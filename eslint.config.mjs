@@ -28,6 +28,13 @@ export default tseslint.config(
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
+      '@typescript-eslint/ban-ts-comment': ['error', {
+        'ts-expect-error': 'allow-with-description',
+        'ts-ignore': true,
+        'ts-nocheck': true,
+        'ts-check': false,
+        minimumDescriptionLength: 3,
+      }],
       'no-empty': ['error', { allowEmptyCatch: true }],
       'no-console': ['error', { allow: ['warn', 'error'] }],
 
@@ -38,6 +45,12 @@ export default tseslint.config(
       'rpc/module-file-naming': 'error',
       'rpc/require-typed-register': 'error',
       'rpc/require-api-client': 'error',
+    },
+  },
+  {
+    files: ['src/shared/lib/logger.ts'],
+    rules: {
+      'no-console': 'off',
     },
   },
 );
