@@ -1,0 +1,27 @@
+{
+  "name": "@dyyz1993/rpc-core",
+  "version": "1.0.0",
+  "description": "Type-safe RPC communication framework with request-response and pub-sub patterns",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dyyz1993/pi-agent-chat-chat"
+  },
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "import": "./src/index.ts",
+      "types": "./src/index.ts"
+    }
+  },
+  "dependencies": {
+    "uuid": "^9.0.0"
+  },
+  "scripts": {
+    "test": "bun test tests/rpc.test.ts"
+  },
+  "devDependencies": {
+    "@types/uuid": "^9.0.0"
+  }
+}
