@@ -5,3 +5,5 @@ export { register as git } from "./git";
 export { register as project } from "./project";
 export { register as session } from "./session";
 export { register as agent } from "./agent";
+export { register as subagent } from "./subagent";
+export { register as todo } from "./todo";

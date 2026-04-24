@@ -1,5 +1,6 @@
-import { ChevronDown, ChevronRight, Zap, ClipboardList, Terminal, Plug, Network, Puzzle } from "lucide-react";
+import { ChevronDown, ChevronRight, Zap, ClipboardList, Terminal, Plug, Network, Puzzle, CheckCircle2, Circle } from "lucide-react";
 import { useStatusStore } from "../../stores/use-status-store";
+import { useSessionStore } from "../../stores/use-session-store";
 import type { StatusSection } from "../../stores/use-status-store";
 
 const SECTIONS: { id: StatusSection; label: string; icon: React.ElementType }[] = [
@@ -13,15 +14,16 @@ const SECTIONS: { id: StatusSection; label: string; icon: React.ElementType }[] 
 
 export function StatusPanel() {
   const yoloEnabled = useStatusStore((s) => s.yoloEnabled);
-  const planMode = useStatusStore((s) => s.planMode);
   const shellActive = useStatusStore((s) => s.shellActive);
   const mcpTools = useStatusStore((s) => s.mcpTools);
   const lspStatus = useStatusStore((s) => s.lspStatus);
   const plugins = useStatusStore((s) => s.plugins);
+  const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const todosBySession = useSessionStore((s) => s.todosBySession);
+  const todos = activeSessionId ? (todosBySession[activeSessionId] ?? []) : [];
   const collapsedSections = useStatusStore((s) => s.collapsedSections);
   const toggleSection = useStatusStore((s) => s.toggleSection);
   const toggleYolo = useStatusStore((s) => s.toggleYolo);
-  const togglePlan = useStatusStore((s) => s.togglePlan);
 
   return (
     <div className="py-1">
@@ -45,9 +47,23 @@ export function StatusPanel() {
                   </button>
                 )}
                 {id === "plan" && (
-                  <button onClick={togglePlan} className={`px-2 py-0.5 rounded text-[10px] ${planMode ? "bg-indigo-600/30 text-indigo-400" : "bg-gray-800 text-gray-500"}`}>
-                    {planMode ? "计划中" : "自由模式"}
-                  </button>
+                  <div className="space-y-1">
+                    {todos.length > 0 && (
+                      <div className="space-y-0.5 pt-0.5">
+                        {todos.map((t) => (
+                          <div key={t.id} className="flex items-center gap-1.5 py-0.5 px-1 rounded hover:bg-gray-800/40 transition-colors">
+                            {t.done
+                              ? <CheckCircle2 className="w-3 h-3 shrink-0 text-emerald-400" />
+                              : <Circle className="w-3 h-3 shrink-0 text-gray-500" />
+                            }
+                            <span className={`${t.done ? "text-gray-500 line-through" : "text-gray-300"} truncate`}>
+                              {t.text}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 )}
                 {id === "shell" && <span>{shellActive ? "运行中" : "空闲"}</span>}
                 {id === "mcp" && (

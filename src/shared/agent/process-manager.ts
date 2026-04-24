@@ -2,10 +2,17 @@ import { spawn, type ChildProcess } from "child_process";
 import { existsSync } from "fs";
 import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { AgentEvent, AgentProcessInfo } from "../modules/agent";
+import type { TodoChannelEvent } from "../modules/todo";
 import { StreamParser } from "./stream-parser";
 import { createLogger } from "../lib/logger";
 
 const log = createLogger("agent");
+
+const SUBAGENT_EXTENSION_PATH =
+  "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/test/auto-memory/subagent.ts";
+
+const TODO_EXTENSION_PATH =
+  "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/test/auto-memory/todo.ts";
 
 interface ManagedProcess {
   process: ChildProcess;
@@ -29,12 +36,17 @@ export class AgentProcessManager {
     const existing = this.processes.get(sessionId);
     if (existing && existing.process.pid && !existing.process.killed) {
       for (const evt of existing.info.holdEvents) {
-        await this.emit(sessionId, evt);
+        await this.emitAgentEvent(sessionId, evt);
       }
       return { agentId: sessionId, status: "already_running" };
     }
 
-    const args = ["--mode", "rpc", "--no-extensions", "--no-skills"];
+    const args = [
+      "--mode", "rpc",
+      "--no-extensions",
+      "--extension", SUBAGENT_EXTENSION_PATH,
+      "--extension", TODO_EXTENSION_PATH,
+    ];
     if (sessionPath && existsSync(sessionPath)) {
       args.push("--session", sessionPath);
     }
@@ -80,7 +92,7 @@ export class AgentProcessManager {
 
     child.on("exit", (code, signal) => {
       log.info("Process exited", { code, signal });
-      this.emit(sessionId, { type: "agent_end", messages: [] });
+      this.emitAgentEvent(sessionId, { type: "agent_end", messages: [] });
       this.processes.delete(sessionId);
     });
 
@@ -130,13 +142,24 @@ export class AgentProcessManager {
     const managed = this.processes.get(sessionId);
     if (!managed) return;
 
+    const record = event as Record<string, unknown>;
+
+    if (record.type === "channel_data" && record.name === "subagent") {
+      this.handleSubagentChannelData(sessionId, record);
+      return;
+    }
+
+    if (record.type === "channel_data" && record.name === "todo") {
+      this.handleTodoChannelData(sessionId, record);
+      return;
+    }
+
     const INTERACTIVE_METHODS = new Set(["confirm", "input", "select", "editor"]);
     if (event.type === "extension_ui_request") {
-      const method = (event as Record<string, unknown>).method as string;
+      const method = record.method as string;
       if (!INTERACTIVE_METHODS.has(method)) return;
     }
 
-    // 状态跟踪
     if (event.type === "agent_start") {
       managed.info.status = "streaming";
       managed.info.holdEvents = [];
@@ -152,16 +175,82 @@ export class AgentProcessManager {
       managed.info.status = "streaming";
     }
 
-    // hold buffer: 在 streaming 期间收集事件
     if (managed.info.status === "streaming" && event.type !== "agent_end" && event.type !== "response") {
       managed.info.holdEvents.push(event);
     }
 
-    // 转发给前端
-    this.emit(sessionId, event);
+    this.emitAgentEvent(sessionId, event);
   }
 
-  private async emit(sessionId: string, event: AgentEvent): Promise<void> {
+  private async handleSubagentChannelData(
+    parentSessionId: string,
+    channelMsg: Record<string, unknown>,
+  ): Promise<void> {
+    const data = channelMsg.data as Record<string, unknown> | undefined;
+    if (!data) return;
+
+    const subEvent = data.event as Record<string, unknown> | undefined;
+    const subSessionId = data.sessionId as string | undefined;
+    if (!subEvent || !subSessionId) return;
+
+    const eventType = subEvent.type as string;
+
+    if (eventType === "response") return;
+
+    const managed = this.processes.get(parentSessionId);
+    const sessionPath = managed?.info.sessionPath || "";
+
+    if (eventType === "message_end" && subEvent.message) {
+      const msg = subEvent.message as Record<string, unknown>;
+      const content = msg.content as Array<Record<string, unknown>> | undefined;
+      if (Array.isArray(content)) {
+        for (const part of content) {
+          if (part.type === "text" && typeof part.text === "string") {
+            log.info("Subagent final text", {
+              parentSessionId,
+              subSessionId,
+              textLength: part.text.length,
+              preview: part.text.slice(0, 100),
+            });
+          }
+        }
+      }
+    }
+
+    await this.server.emitEvent(
+      "subagent.event",
+      {
+        parentSessionId,
+        parentSessionPath: sessionPath,
+        subSessionId,
+        event: subEvent,
+      } as unknown as Record<string, unknown>,
+      { parentSessionId },
+    );
+  }
+
+  private async handleTodoChannelData(
+    sessionId: string,
+    channelMsg: Record<string, unknown>,
+  ): Promise<void> {
+    const data = channelMsg.data as TodoChannelEvent | undefined;
+    if (!data) return;
+
+    log.info("Todo channel data", { sessionId, action: data.action, count: data.todos?.length });
+
+    await this.server.emitEvent(
+      "todo.event",
+      {
+        sessionId,
+        action: data.action,
+        todos: data.todos,
+        timestamp: data.timestamp,
+      } as unknown as Record<string, unknown>,
+      { sessionId },
+    );
+  }
+
+  private async emitAgentEvent(sessionId: string, event: AgentEvent): Promise<void> {
     await this.server.emitEvent(
       "agent.event",
       { sessionId, event } as unknown as Record<string, unknown>,
