@@ -24,10 +24,10 @@ function App() {
     if (!ready || restoredRef.current) return;
     restoredRef.current = true;
 
-    listRootDir();
-
     (async () => {
       try {
+        listRootDir();
+
         const result = await apiClient.call("project.listRecent", {});
         const projects = (result.projects as Array<{ path: string; name: string; sessionCount: number }>) || [];
         if (projects.length === 0) return;

@@ -28,7 +28,7 @@ export type ContentBlock =
   | { type: "text"; text: string }
   | { type: "thinking"; thinking: string }
   | { type: "toolCall"; id: string; name: string; input: string }
-  | { type: "toolResult"; toolCallId: string; content: string; isError?: boolean }
+  | { type: "toolResult"; toolCallId: string; toolName: string; content: string; isError?: boolean }
   | { type: "toolExecution"; toolCallId: string; toolName: string; args: string; status: ToolExecutionStatus; output?: string };
 
 export type ChatMessage = {

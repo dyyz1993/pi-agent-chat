@@ -9,6 +9,7 @@ import {
   Home,
   FileText,
   Loader2,
+  Check,
 } from "lucide-react";
 import { apiClient } from "../../lib/api-client";
 import type { MergedProject, ConfiguredPath } from "../../types";
@@ -39,12 +40,14 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
   const [currentBrowsePath, setCurrentBrowsePath] = useState<string | null>(null);
   const [browseContents, setBrowseContents] = useState<Array<{ name: string; path: string; type: "file" | "directory" }>>([]);
   const [browseLoading, setBrowseLoading] = useState(false);
+  const [browseHistory, setBrowseHistory] = useState<string[]>([]);
 
   useEffect(() => {
     if (!open) {
       setSearchQuery("");
       setViewMode("list");
       setCurrentBrowsePath(null);
+      setBrowseHistory([]);
       return;
     }
     setLoading(true);
@@ -63,9 +66,14 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
       .finally(() => setLoading(false));
   }, [open]);
 
-  const handleBrowsePath = useCallback(async (path: string) => {
+  const handleBrowsePath = useCallback(async (path: string, isInitial?: boolean) => {
     setBrowseLoading(true);
     setCurrentBrowsePath(path);
+    if (!isInitial) {
+      setBrowseHistory((prev) => [...prev, path]);
+    } else {
+      setBrowseHistory([path]);
+    }
     try {
       const result = await apiClient.call("file.listDir", { path });
       setBrowseContents((result.entries as Array<{ name: string; path: string; type: "file" | "directory" }>) || []);
@@ -85,9 +93,14 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
   );
 
   const handleSelectBrowseItem = useCallback(
-    (item: { name: string; path: string; type: "file" | "directory" }) => {
+    (item: { name: string; path: string; type: "file" | "directory" }, e?: React.MouseEvent) => {
       if (item.type === "directory") {
-        handleBrowsePath(item.path);
+        if (e?.detail === 2) {
+          onSelect(item.path, item.name);
+          onClose();
+        } else {
+          handleBrowsePath(item.path);
+        }
       } else {
         onSelect(item.path, item.name);
         onClose();
@@ -96,17 +109,46 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
     [onClose, onSelect, handleBrowsePath]
   );
 
+  const handleSelectCurrentFolder = useCallback(() => {
+    if (currentBrowsePath) {
+      const name = currentBrowsePath.split("/").pop() || currentBrowsePath;
+      onSelect(currentBrowsePath, name);
+      onClose();
+    }
+  }, [currentBrowsePath, onClose, onClose]);
+
   const handleBrowseFolder = useCallback(() => {
     setViewMode("browse");
     if (configuredPaths.length > 0) {
-      handleBrowsePath(configuredPaths[0].path);
+      handleBrowsePath(configuredPaths[0].path, true);
     }
   }, [configuredPaths, handleBrowsePath]);
 
   const handleBackToList = useCallback(() => {
     setViewMode("list");
     setCurrentBrowsePath(null);
+    setBrowseHistory([]);
   }, []);
+
+  const handleGoBack = useCallback(() => {
+    if (browseHistory.length > 1) {
+      const newHistory = browseHistory.slice(0, -1);
+      const previousPath = newHistory[newHistory.length - 1];
+      setBrowseHistory(newHistory);
+      setCurrentBrowsePath(previousPath);
+      setBrowseLoading(true);
+      apiClient.call("file.listDir", { path: previousPath })
+        .then((result) => {
+          setBrowseContents((result.entries as Array<{ name: string; path: string; type: "file" | "directory" }>) || []);
+        })
+        .catch(() => setBrowseContents([]))
+        .finally(() => setBrowseLoading(false));
+    } else {
+      setViewMode("list");
+      setCurrentBrowsePath(null);
+      setBrowseHistory([]);
+    }
+  }, [browseHistory]);
 
   const filtered = projects.filter(
     (p) =>
@@ -225,12 +267,19 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
             <div className="w-full flex flex-col">
               <div className="px-4 py-3 border-b border-gray-800 flex items-center gap-2">
                 <button
-                  onClick={handleBackToList}
+                  onClick={browseHistory.length > 1 ? handleGoBack : handleBackToList}
                   className="p-1.5 rounded-md hover:bg-gray-800 text-gray-400 hover:text-white transition-colors"
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
                 <span className="text-xs text-gray-400 truncate flex-1">{currentBrowsePath}</span>
+                <button
+                  onClick={handleSelectCurrentFolder}
+                  className="flex items-center gap-1 px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-md transition-colors"
+                >
+                  <Check className="w-3 h-3" />
+                  选择此文件夹
+                </button>
               </div>
 
               <div className="flex-1 overflow-y-auto px-3 py-2 space-y-0.5">

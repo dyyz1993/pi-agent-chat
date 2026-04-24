@@ -4,7 +4,7 @@
  */
 
 import type { IncomingMessage, ServerResponse } from "http";
-import { stat, readFile, writeFile, mkdir } from "fs/promises";
+import { stat, readFile, writeFile, mkdir, appendFile } from "fs/promises";
 import { existsSync } from "fs";
 import { extname, basename, dirname, resolve } from "path";
 import { createLogger } from "../shared/lib/logger";
@@ -109,6 +109,25 @@ export function createHttpHandler(deps: HttpRouteDeps): (req: IncomingMessage, r
         return;
       }
       await handleFileContent(url.pathname.slice(6), req, res);
+      return;
+    }
+
+    // Debug log endpoint (不需要鉴权，仅开发用)
+    if (url.pathname === "/api/debug-log" && req.method === "POST") {
+      const chunks: Buffer[] = [];
+      for await (const chunk of req) chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+      const body = JSON.parse(Buffer.concat(chunks).toString());
+      await appendFile("logs/debug.log", `${body.line}\n`);
+      res.writeHead(200).end("ok");
+      return;
+    }
+
+    // Debug log read
+    if (url.pathname === "/api/debug-log" && req.method === "GET") {
+      try {
+        const content = await readFile("logs/debug.log", "utf-8").catch(() => "");
+        res.writeHead(200, { "Content-Type": "text/plain" }).end(content);
+      } catch { res.writeHead(200, { "Content-Type": "text/plain" }).end(""); }
       return;
     }
 
