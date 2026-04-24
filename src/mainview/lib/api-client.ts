@@ -149,7 +149,15 @@ class APIClientImpl {
     params: MethodParams<RPCMethods, K>
   ): Promise<MethodResult<RPCMethods, K>> {
     await this.initialize();
-    return this.client!.call(method, params);
+    this.debugLog("call", method as string, params);
+    try {
+      const result = await this.client!.call(method, params);
+      this.debugLog("response", method as string, result);
+      return result;
+    } catch (err) {
+      this.debugLog("response", method as string, { error: err instanceof Error ? err.message : String(err) });
+      throw err;
+    }
   }
 
   async subscribe<K extends keyof RPCEvents>(
@@ -158,7 +166,22 @@ class APIClientImpl {
     filter?: Record<string, unknown>
   ): Promise<string> {
     await this.initialize();
-    return this.client!.subscribe(eventType, handler, filter);
+    const wrappedHandler = (payload: EventPayload<RPCEvents[K]>, metadata: EventMetadata<RPCEvents[K]>) => {
+      this.debugLog("event", eventType as string, payload);
+      handler(payload, metadata);
+    };
+    return this.client!.subscribe(eventType, wrappedHandler, filter);
+  }
+
+  private debugLog(direction: "call" | "event" | "response", method: string, payload: unknown): void {
+    import("../stores/use-rpc-debug-store").then(({ useRpcDebugStore }) => {
+      useRpcDebugStore.getState().addEntry({
+        direction,
+        method: direction !== "event" ? method : undefined,
+        eventType: direction === "event" ? method : undefined,
+        payload,
+      });
+    }).catch(() => {});
   }
 
   unsubscribe(subscriptionId: string): void {

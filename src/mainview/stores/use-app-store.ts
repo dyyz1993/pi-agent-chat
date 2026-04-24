@@ -6,8 +6,7 @@ import type { DemoMethod } from "../types";
 
 type DemoResult = MethodResult<RPCMethods, "system.ping">
   | MethodResult<RPCMethods, "system.hello">
-  | MethodResult<RPCMethods, "system.echo">
-  | MethodResult<RPCMethods, "chat.send">;
+  | MethodResult<RPCMethods, "system.echo">;
 
 interface AppState {
   mode: "desktop" | "web";
@@ -70,7 +69,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setMethod: (method) => set({ method }),
 
-  callRPC: async (inputText: string) => {
+  callRPC: async (_inputText: string) => {
     const { method, addLog } = get();
     addLog(`RPC call: ${method}`);
     try {
@@ -82,9 +81,6 @@ export const useAppStore = create<AppState>((set, get) => ({
         res = await apiClient.call("system.hello", {});
       } else if (method === "system.echo") {
         res = await apiClient.call("system.echo", {});
-      } else if (method === "chat.send") {
-        const content = inputText.trim() || "Hello from RPC";
-        res = await apiClient.call("chat.send", { content });
       }
       set({ result: res });
       addLog(`Result: ${JSON.stringify(res)}`);
