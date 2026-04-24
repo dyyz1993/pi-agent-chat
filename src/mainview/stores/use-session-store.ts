@@ -58,7 +58,15 @@ export const useSessionStore = create<SessionState>()(
           };
         }),
 
-      setActiveProject: (id) => set({ activeProjectId: id }),
+      setActiveProject: (id) => {
+        set({ activeProjectId: id });
+        const tab = get().projectTabs.find((t) => t.id === id);
+        if (!tab) return;
+        const existingSessions = get().sessionsByProject[tab.path];
+        if (!existingSessions) {
+          get().loadSessionsForProject(tab.path);
+        }
+      },
 
       loadSessionsForProject: async (projectPath) => {
         set({ loading: true });
