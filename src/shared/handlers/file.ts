@@ -4,6 +4,9 @@ import type { RPCMethods, HandlerOptions } from "../rpc-schema";
 import { readdir, stat, writeFile, readFile, mkdir, rename, rm, cp } from "fs/promises";
 import { existsSync } from "fs";
 import { join, dirname, resolve } from "path";
+import { createLogger } from "../lib/logger";
+
+const log = createLogger("file");
 
 type RegisterFn = <K extends keyof RPCMethods & string>(
   method: K,
@@ -46,7 +49,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
         }
       }
     } catch (err) {
-      console.error("listDir error:", err);
+      log.error("listDir error", { error: err });
     }
     return { entries, basePath };
   });
