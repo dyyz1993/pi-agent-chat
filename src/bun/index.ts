@@ -2,6 +2,10 @@ import { BrowserWindow, BrowserView, Updater, ApplicationMenu } from "electrobun
 import { RPCServer } from "@dyyz1993/rpc-core";
 import { ElectrobunTransport } from "../gateway/ipc-transport";
 import { registerAllHandlers } from "../shared/register-all-handlers";
+import { createLogger, configureLogDir } from "../shared/lib/logger";
+
+configureLogDir("logs");
+const log = createLogger("server");
 
 async function getMainViewUrl(): Promise<string> {
   const channel = await Updater.localInfo.channel();
@@ -9,12 +13,10 @@ async function getMainViewUrl(): Promise<string> {
   if (channel === "dev") {
     try {
       await fetch(DEV_SERVER_URL, { method: "HEAD" });
-      // eslint-disable-next-line no-console
-      console.log(`HMR enabled: Using Vite dev server at ${DEV_SERVER_URL}`);
+      log.info(`HMR enabled: Using Vite dev server at ${DEV_SERVER_URL}`);
       return DEV_SERVER_URL;
     } catch {
-      // eslint-disable-next-line no-console
-      console.log("Vite dev server not running.");
+      log.info("Vite dev server not running.");
     }
   }
   return "views://mainview/index.html";
@@ -50,7 +52,7 @@ const mainWindow = new BrowserWindow({
             const message = typeof data === "string" ? JSON.parse(data) : data;
             transport.handleMessage(message);
           } catch (error) {
-            console.error("[IPC] Failed to parse RPC message:", error);
+            log.error("Failed to parse RPC message", { error });
           }
         },
       },
@@ -60,8 +62,7 @@ const mainWindow = new BrowserWindow({
 
 transport.setBrowserView(mainWindow.webview);
 
-// eslint-disable-next-line no-console
-console.log("PiAgentChat desktop app started!");
+log.info("PiAgentChat desktop app started!");
 
 ApplicationMenu.setApplicationMenu([
   { label: "PiAgentChat", submenu: [{ role: "about" }, { type: "separator" }, { role: "hide" }, { role: "hideOthers" }, { role: "showAll" }, { type: "separator" }, { role: "quit" }] },

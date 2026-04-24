@@ -7,6 +7,9 @@ import type { Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { RPCServer, type Transport } from "@dyyz1993/rpc-core";
 import { registerAllHandlers } from "../shared/register-all-handlers";
+import { createLogger } from "../shared/lib/logger";
+
+const log = createLogger("gateway");
 
 export interface WsHandlerDeps {
   config: { readonly port: number; readonly authToken: string; readonly maxUploadSize: number };
@@ -21,14 +24,12 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
     const url = req.url ? new URL(req.url, "http://localhost") : null;
     const token = url?.searchParams.get("token");
     if (token !== cfg.authToken) {
-      // eslint-disable-next-line no-console
-      console.log("[WS] Connection rejected: invalid token");
+      log.warn("Connection rejected: invalid token");
       ws.close(4001, "Unauthorized");
       return;
     }
 
-    // eslint-disable-next-line no-console
-    console.log("[WS] Client connected, total:", wss.clients.size);
+    log.info("Client connected", { total: wss.clients.size });
 
     const wsTransport = {
       send: async (message: unknown): Promise<void> => {
@@ -42,7 +43,7 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
             const msg = JSON.parse(data.toString());
             handler(msg);
           } catch (err) {
-            console.error("[WS] Failed to parse message:", err instanceof Error ? err.message : String(err));
+            log.error("Failed to parse message", { error: err instanceof Error ? err.message : String(err) });
           }
         };
         ws.on("message", listener);
@@ -64,13 +65,12 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
     registerAllHandlers(rpcServer, { platform: "web" });
 
     ws.on("close", () => {
-      // eslint-disable-next-line no-console
-      console.log("[WS] Client disconnected, total:", wss.clients.size);
+      log.info("Client disconnected", { total: wss.clients.size });
       rpcServer.close();
     });
 
     ws.on("error", (err: Error) => {
-      console.error("[WS] Client error:", err.message);
+      log.error("Client error", { error: err.message });
     });
   });
 

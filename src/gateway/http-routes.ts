@@ -7,6 +7,9 @@ import type { IncomingMessage, ServerResponse } from "http";
 import { stat, readFile, writeFile, mkdir } from "fs/promises";
 import { existsSync } from "fs";
 import { extname, basename, dirname, resolve } from "path";
+import { createLogger } from "../shared/lib/logger";
+
+const log = createLogger("gateway");
 
 // MIME 类型映射
 const MIME_TYPES: Record<string, string> = {
@@ -87,6 +90,7 @@ export function createHttpHandler(deps: HttpRouteDeps): (req: IncomingMessage, r
 
     // 以下端点需要 Token 鉴权
     if (!verifyToken(req, cfg.authToken)) {
+      log.warn("Auth failed", { path: url.pathname });
       res.writeHead(401, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "Unauthorized" }));
       return;
@@ -177,6 +181,7 @@ async function handleFileContent(encodedPath: string, req: IncomingMessage, res:
       const buffer = await readFile(filePath);
       res.end(buffer);
     }
+    log.info("File served", { path: filePath });
   } catch {
     res.writeHead(500, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Failed to read file" }));
@@ -213,6 +218,7 @@ async function handleFileUpload(
     const body = Buffer.concat(chunks);
     await mkdir(dirname(destPath), { recursive: true });
     await writeFile(destPath, body);
+    log.info("File uploaded", { path: destPath, size: body.length });
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ok: true, path: destPath, size: body.length }));
   } catch (err) {

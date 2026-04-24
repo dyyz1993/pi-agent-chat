@@ -1,4 +1,7 @@
 import type { Transport, MessageHandler, ErrorHandler } from "@dyyz1993/rpc-core";
+import { createLogger } from "../shared/lib/logger";
+
+const log = createLogger("gateway");
 
 /**
  * Transport that bridges between Bun and Webview via:
@@ -13,8 +16,7 @@ export class ElectrobunTransport implements Transport {
 
   setBrowserView(view: { executeJavascript: (js: string) => void }): void {
     this.browserView = view;
-    // eslint-disable-next-line no-console
-    console.log("[IPC Transport] BrowserView set");
+    log.info("[IPC Transport] BrowserView set");
   }
 
   async send(message: unknown): Promise<void> {
