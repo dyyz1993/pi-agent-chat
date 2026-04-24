@@ -1,25 +1,31 @@
 import { readFile, writeFile, mkdir } from "fs/promises";
 import { existsSync } from "fs";
-import { join, dirname } from "path";
+import { join, dirname, basename } from "path";
 import { homedir } from "os";
-import type { RecentProject } from "../modules/project";
+import type { RecentProject, ConfiguredPath } from "../modules/project";
 
 const CONFIG_PATH = join(homedir(), ".pi-agent-chat", "config.json");
 
 interface ProjectConfig {
   recentProjects: RecentProject[];
   activeProject: string | null;
+  configuredPaths: ConfiguredPath[];
 }
 
 async function load(): Promise<ProjectConfig> {
   try {
     if (!existsSync(CONFIG_PATH)) {
-      return { recentProjects: [], activeProject: null };
+      return { recentProjects: [], activeProject: null, configuredPaths: [] };
     }
     const raw = await readFile(CONFIG_PATH, "utf-8");
-    return JSON.parse(raw) as ProjectConfig;
+    const parsed = JSON.parse(raw) as Partial<ProjectConfig>;
+    return {
+      recentProjects: parsed.recentProjects ?? [],
+      activeProject: parsed.activeProject ?? null,
+      configuredPaths: parsed.configuredPaths ?? [],
+    };
   } catch {
-    return { recentProjects: [], activeProject: null };
+    return { recentProjects: [], activeProject: null, configuredPaths: [] };
   }
 }
 
@@ -74,4 +80,36 @@ export async function removeRecentProject(projectPath: string): Promise<void> {
 export async function getActiveProject(): Promise<string | null> {
   const config = await load();
   return config.activeProject;
+}
+
+export async function listConfiguredPaths(): Promise<ConfiguredPath[]> {
+  const config = await load();
+  if (config.configuredPaths.length === 0) {
+    return [
+      { path: homedir(), name: "主目录", type: "home" },
+      { path: join(homedir(), "Documents"), name: "文档", type: "documents" },
+    ];
+  }
+  return config.configuredPaths;
+}
+
+export async function addConfiguredPath(
+  path: string,
+  name?: string,
+): Promise<void> {
+  const config = await load();
+  if (!config.configuredPaths.find((p) => p.path === path)) {
+    config.configuredPaths.push({
+      path,
+      name: name || basename(path),
+      type: "custom",
+    });
+    await save(config);
+  }
+}
+
+export async function removeConfiguredPath(path: string): Promise<void> {
+  const config = await load();
+  config.configuredPaths = config.configuredPaths.filter((p) => p.path !== path);
+  await save(config);
 }

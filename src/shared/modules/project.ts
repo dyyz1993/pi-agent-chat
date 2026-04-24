@@ -15,6 +15,30 @@ export interface ProjectMethods {
     params: { projectPath: string };
     result: { sessions: SessionMeta[] };
   };
+  "project.listPiProjects": {
+    params: {};
+    result: { projects: PiProject[] };
+  };
+  "project.browseFolder": {
+    params: { defaultPath?: string };
+    result: { path: string } | { cancelled: true };
+  };
+  "project.addConfiguredPath": {
+    params: { path: string; name?: string };
+    result: { ok: boolean };
+  };
+  "project.removeConfiguredPath": {
+    params: { path: string };
+    result: { ok: boolean };
+  };
+  "project.listConfiguredPaths": {
+    params: {};
+    result: { paths: ConfiguredPath[] };
+  };
+  "project.listAllProjects": {
+    params: {};
+    result: { projects: MergedProject[] };
+  };
 }
 
 export interface RecentProject {
@@ -23,6 +47,29 @@ export interface RecentProject {
   lastOpened: number;
   pinned: boolean;
   sessionCount: number;
+}
+
+export interface PiProject {
+  path: string;
+  name: string;
+  sessionCount: number;
+  lastModified: number;
+  hasActiveSession: boolean;
+}
+
+export interface ConfiguredPath {
+  path: string;
+  name: string;
+  type: "home" | "documents" | "custom";
+}
+
+export interface MergedProject {
+  path: string;
+  name: string;
+  source: "pi" | "recent" | "configured";
+  sessionCount: number;
+  lastModified: number;
+  hasActiveSession: boolean;
 }
 
 export interface SessionMeta {

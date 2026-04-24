@@ -2,7 +2,8 @@ import { readdir, stat, readFile } from "fs/promises";
 import { existsSync } from "fs";
 import { join, basename } from "path";
 import { homedir } from "os";
-import type { SessionMeta } from "../modules/project";
+import type { SessionMeta, PiProject, MergedProject } from "../modules/project";
+import { listRecentProjects } from "./project-config";
 
 const SESSIONS_DIR = join(homedir(), ".pi", "agent", "sessions");
 
@@ -163,4 +164,50 @@ export async function scanAllProjects(): Promise<
   });
 
   return results;
+}
+
+export async function listPiProjects(): Promise<PiProject[]> {
+  const allProjects = await scanAllProjects();
+  return allProjects.map((p) => ({
+    path: p.projectPath,
+    name: basename(p.projectPath),
+    sessionCount: p.sessionCount,
+    lastModified: p.sessions[0]?.updatedAt ?? 0,
+    hasActiveSession: p.sessions.some((s) => s.status === "running"),
+  }));
+}
+
+export async function listMergedProjects(): Promise<MergedProject[]> {
+  const [piProjects, recentProjects] = await Promise.all([
+    listPiProjects(),
+    listRecentProjects(),
+  ]);
+
+  const mergedMap = new Map<string, MergedProject>();
+
+  for (const proj of piProjects) {
+    mergedMap.set(proj.path, {
+      path: proj.path,
+      name: proj.name,
+      source: "pi",
+      sessionCount: proj.sessionCount,
+      lastModified: proj.lastModified,
+      hasActiveSession: proj.hasActiveSession,
+    });
+  }
+
+  for (const proj of recentProjects) {
+    if (!mergedMap.has(proj.path)) {
+      mergedMap.set(proj.path, {
+        path: proj.path,
+        name: proj.name,
+        source: "recent",
+        sessionCount: proj.sessionCount,
+        lastModified: proj.lastOpened,
+        hasActiveSession: false,
+      });
+    }
+  }
+
+  return Array.from(mergedMap.values()).sort((a, b) => b.lastModified - a.lastModified);
 }

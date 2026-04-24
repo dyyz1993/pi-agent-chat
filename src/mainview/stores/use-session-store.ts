@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { SessionMeta, ProjectTab } from "../types";
 import { apiClient } from "../lib/api-client";
 import { messageToChatMessage, parseContentBlocks } from "../lib/message-mapper";
+import type { ContentBlock } from "../types";
 
 interface SessionState {
   sessionsByProject: Record<string, SessionMeta[]>;
@@ -170,6 +171,62 @@ export const useSessionStore = create<SessionState>((set, get) => ({
               chat.setMessagesForSession(id, [...existing, msg]);
             }
           }
+        }
+
+        // tool_execution events: append/update toolExecution blocks on the streaming assistant message
+        if (eventType === "tool_execution_start" || eventType === "tool_execution_update" || eventType === "tool_execution_end") {
+          const lastMsg = existing[existing.length - 1];
+          const logLine = `[TE] ${eventType} lastMsg: ${lastMsg?.role}/${lastMsg?.isStreaming} eventKeys: ${Object.keys(event).join(",")} toolCallId: ${event.toolCallId}\n`;
+          fetch("/api/debug-log", { method: "POST", headers: {"content-type":"application/json"}, body: JSON.stringify({ line: logLine }) }).catch(() => {});
+          if (!lastMsg || lastMsg.role !== "assistant" || !lastMsg.isStreaming) return;
+
+          const toolCallId = event.toolCallId as string;
+          const toolName = (event.toolName as string) || "unknown";
+          const args = event.args as Record<string, unknown> | undefined;
+          const argsStr = args ? (typeof args.command === "string" ? args.command : JSON.stringify(args, null, 2)) : "";
+
+          type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
+          const blocks = [...lastMsg.content];
+          const idx = blocks.findIndex((b): b is ToolExecBlock => b.type === "toolExecution" && b.toolCallId === toolCallId);
+
+          if (eventType === "tool_execution_start") {
+            blocks.push({ type: "toolExecution", toolCallId, toolName, args: argsStr, status: "running" });
+          } else if (eventType === "tool_execution_update") {
+            const partial = event.partialResult as Record<string, unknown> | undefined;
+            let output = "";
+            if (partial) {
+              const partialContent = partial.content as Array<{ type: string; text?: string }> | undefined;
+              if (Array.isArray(partialContent)) {
+                output = partialContent.map((c) => c.text ?? "").join("");
+              } else {
+                output = JSON.stringify(partial, null, 2);
+              }
+            }
+            if (idx >= 0) {
+              const prev = blocks[idx] as ToolExecBlock;
+              blocks[idx] = { ...prev, output: (prev.output ?? "") + output };
+            }
+          } else if (eventType === "tool_execution_end") {
+            const result = event.result as Record<string, unknown> | undefined;
+            const isError = event.isError as boolean;
+            let output = "";
+            if (result) {
+              const resultContent = result.content as Array<{ type: string; text?: string }> | undefined;
+              if (Array.isArray(resultContent)) {
+                output = resultContent.map((c) => c.text ?? "").join("");
+              } else {
+                output = JSON.stringify(result, null, 2);
+              }
+            }
+            if (idx >= 0) {
+              const prev = blocks[idx] as ToolExecBlock;
+              blocks[idx] = { ...prev, status: isError ? "error" : "done", output: (prev.output ?? "") + output };
+            }
+          }
+
+          const updated = [...existing];
+          updated[updated.length - 1] = { ...lastMsg, content: blocks };
+          chat.setMessagesForSession(id, updated);
         }
       });
     }).then((subId) => {

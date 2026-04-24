@@ -22,11 +22,14 @@ export type FilePreview = {
   totalLines?: number;
 };
 
+export type ToolExecutionStatus = "running" | "done" | "error";
+
 export type ContentBlock =
   | { type: "text"; text: string }
   | { type: "thinking"; thinking: string }
   | { type: "toolCall"; id: string; name: string; input: string }
-  | { type: "toolResult"; toolCallId: string; content: string; isError?: boolean };
+  | { type: "toolResult"; toolCallId: string; content: string; isError?: boolean }
+  | { type: "toolExecution"; toolCallId: string; toolName: string; args: string; status: ToolExecutionStatus; output?: string };
 
 export type ChatMessage = {
   id: string;
@@ -62,6 +65,29 @@ export type RecentProject = {
   lastOpened: number;
   pinned: boolean;
   sessionCount: number;
+};
+
+export type PiProject = {
+  path: string;
+  name: string;
+  sessionCount: number;
+  lastModified: number;
+  hasActiveSession: boolean;
+};
+
+export type ConfiguredPath = {
+  path: string;
+  name: string;
+  type: "home" | "documents" | "custom";
+};
+
+export type MergedProject = {
+  path: string;
+  name: string;
+  source: "pi" | "recent" | "configured";
+  sessionCount: number;
+  lastModified: number;
+  hasActiveSession: boolean;
 };
 
 export type ProjectTab = {

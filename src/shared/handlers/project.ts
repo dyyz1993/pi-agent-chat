@@ -2,8 +2,8 @@ import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { RPCMethods, HandlerOptions } from "../rpc-schema";
 import { existsSync } from "fs";
 import { basename } from "path";
-import { addRecentProject, listRecentProjects, removeRecentProject } from "../lib/project-config";
-import { scanSessionsForProject, scanAllProjects } from "../lib/session-scanner";
+import { addRecentProject, listRecentProjects, removeRecentProject, listConfiguredPaths, addConfiguredPath, removeConfiguredPath } from "../lib/project-config";
+import { scanSessionsForProject, scanAllProjects, listPiProjects, listMergedProjects } from "../lib/session-scanner";
 
 type P<K extends keyof RPCMethods> = RPCMethods[K] extends { params: infer P } ? P : never;
 type R<K extends keyof RPCMethods> = RPCMethods[K] extends { result: infer R } ? R : never;
@@ -58,5 +58,34 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   r("project.scanSessions", async (params) => {
     const sessions = await scanSessionsForProject(params.projectPath);
     return { sessions };
+  });
+
+  r("project.listPiProjects", async () => {
+    const projects = await listPiProjects();
+    return { projects };
+  });
+
+  r("project.listAllProjects", async () => {
+    const projects = await listMergedProjects();
+    return { projects };
+  });
+
+  r("project.listConfiguredPaths", async () => {
+    const paths = await listConfiguredPaths();
+    return { paths };
+  });
+
+  r("project.addConfiguredPath", async (params) => {
+    await addConfiguredPath(params.path, params.name);
+    return { ok: true };
+  });
+
+  r("project.removeConfiguredPath", async (params) => {
+    await removeConfiguredPath(params.path);
+    return { ok: true };
+  });
+
+  r("project.browseFolder", async (_params) => {
+    return { cancelled: true } as { path: string } | { cancelled: true };
   });
 }
