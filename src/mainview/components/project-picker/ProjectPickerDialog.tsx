@@ -181,7 +181,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
     }
 
     return browseContents
-      .filter((item) => item.type === "directory")
+      .filter((item) => item.type === "directory" && !item.name.startsWith("."))
       .map((item) => (
         <div
           key={item.path}
