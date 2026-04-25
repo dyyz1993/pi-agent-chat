@@ -13,6 +13,7 @@ export default tseslint.config(
       'eslint-plugin-rpc/**',
       'postcss.config.js',
       'tailwind.config.js',
+      'scripts/**',
     ],
   },
   {
