@@ -3,6 +3,7 @@ export type TreeNode = {
   path: string;
   type: "file" | "directory";
   size?: number;
+  isIgnored?: boolean;
   children?: TreeNode[];
   expanded?: boolean;
   loaded?: boolean;
@@ -28,8 +29,17 @@ export type ContentBlock =
   | { type: "text"; text: string }
   | { type: "thinking"; thinking: string }
   | { type: "toolCall"; id: string; name: string; input: string }
-  | { type: "toolResult"; toolCallId: string; toolName: string; content: string; isError?: boolean }
-  | { type: "toolExecution"; toolCallId: string; toolName: string; args: string; status: ToolExecutionStatus; output?: string };
+  | { type: "toolResult"; toolCallId: string; toolName: string; content: string; isError?: boolean; args?: string; details?: unknown }
+  | { type: "toolExecution"; toolCallId: string; toolName: string; args: string; status: ToolExecutionStatus; output?: string; details?: unknown };
+
+export type TokenUsage = {
+  input: number;
+  output: number;
+  reasoning?: number;
+  cacheRead?: number;
+  cacheWrite?: number;
+  cost?: number;
+};
 
 export type ChatMessage = {
   id: string;
@@ -40,11 +50,18 @@ export type ChatMessage = {
   model?: string;
   stopReason?: string | null;
   isStreaming?: boolean;
-  tokenUsage?: { input: number; output: number };
+  tokenUsage?: TokenUsage;
 };
 
 export type EditingType = "rename" | "newFile" | "newDir";
 export type EditingNode = { path: string; type: EditingType };
+
+export type SessionStatus = "idle" | "streaming" | "compacting" | "permission";
+
+export type ContextUsage = {
+  tokens: number | null;
+  contextWindow: number;
+};
 
 export type SessionMeta = {
   sessionId: string;
@@ -57,6 +74,8 @@ export type SessionMeta = {
   createdAt: number;
   updatedAt: number;
   status: "idle" | "running";
+  sessionStatus?: SessionStatus;
+  contextUsage?: ContextUsage;
 };
 
 export type RecentProject = {
@@ -96,4 +115,17 @@ export type ProjectTab = {
   path: string;
   active?: boolean;
   connected?: boolean;
+};
+
+export type SubagentSessionInfo = {
+  toolCallId?: string;
+  sessionId: string;
+  sessionPath: string;
+  description: string;
+  instruction: string;
+  startedAt: number;
+  completedAt?: number;
+  exitCode?: number;
+  finalText?: string;
+  error?: string;
 };

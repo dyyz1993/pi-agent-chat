@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import {
   ArrowUp,
   Paperclip,
@@ -7,23 +7,26 @@ import {
   PanelRight,
   Bot,
   ArrowLeft,
+  Square,
 } from "lucide-react";
-import { useRef } from "react";
 import { useChatStore } from "../../stores/use-chat-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useSubagentStore } from "../../stores/use-subagent-store";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import { useChatNavStore } from "../../stores/use-chat-nav-store";
+import { apiClient } from "../../lib/api-client";
 import { useActiveScrollTracker } from "../../hooks/use-active-scroll-tracker";
 import { MessageBubble } from "./MessageBubble";
 import { SideNav } from "./SideNav";
-import { InputBar } from "./InputBar";
+import { InputBar, type InputBarHandle } from "./InputBar";
+import { TokenStatusBar } from "./TokenStatusBar";
 import type { ChatMessage } from "../../types";
 
 const EMPTY_MSGS: never[] = [];
 
 export function ChatPanel() {
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const sessionStatus = useSessionStore((s) => activeSessionId ? (s.sessionStatusMap[activeSessionId] ?? "idle") : "idle");
   const activeSubId = useSubagentStore((s) => s.activeSubsessionId);
   const subMessages = useSubagentStore((s) => {
     if (!activeSubId) return EMPTY_MSGS;
@@ -43,14 +46,37 @@ export function ChatPanel() {
   const setActive = useChatNavStore((s) => s.setActive);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const navScrollRef = useRef<HTMLDivElement>(null);
+  const inputBarRef = useRef<InputBarHandle>(null);
 
   const messageIds = useMemo(() => messages.map((m) => m.id), [messages]);
+  const isStreaming = sessionStatus === "streaming" || sessionStatus === "compacting";
+
+  const streamVersion = useMemo(() => {
+    let v = 0;
+    for (const m of messages) {
+      v += m.content.length;
+      if (m.isStreaming) {
+        const last = m.content[m.content.length - 1];
+        if (last?.type === "text") v += (last as { text: string }).text.length;
+        if (last?.type === "toolExecution") v += ((last as { output?: string }).output?.length ?? 0);
+      }
+    }
+    return v;
+  }, [messages]);
+
+  const handleAbort = useCallback(async () => {
+    if (!activeSessionId) return;
+    try {
+      await apiClient.call("agent.stop", { sessionId: activeSessionId });
+    } catch { /* ignore */ }
+  }, [activeSessionId]);
 
   const { handleScroll, scrollToMessage } = useActiveScrollTracker({
     scrollRef: messagesScrollRef,
     navScrollRef,
     messageIds,
     setActive,
+    streamVersion,
   });
 
   const handleNavDotClick = useCallback(
@@ -78,19 +104,6 @@ export function ChatPanel() {
     }
   };
 
-  const totalTokens = messages.reduce(
-    (acc, m) => acc + (m.tokenUsage?.input ?? 0) + (m.tokenUsage?.output ?? 0),
-    0
-  );
-  const inputTokens = messages.reduce(
-    (acc, m) => acc + (m.tokenUsage?.input ?? 0),
-    0
-  );
-  const outputTokens = messages.reduce(
-    (acc, m) => acc + (m.tokenUsage?.output ?? 0),
-    0
-  );
-
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative bg-gray-950">
       <div className="flex items-center gap-4 px-4 py-1.5 bg-gray-900/80 border-b border-gray-800 text-[11px] text-gray-500 flex-shrink-0">
@@ -105,19 +118,10 @@ export function ChatPanel() {
             <span>返回主会话</span>
           </button>
         )}
-        <div className="flex items-center gap-1.5">
-          <span className={`w-2 h-2 rounded-full ${isViewingSubagent ? "bg-purple-500/60" : "bg-green-500/60"}`} />
-          <span>已用</span>
-          <span className="text-gray-400 font-medium">{(totalTokens / 1000).toFixed(0)}K</span>
+        {activeSessionId && <TokenStatusBar sessionId={activeSessionId} />}
+        <div className="ml-auto flex items-center">
+          <StatusToggleIcon />
         </div>
-        <span className="text-gray-700">/</span>
-        <span>可用 200K</span>
-        <div className="ml-auto flex items-center gap-3">
-          <span>输入 {(inputTokens / 1000).toFixed(0)}K</span>
-          <span>输出 {outputTokens}</span>
-          <span>费用 $0.00</span>
-        </div>
-        <StatusToggleIcon />
       </div>
 
       <div className="flex-1 flex overflow-hidden">
@@ -145,7 +149,7 @@ export function ChatPanel() {
       <div className="px-3 pb-3 pt-2 flex-shrink-0 flex items-end gap-1.5 bg-gray-900 border-t border-gray-800">
         {!isViewingSubagent && (
           <>
-            <div className="flex flex-col gap-1 shrink-0">
+            <div className="flex flex-col gap-1 shrink-0 justify-between py-1">
               <button className="p-1.5 rounded-md hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors" title="附件">
                 <Paperclip className="w-4 h-4" />
               </button>
@@ -154,11 +158,16 @@ export function ChatPanel() {
               </button>
             </div>
 
-            <InputBar value={inputText} onChange={setInputText} onSend={handleSend} />
+            <InputBar ref={inputBarRef} value={inputText} onChange={setInputText} onSend={handleSend} sessionId={activeSessionId ?? ""} />
 
-            <button onClick={handleSend} disabled={!inputText.trim()} className={`p-2.5 rounded-lg transition-colors shrink-0 self-end ${inputText.trim() ? "bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm shadow-indigo-500/20" : "bg-gray-800 text-gray-600 cursor-not-allowed"}`} title="发送">
-              <ArrowUp className="w-4 h-4" />
-            </button>
+            <div className="flex flex-col gap-1 shrink-0 justify-between py-1">
+              <button onClick={handleAbort} disabled={!isStreaming} className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${isStreaming ? "bg-red-600 text-white hover:bg-red-700" : "bg-red-900/30 text-red-500/50 cursor-not-allowed"}`} title="暂停">
+                <Square className="w-4 h-4" />
+              </button>
+              <button onClick={() => inputBarRef.current?.send()} disabled={!inputText.trim()} className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${inputText.trim() ? "bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm shadow-indigo-500/20" : "bg-gray-800 text-gray-600 cursor-not-allowed"}`} title="发送">
+                <ArrowUp className="w-4 h-4" />
+              </button>
+            </div>
           </>
         )}
         {isViewingSubagent && (

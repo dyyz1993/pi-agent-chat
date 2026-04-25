@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { SessionMeta, ProjectTab, ContentBlock } from "../types";
+import type { SessionMeta, ProjectTab, ContentBlock, ContextUsage, SessionStatus } from "../types";
 import { apiClient } from "../lib/api-client";
 import { messageToChatMessage } from "../lib/message-mapper";
 import type { AgentEvent } from "../../shared/modules/agent";
@@ -34,6 +34,8 @@ interface SessionState {
   bashSubscriptions: Record<string, string>;
   lspSubscriptions: Record<string, string>;
   todosBySession: Record<string, TodoItem[]>;
+  sessionContextMap: Record<string, ContextUsage>;
+  sessionStatusMap: Record<string, SessionStatus>;
 
   addProjectTab: (tab: ProjectTab) => void;
   removeProjectTab: (id: string) => void;
@@ -45,6 +47,9 @@ interface SessionState {
   deleteSession: (sessionId: string) => void;
   setSessionTodos: (sessionId: string, todos: TodoItem[]) => void;
   restoreFromPersisted: () => Promise<boolean>;
+  updateSessionContext: (sessionId: string, usage: Partial<ContextUsage>) => void;
+  updateSessionStatus: (sessionId: string, status: SessionStatus) => void;
+  fetchInitialState: (sessionId: string) => void;
 }
 
 function setupSubscriptions(
@@ -76,6 +81,8 @@ function setupSubscriptions(
         projectPath: session.projectPath,
         sessionPath: session.sessionPath,
       }).catch(() => {});
+
+      storeGet().fetchInitialState(id);
     }).catch(() => {});
   }
 
@@ -194,6 +201,8 @@ export const useSessionStore = create<SessionState>()(
       bashSubscriptions: {},
       lspSubscriptions: {},
       todosBySession: {},
+      sessionContextMap: {},
+      sessionStatusMap: {},
 
       addProjectTab: (tab) =>
         set((s) => {
@@ -366,6 +375,38 @@ export const useSessionStore = create<SessionState>()(
         }));
       },
 
+      updateSessionContext: (sessionId, usage) => {
+        set((s) => {
+          const prev = s.sessionContextMap[sessionId] || { tokens: null, contextWindow: 0 };
+          return {
+            sessionContextMap: { ...s.sessionContextMap, [sessionId]: { ...prev, ...usage } },
+          };
+        });
+      },
+
+      updateSessionStatus: (sessionId, status) => {
+        set((s) => ({
+          sessionStatusMap: { ...s.sessionStatusMap, [sessionId]: status },
+        }));
+      },
+
+      fetchInitialState: (sessionId) => {
+        apiClient.call("agent.getState", { sessionId }).then((result) => {
+          if (!result) return;
+          const cw = result.model?.contextWindow || 0;
+          if (cw > 0) {
+            get().updateSessionContext(sessionId, { contextWindow: cw });
+          }
+          if (result.isStreaming) {
+            get().updateSessionStatus(sessionId, "streaming");
+          } else if (result.isCompacting) {
+            get().updateSessionStatus(sessionId, "compacting");
+          } else {
+            get().updateSessionStatus(sessionId, "idle");
+          }
+        }).catch(() => {});
+      },
+
       restoreFromPersisted: async () => {
         const { activeProjectId, activeSessionId, projectTabs } = get();
         if (!activeProjectId || !activeSessionId || projectTabs.length === 0) {
@@ -425,7 +466,35 @@ export const useSessionStore = create<SessionState>()(
 );
 
 function handleAgentEvent(sessionId: string, event: AgentEvent) {
+  const storeGet = () => useSessionStore.getState() as SessionState;
+
+  if (event.type === "agent_start") {
+    storeGet().updateSessionStatus(sessionId, "streaming");
+    return;
+  }
+
+  if (event.type === "agent_end") {
+    storeGet().updateSessionStatus(sessionId, "idle");
+    return;
+  }
+
+  if (event.type === "compaction_start") {
+    storeGet().updateSessionStatus(sessionId, "compacting");
+    return;
+  }
+
+  if (event.type === "compaction_end") {
+    const result = event.result as { tokensAfter?: number; tokensBefore?: number } | undefined;
+    const tokensAfter = result?.tokensAfter;
+    storeGet().updateSessionContext(sessionId, { tokens: tokensAfter ?? null });
+    storeGet().updateSessionStatus(sessionId, "idle");
+    return;
+  }
+
   if (event.type === "extension_ui_request") {
+    if (event.method === "confirm" || event.method === "select" || event.method === "input") {
+      storeGet().updateSessionStatus(sessionId, "permission");
+    }
     return;
   }
 
@@ -516,6 +585,14 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
     const message = event.message as AssistantMessage;
 
+    if (message.usage) {
+      const raw = message.usage as unknown as Record<string, unknown>;
+      const totalTokens = Number(raw.totalTokens ?? 0);
+      if (totalTokens > 0) {
+        storeGet().updateSessionContext(sessionId, { tokens: totalTokens });
+      }
+    }
+
     chat.setMessagesForSession(sessionId, [...existing.slice(0, -1), {
       ...lastMsg,
       content: lastMsg.content,
@@ -569,7 +646,7 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
     } else if (event.type === "tool_execution_end") {
       const isError = event.isError;
       let output = "";
-      const result = event.result as { content?: Array<{ type: string; text?: string }> } | undefined;
+      const result = event.result as { content?: Array<{ type: string; text?: string }>; details?: unknown } | undefined;
       if (result) {
         if (Array.isArray(result.content)) {
           output = result.content.map((c) => c.text ?? "").join("");
@@ -579,7 +656,7 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
       }
       if (targetIdx >= 0) {
         const prev = blocks[targetIdx] as ToolExecBlock;
-        blocks[targetIdx] = { ...prev, status: isError ? "error" : "done", output };
+        blocks[targetIdx] = { ...prev, status: isError ? "error" : "done", output, details: result?.details };
       }
     }
 

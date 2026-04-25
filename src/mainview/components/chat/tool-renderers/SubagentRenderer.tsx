@@ -1,0 +1,231 @@
+import { useCallback, memo } from "react";
+import { Bot, ArrowRight, ExternalLink } from "lucide-react";
+import type { ContentBlock, SubagentSessionInfo } from "../../../types";
+import { useSubagentStore } from "../../../stores/use-subagent-store";
+import { useSessionStore } from "../../../stores/use-session-store";
+
+type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
+
+export const SubagentExecutionCard = memo(function SubagentExecutionCard({ block }: { block: ToolExecBlock }) {
+  const isRunning = block.status === "running";
+  const isError = block.status === "error";
+  const isDone = block.status === "done";
+
+  let description = "";
+  let instruction = "";
+  try {
+    const parsed = JSON.parse(block.args || "{}");
+    description = parsed.description || "";
+    instruction = parsed.instruction || "";
+  } catch {}
+
+  const displayTitle = description || instruction.slice(0, 120) || "子代理任务";
+
+  const matchedSub = useSubagentStore((s): SubagentSessionInfo | null => {
+    for (const subs of Object.values(s.subsessionsByParent)) {
+      const found = subs.find(
+        (sub) =>
+          sub.toolCallId === block.toolCallId ||
+          sub.description === description
+      );
+      if (found) return found;
+    }
+    return null;
+  });
+
+  const activeSessionId = useSessionStore((s) => s.activeSessionId);
+
+  const handleViewSubagent = useCallback(() => {
+    if (matchedSub && activeSessionId) {
+      useSubagentStore
+        .getState()
+        .setActiveSubsession(activeSessionId, matchedSub.sessionId);
+    }
+  }, [matchedSub, activeSessionId]);
+
+  return (
+    <div
+      className={`my-1.5 -mx-3 rounded-none overflow-hidden border-x-0 border-t border-b cursor-pointer transition-colors ${
+        isRunning
+          ? "border-purple-500/30 bg-purple-950/15"
+          : isError
+            ? "border-red-500/20 bg-red-950/10"
+            : "border-purple-700/20 bg-purple-950/8 hover:bg-purple-950/15"
+      }`}
+      onClick={handleViewSubagent}
+    >
+      <Header
+        isRunning={isRunning}
+        isError={isError}
+        isDone={isDone}
+        displayTitle={displayTitle}
+        matchedSub={matchedSub}
+        onView={handleViewSubagent}
+      />
+
+      {isRunning && <RunningInstruction instruction={instruction} />}
+
+      {(block.output || (!isRunning && block.args)) && (
+        <OutputSection block={block} isRunning={isRunning} />
+      )}
+    </div>
+  );
+});
+
+export const Header = memo(function Header({
+  isRunning,
+  isError,
+  isDone,
+  displayTitle,
+  matchedSub,
+  onView,
+}: {
+  isRunning: boolean;
+  isError: boolean;
+  isDone: boolean;
+  displayTitle: string;
+  matchedSub: SubagentSessionInfo | null;
+  onView: () => void;
+}) {
+  return (
+    <div className="px-3 py-2 flex items-start gap-2.5">
+      <div
+        className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 mt-0.5 ${
+          isRunning
+            ? "bg-purple-500/20 border border-purple-500/30"
+            : isError
+              ? "bg-red-500/15 border border-red-500/20"
+              : "bg-purple-500/10 border border-purple-500/15"
+        }`}
+      >
+        <Bot
+          className={`w-3.5 h-3.5 ${
+            isRunning
+              ? "text-purple-400"
+              : isError
+                ? "text-red-400"
+                : "text-purple-400/70"
+          }`}
+        />
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 mb-0.5">
+          <span className="text-[11px] font-medium text-purple-300">
+            SubAgent
+          </span>
+          <StatusChip
+            isRunning={isRunning}
+            isDone={isDone}
+            isError={isError}
+          />
+        </div>
+        <p className="text-[11px] text-gray-400 leading-relaxed line-clamp-2">
+          {displayTitle}
+        </p>
+      </div>
+
+      {isDone && matchedSub && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onView();
+          }}
+          className="shrink-0 flex items-center gap-1 px-2 py-1 rounded text-[10px] text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 transition-colors mt-1"
+        >
+          <ExternalLink className="w-3 h-3" />
+          查看
+        </button>
+      )}
+    </div>
+  );
+});
+
+export const StatusChip = memo(function StatusChip({
+  isRunning,
+  isDone,
+  isError,
+}: {
+  isRunning: boolean;
+  isDone: boolean;
+  isError: boolean;
+}) {
+  if (isRunning) {
+    return (
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] bg-purple-500/15 text-purple-400 border border-purple-500/20">
+        <span className="w-1 h-1 rounded-full bg-purple-400 animate-pulse" />
+        运行中
+      </span>
+    );
+  }
+  if (isDone) {
+    return (
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
+        <span className="w-1 h-1 rounded-full bg-emerald-400" />
+        完成
+      </span>
+    );
+  }
+  if (isError) {
+    return (
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] bg-red-500/15 text-red-400 border border-red-500/20">
+        出错
+      </span>
+    );
+  }
+  return null;
+});
+
+export const RunningInstruction = memo(function RunningInstruction({ instruction }: { instruction: string }) {
+  return (
+    <div className="px-3 pb-2 pt-1 border-t border-purple-500/10">
+      <div className="flex items-center gap-1.5 text-[11px] text-purple-400/60">
+        <ArrowRight className="w-3 h-3 animate-pulse" />
+        <span className="truncate">
+          {instruction.slice(0, 200) || "执行中..."}
+        </span>
+      </div>
+    </div>
+  );
+});
+
+export const OutputSection = memo(function OutputSection({
+  block,
+  isRunning,
+}: {
+  block: ToolExecBlock;
+  isRunning: boolean;
+}) {
+  return (
+    <details className="group border-t border-purple-500/10">
+      <summary className="px-3 py-1 text-[11px] text-gray-500 cursor-pointer hover:text-gray-400 select-none flex items-center gap-1.5">
+        <svg
+          className="w-3 h-3 transition-transform group-open:rotate-90 shrink-0"
+          viewBox="0 0 12 12"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+        >
+          <path d="M4.5 3l3 3-3 3" />
+        </svg>
+        <span>{isRunning ? "实时输出" : "输出"}</span>
+        {isRunning && (
+          <span className="ml-auto text-purple-400/70 animate-pulse text-[10px]">
+            streaming
+          </span>
+        )}
+      </summary>
+      <div className="px-3 pb-2">
+        {block.output ? (
+          <pre className="text-[11px] text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-72 overflow-y-auto">
+            {block.output}
+          </pre>
+        ) : (
+          <div className="text-[11px] text-gray-600 italic py-1">
+            暂无输出
+          </div>
+        )}
+      </div>
+    </details>
+  );
+});

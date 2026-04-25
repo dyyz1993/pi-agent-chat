@@ -1,6 +1,11 @@
-import { useCallback, memo, useMemo } from "react";
+import { useCallback, useEffect, memo, useMemo, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { ArrowDownToLine, X, Brain } from "lucide-react";
 import type { ChatMessage, ContentBlock } from "../../types";
 import { useChatNavStore } from "../../stores/use-chat-nav-store";
+import { useSessionStore } from "../../stores/use-session-store";
+import { apiClient } from "../../lib/api-client";
 import { SubagentExecutionCard } from "./tool-renderers/SubagentRenderer";
 import { getToolRenderer } from "./tool-renderers";
 
@@ -66,7 +71,7 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
         className={`${styleMemo.isUser ? "max-w-[85%]" : "w-full"} px-3 py-2 rounded-lg text-sm whitespace-pre-wrap break-words transition-colors ${baseBg} ${styleMemo.border} ${styleMemo.bg}`}
       >
         {message.content.map((block, i) => (
-          <ContentBlockRenderer key={i} block={block} />
+          <ContentBlockRenderer key={i} block={block} isStreaming={message.isStreaming} />
         ))}
         {message.isStreaming && (
           <span className="inline-block w-1.5 h-4 bg-indigo-400 animate-pulse ml-0.5 align-text-bottom" />
@@ -79,19 +84,67 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
   );
 });
 
-export const ContentBlockRenderer = memo(function ContentBlockRenderer({ block }: { block: ContentBlock }) {
+export const ThinkingCard = memo(function ThinkingCard({ 
+    thinking, 
+    isStreaming 
+  }: { 
+    thinking: string; 
+    isStreaming: boolean;
+  }) {
+  const [isOpen, setIsOpen] = useState(true);
+
+  // 流式结束后自动折叠
+  const wasStreamingRef = useRef(isStreaming);
+  useEffect(() => {
+    if (wasStreamingRef.current && !isStreaming) {
+      setIsOpen(false);
+    }
+    wasStreamingRef.current = isStreaming;
+  }, [isStreaming]);
+
+  // 获取第一行用于预览
+  const firstLine = thinking.split('\n')[0] || 'Thinking...';
+  const hasMore = thinking.includes('\n') || thinking.length > 80;
+
+  return (
+    <div className="my-1 border border-purple-600/30 rounded-lg overflow-hidden bg-purple-950/10">
+      <div 
+        className={`px-3 py-1.5 text-xs flex items-center gap-2 ${!isStreaming ? 'cursor-pointer hover:bg-gray-800/50' : ''}`}
+        onClick={() => !isStreaming && setIsOpen(!isOpen)}
+      >
+        <Brain className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+        <span className="text-purple-300 font-medium">Thinking</span>
+        {isStreaming && <span className="text-purple-400 animate-pulse text-[10px]">...</span>}
+      </div>
+      
+      {isOpen ? (
+        <div className="px-3 pb-2 text-xs text-gray-300 whitespace-pre-wrap bg-gray-800/20 border-t border-purple-600/20">
+          {thinking || <span className="text-gray-500 italic">thinking...</span>}
+        </div>
+      ) : hasMore ? (
+        <div className="px-3 py-1 text-[11px] text-gray-400 truncate border-t border-purple-600/20 bg-gray-800/10">
+          {firstLine.length > 80 ? firstLine.slice(0, 80) + '...' : firstLine}
+        </div>
+      ) : null}
+    </div>
+  );
+});
+
+export const ContentBlockRenderer = memo(function ContentBlockRenderer({ block, isStreaming }: { block: ContentBlock; isStreaming?: boolean }) {
   switch (block.type) {
     case "text":
+      if (isStreaming) {
+        return (
+          <div className="my-1 px-3 py-2 rounded-lg bg-gray-700/80 text-sm text-gray-200 whitespace-pre-wrap break-words overflow-auto max-h-[60vh]">{block.text}</div>
+        );
+      }
       return (
-        <div className="my-1 px-3 py-2 rounded-lg bg-gray-700/80">{block.text}</div>
+        <div className="my-1 px-3 py-2 rounded-lg bg-gray-700/80 prose prose-invert prose-sm max-w-none overflow-auto max-h-[60vh]">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{block.text}</ReactMarkdown>
+        </div>
       );
     case "thinking":
-      return (
-        <details className="my-1 border border-gray-600 rounded-lg overflow-hidden">
-          <summary className="px-3 py-1.5 text-xs text-gray-400 cursor-pointer hover:bg-gray-800/50">Thinking...</summary>
-          <div className="px-3 pb-2 text-xs text-gray-300 whitespace-pre-wrap bg-gray-800/30">{block.thinking}</div>
-        </details>
-      );
+      return <ThinkingCard thinking={block.thinking} isStreaming={!!isStreaming} />;
     case "toolCall":
       return (
         <div className="my-1 border border-yellow-600/30 rounded-lg overflow-hidden bg-yellow-900/5">
@@ -107,7 +160,7 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({ block }
           <summary className={`px-3 py-1.5 text-xs cursor-pointer flex items-center gap-1.5 ${block.isError ? "text-red-400" : "text-green-400"} hover:bg-gray-800/50`}>
             <span>{block.isError ? "✗" : "✓"}</span><span>Result{block.isError ? " (error)" : ""}</span>
           </summary>
-          <pre className="px-3 pb-2 text-xs text-gray-300 overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap bg-gray-800/30">{block.content}</pre>
+          <pre className="px-3 pb-2 text-xs text-gray-300 overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap">{block.content}</pre>
         </details>
       );
     case "toolExecution": {
@@ -124,14 +177,31 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({ block }
   }
 });
 
-export const ToolExecutionCard = memo(function ToolExecutionCard({ block }: { block: Extract<ContentBlock, { type: "toolExecution" }> }) {
+export const ToolExecutionCard = memo(function ToolExecutionCard ({ block }: { block: Extract<ContentBlock, {  type: "toolExecution" }> }) {
   const isRunning = block.status === "running";
   const isError = block.status === "error";
+  const isBash = block.toolName.toLowerCase() === "bash";
+  const [elapsed, setElapsed] = useState(0);
+  const startedAt = useRef(Date.now());
+
+  useEffect(() => {
+    if (!isRunning) return;
+    startedAt.current = Date.now();
+    setElapsed(0);
+    const id = setInterval(() => setElapsed(Date.now() - startedAt.current), 1000);
+    return () => clearInterval(id);
+  }, [isRunning]);
+
+  const showBackground = elapsed > 5000 && isBash && isRunning;
+
+  async function sendAction(action: "kill" | "background") {
+    const sid = useSessionStore.getState().activeSessionId;
+    if (!sid) return;
+    await apiClient.call("bash.command", { sessionId: sid, action, toolCallId: block.toolCallId });
+  }
 
   return (
-    <div className={`my-1.5 -mx-3 rounded-none overflow-hidden border-x-0 border-t border-b ${
-      isRunning ? "border-blue-500/30 bg-blue-950/15" : isError ? "border-red-500/20 bg-red-950/10" : "border-gray-700/40 bg-gray-800/20"
-    }`}>
+    <div className={`my-1.5 -mx-3 rounded-none overflow-hidden border-x-0 border-t border-b ${isRunning ? "border-blue-500/30 bg-blue-950/15" : isError ? "border-red-500/20 bg-red-950/10" : "border-gray-700/40 bg-gray-800/20"}`}>
       <div className="px-3 py-1.5 flex items-center gap-2 text-xs">
         <span className={`font-medium ${isRunning ? "text-blue-400" : isError ? "text-red-400" : "text-gray-300"}`}>{block.toolName}</span>
         {isRunning && <span className="text-blue-400 animate-pulse text-[10px]">running</span>}
@@ -139,7 +209,7 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({ block }: { bl
 
       <details className="group">
         <summary className="px-3 py-1 text-[11px] text-gray-500 cursor-pointer hover:text-gray-400 select-none flex items-center gap-1.5 border-t border-gray-700/30">
-          <svg className="w-3 h-3 transition-transform group-open:rotate-90 shrink-0" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4.5 3l3 3-3 3"/></svg>
+          <svg className="w-3 h-3 transition-transform group-open:rotate-90 shrink-0" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4.5 3l3 3-3 3" /></svg>
           <span>Input</span>
         </summary>
         <div className="px-3 pb-2">
@@ -151,7 +221,7 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({ block }: { bl
 
       <details open className="group">
         <summary className="px-3 py-1 text-[11px] text-gray-500 cursor-pointer hover:text-gray-400 select-none flex items-center gap-1.5 border-t border-gray-700/30">
-          <svg className="w-3 h-3 transition-transform group-open:rotate-90 shrink-0" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4.5 3l3 3-3 3"/></svg>
+          <svg className="w-3 h-3 transition-transform group-open:rotate-90 shrink-0" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4.5 3l3 3-3 3" /></svg>
           <span>Output</span>
           {isRunning && <span className="ml-auto text-blue-400/70 animate-pulse text-[10px]">streaming</span>}
         </summary>
@@ -163,6 +233,30 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({ block }: { bl
           ) : null}
         </div>
       </details>
+
+      {isBash && isRunning && (
+        <div className="flex items-center gap-1.5 px-3 py-1.5 border-t border-gray-700/30">
+          {showBackground && (
+            <button
+              onClick={() => sendAction("background")}
+              className="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded border border-yellow-600/40 text-[10px] text-yellow-400 hover:bg-yellow-600/15 transition-colors"
+              title="转为后台运行"
+            >
+              <ArrowDownToLine className="w-3 h-3" />
+              <span>后台运行</span>
+            </button>
+          )}
+          {!showBackground && <div className="flex-1" />}
+          <button
+            onClick={() => sendAction("kill")}
+            className="flex items-center justify-center gap-1 px-2 py-1 rounded border border-red-600/30 text-[10px] text-red-400 hover:bg-red-600/10 transition-colors"
+            title="取消执行"
+          >
+            <X className="w-3 h-3" />
+            <span>取消</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 });
