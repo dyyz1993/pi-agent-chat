@@ -10,6 +10,10 @@ type R<K extends keyof RPCMethods> = RPCMethods[K] extends { result: infer R } ?
 
 let manager: AgentProcessManager | null = null;
 
+export function getProcessManager(): AgentProcessManager | null {
+  return manager;
+}
+
 export function register(server: RPCServer, _options: HandlerOptions): void {
   if (!manager) {
     manager = new AgentProcessManager(server);
@@ -50,5 +54,13 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   r("agent.respondUI", async (params) => {
     const ok = manager!.respondUI(params.sessionId, params.requestId, params.response);
     return { ok };
+  });
+
+  r("agent.getState", async (params) => {
+    return manager!.getState(params.sessionId);
+  });
+
+  r("agent.getSessionStats", async (params) => {
+    return manager!.getSessionStats(params.sessionId);
   });
 }

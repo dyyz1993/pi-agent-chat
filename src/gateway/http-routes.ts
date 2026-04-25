@@ -8,6 +8,7 @@ import { stat, readFile, writeFile, mkdir, appendFile } from "fs/promises";
 import { existsSync } from "fs";
 import { extname, basename, dirname, resolve } from "path";
 import { createLogger } from "../shared/lib/logger";
+import { listRecentProjects } from "../shared/lib/project-config";
 
 const log = createLogger("gateway");
 
@@ -37,9 +38,30 @@ const MIME_TYPES: Record<string, string> = {
 
 // 路径白名单校验：阻止路径遍历攻击
 const ALLOWED_ROOTS = [resolve(process.cwd())];
-function isPathAllowed(requestedPath: string): boolean {
+let cachedAllowedRoots: string[] | null = null;
+let rootsCacheTime = 0;
+const ROOTS_CACHE_TTL = 30_000;
+
+async function getAllowedRoots(): Promise<string[]> {
+  const now = Date.now();
+  if (cachedAllowedRoots && now - rootsCacheTime < ROOTS_CACHE_TTL) return cachedAllowedRoots;
+  try {
+    const projects = await listRecentProjects();
+    cachedAllowedRoots = [
+      ...ALLOWED_ROOTS,
+      ...projects.map((p) => resolve(p.path)),
+    ];
+    rootsCacheTime = now;
+  } catch {
+    cachedAllowedRoots = [...ALLOWED_ROOTS];
+  }
+  return cachedAllowedRoots;
+}
+
+async function isPathAllowed(requestedPath: string): Promise<boolean> {
   const resolved = resolve(requestedPath);
-  return ALLOWED_ROOTS.some((root) => resolved === root || resolved.startsWith(root + "/"));
+  const roots = await getAllowedRoots();
+  return roots.some((root) => resolved === root || resolved.startsWith(root + "/"));
 }
 
 // Token 验证
@@ -138,7 +160,7 @@ export function createHttpHandler(deps: HttpRouteDeps): (req: IncomingMessage, r
 
 async function handleFileInfo(encodedPath: string, res: ServerResponse): Promise<void> {
   const filePath = decodeURIComponent(encodedPath);
-  if (!isPathAllowed(filePath)) {
+  if (!(await isPathAllowed(filePath))) {
     res.writeHead(403, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Path not allowed" }));
     return;
@@ -162,7 +184,7 @@ async function handleFileInfo(encodedPath: string, res: ServerResponse): Promise
 
 async function handleFileContent(encodedPath: string, req: IncomingMessage, res: ServerResponse): Promise<void> {
   const filePath = decodeURIComponent(encodedPath);
-  if (!isPathAllowed(filePath)) {
+  if (!(await isPathAllowed(filePath))) {
     res.writeHead(403, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Path not allowed" }));
     return;
@@ -218,7 +240,7 @@ async function handleFileUpload(
     res.end(JSON.stringify({ error: "Missing path parameter" }));
     return;
   }
-  if (!isPathAllowed(destPath)) {
+  if (!(await isPathAllowed(destPath))) {
     res.writeHead(403, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Path not allowed" }));
     return;

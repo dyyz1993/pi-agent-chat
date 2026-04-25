@@ -1,3 +1,6 @@
+import type { AgentEvent as UpstreamAgentEvent } from "@dyyz1993/pi-agent-core";
+import type { AssistantMessage, AssistantMessageEvent, TextContent } from "@dyyz1993/pi-ai";
+
 export interface AgentMethods {
   "agent.start": {
     params: { sessionId: string; projectPath: string; sessionPath: string };
@@ -19,6 +22,27 @@ export interface AgentMethods {
     params: { sessionId: string; requestId: string; response: Record<string, unknown> };
     result: { ok: boolean };
   };
+  "agent.getState": {
+    params: { sessionId: string };
+    result: {
+      model?: {
+        id: string;
+        contextWindow: number;
+        maxTokens: number;
+      };
+      isStreaming: boolean;
+      isCompacting: boolean;
+      messageCount: number;
+    } | null;
+  };
+  "agent.getSessionStats": {
+    params: { sessionId: string };
+    result: {
+      tokens: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number };
+      cost: number;
+      contextUsage?: { tokens: number | null; contextWindow: number; percent: number | null };
+    } | null;
+  };
 }
 
 export interface AgentEvents {
@@ -30,42 +54,52 @@ export interface AgentEventPayload {
   event: AgentEvent;
 }
 
+export interface ChannelDataEvent {
+  type: "channel_data";
+  name: string;
+  data: unknown;
+}
+
+export interface ExtensionUIRequestEvent {
+  type: "extension_ui_request";
+  id: string;
+  method: "select" | "confirm" | "input" | "editor" | "notify" | "setStatus" | "setWidget" | "setTitle" | "set_editor_text";
+  title?: string;
+  message?: string;
+  options?: string[];
+  placeholder?: string;
+  prefill?: string;
+  timeout?: number;
+  notifyType?: "info" | "warning" | "error";
+  statusKey?: string;
+  statusText?: string;
+  widgetKey?: string;
+  widgetLines?: string[];
+  widgetPlacement?: "aboveEditor" | "belowEditor";
+  text?: string;
+}
+
+export interface ResponseEvent {
+  type: "response";
+  id: string;
+  command: string;
+  success: boolean;
+  data?: unknown;
+  error?: string;
+}
+
 export type AgentEvent =
-  | { type: "agent_start" }
-  | { type: "agent_end"; messages: unknown[] }
-  | { type: "turn_start" }
-  | { type: "turn_end"; message: unknown; toolResults: unknown[] }
-  | { type: "message_start"; message: MessageData }
-  | { type: "message_update"; message: MessageData; assistantMessageEvent?: unknown }
-  | { type: "message_end"; message: MessageData }
-  | { type: "tool_execution_start"; toolCallId: string; toolName: string; args: Record<string, unknown> }
-  | { type: "tool_execution_update"; toolCallId: string; toolName: string; args: Record<string, unknown>; partialResult: unknown }
-  | { type: "tool_execution_end"; toolCallId: string; toolName: string; result: unknown; isError: boolean }
+  | UpstreamAgentEvent
   | { type: "compaction_start"; reason: string }
   | { type: "compaction_end"; reason: string; result: unknown; aborted: boolean }
   | { type: "queue_update"; steering: string[]; followUp: string[] }
-  | { type: "response"; id: string; command: string; success: boolean; data?: unknown; error?: string }
-  | { type: "extension_ui_request"; id: string; method: string; [key: string]: unknown }
-  | { type: string; [key: string]: unknown };
+  | ResponseEvent
+  | ExtensionUIRequestEvent
+  | ChannelDataEvent;
 
-export interface MessageData {
-  role: string;
-  content?: ContentBlock[];
-  provider?: string;
-  model?: string;
-  usage?: unknown;
-  stopReason?: string | null;
-  timestamp?: number;
-}
+export type { AssistantMessage, AssistantMessageEvent, TextContent };
 
-export interface ContentBlock {
-  type: "text" | "thinking" | "toolCall";
-  text?: string;
-  thinking?: string;
-  id?: string;
-  name?: string;
-  input?: string;
-}
+export type MessageData = AssistantMessage;
 
 export interface AgentProcessInfo {
   sessionId: string;

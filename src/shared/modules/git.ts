@@ -78,4 +78,6 @@ export interface GitMethods {
 export interface GitFileChange {
   path: string;
   status: "modified" | "added" | "deleted" | "renamed" | "copied";
+  additions?: number;
+  deletions?: number;
 }

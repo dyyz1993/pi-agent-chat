@@ -7,3 +7,5 @@ export { register as session } from "./session";
 export { register as agent } from "./agent";
 export { register as subagent } from "./subagent";
 export { register as todo } from "./todo";
+export { register as bash } from "./bash";
+export { register as lsp } from "./lsp";

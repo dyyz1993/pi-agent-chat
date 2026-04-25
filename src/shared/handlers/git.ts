@@ -60,6 +60,28 @@ function parseStatus(output: string): {
   return { staged, changed, untracked };
 }
 
+function getNumStats(repoRoot: string, staged: boolean): Map<string, { additions: number; deletions: number }> {
+  const stats = new Map<string, { additions: number; deletions: number }>();
+  try {
+    const args = staged ? ["diff", "--cached", "--numstat"] : ["diff", "--numstat"];
+    const output = execGit(args, repoRoot, true);
+    for (const line of output.split("\n")) {
+      if (!line.trim()) continue;
+      const [additions, deletions, ...pathParts] = line.split("\t");
+      const path = pathParts.join("\t"); // handle paths with tabs
+      if (path && additions !== undefined && deletions !== undefined) {
+        // For binary files, additions/deletions are "-"
+        const add = additions === "-" ? 0 : parseInt(additions) || 0;
+        const del = deletions === "-" ? 0 : parseInt(deletions) || 0;
+        stats.set(path, { additions: add, deletions: del });
+      }
+    }
+  } catch {
+    // ignore errors
+  }
+  return stats;
+}
+
 export function register(server: RPCServer, _options: HandlerOptions): void {
   const r: RegisterFn = (method, handler) => {
     server.register(method, handler as (params: unknown) => Promise<unknown>);
@@ -78,6 +100,26 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const behind = branchMatch?.[5] ? parseInt(branchMatch[5]) : 0;
 
     const { staged, changed, untracked } = parseStatus(lines.slice(1).join("\n"));
+
+    // Get line stats for staged and changed files
+    const stagedStats = getNumStats(repoRoot, true);
+    const changedStats = getNumStats(repoRoot, false);
+
+    // Merge stats into file changes
+    for (const f of staged) {
+      const stats = stagedStats.get(f.path);
+      if (stats) {
+        f.additions = stats.additions;
+        f.deletions = stats.deletions;
+      }
+    }
+    for (const f of changed) {
+      const stats = changedStats.get(f.path);
+      if (stats) {
+        f.additions = stats.additions;
+        f.deletions = stats.deletions;
+      }
+    }
 
     return { staged, changed, untracked, branch, ahead, behind };
   });
