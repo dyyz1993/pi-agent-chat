@@ -5,6 +5,7 @@ import { StatusPanel } from "../status-panel/StatusPanel";
 import { ExplorerSidebar } from "../explorer/ExplorerSidebar";
 import { GitPanel } from "../git/GitPanel";
 import { RpcPanel } from "../rpc-panel/RpcPanel";
+import { BashPanel } from "../bash-panel/BashPanel";
 import { useExplorerStore } from "../../stores/use-explorer-store";
 import { useEffect } from "react";
 
@@ -21,7 +22,22 @@ export function RightSidebar({ width, overlay, onResizeStart }: RightSidebarProp
   const setActivePanelTab = useLayoutStore((s) => s.setActivePanelTab);
   const listRootDir = useExplorerStore((s) => s.listRootDir);
 
+  const treeNodes = useExplorerStore((s) => s.treeNodes);
+  const currentPath = useExplorerStore((s) => s.currentPath);
+  const selectedPath = useExplorerStore((s) => s.selectedPath);
+  const editingNode = useExplorerStore((s) => s.editingNode);
+  const toggleNode = useExplorerStore((s) => s.toggleNode);
+  const openFile = useExplorerStore((s) => s.openFile);
+  const createFile = useExplorerStore((s) => s.createFile);
+  const createDir = useExplorerStore((s) => s.createDir);
+  const renameNode = useExplorerStore((s) => s.renameNode);
+  const deleteNode = useExplorerStore((s) => s.deleteNode);
+  const startEditing = useExplorerStore((s) => s.startEditing);
+  const cancelEditing = useExplorerStore((s) => s.cancelEditing);
+  const importFiles = useExplorerStore((s) => s.importFiles);
+
   const isPinned = statusPanel === "pinned";
+  const isMobile = useLayoutStore((s) => s.breakpoint) === "mobile";
 
   useEffect(() => {
     if (activePanelTab === "files") {
@@ -36,26 +52,27 @@ export function RightSidebar({ width, overlay, onResizeStart }: RightSidebarProp
       case "files":
         return (
           <ExplorerSidebar
-            treeNodes={useExplorerStore.getState().treeNodes}
-            currentPath={useExplorerStore.getState().currentPath}
-            selectedPath={useExplorerStore.getState().selectedPath}
-            editingNode={useExplorerStore.getState().editingNode}
-            onPathChange={useExplorerStore.getState().setCurrentPath}
+            treeNodes={treeNodes}
+            currentPath={currentPath}
+            selectedPath={selectedPath}
+            editingNode={editingNode}
             onRefresh={listRootDir}
-            onToggle={useExplorerStore.getState().toggleNode}
-            onOpenFile={useExplorerStore.getState().openFile}
-            onCreateFile={useExplorerStore.getState().createFile}
-            onCreateDir={useExplorerStore.getState().createDir}
-            onRenameNode={useExplorerStore.getState().renameNode}
-            onDeleteNode={useExplorerStore.getState().deleteNode}
-            onStartEditing={useExplorerStore.getState().startEditing}
-            onCancelEditing={useExplorerStore.getState().cancelEditing}
-            onImportFiles={useExplorerStore.getState().importFiles}
+            onToggle={toggleNode}
+            onOpenFile={openFile}
+            onCreateFile={createFile}
+            onCreateDir={createDir}
+            onRenameNode={renameNode}
+            onDeleteNode={deleteNode}
+            onStartEditing={startEditing}
+            onCancelEditing={cancelEditing}
+            onImportFiles={importFiles}
             hideOuterShell
           />
         );
       case "status":
         return <StatusPanel />;
+      case "shell":
+        return <BashPanel />;
       case "rpc":
         return <RpcPanel />;
       default:
@@ -77,13 +94,15 @@ export function RightSidebar({ width, overlay, onResizeStart }: RightSidebarProp
     >
       {/* Tab bar + pin */}
       <div className="flex items-center border-b border-gray-800 shrink-0">
-        <button
-          onClick={(e) => { e.stopPropagation(); toggleStatus(); }}
-          className={`p-1.5 mr-1 rounded transition-colors ${isPinned ? "text-indigo-400" : "text-gray-600 hover:text-gray-400"}`}
-          title={isPinned ? "取消固定" : "固定面板"}
-        >
-          <Pin className="w-3.5 h-3.5" fill={isPinned ? "currentColor" : "none"} />
-        </button>
+        {!isMobile && (
+          <button
+            onClick={(e) => { e.stopPropagation(); toggleStatus(); }}
+            className={`p-1.5 mr-1 rounded transition-colors ${isPinned ? "text-indigo-400" : "text-gray-600 hover:text-gray-400"}`}
+            title={isPinned ? "取消固定" : "固定面板"}
+          >
+            <Pin className="w-3.5 h-3.5" fill={isPinned ? "currentColor" : "none"} />
+          </button>
+        )}
         {PANEL_TABS.map((tab: { id: PanelTabId; label: string }) => (
           <button
             key={tab.id}

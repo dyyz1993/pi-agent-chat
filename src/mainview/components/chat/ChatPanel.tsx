@@ -1,42 +1,81 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useMemo } from "react";
 import {
-  Square,
   ArrowUp,
   Paperclip,
   Image as ImageIcon,
   PanelLeft,
   PanelRight,
+  Bot,
+  ArrowLeft,
 } from "lucide-react";
+import { useRef } from "react";
 import { useChatStore } from "../../stores/use-chat-store";
 import { useSessionStore } from "../../stores/use-session-store";
+import { useSubagentStore } from "../../stores/use-subagent-store";
 import { useLayoutStore } from "../../layouts/use-layout-store";
+import { useChatNavStore } from "../../stores/use-chat-nav-store";
+import { useActiveScrollTracker } from "../../hooks/use-active-scroll-tracker";
 import { MessageBubble } from "./MessageBubble";
-import { ToolIconList } from "./ToolIconList";
+import { SideNav } from "./SideNav";
 import { InputBar } from "./InputBar";
+import type { ChatMessage } from "../../types";
 
 const EMPTY_MSGS: never[] = [];
 
 export function ChatPanel() {
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
-  const messages = useChatStore((s) => {
+  const activeSubId = useSubagentStore((s) => s.activeSubsessionId);
+  const subMessages = useSubagentStore((s) => {
+    if (!activeSubId) return EMPTY_MSGS;
+    return s.messagesBySubsession[activeSubId] || EMPTY_MSGS;
+  });
+  const mainMessages = useChatStore((s) => {
     if (!activeSessionId) return EMPTY_MSGS;
     return s.messagesBySession[activeSessionId] || EMPTY_MSGS;
   });
+
+  const isViewingSubagent = !!activeSubId;
+  const messages: ChatMessage[] = isViewingSubagent ? subMessages : mainMessages;
+
   const inputText = useChatStore((s) => s.inputText);
   const sendMessage = useChatStore((s) => s.sendMessage);
   const setInputText = useChatStore((s) => s.setInputText);
-  const messagesEndRef = useRef<HTMLDivElement>(null!);
-  const [isStreaming, setIsStreaming] = useState(false);
+  const setActive = useChatNavStore((s) => s.setActive);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
+  const navScrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  const messageIds = useMemo(() => messages.map((m) => m.id), [messages]);
+
+  const { handleScroll, scrollToMessage } = useActiveScrollTracker({
+    scrollRef: messagesScrollRef,
+    navScrollRef,
+    messageIds,
+    setActive,
+  });
+
+  const handleNavDotClick = useCallback(
+    (msgId: string) => {
+      scrollToMessage(msgId);
+    },
+    [scrollToMessage],
+  );
+
+  const handleSubDotScroll = useCallback(
+    (msgId: string) => {
+      scrollToMessage(msgId);
+    },
+    [scrollToMessage],
+  );
 
   const handleSend = async () => {
-    if (!inputText.trim() || isStreaming) return;
-    setIsStreaming(true);
+    if (!inputText.trim()) return;
     await sendMessage();
-    setIsStreaming(false);
+  };
+
+  const handleBackToMain = () => {
+    if (activeSessionId) {
+      useSubagentStore.getState().setActiveSubsession(activeSessionId, null);
+    }
   };
 
   const totalTokens = messages.reduce(
@@ -54,11 +93,20 @@ export function ChatPanel() {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative bg-gray-950">
-      {/* Top token bar */}
       <div className="flex items-center gap-4 px-4 py-1.5 bg-gray-900/80 border-b border-gray-800 text-[11px] text-gray-500 flex-shrink-0">
         <SessionToggleIcon />
+        {isViewingSubagent && (
+          <button
+            onClick={handleBackToMain}
+            className="flex items-center gap-1 text-purple-400 hover:text-purple-300 transition-colors"
+          >
+            <ArrowLeft className="w-3 h-3" />
+            <Bot className="w-3 h-3" />
+            <span>返回主会话</span>
+          </button>
+        )}
         <div className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-green-500/60" />
+          <span className={`w-2 h-2 rounded-full ${isViewingSubagent ? "bg-purple-500/60" : "bg-green-500/60"}`} />
           <span>已用</span>
           <span className="text-gray-400 font-medium">{(totalTokens / 1000).toFixed(0)}K</span>
         </div>
@@ -72,85 +120,97 @@ export function ChatPanel() {
         <StatusToggleIcon />
       </div>
 
-      {/* Main area: messages | tool icons (narrow right bar) */}
       <div className="flex-1 flex overflow-hidden">
         <div className="flex-1 min-w-0">
-          <MessagesArea messages={messages} isStreaming={isStreaming} messagesEndRef={messagesEndRef} />
+          {isViewingSubagent ? (
+            <SubagentMessagesArea messages={messages} scrollRef={messagesScrollRef} onScroll={handleScroll} />
+          ) : (
+            <MessagesArea
+              messages={messages}
+              scrollRef={messagesScrollRef}
+              onScroll={handleScroll}
+            />
+          )}
         </div>
-        <div className="w-9 shrink-0 bg-gray-900/30 border-l border-gray-800/30 flex flex-col items-center py-1.5 gap-0.5">
-          <ToolIconList />
+        <div className="w-12 shrink-0">
+          <SideNav
+            messages={messages}
+            scrollRef={navScrollRef}
+            onNavDotClick={handleNavDotClick}
+            onNavDotScroll={handleSubDotScroll}
+          />
         </div>
       </div>
 
-      {/* Input bar — full width at bottom */}
       <div className="px-3 pb-3 pt-2 flex-shrink-0 flex items-end gap-1.5 bg-gray-900 border-t border-gray-800">
-        {/* Left: attachment + image buttons (vertical) */}
-        <div className="flex flex-col gap-1 shrink-0">
-          <button className="p-1.5 rounded-md hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors" title="附件">
-            <Paperclip className="w-4 h-4" />
-          </button>
-          <button className="p-1.5 rounded-md hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors" title="图片">
-            <ImageIcon className="w-4 h-4" />
-          </button>
-        </div>
+        {!isViewingSubagent && (
+          <>
+            <div className="flex flex-col gap-1 shrink-0">
+              <button className="p-1.5 rounded-md hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors" title="附件">
+                <Paperclip className="w-4 h-4" />
+              </button>
+              <button className="p-1.5 rounded-md hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors" title="图片">
+                <ImageIcon className="w-4 h-4" />
+              </button>
+            </div>
 
-        {/* Center: input */}
-        <InputBar value={inputText} onChange={setInputText} onSend={handleSend} />
+            <InputBar value={inputText} onChange={setInputText} onSend={handleSend} />
 
-        {/* Right: send/stop button (vertical) */}
-        {isStreaming ? (
-          <button onClick={() => setIsStreaming(false)} className="p-2.5 rounded-lg bg-red-600/20 text-red-400 hover:bg-red-600/30 transition-colors shrink-0 self-end" title="停止">
-            <Square className="w-4 h-4 fill-current" />
-          </button>
-        ) : (
-          <button onClick={handleSend} disabled={!inputText.trim()} className={`p-2.5 rounded-lg transition-colors shrink-0 self-end ${inputText.trim() ? "bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm shadow-indigo-500/20" : "bg-gray-800 text-gray-600 cursor-not-allowed"}`} title="发送">
-            <ArrowUp className="w-4 h-4" />
-          </button>
+            <button onClick={handleSend} disabled={!inputText.trim()} className={`p-2.5 rounded-lg transition-colors shrink-0 self-end ${inputText.trim() ? "bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm shadow-indigo-500/20" : "bg-gray-800 text-gray-600 cursor-not-allowed"}`} title="发送">
+              <ArrowUp className="w-4 h-4" />
+            </button>
+          </>
+        )}
+        {isViewingSubagent && (
+          <div className="flex-1 text-center text-[11px] text-gray-600 py-2">
+            子代理会话为只读模式
+          </div>
         )}
       </div>
     </div>
   );
 }
 
-function MessagesArea({ messages, isStreaming, messagesEndRef }: {
-  messages: import("../../types").ChatMessage[];
-  isStreaming: boolean;
-  messagesEndRef: React.RefObject<HTMLDivElement>;
+function SubagentMessagesArea({ messages, scrollRef, onScroll }: {
+  messages: ChatMessage[];
+  scrollRef: React.RefObject<HTMLDivElement | null>;
+  onScroll: () => void;
 }) {
   return (
-    <div className="h-full overflow-y-auto px-4 py-3 space-y-2">
+    <div
+      ref={scrollRef as React.Ref<HTMLDivElement>}
+      className="h-full overflow-y-auto px-4 py-3 space-y-2"
+      onScroll={onScroll}
+    >
+      {messages.length === 0 ? (
+        <div className="flex flex-col items-center justify-center h-full text-gray-600 text-sm gap-2">
+          <Bot className="w-6 h-6 text-purple-500/50" />
+          <span>等待子代理响应...</span>
+        </div>
+      ) : (
+        messages.map((msg) => <MessageBubble key={msg.id} message={msg} />)
+      )}
+    </div>
+  );
+}
+
+function MessagesArea({ messages, scrollRef, onScroll }: {
+  messages: ChatMessage[];
+  scrollRef: React.RefObject<HTMLDivElement | null>;
+  onScroll: () => void;
+}) {
+  return (
+    <div
+      ref={scrollRef as React.Ref<HTMLDivElement>}
+      className="h-full overflow-y-auto px-4 py-3 space-y-2"
+      onScroll={onScroll}
+    >
       {messages.length === 0 ? (
         <div className="flex items-center justify-center h-full text-gray-600 text-sm">开始对话...</div>
       ) : (
         messages.map((msg) => <MessageBubble key={msg.id} message={msg} />)
       )}
-      {isStreaming && (
-        <div className="flex items-start gap-2 px-1">
-          <div className="w-6 h-6 rounded bg-green-600/20 border border-green-500/30 flex items-center justify-center shrink-0 mt-0.5">
-            <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-          </div>
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs text-green-400">助手</span>
-              <LoaderDots />
-            </div>
-            <div className="text-sm text-gray-300 animate-pulse">正在生成...</div>
-          </div>
-        </div>
-      )}
-      <div ref={messagesEndRef as React.Ref<HTMLDivElement>} />
     </div>
-  );
-}
-
-function LoaderDots() {
-  return (
-    <span className="inline-flex gap-0.5 ml-1">
-      {[0, 1, 2].map((i) => (
-        <span key={i} className="w-1 h-1 rounded-full bg-green-400/60 animate-bounce"
-          style={{ animationDelay: `${i * 150}ms`, animationDuration: "600ms" }} />
-      ))}
-    </span>
   );
 }
 
@@ -159,7 +219,7 @@ function SessionToggleIcon() {
   const showSession = useLayoutStore((s) => s.showSession);
   const hideSession = useLayoutStore((s) => s.hideSession);
 
-  if (sessionPanel === "pinned") return null;
+  const isPinned = sessionPanel === "pinned";
   const isHidden = sessionPanel === "hidden";
 
   return (
@@ -167,7 +227,7 @@ function SessionToggleIcon() {
       e.stopPropagation();
       if (isHidden) { showSession(); } else { hideSession(); }
     }}
-      className={`p-1 rounded transition-colors ${isHidden ? "text-gray-600 hover:text-gray-300" : "text-indigo-400/60 hover:text-indigo-300"}`}
+      className={`p-1 rounded transition-colors ${isPinned ? "max-sm:block sm:hidden" : ""} ${isHidden ? "text-gray-600 hover:text-gray-300" : "text-indigo-400/60 hover:text-indigo-300"}`}
       title={isHidden ? "打开会话面板" : "关闭会话面板"}
     >
       <PanelLeft className="w-3.5 h-3.5" />
@@ -180,7 +240,7 @@ function StatusToggleIcon() {
   const showStatus = useLayoutStore((s) => s.showStatus);
   const hideStatus = useLayoutStore((s) => s.hideStatus);
 
-  if (statusPanel === "pinned") return null;
+  const isPinned = statusPanel === "pinned";
   const isHidden = statusPanel === "hidden";
 
   return (
@@ -188,7 +248,7 @@ function StatusToggleIcon() {
       e.stopPropagation();
       if (isHidden) { showStatus(); } else { hideStatus(); }
     }}
-      className={`p-1 rounded transition-colors ${isHidden ? "text-gray-600 hover:text-gray-300" : "text-indigo-400/60 hover:text-indigo-300"}`}
+      className={`p-1 rounded transition-colors ${isPinned ? "max-sm:block sm:hidden" : ""} ${isHidden ? "text-gray-600 hover:text-gray-300" : "text-indigo-400/60 hover:text-indigo-300"}`}
       title={isHidden ? "打开状态面板" : "关闭状态面板"}
     >
       <PanelRight className="w-3.5 h-3.5" />

@@ -5,6 +5,8 @@ import { TabBar } from "../components/tab-bar/TabBar";
 import { ChatPanel } from "../components/chat/ChatPanel";
 import { LeftSidebar } from "../components/left-sidebar/LeftSidebar";
 import { RightSidebar } from "../components/right-sidebar/RightSidebar";
+import { FilePreviewOverlay } from "../components/file-preview/FilePreviewOverlay";
+import { useExplorerStore } from "../stores/use-explorer-store";
 
 interface MainLayoutProps {
   onAddProject: () => void;
@@ -103,6 +105,10 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
     if (store.statusPanel === "visible") store.hideStatus();
   }, []);
 
+  const filePreview = useExplorerStore((s) => s.filePreview);
+  const loadingFile = useExplorerStore((s) => s.loadingFile);
+  const closePreview = useExplorerStore((s) => s.closePreview);
+
   return (
     <div className="h-screen bg-gray-950 text-white flex flex-col overflow-hidden">
       {/* === ROW 1: Top Tab Bar === */}
@@ -111,9 +117,9 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
       {/* === ROW 2: Body - 5 columns === */}
       <div className="flex-1 flex overflow-hidden relative">
         {/* ---- COL 1: Left Sidebar ---- */}
-        {sessionPanel !== "hidden" && !isMobile && (
+        {sessionPanel !== "hidden" && (!isMobile || sessionPanel === "visible") && (
           <LeftSidebar
-            width={sessionPanel === "pinned" ? sessionWidth : 260}
+            width={sessionPanel === "pinned" ? sessionWidth : isMobile ? Math.round(window.innerWidth * 0.85) : 260}
             overlay={sessionPanel === "visible"}
             onResizeStart={handleLeftResize}
           />
@@ -125,12 +131,21 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
           onClick={handleChatAreaClick}
         >
           <ChatPanel />
+          {filePreview && (
+            <div onClick={(e) => e.stopPropagation()}>
+              <FilePreviewOverlay
+                preview={filePreview}
+                loading={loadingFile}
+                onClose={closePreview}
+              />
+            </div>
+          )}
         </div>
 
         {/* ---- COL 3: Right Sidebar ---- */}
-        {statusPanel !== "hidden" && !isMobile && !isTablet && (
+        {statusPanel !== "hidden" && (!isMobile || statusPanel === "visible") && !isTablet && (
           <RightSidebar
-            width={statusPanel === "pinned" ? statusWidth : 300}
+            width={statusPanel === "pinned" ? statusWidth : isMobile ? Math.round(window.innerWidth * 0.85) : 300}
             overlay={statusPanel === "visible"}
             onResizeStart={handleRightResize}
           />
