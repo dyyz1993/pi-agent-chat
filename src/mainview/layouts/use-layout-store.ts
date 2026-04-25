@@ -25,7 +25,11 @@ function readNum(key: string, fallback: number): number {
 }
 
 function writeNum(key: string, v: number) {
-  try { localStorage.setItem(key, String(v)); } catch { /* ignore */ }
+  try { localStorage.setItem(key, String(v)); } catch { /* storage unavailable */ }
+}
+
+function writePanel(key: string, v: PanelVisibility) {
+  try { localStorage.setItem(key, v); } catch { /* storage unavailable */ }
 }
 
 function readPanel(key: string, fallback: PanelVisibility): PanelVisibility {
@@ -36,10 +40,6 @@ function readPanel(key: string, fallback: PanelVisibility): PanelVisibility {
   } catch {
     return fallback;
   }
-}
-
-function writePanel(key: string, v: PanelVisibility) {
-  try { localStorage.setItem(key, v); } catch {}
 }
 
 export interface LayoutState {

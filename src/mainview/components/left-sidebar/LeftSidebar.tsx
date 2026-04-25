@@ -1,4 +1,4 @@
-import { Pin, Plus } from "lucide-react";
+import { Pin, Plus, PanelLeft } from "lucide-react";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { SessionSidebar } from "../session-sidebar/SessionSidebar";
@@ -15,6 +15,7 @@ export function LeftSidebar({ width, overlay, onResizeStart }: LeftSidebarProps)
 
   const isPinned = sessionPanel === "pinned";
   const isMobile = useLayoutStore((s) => s.breakpoint) === "mobile";
+  const hideSession = useLayoutStore((s) => s.hideSession);
 
   return (
     <div
@@ -43,6 +44,15 @@ export function LeftSidebar({ width, overlay, onResizeStart }: LeftSidebarProps)
           >
             <Plus className="w-3.5 h-3.5" />
           </button>
+          {isMobile && overlay && (
+            <button
+              onClick={(e) => { e.stopPropagation(); hideSession(); }}
+              className="p-1 rounded hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors"
+              title="关闭"
+            >
+              <PanelLeft className="w-3.5 h-3.5" />
+            </button>
+          )}
           {!isMobile && (
             <button
               onClick={(e) => { e.stopPropagation(); toggleSession(); }}

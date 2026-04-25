@@ -220,15 +220,15 @@ function SessionToggleIcon() {
   const hideSession = useLayoutStore((s) => s.hideSession);
 
   const isPinned = sessionPanel === "pinned";
-  const isHidden = sessionPanel === "hidden";
+  const isVisible = sessionPanel === "visible";
 
   return (
     <button onClick={(e) => {
       e.stopPropagation();
-      if (isHidden) { showSession(); } else { hideSession(); }
+      if (isVisible) { hideSession(); } else { showSession(); }
     }}
-      className={`p-1 rounded transition-colors ${isPinned ? "max-sm:block sm:hidden" : ""} ${isHidden ? "text-gray-600 hover:text-gray-300" : "text-indigo-400/60 hover:text-indigo-300"}`}
-      title={isHidden ? "打开会话面板" : "关闭会话面板"}
+      className={`p-1 rounded transition-colors ${isPinned ? "max-sm:block sm:hidden" : ""} ${isVisible ? "text-indigo-400 hover:text-indigo-300" : "text-gray-600 hover:text-gray-300"}`}
+      title={isVisible ? "关闭会话面板" : "打开会话面板"}
     >
       <PanelLeft className="w-3.5 h-3.5" />
     </button>
@@ -241,15 +241,15 @@ function StatusToggleIcon() {
   const hideStatus = useLayoutStore((s) => s.hideStatus);
 
   const isPinned = statusPanel === "pinned";
-  const isHidden = statusPanel === "hidden";
+  const isVisible = statusPanel === "visible";
 
   return (
     <button onClick={(e) => {
       e.stopPropagation();
-      if (isHidden) { showStatus(); } else { hideStatus(); }
+      if (isVisible) { hideStatus(); } else { showStatus(); }
     }}
-      className={`p-1 rounded transition-colors ${isPinned ? "max-sm:block sm:hidden" : ""} ${isHidden ? "text-gray-600 hover:text-gray-300" : "text-indigo-400/60 hover:text-indigo-300"}`}
-      title={isHidden ? "打开状态面板" : "关闭状态面板"}
+      className={`p-1 rounded transition-colors ${isPinned ? "max-sm:block sm:hidden" : ""} ${isVisible ? "text-indigo-400 hover:text-indigo-300" : "text-gray-600 hover:text-gray-300"}`}
+      title={isVisible ? "关闭状态面板" : "打开状态面板"}
     >
       <PanelRight className="w-3.5 h-3.5" />
     </button>

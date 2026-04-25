@@ -1,4 +1,4 @@
-import { Pin } from "lucide-react";
+import { Pin, PanelRight } from "lucide-react";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import { PANEL_TABS, type PanelTabId } from "../../layouts/types";
 import { StatusPanel } from "../status-panel/StatusPanel";
@@ -38,6 +38,7 @@ export function RightSidebar({ width, overlay, onResizeStart }: RightSidebarProp
 
   const isPinned = statusPanel === "pinned";
   const isMobile = useLayoutStore((s) => s.breakpoint) === "mobile";
+  const hideStatus = useLayoutStore((s) => s.hideStatus);
 
   useEffect(() => {
     if (activePanelTab === "files") {
@@ -94,6 +95,15 @@ export function RightSidebar({ width, overlay, onResizeStart }: RightSidebarProp
     >
       {/* Tab bar + pin */}
       <div className="flex items-center border-b border-gray-800 shrink-0">
+        {isMobile && overlay && (
+          <button
+            onClick={(e) => { e.stopPropagation(); hideStatus(); }}
+            className="p-1.5 mr-1 rounded hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors"
+            title="关闭"
+          >
+            <PanelRight className="w-3.5 h-3.5" />
+          </button>
+        )}
         {!isMobile && (
           <button
             onClick={(e) => { e.stopPropagation(); toggleStatus(); }}

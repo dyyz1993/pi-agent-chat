@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useGitStore, type GitFileChange, type GitCommit } from "../../stores/use-git-store";
 import { useExplorerStore } from "../../stores/use-explorer-store";
+import { useSessionStore } from "../../stores/use-session-store";
 import { ContextMenu, type MenuItem } from "../explorer/ContextMenu";
 import { GitCommitInput } from "./GitCommitInput";
 import { GitBranchSelector } from "./GitBranchSelector";
@@ -232,8 +233,10 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
   const push = useGitStore((s) => s.push);
   const pull = useGitStore((s) => s.pull);
   const fetchWorktrees = useGitStore((s) => s.fetchWorktrees);
+  const fetchBranches = useGitStore((s) => s.fetchBranches);
 
   const currentPath = useExplorerStore((s) => s.currentPath);
+  const activeProjectId = useSessionStore((s) => s.activeProjectId);
   const openFile = useExplorerStore((s) => s.openFile);
 
   const [commitsExpanded, setCommitsExpanded] = useState(false);
@@ -244,14 +247,15 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
 
   const branchBtnRef = useRef<HTMLButtonElement>(null);
 
-  /* Refresh status + worktrees on mount */
   const refresh = useCallback(() => {
+    if (!currentPath) return;
     fetchStatus(currentPath);
     fetchWorktrees(currentPath);
+    fetchBranches(currentPath);
     if (commitsExpanded) fetchLog(currentPath);
-  }, [fetchStatus, fetchWorktrees, fetchLog, currentPath, commitsExpanded]);
+  }, [fetchStatus, fetchWorktrees, fetchBranches, fetchLog, currentPath, commitsExpanded]);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => { refresh(); }, [refresh, activeProjectId]);
 
   /* File click handlers */
   const handleFileClick = useCallback((filePath: string, staged?: boolean) => {
@@ -329,16 +333,25 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
 
   const totalChanges = staged.length + changed.length + untracked.length;
   const selectedFilePath = currentDiff?.filePath ?? null;
-  const hasMultipleWorktrees = worktrees.length > 1;
 
   const pinButton = <PinButton />;
 
   const panelContent = (
     <>
-      {/* Header */}
-      <div className="px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide border-b border-gray-700 flex items-center gap-1.5">
-        <GitBranch className="w-3.5 h-3.5" />
-        Source Control
+      {/* Header: title + branch selector + actions in one row */}
+      <div className="px-2 py-1.5 text-xs text-gray-400 flex items-center gap-1.5 border-b border-gray-700">
+        <GitBranch className="w-3.5 h-3.5 shrink-0 text-gray-500" />
+        <button
+          ref={branchBtnRef}
+          className="flex items-center gap-1 hover:text-white transition-colors"
+          onClick={() => setShowBranches(!showBranches)}
+        >
+          <span className="font-medium">{branch}</span>
+          {ahead > 0 && <span className="text-green-400">↑{ahead}</span>}
+          {behind > 0 && <span className="text-orange-400">↓{behind}</span>}
+          <BranchChevron className="w-3 h-3 text-gray-500" />
+        </button>
+
         <span className="ml-auto flex items-center gap-1">
           {totalChanges > 0 && (
             <span className="bg-indigo-600 text-white px-1.5 py-0.5 rounded-full text-[10px] leading-none">
@@ -356,32 +369,6 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
             <RefreshCw className="w-3 h-3" />
           </button>
         </span>
-      </div>
-
-      {/* Branch info + selector */}
-      <div className="px-2 py-1.5 text-xs text-gray-400 flex items-center gap-1.5 border-b border-gray-700/50">
-        <button
-          ref={branchBtnRef}
-          className="flex items-center gap-1 hover:text-white transition-colors"
-          onClick={() => setShowBranches(!showBranches)}
-        >
-          <GitBranch className="w-3 h-3" />
-          <span className="font-medium">{branch}</span>
-          {ahead > 0 && <span className="text-green-400">↑{ahead}</span>}
-          {behind > 0 && <span className="text-orange-400">↓{behind}</span>}
-          <BranchChevron className="w-3 h-3 text-gray-500" />
-        </button>
-
-        {/* Worktree indicator */}
-        {hasMultipleWorktrees && (
-          <button
-            className="ml-auto text-gray-500 hover:text-white transition-colors"
-            onClick={() => setShowWorktrees(!showWorktrees)}
-            title={`${worktrees.length} worktrees`}
-          >
-            <FolderTree className="w-3 h-3" />
-          </button>
-        )}
       </div>
 
       {/* Commit input */}

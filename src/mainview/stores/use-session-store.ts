@@ -1,14 +1,17 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { SessionMeta, ProjectTab } from "../types";
+import type { SessionMeta, ProjectTab, ContentBlock } from "../types";
 import { apiClient } from "../lib/api-client";
 import { messageToChatMessage } from "../lib/message-mapper";
-import type { ContentBlock } from "../types";
+import type { AgentEvent } from "../../shared/modules/agent";
+import type { AssistantMessage } from "@dyyz1993/pi-ai";
+import { extractTokenUsage } from "../lib/message-mapper";
 import { useChatStore } from "./use-chat-store";
 import { useAppStore } from "./use-app-store";
 import { useSubagentStore, handleSubagentEvent } from "./use-subagent-store";
+import { useBashStore, handleBashEvent } from "./use-bash-store";
+import { useLspStore } from "./use-lsp-store";
 import { useExplorerStore } from "./use-explorer-store";
-import { useGitStore } from "./use-git-store";
 
 export interface TodoItem {
   id: number;
@@ -28,6 +31,8 @@ interface SessionState {
   agentSubscriptions: Record<string, string>;
   subagentSubscriptions: Record<string, string>;
   todoSubscriptions: Record<string, string>;
+  bashSubscriptions: Record<string, string>;
+  lspSubscriptions: Record<string, string>;
   todosBySession: Record<string, TodoItem[]>;
 
   addProjectTab: (tab: ProjectTab) => void;
@@ -48,11 +53,11 @@ function setupSubscriptions(
   id: string,
   session: SessionMeta,
 ): void {
-  const { agentSubscriptions, subagentSubscriptions, todoSubscriptions } = state;
+  const { agentSubscriptions, subagentSubscriptions, todoSubscriptions, bashSubscriptions, lspSubscriptions } = state;
   const storeGet = () => useSessionStore.getState() as SessionState;
 
   if (!agentSubscriptions[id]) {
-    apiClient.subscribe("agent.event", (payload: { sessionId: string; event: Record<string, unknown> }) => {
+    apiClient.subscribe("agent.event", (payload: { sessionId: string; event: AgentEvent }) => {
       if (payload.sessionId !== id) return;
       handleAgentEvent(id, payload.event);
     }).then((subId) => {
@@ -141,6 +146,38 @@ function setupSubscriptions(
       }).catch(() => {});
     }).catch(() => {});
   }
+
+  if (!bashSubscriptions[id]) {
+    apiClient.subscribe(
+      "bash.event",
+      (payload: { sessionId: string; event: import("../../shared/modules/bash").BashChannelEvent }) => {
+        if (payload.sessionId !== id) return;
+        handleBashEvent(id, payload.event);
+      },
+      { sessionId: id },
+    ).then((subId) => {
+      set((s) => ({
+        bashSubscriptions: { ...s.bashSubscriptions, [id]: subId },
+      }));
+      useBashStore.getState().loadHistory(session.sessionPath, id).catch(() => {});
+    }).catch(() => {});
+  }
+
+  if (!lspSubscriptions[id]) {
+    apiClient.subscribe(
+      "lsp.event",
+      (payload: { sessionId: string; event: import("../../shared/modules/lsp").LspChannelEvent }) => {
+        if (payload.sessionId !== id) return;
+        useLspStore.getState().handleLspEvent(id, payload.event);
+      },
+      { sessionId: id },
+    ).then((subId) => {
+      set((s) => ({
+        lspSubscriptions: { ...s.lspSubscriptions, [id]: subId },
+      }));
+      useLspStore.getState().loadHistory(session.sessionPath, id).catch(() => {});
+    }).catch(() => {});
+  }
 }
 
 export const useSessionStore = create<SessionState>()(
@@ -154,6 +191,8 @@ export const useSessionStore = create<SessionState>()(
       agentSubscriptions: {},
       subagentSubscriptions: {},
       todoSubscriptions: {},
+      bashSubscriptions: {},
+      lspSubscriptions: {},
       todosBySession: {},
 
       addProjectTab: (tab) =>
@@ -186,15 +225,8 @@ export const useSessionStore = create<SessionState>()(
         if (!tab) return;
 
         const explorer = useExplorerStore.getState();
-        if (explorer.currentPath !== tab.path) {
-          explorer.setCurrentPath(tab.path);
-          explorer.listRootDir();
-        }
-
-        const git = useGitStore.getState();
-        git.refresh(tab.path);
-        git.fetchBranches(tab.path);
-        git.fetchLog(tab.path);
+        explorer.setCurrentPath(tab.path);
+        explorer.listRootDir();
 
         get().loadSessionsForProject(tab.path).then((sessions) => {
           if (sessions.length > 0) {
@@ -392,160 +424,173 @@ export const useSessionStore = create<SessionState>()(
   )
 );
 
-function handleAgentEvent(sessionId: string, event: Record<string, unknown>) {
-  const eventType = event.type as string;
-
-  if (eventType === "extension_ui_request") {
-    const INTERACTIVE = new Set(["confirm", "input", "select", "editor"]);
-    const method = event.method as string;
-    if (!INTERACTIVE.has(method)) return;
-    const requestId = event.id as string;
-    const options = event.options as string[] | undefined;
-    let response: Record<string, unknown>;
-    switch (method) {
-      case "select": response = { value: options?.[0] ?? "" }; break;
-      case "confirm": response = { confirmed: true }; break;
-      default: response = { value: "" }; break;
-    }
-    apiClient.call("agent.respondUI", { sessionId, requestId, response }).catch(() => {});
+function handleAgentEvent(sessionId: string, event: AgentEvent) {
+  if (event.type === "extension_ui_request") {
     return;
   }
 
-  const chat = useChatStore.getState();
-  const existing = chat.messagesBySession[sessionId] || [];
+  if (event.type === "message_start") {
+    const raw = event.message;
+    const msgObj = typeof raw === "object" && raw !== null ? raw as unknown as Record<string, unknown> : null;
+    const role = msgObj && typeof msgObj.role === "string" ? msgObj.role : "";
+    if (role !== "assistant") return;
 
-  if (eventType === "message_start") {
-    const raw = event.message as Record<string, unknown>;
     const msg = messageToChatMessage(raw, undefined, toolCallNameMap);
-    if (msg) {
-      msg.content = msg.content.filter((b) => b.type !== "toolCall");
-      const lastMsg = existing[existing.length - 1];
-      if (lastMsg && lastMsg.role === "assistant" && lastMsg.isStreaming !== false) {
-        chat.setMessagesForSession(sessionId, [...existing.slice(0, -1), { ...lastMsg, content: msg.content, isStreaming: true }]);
-      } else {
-        chat.setMessagesForSession(sessionId, [...existing, { ...msg, isStreaming: true }]);
-      }
-    }
-  } else if (eventType === "message_update") {
-    const raw = event.message as Record<string, unknown>;
-    const lastMsg = existing[existing.length - 1];
-    if (!lastMsg) return;
 
-    const incoming = raw.content as ContentBlock[] | undefined;
+    const chat = useChatStore.getState();
+    const existing = chat.messagesBySession[sessionId] || [];
+    const lastMsg = existing[existing.length - 1];
+
+    if (lastMsg && lastMsg.role === "assistant" && lastMsg.isStreaming === true) {
+      const content = msg ? msg.content.filter((b) => b.type !== "toolCall") : lastMsg.content;
+      chat.setMessagesForSession(sessionId, [...existing.slice(0, -1), { ...lastMsg, content, isStreaming: true }]);
+    } else if (msg) {
+      msg.content = msg.content.filter((b) => b.type !== "toolCall");
+      chat.setMessagesForSession(sessionId, [...existing, { ...msg, isStreaming: true }]);
+    } else {
+      chat.setMessagesForSession(sessionId, [...existing, {
+        id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        role: "assistant",
+        content: [],
+        timestamp: Date.now(),
+        isStreaming: true,
+      }]);
+    }
+    return;
+  }
+
+  if (event.type === "message_update") {
+    const chat = useChatStore.getState();
+    const existing = chat.messagesBySession[sessionId] || [];
+    const lastMsg = existing[existing.length - 1];
+    if (!lastMsg || lastMsg.role !== "assistant") return;
+
+    const message = event.message as AssistantMessage;
+    const incoming = message.content;
     if (!incoming || !Array.isArray(incoming)) return;
 
-    const preservedToolExecs = (lastMsg.content as ContentBlock[]).filter((b) => b.type === "toolExecution");
-    const updatedContent: ContentBlock[] = [];
+    const preservedToolExecs = lastMsg.content.filter((b): b is Extract<ContentBlock, { type: "toolExecution" }> => b.type === "toolExecution");
+    const execByCallId = new Map<string, Extract<ContentBlock, { type: "toolExecution" }>>();
+    for (const exec of preservedToolExecs) {
+      execByCallId.set(exec.toolCallId, exec);
+    }
+    const usedExecs = new Set<string>();
+
+    const textBlocks: ContentBlock[] = [];
+    const otherBlocks: ContentBlock[] = [];
 
     for (const block of incoming) {
-      if (block.type === "toolCall") continue;
-      updatedContent.push(block);
+      if (block.type === "toolCall" && block.id) {
+        const exec = execByCallId.get(block.id);
+        if (exec) {
+          otherBlocks.push(exec);
+          usedExecs.add(block.id);
+        }
+      } else if (block.type === "text") {
+        textBlocks.push(block);
+      } else if (block.type === "thinking") {
+        otherBlocks.push(block);
+      }
     }
 
-    chat.setMessagesForSession(sessionId, [...existing.slice(0, -1), { ...lastMsg, content: [...updatedContent, ...preservedToolExecs] }]);
-  } else if (eventType === "message_end") {
-    const raw = event.message as Record<string, unknown>;
-    const lastMsg = existing[existing.length - 1];
-    if (!lastMsg) return;
-
-    const rawUsage = raw.usage as Record<string, unknown> | undefined;
-    let tokenUsage: import("../types").TokenUsage | undefined;
-    if (rawUsage) {
-      const input = Number(rawUsage.inputTokens ?? rawUsage.promptTokens ?? rawUsage.input ?? 0);
-      const output = Number(rawUsage.outputTokens ?? rawUsage.completionTokens ?? rawUsage.output ?? 0);
-      const reasoning = Number(rawUsage.reasoningTokens ?? rawUsage.reasoning ?? 0);
-      const cacheRead = Number(rawUsage.cacheReadInputTokens ?? rawUsage.cacheRead ?? 0);
-      const cacheWrite = Number(rawUsage.cacheCreationInputTokens ?? rawUsage.cacheWrite ?? 0);
-      const cost = Number(rawUsage.cost ?? rawUsage.totalCost ?? 0);
-      if (input || output || reasoning || cacheRead || cacheWrite) {
-        tokenUsage = { input, output, reasoning: reasoning || undefined, cacheRead: cacheRead || undefined, cacheWrite: cacheWrite || undefined, cost: cost || undefined };
+    for (const exec of preservedToolExecs) {
+      if (!usedExecs.has(exec.toolCallId)) {
+        otherBlocks.push(exec);
       }
     }
 
     chat.setMessagesForSession(sessionId, [...existing.slice(0, -1), {
       ...lastMsg,
-      content: lastMsg.content,
-      isStreaming: false,
-      stopReason: (raw.stopReason as string) ?? null,
-      provider: (raw.provider as string) || lastMsg.provider,
-      model: (raw.model as string) || lastMsg.model,
-      tokenUsage: tokenUsage || lastMsg.tokenUsage,
+      content: [...otherBlocks, ...textBlocks],
+      ...buildTokenUsage(message.usage),
+      ...(message.stopReason ? { stopReason: message.stopReason } : {}),
     }]);
-  } else if (eventType === "custom_message") {
     return;
   }
 
-  if (eventType === "tool_execution_start" || eventType === "tool_execution_update" || eventType === "tool_execution_end") {
-    // 记录 toolCallId → toolName 映射
-    if (eventType === "tool_execution_start") {
-      const toolCallId = event.toolCallId as string;
-      const toolName = (event.toolName as string) || "unknown";
+  if (event.type === "message_end") {
+    const chat = useChatStore.getState();
+    const existing = chat.messagesBySession[sessionId] || [];
+    const lastMsg = existing[existing.length - 1];
+    if (!lastMsg || lastMsg.role !== "assistant") return;
+
+    const message = event.message as AssistantMessage;
+
+    chat.setMessagesForSession(sessionId, [...existing.slice(0, -1), {
+      ...lastMsg,
+      content: lastMsg.content,
+      isStreaming: false,
+      stopReason: message.stopReason ?? lastMsg.stopReason ?? null,
+      provider: message.provider || lastMsg.provider,
+      model: message.model || lastMsg.model,
+      ...buildTokenUsage(message.usage),
+    }]);
+    return;
+  }
+
+  if (event.type === "tool_execution_start" || event.type === "tool_execution_update" || event.type === "tool_execution_end") {
+    const toolCallId = event.toolCallId;
+    const toolName = event.toolName || "unknown";
+
+    if (event.type === "tool_execution_start") {
       toolCallNameMap[toolCallId] = toolName;
     }
+
     type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
-    const toolCallId = event.toolCallId as string;
-    const toolName = (event.toolName as string) || "unknown";
-    const args = event.args as Record<string, unknown> | undefined;
-    const argsStr = args ? (typeof args.command === "string" ? args.command : JSON.stringify(args, null, 2)) : "";
 
-    const freshMessages = chat.messagesBySession[sessionId] || [];
-    const lastMsg = freshMessages[freshMessages.length - 1];
-    if (!lastMsg) return;
+    const chat = useChatStore.getState();
+    const existing = chat.messagesBySession[sessionId] || [];
+    const lastMsg = existing[existing.length - 1];
+    if (!lastMsg || lastMsg.role !== "assistant") return;
 
-    const blocks = (lastMsg.content as ContentBlock[]) || [];
+    const blocks = [...lastMsg.content];
     const targetIdx = blocks.findIndex((b): b is ToolExecBlock =>
       b.type === "toolExecution" && b.toolCallId === toolCallId
     );
 
-    if (eventType === "tool_execution_start") {
+    if (event.type === "tool_execution_start") {
+      const args = event.args;
+      const argsStr = args && typeof args === "object" && "command" in args && typeof args.command === "string"
+        ? args.command
+        : args ? JSON.stringify(args, null, 2) : "";
       blocks.push({ type: "toolExecution", toolCallId, toolName, args: argsStr, status: "running" });
-    } else if (eventType === "tool_execution_update") {
-      const partial = event.partialResult as Record<string, unknown> | undefined;
+    } else if (event.type === "tool_execution_update") {
+      const partial = event.partialResult as { content?: Array<{ type: string; text?: string }> } | undefined;
       let output = "";
       if (partial) {
-        const partialContent = partial.content as Array<{ type: string; text?: string }> | undefined;
-        if (Array.isArray(partialContent)) {
-          output = partialContent.map((c) => c.text ?? "").join("");
-        } else if (typeof partial === "string") {
-          output = partial;
-        } else if (partial.text) {
-          output = String(partial.text);
-        }
-      }
-      if (!output && event.output) output = String(event.output);
-      if (!output && event.result) {
-        const r = event.result as Record<string, unknown>;
-        if (typeof r === "string") output = r;
-        else if (r?.content) {
-          const rc = r.content as Array<{ type: string; text?: string }> | string | undefined;
-          if (Array.isArray(rc)) output = rc.map((c: { text?: string }) => c.text ?? "").join("");
-          else if (typeof rc === "string") output = rc;
+        if (Array.isArray(partial.content)) {
+          output = partial.content.map((c) => c.text ?? "").join("");
         }
       }
       if (targetIdx >= 0) {
         const prev = blocks[targetIdx] as ToolExecBlock;
-        blocks[targetIdx] = { ...prev, output: (prev.output ?? "") + output };
+        blocks[targetIdx] = { ...prev, output };
       }
-    } else if (eventType === "tool_execution_end") {
-      const result = event.result as Record<string, unknown> | undefined;
-      const isError = event.isError as boolean;
+    } else if (event.type === "tool_execution_end") {
+      const isError = event.isError;
       let output = "";
+      const result = event.result as { content?: Array<{ type: string; text?: string }> } | undefined;
       if (result) {
-        const resultContent = result.content as Array<{ type: string; text?: string }> | undefined;
-        if (Array.isArray(resultContent)) {
-          output = resultContent.map((c) => c.text ?? "").join("");
+        if (Array.isArray(result.content)) {
+          output = result.content.map((c) => c.text ?? "").join("");
         } else {
           output = JSON.stringify(result, null, 2);
         }
       }
       if (targetIdx >= 0) {
         const prev = blocks[targetIdx] as ToolExecBlock;
-        blocks[targetIdx] = { ...prev, status: isError ? "error" : "done", output: (prev.output ?? "") + output };
+        blocks[targetIdx] = { ...prev, status: isError ? "error" : "done", output };
       }
     }
 
-    const updated = [...freshMessages];
-    updated[freshMessages.length - 1] = { ...updated[freshMessages.length - 1], content: blocks };
+    const updated = [...existing];
+    updated[existing.length - 1] = { ...lastMsg, content: blocks };
     chat.setMessagesForSession(sessionId, updated);
+    return;
   }
+}
+
+function buildTokenUsage(usage: unknown): { tokenUsage?: import("../types").TokenUsage } {
+  const result = extractTokenUsage(usage);
+  return result ? { tokenUsage: result } : {};
 }

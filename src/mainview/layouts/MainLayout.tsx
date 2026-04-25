@@ -116,6 +116,14 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
 
       {/* === ROW 2: Body - 5 columns === */}
       <div className="flex-1 flex overflow-hidden relative">
+        {/* ---- Mobile drawer backdrop ---- */}
+        {isMobile && (sessionPanel === "visible" || statusPanel === "visible") && (
+          <div
+            className="absolute inset-0 bg-black/50 z-10 animate-in fade-in duration-150"
+            onClick={handleChatAreaClick}
+          />
+        )}
+
         {/* ---- COL 1: Left Sidebar ---- */}
         {sessionPanel !== "hidden" && (!isMobile || sessionPanel === "visible") && (
           <LeftSidebar
