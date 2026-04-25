@@ -14,6 +14,7 @@ function App() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const addProjectTab = useSessionStore((s) => s.addProjectTab);
   const loadSessionsForProject = useSessionStore((s) => s.loadSessionsForProject);
+  const restoreFromPersisted = useSessionStore((s) => s.restoreFromPersisted);
   const restoredRef = useRef(false);
 
   useEffect(() => {
@@ -27,6 +28,12 @@ function App() {
     (async () => {
       try {
         listRootDir();
+
+        const restored = await restoreFromPersisted();
+        if (restored) {
+          addLog("Restored last session from cache");
+          return;
+        }
 
         const result = await apiClient.call("project.listRecent", {});
         const projects = (result.projects as Array<{ path: string; name: string; sessionCount: number }>) || [];
@@ -46,7 +53,7 @@ function App() {
         addLog(`Restore failed: ${err instanceof Error ? err.message : String(err)}`);
       }
     })();
-  }, [ready, addLog, listRootDir, addProjectTab, loadSessionsForProject]);
+  }, [ready, addLog, listRootDir, addProjectTab, loadSessionsForProject, restoreFromPersisted]);
 
   const handleSelectProject = async (path: string, name: string) => {
     try {
@@ -58,9 +65,8 @@ function App() {
 
     const tabId = `proj-${path.replace(/\//g, "-")}`;
     addProjectTab({ id: tabId, name, path });
-
-    const sessions = await loadSessionsForProject(path);
-    addLog(`Loaded ${sessions.length} sessions for ${name}`);
+    useSessionStore.getState().setActiveProject(tabId);
+    addLog(`Loaded project: ${name}`);
   };
 
   if (!ready) {

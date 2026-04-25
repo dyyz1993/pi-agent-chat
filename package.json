@@ -14,6 +14,8 @@
 		"prepare": "husky"
 	},
 	"dependencies": {
+		"@dyyz1993/pi-agent-core": "0.69.9",
+		"@dyyz1993/pi-ai": "0.69.9",
 		"@dyyz1993/rpc-core": "^1.0.0",
 		"@tanstack/react-virtual": "^3.13.24",
 		"electrobun": "1.13.1",
@@ -22,10 +24,13 @@
 		"react": "^18.3.1",
 		"react-diff-viewer-continued": "^4.2.2",
 		"react-dom": "^18.3.1",
+		"react-markdown": "^10.1.0",
+		"remark-gfm": "^4.0.1",
 		"zustand": "^5.0.12"
 	},
 	"devDependencies": {
 		"@eslint/js": "^9.0.0",
+		"@tailwindcss/typography": "^0.5.19",
 		"@types/bun": "latest",
 		"@types/react": "^18.3.12",
 		"@types/react-dom": "^18.3.1",
@@ -36,6 +41,7 @@
 		"eslint": "^9.0.0",
 		"husky": "^9.1.0",
 		"postcss": "^8.4.49",
+		"sharp": "^0.34.5",
 		"tailwindcss": "^3.4.16",
 		"typescript": "^5.7.2",
 		"typescript-eslint": "^8.0.0",

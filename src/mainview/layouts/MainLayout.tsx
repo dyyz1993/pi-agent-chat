@@ -6,7 +6,9 @@ import { ChatPanel } from "../components/chat/ChatPanel";
 import { LeftSidebar } from "../components/left-sidebar/LeftSidebar";
 import { RightSidebar } from "../components/right-sidebar/RightSidebar";
 import { FilePreviewOverlay } from "../components/file-preview/FilePreviewOverlay";
+import { DiffViewerPanel } from "../components/diff/DiffViewerPanel";
 import { useExplorerStore } from "../stores/use-explorer-store";
+import { useGitStore } from "../stores/use-git-store";
 
 interface MainLayoutProps {
   onAddProject: () => void;
@@ -108,6 +110,7 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
   const filePreview = useExplorerStore((s) => s.filePreview);
   const loadingFile = useExplorerStore((s) => s.loadingFile);
   const closePreview = useExplorerStore((s) => s.closePreview);
+  const currentDiff = useGitStore((s) => s.currentDiff);
 
   return (
     <div className="h-screen bg-gray-950 text-white flex flex-col overflow-hidden">
@@ -146,6 +149,11 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
                 loading={loadingFile}
                 onClose={closePreview}
               />
+            </div>
+          )}
+          {currentDiff && (
+            <div onClick={(e) => e.stopPropagation()}>
+              <DiffViewerPanel />
             </div>
           )}
         </div>

@@ -8,10 +8,12 @@ import type { SessionMethods } from "./modules/session";
 import type { AgentMethods, AgentEvents } from "./modules/agent";
 import type { SubagentMethods, SubagentEvents } from "./modules/subagent";
 import type { TodoMethods, TodoEvents } from "./modules/todo";
+import type { BashMethods, BashEvents } from "./modules/bash";
+import type { LspMethods, LspEvents } from "./modules/lsp";
 
-export interface RPCMethods extends AnyMethods, SystemMethods, FileMethods, TimerMethods, GitMethods, ProjectMethods, SessionMethods, AgentMethods, SubagentMethods, TodoMethods {}
+export interface RPCMethods extends AnyMethods, SystemMethods, FileMethods, TimerMethods, GitMethods, ProjectMethods, SessionMethods, AgentMethods, SubagentMethods, TodoMethods, BashMethods, LspMethods {}
 
-export interface RPCEvents extends TimerEvents, AgentEvents, SubagentEvents, TodoEvents {}
+export interface RPCEvents extends TimerEvents, AgentEvents, SubagentEvents, TodoEvents, BashEvents, LspEvents {}
 
 export interface HandlerOptions {
   platform: "desktop" | "web";
