@@ -3,6 +3,7 @@ import { Search, ChevronRight, ChevronDown, Copy, Pencil, Trash2, User, Check, X
 import { useSessionStore } from "../../stores/use-session-store";
 import { useSubagentStore } from "../../stores/use-subagent-store";
 import { useGitStore } from "../../stores/use-git-store";
+import { useLayoutStore } from "../../layouts/use-layout-store";
 import type { SessionMeta, SubagentSessionInfo } from "../../types";
 
 const EMPTY: never[] = [];
@@ -145,7 +146,7 @@ function SessionList({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto px-1 space-y-1">
+    <div className="flex-1 overflow-y-auto overscroll-contain px-1 space-y-1">
       {rootSessions.map((sess) => (
         <SessionItem
           key={sess.sessionId}
@@ -160,12 +161,22 @@ function SessionList({
   );
 }
 
-function StatusBadge({ status }: { status: "idle" | "running" }) {
-  if (status === "running") {
+function StatusBadge({ sessionId }: { sessionId: string }) {
+  const status = useSessionStore((s) => s.sessionStatusMap[sessionId]);
+
+  if (status === "streaming" || status === "compacting") {
     return (
       <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/15 text-amber-400 border border-amber-500/20">
         <span className="w-1 h-1 rounded-full bg-amber-400 animate-pulse" />
         工作中
+      </span>
+    );
+  }
+  if (status === "permission") {
+    return (
+      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-red-500/15 text-red-400 border border-red-500/20">
+        <span className="w-1 h-1 rounded-full bg-red-400" />
+        需要协助
       </span>
     );
   }
@@ -188,7 +199,12 @@ function WorktreeBranchBadge({ branch }: { branch: string }) {
 
 function SubagentStatusBadge({ sub }: { sub: SubagentSessionInfo }) {
   if (sub.exitCode === 0) {
-    return <StatusBadge status="idle" />;
+    return (
+      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
+        <span className="w-1 h-1 rounded-full bg-emerald-400" />
+        空闲
+      </span>
+    );
   }
   if (sub.error || (sub.exitCode !== undefined && sub.exitCode !== 0)) {
     return (
@@ -249,11 +265,15 @@ function SessionItem({
     if (hasExpandableChildren && !isExpanded) {
       onToggleExpand();
     }
+    const layout = useLayoutStore.getState();
+    if (layout.breakpoint === "mobile" && layout.sessionPanel === "visible") {
+      layout.hideSession();
+    }
   };
 
   const handleCopyId = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    navigator.clipboard.writeText(session.sessionId).catch(() => {});
+    navigator.clipboard.writeText(session.sessionId).catch(() => { });
   }, [session.sessionId]);
 
   const handleStartRename = useCallback((e: React.MouseEvent) => {
@@ -286,11 +306,10 @@ function SessionItem({
   return (
     <div>
       <div
-        className={`group w-full text-left px-2.5 py-2 rounded text-[11px] transition-colors cursor-pointer ${
-          isActive
+        className={`group w-full text-left px-2.5 py-2 rounded text-[11px] transition-colors cursor-pointer ${isActive
             ? "bg-indigo-600/20 text-indigo-200"
             : "text-gray-400 hover:bg-gray-800/60 hover:text-gray-200"
-        } ${isActive ? "border-l-2 border-indigo-500 -ml-[2px] pl-[calc(0.625rem+2px)]" : ""}`}
+          } ${isActive ? "border-l-2 border-indigo-500 -ml-[2px] pl-[calc(0.625rem+2px)]" : ""}`}
         onClick={handleClick}
       >
         <div className="flex items-center justify-center gap-1.5">
@@ -330,7 +349,7 @@ function SessionItem({
                 {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
               </button>
             )}
-            <StatusBadge status={session.status} />
+            <StatusBadge sessionId={session.sessionId} />
             {worktreeInfo && <WorktreeBranchBadge branch={worktreeInfo.branch} />}
             <div className="ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
               <button onClick={handleCopyId} className="p-1 rounded hover:bg-gray-700 text-gray-500 hover:text-gray-300" title="复制 ID">
@@ -361,7 +380,7 @@ function SessionItem({
               session={child}
               isActive={false}
               isExpanded={false}
-              onToggleExpand={() => {}}
+              onToggleExpand={() => { }}
             />
           ))}
           {!loadingSubs && hasSubagents && subsessions!.map((sub) => (
@@ -389,22 +408,25 @@ function SubagentItem({
 
   const handleClick = () => {
     useSubagentStore.getState().setActiveSubsession(parentSessionId, sub.sessionId);
+    const layout = useLayoutStore.getState();
+    if (layout.breakpoint === "mobile" && layout.sessionPanel === "visible") {
+      layout.hideSession();
+    }
   };
 
   const handleCopyId = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    navigator.clipboard.writeText(sub.sessionId).catch(() => {});
+    navigator.clipboard.writeText(sub.sessionId).catch(() => { });
   }, [sub.sessionId]);
 
   const displayName = sub.description || sub.instruction.slice(0, 80);
 
   return (
     <div
-      className={`group w-full text-left px-2.5 py-2 rounded text-[11px] cursor-pointer transition-colors ${
-        isActive
+      className={`group w-full text-left px-2.5 py-2 rounded text-[11px] cursor-pointer transition-colors ${isActive
           ? "bg-purple-600/20 text-purple-200"
           : "text-gray-500 hover:bg-gray-800/60 hover:text-gray-300"
-      }`}
+        }`}
       onClick={handleClick}
     >
       <div className="flex items-center justify-center gap-1.5">

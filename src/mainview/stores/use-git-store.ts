@@ -5,6 +5,8 @@ import { useAppStore } from "./use-app-store";
 export interface GitFileChange {
   path: string;
   status: "modified" | "added" | "deleted" | "renamed" | "copied";
+  additions?: number;
+  deletions?: number;
 }
 
 export interface GitCommit {
@@ -100,6 +102,14 @@ export const useGitStore = create<GitState>((set, get) => ({
       });
     } catch (err) {
       addLog(`Git status error: ${err instanceof Error ? err.message : String(err)}`);
+      set({
+        branch: "",
+        ahead: 0,
+        behind: 0,
+        staged: [],
+        changed: [],
+        untracked: [],
+      });
     }
   },
 
@@ -125,7 +135,7 @@ export const useGitStore = create<GitState>((set, get) => ({
     } catch (err) {
       const addLog = useAppStore.getState().addLog;
       addLog(`Git log error: ${err instanceof Error ? err.message : String(err)}`);
-      set({ loadingCommits: false });
+      set({ commits: [], loadingCommits: false });
     }
   },
 
@@ -184,7 +194,7 @@ export const useGitStore = create<GitState>((set, get) => ({
     } catch (err) {
       const addLog = useAppStore.getState().addLog;
       addLog(`Git branches error: ${err instanceof Error ? err.message : String(err)}`);
-      set({ loadingBranches: false });
+      set({ branches: [], loadingBranches: false });
     }
   },
 

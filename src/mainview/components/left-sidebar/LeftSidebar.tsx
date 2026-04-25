@@ -20,7 +20,7 @@ export function LeftSidebar({ width, overlay, onResizeStart }: LeftSidebarProps)
   return (
     <div
       className={`flex flex-col bg-gray-900 border-r border-gray-800 overflow-hidden z-20 ${
-        overlay ? "animate-slide-in-left shadow-xl shadow-black/30" : ""
+        overlay ? "animate-slide-in-left shadow-xl shadow-black/30 will-change-transform" : ""
       }`}
       style={
         overlay

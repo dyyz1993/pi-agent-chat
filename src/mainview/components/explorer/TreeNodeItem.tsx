@@ -35,6 +35,7 @@ function TreeNodeItemInner({
     node.expanded &&
     editingNode?.path === node.path &&
     (editingNode.type === "newFile" || editingNode.type === "newDir");
+  const isIgnored = node.isIgnored;
 
   return (
     <li>
@@ -59,7 +60,7 @@ function TreeNodeItemInner({
         ) : (
           <span className="w-3 shrink-0" />
         )}
-        {getFileIcon(node)}
+        <span className={isIgnored ? "opacity-50" : ""}>{getFileIcon(node)}</span>
         {isRenaming ? (
           <InlineInput
             defaultValue={node.name}
@@ -68,7 +69,7 @@ function TreeNodeItemInner({
             onCancel={onCancelEdit}
           />
         ) : (
-          <span className={`truncate ${isDir ? "text-blue-300 font-medium" : "text-gray-300"}`}>
+          <span className={`truncate ${isDir ? "text-blue-300 font-medium" : "text-gray-300"} ${isIgnored ? "!text-gray-500 !font-normal" : ""}`}>
             {node.name}
           </span>
         )}

@@ -14,7 +14,6 @@ interface ExplorerSidebarProps {
   currentPath: string;
   selectedPath: string | null;
   editingNode: EditingNode | null;
-  onPathChange: (path: string) => void;
   onRefresh: () => void;
   onToggle: (path: string) => void;
   onOpenFile: (node: TreeNode) => void;
@@ -39,7 +38,6 @@ export function ExplorerSidebar({
   currentPath,
   selectedPath,
   editingNode,
-  onPathChange,
   onRefresh,
   onToggle,
   onOpenFile,
@@ -151,23 +149,6 @@ export function ExplorerSidebar({
     <>
       {header}
       <div className="flex-1 overflow-hidden flex flex-col">
-        <div className="flex gap-2 p-2 border-b border-gray-700">
-          <input
-            type="text"
-            value={currentPath}
-            onChange={(e) => onPathChange(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && onRefresh()}
-            placeholder="Path"
-            className="flex-1 px-2 py-1 text-xs bg-gray-700 rounded text-white border border-gray-600 focus:border-indigo-500 focus:outline-none"
-          />
-          <button
-            onClick={onRefresh}
-            className="px-2 py-1 text-xs bg-indigo-600 hover:bg-indigo-700 rounded transition-colors"
-            title="List directory"
-          >
-            <RefreshCw className="w-3 h-3" />
-          </button>
-        </div>
         <div
           className={`flex-1 overflow-y-auto p-1 transition-colors ${
             isDragOver ? "bg-indigo-900/30 ring-1 ring-inset ring-indigo-500/50" : ""

@@ -37,6 +37,7 @@ function entriesToTreeNodes(entries: RPCMethods["file.listDir"]["result"]["entri
     path: e.path,
     type: e.type,
     size: e.size,
+    isIgnored: e.isIgnored,
     children: e.type === "directory" ? [] : undefined,
     expanded: false,
     loaded: false,

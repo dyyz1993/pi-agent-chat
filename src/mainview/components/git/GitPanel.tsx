@@ -34,6 +34,35 @@ function statusLabel(status: GitFileChange["status"]) {
   }
 }
 
+function statusColor(status: GitFileChange["status"]) {
+  switch (status) {
+    case "added": return "text-green-400 bg-green-400/10";
+    case "deleted": return "text-red-400 bg-red-400/10";
+    case "modified": return "text-yellow-400 bg-yellow-400/10";
+    case "renamed": return "text-blue-400 bg-blue-400/10";
+    case "copied": return "text-cyan-400 bg-cyan-400/10";
+  }
+}
+
+function countByStatus(files: GitFileChange[]) {
+  const counts = { added: 0, modified: 0, deleted: 0, renamed: 0, copied: 0 };
+  for (const f of files) {
+    counts[f.status]++;
+  }
+  return counts;
+}
+
+function formatChangeSummary(files: GitFileChange[]): string {
+  const counts = countByStatus(files);
+  const parts: string[] = [];
+  if (counts.added > 0) parts.push(`${counts.added} added`);
+  if (counts.modified > 0) parts.push(`${counts.modified} modified`);
+  if (counts.deleted > 0) parts.push(`${counts.deleted} deleted`);
+  if (counts.renamed > 0) parts.push(`${counts.renamed} renamed`);
+  if (counts.copied > 0) parts.push(`${counts.copied} copied`);
+  return parts.join(", ");
+}
+
 function relativeTime(dateStr: string): string {
   const d = new Date(dateStr);
   const now = new Date();
@@ -54,6 +83,8 @@ function relativeTime(dateStr: string): string {
 interface FileItemProps {
   path: string;
   status: GitFileChange["status"];
+  additions?: number;
+  deletions?: number;
   isSelected: boolean;
   isStaged?: boolean;
   onClick: (filePath: string, staged?: boolean) => void;
@@ -62,8 +93,9 @@ interface FileItemProps {
 }
 
 const FileItem = memo(function FileItem({
-  path, status, isSelected, isStaged, onClick, onContextMenu, onStageToggle,
+  path, status, additions, deletions, isSelected, isStaged, onClick, onContextMenu, onStageToggle,
 }: FileItemProps) {
+  const showStats = additions !== undefined || deletions !== undefined;
   return (
     <div
       className={`group flex items-center gap-1.5 px-2 py-0.5 text-xs rounded cursor-pointer transition-colors ${
@@ -74,7 +106,13 @@ const FileItem = memo(function FileItem({
     >
       {statusIcon(status)}
       <span className="truncate flex-1">{path.split("/").pop()}</span>
-      <span className="text-gray-500 text-[10px]">{statusLabel(status)}</span>
+      {showStats && (
+        <span className="flex items-center gap-0.5 text-[10px] font-mono shrink-0">
+          {(additions ?? 0) > 0 && <span className="text-green-400">+{additions}</span>}
+          {(deletions ?? 0) > 0 && <span className="text-red-400">-{deletions}</span>}
+        </span>
+      )}
+      <span className={`px-1.5 rounded text-[10px] font-medium ${statusColor(status)}`}>{statusLabel(status)}</span>
       <button
         className={`opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-gray-600 ${
           isStaged ? "text-orange-400 hover:text-orange-300" : "text-green-400 hover:text-green-300"
@@ -110,7 +148,7 @@ const UntrackedItem = memo(function UntrackedItem({
     >
       <FileQuestion className="w-3 h-3 text-gray-500" />
       <span className="truncate flex-1">{path.split("/").pop()}</span>
-      <span className="text-gray-600 text-[10px]">U</span>
+      <span className="px-1.5 rounded text-[10px] font-medium text-gray-400 bg-gray-400/10">U</span>
       <button
         className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded text-green-400 hover:text-green-300 hover:bg-gray-600"
         onClick={(e) => { e.stopPropagation(); onStage(path); }}
@@ -140,7 +178,7 @@ const CommitFileItem = memo(function CommitFileItem({ path, status, isSelected, 
     >
       {statusIcon(status)}
       <span className="truncate flex-1">{path.split("/").pop()}</span>
-      <span className="text-gray-600 text-[10px]">{statusLabel(status)}</span>
+      <span className={`px-1.5 rounded text-[10px] font-medium ${statusColor(status)}`}>{statusLabel(status)}</span>
     </div>
   );
 });
@@ -378,14 +416,17 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
         {/* Staged */}
         {staged.length > 0 && (
           <div className="mt-1">
-            <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-gray-500 font-semibold flex items-center">
+            <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-gray-500 font-semibold flex items-center flex-wrap gap-x-2">
               <span>Staged Changes ({staged.length})</span>
-              <button className="ml-auto text-orange-400 hover:text-orange-300" onClick={handleUnstageAll} title="Unstage all">
+              {formatChangeSummary(staged) && (
+                <span className="text-gray-600 font-normal normal-case tracking-normal">{formatChangeSummary(staged)}</span>
+              )}
+              <button className="ml-auto text-orange-400 hover:text-orange-300 shrink-0" onClick={handleUnstageAll} title="Unstage all">
                 <ChevronUp className="w-3 h-3" />
               </button>
             </div>
             {staged.map((f) => (
-              <FileItem key={f.path} path={f.path} status={f.status} isSelected={selectedFilePath === f.path} isStaged
+              <FileItem key={f.path} path={f.path} status={f.status} additions={f.additions} deletions={f.deletions} isSelected={selectedFilePath === f.path} isStaged
                 onClick={handleFileClick} onContextMenu={handleContextMenu} onStageToggle={handleStageToggle} />
             ))}
           </div>
@@ -394,14 +435,17 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
         {/* Changed */}
         {changed.length > 0 && (
           <div className="mt-2">
-            <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-gray-500 font-semibold flex items-center">
+            <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-gray-500 font-semibold flex items-center flex-wrap gap-x-2">
               <span>Changes ({changed.length})</span>
-              <button className="ml-auto text-green-400 hover:text-green-300" onClick={handleStageAll} title="Stage all">
+              {formatChangeSummary(changed) && (
+                <span className="text-gray-600 font-normal normal-case tracking-normal">{formatChangeSummary(changed)}</span>
+              )}
+              <button className="ml-auto text-green-400 hover:text-green-300 shrink-0" onClick={handleStageAll} title="Stage all">
                 <Plus className="w-3 h-3" />
               </button>
             </div>
             {changed.map((f) => (
-              <FileItem key={f.path} path={f.path} status={f.status} isSelected={selectedFilePath === f.path}
+              <FileItem key={f.path} path={f.path} status={f.status} additions={f.additions} deletions={f.deletions} isSelected={selectedFilePath === f.path}
                 onClick={handleFileClick} onContextMenu={handleContextMenu} onStageToggle={handleStageToggle} />
             ))}
           </div>
