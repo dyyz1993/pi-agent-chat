@@ -21,7 +21,7 @@ httpServer.on("request", createHttpHandler({
 
 httpServer.listen(config.port, () => {
   log.info(`HTTP + WebSocket server running on http://localhost:${config.port}`);
-  log.info(`WebSocket: ws://localhost:${config.port}?token=${config.authToken}`);
+  log.info(`WebSocket: ws://localhost:${config.port}/ws?token=${config.authToken}`);
   log.info("Available RPC methods: system.ping, system.hello, system.echo, file.listDir, timer.start, timer.stop");
   log.info("File endpoints: GET /file/{path}, GET /info/{path}");
 });

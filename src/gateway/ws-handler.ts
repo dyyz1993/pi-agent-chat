@@ -1,8 +1,3 @@
-/**
- * WebSocket handler for the web gateway.
- * Handles WS connections, auth, and bridges to RPCServer.
- */
-
 import type { Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { RPCServer, type Transport } from "@dyyz1993/rpc-core";
@@ -17,19 +12,37 @@ export interface WsHandlerDeps {
 
 export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSocketServer {
   const { config: cfg } = deps;
-  const wss = new WebSocketServer({ server: httpServer, path: "/" });
+  const clients = new Set<WebSocket>();
+  const wss = new WebSocketServer({ noServer: true });
 
-  wss.on("connection", (ws: WebSocket, req) => {
-    // Token 验证
-    const url = req.url ? new URL(req.url, "http://localhost") : null;
-    const token = url?.searchParams.get("token");
-    if (token !== cfg.authToken) {
-      log.warn("Connection rejected: invalid token");
-      ws.close(4001, "Unauthorized");
+  httpServer.on("upgrade", (req, socket, head) => {
+    if (!req.url) {
+      socket.destroy();
       return;
     }
 
-    log.info("Client connected", { total: wss.clients.size });
+    const url = new URL(req.url, "http://localhost");
+    if (url.pathname !== "/ws") {
+      socket.destroy();
+      return;
+    }
+
+    const token = url.searchParams.get("token");
+    if (token !== cfg.authToken) {
+      log.warn("Connection rejected: invalid token");
+      socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+      socket.destroy();
+      return;
+    }
+
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      wss.emit("connection", ws, req);
+    });
+  });
+
+  wss.on("connection", (ws: WebSocket, _req) => {
+    log.info("Client connected", { total: clients.size + 1 });
+    clients.add(ws);
 
     const wsTransport = {
       send: async (message: unknown): Promise<void> => {
@@ -60,18 +73,21 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
     };
 
     const rpcServer = new RPCServer(wsTransport as Transport);
-
-    // 自动导入并注册所有 handlers
     registerAllHandlers(rpcServer, { platform: "web" });
 
     ws.on("close", () => {
-      log.info("Client disconnected", { total: wss.clients.size });
+      clients.delete(ws);
+      log.info("Client disconnected", { total: clients.size });
       rpcServer.close();
     });
 
     ws.on("error", (err: Error) => {
       log.error("Client error", { error: err.message });
     });
+  });
+
+  Object.defineProperty(wss, "clients", {
+    get: () => clients,
   });
 
   return wss;

@@ -1,15 +1,14 @@
-import { useMemo, useCallback, useState, memo } from "react";
+import { useMemo, useCallback, useState, memo, useRef, useEffect } from "react";
 import {
   User,
   Bot,
   FileText,
+  AlertTriangle,
   type LucideIcon,
 } from "lucide-react";
 import type { ChatMessage } from "../../types";
 import { useChatNavStore } from "../../stores/use-chat-nav-store";
-import { getToolIcon } from "./tool-icon-map";
-
-
+import { getToolIcon, getPreviewResourceIcon } from "./tool-icon-map";
 
 type SubItem = {
   kind: "text" | "tool";
@@ -41,6 +40,20 @@ function buildNavItems(messages: ChatMessage[]): NavItem[] {
       };
     }
 
+    const customBlock = msg.content.find((b) => b.type === "custom") as
+      | { type: "custom"; customType: string; data: unknown }
+      | undefined;
+    if (customBlock && customBlock.customType === "lsp_diagnostics") {
+      return {
+        id: msg.id,
+        role: "assistant",
+        icon: AlertTriangle,
+        color: "text-yellow-400",
+        label: "LSP Diagnostics",
+        subs: [],
+      };
+    }
+
     const subs: SubItem[] = [];
     const hasText = msg.content.some((b) => b.type === "text");
     const toolNames: string[] = [];
@@ -58,8 +71,24 @@ function buildNavItems(messages: ChatMessage[]): NavItem[] {
     }
 
     for (const name of uniqueTools) {
-      const ti = getToolIcon(name);
-      subs.push({ kind: "tool", icon: ti.icon, color: ti.color, label: ti.label, toolName: name });
+      let ti = getToolIcon(name);
+      let label = ti.label;
+      if (name.toLowerCase() === "preview") {
+        const previewBlock = msg.content.find(
+          (b) =>
+            (b.type === "toolExecution" || b.type === "toolResult") &&
+            b.toolName.toLowerCase() === "preview" &&
+            (b as { details?: unknown }).details,
+        );
+        if (previewBlock) {
+          const rt = ((previewBlock as { details?: { resourceType?: string } }).details as { resourceType?: string })?.resourceType;
+          if (rt) {
+            ti = getPreviewResourceIcon(rt);
+            label = ti.label;
+          }
+        }
+      }
+      subs.push({ kind: "tool", icon: ti.icon, color: ti.color, label, toolName: name });
     }
 
     const hasError = msg.content.some(
@@ -231,14 +260,10 @@ const NavDotGroup = memo(function NavDotGroup({
 
 export function SideNav({
   messages,
-  scrollRef,
-  onScrollSync,
   onNavDotClick,
   onNavDotScroll,
 }: {
   messages: ChatMessage[];
-  scrollRef?: React.RefObject<HTMLDivElement>;
-  onScrollSync?: () => void;
   onNavDotClick?: (msgId: string) => void;
   onNavDotScroll?: (msgId: string) => void;
 }) {
@@ -246,6 +271,7 @@ export function SideNav({
   const selectedIds = useChatNavStore((s) => s.selectedIds);
   const toggleSelected = useChatNavStore((s) => s.toggleSelected);
   const [subActiveKey, setSubActiveKey] = useState<string | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const navItems = useMemo(() => buildNavItems(messages), [messages]);
 
@@ -264,40 +290,50 @@ export function SideNav({
       e.preventDefault();
       toggleSelected(id);
     },
-    [toggleSelected]
+    [toggleSelected],
   );
 
   const handleDoubleClick = useCallback(
     (id: string) => {
       toggleSelected(id);
     },
-    [toggleSelected]
+    [toggleSelected],
   );
+
+  useEffect(() => {
+    if (!activeId || !scrollContainerRef.current) return;
+    const badge = scrollContainerRef.current.querySelector(
+      `[data-nav-id="${activeId}"]`,
+    ) as HTMLElement | null;
+    if (badge) {
+      badge.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, [activeId]);
 
   return (
     <div className="h-full flex flex-col bg-gray-900/30 border-l border-gray-800/30">
       <div
-        ref={scrollRef as React.Ref<HTMLDivElement>}
+        ref={scrollContainerRef}
         className="flex-1 overflow-y-auto"
-        onScroll={onScrollSync}
         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
       >
         <div className="flex flex-col items-center py-2 space-y-0.5">
           {navItems.map(({ id, icon: Icon, color, subs }) => (
-            <NavDotGroup
-              key={id}
-              id={id}
-              Icon={Icon}
-              color={color}
-              subs={subs}
-              isActive={activeId === id}
-              isSelected={selectedIds.has(id)}
-              subActiveKey={subActiveKey}
-              onDotClick={handleDotClick}
-              onSubDotClick={handleSubDotClick}
-              onContextMenu={handleContextMenu}
-              onDoubleClick={handleDoubleClick}
-            />
+            <div key={id} data-nav-id={id}>
+              <NavDotGroup
+                id={id}
+                Icon={Icon}
+                color={color}
+                subs={subs}
+                isActive={activeId === id}
+                isSelected={selectedIds.has(id)}
+                subActiveKey={subActiveKey}
+                onDotClick={handleDotClick}
+                onSubDotClick={handleSubDotClick}
+                onContextMenu={handleContextMenu}
+                onDoubleClick={handleDoubleClick}
+              />
+            </div>
           ))}
         </div>
       </div>
