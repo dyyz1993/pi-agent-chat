@@ -14,6 +14,8 @@ export default tseslint.config(
       'postcss.config.js',
       'tailwind.config.js',
       'scripts/**',
+      'preview-test/**',
+      '*.html',
     ],
   },
   {

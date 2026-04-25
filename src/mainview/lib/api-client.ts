@@ -1,6 +1,7 @@
 import { createTypedClient, WebSocketTransport, IPCTransport } from "@dyyz1993/rpc-core";
 import type { TypedClient, MethodParams, MethodResult, EventPayload, EventMetadata } from "@dyyz1993/rpc-core";
 import type { RPCMethods, RPCEvents } from "../../shared/rpc-schema";
+import { useRpcDebugStore } from "../stores/use-rpc-debug-store";
 
 /**
  * Token 来源优先级：
@@ -173,15 +174,22 @@ class APIClientImpl {
     return this.client!.subscribe(eventType, wrappedHandler, filter);
   }
 
+  private _debugEnabled = false;
+
+  setDebugEnabled(enabled: boolean) {
+    this._debugEnabled = enabled;
+  }
+
   private debugLog(direction: "call" | "event" | "response", method: string, payload: unknown): void {
-    import("../stores/use-rpc-debug-store").then(({ useRpcDebugStore }) => {
+    if (!this._debugEnabled) return;
+    try {
       useRpcDebugStore.getState().addEntry({
         direction,
         method: direction !== "event" ? method : undefined,
         eventType: direction === "event" ? method : undefined,
         payload,
       });
-    }).catch(() => {});
+    } catch {}
   }
 
   unsubscribe(subscriptionId: string): void {

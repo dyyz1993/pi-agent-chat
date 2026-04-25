@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUp,
   Paperclip,
@@ -9,6 +9,7 @@ import {
   ArrowLeft,
   Square,
 } from "lucide-react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { useChatStore } from "../../stores/use-chat-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useSubagentStore } from "../../stores/use-subagent-store";
@@ -24,6 +25,20 @@ import type { ChatMessage } from "../../types";
 
 const EMPTY_MSGS: never[] = [];
 
+function estimateMessageSize(msg: ChatMessage): number {
+  if (msg.role === "user") return 60;
+  let h = 48;
+  for (const block of msg.content) {
+    switch (block.type) {
+      case "text": h += Math.min(200, Math.max(40, (block.text.length / 80) * 22)); break;
+      case "thinking": h += 80; break;
+      case "toolExecution": h += block.status === "running" ? 180 : 120; break;
+      default: h += 60;
+    }
+  }
+  return h;
+}
+
 export function ChatPanel() {
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const sessionStatus = useSessionStore((s) => activeSessionId ? (s.sessionStatusMap[activeSessionId] ?? "idle") : "idle");
@@ -36,6 +51,8 @@ export function ChatPanel() {
     if (!activeSessionId) return EMPTY_MSGS;
     return s.messagesBySession[activeSessionId] || EMPTY_MSGS;
   });
+  const hasMore = useChatStore((s) => activeSessionId ? (s.hasMoreBySession[activeSessionId] ?? false) : false);
+  const loadingMore = useChatStore((s) => activeSessionId ? (s.loadingMoreBySession[activeSessionId] ?? false) : false);
 
   const isViewingSubagent = !!activeSubId;
   const messages: ChatMessage[] = isViewingSubagent ? subMessages : mainMessages;
@@ -51,18 +68,7 @@ export function ChatPanel() {
   const messageIds = useMemo(() => messages.map((m) => m.id), [messages]);
   const isStreaming = sessionStatus === "streaming" || sessionStatus === "compacting";
 
-  const streamVersion = useMemo(() => {
-    let v = 0;
-    for (const m of messages) {
-      v += m.content.length;
-      if (m.isStreaming) {
-        const last = m.content[m.content.length - 1];
-        if (last?.type === "text") v += (last as { text: string }).text.length;
-        if (last?.type === "toolExecution") v += ((last as { output?: string }).output?.length ?? 0);
-      }
-    }
-    return v;
-  }, [messages]);
+  const streamVersion = useChatStore((s) => s.streamContentVersion);
 
   const handleAbort = useCallback(async () => {
     if (!activeSessionId) return;
@@ -133,6 +139,8 @@ export function ChatPanel() {
               messages={messages}
               scrollRef={messagesScrollRef}
               onScroll={handleScroll}
+              hasMore={hasMore}
+              loadingMore={loadingMore}
             />
           )}
         </div>
@@ -185,40 +193,160 @@ function SubagentMessagesArea({ messages, scrollRef, onScroll }: {
   scrollRef: React.RefObject<HTMLDivElement | null>;
   onScroll: () => void;
 }) {
-  return (
-    <div
-      ref={scrollRef as React.Ref<HTMLDivElement>}
-      className="h-full overflow-y-auto px-4 py-3 space-y-2"
-      onScroll={onScroll}
-    >
-      {messages.length === 0 ? (
+  const virtualizer = useVirtualizer({
+    count: messages.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: (index) => estimateMessageSize(messages[index]),
+    overscan: 5,
+    measureElement: (el) => el.getBoundingClientRect().height,
+  });
+
+  const prevCountRef = useRef(0);
+  useEffect(() => {
+    if (messages.length > prevCountRef.current) {
+      virtualizer.scrollToIndex(messages.length - 1, { align: "end" });
+    }
+    prevCountRef.current = messages.length;
+  }, [messages.length, virtualizer]);
+
+  if (messages.length === 0) {
+    return (
+      <div
+        ref={scrollRef as React.Ref<HTMLDivElement>}
+        className="h-full overflow-y-auto px-4 py-3"
+        onScroll={onScroll}
+      >
         <div className="flex flex-col items-center justify-center h-full text-gray-600 text-sm gap-2">
           <Bot className="w-6 h-6 text-purple-500/50" />
           <span>等待子代理响应...</span>
         </div>
-      ) : (
-        messages.map((msg) => <MessageBubble key={msg.id} message={msg} />)
-      )}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      ref={scrollRef as React.Ref<HTMLDivElement>}
+      className="h-full overflow-y-auto px-4 py-3"
+      onScroll={onScroll}
+    >
+      <div style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}>
+        {virtualizer.getVirtualItems().map((vr) => {
+          const msg = messages[vr.index];
+          return (
+            <div
+              key={msg.id}
+              data-index={vr.index}
+              ref={virtualizer.measureElement}
+              style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${vr.start}px)` }}
+            >
+              <div className="py-1">
+                <MessageBubble message={msg} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
-function MessagesArea({ messages, scrollRef, onScroll }: {
+function MessagesArea({ messages, scrollRef, onScroll, hasMore, loadingMore }: {
   messages: ChatMessage[];
   scrollRef: React.RefObject<HTMLDivElement | null>;
   onScroll: () => void;
+  hasMore: boolean;
+  loadingMore: boolean;
 }) {
+  const prevHeightRef = useRef(0);
+  const [loadingTriggered, setLoadingTriggered] = useState(false);
+
+  const virtualizer = useVirtualizer({
+    count: messages.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: (index) => estimateMessageSize(messages[index]),
+    overscan: 5,
+    measureElement: (el) => el.getBoundingClientRect().height,
+  });
+
+  const prevCountRef = useRef(0);
+  useEffect(() => {
+    if (messages.length > prevCountRef.current && prevCountRef.current > 0 && !loadingTriggered) {
+      virtualizer.scrollToIndex(messages.length - 1, { align: "end" });
+    }
+    if (loadingTriggered) setLoadingTriggered(false);
+    prevCountRef.current = messages.length;
+  }, [messages.length, virtualizer, loadingTriggered]);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || prevHeightRef.current === 0) return;
+    const diff = el.scrollHeight - prevHeightRef.current;
+    if (diff > 0) {
+      el.scrollTop = el.scrollTop + diff;
+      prevHeightRef.current = 0;
+    }
+  }, [messages, scrollRef]);
+
+  const handleScrollCapture = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el || !hasMore || loadingMore) return;
+    if (el.scrollTop < 40) {
+      prevHeightRef.current = el.scrollHeight;
+      setLoadingTriggered(true);
+      const session = useSessionStore.getState();
+      const tab = session.projectTabs.find((t) => t.id === session.activeProjectId);
+      if (tab) {
+        const sessions = session.sessionsByProject[tab.path];
+        const activeSessionId = session.activeSessionId;
+        const meta = sessions?.find((s) => s.sessionId === activeSessionId);
+        if (meta) {
+          useChatStore.getState().loadMoreMessages(meta.sessionPath);
+        }
+      }
+    }
+  }, [hasMore, loadingMore, scrollRef]);
+
+  if (messages.length === 0) {
+    return (
+      <div
+        ref={scrollRef as React.Ref<HTMLDivElement>}
+        className="h-full overflow-y-auto px-4 py-3"
+        onScroll={onScroll}
+      >
+        <div className="flex items-center justify-center h-full text-gray-600 text-sm">开始对话...</div>
+      </div>
+    );
+  }
+
   return (
     <div
       ref={scrollRef as React.Ref<HTMLDivElement>}
-      className="h-full overflow-y-auto px-4 py-3 space-y-2"
-      onScroll={onScroll}
+      className="h-full overflow-y-auto px-4 py-3"
+      onScroll={() => { handleScrollCapture(); onScroll(); }}
     >
-      {messages.length === 0 ? (
-        <div className="flex items-center justify-center h-full text-gray-600 text-sm">开始对话...</div>
-      ) : (
-        messages.map((msg) => <MessageBubble key={msg.id} message={msg} />)
+      {hasMore && (
+        <div className="flex justify-center py-2 text-gray-500 text-xs">
+          {loadingMore ? "加载中..." : "向上滚动加载更多"}
+        </div>
       )}
+      <div style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}>
+        {virtualizer.getVirtualItems().map((vr) => {
+          const msg = messages[vr.index];
+          return (
+            <div
+              key={msg.id}
+              data-index={vr.index}
+              ref={virtualizer.measureElement}
+              style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${vr.start}px)` }}
+            >
+              <div className="py-1">
+                <MessageBubble message={msg} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

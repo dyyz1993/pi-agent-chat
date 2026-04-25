@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { useSessionStore } from "../../stores/use-session-store";
 import type { SessionStatus } from "../../types";
 
@@ -7,35 +8,27 @@ function formatTokens(tokens: number | null | undefined): string {
   return `${tokens}`;
 }
 
+const STATUS_CONFIGS = {
+  streaming: { color: "#facc15", strokeClass: "text-yellow-400", animClass: "animate-pulse", label: "工作中" },
+  compacting: { color: "#facc15", strokeClass: "text-yellow-400", animClass: "animate-pulse", label: "工作中" },
+  permission: { color: "#f87171", strokeClass: "text-red-400", animClass: "", label: "需要协助" },
+  idle: { color: "#4ade80", strokeClass: "text-green-400", animClass: "", label: "休闲中" },
+} as const;
+
 function statusConfig(status: SessionStatus | undefined) {
   switch (status) {
     case "streaming":
     case "compacting":
-      return {
-        color: "#facc15",
-        strokeClass: "text-yellow-400",
-        animClass: "animate-pulse",
-        label: "工作中",
-      };
+      return STATUS_CONFIGS.streaming;
     case "permission":
-      return {
-        color: "#f87171",
-        strokeClass: "text-red-400",
-        animClass: "",
-        label: "需要协助",
-      };
+      return STATUS_CONFIGS.permission;
     case "idle":
     default:
-      return {
-        color: "#4ade80",
-        strokeClass: "text-green-400",
-        animClass: "",
-        label: "休闲中",
-      };
+      return STATUS_CONFIGS.idle;
   }
 }
 
-function ContextRing({ percent, color, isWorking }: { percent: number; color: string; isWorking: boolean }) {
+const ContextRing = memo(function ContextRing({ percent, color, isWorking }: { percent: number; color: string; isWorking: boolean }) {
   const size = 18;
   const stroke = 2.5;
   const radius = (size - stroke) / 2;
@@ -69,9 +62,9 @@ function ContextRing({ percent, color, isWorking }: { percent: number; color: st
       />
     </svg>
   );
-}
+});
 
-export function TokenStatusBar({ sessionId }: { sessionId: string }) {
+export const TokenStatusBar = memo(function TokenStatusBar({ sessionId }: { sessionId: string }) {
   const contextUsage = useSessionStore((s) => s.sessionContextMap[sessionId]);
   const sessionStatus = useSessionStore((s) => s.sessionStatusMap[sessionId]);
 
@@ -95,4 +88,4 @@ export function TokenStatusBar({ sessionId }: { sessionId: string }) {
       <span>可用 {available}</span>
     </div>
   );
-}
+});

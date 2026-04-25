@@ -1,4 +1,4 @@
-import { useMemo, useCallback, useState } from "react";
+import { useMemo, useCallback, useState, memo } from "react";
 import {
   User,
   Bot,
@@ -77,101 +77,7 @@ function buildNavItems(messages: ChatMessage[]): NavItem[] {
   });
 }
 
-export function SideNav({
-  messages,
-  scrollRef,
-  onScrollSync,
-  onNavDotClick,
-  onNavDotScroll,
-}: {
-  messages: ChatMessage[];
-  scrollRef?: React.RefObject<HTMLDivElement>;
-  onScrollSync?: () => void;
-  onNavDotClick?: (msgId: string) => void;
-  onNavDotScroll?: (msgId: string) => void;
-}) {
-  const activeId = useChatNavStore((s) => s.activeId);
-  const selectedIds = useChatNavStore((s) => s.selectedIds);
-  const toggleSelected = useChatNavStore((s) => s.toggleSelected);
-  const [subActiveKey, setSubActiveKey] = useState<string | null>(null);
-
-  const navItems = useMemo(() => buildNavItems(messages), [messages]);
-
-  const handleContextMenu = useCallback(
-    (e: React.MouseEvent, id: string) => {
-      e.preventDefault();
-      toggleSelected(id);
-    },
-    [toggleSelected]
-  );
-
-  const handleDoubleClick = useCallback(
-    (id: string) => {
-      toggleSelected(id);
-    },
-    [toggleSelected]
-  );
-
-  return (
-    <div className="h-full flex flex-col bg-gray-900/30 border-l border-gray-800/30">
-      <div
-        ref={scrollRef as React.Ref<HTMLDivElement>}
-        className="flex-1 overflow-y-auto"
-        onScroll={onScrollSync}
-        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-      >
-        <div className="flex flex-col items-center py-2 space-y-0.5">
-          {navItems.map(({ id, icon: Icon, color, subs }) => {
-            const isActive = activeId === id;
-            const isSelected = selectedIds.has(id);
-
-            return (
-              <div key={id} className="flex flex-col items-center w-full">
-                <NavDot
-                  id={id}
-                  Icon={Icon}
-                  color={color}
-                  isActive={isActive && !subActiveKey}
-                  isSelected={isSelected}
-                  onClick={() => { setSubActiveKey(null); if (onNavDotClick) onNavDotClick(id); }}
-                  onContextMenu={(e) => handleContextMenu(e, id)}
-                  onDoubleClick={() => handleDoubleClick(id)}
-                />
-                {subs.length > 0 && (
-                  <div className="flex flex-col items-center ml-1 mt-0.5 space-y-0.5">
-                    {subs.map((sub, i) => {
-                      const key = `${id}-${i}`;
-                      return (
-                        <NavSubDot
-                          key={key}
-                          Icon={sub.icon}
-                          color={sub.color}
-                          label={sub.label}
-                          onClick={() => { setSubActiveKey(key); if (onNavDotScroll) onNavDotScroll(id); }}
-                          onContextMenu={(e) => handleContextMenu(e, id)}
-                          onDoubleClick={() => handleDoubleClick(id)}
-                          isActive={subActiveKey === key}
-                        />
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {selectedIds.size > 0 && (
-        <div className="px-1 py-1 text-[10px] text-red-400 text-center border-t border-red-500/20 bg-red-950/20">
-          已选 {selectedIds.size}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function NavDot({
+const NavDot = memo(function NavDot({
   id: _id,
   Icon,
   color,
@@ -219,9 +125,9 @@ function NavDot({
       <Icon className={`w-4 h-4 ${iconColor} transition-colors`} />
     </button>
   );
-}
+});
 
-function NavSubDot({
+const NavSubDot = memo(function NavSubDot({
   Icon,
   color,
   label,
@@ -260,5 +166,147 @@ function NavSubDot({
     >
       <Icon className={`w-3.5 h-3.5 ${iconColor}`} />
     </button>
+  );
+});
+
+const NavDotGroup = memo(function NavDotGroup({
+  id,
+  Icon,
+  color,
+  subs,
+  isActive,
+  isSelected,
+  subActiveKey,
+  onDotClick,
+  onSubDotClick,
+  onContextMenu,
+  onDoubleClick,
+}: {
+  id: string;
+  Icon: React.ComponentType<{ className?: string }>;
+  color: string;
+  subs: SubItem[];
+  isActive: boolean;
+  isSelected: boolean;
+  subActiveKey: string | null;
+  onDotClick: (id: string) => void;
+  onSubDotClick: (id: string, key: string) => void;
+  onContextMenu: (e: React.MouseEvent, id: string) => void;
+  onDoubleClick: (id: string) => void;
+}) {
+  return (
+    <div className="flex flex-col items-center w-full">
+      <NavDot
+        id={id}
+        Icon={Icon}
+        color={color}
+        isActive={isActive && !subActiveKey}
+        isSelected={isSelected}
+        onClick={() => onDotClick(id)}
+        onContextMenu={(e) => onContextMenu(e, id)}
+        onDoubleClick={() => onDoubleClick(id)}
+      />
+      {subs.length > 0 && (
+        <div className="flex flex-col items-center ml-1 mt-0.5 space-y-0.5">
+          {subs.map((sub, i) => {
+            const key = `${id}-${i}`;
+            return (
+              <NavSubDot
+                key={key}
+                Icon={sub.icon}
+                color={sub.color}
+                label={sub.label}
+                onClick={() => onSubDotClick(id, key)}
+                onContextMenu={(e) => onContextMenu(e, id)}
+                onDoubleClick={() => onDoubleClick(id)}
+                isActive={subActiveKey === key}
+              />
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+});
+
+export function SideNav({
+  messages,
+  scrollRef,
+  onScrollSync,
+  onNavDotClick,
+  onNavDotScroll,
+}: {
+  messages: ChatMessage[];
+  scrollRef?: React.RefObject<HTMLDivElement>;
+  onScrollSync?: () => void;
+  onNavDotClick?: (msgId: string) => void;
+  onNavDotScroll?: (msgId: string) => void;
+}) {
+  const activeId = useChatNavStore((s) => s.activeId);
+  const selectedIds = useChatNavStore((s) => s.selectedIds);
+  const toggleSelected = useChatNavStore((s) => s.toggleSelected);
+  const [subActiveKey, setSubActiveKey] = useState<string | null>(null);
+
+  const navItems = useMemo(() => buildNavItems(messages), [messages]);
+
+  const handleDotClick = useCallback((id: string) => {
+    setSubActiveKey(null);
+    if (onNavDotClick) onNavDotClick(id);
+  }, [onNavDotClick]);
+
+  const handleSubDotClick = useCallback((id: string, key: string) => {
+    setSubActiveKey(key);
+    if (onNavDotScroll) onNavDotScroll(id);
+  }, [onNavDotScroll]);
+
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent, id: string) => {
+      e.preventDefault();
+      toggleSelected(id);
+    },
+    [toggleSelected]
+  );
+
+  const handleDoubleClick = useCallback(
+    (id: string) => {
+      toggleSelected(id);
+    },
+    [toggleSelected]
+  );
+
+  return (
+    <div className="h-full flex flex-col bg-gray-900/30 border-l border-gray-800/30">
+      <div
+        ref={scrollRef as React.Ref<HTMLDivElement>}
+        className="flex-1 overflow-y-auto"
+        onScroll={onScrollSync}
+        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+      >
+        <div className="flex flex-col items-center py-2 space-y-0.5">
+          {navItems.map(({ id, icon: Icon, color, subs }) => (
+            <NavDotGroup
+              key={id}
+              id={id}
+              Icon={Icon}
+              color={color}
+              subs={subs}
+              isActive={activeId === id}
+              isSelected={selectedIds.has(id)}
+              subActiveKey={subActiveKey}
+              onDotClick={handleDotClick}
+              onSubDotClick={handleSubDotClick}
+              onContextMenu={handleContextMenu}
+              onDoubleClick={handleDoubleClick}
+            />
+          ))}
+        </div>
+      </div>
+
+      {selectedIds.size > 0 && (
+        <div className="px-1 py-1 text-[10px] text-red-400 text-center border-t border-red-500/20 bg-red-950/20">
+          已选 {selectedIds.size}
+        </div>
+      )}
+    </div>
   );
 }

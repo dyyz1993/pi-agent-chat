@@ -64,40 +64,57 @@ function findNode(nodes: TreeNode[], path: string): TreeNode | null {
 }
 
 function updateExpanded(nodes: TreeNode[], path: string, expanded: boolean): TreeNode[] {
-  return nodes.map((n) => {
-    if (n.path === path) return { ...n, expanded };
-    if (n.children) return { ...n, children: updateExpanded(n.children, path, expanded) };
+  let changed = false;
+  const result = nodes.map((n) => {
+    if (n.path === path) { changed = true; return { ...n, expanded }; }
+    if (n.children) {
+      const newChildren = updateExpanded(n.children, path, expanded);
+      if (newChildren !== n.children) { changed = true; return { ...n, children: newChildren }; }
+    }
     return n;
   });
+  return changed ? result : nodes;
 }
 
 function loadChildren(nodes: TreeNode[], nodePath: string, children: TreeNode[]): TreeNode[] {
-  return nodes.map((n) => {
-    if (n.path === nodePath) return { ...n, children, expanded: true, loaded: true };
-    if (n.children) return { ...n, children: loadChildren(n.children, nodePath, children) };
+  let changed = false;
+  const result = nodes.map((n) => {
+    if (n.path === nodePath) { changed = true; return { ...n, children, expanded: true, loaded: true }; }
+    if (n.children) {
+      const newChildren = loadChildren(n.children, nodePath, children);
+      if (newChildren !== n.children) { changed = true; return { ...n, children: newChildren }; }
+    }
     return n;
   });
+  return changed ? result : nodes;
 }
 
 function removeNode(nodes: TreeNode[], path: string): TreeNode[] {
-  return nodes
-    .filter((n) => n.path !== path)
-    .map((n) => {
-      if (n.children) return { ...n, children: removeNode(n.children, path) };
-      return n;
-    });
-}
-
-function renameInTree(nodes: TreeNode[], oldPath: string, newPath: string, newName: string): TreeNode[] {
-  return nodes.map((n) => {
-    if (n.path === oldPath) {
-      return { ...n, name: newName, path: newPath };
-    }
+  let changed = false;
+  const result = nodes.filter((n) => {
+    if (n.path === path) { changed = true; return false; }
+    return true;
+  }).map((n) => {
     if (n.children) {
-      return { ...n, children: renameInTree(n.children, oldPath, newPath, newName) };
+      const newChildren = removeNode(n.children, path);
+      if (newChildren !== n.children) { changed = true; return { ...n, children: newChildren }; }
     }
     return n;
   });
+  return changed ? result : nodes;
+}
+
+function renameInTree(nodes: TreeNode[], oldPath: string, newPath: string, newName: string): TreeNode[] {
+  let changed = false;
+  const result = nodes.map((n) => {
+    if (n.path === oldPath) { changed = true; return { ...n, name: newName, path: newPath }; }
+    if (n.children) {
+      const newChildren = renameInTree(n.children, oldPath, newPath, newName);
+      if (newChildren !== n.children) { changed = true; return { ...n, children: newChildren }; }
+    }
+    return n;
+  });
+  return changed ? result : nodes;
 }
 
 export const useExplorerStore = create<ExplorerState>((set, get) => ({

@@ -12,6 +12,7 @@ import { useSubagentStore, handleSubagentEvent } from "./use-subagent-store";
 import { useBashStore, handleBashEvent } from "./use-bash-store";
 import { useLspStore } from "./use-lsp-store";
 import { useExplorerStore } from "./use-explorer-store";
+import { batchMessageUpdate, flushNow } from "./message-batcher";
 
 export interface TodoItem {
   id: number;
@@ -529,51 +530,54 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
   }
 
   if (event.type === "message_update") {
-    const chat = useChatStore.getState();
-    const existing = chat.messagesBySession[sessionId] || [];
-    const lastMsg = existing[existing.length - 1];
-    if (!lastMsg || lastMsg.role !== "assistant") return;
+    batchMessageUpdate(sessionId, () => {
+      const chat = useChatStore.getState();
+      const existing = chat.messagesBySession[sessionId] || [];
+      const lastMsg = existing[existing.length - 1];
+      if (!lastMsg || lastMsg.role !== "assistant") return;
 
-    const message = event.message as AssistantMessage;
-    const incoming = message.content;
-    if (!incoming || !Array.isArray(incoming)) return;
+      const message = event.message as AssistantMessage;
+      const incoming = message.content;
+      if (!incoming || !Array.isArray(incoming)) return;
 
-    const preservedToolExecs = lastMsg.content.filter((b): b is Extract<ContentBlock, { type: "toolExecution" }> => b.type === "toolExecution");
-    const execByCallId = new Map<string, Extract<ContentBlock, { type: "toolExecution" }>>();
-    for (const exec of preservedToolExecs) {
-      execByCallId.set(exec.toolCallId, exec);
-    }
-    const usedExecs = new Set<string>();
+      const preservedToolExecs = lastMsg.content.filter((b): b is Extract<ContentBlock, { type: "toolExecution" }> => b.type === "toolExecution");
+      const execByCallId = new Map<string, Extract<ContentBlock, { type: "toolExecution" }>>();
+      for (const exec of preservedToolExecs) {
+        execByCallId.set(exec.toolCallId, exec);
+      }
+      const usedExecs = new Set<string>();
 
-    const textBlocks: ContentBlock[] = [];
-    const otherBlocks: ContentBlock[] = [];
+      const textBlocks: ContentBlock[] = [];
+      const otherBlocks: ContentBlock[] = [];
 
-    for (const block of incoming) {
-      if (block.type === "toolCall" && block.id) {
-        const exec = execByCallId.get(block.id);
-        if (exec) {
-          otherBlocks.push(exec);
-          usedExecs.add(block.id);
+      for (const block of incoming) {
+        if (block.type === "toolCall" && block.id) {
+          const exec = execByCallId.get(block.id);
+          if (exec) {
+            otherBlocks.push(exec);
+            usedExecs.add(block.id);
+          }
+        } else if (block.type === "text") {
+          textBlocks.push(block);
+        } else if (block.type === "thinking") {
+          otherBlocks.push(block);
         }
-      } else if (block.type === "text") {
-        textBlocks.push(block);
-      } else if (block.type === "thinking") {
-        otherBlocks.push(block);
       }
-    }
 
-    for (const exec of preservedToolExecs) {
-      if (!usedExecs.has(exec.toolCallId)) {
-        otherBlocks.push(exec);
+      for (const exec of preservedToolExecs) {
+        if (!usedExecs.has(exec.toolCallId)) {
+          otherBlocks.push(exec);
+        }
       }
-    }
 
-    chat.setMessagesForSession(sessionId, [...existing.slice(0, -1), {
-      ...lastMsg,
-      content: [...otherBlocks, ...textBlocks],
-      ...buildTokenUsage(message.usage),
-      ...(message.stopReason ? { stopReason: message.stopReason } : {}),
-    }]);
+      chat.setMessagesForSession(sessionId, [...existing.slice(0, -1), {
+        ...lastMsg,
+        content: [...otherBlocks, ...textBlocks],
+        ...buildTokenUsage(message.usage),
+        ...(message.stopReason ? { stopReason: message.stopReason } : {}),
+      }]);
+      chat.incrementStreamVersion();
+    });
     return;
   }
 
@@ -602,6 +606,7 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
       model: message.model || lastMsg.model,
       ...buildTokenUsage(message.usage),
     }]);
+    flushNow();
     return;
   }
 
@@ -615,54 +620,57 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
     type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
 
-    const chat = useChatStore.getState();
-    const existing = chat.messagesBySession[sessionId] || [];
-    const lastMsg = existing[existing.length - 1];
-    if (!lastMsg || lastMsg.role !== "assistant") return;
+    batchMessageUpdate(sessionId, () => {
+      const chat = useChatStore.getState();
+      const existing = chat.messagesBySession[sessionId] || [];
+      const lastMsg = existing[existing.length - 1];
+      if (!lastMsg || lastMsg.role !== "assistant") return;
 
-    const blocks = [...lastMsg.content];
-    const targetIdx = blocks.findIndex((b): b is ToolExecBlock =>
-      b.type === "toolExecution" && b.toolCallId === toolCallId
-    );
+      const blocks = [...lastMsg.content];
+      const targetIdx = blocks.findIndex((b): b is ToolExecBlock =>
+        b.type === "toolExecution" && b.toolCallId === toolCallId
+      );
 
-    if (event.type === "tool_execution_start") {
-      const args = event.args;
-      const argsStr = args && typeof args === "object" && "command" in args && typeof args.command === "string"
-        ? args.command
-        : args ? JSON.stringify(args, null, 2) : "";
-      blocks.push({ type: "toolExecution", toolCallId, toolName, args: argsStr, status: "running" });
-    } else if (event.type === "tool_execution_update") {
-      const partial = event.partialResult as { content?: Array<{ type: string; text?: string }> } | undefined;
-      let output = "";
-      if (partial) {
-        if (Array.isArray(partial.content)) {
-          output = partial.content.map((c) => c.text ?? "").join("");
+      if (event.type === "tool_execution_start") {
+        const args = event.args;
+        const argsStr = args && typeof args === "object" && "command" in args && typeof args.command === "string"
+          ? args.command
+          : args ? JSON.stringify(args, null, 2) : "";
+        blocks.push({ type: "toolExecution", toolCallId, toolName, args: argsStr, status: "running" });
+      } else if (event.type === "tool_execution_update") {
+        const partial = event.partialResult as { content?: Array<{ type: string; text?: string }> } | undefined;
+        let output = "";
+        if (partial) {
+          if (Array.isArray(partial.content)) {
+            output = partial.content.map((c) => c.text ?? "").join("");
+          }
+        }
+        if (targetIdx >= 0) {
+          const prev = blocks[targetIdx] as ToolExecBlock;
+          blocks[targetIdx] = { ...prev, output };
+        }
+      } else if (event.type === "tool_execution_end") {
+        const isError = event.isError;
+        let output = "";
+        const result = event.result as { content?: Array<{ type: string; text?: string }>; details?: unknown } | undefined;
+        if (result) {
+          if (Array.isArray(result.content)) {
+            output = result.content.map((c) => c.text ?? "").join("");
+          } else {
+            output = JSON.stringify(result, null, 2);
+          }
+        }
+        if (targetIdx >= 0) {
+          const prev = blocks[targetIdx] as ToolExecBlock;
+          blocks[targetIdx] = { ...prev, status: isError ? "error" : "done", output, details: result?.details };
         }
       }
-      if (targetIdx >= 0) {
-        const prev = blocks[targetIdx] as ToolExecBlock;
-        blocks[targetIdx] = { ...prev, output };
-      }
-    } else if (event.type === "tool_execution_end") {
-      const isError = event.isError;
-      let output = "";
-      const result = event.result as { content?: Array<{ type: string; text?: string }>; details?: unknown } | undefined;
-      if (result) {
-        if (Array.isArray(result.content)) {
-          output = result.content.map((c) => c.text ?? "").join("");
-        } else {
-          output = JSON.stringify(result, null, 2);
-        }
-      }
-      if (targetIdx >= 0) {
-        const prev = blocks[targetIdx] as ToolExecBlock;
-        blocks[targetIdx] = { ...prev, status: isError ? "error" : "done", output, details: result?.details };
-      }
-    }
 
-    const updated = [...existing];
-    updated[existing.length - 1] = { ...lastMsg, content: blocks };
-    chat.setMessagesForSession(sessionId, updated);
+      const updated = [...existing];
+      updated[existing.length - 1] = { ...lastMsg, content: blocks };
+      chat.setMessagesForSession(sessionId, updated);
+      chat.incrementStreamVersion();
+    });
     return;
   }
 }

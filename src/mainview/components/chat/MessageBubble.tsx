@@ -1,7 +1,6 @@
 import { useCallback, useEffect, memo, useMemo, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { ArrowDownToLine, X, Brain } from "lucide-react";
+import { CachedReactMarkdown } from "./CachedReactMarkdown";
 import type { ChatMessage, ContentBlock } from "../../types";
 import { useChatNavStore } from "../../stores/use-chat-nav-store";
 import { useSessionStore } from "../../stores/use-session-store";
@@ -15,11 +14,13 @@ interface MessageBubbleProps {
 
 export const MessageBubble = memo(function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === "user";
-  const activeId = useChatNavStore((s) => s.activeId);
-  const selectedIds = useChatNavStore((s) => s.selectedIds);
+  const isActive = useChatNavStore(
+    useCallback((s) => s.activeId === message.id, [message.id])
+  );
+  const isSelected = useChatNavStore(
+    useCallback((s) => s.selectedIds.has(message.id), [message.id])
+  );
   const setActive = useChatNavStore((s) => s.setActive);
-  const isActive = activeId === message.id;
-  const isSelected = selectedIds.has(message.id);
 
   const handleClick = useCallback(() => {
     setActive(message.id);
@@ -140,7 +141,7 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({ block, 
       }
       return (
         <div className="my-1 px-3 py-2 rounded-lg bg-gray-700/80 prose prose-invert prose-sm max-w-none overflow-auto max-h-[60vh]">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{block.text}</ReactMarkdown>
+          <CachedReactMarkdown>{block.text}</CachedReactMarkdown>
         </div>
       );
     case "thinking":

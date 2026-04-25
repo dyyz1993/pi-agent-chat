@@ -2,7 +2,8 @@ import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { RPCMethods, HandlerOptions } from "../rpc-schema";
 import type { SessionEntry } from "../modules/session";
 import { readFile, writeFile, mkdir, unlink } from "fs/promises";
-import { existsSync } from "fs";
+import { existsSync, createReadStream } from "fs";
+import * as readline from "readline";
 import { join } from "path";
 import { homedir } from "os";
 import { randomUUID } from "crypto";
@@ -31,28 +32,34 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       return { entries: [], hasMore: false };
     }
 
-    const content = await readFile(sessionPath, "utf-8");
-    const allLines = content.split("\n").filter((l) => l.trim());
-
     const startIdx = cursor ? parseInt(cursor, 10) : 1;
     const entries: SessionEntry[] = [];
+    let lineIdx = 0;
+    let hasMore = false;
 
-    for (let i = startIdx; i < allLines.length && entries.length < limit; i++) {
+    const rl = readline.createInterface({
+      input: createReadStream(sessionPath, { encoding: "utf-8" }),
+      crlfDelay: Infinity,
+    });
+
+    for await (const line of rl) {
+      if (!line.trim()) { lineIdx++; continue; }
+      if (lineIdx < startIdx) { lineIdx++; continue; }
+      if (entries.length >= limit) { hasMore = true; break; }
       try {
-        const parsed = JSON.parse(allLines[i]);
+        const parsed = JSON.parse(line);
         entries.push({
-          id: parsed.id || `entry-${i}`,
+          id: parsed.id || `entry-${lineIdx}`,
           type: (parsed.type || "custom") as SessionEntry["type"],
           parentId: parsed.parentId || null,
           timestamp: new Date(parsed.timestamp || 0).getTime(),
           data: parsed,
         });
-      } catch {
-        continue;
-      }
+      } catch {}
+      lineIdx++;
     }
 
-    const hasMore = startIdx + limit < allLines.length;
+    rl.close();
     return { entries, hasMore };
   });
 

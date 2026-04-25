@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { SubagentSessionInfo, ChatMessage, ContentBlock } from "../types";
 import { apiClient } from "../lib/api-client";
 import { messageToChatMessage } from "../lib/message-mapper";
+import { batchMessageUpdate } from "./message-batcher";
 
 const subToolCallNameMap: Record<string, string> = {};
 
@@ -108,29 +109,33 @@ export function handleSubagentEvent(subId: string, event: Record<string, unknown
       store.setSubMessages(subId, [...existing, msg]);
     }
   } else if (eventType === "message_update") {
-    const raw = event.message as Record<string, unknown>;
-    const lastMsg = existing[existing.length - 1];
-    if (!lastMsg) return;
+    batchMessageUpdate(subId, () => {
+      const freshStore = useSubagentStore.getState();
+      const freshExisting = freshStore.messagesBySubsession[subId] || [];
+      const lastMsg = freshExisting[freshExisting.length - 1];
+      if (!lastMsg) return;
 
-    const blocks = (lastMsg.content as ContentBlock[]) || [];
-    const content = raw.content as ContentBlock[];
-    if (!content || !Array.isArray(content)) return;
+      const blocks = (lastMsg.content as ContentBlock[]) || [];
+      const content = (event.message as Record<string, unknown>)?.content as ContentBlock[];
+      if (!content || !Array.isArray(content)) return;
 
-    const updated: ContentBlock[] = [...blocks];
-    for (const block of content) {
-      if (block.type === "text") {
-        const lastBlock = updated[updated.length - 1];
-        if (lastBlock?.type === "text") {
-          (lastBlock as { text: string }).text += block.text;
+      const updated: ContentBlock[] = [...blocks];
+      for (const block of content) {
+        if (block.type === "text") {
+          const lastIdx = updated.length - 1;
+          const lastBlock = updated[lastIdx];
+          if (lastIdx >= 0 && lastBlock?.type === "text") {
+            updated[lastIdx] = { type: "text" as const, text: lastBlock.text + block.text };
+          } else {
+            updated.push(block);
+          }
         } else {
           updated.push(block);
         }
-      } else {
-        updated.push(block);
       }
-    }
 
-    store.setSubMessages(subId, [...existing.slice(0, -1), { ...lastMsg, content: updated }]);
+      freshStore.setSubMessages(subId, [...freshExisting.slice(0, -1), { ...lastMsg, content: updated }]);
+    });
   } else if (eventType === "message_end") {
     const raw = event.message as Record<string, unknown>;
     const lastMsg = existing[existing.length - 1];
@@ -197,55 +202,57 @@ export function handleSubagentEvent(subId: string, event: Record<string, unknown
         : JSON.stringify(args, null, 2)
       : "";
 
-    const freshMessages = useSubagentStore.getState().messagesBySubsession[subId] || [];
-    const lastMsg = freshMessages[freshMessages.length - 1];
-    if (!lastMsg) return;
+    batchMessageUpdate(subId, () => {
+      const freshMessages = useSubagentStore.getState().messagesBySubsession[subId] || [];
+      const lastMsg = freshMessages[freshMessages.length - 1];
+      if (!lastMsg) return;
 
-    const blocks = [...((lastMsg.content as ContentBlock[]) || [])];
-    const targetIdx = blocks.findIndex(
-      (b): b is ToolExecBlock => b.type === "toolExecution" && b.toolCallId === toolCallId,
-    );
+      const blocks = [...((lastMsg.content as ContentBlock[]) || [])];
+      const targetIdx = blocks.findIndex(
+        (b): b is ToolExecBlock => b.type === "toolExecution" && b.toolCallId === toolCallId,
+      );
 
-    if (eventType === "tool_execution_start") {
-      blocks.push({ type: "toolExecution", toolCallId, toolName, args: argsStr, status: "running" });
-    } else if (eventType === "tool_execution_update") {
-      const partial = event.partialResult as Record<string, unknown> | undefined;
-      let output = "";
-      if (partial) {
-        const partialContent = partial.content as Array<{ type: string; text?: string }> | undefined;
-        if (Array.isArray(partialContent)) {
-          output = partialContent.map((c) => c.text ?? "").join("");
-        } else if (typeof partial === "string") {
-          output = partial;
-        } else {
-          output = JSON.stringify(partial, null, 2);
+      if (eventType === "tool_execution_start") {
+        blocks.push({ type: "toolExecution", toolCallId, toolName, args: argsStr, status: "running" });
+      } else if (eventType === "tool_execution_update") {
+        const partial = event.partialResult as Record<string, unknown> | undefined;
+        let output = "";
+        if (partial) {
+          const partialContent = partial.content as Array<{ type: string; text?: string }> | undefined;
+          if (Array.isArray(partialContent)) {
+            output = partialContent.map((c) => c.text ?? "").join("");
+          } else if (typeof partial === "string") {
+            output = partial;
+          } else {
+            output = JSON.stringify(partial, null, 2);
+          }
+        }
+        if (targetIdx >= 0) {
+          const prev = blocks[targetIdx] as ToolExecBlock;
+          blocks[targetIdx] = { ...prev, output: (prev.output ?? "") + output };
+        }
+      } else if (eventType === "tool_execution_end") {
+        const result = event.result as Record<string, unknown> | undefined;
+        const isError = event.isError as boolean;
+        let output = "";
+        if (result) {
+          const resultContent = result.content as Array<{ type: string; text?: string }> | undefined;
+          if (Array.isArray(resultContent)) {
+            output = resultContent.map((c) => c.text ?? "").join("");
+          } else {
+            output = JSON.stringify(result, null, 2);
+          }
+        }
+        if (targetIdx >= 0) {
+          const prev = blocks[targetIdx] as ToolExecBlock;
+          blocks[targetIdx] = { ...prev, status: isError ? "error" : "done", output: (prev.output ?? "") + output, details: result?.details };
         }
       }
-      if (targetIdx >= 0) {
-        const prev = blocks[targetIdx] as ToolExecBlock;
-        blocks[targetIdx] = { ...prev, output: (prev.output ?? "") + output };
-      }
-    } else if (eventType === "tool_execution_end") {
-      const result = event.result as Record<string, unknown> | undefined;
-      const isError = event.isError as boolean;
-      let output = "";
-      if (result) {
-        const resultContent = result.content as Array<{ type: string; text?: string }> | undefined;
-        if (Array.isArray(resultContent)) {
-          output = resultContent.map((c) => c.text ?? "").join("");
-        } else {
-          output = JSON.stringify(result, null, 2);
-        }
-      }
-      if (targetIdx >= 0) {
-        const prev = blocks[targetIdx] as ToolExecBlock;
-        blocks[targetIdx] = { ...prev, status: isError ? "error" : "done", output: (prev.output ?? "") + output, details: result?.details };
-      }
-    }
 
-    const updated = [...freshMessages];
-    updated[freshMessages.length - 1] = { ...updated[freshMessages.length - 1], content: blocks };
-    store.setSubMessages(subId, updated);
+      const updated = [...freshMessages];
+      updated[freshMessages.length - 1] = { ...updated[freshMessages.length - 1], content: blocks };
+      useSubagentStore.getState().setSubMessages(subId, updated);
+    });
   }
 
   if (eventType === "agent_end") {
