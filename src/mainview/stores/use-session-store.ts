@@ -12,6 +12,8 @@ import { useSubagentStore, handleSubagentEvent } from "./use-subagent-store";
 import { useBashStore, handleBashEvent } from "./use-bash-store";
 import { useLspStore } from "./use-lsp-store";
 import { useExplorerStore } from "./use-explorer-store";
+import { useMemoryStore } from "./use-memory-store";
+import { useStatusStore } from "./use-status-store";
 import { batchMessageUpdate, flushNow } from "./message-batcher";
 
 export interface TodoItem {
@@ -34,6 +36,7 @@ interface SessionState {
   todoSubscriptions: Record<string, string>;
   bashSubscriptions: Record<string, string>;
   lspSubscriptions: Record<string, string>;
+  notifySubscriptions: Record<string, string>;
   todosBySession: Record<string, TodoItem[]>;
   sessionContextMap: Record<string, ContextUsage>;
   sessionStatusMap: Record<string, SessionStatus>;
@@ -50,6 +53,7 @@ interface SessionState {
   restoreFromPersisted: () => Promise<boolean>;
   updateSessionContext: (sessionId: string, usage: Partial<ContextUsage>) => void;
   updateSessionStatus: (sessionId: string, status: SessionStatus) => void;
+  restoreContextFromHistory: (sessionId: string) => void;
   fetchInitialState: (sessionId: string) => void;
 }
 
@@ -59,7 +63,7 @@ function setupSubscriptions(
   id: string,
   session: SessionMeta,
 ): void {
-  const { agentSubscriptions, subagentSubscriptions, todoSubscriptions, bashSubscriptions, lspSubscriptions } = state;
+  const { agentSubscriptions, subagentSubscriptions, todoSubscriptions, bashSubscriptions, lspSubscriptions, notifySubscriptions } = state;
   const storeGet = () => useSessionStore.getState() as SessionState;
 
   if (!agentSubscriptions[id]) {
@@ -117,7 +121,7 @@ function setupSubscriptions(
           });
         }
 
-        handleSubagentEvent(sid, payload.event);
+        handleSubagentEvent(sid, payload.event, id);
 
         if (eventType === "agent_end") {
           subStore.upsertLiveSubagent(path, sid, {
@@ -186,6 +190,41 @@ function setupSubscriptions(
       useLspStore.getState().loadHistory(session.sessionPath, id).catch(() => {});
     }).catch(() => {});
   }
+
+  if (!notifySubscriptions[id]) {
+    apiClient.subscribe(
+      "agent.notify",
+      (payload: { sessionId: string; message: string; notifyType: "info" | "warning" | "error" }) => {
+        if (payload.sessionId !== id) return;
+        const chat = useChatStore.getState();
+        const existing = chat.messagesBySession[id] || [];
+        const notifyMsg: import("../types").ChatMessage = {
+          id: `notify-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          role: "assistant",
+          content: [{
+            type: "text",
+            text: payload.notifyType === "warning"
+              ? `⚠️ ${payload.message}`
+              : payload.notifyType === "error"
+                ? `❌ ${payload.message}`
+                : `ℹ️ ${payload.message}`,
+          }],
+          timestamp: Date.now(),
+        };
+        chat.setMessagesForSession(id, [...existing, notifyMsg]);
+      },
+      { sessionId: id },
+    ).then((subId) => {
+      set((s) => ({
+        notifySubscriptions: { ...s.notifySubscriptions, [id]: subId },
+      }));
+    }).catch(() => {});
+  }
+}
+
+function syncTabsToBackend(tabs: ProjectTab[], activeTabId: string | null) {
+  const persistTabs = tabs.map((t) => ({ id: t.id, name: t.name, path: t.path }));
+  apiClient.call("project.syncTabs", { tabs: persistTabs, activeTabId }).catch(() => {});
 }
 
 export const useSessionStore = create<SessionState>()(
@@ -201,6 +240,7 @@ export const useSessionStore = create<SessionState>()(
       todoSubscriptions: {},
       bashSubscriptions: {},
       lspSubscriptions: {},
+      notifySubscriptions: {},
       todosBySession: {},
       sessionContextMap: {},
       sessionStatusMap: {},
@@ -209,10 +249,13 @@ export const useSessionStore = create<SessionState>()(
         set((s) => {
           const exists = s.projectTabs.find((t) => t.path === tab.path);
           if (exists) {
+            syncTabsToBackend(s.projectTabs, exists.id);
             return { activeProjectId: exists.id };
           }
+          const next = [...s.projectTabs, tab];
+          syncTabsToBackend(next, tab.id);
           return {
-            projectTabs: [...s.projectTabs, tab],
+            projectTabs: next,
             activeProjectId: tab.id,
           };
         }),
@@ -220,18 +263,22 @@ export const useSessionStore = create<SessionState>()(
       removeProjectTab: (id) =>
         set((s) => {
           const filtered = s.projectTabs.filter((t) => t.id !== id);
+          const newActiveId =
+            s.activeProjectId === id
+              ? filtered[filtered.length - 1]?.id ?? null
+              : s.activeProjectId;
+          syncTabsToBackend(filtered, newActiveId);
           return {
             projectTabs: filtered,
-            activeProjectId:
-              s.activeProjectId === id
-                ? filtered[filtered.length - 1]?.id ?? null
-                : s.activeProjectId,
+            activeProjectId: newActiveId,
           };
         }),
 
       setActiveProject: (id) => {
         set({ activeProjectId: id });
-        const tab = get().projectTabs.find((t) => t.id === id);
+        const tabs = get().projectTabs;
+        syncTabsToBackend(tabs, id);
+        const tab = tabs.find((t) => t.id === id);
         if (!tab) return;
 
         const explorer = useExplorerStore.getState();
@@ -391,6 +438,26 @@ export const useSessionStore = create<SessionState>()(
         }));
       },
 
+      restoreContextFromHistory: (sessionId) => {
+        const existing = get().sessionContextMap[sessionId];
+        if (existing?.tokens != null && existing.tokens > 0) return;
+        const msgs = useChatStore.getState().messagesBySession[sessionId];
+        if (!msgs || msgs.length === 0) return;
+        for (let i = msgs.length - 1; i >= 0; i--) {
+          const m = msgs[i];
+          if (m.role === "assistant" && m.tokenUsage) {
+            const total = m.tokenUsage.input + m.tokenUsage.output
+              + (m.tokenUsage.reasoning ?? 0)
+              + (m.tokenUsage.cacheRead ?? 0)
+              + (m.tokenUsage.cacheWrite ?? 0);
+            if (total > 0) {
+              get().updateSessionContext(sessionId, { tokens: total });
+            }
+            return;
+          }
+        }
+      },
+
       fetchInitialState: (sessionId) => {
         apiClient.call("agent.getState", { sessionId }).then((result) => {
           if (!result) return;
@@ -405,6 +472,25 @@ export const useSessionStore = create<SessionState>()(
           } else {
             get().updateSessionStatus(sessionId, "idle");
           }
+
+          apiClient.call("agent.getSessionStats", { sessionId }).then((stats) => {
+            if (!stats?.contextUsage) return;
+            const cu = stats.contextUsage;
+            const update: Partial<ContextUsage> = {};
+            if (cu.contextWindow > 0) update.contextWindow = cu.contextWindow;
+            if (cu.tokens != null) update.tokens = cu.tokens;
+            if (update.contextWindow || update.tokens != null) {
+              get().updateSessionContext(sessionId, update);
+            }
+          }).catch(() => {});
+
+          apiClient.call("agent.getCommands", { sessionId }).then((commands) => {
+            if (!Array.isArray(commands)) return;
+            const plugins = commands
+              .filter((c) => c.source === "extension")
+              .map((c) => ({ name: c.name, enabled: true }));
+            useStatusStore.getState().setPlugins(plugins);
+          }).catch(() => {});
         }).catch(() => {});
       },
 
@@ -476,6 +562,14 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
   if (event.type === "agent_end") {
     storeGet().updateSessionStatus(sessionId, "idle");
+    const allSessions = storeGet().sessionsByProject;
+    for (const sessList of Object.values(allSessions)) {
+      const session = sessList.find((s) => s.sessionId === sessionId);
+      if (session) {
+        useMemoryStore.getState().loadFiles(session.projectPath, sessionId);
+        break;
+      }
+    }
     return;
   }
 
@@ -671,6 +765,37 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
       chat.setMessagesForSession(sessionId, updated);
       chat.incrementStreamVersion();
     });
+    return;
+  }
+
+  if (event.type === "custom_entry") {
+    const chat = useChatStore.getState();
+    const existing = chat.messagesBySession[sessionId] || [];
+    const customMsg: import("../types").ChatMessage = {
+      id: event.id || `custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      role: "custom",
+      content: [{ type: "custom", customType: event.customType, data: event.data }],
+      timestamp: Date.now(),
+    };
+    chat.setMessagesForSession(sessionId, [...existing, customMsg]);
+
+    const memoryStore = useMemoryStore.getState();
+    memoryStore.addEvent(sessionId, {
+      id: event.id || `custom-${Date.now()}`,
+      customType: event.customType as string,
+      data: event.data,
+      timestamp: Date.now(),
+    });
+
+    if (event.customType === "memory_prefetch_result") {
+      const data = event.data as { summary?: string; snippet?: string } | undefined;
+      if (data) {
+        memoryStore.addInjected(sessionId, {
+          summary: data.summary || "",
+          snippet: data.snippet || "",
+        });
+      }
+    }
     return;
   }
 }

@@ -16,6 +16,7 @@ interface StatusState {
   toggleSection: (section: StatusSection) => void;
   setMcpTools: (tools: StatusState["mcpTools"]) => void;
   setLspStatus: (status: StatusState["lspStatus"]) => void;
+  setPlugins: (plugins: StatusState["plugins"]) => void;
 }
 
 export const useStatusStore = create<StatusState>((set) => ({
@@ -38,4 +39,5 @@ export const useStatusStore = create<StatusState>((set) => ({
     }),
   setMcpTools: (tools) => set({ mcpTools: tools }),
   setLspStatus: (status) => set({ lspStatus: status }),
+  setPlugins: (plugins) => set({ plugins }),
 }));

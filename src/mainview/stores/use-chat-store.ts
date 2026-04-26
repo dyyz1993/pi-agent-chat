@@ -90,9 +90,6 @@ interface ChatState {
   inputText: string;
   isStreaming: boolean;
   streamContentVersion: number;
-  hasMoreBySession: Record<string, boolean>;
-  cursorBySession: Record<string, string | null>;
-  loadingMoreBySession: Record<string, boolean>;
 
   setInputText: (text: string) => void;
   sendMessage: () => Promise<void>;
@@ -100,7 +97,6 @@ interface ChatState {
   setMessagesForSession: (sessionId: string, msgs: ChatMessage[]) => void;
   clearSessionMessages: (sessionId: string) => void;
   loadSessionMessages: (sessionPath: string) => Promise<void>;
-  loadMoreMessages: (sessionPath: string) => Promise<void>;
   setIsStreaming: (v: boolean) => void;
   incrementStreamVersion: () => void;
 }
@@ -110,9 +106,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
   inputText: "",
   isStreaming: false,
   streamContentVersion: 0,
-  hasMoreBySession: {},
-  cursorBySession: {},
-  loadingMoreBySession: {},
 
   setInputText: (text) => set({ inputText: text }),
 
@@ -124,6 +117,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const sessionId = useSessionStore.getState().activeSessionId;
     if (!sessionId) {
       useAppStore.getState().addLog("No active session");
+      return;
+    }
+
+    const activeSubId = (await import("./use-subagent-store")).useSubagentStore.getState().activeSubsessionId;
+    if (activeSubId) {
+      useAppStore.getState().addLog("Cannot send to subagent session");
       return;
     }
 
@@ -177,10 +176,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   clearSessionMessages: (sessionId) =>
     set((s) => {
       const { [sessionId]: _, ...rest } = s.messagesBySession;
-      const { [sessionId]: __, ...restHasMore } = s.hasMoreBySession;
-      const { [sessionId]: ___, ...restCursor } = s.cursorBySession;
-      const { [sessionId]: ____, ...restLoading } = s.loadingMoreBySession;
-      return { messagesBySession: rest, hasMoreBySession: restHasMore, cursorBySession: restCursor, loadingMoreBySession: restLoading };
+      return { messagesBySession: rest };
     }),
 
   setIsStreaming: (v) => set({ isStreaming: v }),
@@ -196,7 +192,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (preflight.length > 0) return;
 
       const { apiClient } = await import("../lib/api-client");
-      const result = await apiClient.call("session.getEntries", { sessionPath, limit: 50 });
+      const result = await apiClient.call("session.getEntries", { sessionPath });
 
       const current = get().messagesBySession[sessionId] || [];
       if (current.length > 0) return;
@@ -239,71 +235,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       set((s) => ({
         messagesBySession: { ...s.messagesBySession, [sessionId]: msgs },
-        hasMoreBySession: { ...s.hasMoreBySession, [sessionId]: result.hasMore ?? false },
-        cursorBySession: { ...s.cursorBySession, [sessionId]: result.hasMore ? String(rawEntries.length) : null },
       }));
+
+      useSessionStore.getState().restoreContextFromHistory(sessionId);
     } catch (err) {
       useAppStore.getState().addLog(`Failed to load session: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  },
-
-  loadMoreMessages: async (sessionPath) => {
-    const sessionId = useSessionStore.getState().activeSessionId;
-    if (!sessionId) return;
-    const { hasMoreBySession, cursorBySession, loadingMoreBySession } = get();
-    if (!hasMoreBySession[sessionId] || loadingMoreBySession[sessionId]) return;
-    const cursor = cursorBySession[sessionId];
-    if (!cursor) return;
-
-    set((s) => ({
-      loadingMoreBySession: { ...s.loadingMoreBySession, [sessionId]: true },
-    }));
-
-    try {
-      const result = await apiClient.call("session.getEntries", { sessionPath, limit: 50, cursor });
-      const existing = get().messagesBySession[sessionId] || [];
-
-      const toolCallNameMap: Record<string, string> = {};
-      const rawEntries: Array<{ raw: Record<string, unknown>; id: string }> = [];
-      for (const entry of result.entries) {
-        const data = entry.data as Record<string, unknown>;
-        const raw = data?.message as Record<string, unknown> | undefined;
-        if (!raw) continue;
-        rawEntries.push({ raw, id: entry.id });
-        const role = raw.role as string;
-        if (role === "assistant") {
-          const content = raw.content as Array<Record<string, unknown>> | undefined;
-          if (Array.isArray(content)) {
-            for (const block of content) {
-              if (block.type === "toolCall" && block.id && block.name) {
-                toolCallNameMap[block.id as string] = block.name as string;
-              }
-            }
-          }
-        }
-        if (role === "toolResult" && raw.toolCallId && raw.name) {
-          const tcId = raw.toolCallId as string;
-          if (!toolCallNameMap[tcId]) toolCallNameMap[tcId] = raw.name as string;
-        }
-      }
-
-      const olderMsgs: ChatMessage[] = [];
-      for (const { raw, id } of rawEntries) {
-        const msg = messageToChatMessage(raw, id, toolCallNameMap);
-        if (msg) olderMsgs.push(msg);
-      }
-      normalizeToolBlocks(olderMsgs);
-
-      set((s) => ({
-        messagesBySession: { ...s.messagesBySession, [sessionId]: [...olderMsgs, ...existing] },
-        hasMoreBySession: { ...s.hasMoreBySession, [sessionId]: result.hasMore ?? false },
-        cursorBySession: { ...s.cursorBySession, [sessionId]: result.hasMore ? String(parseInt(cursor) + rawEntries.length) : null },
-        loadingMoreBySession: { ...s.loadingMoreBySession, [sessionId]: false },
-      }));
-    } catch {
-      set((s) => ({
-        loadingMoreBySession: { ...s.loadingMoreBySession, [sessionId]: false },
-      }));
     }
   },
 }));

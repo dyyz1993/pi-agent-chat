@@ -1,8 +1,9 @@
 import { create } from "zustand";
-import type { SubagentSessionInfo, ChatMessage, ContentBlock } from "../types";
+import type { SubagentSessionInfo, ChatMessage, ContentBlock, SessionStatus, ContextUsage, TokenUsage } from "../types";
 import { apiClient } from "../lib/api-client";
 import { messageToChatMessage } from "../lib/message-mapper";
 import { batchMessageUpdate } from "./message-batcher";
+import { useSessionStore } from "./use-session-store";
 
 const subToolCallNameMap: Record<string, string> = {};
 
@@ -11,12 +12,16 @@ interface SubagentState {
   activeSubsessionId: string | null;
   messagesBySubsession: Record<string, ChatMessage[]>;
   loadingByParent: Record<string, boolean>;
+  subagentStatusMap: Record<string, SessionStatus>;
+  subagentContextMap: Record<string, ContextUsage>;
 
   loadSubsessions: (parentSessionPath: string) => Promise<SubagentSessionInfo[]>;
   setActiveSubsession: (parentSessionId: string, subId: string | null) => void;
   setSubMessages: (subId: string, msgs: ChatMessage[]) => void;
   loadSubHistory: (subSessionPath: string, subId: string) => Promise<void>;
   upsertLiveSubagent: (parentSessionPath: string, subId: string, partial: Partial<SubagentSessionInfo>) => void;
+  updateSubagentStatus: (subId: string, status: SessionStatus) => void;
+  updateSubagentContext: (subId: string, update: Partial<ContextUsage>) => void;
 }
 
 export const useSubagentStore = create<SubagentState>()((set, get) => ({
@@ -24,6 +29,26 @@ export const useSubagentStore = create<SubagentState>()((set, get) => ({
   activeSubsessionId: null,
   messagesBySubsession: {},
   loadingByParent: {},
+  subagentStatusMap: {},
+  subagentContextMap: {},
+
+  updateSubagentStatus: (subId, status) => {
+    set((s) => ({
+      subagentStatusMap: { ...s.subagentStatusMap, [subId]: status },
+    }));
+  },
+
+  updateSubagentContext: (subId, update) => {
+    set((s) => {
+      const prev = s.subagentContextMap[subId] || { tokens: null, contextWindow: 0 };
+      return {
+        subagentContextMap: {
+          ...s.subagentContextMap,
+          [subId]: { ...prev, ...update },
+        },
+      };
+    });
+  },
 
   loadSubsessions: async (parentSessionPath: string) => {
     set((s) => ({ loadingByParent: { ...s.loadingByParent, [parentSessionPath]: true } }));
@@ -51,7 +76,7 @@ export const useSubagentStore = create<SubagentState>()((set, get) => ({
       const { subsessionsByParent } = get();
       for (const subs of Object.values(subsessionsByParent)) {
         const match = subs.find((s) => s.sessionId === subId);
-        if (match) {
+        if (match && match.sessionPath) {
           get().loadSubHistory(match.sessionPath, subId);
           break;
         }
@@ -64,7 +89,10 @@ export const useSubagentStore = create<SubagentState>()((set, get) => ({
 
   loadSubHistory: async (subSessionPath, subId) => {
     try {
-      const result = await apiClient.call("session.getEntries", { sessionPath: subSessionPath, limit: 500 });
+      const result = await apiClient.call("session.getEntries", { sessionPath: subSessionPath });
+      if (!result?.entries || !Array.isArray(result.entries) || result.entries.length === 0) {
+        return;
+      }
       const msgs: ChatMessage[] = [];
       for (const entry of result.entries) {
         const data = entry.data as Record<string, unknown>;
@@ -73,8 +101,13 @@ export const useSubagentStore = create<SubagentState>()((set, get) => ({
         const msg = messageToChatMessage(raw, entry.id);
         if (msg) msgs.push(msg);
       }
-      set((s) => ({ messagesBySubsession: { ...s.messagesBySubsession, [subId]: msgs } }));
-    } catch {}
+      if (msgs.length > 0) {
+        set((s) => ({ messagesBySubsession: { ...s.messagesBySubsession, [subId]: msgs } }));
+      }
+    } catch {
+      // Subagent session file may not exist yet (still streaming via live events).
+      // This is expected — live messages are accumulated in handleSubagentEvent.
+    }
   },
 
   upsertLiveSubagent: (parentSessionPath: string, subId: string, partial: Partial<SubagentSessionInfo>) => {
@@ -82,7 +115,7 @@ export const useSubagentStore = create<SubagentState>()((set, get) => ({
       const existing = s.subsessionsByParent[parentSessionPath] || [];
       const idx = existing.findIndex((e) => e.sessionId === subId);
       const base = idx >= 0
-        ? { sessionId: subId, sessionPath: "", description: "", instruction: "", startedAt: Date.now() }
+        ? existing[idx]
         : { sessionId: subId, sessionPath: "", description: "", instruction: "", startedAt: Date.now() };
       const merged: SubagentSessionInfo = { ...base, ...partial };
       let updated: SubagentSessionInfo[];
@@ -97,9 +130,48 @@ export const useSubagentStore = create<SubagentState>()((set, get) => ({
   },
 }));
 
-export function handleSubagentEvent(subId: string, event: Record<string, unknown>) {
+function extractTokenUsage(usage: unknown): TokenUsage | null {
+  if (!usage || typeof usage !== "object") return null;
+  const u = usage as Record<string, unknown>;
+  const input = Number(u.inputTokens ?? u.input ?? 0) || 0;
+  const output = Number(u.outputTokens ?? u.output ?? 0) || 0;
+  if (!input && !output) return null;
+  return {
+    input,
+    output,
+    reasoning: typeof u.reasoningTokens === "number" ? u.reasoningTokens : undefined,
+    cacheRead: typeof u.cacheReadTokens === "number" ? u.cacheReadTokens : undefined,
+    cacheWrite: typeof u.cacheWriteTokens === "number" ? u.cacheWriteTokens : undefined,
+    cost: typeof u.cost === "number" ? u.cost : undefined,
+  };
+}
+
+export function handleSubagentEvent(subId: string, event: Record<string, unknown>, parentSessionId?: string) {
   const eventType = event.type as string;
   const store = useSubagentStore.getState();
+
+  if (eventType === "agent_start" || eventType === "subagent_start") {
+    store.updateSubagentStatus(subId, "streaming");
+    if (parentSessionId) {
+      const parentContext = useSessionStore.getState().sessionContextMap[parentSessionId];
+      if (parentContext?.contextWindow && parentContext.contextWindow > 0) {
+        store.updateSubagentContext(subId, { contextWindow: parentContext.contextWindow });
+      }
+    }
+  }
+
+  if (eventType === "compaction_start") {
+    store.updateSubagentStatus(subId, "compacting");
+  }
+
+  if (eventType === "compaction_end") {
+    const result = event.result as { tokensAfter?: number } | undefined;
+    if (result?.tokensAfter != null) {
+      store.updateSubagentContext(subId, { tokens: result.tokensAfter });
+    }
+    store.updateSubagentStatus(subId, "streaming");
+  }
+
   const existing = store.messagesBySubsession[subId] || [];
 
   if (eventType === "message_start") {
@@ -149,16 +221,28 @@ export function handleSubagentEvent(subId: string, event: Record<string, unknown
       }
     }
 
+    const provider = (raw.provider as string) || lastMsg.provider;
+    const model = (raw.model as string) || lastMsg.model;
+    const tokenUsage = extractTokenUsage(raw.usage);
+
     store.setSubMessages(subId, [
       ...existing.slice(0, -1),
       {
         ...lastMsg,
         isStreaming: false,
         stopReason: (raw.stopReason as string) ?? null,
-        provider: (raw.provider as string) || lastMsg.provider,
-        model: (raw.model as string) || lastMsg.model,
+        provider,
+        model,
+        tokenUsage: tokenUsage ?? lastMsg.tokenUsage,
       },
     ]);
+
+    if (raw.usage) {
+      const totalTokens = Number((raw.usage as Record<string, unknown>).totalTokens ?? 0);
+      if (totalTokens > 0) {
+        store.updateSubagentContext(subId, { tokens: totalTokens });
+      }
+    }
 
     if (finalText) {
       const { subsessionsByParent } = useSubagentStore.getState();
@@ -168,6 +252,8 @@ export function handleSubagentEvent(subId: string, event: Record<string, unknown
             completedAt: Date.now(),
             exitCode: 0,
             finalText: finalText.slice(0, 200),
+            provider,
+            model,
           });
           break;
         }
@@ -270,5 +356,6 @@ export function handleSubagentEvent(subId: string, event: Record<string, unknown
         break;
       }
     }
+    store.updateSubagentStatus(subId, "idle");
   }
 }

@@ -7,9 +7,7 @@ function flush() {
   rafId = null;
   const batch = queue;
   queue = [];
-  const latest = new Map<string, Update>();
-  for (const u of batch) latest.set(u.sessionId, u);
-  for (const u of latest.values()) u.apply();
+  for (const u of batch) u.apply();
 }
 
 export function batchMessageUpdate(sessionId: string, apply: () => void) {
