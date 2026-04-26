@@ -80,14 +80,16 @@ function setupSubscriptions(
         sessionId: id,
         projectPath: session.projectPath,
         sessionPath: session.sessionPath,
-      }).then((result) => {
+      }).then(async (result) => {
         if (result.status === "already_running" || result.status === "started") {
           const chatState = useChatStore.getState();
-          const cached = chatState.messagesBySession[id];
-          if (!cached || cached.length === 0) {
-            chatState.loadSessionMessages(id);
+          if (!chatState.messagesBySession[id] || chatState.messagesBySession[id].length === 0) {
+            await chatState.loadSessionMessages(id);
           }
           storeGet().fetchInitialState(id);
+          if (result.status === "already_running") {
+            apiClient.call("agent.replayHoldEvents", { sessionId: id }).catch(() => {});
+          }
         }
       }).catch(() => {});
     }).catch(() => {});
@@ -653,13 +655,26 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
       const chat = useChatStore.getState();
       const existing = chat.messagesBySession[sessionId] || [];
       const lastMsg = existing[existing.length - 1];
-      if (!lastMsg || lastMsg.role !== "assistant") return;
 
       const message = event.message as AssistantMessage;
       const incoming = message.content;
       if (!incoming || !Array.isArray(incoming)) return;
 
-      const preservedToolExecs = lastMsg.content.filter((b): b is Extract<ContentBlock, { type: "toolExecution" }> => b.type === "toolExecution");
+      if (!lastMsg || lastMsg.role !== "assistant" || !lastMsg.isStreaming) {
+        const synthMsg: import("../types").ChatMessage = {
+          id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          role: "assistant",
+          content: [],
+          timestamp: Date.now(),
+          isStreaming: true,
+        };
+        chat.setMessagesForSession(sessionId, [...existing, synthMsg]);
+      }
+
+      const currentMsgs = chat.messagesBySession[sessionId] || [];
+      const currentLast = currentMsgs[currentMsgs.length - 1];
+
+      const preservedToolExecs = (currentLast?.content || []).filter((b): b is Extract<ContentBlock, { type: "toolExecution" }> => b.type === "toolExecution");
       const execByCallId = new Map<string, Extract<ContentBlock, { type: "toolExecution" }>>();
       for (const exec of preservedToolExecs) {
         execByCallId.set(exec.toolCallId, exec);
@@ -689,8 +704,8 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
         }
       }
 
-      chat.setMessagesForSession(sessionId, [...existing.slice(0, -1), {
-        ...lastMsg,
+      chat.setMessagesForSession(sessionId, [...currentMsgs.slice(0, -1), {
+        ...currentLast,
         content: [...otherBlocks, ...textBlocks],
         ...buildTokenUsage(message.usage),
         ...(message.stopReason ? { stopReason: message.stopReason } : {}),
@@ -700,96 +715,120 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
     return;
   }
 
-  if (event.type === "message_end") {
-    const chat = useChatStore.getState();
-    const existing = chat.messagesBySession[sessionId] || [];
-    const lastMsg = existing[existing.length - 1];
-    if (!lastMsg || lastMsg.role !== "assistant") return;
+	if (event.type === "message_end") {
+		const chat = useChatStore.getState();
+		const existing = chat.messagesBySession[sessionId] || [];
+		const lastMsg = existing[existing.length - 1];
+		if (!lastMsg || lastMsg.role !== "assistant") return;
 
-    const message = event.message as AssistantMessage;
+		const message = event.message as AssistantMessage;
 
-    if (message.usage) {
-      const raw = message.usage as unknown as Record<string, unknown>;
-      const totalTokens = Number(raw.totalTokens ?? 0);
-      if (totalTokens > 0) {
-        storeGet().updateSessionContext(sessionId, { tokens: totalTokens });
-      }
-    }
+		if (message.usage) {
+			const raw = message.usage as unknown as Record<string, unknown>;
+			const totalTokens = Number(raw.totalTokens ?? 0);
+			if (totalTokens > 0) {
+				storeGet().updateSessionContext(sessionId, { tokens: totalTokens });
+			}
+		}
 
-    chat.setMessagesForSession(sessionId, [...existing.slice(0, -1), {
-      ...lastMsg,
-      content: lastMsg.content,
-      isStreaming: false,
-      stopReason: message.stopReason ?? lastMsg.stopReason ?? null,
-      provider: message.provider || lastMsg.provider,
-      model: message.model || lastMsg.model,
-      ...buildTokenUsage(message.usage),
-    }]);
-    flushNow();
+		flushNow();
+		chat.setMessagesForSession(sessionId, [...existing.slice(0, -1), {
+			...lastMsg,
+			isStreaming: false,
+			stopReason: message.stopReason ?? lastMsg.stopReason ?? null,
+			provider: message.provider || lastMsg.provider,
+			model: message.model || lastMsg.model,
+			...buildTokenUsage(message.usage),
+		}]);
+		return;
+	}
+
+		if (event.type === "tool_execution_start" || event.type === "tool_execution_update") {
+			const toolCallId = event.toolCallId;
+			const toolName = event.toolName || "unknown";
+
+			if (event.type === "tool_execution_start") {
+					toolCallNameMap[toolCallId] = toolName;
+			}
+
+			type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
+
+			batchMessageUpdate(sessionId, () => {
+				const chat = useChatStore.getState();
+				const existing = chat.messagesBySession[sessionId] || [];
+				const lastMsg = existing[existing.length - 1];
+				if (!lastMsg || lastMsg.role !== "assistant") return;
+
+				const blocks = [...lastMsg.content];
+				const targetIdx = blocks.findIndex((b): b is ToolExecBlock =>
+					b.type === "toolExecution" && b.toolCallId === toolCallId
+				);
+
+				if (event.type === "tool_execution_start") {
+					const args = event.args;
+					const argsStr = args && typeof args === "object" && "command" in args && typeof args.command === "string"
+						? args.command
+						: args ? JSON.stringify(args, null, 2) : "";
+					blocks.push({ type: "toolExecution", toolCallId, toolName, args: argsStr, status: "running" });
+				} else if (event.type === "tool_execution_update") {
+					const partial = event.partialResult as { content?: Array<{ type: string; text?: string }> } | undefined;
+					let output = "";
+					if (partial) {
+						if (Array.isArray(partial.content)) {
+							output = partial.content.map((c) => c.text ?? "").join("");
+						}
+					}
+					if (targetIdx >= 0) {
+						const prev = blocks[targetIdx] as ToolExecBlock;
+						blocks[targetIdx] = { ...prev, output };
+					}
+				}
+
+				const updated = [...existing];
+				updated[existing.length - 1] = { ...lastMsg, content: blocks };
+				chat.setMessagesForSession(sessionId, updated);
+				chat.incrementStreamVersion();
+			});
     return;
   }
 
-  if (event.type === "tool_execution_start" || event.type === "tool_execution_update" || event.type === "tool_execution_end") {
+  if (event.type === "tool_execution_end") {
+    flushNow();
     const toolCallId = event.toolCallId;
-    const toolName = event.toolName || "unknown";
-
-    if (event.type === "tool_execution_start") {
-      toolCallNameMap[toolCallId] = toolName;
-    }
-
     type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
+    const chat = useChatStore.getState();
+    const existing = chat.messagesBySession[sessionId] || [];
 
-    batchMessageUpdate(sessionId, () => {
-      const chat = useChatStore.getState();
-      const existing = chat.messagesBySession[sessionId] || [];
-      const lastMsg = existing[existing.length - 1];
-      if (!lastMsg || lastMsg.role !== "assistant") return;
-
-      const blocks = [...lastMsg.content];
-      const targetIdx = blocks.findIndex((b): b is ToolExecBlock =>
+    for (let i = existing.length - 1; i >= 0; i--) {
+      const msg = existing[i];
+      if (msg.role !== "assistant") continue;
+      const blockIdx = msg.content.findIndex((b): b is ToolExecBlock =>
         b.type === "toolExecution" && b.toolCallId === toolCallId
       );
+      if (blockIdx < 0) continue;
 
-      if (event.type === "tool_execution_start") {
-        const args = event.args;
-        const argsStr = args && typeof args === "object" && "command" in args && typeof args.command === "string"
-          ? args.command
-          : args ? JSON.stringify(args, null, 2) : "";
-        blocks.push({ type: "toolExecution", toolCallId, toolName, args: argsStr, status: "running" });
-      } else if (event.type === "tool_execution_update") {
-        const partial = event.partialResult as { content?: Array<{ type: string; text?: string }> } | undefined;
-        let output = "";
-        if (partial) {
-          if (Array.isArray(partial.content)) {
-            output = partial.content.map((c) => c.text ?? "").join("");
-          }
-        }
-        if (targetIdx >= 0) {
-          const prev = blocks[targetIdx] as ToolExecBlock;
-          blocks[targetIdx] = { ...prev, output };
-        }
-      } else if (event.type === "tool_execution_end") {
-        const isError = event.isError;
-        let output = "";
-        const result = event.result as { content?: Array<{ type: string; text?: string }>; details?: unknown } | undefined;
-        if (result) {
-          if (Array.isArray(result.content)) {
-            output = result.content.map((c) => c.text ?? "").join("");
-          } else {
-            output = JSON.stringify(result, null, 2);
-          }
-        }
-        if (targetIdx >= 0) {
-          const prev = blocks[targetIdx] as ToolExecBlock;
-          blocks[targetIdx] = { ...prev, status: isError ? "error" : "done", output, details: result?.details };
+      const isError = event.isError;
+      let output = "";
+      const result = event.result as { content?: Array<{ type: string; text?: string }>; details?: unknown } | undefined;
+      if (result) {
+        if (Array.isArray(result.content)) {
+          output = result.content.map((c) => c.text ?? "").join("");
+        } else {
+          output = JSON.stringify(result, null, 2);
         }
       }
 
+      const blocks = [...msg.content];
+      const prev = blocks[blockIdx] as ToolExecBlock;
+      blocks[blockIdx] = { ...prev, status: isError ? "error" : "done", output, details: result?.details };
+
       const updated = [...existing];
-      updated[existing.length - 1] = { ...lastMsg, content: blocks };
+      updated[i] = { ...msg, content: blocks };
       chat.setMessagesForSession(sessionId, updated);
       chat.incrementStreamVersion();
-    });
+      return;
+    }
+
     return;
   }
 
@@ -826,6 +865,20 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
       handleBackgroundExit(sessionId, event.data as import("../../shared/modules/bash").BashBackgroundExitEvent);
     }
 
+    return;
+  }
+
+  if (event.type === "session_rename") {
+    const { newName } = event;
+    set((s) => {
+      const updated: Record<string, import("../types").SessionMeta[]> = {};
+      for (const [path, sessions] of Object.entries(s.sessionsByProject)) {
+        updated[path] = sessions.map((sess) =>
+          sess.sessionId === sessionId ? { ...sess, name: newName } : sess,
+        );
+      }
+      return { sessionsByProject: updated };
+    });
     return;
   }
 }
