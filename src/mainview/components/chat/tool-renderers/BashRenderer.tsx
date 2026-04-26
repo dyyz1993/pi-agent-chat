@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState } from "react";
-import { ArrowDownToLine, X } from "lucide-react";
+import { ArrowDownToLine, X, Eye } from "lucide-react";
 import type { ContentBlock } from "../../../types";
 import { useSessionStore } from "../../../stores/use-session-store";
 import { apiClient } from "../../../lib/api-client";
@@ -137,6 +137,24 @@ export const BashExecutionCard = memo(function BashExecutionCard({ block }: { bl
 					>
 						<X className="w-3 h-3" />
 						<span>取消</span>
+					</button>
+				</div>
+			)}
+
+			{isBackground && (
+				<div className="flex items-center gap-1.5 px-3 py-1.5 border-t border-gray-700/30">
+					<div className="flex-1" />
+					<button
+						onClick={async () => {
+							const sid = useSessionStore.getState().activeSessionId;
+							if (!sid) return;
+							await apiClient.call("bash.command", { sessionId: sid, action: "subscribe_output", toolCallId: block.toolCallId });
+						}}
+						className="flex items-center justify-center gap-1 px-2 py-1 rounded border border-cyan-600/40 text-[10px] text-cyan-400 hover:bg-cyan-600/15 transition-colors"
+						title="订阅实时输出"
+					>
+						<Eye className="w-3 h-3" />
+						<span>查看输出</span>
 					</button>
 				</div>
 			)}
