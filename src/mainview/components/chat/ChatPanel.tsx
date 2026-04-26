@@ -8,6 +8,7 @@ import {
   Bot,
   ArrowLeft,
   Square,
+  Loader2,
 } from "lucide-react";
 import { useVirtualizer, type Virtualizer } from "@tanstack/react-virtual";
 import { useChatStore } from "../../stores/use-chat-store";
@@ -52,6 +53,8 @@ export function ChatPanel() {
     if (!activeSessionId) return EMPTY_MSGS;
     return s.messagesBySession[activeSessionId] || EMPTY_MSGS;
   });
+  const isLoading = useChatStore((s) => activeSessionId ? s.loadingSessions.has(activeSessionId) : false);
+  const historyLoadVersion = useChatStore((s) => s.historyLoadVersion);
 
   const isViewingSubagent = !!activeSubId;
   const messages: ChatMessage[] = isViewingSubagent ? subMessages : mainMessages;
@@ -103,6 +106,7 @@ export function ChatPanel() {
     sessionId: isViewingSubagent ? activeSubId : activeSessionId ?? undefined,
     setActive,
     streamVersion,
+    historyLoadVersion,
   });
 
   const handleNavDotClick = useCallback(
@@ -160,6 +164,7 @@ export function ChatPanel() {
               scrollRef={messagesScrollRef}
               onScroll={handleScroll}
               virtualizer={mainVirtualizer}
+              isLoading={isLoading}
             />
           )}
         </div>
@@ -255,11 +260,12 @@ function SubagentMessagesArea({ messages, scrollRef, onScroll, virtualizer }: {
   );
 }
 
-function MessagesArea({ messages, scrollRef, onScroll, virtualizer }: {
+function MessagesArea({ messages, scrollRef, onScroll, virtualizer, isLoading }: {
   messages: ChatMessage[];
   scrollRef: React.RefObject<HTMLDivElement | null>;
   onScroll: () => void;
   virtualizer: Virtualizer<HTMLDivElement, Element>;
+  isLoading?: boolean;
 }) {
   if (messages.length === 0) {
     return (
@@ -268,7 +274,10 @@ function MessagesArea({ messages, scrollRef, onScroll, virtualizer }: {
         className="h-full overflow-y-auto px-4 py-3"
         onScroll={onScroll}
       >
-        <div className="flex items-center justify-center h-full text-gray-600 text-sm">开始对话...</div>
+        <div className="flex flex-col items-center justify-center h-full text-gray-600 text-sm gap-3">
+          {isLoading && <Loader2 className="w-5 h-5 animate-spin text-indigo-400" />}
+          <span>{isLoading ? "加载历史消息..." : "开始对话..."}</span>
+        </div>
       </div>
     );
   }
@@ -305,8 +314,10 @@ function SessionToggleIcon() {
   const sessionPanel = useLayoutStore((s) => s.sessionPanel);
   const showSession = useLayoutStore((s) => s.showSession);
   const hideSession = useLayoutStore((s) => s.hideSession);
+  const isMobile = useLayoutStore((s) => s.breakpoint) === "mobile";
 
-  const isPinned = sessionPanel === "pinned";
+  if (sessionPanel === "pinned" && !isMobile) return null;
+
   const isVisible = sessionPanel === "visible";
 
   return (
@@ -314,7 +325,7 @@ function SessionToggleIcon() {
       e.stopPropagation();
       if (isVisible) { hideSession(); } else { showSession(); }
     }}
-      className={`p-1 rounded transition-colors ${isPinned ? "max-sm:block sm:hidden" : ""} ${isVisible ? "text-indigo-400 hover:text-indigo-300" : "text-gray-600 hover:text-gray-300"}`}
+      className={`p-1 rounded transition-colors ${isVisible ? "text-indigo-400 hover:text-indigo-300" : "text-gray-600 hover:text-gray-300"}`}
       title={isVisible ? "关闭会话面板" : "打开会话面板"}
     >
       <PanelLeft className="w-3.5 h-3.5" />
@@ -326,8 +337,10 @@ function StatusToggleIcon() {
   const statusPanel = useLayoutStore((s) => s.statusPanel);
   const showStatus = useLayoutStore((s) => s.showStatus);
   const hideStatus = useLayoutStore((s) => s.hideStatus);
+  const isMobile = useLayoutStore((s) => s.breakpoint) === "mobile";
 
-  const isPinned = statusPanel === "pinned";
+  if (statusPanel === "pinned" && !isMobile) return null;
+
   const isVisible = statusPanel === "visible";
 
   return (
@@ -335,7 +348,7 @@ function StatusToggleIcon() {
       e.stopPropagation();
       if (isVisible) { hideStatus(); } else { showStatus(); }
     }}
-      className={`p-1 rounded transition-colors ${isPinned ? "max-sm:block sm:hidden" : ""} ${isVisible ? "text-indigo-400 hover:text-indigo-300" : "text-gray-600 hover:text-gray-300"}`}
+      className={`p-1 rounded transition-colors ${isVisible ? "text-indigo-400 hover:text-indigo-300" : "text-gray-600 hover:text-gray-300"}`}
       title={isVisible ? "关闭状态面板" : "打开状态面板"}
     >
       <PanelRight className="w-3.5 h-3.5" />

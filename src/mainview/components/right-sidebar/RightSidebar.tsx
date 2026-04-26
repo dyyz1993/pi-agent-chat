@@ -13,10 +13,9 @@ import { useEffect } from "react";
 interface RightSidebarProps {
   width: number;
   overlay: boolean;
-  onResizeStart: (e: React.MouseEvent) => void;
 }
 
-export function RightSidebar({ width, overlay, onResizeStart }: RightSidebarProps) {
+export function RightSidebar({ width, overlay }: RightSidebarProps) {
   const statusPanel = useLayoutStore((s) => s.statusPanel);
   const toggleStatus = useLayoutStore((s) => s.toggleStatus);
   const activePanelTab = useLayoutStore((s) => s.activePanelTab);
@@ -38,7 +37,6 @@ export function RightSidebar({ width, overlay, onResizeStart }: RightSidebarProp
   const importFiles = useExplorerStore((s) => s.importFiles);
 
   const isPinned = statusPanel === "pinned";
-  const isMobile = useLayoutStore((s) => s.breakpoint) === "mobile";
   const hideStatus = useLayoutStore((s) => s.hideStatus);
 
   useEffect(() => {
@@ -98,29 +96,28 @@ export function RightSidebar({ width, overlay, onResizeStart }: RightSidebarProp
     >
       {/* Tab bar + pin */}
       <div className="flex items-center border-b border-gray-800 shrink-0">
-        {isMobile && overlay && (
+        {overlay && (
           <button
             onClick={(e) => { e.stopPropagation(); hideStatus(); }}
-            className="p-1.5 mr-1 rounded hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors"
-            title="关闭"
+            className="p-1.5 mr-1 rounded hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors shrink-0"
+            title="关闭面板"
           >
             <PanelRight className="w-3.5 h-3.5" />
           </button>
         )}
-        {!isMobile && (
-          <button
-            onClick={(e) => { e.stopPropagation(); toggleStatus(); }}
-            className={`p-1.5 mr-1 rounded transition-colors ${isPinned ? "text-indigo-400" : "text-gray-600 hover:text-gray-400"}`}
-            title={isPinned ? "取消固定" : "固定面板"}
-          >
-            <Pin className="w-3.5 h-3.5" fill={isPinned ? "currentColor" : "none"} />
-          </button>
-        )}
+        <button
+          onClick={(e) => { e.stopPropagation(); toggleStatus(); }}
+          className={`p-1.5 mr-1 rounded transition-colors shrink-0 max-sm:hidden ${isPinned ? "text-indigo-400" : "text-gray-600 hover:text-gray-400"}`}
+          title={isPinned ? "取消固定" : "固定面板"}
+        >
+          <Pin className="w-3.5 h-3.5" fill={isPinned ? "currentColor" : "none"} />
+        </button>
+        <div className="flex items-center overflow-x-auto scrollbar-none">
         {PANEL_TABS.map((tab: { id: PanelTabId; label: string }) => (
           <button
             key={tab.id}
             onClick={(e) => { e.stopPropagation(); setActivePanelTab(tab.id); }}
-            className={`px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
+            className={`px-2.5 py-1.5 text-[11px] font-medium transition-colors whitespace-nowrap shrink-0 ${
               activePanelTab === tab.id
                 ? "text-indigo-400 border-b-2 border-indigo-400"
                 : "text-gray-500 hover:text-gray-300"
@@ -129,21 +126,13 @@ export function RightSidebar({ width, overlay, onResizeStart }: RightSidebarProp
             {tab.label}
           </button>
         ))}
+        </div>
       </div>
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
         {renderContent()}
       </div>
-
-      {/* Resize handle */}
-      {!overlay && (
-        <div
-          className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-500/50 active:bg-indigo-500 transition-colors z-10"
-          onMouseDown={onResizeStart}
-          style={{ position: "absolute", left: -1 }}
-        />
-      )}
     </div>
   );
 }

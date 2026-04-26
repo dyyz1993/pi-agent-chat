@@ -6,15 +6,13 @@ import { SessionSidebar } from "../session-sidebar/SessionSidebar";
 interface LeftSidebarProps {
   width: number;
   overlay: boolean;
-  onResizeStart: (e: React.MouseEvent) => void;
 }
 
-export function LeftSidebar({ width, overlay, onResizeStart }: LeftSidebarProps) {
+export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
   const sessionPanel = useLayoutStore((s) => s.sessionPanel);
   const toggleSession = useLayoutStore((s) => s.toggleSession);
 
   const isPinned = sessionPanel === "pinned";
-  const isMobile = useLayoutStore((s) => s.breakpoint) === "mobile";
   const hideSession = useLayoutStore((s) => s.hideSession);
 
   return (
@@ -44,22 +42,20 @@ export function LeftSidebar({ width, overlay, onResizeStart }: LeftSidebarProps)
           >
             <Plus className="w-3.5 h-3.5" />
           </button>
-          {isMobile && overlay && (
+          <button
+            onClick={(e) => { e.stopPropagation(); toggleSession(); }}
+            className={`p-1 rounded transition-colors max-sm:hidden ${isPinned ? "text-indigo-400" : "text-gray-600 hover:text-gray-400"}`}
+            title={isPinned ? "取消固定" : "固定面板"}
+          >
+            <Pin className="w-3.5 h-3.5" fill={isPinned ? "currentColor" : "none"} />
+          </button>
+          {overlay && (
             <button
               onClick={(e) => { e.stopPropagation(); hideSession(); }}
               className="p-1 rounded hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors"
-              title="关闭"
+              title="关闭面板"
             >
               <PanelLeft className="w-3.5 h-3.5" />
-            </button>
-          )}
-          {!isMobile && (
-            <button
-              onClick={(e) => { e.stopPropagation(); toggleSession(); }}
-              className={`p-1 rounded transition-colors ${isPinned ? "text-indigo-400" : "text-gray-600 hover:text-gray-400"}`}
-              title={isPinned ? "取消固定" : "固定面板"}
-            >
-              <Pin className="w-3.5 h-3.5" fill={isPinned ? "currentColor" : "none"} />
             </button>
           )}
         </div>
@@ -69,13 +65,6 @@ export function LeftSidebar({ width, overlay, onResizeStart }: LeftSidebarProps)
         <SessionSidebar />
       </div>
 
-      {!overlay && (
-        <div
-          className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-500/50 active:bg-indigo-500 transition-colors z-10"
-          onMouseDown={onResizeStart}
-          style={{ position: "absolute", right: -1 }}
-        />
-      )}
     </div>
   );
 }

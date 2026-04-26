@@ -101,6 +101,9 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
   const isMobile = breakpoint === "mobile";
   const isTablet = breakpoint === "tablet";
 
+  const showLeftHandle = sessionPanel === "pinned" && !isMobile;
+  const showRightHandle = statusPanel === "pinned" && !isMobile && !isTablet;
+
   const handleChatAreaClick = useCallback(() => {
     const store = useLayoutStore.getState();
     if (store.sessionPanel === "visible") store.hideSession();
@@ -130,10 +133,20 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
         {/* ---- COL 1: Left Sidebar ---- */}
         {sessionPanel !== "hidden" && (!isMobile || sessionPanel === "visible") && (
           <LeftSidebar
-            width={sessionPanel === "pinned" ? sessionWidth : isMobile ? Math.round(window.innerWidth * 0.85) : 260}
+            width={isMobile ? Math.round(window.innerWidth * 0.85) : sessionWidth}
             overlay={sessionPanel === "visible"}
-            onResizeStart={handleLeftResize}
           />
+        )}
+
+        {/* ---- Left Resize Handle ---- */}
+        {showLeftHandle && (
+          <div
+            className="absolute top-0 bottom-0 cursor-col-resize flex items-center justify-center z-30"
+            style={{ left: sessionWidth, width: 12 }}
+            onMouseDown={handleLeftResize}
+          >
+            <div className="w-0.5 h-8 rounded-full bg-gray-700 hover:bg-indigo-400 hover:h-12 transition-all duration-150" />
+          </div>
         )}
 
         {/* ---- COL 2: Chat Area (center) ---- */}
@@ -158,12 +171,22 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
           )}
         </div>
 
+        {/* ---- Right Resize Handle ---- */}
+        {showRightHandle && (
+          <div
+            className="absolute top-0 bottom-0 cursor-col-resize flex items-center justify-center z-30"
+            style={{ right: statusWidth, width: 12 }}
+            onMouseDown={handleRightResize}
+          >
+            <div className="w-0.5 h-8 rounded-full bg-gray-700 hover:bg-indigo-400 hover:h-12 transition-all duration-150" />
+          </div>
+        )}
+
         {/* ---- COL 3: Right Sidebar ---- */}
-        {statusPanel !== "hidden" && (!isMobile || statusPanel === "visible") && !isTablet && (
+        {statusPanel !== "hidden" && (!isMobile || statusPanel === "visible") && (
           <RightSidebar
-            width={statusPanel === "pinned" ? statusWidth : isMobile ? Math.round(window.innerWidth * 0.85) : 300}
+            width={isMobile ? Math.round(window.innerWidth * 0.85) : statusWidth}
             overlay={statusPanel === "visible"}
-            onResizeStart={handleRightResize}
           />
         )}
       </div>
