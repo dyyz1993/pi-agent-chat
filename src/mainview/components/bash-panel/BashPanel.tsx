@@ -15,6 +15,7 @@ import { useSessionStore } from "../../stores/use-session-store";
 import { useBashStore } from "../../stores/use-bash-store";
 import type { BashProcess } from "../../../shared/modules/bash";
 import { apiClient } from "../../lib/api-client";
+import { AnsiText } from "../chat/primitives/AnsiText";
 
 function formatOutputSize(output: string): string {
 	const bytes = new TextEncoder().encode(output).length;
@@ -171,9 +172,10 @@ function BashProcessCard({ process: p, isSubscribed, onSubscribe, onUnsubscribe,
 					</summary>
 					<div className="mt-1 space-y-1.5">
 						{p.output ? (
-							<pre className="text-[9px] text-gray-400 font-mono max-h-32 overflow-y-auto whitespace-pre-wrap break-all rounded bg-gray-800/50 px-1.5 py-1">
-								{p.output.slice(-2000)}
-							</pre>
+							<AnsiText
+								content={p.output.slice(-2000)}
+								className="text-[9px] max-h-32 overflow-y-auto break-all rounded bg-gray-800/50 px-1.5 py-1"
+							/>
 						) : (
 							<div className="text-[9px] text-gray-600 italic">无输出{isBackground ? "（后台模式默认不推送输出）" : ""}</div>
 						)}

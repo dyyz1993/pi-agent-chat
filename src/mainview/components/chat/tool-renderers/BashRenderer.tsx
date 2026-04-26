@@ -3,6 +3,7 @@ import { ArrowDownToLine, X } from "lucide-react";
 import type { ContentBlock } from "../../../types";
 import { useSessionStore } from "../../../stores/use-session-store";
 import { apiClient } from "../../../lib/api-client";
+import { AnsiText } from "../primitives/AnsiText";
 
 type Block = Extract<ContentBlock, { type: "toolExecution" }>;
 
@@ -106,7 +107,10 @@ export const BashExecutionCard = memo(function BashExecutionCard({ block }: { bl
 				</summary>
 				<div className="px-3 pb-2">
 					{block.output ? (
-						<pre className="text-[11px] text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-72 overflow-y-auto">{block.output}</pre>
+						<AnsiText
+							content={block.output}
+							className="text-[11px] overflow-x-auto leading-relaxed max-h-72 overflow-y-auto"
+						/>
 					) : isRunning ? (
 						<div className="text-[11px] text-gray-600 italic py-1">waiting...</div>
 					) : null}
