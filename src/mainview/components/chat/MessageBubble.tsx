@@ -1,10 +1,8 @@
 import { useCallback, useEffect, memo, useMemo, useRef, useState } from "react";
-import { ArrowDownToLine, X, Brain, AlertTriangle, FileText } from "lucide-react";
+import { Brain, AlertTriangle, FileText } from "lucide-react";
 import { CachedReactMarkdown } from "./CachedReactMarkdown";
 import type { ChatMessage, ContentBlock } from "../../types";
 import { useChatNavStore } from "../../stores/use-chat-nav-store";
-import { useSessionStore } from "../../stores/use-session-store";
-import { apiClient } from "../../lib/api-client";
 import { SubagentExecutionCard } from "./tool-renderers/SubagentRenderer";
 import { getToolRenderer } from "./tool-renderers";
 
@@ -239,31 +237,21 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({ block, 
   }
 });
 
-export const ToolExecutionCard = memo(function ToolExecutionCard ({ block }: { block: Extract<ContentBlock, {  type: "toolExecution" }> }) {
+export const ToolExecutionCard = memo(function ToolExecutionCard({ block }: { block: Extract<ContentBlock, { type: "toolExecution" }> }) {
   const isRunning = block.status === "running";
   const isError = block.status === "error";
-  const isBash = block.toolName.toLowerCase() === "bash";
-  const [elapsed, setElapsed] = useState(0);
-  const startedAt = useRef(Date.now());
 
-  useEffect(() => {
-    if (!isRunning) return;
-    startedAt.current = Date.now();
-    setElapsed(0);
-    const id = setInterval(() => setElapsed(Date.now() - startedAt.current), 1000);
-    return () => clearInterval(id);
-  }, [isRunning]);
-
-  const showBackground = elapsed > 5000 && isBash && isRunning;
-
-  async function sendAction(action: "kill" | "background") {
-    const sid = useSessionStore.getState().activeSessionId;
-    if (!sid) return;
-    await apiClient.call("bash.command", { sessionId: sid, action, toolCallId: block.toolCallId });
+  let borderBg: string;
+  if (isRunning) {
+    borderBg = "border-blue-500/30 bg-blue-950/15";
+  } else if (isError) {
+    borderBg = "border-red-500/20 bg-red-950/10";
+  } else {
+    borderBg = "border-gray-700/40 bg-gray-800/20";
   }
 
   return (
-    <div className={`my-1.5 -mx-3 rounded-none overflow-hidden border-x-0 border-t border-b ${isRunning ? "border-blue-500/30 bg-blue-950/15" : isError ? "border-red-500/20 bg-red-950/10" : "border-gray-700/40 bg-gray-800/20"}`}>
+    <div className={`my-1.5 -mx-3 rounded-none overflow-hidden border-x-0 border-t border-b ${borderBg}`}>
       <div className="px-3 py-1.5 flex items-center gap-2 text-xs">
         <span className={`font-medium ${isRunning ? "text-blue-400" : isError ? "text-red-400" : "text-gray-300"}`}>{block.toolName}</span>
         {isRunning && <span className="text-blue-400 animate-pulse text-[10px]">running</span>}
@@ -295,30 +283,6 @@ export const ToolExecutionCard = memo(function ToolExecutionCard ({ block }: { b
           ) : null}
         </div>
       </details>
-
-      {isBash && isRunning && (
-        <div className="flex items-center gap-1.5 px-3 py-1.5 border-t border-gray-700/30">
-          {showBackground && (
-            <button
-              onClick={() => sendAction("background")}
-              className="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded border border-yellow-600/40 text-[10px] text-yellow-400 hover:bg-yellow-600/15 transition-colors"
-              title="转为后台运行"
-            >
-              <ArrowDownToLine className="w-3 h-3" />
-              <span>后台运行</span>
-            </button>
-          )}
-          {!showBackground && <div className="flex-1" />}
-          <button
-            onClick={() => sendAction("kill")}
-            className="flex items-center justify-center gap-1 px-2 py-1 rounded border border-red-600/30 text-[10px] text-red-400 hover:bg-red-600/10 transition-colors"
-            title="取消执行"
-          >
-            <X className="w-3 h-3" />
-            <span>取消</span>
-          </button>
-        </div>
-      )}
     </div>
   );
 });
