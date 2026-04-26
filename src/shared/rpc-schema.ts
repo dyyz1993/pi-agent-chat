@@ -10,8 +10,9 @@ import type { SubagentMethods, SubagentEvents } from "./modules/subagent";
 import type { TodoMethods, TodoEvents } from "./modules/todo";
 import type { BashMethods, BashEvents } from "./modules/bash";
 import type { LspMethods, LspEvents } from "./modules/lsp";
+import type { MemoryMethods } from "./modules/memory";
 
-export interface RPCMethods extends AnyMethods, SystemMethods, FileMethods, TimerMethods, GitMethods, ProjectMethods, SessionMethods, AgentMethods, SubagentMethods, TodoMethods, BashMethods, LspMethods {}
+export interface RPCMethods extends AnyMethods, SystemMethods, FileMethods, TimerMethods, GitMethods, ProjectMethods, SessionMethods, AgentMethods, SubagentMethods, TodoMethods, BashMethods, LspMethods, MemoryMethods {}
 
 export interface RPCEvents extends TimerEvents, AgentEvents, SubagentEvents, TodoEvents, BashEvents, LspEvents {}
 

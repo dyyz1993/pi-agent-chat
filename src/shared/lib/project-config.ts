@@ -6,16 +6,24 @@ import type { RecentProject, ConfiguredPath } from "../modules/project";
 
 const CONFIG_PATH = join(homedir(), ".pi-agent-chat", "config.json");
 
+export interface PersistedTab {
+  id: string;
+  name: string;
+  path: string;
+}
+
 interface ProjectConfig {
   recentProjects: RecentProject[];
   activeProject: string | null;
   configuredPaths: ConfiguredPath[];
+  openTabs: PersistedTab[];
+  activeTabId: string | null;
 }
 
 async function load(): Promise<ProjectConfig> {
   try {
     if (!existsSync(CONFIG_PATH)) {
-      return { recentProjects: [], activeProject: null, configuredPaths: [] };
+    return { recentProjects: [], activeProject: null, configuredPaths: [], openTabs: [], activeTabId: null };
     }
     const raw = await readFile(CONFIG_PATH, "utf-8");
     const parsed = JSON.parse(raw) as Partial<ProjectConfig>;
@@ -23,9 +31,11 @@ async function load(): Promise<ProjectConfig> {
       recentProjects: parsed.recentProjects ?? [],
       activeProject: parsed.activeProject ?? null,
       configuredPaths: parsed.configuredPaths ?? [],
+      openTabs: parsed.openTabs ?? [],
+      activeTabId: parsed.activeTabId ?? null,
     };
   } catch {
-    return { recentProjects: [], activeProject: null, configuredPaths: [] };
+    return { recentProjects: [], activeProject: null, configuredPaths: [], openTabs: [], activeTabId: null };
   }
 }
 
@@ -112,4 +122,16 @@ export async function removeConfiguredPath(path: string): Promise<void> {
   const config = await load();
   config.configuredPaths = config.configuredPaths.filter((p) => p.path !== path);
   await save(config);
+}
+
+export async function syncOpenTabs(tabs: PersistedTab[], activeTabId: string | null): Promise<void> {
+  const config = await load();
+  config.openTabs = tabs;
+  config.activeTabId = activeTabId;
+  await save(config);
+}
+
+export async function restoreOpenTabs(): Promise<{ tabs: PersistedTab[]; activeTabId: string | null }> {
+  const config = await load();
+  return { tabs: config.openTabs, activeTabId: config.activeTabId };
 }

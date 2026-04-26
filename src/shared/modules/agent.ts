@@ -35,6 +35,14 @@ export interface AgentMethods {
       messageCount: number;
     } | null;
   };
+  "agent.getCommands": {
+    params: { sessionId: string };
+    result: Array<{
+      name: string;
+      description: string;
+      source: "extension" | "prompt" | "skill";
+    }>;
+  };
   "agent.getSessionStats": {
     params: { sessionId: string };
     result: {
@@ -47,6 +55,7 @@ export interface AgentMethods {
 
 export interface AgentEvents {
   "agent.event": AgentEventPayload;
+  "agent.notify": { sessionId: string; message: string; notifyType: "info" | "warning" | "error" };
 }
 
 export interface AgentEventPayload {
@@ -95,7 +104,8 @@ export type AgentEvent =
   | { type: "queue_update"; steering: string[]; followUp: string[] }
   | ResponseEvent
   | ExtensionUIRequestEvent
-  | ChannelDataEvent;
+  | ChannelDataEvent
+  | { type: "custom_entry"; customType: string; data: unknown; id: string };
 
 export type { AssistantMessage, AssistantMessageEvent, TextContent };
 

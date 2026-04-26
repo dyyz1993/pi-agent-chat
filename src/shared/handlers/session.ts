@@ -26,16 +26,14 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   };
 
   r("session.getEntries", async (params) => {
-    const { sessionPath, limit = 200, cursor } = params;
+    const { sessionPath } = params;
 
     if (!existsSync(sessionPath)) {
       return { entries: [], hasMore: false };
     }
 
-    const startIdx = cursor ? parseInt(cursor, 10) : 1;
     const entries: SessionEntry[] = [];
     let lineIdx = 0;
-    let hasMore = false;
 
     const rl = readline.createInterface({
       input: createReadStream(sessionPath, { encoding: "utf-8" }),
@@ -44,8 +42,6 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
     for await (const line of rl) {
       if (!line.trim()) { lineIdx++; continue; }
-      if (lineIdx < startIdx) { lineIdx++; continue; }
-      if (entries.length >= limit) { hasMore = true; break; }
       try {
         const parsed = JSON.parse(line);
         entries.push({
@@ -60,7 +56,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     }
 
     rl.close();
-    return { entries, hasMore };
+    return { entries, hasMore: false };
   });
 
   r("session.create", async (params) => {

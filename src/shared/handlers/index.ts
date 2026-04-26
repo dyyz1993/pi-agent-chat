@@ -9,3 +9,4 @@ export { register as subagent } from "./subagent";
 export { register as todo } from "./todo";
 export { register as bash } from "./bash";
 export { register as lsp } from "./lsp";
+export { register as memory } from "./memory";

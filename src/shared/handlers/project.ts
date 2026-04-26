@@ -2,7 +2,7 @@ import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { RPCMethods, HandlerOptions } from "../rpc-schema";
 import { existsSync } from "fs";
 import { basename } from "path";
-import { addRecentProject, listRecentProjects, removeRecentProject, listConfiguredPaths, addConfiguredPath, removeConfiguredPath } from "../lib/project-config";
+import { addRecentProject, listRecentProjects, removeRecentProject, listConfiguredPaths, addConfiguredPath, removeConfiguredPath, syncOpenTabs, restoreOpenTabs } from "../lib/project-config";
 import { scanSessionsForProject, scanAllProjects, listPiProjects, listMergedProjects } from "../lib/session-scanner";
 
 type P<K extends keyof RPCMethods> = RPCMethods[K] extends { params: infer P } ? P : never;
@@ -87,5 +87,14 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
   r("project.browseFolder", async (_params) => {
     return { cancelled: true } as { path: string } | { cancelled: true };
+  });
+
+  r("project.syncTabs", async (params) => {
+    await syncOpenTabs(params.tabs, params.activeTabId);
+    return { ok: true };
+  });
+
+  r("project.restoreTabs", async () => {
+    return restoreOpenTabs();
   });
 }

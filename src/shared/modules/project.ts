@@ -1,3 +1,9 @@
+export interface PersistedTab {
+  id: string;
+  name: string;
+  path: string;
+}
+
 export interface ProjectMethods {
   "project.open": {
     params: { path: string };
@@ -38,6 +44,14 @@ export interface ProjectMethods {
   "project.listAllProjects": {
     params: {};
     result: { projects: MergedProject[] };
+  };
+  "project.syncTabs": {
+    params: { tabs: PersistedTab[]; activeTabId: string | null };
+    result: { ok: boolean };
+  };
+  "project.restoreTabs": {
+    params: {};
+    result: { tabs: PersistedTab[]; activeTabId: string | null };
   };
 }
 

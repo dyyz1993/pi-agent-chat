@@ -33,6 +33,9 @@ const LSP_EXTENSION_PATH =
 const PREVIEW_EXTENSION_PATH =
   "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/test/auto-memory/preview.ts";
 
+const AUTO_MEMORY_EXTENSION_PATH =
+  "/Users/xuyingzhou/.pi/agent/extensions/auto-memory/auto-memory.ts";
+
 interface ManagedProcess {
   process: ChildProcess;
   info: AgentProcessInfo;
@@ -90,6 +93,7 @@ export class AgentProcessManager {
       "--extension", BASH_EXTENSION_PATH,
       "--extension", LSP_EXTENSION_PATH,
       "--extension", PREVIEW_EXTENSION_PATH,
+      "--extension", AUTO_MEMORY_EXTENSION_PATH,
     ];
     if (sessionPath && existsSync(sessionPath)) {
       args.push("--session", sessionPath);
@@ -226,6 +230,30 @@ export class AgentProcessManager {
       .catch(() => null);
   }
 
+  getCommands(sessionId: string): Promise<
+    Array<{
+      name: string;
+      description: string;
+      source: "extension" | "prompt" | "skill";
+    }>
+  > {
+    return this.sendRpcCommand(sessionId, { type: "get_commands" })
+      .then((data) => {
+        if (!data || typeof data !== "object") return [];
+        const d = data as Record<string, unknown>;
+        if (d.success === false) return [];
+        const commands = (d.data ?? d) as Record<string, unknown>;
+        const list = commands.commands as Array<Record<string, unknown>> | undefined;
+        if (!Array.isArray(list)) return [];
+        return list.map((c) => ({
+          name: String(c.name ?? ""),
+          description: String(c.description ?? ""),
+          source: (c.source as "extension" | "prompt" | "skill") ?? "extension",
+        }));
+      })
+      .catch(() => []);
+  }
+
   getSessionStats(sessionId: string): Promise<{
     tokens: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number };
     cost: number;
@@ -298,6 +326,14 @@ export class AgentProcessManager {
     if (event.type === "extension_ui_request") {
       const ui = event as ExtensionUIRequestEvent;
       const INTERACTIVE_METHODS = new Set(["confirm", "input", "select", "editor"]);
+      if (ui.method === "notify") {
+        this.server.emitEvent("agent.notify", {
+          sessionId,
+          message: ui.message ?? "",
+          notifyType: ui.notifyType ?? "info",
+        }, { sessionId }).catch(() => {});
+        return;
+      }
       if (!INTERACTIVE_METHODS.has(ui.method)) return;
     }
 

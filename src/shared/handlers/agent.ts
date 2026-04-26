@@ -63,4 +63,8 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   r("agent.getSessionStats", async (params) => {
     return manager!.getSessionStats(params.sessionId);
   });
+
+  r("agent.getCommands", async (params) => {
+    return manager!.getCommands(params.sessionId);
+  });
 }
