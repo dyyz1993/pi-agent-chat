@@ -1,0 +1,19 @@
+{
+  "name": "测试数据",
+  "version": "1.0.0",
+  "description": "JSON 文件预览测试",
+  "features": [
+    "语法高亮",
+    "格式化显示",
+    "折叠功能"
+  ],
+  "nested": {
+    "level1": {
+      "level2": {
+        "level3": "深层嵌套数据"
+      }
+    }
+  },
+  "active": true,
+  "count": 42
+}

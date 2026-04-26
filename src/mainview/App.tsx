@@ -35,6 +35,35 @@ function App() {
           return;
         }
 
+        const tabResult = await apiClient.call("project.restoreTabs", {});
+        const savedTabs = tabResult.tabs as Array<{ id: string; name: string; path: string }>;
+        const savedActiveId = tabResult.activeTabId as string | null;
+
+        if (savedTabs && savedTabs.length > 0) {
+          const { projectTabs } = useSessionStore.getState();
+          for (const t of savedTabs) {
+            const exists = projectTabs.find((pt) => pt.id === t.id);
+            if (!exists) {
+              addProjectTab({ id: t.id, name: t.name, path: t.path });
+            }
+          }
+
+          const targetId = savedActiveId && savedTabs.some((t) => t.id === savedActiveId)
+            ? savedActiveId
+            : savedTabs[0].id;
+          useSessionStore.getState().setActiveProject(targetId);
+
+          const tab = savedTabs.find((t) => t.id === targetId);
+          if (tab) {
+            const sessions = await loadSessionsForProject(tab.path);
+            addLog(`Restored ${savedTabs.length} tabs from server config (${sessions.length} sessions)`);
+            if (sessions.length > 0) {
+              useSessionStore.getState().setActiveSession(sessions[0].sessionId);
+            }
+          }
+          return;
+        }
+
         const result = await apiClient.call("project.listRecent", {});
         const projects = (result.projects as Array<{ path: string; name: string; sessionCount: number }>) || [];
         if (projects.length === 0) return;
