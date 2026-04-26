@@ -1,5 +1,5 @@
 import { useCallback, useEffect, memo, useMemo, useRef, useState } from "react";
-import { ArrowDownToLine, X, Brain } from "lucide-react";
+import { ArrowDownToLine, X, Brain, AlertTriangle, FileText } from "lucide-react";
 import { CachedReactMarkdown } from "./CachedReactMarkdown";
 import type { ChatMessage, ContentBlock } from "../../types";
 import { useChatNavStore } from "../../stores/use-chat-nav-store";
@@ -20,11 +20,6 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
   const isSelected = useChatNavStore(
     useCallback((s) => s.selectedIds.has(message.id), [message.id])
   );
-  const setActive = useChatNavStore((s) => s.setActive);
-
-  const handleClick = useCallback(() => {
-    setActive(message.id);
-  }, [message.id, setActive]);
 
   const styleMemo = useMemo(() => {
     let border = "";
@@ -63,7 +58,6 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
       id={`msg-${message.id}`}
       data-msg-id={message.id}
       className={`flex ${styleMemo.isUser ? "justify-end" : "justify-start w-full"} ${isSelected ? "relative" : ""}`}
-      onClick={handleClick}
     >
       {isSelected && (
         <div className="absolute inset-0 rounded-lg bg-red-500/[0.04] pointer-events-none" />
@@ -131,6 +125,71 @@ export const ThinkingCard = memo(function ThinkingCard({
   );
 });
 
+const MEMORY_ICONS: Record<string, { label: string; color: string }> = {
+  memory_prefetch: { label: "Memory Search", color: "text-blue-400" },
+  memory_prefetch_result: { label: "Memories Found", color: "text-blue-400" },
+  memory_extract: { label: "Memory Saved", color: "text-green-400" },
+  memory_extract_result: { label: "Extraction Result", color: "text-green-400" },
+  memory_dream: { label: "Memory Consolidation", color: "text-purple-400" },
+  memory_dream_result: { label: "Dream Result", color: "text-purple-400" },
+  lsp: { label: "LSP", color: "text-blue-400" },
+  lsp_notify: { label: "LSP Diagnostics", color: "text-yellow-400" },
+  lsp_diagnostics: { label: "LSP Diagnostics", color: "text-yellow-400" },
+}
+
+export const MemoryCard = memo(function MemoryCard({ customType, data }: { customType: string; data: unknown }) {
+  const config = MEMORY_ICONS[customType] ?? { label: customType, color: "text-gray-400" }
+
+  if (customType === "lsp_diagnostics" && data && typeof data === "object") {
+    const details = data as { files?: Array<{ filePath: string; summary: string; issues: Array<{ severity?: number; line: number; message: string; source?: string; code?: string | number }> }> };
+    return (
+      <div className="my-1 border border-yellow-700/30 rounded-lg overflow-hidden bg-yellow-900/10">
+        <div className="px-3 py-1.5 text-xs font-medium text-yellow-400 flex items-center gap-1.5">
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+          <span>LSP Diagnostics</span>
+        </div>
+        <div className="border-t border-yellow-700/20">
+          {details.files?.map((f) => (
+            <div key={f.filePath} className="px-3 py-1.5 border-b last:border-b-0 border-yellow-700/10">
+              <div className="text-[11px] text-yellow-300 font-medium flex items-center gap-1">
+                <FileText className="w-3 h-3 shrink-0" />
+                <span>{f.filePath}</span>
+                <span className="text-yellow-500 ml-1">{f.summary}</span>
+              </div>
+              {f.issues.map((issue, i) => (
+                <div key={i} className="text-[10px] text-gray-400 pl-4 pt-0.5">
+                  <span className={issue.severity === 1 ? "text-red-400" : issue.severity === 2 ? "text-yellow-400" : "text-gray-500"}>
+                    L{issue.line}
+                  </span>
+                  {issue.source && <span className="text-gray-600"> [{issue.source}]</span>}
+                  {issue.code != null && <span className="text-gray-600"> ({String(issue.code)})</span>}
+                  : {issue.message}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const dataStr = typeof data === "string" ? data : data ? JSON.stringify(data, null, 2) : ""
+
+  return (
+    <div className="my-1 border border-gray-700/50 rounded-lg overflow-hidden bg-gray-800/30">
+      <div className={`px-3 py-1.5 text-xs font-medium ${config.color} flex items-center gap-1.5`}>
+        <Brain className="w-3.5 h-3.5 shrink-0" />
+        <span>{config.label}</span>
+      </div>
+      {dataStr && (
+        <pre className="px-3 pb-2 text-[11px] text-gray-400 overflow-x-auto whitespace-pre-wrap max-h-32 overflow-y-auto border-t border-gray-700/30">
+          {dataStr.length > 500 ? dataStr.slice(0, 500) + "..." : dataStr}
+        </pre>
+      )}
+    </div>
+  )
+})
+
 export const ContentBlockRenderer = memo(function ContentBlockRenderer({ block, isStreaming }: { block: ContentBlock; isStreaming?: boolean }) {
   switch (block.type) {
     case "text":
@@ -175,6 +234,8 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({ block, 
       }
       return <ToolExecutionCard block={block} />;
     }
+    case "custom":
+      return <MemoryCard customType={block.customType} data={block.data} />;
   }
 });
 

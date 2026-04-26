@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { useSessionStore } from "../../stores/use-session-store";
-import type { SessionStatus } from "../../types";
+import { useSubagentStore } from "../../stores/use-subagent-store";
+import type { SessionStatus, ContextUsage } from "../../types";
 
 function formatTokens(tokens: number | null | undefined): string {
   if (tokens == null || tokens <= 0) return "--";
@@ -65,8 +66,16 @@ const ContextRing = memo(function ContextRing({ percent, color, isWorking }: { p
 });
 
 export const TokenStatusBar = memo(function TokenStatusBar({ sessionId }: { sessionId: string }) {
-  const contextUsage = useSessionStore((s) => s.sessionContextMap[sessionId]);
-  const sessionStatus = useSessionStore((s) => s.sessionStatusMap[sessionId]);
+  const activeSubId = useSubagentStore((s) => s.activeSubsessionId);
+
+  const parentContext = useSessionStore((s) => s.sessionContextMap[sessionId]);
+  const parentStatus = useSessionStore((s) => s.sessionStatusMap[sessionId]);
+
+  const subContext = useSubagentStore((s) => activeSubId ? s.subagentContextMap[activeSubId] : undefined);
+  const subStatus = useSubagentStore((s) => activeSubId ? s.subagentStatusMap[activeSubId] : undefined);
+
+  const contextUsage: ContextUsage | undefined = activeSubId ? subContext : parentContext;
+  const sessionStatus: SessionStatus | undefined = activeSubId ? subStatus : parentStatus;
 
   const config = statusConfig(sessionStatus);
   const used = formatTokens(contextUsage?.tokens);
@@ -82,10 +91,14 @@ export const TokenStatusBar = memo(function TokenStatusBar({ sessionId }: { sess
   return (
     <div className="flex items-center gap-1.5">
       <ContextRing percent={percent} color={config.color} isWorking={isWorking} />
-      <span>已用</span>
+      <span>{activeSubId ? "子代理" : "已用"}</span>
       <span className="text-gray-400 font-medium">{used}</span>
-      <span className="text-gray-700">/</span>
-      <span>可用 {available}</span>
+      {contextUsage?.contextWindow ? (
+        <>
+          <span className="text-gray-700">/</span>
+          <span>可用 {available}</span>
+        </>
+      ) : null}
     </div>
   );
 });

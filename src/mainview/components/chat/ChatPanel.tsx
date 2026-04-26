@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import {
   ArrowUp,
   Paperclip,
@@ -9,7 +9,7 @@ import {
   ArrowLeft,
   Square,
 } from "lucide-react";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { useVirtualizer, type Virtualizer } from "@tanstack/react-virtual";
 import { useChatStore } from "../../stores/use-chat-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useSubagentStore } from "../../stores/use-subagent-store";
@@ -41,8 +41,9 @@ function estimateMessageSize(msg: ChatMessage): number {
 
 export function ChatPanel() {
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
-  const sessionStatus = useSessionStore((s) => activeSessionId ? (s.sessionStatusMap[activeSessionId] ?? "idle") : "idle");
+  const parentStatus = useSessionStore((s) => activeSessionId ? (s.sessionStatusMap[activeSessionId] ?? "idle") : "idle");
   const activeSubId = useSubagentStore((s) => s.activeSubsessionId);
+  const subStatus = useSubagentStore((s) => activeSubId ? (s.subagentStatusMap[activeSubId] ?? "idle") : "idle");
   const subMessages = useSubagentStore((s) => {
     if (!activeSubId) return EMPTY_MSGS;
     return s.messagesBySubsession[activeSubId] || EMPTY_MSGS;
@@ -51,36 +52,55 @@ export function ChatPanel() {
     if (!activeSessionId) return EMPTY_MSGS;
     return s.messagesBySession[activeSessionId] || EMPTY_MSGS;
   });
-  const hasMore = useChatStore((s) => activeSessionId ? (s.hasMoreBySession[activeSessionId] ?? false) : false);
-  const loadingMore = useChatStore((s) => activeSessionId ? (s.loadingMoreBySession[activeSessionId] ?? false) : false);
 
   const isViewingSubagent = !!activeSubId;
   const messages: ChatMessage[] = isViewingSubagent ? subMessages : mainMessages;
+
+  const effectiveStatus = isViewingSubagent ? subStatus : parentStatus;
 
   const inputText = useChatStore((s) => s.inputText);
   const sendMessage = useChatStore((s) => s.sendMessage);
   const setInputText = useChatStore((s) => s.setInputText);
   const setActive = useChatNavStore((s) => s.setActive);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
-  const navScrollRef = useRef<HTMLDivElement>(null);
   const inputBarRef = useRef<InputBarHandle>(null);
 
   const messageIds = useMemo(() => messages.map((m) => m.id), [messages]);
-  const isStreaming = sessionStatus === "streaming" || sessionStatus === "compacting";
+  const isStreaming = effectiveStatus === "streaming" || effectiveStatus === "compacting";
 
   const streamVersion = useChatStore((s) => s.streamContentVersion);
 
+  const mainVirtualizer = useVirtualizer({
+    count: mainMessages.length,
+    getScrollElement: () => messagesScrollRef.current,
+    estimateSize: (index) => estimateMessageSize(mainMessages[index]),
+    overscan: 5,
+    measureElement: (el) => el.getBoundingClientRect().height,
+  });
+
+  const subVirtualizer = useVirtualizer({
+    count: subMessages.length,
+    getScrollElement: () => messagesScrollRef.current,
+    estimateSize: (index) => estimateMessageSize(subMessages[index]),
+    overscan: 5,
+    measureElement: (el) => el.getBoundingClientRect().height,
+  });
+
+  const activeVirtualizer = isViewingSubagent ? subVirtualizer : mainVirtualizer;
+
   const handleAbort = useCallback(async () => {
     if (!activeSessionId) return;
+    if (activeSubId) return;
     try {
       await apiClient.call("agent.stop", { sessionId: activeSessionId });
     } catch { /* ignore */ }
-  }, [activeSessionId]);
+  }, [activeSessionId, activeSubId]);
 
   const { handleScroll, scrollToMessage } = useActiveScrollTracker({
     scrollRef: messagesScrollRef,
-    navScrollRef,
+    virtualizer: activeVirtualizer,
     messageIds,
+    sessionId: isViewingSubagent ? activeSubId : activeSessionId ?? undefined,
     setActive,
     streamVersion,
   });
@@ -133,21 +153,19 @@ export function ChatPanel() {
       <div className="flex-1 flex overflow-hidden">
         <div className="flex-1 min-w-0">
           {isViewingSubagent ? (
-            <SubagentMessagesArea messages={messages} scrollRef={messagesScrollRef} onScroll={handleScroll} />
+            <SubagentMessagesArea messages={messages} scrollRef={messagesScrollRef} onScroll={handleScroll} virtualizer={subVirtualizer} />
           ) : (
             <MessagesArea
               messages={messages}
               scrollRef={messagesScrollRef}
               onScroll={handleScroll}
-              hasMore={hasMore}
-              loadingMore={loadingMore}
+              virtualizer={mainVirtualizer}
             />
           )}
         </div>
         <div className="w-12 shrink-0">
           <SideNav
             messages={messages}
-            scrollRef={navScrollRef}
             onNavDotClick={handleNavDotClick}
             onNavDotScroll={handleSubDotScroll}
           />
@@ -188,27 +206,12 @@ export function ChatPanel() {
   );
 }
 
-function SubagentMessagesArea({ messages, scrollRef, onScroll }: {
+function SubagentMessagesArea({ messages, scrollRef, onScroll, virtualizer }: {
   messages: ChatMessage[];
   scrollRef: React.RefObject<HTMLDivElement | null>;
   onScroll: () => void;
+  virtualizer: Virtualizer<HTMLDivElement, Element>;
 }) {
-  const virtualizer = useVirtualizer({
-    count: messages.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: (index) => estimateMessageSize(messages[index]),
-    overscan: 5,
-    measureElement: (el) => el.getBoundingClientRect().height,
-  });
-
-  const prevCountRef = useRef(0);
-  useEffect(() => {
-    if (messages.length > prevCountRef.current) {
-      virtualizer.scrollToIndex(messages.length - 1, { align: "end" });
-    }
-    prevCountRef.current = messages.length;
-  }, [messages.length, virtualizer]);
-
   if (messages.length === 0) {
     return (
       <div
@@ -237,6 +240,7 @@ function SubagentMessagesArea({ messages, scrollRef, onScroll }: {
             <div
               key={msg.id}
               data-index={vr.index}
+              data-msg-id={msg.id}
               ref={virtualizer.measureElement}
               style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${vr.start}px)` }}
             >
@@ -251,62 +255,12 @@ function SubagentMessagesArea({ messages, scrollRef, onScroll }: {
   );
 }
 
-function MessagesArea({ messages, scrollRef, onScroll, hasMore, loadingMore }: {
+function MessagesArea({ messages, scrollRef, onScroll, virtualizer }: {
   messages: ChatMessage[];
   scrollRef: React.RefObject<HTMLDivElement | null>;
   onScroll: () => void;
-  hasMore: boolean;
-  loadingMore: boolean;
+  virtualizer: Virtualizer<HTMLDivElement, Element>;
 }) {
-  const prevHeightRef = useRef(0);
-  const [loadingTriggered, setLoadingTriggered] = useState(false);
-
-  const virtualizer = useVirtualizer({
-    count: messages.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: (index) => estimateMessageSize(messages[index]),
-    overscan: 5,
-    measureElement: (el) => el.getBoundingClientRect().height,
-  });
-
-  const prevCountRef = useRef(0);
-  useEffect(() => {
-    if (messages.length > prevCountRef.current && prevCountRef.current > 0 && !loadingTriggered) {
-      virtualizer.scrollToIndex(messages.length - 1, { align: "end" });
-    }
-    if (loadingTriggered) setLoadingTriggered(false);
-    prevCountRef.current = messages.length;
-  }, [messages.length, virtualizer, loadingTriggered]);
-
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el || prevHeightRef.current === 0) return;
-    const diff = el.scrollHeight - prevHeightRef.current;
-    if (diff > 0) {
-      el.scrollTop = el.scrollTop + diff;
-      prevHeightRef.current = 0;
-    }
-  }, [messages, scrollRef]);
-
-  const handleScrollCapture = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el || !hasMore || loadingMore) return;
-    if (el.scrollTop < 40) {
-      prevHeightRef.current = el.scrollHeight;
-      setLoadingTriggered(true);
-      const session = useSessionStore.getState();
-      const tab = session.projectTabs.find((t) => t.id === session.activeProjectId);
-      if (tab) {
-        const sessions = session.sessionsByProject[tab.path];
-        const activeSessionId = session.activeSessionId;
-        const meta = sessions?.find((s) => s.sessionId === activeSessionId);
-        if (meta) {
-          useChatStore.getState().loadMoreMessages(meta.sessionPath);
-        }
-      }
-    }
-  }, [hasMore, loadingMore, scrollRef]);
-
   if (messages.length === 0) {
     return (
       <div
@@ -323,13 +277,8 @@ function MessagesArea({ messages, scrollRef, onScroll, hasMore, loadingMore }: {
     <div
       ref={scrollRef as React.Ref<HTMLDivElement>}
       className="h-full overflow-y-auto px-4 py-3"
-      onScroll={() => { handleScrollCapture(); onScroll(); }}
+      onScroll={onScroll}
     >
-      {hasMore && (
-        <div className="flex justify-center py-2 text-gray-500 text-xs">
-          {loadingMore ? "加载中..." : "向上滚动加载更多"}
-        </div>
-      )}
       <div style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}>
         {virtualizer.getVirtualItems().map((vr) => {
           const msg = messages[vr.index];
@@ -337,6 +286,7 @@ function MessagesArea({ messages, scrollRef, onScroll, hasMore, loadingMore }: {
             <div
               key={msg.id}
               data-index={vr.index}
+              data-msg-id={msg.id}
               ref={virtualizer.measureElement}
               style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${vr.start}px)` }}
             >

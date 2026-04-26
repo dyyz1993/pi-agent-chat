@@ -105,7 +105,7 @@ export function messageToChatMessage(
 ): ChatMessage | null {
   if (typeof message !== "object" || message === null || !("role" in message)) return null;
   const role = typeof message.role === "string" ? message.role : "";
-  if (role !== "user" && role !== "assistant" && role !== "toolResult") return null;
+  if (role !== "user" && role !== "assistant" && role !== "toolResult" && role !== "custom") return null;
 
   if (role === "toolResult") {
     const block = parseToolResultBlock(message, toolCallNameMap ?? {});
@@ -114,6 +114,18 @@ export function messageToChatMessage(
       id: id || `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       role: "toolResult",
       content: [block],
+      timestamp: extractTimestamp(message),
+    };
+  }
+
+  if (role === "custom") {
+    const msgObj = message as Record<string, unknown>;
+    const customType = typeof msgObj.customType === "string" ? msgObj.customType : "unknown";
+    const data = "data" in msgObj ? msgObj.data : {};
+    return {
+      id: id || `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      role: "custom",
+      content: [{ type: "custom", customType, data }],
       timestamp: extractTimestamp(message),
     };
   }

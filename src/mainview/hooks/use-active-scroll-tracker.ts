@@ -1,26 +1,43 @@
 import { useRef, useCallback, useEffect } from "react";
+import type { Virtualizer } from "@tanstack/react-virtual";
 
 interface UseActiveScrollTrackerOptions {
   scrollRef: React.RefObject<HTMLDivElement | null>;
-  navScrollRef: React.RefObject<HTMLDivElement | null>;
+  virtualizer: Virtualizer<HTMLDivElement, Element>;
   messageIds: string[];
+  sessionId: string | undefined;
   setActive: (id: string | null) => void;
   streamVersion: number;
 }
 
 const BOTTOM_THRESHOLD_PX = 80;
+const ACTIVE_THROTTLE_MS = 50;
 
 export function useActiveScrollTracker({
   scrollRef,
-  navScrollRef,
+  virtualizer,
   messageIds,
+  sessionId,
   setActive,
   streamVersion,
 }: UseActiveScrollTrackerOptions) {
   const userScrolledUpRef = useRef(false);
   const prevCountRef = useRef(0);
   const prevStreamRef = useRef(0);
-  const isAutoScrollingRef = useRef(false);
+  const lastActiveTimeRef = useRef(0);
+  const didInitRef = useRef(false);
+  const prevSessionRef = useRef(sessionId);
+  const programmaticScrollRef = useRef(false);
+
+  const markProgrammatic = useCallback((fn: () => void) => {
+    programmaticScrollRef.current = true;
+    fn();
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        programmaticScrollRef.current = false;
+      });
+    });
+  }, []);
 
   const isNearBottom = useCallback(() => {
     const el = scrollRef.current;
@@ -28,108 +45,129 @@ export function useActiveScrollTracker({
     return el.scrollHeight - el.scrollTop - el.clientHeight < BOTTOM_THRESHOLD_PX;
   }, [scrollRef]);
 
-  const syncNav = useCallback(() => {
-    const el = scrollRef.current;
-    const nav = navScrollRef.current;
-    if (!el || !nav) return;
-    const msgMax = el.scrollHeight - el.clientHeight;
-    if (msgMax <= 0) return;
-    const navMax = nav.scrollHeight - nav.clientHeight;
-    if (navMax > 0) {
-      nav.scrollTop = (el.scrollTop / msgMax) * navMax;
-    }
-  }, [scrollRef, navScrollRef]);
-
   const updateActiveFromScroll = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el || messageIds.length === 0) return;
-    const msgMax = el.scrollHeight - el.clientHeight;
-    if (msgMax <= 0) {
-      setActive(messageIds[messageIds.length - 1]);
-      return;
+    const now = Date.now();
+    if (now - lastActiveTimeRef.current < ACTIVE_THROTTLE_MS) return;
+    lastActiveTimeRef.current = now;
+
+    if (messageIds.length === 0) return;
+    const range = virtualizer.range;
+    if (!range) return;
+    const idx = range.startIndex;
+    if (idx >= 0 && idx < messageIds.length) {
+      setActive(messageIds[idx]);
     }
-    const ratio = el.scrollTop / msgMax;
-    const index = Math.round(ratio * (messageIds.length - 1));
-    setActive(messageIds[Math.max(0, Math.min(messageIds.length - 1, index))]);
-  }, [messageIds, setActive, scrollRef]);
+  }, [virtualizer, messageIds, setActive]);
 
   const doScrollToBottom = useCallback(() => {
     const el = scrollRef.current;
-    if (!el) return;
-    isAutoScrollingRef.current = true;
-    el.scrollTop = el.scrollHeight;
-    syncNav();
-    if (messageIds.length > 0) setActive(messageIds[messageIds.length - 1]);
-    requestAnimationFrame(() => {
-      isAutoScrollingRef.current = false;
+    if (!el || messageIds.length === 0) return;
+    markProgrammatic(() => {
+      el.scrollTop = el.scrollHeight;
     });
-  }, [scrollRef, syncNav, setActive, messageIds]);
+    setActive(messageIds[messageIds.length - 1]);
+  }, [scrollRef, markProgrammatic, setActive, messageIds]);
 
   const scrollToMessage = useCallback(
     (msgId: string) => {
-      const container = scrollRef.current;
-      if (!container) return;
-      const target = container.querySelector<HTMLElement>(`[data-msg-id="${msgId}"]`);
-      if (!target) return;
+      const index = messageIds.indexOf(msgId);
+      if (index === -1) return;
+
+      const el = scrollRef.current;
+      if (!el) return;
 
       setActive(msgId);
 
-      const containerRect = container.getBoundingClientRect();
-      const targetRect = target.getBoundingClientRect();
-      const paddingTop = 12;
-      const maxScrollTop = container.scrollHeight - container.clientHeight;
-      const scrollOffset = targetRect.top - containerRect.top + container.scrollTop - paddingTop;
-      const clamped = Math.min(Math.max(0, scrollOffset), maxScrollTop);
-
-      isAutoScrollingRef.current = true;
-      container.scrollTo({ top: clamped, behavior: "smooth" });
+      const target = el.querySelector<HTMLElement>(`[data-msg-id="${msgId}"]`);
+      if (target) {
+        const elRect = el.getBoundingClientRect();
+        const targetRect = target.getBoundingClientRect();
+        const offset = targetRect.top - elRect.top + el.scrollTop - 8;
+        markProgrammatic(() => {
+          el.scrollTo({ top: offset, behavior: "smooth" });
+        });
+      } else {
+        markProgrammatic(() => {
+          virtualizer.scrollToIndex(index, { align: "start", behavior: "smooth" });
+        });
+      }
 
       if (msgId === messageIds[messageIds.length - 1]) {
         userScrolledUpRef.current = false;
       }
-
-      setTimeout(() => {
-        isAutoScrollingRef.current = false;
-      }, 400);
     },
-    [scrollRef, setActive, messageIds],
+    [scrollRef, virtualizer, markProgrammatic, setActive, messageIds],
   );
 
   const handleScroll = useCallback(() => {
-    if (isAutoScrollingRef.current) return;
-
+    if (programmaticScrollRef.current) return;
     updateActiveFromScroll();
-    syncNav();
+    userScrolledUpRef.current = !isNearBottom();
+  }, [updateActiveFromScroll, isNearBottom]);
 
-    if (!isNearBottom()) {
-      userScrolledUpRef.current = true;
-    } else {
-      userScrolledUpRef.current = false;
-    }
-  }, [updateActiveFromScroll, syncNav, isNearBottom]);
-
-  // new message → scroll to bottom
   useEffect(() => {
-    if (messageIds.length > prevCountRef.current) {
+    if (prevSessionRef.current !== sessionId) {
+      prevSessionRef.current = sessionId;
+      didInitRef.current = false;
       userScrolledUpRef.current = false;
+      prevCountRef.current = 0;
+      prevStreamRef.current = 0;
+    }
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (didInitRef.current || messageIds.length === 0) return;
+    didInitRef.current = true;
+
+    const scrollToBottomWhenReady = (attempt = 0) => {
+      if (attempt > 30) return;
+
+      const el = scrollRef.current;
+      if (!el) {
+        requestAnimationFrame(() => scrollToBottomWhenReady(attempt + 1));
+        return;
+      }
+
+      const totalSize = virtualizer.getTotalSize();
+      const clientH = el.clientHeight;
+
+      if (totalSize <= clientH || clientH === 0) {
+        requestAnimationFrame(() => scrollToBottomWhenReady(attempt + 1));
+        return;
+      }
+
+      const prevScrollHeight = el.scrollHeight;
+      markProgrammatic(() => {
+        el.scrollTop = prevScrollHeight;
+      });
+      setActive(messageIds[messageIds.length - 1]);
+
+      requestAnimationFrame(() => {
+        const afterScrollHeight = el.scrollHeight;
+        if (Math.abs(afterScrollHeight - prevScrollHeight) > 5) {
+          markProgrammatic(() => {
+            el.scrollTop = afterScrollHeight;
+          });
+        }
+      });
+    };
+
+    requestAnimationFrame(() => scrollToBottomWhenReady(0));
+  }, [messageIds, scrollRef, virtualizer, markProgrammatic, setActive]);
+
+  useEffect(() => {
+    if (messageIds.length > prevCountRef.current && !userScrolledUpRef.current) {
       doScrollToBottom();
     }
     prevCountRef.current = messageIds.length;
   }, [messageIds, doScrollToBottom]);
 
-  // stream content changed → scroll to bottom if user hasn't scrolled up
   useEffect(() => {
     if (streamVersion === 0 || streamVersion === prevStreamRef.current) return;
     prevStreamRef.current = streamVersion;
-
     if (userScrolledUpRef.current) return;
-
     doScrollToBottom();
   }, [streamVersion, doScrollToBottom]);
-
-  useEffect(() => {
-    return () => {};
-  }, []);
 
   return { handleScroll, scrollToBottom: doScrollToBottom, scrollToMessage };
 }

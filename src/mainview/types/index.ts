@@ -30,7 +30,8 @@ export type ContentBlock =
   | { type: "thinking"; thinking: string }
   | { type: "toolCall"; id: string; name: string; input: string }
   | { type: "toolResult"; toolCallId: string; toolName: string; content: string; isError?: boolean; args?: string; details?: unknown }
-  | { type: "toolExecution"; toolCallId: string; toolName: string; args: string; status: ToolExecutionStatus; output?: string; details?: unknown };
+  | { type: "toolExecution"; toolCallId: string; toolName: string; args: string; status: ToolExecutionStatus; output?: string; details?: unknown }
+  | { type: "custom"; customType: string; data: unknown };
 
 export type TokenUsage = {
   input: number;
@@ -43,7 +44,7 @@ export type TokenUsage = {
 
 export type ChatMessage = {
   id: string;
-  role: "user" | "assistant" | "toolResult";
+  role: "user" | "assistant" | "toolResult" | "custom";
   content: ContentBlock[];
   timestamp: number;
   provider?: string;
@@ -128,4 +129,8 @@ export type SubagentSessionInfo = {
   exitCode?: number;
   finalText?: string;
   error?: string;
+  agent?: string;
+  model?: string;
+  provider?: string;
+  contextUsage?: ContextUsage;
 };
