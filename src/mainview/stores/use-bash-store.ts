@@ -4,15 +4,19 @@ import { apiClient } from "../lib/api-client";
 
 interface BashState {
   processesBySession: Record<string, BashProcess[]>;
+  subscribedOutputs: Set<string>;
 
   upsertProcess: (sessionId: string, proc: BashProcess) => void;
   removeProcess: (sessionId: string, toolCallId: string) => void;
   clearSession: (sessionId: string) => void;
   loadHistory: (sessionPath: string, sessionId: string) => Promise<void>;
+  subscribeOutput: (sessionId: string, toolCallId: string) => Promise<void>;
+  unsubscribeOutput: (sessionId: string, toolCallId: string) => Promise<void>;
 }
 
 export const useBashStore = create<BashState>()((set) => ({
   processesBySession: {},
+  subscribedOutputs: new Set<string>(),
 
   upsertProcess: (sessionId: string, proc: BashProcess) => {
     set((s) => {
@@ -52,6 +56,24 @@ export const useBashStore = create<BashState>()((set) => ({
       const processes = result.processes as BashProcess[] || [];
       set((s) => ({ ...s, processesBySession: { ...s.processesBySession, [sessionId]: processes } }));
     } catch {}
+  },
+
+  subscribeOutput: async (sessionId: string, toolCallId: string) => {
+    await apiClient.call("bash.command", { sessionId, action: "subscribe_output", toolCallId });
+    set((s) => {
+      const next = new Set(s.subscribedOutputs);
+      next.add(toolCallId);
+      return { ...s, subscribedOutputs: next };
+    });
+  },
+
+  unsubscribeOutput: async (sessionId: string, toolCallId: string) => {
+    await apiClient.call("bash.command", { sessionId, action: "unsubscribe_output", toolCallId });
+    set((s) => {
+      const next = new Set(s.subscribedOutputs);
+      next.delete(toolCallId);
+      return { ...s, subscribedOutputs: next };
+    });
   },
 }));
 
