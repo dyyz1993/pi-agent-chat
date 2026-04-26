@@ -1,6 +1,7 @@
 import { Trash2, ArrowUpRight, ArrowDownLeft, Copy, Check } from "lucide-react";
 import { useState, useCallback } from "react";
 import { useRpcDebugStore, type RpcLogEntry } from "../../stores/use-rpc-debug-store";
+import { copyToClipboard } from "../../utils/clipboard";
 
 const DIR_ICONS = {
   call: ArrowUpRight,
@@ -24,9 +25,11 @@ function RpcEntry({ entry }: { entry: RpcLogEntry }) {
   const truncated = JSON.stringify(entry.payload).slice(0, 200);
 
   const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(fullPayload).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+    copyToClipboard(fullPayload).then((ok) => {
+      if (ok) {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }
     });
   }, [fullPayload]);
 

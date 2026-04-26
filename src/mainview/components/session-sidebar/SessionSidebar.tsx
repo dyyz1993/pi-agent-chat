@@ -5,6 +5,7 @@ import { useSubagentStore } from "../../stores/use-subagent-store";
 import { useGitStore } from "../../stores/use-git-store";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import type { SessionMeta, SubagentSessionInfo } from "../../types";
+import { copyToClipboard } from "../../utils/clipboard";
 
 const EMPTY: never[] = [];
 
@@ -273,7 +274,7 @@ function SessionItem({
 
   const handleCopyId = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    navigator.clipboard.writeText(session.sessionId).catch(() => { });
+    copyToClipboard(session.sessionId);
   }, [session.sessionId]);
 
   const handleStartRename = useCallback((e: React.MouseEvent) => {
@@ -416,7 +417,7 @@ function SubagentItem({
 
   const handleCopyId = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    navigator.clipboard.writeText(sub.sessionId).catch(() => { });
+    copyToClipboard(sub.sessionId);
   }, [sub.sessionId]);
 
   const displayName = sub.description || sub.instruction.slice(0, 80);

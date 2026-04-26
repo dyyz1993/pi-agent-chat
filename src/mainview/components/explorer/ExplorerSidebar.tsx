@@ -3,6 +3,7 @@ import { Folder, RefreshCw, File, FolderPlus, Pencil, Trash2, Copy } from "lucid
 import type { TreeNode, EditingNode } from "../../types";
 import type { DropEntry } from "../../utils/drop-handler";
 import { readDropItems } from "../../utils/drop-handler";
+import { copyToClipboard } from "../../utils/clipboard";
 import { TreeNodeItem } from "./TreeNodeItem";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -110,7 +111,7 @@ export function ExplorerSidebar({
     items.push(
       { label: "Rename", icon: <Pencil className="w-3 h-3" />, onClick: () => onStartEditing(node.path, "rename"), divider: items.length > 0 },
       { label: "Delete", icon: <Trash2 className="w-3 h-3" />, onClick: () => setPendingDelete(node.path), danger: true },
-      { label: "Copy Path", icon: <Copy className="w-3 h-3" />, onClick: () => navigator.clipboard.writeText(node.path) },
+      { label: "Copy Path", icon: <Copy className="w-3 h-3" />, onClick: () => copyToClipboard(node.path) },
     );
     return items;
   }, [contextMenu, currentPath, onRefresh, onStartEditing]);

@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronRight, Zap, ClipboardList, Terminal, Plug, Network, Puzzle, CheckCircle2, Circle, AlertTriangle } from "lucide-react";
 import { useStatusStore } from "../../stores/use-status-store";
 import { useSessionStore } from "../../stores/use-session-store";
+import { useSubagentStore } from "../../stores/use-subagent-store";
 import { useLspStore } from "../../stores/use-lsp-store";
 import type { LspDiagnosticsMode } from "../../../shared/modules/lsp";
 import type { StatusSection } from "../../stores/use-status-store";
@@ -20,6 +21,7 @@ export function StatusPanel() {
   const mcpTools = useStatusStore((s) => s.mcpTools);
   const plugins = useStatusStore((s) => s.plugins);
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const activeSubId = useSubagentStore((s) => s.activeSubsessionId);
   const todosBySession = useSessionStore((s) => s.todosBySession);
   const todos = activeSessionId ? todosBySession[activeSessionId] : undefined;
   const lspStore = useLspStore((s) => s.statusBySession);
@@ -130,7 +132,7 @@ export function StatusPanel() {
                       {(["agent_end", "edit_write", "disabled"] as LspDiagnosticsMode[]).map((m) => (
                         <button
                           key={m}
-                          onClick={() => { if (activeSessionId) useLspStore.getState().setMode(activeSessionId, m); }}
+                          onClick={() => { if (activeSessionId && !activeSubId) useLspStore.getState().setMode(activeSessionId, m); }}
                           className={`px-1.5 py-0.5 rounded text-[9px] ${lspData?.mode === m ? "bg-blue-600/30 text-blue-400" : "bg-gray-800 text-gray-500 hover:bg-gray-700/50"}`}
                         >
                           {m === "agent_end" ? "On End" : m === "edit_write" ? "On Write" : "Off"}

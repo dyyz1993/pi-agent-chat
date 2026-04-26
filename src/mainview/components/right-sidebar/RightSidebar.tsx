@@ -6,6 +6,7 @@ import { ExplorerSidebar } from "../explorer/ExplorerSidebar";
 import { GitPanel } from "../git/GitPanel";
 import { RpcPanel } from "../rpc-panel/RpcPanel";
 import { BashPanel } from "../bash-panel/BashPanel";
+import { MemoryPanel } from "../memory-panel/MemoryPanel";
 import { useExplorerStore } from "../../stores/use-explorer-store";
 import { useEffect } from "react";
 
@@ -76,6 +77,8 @@ export function RightSidebar({ width, overlay, onResizeStart }: RightSidebarProp
         return <BashPanel />;
       case "rpc":
         return <RpcPanel />;
+      case "memory":
+        return <MemoryPanel />;
       default:
         return null;
     }

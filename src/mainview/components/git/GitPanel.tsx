@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useGitStore, type GitFileChange, type GitCommit } from "../../stores/use-git-store";
 import { useExplorerStore } from "../../stores/use-explorer-store";
+import { copyToClipboard } from "../../utils/clipboard";
 import { useSessionStore } from "../../stores/use-session-store";
 import { ContextMenu, type MenuItem } from "../explorer/ContextMenu";
 import { GitCommitInput } from "./GitCommitInput";
@@ -310,7 +311,7 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
   }, [openFile, currentPath]);
 
   const handleCopyPath = useCallback(async (filePath: string) => {
-    await navigator.clipboard.writeText(`${currentPath}/${filePath}`);
+    await copyToClipboard(`${currentPath}/${filePath}`);
   }, [currentPath]);
 
   const getContextMenuItems = useCallback((filePath: string, isStaged?: boolean): MenuItem[] => [
@@ -326,8 +327,8 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
   }, []);
 
   const getCommitContextMenuItems = useCallback((commit: GitCommit): MenuItem[] => [
-    { label: "Copy Hash", icon: <Copy className="w-3 h-3" />, onClick: () => navigator.clipboard.writeText(commit.hash) },
-    { label: "Copy Message", icon: <Copy className="w-3 h-3" />, onClick: () => navigator.clipboard.writeText(commit.message) },
+    { label: "Copy Hash", icon: <Copy className="w-3 h-3" />, onClick: () => copyToClipboard(commit.hash) },
+    { label: "Copy Message", icon: <Copy className="w-3 h-3" />, onClick: () => copyToClipboard(commit.message) },
   ], []);
 
   /* Commit file diff */
