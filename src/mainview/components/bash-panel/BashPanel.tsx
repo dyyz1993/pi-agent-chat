@@ -30,11 +30,12 @@ function formatDuration(ms: number): string {
 	return `${m}m${s % 60}s`;
 }
 
-function BashProcessCard({ process: p, isSubscribed, onSubscribe, onUnsubscribe }: {
+function BashProcessCard({ process: p, isSubscribed, onSubscribe, onUnsubscribe, onViewLog }: {
 	process: BashProcess;
 	isSubscribed: boolean;
 	onSubscribe: () => void;
 	onUnsubscribe: () => void;
+	onViewLog?: (logPath: string) => void;
 }) {
 	const [elapsed, setElapsed] = useState(Date.now() - p.startedAt);
 	const showBackground = elapsed > 5000 && p.status === "running";
@@ -189,11 +190,15 @@ function BashProcessCard({ process: p, isSubscribed, onSubscribe, onUnsubscribe 
 										<span>订阅输出</span>
 									</button>
 								)}
-								{p.logPath && (
-									<span className="text-[9px] text-gray-600 font-mono truncate" title={p.logPath}>
-										<FileText className="w-3 h-3 inline mr-0.5" />
-										{p.logPath.split("/").pop()}
-									</span>
+								{p.logPath && onViewLog && (
+									<button
+										onClick={() => onViewLog(p.logPath!)}
+										className="flex items-center gap-1 text-[9px] text-cyan-400 hover:text-cyan-300 transition-colors"
+										title={p.logPath}
+									>
+										<FileText className="w-3 h-3" />
+										<span>查看日志</span>
+									</button>
 								)}
 							</div>
 						)}
@@ -210,6 +215,7 @@ export function BashPanel() {
 	const subscribedOutputs = useBashStore(useShallow((s) => s.subscribedOutputs));
 	const [collapsed, setCollapsed] = useState(false);
 	const [tab, setTab] = useState<"active" | "history">("active");
+	const [viewingLog, setViewingLog] = useState<{ logPath: string; content: string | null; loading: boolean } | null>(null);
 
 	const activeProcesses = allProcesses?.filter((p) =>
 		p.status === "running" || p.status === "background",
@@ -224,6 +230,16 @@ export function BashPanel() {
 			setTab("history");
 		}
 	}, [activeProcesses.length, historyProcesses.length, tab]);
+
+	async function handleViewLog(logPath: string) {
+		setViewingLog({ logPath, content: null, loading: true });
+		try {
+			const result = await apiClient.call("file.readFile", { path: logPath });
+			setViewingLog({ logPath, content: (result as { content: string }).content, loading: false });
+		} catch {
+			setViewingLog({ logPath, content: null, loading: false });
+		}
+	}
 
 	if (!allProcesses || allProcesses.length === 0) {
 		return null;
@@ -268,6 +284,7 @@ export function BashPanel() {
 								isSubscribed={subscribedOutputs.has(p.toolCallId)}
 								onSubscribe={() => useBashStore.getState().subscribeOutput(activeSessionId ?? "", p.toolCallId)}
 								onUnsubscribe={() => useBashStore.getState().unsubscribeOutput(activeSessionId ?? "", p.toolCallId)}
+								onViewLog={handleViewLog}
 							/>
 						)) : (
 							<div className="text-[10px] text-gray-600 italic pl-1">
@@ -276,6 +293,20 @@ export function BashPanel() {
 						)}
 					</div>
 				</>
+			)}
+
+			{viewingLog && (
+				<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setViewingLog(null)}>
+					<div className="bg-gray-900 border border-gray-700 rounded-lg w-[80vw] max-w-4xl max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+						<div className="flex items-center justify-between px-4 py-2 border-b border-gray-700">
+							<span className="text-xs text-gray-400 font-mono truncate">{viewingLog.logPath}</span>
+							<button onClick={() => setViewingLog(null)} className="text-gray-500 hover:text-white text-sm leading-none">✕</button>
+						</div>
+						<pre className="flex-1 overflow-auto p-4 text-[11px] text-gray-300 font-mono whitespace-pre-wrap">
+							{viewingLog.loading ? "加载中..." : viewingLog.content ?? "无法读取日志文件"}
+						</pre>
+					</div>
+				</div>
 			)}
 		</div>
 	);
