@@ -9,6 +9,7 @@ export interface BashProcess {
   output: string;
   status: "running" | "done" | "error" | "terminated" | "background";
   error?: string;
+  logPath?: string;
 }
 
 export interface BashChannelEvent {
@@ -21,7 +22,7 @@ export interface BashChannelEvent {
 }
 
 export interface BashChannelCommand {
-  action: "list" | "kill" | "background";
+  action: "list" | "kill" | "background" | "subscribe_output" | "unsubscribe_output";
   toolCallId?: string;
 }
 
@@ -31,7 +32,7 @@ export interface BashMethods {
     result: { processes: BashProcess[] };
   };
   "bash.command": {
-    params: { sessionId: string; action: "kill" | "background"; toolCallId?: string };
+    params: { sessionId: string; action: "kill" | "background" | "subscribe_output" | "unsubscribe_output"; toolCallId?: string };
     result: { ok: boolean };
   };
 }
@@ -43,4 +44,19 @@ export interface BashEvents {
 export interface BashEventPayload {
   sessionId: string;
   event: BashChannelEvent;
+}
+
+export interface BashBackgroundExitEvent {
+  customType: "bash_background_exit";
+  content: string;
+  details: {
+    pid?: number;
+    command: string;
+    exitCode: number | null;
+    startedAt: number;
+    endedAt: number;
+    durationMs: number;
+    logPath?: string;
+  };
+  display: "info" | "warning";
 }
