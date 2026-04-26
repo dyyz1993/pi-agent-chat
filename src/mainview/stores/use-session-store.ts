@@ -9,7 +9,7 @@ import { extractTokenUsage } from "../lib/message-mapper";
 import { useChatStore } from "./use-chat-store";
 import { useAppStore } from "./use-app-store";
 import { useSubagentStore, handleSubagentEvent } from "./use-subagent-store";
-import { useBashStore, handleBashEvent } from "./use-bash-store";
+import { useBashStore, handleBashEvent, handleBackgroundExit } from "./use-bash-store";
 import { useLspStore } from "./use-lsp-store";
 import { useExplorerStore } from "./use-explorer-store";
 import { useMemoryStore } from "./use-memory-store";
@@ -49,6 +49,7 @@ interface SessionState {
   createNewSession: () => Promise<void>;
   renameSession: (sessionId: string, newName: string) => void;
   deleteSession: (sessionId: string) => void;
+  togglePinSession: (sessionId: string) => void;
   setSessionTodos: (sessionId: string, todos: TodoItem[]) => void;
   restoreFromPersisted: () => Promise<boolean>;
   updateSessionContext: (sessionId: string, usage: Partial<ContextUsage>) => void;
@@ -75,19 +76,20 @@ function setupSubscriptions(
         agentSubscriptions: { ...s.agentSubscriptions, [id]: subId },
       }));
 
-      const chatState = useChatStore.getState();
-      const cached = chatState.messagesBySession[id];
-      if (!cached || cached.length === 0) {
-        chatState.loadSessionMessages(session.sessionPath);
-      }
-
       apiClient.call("agent.start", {
         sessionId: id,
         projectPath: session.projectPath,
         sessionPath: session.sessionPath,
+      }).then((result) => {
+        if (result.status === "already_running" || result.status === "started") {
+          const chatState = useChatStore.getState();
+          const cached = chatState.messagesBySession[id];
+          if (!cached || cached.length === 0) {
+            chatState.loadSessionMessages(id);
+          }
+          storeGet().fetchInitialState(id);
+        }
       }).catch(() => {});
-
-      storeGet().fetchInitialState(id);
     }).catch(() => {});
   }
 
@@ -414,6 +416,29 @@ export const useSessionStore = create<SessionState>()(
         }
         if (deletedSessionPath) {
           apiClient.call("session.delete", { sessionId, sessionPath: deletedSessionPath }).catch(() => {});
+        }
+      },
+
+      togglePinSession: (sessionId) => {
+        let isCurrentlyPinned = false;
+        set((s) => {
+          const updated: Record<string, SessionMeta[]> = {};
+          for (const [path, sessions] of Object.entries(s.sessionsByProject)) {
+            updated[path] = sessions.map((sess) => {
+              if (sess.sessionId === sessionId) {
+                isCurrentlyPinned = sess.pinned ?? false;
+                return { ...sess, pinned: !isCurrentlyPinned };
+              }
+              return sess;
+            });
+          }
+          return { sessionsByProject: updated };
+        });
+
+        if (isCurrentlyPinned) {
+          apiClient.call("session.unpin", { sessionId }).catch(() => {});
+        } else {
+          apiClient.call("session.pin", { sessionId }).catch(() => {});
         }
       },
 
@@ -796,6 +821,11 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
         });
       }
     }
+
+    if (event.customType === "bash_background_exit") {
+      handleBackgroundExit(sessionId, event.data as import("../../shared/modules/bash").BashBackgroundExitEvent);
+    }
+
     return;
   }
 }
