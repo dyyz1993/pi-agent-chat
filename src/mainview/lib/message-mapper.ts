@@ -121,7 +121,9 @@ export function messageToChatMessage(
   if (role === "custom") {
     const msgObj = message as Record<string, unknown>;
     const customType = typeof msgObj.customType === "string" ? msgObj.customType : "unknown";
-    const data = "data" in msgObj ? msgObj.data : {};
+    const data = "details" in msgObj ? msgObj.details
+      : "data" in msgObj ? msgObj.data
+      : {};
     return {
       id: id || `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       role: "custom",

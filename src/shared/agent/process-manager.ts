@@ -1,48 +1,35 @@
-import { spawn, type ChildProcess } from "child_process";
 import { existsSync } from "fs";
+import { createReadStream } from "fs";
+import * as readline from "readline";
 import type { RPCServer } from "@dyyz1993/rpc-core";
 import type {
   AgentEvent,
-  AgentProcessInfo,
   ChannelDataEvent,
   ExtensionUIRequestEvent,
-  MessageData,
 } from "../modules/agent";
 import type { AssistantMessage, AssistantMessageEvent } from "@dyyz1993/pi-ai";
 import type { TodoChannelEvent } from "../modules/todo";
 import type { BashChannelEvent } from "../modules/bash";
 import type { LspChannelEvent } from "../modules/lsp";
-import { StreamParser } from "./stream-parser";
-import { serializeJsonLine } from "./jsonl-helpers";
+import type { RulesChannelEvent, RuleSummary } from "../modules/rules";
 import { createLogger } from "../lib/logger";
+import { config } from "../../server-config";
 
 const log = createLogger("agent");
 
-const SUBAGENT_EXTENSION_PATH =
-  "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/test/auto-memory/subagent.ts";
-
-const TODO_EXTENSION_PATH =
-  "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/test/auto-memory/todo.ts";
-
-const BASH_EXTENSION_PATH =
-  "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/test/auto-memory/bash.ts";
-
-const LSP_EXTENSION_PATH =
-  "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/test/auto-memory/lsp/index.ts";
-
-const PREVIEW_EXTENSION_PATH =
-  "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/test/auto-memory/preview.ts";
-
-const AUTO_MEMORY_EXTENSION_PATH =
-  "/Users/xuyingzhou/.pi/agent/extensions/auto-memory/auto-memory.ts";
-
-interface ManagedProcess {
-  process: ChildProcess;
-  info: AgentProcessInfo;
-  parser: StreamParser;
-  pendingRequests: Map<string, { resolve: (data: unknown) => void; reject: (err: Error) => void; timer: ReturnType<typeof setTimeout> }>;
-  reqIdCounter: number;
-}
+const { subagent, todo, bash, lsp, preview, autoMemory, autoSessionTitle, rules, fileSnapshot } = config.piExtensionPaths;
+const EXTENSION_ARGS = [
+  "--no-extensions",
+  "--extension", subagent,
+  "--extension", todo,
+  "--extension", bash,
+  "--extension", lsp,
+  "--extension", preview,
+  "--extension", autoMemory,
+  "--extension", autoSessionTitle,
+  ...(rules ? ["--extension", rules] : []),
+  ...(fileSnapshot ? ["--extension", fileSnapshot] : []),
+];
 
 type SanitizedMessageUpdate = Extract<AgentEvent, { type: "message_update" }> & {
   assistantMessageEvent: Omit<AssistantMessageEvent, "partial">;
@@ -64,8 +51,83 @@ interface SubagentChannelPayload {
   event: Record<string, unknown>;
 }
 
+interface RpcClientLike {
+  start(): Promise<void>;
+  stop(): Promise<void>;
+  onEvent(listener: (event: AgentEvent) => void): () => void;
+  getStderr(): string;
+  prompt(message: string): Promise<void>;
+  steer(message: string): Promise<void>;
+  followUp(message: string): Promise<void>;
+  abort(): Promise<void>;
+  getState(): Promise<unknown>;
+  getCommands(): Promise<unknown>;
+  getSessionStats(): Promise<unknown>;
+  getMessages(): Promise<unknown>;
+  getAvailableModels(): Promise<unknown>;
+  setModel(provider: string, modelId: string): Promise<unknown>;
+  cycleModel(): Promise<unknown>;
+  setThinkingLevel(level: string): Promise<void>;
+  cycleThinkingLevel(): Promise<unknown>;
+  compact(customInstructions?: string): Promise<unknown>;
+  setAutoCompaction(enabled: boolean): Promise<void>;
+  setAutoRetry(enabled: boolean): Promise<void>;
+  abortRetry(): Promise<void>;
+  setSteeringMode(mode: string): Promise<void>;
+  setFollowUpMode(mode: string): Promise<void>;
+  getActiveTools(): Promise<unknown>;
+  setActiveTools(toolNames: string[]): Promise<void>;
+  getQueue(): Promise<unknown>;
+  clearQueue(): Promise<unknown>;
+  getExtensions(): Promise<unknown>;
+  getSkills(): Promise<unknown>;
+  getTools(): Promise<unknown>;
+  getContextUsage(): Promise<unknown>;
+  getSettings(scope?: string): Promise<unknown>;
+  setSettings(settings: Record<string, unknown>, scope?: string): Promise<void>;
+  setSessionName(name: string): Promise<void>;
+  getLastAssistantText(): Promise<unknown>;
+  getForkMessages(): Promise<unknown>;
+  fork(entryId: string): Promise<unknown>;
+  clone(): Promise<unknown>;
+  newSession(parentSession?: string): Promise<unknown>;
+  exportHtml(outputPath?: string): Promise<unknown>;
+  channel(name: string): { name: string; send: (data: unknown) => void; onReceive: (handler: (data: unknown) => void) => () => void };
+}
+
+interface ManagedClient {
+  client: RpcClientLike;
+  info: AgentProcessInfo;
+  unsubscribe: () => void;
+}
+
+import type { AgentProcessInfo } from "../modules/agent";
+
+async function createRpcClient(
+  cliPath: string,
+  cwd: string,
+  sessionPath: string | undefined,
+): Promise<RpcClientLike> {
+  const mod = await import(
+    "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/dist/modes/rpc/rpc-client.js"
+  ) as { RpcClient: new (options?: Record<string, unknown>) => RpcClientLike };
+
+  const args = [...EXTENSION_ARGS];
+  if (sessionPath && existsSync(sessionPath)) {
+    args.push("--session", sessionPath);
+  }
+
+  const client = new mod.RpcClient({
+    cliPath,
+    cwd,
+    args,
+  });
+
+  return client;
+}
+
 export class AgentProcessManager {
-  private processes = new Map<string, ManagedProcess>();
+  private clients = new Map<string, ManagedClient>();
   private server: RPCServer;
 
   constructor(server: RPCServer) {
@@ -77,231 +139,415 @@ export class AgentProcessManager {
   }
 
   async start(sessionId: string, projectPath: string, sessionPath: string): Promise<{ agentId: string; status: "started" | "already_running" }> {
-    const existing = this.processes.get(sessionId);
-    if (existing && existing.process.pid && !existing.process.killed) {
-      for (const evt of existing.info.holdEvents) {
-        await this.emitAgentEvent(sessionId, evt);
-      }
+    const existing = this.clients.get(sessionId);
+    if (existing) {
       return { agentId: sessionId, status: "already_running" };
     }
 
-    const args = [
-      "--mode", "rpc",
-      "--no-extensions",
-      "--extension", SUBAGENT_EXTENSION_PATH,
-      "--extension", TODO_EXTENSION_PATH,
-      "--extension", BASH_EXTENSION_PATH,
-      "--extension", LSP_EXTENSION_PATH,
-      "--extension", PREVIEW_EXTENSION_PATH,
-      "--extension", AUTO_MEMORY_EXTENSION_PATH,
-    ];
-    if (sessionPath && existsSync(sessionPath)) {
-      args.push("--session", sessionPath);
-    }
+    const client = await createRpcClient(config.piCliPath, projectPath, sessionPath);
 
-    log.info("Spawning pi", { args: args.join(" "), cwd: projectPath });
-
-    const LOCAL_PI = "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/dist/cli.js";
-    const child = spawn("node", [LOCAL_PI, ...args], {
-      stdio: ["pipe", "pipe", "pipe"],
-      cwd: projectPath,
-    });
-
-    log.info("Spawned", { pid: child.pid });
+    log.info("Spawning pi via RpcClient", { cwd: projectPath, sessionPath });
 
     const info: AgentProcessInfo = {
       sessionId,
       projectPath,
       sessionPath,
-      pid: child.pid!,
       status: "idle",
       holdEvents: [],
-      holdStartTime: 0,
     };
 
-    const parser = new StreamParser();
-    const managed: ManagedProcess = { process: child, info, parser, pendingRequests: new Map(), reqIdCounter: 0 };
-
-    child.stdout.on("data", (data: Buffer) => {
-      const raw = data.toString();
-      log.debug("stdout", { raw: raw.slice(0, 200) });
-      const events = parser.feed(raw);
-      log.debug("parsed events", { count: events.length });
-      for (const event of events) {
-        this.handleEvent(sessionId, event);
-      }
+    const unsubscribe = client.onEvent((event) => {
+      this.handleEvent(sessionId, event);
     });
 
-    child.stderr.on("data", (data: Buffer) => {
-      const msg = data.toString().trim();
-      if (msg) {
-        log.warn("stderr", { msg: msg.slice(0, 200) });
-      }
-    });
+    for (const name of ["bash", "todo", "subagent", "lsp", "rules-engine"] as const) {
+      client.channel(name).onReceive((data: unknown) => {
+        this.handleEvent(sessionId, { type: "channel_data", name, data } as ChannelDataEvent);
+      });
+    }
 
-    child.on("exit", (code, signal) => {
-      log.info("Process exited", { code, signal });
-      this.emitAgentEvent(sessionId, { type: "agent_end", messages: [] });
-      this.processes.delete(sessionId);
-    });
+    await client.start();
 
-    this.processes.set(sessionId, managed);
+    log.info("RpcClient started");
+
+    this.clients.set(sessionId, { client, info, unsubscribe });
     return { agentId: sessionId, status: "started" };
   }
 
+  async replayHoldEvents(sessionId: string): Promise<{ replayed: number }> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return { replayed: 0 };
+    const events = managed.info.holdEvents;
+    for (const evt of events) {
+      await this.emitAgentEvent(sessionId, evt as SanitizedEvent);
+    }
+    return { replayed: events.length };
+  }
+
   send(sessionId: string, content: string): boolean {
-    const managed = this.processes.get(sessionId);
-    if (!managed || managed.process.killed) {
-      log.warn("send: no process", { sessionId, killed: managed?.process.killed });
+    const managed = this.clients.get(sessionId);
+    if (!managed) {
+      log.warn("send: no client", { sessionId });
       return false;
     }
+    managed.client.prompt(content).catch((err: Error) => {
+      log.warn("prompt error", { err: err.message });
+    });
+    return true;
+  }
 
-    const msg = { type: "prompt", message: content, id: `req_${Date.now()}` };
-    log.debug("Writing to stdin", { json: JSON.stringify(msg) });
-    managed.process.stdin!.write(serializeJsonLine(msg));
+  steer(sessionId: string, content: string): boolean {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return false;
+    managed.client.steer(content).catch(() => {});
+    return true;
+  }
+
+  followUp(sessionId: string, content: string): boolean {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return false;
+    managed.client.followUp(content).catch(() => {});
+    return true;
+  }
+
+  async abort(sessionId: string): Promise<boolean> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return false;
+    await managed.client.abort().catch(() => {});
     return true;
   }
 
   respondUI(sessionId: string, requestId: string, response: Record<string, unknown>): boolean {
-    const managed = this.processes.get(sessionId);
-    if (!managed || managed.process.killed) return false;
+    const managed = this.clients.get(sessionId);
+    if (!managed) return false;
 
-    const msg = { type: "extension_ui_response", id: requestId, ...response };
-    managed.process.stdin!.write(serializeJsonLine(msg));
+    const ch = managed.client.channel("ui");
+    ch.send({ id: requestId, ...response });
     return true;
   }
 
   stop(sessionId: string): boolean {
-    const managed = this.processes.get(sessionId);
-    if (!managed || managed.process.killed) return false;
+    const managed = this.clients.get(sessionId);
+    if (!managed) return false;
 
-    managed.process.kill("SIGTERM");
-    this.processes.delete(sessionId);
+    managed.unsubscribe();
+    managed.client.stop().catch(() => {});
+    this.clients.delete(sessionId);
     return true;
   }
 
   getStatus(sessionId: string): { status: "idle" | "streaming" | "stopped"; pid?: number } {
-    const managed = this.processes.get(sessionId);
-    if (!managed || managed.process.killed) return { status: "stopped" };
-    return { status: managed.info.status, pid: managed.info.pid };
+    const managed = this.clients.get(sessionId);
+    if (!managed) return { status: "stopped" };
+    return { status: managed.info.status };
   }
 
-  private sendRpcCommand(sessionId: string, command: Record<string, unknown>, timeoutMs = 5000): Promise<unknown> {
-    const managed = this.processes.get(sessionId);
-    if (!managed || managed.process.killed) return Promise.reject(new Error("Process not running"));
-    if (!managed.process.stdin) return Promise.reject(new Error("Stdin not available"));
-
-    const reqId = `req_${Date.now()}_${++managed.reqIdCounter}`;
-    const msg = { ...command, id: reqId };
-
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        managed.pendingRequests.delete(reqId);
-        reject(new Error(`RPC command ${command.type} timed out after ${timeoutMs}ms`));
-      }, timeoutMs);
-
-      managed.pendingRequests.set(reqId, { resolve: resolve as (data: unknown) => void, reject, timer });
-      managed.process.stdin!.write(serializeJsonLine(msg));
-    });
-  }
-
-  getState(sessionId: string): Promise<{
-    model?: { id: string; contextWindow: number; maxTokens: number };
+  async getState(sessionId: string): Promise<{
+    model?: { id: string; name?: string; provider?: string; reasoning?: boolean; contextWindow: number; maxTokens: number };
+    thinkingLevel?: string;
     isStreaming: boolean;
     isCompacting: boolean;
     messageCount: number;
   } | null> {
-    return this.sendRpcCommand(sessionId, { type: "get_state" })
-      .then((data) => {
-        if (!data || typeof data !== "object") return null;
-        const d = data as Record<string, unknown>;
-        const model = d.model as Record<string, unknown> | undefined;
-        return {
-          model: model ? {
-            id: String(model.id ?? ""),
-            contextWindow: Number(model.contextWindow ?? 0),
-            maxTokens: Number(model.maxTokens ?? 0),
-          } : undefined,
-          isStreaming: Boolean(d.isStreaming),
-          isCompacting: Boolean(d.isCompacting),
-          messageCount: Number(d.messageCount ?? 0),
-        };
-      })
-      .catch(() => null);
+    const managed = this.clients.get(sessionId);
+    if (!managed) return null;
+
+    try {
+      const raw = await managed.client.getState() as Record<string, unknown>;
+      if (!raw) return null;
+      const model = raw.model as Record<string, unknown> | undefined;
+      return {
+        model: model ? {
+          id: String(model.id ?? ""),
+          name: model.name ? String(model.name) : undefined,
+          provider: model.provider ? String(model.provider) : undefined,
+          reasoning: Boolean(model.reasoning),
+          contextWindow: Number(model.contextWindow ?? 0),
+          maxTokens: Number(model.maxTokens ?? 0),
+        } : undefined,
+        thinkingLevel: raw.thinkingLevel ? String(raw.thinkingLevel) : undefined,
+        isStreaming: Boolean(raw.isStreaming),
+        isCompacting: Boolean(raw.isCompacting),
+        messageCount: Number(raw.messageCount ?? 0),
+      };
+    } catch {
+      return null;
+    }
   }
 
-  getCommands(sessionId: string): Promise<
-    Array<{
-      name: string;
-      description: string;
-      source: "extension" | "prompt" | "skill";
-    }>
-  > {
-    return this.sendRpcCommand(sessionId, { type: "get_commands" })
-      .then((data) => {
-        if (!data || typeof data !== "object") return [];
-        const d = data as Record<string, unknown>;
-        if (d.success === false) return [];
-        const commands = (d.data ?? d) as Record<string, unknown>;
-        const list = commands.commands as Array<Record<string, unknown>> | undefined;
-        if (!Array.isArray(list)) return [];
-        return list.map((c) => ({
-          name: String(c.name ?? ""),
-          description: String(c.description ?? ""),
-          source: (c.source as "extension" | "prompt" | "skill") ?? "extension",
-        }));
-      })
-      .catch(() => []);
+  async getCommands(sessionId: string): Promise<Array<{ name: string; description: string; source: "extension" | "prompt" | "skill" }>> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return [];
+
+    try {
+      const raw = await managed.client.getCommands() as Record<string, unknown>;
+      if (!raw) return [];
+      const list = (raw.commands ?? raw) as Array<Record<string, unknown>>;
+      if (!Array.isArray(list)) return [];
+      return list.map((c) => ({
+        name: String(c.name ?? ""),
+        description: String(c.description ?? ""),
+        source: (c.source as "extension" | "prompt" | "skill") ?? "extension",
+      }));
+    } catch {
+      return [];
+    }
   }
 
-  getSessionStats(sessionId: string): Promise<{
+  async getSessionStats(sessionId: string): Promise<{
     tokens: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number };
     cost: number;
     contextUsage?: { tokens: number | null; contextWindow: number; percent: number | null };
   } | null> {
-    return this.sendRpcCommand(sessionId, { type: "get_session_stats" })
-      .then((data) => {
-        if (!data || typeof data !== "object") return null;
-        if ((data as Record<string, unknown>).success === false) return null;
-        const d = ((data as Record<string, unknown>).data ?? data) as Record<string, unknown>;
-        const tokens = d.tokens as Record<string, unknown> | undefined;
-        const cu = d.contextUsage as Record<string, unknown> | undefined;
-        return {
-          tokens: {
-            input: Number(tokens?.input ?? 0),
-            output: Number(tokens?.output ?? 0),
-            cacheRead: Number(tokens?.cacheRead ?? 0),
-            cacheWrite: Number(tokens?.cacheWrite ?? 0),
-            total: Number(tokens?.total ?? 0),
-          },
-          cost: Number(d.cost ?? 0),
-          contextUsage: cu ? {
-            tokens: cu.tokens as number | null,
-            contextWindow: Number(cu.contextWindow ?? 0),
-            percent: cu.percent as number | null,
-          } : undefined,
-        };
-      })
-      .catch(() => null);
+    const managed = this.clients.get(sessionId);
+    if (!managed) return null;
+
+    try {
+      const raw = await managed.client.getSessionStats() as Record<string, unknown>;
+      if (!raw) return null;
+      const tokens = raw.tokens as Record<string, unknown> | undefined;
+      const cu = raw.contextUsage as Record<string, unknown> | undefined;
+      return {
+        tokens: {
+          input: Number(tokens?.input ?? 0),
+          output: Number(tokens?.output ?? 0),
+          cacheRead: Number(tokens?.cacheRead ?? 0),
+          cacheWrite: Number(tokens?.cacheWrite ?? 0),
+          total: Number(tokens?.total ?? 0),
+        },
+        cost: Number(raw.cost ?? 0),
+        contextUsage: cu ? {
+          tokens: cu.tokens as number | null,
+          contextWindow: Number(cu.contextWindow ?? 0),
+          percent: cu.percent as number | null,
+        } : undefined,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  async getMessages(sessionId: string): Promise<{ messages: unknown[]; customEntries: Array<{ id: string; customType: string; data: unknown; timestamp: number }> }> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return { messages: [], customEntries: [] };
+
+    let messages: unknown[] = [];
+    try {
+      const raw = await managed.client.getMessages() as Record<string, unknown>;
+      if (raw) {
+        messages = (raw.messages ?? raw) as unknown[];
+      }
+    } catch {}
+
+    const customEntries: Array<{ id: string; customType: string; data: unknown; timestamp: number }> = [];
+    const sessionPath = managed.info.sessionPath;
+    if (sessionPath && existsSync(sessionPath)) {
+      try {
+        const rl = readline.createInterface({
+          input: createReadStream(sessionPath, { encoding: "utf-8" }),
+          crlfDelay: Infinity,
+        });
+        for await (const line of rl) {
+          if (!line.trim()) continue;
+          try {
+            const parsed = JSON.parse(line);
+            if (parsed.type === "custom") {
+              customEntries.push({
+                id: parsed.id || `custom-${Date.now()}`,
+                customType: parsed.customType || "unknown",
+                data: parsed.data,
+                timestamp: new Date(parsed.timestamp || 0).getTime(),
+              });
+            }
+          } catch {}
+        }
+        rl.close();
+      } catch (err) {
+        log.warn("Failed to read custom entries from JSONL", { err: err instanceof Error ? err.message : String(err) });
+      }
+    }
+
+    return { messages, customEntries };
+  }
+
+  async getAvailableModels(sessionId: string): Promise<unknown> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return [];
+    return managed.client.getAvailableModels().catch(() => []);
+  }
+
+  async setModel(sessionId: string, provider: string, modelId: string): Promise<unknown> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) throw new Error("Client not found");
+    return managed.client.setModel(provider, modelId);
+  }
+
+  async cycleModel(sessionId: string): Promise<unknown> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return null;
+    return managed.client.cycleModel().catch(() => null);
+  }
+
+  async setThinkingLevel(sessionId: string, level: string): Promise<void> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return;
+    await managed.client.setThinkingLevel(level).catch(() => {});
+  }
+
+  async cycleThinkingLevel(sessionId: string): Promise<unknown> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return null;
+    return managed.client.cycleThinkingLevel().catch(() => null);
+  }
+
+  async compact(sessionId: string, customInstructions?: string): Promise<unknown> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) throw new Error("Client not found");
+    return managed.client.compact(customInstructions);
+  }
+
+  async setAutoCompaction(sessionId: string, enabled: boolean): Promise<void> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return;
+    await managed.client.setAutoCompaction(enabled).catch(() => {});
+  }
+
+  async setAutoRetry(sessionId: string, enabled: boolean): Promise<void> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return;
+    await managed.client.setAutoRetry(enabled).catch(() => {});
+  }
+
+  async abortRetry(sessionId: string): Promise<void> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return;
+    await managed.client.abortRetry().catch(() => {});
+  }
+
+  async setSteeringMode(sessionId: string, mode: string): Promise<void> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return;
+    await managed.client.setSteeringMode(mode as "all" | "one-at-a-time").catch(() => {});
+  }
+
+  async setFollowUpMode(sessionId: string, mode: string): Promise<void> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return;
+    await managed.client.setFollowUpMode(mode as "all" | "one-at-a-time").catch(() => {});
+  }
+
+  async getActiveTools(sessionId: string): Promise<unknown> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return { toolNames: [] };
+    return managed.client.getActiveTools().catch(() => ({ toolNames: [] }));
+  }
+
+  async setActiveTools(sessionId: string, toolNames: string[]): Promise<void> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return;
+    await managed.client.setActiveTools(toolNames).catch(() => {});
+  }
+
+  async getQueue(sessionId: string): Promise<unknown> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return { steering: [], followUp: [] };
+    return managed.client.getQueue().catch(() => ({ steering: [], followUp: [] }));
+  }
+
+  async clearQueue(sessionId: string): Promise<unknown> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return { steering: [], followUp: [] };
+    return managed.client.clearQueue().catch(() => ({ steering: [], followUp: [] }));
+  }
+
+  async getExtensions(sessionId: string): Promise<unknown> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return { extensions: [] };
+    return managed.client.getExtensions().catch(() => ({ extensions: [] }));
+  }
+
+  async getSkills(sessionId: string): Promise<unknown> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return { skills: [] };
+    return managed.client.getSkills().catch(() => ({ skills: [] }));
+  }
+
+  async getTools(sessionId: string): Promise<unknown> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return { tools: [] };
+    return managed.client.getTools().catch(() => ({ tools: [] }));
+  }
+
+  async getContextUsage(sessionId: string): Promise<unknown> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return { tokens: null, contextWindow: 0, percent: null };
+    return managed.client.getContextUsage().catch(() => ({ tokens: null, contextWindow: 0, percent: null }));
+  }
+
+  async getSettings(sessionId: string, scope?: string): Promise<unknown> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return {};
+    return managed.client.getSettings(scope).catch(() => ({}));
+  }
+
+  async setSettings(sessionId: string, settings: Record<string, unknown>, scope?: string): Promise<void> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return;
+    await managed.client.setSettings(settings, scope).catch(() => {});
+  }
+
+  async setSessionName(sessionId: string, name: string): Promise<void> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return;
+    await managed.client.setSessionName(name).catch(() => {});
+  }
+
+  async getLastAssistantText(sessionId: string): Promise<unknown> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return { text: null };
+    return managed.client.getLastAssistantText().catch(() => ({ text: null }));
+  }
+
+  async getForkMessages(sessionId: string): Promise<unknown> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return { messages: [] };
+    return managed.client.getForkMessages().catch(() => ({ messages: [] }));
+  }
+
+  async fork(sessionId: string, entryId: string): Promise<unknown> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) throw new Error("Client not found");
+    return managed.client.fork(entryId);
+  }
+
+  async clone(sessionId: string): Promise<unknown> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) throw new Error("Client not found");
+    return managed.client.clone();
+  }
+
+  async newSession(sessionId: string, parentSession?: string): Promise<unknown> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) throw new Error("Client not found");
+    return managed.client.newSession(parentSession);
+  }
+
+  async exportHtml(sessionId: string, outputPath?: string): Promise<unknown> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) throw new Error("Client not found");
+    return managed.client.exportHtml(outputPath);
+  }
+
+  sendChannelData(sessionId: string, channelName: string, data: unknown): void {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return;
+    const ch = managed.client.channel(channelName);
+    ch.send(data);
   }
 
   private handleEvent(sessionId: string, event: AgentEvent): void {
-    const managed = this.processes.get(sessionId);
+    const managed = this.clients.get(sessionId);
     if (!managed) return;
-
-    if (event.type === "response" && event.id) {
-      const pending = managed.pendingRequests.get(event.id);
-      if (pending) {
-        clearTimeout(pending.timer);
-        managed.pendingRequests.delete(event.id);
-        if (event.success !== false) {
-          pending.resolve(event.data ?? null);
-        } else {
-          pending.reject(new Error(event.error ?? "RPC command failed"));
-        }
-        return;
-      }
-    }
 
     if (event.type === "channel_data") {
       const ch = event as ChannelDataEvent;
@@ -319,6 +565,10 @@ export class AgentProcessManager {
       }
       if (ch.name === "lsp") {
         this.handleLspChannelData(sessionId, ch);
+        return;
+      }
+      if (ch.name === "rules-engine") {
+        this.handleRulesChannelData(sessionId, ch);
         return;
       }
     }
@@ -340,11 +590,14 @@ export class AgentProcessManager {
     if (event.type === "agent_start") {
       managed.info.status = "streaming";
       managed.info.holdEvents = [];
-      managed.info.holdStartTime = Date.now();
     }
 
     if (event.type === "agent_end") {
       managed.info.status = "idle";
+      managed.info.holdEvents = [];
+    }
+
+    if (event.type === "message_end") {
       managed.info.holdEvents = [];
     }
 
@@ -354,7 +607,7 @@ export class AgentProcessManager {
 
     const sanitized = sanitizeEvent(event);
 
-    if (managed.info.status === "streaming" && event.type !== "agent_end" && event.type !== "response") {
+    if (managed.info.status === "streaming") {
       managed.info.holdEvents.push(sanitized);
     }
 
@@ -374,19 +627,18 @@ export class AgentProcessManager {
     const eventType = subEvent.type as string;
     if (eventType === "response") return;
 
-    const managed = this.processes.get(parentSessionId);
+    const managed = this.clients.get(parentSessionId);
     const sessionPath = managed?.info.sessionPath || "";
 
     if (eventType === "message_end" && subEvent.message) {
-      const msg = subEvent.message as MessageData;
+      const msg = subEvent.message as { content?: Array<{ type: string; text?: string }> };
       if (Array.isArray(msg.content)) {
         for (const part of msg.content) {
           if (part.type === "text") {
             log.info("Subagent final text", {
               parentSessionId,
               subSessionId,
-              textLength: part.text.length,
-              preview: part.text.slice(0, 100),
+              textLength: part.text?.length,
             });
           }
         }
@@ -421,8 +673,9 @@ export class AgentProcessManager {
     channelMsg: ChannelDataEvent,
   ): Promise<void> {
     const data = channelMsg.data as BashChannelEvent | undefined;
-    log.info("Bash channel data", { sessionId, type: data?.type, toolCallId: data?.toolCallId });
     if (!data) return;
+
+    log.info("Bash channel data", { sessionId, type: data.type, toolCallId: data.toolCallId });
 
     await this.server.emitEvent(
       "bash.event",
@@ -447,17 +700,72 @@ export class AgentProcessManager {
     );
   }
 
+  private async handleRulesChannelData(
+    sessionId: string,
+    channelMsg: ChannelDataEvent,
+  ): Promise<void> {
+    const data = channelMsg.data as Record<string, unknown>;
+    if (!data) return;
+
+    const rawType = data.type as string;
+    log.info("Rules channel data", { sessionId, type: rawType });
+
+    const now = Date.now();
+    let mappedEvent: RulesChannelEvent | null = null;
+
+    if (rawType === "session_start") {
+      const rawRules = (data.rules as Array<Record<string, unknown>>) || [];
+      mappedEvent = {
+        type: "rules.loaded",
+        totalRules: (data.totalRules as number) || 0,
+        unconditional: (data.unconditional as number) || 0,
+        conditional: (data.conditional as number) || 0,
+        rules: rawRules.map(
+          (r): RuleSummary => ({
+            name: r.name as string,
+            title: r.title as string,
+            scope: ((r.scope as string) || "project") as RuleSummary["scope"],
+            source: r.source as string,
+            severity: ((r.severity as string) || "medium") as RuleSummary["severity"],
+            isUnconditional: Boolean(r.isUnconditional),
+            paths: (r.paths as string[]) || [],
+            content: (r.content as string) || "",
+            loadedAt: now,
+            expiresAt: now + 30000,
+            status: "active" as const,
+          }),
+        ),
+        loadedAt: now,
+        cacheTTL: 30000,
+      };
+    } else if (rawType === "before_agent_start") {
+      mappedEvent = {
+        type: "rules.injected",
+        injectedCount: (data.unconditional as number) || 0,
+        systemPromptDelta: (data.systemPromptLength as number) || 0,
+        ruleNames: [],
+      };
+    } else if (rawType === "session_shutdown") {
+      mappedEvent = {
+        type: "rules.unloaded",
+        reason: "session_shutdown",
+      };
+    }
+
+    if (!mappedEvent) return;
+
+    await this.server.emitEvent(
+      "rules.event",
+      { sessionId, event: mappedEvent },
+      { sessionId },
+    );
+  }
+
   private async emitAgentEvent(sessionId: string, event: SanitizedEvent): Promise<void> {
     await this.server.emitEvent(
       "agent.event",
       { sessionId, event },
       { sessionId },
     );
-  }
-
-  sendChannelData(sessionId: string, channelName: string, data: unknown): void {
-    const managed = this.processes.get(sessionId);
-    if (!managed || !managed.process.stdin) return;
-    managed.process.stdin.write(serializeJsonLine({ type: "channel_data", name: channelName, data }));
   }
 }

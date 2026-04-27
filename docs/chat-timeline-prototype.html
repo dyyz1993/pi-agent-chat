@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chat Timeline Prototype v5</title>
+<style>
+:root {
+  --bg-base: #0a0a0f; --bg-surface: #111118; --bg-card: #1a1a24; --bg-card-hover: #22222e;
+  --bg-bubble-user: #312e81; --bg-bubble-user-border: #4338ca;
+  --bg-overlay: rgba(0,0,0,0.7);
+  --text-primary: #e4e4e7; --text-secondary: #a1a1aa; --text-muted: #71717a; --text-dim: #52525b;
+  --accent-indigo: #6366f1; --accent-indigo-dim: rgba(99,102,241,0.15);
+  --accent-indigo-line: rgba(99,102,241,0.3); --accent-indigo-line-active: rgba(99,102,241,0.7);
+  --tool-bash: #22d3ee; --tool-edit: #4ade80; --tool-read: #60a5fa; --tool-subagent: #c084fc; --tool-default: #a1a1aa;
+  --status-done: #4ade80; --status-error: #f87171; --status-running: #facc15;
+  --color-brain: #60a5fa; --color-system: #facc15; --color-bot: #4ade80; --color-user: #818cf8;
+  --border-color: rgba(255,255,255,0.06); --radius-sm: 6px; --radius-md: 10px; --radius-lg: 14px;
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.4), 0 0 0 1px var(--border-color);
+  --transition: 150ms ease; --font-sans: system-ui,-apple-system,sans-serif;
+  --font-mono: 'SF Mono','Fira Code','Cascadia Code',monospace;
+  --rollback-code: #facc15; --rollback-chat: #60a5fa;
+}
+* { margin: 0; padding: 0; box-sizing: border-box }
+html, body { height: 100%; background: var(--bg-base); color: var(--text-primary); font-family: var(--font-sans); font-size: 14px; line-height: 1.6; overflow: hidden }
+#app { display: flex; height: 100vh; width: 100vw }
+
+/* ===== Left Sidebar ===== */
+.sidebar-left { width: 56px; min-width: 56px; background: var(--bg-surface); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; align-items: center; padding: 12px 0; gap: 8px }
+.sidebar-icon { width: 36px; height: 36px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-muted); transition: all var(--transition) }
+.sidebar-icon:hover { background: var(--bg-card); color: var(--text-primary) }
+.sidebar-icon.active { background: var(--accent-indigo-dim); color: var(--accent-indigo) }
+.sidebar-spacer { flex: 1 }
+
+/* ===== Main Chat Area ===== */
+.chat-main { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative }
+.chat-header { height: 48px; min-height: 48px; background: var(--bg-surface); border-bottom: 1px solid var(--border-color); display: flex; align-items: center; padding: 0 20px; gap: 12px; font-size: 13px; color: var(--text-secondary) }
+.chat-header-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--status-done) }
+.chat-header-title { font-weight: 600; color: var(--text-primary) }
+.chat-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 24px 0; scroll-behavior: smooth }
+.chat-scroll::-webkit-scrollbar { width: 6px }
+.chat-scroll::-webkit-scrollbar-track { background: transparent }
+.chat-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px }
+.chat-content { max-width: 780px; margin: 0 auto; padding: 0 24px; position: relative }
+.chat-input-bar { min-height: 64px; background: var(--bg-surface); border-top: 1px solid var(--border-color); display: flex; align-items: center; padding: 12px 20px; gap: 12px }
+.chat-input { flex: 1; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 10px 16px; color: var(--text-primary); font-family: var(--font-sans); font-size: 14px; outline: none; transition: border-color var(--transition) }
+.chat-input::placeholder { color: var(--text-dim) }
+.chat-input:focus { border-color: var(--accent-indigo) }
+.send-btn { width: 38px; height: 38px; border-radius: var(--radius-sm); background: var(--accent-indigo); border: none; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: opacity var(--transition) }
+.send-btn:hover { opacity: 0.85 }
+
+/* ===== Turn ===== */
+.turn { position: relative; padding-left: 50px; margin-bottom: 4px; transition: border-color .2s, background .2s; border: 1px solid transparent; border-radius: var(--radius-md) }
+.turn.selected-turn { border-color: rgba(248,113,113,0.4); background: rgba(248,113,113,0.03) }
+.turn::before { content: ''; position: absolute; left: 17px; top: 0; bottom: 0; width: 3px; background: var(--accent-indigo-line); border-radius: 2px; transition: background var(--transition) }
+.turn.active::before { background: var(--accent-indigo-line-active) }
+.turn.past::before { background: rgba(113,113,122,0.25) }
+.turn.rolled-back::before { background-image: repeating-linear-gradient(to bottom, rgba(113,113,122,.3) 0, rgba(113,113,122,.3) 4px, transparent 4px, transparent 8px); background: transparent }
+.turn-gap { height: 16px; position: relative; padding-left: 50px }
+.turn-gap::before { content: ''; position: absolute; left: 17px; top: 0; width: 1px; height: 100%; background: rgba(113,113,122,0.15) }
+
+/* Timeline dots */
+.timeline-dot { position: absolute; left: 12px; width: 10px; height: 10px; border-radius: 50%; z-index: 2; border: 2px solid transparent; transition: all var(--transition) }
+.timeline-dot.user-dot { top: 8px; background: var(--bg-base); border-color: var(--color-user) }
+.timeline-dot.bot-dot { top: 54px; background: var(--bg-base); border-color: var(--color-bot); cursor: pointer }
+.timeline-dot.bot-dot:hover { transform: scale(1.4); box-shadow: 0 0 8px rgba(74,222,128,0.4) }
+
+/* Per-item checkbox (absolute positioned) */
+.item-row { position: relative }
+.item-checkbox { position: absolute; left: -32px; top: 6px; width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid var(--text-dim); background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all var(--transition); z-index: 5; opacity: 0 }
+.turn:hover .item-checkbox, .has-selection .item-checkbox { opacity: 1 }
+.item-checkbox:hover { border-color: var(--accent-indigo); transform: scale(1.15) }
+.item-checkbox.checked { background: var(--accent-indigo); border-color: var(--accent-indigo) }
+.item-checkbox.checked svg { display: block }
+.item-checkbox svg { width: 9px; height: 9px; color: white; display: none }
+.item-body { min-width: 0 }
+.item-selected .msg-user-bubble, .item-selected .text-block, .item-selected .tool-card { border-color: rgba(248,113,113,.35) !important; background: rgba(248,113,113,.04) !important }
+.item-selected.tool-card { box-shadow: 0 0 0 1px rgba(248,113,113,.2) }
+
+/* User message */
+.msg-user { margin: 4px 0 16px }
+.msg-user-bubble { background: var(--bg-bubble-user); border: 1px solid var(--bg-bubble-user-border); border-radius: var(--radius-md); padding: 10px 16px; color: var(--text-primary); font-size: 14px; display: inline-block; max-width: 85% }
+.msg-user-row { display: flex; align-items: flex-start; justify-content: flex-end; gap: 6px }
+
+/* Copy button */
+.copy-inline { opacity: 0; background: none; border: none; color: var(--text-dim); cursor: pointer; padding: 2px; border-radius: 4px; transition: all var(--transition); flex-shrink: 0; margin-top: 2px }
+.copy-inline:hover { color: var(--text-secondary); background: rgba(255,255,255,.06) }
+.copy-inline svg { width: 13px; height: 13px }
+.msg-user-row:hover .copy-inline, .msg-assistant:hover .copy-inline, .text-block:hover .copy-inline, .tool-card:hover .copy-inline { opacity: 1 }
+
+/* Assistant / Bot response */
+.msg-assistant { margin: 0 0 8px }
+.collapse-chevron { width: 14px; height: 14px; color: var(--text-dim); cursor: pointer; flex-shrink: 0 }
+.collapse-chevron:hover { color: var(--text-secondary) }
+.turn-collapse-summary { display: none; padding: 8px 14px; margin: 4px 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: 12px; color: var(--text-muted); cursor: pointer; transition: all var(--transition) }
+.turn-collapse-summary:hover { background: var(--bg-card-hover); color: var(--text-secondary) }
+.turn.collapsed .turn-collapse-summary { display: flex; align-items: center; gap: 8px }
+.turn.collapsed .msg-assistant-inner { display: none }
+
+/* Thinking block */
+.thinking-block { margin: 4px 0 12px; border: 1px dashed rgba(113,113,122,.3); border-radius: var(--radius-md); overflow: hidden; transition: all var(--transition) }
+.thinking-header { display: flex; align-items: center; gap: 8px; padding: 8px 14px; cursor: pointer; color: var(--text-muted); font-size: 12px; user-select: none; transition: color var(--transition) }
+.thinking-header:hover { color: var(--text-secondary) }
+.thinking-header svg { width: 14px; height: 14px; transition: transform var(--transition) }
+.thinking-header.expanded svg.chevron { transform: rotate(90deg) }
+.thinking-body { padding: 0 14px; max-height: 0; overflow: hidden; transition: max-height 200ms ease, padding 200ms ease; color: var(--text-muted); font-size: 13px; font-style: italic }
+.thinking-body.open { max-height: 200px; padding: 0 14px 12px }
+
+/* Text block */
+.text-block { padding: 6px 0; color: var(--text-primary); font-size: 14px; line-height: 1.7; position: relative }
+.text-block code { background: rgba(255,255,255,.08); padding: 2px 6px; border-radius: 4px; font-family: var(--font-mono); font-size: 13px }
+
+/* ===== Tool Card (unified toolExecution) ===== */
+.tool-card { margin: 8px 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); overflow: hidden; transition: border-color var(--transition), box-shadow var(--transition); position: relative }
+.tool-card:hover { border-color: rgba(255,255,255,.12); box-shadow: 0 2px 8px rgba(0,0,0,.3) }
+.tool-card-header { display: flex; align-items: center; gap: 10px; padding: 10px 16px; font-size: 13px; font-weight: 600; cursor: default }
+.tool-card-header .tool-icon-wrap { width: 24px; height: 24px; border-radius: 6px; display: flex; align-items: center; justify-content: center }
+.tool-card-header .tool-icon-wrap svg { width: 14px; height: 14px }
+.tool-card-header .tool-name { flex: 1 }
+.tool-status { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px; display: flex; align-items: center; gap: 5px; text-transform: uppercase; letter-spacing: .5px }
+.tool-status.done { background: rgba(74,222,128,.12); color: var(--status-done) }
+.tool-status.error { background: rgba(248,113,113,.12); color: var(--status-error) }
+.tool-status.running { background: rgba(250,204,21,.12); color: var(--status-running) }
+.tool-status svg { width: 12px; height: 12px }
+@keyframes spin { to { transform: rotate(360deg) } }
+.spin { animation: spin 1s linear infinite }
+
+/* Tool sections (Input / Output / Details) */
+.tool-section { border-top: 1px solid var(--border-color) }
+.tool-section-header { display: flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 12px; color: var(--text-muted); cursor: pointer; user-select: none; transition: color var(--transition) }
+.tool-section-header:hover { color: var(--text-secondary) }
+.tool-section-header svg { width: 12px; height: 12px; transition: transform var(--transition) }
+.tool-section-header.expanded svg.chevron { transform: rotate(90deg) }
+.tool-section-body { max-height: 0; overflow: hidden; transition: max-height 200ms ease }
+.tool-section-body.open { max-height: 600px }
+.tool-code { padding: 0 16px 12px; font-family: var(--font-mono); font-size: 12px; line-height: 1.6; color: var(--text-secondary); white-space: pre-wrap; word-break: break-all }
+.tool-card-actions { display: flex; gap: 4px; padding: 6px 16px; opacity: 0; transition: opacity var(--transition); border-top: 1px solid var(--border-color) }
+.tool-card:hover .tool-card-actions { opacity: 1 }
+.tool-action-btn { background: none; border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-muted); padding: 4px 10px; font-size: 11px; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all var(--transition); font-family: var(--font-sans) }
+.tool-action-btn:hover { border-color: rgba(255,255,255,0.15); color: var(--text-primary); background: var(--bg-card-hover) }
+.tool-action-btn svg { width: 12px; height: 12px }
+.tool-bash .tool-icon-wrap { background: rgba(34,211,238,.12); color: var(--tool-bash) }
+.tool-edit .tool-icon-wrap { background: rgba(74,222,128,.12); color: var(--tool-edit) }
+.tool-read .tool-icon-wrap { background: rgba(96,165,250,.12); color: var(--tool-read) }
+.tool-subagent .tool-icon-wrap { background: rgba(192,132,252,.12); color: var(--tool-subagent) }
+
+/* ===== Custom Entry (standalone, not in any turn) ===== */
+.custom-entry { position: relative; padding-left: 50px; margin: 4px 0 }
+.custom-entry-card { display: flex; align-items: center; gap: 10px; padding: 8px 16px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: 13px; color: var(--text-secondary); transition: background var(--transition) }
+.custom-entry-card:hover { background: var(--bg-card-hover) }
+.custom-entry-icon { width: 26px; height: 26px; border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0 }
+.custom-entry-icon svg { width: 14px; height: 14px }
+.custom-entry-icon.memory { background: rgba(96,165,250,.12); color: var(--color-brain) }
+.custom-entry-icon.system { background: rgba(250,204,21,.12); color: var(--color-system) }
+.custom-entry::before { content: ''; position: absolute; left: 17px; top: 50%; transform: translateY(-50%); width: 7px; height: 7px; border-radius: 50%; background: rgba(113,113,122,.3) }
+
+/* ===== Turn Actions Bar ===== */
+.turn-actions-bar { display: flex; align-items: center; gap: 4px; padding: 6px 0 4px; opacity: 0; transition: opacity var(--transition); border-top: 1px solid transparent; margin-top: 4px }
+.turn:hover .turn-actions-bar { opacity: 1; border-top-color: var(--border-color) }
+.turn-action-btn { background: none; border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-dim); padding: 4px 10px; font-size: 11px; cursor: pointer; display: flex; align-items: center; gap: 5px; transition: all var(--transition); font-family: var(--font-sans); white-space: nowrap }
+.turn-action-btn:hover { color: var(--text-primary); background: var(--bg-card) }
+.turn-action-btn svg { width: 12px; height: 12px }
+.turn-action-btn.rollback-code:hover { color: var(--rollback-code); border-color: rgba(250,204,21,.3) }
+.turn-action-btn.rollback-chat:hover { color: var(--rollback-chat); border-color: rgba(96,165,250,.3) }
+.turn-action-btn.fork:hover { color: var(--tool-bash); border-color: rgba(34,211,238,.3) }
+.turn-action-btn.delete:hover { color: var(--status-error); border-color: rgba(248,113,113,.3) }
+.turn-action-btn.summary:hover { color: var(--tool-read); border-color: rgba(96,165,250,.3) }
+
+/* ===== Rollback Overlay (not modal!) ===== */
+.rollback-overlay { position: absolute; inset: 0; background: var(--bg-overlay); display: none; align-items: center; justify-content: center; z-index: 100; backdrop-filter: blur(4px) }
+.rollback-overlay.visible { display: flex }
+.rollback-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 28px 32px; min-width: 380px; box-shadow: 0 8px 32px rgba(0,0,0,.5); text-align: center }
+.rollback-card.type-code { border-color: rgba(250,204,21,.3) }
+.rollback-card.type-chat { border-color: rgba(96,165,250,.3) }
+.rollback-card h3 { font-size: 16px; margin-bottom: 8px; color: var(--text-primary) }
+.rollback-card p { font-size: 13px; color: var(--text-secondary); margin-bottom: 20px }
+.rollback-card .btn-row { display: flex; gap: 10px; justify-content: center }
+.rollback-btn-confirm { padding: 8px 20px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: var(--font-sans); transition: all var(--transition); border-radius: var(--radius-sm); border: none }
+.rollback-btn-confirm.code { background: rgba(250,204,21,.15); color: var(--rollback-code); border: 1px solid rgba(250,204,21,.3) }
+.rollback-btn-confirm.code:hover { background: rgba(250,204,21,.25) }
+.rollback-btn-confirm.chat { background: rgba(96,165,250,.15); color: var(--rollback-chat); border: 1px solid rgba(96,165,250,.3) }
+.rollback-btn-confirm.chat:hover { background: rgba(96,165,250,.25) }
+.rollback-btn-cancel { background: var(--bg-card-hover); color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 8px 20px; font-size: 13px; cursor: pointer; font-family: var(--font-sans); transition: all var(--transition) }
+.rollback-btn-cancel:hover { color: var(--text-primary) }
+
+/* ===== Batch Bar (token savings) ===== */
+.batch-bar { position: fixed; bottom: -64px; left: 56px; right: 48px; height: 56px; background: var(--bg-surface); border-top: 1px solid rgba(248,113,113,.2); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; font-size: 13px; color: var(--text-secondary); z-index: 200; transition: bottom .25s ease }
+.batch-bar.visible { bottom: 0 }
+.batch-bar-left { display: flex; align-items: center; gap: 16px }
+.batch-bar-right { display: flex; align-items: center; gap: 8px }
+.token-pill { display: flex; align-items: center; gap: 6px; background: rgba(99,102,241,.08); border: 1px solid rgba(99,102,241,.2); border-radius: 20px; padding: 4px 12px; font-size: 11px; color: var(--text-muted) }
+.token-pill .token-val { font-family: var(--font-mono); font-weight: 600; color: var(--accent-indigo) }
+.token-arrow { color: var(--status-done); font-size: 10px }
+.token-saved { color: var(--status-done); font-weight: 700 }
+.batch-delete-btn { background: rgba(248,113,113,.12); color: var(--status-error); border: 1px solid rgba(248,113,113,.3); border-radius: var(--radius-sm); padding: 6px 16px; font-size: 13px; cursor: pointer; font-weight: 600; font-family: var(--font-sans); transition: all var(--transition); display: flex; align-items: center; gap: 6px }
+.batch-delete-btn:hover { background: rgba(248,113,113,.2) }
+.batch-delete-btn svg { width: 13px; height: 13px }
+.batch-cancel-btn { background: none; border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-muted); padding: 6px 16px; font-size: 13px; cursor: pointer; font-family: var(--font-sans); transition: all var(--transition) }
+.batch-cancel-btn:hover { color: var(--text-secondary) }
+
+/* ===== Right Nav Rail ===== */
+.nav-rail { width: 48px; min-width: 48px; background: var(--bg-surface); border-left: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 8px 6px; gap: 2px; overflow-y: auto; overflow-x: hidden }
+.nav-rail::-webkit-scrollbar { width: 3px }
+.nav-rail::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px }
+.nav-group { display: flex; flex-direction: column; gap: 2px; position: relative; margin-bottom: 6px }
+.nav-group::after { content: ''; display: block; height: 1px; background: var(--border-color); margin: 4px 2px }
+.nav-icon { width: 34px; height: 28px; border-radius: 5px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-muted); transition: all var(--transition); position: relative; border: 1px solid transparent }
+.nav-icon:hover { background: var(--bg-card); color: var(--text-primary) }
+.nav-icon.active { background: var(--bg-card); color: var(--text-primary) }
+.nav-icon.active::before { content: ''; position: absolute; left: -6px; top: 5px; bottom: 5px; width: 3px; border-radius: 2px; background: var(--accent-indigo) }
+.nav-icon.selected { border-color: rgba(248,113,113,.5); background: rgba(248,113,113,.08); color: var(--status-error) }
+.nav-icon svg { width: 14px; height: 14px }
+.tooltip { position: absolute; right: calc(100% + 8px); top: 50%; transform: translateY(-50%); background: var(--bg-card); border: 1px solid var(--border-color); padding: 4px 10px; border-radius: 5px; font-size: 11px; color: var(--text-secondary); white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity var(--transition); z-index: 50 }
+.nav-icon:hover .tooltip { opacity: 1 }
+@keyframes highlight-flash { 0% { background: rgba(99,102,241,.25) } 100% { background: transparent } }
+.highlight-flash { animation: highlight-flash 1s ease-out }
+
+/* Rolled-back state */
+.turn.rolled-back { opacity: 0.5 }
+.turn.rolled-back .msg-user-bubble { border-style: dashed }
+.turn-tag { display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 10px; margin-left: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px }
+.turn-tag.rollback-tag { background: rgba(248,113,113,.12); color: var(--status-error) }
+.turn-tag.active-tag { background: rgba(99,102,241,.12); color: var(--accent-indigo) }
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- Left Sidebar -->
+<div class="sidebar-left">
+  <div class="sidebar-icon active" title="Chat">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+  </div>
+  <div class="sidebar-icon" title="Files">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+  </div>
+  <div class="sidebar-icon" title="Search">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+  </div>
+  <div class="sidebar-spacer"></div>
+  <div class="sidebar-icon" title="Settings">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06A1.65 1.65 0 0 0 15.41 19H9a1.65 1.65 0 0 0-1.33.67l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 8.59 5H15a1.65 1.65 0 0 0 1.33-.67l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.01.66-.27 1.3-.76 1.77z"/></svg>
+  </div>
+</div>
+
+<!-- Chat Area -->
+<div class="chat-main">
+  <div class="chat-header">
+    <div class="chat-header-dot"></div>
+    <span class="chat-header-title">pi-agent-chat</span>
+    <span style="margin-left:auto;color:var(--text-dim)">glm-4.7v-turbo</span>
+  </div>
+
+  <div class="chat-scroll" id="chatScroll">
+    <div class="chat-content" id="chatContent">
+      <!-- Rendered by JS -->
+    </div>
+  </div>
+
+  <!-- Rollback Overlay -->
+  <div class="rollback-overlay" id="rollbackOverlay">
+    <div class="rollback-card" id="rollbackCard">
+      <h3 id="rbTitle">Confirm Rollback</h3>
+      <p id="rbDesc">This action will revert changes.</p>
+      <div class="btn-row">
+        <button class="rollback-btn-cancel" onclick="hideRollback()">Cancel</button>
+        <button class="rollback-btn-confirm" id="rbConfirm">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="chat-input-bar">
+    <input class="chat-input" placeholder="Type a message..." />
+    <button class="send-btn">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- Right Nav Rail -->
+<div class="nav-rail" id="navRail">
+  <!-- Rendered by JS -->
+</div>
+
+</div><!-- end #app -->
+
+<!-- Batch Bar (fixed overlay) -->
+<div class="batch-bar" id="batchBar">
+  <div class="batch-bar-left">
+    <span><strong id="selectedCount">0</strong> items selected</span>
+    <div class="token-pill">
+      <span id="tokenInputVal">0</span> input
+      <span class="token-arrow">→</span>
+      <span id="tokenOutputVal">0</span> output
+      <span class="token-saved" id="tokenSavedVal">saved ✓</span>
+    </div>
+  </div>
+  <div class="batch-bar-right">
+    <button class="batch-delete-btn" onclick="batchDelete()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+      Delete Selected
+    </button>
+    <button class="batch-cancel-btn" onclick="clearSelection()">Cancel</button>
+  </div>
+</div>
+
+<script>
+// ========== DATA ==========
+const conversationData = [
+  // Custom entry (standalone, before turn 1)
+  { type: 'custom_entry', id: 'ce-1', icon: 'memory', label: 'Memory Prefetch', desc: 'Loaded 3 context memories for session', inputTokens: 120, outputTokens: 0 },
+  // Turn 1
+  { type: 'turn', id: 't1', state: 'past',
+    userMsg: { id: 'u1', text: '帮我写一个 React 的 useDebounce hook，支持 cancel 和 reset 方法', inputTokens: 24 },
+    items: [
+      { type: 'thinking', id: 'th1', text: '用户需要一个带 cancel/reset 的 debounce hook。需要考虑：1) useEffect 清理 2) 返回 ref 避免闭包问题 3) 提供命令式 API...' },
+      { type: 'toolExecution', id: 'tool1', toolName: 'bash', status: 'done', duration: '1.2s',
+        input: { label: 'Command', code: 'mkdir -p src/hooks && ls src/hooks/' },
+        output: { label: 'stdout', code: '' },
+        details: { label: 'Details', code: 'cwd: /Users/xuyingzhou/project\nexitCode: 0' },
+        inputTokens: 45, outputTokens: 12 },
+      { type: 'toolExecution', id: 'tool2', toolName: 'edit', status: 'done', duration: '0.8s',
+        input: { label: 'File', code: 'src/hooks/useDebounce.ts (create)' },
+        output: { label: 'Result', code: '✓ File created (42 lines)' },
+        details: null,
+        inputTokens: 320, outputTokens: 18 },
+      { type: 'text', id: 'txt1', text: '已创建 `src/hooks/useDebounce.ts`，包含以下功能：\n\n- **debounce** — 延迟执行，默认 300ms\n- **cancel** — 取消待执行的回调\n- **reset** — 重置计时器\n- **flush** — 立即执行待执行的回调\n\n使用 TypeScript 泛型支持任意函数签名。', outputTokens: 85 }
+    ]
+  },
+  // Gap
+  { type: 'gap' },
+  // Turn 2
+  { type: 'turn', id: 't2', state: 'past',
+    userMsg: { id: 'u2', text: '加一个单元测试用 vitest', inputTokens: 18 },
+    items: [
+      { type: 'thinking', id: 'th2', text: '需要为 useDebounce 编写 vitest 测试。覆盖场景：基本 debounce、cancel、reset、flush、多次调用只执行最后一次...' },
+      { type: 'toolExecution', id: 'tool3', toolName: 'edit', status: 'done', duration: '1.5s',
+        input: { label: 'File', code: 'src/hooks/__tests__/useDebounce.test.ts (create)' },
+        output: { label: 'Result', code: '✓ File created (128 lines)' },
+        details: null,
+        inputTokens: 480, outputTokens: 24 },
+      { type: 'toolExecution', id: 'tool4', toolName: 'bash', status: 'done', duration: '3.2s',
+        input: { label: 'Command', code: 'npx vitest run src/hooks/__tests__/useDebounce.test.ts' },
+        output: { label: 'stdout', code: ' ✓ useDebounce.test.ts (5 tests) 42ms\n\n Tests  5 passed (5)\n Time   1.23s' },
+        details: { label: 'Details', code: 'exitCode: 0\nduration: 1234ms\ncoverage: 94%' },
+        inputTokens: 52, outputTokens: 180 }
+    ]
+  },
+  // Gap
+  { type: 'gap' },
+  // Turn 3 (active/current)
+  { type: 'turn', id: 't3', state: 'active',
+    userMsg: { id: 'u3', text: '运行全部测试看看覆盖率', inputTokens: 16 },
+    items: [
+      { type: 'toolExecution', id: 'tool5', toolName: 'bash', status: 'running', duration: '',
+        input: { label: 'Command', code: 'npm test -- --coverage' },
+        output: { label: 'stdout', code: 'Running tests...\n\n PASS  src/hooks/__tests__/useDebounce.test.ts' },
+        details: null,
+        inputTokens: 38, outputTokens: 0 },
+      { type: 'toolExecution', id: 'tool6', toolName: 'subagent', status: 'done', duration: '5.1s',
+        input: { label: 'Task', code: 'Analyze test coverage gaps and suggest improvements' },
+        output: { label: 'Report', code: 'Coverage Summary:\n• Statements: 94%\n• Branches: 87%\n• Functions: 100%\n• Lines: 93%\n\nGaps found in error handling paths.' },
+        details: { label: 'Agent Log', code: 'subagent: code-reviewer\niterations: 3\ntokens used: 2,340' },
+        inputTokens: 156, outputTokens: 420 }
+    ]
+  },
+  // Gap
+  { type: 'gap' },
+  // Turn 4 (rolled back example)
+  { type: 'turn', id: 't4', state: 'rolled-back',
+    userMsg: { id: 'u4', text: '把这个 hook 改成 class component 版本', inputTokens: 14 },
+    tag: { text: 'Rolled Back', cls: 'rollback-tag' },
+    items: [
+      { type: 'text', id: 'txt2', text: '已将 useDebounce 转换为 DebounceClass 组件...', outputTokens: 120 }
+    ]
+  },
+  // Gap
+  { type: 'gap' },
+  // Custom entry (standalone, after turns)
+  { type: 'custom_entry', id: 'ce-2', icon: 'system', label: 'Auto-Save', desc: 'Session snapshot saved (v12)', inputTokens: 0, outputTokens: 8 }
+];
+
+// Tool icon map
+const toolIcons = {
+  bash: { icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>', color: 'var(--tool-bash)' },
+  edit: { icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>', color: 'var(--tool-edit)' },
+  read: { icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>', color: 'var(--tool-read)' },
+  subagent: { icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v1H7a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-2V5a3 3 0 0 0-3-3z"/><circle cx="12" cy="9" r="1"/></svg>', color: 'var(--tool-subagent)' },
+};
+
+// Custom entry icons
+const customIcons = {
+  memory: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a8 8 0 0 0-8 8c0 5.4 8 12 8 12s8-6.6 8-12a8 8 0 0 0-8-8z"/><circle cx="12" cy="10" r="3"/></svg>',
+  system: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06A1.65 1.65 0 0 0 15.41 19H9a1.65 1.65 0 0 0-1.33.67l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 8.59 5H15a1.65 1.65 0 0 0 1.33-.67l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9z"/></svg>',
+};
+
+// ========== STATE ==========
+let selectedItems = new Set();
+let collapsedTurns = new Set();
+
+// ========== ICON HELPERS ==========
+function copyIcon() { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'; }
+function checkIcon() { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" width="9" height="9"><polyline points="20 6 9 17 4 12"/></svg>'; }
+function chevronIcon() { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12" class="chevron"><polyline points="9 18 15 12 9 6"/></svg>'; }
+
+// ========== RENDER HELPERS ==========
+function makeCheckbox(itemId) {
+  const checked = selectedItems.has(itemId) ? ' checked' : '';
+  return `<label class="item-checkbox${checked}" onclick="toggleItem('${itemId}',event)">
+    ${checkIcon()}
+  </label>`;
+}
+
+function makeCopyBtn(text) {
+  return `<button class="copy-inline" onclick="copyToClipboard('${escapeAttr(text)}',event)" title="Copy">${copyIcon()}</button>`;
+}
+
+function makeTurnActions(turnIdx) {
+  return `<div class="turn-actions-bar">
+    <button class="turn-action-btn fork" onclick="forkTurn(${turnIdx})" title="Fork from here">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>Fork
+    </button>
+    <button class="turn-action-btn delete" onclick="selectTurnItems(${turnIdx})" title="Select all items in turn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Select All
+    </button>
+    <button class="turn-action-btn summary" onclick="summarizeTurn(${turnIdx})" title="Summarize turn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Summary
+    </button>
+    <button class="turn-action-btn rollback-code" onclick="showRollback('code',${turnIdx})" title="Rollback Code">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>Rollback Code
+    </button>
+    <button class="turn-action-btn rollback-chat" onclick="showRollback('chat',${turnIdx})" title="Rollback Chat">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>Rollback Chat
+    </button>
+    <button class="turn-action-btn" onclick="copyTurnText(${turnIdx})" title="Copy turn text" style="padding:4px 6px">
+      ${copyIcon()}
+    </button>
+  </div>`;
+}
+
+function makeToolCard(item) {
+  const ti = toolIcons[item.toolName] || { icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/></svg>', color: 'var(--tool-default)' };
+  const statusCls = item.status || 'done';
+  const statusIcon = statusCls === 'running'
+    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>'
+    : statusCls === 'error'
+    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>';
+
+  let sectionsHtml = '';
+  if (item.input) {
+    sectionsHtml += `<div class="tool-section">
+      <div class="tool-section-header" onclick="toggleSection(this)">
+        ${chevronIcon()}<span>${esc(item.input.label)}</span>
+      </div>
+      <div class="tool-section-body open"><div class="tool-code">${esc(item.input.code)}</div></div>
+    </div>`;
+  }
+  if (item.output) {
+    sectionsHtml += `<div class="tool-section">
+      <div class="tool-section-header" onclick="toggleSection(this)">
+        ${chevronIcon()}<span>${esc(item.output.label)}</span>
+      </div>
+      <div class="tool-section-body open"><div class="tool-code">${esc(item.output.code)}</div></div>
+    </div>`;
+  }
+  if (item.details) {
+    sectionsHtml += `<div class="tool-section">
+      <div class="tool-section-header" onclick="toggleSection(this)">
+        ${chevronIcon()}<span>${esc(item.details.label)}</span>
+      </div>
+      <div class="tool-section-body"><div class="tool-code">${esc(item.details.code)}</div></div>
+    </div>`;
+  }
+
+  const selectedCls = selectedItems.has(item.id) ? ' item-selected' : '';
+
+  return `<div class="item-row">${makeCheckbox(item.id)}
+    <div class="item-body">
+      <div class="tool-card tool-${item.toolName}${selectedCls}">
+        <div class="tool-card-header">
+          <div class="tool-icon-wrap" style="color:${ti.color}">${ti.icon}</div>
+          <span class="tool-name">${esc(item.toolName)}${item.duration ? ` · ${item.duration}` : ''}</span>
+          <div class="tool-status ${statusCls}">${statusIcon} ${statusCls}</div>
+          ${makeCopyBtn(item.output?.code || item.input?.code || '')}
+        </div>
+        ${sectionsHtml}
+        <div class="tool-card-actions">
+          <button class="tool-action-btn" onclick="copyToClipboard('${escapeAttr(item.input?.code||'')}',event)">Copy Input</button>
+          <button class="tool-action-btn" onclick="copyToClipboard('${escapeAttr(item.output?.code||'')}',event)">Copy Output</button>
+          <button class="tool-action-btn" onclick="rerunTool('${item.id}')">Rerun</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderThinking(item) {
+  return `<div class="item-row">${makeCheckbox(item.id)}
+    <div class="item-body">
+      <div class="thinking-block">
+        <div class="thinking-header" onclick="toggleThinking(this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><point cx="12" cy="17" r="1"/></svg>
+          Thinking...
+          ${chevronIcon()}
+        </div>
+        <div class="thinking-body open">${esc(item.text)}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderTextBlock(item) {
+  const selectedCls = selectedItems.has(item.id) ? ' item-selected' : '';
+  const formatted = item.text.replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\n/g, '<br/>');
+  return `<div class="item-row">${makeCheckbox(item.id)}
+    <div class="item-body">
+      <div class="text-block${selectedCls}">
+        ${formatted}
+        ${makeCopyBtn(item.text)}
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderTurn(turnData, idx) {
+  const stateCls = turnData.state === 'active' ? 'active' : turnData.state === 'rolled-back' ? 'rolled-back' : 'past';
+  const collapsedCls = collapsedTurns.has(turnData.id) ? ' collapsed' : '';
+  const tagHtml = turnData.tag ? `<span class="turn-tag ${turnData.tag.cls}">${turnData.tag.text}</span>` : '';
+
+  let itemsHtml = '';
+  (turnData.items || []).forEach(item => {
+    if (item.type === 'thinking') itemsHtml += renderThinking(item);
+    else if (item.type === 'toolExecution') itemsHtml += makeToolCard(item);
+    else if (item.type === 'text') itemsHtml += renderTextBlock(item);
+  });
+
+  return `<div class="turn ${stateCls}${collapsedCls}" id="${turnData.id}" data-turn-idx="${idx}">
+    <div class="timeline-dot user-dot"></div>
+    <div class="timeline-dot bot-dot" onclick="scrollToTurn('${turnData.id}')"></div>
+    <div class="msg-user">
+      <div class="item-row">${makeCheckbox(turnData.userMsg.id)}
+        <div class="item-body">
+          <div class="msg-user-row">
+            <div class="msg-user-bubble${selectedItems.has(turnData.userMsg.id) ? ' item-selected' : ''}">${esc(turnData.userMsg.text)}</div>
+            ${makeCopyBtn(turnData.userMsg.text)}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="msg-assistant">
+      <div class="turn-collapse-summary" onclick="toggleCollapse('${turnData.id}')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><polyline points="9 18 15 12 9 6"/></svg>
+        ${summarizeItems(turnData.items)}${tagHtml}
+      </div>
+      <div class="msg-assistant-inner">
+        ${itemsHtml}
+        ${makeTurnActions(idx)}
+      </div>
+    </div>
+  </div>`;
+}
+
+function summarizeItems(items) {
+  if (!items || items.length === 0) return 'Empty response';
+  const tc = items.filter(i => i.type === 'toolExecution').length;
+  const tx = items.filter(i => i.type === 'text').length;
+  const th = items.filter(i => i.type === 'thinking').length;
+  const parts = [];
+  if (tc > 0) parts.push(`${tc} tool${tc>1?'s':''}`);
+  if (tx > 0) parts.push(`${tx} text block${tx>1?'s':''}`);
+  if (th > 0) parts.push(`thinking`);
+  return parts.join(', ') || 'Response';
+}
+
+function renderCustomEntry(entry) {
+  const iconSvg = customIcons[entry.icon] || customIcons.system;
+  return `<div class="custom-entry">
+    <div class="item-row">${makeCheckbox(entry.id)}
+      <div class="item-body">
+        <div class="custom-entry-card">
+          <div class="custom-entry-icon ${entry.icon}">${iconSvg}</div>
+          <span style="flex:1;font-weight:500;color:var(--text-primary)">${esc(entry.label)}</span>
+          <span style="color:var(--text-muted);font-size:12px">${esc(entry.desc)}</span>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderNavRail() {
+  let html = '';
+  let groupIdx = 0;
+  conversationData.forEach((block, i) => {
+    if (block.type === 'turn') {
+      if (groupIdx > 0) html += '</div>';
+      html += `<div class="nav-group">`;
+      // User icon
+      const uSel = selectedItems.has(block.userMsg.id) ? ' selected' : '';
+      html += `<div class="nav-icon${uSel}" onclick="scrollToTurn('${block.id}')" data-target="${block.id}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <div class="tooltip">T${i+1}: User</div>
+      </div>;
+      // Bot icon
+      const activeCls = block.state === 'active' ? ' active' : '';
+      html += `<div class="nav-icon nav-sub${activeCls}" onclick="scrollToTurn('${block.id}')" data-target="${block.id}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <div class="tooltip">T${i+1}: Response</div>
+      </div>`;
+      groupIdx++;
+    }
+  });
+  if (groupIdx > 0) html += '</div>';
+  document.getElementById('navRail').innerHTML = html;
+}
+
+function renderAll() {
+  let html = '';
+  conversationData.forEach((block, i) => {
+    if (block.type === 'turn') html += renderTurn(block, i);
+    else if (block.type === 'custom_entry') html += renderCustomEntry(block);
+    else if (block.type === 'gap') html += '<div class="turn-gap"></div>';
+  });
+  document.getElementById('chatContent').innerHTML = html;
+  renderNavRail();
+  updateBatchBar();
+}
+
+// ========== INTERACTION ==========
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function escapeAttr(s) { return (s||'').replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
+
+function toggleItem(id, e) {
+  e.stopPropagation();
+  if (selectedItems.has(id)) selectedItems.delete(id); else selectedItems.add(id);
+  renderAll();
+}
+
+function clearSelection() { selectedItems.clear(); renderAll(); }
+
+function selectTurnItems(turnIdx) {
+  const t = conversationData[turnIdx];
+  if (!t || t.type !== 'turn') return;
+  selectedItems.add(t.userMsg.id);
+  (t.items||[]).forEach(it => selectedItems.add(it.id));
+  renderAll();
+}
+
+function toggleCollapse(turnId) {
+  if (collapsedTurns.has(turnId)) collapsedTurns.delete(turnId); else collapsedTurns.add(turnId);
+  renderAll();
+}
+
+function toggleSection(hdr) {
+  hdr.classList.toggle('expanded');
+  const body = hdr.nextElementSibling;
+  body.classList.toggle('open');
+}
+
+function toggleThinking(hdr) {
+  hdr.classList.toggle('expanded');
+  const body = hdr.nextElementSibling;
+  body.classList.toggle('open');
+}
+
+function scrollToTurn(id) {
+  const el = document.getElementById(id);
+  if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('highlight-flash'); setTimeout(() => el.classList.remove('highlight-flash'), 1000); }
+}
+
+function copyToClipboard(text, e) {
+  if (e) e.stopPropagation();
+  navigator.clipboard.writeText(text).then(() => {
+    // brief flash feedback could go here
+  }).catch(() => {
+    const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+  });
+}
+
+function copyTurnText(turnIdx) {
+  const t = conversationData[turnIdx];
+  if (!t) return;
+  let parts = [t.userMsg.text];
+  (t.items||[]).forEach(it => { if (it.type==='text') parts.push(it.text); });
+  copyToClipboard(parts.join('\n\n---\n\n'));
+}
+
+function forkTurn(turnIdx) { alert(`Fork from Turn ${turnIdx+1} — would create a new branch`); }
+function summarizeTurn(turnIdx) { alert(`Summarize Turn ${turnIdx+1} — would generate AI summary`); }
+function rerunTool(toolId) { alert(`Rerun tool ${toolId}`); }
+
+// Rollback overlay
+function showRollback(type, turnIdx) {
+  const ov = document.getElementById('rollbackOverlay');
+  const card = document.getElementById('rollbackCard');
+  const btn = document.getElementById('rbConfirm');
+  const title = document.getElementById('rbTitle');
+  const desc = document.getElementById('rbDesc');
+  card.className = 'rollback-card type-' + type;
+  btn.className = 'rollback-btn-confirm ' + type;
+  btn.textContent = type === 'code' ? 'Rollback Code' : 'Rollback Chat';
+  btn.onclick = () => confirmRollback(type, turnIdx);
+  if (type === 'code') { title.textContent = 'Rollback Code Changes'; desc.textContent = 'Revert all file modifications made in this turn. Chat history will be preserved.'; }
+  else { title.textContent = 'Rollback Chat'; desc.textContent = 'Remove this turn and all subsequent turns from chat history. Code changes are kept.'; }
+  ov.classList.add('visible');
+}
+function hideRollback() { document.getElementById('rollbackOverlay').classList.remove('visible'); }
+function confirmRollback(type, turnIdx) {
+  hideRollback();
+  alert(`${type === 'code' ? 'Code' : 'Chat'} rollback confirmed for Turn ${turnIdx+1}`);
+}
+
+// Batch bar
+function updateBatchBar() {
+  const bar = document.getElementById('batchBar');
+  const countEl = document.getElementById('selectedCount');
+  const inEl = document.getElementById('tokenInputVal');
+  const outEl = document.getElementById('tokenOutputVal');
+  const savedEl = document.getElementById('tokenSavedVal');
+
+  let totalIn = 0, totalOut = 0;
+  selectedItems.forEach(id => {
+    conversationData.forEach(block => {
+      if (block.type === 'turn') {
+        if (block.userMsg.id === id) totalIn += block.userMsg.inputTokens || 0;
+        (block.items||[]).forEach(it => { if (it.id === id) { totalIn += it.inputTokens||0; totalOut += it.outputTokens||0; } });
+      } else if (block.type === 'custom_entry' && block.id === id) {
+        totalIn += block.inputTokens||0; totalOut += block.outputTokens||0;
+      }
+    });
+  });
+
+  countEl.textContent = selectedItems.size;
+  inEl.textContent = totalIn.toLocaleString();
+  outEl.textContent = totalOut.toLocaleString();
+  savedEl.textContent = Math.round((totalIn+totalOut)*0.7).toLocaleString() + ' saved ✓';
+
+  if (selectedItems.size > 0) { bar.classList.add('visible'); document.getElementById('app').classList.add('has-selection'); }
+  else { bar.classList.remove('visible'); document.getElementById('app').classList.remove('has-selection'); }
+}
+
+function batchDelete() {
+  if (selectedItems.size === 0) return;
+  alert(`Delete ${selectedItems.size} selected items`);
+  clearSelection();
+}
+
+// Init
+renderAll();
+</script>
+</body>
+</html>

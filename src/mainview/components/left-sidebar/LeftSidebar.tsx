@@ -2,6 +2,7 @@ import { Pin, Plus, PanelLeft } from "lucide-react";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { SessionSidebar } from "../session-sidebar/SessionSidebar";
+import { SidebarBottomControls } from "./SidebarBottomControls";
 
 interface LeftSidebarProps {
   width: number;
@@ -65,6 +66,7 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
         <SessionSidebar />
       </div>
 
+      <SidebarBottomControls />
     </div>
   );
 }

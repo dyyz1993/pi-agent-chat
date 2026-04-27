@@ -77,6 +77,7 @@ export type SessionMeta = {
   status: "idle" | "running";
   sessionStatus?: SessionStatus;
   contextUsage?: ContextUsage;
+  pinned?: boolean;
 };
 
 export type RecentProject = {
@@ -119,18 +120,101 @@ export type ProjectTab = {
 };
 
 export type SubagentSessionInfo = {
-  toolCallId?: string;
-  sessionId: string;
-  sessionPath: string;
-  description: string;
-  instruction: string;
-  startedAt: number;
-  completedAt?: number;
-  exitCode?: number;
-  finalText?: string;
-  error?: string;
-  agent?: string;
+	toolCallId?: string;
+	sessionId: string;
+	sessionPath: string;
+	description: string;
+	instruction: string;
+	startedAt: number;
+	completedAt?: number;
+	exitCode?: number;
+	finalText?: string;
+	error?: string;
+	agent?: string;
+	provider?: string;
+	model?: string;
+	contextUsage?: ContextUsage;
+};
+
+export type BookmarkEntry = {
+	id: string;
+	filename: string;
+	filePath: string;
+	title: string;
+	description: string;
+	summary: string;
+	tags: string[];
+	sourceSessionId: string;
+	sourceMessageIds: string[];
+	sourcePreview: string;
+	mtimeMs: number;
+	size: number;
+};
+
+export type FileDiffEntry = {
+  path: string;
+  status: "added" | "modified" | "deleted";
+};
+
+export type SnapshotInfo = {
+  id: string;
+  stepIndex: number;
+  timestamp: string;
+  treeHash: string;
+  diff: {
+    added: string[];
+    modified: string[];
+    deleted: string[];
+  };
+  files: Record<string, string>;
+  rolledBack: boolean;
+};
+
+// ─── Turn-based Timeline Types ───
+
+/** A single item within a Turn */
+export type TimelineItem =
+  | { itemType: "userMessage"; messageId: string; text: string; timestamp: number }
+  | { itemType: "assistantText"; blockIndex: number; text: string; messageId: string }
+  | { itemType: "toolExecution"; blockIndex: number; toolCallId: string; toolName: string; args: string; status: ToolExecutionStatus; output?: string; details?: unknown; messageId: string }
+  | { itemType: "customEntry"; entryId: string; customType: string; data: unknown; timestamp: number };
+
+/** A "Turn" = one user message + the assistant's full response (text blocks + tool executions) */
+export type TimelineTurn = {
+  id: string;
+  index: number;
+  userMessageId: string | null;
+  userText: string;
+  userTimestamp: number;
+  assistantMessageId: string | null;
+  items: TimelineItem[];
   model?: string;
   provider?: string;
-  contextUsage?: ContextUsage;
+  tokenUsage?: TokenUsage;
+  isStreaming: boolean;
+  collapsed: boolean;
 };
+
+/** Standalone custom entry not bound to any Turn (e.g., memory prefetch, system actions) */
+export type StandaloneEntry = {
+  id: string;
+  customType: string;
+  data: unknown;
+  timestamp: number;
+  icon?: string;
+  label?: string;
+  color?: string;
+};
+
+/** Selection state for batch operations */
+export type SelectionState = {
+  selectedItems: Set<string>; // itemId keys
+  selectedTurns: Set<string>; // turnId keys
+  mode: "none" | "items" | "turns";
+};
+
+/** Batch operation types */
+export type BatchAction =
+  | { type: "delete" }
+  | { type: "rollbackCode"; snapshotIds: string[] }
+  | { type: "rollbackChat"; targetItemId: string };

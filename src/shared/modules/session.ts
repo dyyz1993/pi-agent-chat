@@ -15,6 +15,18 @@ export interface SessionMethods {
     params: { sessionId: string; sessionPath: string };
     result: { ok: boolean };
   };
+  "session.pin": {
+    params: { sessionId: string };
+    result: { pinnedSessionIds: string[] };
+  };
+  "session.unpin": {
+    params: { sessionId: string };
+    result: { pinnedSessionIds: string[] };
+  };
+  "session.listPinned": {
+    params: {};
+    result: { pinnedSessionIds: string[] };
+  };
 }
 
 export interface SessionEntry {

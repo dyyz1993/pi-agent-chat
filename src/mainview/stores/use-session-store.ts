@@ -11,6 +11,7 @@ import { useAppStore } from "./use-app-store";
 import { useSubagentStore, handleSubagentEvent } from "./use-subagent-store";
 import { useBashStore, handleBashEvent, handleBackgroundExit } from "./use-bash-store";
 import { useLspStore } from "./use-lsp-store";
+import { useRulesStore } from "./use-rules-store";
 import { useExplorerStore } from "./use-explorer-store";
 import { useMemoryStore } from "./use-memory-store";
 import { useStatusStore } from "./use-status-store";
@@ -20,6 +21,11 @@ export interface TodoItem {
   id: number;
   text: string;
   done: boolean;
+}
+
+export interface ModelInfo {
+  provider: string;
+  id: string;
 }
 
 /** toolCallId → toolName 映射，供 toolResult 查找工具名 */
@@ -36,10 +42,14 @@ interface SessionState {
   todoSubscriptions: Record<string, string>;
   bashSubscriptions: Record<string, string>;
   lspSubscriptions: Record<string, string>;
+  rulesSubscriptions: Record<string, string>;
   notifySubscriptions: Record<string, string>;
   todosBySession: Record<string, TodoItem[]>;
   sessionContextMap: Record<string, ContextUsage>;
   sessionStatusMap: Record<string, SessionStatus>;
+  currentModel: ModelInfo | null;
+  currentThinkingLevel: string;
+  availableModels: Array<{ provider: string; id: string; contextWindow?: number; reasoning?: boolean }>;
 
   addProjectTab: (tab: ProjectTab) => void;
   removeProjectTab: (id: string) => void;
@@ -56,6 +66,9 @@ interface SessionState {
   updateSessionStatus: (sessionId: string, status: SessionStatus) => void;
   restoreContextFromHistory: (sessionId: string) => void;
   fetchInitialState: (sessionId: string) => void;
+  fetchModelState: (sessionId: string) => void;
+  setCurrentModel: (provider: string, modelId: string) => void;
+  setThinkingLevel: (level: string) => void;
 }
 
 function setupSubscriptions(
@@ -64,7 +77,7 @@ function setupSubscriptions(
   id: string,
   session: SessionMeta,
 ): void {
-  const { agentSubscriptions, subagentSubscriptions, todoSubscriptions, bashSubscriptions, lspSubscriptions, notifySubscriptions } = state;
+  const { agentSubscriptions, subagentSubscriptions, todoSubscriptions, bashSubscriptions, lspSubscriptions, rulesSubscriptions, notifySubscriptions } = state;
   const storeGet = () => useSessionStore.getState() as SessionState;
 
   if (!agentSubscriptions[id]) {
@@ -91,7 +104,9 @@ function setupSubscriptions(
             apiClient.call("agent.replayHoldEvents", { sessionId: id }).catch(() => {});
           }
         }
-      }).catch(() => {});
+      }).catch((err) => {
+        useAppStore.getState().addLog(`agent.start failed: ${err instanceof Error ? err.message : String(err)}`);
+      });
     }).catch(() => {});
   }
 
@@ -175,7 +190,7 @@ function setupSubscriptions(
       set((s) => ({
         bashSubscriptions: { ...s.bashSubscriptions, [id]: subId },
       }));
-      useBashStore.getState().loadHistory(session.sessionPath, id).catch(() => {});
+      useBashStore.getState().loadHistory(id).catch(() => {});
     }).catch(() => {});
   }
 
@@ -195,11 +210,27 @@ function setupSubscriptions(
     }).catch(() => {});
   }
 
+  if (!rulesSubscriptions[id]) {
+    apiClient.subscribe(
+      "rules.event",
+      (payload: { sessionId: string; event: import("../../shared/modules/rules").RulesChannelEvent }) => {
+        if (payload.sessionId !== id) return;
+        useRulesStore.getState().handleRulesEvent(id, payload.event);
+      },
+      { sessionId: id },
+    ).then((subId) => {
+      set((s) => ({
+        rulesSubscriptions: { ...s.rulesSubscriptions, [id]: subId },
+      }));
+    }).catch(() => {});
+  }
+
   if (!notifySubscriptions[id]) {
     apiClient.subscribe(
       "agent.notify",
       (payload: { sessionId: string; message: string; notifyType: "info" | "warning" | "error" }) => {
         if (payload.sessionId !== id) return;
+
         const chat = useChatStore.getState();
         const existing = chat.messagesBySession[id] || [];
         const notifyMsg: import("../types").ChatMessage = {
@@ -244,10 +275,14 @@ export const useSessionStore = create<SessionState>()(
       todoSubscriptions: {},
       bashSubscriptions: {},
       lspSubscriptions: {},
+      rulesSubscriptions: {},
       notifySubscriptions: {},
       todosBySession: {},
       sessionContextMap: {},
       sessionStatusMap: {},
+      currentModel: null,
+      currentThinkingLevel: "medium",
+      availableModels: [],
 
       addProjectTab: (tab) =>
         set((s) => {
@@ -511,15 +546,48 @@ export const useSessionStore = create<SessionState>()(
             }
           }).catch(() => {});
 
-          apiClient.call("agent.getCommands", { sessionId }).then((commands) => {
-            if (!Array.isArray(commands)) return;
-            const plugins = commands
-              .filter((c) => c.source === "extension")
-              .map((c) => ({ name: c.name, enabled: true }));
+          apiClient.call("agent.getExtensions", { sessionId }).then((res) => {
+            if (!Array.isArray(res)) return;
+            const plugins = (res as Array<Record<string, unknown>>).map((e) => ({
+              name: (e.path as string)?.split("/").pop()?.replace(/\.(ts|js|tsx|jsx)$/, "") ?? "unknown",
+              path: (e.path as string) ?? "",
+              enabled: true,
+              toolNames: e.toolNames as string[] ?? [],
+              commandNames: e.commandNames as string[] ?? [],
+            }));
             useStatusStore.getState().setPlugins(plugins);
+          }).catch(() => {});
+
+          apiClient.call("agent.getSkills", { sessionId }).then((res) => {
+            if (!Array.isArray(res)) return;
+            useStatusStore.getState().setSkills((res as Array<Record<string, unknown>>).map((s) => ({
+              name: s.name as string ?? "",
+              description: s.description as string ?? "",
+              filePath: s.filePath as string ?? "",
+              baseDir: s.baseDir as string ?? "",
+              disableModelInvocation: s.disableModelInvocation as boolean ?? false,
+              enabled: true,
+            })));
           }).catch(() => {});
         }).catch(() => {});
       },
+
+      fetchModelState: (sessionId) => {
+        apiClient.call("agent.getState", { sessionId }).then((result) => {
+          if (!result?.model) return;
+          set({
+            currentModel: { provider: result.model.provider || "", id: result.model.id },
+            currentThinkingLevel: result.thinkingLevel || "medium",
+          });
+        }).catch(() => {});
+        apiClient.call("agent.getAvailableModels", { sessionId }).then((models) => {
+          if (!Array.isArray(models)) return;
+          set({ availableModels: models });
+        }).catch(() => {});
+      },
+
+      setCurrentModel: (provider, modelId) => set({ currentModel: { provider, id: modelId } }),
+      setThinkingLevel: (level) => set({ currentThinkingLevel: level }),
 
       restoreFromPersisted: async () => {
         const { activeProjectId, activeSessionId, projectTabs } = get();
@@ -579,6 +647,36 @@ export const useSessionStore = create<SessionState>()(
   )
 );
 
+apiClient.onReconnect(() => {
+  const state = useSessionStore.getState();
+  const { activeSessionId, projectTabs, activeProjectId } = state;
+
+  useSessionStore.setState({
+    agentSubscriptions: {},
+    subagentSubscriptions: {},
+    todoSubscriptions: {},
+    bashSubscriptions: {},
+    lspSubscriptions: {},
+    rulesSubscriptions: {},
+    notifySubscriptions: {},
+  });
+
+  if (!activeSessionId || !activeProjectId) return;
+  const tab = projectTabs.find((t) => t.id === activeProjectId);
+  if (!tab) return;
+
+  const sessions = state.sessionsByProject[tab.path];
+  const session = sessions?.find((s) => s.sessionId === activeSessionId);
+  if (session) {
+    setupSubscriptions(
+      useSessionStore.getState(),
+      (fn) => useSessionStore.setState(fn(useSessionStore.getState())),
+      activeSessionId,
+      session,
+    );
+  }
+});
+
 function handleAgentEvent(sessionId: string, event: AgentEvent) {
   const storeGet = () => useSessionStore.getState() as SessionState;
 
@@ -624,6 +722,29 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
     const raw = event.message;
     const msgObj = typeof raw === "object" && raw !== null ? raw as unknown as Record<string, unknown> : null;
     const role = msgObj && typeof msgObj.role === "string" ? msgObj.role : "";
+
+    if (role === "custom") {
+      const customType = typeof (msgObj as Record<string, unknown>).customType === "string"
+        ? (msgObj as Record<string, unknown>).customType as string : "unknown";
+
+      const data = "details" in (msgObj as Record<string, unknown>)
+        ? (msgObj as Record<string, unknown>).details
+        : "data" in (msgObj as Record<string, unknown>)
+          ? (msgObj as Record<string, unknown>).data
+          : {};
+
+      const chat = useChatStore.getState();
+      const existing = chat.messagesBySession[sessionId] || [];
+      const customMsg: import("../types").ChatMessage = {
+        id: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        role: "custom",
+        content: [{ type: "custom", customType, data }],
+        timestamp: Date.now(),
+      };
+      chat.setMessagesForSession(sessionId, [...existing, customMsg]);
+      return;
+    }
+
     if (role !== "assistant") return;
 
     const msg = messageToChatMessage(raw, undefined, toolCallNameMap);
@@ -870,10 +991,10 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
   if (event.type === "session_rename") {
     const { newName } = event;
-    set((s) => {
+    useSessionStore.setState((s) => {
       const updated: Record<string, import("../types").SessionMeta[]> = {};
       for (const [path, sessions] of Object.entries(s.sessionsByProject)) {
-        updated[path] = sessions.map((sess) =>
+        updated[path] = (sessions as import("../types").SessionMeta[]).map((sess) =>
           sess.sessionId === sessionId ? { ...sess, name: newName } : sess,
         );
       }

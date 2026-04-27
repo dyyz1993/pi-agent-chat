@@ -7,6 +7,7 @@ import * as readline from "readline";
 import { join } from "path";
 import { homedir } from "os";
 import { randomUUID } from "crypto";
+import { pinSession, unpinSession, listPinnedSessionIds } from "../lib/project-config";
 
 type P<K extends keyof RPCMethods> = RPCMethods[K] extends { params: infer P } ? P : never;
 type R<K extends keyof RPCMethods> = RPCMethods[K] extends { result: infer R } ? R : never;
@@ -120,11 +121,27 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("session.delete", async (params) => {
-    const { sessionPath } = params;
+    const { sessionPath, sessionId } = params;
     if (!existsSync(sessionPath)) {
       return { ok: false };
     }
     await unlink(sessionPath);
+    await unpinSession(sessionId);
     return { ok: true };
+  });
+
+  r("session.pin", async (params) => {
+    const pinnedSessionIds = await pinSession(params.sessionId);
+    return { pinnedSessionIds };
+  });
+
+  r("session.unpin", async (params) => {
+    const pinnedSessionIds = await unpinSession(params.sessionId);
+    return { pinnedSessionIds };
+  });
+
+  r("session.listPinned", async () => {
+    const pinnedSessionIds = await listPinnedSessionIds();
+    return { pinnedSessionIds };
   });
 }

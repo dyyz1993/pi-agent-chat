@@ -3,7 +3,7 @@ import { existsSync } from "fs";
 import { join, basename } from "path";
 import { homedir } from "os";
 import type { SessionMeta, PiProject, MergedProject } from "../modules/project";
-import { listRecentProjects } from "./project-config";
+import { listRecentProjects, listPinnedSessionIds } from "./project-config";
 
 const SESSIONS_DIR = join(homedir(), ".pi", "agent", "sessions");
 
@@ -87,7 +87,7 @@ async function parseJsonlMeta(filePath: string): Promise<{
   }
 }
 
-async function scanSessionDir(sessionDir: string): Promise<SessionMeta[]> {
+async function scanSessionDir(sessionDir: string, pinnedIds?: Set<string>): Promise<SessionMeta[]> {
   if (!existsSync(sessionDir)) return [];
 
   const files = await readdir(sessionDir);
@@ -117,20 +117,34 @@ async function scanSessionDir(sessionDir: string): Promise<SessionMeta[]> {
         createdAt: new Date(header.timestamp).getTime(),
         updatedAt: fileStat.mtimeMs,
         status: "idle",
+        pinned: pinnedIds ? pinnedIds.has(header.id) : false,
       });
     } catch {
       continue;
     }
   }
 
-  sessions.sort((a, b) => b.updatedAt - a.updatedAt);
+  sessions.sort((a, b) => {
+    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+    return b.updatedAt - a.updatedAt;
+  });
   return sessions;
 }
 
 export async function scanSessionsForProject(projectPath: string): Promise<SessionMeta[]> {
   const dirName = encodeCwd(projectPath);
   const sessionDir = join(SESSIONS_DIR, dirName);
-  return scanSessionDir(sessionDir);
+  const pinnedIds = await loadPinnedSet();
+  return scanSessionDir(sessionDir, pinnedIds);
+}
+
+async function loadPinnedSet(): Promise<Set<string>> {
+  try {
+    const ids = await listPinnedSessionIds();
+    return new Set(ids);
+  } catch {
+    return new Set();
+  }
 }
 
 export async function scanAllProjects(): Promise<
@@ -138,6 +152,7 @@ export async function scanAllProjects(): Promise<
 > {
   if (!existsSync(SESSIONS_DIR)) return [];
 
+  const pinnedIds = await loadPinnedSet();
   const dirs = await readdir(SESSIONS_DIR);
   const results: { projectPath: string; sessionCount: number; sessions: SessionMeta[] }[] = [];
 
@@ -150,7 +165,7 @@ export async function scanAllProjects(): Promise<
       continue;
     }
 
-    const sessions = await scanSessionDir(fullPath);
+    const sessions = await scanSessionDir(fullPath, pinnedIds);
     if (sessions.length === 0) continue;
 
     const projectPath = sessions[0].projectPath;

@@ -18,12 +18,13 @@ interface ProjectConfig {
   configuredPaths: ConfiguredPath[];
   openTabs: PersistedTab[];
   activeTabId: string | null;
+  pinnedSessionIds: string[];
 }
 
 async function load(): Promise<ProjectConfig> {
   try {
     if (!existsSync(CONFIG_PATH)) {
-    return { recentProjects: [], activeProject: null, configuredPaths: [], openTabs: [], activeTabId: null };
+    return { recentProjects: [], activeProject: null, configuredPaths: [], openTabs: [], activeTabId: null, pinnedSessionIds: [] };
     }
     const raw = await readFile(CONFIG_PATH, "utf-8");
     const parsed = JSON.parse(raw) as Partial<ProjectConfig>;
@@ -33,9 +34,10 @@ async function load(): Promise<ProjectConfig> {
       configuredPaths: parsed.configuredPaths ?? [],
       openTabs: parsed.openTabs ?? [],
       activeTabId: parsed.activeTabId ?? null,
+      pinnedSessionIds: parsed.pinnedSessionIds ?? [],
     };
   } catch {
-    return { recentProjects: [], activeProject: null, configuredPaths: [], openTabs: [], activeTabId: null };
+    return { recentProjects: [], activeProject: null, configuredPaths: [], openTabs: [], activeTabId: null, pinnedSessionIds: [] };
   }
 }
 
@@ -134,4 +136,25 @@ export async function syncOpenTabs(tabs: PersistedTab[], activeTabId: string | n
 export async function restoreOpenTabs(): Promise<{ tabs: PersistedTab[]; activeTabId: string | null }> {
   const config = await load();
   return { tabs: config.openTabs, activeTabId: config.activeTabId };
+}
+
+export async function pinSession(sessionId: string): Promise<string[]> {
+  const config = await load();
+  if (!config.pinnedSessionIds.includes(sessionId)) {
+    config.pinnedSessionIds.push(sessionId);
+    await save(config);
+  }
+  return config.pinnedSessionIds;
+}
+
+export async function unpinSession(sessionId: string): Promise<string[]> {
+  const config = await load();
+  config.pinnedSessionIds = config.pinnedSessionIds.filter((id) => id !== sessionId);
+  await save(config);
+  return config.pinnedSessionIds;
+}
+
+export async function listPinnedSessionIds(): Promise<string[]> {
+  const config = await load();
+  return config.pinnedSessionIds;
 }

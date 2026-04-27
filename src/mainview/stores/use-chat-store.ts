@@ -3,7 +3,10 @@ import type { ChatMessage, ContentBlock } from "../types";
 import { apiClient } from "../lib/api-client";
 import { useAppStore } from "./use-app-store";
 import { useSessionStore } from "./use-session-store";
+import { useMemoryStore } from "./use-memory-store";
+import { handleBackgroundExit } from "./use-bash-store";
 import { messageToChatMessage } from "../lib/message-mapper";
+import type { CustomEntryForUI } from "../../shared/modules/agent";
 
 function normalizeToolBlocks(msgs: ChatMessage[]): void {
   const toolCallById = new Map<string, { msgIndex: number; blockIndex: number; name: string; input: string }>();
@@ -90,13 +93,15 @@ interface ChatState {
   inputText: string;
   isStreaming: boolean;
   streamContentVersion: number;
+  loadingSessions: Set<string>;
+  historyLoadVersion: number;
 
   setInputText: (text: string) => void;
   sendMessage: () => Promise<void>;
   addMessage: (msg: ChatMessage) => void;
   setMessagesForSession: (sessionId: string, msgs: ChatMessage[]) => void;
   clearSessionMessages: (sessionId: string) => void;
-  loadSessionMessages: (sessionPath: string) => Promise<void>;
+  loadSessionMessages: (sessionId: string) => Promise<void>;
   setIsStreaming: (v: boolean) => void;
   incrementStreamVersion: () => void;
 }
@@ -106,6 +111,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   inputText: "",
   isStreaming: false,
   streamContentVersion: 0,
+  loadingSessions: new Set<string>(),
+  historyLoadVersion: 0,
 
   setInputText: (text) => set({ inputText: text }),
 
@@ -183,32 +190,32 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   incrementStreamVersion: () => set((s) => ({ streamContentVersion: s.streamContentVersion + 1 })),
 
-  loadSessionMessages: async (sessionPath) => {
+  loadSessionMessages: async (sessionId: string) => {
+    const sid = sessionId;
+    if (!sid) return;
+
+    if (get().loadingSessions.has(sid)) return;
+    set((s) => ({ loadingSessions: new Set(s.loadingSessions).add(sid) }));
+
     try {
-      const sessionId = useSessionStore.getState().activeSessionId;
-      if (!sessionId) return;
-
-      const preflight = get().messagesBySession[sessionId] || [];
-      if (preflight.length > 0) return;
-
       const { apiClient } = await import("../lib/api-client");
-      const result = await apiClient.call("session.getEntries", { sessionPath });
+      const result = await apiClient.call("agent.getMessages", { sessionId: sid });
 
-      const current = get().messagesBySession[sessionId] || [];
-      if (current.length > 0) return;
+      const current = get().messagesBySession[sid] || [];
+      if (current.length > 0 && current[0].id !== undefined && !current[0].id.startsWith("notify-")) return;
 
       const toolCallNameMap: Record<string, string> = {};
-      const rawEntries: Array<{ raw: Record<string, unknown>; id: string }> = [];
+      const rawMessages: Array<{ raw: Record<string, unknown>; id?: string }> = [];
 
-      for (const entry of result.entries) {
-        const data = entry.data as Record<string, unknown>;
-        const raw = data?.message as Record<string, unknown> | undefined;
-        if (!raw) continue;
-        rawEntries.push({ raw, id: entry.id });
+      const messages = (result as unknown as { messages: Array<Record<string, unknown>> }).messages;
+      if (!Array.isArray(messages)) return;
 
-        const role = raw.role as string;
+      for (const msg of messages) {
+        rawMessages.push({ raw: msg, id: msg.id as string | undefined });
+
+        const role = msg.role as string;
         if (role === "assistant") {
-          const content = raw.content as Array<Record<string, unknown>> | undefined;
+          const content = msg.content as Array<Record<string, unknown>> | undefined;
           if (Array.isArray(content)) {
             for (const block of content) {
               if (block.type === "toolCall" && block.id && block.name) {
@@ -217,29 +224,77 @@ export const useChatStore = create<ChatState>((set, get) => ({
             }
           }
         }
-        if (role === "toolResult" && raw.toolCallId && raw.name) {
-          const tcId = raw.toolCallId as string;
+        if (role === "toolResult" && msg.toolCallId && msg.name) {
+          const tcId = msg.toolCallId as string;
           if (!toolCallNameMap[tcId]) {
-            toolCallNameMap[tcId] = raw.name as string;
+            toolCallNameMap[tcId] = msg.name as string;
           }
         }
       }
 
       const msgs: ChatMessage[] = [];
-      for (const { raw, id } of rawEntries) {
+      for (const { raw, id } of rawMessages) {
         const msg = messageToChatMessage(raw, id, toolCallNameMap);
         if (msg) msgs.push(msg);
       }
 
       normalizeToolBlocks(msgs);
 
+      const customEntries = (result as unknown as { customEntries: CustomEntryForUI[] }).customEntries;
+      if (Array.isArray(customEntries) && customEntries.length > 0) {
+        const memoryStore = useMemoryStore.getState();
+
+        for (const entry of customEntries) {
+          memoryStore.addEvent(sid, {
+            id: entry.id,
+            customType: entry.customType,
+            data: entry.data,
+            timestamp: entry.timestamp,
+          });
+
+          if (entry.customType === "memory_prefetch_result" && entry.data) {
+            const payload = entry.data as { summary?: string; snippet?: string };
+            memoryStore.addInjected(sid, {
+              summary: payload.summary || "",
+              snippet: payload.snippet || "",
+            });
+          }
+
+          if (entry.customType === "bash_background_exit" && entry.data) {
+            handleBackgroundExit(
+              sid,
+              entry.data as import("../../shared/modules/bash").BashBackgroundExitEvent,
+            );
+          }
+
+          msgs.push({
+            id: entry.id,
+            role: "custom",
+            content: [{ type: "custom", customType: entry.customType, data: entry.data }],
+            timestamp: entry.timestamp,
+          });
+        }
+
+        msgs.sort((a, b) => {
+          if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
+          return (a.id || "").localeCompare(b.id || "");
+        });
+      }
+
       set((s) => ({
-        messagesBySession: { ...s.messagesBySession, [sessionId]: msgs },
+        messagesBySession: { ...s.messagesBySession, [sid]: msgs },
+        historyLoadVersion: s.historyLoadVersion + 1,
       }));
 
-      useSessionStore.getState().restoreContextFromHistory(sessionId);
+      useSessionStore.getState().restoreContextFromHistory(sid);
     } catch (err) {
       useAppStore.getState().addLog(`Failed to load session: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      set((s) => {
+        const next = new Set(s.loadingSessions);
+        next.delete(sid);
+        return { loadingSessions: next };
+      });
     }
   },
 }));

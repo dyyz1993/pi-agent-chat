@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
-import { Search, ChevronRight, ChevronDown, Copy, Pencil, Trash2, User, Check, X, Loader2, Bot, GitBranch } from "lucide-react";
+import { Search, ChevronRight, ChevronDown, Copy, Pencil, Trash2, User, Check, X, Loader2, Bot, GitBranch, Pin, PinOff } from "lucide-react";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useSubagentStore } from "../../stores/use-subagent-store";
 import { useGitStore } from "../../stores/use-git-store";
@@ -109,6 +109,12 @@ function SessionList({
       }
     }
 
+    const sortPinnedFirst = (s: SessionMeta[]) =>
+      [...s].sort((a, b) => {
+        if ((a.pinned ? 1 : 0) !== (b.pinned ? 1 : 0)) return a.pinned ? -1 : 1;
+        return b.updatedAt - a.updatedAt;
+      });
+
     if (q) {
       const filter = (s: SessionMeta[]) =>
         s.filter(
@@ -117,7 +123,7 @@ function SessionList({
             sess.firstMessage?.toLowerCase().includes(q) ||
             sess.sessionId.toLowerCase().includes(q)
         );
-      const filteredRoots = filter(roots);
+      const filteredRoots = sortPinnedFirst(filter(roots));
       const filteredChildren: Record<string, SessionMeta[]> = {};
       for (const [parentPath, kids] of Object.entries(children)) {
         const filtered = filter(kids);
@@ -130,7 +136,7 @@ function SessionList({
       return { rootSessions: filteredRoots, childMap: filteredChildren };
     }
 
-    return { rootSessions: roots, childMap: children };
+    return { rootSessions: sortPinnedFirst(roots), childMap: children };
   }, [rawSessions, searchQuery]);
 
   if (loading) {
@@ -238,6 +244,7 @@ function SessionItem({
   const setActiveSession = useSessionStore((s) => s.setActiveSession);
   const renameSession = useSessionStore((s) => s.renameSession);
   const deleteSession = useSessionStore((s) => s.deleteSession);
+  const togglePinSession = useSessionStore((s) => s.togglePinSession);
   const subsessions = useSubagentStore((s) => s.subsessionsByParent[session.sessionPath]);
   const loadingSubs = useSubagentStore((s) => s.loadingByParent[session.sessionPath]);
   const worktrees = useGitStore((s) => s.worktrees);
@@ -302,6 +309,11 @@ function SessionItem({
     }
   }, [session.name, session.sessionId, deleteSession]);
 
+  const handleTogglePin = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    togglePinSession(session.sessionId);
+  }, [session.sessionId, togglePinSession]);
+
   const displayName = session.name || session.firstMessage || "空会话";
 
   return (
@@ -335,7 +347,10 @@ function SessionItem({
               </button>
             </div>
           ) : (
-            <span className="truncate font-medium leading-tight flex-1 min-w-0">{displayName}</span>
+            <>
+              {session.pinned && <Pin className="w-3 h-3 shrink-0 text-indigo-400" />}
+              <span className="truncate font-medium leading-tight flex-1 min-w-0">{displayName}</span>
+            </>
           )}
         </div>
 
@@ -353,6 +368,9 @@ function SessionItem({
             <StatusBadge sessionId={session.sessionId} />
             {worktreeInfo && <WorktreeBranchBadge branch={worktreeInfo.branch} />}
             <div className="ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button onClick={handleTogglePin} className={`p-1 rounded hover:bg-gray-700 ${session.pinned ? "text-indigo-400" : "text-gray-500 hover:text-gray-300"}`} title={session.pinned ? "取消置顶" : "置顶"}>
+                {session.pinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
+              </button>
               <button onClick={handleCopyId} className="p-1 rounded hover:bg-gray-700 text-gray-500 hover:text-gray-300" title="复制 ID">
                 <Copy className="w-3 h-3" />
               </button>

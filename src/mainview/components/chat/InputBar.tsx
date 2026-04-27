@@ -105,6 +105,7 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
         style={{ maxHeight: expanded ? "none" : `${maxHeight}px`, minHeight: expanded ? "200px" : "80px" }}
       />
       <div className="absolute right-1.5 top-1 flex flex-col gap-0.5">
+        {/* Row 1: Clear (if has content) + Expand toggle */}
         <div className="flex gap-0.5">
           {hasContent && (
             <button onClick={handleClear} className="w-[26px] h-[26px] p-1 rounded hover:bg-gray-700 text-gray-500 hover:text-gray-300 transition-colors flex items-center justify-center" title="清除输入和历史">
@@ -115,12 +116,17 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
             {expanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
           </button>
         </div>
-        <button onClick={handleNavPrev} className="w-[26px] h-[26px] p-1 rounded hover:bg-gray-700 text-gray-600 hover:text-gray-300 transition-colors flex items-center justify-center" title="上一条">
-          <ArrowUp className="w-3.5 h-3.5" />
-        </button>
-        <button onClick={handleNavNext} className="w-[26px] h-[26px] p-1 rounded hover:bg-gray-700 text-gray-600 hover:text-gray-300 transition-colors flex items-center justify-center" title="下一条">
-          <ArrowDown className="w-3.5 h-3.5" />
-        </button>
+        {/* Row 2: Navigation arrows - same layout as Row 1 with placeholder for X */}
+        <div className="flex gap-0.5">
+          {/* Placeholder for X button alignment */}
+          {!hasContent && <div className="w-[26px] h-[26px]" />}
+          <button onClick={handleNavPrev} className="w-[26px] h-[26px] p-1 rounded hover:bg-gray-700 text-gray-600 hover:text-gray-300 transition-colors flex items-center justify-center" title="上一条">
+            <ArrowUp className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={handleNavNext} className="w-[26px] h-[26px] p-1 rounded hover:bg-gray-700 text-gray-600 hover:text-gray-300 transition-colors flex items-center justify-center" title="下一条">
+            <ArrowDown className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
     </div>
   );

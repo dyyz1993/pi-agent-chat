@@ -97,4 +97,5 @@ export interface SessionMeta {
   createdAt: number;
   updatedAt: number;
   status: "idle" | "running";
+  pinned?: boolean;
 }

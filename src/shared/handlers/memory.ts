@@ -3,14 +3,14 @@ import type { RPCMethods, HandlerOptions } from "../rpc-schema"
 import type { MemoryFile } from "../modules/memory"
 import { readdir, readFile, stat } from "fs/promises"
 import { existsSync } from "fs"
-import { join } from "path"
+import { join, resolve } from "path"
 import { homedir } from "os"
 
 type P<K extends keyof RPCMethods> = RPCMethods[K] extends { params: infer P } ? P : never
 type R<K extends keyof RPCMethods> = RPCMethods[K] extends { result: infer R } ? R : never
 
 function encodeCwd(cwd: string): string {
-	return "--" + cwd.replace(/^\//, "").replace(/\//g, "-") + "--"
+	return "--" + cwd.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-") + "--"
 }
 
 function parseFrontmatter(content: string): { frontmatter: Record<string, string>; body: string } {
@@ -86,8 +86,13 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 	})
 
 	r("memory.readFile", async (params) => {
-		const content = await readFile(params.filePath, "utf-8")
-		const s = await stat(params.filePath)
+		const memoryBase = resolve(join(homedir(), ".pi", "agent", "memory"))
+		const resolvedPath = resolve(params.filePath)
+		if (resolvedPath !== memoryBase && !resolvedPath.startsWith(memoryBase + "/") && !resolvedPath.startsWith(memoryBase + "\\")) {
+			throw new Error("Path outside memory directory")
+		}
+		const content = await readFile(resolvedPath, "utf-8")
+		const s = await stat(resolvedPath)
 		return { content, size: s.size }
 	})
 }

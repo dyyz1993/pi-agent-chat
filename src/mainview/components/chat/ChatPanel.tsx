@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useMemo, useRef, useState, useEffect } from "react";
 import {
   ArrowUp,
   Paperclip,
@@ -22,7 +22,9 @@ import { MessageBubble } from "./MessageBubble";
 import { SideNav } from "./SideNav";
 import { InputBar, type InputBarHandle } from "./InputBar";
 import { TokenStatusBar } from "./TokenStatusBar";
-import type { ChatMessage } from "../../types";
+import { SnapshotToolbar } from "./SnapshotToolbar";
+import { RollbackModal } from "./RollbackModal";
+import type { ChatMessage, SnapshotInfo } from "../../types";
 
 const EMPTY_MSGS: never[] = [];
 
@@ -67,6 +69,10 @@ export function ChatPanel() {
   const setActive = useChatNavStore((s) => s.setActive);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const inputBarRef = useRef<InputBarHandle>(null);
+
+  const [snapshots, setSnapshots] = useState<SnapshotInfo[]>([]);
+  const [rollbackModalOpen, setRollbackModalOpen] = useState(false);
+  const [rollbackTargetSnap, setRollbackTargetSnap] = useState<SnapshotInfo | null>(null);
 
   const messageIds = useMemo(() => messages.map((m) => m.id), [messages]);
   const isStreaming = effectiveStatus === "streaming" || effectiveStatus === "compacting";
@@ -134,6 +140,27 @@ export function ChatPanel() {
     }
   };
 
+  const fetchSnapshots = useCallback(async () => {
+    if (!activeSessionId) return;
+    try {
+      const result = await apiClient.call("snapshot.list", { sessionId: activeSessionId });
+      setSnapshots(result as SnapshotInfo[]);
+    } catch { /* no snapshots yet */ }
+  }, [activeSessionId]);
+
+  const handleRollbackClick = useCallback((snap: SnapshotInfo) => {
+    setRollbackTargetSnap(snap);
+    setRollbackModalOpen(true);
+  }, []);
+
+  const handleRollbackConfirm = useCallback(async (snapshotId: string, selectedFiles: string[]) => {
+    if (!activeSessionId) return;
+    await apiClient.call("snapshot.rollback", { sessionId: activeSessionId, snapshotId, files: selectedFiles });
+    await fetchSnapshots();
+  }, [activeSessionId, fetchSnapshots]);
+
+  useEffect(() => { fetchSnapshots(); }, [activeSessionId, fetchSnapshots]);
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative bg-gray-950">
       <div className="flex items-center gap-4 px-4 py-1.5 bg-gray-900/80 border-b border-gray-800 text-[11px] text-gray-500 flex-shrink-0">
@@ -165,6 +192,9 @@ export function ChatPanel() {
               onScroll={handleScroll}
               virtualizer={mainVirtualizer}
               isLoading={isLoading}
+              snapshots={snapshots}
+              sessionId={activeSessionId ?? ""}
+              onRollbackClick={handleRollbackClick}
             />
           )}
         </div>
@@ -207,6 +237,14 @@ export function ChatPanel() {
           </div>
         )}
       </div>
+
+      <RollbackModal
+        open={rollbackModalOpen}
+        snapshot={rollbackTargetSnap}
+        sessionId={activeSessionId ?? ""}
+        onClose={() => setRollbackModalOpen(false)}
+        onConfirm={handleRollbackConfirm}
+      />
     </div>
   );
 }
@@ -260,12 +298,15 @@ function SubagentMessagesArea({ messages, scrollRef, onScroll, virtualizer }: {
   );
 }
 
-function MessagesArea({ messages, scrollRef, onScroll, virtualizer, isLoading }: {
+function MessagesArea({ messages, scrollRef, onScroll, virtualizer, isLoading, snapshots, sessionId, onRollbackClick }: {
   messages: ChatMessage[];
   scrollRef: React.RefObject<HTMLDivElement | null>;
   onScroll: () => void;
   virtualizer: Virtualizer<HTMLDivElement, Element>;
   isLoading?: boolean;
+  snapshots?: SnapshotInfo[];
+  sessionId?: string;
+  onRollbackClick?: (snap: SnapshotInfo) => void;
 }) {
   if (messages.length === 0) {
     return (
@@ -282,6 +323,12 @@ function MessagesArea({ messages, scrollRef, onScroll, virtualizer, isLoading }:
     );
   }
 
+  const snapMap = useMemo(() => {
+    const map = new Map<number, SnapshotInfo>();
+    (snapshots ?? []).forEach((s) => map.set(s.stepIndex, s));
+    return map;
+  }, [snapshots]);
+
   return (
     <div
       ref={scrollRef as React.Ref<HTMLDivElement>}
@@ -291,6 +338,7 @@ function MessagesArea({ messages, scrollRef, onScroll, virtualizer, isLoading }:
       <div style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}>
         {virtualizer.getVirtualItems().map((vr) => {
           const msg = messages[vr.index];
+          const snap = msg.role === "assistant" ? snapMap.get(Math.floor(vr.index / 2) + 1) : undefined;
           return (
             <div
               key={msg.id}
@@ -300,6 +348,15 @@ function MessagesArea({ messages, scrollRef, onScroll, virtualizer, isLoading }:
               style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${vr.start}px)` }}
             >
               <div className="py-1">
+                {snap && sessionId && (
+                  <div className="mb-1">
+                    <SnapshotToolbar
+                      snapshot={snap}
+                      sessionId={sessionId}
+                      onRollback={() => onRollbackClick?.(snap)}
+                    />
+                  </div>
+                )}
                 <MessageBubble message={msg} />
               </div>
             </div>

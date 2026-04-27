@@ -27,6 +27,8 @@ class APIClientImpl {
   private _transport: "ipc" | "websocket" = "websocket";
   private _baseUrl: string | null = null;
   private wsTransport: WebSocketTransport | null = null;
+  private _reconnectCallback: (() => void) | null = null;
+  private _wasDisconnected: boolean = false;
 
   /**
    * 桌面端同步初始化：通过 executeJavascript 接收 + __electrobunBunBridge 发送
@@ -43,16 +45,18 @@ class APIClientImpl {
     console.log("[APIClient] Desktop (IPC) initialized synchronously");
   }
 
+  onReconnect(callback: () => void): void {
+    this._reconnectCallback = callback;
+  }
+
   /**
    * 异步初始化：Web 端使用（连接 WebSocket）
    */
   async initialize(): Promise<void> {
-    // 已连接且 transport 正常 → 直接返回
     if (this.client && (this._transport === "ipc" || this.wsTransport?.isConnected())) {
       return;
     }
 
-    // client 存在但 WS 断开了 → 清理后重连
     if (this.client && this.wsTransport && !this.wsTransport.isConnected()) {
       this.wsTransport.close();
       this.wsTransport = null;
@@ -66,12 +70,12 @@ class APIClientImpl {
       const env = this.detectEnvironment();
 
       if (env === "electrobun") {
-        // 不应走到这里，桌面端应通过 initSyncForDesktop() 初始化
         this.initSyncForDesktop();
       } else {
         this._transport = "websocket";
         const wsUrl = this.getWebSocketUrl();
         this.wsTransport = new WebSocketTransport(wsUrl);
+        this.setupReconnectDetection();
         await this.wsTransport.connect();
         this.client = createTypedClient<RPCMethods, RPCEvents>(this.wsTransport);
 
@@ -81,6 +85,33 @@ class APIClientImpl {
     })();
 
     return this.initPromise;
+  }
+
+  private setupReconnectDetection(): void {
+    if (!this.wsTransport) return;
+
+    let wasConnected = true;
+
+    const checkInterval = setInterval(() => {
+      if (!this.wsTransport) {
+        clearInterval(checkInterval);
+        return;
+      }
+
+      const connected = this.wsTransport.isConnected();
+
+      if (wasConnected && !connected) {
+        this._wasDisconnected = true;
+      }
+
+      if (!wasConnected && connected && this._wasDisconnected) {
+        this._wasDisconnected = false;
+        this.client = createTypedClient<RPCMethods, RPCEvents>(this.wsTransport);
+        this._reconnectCallback?.();
+      }
+
+      wasConnected = connected;
+    }, 1000);
   }
 
   private detectEnvironment(): "electrobun" | "browser" {

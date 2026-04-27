@@ -11,10 +11,13 @@ import type { TodoMethods, TodoEvents } from "./modules/todo";
 import type { BashMethods, BashEvents } from "./modules/bash";
 import type { LspMethods, LspEvents } from "./modules/lsp";
 import type { MemoryMethods } from "./modules/memory";
+import type { BookmarkMethods } from "./modules/bookmark";
+import type { RulesMethods, RulesEvents } from "./modules/rules";
+import type { SnapshotMethods } from "./modules/snapshot";
 
-export interface RPCMethods extends AnyMethods, SystemMethods, FileMethods, TimerMethods, GitMethods, ProjectMethods, SessionMethods, AgentMethods, SubagentMethods, TodoMethods, BashMethods, LspMethods, MemoryMethods {}
+export interface RPCMethods extends AnyMethods, SystemMethods, FileMethods, TimerMethods, GitMethods, ProjectMethods, SessionMethods, AgentMethods, SubagentMethods, TodoMethods, BashMethods, LspMethods, MemoryMethods, RulesMethods, BookmarkMethods, SnapshotMethods {}
 
-export interface RPCEvents extends TimerEvents, AgentEvents, SubagentEvents, TodoEvents, BashEvents, LspEvents {}
+export interface RPCEvents extends TimerEvents, AgentEvents, SubagentEvents, TodoEvents, BashEvents, LspEvents, RulesEvents {}
 
 export interface HandlerOptions {
   platform: "desktop" | "web";
