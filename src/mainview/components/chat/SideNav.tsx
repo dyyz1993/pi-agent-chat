@@ -68,9 +68,9 @@ function buildNavItems(messages: ChatMessage[]): NavItem[] {
       const blockId = `${msg.id}-${bi}`;
 
       if (b.type === "thinking") {
-        subs.push({ icon: Brain, color: "text-purple-400/60", label: "Thinking", blockId });
+        subs.push({ icon: Brain, color: "text-purple-400", label: "Thinking", blockId });
       } else if (b.type === "text") {
-        subs.push({ icon: FileText, color: "text-gray-500", label: "文本", blockId });
+        subs.push({ icon: FileText, color: "text-gray-400", label: "文本", blockId });
       } else if (b.type === "toolExecution" && !seenTools.has(b.toolName)) {
         seenTools.add(b.toolName);
         let ti = getToolIcon(b.toolName);
@@ -82,14 +82,14 @@ function buildNavItems(messages: ChatMessage[]): NavItem[] {
         subs.push({ icon: ti.icon, color: ti.color, label, blockId });
       } else if (b.type === "custom") {
         let icon: LucideIcon = Brain;
-        let color = "text-yellow-400/70";
+        let color = "text-yellow-400";
         let label = b.customType;
         switch (b.customType) {
-          case "bash_background_exit": icon = Terminal; color = "text-cyan-400/70"; label = "后台进程"; break;
-          case "lsp_diagnostics": icon = ScanSearch; color = "text-yellow-400/70"; break;
-          case "memory_prefetch": color = "text-blue-400/70"; label = "Memory"; break;
-          case "memory_extract": color = "text-green-400/70"; label = "Memory"; break;
-          case "memory_dream": color = "text-purple-400/70"; label = "Memory"; break;
+          case "bash_background_exit": icon = Terminal; color = "text-cyan-400"; label = "后台进程"; break;
+          case "lsp_diagnostics": icon = ScanSearch; color = "text-yellow-400"; break;
+          case "memory_prefetch": color = "text-blue-400"; label = "Memory"; break;
+          case "memory_extract": color = "text-green-400"; label = "Memory"; break;
+          case "memory_dream": color = "text-purple-400"; label = "Memory"; break;
         }
         subs.push({ icon, color, label, blockId });
       }
@@ -126,13 +126,13 @@ const NavDot = memo(function NavDot({
   let barCls = "absolute left-0 top-1 bottom-1 w-[3px] rounded-full transition-all opacity-0 ";
 
   if (isMultiSelected) {
-    cls += "bg-red-500/20 ";
+    cls += "bg-red-500/25 ";
     iconColor = "text-red-400";
     barCls += "bg-red-500 opacity-100 ";
   } else if (isClicked) {
-    cls += "bg-blue-500/20 shadow-[0_0_8px_rgba(59,130,246,0.25)] ";
-    iconColor = "text-blue-300";
-    barCls += "bg-blue-400 opacity-100 ";
+    cls += "bg-indigo-500/30 shadow-[0_0_10px_rgba(99,102,241,0.3)] ";
+    iconColor = "text-indigo-300";
+    barCls += "bg-indigo-400 opacity-100 ";
   } else {
     cls += "hover:bg-gray-800/60 ";
   }
@@ -180,8 +180,8 @@ const NavSubDot = memo(function NavSubDot({
   let iconColor = color;
 
   if (isActive) {
-    cls += "bg-blue-500/30 shadow-[0_0_6px_rgba(59,130,246,0.3)] ";
-    iconColor = "text-blue-300";
+    cls += "bg-indigo-500/25 shadow-[0_0_6px_rgba(99,102,241,0.25)] ";
+    iconColor = "text-indigo-300";
   } else {
     cls += "hover:bg-gray-800/60 ";
   }
@@ -255,7 +255,7 @@ export function SideNav({
   return (
     <div className="h-full flex flex-col bg-gray-900/30 border-l border-gray-800/30">
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto sidenav-scroll" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
-        <div className="flex flex-col items-center py-2 space-y-0.5">
+        <div className="flex flex-col items-center py-2 space-y-1.5">
           {navItems.map(({ id, icon: Icon, color, subs }) => (
             <div key={id} data-nav-id={id}>
               <div className="flex flex-col items-center w-full">

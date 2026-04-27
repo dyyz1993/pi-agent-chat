@@ -60,15 +60,15 @@ export const useMemoryStore = create<MemoryState>()((set) => ({
 
 	loadFiles: async (projectPath, sessionId) => {
 		try {
-			const result = await apiClient.call("memory.listFiles", { projectPath })
+			const result = await apiClient.call("memory.listFiles", { projectPath }) as { files: MemoryFile[]; entrypointContent: string | null }
 			set((s) => ({
 				filesBySession: {
 					...s.filesBySession,
-					[sessionId]: result.files as MemoryFile[],
+					[sessionId]: result.files,
 				},
 				entrypointBySession: {
 					...s.entrypointBySession,
-					[sessionId]: result.entrypointContent as string | null,
+					[sessionId]: result.entrypointContent,
 				},
 			}))
 		} catch {}

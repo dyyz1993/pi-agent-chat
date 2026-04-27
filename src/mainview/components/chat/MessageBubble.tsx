@@ -70,8 +70,8 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
         <div className="absolute inset-0 rounded-lg bg-indigo-500/[0.06] pointer-events-none" />
       )}
       {isUser ? (
-        <div className={`px-2 py-1 text-[13px] leading-relaxed whitespace-pre-wrap break-words text-gray-100 ${styleMemo.bg} min-w-0`}>
-          <div className="absolute -top-1 right-2 flex items-center gap-0.5 z-10">
+        <div className={`relative mx-2 px-3 py-2 text-[13px] leading-relaxed whitespace-pre-wrap break-words text-gray-100 bg-blue-500/[0.06] rounded-lg ${styleMemo.bg} min-w-0`}>
+          <div className="absolute -top-0.5 right-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
             <CopyButton text={fullTextForCopy} size="xs" />
           </div>
           {message.content.filter((b) => b.type === "text").map((b, i) => (
@@ -339,8 +339,8 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({ block, 
     case "text":
       if (isStreaming) {
         return (
-          <div data-block-id={blockId} className="my-0.5 group relative px-3 py-2 text-sm text-gray-200 whitespace-pre-wrap break-words overflow-auto max-h-[60vh]">
-            <div className="absolute top-1 right-2 z-10">
+          <div data-block-id={blockId} className="my-0.5 group relative px-3 py-2 pr-10 text-sm text-gray-200 whitespace-pre-wrap break-words overflow-auto max-h-[60vh]">
+            <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
               <CopyButton text={block.text} size="xs" />
             </div>
             {block.text}
@@ -348,8 +348,8 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({ block, 
         );
       }
       return (
-        <div data-block-id={blockId} className="my-0.5 px-3 py-2 prose prose-invert prose-sm max-w-none overflow-auto max-h-[60vh] prose-p:my-1 prose-pre:bg-transparent">
-          <div className="absolute top-1 right-2 z-10">
+        <div data-block-id={blockId} className="my-0.5 group relative px-3 py-2 pr-10 prose prose-invert prose-sm max-w-none overflow-auto max-h-[60vh] prose-p:my-1 prose-pre:bg-transparent">
+          <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
             <CopyButton text={block.text} size="xs" />
           </div>
           <CachedReactMarkdown>{block.text}</CachedReactMarkdown>
@@ -434,7 +434,7 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({ block, blockI
   }, []);
 
   return (
-    <div ref={cardRef} className={`my-1 -mx-4 overflow-hidden border-l-[3px] ${barColor} ${bgOnly}`} data-block-id={blockId}>
+    <div ref={cardRef} className={`my-1 -mx-2 overflow-hidden border-l-[3px] ${barColor} ${bgOnly}`} data-block-id={blockId}>
       <div className="px-3 py-1 pl-2 flex items-center gap-2 text-xs">
         <button
           onClick={handleToggleCollapse}

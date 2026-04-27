@@ -219,7 +219,7 @@ export function ChatPanel() {
         messageIds={messageIds}
         messages={messages}
         onDeleteSelected={(ids) => {
-          console.log("[批量删除]:", ids);
+          void ids
         }}
       />
 
