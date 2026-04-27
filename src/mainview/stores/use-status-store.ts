@@ -1,6 +1,23 @@
 import { create } from "zustand";
 
-export type StatusSection = "yolo" | "plan" | "shell" | "mcp" | "lsp" | "plugins";
+export type StatusSection = "yolo" | "plan" | "shell" | "mcp" | "lsp" | "plugins" | "skills";
+
+export interface PluginInfo {
+  name: string;
+  path: string;
+  enabled: boolean;
+  toolNames: string[];
+  commandNames: string[];
+}
+
+export interface SkillInfo {
+  name: string;
+  description: string;
+  filePath: string;
+  baseDir: string;
+  disableModelInvocation: boolean;
+  enabled: boolean;
+}
 
 interface StatusState {
   yoloEnabled: boolean;
@@ -8,7 +25,9 @@ interface StatusState {
   shellActive: boolean;
   mcpTools: Array<{ name: string; status: "ready" | "error" | "loading" }>;
   lspStatus: "connected" | "disconnected" | "connecting";
-  plugins: Array<{ name: string; enabled: boolean }>;
+  plugins: PluginInfo[];
+  skills: SkillInfo[];
+  expandedSkill: string | null;
   collapsedSections: Set<StatusSection>;
 
   toggleYolo: () => void;
@@ -17,6 +36,9 @@ interface StatusState {
   setMcpTools: (tools: StatusState["mcpTools"]) => void;
   setLspStatus: (status: StatusState["lspStatus"]) => void;
   setPlugins: (plugins: StatusState["plugins"]) => void;
+  setSkills: (skills: StatusState["skills"]) => void;
+  toggleSkillExpanded: (name: string) => void;
+  toggleSkillEnabled: (name: string) => void;
 }
 
 export const useStatusStore = create<StatusState>((set) => ({
@@ -26,6 +48,8 @@ export const useStatusStore = create<StatusState>((set) => ({
   mcpTools: [],
   lspStatus: "disconnected",
   plugins: [],
+  skills: [],
+  expandedSkill: null,
   collapsedSections: new Set(),
 
   toggleYolo: () => set((s) => ({ yoloEnabled: !s.yoloEnabled })),
@@ -40,4 +64,11 @@ export const useStatusStore = create<StatusState>((set) => ({
   setMcpTools: (tools) => set({ mcpTools: tools }),
   setLspStatus: (status) => set({ lspStatus: status }),
   setPlugins: (plugins) => set({ plugins }),
+  setSkills: (skills) => set({ skills }),
+  toggleSkillExpanded: (name) =>
+    set((s) => ({ expandedSkill: s.expandedSkill === name ? null : name })),
+  toggleSkillEnabled: (name) =>
+    set((s) => ({
+      skills: s.skills.map((sk) => sk.name === name ? { ...sk, enabled: !sk.enabled } : sk),
+    })),
 }));

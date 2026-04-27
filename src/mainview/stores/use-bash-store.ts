@@ -9,7 +9,7 @@ interface BashState {
   upsertProcess: (sessionId: string, proc: BashProcess) => void;
   removeProcess: (sessionId: string, toolCallId: string) => void;
   clearSession: (sessionId: string) => void;
-  loadHistory: (sessionPath: string, sessionId: string) => Promise<void>;
+  loadHistory: (sessionId: string) => Promise<void>;
   subscribeOutput: (sessionId: string, toolCallId: string) => Promise<void>;
   unsubscribeOutput: (sessionId: string, toolCallId: string) => Promise<void>;
 }
@@ -50,11 +50,9 @@ export const useBashStore = create<BashState>()((set) => ({
     });
   },
 
-  loadHistory: async (sessionPath: string, sessionId: string) => {
+  loadHistory: async (sessionId: string) => {
     try {
-      const result = await apiClient.call("bash.list", { sessionPath });
-      const processes = result.processes as BashProcess[] || [];
-      set((s) => ({ ...s, processesBySession: { ...s.processesBySession, [sessionId]: processes } }));
+      await apiClient.call("bash.list", { sessionId });
     } catch {}
   },
 
@@ -82,9 +80,10 @@ export function handleBashEvent(sessionId: string, event: BashChannelEvent): voi
 
   if (event.type === "list") {
     if (event.processes) {
-      for (const proc of event.processes) {
-        store.upsertProcess(sessionId, proc);
-      }
+      useBashStore.setState((s) => ({
+        ...s,
+        processesBySession: { ...s.processesBySession, [sessionId]: event.processes! },
+      }));
     }
     return;
   }

@@ -22,23 +22,36 @@ export interface BashChannelEvent {
 }
 
 export interface BashChannelCommand {
-  action: "list" | "kill" | "background" | "subscribe_output" | "unsubscribe_output";
+  action: "list" | "kill" | "background" | "remove" | "subscribe_output" | "unsubscribe_output" | "write_stdin";
   toolCallId?: string;
+  data?: string;
 }
 
 export interface BashMethods {
   "bash.list": {
-    params: { sessionPath: string };
+    params: { sessionId: string };
     result: { processes: BashProcess[] };
   };
   "bash.command": {
-    params: { sessionId: string; action: "kill" | "background" | "subscribe_output" | "unsubscribe_output"; toolCallId?: string };
+    params: { sessionId: string; action: "kill" | "background" | "remove" | "subscribe_output" | "unsubscribe_output" | "write_stdin"; toolCallId?: string; data?: string };
     result: { ok: boolean };
+  };  "bash.readLog": {
+    params: { logPath: string; offset?: number; limit?: number };
+    result: { lines: string[]; totalLines: number; hasMore: boolean };
+  };
+  "bash.watchLog": {
+    params: { logPath: string };
+    result: { watching: boolean };
+  };
+  "bash.unwatchLog": {
+    params: { logPath: string };
+    result: { stopped: boolean };
   };
 }
 
 export interface BashEvents {
   "bash.event": BashEventPayload;
+  "bash.logUpdate": BashLogUpdatePayload;
 }
 
 export interface BashEventPayload {
@@ -59,4 +72,9 @@ export interface BashBackgroundExitEvent {
     logPath?: string;
   };
   display: "info" | "warning";
+}
+
+export interface BashLogUpdatePayload {
+  logPath: string;
+  newLines: string[];
 }
