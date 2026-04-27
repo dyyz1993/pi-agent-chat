@@ -13,7 +13,7 @@ const STATUS_CONFIGS = {
   streaming: { color: "#facc15", strokeClass: "text-yellow-400", animClass: "animate-pulse", label: "工作中" },
   compacting: { color: "#facc15", strokeClass: "text-yellow-400", animClass: "animate-pulse", label: "工作中" },
   permission: { color: "#f87171", strokeClass: "text-red-400", animClass: "", label: "需要协助" },
-  idle: { color: "#4ade80", strokeClass: "text-green-400", animClass: "", label: "休闲中" },
+  idle: { color: "#4ade80", strokeClass: "text-green-400", animClass: "", label: "空闲" },
 } as const;
 
 function statusConfig(status: SessionStatus | undefined) {

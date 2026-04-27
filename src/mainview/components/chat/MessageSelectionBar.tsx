@@ -1,5 +1,5 @@
 import { memo, useCallback } from "react";
-import { Trash2, X } from "lucide-react";
+import { Trash2, BookmarkPlus, Sparkles, X } from "lucide-react";
 import { useTurnStore } from "../../stores/use-turn-store";
 import type { ChatMessage, TokenUsage } from "../../types";
 import { formatTokenCount } from "../../utils/turn-utils";
@@ -18,6 +18,14 @@ export const MessageSelectionBar = memo(function MessageSelectionBar({ messages,
     if (onDeleteSelected) onDeleteSelected(Array.from(selectedIds));
   }, [onDeleteSelected, selectedIds]);
 
+  const handleSummarize = useCallback(() => {
+    console.log("[批量总结]:", Array.from(selectedIds));
+  }, [selectedIds]);
+
+  const handleBookmark = useCallback(() => {
+    console.log("[批量收藏]:", Array.from(selectedIds));
+  }, [selectedIds]);
+
   const count = selectedIds.size;
   if (count === 0) return null;
 
@@ -33,21 +41,28 @@ export const MessageSelectionBar = memo(function MessageSelectionBar({ messages,
   }
 
   return (
-    <div className="-mt-1 mx-auto w-fit flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-950/80 border border-red-500/30 shadow-md">
-      <span className="text-sm font-semibold text-red-400 tabular-nums leading-none">{count}</span>
+    <div className="mx-auto w-fit flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-800/90 border border-gray-700/60 shadow-lg backdrop-blur-sm">
+      <span className="text-sm font-semibold text-indigo-400 tabular-nums leading-none min-w-[1.25rem] text-center">{count}</span>
       {(input > 0 || output > 0) && (
         <>
-          <div className="w-px h-3.5 bg-red-500/20" />
-          <span className="text-[11px] text-gray-300 font-mono tabular-nums">{formatTokenCount(input)}</span>
+          <div className="w-px h-3.5 bg-gray-700" />
+          <span className="text-[11px] text-gray-400 font-mono tabular-nums">{formatTokenCount(input)}</span>
           <span className="text-[11px] text-emerald-400/70 font-mono tabular-nums">{formatTokenCount(output)}</span>
         </>
       )}
-      <div className="w-px h-3.5 bg-red-500/20" />
-      <button onClick={handleDelete} className="flex items-center justify-center w-6 h-6 rounded-full text-gray-500 hover:text-red-400 hover:bg-red-500/15 transition-colors" title="删除所选">
-        <Trash2 className="w-3 h-3" />
+      <div className="w-px h-3.5 bg-gray-700" />
+      <button onClick={handleSummarize} className="flex items-center justify-center w-7 h-7 rounded-full text-purple-400 hover:text-purple-300 hover:bg-purple-500/15 transition-colors" title="总结所选">
+        <Sparkles className="w-3.5 h-3.5" />
       </button>
-      <button onClick={clear} className="flex items-center justify-center w-6 h-6 rounded-full text-gray-500 hover:text-gray-300 hover:bg-gray-700/60 transition-colors" title="取消选择">
-        <X className="w-3 h-3" />
+      <button onClick={handleBookmark} className="flex items-center justify-center w-7 h-7 rounded-full text-amber-400 hover:text-amber-300 hover:bg-amber-500/15 transition-colors" title="收藏所选">
+        <BookmarkPlus className="w-3.5 h-3.5" />
+      </button>
+      <button onClick={handleDelete} className="flex items-center justify-center w-7 h-7 rounded-full text-gray-500 hover:text-red-400 hover:bg-red-500/15 transition-colors" title="删除所选">
+        <Trash2 className="w-3.5 h-3.5" />
+      </button>
+      <div className="w-px h-3.5 bg-gray-700" />
+      <button onClick={clear} className="flex items-center justify-center w-7 h-7 rounded-full text-gray-500 hover:text-gray-300 hover:bg-gray-700/60 transition-colors" title="取消选择">
+        <X className="w-3.5 h-3.5" />
       </button>
     </div>
   );

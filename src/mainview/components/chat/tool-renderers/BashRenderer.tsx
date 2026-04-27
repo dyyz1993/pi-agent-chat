@@ -77,7 +77,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({ block, blockI
 	}
 
 	return (
-		<div data-block-id={blockId} className={`my-1.5 -mx-3 rounded-none overflow-hidden border-x-0 border-t border-b ${borderBg}`}>
+		<div data-block-id={blockId} className={`my-1.5 -mx-2 rounded-none overflow-hidden border-x-0 border-t border-b ${borderBg}`}>
 			<div className="px-3 py-1.5 flex items-center gap-2 text-xs">
 				<span className={`font-medium ${isBackground ? "text-yellow-400" : isTerminated ? "text-red-400" : isRunning ? "text-blue-400" : isError ? "text-red-400" : "text-gray-300"}`}>{block.toolName}</span>
 				{isRunning && !statusLabel && <span className="text-blue-400 animate-pulse text-[10px]">running</span>}

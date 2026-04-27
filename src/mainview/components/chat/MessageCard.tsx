@@ -1,7 +1,6 @@
 import { memo, useCallback } from "react";
 import {
   ChevronDown,
-  Clock,
   User,
   Bot,
   Terminal,
@@ -9,7 +8,7 @@ import {
   Brain,
   FileText,
 } from "lucide-react";
-import { GitBranch, Trash2, RotateCcw, Undo2, BookmarkPlus, Sparkles } from "lucide-react";
+import { RotateCcw, Undo2, GitBranch } from "lucide-react";
 import { useTurnStore } from "../../stores/use-turn-store";
 import { MessageBubble } from "./MessageBubble";
 import type { ChatMessage } from "../../types";
@@ -82,17 +81,12 @@ export const MessageCard = memo(function MessageCard({ message, prevBarColor }: 
     toggleCollapse(message.id);
   }, [message.id, toggleCollapse]);
 
-  const handleClick = useCallback(() => {
-    if (!isEntry) toggleMessageSelection(message.id);
-  }, [message.id, toggleMessageSelection, isEntry]);
-
   const timeStr = formatTime(message.timestamp);
 
   return (
     <div
       data-msg-card-id={message.id}
       className={`group/msgcard relative w-full py-1.5 border-l-[3px] ${isSelected ? "border-l-red-500 bg-red-500/[0.06]" : barColor + " " + bgColor} transition-colors overflow-hidden`}
-      onClick={handleClick}
     >
       {isSelected && (
         <div className="absolute inset-0 bg-red-500/15 pointer-events-none z-10 rounded-sm" />
@@ -115,7 +109,7 @@ export const MessageCard = memo(function MessageCard({ message, prevBarColor }: 
         </span>
 
         {!isUser && !isEntry && (message.provider || message.model) && (
-          <span className="text-[10px] text-gray-600">
+          <span className="text-[10px] text-gray-600 opacity-0 group-hover/msgcard:opacity-100 transition-opacity">
             {message.provider}{message.model ? ` · ${message.model}` : ""}
           </span>
         )}
@@ -130,7 +124,6 @@ export const MessageCard = memo(function MessageCard({ message, prevBarColor }: 
               <ChevronDown className={`w-3 h-3 transition-transform ${isCollapsed ? "" : "-rotate-90"}`} />
             </button>
           )}
-          <Clock className="w-3 h-3 text-gray-700" />
           <span className="text-[10px] text-gray-600">{timeStr}</span>
         </div>
       </div>
@@ -166,12 +159,9 @@ export const MessageCard = memo(function MessageCard({ message, prevBarColor }: 
           )}
 
           <div className="flex items-center justify-end gap-0.5 px-4 pt-0.5 pb-0.5">
-            <ActionBtn icon={GitBranch} label="Fork" onClick={() => console.log("[Demo] Fork:", message.id)} />
-            <ActionBtn icon={Sparkles} label="总结" onClick={() => console.log("[Demo] 总结:", message.id)} accent="purple" />
-            <ActionBtn icon={BookmarkPlus} label="收藏" onClick={() => console.log("[Demo] 收藏:", message.id)} accent="amber" />
-            <ActionBtn icon={RotateCcw} label="回滚消息" onClick={() => console.log("[Demo] 回滚消息:", message.id)} />
-            <ActionBtn icon={Undo2} label="回滚全部" onClick={() => console.log("[Demo] 回滚全部:", message.id)} />
-            <ActionBtn icon={Trash2} label="" onClick={() => console.log("[Demo] 删除:", message.id)} danger />
+            <ActionBtn icon={GitBranch} title="Fork" onClick={() => console.log("[Demo] Fork:", message.id)} />
+            <ActionBtn icon={RotateCcw} title="回滚消息" onClick={() => console.log("[Demo] 回滚消息:", message.id)} />
+            <ActionBtn icon={Undo2} title="回滚全部" onClick={() => console.log("[Demo] 回滚全部:", message.id)} />
           </div>
         </div>
       )}
@@ -181,32 +171,21 @@ export const MessageCard = memo(function MessageCard({ message, prevBarColor }: 
 
 const ActionBtn = memo(function ActionBtn({
   icon: Icon,
-  label,
+  title,
   onClick,
-  danger,
-  accent,
 }: {
   icon: React.ComponentType<{ className?: string }>;
-  label: string;
+  title?: string;
   onClick?: () => void;
-  danger?: boolean;
-  accent?: "purple" | "amber" | "blue";
 }) {
   if (!onClick) return null;
-  const accentClass = accent === "purple"
-    ? "text-purple-400/60 hover:text-purple-300"
-    : accent === "amber"
-      ? "text-amber-400/60 hover:text-amber-300"
-      : accent === "blue"
-        ? "text-blue-400/60 hover:text-blue-300"
-        : "text-gray-600 hover:text-gray-300";
   return (
     <button
       onClick={(e) => e.stopPropagation()}
-      className={`px-1.5 py-0.5 text-[11px] transition-colors flex items-center gap-0.5 ${accentClass} ${danger ? "hover:!text-red-400" : ""}`}
+      title={title}
+      className="p-1 rounded text-gray-600 hover:text-gray-300 hover:bg-gray-700/50 transition-colors"
     >
-      <Icon className="w-3 h-3" />
-      {label && <span>{label}</span>}
+      <Icon className="w-3.5 h-3.5" />
     </button>
   );
 });
