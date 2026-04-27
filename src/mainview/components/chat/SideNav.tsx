@@ -4,11 +4,13 @@ import {
   Bot,
   FileText,
   AlertTriangle,
+  Bookmark,
   type LucideIcon,
 } from "lucide-react";
 import type { ChatMessage } from "../../types";
 import { useChatNavStore } from "../../stores/use-chat-nav-store";
-import { getToolIcon, getPreviewResourceIcon } from "./tool-icon-map";
+import { getToolIcon, getPreviewResourceIcon, getCustomTypeIcon } from "./tool-icon-map";
+import { useBookmarkStore } from "../../stores/use-bookmark-store";
 
 type SubItem = {
   kind: "text" | "tool";
@@ -20,7 +22,7 @@ type SubItem = {
 
 type NavItem = {
   id: string;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "custom";
   icon: LucideIcon;
   color: string;
   label: string;
@@ -36,6 +38,22 @@ function buildNavItems(messages: ChatMessage[]): NavItem[] {
         icon: User,
         color: "text-indigo-400",
         label: "用户",
+        subs: [],
+      };
+    }
+
+    if (msg.role === "custom") {
+      const customBlock = msg.content.find((b) => b.type === "custom") as
+        | { type: "custom"; customType: string; data: unknown }
+        | undefined;
+      const customType = customBlock?.customType ?? "unknown";
+      const iconEntry = getCustomTypeIcon(customType);
+      return {
+        id: msg.id,
+        role: "custom",
+        icon: iconEntry.icon,
+        color: iconEntry.color,
+        label: iconEntry.label,
         subs: [],
       };
     }
@@ -112,6 +130,7 @@ const NavDot = memo(function NavDot({
   color,
   isActive,
   isSelected,
+  isBookmarked,
   onClick,
   onContextMenu,
   onDoubleClick,
@@ -121,6 +140,7 @@ const NavDot = memo(function NavDot({
   color: string;
   isActive: boolean;
   isSelected: boolean;
+  isBookmarked?: boolean;
   onClick?: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
   onDoubleClick: () => void;
@@ -152,6 +172,24 @@ const NavDot = memo(function NavDot({
     >
       <span className={barClass} />
       <Icon className={`w-4 h-4 ${iconColor} transition-colors`} />
+      {isBookmarked && (
+        <span
+          style={{
+            position: "absolute",
+            top: -1,
+            right: -1,
+            width: 10,
+            height: 10,
+            borderRadius: "50%",
+            background: "#e3b341",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Bookmark size={6} style={{ width: 6, height: 6, fill: "#5c4b0a" }} />
+        </span>
+      )}
     </button>
   );
 });
@@ -205,6 +243,7 @@ const NavDotGroup = memo(function NavDotGroup({
   subs,
   isActive,
   isSelected,
+  isBookmarked,
   subActiveKey,
   onDotClick,
   onSubDotClick,
@@ -217,6 +256,7 @@ const NavDotGroup = memo(function NavDotGroup({
   subs: SubItem[];
   isActive: boolean;
   isSelected: boolean;
+  isBookmarked?: boolean;
   subActiveKey: string | null;
   onDotClick: (id: string) => void;
   onSubDotClick: (id: string, key: string) => void;
@@ -231,6 +271,7 @@ const NavDotGroup = memo(function NavDotGroup({
         color={color}
         isActive={isActive && !subActiveKey}
         isSelected={isSelected}
+        isBookmarked={isBookmarked}
         onClick={() => onDotClick(id)}
         onContextMenu={(e) => onContextMenu(e, id)}
         onDoubleClick={() => onDoubleClick(id)}
@@ -268,10 +309,21 @@ export function SideNav({
   onNavDotScroll?: (msgId: string) => void;
 }) {
   const activeId = useChatNavStore((s) => s.activeId);
-  const selectedIds = useChatNavStore((s) => s.selectedIds);
-  const toggleSelected = useChatNavStore((s) => s.toggleSelected);
+  const selectedItems = useChatNavStore((s) => s.selectedItems);
+  const toggleItemSelect = useChatNavStore((s) => s.toggleItemSelect);
   const [subActiveKey, setSubActiveKey] = useState<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const itemsByProject = useBookmarkStore((s) => s.itemsByProject);
+  const bookmarkedMessageIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const items of Object.values(itemsByProject)) {
+      for (const item of items) {
+        for (const mid of item.sourceMessageIds) ids.add(mid)
+      }
+    }
+    return ids
+  }, [itemsByProject]);
 
   const navItems = useMemo(() => buildNavItems(messages), [messages]);
 
@@ -288,16 +340,16 @@ export function SideNav({
   const handleContextMenu = useCallback(
     (e: React.MouseEvent, id: string) => {
       e.preventDefault();
-      toggleSelected(id);
+      toggleItemSelect(id);
     },
-    [toggleSelected],
+    [toggleItemSelect],
   );
 
   const handleDoubleClick = useCallback(
     (id: string) => {
-      toggleSelected(id);
+      toggleItemSelect(id);
     },
-    [toggleSelected],
+    [toggleItemSelect],
   );
 
   useEffect(() => {
@@ -326,7 +378,8 @@ export function SideNav({
                 color={color}
                 subs={subs}
                 isActive={activeId === id}
-                isSelected={selectedIds.has(id)}
+                isSelected={selectedItems.has(id)}
+                isBookmarked={bookmarkedMessageIds.has(id)}
                 subActiveKey={subActiveKey}
                 onDotClick={handleDotClick}
                 onSubDotClick={handleSubDotClick}
@@ -338,9 +391,9 @@ export function SideNav({
         </div>
       </div>
 
-      {selectedIds.size > 0 && (
+      {selectedItems.size > 0 && (
         <div className="px-1 py-1 text-[10px] text-red-400 text-center border-t border-red-500/20 bg-red-950/20">
-          已选 {selectedIds.size}
+          已选 {selectedItems.size}
         </div>
       )}
     </div>

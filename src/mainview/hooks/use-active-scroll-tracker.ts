@@ -8,6 +8,7 @@ interface UseActiveScrollTrackerOptions {
   sessionId: string | undefined;
   setActive: (id: string | null) => void;
   streamVersion: number;
+  historyLoadVersion?: number;
 }
 
 const BOTTOM_THRESHOLD_PX = 80;
@@ -20,6 +21,7 @@ export function useActiveScrollTracker({
   sessionId,
   setActive,
   streamVersion,
+  historyLoadVersion,
 }: UseActiveScrollTrackerOptions) {
   const userScrolledUpRef = useRef(false);
   const prevCountRef = useRef(0);
@@ -168,6 +170,63 @@ export function useActiveScrollTracker({
     if (userScrolledUpRef.current) return;
     doScrollToBottom();
   }, [streamVersion, doScrollToBottom]);
+
+  useEffect(() => {
+    if (historyLoadVersion === undefined || historyLoadVersion === 0) return;
+    userScrolledUpRef.current = false;
+    didInitRef.current = false;
+    prevCountRef.current = messageIds.length;
+
+    const scrollEl = scrollRef.current;
+    if (!scrollEl || messageIds.length === 0) return;
+
+    if (messageIds.length > 0) {
+      setActive(messageIds[messageIds.length - 1]);
+    }
+
+    let rafId: number;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 30;
+
+    const tryScroll = () => {
+      attempts++;
+      const el = scrollRef.current;
+      if (!el) { rafId = requestAnimationFrame(tryScroll); return; }
+
+      const totalSize = virtualizer.getTotalSize();
+      if (totalSize > el.clientHeight && el.clientHeight > 0) {
+        programmaticScrollRef.current = true;
+        el.scrollTop = el.scrollHeight;
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            programmaticScrollRef.current = false;
+            const finalEl = scrollRef.current;
+            if (finalEl && Math.abs(finalEl.scrollTop + finalEl.clientHeight - finalEl.scrollHeight) > 3) {
+              programmaticScrollRef.current = true;
+              finalEl.scrollTop = finalEl.scrollHeight;
+              requestAnimationFrame(() => {
+                requestAnimationFrame(() => { programmaticScrollRef.current = false; });
+              });
+            }
+          });
+        });
+        return;
+      }
+
+      if (attempts < MAX_ATTEMPTS) {
+        rafId = requestAnimationFrame(tryScroll);
+      } else {
+        programmaticScrollRef.current = true;
+        el.scrollTop = el.scrollHeight;
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => { programmaticScrollRef.current = false; });
+        });
+      }
+    };
+
+    rafId = requestAnimationFrame(tryScroll);
+    return () => cancelAnimationFrame(rafId);
+  }, [historyLoadVersion, scrollRef, virtualizer, messageIds, setActive]);
 
   return { handleScroll, scrollToBottom: doScrollToBottom, scrollToMessage };
 }

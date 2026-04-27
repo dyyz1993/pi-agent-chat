@@ -19,6 +19,10 @@ import {
   Music,
   File,
   Brain,
+  SearchCheck,
+  Save,
+  Sparkles,
+  Activity,
   type LucideIcon,
 } from "lucide-react";
 
@@ -92,6 +96,28 @@ export function getToolIcon(toolName: string): ToolIconEntry {
   return DEFAULT_ENTRY;
 }
 
+const CUSTOM_TYPE_ICON_MAP: Record<string, ToolIconEntry> = {
+  memory_prefetch: { icon: SearchCheck, color: "text-blue-400", label: "Memory Search" },
+  memory_prefetch_result: { icon: SearchCheck, color: "text-blue-400", label: "Memories Found" },
+  memory_extract: { icon: Save, color: "text-green-400", label: "Memory Saved" },
+  memory_extract_result: { icon: Save, color: "text-green-400", label: "Extraction Result" },
+  memory_dream: { icon: Sparkles, color: "text-purple-400", label: "Memory Consolidation" },
+  memory_dream_result: { icon: Sparkles, color: "text-purple-400", label: "Dream Result" },
+  lsp_diagnostics: { icon: Network, color: "text-yellow-400", label: "LSP Diagnostics" },
+  bash_background_exit: { icon: Terminal, color: "text-cyan-400", label: "Background Exit" },
+  step_snapshot: { icon: Activity, color: "text-gray-400", label: "Step Snapshot" },
+};
+
+const CUSTOM_TYPE_DEFAULT: ToolIconEntry = {
+  icon: Brain,
+  color: "text-purple-400",
+  label: "Custom",
+};
+
+export function getCustomTypeIcon(customType: string): ToolIconEntry {
+  return CUSTOM_TYPE_ICON_MAP[customType] ?? CUSTOM_TYPE_DEFAULT;
+}
+
 export function getRoleIcon(role: "user" | "assistant" | "toolResult" | "custom"): ToolIconEntry {
   switch (role) {
     case "user":
@@ -101,13 +127,19 @@ export function getRoleIcon(role: "user" | "assistant" | "toolResult" | "custom"
     case "toolResult":
       return DEFAULT_ENTRY;
     case "custom":
-      return { icon: Brain, color: "text-purple-400", label: "Memory" };
+      return CUSTOM_TYPE_DEFAULT;
   }
 }
 
-export function getMessageIcon(message: { role: string; content: Array<{ type: string; name?: string; toolName?: string }> }): ToolIconEntry {
+export function getMessageIcon(message: { role: string; content: Array<{ type: string; name?: string; toolName?: string; customType?: string }> }): ToolIconEntry {
   if (message.role === "user") return getRoleIcon("user");
-  if (message.role === "custom") return getRoleIcon("custom");
+  if (message.role === "custom") {
+    const customBlock = message.content.find((b) => b.type === "custom");
+    if (customBlock && (customBlock as { customType?: string }).customType) {
+      return getCustomTypeIcon((customBlock as { customType: string }).customType);
+    }
+    return getRoleIcon("custom");
+  }
 
   const toolBlock = message.content.find(
     (b) => b.type === "toolCall" || b.type === "toolExecution" || b.type === "toolResult"

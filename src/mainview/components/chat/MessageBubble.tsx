@@ -1,10 +1,13 @@
 import { useCallback, useEffect, memo, useMemo, useRef, useState } from "react";
-import { Brain, AlertTriangle, FileText } from "lucide-react";
+import { Brain, AlertTriangle, FileText, Bookmark } from "lucide-react";
 import { CachedReactMarkdown } from "./CachedReactMarkdown";
 import type { ChatMessage, ContentBlock } from "../../types";
 import { useChatNavStore } from "../../stores/use-chat-nav-store";
+import { useSessionStore } from "../../stores/use-session-store";
 import { SubagentExecutionCard } from "./tool-renderers/SubagentRenderer";
 import { getToolRenderer } from "./tool-renderers";
+import { getCustomTypeIcon } from "./tool-icon-map";
+import { useBookmarkStore, type BookmarkItem } from "../../stores/use-bookmark-store";
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -16,7 +19,14 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
     useCallback((s) => s.activeId === message.id, [message.id])
   );
   const isSelected = useChatNavStore(
-    useCallback((s) => s.selectedIds.has(message.id), [message.id])
+    useCallback((s) => s.selectedItems.has(message.id), [message.id])
+  );
+  const isBookmarked = useBookmarkStore(
+    useCallback((s) => {
+      const items: BookmarkItem[] = []
+      for (const vals of Object.values(s.itemsByProject)) items.push(...vals)
+      return items.some((i) => i.sourceMessageIds.includes(message.id))
+    }, [])
   );
 
   const styleMemo = useMemo(() => {
@@ -52,27 +62,60 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
   const baseBg = isUser ? "bg-indigo-600 text-white" : "bg-transparent text-gray-200";
 
   return (
-    <div
-      id={`msg-${message.id}`}
-      data-msg-id={message.id}
-      className={`flex ${styleMemo.isUser ? "justify-end" : "justify-start w-full"} ${isSelected ? "relative" : ""}`}
-    >
-      {isSelected && (
-        <div className="absolute inset-0 rounded-lg bg-red-500/[0.04] pointer-events-none" />
-      )}
       <div
-        className={`${styleMemo.isUser ? "max-w-[85%]" : "w-full"} px-3 py-2 rounded-lg text-sm whitespace-pre-wrap break-words transition-colors ${baseBg} ${styleMemo.border} ${styleMemo.bg}`}
+        id={`msg-${message.id}`}
+        data-msg-id={message.id}
+        className={`group flex ${styleMemo.isUser ? "justify-end" : "justify-start w-full"} ${isSelected ? "relative" : ""}`}
       >
-        {message.content.map((block, i) => (
-          <ContentBlockRenderer key={i} block={block} isStreaming={message.isStreaming} />
-        ))}
-        {message.isStreaming && (
-          <span className="inline-block w-1.5 h-4 bg-indigo-400 animate-pulse ml-0.5 align-text-bottom" />
+        {isSelected && (
+          <div className="absolute inset-0 rounded-lg bg-red-500/[0.04] pointer-events-none" />
         )}
-        {!isUser && (message.tokenUsage || message.model) && (
-          <MessageMetaFooter message={message} />
+        <div
+          className={`${styleMemo.isUser ? "max-w-[85%]" : "w-full"} px-3 py-2 rounded-lg text-sm whitespace-pre-wrap break-words transition-colors ${baseBg} ${styleMemo.border} ${styleMemo.bg}`}
+        >
+          {message.content.map((block, i) => (
+            <ContentBlockRenderer key={i} block={block} isStreaming={message.isStreaming} />
+          ))}
+          {message.isStreaming && (
+            <span className="inline-block w-1.5 h-4 bg-indigo-400 animate-pulse ml-0.5 align-text-bottom" />
+          )}
+          {!isUser && (message.tokenUsage || message.model) && (
+            <MessageMetaFooter message={message} />
+          )}
+        </div>
+        {!isUser && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              const { activeProjectId, projectTabs } = useSessionStore.getState()
+              if (isBookmarked) {
+                const bm = useBookmarkStore.getState().itemsByProject
+                const item = Object.values(bm).flat().find((i) => i.sourceMessageIds.includes(message.id))
+                if (item) useBookmarkStore.getState().removeBookmark(item.filePath)
+              } else {
+                const text = message.content
+                  .filter((b) => b.type === "text")
+                  .map((b) => b.text)
+                  .join("\n")
+                const tab = projectTabs.find((t) => t.id === activeProjectId)
+                if (tab && activeProjectId) {
+                  useBookmarkStore.getState().addBookmark(tab.path, activeProjectId, [message.id], text)
+                }
+              }
+            }}
+            className={`absolute -top-2 right-${isUser ? 4 : 8} w-6 h-6 rounded flex items-center justify-center border border transition-all duration-150 ${
+              isBookmarked
+                ? "bg-amber-400/15 border-amber-400/30 text-amber-400"
+                : "bg-gray-800/80 border-gray-700 hover:border-amber-400/50 text-gray-500 opacity-0 group-hover:opacity-100"
+            }`}
+            title={isBookmarked ? "取消收藏" : "添加收藏"}
+          >
+            <Bookmark
+              size={11}
+              className={isBookmarked ? "fill-current" : ""}
+            />
+          </button>
         )}
-      </div>
     </div>
   );
 });
@@ -130,53 +173,83 @@ const MEMORY_ICONS: Record<string, { label: string; color: string }> = {
   memory_extract_result: { label: "Extraction Result", color: "text-green-400" },
   memory_dream: { label: "Memory Consolidation", color: "text-purple-400" },
   memory_dream_result: { label: "Dream Result", color: "text-purple-400" },
+}
+
+export const MEMORY_CUSTOM_TYPES = new Set(Object.keys(MEMORY_ICONS))
+
+const LSP_CUSTOM_TYPES: Record<string, { label: string; color: string }> = {
   lsp: { label: "LSP", color: "text-blue-400" },
   lsp_notify: { label: "LSP Diagnostics", color: "text-yellow-400" },
   lsp_diagnostics: { label: "LSP Diagnostics", color: "text-yellow-400" },
 }
 
-export const MemoryCard = memo(function MemoryCard({ customType, data }: { customType: string; data: unknown }) {
-  const config = MEMORY_ICONS[customType] ?? { label: customType, color: "text-gray-400" }
+export const LSP_CUSTOM_TYPES_SET = new Set(Object.keys(LSP_CUSTOM_TYPES))
 
-  if (customType === "lsp_diagnostics" && data && typeof data === "object") {
-    const details = data as { files?: Array<{ filePath: string; summary: string; issues: Array<{ severity?: number; line: number; message: string; source?: string; code?: string | number }> }> };
+export const LSP_VISIBLE_TYPES = new Set(["lsp_diagnostics"])
+
+export function isLspCustomType(customType: string): boolean {
+  return LSP_CUSTOM_TYPES_SET.has(customType)
+}
+
+export function isLspVisibleInChat(customType: string): boolean {
+  return LSP_VISIBLE_TYPES.has(customType)
+}
+
+export const LspDiagnosticsCard = memo(function LspDiagnosticsCard({ data }: { data: unknown }) {
+  if (!data || typeof data !== "object") {
     return (
       <div className="my-1 border border-yellow-700/30 rounded-lg overflow-hidden bg-yellow-900/10">
         <div className="px-3 py-1.5 text-xs font-medium text-yellow-400 flex items-center gap-1.5">
           <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
           <span>LSP Diagnostics</span>
         </div>
-        <div className="border-t border-yellow-700/20">
-          {details.files?.map((f) => (
-            <div key={f.filePath} className="px-3 py-1.5 border-b last:border-b-0 border-yellow-700/10">
-              <div className="text-[11px] text-yellow-300 font-medium flex items-center gap-1">
-                <FileText className="w-3 h-3 shrink-0" />
-                <span>{f.filePath}</span>
-                <span className="text-yellow-500 ml-1">{f.summary}</span>
-              </div>
-              {f.issues.map((issue, i) => (
-                <div key={i} className="text-[10px] text-gray-400 pl-4 pt-0.5">
-                  <span className={issue.severity === 1 ? "text-red-400" : issue.severity === 2 ? "text-yellow-400" : "text-gray-500"}>
-                    L{issue.line}
-                  </span>
-                  {issue.source && <span className="text-gray-600"> [{issue.source}]</span>}
-                  {issue.code != null && <span className="text-gray-600"> ({String(issue.code)})</span>}
-                  : {issue.message}
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
       </div>
-    );
+    )
   }
+
+  const details = data as { files?: Array<{ filePath: string; summary: string; issues: Array<{ severity?: number; line: number; message: string; source?: string; code?: string | number }> }> }
+
+  return (
+    <div className="my-1 border border-yellow-700/30 rounded-lg overflow-hidden bg-yellow-900/10">
+      <div className="px-3 py-1.5 text-xs font-medium text-yellow-400 flex items-center gap-1.5">
+        <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+        <span>LSP Diagnostics</span>
+      </div>
+      <div className="border-t border-yellow-700/20">
+        {details.files?.map((f) => (
+          <div key={f.filePath} className="px-3 py-1.5 border-b last:border-b-0 border-yellow-700/10">
+            <div className="text-[11px] text-yellow-300 font-medium flex items-center gap-1">
+              <FileText className="w-3 h-3 shrink-0" />
+              <span>{f.filePath}</span>
+              <span className="text-yellow-500 ml-1">{f.summary}</span>
+            </div>
+            {f.issues.map((issue, i) => (
+              <div key={i} className="text-[10px] text-gray-400 pl-4 pt-0.5">
+                <span className={issue.severity === 1 ? "text-red-400" : issue.severity === 2 ? "text-yellow-400" : "text-gray-500"}>
+                  L{issue.line}
+                </span>
+                {issue.source && <span className="text-gray-600"> [{issue.source}]</span>}
+                {issue.code != null && <span className="text-gray-600"> ({String(issue.code)})</span>}
+                : {issue.message}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+})
+
+export const MemoryCard = memo(function MemoryCard({ customType, data }: { customType: string; data: unknown }) {
+  const config = MEMORY_ICONS[customType] ?? { label: customType, color: "text-gray-400" }
+  const Icon = getCustomTypeIcon(customType).icon
 
   const dataStr = typeof data === "string" ? data : data ? JSON.stringify(data, null, 2) : ""
 
   return (
     <div className="my-1 border border-gray-700/50 rounded-lg overflow-hidden bg-gray-800/30">
       <div className={`px-3 py-1.5 text-xs font-medium ${config.color} flex items-center gap-1.5`}>
-        <Brain className="w-3.5 h-3.5 shrink-0" />
+        <Icon className="w-3.5 h-3.5 shrink-0" />
         <span>{config.label}</span>
       </div>
       {dataStr && (
@@ -233,6 +306,12 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({ block, 
       return <ToolExecutionCard block={block} />;
     }
     case "custom":
+      if (isLspCustomType(block.customType)) {
+        if (!isLspVisibleInChat(block.customType)) {
+          return null;
+        }
+        return <LspDiagnosticsCard data={block.data} />;
+      }
       return <MemoryCard customType={block.customType} data={block.data} />;
   }
 });
