@@ -38,3 +38,7 @@ textarea {
 .prose :where(code) {
   word-break: break-word;
 }
+
+.sidenav-scroll::-webkit-scrollbar {
+  display: none;
+}

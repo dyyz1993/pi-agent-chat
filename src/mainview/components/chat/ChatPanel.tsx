@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   ArrowUp,
   Paperclip,
@@ -8,23 +8,22 @@ import {
   Bot,
   ArrowLeft,
   Square,
-  Loader2,
 } from "lucide-react";
-import { useVirtualizer, type Virtualizer } from "@tanstack/react-virtual";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { useChatStore } from "../../stores/use-chat-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useSubagentStore } from "../../stores/use-subagent-store";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import { useChatNavStore } from "../../stores/use-chat-nav-store";
+import { useTurnStore } from "../../stores/use-turn-store";
 import { apiClient } from "../../lib/api-client";
 import { useActiveScrollTracker } from "../../hooks/use-active-scroll-tracker";
-import { MessageBubble } from "./MessageBubble";
 import { SideNav } from "./SideNav";
 import { InputBar, type InputBarHandle } from "./InputBar";
 import { TokenStatusBar } from "./TokenStatusBar";
-import { SnapshotToolbar } from "./SnapshotToolbar";
-import { RollbackModal } from "./RollbackModal";
-import type { ChatMessage, SnapshotInfo } from "../../types";
+import { MessageListView } from "./MessageListView";
+import { MessageSelectionBar } from "./MessageSelectionBar";
+import type { ChatMessage } from "../../types";
 
 const EMPTY_MSGS: never[] = [];
 
@@ -55,9 +54,6 @@ export function ChatPanel() {
     if (!activeSessionId) return EMPTY_MSGS;
     return s.messagesBySession[activeSessionId] || EMPTY_MSGS;
   });
-  const isLoading = useChatStore((s) => activeSessionId ? s.loadingSessions.has(activeSessionId) : false);
-  const historyLoadVersion = useChatStore((s) => s.historyLoadVersion);
-
   const isViewingSubagent = !!activeSubId;
   const messages: ChatMessage[] = isViewingSubagent ? subMessages : mainMessages;
 
@@ -69,10 +65,6 @@ export function ChatPanel() {
   const setActive = useChatNavStore((s) => s.setActive);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const inputBarRef = useRef<InputBarHandle>(null);
-
-  const [snapshots, setSnapshots] = useState<SnapshotInfo[]>([]);
-  const [rollbackModalOpen, setRollbackModalOpen] = useState(false);
-  const [rollbackTargetSnap, setRollbackTargetSnap] = useState<SnapshotInfo | null>(null);
 
   const messageIds = useMemo(() => messages.map((m) => m.id), [messages]);
   const isStreaming = effectiveStatus === "streaming" || effectiveStatus === "compacting";
@@ -105,28 +97,49 @@ export function ChatPanel() {
     } catch { /* ignore */ }
   }, [activeSessionId, activeSubId]);
 
-  const { handleScroll, scrollToMessage } = useActiveScrollTracker({
+  const setNavId = useTurnStore((s) => s.setNavId);
+  const clickScrollRef = useRef(false);
+  const sessionInitRef = useRef(false);
+
+  const latestMsgIdsRef = useRef(messageIds);
+  latestMsgIdsRef.current = messageIds;
+  const latestVizRef = useRef(activeVirtualizer);
+  latestVizRef.current = activeVirtualizer;
+
+  const { handleScroll } = useActiveScrollTracker({
     scrollRef: messagesScrollRef,
     virtualizer: activeVirtualizer,
     messageIds,
     sessionId: isViewingSubagent ? activeSubId : activeSessionId ?? undefined,
-    setActive,
+    setActive: useCallback((id: string | null) => {
+      setActive(id);
+      if (id && !clickScrollRef.current && !sessionInitRef.current) setNavId(id);
+    }, [setActive, setNavId]),
     streamVersion,
-    historyLoadVersion,
   });
 
   const handleNavDotClick = useCallback(
-    (msgId: string) => {
-      scrollToMessage(msgId);
+    (navId: string) => {
+      clickScrollRef.current = true;
+      const isSubDot = /-[0-9]+$/.test(navId);
+      const lastDashIdx = navId.lastIndexOf("-");
+      const msgId = isSubDot ? navId.slice(0, lastDashIdx) : navId;
+      const idx = mainMessages.findIndex((m) => m.id === msgId);
+      const viz = idx >= 0 ? mainVirtualizer : subVirtualizer;
+      const vIdx = idx >= 0 ? idx : subMessages.findIndex((m) => m.id === msgId);
+      if (vIdx < 0) { clickScrollRef.current = false; return; }
+      viz.scrollToIndex(vIdx, { align: "start" });
+      if (isSubDot) {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            const blockEl = messagesScrollRef.current?.querySelector(`[data-block-id="${navId}"]`);
+            if (blockEl) blockEl.scrollIntoView({ block: "start", behavior: "instant" });
+          });
+        });
+      }
+      setTimeout(() => { clickScrollRef.current = false; }, 400);
     },
-    [scrollToMessage],
-  );
-
-  const handleSubDotScroll = useCallback(
-    (msgId: string) => {
-      scrollToMessage(msgId);
-    },
-    [scrollToMessage],
+    [mainMessages, subMessages, mainVirtualizer, subVirtualizer],
   );
 
   const handleSend = async () => {
@@ -134,32 +147,37 @@ export function ChatPanel() {
     await sendMessage();
   };
 
+  useEffect(() => {
+    sessionInitRef.current = true;
+    let attempts = 0;
+    let done = false;
+    const timer = setInterval(() => {
+      if (done) return;
+      attempts++;
+      const ids = latestMsgIdsRef.current;
+      if (ids.length === 0) {
+        if (attempts > 20) { done = true; clearInterval(timer); setTimeout(() => { sessionInitRef.current = false; }, 200); }
+        return;
+      }
+      if (attempts > 20) { done = true; clearInterval(timer); setTimeout(() => { sessionInitRef.current = false; }, 200); return; }
+      const lastIdx = ids.length - 1;
+      latestVizRef.current.scrollToIndex(lastIdx, { align: "end" });
+      setNavId(ids[lastIdx]);
+      const el = messagesScrollRef.current;
+      if (el && Math.abs(el.scrollHeight - el.scrollTop - el.clientHeight) < 50) {
+        done = true;
+        clearInterval(timer);
+        setTimeout(() => { sessionInitRef.current = false; }, 300);
+      }
+    }, 80);
+    return () => { clearInterval(timer); sessionInitRef.current = false; };
+  }, [activeSessionId, activeSubId]);
+
   const handleBackToMain = () => {
     if (activeSessionId) {
       useSubagentStore.getState().setActiveSubsession(activeSessionId, null);
     }
   };
-
-  const fetchSnapshots = useCallback(async () => {
-    if (!activeSessionId) return;
-    try {
-      const result = await apiClient.call("snapshot.list", { sessionId: activeSessionId });
-      setSnapshots(result as SnapshotInfo[]);
-    } catch { /* no snapshots yet */ }
-  }, [activeSessionId]);
-
-  const handleRollbackClick = useCallback((snap: SnapshotInfo) => {
-    setRollbackTargetSnap(snap);
-    setRollbackModalOpen(true);
-  }, []);
-
-  const handleRollbackConfirm = useCallback(async (snapshotId: string, selectedFiles: string[]) => {
-    if (!activeSessionId) return;
-    await apiClient.call("snapshot.rollback", { sessionId: activeSessionId, snapshotId, files: selectedFiles });
-    await fetchSnapshots();
-  }, [activeSessionId, fetchSnapshots]);
-
-  useEffect(() => { fetchSnapshots(); }, [activeSessionId, fetchSnapshots]);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative bg-gray-950">
@@ -184,28 +202,26 @@ export function ChatPanel() {
       <div className="flex-1 flex overflow-hidden">
         <div className="flex-1 min-w-0">
           {isViewingSubagent ? (
-            <SubagentMessagesArea messages={messages} scrollRef={messagesScrollRef} onScroll={handleScroll} virtualizer={subVirtualizer} />
+            <MessageListView messages={messages} scrollRef={messagesScrollRef} onScroll={handleScroll} virtualizer={subVirtualizer} />
           ) : (
-            <MessagesArea
-              messages={messages}
-              scrollRef={messagesScrollRef}
-              onScroll={handleScroll}
-              virtualizer={mainVirtualizer}
-              isLoading={isLoading}
-              snapshots={snapshots}
-              sessionId={activeSessionId ?? ""}
-              onRollbackClick={handleRollbackClick}
-            />
+            <MessageListView messages={mainMessages} scrollRef={messagesScrollRef} onScroll={handleScroll} virtualizer={mainVirtualizer} />
           )}
         </div>
         <div className="w-12 shrink-0">
           <SideNav
             messages={messages}
             onNavDotClick={handleNavDotClick}
-            onNavDotScroll={handleSubDotScroll}
           />
         </div>
       </div>
+
+      <MessageSelectionBar
+        messageIds={messageIds}
+        messages={messages}
+        onDeleteSelected={(ids) => {
+          console.log("[批量删除]:", ids);
+        }}
+      />
 
       <div className="px-3 pb-3 pt-2 flex-shrink-0 flex items-end gap-1.5 bg-gray-900 border-t border-gray-800">
         {!isViewingSubagent && (
@@ -238,131 +254,6 @@ export function ChatPanel() {
         )}
       </div>
 
-      <RollbackModal
-        open={rollbackModalOpen}
-        snapshot={rollbackTargetSnap}
-        sessionId={activeSessionId ?? ""}
-        onClose={() => setRollbackModalOpen(false)}
-        onConfirm={handleRollbackConfirm}
-      />
-    </div>
-  );
-}
-
-function SubagentMessagesArea({ messages, scrollRef, onScroll, virtualizer }: {
-  messages: ChatMessage[];
-  scrollRef: React.RefObject<HTMLDivElement | null>;
-  onScroll: () => void;
-  virtualizer: Virtualizer<HTMLDivElement, Element>;
-}) {
-  if (messages.length === 0) {
-    return (
-      <div
-        ref={scrollRef as React.Ref<HTMLDivElement>}
-        className="h-full overflow-y-auto px-4 py-3"
-        onScroll={onScroll}
-      >
-        <div className="flex flex-col items-center justify-center h-full text-gray-600 text-sm gap-2">
-          <Bot className="w-6 h-6 text-purple-500/50" />
-          <span>等待子代理响应...</span>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      ref={scrollRef as React.Ref<HTMLDivElement>}
-      className="h-full overflow-y-auto px-4 py-3"
-      onScroll={onScroll}
-    >
-      <div style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}>
-        {virtualizer.getVirtualItems().map((vr) => {
-          const msg = messages[vr.index];
-          return (
-            <div
-              key={msg.id}
-              data-index={vr.index}
-              data-msg-id={msg.id}
-              ref={virtualizer.measureElement}
-              style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${vr.start}px)` }}
-            >
-              <div className="py-1">
-                <MessageBubble message={msg} />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function MessagesArea({ messages, scrollRef, onScroll, virtualizer, isLoading, snapshots, sessionId, onRollbackClick }: {
-  messages: ChatMessage[];
-  scrollRef: React.RefObject<HTMLDivElement | null>;
-  onScroll: () => void;
-  virtualizer: Virtualizer<HTMLDivElement, Element>;
-  isLoading?: boolean;
-  snapshots?: SnapshotInfo[];
-  sessionId?: string;
-  onRollbackClick?: (snap: SnapshotInfo) => void;
-}) {
-  if (messages.length === 0) {
-    return (
-      <div
-        ref={scrollRef as React.Ref<HTMLDivElement>}
-        className="h-full overflow-y-auto px-4 py-3"
-        onScroll={onScroll}
-      >
-        <div className="flex flex-col items-center justify-center h-full text-gray-600 text-sm gap-3">
-          {isLoading && <Loader2 className="w-5 h-5 animate-spin text-indigo-400" />}
-          <span>{isLoading ? "加载历史消息..." : "开始对话..."}</span>
-        </div>
-      </div>
-    );
-  }
-
-  const snapMap = useMemo(() => {
-    const map = new Map<number, SnapshotInfo>();
-    (snapshots ?? []).forEach((s) => map.set(s.stepIndex, s));
-    return map;
-  }, [snapshots]);
-
-  return (
-    <div
-      ref={scrollRef as React.Ref<HTMLDivElement>}
-      className="h-full overflow-y-auto px-4 py-3"
-      onScroll={onScroll}
-    >
-      <div style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}>
-        {virtualizer.getVirtualItems().map((vr) => {
-          const msg = messages[vr.index];
-          const snap = msg.role === "assistant" ? snapMap.get(Math.floor(vr.index / 2) + 1) : undefined;
-          return (
-            <div
-              key={msg.id}
-              data-index={vr.index}
-              data-msg-id={msg.id}
-              ref={virtualizer.measureElement}
-              style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${vr.start}px)` }}
-            >
-              <div className="py-1">
-                {snap && sessionId && (
-                  <div className="mb-1">
-                    <SnapshotToolbar
-                      snapshot={snap}
-                      sessionId={sessionId}
-                      onRollback={() => onRollbackClick?.(snap)}
-                    />
-                  </div>
-                )}
-                <MessageBubble message={msg} />
-              </div>
-            </div>
-          );
-        })}
-      </div>
     </div>
   );
 }

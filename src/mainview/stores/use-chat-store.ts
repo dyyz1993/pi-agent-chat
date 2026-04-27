@@ -195,6 +195,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (!sid) return;
 
     if (get().loadingSessions.has(sid)) return;
+    const preflight = get().messagesBySession[sid] || [];
+    const hasRealMessages = preflight.some((m) => m.role === "user" || (m.role === "assistant" && m.tokenUsage));
+    if (hasRealMessages) return;
     set((s) => ({ loadingSessions: new Set(s.loadingSessions).add(sid) }));
 
     try {
@@ -202,7 +205,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const result = await apiClient.call("agent.getMessages", { sessionId: sid });
 
       const current = get().messagesBySession[sid] || [];
-      if (current.length > 0 && current[0].id !== undefined && !current[0].id.startsWith("notify-")) return;
+      const hasRealNow = current.some((m) => m.role === "user" || (m.role === "assistant" && m.tokenUsage));
+      if (hasRealNow) return;
 
       const toolCallNameMap: Record<string, string> = {};
       const rawMessages: Array<{ raw: Record<string, unknown>; id?: string }> = [];

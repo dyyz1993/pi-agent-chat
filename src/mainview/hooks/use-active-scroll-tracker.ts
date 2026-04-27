@@ -228,5 +228,6 @@ export function useActiveScrollTracker({
     return () => cancelAnimationFrame(rafId);
   }, [historyLoadVersion, scrollRef, virtualizer, messageIds, setActive]);
 
-  return { handleScroll, scrollToBottom: doScrollToBottom, scrollToMessage };
+  return { handleScroll, scrollToBottom: doScrollToBottom, scrollToMessage, markProgrammatic };
+
 }

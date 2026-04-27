@@ -3,6 +3,7 @@ import type { ContentBlock } from "../../../types";
 
 export interface ToolRendererProps {
   block: Extract<ContentBlock, { type: "toolExecution" }>;
+  blockId?: string;
 }
 
 export interface ToolRenderer {
