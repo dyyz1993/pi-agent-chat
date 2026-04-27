@@ -54,6 +54,23 @@ export type ChatMessage = {
   tokenUsage?: TokenUsage;
 };
 
+export type Turn = {
+  id: string;
+  userMessageId: string | null;
+  assistantMessageIds: string[];
+  index: number;
+  timestamp: number;
+  tokenUsage?: TokenUsage;
+};
+
+export type TurnSelection = {
+  selectedTurnIds: Set<string>;
+  totalTokens: number;
+  messageCount: number;
+};
+
+export type CollapseState = Record<string, boolean>;
+
 export type EditingType = "rename" | "newFile" | "newDir";
 export type EditingNode = { path: string; type: EditingType };
 

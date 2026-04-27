@@ -1,0 +1,95 @@
+import { useMemo } from "react";
+import type { Virtualizer } from "@tanstack/react-virtual";
+import { MessageCard } from "./MessageCard";
+import type { ChatMessage } from "../../types";
+
+function getCardLabel(msg: ChatMessage): string | undefined {
+  const hasCustom = msg.content.some((b) => b.type === "custom");
+  if (hasCustom) {
+    const custom = msg.content.find((b): b is Extract<typeof b, { type: "custom" }> => b.type === "custom");
+    if (!custom) return undefined;
+    switch (custom.customType) {
+      case "bash_background_exit": return "后台进程";
+      case "lsp_diagnostics": return "LSP";
+      case "memory_prefetch": return "Memory";
+      case "memory_extract": return "Memory";
+      case "memory_dream": return "Memory";
+      default: return custom.customType;
+    }
+  }
+  if (msg.role === "user") return "你";
+  return "助手";
+}
+
+function getPrevBarColor(messages: ChatMessage[], index: number): string | undefined {
+  if (index <= 0) return undefined;
+  const prev = messages[index - 1];
+  const prevHasCustom = prev.content.some((b) => b.type === "custom");
+  if (prevHasCustom) return "border-l-yellow-500/50";
+  if (prev.role === "user") return "border-l-blue-500/60";
+  return "border-l-emerald-500/50";
+}
+
+interface MessageListViewProps {
+  messages: ChatMessage[];
+  scrollRef?: React.RefObject<HTMLDivElement | null>;
+  onScroll?: () => void;
+  virtualizer?: Virtualizer<HTMLDivElement, Element>;
+}
+
+export function MessageListView({ messages, scrollRef, onScroll, virtualizer }: MessageListViewProps) {
+  if (messages.length === 0 && scrollRef) {
+    return (
+      <div ref={scrollRef as React.Ref<HTMLDivElement>} className="h-full overflow-y-auto overflow-x-hidden" onScroll={onScroll}>
+        <div className="flex flex-col items-center justify-center h-full text-gray-600 text-sm gap-2">
+          <p>开始对话吧</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (virtualizer) {
+    return (
+      <div ref={scrollRef as React.Ref<HTMLDivElement>} className="h-full overflow-y-auto overflow-x-hidden" onScroll={onScroll}>
+        <div style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}>
+          {virtualizer.getVirtualItems().map((vr) => {
+            const msg = messages[vr.index];
+            const prevBarColor = getPrevBarColor(messages, vr.index);
+            return (
+              <div
+                key={msg.id}
+                data-index={vr.index}
+                data-msg-id={msg.id}
+                ref={virtualizer.measureElement}
+                style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${vr.start}px)` }}
+              >
+                <MessageCard message={{ ...msg, cardLabel: getCardLabel(msg) }} prevBarColor={prevBarColor} />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      ref={scrollRef as React.Ref<HTMLDivElement>}
+      className="flex-1 overflow-y-auto overflow-x-hidden"
+      style={{ scrollbarWidth: 'thin', scrollbarColor: 'transparent transparent' }}
+      onMouseEnter={(e) => { (e.target as HTMLElement).style.scrollbarColor = '#37415120 transparent' }}
+      onMouseLeave={(e) => { (e.target as HTMLElement).style.scrollbarColor = 'transparent transparent' }}
+      onScroll={onScroll}
+    >
+      <div className="py-0.5 pl-2 pr-3">
+        {useMemo(() => messages.map((msg, i) => (
+          <MessageCard
+            key={msg.id}
+            message={{ ...msg, cardLabel: getCardLabel(msg) }}
+            prevBarColor={getPrevBarColor(messages, i)}
+          />
+        )), [messages])}
+      </div>
+    </div>
+  );
+}

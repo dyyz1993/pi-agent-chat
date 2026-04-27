@@ -6,7 +6,7 @@ import { useSessionStore } from "../../../stores/use-session-store";
 
 type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
 
-export const SubagentExecutionCard = memo(function SubagentExecutionCard({ block }: { block: ToolExecBlock }) {
+export const SubagentExecutionCard = memo(function SubagentExecutionCard({ block, blockId }: { block: ToolExecBlock; blockId?: string }) {
   const isRunning = block.status === "running";
   const isError = block.status === "error";
   const isDone = block.status === "done";
@@ -45,6 +45,7 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({ block
 
   return (
     <div
+      data-block-id={blockId}
       className={`my-1.5 -mx-3 rounded-none overflow-hidden border-x-0 border-t border-b cursor-pointer transition-colors ${
         isRunning
           ? "border-purple-500/30 bg-purple-950/15"

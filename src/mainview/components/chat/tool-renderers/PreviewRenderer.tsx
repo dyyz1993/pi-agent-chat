@@ -5,7 +5,7 @@ import { PreviewCard, type PreviewDetails } from "../preview";
 
 type Block = Extract<ContentBlock, { type: "toolExecution" }>;
 
-export const PreviewRenderer = memo(function PreviewRenderer({ block }: { block: Block }) {
+export const PreviewRenderer = memo(function PreviewRenderer({ block, blockId }: { block: Block; blockId?: string }) {
   const details = block.details as PreviewDetails | undefined;
 
   if (!details || details.status === "error" || details.status === "not_found") {
@@ -19,7 +19,7 @@ export const PreviewRenderer = memo(function PreviewRenderer({ block }: { block:
     } catch {}
 
     return (
-      <div className={`my-1 -mx-3 border-x-0 border-t border-b overflow-hidden ${
+      <div data-block-id={blockId} className={`my-1 -mx-3 border-x-0 border-t border-b overflow-hidden ${
         isRunning ? "border-blue-500/25 bg-blue-950/10" : isError ? "border-red-500/15 bg-red-950/8" : "border-gray-700/30 bg-gray-800/15"
       }`}>
         <div className="px-3 py-1.5 flex items-center gap-2 text-xs">
@@ -38,7 +38,7 @@ export const PreviewRenderer = memo(function PreviewRenderer({ block }: { block:
   }
 
   return (
-    <div className="my-1">
+    <div data-block-id={blockId} className="my-1">
       <PreviewCard details={details} />
     </div>
   );

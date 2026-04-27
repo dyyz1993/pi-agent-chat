@@ -189,13 +189,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (!sessionId) return;
 
       const preflight = get().messagesBySession[sessionId] || [];
-      if (preflight.length > 0) return;
+      const hasRealMessages = preflight.some((m) => m.role === "user" || (m.role === "assistant" && m.tokenUsage));
+      if (hasRealMessages) return;
 
       const { apiClient } = await import("../lib/api-client");
       const result = await apiClient.call("session.getEntries", { sessionPath });
 
       const current = get().messagesBySession[sessionId] || [];
-      if (current.length > 0) return;
+      const hasRealNow = current.some((m) => m.role === "user" || (m.role === "assistant" && m.tokenUsage));
+      if (hasRealNow) return;
 
       const toolCallNameMap: Record<string, string> = {};
       const rawEntries: Array<{ raw: Record<string, unknown>; id: string }> = [];

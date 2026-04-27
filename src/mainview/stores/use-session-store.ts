@@ -83,8 +83,10 @@ function setupSubscriptions(
       }).then(async (result) => {
         if (result.status === "already_running" || result.status === "started") {
           const chatState = useChatStore.getState();
-          if (!chatState.messagesBySession[id] || chatState.messagesBySession[id].length === 0) {
-            await chatState.loadSessionMessages(id);
+          const existing = chatState.messagesBySession[id] || [];
+          const hasReal = existing.some((m) => m.role === "user" || (m.role === "assistant" && m.tokenUsage));
+          if (!hasReal) {
+            await chatState.loadSessionMessages(session.sessionPath);
           }
           storeGet().fetchInitialState(id);
           if (result.status === "already_running") {

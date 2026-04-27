@@ -1,156 +1,124 @@
-import { useMemo, useCallback, useState, memo, useRef, useEffect } from "react";
+import { useMemo, useCallback, useEffect, useRef, memo } from "react";
 import {
   User,
   Bot,
   FileText,
   AlertTriangle,
+  Terminal,
+  ScanSearch,
+  Brain,
   type LucideIcon,
 } from "lucide-react";
 import type { ChatMessage } from "../../types";
 import { useChatNavStore } from "../../stores/use-chat-nav-store";
+import { useTurnStore } from "../../stores/use-turn-store";
 import { getToolIcon, getPreviewResourceIcon } from "./tool-icon-map";
 
 type SubItem = {
-  kind: "text" | "tool";
   icon: LucideIcon;
   color: string;
   label: string;
-  toolName?: string;
+  blockId: string;
 };
 
 type NavItem = {
   id: string;
-  role: "user" | "assistant";
   icon: LucideIcon;
   color: string;
-  label: string;
   subs: SubItem[];
 };
 
 function buildNavItems(messages: ChatMessage[]): NavItem[] {
   return messages.map((msg) => {
     if (msg.role === "user") {
-      return {
-        id: msg.id,
-        role: "user",
-        icon: User,
-        color: "text-indigo-400",
-        label: "用户",
-        subs: [],
-      };
+      return { id: msg.id, icon: User, color: "text-indigo-400", subs: [] };
     }
 
     const customBlock = msg.content.find((b) => b.type === "custom") as
       | { type: "custom"; customType: string; data: unknown }
       | undefined;
     if (customBlock && customBlock.customType === "lsp_diagnostics") {
-      return {
-        id: msg.id,
-        role: "assistant",
-        icon: AlertTriangle,
-        color: "text-yellow-400",
-        label: "LSP Diagnostics",
-        subs: [],
-      };
+      return { id: msg.id, icon: AlertTriangle, color: "text-yellow-400", subs: [] };
     }
 
     const subs: SubItem[] = [];
-    const hasText = msg.content.some((b) => b.type === "text");
-    const toolNames: string[] = [];
+    const seenTools = new Set<string>();
 
-    for (const b of msg.content) {
-      if (b.type === "toolCall") toolNames.push(b.name);
-      else if (b.type === "toolExecution") toolNames.push(b.toolName);
-      else if (b.type === "toolResult") toolNames.push(b.toolName);
-    }
+    for (let bi = 0; bi < msg.content.length; bi++) {
+      const b = msg.content[bi];
+      const blockId = `${msg.id}-${bi}`;
 
-    const uniqueTools = [...new Set(toolNames)];
-
-    if (hasText && uniqueTools.length > 0) {
-      subs.push({ kind: "text", icon: FileText, color: "text-gray-400", label: "文本" });
-    }
-
-    for (const name of uniqueTools) {
-      let ti = getToolIcon(name);
-      let label = ti.label;
-      if (name.toLowerCase() === "preview") {
-        const previewBlock = msg.content.find(
-          (b) =>
-            (b.type === "toolExecution" || b.type === "toolResult") &&
-            b.toolName.toLowerCase() === "preview" &&
-            (b as { details?: unknown }).details,
-        );
-        if (previewBlock) {
-          const rt = ((previewBlock as { details?: { resourceType?: string } }).details as { resourceType?: string })?.resourceType;
-          if (rt) {
-            ti = getPreviewResourceIcon(rt);
-            label = ti.label;
-          }
+      if (b.type === "thinking") {
+        subs.push({ icon: Brain, color: "text-purple-400/60", label: "Thinking", blockId });
+      } else if (b.type === "text") {
+        subs.push({ icon: FileText, color: "text-gray-500", label: "文本", blockId });
+      } else if (b.type === "toolExecution" && !seenTools.has(b.toolName)) {
+        seenTools.add(b.toolName);
+        let ti = getToolIcon(b.toolName);
+        let label = ti.label;
+        if (b.toolName.toLowerCase() === "preview" && (b as { details?: unknown }).details) {
+          const rt = ((b as { details?: { resourceType?: string } }).details as { resourceType?: string })?.resourceType;
+          if (rt) { ti = getPreviewResourceIcon(rt); label = ti.label; }
         }
+        subs.push({ icon: ti.icon, color: ti.color, label, blockId });
+      } else if (b.type === "custom") {
+        let icon: LucideIcon = Brain;
+        let color = "text-yellow-400/70";
+        let label = b.customType;
+        switch (b.customType) {
+          case "bash_background_exit": icon = Terminal; color = "text-cyan-400/70"; label = "后台进程"; break;
+          case "lsp_diagnostics": icon = ScanSearch; color = "text-yellow-400/70"; break;
+          case "memory_prefetch": color = "text-blue-400/70"; label = "Memory"; break;
+          case "memory_extract": color = "text-green-400/70"; label = "Memory"; break;
+          case "memory_dream": color = "text-purple-400/70"; label = "Memory"; break;
+        }
+        subs.push({ icon, color, label, blockId });
       }
-      subs.push({ kind: "tool", icon: ti.icon, color: ti.color, label, toolName: name });
     }
 
     const hasError = msg.content.some(
       (b) => (b.type === "toolResult" && b.isError) || (b.type === "toolExecution" && b.status === "error")
     );
-
-    return {
-      id: msg.id,
-      role: "assistant",
-      icon: Bot,
-      color: hasError ? "text-red-400" : "text-green-400",
-      label: hasError ? "出错" : "助手",
-      subs,
-    };
+    return { id: msg.id, icon: Bot, color: hasError ? "text-red-400" : "text-green-400", subs };
   });
 }
 
 const NavDot = memo(function NavDot({
-  id: _id,
   Icon,
   color,
-  isActive,
-  isSelected,
+  isClicked,
+  isMultiSelected,
   onClick,
   onContextMenu,
   onDoubleClick,
 }: {
-  id: string;
   Icon: React.ComponentType<{ className?: string }>;
   color: string;
-  isActive: boolean;
-  isSelected: boolean;
+  isClicked: boolean;
+  isMultiSelected: boolean;
   onClick?: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
   onDoubleClick: () => void;
 }) {
-  const base = "relative w-10 h-8 rounded-r flex items-center justify-center transition-all cursor-pointer";
-
-  let stateClass = "";
+  let cls = "relative w-10 h-8 rounded-r flex items-center justify-center transition-all cursor-pointer ";
   let iconColor = color;
-  let barClass = "absolute left-0 top-1 bottom-1 w-[3px] rounded-full transition-all opacity-0";
+  let barCls = "absolute left-0 top-1 bottom-1 w-[3px] rounded-full transition-all opacity-0 ";
 
-  if (isSelected) {
-    stateClass = "bg-red-500/20";
+  if (isMultiSelected) {
+    cls += "bg-red-500/20 ";
     iconColor = "text-red-400";
-    barClass += " bg-red-500 opacity-100";
-  } else if (isActive) {
-    stateClass = "bg-blue-500/20 shadow-[0_0_8px_rgba(59,130,246,0.25)]";
+    barCls += "bg-red-500 opacity-100 ";
+  } else if (isClicked) {
+    cls += "bg-blue-500/20 shadow-[0_0_8px_rgba(59,130,246,0.25)] ";
     iconColor = "text-blue-300";
-    barClass += " bg-blue-400 opacity-100";
+    barCls += "bg-blue-400 opacity-100 ";
   } else {
-    stateClass = "hover:bg-gray-800/60";
+    cls += "hover:bg-gray-800/60 ";
   }
 
   return (
-    <button
-      className={`${base} ${stateClass}`}
-      onClick={onClick}
-      onContextMenu={onContextMenu}
-      onDoubleClick={onDoubleClick}
-    >
-      <span className={barClass} />
+    <button className={cls} onClick={onClick} onContextMenu={onContextMenu} onDoubleClick={onDoubleClick}>
+      <span className={barCls} />
       <Icon className={`w-4 h-4 ${iconColor} transition-colors`} />
     </button>
   );
@@ -160,179 +128,111 @@ const NavSubDot = memo(function NavSubDot({
   Icon,
   color,
   label,
-  onClick,
-  onContextMenu,
-  onDoubleClick,
   isActive,
-  isSelected,
+  onClick,
 }: {
   Icon: React.ComponentType<{ className?: string }>;
   color: string;
   label: string;
+  isActive: boolean;
   onClick?: () => void;
-  onContextMenu?: (e: React.MouseEvent) => void;
-  onDoubleClick?: () => void;
-  isActive?: boolean;
-  isSelected?: boolean;
 }) {
-  let stateClass = "hover:bg-gray-800/60";
+  let cls = "relative w-10 h-7 rounded-r flex items-center justify-center transition-colors cursor-pointer ";
   let iconColor = color;
-  if (isSelected) {
-    stateClass = "bg-red-500/20";
-    iconColor = "text-red-400";
-  } else if (isActive) {
-    stateClass = "bg-blue-500/20";
+
+  if (isActive) {
+    cls += "bg-blue-500/30 shadow-[0_0_6px_rgba(59,130,246,0.3)] ";
     iconColor = "text-blue-300";
+  } else {
+    cls += "hover:bg-gray-800/60 ";
   }
 
   return (
-    <button
-      className={`relative w-10 h-7 rounded-r flex items-center justify-center transition-colors cursor-pointer ${stateClass}`}
-      title={label}
-      onClick={onClick}
-      onContextMenu={onContextMenu}
-      onDoubleClick={onDoubleClick}
-    >
+    <button className={cls} title={label} onClick={onClick}>
       <Icon className={`w-3.5 h-3.5 ${iconColor}`} />
     </button>
-  );
-});
-
-const NavDotGroup = memo(function NavDotGroup({
-  id,
-  Icon,
-  color,
-  subs,
-  isActive,
-  isSelected,
-  subActiveKey,
-  onDotClick,
-  onSubDotClick,
-  onContextMenu,
-  onDoubleClick,
-}: {
-  id: string;
-  Icon: React.ComponentType<{ className?: string }>;
-  color: string;
-  subs: SubItem[];
-  isActive: boolean;
-  isSelected: boolean;
-  subActiveKey: string | null;
-  onDotClick: (id: string) => void;
-  onSubDotClick: (id: string, key: string) => void;
-  onContextMenu: (e: React.MouseEvent, id: string) => void;
-  onDoubleClick: (id: string) => void;
-}) {
-  return (
-    <div className="flex flex-col items-center w-full">
-      <NavDot
-        id={id}
-        Icon={Icon}
-        color={color}
-        isActive={isActive && !subActiveKey}
-        isSelected={isSelected}
-        onClick={() => onDotClick(id)}
-        onContextMenu={(e) => onContextMenu(e, id)}
-        onDoubleClick={() => onDoubleClick(id)}
-      />
-      {subs.length > 0 && (
-        <div className="flex flex-col items-center ml-1 mt-0.5 space-y-0.5">
-          {subs.map((sub, i) => {
-            const key = `${id}-${i}`;
-            return (
-              <NavSubDot
-                key={key}
-                Icon={sub.icon}
-                color={sub.color}
-                label={sub.label}
-                onClick={() => onSubDotClick(id, key)}
-                onContextMenu={(e) => onContextMenu(e, id)}
-                onDoubleClick={() => onDoubleClick(id)}
-                isActive={subActiveKey === key}
-              />
-            );
-          })}
-        </div>
-      )}
-    </div>
   );
 });
 
 export function SideNav({
   messages,
   onNavDotClick,
-  onNavDotScroll,
 }: {
   messages: ChatMessage[];
-  onNavDotClick?: (msgId: string) => void;
-  onNavDotScroll?: (msgId: string) => void;
+  onNavDotClick: (navId: string) => void;
 }) {
-  const activeId = useChatNavStore((s) => s.activeId);
+  const selectedNavId = useTurnStore((s) => s.selectedNavId);
+  const setNavId = useTurnStore((s) => s.setNavId);
   const selectedIds = useChatNavStore((s) => s.selectedIds);
   const toggleSelected = useChatNavStore((s) => s.toggleSelected);
-  const [subActiveKey, setSubActiveKey] = useState<string | null>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const navItems = useMemo(() => buildNavItems(messages), [messages]);
 
   const handleDotClick = useCallback((id: string) => {
-    setSubActiveKey(null);
-    if (onNavDotClick) onNavDotClick(id);
-  }, [onNavDotClick]);
+    setNavId(id);
+    onNavDotClick(id);
+  }, [onNavDotClick, setNavId]);
 
-  const handleSubDotClick = useCallback((id: string, key: string) => {
-    setSubActiveKey(key);
-    if (onNavDotScroll) onNavDotScroll(id);
-  }, [onNavDotScroll]);
+  const handleSubDotClick = useCallback((blockId: string) => {
+    setNavId(blockId);
+    onNavDotClick(blockId);
+  }, [onNavDotClick, setNavId]);
 
-  const handleContextMenu = useCallback(
-    (e: React.MouseEvent, id: string) => {
-      e.preventDefault();
-      toggleSelected(id);
-    },
-    [toggleSelected],
-  );
+  const handleContextMenu = useCallback((e: React.MouseEvent, id: string) => {
+    e.preventDefault();
+    toggleSelected(id);
+  }, [toggleSelected]);
 
-  const handleDoubleClick = useCallback(
-    (id: string) => {
-      toggleSelected(id);
-    },
-    [toggleSelected],
-  );
+  const handleDoubleClick = useCallback((id: string) => {
+    toggleSelected(id);
+  },     [toggleSelected]);
+
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!activeId || !scrollContainerRef.current) return;
-    const badge = scrollContainerRef.current.querySelector(
-      `[data-nav-id="${activeId}"]`,
-    ) as HTMLElement | null;
-    if (badge) {
-      badge.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    if (!selectedNavId || !scrollContainerRef.current) return;
+    const msgId = selectedNavId.includes("-") ? selectedNavId.slice(0, selectedNavId.lastIndexOf("-")) : selectedNavId;
+    const groupEl = scrollContainerRef.current.querySelector(`[data-nav-id="${msgId}"]`);
+    if (!groupEl) return;
+    const target = selectedNavId.includes("-")
+      ? groupEl.querySelector("button[title]")
+      : groupEl.querySelector("button:not([title])");
+    if (target) {
+      target.scrollIntoView({ block: "nearest", behavior: "smooth" });
     }
-  }, [activeId]);
+  }, [selectedNavId]);
 
   return (
     <div className="h-full flex flex-col bg-gray-900/30 border-l border-gray-800/30">
-      <div
-        ref={scrollContainerRef}
-        className="flex-1 overflow-y-auto"
-        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-      >
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto sidenav-scroll" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
         <div className="flex flex-col items-center py-2 space-y-0.5">
           {navItems.map(({ id, icon: Icon, color, subs }) => (
             <div key={id} data-nav-id={id}>
-              <NavDotGroup
-                id={id}
-                Icon={Icon}
-                color={color}
-                subs={subs}
-                isActive={activeId === id}
-                isSelected={selectedIds.has(id)}
-                subActiveKey={subActiveKey}
-                onDotClick={handleDotClick}
-                onSubDotClick={handleSubDotClick}
-                onContextMenu={handleContextMenu}
-                onDoubleClick={handleDoubleClick}
-              />
+              <div className="flex flex-col items-center w-full">
+                  <NavDot
+                    Icon={Icon}
+                    color={color}
+                    isClicked={selectedNavId === id}
+                    isMultiSelected={selectedIds.has(id)}
+                    onClick={() => handleDotClick(id)}
+                    onContextMenu={(e) => handleContextMenu(e, id)}
+                    onDoubleClick={() => handleDoubleClick(id)}
+                  />
+                  {subs.length > 0 && (
+                    <div className="flex flex-col items-center ml-1 mt-0.5 space-y-0.5">
+                      {subs.map((sub) => (
+                        <NavSubDot
+                          key={sub.blockId}
+                          Icon={sub.icon}
+                          color={sub.color}
+                          label={sub.label}
+                          isActive={selectedNavId === sub.blockId}
+                          onClick={() => handleSubDotClick(sub.blockId)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
             </div>
           ))}
         </div>

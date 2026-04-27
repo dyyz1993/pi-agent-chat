@@ -4,7 +4,7 @@ import type { ContentBlock } from "../../../types";
 
 type Block = Extract<ContentBlock, { type: "toolExecution" }>;
 
-export const ReadFileCard = memo(function ReadFileCard({ block }: { block: Block }) {
+export const ReadFileCard = memo(function ReadFileCard({ block, blockId }: { block: Block; blockId?: string }) {
   const isRunning = block.status === "running";
   const isError = block.status === "error";
 
@@ -17,7 +17,7 @@ export const ReadFileCard = memo(function ReadFileCard({ block }: { block: Block
   const displayPath = filePath || block.args?.slice(0, 80) || "";
 
   return (
-    <div className={`my-1 -mx-3 border-x-0 border-t border-b overflow-hidden ${
+    <div data-block-id={blockId} className={`my-1 -mx-3 border-x-0 border-t border-b overflow-hidden ${
       isRunning ? "border-blue-500/25 bg-blue-950/10" : isError ? "border-red-500/15 bg-red-950/8" : "border-gray-700/30 bg-gray-800/15"
     }`}>
       <div className="px-3 py-1.5 flex items-center gap-2 text-xs">

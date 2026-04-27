@@ -169,5 +169,5 @@ export function useActiveScrollTracker({
     doScrollToBottom();
   }, [streamVersion, doScrollToBottom]);
 
-  return { handleScroll, scrollToBottom: doScrollToBottom, scrollToMessage };
+  return { handleScroll, scrollToBottom: doScrollToBottom, scrollToMessage, markProgrammatic };
 }
