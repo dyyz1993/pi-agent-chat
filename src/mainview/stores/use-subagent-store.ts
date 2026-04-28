@@ -51,6 +51,8 @@ export const useSubagentStore = create<SubagentState>()((set, get) => ({
   },
 
   loadSubsessions: async (parentSessionPath: string) => {
+    if (get().loadingByParent[parentSessionPath]) return [];
+    if (get().subsessionsByParent[parentSessionPath]) return get().subsessionsByParent[parentSessionPath];
     set((s) => ({ loadingByParent: { ...s.loadingByParent, [parentSessionPath]: true } }));
     try {
       const result = await apiClient.call("subagent.listBySession", { sessionPath: parentSessionPath });

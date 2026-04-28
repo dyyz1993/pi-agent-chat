@@ -15,6 +15,8 @@ import { useRulesStore } from "./use-rules-store";
 import { useExplorerStore } from "./use-explorer-store";
 import { useMemoryStore } from "./use-memory-store";
 import { useStatusStore } from "./use-status-store";
+import { useTurnStore } from "./use-turn-store";
+import { useChatNavStore } from "./use-chat-nav-store";
 import { batchMessageUpdate, flushNow } from "./message-batcher";
 
 export interface TodoItem {
@@ -99,7 +101,7 @@ function setupSubscriptions(
           const existing = chatState.messagesBySession[id] || [];
           const hasReal = existing.some((m) => m.role === "user" || (m.role === "assistant" && m.tokenUsage));
           if (!hasReal) {
-            await chatState.loadSessionMessages(session.sessionPath);
+            await chatState.loadSessionMessages(id);
           }
           storeGet().fetchInitialState(id);
           if (result.status === "already_running") {
@@ -224,6 +226,15 @@ function setupSubscriptions(
       set((s) => ({
         rulesSubscriptions: { ...s.rulesSubscriptions, [id]: subId },
       }));
+      const store = useRulesStore.getState();
+      const sessionState = store.bySession[id];
+      if (!sessionState || sessionState.totalRules === 0) {
+        apiClient.call("rules.requestSnapshot", { sessionId: id }).then((result) => {
+          if (result && typeof result === "object" && "type" in result && result.type === "snapshot") {
+            useRulesStore.getState().handleRulesEvent(id, result as import("../../shared/modules/rules").RulesChannelEvent);
+          }
+        }).catch(() => {});
+      }
     }).catch(() => {});
   }
 
@@ -354,6 +365,8 @@ export const useSessionStore = create<SessionState>()(
       },
 
       setActiveSession: (id) => {
+        const prevId = get().activeSessionId;
+        if (prevId === id) return;
         set({ activeSessionId: id });
         if (!id) return;
 
@@ -453,6 +466,8 @@ export const useSessionStore = create<SessionState>()(
         if (deletedPath) {
           useChatStore.getState().clearSessionMessages(sessionId);
         }
+        useTurnStore.getState().clearSessionUI(sessionId);
+        useChatNavStore.getState().clearSessionUI(sessionId);
         if (deletedSessionPath) {
           apiClient.call("session.delete", { sessionId, sessionPath: deletedSessionPath }).catch(() => {});
         }

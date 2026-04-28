@@ -6,7 +6,6 @@ import { ExplorerSidebar } from "../explorer/ExplorerSidebar";
 import { GitPanel } from "../git/GitPanel";
 import { RpcPanel } from "../rpc-panel/RpcPanel";
 import { MemoryPanel } from "../memory-panel/MemoryPanel";
-import { BookmarkPanel } from "../bookmark-panel/BookmarkPanel";
 import { RulesPanel } from "../rules-panel/RulesPanel";
 import { useExplorerStore } from "../../stores/use-explorer-store";
 import { useEffect } from "react";
@@ -76,8 +75,6 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
         return <RpcPanel />;
 		case "memory":
 				return <MemoryPanel />;
-			case "bookmark":
-				return <BookmarkPanel />;
 			case "rules":
 				return <RulesPanel />;
 			default:

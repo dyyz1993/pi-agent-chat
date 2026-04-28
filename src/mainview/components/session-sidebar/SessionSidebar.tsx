@@ -73,13 +73,15 @@ function SessionList({
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const loading = useSessionStore((s) => s.loading);
 
+  const activeSessionPath = useMemo(() => {
+    const sess = rawSessions.find((s) => s.sessionId === activeSessionId);
+    return sess?.sessionPath ?? null;
+  }, [rawSessions, activeSessionId]);
+
   useEffect(() => {
-    if (rawSessions.length > 0) {
-      for (const sess of rawSessions) {
-        useSubagentStore.getState().loadSubsessions(sess.sessionPath);
-      }
-    }
-  }, [rawSessions]);
+    if (!activeSessionPath) return;
+    useSubagentStore.getState().loadSubsessions(activeSessionPath);
+  }, [activeSessionPath]);
 
   const subsessionsByParent = useSubagentStore((s) => s.subsessionsByParent);
   const autoExpandedRef = useRef<Set<string>>(new Set());

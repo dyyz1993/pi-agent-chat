@@ -1,41 +1,62 @@
 export type RuleSeverity = "critical" | "high" | "medium" | "low" | "hint";
-export type RuleScope = "user" | "pi" | "project" | "managed";
-export type RuleStatus = "active" | "expired" | "pending" | "unloaded";
 
-export interface RuleSummary {
+export type RulesChannelEvent =
+	| { type: "snapshot"; rules: RuleDetail[]; injectedRuleNames: string[]; totalRules: number; unconditionalCount: number; conditionalCount: number; matchHistory: MatchRecord[]; lifecycleLog: LifecycleEntry[]; loadedAt: number; cacheTTL: number }
+	| { type: "matched"; filePath: string; matchedRules: MatchedRuleDetail[]; toolName: string; toolCallId: string; severity: "info" | "warning"; timestamp: number }
+	| { type: "injected"; ruleNames: string[]; systemPromptLength: number }
+	| { type: "reloaded"; rules: RuleDetail[]; loadedAt: number }
+	| { type: "unloaded"; reason: string };
+
+export interface RuleDetail {
 	name: string;
 	title: string;
-	scope: RuleScope;
+	content: string;
+	scope: "user" | "pi" | "project" | "managed";
 	source: string;
 	severity: RuleSeverity;
 	isUnconditional: boolean;
 	paths: string[];
-	content: string;
-	loadedAt: number;
-	expiresAt: number;
-	status: RuleStatus;
+	description?: string;
 }
 
-export interface RulesMatchRecord {
-	filePath: string;
-	ruleName: string;
-	ruleTitle: string;
+export interface MatchedRuleDetail {
+	name: string;
+	title: string;
 	severity: RuleSeverity;
-	timestamp: number;
+	matchedGlob: string;
 }
 
-export type RulesChannelEvent =
-	| { type: "rules.loaded"; totalRules: number; unconditional: number; conditional: number; rules: RuleSummary[]; loadedAt: number; cacheTTL: number }
-	| { type: "rules.injected"; injectedCount: number; systemPromptDelta: number; ruleNames: string[] }
-	| { type: "rules.matched"; filePath: string; matchedRules: RuleSummary[]; severity: "info" | "warning" }
-	| { type: "rules.compacted"; reInjectedCount: number; ruleNames: string[] }
-	| { type: "rules.unloaded"; reason: string }
-	| { type: "rules.reload"; totalRules: number; unconditional: number; conditional: number; rules: RuleSummary[]; loadedAt: number; cacheTTL: number };
+export interface MatchRecord {
+	filePath: string;
+	ruleNames: string[];
+	toolName: string;
+	toolCallId: string;
+	severity: "info" | "warning";
+	timestamp: number;
+	matchedRuleDetails?: MatchedRuleDetail[];
+}
+
+export interface LifecycleEntry {
+	event: "loaded" | "injected" | "reloaded" | "unloaded" | "expired";
+	message: string;
+	ruleCount?: number;
+	timestamp: number;
+	details?: {
+		scannedDirs?: Array<{ dir: string; fileCount: number; ruleNames: string[] }>;
+		configSource?: string;
+		cacheHit?: boolean;
+		injectedRules?: Array<{ name: string; promptDelta: number }>;
+	};
+}
 
 export interface RulesMethods {
 	"rules.list": {
 		params: { sessionId: string };
-		result: { rules: RuleSummary[]; totalRules: number };
+		result: { rules: RuleDetail[]; totalRules: number };
+	};
+	"rules.requestSnapshot": {
+		params: { sessionId: string };
+		result: { rules: RuleDetail[]; totalRules: number; unconditionalCount: number; conditionalCount: number };
 	};
 }
 

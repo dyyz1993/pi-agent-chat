@@ -1,12 +1,22 @@
 import { create } from "zustand"
-import type { RuleSummary, RulesMatchRecord, RulesChannelEvent } from "../../shared/modules/rules"
+import type { RuleDetail, MatchRecord, LifecycleEntry, RulesChannelEvent } from "../../shared/modules/rules"
+import { useSessionStore } from "./use-session-store"
+
+interface RulesSessionState {
+	rules: RuleDetail[]
+	injectedRuleNames: string[]
+	matchHistory: MatchRecord[]
+	lifecycleLog: LifecycleEntry[]
+	totalRules: number
+	unconditionalCount: number
+	conditionalCount: number
+	loadedAt: number
+	cacheTTL: number
+}
 
 interface RulesState {
-	rulesBySession: Record<string, RuleSummary[]>
-	matchHistoryBySession: Record<string, RulesMatchRecord[]>
-	cacheTTLBySession: Record<string, number>
-	loadedAtBySession: Record<string, number>
-	expandedRule: string | null
+	bySession: Record<string, RulesSessionState>
+	expandedRuleBySession: Record<string, string | null>
 	collapsedSections: Set<string>
 
 	handleRulesEvent: (sessionId: string, event: RulesChannelEvent) => void
@@ -15,65 +25,121 @@ interface RulesState {
 	clearSession: (sessionId: string) => void
 }
 
-const DEFAULT_COLLAPSED = new Set(["history"])
+const DEFAULT_COLLAPSED = new Set(["history", "lifecycle"])
+const EMPTY_SESSION: RulesSessionState = {
+	rules: [],
+	injectedRuleNames: [],
+	matchHistory: [],
+	lifecycleLog: [],
+	totalRules: 0,
+	unconditionalCount: 0,
+	conditionalCount: 0,
+	loadedAt: 0,
+	cacheTTL: 0,
+}
 
 export const useRulesStore = create<RulesState>()((set) => ({
-	rulesBySession: {},
-	matchHistoryBySession: {},
-	cacheTTLBySession: {},
-	loadedAtBySession: {},
-	expandedRule: null,
+	bySession: {},
+	expandedRuleBySession: {},
 	collapsedSections: DEFAULT_COLLAPSED,
 
 	handleRulesEvent: (sessionId, event) => {
 		switch (event.type) {
-			case "rules.loaded":
-			case "rules.reload":
+			case "snapshot":
 				set((s) => ({
-					rulesBySession: { ...s.rulesBySession, [sessionId]: event.rules },
-					cacheTTLBySession: { ...s.cacheTTLBySession, [sessionId]: event.cacheTTL },
-					loadedAtBySession: { ...s.loadedAtBySession, [sessionId]: event.loadedAt },
+					bySession: {
+						...s.bySession,
+						[sessionId]: {
+							rules: event.rules,
+							injectedRuleNames: event.injectedRuleNames,
+							matchHistory: event.matchHistory,
+							lifecycleLog: event.lifecycleLog,
+							totalRules: event.totalRules,
+							unconditionalCount: event.unconditionalCount,
+							conditionalCount: event.conditionalCount,
+							loadedAt: event.loadedAt,
+							cacheTTL: event.cacheTTL,
+						},
+					},
 				}))
 				break
-			case "rules.matched": {
-				const records: RulesMatchRecord[] = event.matchedRules.map((r) => ({
-					filePath: event.filePath,
-					ruleName: r.name,
-					ruleTitle: r.title,
-					severity: r.severity,
-					timestamp: Date.now(),
-				}))
+			case "matched":
 				set((s) => {
-					const existing = s.matchHistoryBySession[sessionId] || []
+					const prev = s.bySession[sessionId] || { ...EMPTY_SESSION }
+					const record: MatchRecord = {
+						filePath: event.filePath,
+						ruleNames: event.matchedRules.map((r) => r.name),
+						toolName: event.toolName,
+						toolCallId: event.toolCallId,
+						severity: event.severity,
+						timestamp: event.timestamp,
+						matchedRuleDetails: event.matchedRules,
+					}
 					return {
-						matchHistoryBySession: {
-							...s.matchHistoryBySession,
-							[sessionId]: [...records, ...existing].slice(0, 100),
-						},
-						rulesBySession: {
-							...s.rulesBySession,
-							[sessionId]: (s.rulesBySession[sessionId] || []).map((rule) => {
-								const wasMatched = event.matchedRules.some((mr) => mr.name === rule.name)
-								return wasMatched ? { ...rule, status: "active" as const } : rule
-							}),
+						bySession: {
+							...s.bySession,
+							[sessionId]: {
+								...prev,
+								matchHistory: [record, ...prev.matchHistory].slice(0, 100),
+							},
 						},
 					}
 				})
 				break
-			}
-			case "rules.injected":
+			case "injected":
+				set((s) => {
+					const prev = s.bySession[sessionId] || { ...EMPTY_SESSION }
+					return {
+						bySession: {
+							...s.bySession,
+							[sessionId]: {
+								...prev,
+								injectedRuleNames: event.ruleNames,
+							},
+						},
+					}
+				})
 				break
-			case "rules.compacted":
+			case "reloaded":
+				set((s) => {
+					const prev = s.bySession[sessionId] || { ...EMPTY_SESSION }
+					return {
+						bySession: {
+							...s.bySession,
+							[sessionId]: {
+								...prev,
+								rules: event.rules,
+								loadedAt: event.loadedAt,
+							},
+						},
+					}
+				})
 				break
-			case "rules.unloaded":
-				set((s) => ({
-					rulesBySession: { ...s.rulesBySession, [sessionId]: (s.rulesBySession[sessionId] || []).map((r) => ({ ...r, status: "unloaded" as const })) },
-				}))
+			case "unloaded":
+				set((s) => {
+					const prev = s.bySession[sessionId] || { ...EMPTY_SESSION }
+					return {
+						bySession: {
+							...s.bySession,
+							[sessionId]: {
+								...EMPTY_SESSION,
+								matchHistory: prev.matchHistory,
+								lifecycleLog: prev.lifecycleLog,
+							},
+						},
+					}
+				})
 				break
 		}
 	},
 
-	setExpandedRule: (name) => set({ expandedRule: name }),
+	setExpandedRule: (name) => {
+		const sessionId = useSessionStore.getState().activeSessionId
+		if (!sessionId) return
+		set((s) => ({
+			expandedRuleBySession: { ...s.expandedRuleBySession, [sessionId]: name },
+		}))
+	},
 
 	toggleSection: (section) =>
 		set((s) => {
@@ -85,15 +151,7 @@ export const useRulesStore = create<RulesState>()((set) => ({
 
 	clearSession: (sessionId) =>
 		set((s) => {
-			const { [sessionId]: _r, ...restRules } = s.rulesBySession
-			const { [sessionId]: _m, ...restMatches } = s.matchHistoryBySession
-			const { [sessionId]: _c, ...restCache } = s.cacheTTLBySession
-			const { [sessionId]: _l, ...restLoaded } = s.loadedAtBySession
-			return {
-				rulesBySession: restRules,
-				matchHistoryBySession: restMatches,
-				cacheTTLBySession: restCache,
-				loadedAtBySession: restLoaded,
-			}
+			const { [sessionId]: _, ...rest } = s.bySession
+			return { bySession: rest }
 		}),
 }))

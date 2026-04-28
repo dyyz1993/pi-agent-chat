@@ -178,6 +178,14 @@ export interface AgentMethods {
     params: { sessionId: string; entryId: string };
     result: { text: string; cancelled: boolean };
   };
+  "agent.navigateTree": {
+    params: { sessionId: string; targetId: string; summarize?: boolean };
+    result: { cancelled: boolean };
+  };
+  "agent.getTree": {
+    params: { sessionId: string };
+    result: { entries: unknown[] };
+  };
   "agent.clone": {
     params: { sessionId: string };
     result: { cancelled: boolean };

@@ -11,7 +11,7 @@ import type { AssistantMessage, AssistantMessageEvent } from "@dyyz1993/pi-ai";
 import type { TodoChannelEvent } from "../modules/todo";
 import type { BashChannelEvent } from "../modules/bash";
 import type { LspChannelEvent } from "../modules/lsp";
-import type { RulesChannelEvent, RuleSummary } from "../modules/rules";
+import type { RulesChannelEvent } from "../modules/rules";
 import { createLogger } from "../lib/logger";
 import { config } from "../../server-config";
 
@@ -89,10 +89,12 @@ interface RpcClientLike {
   getLastAssistantText(): Promise<unknown>;
   getForkMessages(): Promise<unknown>;
   fork(entryId: string): Promise<unknown>;
+  navigateTree(targetId: string, options?: { summarize?: boolean }): Promise<unknown>;
+  getTree(): Promise<unknown>;
   clone(): Promise<unknown>;
   newSession(parentSession?: string): Promise<unknown>;
   exportHtml(outputPath?: string): Promise<unknown>;
-  channel(name: string): { name: string; send: (data: unknown) => void; onReceive: (handler: (data: unknown) => void) => () => void };
+  channel(name: string): { name: string; send: (data: unknown) => void; onReceive: (handler: (data: unknown) => void) => () => void; invoke: (data: unknown, timeoutMs?: number) => Promise<unknown> };
 }
 
 interface ManagedClient {
@@ -520,6 +522,18 @@ export class AgentProcessManager {
     return managed.client.fork(entryId);
   }
 
+  async navigateTree(sessionId: string, targetId: string, options?: { summarize?: boolean }): Promise<unknown> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) throw new Error("Client not found");
+    return managed.client.navigateTree(targetId, options);
+  }
+
+  async getTree(sessionId: string): Promise<unknown> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) throw new Error("Client not found");
+    return managed.client.getTree();
+  }
+
   async clone(sessionId: string): Promise<unknown> {
     const managed = this.clients.get(sessionId);
     if (!managed) throw new Error("Client not found");
@@ -704,59 +718,14 @@ export class AgentProcessManager {
     sessionId: string,
     channelMsg: ChannelDataEvent,
   ): Promise<void> {
-    const data = channelMsg.data as Record<string, unknown>;
+    const data = channelMsg.data as RulesChannelEvent;
     if (!data) return;
 
-    const rawType = data.type as string;
-    log.info("Rules channel data", { sessionId, type: rawType });
-
-    const now = Date.now();
-    let mappedEvent: RulesChannelEvent | null = null;
-
-    if (rawType === "session_start") {
-      const rawRules = (data.rules as Array<Record<string, unknown>>) || [];
-      mappedEvent = {
-        type: "rules.loaded",
-        totalRules: (data.totalRules as number) || 0,
-        unconditional: (data.unconditional as number) || 0,
-        conditional: (data.conditional as number) || 0,
-        rules: rawRules.map(
-          (r): RuleSummary => ({
-            name: r.name as string,
-            title: r.title as string,
-            scope: ((r.scope as string) || "project") as RuleSummary["scope"],
-            source: r.source as string,
-            severity: ((r.severity as string) || "medium") as RuleSummary["severity"],
-            isUnconditional: Boolean(r.isUnconditional),
-            paths: (r.paths as string[]) || [],
-            content: (r.content as string) || "",
-            loadedAt: now,
-            expiresAt: now + 30000,
-            status: "active" as const,
-          }),
-        ),
-        loadedAt: now,
-        cacheTTL: 30000,
-      };
-    } else if (rawType === "before_agent_start") {
-      mappedEvent = {
-        type: "rules.injected",
-        injectedCount: (data.unconditional as number) || 0,
-        systemPromptDelta: (data.systemPromptLength as number) || 0,
-        ruleNames: [],
-      };
-    } else if (rawType === "session_shutdown") {
-      mappedEvent = {
-        type: "rules.unloaded",
-        reason: "session_shutdown",
-      };
-    }
-
-    if (!mappedEvent) return;
+    log.info("Rules channel data", { sessionId, type: data.type });
 
     await this.server.emitEvent(
       "rules.event",
-      { sessionId, event: mappedEvent },
+      { sessionId, event: data },
       { sessionId },
     );
   }
@@ -767,5 +736,17 @@ export class AgentProcessManager {
       { sessionId, event },
       { sessionId },
     );
+  }
+
+  async sendChannelMessage(sessionId: string, channelName: string, data: unknown): Promise<unknown> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return null;
+    try {
+      const ch = managed.client.channel(channelName);
+      return await ch.invoke(data);
+    } catch (err) {
+      log.warn("sendChannelMessage failed", { sessionId, channelName, err: (err as Error).message });
+      return null;
+    }
   }
 }

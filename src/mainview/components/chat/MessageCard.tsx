@@ -7,9 +7,14 @@ import {
   ScanSearch,
   Brain,
   FileText,
+  RotateCcw,
+  Undo2,
+  GitBranch,
 } from "lucide-react";
-import { RotateCcw, Undo2, GitBranch } from "lucide-react";
-import { useTurnStore } from "../../stores/use-turn-store";
+import { useTurnStore, EMPTY_SET } from "../../stores/use-turn-store";
+import { useSessionStore } from "../../stores/use-session-store";
+import { useChatStore } from "../../stores/use-chat-store";
+import { apiClient } from "../../lib/api-client";
 import { MessageBubble } from "./MessageBubble";
 import type { ChatMessage } from "../../types";
 import { formatTokenCount } from "../../utils/turn-utils";
@@ -34,13 +39,15 @@ function formatTime(ts: number): string {
 }
 
 export const MessageCard = memo(function MessageCard({ message, prevBarColor }: MessageCardProps) {
-  const collapsedMessageIds = useTurnStore((s) => s.collapsedMessageIds);
+  const sessionId = useSessionStore((s) => s.activeSessionId);
   const toggleCollapse = useTurnStore((s) => s.toggleCollapse);
   const toggleMessageSelection = useTurnStore((s) => s.toggleMessageSelection);
 
-  const isCollapsed = collapsedMessageIds.has(message.id);
+  const isCollapsed = useTurnStore(
+    useCallback((s) => sessionId ? (s.collapsedMessageIdsBySession[sessionId] ?? EMPTY_SET).has(message.id) : false, [sessionId, message.id])
+  );
   const isSelected = useTurnStore(
-    useCallback((s) => s.selectedMessageIds.has(message.id), [message.id])
+    useCallback((s) => sessionId ? (s.selectedMessageIdsBySession[sessionId] ?? EMPTY_SET).has(message.id) : false, [sessionId, message.id])
   );
 
   const isUser = message.role === "user";
@@ -114,7 +121,10 @@ export const MessageCard = memo(function MessageCard({ message, prevBarColor }: 
           </span>
         )}
 
-        <div className="flex items-center gap-1 ml-auto shrink-0">
+        <div className="flex items-center gap-0.5 ml-auto shrink-0">
+          {isAssistant && !isEntry && !isCollapsed && (
+            <HeaderActions message={message} />
+          )}
           {(isAssistant || isEntry) && (
             <button
               onClick={(e) => { e.stopPropagation(); handleToggleCollapse(); }}
@@ -157,15 +167,59 @@ export const MessageCard = memo(function MessageCard({ message, prevBarColor }: 
               </span>
             </div>
           )}
-
-          <div className="flex items-center justify-end gap-0.5 px-4 pt-0.5 pb-0.5">
-            <ActionBtn icon={GitBranch} title="Fork" onClick={() => { void message.id }} />
-            <ActionBtn icon={RotateCcw} title="回滚消息" onClick={() => { void message.id }} />
-            <ActionBtn icon={Undo2} title="回滚全部" onClick={() => { void message.id }} />
-          </div>
         </div>
       )}
     </div>
+  );
+});
+
+const HeaderActions = memo(function HeaderActions({ message }: { message: ChatMessage }) {
+  const sessionId = useSessionStore((s) => s.activeSessionId);
+  const messages = useChatStore((s) => sessionId ? (s.messagesBySession[sessionId] || []) : []);
+
+  const resolveEntryId = useCallback(async (): Promise<{ entryId: string; parentId: string | null } | null> => {
+    if (!sessionId) return null;
+    try {
+      const tree = await apiClient.call("agent.getTree", { sessionId }) as Record<string, unknown>;
+      const rawEntries = Array.isArray(tree) ? tree : ((tree as Record<string, unknown>)?.entries as unknown[] || []);
+      const allAssistantMsgs = messages.filter(m => m.role === "assistant");
+      const assistantMsgIdx = allAssistantMsgs.findIndex(m => m.id === message.id);
+      const assistantTreeEntries = rawEntries.filter((e: Record<string, unknown>) => (e as { type: string }).type === "message" && (e as { label: string }).label === "assistant");
+      if (assistantMsgIdx !== -1 && assistantMsgIdx < assistantTreeEntries.length) {
+        const e = assistantTreeEntries[assistantMsgIdx];
+        return { entryId: e.id, parentId: e.parentId };
+      }
+      const last = rawEntries[rawEntries.length - 1];
+      return last ? { entryId: last.id, parentId: last.parentId } : null;
+    } catch { return null; }
+  }, [sessionId, message.id, messages]);
+
+  const handleFork = useCallback(async () => {
+    const resolved = await resolveEntryId();
+    if (!sessionId || !resolved?.parentId) return;
+    apiClient.call("agent.fork", { sessionId, entryId: resolved.parentId }).catch(() => {});
+  }, [sessionId, resolveEntryId]);
+
+  const handleRollbackMessage = useCallback(async () => {
+    const resolved = await resolveEntryId();
+    if (!sessionId || !resolved?.parentId) return;
+    await apiClient.call("agent.navigateTree", { sessionId, targetId: resolved.parentId, summarize: false }).catch(() => {});
+    useChatStore.getState().loadSessionMessages(sessionId, { force: true });
+  }, [sessionId, resolveEntryId]);
+
+  const handleRollbackAll = useCallback(async () => {
+    const resolved = await resolveEntryId();
+    if (!sessionId || !resolved?.parentId) return;
+    await apiClient.call("agent.navigateTree", { sessionId, targetId: resolved.parentId, summarize: false }).catch(() => {});
+    useChatStore.getState().loadSessionMessages(sessionId, { force: true });
+  }, [sessionId, resolveEntryId]);
+
+  return (
+    <>
+      <ActionBtn icon={GitBranch} title="Fork" onClick={handleFork} />
+      <ActionBtn icon={RotateCcw} title="回滚消息" onClick={handleRollbackMessage} />
+      <ActionBtn icon={Undo2} title="回滚全部" onClick={handleRollbackAll} />
+    </>
   );
 });
 
@@ -173,19 +227,23 @@ const ActionBtn = memo(function ActionBtn({
   icon: Icon,
   title,
   onClick,
+  active,
+  activeClassName,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   title?: string;
   onClick?: () => void;
+  active?: boolean;
+  activeClassName?: string;
 }) {
   if (!onClick) return null;
   return (
     <button
-      onClick={(e) => e.stopPropagation()}
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
       title={title}
-      className="p-1 rounded text-gray-600 hover:text-gray-300 hover:bg-gray-700/50 transition-colors"
+      className={`p-1 rounded transition-colors ${active ? activeClassName : "text-gray-600 hover:text-gray-300 hover:bg-gray-700/50"}`}
     >
-      <Icon className="w-3.5 h-3.5" />
+      <Icon className={`w-3.5 h-3.5 ${active ? "fill-current" : ""}`} />
     </button>
   );
 });

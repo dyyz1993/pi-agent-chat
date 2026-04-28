@@ -9,11 +9,15 @@ export interface MemoryFile {
 
 export interface MemoryMethods {
 	"memory.listFiles": {
-		params: { projectPath: string }
+		params: { projectPath: string; sessionId?: string }
 		result: { files: MemoryFile[]; entrypointContent: string | null; memoryDir: string }
 	}
 	"memory.readFile": {
 		params: { filePath: string }
 		result: { content: string; size: number }
+	}
+	"memory.remember": {
+		params: { projectPath: string; sessionId: string; messageIds: string[]; content: string }
+		result: { ok: boolean }
 	}
 }

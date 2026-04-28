@@ -5,6 +5,7 @@ import { readdir, readFile, stat } from "fs/promises"
 import { existsSync } from "fs"
 import { join, resolve } from "path"
 import { homedir } from "os"
+import { getProcessManager } from "./agent"
 
 type P<K extends keyof RPCMethods> = RPCMethods[K] extends { params: infer P } ? P : never
 type R<K extends keyof RPCMethods> = RPCMethods[K] extends { result: infer R } ? R : never
@@ -39,9 +40,9 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 		server.register(method, handler as (params: unknown) => Promise<unknown>)
 	}
 
-	r("memory.listFiles", async (params) => {
+	async function fallbackListFiles(projectPath: string): Promise<R<"memory.listFiles">> {
 		const agentDir = join(homedir(), ".pi", "agent")
-		const memoryDir = join(agentDir, "memory", encodeCwd(params.projectPath))
+		const memoryDir = join(agentDir, "memory", encodeCwd(projectPath))
 
 		if (!existsSync(memoryDir)) {
 			return { files: [], entrypointContent: null, memoryDir }
@@ -83,6 +84,24 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 		}
 
 		return { files, entrypointContent, memoryDir }
+	}
+
+	r("memory.listFiles", async (params) => {
+		const manager = getProcessManager()
+		if (manager) {
+			const sessionId = params.sessionId
+			if (sessionId) {
+				try {
+					const result = await manager.sendChannelMessage(sessionId, "memory", {
+						type: "list",
+						projectPath: params.projectPath,
+					}) as { files: MemoryFile[]; entrypointContent: string | null; memoryDir?: string } | null
+					if (result) return { ...result, memoryDir: result.memoryDir ?? "" }
+				} catch {}
+			}
+		}
+
+		return fallbackListFiles(params.projectPath)
 	})
 
 	r("memory.readFile", async (params) => {
@@ -94,5 +113,19 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 		const content = await readFile(resolvedPath, "utf-8")
 		const s = await stat(resolvedPath)
 		return { content, size: s.size }
+	})
+
+	r("memory.remember", async (params) => {
+		const manager = getProcessManager()
+		if (manager) {
+			manager.sendChannelData(params.sessionId, "memory", {
+				type: "user_remember",
+				sourceSessionId: params.sessionId,
+				sourceMessageIds: params.messageIds,
+				content: params.content,
+			})
+		}
+
+		return { ok: true }
 	})
 }

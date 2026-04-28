@@ -1,14 +1,14 @@
 import { useCallback, useEffect, memo, useMemo, useRef, useState } from "react";
-import { Brain, AlertTriangle, FileText, Bookmark, ChevronDown, ChevronRight, CheckCircle, XCircle, Type } from "lucide-react";
+import { Brain, AlertTriangle, FileText, ChevronDown, ChevronRight, CheckCircle, XCircle, Type } from "lucide-react";
 import { CachedReactMarkdown } from "./CachedReactMarkdown";
 import { CopyButton } from "./CopyButton";
 import type { ChatMessage, ContentBlock } from "../../types";
 import { useChatNavStore } from "../../stores/use-chat-nav-store";
+import { EMPTY_SET } from "../../stores/use-turn-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { SubagentExecutionCard } from "./tool-renderers/SubagentRenderer";
 import { getToolRenderer } from "./tool-renderers";
 import { getCustomTypeIcon } from "./tool-icon-map";
-import { useBookmarkStore, type BookmarkItem } from "../../stores/use-bookmark-store";
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -16,18 +16,12 @@ interface MessageBubbleProps {
 
 export const MessageBubble = memo(function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === "user";
+  const sessionId = useSessionStore((s) => s.activeSessionId);
   const isActive = useChatNavStore(
-    useCallback((s) => s.activeId === message.id, [message.id])
+    useCallback((s) => sessionId ? (s.activeIdBySession[sessionId] ?? null) === message.id : false, [sessionId, message.id])
   );
   const isSelected = useChatNavStore(
-    useCallback((s) => s.selectedItems.has(message.id), [message.id])
-  );
-  const isBookmarked = useBookmarkStore(
-    useCallback((s) => {
-      const items: BookmarkItem[] = []
-      for (const vals of Object.values(s.itemsByProject)) items.push(...vals)
-      return items.some((i) => i.sourceMessageIds.includes(message.id))
-    }, [])
+    useCallback((s) => sessionId ? (s.selectedItemsBySession[sessionId] ?? EMPTY_SET).has(message.id) : false, [sessionId, message.id])
   );
 
   const styleMemo = useMemo(() => {
@@ -90,39 +84,6 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
             <MessageMetaFooter message={message} />
           )}
         </div>
-      )}
-      {!isUser && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            const { activeProjectId, projectTabs } = useSessionStore.getState()
-            if (isBookmarked) {
-              const bm = useBookmarkStore.getState().itemsByProject
-              const item = Object.values(bm).flat().find((i) => i.sourceMessageIds.includes(message.id))
-              if (item) useBookmarkStore.getState().removeBookmark(item.filePath)
-            } else {
-              const text = message.content
-                .filter((b) => b.type === "text")
-                .map((b) => b.text)
-                .join("\n")
-              const tab = projectTabs.find((t) => t.id === activeProjectId)
-              if (tab && activeProjectId) {
-                useBookmarkStore.getState().addBookmark(tab.path, activeProjectId, [message.id], text)
-              }
-            }
-          }}
-          className={`absolute -top-2 right-8 w-6 h-6 rounded flex items-center justify-center border border transition-all duration-150 ${
-            isBookmarked
-              ? "bg-amber-400/15 border-amber-400/30 text-amber-400"
-              : "bg-gray-800/80 border-gray-700 hover:border-amber-400/50 text-gray-500 opacity-0 group-hover:opacity-100"
-          }`}
-          title={isBookmarked ? "取消收藏" : "添加收藏"}
-        >
-          <Bookmark
-            size={11}
-            className={isBookmarked ? "fill-current" : ""}
-          />
-        </button>
       )}
     </div>
   );

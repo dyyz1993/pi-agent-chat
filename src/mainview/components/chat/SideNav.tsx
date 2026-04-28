@@ -4,7 +4,6 @@ import {
   Bot,
   FileText,
   AlertTriangle,
-  Bookmark,
   Terminal,
   ScanSearch,
   Brain,
@@ -12,9 +11,9 @@ import {
 } from "lucide-react";
 import type { ChatMessage } from "../../types";
 import { useChatNavStore } from "../../stores/use-chat-nav-store";
-import { useTurnStore } from "../../stores/use-turn-store";
+import { useTurnStore, EMPTY_SET } from "../../stores/use-turn-store";
+import { useSessionStore } from "../../stores/use-session-store";
 import { getToolIcon, getPreviewResourceIcon, getCustomTypeIcon } from "./tool-icon-map";
-import { useBookmarkStore } from "../../stores/use-bookmark-store";
 
 type SubItem = {
   icon: LucideIcon;
@@ -107,7 +106,6 @@ const NavDot = memo(function NavDot({
   color,
   isClicked,
   isMultiSelected,
-  isBookmarked,
   onClick,
   onContextMenu,
   onDoubleClick,
@@ -116,7 +114,6 @@ const NavDot = memo(function NavDot({
   color: string;
   isClicked: boolean;
   isMultiSelected: boolean;
-  isBookmarked?: boolean;
   onClick?: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
   onDoubleClick: () => void;
@@ -141,24 +138,6 @@ const NavDot = memo(function NavDot({
     <button className={cls} onClick={onClick} onContextMenu={onContextMenu} onDoubleClick={onDoubleClick}>
       <span className={barCls} />
       <Icon className={`w-4 h-4 ${iconColor} transition-colors`} />
-      {isBookmarked && (
-        <span
-          style={{
-            position: "absolute",
-            top: -1,
-            right: -1,
-            width: 10,
-            height: 10,
-            borderRadius: "50%",
-            background: "#e3b341",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Bookmark size={6} style={{ width: 6, height: 6, fill: "#5c4b0a" }} />
-        </span>
-      )}
     </button>
   );
 });
@@ -200,21 +179,15 @@ export function SideNav({
   messages: ChatMessage[];
   onNavDotClick: (navId: string) => void;
 }) {
-  const selectedNavId = useTurnStore((s) => s.selectedNavId);
+  const sessionId = useSessionStore((s) => s.activeSessionId);
+  const selectedNavId = useTurnStore(
+    useCallback((s) => sessionId ? (s.selectedNavIdBySession[sessionId] ?? null) : null, [sessionId])
+  );
   const setNavId = useTurnStore((s) => s.setNavId);
-  const selectedItems = useChatNavStore((s) => s.selectedItems);
+  const selectedItems = useChatNavStore(
+    useCallback((s) => sessionId ? (s.selectedItemsBySession[sessionId] ?? EMPTY_SET) : EMPTY_SET, [sessionId])
+  );
   const toggleItemSelect = useChatNavStore((s) => s.toggleItemSelect);
-
-  const itemsByProject = useBookmarkStore((s) => s.itemsByProject);
-  const bookmarkedMessageIds = useMemo(() => {
-    const ids = new Set<string>()
-    for (const items of Object.values(itemsByProject)) {
-      for (const item of items) {
-        for (const mid of item.sourceMessageIds) ids.add(mid)
-      }
-    }
-    return ids
-  }, [itemsByProject]);
 
   const navItems = useMemo(() => buildNavItems(messages), [messages]);
 
@@ -264,7 +237,6 @@ export function SideNav({
                     color={color}
                     isClicked={selectedNavId === id}
                     isMultiSelected={selectedItems.has(id)}
-                    isBookmarked={bookmarkedMessageIds.has(id)}
                     onClick={() => handleDotClick(id)}
                     onContextMenu={(e) => handleContextMenu(e, id)}
                     onDoubleClick={() => handleDoubleClick(id)}

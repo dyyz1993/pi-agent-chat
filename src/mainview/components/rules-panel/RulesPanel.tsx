@@ -9,11 +9,13 @@ import {
 	FileCode,
 	CheckCircle2,
 	XCircle,
+	RefreshCw,
+	FolderOpen,
 } from "lucide-react"
 import { useRulesStore } from "../../stores/use-rules-store"
 import { useSessionStore } from "../../stores/use-session-store"
 import { useShallow } from "zustand/react/shallow"
-import type { RuleSummary, RuleSeverity, RulesMatchRecord } from "../../../shared/modules/rules"
+import type { RuleDetail, RuleSeverity, MatchRecord, LifecycleEntry } from "../../../shared/modules/rules"
 
 const SEVERITY_CONFIG: Record<RuleSeverity, { label: string; cls: string; icon: typeof AlertTriangle }> = {
 	critical: { label: "严重", cls: "text-red-400 bg-red-400/10", icon: AlertTriangle },
@@ -62,18 +64,16 @@ function SectionHeader({
 
 function RuleCard({
 	rule,
+	isInjected,
 	expanded,
 	onToggle,
 }: {
-	rule: RuleSummary
+	rule: RuleDetail
+	isInjected: boolean
 	expanded: boolean
 	onToggle: () => void
 }) {
 	const sev = SEVERITY_CONFIG[rule.severity] || SEVERITY_CONFIG.medium
-	const statusIcon =
-		rule.status === "active" ? <CheckCircle2 className="w-2.5 h-2.5 text-green-400 shrink-0" /> :
-		rule.status === "unloaded" ? <XCircle className="w-2.5 h-2.5 text-gray-600 shrink-0" /> :
-		<Clock className="w-2.5 h-2.5 text-gray-600 shrink-0" />
 
 	return (
 		<div className="border-b border-gray-800/50 last:border-b-0">
@@ -82,7 +82,11 @@ function RuleCard({
 				className="w-full text-left px-2.5 py-1.5 hover:bg-gray-800/20 transition-colors"
 			>
 				<div className="flex items-center gap-1.5">
-					{statusIcon}
+					{isInjected ? (
+						<CheckCircle2 className="w-2.5 h-2.5 text-green-400 shrink-0" />
+					) : (
+						<Clock className="w-2.5 h-2.5 text-gray-600 shrink-0" />
+					)}
 					<span className="text-[11px] text-gray-200 truncate flex-1">{rule.title}</span>
 					<span className={`text-[9px] px-1 py-0.5 rounded ${sev.cls}`}>{sev.label}</span>
 				</div>
@@ -100,6 +104,9 @@ function RuleCard({
 
 			{expanded && (
 				<div className="px-2.5 pb-2 pt-0.5 space-y-1">
+					{rule.description && (
+						<div className="text-[10px] text-gray-400">{rule.description}</div>
+					)}
 					{rule.source && (
 						<div className="text-[10px] text-gray-600">
 							来源: {rule.source}
@@ -110,19 +117,9 @@ function RuleCard({
 							匹配模式: <code className="text-[9px] text-indigo-400/70">{rule.paths.join(", ")}</code>
 						</div>
 					)}
-					{rule.severity && (
-						<div className="text-[10px] text-gray-600">
-							严重级别: <span className={sev.cls}>{rule.severity}</span>
-						</div>
-					)}
 					{rule.content && (
 						<div className="mt-1.5 p-2 bg-gray-800/50 rounded text-[10px] text-gray-300 leading-relaxed whitespace-pre-wrap max-h-60 overflow-y-auto font-mono">
 							{rule.content}
-						</div>
-					)}
-					{rule.loadedAt > 0 && (
-						<div className="text-[10px] text-gray-600">
-							加载时间: {new Date(rule.loadedAt).toLocaleTimeString()}
 						</div>
 					)}
 				</div>
@@ -131,17 +128,71 @@ function RuleCard({
 	)
 }
 
-function MatchRecord({ record }: { record: RulesMatchRecord }) {
-	const sev = SEVERITY_CONFIG[record.severity] || SEVERITY_CONFIG.medium
+function MatchRecordCard({ record }: { record: MatchRecord }) {
+	const details = record.matchedRuleDetails || []
 	return (
-		<div className="flex items-center gap-1.5 px-2.5 py-1 text-[10px]">
-			<Zap className="w-2.5 h-2.5 text-amber-400 shrink-0" />
-			<span className="text-gray-500">{new Date(record.timestamp).toLocaleTimeString()}</span>
-			<span className="text-gray-700">|</span>
-			<span className="text-gray-400 truncate">{record.filePath.split("/").pop()}</span>
-			<span className="text-gray-700">→</span>
-			<span className="text-gray-300 truncate">{record.ruleTitle}</span>
-			<span className={`text-[8px] px-0.5 rounded ${sev.cls}`}>{sev.label}</span>
+		<div className="px-2.5 py-1 text-[10px] space-y-0.5">
+			<div className="flex items-center gap-1.5">
+				<Zap className="w-2.5 h-2.5 text-amber-400 shrink-0" />
+				<span className="text-gray-500">{new Date(record.timestamp).toLocaleTimeString()}</span>
+				<span className="text-gray-700">|</span>
+				<span className="text-gray-400 truncate">{record.filePath.split("/").pop()}</span>
+				<span className="text-gray-700">&rarr;</span>
+				<span className="text-gray-300 truncate">{record.toolName}</span>
+			</div>
+			{details.map((d) => (
+				<div key={d.name} className="flex items-center gap-1 pl-5">
+					<span className="text-gray-400 truncate">{d.title || d.name}</span>
+					<code className="text-[9px] text-indigo-400/70 truncate">{d.matchedGlob}</code>
+				</div>
+			))}
+		</div>
+	)
+}
+
+function LifecycleEntryCard({ entry }: { entry: LifecycleEntry }) {
+	const iconMap: Record<string, React.ElementType> = {
+		loaded: RefreshCw,
+		injected: CheckCircle2,
+		reloaded: RefreshCw,
+		unloaded: XCircle,
+		expired: Clock,
+	}
+	const Icon = iconMap[entry.event] || Clock
+	return (
+		<div className="px-2.5 py-1 text-[10px]">
+			<div className="flex items-center gap-1.5">
+				<Icon className="w-2.5 h-2.5 text-gray-500 shrink-0" />
+				<span className="text-gray-500">{new Date(entry.timestamp).toLocaleTimeString()}</span>
+				<span className="text-gray-400">{entry.event}</span>
+				{entry.ruleCount != null && (
+					<span className="text-gray-600">({entry.ruleCount} rules)</span>
+				)}
+			</div>
+			{entry.details?.scannedDirs && entry.details.scannedDirs.length > 0 && (
+				<div className="pl-5 space-y-0.5">
+					{entry.details.scannedDirs.map((d) => (
+						<div key={d.dir} className="flex items-center gap-1 text-gray-600">
+							<FolderOpen className="w-2 h-2 shrink-0" />
+							<span className="truncate">{d.dir}</span>
+							<span className="text-gray-700">({d.fileCount})</span>
+							{d.ruleNames.length > 0 && (
+								<span className="text-indigo-400/70 truncate">{d.ruleNames.join(", ")}</span>
+							)}
+						</div>
+					))}
+				</div>
+			)}
+			{entry.details?.configSource && (
+				<div className="pl-5 text-gray-600 truncate">
+					config: {entry.details.configSource}
+				</div>
+			)}
+			{entry.details?.cacheHit != null && (
+				<div className="pl-5 text-gray-600">
+					cache: {entry.details.cacheHit ? "hit" : "miss"}
+				</div>
+			)}
 		</div>
 	)
 }
@@ -150,28 +201,35 @@ export function RulesPanel() {
 	const activeSessionId = useSessionStore((s) => s.activeSessionId)
 	const collapsedSections = useRulesStore((s) => s.collapsedSections)
 	const toggleSection = useRulesStore((s) => s.toggleSection)
-	const expandedRule = useRulesStore((s) => s.expandedRule)
+	const expandedRule = useRulesStore(
+		useShallow((s) => activeSessionId ? (s.expandedRuleBySession[activeSessionId] ?? null) : null),
+	)
 	const setExpandedRule = useRulesStore((s) => s.setExpandedRule)
 
-	const rules = useRulesStore(
-		useShallow((s) => s.rulesBySession[activeSessionId || ""] || []),
+	const session = useRulesStore(
+		useShallow((s) => s.bySession[activeSessionId || ""] || null),
 	)
-	const matchHistory = useRulesStore(
-		useShallow((s) => s.matchHistoryBySession[activeSessionId || ""] || []),
-	)
+
+	const rules = session?.rules || []
+	const injectedRuleNames = session?.injectedRuleNames || []
+	const matchHistory = session?.matchHistory || []
+	const lifecycleLog = session?.lifecycleLog || []
+	const totalRules = session?.totalRules || 0
 
 	const unconditional = rules.filter((r) => r.isUnconditional)
 	const conditional = rules.filter((r) => !r.isUnconditional)
+	const showSource = !collapsedSections.has("source")
 	const showUnconditional = !collapsedSections.has("unconditional")
 	const showConditional = !collapsedSections.has("conditional")
 	const showHistory = !collapsedSections.has("history")
+	const showLifecycle = !collapsedSections.has("lifecycle")
 
 	return (
 		<div className="flex flex-col h-full">
 			<div className="flex items-center gap-2 px-2.5 py-2 border-b border-gray-800 shrink-0">
 				<Shield className="w-3.5 h-3.5 text-indigo-400" />
 				<span className="text-[11px] font-medium text-gray-300">Rules Engine</span>
-				<span className="text-[9px] text-gray-600 ml-auto">{rules.length} 条规则</span>
+				<span className="text-[9px] text-gray-600 ml-auto">{totalRules} 条规则</span>
 			</div>
 
 			<div className="flex-1 overflow-y-auto">
@@ -181,6 +239,22 @@ export function RulesPanel() {
 					</div>
 				) : (
 					<>
+						{lifecycleLog.length > 0 && (
+							<>
+								<SectionHeader
+									collapsed={!showSource}
+									onToggle={() => toggleSection("source")}
+									icon={FolderOpen}
+									iconCls="text-indigo-400"
+									label="加载来源"
+									badge={lifecycleLog.length}
+								/>
+								{showSource && lifecycleLog.slice(0, 10).map((entry, i) => (
+									<LifecycleEntryCard key={`${entry.timestamp}-${i}`} entry={entry} />
+								))}
+							</>
+						)}
+
 						<SectionHeader
 							collapsed={!showUnconditional}
 							onToggle={() => toggleSection("unconditional")}
@@ -193,6 +267,7 @@ export function RulesPanel() {
 							<RuleCard
 								key={rule.name}
 								rule={rule}
+								isInjected={injectedRuleNames.includes(rule.name)}
 								expanded={expandedRule === rule.name}
 								onToggle={() => setExpandedRule(expandedRule === rule.name ? null : rule.name)}
 							/>
@@ -210,6 +285,7 @@ export function RulesPanel() {
 							<RuleCard
 								key={rule.name}
 								rule={rule}
+								isInjected={injectedRuleNames.includes(rule.name)}
 								expanded={expandedRule === rule.name}
 								onToggle={() => setExpandedRule(expandedRule === rule.name ? null : rule.name)}
 							/>
@@ -226,7 +302,7 @@ export function RulesPanel() {
 						{showHistory && matchHistory.length > 0 && (
 							<div className="border-t border-gray-800/50">
 								{matchHistory.slice(0, 30).map((record, i) => (
-									<MatchRecord key={`${record.timestamp}-${i}`} record={record} />
+									<MatchRecordCard key={`${record.timestamp}-${i}`} record={record} />
 								))}
 							</div>
 						)}
@@ -234,6 +310,22 @@ export function RulesPanel() {
 							<div className="px-2.5 py-3 text-[10px] text-gray-600 text-center">
 								暂无触发记录
 							</div>
+						)}
+
+						{lifecycleLog.length > 0 && (
+							<>
+								<SectionHeader
+									collapsed={!showLifecycle}
+									onToggle={() => toggleSection("lifecycle")}
+									icon={Clock}
+									iconCls="text-gray-400"
+									label="生命周期"
+									badge={lifecycleLog.length}
+								/>
+								{showLifecycle && lifecycleLog.map((entry, i) => (
+									<LifecycleEntryCard key={`lc-${entry.timestamp}-${i}`} entry={entry} />
+								))}
+							</>
 						)}
 					</>
 				)}

@@ -101,7 +101,7 @@ interface ChatState {
   addMessage: (msg: ChatMessage) => void;
   setMessagesForSession: (sessionId: string, msgs: ChatMessage[]) => void;
   clearSessionMessages: (sessionId: string) => void;
-  loadSessionMessages: (sessionId: string) => Promise<void>;
+  loadSessionMessages: (sessionId: string, options?: { force?: boolean }) => Promise<void>;
   setIsStreaming: (v: boolean) => void;
   incrementStreamVersion: () => void;
 }
@@ -190,23 +190,34 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   incrementStreamVersion: () => set((s) => ({ streamContentVersion: s.streamContentVersion + 1 })),
 
-  loadSessionMessages: async (sessionId: string) => {
+  loadSessionMessages: async (sessionId: string, options?: { force?: boolean }) => {
     const sid = sessionId;
     if (!sid) return;
 
     if (get().loadingSessions.has(sid)) return;
-    const preflight = get().messagesBySession[sid] || [];
-    const hasRealMessages = preflight.some((m) => m.role === "user" || (m.role === "assistant" && m.tokenUsage));
-    if (hasRealMessages) return;
+    if (!options?.force) {
+      const preflight = get().messagesBySession[sid] || [];
+      const hasRealMessages = preflight.some((m) => m.role === "user" || (m.role === "assistant" && m.tokenUsage));
+      if (hasRealMessages) return;
+    }
+    if (options?.force) {
+      set((s) => {
+        const map = { ...s.messagesBySession };
+        delete map[sid];
+        return { messagesBySession: map };
+      });
+    }
     set((s) => ({ loadingSessions: new Set(s.loadingSessions).add(sid) }));
 
     try {
       const { apiClient } = await import("../lib/api-client");
       const result = await apiClient.call("agent.getMessages", { sessionId: sid });
 
-      const current = get().messagesBySession[sid] || [];
-      const hasRealNow = current.some((m) => m.role === "user" || (m.role === "assistant" && m.tokenUsage));
-      if (hasRealNow) return;
+      if (!options?.force) {
+        const current = get().messagesBySession[sid] || [];
+        const hasRealNow = current.some((m) => m.role === "user" || (m.role === "assistant" && m.tokenUsage));
+        if (hasRealNow) return;
+      }
 
       const toolCallNameMap: Record<string, string> = {};
       const rawMessages: Array<{ raw: Record<string, unknown>; id?: string }> = [];

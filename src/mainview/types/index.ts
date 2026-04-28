@@ -153,21 +153,6 @@ export type SubagentSessionInfo = {
 	contextUsage?: ContextUsage;
 };
 
-export type BookmarkEntry = {
-	id: string;
-	filename: string;
-	filePath: string;
-	title: string;
-	description: string;
-	summary: string;
-	tags: string[];
-	sourceSessionId: string;
-	sourceMessageIds: string[];
-	sourcePreview: string;
-	mtimeMs: number;
-	size: number;
-};
-
 export type FileDiffEntry = {
   path: string;
   status: "added" | "modified" | "deleted";

@@ -200,6 +200,14 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     return manager!.fork(params.sessionId, params.entryId) as Promise<R<"agent.fork">>;
   });
 
+  r("agent.navigateTree", async (params) => {
+    return manager!.navigateTree(params.sessionId, params.targetId, { summarize: params.summarize }) as Promise<R<"agent.navigateTree">>;
+  });
+
+  r("agent.getTree", async (params) => {
+    return manager!.getTree(params.sessionId) as Promise<R<"agent.getTree">>;
+  });
+
   r("agent.clone", async (params) => {
     return manager!.clone(params.sessionId) as Promise<R<"agent.clone">>;
   });

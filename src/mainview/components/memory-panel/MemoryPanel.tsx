@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import {
 	Brain,
 	Search,
@@ -103,7 +103,6 @@ function FileContentPreview({ filePath }: { filePath: string }) {
 
 export function MemoryPanel() {
 	const sessionId = useSessionStore((s) => s.activeSessionId)
-	const sessions = useSessionStore((s) => s.sessionsByProject)
 	const projectTabs = useSessionStore((s) => s.projectTabs)
 	const activeProjectId = useSessionStore((s) => s.activeProjectId)
 
@@ -111,7 +110,9 @@ export function MemoryPanel() {
 	const files = useMemoryStore(useShallow((s) => s.filesBySession[sessionId || ""] || []))
 	const entrypoint = useMemoryStore((s) => sessionId ? s.entrypointBySession[sessionId] : null)
 	const injected = useMemoryStore(useShallow((s) => sessionId ? (s.injectedBySession[sessionId] || []) : []))
-	const expandedFile = useMemoryStore((s) => s.expandedFile)
+	const expandedFile = useMemoryStore(
+		useCallback((s) => sessionId ? (s.expandedFileBySession[sessionId] ?? null) : null, [sessionId])
+	)
 	const collapsedSections = useMemoryStore((s) => s.collapsedSections)
 	const toggleSection = useMemoryStore((s) => s.toggleSection)
 	const setExpandedFile = useMemoryStore((s) => s.setExpandedFile)
@@ -122,16 +123,7 @@ export function MemoryPanel() {
 		if (!sessionId) return
 		const tab = projectTabs.find((t) => t.id === activeProjectId)
 		if (!tab) return
-		const projectPath = tab.path
-		let found = false
-		for (const sessList of Object.values(sessions)) {
-			if (sessList.some((s) => s.sessionId === sessionId)) {
-				found = true
-				break
-			}
-		}
-		if (!found) return
-		loadFiles(projectPath, sessionId)
+		loadFiles(tab.path, sessionId)
 	}, [sessionId, activeProjectId, projectTabs])
 
 	if (!sessionId) {

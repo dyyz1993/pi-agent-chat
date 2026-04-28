@@ -11,4 +11,3 @@ export { register as bash } from "./bash";
 export { register as lsp } from "./lsp";
 export { register as memory } from "./memory";
 export { register as rules } from "./rules";
-export { register as bookmark } from "./bookmark";

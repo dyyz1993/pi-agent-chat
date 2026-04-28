@@ -1,5 +1,6 @@
 import { create } from "zustand"
 import { apiClient } from "../lib/api-client"
+import { useSessionStore } from "./use-session-store"
 
 interface MemoryEvent {
 	id: string
@@ -27,7 +28,7 @@ interface MemoryState {
 	filesBySession: Record<string, MemoryFile[]>
 	entrypointBySession: Record<string, string | null>
 	injectedBySession: Record<string, InjectedMemory[]>
-	expandedFile: string | null
+	expandedFileBySession: Record<string, string | null>
 	collapsedSections: Set<string>
 
 	addEvent: (sessionId: string, event: MemoryEvent) => void
@@ -43,7 +44,7 @@ export const useMemoryStore = create<MemoryState>()((set) => ({
 	filesBySession: {},
 	entrypointBySession: {},
 	injectedBySession: {},
-	expandedFile: null,
+	expandedFileBySession: {},
 	collapsedSections: new Set(["operations"]),
 
 	addEvent: (sessionId, event) => {
@@ -87,7 +88,11 @@ export const useMemoryStore = create<MemoryState>()((set) => ({
 	},
 
 	setExpandedFile: (filePath) => {
-		set({ expandedFile: filePath })
+		const sessionId = useSessionStore.getState().activeSessionId
+		if (!sessionId) return
+		set((s) => ({
+			expandedFileBySession: { ...s.expandedFileBySession, [sessionId]: filePath },
+		}))
 	},
 
 	toggleSection: (section) => {
