@@ -1,7 +1,7 @@
 import { Trash2, ArrowUpRight, ArrowDownLeft, Copy, Check } from "lucide-react";
-import { useState, useCallback } from "react";
+import { useCallback } from "react";
 import { useRpcDebugStore, type RpcLogEntry } from "../../stores/use-rpc-debug-store";
-import { copyToClipboard } from "../../utils/clipboard";
+import { useClipboard } from "../chat/preview/use-clipboard";
 
 const DIR_ICONS = {
   call: ArrowUpRight,
@@ -16,7 +16,7 @@ const DIR_COLORS = {
 };
 
 function RpcEntry({ entry }: { entry: RpcLogEntry }) {
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useClipboard();
   const Icon = DIR_ICONS[entry.direction];
   const color = DIR_COLORS[entry.direction];
   const label = entry.method || entry.eventType || entry.direction;
@@ -25,13 +25,8 @@ function RpcEntry({ entry }: { entry: RpcLogEntry }) {
   const truncated = JSON.stringify(entry.payload).slice(0, 200);
 
   const handleCopy = useCallback(() => {
-    copyToClipboard(fullPayload).then((ok) => {
-      if (ok) {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      }
-    });
-  }, [fullPayload]);
+    copy(fullPayload);
+  }, [fullPayload, copy]);
 
   return (
     <div className="group px-2 py-1 border-b border-gray-800/30 hover:bg-gray-800/30">

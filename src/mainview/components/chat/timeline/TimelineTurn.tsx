@@ -1,4 +1,4 @@
-import { memo, useCallback, useState } from "react";
+import { memo, useCallback } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -12,6 +12,7 @@ import {
 import type { TimelineTurn as TTurn, TimelineItem } from "../../../types";
 import { getItemId } from "../../../lib/turn-aggregator";
 import { useChatNavStore } from "../../../stores/use-chat-nav-store";
+import { useClipboard } from "../preview/use-clipboard";
 
 interface TimelineTurnProps {
   turn: TTurn;
@@ -20,6 +21,7 @@ interface TimelineTurnProps {
 
 export const TimelineTurn = memo(function TimelineTurn({ turn, isLast: _isLast }: TimelineTurnProps) {
   void _isLast;
+  const { copied: turnCopied, copy: copyTurn } = useClipboard();
   const collapsed = useChatNavStore(
     useCallback((s: { isTurnCollapsed: (id: string) => boolean }) => s.isTurnCollapsed(turn.id), [turn.id])
   );
@@ -93,7 +95,19 @@ export const TimelineTurn = memo(function TimelineTurn({ turn, isLast: _isLast }
 
           {/* Turn action buttons (visible on hover) */}
           <div className="flex items-center gap-0.5 opacity-0 group-hover/turn:opacity-100 transition-opacity ml-auto shrink-0">
-            <TurnActionButton icon={<Copy size={12} />} label="复制" onClick={() => {}} />
+            <TurnActionButton
+              icon={turnCopied ? <Check size={12} /> : <Copy size={12} />}
+              label={turnCopied ? "已复制" : "复制"}
+              onClick={() => {
+                const parts: string[] = [];
+                if (turn.userText) parts.push(turn.userText);
+                turn.items.forEach((i: TimelineItem) => {
+                  if (i.itemType === "assistantText") parts.push(i.text);
+                });
+                copyTurn(parts.join("\n\n"));
+              }}
+              active={turnCopied}
+            />
             <TurnActionButton icon={<GitBranch size={12} />} label="Fork" onClick={() => {}} />
             <TurnActionButton
               icon={<Trash2 size={12} />}
@@ -237,12 +251,7 @@ function AssistantTextBlock({
   text: string;
   isStreaming?: boolean;
 }) {
-  const [copied, setCopied] = useState(false);
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
+  const { copied, copy } = useClipboard();
 
   if (isStreaming) {
     return (
@@ -257,9 +266,9 @@ function AssistantTextBlock({
     <div className="group/text relative px-3 py-2 rounded-lg bg-gray-800/40 prose prose-invert prose-sm max-w-none">
       <pre className="whitespace-pre-wrap break-words text-sm text-gray-200">{text}</pre>
       <button
-        onClick={handleCopy}
+        onClick={() => copy(text)}
         className="absolute top-1.5 right-1.5 p-1 rounded opacity-0 group-hover/text:opacity-100 hover:bg-gray-700 transition-all"
-        title="复制文本"
+        title={copied ? "已复制" : "复制文本"}
       >
         <Copy size={11} className={copied ? "text-green-400" : "text-gray-500"} />
       </button>

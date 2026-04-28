@@ -1,5 +1,6 @@
 import { useCallback, useState, memo } from "react";
 import { Copy, Check } from "lucide-react";
+import { copyToClipboard } from "../../utils/clipboard";
 
 interface CopyButtonProps {
   text: string;
@@ -11,12 +12,13 @@ interface CopyButtonProps {
 export const CopyButton = memo(function CopyButton({ text, size = "xs", className = "", title = "复制" }: CopyButtonProps) {
   const [copied, setCopied] = useState(false);
 
-  const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch { /* fallback: no-op */ }
+  const handleCopy = useCallback(() => {
+    copyToClipboard(text).then((ok) => {
+      if (ok) {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }
+    });
   }, [text]);
 
   const sizeClasses = size === "xs" ? "w-3.5 h-3.5" : "w-4 h-4";
