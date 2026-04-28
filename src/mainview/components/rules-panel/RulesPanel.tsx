@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react"
 import {
 	Shield,
 	ChevronDown,
@@ -11,10 +12,12 @@ import {
 	XCircle,
 	RefreshCw,
 	FolderOpen,
+	Loader2,
 } from "lucide-react"
 import { useRulesStore } from "../../stores/use-rules-store"
 import { useSessionStore } from "../../stores/use-session-store"
 import { useShallow } from "zustand/react/shallow"
+import { apiClient } from "../../lib/api-client"
 import type { RuleDetail, RuleSeverity, MatchRecord, LifecycleEntry } from "../../../shared/modules/rules"
 
 const SEVERITY_CONFIG: Record<RuleSeverity, { label: string; cls: string; icon: typeof AlertTriangle }> = {
@@ -62,18 +65,55 @@ function SectionHeader({
 	)
 }
 
+function useRuleContent(filePath: string | undefined, expanded: boolean) {
+	const [content, setContent] = useState<string | null>(null)
+	const [loading, setLoading] = useState(false)
+
+	useEffect(() => {
+		if (!expanded || !filePath) {
+			setContent(null)
+			return
+		}
+		let cancelled = false
+		setLoading(true)
+		const baseUrl = apiClient.getBaseUrl()
+		const token = apiClient.getAuthToken()
+		fetch(`${baseUrl}/file/${encodeURIComponent(filePath)}?token=${token}`)
+			.then((r) => (r.ok ? r.text() : Promise.reject(new Error(r.statusText))))
+			.then((text) => {
+				if (!cancelled) {
+					const stripped = text.replace(/^---\r?\n[\s\S]*?\n?---\r?\n?/, "")
+					setContent(stripped)
+					setLoading(false)
+				}
+			})
+			.catch(() => {
+				if (!cancelled) {
+					setContent(null)
+					setLoading(false)
+				}
+			})
+		return () => { cancelled = true }
+	}, [filePath, expanded])
+
+	return { content, loading }
+}
+
 function RuleCard({
 	rule,
 	isInjected,
 	expanded,
+	onTriggered,
 	onToggle,
 }: {
 	rule: RuleDetail
 	isInjected: boolean
 	expanded: boolean
+	onTriggered: boolean
 	onToggle: () => void
 }) {
 	const sev = SEVERITY_CONFIG[rule.severity] || SEVERITY_CONFIG.medium
+	const { content, loading } = useRuleContent(rule.filePath, expanded)
 
 	return (
 		<div className="border-b border-gray-800/50 last:border-b-0">
@@ -84,6 +124,8 @@ function RuleCard({
 				<div className="flex items-center gap-1.5">
 					{isInjected ? (
 						<CheckCircle2 className="w-2.5 h-2.5 text-green-400 shrink-0" />
+					) : onTriggered ? (
+						<Zap className="w-2.5 h-2.5 text-amber-400 shrink-0" />
 					) : (
 						<Clock className="w-2.5 h-2.5 text-gray-600 shrink-0" />
 					)}
@@ -117,9 +159,15 @@ function RuleCard({
 							匹配模式: <code className="text-[9px] text-indigo-400/70">{rule.paths.join(", ")}</code>
 						</div>
 					)}
-					{rule.content && (
+					{loading && (
+						<div className="flex items-center gap-1.5 mt-1.5 text-[10px] text-gray-500">
+							<Loader2 className="w-2.5 h-2.5 animate-spin" />
+							<span>加载中...</span>
+						</div>
+					)}
+					{!loading && content && (
 						<div className="mt-1.5 p-2 bg-gray-800/50 rounded text-[10px] text-gray-300 leading-relaxed whitespace-pre-wrap max-h-60 overflow-y-auto font-mono">
-							{rule.content}
+							{content}
 						</div>
 					)}
 				</div>
@@ -224,6 +272,8 @@ export function RulesPanel() {
 	const showHistory = !collapsedSections.has("history")
 	const showLifecycle = !collapsedSections.has("lifecycle")
 
+	const triggeredNames = new Set(matchHistory.flatMap((h) => h.ruleNames))
+
 	return (
 		<div className="flex flex-col h-full">
 			<div className="flex items-center gap-2 px-2.5 py-2 border-b border-gray-800 shrink-0">
@@ -268,6 +318,7 @@ export function RulesPanel() {
 								key={rule.name}
 								rule={rule}
 								isInjected={injectedRuleNames.includes(rule.name)}
+								onTriggered={triggeredNames.has(rule.name)}
 								expanded={expandedRule === rule.name}
 								onToggle={() => setExpandedRule(expandedRule === rule.name ? null : rule.name)}
 							/>
@@ -286,6 +337,7 @@ export function RulesPanel() {
 								key={rule.name}
 								rule={rule}
 								isInjected={injectedRuleNames.includes(rule.name)}
+								onTriggered={triggeredNames.has(rule.name)}
 								expanded={expandedRule === rule.name}
 								onToggle={() => setExpandedRule(expandedRule === rule.name ? null : rule.name)}
 							/>

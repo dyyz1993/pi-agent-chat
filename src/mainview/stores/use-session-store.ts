@@ -46,6 +46,8 @@ interface SessionState {
   lspSubscriptions: Record<string, string>;
   rulesSubscriptions: Record<string, string>;
   notifySubscriptions: Record<string, string>;
+  memorySubscriptions: Record<string, string>;
+  sessionReady: Record<string, boolean>;
   todosBySession: Record<string, TodoItem[]>;
   sessionContextMap: Record<string, ContextUsage>;
   sessionStatusMap: Record<string, SessionStatus>;
@@ -79,7 +81,7 @@ function setupSubscriptions(
   id: string,
   session: SessionMeta,
 ): void {
-  const { agentSubscriptions, subagentSubscriptions, todoSubscriptions, bashSubscriptions, lspSubscriptions, rulesSubscriptions, notifySubscriptions } = state;
+  const { agentSubscriptions, subagentSubscriptions, todoSubscriptions, bashSubscriptions, lspSubscriptions, rulesSubscriptions, notifySubscriptions, memorySubscriptions } = state;
   const storeGet = () => useSessionStore.getState() as SessionState;
 
   if (!agentSubscriptions[id]) {
@@ -89,28 +91,18 @@ function setupSubscriptions(
     }).then((subId) => {
       set((s) => ({
         agentSubscriptions: { ...s.agentSubscriptions, [id]: subId },
+        sessionReady: { ...s.sessionReady, [id]: true },
       }));
-
-      apiClient.call("agent.start", {
-        sessionId: id,
-        projectPath: session.projectPath,
-        sessionPath: session.sessionPath,
-      }).then(async (result) => {
-        if (result.status === "already_running" || result.status === "started") {
-          const chatState = useChatStore.getState();
-          const existing = chatState.messagesBySession[id] || [];
-          const hasReal = existing.some((m) => m.role === "user" || (m.role === "assistant" && m.tokenUsage));
-          if (!hasReal) {
-            await chatState.loadSessionMessages(id);
-          }
-          storeGet().fetchInitialState(id);
-          if (result.status === "already_running") {
-            apiClient.call("agent.replayHoldEvents", { sessionId: id }).catch(() => {});
-          }
+      useChatStore.getState().loadSessionMessages(id, { sessionPath: session.sessionPath }).catch(() => {});
+      apiClient.call("rules.requestSnapshot", { sessionId: id }).then((raw: unknown) => {
+        const result = raw && typeof raw === "object" && "result" in raw ? (raw as Record<string, unknown>).result : raw;
+        if (result && typeof result === "object" && "type" in result && (result as Record<string, unknown>).type === "snapshot") {
+          const snap = result as { totalRules?: number };
+          const current = useRulesStore.getState().bySession[id];
+          if (snap.totalRules === 0 && current && current.totalRules > 0) return;
+          useRulesStore.getState().handleRulesEvent(id, result as import("../../shared/modules/rules").RulesChannelEvent);
         }
-      }).catch((err) => {
-        useAppStore.getState().addLog(`agent.start failed: ${err instanceof Error ? err.message : String(err)}`);
-      });
+      }).catch(() => {});
     }).catch(() => {});
   }
 
@@ -229,7 +221,8 @@ function setupSubscriptions(
       const store = useRulesStore.getState();
       const sessionState = store.bySession[id];
       if (!sessionState || sessionState.totalRules === 0) {
-        apiClient.call("rules.requestSnapshot", { sessionId: id }).then((result) => {
+        apiClient.call("rules.requestSnapshot", { sessionId: id }).then((raw: unknown) => {
+          const result = raw && typeof raw === "object" && "result" in raw ? (raw as Record<string, unknown>).result : raw;
           if (result && typeof result === "object" && "type" in result && result.type === "snapshot") {
             useRulesStore.getState().handleRulesEvent(id, result as import("../../shared/modules/rules").RulesChannelEvent);
           }
@@ -268,6 +261,68 @@ function setupSubscriptions(
       }));
     }).catch(() => {});
   }
+
+  if (!memorySubscriptions[id]) {
+    const projectTab = useSessionStore.getState().projectTabs.find((t) => t.id === useSessionStore.getState().activeProjectId);
+    apiClient.subscribe(
+      "memory.creating",
+      (payload: { sessionId: string; sourceMessageIds: string[]; timestamp: number }) => {
+        if (payload.sessionId !== id) return;
+        const memStore = useMemoryStore.getState();
+        memStore.addEvent(id, {
+          id: `mem-creating-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          customType: "memory_creating",
+          data: payload,
+          timestamp: payload.timestamp,
+        });
+        memStore.setBookmarkCreating(id, true);
+      },
+      { sessionId: id },
+    ).catch(() => {});
+
+    apiClient.subscribe(
+      "memory.updated",
+      (payload: { sessionId: string; files: Array<{ filename: string; filePath: string; description: string | null; type: string | null; mtimeMs: number }>; timestamp: number }) => {
+        if (payload.sessionId !== id) return;
+        const memStore = useMemoryStore.getState();
+        memStore.addEvent(id, {
+          id: `mem-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          customType: "memory_updated",
+          data: payload,
+          timestamp: payload.timestamp,
+        });
+        memStore.setBookmarkCreating(id, false);
+        if (projectTab) {
+          memStore.loadFiles(projectTab.path, id);
+        }
+      },
+      { sessionId: id },
+    ).then((subId) => {
+      set((s) => ({
+        memorySubscriptions: { ...s.memorySubscriptions, [id]: subId },
+      }));
+    }).catch(() => {});
+
+    apiClient.subscribe(
+      "memory.update_failed",
+      (payload: { sessionId: string; reason: string; timestamp: number }) => {
+        if (payload.sessionId !== id) return;
+        const memStore = useMemoryStore.getState();
+        memStore.addEvent(id, {
+          id: `mem-fail-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          customType: "memory_update_failed",
+          data: payload,
+          timestamp: payload.timestamp,
+        });
+        memStore.setBookmarkCreating(id, false);
+      },
+      { sessionId: id },
+    ).catch(() => {});
+  }
+
+  if (agentSubscriptions[id]) {
+    set((s) => ({ sessionReady: { ...s.sessionReady, [id]: true } }));
+  }
 }
 
 function syncTabsToBackend(tabs: ProjectTab[], activeTabId: string | null) {
@@ -290,6 +345,8 @@ export const useSessionStore = create<SessionState>()(
       lspSubscriptions: {},
       rulesSubscriptions: {},
       notifySubscriptions: {},
+      memorySubscriptions: {},
+      sessionReady: {},
       todosBySession: {},
       sessionContextMap: {},
       sessionStatusMap: {},
@@ -337,13 +394,15 @@ export const useSessionStore = create<SessionState>()(
         explorer.setCurrentPath(tab.path);
         explorer.listRootDir();
 
-        get().loadSessionsForProject(tab.path).then((sessions) => {
+        get().loadSessionsForProject(tab.path).then(async (sessions) => {
           if (sessions.length > 0) {
             const current = get().activeSessionId;
             const belongs = sessions.some((s) => s.sessionId === current);
             if (!belongs) {
               get().setActiveSession(sessions[0].sessionId);
             }
+          } else {
+            await get().createNewSession();
           }
         });
       },
@@ -367,7 +426,17 @@ export const useSessionStore = create<SessionState>()(
       setActiveSession: (id) => {
         const prevId = get().activeSessionId;
         if (prevId === id) return;
-        set({ activeSessionId: id });
+
+        const sid = id ?? "";
+        useRulesStore.getState().clearSession(sid);
+        useMemoryStore.getState().clearSession(sid);
+        useBashStore.getState().clearSession(sid);
+        useLspStore.getState().clearSession(sid);
+
+        set({
+          activeSessionId: id,
+          sessionReady: id ? { ...get().sessionReady, [id]: false } : get().sessionReady,
+        });
         if (!id) return;
 
         const { projectTabs, activeProjectId } = get();
@@ -385,6 +454,13 @@ export const useSessionStore = create<SessionState>()(
         ensureSession().then((session) => {
           if (!session) return;
           setupSubscriptions(get(), set, id, session);
+          apiClient.call("agent.start", {
+            sessionId: id,
+            projectPath: session.projectPath,
+            sessionPath: session.sessionPath,
+          }).catch((err) => {
+            useAppStore.getState().addLog(`agent.start failed: ${err instanceof Error ? err.message : String(err)}`);
+          });
         });
       },
 
@@ -621,17 +697,24 @@ export const useSessionStore = create<SessionState>()(
         try {
           const sessions = await get().loadSessionsForProject(tab.path);
           const found = sessions?.find((s) => s.sessionId === activeSessionId);
-          if (found) {
-            get().setActiveSession(activeSessionId);
-            return true;
-          }
+          const targetId = found ? activeSessionId : (sessions.length > 0 ? sessions[0].sessionId : null);
+          if (!targetId) return false;
 
-          if (sessions.length > 0) {
-            get().setActiveSession(sessions[0].sessionId);
-            return true;
-          }
+          set({ activeSessionId: null });
+          get().setActiveSession(targetId);
 
-          return false;
+          await new Promise<void>((resolve) => {
+            const check = () => {
+              if (useSessionStore.getState().sessionReady[targetId]) {
+                resolve();
+              } else {
+                setTimeout(check, 50);
+              }
+            };
+            setTimeout(check, 50);
+          });
+
+          return true;
         } catch {
           return false;
         }
@@ -644,22 +727,7 @@ export const useSessionStore = create<SessionState>()(
         activeProjectId: state.activeProjectId,
         activeSessionId: state.activeSessionId,
       }),
-      onRehydrateStorage: () => (state) => {
-        if (!state?.activeProjectId || !state?.activeSessionId || !state?.projectTabs?.length) return;
-        const { activeProjectId, activeSessionId, projectTabs } = state;
-        const tab = projectTabs.find((t) => t.id === activeProjectId);
-        if (!tab) return;
-
-        setTimeout(() => {
-          state.setActiveProject(activeProjectId);
-          state.loadSessionsForProject(tab.path).then((sessions) => {
-            const found = sessions?.find((s) => s.sessionId === activeSessionId);
-            if (found) {
-              state.setActiveSession(activeSessionId);
-            }
-          });
-        }, 200);
-      },
+      onRehydrateStorage: () => () => {},
     }
   )
 );
@@ -676,6 +744,7 @@ apiClient.onReconnect(() => {
     lspSubscriptions: {},
     rulesSubscriptions: {},
     notifySubscriptions: {},
+    sessionReady: {},
   });
 
   if (!activeSessionId || !activeProjectId) return;
@@ -854,12 +923,27 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
   }
 
 	if (event.type === "message_end") {
+		const entryId = (event as Record<string, unknown>).entryId as string | undefined;
+		const message = event.message as unknown as Record<string, unknown>;
+		const role = typeof message.role === "string" ? message.role : "";
+
+		if (role === "user" && entryId) {
+			const chat = useChatStore.getState();
+			const existing = chat.messagesBySession[sessionId] || [];
+			const userMsg = existing.find((m) => m.role === "user" && !m.entryId);
+			if (userMsg) {
+				chat.setMessagesForSession(sessionId, existing.map((m) =>
+					m.id === userMsg.id ? { ...m, entryId } : m
+				));
+			}
+			return;
+		}
+
+		if (role !== "assistant") return;
 		const chat = useChatStore.getState();
 		const existing = chat.messagesBySession[sessionId] || [];
 		const lastMsg = existing[existing.length - 1];
 		if (!lastMsg || lastMsg.role !== "assistant") return;
-
-		const message = event.message as AssistantMessage;
 
 		if (message.usage) {
 			const raw = message.usage as unknown as Record<string, unknown>;
@@ -873,10 +957,11 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
 		chat.setMessagesForSession(sessionId, [...existing.slice(0, -1), {
 			...lastMsg,
 			isStreaming: false,
-			stopReason: message.stopReason ?? lastMsg.stopReason ?? null,
-			provider: message.provider || lastMsg.provider,
-			model: message.model || lastMsg.model,
-			...buildTokenUsage(message.usage),
+			stopReason: (message as Record<string, unknown>).stopReason as string | null | undefined ?? lastMsg.stopReason ?? null,
+			provider: ((message as Record<string, unknown>).provider as string | undefined) || lastMsg.provider,
+			model: ((message as Record<string, unknown>).model as string | undefined) || lastMsg.model,
+			...buildTokenUsage((message as Record<string, unknown>).usage as Record<string, unknown> | undefined),
+			entryId,
 		}]);
 		return;
 	}

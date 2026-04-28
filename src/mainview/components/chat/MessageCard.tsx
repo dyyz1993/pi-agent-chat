@@ -15,6 +15,7 @@ import { useTurnStore, EMPTY_SET } from "../../stores/use-turn-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useChatStore } from "../../stores/use-chat-store";
 import { apiClient } from "../../lib/api-client";
+import type { SessionMeta } from "../../types";
 import { MessageBubble } from "./MessageBubble";
 import type { ChatMessage } from "../../types";
 import { formatTokenCount } from "../../utils/turn-utils";
@@ -177,7 +178,8 @@ const HeaderActions = memo(function HeaderActions({ message }: { message: ChatMe
   const sessionId = useSessionStore((s) => s.activeSessionId);
   const messages = useChatStore((s) => sessionId ? (s.messagesBySession[sessionId] || []) : []);
 
-  const resolveEntryId = useCallback(async (): Promise<{ entryId: string; parentId: string | null } | null> => {
+  const resolveEntryId = useCallback(async (): Promise<string | null> => {
+    if (message.entryId) return message.entryId;
     if (!sessionId) return null;
     try {
       const tree = await apiClient.call("agent.getTree", { sessionId }) as Record<string, unknown>;
@@ -186,33 +188,82 @@ const HeaderActions = memo(function HeaderActions({ message }: { message: ChatMe
       const assistantMsgIdx = allAssistantMsgs.findIndex(m => m.id === message.id);
       const assistantTreeEntries = rawEntries.filter((e: Record<string, unknown>) => (e as { type: string }).type === "message" && (e as { label: string }).label === "assistant");
       if (assistantMsgIdx !== -1 && assistantMsgIdx < assistantTreeEntries.length) {
-        const e = assistantTreeEntries[assistantMsgIdx];
-        return { entryId: e.id, parentId: e.parentId };
+        return (assistantTreeEntries[assistantMsgIdx] as { id: string }).id;
       }
-      const last = rawEntries[rawEntries.length - 1];
-      return last ? { entryId: last.id, parentId: last.parentId } : null;
+      return null;
     } catch { return null; }
-  }, [sessionId, message.id, messages]);
+  }, [sessionId, message.id, message.entryId, messages]);
+
+  const resolveRollbackTarget = useCallback(async (mode: "message" | "all"): Promise<string | null> => {
+    if (!sessionId) return null;
+    try {
+      const tree = await apiClient.call("agent.getTree", { sessionId }) as unknown as Array<Record<string, unknown>>;
+      const entries = Array.isArray(tree) ? tree : [];
+      if (entries.length === 0) return null;
+
+      if (mode === "all") {
+        const root = entries.find((e) => e.parentId == null);
+        return (root?.id as string) ?? (entries[0]?.id as string) ?? null;
+      }
+
+      const entryId = await resolveEntryId();
+      if (!entryId) return null;
+      const assistantEntry = entries.find((e) => e.id === entryId);
+      if (!assistantEntry) return null;
+      const userEntry = entries.find((e) => e.id === assistantEntry.parentId);
+      if (!userEntry) return null;
+      const prevLeaf = entries.find((e) => e.id === userEntry.parentId);
+      return (prevLeaf?.id as string) ?? null;
+    } catch { return null; }
+  }, [sessionId, resolveEntryId]);
 
   const handleFork = useCallback(async () => {
-    const resolved = await resolveEntryId();
-    if (!sessionId || !resolved?.parentId) return;
-    apiClient.call("agent.fork", { sessionId, entryId: resolved.parentId }).catch(() => {});
+    const entryId = await resolveEntryId();
+    if (!sessionId || !entryId) return;
+    const result = await apiClient.call("agent.fork", { sessionId, entryId, position: "at" }).catch(() => undefined);
+    if (!result || result.cancelled || !result.newSessionId || !result.newSessionFile) return;
+    const state = useSessionStore.getState();
+    const activeTab = state.projectTabs.find((t: { id: string }) => t.id === state.activeProjectId);
+    if (!activeTab) return;
+
+    const now = Date.now();
+    const forkedSession: SessionMeta = {
+      sessionId: result.newSessionId,
+      name: "",
+      sessionPath: result.newSessionFile,
+      projectPath: activeTab.path,
+      parentSessionPath: null,
+      messageCount: 0,
+      firstMessage: "",
+      createdAt: now,
+      updatedAt: now,
+      status: "idle",
+    };
+
+    useSessionStore.setState((s) => ({
+      sessionsByProject: {
+        ...s.sessionsByProject,
+        [activeTab.path]: [forkedSession, ...(s.sessionsByProject[activeTab.path] || [])],
+      },
+    }));
+
+    state.setActiveSession(result.newSessionId);
+    useChatStore.getState().loadSessionMessages(result.newSessionId, { force: true });
   }, [sessionId, resolveEntryId]);
 
   const handleRollbackMessage = useCallback(async () => {
-    const resolved = await resolveEntryId();
-    if (!sessionId || !resolved?.parentId) return;
-    await apiClient.call("agent.navigateTree", { sessionId, targetId: resolved.parentId, summarize: false }).catch(() => {});
+    const targetId = await resolveRollbackTarget("message");
+    if (!sessionId || !targetId) return;
+    await apiClient.call("agent.navigateTree", { sessionId, targetId, summarize: false }).catch(() => {});
     useChatStore.getState().loadSessionMessages(sessionId, { force: true });
-  }, [sessionId, resolveEntryId]);
+  }, [sessionId, resolveRollbackTarget]);
 
   const handleRollbackAll = useCallback(async () => {
-    const resolved = await resolveEntryId();
-    if (!sessionId || !resolved?.parentId) return;
-    await apiClient.call("agent.navigateTree", { sessionId, targetId: resolved.parentId, summarize: false }).catch(() => {});
+    const targetId = await resolveRollbackTarget("all");
+    if (!sessionId || !targetId) return;
+    await apiClient.call("agent.navigateTree", { sessionId, targetId, summarize: false }).catch(() => {});
     useChatStore.getState().loadSessionMessages(sessionId, { force: true });
-  }, [sessionId, resolveEntryId]);
+  }, [sessionId, resolveRollbackTarget]);
 
   return (
     <>

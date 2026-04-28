@@ -101,7 +101,7 @@ interface ChatState {
   addMessage: (msg: ChatMessage) => void;
   setMessagesForSession: (sessionId: string, msgs: ChatMessage[]) => void;
   clearSessionMessages: (sessionId: string) => void;
-  loadSessionMessages: (sessionId: string, options?: { force?: boolean }) => Promise<void>;
+  loadSessionMessages: (sessionId: string, options?: { force?: boolean; sessionPath?: string }) => Promise<void>;
   setIsStreaming: (v: boolean) => void;
   incrementStreamVersion: () => void;
 }
@@ -190,7 +190,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   incrementStreamVersion: () => set((s) => ({ streamContentVersion: s.streamContentVersion + 1 })),
 
-  loadSessionMessages: async (sessionId: string, options?: { force?: boolean }) => {
+  loadSessionMessages: async (sessionId: string, options?: { force?: boolean; sessionPath?: string }) => {
     const sid = sessionId;
     if (!sid) return;
 
@@ -211,7 +211,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     try {
       const { apiClient } = await import("../lib/api-client");
-      const result = await apiClient.call("agent.getMessages", { sessionId: sid });
+      const result = await apiClient.call("agent.getMessages", { sessionId: sid, sessionPath: options?.sessionPath });
 
       if (!options?.force) {
         const current = get().messagesBySession[sid] || [];

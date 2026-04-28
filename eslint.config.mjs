@@ -17,6 +17,8 @@ export default tseslint.config(
       'preview-test/**',
       '*.html',
       '.codenomad/**',
+      'test*/**',
+      'test-*.ts',
     ],
   },
   {

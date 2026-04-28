@@ -52,6 +52,7 @@ export type ChatMessage = {
   stopReason?: string | null;
   isStreaming?: boolean;
   tokenUsage?: TokenUsage;
+  entryId?: string;
 };
 
 export type Turn = {
@@ -126,6 +127,18 @@ export type MergedProject = {
   sessionCount: number;
   lastModified: number;
   hasActiveSession: boolean;
+};
+
+export type DirectoryEntry = {
+  name: string;
+  path: string;
+  isDirectory: boolean;
+};
+
+export type FavoriteFolder = {
+  path: string;
+  name: string;
+  addedAt: number;
 };
 
 export type ProjectTab = {
