@@ -8,6 +8,7 @@ import {
   Bot,
   ArrowLeft,
   Square,
+  Loader2,
 } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useChatStore } from "../../stores/use-chat-store";
@@ -59,6 +60,10 @@ export function ChatPanel() {
 
   const effectiveStatus = isViewingSubagent ? subStatus : parentStatus;
 
+  const isLoading = useChatStore(useCallback(
+    (s) => !!activeSessionId && s.loadingSessions.has(activeSessionId),
+    [activeSessionId],
+  ));
   const inputText = useChatStore((s) => s.inputText);
   const sendMessage = useChatStore((s) => s.sendMessage);
   const setInputText = useChatStore((s) => s.setInputText);
@@ -201,7 +206,14 @@ export function ChatPanel() {
 
       <div className="flex-1 flex overflow-hidden">
         <div className="flex-1 min-w-0">
-          {isViewingSubagent ? (
+          {isLoading ? (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="flex flex-col items-center gap-2 opacity-50">
+                <Loader2 className="w-5 h-5 text-gray-500 animate-spin" />
+                <span className="text-xs text-gray-500">加载会话...</span>
+              </div>
+            </div>
+          ) : isViewingSubagent ? (
             <MessageListView messages={messages} scrollRef={messagesScrollRef} onScroll={handleScroll} virtualizer={subVirtualizer} />
           ) : (
             <MessageListView messages={mainMessages} scrollRef={messagesScrollRef} onScroll={handleScroll} virtualizer={mainVirtualizer} />
