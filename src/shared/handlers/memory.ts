@@ -6,6 +6,7 @@ import { existsSync } from "fs"
 import { join, resolve } from "path"
 import { homedir } from "os"
 import { getProcessManager } from "./agent"
+import { ClientChannel } from "../lib/client-channel"
 
 type P<K extends keyof RPCMethods> = RPCMethods[K] extends { params: infer P } ? P : never
 type R<K extends keyof RPCMethods> = RPCMethods[K] extends { result: infer R } ? R : never
@@ -92,10 +93,10 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 			const sessionId = params.sessionId
 			if (sessionId) {
 				try {
-					const result = await manager.sendChannelMessage(sessionId, "memory", {
-						type: "list",
-						projectPath: params.projectPath,
-					}) as { files: MemoryFile[]; entrypointContent: string | null; memoryDir?: string } | null
+					const channel = new ClientChannel((data) =>
+						manager.sendChannelMessage!(sessionId, "memory", data),
+					)
+					const result = await channel.call("memory.list", { projectPath: params.projectPath }) as { files: MemoryFile[]; entrypointContent: string | null; memoryDir?: string } | null
 					if (result) return { ...result, memoryDir: result.memoryDir ?? "" }
 				} catch {}
 			}
@@ -118,8 +119,10 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 	r("memory.remember", async (params) => {
 		const manager = getProcessManager()
 		if (manager) {
-			manager.sendChannelData(params.sessionId, "memory", {
-				type: "user_remember",
+			const channel = new ClientChannel((data) =>
+				manager.sendChannelMessage!(params.sessionId, "memory", data),
+			)
+			await channel.call("memory.userRemember", {
 				sourceSessionId: params.sessionId,
 				sourceMessageIds: params.messageIds,
 				content: params.content,

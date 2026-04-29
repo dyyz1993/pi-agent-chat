@@ -3,6 +3,7 @@ import type { RPCMethods, HandlerOptions } from "../rpc-schema";
 import { readFile } from "fs/promises";
 import { existsSync } from "fs";
 import { getProcessManager } from "./agent";
+import { ClientChannel } from "../lib/client-channel";
 
 type P<K extends keyof RPCMethods> = RPCMethods[K] extends { params: infer P } ? P : never;
 type R<K extends keyof RPCMethods> = RPCMethods[K] extends { result: infer R } ? R : never;
@@ -61,8 +62,8 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const { sessionId, mode } = params as { sessionId: string; mode: import("../modules/lsp").LspDiagnosticsMode };
     const pm = getProcessManager();
     if (!pm) throw new Error("No process manager available");
-    pm.sendChannelData(sessionId, "lsp", { action: "setMode", mode });
-
-    return { ok: true, mode };
+    const channel = new ClientChannel((data) => pm.sendChannelMessage!(sessionId, "lsp", data));
+    const result = await channel.call("lsp.setMode", { mode });
+    return result as { ok: boolean; mode: typeof mode };
   });
 }

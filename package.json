@@ -16,9 +16,9 @@
 		"test:watch": "vitest"
 	},
 	"dependencies": {
-		"@dyyz1993/pi-agent-core": "0.69.9",
-		"@dyyz1993/pi-ai": "0.69.9",
-		"@dyyz1993/rpc-core": "^1.0.1",
+		"@dyyz1993/pi-agent-core": "^0.69.13",
+		"@dyyz1993/pi-ai": "^0.69.13",
+		"@dyyz1993/rpc-core": "^1.0.3",
 		"@tanstack/react-virtual": "^3.13.24",
 		"electrobun": "1.13.1",
 		"lucide-react": "^1.8.0",
