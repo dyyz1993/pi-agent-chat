@@ -8,6 +8,8 @@ import {
   Bot,
   ArrowLeft,
   Square,
+  Zap,
+  Clock,
   Loader2,
 } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -28,6 +30,7 @@ import { MessageListView } from "./MessageListView";
 import { MessageSelectionBar } from "./MessageSelectionBar";
 import { QuickActionToolbar } from "./QuickActionToolbar";
 import { ScrollToolbar } from "./ScrollToolbar";
+import { QueueCards } from "./QueueCards";
 import type { ChatMessage } from "../../types";
 
 const EMPTY_MSGS: never[] = [];
@@ -70,6 +73,8 @@ export function ChatPanel() {
   ));
   const inputText = useChatStore((s) => s.inputText);
   const sendMessage = useChatStore((s) => s.sendMessage);
+  const sendSteer = useChatStore((s) => s.sendSteer);
+  const sendFollowUp = useChatStore((s) => s.sendFollowUp);
   const setInputText = useChatStore((s) => s.setInputText);
   const setActive = useChatNavStore((s) => s.setActive);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
@@ -87,7 +92,7 @@ export function ChatPanel() {
     count: mainMessages.length,
     getScrollElement: () => messagesScrollRef.current,
     estimateSize: (index) => estimateMessageSize(mainMessages[index]),
-    overscan: 5,
+    overscan: isMobileOrTablet ? 2 : 5,
     measureElement: (el) => el.getBoundingClientRect().height,
   });
 
@@ -95,7 +100,7 @@ export function ChatPanel() {
     count: subMessages.length,
     getScrollElement: () => messagesScrollRef.current,
     estimateSize: (index) => estimateMessageSize(subMessages[index]),
-    overscan: 5,
+    overscan: isMobileOrTablet ? 2 : 5,
     measureElement: (el) => el.getBoundingClientRect().height,
   });
 
@@ -118,7 +123,7 @@ export function ChatPanel() {
   const latestVizRef = useRef(activeVirtualizer);
   latestVizRef.current = activeVirtualizer;
 
-  const { handleScroll, markProgrammatic, isAtTop, isAtBottom, autoScrollEnabled, toggleAutoScroll } = useActiveScrollTracker({
+  const { handleScroll, scrollToEdge, isAtTop, isAtBottom, autoScrollEnabled, toggleAutoScroll } = useActiveScrollTracker({
     scrollRef: messagesScrollRef,
     virtualizer: activeVirtualizer,
     messageIds,
@@ -132,15 +137,12 @@ export function ChatPanel() {
 
   const handleScrollToEdge = useCallback((edge: "top" | "bottom") => {
     if (messageIds.length === 0) return;
-    const idx = edge === "top" ? 0 : messageIds.length - 1;
-    const id = messageIds[idx];
+    const id = edge === "top" ? messageIds[0] : messageIds[messageIds.length - 1];
     setNavId(id);
     clickScrollRef.current = true;
-    markProgrammatic(() => {
-      activeVirtualizer.scrollToIndex(idx, { align: edge === "top" ? "start" : "end" });
-    });
-    setTimeout(() => { clickScrollRef.current = false; }, 400);
-  }, [messageIds, activeVirtualizer, setNavId, markProgrammatic]);
+    scrollToEdge(edge);
+    setTimeout(() => { clickScrollRef.current = false; }, 500);
+  }, [messageIds, setNavId, scrollToEdge]);
 
   const handleNavDotClick = useCallback(
     (navId: string) => {
@@ -168,7 +170,16 @@ export function ChatPanel() {
 
   const handleSend = async () => {
     if (!inputText.trim()) return;
-    await sendMessage();
+    if (isStreaming) {
+      await sendFollowUp();
+    } else {
+      await sendMessage();
+    }
+  };
+
+  const handleSteer = async () => {
+    if (!inputText.trim() || !isStreaming) return;
+    await sendSteer();
   };
 
   useEffect(() => {
@@ -303,7 +314,7 @@ export function ChatPanel() {
             />
           )}
         </div>
-        <div className="w-12 shrink-0">
+        <div className="w-12 shrink-0 overflow-hidden">
           <SideNav
             messages={messages}
             onNavDotClick={handleNavDotClick}
@@ -320,7 +331,12 @@ export function ChatPanel() {
       />
 
       {!isViewingSubagent && <QuickActionToolbar />}
-      <div className="px-3 pb-3 pt-2 flex-shrink-0 flex items-end gap-1.5 bg-gray-900 border-t border-gray-800" style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
+
+      {activeSessionId && !isViewingSubagent && (
+        <QueueCards sessionId={activeSessionId} />
+      )}
+
+      <div className="px-3 pb-3 pt-2 flex-shrink-0 flex items-stretch gap-1.5 bg-gray-900 border-t border-gray-800" style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
         {!isViewingSubagent && (
           <>
             {!isMobileOrTablet && (
@@ -337,11 +353,26 @@ export function ChatPanel() {
             <InputBar ref={inputBarRef} value={inputText} onChange={setInputText} onSend={handleSend} sessionId={activeSessionId ?? ""} />
 
             <div className="flex flex-col gap-1 shrink-0 justify-between py-1">
-              <button onClick={handleAbort} disabled={!isStreaming} className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${isStreaming ? "bg-red-600 text-white hover:bg-red-700" : "bg-red-900/30 text-red-500/50 cursor-not-allowed"}`} title="暂停">
-                <Square className="w-4 h-4" />
-              </button>
-              <button onClick={() => inputBarRef.current?.send()} disabled={!inputText.trim()} className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${inputText.trim() ? "bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm shadow-indigo-500/20" : "bg-gray-800 text-gray-600 cursor-not-allowed"}`} title="发送">
-                <ArrowUp className="w-4 h-4" />
+              {isStreaming && inputText.trim() ? (
+                <button onClick={handleSteer} className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-amber-600 text-white hover:bg-amber-700 shadow-sm shadow-amber-500/20" title="插入消息 (Steer)">
+                  <Zap className="w-4 h-4" />
+                </button>
+              ) : isStreaming ? (
+                <button onClick={handleAbort} disabled={!isStreaming} className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-red-600 text-white hover:bg-red-700" title="停止">
+                  <Square className="w-4 h-4" />
+                </button>
+              ) : (
+                <button disabled className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-red-900/30 text-red-500/50 cursor-not-allowed" title="停止">
+                  <Square className="w-4 h-4" />
+                </button>
+              )}
+              <button
+                onClick={() => inputBarRef.current?.send()}
+                disabled={!inputText.trim()}
+                className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${inputText.trim() ? (isStreaming ? "bg-blue-600 text-white hover:bg-blue-700 shadow-sm shadow-blue-500/20" : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm shadow-indigo-500/20") : "bg-gray-800 text-gray-600 cursor-not-allowed"}`}
+                title={isStreaming ? "排队发送 (Follow-up)" : "发送"}
+              >
+                {isStreaming ? <Clock className="w-4 h-4" /> : <ArrowUp className="w-4 h-4" />}
               </button>
             </div>
           </>

@@ -4,7 +4,6 @@ import { apiClient } from "../lib/api-client";
 import { useAppStore } from "./use-app-store";
 import { useSessionStore } from "./use-session-store";
 import { useMemoryStore } from "./use-memory-store";
-import { handleBackgroundExit } from "./use-bash-store";
 import { messageToChatMessage } from "../lib/message-mapper";
 import type { CustomEntryForUI } from "../../shared/modules/agent";
 
@@ -98,6 +97,9 @@ interface ChatState {
 
   setInputText: (text: string) => void;
   sendMessage: () => Promise<void>;
+  sendSteer: () => Promise<void>;
+  sendFollowUp: () => Promise<void>;
+  clearQueue: () => Promise<void>;
   addMessage: (msg: ChatMessage) => void;
   setMessagesForSession: (sessionId: string, msgs: ChatMessage[]) => void;
   clearSessionMessages: (sessionId: string) => void;
@@ -159,6 +161,42 @@ export const useChatStore = create<ChatState>((set, get) => ({
       set({ isStreaming: false });
       useAppStore.getState().addLog(`Send error: ${err instanceof Error ? err.message : String(err)}`);
     }
+  },
+
+  sendSteer: async () => {
+    const { inputText } = get();
+    if (!inputText.trim()) return;
+    const text = inputText.trim();
+    const sessionId = useSessionStore.getState().activeSessionId;
+    if (!sessionId) return;
+    set({ inputText: "" });
+    try {
+      await apiClient.call("agent.steer", { sessionId, content: text });
+    } catch (err) {
+      useAppStore.getState().addLog(`Steer error: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  },
+
+  sendFollowUp: async () => {
+    const { inputText } = get();
+    if (!inputText.trim()) return;
+    const text = inputText.trim();
+    const sessionId = useSessionStore.getState().activeSessionId;
+    if (!sessionId) return;
+    set({ inputText: "" });
+    try {
+      await apiClient.call("agent.followUp", { sessionId, content: text });
+    } catch (err) {
+      useAppStore.getState().addLog(`FollowUp error: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  },
+
+  clearQueue: async () => {
+    const sessionId = useSessionStore.getState().activeSessionId;
+    if (!sessionId) return;
+    try {
+      await apiClient.call("agent.clearQueue", { sessionId });
+    } catch {}
   },
 
   addMessage: (msg) => {
@@ -273,13 +311,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
               summary: payload.summary || "",
               snippet: payload.snippet || "",
             });
-          }
-
-          if (entry.customType === "bash_background_exit" && entry.data) {
-            handleBackgroundExit(
-              sid,
-              entry.data as import("../../shared/modules/bash").BashBackgroundExitEvent,
-            );
           }
 
           msgs.push({
