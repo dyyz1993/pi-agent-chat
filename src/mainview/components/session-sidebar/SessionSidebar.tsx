@@ -189,6 +189,14 @@ function StatusBadge({ sessionId }: { sessionId: string }) {
       </span>
     );
   }
+  if (status === "retrying") {
+    return (
+      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-red-500/15 text-red-400 border border-red-500/20">
+        <span className="w-1 h-1 rounded-full bg-red-400 animate-pulse" />
+        重试中
+      </span>
+    );
+  }
   return (
     <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
       <span className="w-1 h-1 rounded-full bg-emerald-400" />

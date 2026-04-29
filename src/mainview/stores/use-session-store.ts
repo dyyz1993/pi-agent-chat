@@ -53,6 +53,7 @@ interface SessionState {
   todosBySession: Record<string, TodoItem[]>;
   sessionContextMap: Record<string, ContextUsage>;
   sessionStatusMap: Record<string, SessionStatus>;
+  queueBySession: Record<string, { steering: string[]; followUp: string[] }>;
   currentModel: ModelInfo | null;
   currentThinkingLevel: string;
   availableModels: Array<{ provider: string; id: string; contextWindow?: number; reasoning?: boolean }>;
@@ -396,6 +397,7 @@ export const useSessionStore = create<SessionState>()(
       todosBySession: {},
       sessionContextMap: {},
       sessionStatusMap: {},
+      queueBySession: {},
       currentModel: null,
       currentThinkingLevel: "medium",
       availableModels: [],
@@ -878,10 +880,7 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
   }
 
   if (event.type === "auto_retry_end") {
-    useRetryStore.getState().endRetry(sessionId, {
-      success: event.success,
-      finalError: event.finalError,
-    });
+    useRetryStore.getState().endRetry(sessionId);
     notificationGateway.emit({
       type: event.success ? "retry_success" : "retry_failed",
       sessionId,
@@ -1204,6 +1203,16 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
       }
       return { sessionsByProject: updated };
     });
+    return;
+  }
+
+  if (event.type === "queue_update") {
+    useSessionStore.setState((s) => ({
+      queueBySession: {
+        ...s.queueBySession,
+        [sessionId]: { steering: event.steering, followUp: event.followUp },
+      },
+    }));
     return;
   }
 }

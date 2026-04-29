@@ -13,6 +13,7 @@ const STATUS_CONFIGS = {
   streaming: { color: "#facc15", strokeClass: "text-yellow-400", animClass: "animate-pulse", label: "工作中" },
   compacting: { color: "#facc15", strokeClass: "text-yellow-400", animClass: "animate-pulse", label: "工作中" },
   permission: { color: "#f87171", strokeClass: "text-red-400", animClass: "", label: "需要协助" },
+  retrying: { color: "#f87171", strokeClass: "text-red-400", animClass: "animate-pulse", label: "重试中" },
   idle: { color: "#4ade80", strokeClass: "text-green-400", animClass: "", label: "空闲" },
 } as const;
 
@@ -23,6 +24,8 @@ function statusConfig(status: SessionStatus | undefined) {
       return STATUS_CONFIGS.streaming;
     case "permission":
       return STATUS_CONFIGS.permission;
+    case "retrying":
+      return STATUS_CONFIGS.retrying;
     case "idle":
     default:
       return STATUS_CONFIGS.idle;
@@ -86,7 +89,7 @@ export const TokenStatusBar = memo(function TokenStatusBar({ sessionId }: { sess
     percent = contextUsage.tokens / contextUsage.contextWindow;
   }
 
-  const isWorking = sessionStatus === "streaming" || sessionStatus === "compacting";
+  const isWorking = sessionStatus === "streaming" || sessionStatus === "compacting" || sessionStatus === "retrying";
 
   return (
     <div className="flex items-center gap-1.5">

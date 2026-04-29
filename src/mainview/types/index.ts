@@ -75,7 +75,7 @@ export type CollapseState = Record<string, boolean>;
 export type EditingType = "rename" | "newFile" | "newDir";
 export type EditingNode = { path: string; type: EditingType };
 
-export type SessionStatus = "idle" | "streaming" | "compacting" | "permission";
+export type SessionStatus = "idle" | "streaming" | "compacting" | "permission" | "retrying";
 
 export type ContextUsage = {
   tokens: number | null;
