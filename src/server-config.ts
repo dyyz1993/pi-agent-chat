@@ -15,7 +15,7 @@ export const config = {
     bash: process.env.PI_EXT_BASH || "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/test/auto-memory/bash.ts",
     lsp: process.env.PI_EXT_LSP || "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/test/auto-memory/lsp/index.ts",
     preview: process.env.PI_EXT_PREVIEW || "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/test/auto-memory/preview.ts",
-    autoMemory: process.env.PI_EXT_AUTO_MEMORY || "/Users/xuyingzhou/.pi/agent/extensions/auto-memory/auto-memory.ts",
+    autoMemory: process.env.PI_EXT_AUTO_MEMORY || "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/test/auto-memory/auto-memory.ts",
     autoSessionTitle: process.env.PI_EXT_AUTO_SESSION_TITLE || "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/examples/extensions/auto-session-title.ts",
     rules: process.env.PI_EXT_RULES || "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/src/rules-engine/index.ts",
     fileSnapshot: process.env.PI_EXT_FILE_SNAPSHOT || "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/examples/extensions/file-snapshot.ts",

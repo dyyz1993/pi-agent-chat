@@ -7,6 +7,7 @@ export function getLanguage(filename: string): string {
     py: "python", rs: "rust", go: "go", sh: "bash", bash: "bash",
     yml: "yaml", yaml: "yaml", toml: "toml", xml: "markup",
     sql: "sql", graphql: "graphql",
+    mdc: "markdown",
   };
   return map[ext] || "";
 }
@@ -19,6 +20,7 @@ export function isTextFile(filename: string): boolean {
     "xml", "sql", "graphql", "env", "gitignore", "prettierrc", "eslintrc",
     "lock", "log", "conf", "cfg", "ini", "csv", "tsv",
     "mjs", "cjs", "mts", "cts", "map",
+    "mdc",
   ]);
   return textExts.has(ext);
 }

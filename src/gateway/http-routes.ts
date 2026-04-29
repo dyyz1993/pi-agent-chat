@@ -8,7 +8,7 @@ import { stat, readFile, writeFile, mkdir, appendFile } from "fs/promises";
 import { existsSync } from "fs";
 import { extname, basename, dirname, resolve } from "path";
 import { createLogger } from "../shared/lib/logger";
-import { listRecentProjects } from "../shared/lib/project-config";
+import { listRecentProjects, restoreOpenTabs } from "../shared/lib/project-config";
 
 const log = createLogger("gateway");
 
@@ -26,6 +26,7 @@ const MIME_TYPES: Record<string, string> = {
   ".ico": "image/x-icon",
   ".txt": "text/plain",
   ".md": "text/markdown",
+  ".mdc": "text/markdown",
   ".ts": "text/plain",
   ".tsx": "text/plain",
   ".py": "text/plain",
@@ -37,7 +38,12 @@ const MIME_TYPES: Record<string, string> = {
 };
 
 // 路径白名单校验：阻止路径遍历攻击
-const ALLOWED_ROOTS = [resolve(process.cwd())];
+const ALLOWED_ROOTS = [
+	resolve(process.cwd()),
+	resolve(process.env.HOME || "", ".claude", "rules"),
+	resolve(process.env.HOME || "", ".config", "opencode", "rules"),
+	resolve(process.env.HOME || "", ".opencode", "rules"),
+];
 let cachedAllowedRoots: string[] | null = null;
 let rootsCacheTime = 0;
 const ROOTS_CACHE_TTL = 30_000;
@@ -47,9 +53,12 @@ async function getAllowedRoots(): Promise<string[]> {
   if (cachedAllowedRoots && now - rootsCacheTime < ROOTS_CACHE_TTL) return cachedAllowedRoots;
   try {
     const projects = await listRecentProjects();
+    const { tabs } = await restoreOpenTabs();
+    const tabPaths = tabs.map((t) => resolve(t.path));
     cachedAllowedRoots = [
       ...ALLOWED_ROOTS,
       ...projects.map((p) => resolve(p.path)),
+      ...tabPaths,
     ];
     rootsCacheTime = now;
   } catch {

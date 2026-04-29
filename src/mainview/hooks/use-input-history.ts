@@ -24,9 +24,12 @@ function writeHistory(sessionId: string, items: string[]) {
 }
 
 export function useInputHistory(sessionId: string) {
-  const [history] = useState(() => readHistory(sessionId));
-  const historyRef = useRef<string[]>(history);
+  const historyRef = useRef<string[]>(readHistory(sessionId));
   const indexRef = useRef(-1);
+  const [, forceUpdate] = useState(0);
+
+  const hasPrev = historyRef.current.length > 0 && indexRef.current < historyRef.current.length - 1;
+  const hasNext = indexRef.current > 0;
 
   const saveToHistory = useCallback((text: string) => {
     const trimmed = text.trim();
@@ -37,6 +40,7 @@ export function useInputHistory(sessionId: string) {
     historyRef.current = updated;
     writeHistory(sessionId, updated);
     indexRef.current = -1;
+    forceUpdate((n) => n + 1);
   }, [sessionId]);
 
   const navigatePrev = useCallback((): string | null => {
@@ -44,6 +48,7 @@ export function useInputHistory(sessionId: string) {
     if (h.length === 0) return null;
     const nextIdx = Math.min(indexRef.current + 1, h.length - 1);
     indexRef.current = nextIdx;
+    forceUpdate((n) => n + 1);
     return h[nextIdx];
   }, []);
 
@@ -53,9 +58,11 @@ export function useInputHistory(sessionId: string) {
     const nextIdx = indexRef.current - 1;
     if (nextIdx < 0) {
       indexRef.current = -1;
+      forceUpdate((n) => n + 1);
       return "";
     }
     indexRef.current = nextIdx;
+    forceUpdate((n) => n + 1);
     return h[nextIdx];
   }, []);
 
@@ -65,11 +72,13 @@ export function useInputHistory(sessionId: string) {
     try {
       localStorage.removeItem(getStorageKey(sessionId));
     } catch { /* ignore */ }
+    forceUpdate((n) => n + 1);
   }, [sessionId]);
 
   const resetIndex = useCallback(() => {
     indexRef.current = -1;
+    forceUpdate((n) => n + 1);
   }, []);
 
-  return { saveToHistory, navigatePrev, navigateNext, clearHistory, resetIndex };
+  return { saveToHistory, navigatePrev, navigateNext, clearHistory, resetIndex, hasPrev, hasNext };
 }
