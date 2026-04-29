@@ -10,7 +10,7 @@ export type RulesChannelEvent =
 export interface RuleDetail {
 	name: string;
 	title: string;
-	content: string;
+	filePath: string;
 	scope: "user" | "pi" | "project" | "managed";
 	source: string;
 	severity: RuleSeverity;

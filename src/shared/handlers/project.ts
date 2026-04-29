@@ -2,7 +2,7 @@ import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { RPCMethods, HandlerOptions } from "../rpc-schema";
 import { existsSync } from "fs";
 import { basename } from "path";
-import { addRecentProject, listRecentProjects, removeRecentProject, listConfiguredPaths, addConfiguredPath, removeConfiguredPath, syncOpenTabs, restoreOpenTabs } from "../lib/project-config";
+import { addRecentProject, listRecentProjects, removeRecentProject, listConfiguredPaths, addConfiguredPath, removeConfiguredPath, syncOpenTabs, restoreOpenTabs, listDirectory, removeFavoriteFolder, listFavoriteFolders, toggleProjectPin, toggleFavoriteFolder } from "../lib/project-config";
 import { scanSessionsForProject, scanAllProjects, listPiProjects, listMergedProjects } from "../lib/session-scanner";
 
 type P<K extends keyof RPCMethods> = RPCMethods[K] extends { params: infer P } ? P : never;
@@ -96,5 +96,30 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
   r("project.restoreTabs", async () => {
     return restoreOpenTabs();
+  });
+
+  r("project.listDirectory", async (params) => {
+    const entries = await listDirectory(params.dirPath, params.searchQuery);
+    return { entries };
+  });
+
+  r("project.toggleFavoriteFolder", async (params) => {
+    const result = await toggleFavoriteFolder(params.folderPath);
+    return { isFavorite: result.added, favorites: result.favorites };
+  });
+
+  r("project.removeFavoriteFolder", async (params) => {
+    await removeFavoriteFolder(params.folderPath);
+    return { ok: true };
+  });
+
+  r("project.listFavoriteFolders", async () => {
+    const folders = await listFavoriteFolders();
+    return { folders };
+  });
+
+  r("project.toggleProjectPin", async (params) => {
+    const pinned = await toggleProjectPin(params.projectPath);
+    return { pinned };
   });
 }

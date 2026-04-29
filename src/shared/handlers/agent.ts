@@ -72,7 +72,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("agent.getMessages", async (params) => {
-    const result = await manager!.getMessages(params.sessionId);
+    const result = await manager!.getMessages(params.sessionId, params.sessionPath);
     return { messages: result.messages, customEntries: result.customEntries } as R<"agent.getMessages">;
   });
 
@@ -197,7 +197,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("agent.fork", async (params) => {
-    return manager!.fork(params.sessionId, params.entryId) as Promise<R<"agent.fork">>;
+    return manager!.fork(params.sessionId, params.entryId, params.position ? { position: params.position } : undefined) as Promise<R<"agent.fork">>;
   });
 
   r("agent.navigateTree", async (params) => {

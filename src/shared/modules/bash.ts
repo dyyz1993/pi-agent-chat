@@ -40,11 +40,11 @@ export interface BashMethods {
     result: { lines: string[]; totalLines: number; hasMore: boolean };
   };
   "bash.watchLog": {
-    params: { logPath: string };
+    params: { logPath: string; sessionId?: string };
     result: { watching: boolean };
   };
   "bash.unwatchLog": {
-    params: { logPath: string };
+    params: { logPath: string; sessionId?: string };
     result: { stopped: boolean };
   };
 }

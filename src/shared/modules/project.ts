@@ -53,6 +53,26 @@ export interface ProjectMethods {
     params: {};
     result: { tabs: PersistedTab[]; activeTabId: string | null };
   };
+  "project.listDirectory": {
+    params: { dirPath: string; searchQuery?: string };
+    result: { entries: DirectoryEntry[] };
+  };
+  "project.toggleFavoriteFolder": {
+    params: { folderPath: string };
+    result: { isFavorite: boolean; favorites: FavoriteFolder[] };
+  };
+  "project.removeFavoriteFolder": {
+    params: { folderPath: string };
+    result: { ok: boolean };
+  };
+  "project.listFavoriteFolders": {
+    params: {};
+    result: { folders: FavoriteFolder[] };
+  };
+  "project.toggleProjectPin": {
+    params: { projectPath: string };
+    result: { pinned: boolean };
+  };
 }
 
 export interface RecentProject {
@@ -98,4 +118,16 @@ export interface SessionMeta {
   updatedAt: number;
   status: "idle" | "running";
   pinned?: boolean;
+}
+
+export interface DirectoryEntry {
+  name: string;
+  path: string;
+  isDirectory: boolean;
+}
+
+export interface FavoriteFolder {
+  path: string;
+  name: string;
+  addedAt: number;
 }

@@ -63,7 +63,7 @@ export interface AgentMethods {
     } | null;
   };
   "agent.getMessages": {
-    params: { sessionId: string };
+    params: { sessionId: string; sessionPath?: string };
     result: { messages: AgentMessageForUI[]; customEntries: CustomEntryForUI[] };
   };
   "agent.steer": {
@@ -175,8 +175,8 @@ export interface AgentMethods {
     result: { messages: Array<{ entryId: string; text: string }> };
   };
   "agent.fork": {
-    params: { sessionId: string; entryId: string };
-    result: { text: string; cancelled: boolean };
+    params: { sessionId: string; entryId: string; position?: "before" | "at" };
+    result: { text: string; cancelled: boolean; newSessionFile?: string; newSessionId?: string };
   };
   "agent.navigateTree": {
     params: { sessionId: string; targetId: string; summarize?: boolean };
@@ -261,7 +261,9 @@ export type AgentEvent =
   | ExtensionUIRequestEvent
   | ChannelDataEvent
   | { type: "custom_entry"; customType: string; data: unknown; id: string }
-  | { type: "session_rename"; oldName: string | undefined; newName: string };
+  | { type: "session_rename"; oldName: string | undefined; newName: string }
+  | { type: "auto_retry_start"; attempt: number; maxAttempts: number; delayMs: number; errorMessage: string }
+  | { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string };
 
 export type { AssistantMessage, AssistantMessageEvent, TextContent };
 
