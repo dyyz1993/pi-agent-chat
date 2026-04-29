@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import {
 	ChevronDown,
 	ChevronRight,
@@ -143,27 +144,7 @@ function LogViewer({ logPath, toolCallId, onClose }: { logPath: string; toolCall
 	const mountedRef = useRef(true);
 	const loadingRef = useRef(false);
 	const initTag = useRef(0);
-
-	const loadHistory = useCallback(async (tag: number) => {
-		if (loadingRef.current) return;
-		loadingRef.current = true;
-		try {
-			const result = await apiClient.call("bash.readLog", {
-				logPath,
-				offset: offsetRef.current,
-				limit: 500,
-			}) as { lines: string[]; totalLines: number; hasMore: boolean };
-			if (!mountedRef.current || initTag.current !== tag) return;
-			setLines((prev) => (offsetRef.current === 0 ? result.lines : [...prev, ...result.lines]));
-			setTotalLines(result.totalLines);
-			setHasMore(result.hasMore);
-			offsetRef.current += result.lines.length;
-		} catch {
-			if (!mountedRef.current || initTag.current !== tag) return;
-		} finally {
-			if (mountedRef.current && initTag.current === tag) { setLoading(false); loadingRef.current = false; }
-		}
-	}, [logPath]);
+	const subIdRef = useRef<string | null>(null);
 
 	useEffect(() => {
 		const tag = ++initTag.current;
@@ -174,34 +155,81 @@ function LogViewer({ logPath, toolCallId, onClose }: { logPath: string; toolCall
 		setLines([]);
 		setTotalLines(0);
 		setHasMore(false);
+		subIdRef.current = null;
 
-		const unsub = apiClient.subscribe("bash.logUpdate", (payload: { logPath: string; newLines: string[] }) => {
-			if (payload.logPath !== logPath || initTag.current !== tag) return;
-			if (payload.newLines.length === 0) return;
-			setLines((prev) => [...prev, ...payload.newLines]);
-			setTotalLines((prev) => prev + payload.newLines.length);
-		});
+		let cancelled = false;
 
-		loadHistory(tag);
-		apiClient.call("bash.watchLog", { logPath }).catch(() => {});
+		(async () => {
+			try {
+				const sid = useSessionStore.getState().activeSessionId;
+				const id = await apiClient.subscribe("bash.logUpdate", (payload: { logPath: string; newLines: string[] }) => {
+					if (payload.logPath !== logPath || initTag.current !== tag) return;
+					if (payload.newLines.length === 0) return;
+					setLines((prev) => [...prev, ...payload.newLines]);
+					setTotalLines((prev) => prev + payload.newLines.length);
+				}, sid ? { sessionId: sid } : undefined);
+				if (cancelled) { apiClient.unsubscribe(id); return; }
+				subIdRef.current = id;
+
+				if (loadingRef.current || cancelled) return;
+				loadingRef.current = true;
+				try {
+					const result = await apiClient.call("bash.readLog", {
+						logPath,
+						offset: offsetRef.current,
+						limit: 500,
+					}) as { lines: string[]; totalLines: number; hasMore: boolean };
+					if (cancelled || !mountedRef.current) return;
+					setLines((prev) => (offsetRef.current === 0 ? result.lines : [...prev, ...result.lines]));
+					setTotalLines(result.totalLines);
+					setHasMore(result.hasMore);
+					offsetRef.current += result.lines.length;
+				} catch {
+				} finally {
+					if (!cancelled && mountedRef.current) { setLoading(false); loadingRef.current = false; }
+				}
+
+				if (cancelled) return;
+				await apiClient.call("bash.watchLog", { logPath, sessionId: sid ?? undefined });
+			} catch {}
+		})();
 
 		return () => {
+			cancelled = true;
 			mountedRef.current = false;
-			unsub.then((id) => apiClient.unsubscribe(id));
-			apiClient.call("bash.unwatchLog", { logPath }).catch(() => {});
+			if (subIdRef.current) apiClient.unsubscribe(subIdRef.current);
+			const sid = useSessionStore.getState().activeSessionId;
+			apiClient.call("bash.unwatchLog", { logPath, sessionId: sid ?? undefined }).catch(() => {});
 		};
-	}, [logPath, loadHistory]);
+	}, [logPath]);
 
 	useEffect(() => {
 		if (autoScroll && containerRef.current) containerRef.current.scrollTop = containerRef.current.scrollHeight;
 	}, [lines, autoScroll]);
 
-	function handleScroll() {
+	async function handleScroll() {
 		const el = containerRef.current;
 		if (!el) return;
 		const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
 		setAutoScroll(nearBottom);
-		if (nearBottom && hasMore && !loadingRef.current) loadHistory(initTag.current);
+		if (nearBottom && hasMore && !loadingRef.current) {
+			loadingRef.current = true;
+			try {
+				const tag = initTag.current;
+				const result = await apiClient.call("bash.readLog", {
+					logPath,
+					offset: offsetRef.current,
+					limit: 500,
+				}) as { lines: string[]; totalLines: number; hasMore: boolean };
+				if (!mountedRef.current || initTag.current !== tag) return;
+				setLines((prev) => [...prev, ...result.lines]);
+				setTotalLines(result.totalLines);
+				setHasMore(result.hasMore);
+				offsetRef.current += result.lines.length;
+			} catch {} finally {
+				if (mountedRef.current) loadingRef.current = false;
+			}
+		}
 	}
 
 	async function sendStdin() {
@@ -214,9 +242,9 @@ function LogViewer({ logPath, toolCallId, onClose }: { logPath: string; toolCall
 	}
 
 	return (
-		<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-6" onClick={onClose}>
+		<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 sm:p-6" onClick={onClose}>
 			<div
-				className="bg-gray-900 border border-gray-700 rounded-lg w-full max-w-4xl flex flex-col h-[85vh] sm:h-[70vh]"
+				className="bg-gray-900 border-t sm:border border-gray-700 sm:rounded-lg w-full sm:max-w-4xl flex flex-col h-full sm:h-[70vh] sm:max-h-[85vh]"
 				onClick={(e) => e.stopPropagation()}
 			>
 				<div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-700 shrink-0">
@@ -247,7 +275,7 @@ function LogViewer({ logPath, toolCallId, onClose }: { logPath: string; toolCall
 					)}
 				</div>
 
-				<div className="flex items-center gap-2 px-3 sm:px-4 py-2 border-t border-gray-700 shrink-0">
+				<div className="flex items-center gap-2 px-3 sm:px-4 py-2 border-t border-gray-700 shrink-0" style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}>
 					<span className="text-[9px] text-gray-600 shrink-0">{lines.length}/{totalLines}</span>
 					<button onClick={() => setAutoScroll(true)} className="text-[9px] text-gray-500 hover:text-gray-400 transition-colors shrink-0">
 						滚动到底部
@@ -281,11 +309,12 @@ export { BashProcessCard, LogViewer };
 export function BashPanel() {
 	const activeSessionId = useSessionStore((s) => s.activeSessionId);
 	const allProcesses = useBashStore(useShallow((s) => s.processesBySession[activeSessionId ?? ""]));
+	const backgroundedIds = useBashStore(useShallow((s) => s.backgroundedIds));
 	const [collapsed, setCollapsed] = useState(false);
 	const [logViewer, setLogViewer] = useState<{ logPath: string; toolCallId: string } | null>(null);
 
 	const backgroundProcesses = allProcesses?.filter((p) =>
-		p.status === "background" || p.status === "done" || p.status === "error" || p.status === "terminated",
+		backgroundedIds.has(p.toolCallId),
 	) ?? [];
 
 	if (backgroundProcesses.length === 0) return null;
@@ -314,8 +343,9 @@ export function BashPanel() {
 				</div>
 			)}
 
-			{logViewer && (
-				<LogViewer logPath={logViewer.logPath} toolCallId={logViewer.toolCallId} onClose={() => setLogViewer(null)} />
+			{logViewer && createPortal(
+				<LogViewer logPath={logViewer.logPath} toolCallId={logViewer.toolCallId} onClose={() => setLogViewer(null)} />,
+				document.body,
 			)}
 		</div>
 	);

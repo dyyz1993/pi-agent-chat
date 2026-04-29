@@ -5,7 +5,7 @@ import { getProcessManager } from "./agent";
 import { statSync } from "node:fs";
 import { createReadStream } from "node:fs";
 import { createInterface } from "node:readline";
-import { spawn as spawnProc } from "child_process";
+import { spawn as spawnProc, type ChildProcess } from "child_process";
 
 type P<K extends keyof RPCMethods> = RPCMethods[K] extends { params: infer P } ? P : never;
 type R<K extends keyof RPCMethods> = RPCMethods[K] extends { result: infer R } ? R : never;
@@ -17,6 +17,10 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   ) => {
     server.register(method, handler as (params: unknown) => Promise<unknown>);
   };
+
+  const serverSubs = (server as unknown as { subscriptions: Map<string, { eventType: string; filter: Record<string, unknown> }> }).subscriptions;
+
+  const killedToolCalls = new Set<string>();
 
   r("bash.list", async (params) => {
     const { sessionId } = params as { sessionId?: string };
@@ -33,6 +37,14 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const { sessionId, action, toolCallId, data } = params as {
       sessionId: string;
     } & BashChannelCommand & { sessionId: string };
+
+    if (action === "kill" && toolCallId) {
+      const dedupeKey = `${sessionId}:${toolCallId}`;
+      if (killedToolCalls.has(dedupeKey)) {
+        return { ok: true };
+      }
+      killedToolCalls.add(dedupeKey);
+    }
 
     const pm = getProcessManager();
     if (!pm) throw new Error("No process manager available");
@@ -81,16 +93,46 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     };
   });
 
-  const watchers = new Map<string, ReturnType<typeof spawnProc>>();
+  const watchers = new Map<string, { tail: ChildProcess; subId: string; sendQueue: Promise<void> }>();
+
+  const isValidLogPath = (path: string): boolean => {
+    if (!path || typeof path !== "string") return false;
+    if (path.includes("..")) return false;
+    if (/[<>"'|;&$`\\]/.test(path)) return false;
+    try {
+      statSync(path);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  function killWatcher(logPath: string): void {
+    const entry = watchers.get(logPath);
+    if (!entry) return;
+    entry.tail.kill("SIGTERM");
+    serverSubs.delete(entry.subId);
+    watchers.delete(logPath);
+  }
 
   r("bash.watchLog", async (params) => {
-    const { logPath } = params as { logPath: string };
-    if (!logPath || typeof logPath !== "string") return { watching: false };
-    if (watchers.has(logPath)) return { watching: true };
+    const { logPath, sessionId } = params as { logPath: string; sessionId?: string };
+    if (!isValidLogPath(logPath)) return { watching: false };
+
+    killWatcher(logPath);
+
+    const subId = `__bash_log_${logPath}`;
+    serverSubs.set(subId, { eventType: "bash.logUpdate", filter: {} });
 
     const tail = spawnProc("tail", ["-F", "-n", "0", logPath], {
       env: process.env,
     });
+
+    const entry: { tail: ChildProcess; subId: string; sendQueue: Promise<void> } = {
+      tail,
+      subId,
+      sendQueue: Promise.resolve(),
+    };
 
     let buffer = "";
     tail.stdout.on("data", (chunk: Buffer) => {
@@ -99,23 +141,21 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       buffer = lines.pop() ?? "";
       const completeLines = lines.filter((l) => l.length > 0);
       if (completeLines.length > 0) {
-        server.emitEvent("bash.logUpdate", { logPath, newLines: completeLines });
+        entry.sendQueue = entry.sendQueue.then(() =>
+          server.emitEvent("bash.logUpdate", { logPath, newLines: completeLines }, sessionId ? { sessionId } : undefined)
+        );
       }
     });
     tail.stderr.on("data", () => {});
     tail.on("error", () => {});
 
-    watchers.set(logPath, tail);
+    watchers.set(logPath, entry);
     return { watching: true };
   });
 
   r("bash.unwatchLog", async (params) => {
     const { logPath } = params as { logPath: string };
-    const tail = watchers.get(logPath);
-    if (tail) {
-      tail.kill("SIGTERM");
-      watchers.delete(logPath);
-    }
+    killWatcher(logPath);
     return { stopped: true };
   });
 }

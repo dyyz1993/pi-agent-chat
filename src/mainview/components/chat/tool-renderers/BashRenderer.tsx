@@ -1,9 +1,13 @@
 import { memo, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ArrowDownToLine, X, Eye } from "lucide-react";
 import type { ContentBlock } from "../../../types";
 import { useSessionStore } from "../../../stores/use-session-store";
+import { useBashStore } from "../../../stores/use-bash-store";
+import { tryFormatAsYaml } from "../../../../shared/lib/json-to-yaml";
 import { apiClient } from "../../../lib/api-client";
 import { AnsiText } from "../primitives/AnsiText";
+import { LogViewer } from "../../bash-panel/BashPanel";
 
 type Block = Extract<ContentBlock, { type: "toolExecution" }>;
 
@@ -33,15 +37,24 @@ function formatDuration(ms: number): string {
 	return `${m}m${s % 60}s`;
 }
 
-export const BashExecutionCard = memo(function BashExecutionCard({ block, blockId }: { block: Block; blockId?: string }) {
-	const isRunning = block.status === "running";
-	const isError = block.status === "error";
+	export const BashExecutionCard = memo(function BashExecutionCard({ block, blockId }: { block: Block; blockId?: string }) {
+	const sid = useSessionStore((s) => s.activeSessionId);
+	const bashProcess = useBashStore((s) => {
+		const procs = s.processesBySession[sid ?? ""] || [];
+		return procs.find((p) => p.toolCallId === block.toolCallId);
+	});
+	const blockIsRunning = block.status === "running";
+	const blockIsError = block.status === "error";
 	const [elapsed, setElapsed] = useState(0);
+	const [showLogViewer, setShowLogViewer] = useState(false);
 	const startedAt = useRef(Date.now());
 
 	const bashDetails = block.details as BashDetails | undefined;
-	const isBackground = !!bashDetails?.background;
-	const isTerminated = !!bashDetails?.terminated;
+	const storeStatus = bashProcess?.status;
+	const isBackground = !!bashDetails?.background || storeStatus === "background";
+	const isTerminated = !!bashDetails?.terminated || storeStatus === "terminated";
+	const isRunning = blockIsRunning && !isBackground && !isTerminated;
+	const isError = blockIsError;
 
 	useEffect(() => {
 		if (!isRunning) return;
@@ -77,14 +90,18 @@ export const BashExecutionCard = memo(function BashExecutionCard({ block, blockI
 	}
 
 	return (
-		<div data-block-id={blockId} className={`my-1.5 -mx-2 rounded-none overflow-hidden border-x-0 border-t border-b ${borderBg}`}>
+		<div data-block-id={blockId} className={`rounded-none overflow-hidden border-x-0 border-t border-b ${borderBg}`}>
 			<div className="px-3 py-1.5 flex items-center gap-2 text-xs">
 				<span className={`font-medium ${isBackground ? "text-yellow-400" : isTerminated ? "text-red-400" : isRunning ? "text-blue-400" : isError ? "text-red-400" : "text-gray-300"}`}>{block.toolName}</span>
 				{isRunning && !statusLabel && <span className="text-blue-400 animate-pulse text-[10px]">running</span>}
 				{statusLabel}
-				{bashDetails?.background && <span className="text-[10px] text-gray-500">PID: {bashDetails.background.pid}</span>}
-				{bashDetails?.background && <span className="text-[10px] text-gray-500">{formatDuration(bashDetails.background.durationMs)}</span>}
-				{bashDetails?.terminated && <span className="text-[10px] text-gray-500">{formatDuration(bashDetails.terminated.durationMs)}</span>}
+			{bashDetails?.background && <span className="text-[10px] text-gray-500">PID: {bashDetails.background.pid}</span>}
+			{(bashDetails?.background || (storeStatus === "background" && bashProcess)) && (
+				<span className="text-[10px] text-gray-500">{formatDuration(bashDetails?.background?.durationMs ?? ((Date.now() - (bashProcess?.startedAt ?? Date.now()))))}</span>
+			)}
+			{(bashDetails?.terminated || (storeStatus === "terminated" && bashProcess)) && (
+				<span className="text-[10px] text-gray-500">{formatDuration(bashDetails?.terminated?.durationMs ?? ((bashProcess?.endedAt ?? Date.now()) - (bashProcess?.startedAt ?? Date.now())))}</span>
+			)}
 			</div>
 
 			<details className="group">
@@ -94,7 +111,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({ block, blockI
 				</summary>
 				<div className="px-3 pb-2">
 					{block.args ? (
-						<pre className="text-[11px] text-yellow-300/60 overflow-x-auto whitespace-pre-wrap font-mono max-h-40 overflow-y-auto leading-relaxed">{block.args}</pre>
+						<pre className="text-[11px] text-yellow-300/60 overflow-x-auto whitespace-pre-wrap font-mono max-h-40 overflow-y-auto leading-relaxed">{tryFormatAsYaml(block.args)}</pre>
 					) : null}
 				</div>
 			</details>
@@ -145,18 +162,23 @@ export const BashExecutionCard = memo(function BashExecutionCard({ block, blockI
 				<div className="flex items-center gap-1.5 px-3 py-1.5 border-t border-gray-700/30">
 					<div className="flex-1" />
 					<button
-						onClick={async () => {
-							const sid = useSessionStore.getState().activeSessionId;
-							if (!sid) return;
-							await apiClient.call("bash.command", { sessionId: sid, action: "subscribe_output", toolCallId: block.toolCallId });
-						}}
+						onClick={() => setShowLogViewer(true)}
 						className="flex items-center justify-center gap-1 px-2 py-1 rounded border border-cyan-600/40 text-[10px] text-cyan-400 hover:bg-cyan-600/15 transition-colors"
-						title="订阅实时输出"
+						title="查看输出"
 					>
 						<Eye className="w-3 h-3" />
 						<span>查看输出</span>
 					</button>
 				</div>
+			)}
+
+			{showLogViewer && bashProcess?.logPath && createPortal(
+				<LogViewer
+					logPath={bashProcess.logPath}
+					toolCallId={block.toolCallId}
+					onClose={() => setShowLogViewer(false)}
+				/>,
+				document.body,
 			)}
 		</div>
 	);

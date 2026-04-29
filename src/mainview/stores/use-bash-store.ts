@@ -5,6 +5,7 @@ import { apiClient } from "../lib/api-client";
 interface BashState {
   processesBySession: Record<string, BashProcess[]>;
   subscribedOutputs: Set<string>;
+  backgroundedIds: Set<string>;
 
   upsertProcess: (sessionId: string, proc: BashProcess) => void;
   removeProcess: (sessionId: string, toolCallId: string) => void;
@@ -12,11 +13,14 @@ interface BashState {
   loadHistory: (sessionId: string) => Promise<void>;
   subscribeOutput: (sessionId: string, toolCallId: string) => Promise<void>;
   unsubscribeOutput: (sessionId: string, toolCallId: string) => Promise<void>;
+  markBackgrounded: (toolCallId: string) => void;
+  isBackgrounded: (toolCallId: string) => boolean;
 }
 
-export const useBashStore = create<BashState>()((set) => ({
+export const useBashStore = create<BashState>()((set, get) => ({
   processesBySession: {},
   subscribedOutputs: new Set<string>(),
+  backgroundedIds: new Set<string>(),
 
   upsertProcess: (sessionId: string, proc: BashProcess) => {
     set((s) => {
@@ -73,6 +77,19 @@ export const useBashStore = create<BashState>()((set) => ({
       return { ...s, subscribedOutputs: next };
     });
   },
+
+  markBackgrounded: (toolCallId: string) => {
+    set((s) => {
+      if (s.backgroundedIds.has(toolCallId)) return s;
+      const next = new Set(s.backgroundedIds);
+      next.add(toolCallId);
+      return { ...s, backgroundedIds: next };
+    });
+  },
+
+  isBackgrounded: (toolCallId: string) => {
+    return get().backgroundedIds.has(toolCallId);
+  },
 }));
 
 export function handleBashEvent(sessionId: string, event: BashChannelEvent): void {
@@ -80,6 +97,11 @@ export function handleBashEvent(sessionId: string, event: BashChannelEvent): voi
 
   if (event.type === "list") {
     if (event.processes) {
+      for (const p of event.processes) {
+        if (p.status === "background" || p.status === "done" || p.status === "error" || p.status === "terminated") {
+          store.markBackgrounded(p.toolCallId);
+        }
+      }
       useBashStore.setState((s) => ({
         ...s,
         processesBySession: { ...s.processesBySession, [sessionId]: event.processes! },
@@ -100,6 +122,9 @@ export function handleBashEvent(sessionId: string, event: BashChannelEvent): voi
     const updatedProc = event.processes.find((p) => p.toolCallId === event.toolCallId);
     if (updatedProc) {
       store.upsertProcess(sessionId, updatedProc);
+      if (event.type === "background") {
+        store.markBackgrounded(updatedProc.toolCallId);
+      }
     }
     return;
   }
