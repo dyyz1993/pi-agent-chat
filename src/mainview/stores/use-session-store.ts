@@ -9,7 +9,7 @@ import { extractTokenUsage } from "../lib/message-mapper";
 import { useChatStore } from "./use-chat-store";
 import { useAppStore } from "./use-app-store";
 import { useSubagentStore, handleSubagentEvent } from "./use-subagent-store";
-import { useBashStore, handleBashEvent, handleBackgroundExit } from "./use-bash-store";
+import { useBashStore, handleBashEvent } from "./use-bash-store";
 import { useLspStore } from "./use-lsp-store";
 import { useRulesStore } from "./use-rules-store";
 import { useExplorerStore } from "./use-explorer-store";
@@ -17,6 +17,8 @@ import { useMemoryStore } from "./use-memory-store";
 import { useStatusStore } from "./use-status-store";
 import { useTurnStore } from "./use-turn-store";
 import { useChatNavStore } from "./use-chat-nav-store";
+import { useRetryStore } from "./use-retry-store";
+import { notificationGateway } from "../lib/notification-gateway";
 import { batchMessageUpdate, flushNow } from "./message-batcher";
 
 export interface TodoItem {
@@ -237,22 +239,13 @@ function setupSubscriptions(
       (payload: { sessionId: string; message: string; notifyType: "info" | "warning" | "error" }) => {
         if (payload.sessionId !== id) return;
 
-        const chat = useChatStore.getState();
-        const existing = chat.messagesBySession[id] || [];
-        const notifyMsg: import("../types").ChatMessage = {
-          id: `notify-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          role: "assistant",
-          content: [{
-            type: "text",
-            text: payload.notifyType === "warning"
-              ? `⚠️ ${payload.message}`
-              : payload.notifyType === "error"
-                ? `❌ ${payload.message}`
-                : `ℹ️ ${payload.message}`,
-          }],
-          timestamp: Date.now(),
-        };
-        chat.setMessagesForSession(id, [...existing, notifyMsg]);
+        notificationGateway.emit({
+          type: "agent_notify",
+          sessionId: payload.sessionId,
+          title: payload.message,
+          body: "",
+          level: payload.notifyType,
+        });
       },
       { sessionId: id },
     ).then((subId) => {
@@ -265,15 +258,15 @@ function setupSubscriptions(
   if (!memorySubscriptions[id]) {
     const projectTab = useSessionStore.getState().projectTabs.find((t) => t.id === useSessionStore.getState().activeProjectId);
     apiClient.subscribe(
-      "memory.creating",
-      (payload: { sessionId: string; sourceMessageIds: string[]; timestamp: number }) => {
+      "memory.bookmark_creating",
+      (payload: { sessionId: string; timestamp: number }) => {
         if (payload.sessionId !== id) return;
         const memStore = useMemoryStore.getState();
         memStore.addEvent(id, {
           id: `mem-creating-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          customType: "memory_creating",
+          customType: "bookmark_creating",
           data: payload,
-          timestamp: payload.timestamp,
+          timestamp: payload.timestamp || Date.now(),
         });
         memStore.setBookmarkCreating(id, true);
       },
@@ -318,6 +311,59 @@ function setupSubscriptions(
       },
       { sessionId: id },
     ).catch(() => {});
+
+    // Subscribe to memory operation events (prefetch, extract, dream) for real-time display
+    const MEMORY_OPERATION_EVENTS = [
+      "memory.memory_prefetch",
+      "memory.memory_prefetch_result",
+      "memory.memory_extract",
+      "memory.memory_extract_result",
+      "memory.memory_dream",
+      "memory.memory_dream_result",
+    ] as const;
+
+    for (const eventName of MEMORY_OPERATION_EVENTS) {
+      apiClient.subscribe(
+        eventName,
+        (payload: { sessionId: string; timestamp?: number; [key: string]: unknown }) => {
+          if (payload.sessionId !== id) return;
+          const customType = eventName.replace("memory.", "");
+          const timestamp = payload.timestamp || Date.now();
+          const eventData = (({ sessionId: _s, timestamp: _t, ...rest }) => rest)(payload);
+
+          // Add to memory store (for right panel)
+          const memStore = useMemoryStore.getState();
+          memStore.addEvent(id, {
+            id: `mem-${customType}-${timestamp}-${Math.random().toString(36).slice(2, 8)}`,
+            customType,
+            data: eventData,
+            timestamp,
+          });
+
+          if (customType === "memory_prefetch_result") {
+            const data = eventData as { summary?: string; snippet?: string };
+            if (data) {
+              memStore.addInjected(id, {
+                summary: data.summary || "",
+                snippet: data.snippet || "",
+              });
+            }
+          }
+
+          // Add to chat messages (for chat area MemoryCard)
+          const chat = useChatStore.getState();
+          const existing = chat.messagesBySession[id] || [];
+          const customMsg: import("../types").ChatMessage = {
+            id: `custom-${timestamp}-${Math.random().toString(36).slice(2, 6)}`,
+            role: "custom",
+            content: [{ type: "custom", customType, data: eventData }],
+            timestamp,
+          };
+          chat.setMessagesForSession(id, [...existing, customMsg]);
+        },
+        { sessionId: id },
+      ).catch(() => {});
+    }
   }
 
   if (agentSubscriptions[id]) {
@@ -458,6 +504,13 @@ export const useSessionStore = create<SessionState>()(
             sessionId: id,
             projectPath: session.projectPath,
             sessionPath: session.sessionPath,
+          }).then((result) => {
+            if (result.status === "already_running" || result.status === "started") {
+              get().fetchInitialState(id);
+              if (result.status === "already_running") {
+                apiClient.call("agent.replayHoldEvents", { sessionId: id }).catch(() => {});
+              }
+            }
           }).catch((err) => {
             useAppStore.getState().addLog(`agent.start failed: ${err instanceof Error ? err.message : String(err)}`);
           });
@@ -640,8 +693,9 @@ export const useSessionStore = create<SessionState>()(
           }).catch(() => {});
 
           apiClient.call("agent.getExtensions", { sessionId }).then((res) => {
-            if (!Array.isArray(res)) return;
-            const plugins = (res as Array<Record<string, unknown>>).map((e) => ({
+            const exts = (res as Record<string, unknown>)?.extensions ?? res;
+            if (!Array.isArray(exts)) return;
+            const plugins = (exts as Array<Record<string, unknown>>).map((e) => ({
               name: (e.path as string)?.split("/").pop()?.replace(/\.(ts|js|tsx|jsx)$/, "") ?? "unknown",
               path: (e.path as string) ?? "",
               enabled: true,
@@ -652,8 +706,9 @@ export const useSessionStore = create<SessionState>()(
           }).catch(() => {});
 
           apiClient.call("agent.getSkills", { sessionId }).then((res) => {
-            if (!Array.isArray(res)) return;
-            useStatusStore.getState().setSkills((res as Array<Record<string, unknown>>).map((s) => ({
+            const skills = (res as Record<string, unknown>)?.skills ?? res;
+            if (!Array.isArray(skills)) return;
+            useStatusStore.getState().setSkills((skills as Array<Record<string, unknown>>).map((s) => ({
               name: s.name as string ?? "",
               description: s.description as string ?? "",
               filePath: s.filePath as string ?? "",
@@ -781,6 +836,13 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
         break;
       }
     }
+    notificationGateway.emit({
+      type: "session_complete",
+      sessionId,
+      title: "会话完成",
+      body: `会话 ${sessionId.slice(0, 8)}... 执行完毕`,
+      level: "info",
+    });
     return;
   }
 
@@ -797,9 +859,53 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
     return;
   }
 
+  if (event.type === "auto_retry_start") {
+    storeGet().updateSessionStatus(sessionId, "retrying");
+    useRetryStore.getState().startRetry(sessionId, {
+      attempt: event.attempt,
+      maxAttempts: event.maxAttempts,
+      delayMs: event.delayMs,
+      errorMessage: event.errorMessage,
+    });
+    notificationGateway.emit({
+      type: "retry_start",
+      sessionId,
+      title: "自动重试",
+      body: `第 ${event.attempt}/${event.maxAttempts} 次重试`,
+      level: "warning",
+    });
+    return;
+  }
+
+  if (event.type === "auto_retry_end") {
+    useRetryStore.getState().endRetry(sessionId, {
+      success: event.success,
+      finalError: event.finalError,
+    });
+    notificationGateway.emit({
+      type: event.success ? "retry_success" : "retry_failed",
+      sessionId,
+      title: event.success ? "重试成功" : "重试失败",
+      body: event.success ? "会话已恢复执行" : (event.finalError ?? "已达最大重试次数"),
+      level: event.success ? "info" : "error",
+    });
+    const current = storeGet().sessionStatusMap[sessionId];
+    if (current === "retrying") {
+      storeGet().updateSessionStatus(sessionId, "streaming");
+    }
+    return;
+  }
+
   if (event.type === "extension_ui_request") {
     if (event.method === "confirm" || event.method === "select" || event.method === "input") {
       storeGet().updateSessionStatus(sessionId, "permission");
+      notificationGateway.emit({
+        type: "permission_request",
+        sessionId,
+        title: "权限请求",
+        body: "Agent 需要你的确认",
+        level: "warning",
+      });
     }
     return;
   }
@@ -1082,10 +1188,6 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
           snippet: data.snippet || "",
         });
       }
-    }
-
-    if (event.customType === "bash_background_exit") {
-      handleBackgroundExit(sessionId, event.data as import("../../shared/modules/bash").BashBackgroundExitEvent);
     }
 
     return;

@@ -3,6 +3,14 @@ import { createRoot } from "react-dom/client";
 import { apiClient } from "./lib/api-client";
 import "./index.css";
 import App from "./App";
+import "./lib/channels/in-app-channel";
+import "./lib/channels/pwa-channel";
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  });
+}
 
 const isElectrobun = typeof window !== "undefined" && !!window.__electrobunBunBridge;
 
@@ -43,9 +51,6 @@ document.body.addEventListener("touchmove", (evt) => {
     evt.preventDefault();
   }
 }, { passive: false });
-
-// eslint-disable-next-line no-console
-console.log("[Main] Application starting, isElectrobun:", isElectrobun);
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

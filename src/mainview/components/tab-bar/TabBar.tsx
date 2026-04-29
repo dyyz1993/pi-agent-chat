@@ -5,7 +5,7 @@ import type { SessionStatus } from "../../types";
 function resolveDotClass(sessions: { sessionId: string }[], statusMap: Record<string, SessionStatus | undefined>): string {
   for (const s of sessions) {
     const st = statusMap[s.sessionId];
-    if (st === "permission") return "bg-red-400";
+    if (st === "permission" || st === "retrying") return "bg-red-400";
     if (st === "streaming" || st === "compacting") return "bg-yellow-400 animate-pulse";
   }
   return "bg-green-400";
@@ -32,7 +32,7 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
   };
 
   return (
-    <div className="h-9 bg-gray-900 border-b border-gray-800 flex items-center px-1 gap-0.5 flex-shrink-0 overflow-x-auto">
+    <div className="h-9 bg-gray-900 border-b border-gray-800 flex items-center px-1 gap-0.5 flex-shrink-0 overflow-x-auto" style={{ paddingTop: 'env(safe-area-inset-top)', height: 'calc(2.25rem + env(safe-area-inset-top))' }}>
       {projectTabs.map((tab) => {
         const sessions = sessionsByProject[tab.path] || [];
         const dotClass = resolveDotClass(sessions, sessionStatusMap);

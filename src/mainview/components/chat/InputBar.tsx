@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from "react";
-import { X, Maximize2, Minimize2, ArrowUp, ArrowDown } from "lucide-react";
+import { X, Maximize2, Minimize2, ChevronUp, ChevronDown } from "lucide-react";
 import { useInputHistory } from "../../hooks/use-input-history";
 
 export interface InputBarHandle {
@@ -101,32 +101,24 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
         disabled={disabled}
         rows={1}
         placeholder="输入消息、@file、@agent，或粘贴图片与文本..."
-        className="w-full px-3 py-2 pr-12 text-sm bg-gray-800/50 text-white rounded-lg border border-gray-700/50 focus:border-indigo-500/50 resize-none outline-none placeholder:text-gray-600 transition-colors"
+        className="w-full px-3 py-2 pr-10 text-sm bg-gray-800/50 text-white rounded-lg border border-gray-700/50 focus:border-indigo-500/50 resize-none outline-none placeholder:text-gray-600 transition-colors"
         style={{ maxHeight: expanded ? "none" : `${maxHeight}px`, minHeight: expanded ? "200px" : "80px" }}
       />
-      <div className="absolute right-1.5 top-1 flex flex-col gap-0.5">
-        {/* Row 1: Clear (if has content) + Expand toggle */}
-        <div className="flex gap-0.5">
-          {hasContent && (
-            <button onClick={handleClear} className="w-[26px] h-[26px] p-1 rounded hover:bg-gray-700 text-gray-500 hover:text-gray-300 transition-colors flex items-center justify-center" title="清除输入和历史">
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
-          <button onClick={toggleExpand} className="w-[26px] h-[26px] p-1 rounded hover:bg-gray-700 text-gray-500 hover:text-gray-300 transition-colors flex items-center justify-center" title={expanded ? "收起" : "展开"}>
-            {expanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+      <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex flex-col gap-px">
+        {hasContent && (
+          <button onClick={handleClear} className="w-5 h-5 rounded border border-gray-600 text-gray-300 hover:text-white hover:border-gray-400 transition-colors flex items-center justify-center" title="清除">
+            <X className="w-3 h-3" />
           </button>
-        </div>
-        {/* Row 2: Navigation arrows - same layout as Row 1 with placeholder for X */}
-        <div className="flex gap-0.5">
-          {/* Placeholder for X button alignment */}
-          {!hasContent && <div className="w-[26px] h-[26px]" />}
-          <button onClick={handleNavPrev} className="w-[26px] h-[26px] p-1 rounded hover:bg-gray-700 text-gray-600 hover:text-gray-300 transition-colors flex items-center justify-center" title="上一条">
-            <ArrowUp className="w-3.5 h-3.5" />
-          </button>
-          <button onClick={handleNavNext} className="w-[26px] h-[26px] p-1 rounded hover:bg-gray-700 text-gray-600 hover:text-gray-300 transition-colors flex items-center justify-center" title="下一条">
-            <ArrowDown className="w-3.5 h-3.5" />
-          </button>
-        </div>
+        )}
+        <button onClick={toggleExpand} className="w-5 h-5 rounded border border-gray-600 text-gray-300 hover:text-white hover:border-gray-400 transition-colors flex items-center justify-center" title={expanded ? "收起" : "展开"}>
+          {expanded ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
+        </button>
+        <button onClick={handleNavPrev} className="w-5 h-5 rounded border border-gray-600 text-gray-300 hover:text-white hover:border-gray-400 transition-colors flex items-center justify-center" title="上一条">
+          <ChevronUp className="w-3 h-3" />
+        </button>
+        <button onClick={handleNavNext} className="w-5 h-5 rounded border border-gray-600 text-gray-300 hover:text-white hover:border-gray-400 transition-colors flex items-center justify-center" title="下一条">
+          <ChevronDown className="w-3 h-3" />
+        </button>
       </div>
     </div>
   );

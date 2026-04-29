@@ -1,4 +1,4 @@
-import { existsSync } from "fs";
+import { existsSync, mkdirSync } from "fs";
 import { createReadStream } from "fs";
 import * as readline from "readline";
 import type { RPCServer } from "@dyyz1993/rpc-core";
@@ -88,9 +88,10 @@ interface RpcClientLike {
   setSessionName(name: string): Promise<void>;
   getLastAssistantText(): Promise<unknown>;
   getForkMessages(): Promise<unknown>;
-  fork(entryId: string): Promise<unknown>;
+  fork(entryId: string, options?: { position?: "before" | "at" }): Promise<unknown>;
   navigateTree(targetId: string, options?: { summarize?: boolean }): Promise<unknown>;
   getTree(): Promise<unknown>;
+  getTreeWithLeaf(): Promise<unknown>;
   clone(): Promise<unknown>;
   newSession(parentSession?: string): Promise<unknown>;
   exportHtml(outputPath?: string): Promise<unknown>;
@@ -113,6 +114,10 @@ async function createRpcClient(
   const mod = await import(
     "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/dist/modes/rpc/rpc-client.js"
   ) as { RpcClient: new (options?: Record<string, unknown>) => RpcClientLike };
+
+  if (!existsSync(cwd)) {
+    mkdirSync(cwd, { recursive: true });
+  }
 
   const args = [...EXTENSION_ARGS];
   if (sessionPath && existsSync(sessionPath)) {
@@ -329,24 +334,48 @@ export class AgentProcessManager {
     }
   }
 
-  async getMessages(sessionId: string): Promise<{ messages: unknown[]; customEntries: Array<{ id: string; customType: string; data: unknown; timestamp: number }> }> {
+  async getMessages(sessionId: string, sessionPath?: string): Promise<{ messages: unknown[]; customEntries: Array<{ id: string; customType: string; data: unknown; timestamp: number }> }> {
     const managed = this.clients.get(sessionId);
-    if (!managed) return { messages: [], customEntries: [] };
 
     let messages: unknown[] = [];
-    try {
-      const raw = await managed.client.getMessages() as Record<string, unknown>;
-      if (raw) {
-        messages = (raw.messages ?? raw) as unknown[];
-      }
-    } catch {}
+    let resolvedSessionPath = sessionPath || "";
+    let activePathIds: Set<string> | null = null;
+
+    if (managed) {
+      resolvedSessionPath = managed.info.sessionPath;
+      try {
+        const raw = await managed.client.getMessages() as Record<string, unknown>;
+        if (raw) {
+          messages = (raw.messages ?? raw) as unknown[];
+        }
+      } catch {}
+      try {
+        const client = managed.client as unknown as { getTreeWithLeaf: () => Promise<Record<string, unknown>> };
+        const treeResult = await client.getTreeWithLeaf();
+        const entries = treeResult?.entries as Array<Record<string, unknown>> | undefined;
+        const leafId = typeof treeResult?.leafId === "string" ? treeResult.leafId : null;
+        if (Array.isArray(entries) && leafId) {
+          const byId = new Map<string, Record<string, unknown>>();
+          for (const e of entries) {
+            const entry = e as Record<string, unknown>;
+            if (typeof entry.id === "string") byId.set(entry.id, entry);
+          }
+          activePathIds = new Set<string>();
+          let curId: string | null | undefined = leafId;
+          while (curId) {
+            activePathIds.add(curId);
+            const node = byId.get(curId);
+            curId = node && typeof node.parentId === "string" && node.parentId ? node.parentId : undefined;
+          }
+        }
+      } catch {}
+    }
 
     const customEntries: Array<{ id: string; customType: string; data: unknown; timestamp: number }> = [];
-    const sessionPath = managed.info.sessionPath;
-    if (sessionPath && existsSync(sessionPath)) {
+    if (resolvedSessionPath && existsSync(resolvedSessionPath)) {
       try {
         const rl = readline.createInterface({
-          input: createReadStream(sessionPath, { encoding: "utf-8" }),
+          input: createReadStream(resolvedSessionPath, { encoding: "utf-8" }),
           crlfDelay: Infinity,
         });
         for await (const line of rl) {
@@ -354,18 +383,21 @@ export class AgentProcessManager {
           try {
             const parsed = JSON.parse(line);
             if (parsed.type === "custom") {
+              if (activePathIds && typeof parsed.id === "string" && !activePathIds.has(parsed.id)) continue;
               customEntries.push({
                 id: parsed.id || `custom-${Date.now()}`,
                 customType: parsed.customType || "unknown",
                 data: parsed.data,
                 timestamp: new Date(parsed.timestamp || 0).getTime(),
               });
+            } else if (!managed && parsed.type === "message" && parsed.message) {
+              messages.push(parsed.message);
             }
           } catch {}
         }
         rl.close();
       } catch (err) {
-        log.warn("Failed to read custom entries from JSONL", { err: err instanceof Error ? err.message : String(err) });
+        log.warn("Failed to read entries from JSONL", { err: err instanceof Error ? err.message : String(err) });
       }
     }
 
@@ -516,10 +548,14 @@ export class AgentProcessManager {
     return managed.client.getForkMessages().catch(() => ({ messages: [] }));
   }
 
-  async fork(sessionId: string, entryId: string): Promise<unknown> {
+  async fork(sessionId: string, entryId: string, options?: { position?: "before" | "at" }): Promise<unknown> {
     const managed = this.clients.get(sessionId);
     if (!managed) throw new Error("Client not found");
-    return managed.client.fork(entryId);
+    const result = await managed.client.fork(entryId, options) as Record<string, unknown>;
+    if (!result.cancelled) {
+      this.stop(sessionId);
+    }
+    return result;
   }
 
   async navigateTree(sessionId: string, targetId: string, options?: { summarize?: boolean }): Promise<unknown> {
@@ -583,6 +619,10 @@ export class AgentProcessManager {
       }
       if (ch.name === "rules-engine") {
         this.handleRulesChannelData(sessionId, ch);
+        return;
+      }
+      if (ch.name === "memory") {
+        this.handleMemoryChannelData(sessionId, ch);
         return;
       }
     }
@@ -728,6 +768,29 @@ export class AgentProcessManager {
       { sessionId, event: data },
       { sessionId },
     );
+  }
+
+  private async handleMemoryChannelData(
+    sessionId: string,
+    channelMsg: ChannelDataEvent,
+  ): Promise<void> {
+    const data = channelMsg.data as Record<string, unknown> | undefined;
+    if (!data) return;
+
+    const eventType = data.type as string;
+    log.info("Memory channel data", { sessionId, type: eventType });
+
+    if (eventType === "bookmark_creating") {
+      await this.server.emitEvent("memory.bookmark_creating", { sessionId, timestamp: Date.now() }, { sessionId });
+    } else if (eventType === "memory_updated") {
+      await this.server.emitEvent("memory.updated", { sessionId, files: data.files, timestamp: Date.now() }, { sessionId });
+    } else if (eventType === "memory_update_failed") {
+      await this.server.emitEvent("memory.update_failed", { sessionId, reason: data.reason, timestamp: Date.now() }, { sessionId });
+    } else if (eventType === "memory_prefetch" || eventType === "memory_extract" || eventType === "memory_dream") {
+      await this.server.emitEvent(`memory.${eventType}`, { sessionId, ...data, timestamp: Date.now() }, { sessionId });
+    } else if (eventType === "memory_prefetch_result" || eventType === "memory_extract_result" || eventType === "memory_dream_result") {
+      await this.server.emitEvent(`memory.${eventType}`, { sessionId, ...data, timestamp: Date.now() }, { sessionId });
+    }
   }
 
   private async emitAgentEvent(sessionId: string, event: SanitizedEvent): Promise<void> {

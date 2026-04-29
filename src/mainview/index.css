@@ -39,6 +39,14 @@ textarea {
   word-break: break-word;
 }
 
+html {
+  background-color: #030712;
+}
+
+body {
+  background-color: #030712;
+}
+
 .sidenav-scroll::-webkit-scrollbar {
   display: none;
 }

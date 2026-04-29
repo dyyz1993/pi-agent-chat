@@ -9,6 +9,48 @@ import { useSessionStore } from "../../stores/use-session-store";
 import { SubagentExecutionCard } from "./tool-renderers/SubagentRenderer";
 import { getToolRenderer } from "./tool-renderers";
 import { getCustomTypeIcon } from "./tool-icon-map";
+import { tryFormatAsYaml } from "../../../shared/lib/json-to-yaml";
+
+export function getBlockBorderColor(block: ContentBlock, role: "user" | "assistant"): string {
+  const roleDefault = role === "user"
+    ? "border-l-blue-500/60"
+    : "border-l-emerald-500/50";
+
+  switch (block.type) {
+    case "thinking":
+      return "border-l-purple-400/50";
+    case "toolCall":
+      return "border-l-amber-500/40";
+    case "toolResult":
+      return block.isError ? "border-l-red-400/50" : "border-l-amber-500/40";
+    case "toolExecution": {
+      if (block.toolName.toLowerCase() === "subagent") {
+        return block.status === "error"
+          ? "border-l-red-400/50"
+          : "border-l-purple-400/50";
+      }
+      if (block.status === "running") return "border-l-blue-400/50";
+      if (block.status === "error") return "border-l-red-400/50";
+      return "border-l-amber-500/40";
+    }
+    case "custom": {
+      const ct = block.customType;
+      if (LSP_CUSTOM_TYPES_SET.has(ct)) return "border-l-yellow-400/40";
+      if (ct.startsWith("memory_prefetch")) return "border-l-blue-400/40";
+      if (ct.startsWith("memory_dream")) return "border-l-purple-400/40";
+      if (ct.startsWith("memory_extract")) return "border-l-green-400/40";
+      if (ct === "memory_created") return "border-l-teal-400/40";
+      if (ct === "memory_failed") return "border-l-red-400/40";
+      return roleDefault;
+    }
+    default:
+      return roleDefault;
+  }
+}
+
+function getDefaultBorderColor(role: "user" | "assistant"): string {
+  return role === "user" ? "border-l-blue-500/60" : "border-l-emerald-500/50";
+}
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -64,7 +106,7 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
         <div className="absolute inset-0 rounded-lg bg-indigo-500/[0.06] pointer-events-none" />
       )}
       {isUser ? (
-        <div className={`relative mx-2 px-3 py-2 text-[13px] leading-relaxed whitespace-pre-wrap break-words text-gray-100 bg-blue-500/[0.06] rounded-lg ${styleMemo.bg} min-w-0`}>
+        <div className={`relative my-1 mr-2 px-3 py-2 text-[13px] leading-relaxed whitespace-pre-wrap break-words text-gray-100 bg-blue-500/[0.06] rounded-r-lg border-l-[3px] border-l-blue-500/60 ${styleMemo.bg} min-w-0`}>
           <div className="absolute -top-0.5 right-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
             <CopyButton text={fullTextForCopy} size="xs" />
           </div>
@@ -73,15 +115,35 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
           ))}
         </div>
       ) : (
-        <div className={`w-full px-1 py-0.5 text-gray-200 transition-colors ${styleMemo.bg} min-w-0 overflow-hidden`}>
-          {message.content.map((block, i) => (
-            <ContentBlockRenderer key={i} block={block} isStreaming={message.isStreaming} msgId={message.id} blockIndex={i} />
-          ))}
+        <div className={`w-full text-gray-200 transition-colors ${styleMemo.bg} min-w-0`}>
+          {message.content.map((block, i) => {
+            const role = message.role as "user" | "assistant";
+            const isEntryMsg = message.content.some((b) => b.type === "custom");
+            if (block.type === "custom" && MEMORY_HIDDEN_IN_CHAT.has(block.customType)) {
+              return null;
+            }
+            if (block.type === "custom" && isLspCustomType(block.customType) && !isLspVisibleInChat(block.customType)) {
+              return null;
+            }
+            if (block.type === "custom" && !MEMORY_CUSTOM_TYPES.has(block.customType) && !isLspCustomType(block.customType)) {
+              return null;
+            }
+            const borderColor = getBlockBorderColor(block, role);
+            return (
+              <div key={i} className={`border-l-[3px] ${borderColor}`}>
+                <ContentBlockRenderer block={block} isStreaming={message.isStreaming} msgId={message.id} blockIndex={i} isEntry={isEntryMsg} />
+              </div>
+            );
+          })}
           {message.isStreaming && (
-            <span className="inline-block w-1.5 h-4 bg-indigo-400 animate-pulse ml-0.5 align-text-bottom" />
+            <div className={`border-l-[3px] ${getDefaultBorderColor(message.role as "user" | "assistant")}`}>
+              <span className="inline-block w-1.5 h-4 bg-indigo-400 animate-pulse ml-3 align-text-bottom" />
+            </div>
           )}
           {(message.tokenUsage || message.model) && (
-            <MessageMetaFooter message={message} />
+            <div className={`border-l-[3px] ${getDefaultBorderColor(message.role as "user" | "assistant")}`}>
+              <MessageMetaFooter message={message} />
+            </div>
           )}
         </div>
       )}
@@ -197,15 +259,19 @@ export const ThinkingCard = memo(function ThinkingCard({
 });
 
 const MEMORY_ICONS: Record<string, { label: string; color: string }> = {
-  memory_prefetch: { label: "Memory Search", color: "text-blue-400" },
-  memory_prefetch_result: { label: "Memories Found", color: "text-blue-400" },
-  memory_extract: { label: "Memory Saved", color: "text-green-400" },
+  memory_prefetch: { label: "搜索记忆", color: "text-blue-400" },
+  memory_prefetch_result: { label: "找到相关记忆", color: "text-blue-400" },
+  memory_extract: { label: "保存记忆", color: "text-green-400" },
   memory_extract_result: { label: "Extraction Result", color: "text-green-400" },
-  memory_dream: { label: "Memory Consolidation", color: "text-purple-400" },
+  memory_dream: { label: "整理记忆", color: "text-purple-400" },
   memory_dream_result: { label: "Dream Result", color: "text-purple-400" },
+  memory_created: { label: "已创建收藏", color: "text-teal-400" },
+  memory_failed: { label: "收藏失败", color: "text-red-400" },
 }
 
 export const MEMORY_CUSTOM_TYPES = new Set(Object.keys(MEMORY_ICONS))
+
+export const MEMORY_HIDDEN_IN_CHAT = new Set(["memory_prefetch"])
 
 const LSP_CUSTOM_TYPES: Record<string, { label: string; color: string }> = {
   lsp: { label: "LSP", color: "text-blue-400" },
@@ -270,31 +336,82 @@ export const LspDiagnosticsCard = memo(function LspDiagnosticsCard({ data }: { d
   )
 })
 
-export const MemoryCard = memo(function MemoryCard({ customType, data, blockId }: { customType: string; data: unknown; blockId: string }) {
-  const config = MEMORY_ICONS[customType] ?? { label: customType, color: "text-gray-400" }
-  const Icon = getCustomTypeIcon(customType).icon
+function getMemorySummary(customType: string, data: unknown): string | null {
+  if (!data || typeof data !== "object") return null;
+  const d = data as Record<string, unknown>;
+  switch (customType) {
+    case "memory_prefetch": {
+      const q = typeof d.query === "string" ? d.query : "";
+      const n = typeof d.availableFiles === "number" ? d.availableFiles : 0;
+      return q ? `「${q.length > 40 ? q.slice(0, 40) + "…" : q}」(${n} 个文件)` : null;
+    }
+    case "memory_prefetch_result": {
+      const summary = typeof d.summary === "string" ? d.summary : "";
+      const bytes = typeof d.injectedBytes === "number" ? d.injectedBytes : 0;
+      return summary ? `${summary}${bytes > 0 ? ` · ${Math.round(bytes / 1024)}KB` : ""}` : null;
+    }
+    case "memory_extract": {
+      const created = Array.isArray(d.created) ? d.created as string[] : [];
+      const updated = Array.isArray(d.updated) ? d.updated as string[] : [];
+      const parts: string[] = [];
+      if (created.length > 0) parts.push(`新建 ${created.length} 条`);
+      if (updated.length > 0) parts.push(`更新 ${updated.length} 条`);
+      return parts.length > 0 ? parts.join("，") : null;
+    }
+    case "memory_dream": {
+      const merges = typeof d.merges === "number" ? d.merges : 0;
+      const deletions = typeof d.deletions === "number" ? d.deletions : 0;
+      const updates = typeof d.updates === "number" ? d.updates : 0;
+      const parts: string[] = [];
+      if (merges > 0) parts.push(`合并 ${merges}`);
+      if (deletions > 0) parts.push(`删除 ${deletions}`);
+      if (updates > 0) parts.push(`更新 ${updates}`);
+      return parts.length > 0 ? parts.join("，") : null;
+    }
+    case "memory_created": {
+      const filename = typeof d.filename === "string" ? d.filename : "";
+      return filename ? filename : null;
+    }
+    case "memory_failed": {
+      const reason = typeof d.reason === "string" ? d.reason : "";
+      return reason || "未知错误";
+    }
+    default:
+      return null;
+  }
+}
 
-  const dataStr = typeof data === "string" ? data : data ? JSON.stringify(data, null, 2) : ""
+export const MemoryCard = memo(function MemoryCard({ customType, data, blockId, isEntry: _isEntry }: { customType: string; data: unknown; blockId: string; isEntry?: boolean }) {
+  const [expanded, setExpanded] = useState(false);
+  const config = MEMORY_ICONS[customType] ?? { label: customType, color: "text-gray-400" };
+  const Icon = getCustomTypeIcon(customType).icon;
+  const summary = getMemorySummary(customType, data);
+  const dataStr = typeof data === "string" ? data : data ? JSON.stringify(data, null, 2) : "";
 
   return (
-    <div className="my-1 overflow-hidden bg-gray-800/8" data-block-id={blockId}>
-      <div className={`px-4 py-1 text-[11px] font-medium ${config.color} flex items-center gap-1.5`}>
+    <div className="my-0.5" data-block-id={blockId}>
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        className={`w-full px-2 py-0.5 flex items-center gap-1.5 text-[11px] ${config.color} hover:bg-gray-800/15 rounded cursor-pointer select-none`}
+      >
         <Icon className="w-3 h-3 shrink-0" />
-        <span>{config.label}</span>
-        {dataStr && (
-          <CopyButton text={dataStr} size="xs" className="ml-auto" title={`复制${config.label}内容`} />
-        )}
-      </div>
-      {dataStr && (
-        <pre className="px-4 pb-2 text-[11px] text-gray-500 overflow-x-auto whitespace-pre-wrap max-h-32 overflow-y-auto">
-          {dataStr.length > 500 ? dataStr.slice(0, 500) + "..." : dataStr}
+        <span className="font-medium">{config.label}</span>
+        {summary && <span className="text-gray-500 truncate">{summary}</span>}
+        <span className="ml-auto text-gray-600">
+          {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+        </span>
+      </button>
+      {expanded && dataStr && (
+        <pre className="px-3 pb-1 text-[11px] text-gray-500 overflow-x-auto whitespace-pre-wrap max-h-40 overflow-y-auto">
+          {dataStr.length > 500 ? dataStr.slice(0, 500) + "…" : dataStr}
         </pre>
       )}
     </div>
-  )
-})
+  );
+});
 
-export const ContentBlockRenderer = memo(function ContentBlockRenderer({ block, isStreaming, msgId, blockIndex }: { block: ContentBlock; isStreaming?: boolean; msgId: string; blockIndex: number }) {
+export const ContentBlockRenderer = memo(function ContentBlockRenderer({ block, isStreaming, msgId, blockIndex, isEntry }: { block: ContentBlock; isStreaming?: boolean; msgId: string; blockIndex: number; isEntry?: boolean }) {
   const blockId = `${msgId}-${blockIndex}`;
   switch (block.type) {
     case "text":
@@ -325,7 +442,7 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({ block, 
             <span>▶</span><span>Tool: {block.name}</span>
             <CopyButton text={typeof block.input === "string" ? block.input : JSON.stringify(block.input)} size="xs" className="ml-auto" title="复制工具输入" />
           </div>
-          <pre className="px-4 pb-2 text-[11px] text-gray-400 overflow-x-auto whitespace-pre-wrap">{block.input}</pre>
+          <pre className="px-4 pb-2 text-[11px] text-gray-400 overflow-x-auto whitespace-pre-wrap">{tryFormatAsYaml(typeof block.input === "string" ? block.input : JSON.stringify(block.input))}</pre>
         </div>
       );
     case "toolResult":
@@ -356,7 +473,13 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({ block, 
         }
         return <LspDiagnosticsCard data={block.data} />;
       }
-      return <MemoryCard customType={block.customType} data={block.data} blockId={blockId} />;
+      if (MEMORY_HIDDEN_IN_CHAT.has(block.customType)) {
+        return null;
+      }
+      if (!MEMORY_CUSTOM_TYPES.has(block.customType)) {
+        return null;
+      }
+      return <MemoryCard customType={block.customType} data={block.data} blockId={blockId} isEntry={isEntry} />;
   }
 });
 
@@ -368,21 +491,17 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({ block, blockI
   const [collapsed, setCollapsed] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
-  let barColor: string;
   let bgOnly: string;
   if (isRunning) {
-    barColor = "border-l-blue-400/50";
     bgOnly = "bg-blue-950/8";
   } else if (isError) {
-    barColor = "border-l-red-400/50";
     bgOnly = "bg-red-950/5";
   } else {
-    barColor = "border-l-amber-500/40";
     bgOnly = "bg-amber-950/[0.04]";
   }
 
   const fullExecutionText = useMemo(() => {
-    return `[工具调用] ${block.toolName}\n输入:\n${block.args ?? ""}\n输出:\n${block.output ?? ""}`;
+    return `[工具调用] ${block.toolName}\n输入:\n${tryFormatAsYaml(block.args ?? "")}\n输出:\n${block.output ?? ""}`;
   }, [block.toolName, block.args, block.output]);
 
   const handleToggleCollapse = useCallback(() => {
@@ -395,7 +514,7 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({ block, blockI
   }, []);
 
   return (
-    <div ref={cardRef} className={`my-1 -mx-2 overflow-hidden border-l-[3px] ${barColor} ${bgOnly}`} data-block-id={blockId}>
+    <div ref={cardRef} className={`overflow-hidden ${bgOnly}`} data-block-id={blockId}>
       <div className="px-3 py-1 pl-2 flex items-center gap-2 text-xs">
         <button
           onClick={handleToggleCollapse}
@@ -433,7 +552,7 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({ block, blockI
           </div>
           {inputOpen && block.args && (
             <div className="px-3 pb-2 pt-0.5">
-              <pre className="text-[11px] text-yellow-300/60 overflow-x-auto whitespace-pre-wrap font-mono max-h-40 overflow-y-auto leading-relaxed pl-2">{block.args}</pre>
+              <pre className="text-[11px] text-yellow-300/60 overflow-x-auto whitespace-pre-wrap font-mono max-h-40 overflow-y-auto leading-relaxed pl-2">{tryFormatAsYaml(block.args)}</pre>
             </div>
           )}
 
@@ -468,7 +587,7 @@ export const MessageMetaFooter = memo(function MessageMetaFooter({ message }: { 
   const { tokenUsage, model, provider } = message;
 
   return (
-    <div className="mt-1.5 pt-1.5 border-t border-gray-800/20 space-y-1">
+    <div className="mt-1.5 pt-1.5 pl-2 pb-0.5 border-t border-gray-800/20 space-y-1">
       {(model || provider) && (
         <div className="text-[10px] text-gray-600">
           {provider && <span>智能体: {provider}</span>}

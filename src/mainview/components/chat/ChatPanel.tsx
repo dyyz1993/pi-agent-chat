@@ -13,6 +13,8 @@ import {
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useChatStore } from "../../stores/use-chat-store";
 import { useSessionStore } from "../../stores/use-session-store";
+import { NotificationCenter } from "./NotificationCenter";
+import { RetryNotification } from "./RetryNotification";
 import { useSubagentStore } from "../../stores/use-subagent-store";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import { useChatNavStore } from "../../stores/use-chat-nav-store";
@@ -24,6 +26,8 @@ import { InputBar, type InputBarHandle } from "./InputBar";
 import { TokenStatusBar } from "./TokenStatusBar";
 import { MessageListView } from "./MessageListView";
 import { MessageSelectionBar } from "./MessageSelectionBar";
+import { QuickActionToolbar } from "./QuickActionToolbar";
+import { ScrollToolbar } from "./ScrollToolbar";
 import type { ChatMessage } from "../../types";
 
 const EMPTY_MSGS: never[] = [];
@@ -70,9 +74,12 @@ export function ChatPanel() {
   const setActive = useChatNavStore((s) => s.setActive);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const inputBarRef = useRef<InputBarHandle>(null);
+  const scrollCaptureRef = useRef<HTMLDivElement>(null);
 
   const messageIds = useMemo(() => messages.map((m) => m.id), [messages]);
-  const isStreaming = effectiveStatus === "streaming" || effectiveStatus === "compacting";
+  const isStreaming = effectiveStatus === "streaming" || effectiveStatus === "compacting" || effectiveStatus === "retrying";
+  const breakpoint = useLayoutStore((s) => s.breakpoint);
+  const isMobileOrTablet = breakpoint === "mobile" || breakpoint === "tablet";
 
   const streamVersion = useChatStore((s) => s.streamContentVersion);
 
@@ -111,7 +118,7 @@ export function ChatPanel() {
   const latestVizRef = useRef(activeVirtualizer);
   latestVizRef.current = activeVirtualizer;
 
-  const { handleScroll } = useActiveScrollTracker({
+  const { handleScroll, markProgrammatic, isAtTop, isAtBottom, autoScrollEnabled, toggleAutoScroll } = useActiveScrollTracker({
     scrollRef: messagesScrollRef,
     virtualizer: activeVirtualizer,
     messageIds,
@@ -122,6 +129,18 @@ export function ChatPanel() {
     }, [setActive, setNavId]),
     streamVersion,
   });
+
+  const handleScrollToEdge = useCallback((edge: "top" | "bottom") => {
+    if (messageIds.length === 0) return;
+    const idx = edge === "top" ? 0 : messageIds.length - 1;
+    const id = messageIds[idx];
+    setNavId(id);
+    clickScrollRef.current = true;
+    markProgrammatic(() => {
+      activeVirtualizer.scrollToIndex(idx, { align: edge === "top" ? "start" : "end" });
+    });
+    setTimeout(() => { clickScrollRef.current = false; }, 400);
+  }, [messageIds, activeVirtualizer, setNavId, markProgrammatic]);
 
   const handleNavDotClick = useCallback(
     (navId: string) => {
@@ -178,6 +197,51 @@ export function ChatPanel() {
     return () => { clearInterval(timer); sessionInitRef.current = false; };
   }, [activeSessionId, activeSubId]);
 
+  useEffect(() => {
+    const strip = scrollCaptureRef.current;
+    if (!strip) return;
+    let lastY = 0;
+    let startX = 0;
+    let startY = 0;
+    let moved = false;
+
+    const onTouchStart = (e: TouchEvent) => {
+      lastY = e.touches[0].clientY;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      moved = false;
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      e.preventDefault();
+      const el = messagesScrollRef.current;
+      if (!el) return;
+      const y = e.touches[0].clientY;
+      el.scrollTop -= y - lastY;
+      lastY = y;
+      const dx = e.touches[0].clientX - startX;
+      const dy = e.touches[0].clientY - startY;
+      if (Math.abs(dx) > 5 || Math.abs(dy) > 5) moved = true;
+    };
+
+    const onTouchEnd = () => {
+      if (moved) return;
+      strip.style.pointerEvents = 'none';
+      const target = document.elementFromPoint(startX, startY);
+      strip.style.pointerEvents = '';
+      if (target instanceof HTMLElement) target.click();
+    };
+
+    strip.addEventListener('touchstart', onTouchStart, { passive: true });
+    strip.addEventListener('touchmove', onTouchMove, { passive: false });
+    strip.addEventListener('touchend', onTouchEnd, { passive: true });
+    return () => {
+      strip.removeEventListener('touchstart', onTouchStart);
+      strip.removeEventListener('touchmove', onTouchMove);
+      strip.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [isMobileOrTablet]);
+
   const handleBackToMain = () => {
     if (activeSessionId) {
       useSubagentStore.getState().setActiveSubsession(activeSessionId, null);
@@ -199,15 +263,18 @@ export function ChatPanel() {
           </button>
         )}
         {activeSessionId && <TokenStatusBar sessionId={activeSessionId} />}
-        <div className="ml-auto flex items-center">
+        <div className="ml-auto flex items-center gap-1">
+          <NotificationCenter />
           <StatusToggleIcon />
         </div>
       </div>
 
+      <RetryNotification />
+
       <div className="flex-1 flex overflow-hidden">
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 relative">
           {isLoading ? (
-            <div className="flex-1 flex items-center justify-center">
+            <div className="h-full flex items-center justify-center">
               <div className="flex flex-col items-center gap-2 opacity-50">
                 <Loader2 className="w-5 h-5 text-gray-500 animate-spin" />
                 <span className="text-xs text-gray-500">加载会话...</span>
@@ -217,6 +284,23 @@ export function ChatPanel() {
             <MessageListView messages={messages} scrollRef={messagesScrollRef} onScroll={handleScroll} virtualizer={subVirtualizer} />
           ) : (
             <MessageListView messages={mainMessages} scrollRef={messagesScrollRef} onScroll={handleScroll} virtualizer={mainVirtualizer} />
+          )}
+          {isMobileOrTablet && (
+            <div
+              ref={scrollCaptureRef}
+              className="absolute right-0 top-0 bottom-0 w-10 z-20"
+              style={{ touchAction: 'none' }}
+            />
+          )}
+          {messages.length > 0 && (
+            <ScrollToolbar
+              isAtTop={isAtTop}
+              isAtBottom={isAtBottom}
+              autoScrollEnabled={autoScrollEnabled}
+              onScrollToTop={() => handleScrollToEdge("top")}
+              onScrollToBottom={() => handleScrollToEdge("bottom")}
+              onToggleAutoScroll={toggleAutoScroll}
+            />
           )}
         </div>
         <div className="w-12 shrink-0">
@@ -235,17 +319,20 @@ export function ChatPanel() {
         }}
       />
 
-      <div className="px-3 pb-3 pt-2 flex-shrink-0 flex items-end gap-1.5 bg-gray-900 border-t border-gray-800">
+      {!isViewingSubagent && <QuickActionToolbar />}
+      <div className="px-3 pb-3 pt-2 flex-shrink-0 flex items-end gap-1.5 bg-gray-900 border-t border-gray-800" style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
         {!isViewingSubagent && (
           <>
-            <div className="flex flex-col gap-1 shrink-0 justify-between py-1">
-              <button className="p-1.5 rounded-md hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors" title="附件">
-                <Paperclip className="w-4 h-4" />
-              </button>
-              <button className="p-1.5 rounded-md hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors" title="图片">
-                <ImageIcon className="w-4 h-4" />
-              </button>
-            </div>
+            {!isMobileOrTablet && (
+              <div className="flex flex-col gap-1 shrink-0 justify-between py-1">
+                <button className="p-1.5 rounded-md hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors" title="附件">
+                  <Paperclip className="w-4 h-4" />
+                </button>
+                <button className="p-1.5 rounded-md hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors" title="图片">
+                  <ImageIcon className="w-4 h-4" />
+                </button>
+              </div>
+            )}
 
             <InputBar ref={inputBarRef} value={inputText} onChange={setInputText} onSend={handleSend} sessionId={activeSessionId ?? ""} />
 
