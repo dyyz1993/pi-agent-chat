@@ -46,22 +46,29 @@ export const useRulesStore = create<RulesState>()((set) => ({
 	handleRulesEvent: (sessionId, event) => {
 		switch (event.type) {
 			case "snapshot":
-				set((s) => ({
-					bySession: {
-						...s.bySession,
-						[sessionId]: {
-							rules: event.rules,
-							injectedRuleNames: event.injectedRuleNames,
-							matchHistory: event.matchHistory,
-							lifecycleLog: event.lifecycleLog,
-							totalRules: event.totalRules,
-							unconditionalCount: event.unconditionalCount,
-							conditionalCount: event.conditionalCount,
-							loadedAt: event.loadedAt,
-							cacheTTL: event.cacheTTL,
+				set((s) => {
+					const prev = s.bySession[sessionId] || { ...EMPTY_SESSION }
+					const incomingHistory = event.matchHistory || []
+					const mergedHistory = incomingHistory.length > 0
+						? incomingHistory
+						: prev.matchHistory
+					return {
+						bySession: {
+							...s.bySession,
+							[sessionId]: {
+								rules: event.rules,
+								injectedRuleNames: event.injectedRuleNames,
+								matchHistory: mergedHistory,
+								lifecycleLog: event.lifecycleLog.length > 0 ? event.lifecycleLog : prev.lifecycleLog,
+								totalRules: event.totalRules,
+								unconditionalCount: event.unconditionalCount,
+								conditionalCount: event.conditionalCount,
+								loadedAt: event.loadedAt,
+								cacheTTL: event.cacheTTL,
+							},
 						},
-					},
-				}))
+					}
+				})
 				break
 			case "matched":
 				set((s) => {
