@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir } from "fs/promises";
+import { readFile, writeFile, mkdir, readdir } from "fs/promises";
 import { existsSync } from "fs";
 import { join, dirname, basename } from "path";
 import { homedir } from "os";
@@ -12,6 +12,18 @@ export interface PersistedTab {
   path: string;
 }
 
+export interface FavoriteFolder {
+  path: string;
+  name: string;
+  addedAt: number;
+}
+
+export interface DirectoryEntry {
+  name: string;
+  path: string;
+  isDirectory: boolean;
+}
+
 interface ProjectConfig {
   recentProjects: RecentProject[];
   activeProject: string | null;
@@ -19,12 +31,13 @@ interface ProjectConfig {
   openTabs: PersistedTab[];
   activeTabId: string | null;
   pinnedSessionIds: string[];
+  favoriteFolders: FavoriteFolder[];
 }
 
 async function load(): Promise<ProjectConfig> {
   try {
     if (!existsSync(CONFIG_PATH)) {
-    return { recentProjects: [], activeProject: null, configuredPaths: [], openTabs: [], activeTabId: null, pinnedSessionIds: [] };
+    return { recentProjects: [], activeProject: null, configuredPaths: [], openTabs: [], activeTabId: null, pinnedSessionIds: [], favoriteFolders: [] };
     }
     const raw = await readFile(CONFIG_PATH, "utf-8");
     const parsed = JSON.parse(raw) as Partial<ProjectConfig>;
@@ -35,9 +48,10 @@ async function load(): Promise<ProjectConfig> {
       openTabs: parsed.openTabs ?? [],
       activeTabId: parsed.activeTabId ?? null,
       pinnedSessionIds: parsed.pinnedSessionIds ?? [],
+      favoriteFolders: parsed.favoriteFolders ?? [],
     };
   } catch {
-    return { recentProjects: [], activeProject: null, configuredPaths: [], openTabs: [], activeTabId: null, pinnedSessionIds: [] };
+    return { recentProjects: [], activeProject: null, configuredPaths: [], openTabs: [], activeTabId: null, pinnedSessionIds: [], favoriteFolders: [] };
   }
 }
 
@@ -157,4 +171,77 @@ export async function unpinSession(sessionId: string): Promise<string[]> {
 export async function listPinnedSessionIds(): Promise<string[]> {
   const config = await load();
   return config.pinnedSessionIds;
+}
+
+export async function listFavoriteFolders(): Promise<FavoriteFolder[]> {
+  const config = await load();
+  return config.favoriteFolders;
+}
+
+export async function addFavoriteFolder(folderPath: string): Promise<FavoriteFolder> {
+  const config = await load();
+  const existing = config.favoriteFolders.find((f) => f.path === folderPath);
+  if (existing) return existing;
+  const fav: FavoriteFolder = { path: folderPath, name: basename(folderPath), addedAt: Date.now() };
+  config.favoriteFolders.push(fav);
+  await save(config);
+  return fav;
+}
+
+export async function toggleFavoriteFolder(folderPath: string): Promise<{ added: boolean; favorites: FavoriteFolder[] }> {
+  const config = await load();
+  const idx = config.favoriteFolders.findIndex((f) => f.path === folderPath);
+  if (idx >= 0) {
+    config.favoriteFolders.splice(idx, 1);
+    await save(config);
+    return { added: false, favorites: config.favoriteFolders };
+  }
+  const fav: FavoriteFolder = { path: folderPath, name: basename(folderPath), addedAt: Date.now() };
+  config.favoriteFolders.push(fav);
+  await save(config);
+  return { added: true, favorites: config.favoriteFolders };
+}
+
+export async function removeFavoriteFolder(folderPath: string): Promise<void> {
+  const config = await load();
+  config.favoriteFolders = config.favoriteFolders.filter((f) => f.path !== folderPath);
+  await save(config);
+}
+
+export async function isFavoriteFolder(folderPath: string): Promise<boolean> {
+  const config = await load();
+  return config.favoriteFolders.some((f) => f.path === folderPath);
+}
+
+export async function toggleProjectPin(projectPath: string): Promise<boolean> {
+  const config = await load();
+  const project = config.recentProjects.find((p) => p.path === projectPath);
+  if (project) {
+    project.pinned = !project.pinned;
+    await save(config);
+    return project.pinned;
+  }
+  return false;
+}
+
+export async function listDirectory(dirPath: string, searchQuery?: string): Promise<DirectoryEntry[]> {
+  if (!existsSync(dirPath)) return [];
+  try {
+    const entries = await readdir(dirPath, { withFileTypes: true });
+    let results: DirectoryEntry[] = [];
+    for (const entry of entries) {
+      if (entry.name.startsWith(".")) continue;
+      if (!entry.isDirectory()) continue;
+      const fullPath = join(dirPath, entry.name);
+      results.push({ name: entry.name, path: fullPath, isDirectory: true });
+    }
+    results.sort((a, b) => a.name.localeCompare(b.name));
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      results = results.filter((e) => e.name.toLowerCase().includes(q));
+    }
+    return results;
+  } catch {
+    return [];
+  }
 }
