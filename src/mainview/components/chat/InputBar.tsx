@@ -21,7 +21,7 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
   const [expanded, setExpanded] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const { saveToHistory, navigatePrev, navigateNext, clearHistory, resetIndex } = useInputHistory(sessionId);
+  const { saveToHistory, navigatePrev, navigateNext, clearHistory, resetIndex, hasPrev, hasNext } = useInputHistory(sessionId);
 
   const currentValue = onChange ? value : internalValue;
 
@@ -92,33 +92,37 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
   const hasContent = currentValue.trim().length > 0;
 
   return (
-    <div className="flex-1 relative">
-      <textarea
-        ref={textareaRef}
-        value={currentValue}
-        onChange={handleChange}
-        onKeyDown={handleKeyDown}
-        disabled={disabled}
-        rows={1}
-        placeholder="输入消息、@file、@agent，或粘贴图片与文本..."
-        className="w-full px-3 py-2 pr-10 text-sm bg-gray-800/50 text-white rounded-lg border border-gray-700/50 focus:border-indigo-500/50 resize-none outline-none placeholder:text-gray-600 transition-colors"
-        style={{ maxHeight: expanded ? "none" : `${maxHeight}px`, minHeight: expanded ? "200px" : "80px" }}
-      />
-      <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex flex-col gap-px">
-        {hasContent && (
-          <button onClick={handleClear} className="w-5 h-5 rounded border border-gray-600 text-gray-300 hover:text-white hover:border-gray-400 transition-colors flex items-center justify-center" title="清除">
-            <X className="w-3 h-3" />
-          </button>
-        )}
-        <button onClick={toggleExpand} className="w-5 h-5 rounded border border-gray-600 text-gray-300 hover:text-white hover:border-gray-400 transition-colors flex items-center justify-center" title={expanded ? "收起" : "展开"}>
-          {expanded ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
-        </button>
-        <button onClick={handleNavPrev} className="w-5 h-5 rounded border border-gray-600 text-gray-300 hover:text-white hover:border-gray-400 transition-colors flex items-center justify-center" title="上一条">
-          <ChevronUp className="w-3 h-3" />
-        </button>
-        <button onClick={handleNavNext} className="w-5 h-5 rounded border border-gray-600 text-gray-300 hover:text-white hover:border-gray-400 transition-colors flex items-center justify-center" title="下一条">
-          <ChevronDown className="w-3 h-3" />
-        </button>
+    <div className="flex-1 rounded-lg border border-gray-700/50 focus-within:border-indigo-500/50 bg-gray-800/50 overflow-hidden transition-colors" style={{ minHeight: expanded ? "200px" : "80px" }}>
+      <div className="relative h-full flex">
+        <textarea
+          ref={textareaRef}
+          value={currentValue}
+          onChange={handleChange}
+          onKeyDown={handleKeyDown}
+          disabled={disabled}
+          rows={1}
+          placeholder="输入消息、@file、@agent，或粘贴图片与文本..."
+          className="flex-1 px-3 py-2 text-sm bg-transparent text-white resize-none outline-none placeholder:text-gray-600"
+          style={{ maxHeight: expanded ? "none" : `${maxHeight}px`, minHeight: expanded ? "200px" : "80px" }}
+        />
+        <div className="flex shrink-0 py-1.5 pr-1.5 gap-1">
+          <div className="flex flex-col justify-between">
+            <button onClick={handleClear} className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${hasContent ? "border-gray-600 text-gray-300 hover:text-white hover:border-gray-400" : "border-gray-700/50 text-gray-700 pointer-events-none"}`} title="清除">
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+          <div className={`flex flex-col shrink ${expanded ? "gap-0.5 justify-start" : "justify-between"}`}>
+            <button onClick={toggleExpand} className="w-5 h-5 rounded border border-gray-600 text-gray-300 hover:text-white hover:border-gray-400 transition-colors flex items-center justify-center" title={expanded ? "收起" : "展开"}>
+              {expanded ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
+            </button>
+            <button onClick={handleNavPrev} disabled={!hasPrev} className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${hasPrev ? "border-gray-600 text-gray-300 hover:text-white hover:border-gray-400" : "border-gray-700/50 text-gray-700 pointer-events-none"}`} title="上一条">
+              <ChevronUp className="w-3 h-3" />
+            </button>
+            <button onClick={handleNavNext} disabled={!hasNext} className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${hasNext ? "border-gray-600 text-gray-300 hover:text-white hover:border-gray-400" : "border-gray-700/50 text-gray-700 pointer-events-none"}`} title="下一条">
+              <ChevronDown className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

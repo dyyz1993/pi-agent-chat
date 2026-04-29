@@ -3,10 +3,6 @@ import {
   ChevronDown,
   User,
   Bot,
-  Terminal,
-  ScanSearch,
-  Brain,
-  FileText,
   RotateCcw,
   Undo2,
   GitBranch,
@@ -16,12 +12,14 @@ import { useSessionStore } from "../../stores/use-session-store";
 import { useChatStore } from "../../stores/use-chat-store";
 import { apiClient } from "../../lib/api-client";
 import type { SessionMeta } from "../../types";
-import { MessageBubble } from "./MessageBubble";
+import { MessageBubble, MEMORY_HIDDEN_IN_CHAT, MEMORY_CUSTOM_TYPES, isLspCustomType, isLspVisibleInChat } from "./MessageBubble";
 import type { ChatMessage } from "../../types";
 import { formatTokenCount } from "../../utils/turn-utils";
+import { getCustomTypeIcon } from "./tool-icon-map";
 
 interface MessageCardProps {
-  message: ChatMessage & { cardLabel?: string; cardIcon?: string };
+  message: ChatMessage;
+  cardLabel?: string;
   prevBarColor?: string;
 }
 
@@ -39,7 +37,7 @@ function formatTime(ts: number): string {
   return `${hh}:${mm}`;
 }
 
-export const MessageCard = memo(function MessageCard({ message, prevBarColor }: MessageCardProps) {
+export const MessageCard = memo(function MessageCard({ message, cardLabel, prevBarColor }: MessageCardProps) {
   const sessionId = useSessionStore((s) => s.activeSessionId);
   const toggleCollapse = useTurnStore((s) => s.toggleCollapse);
   const toggleMessageSelection = useTurnStore((s) => s.toggleMessageSelection);
@@ -57,7 +55,19 @@ export const MessageCard = memo(function MessageCard({ message, prevBarColor }: 
   const hasCustomContent = message.content.some((b) => b.type === "custom");
   const customBlock = message.content.find((b): b is Extract<typeof b, { type: "custom" }> => b.type === "custom");
 
-  const label = message.cardLabel || (isUser ? "你" : "助手");
+  // Skip rendering entirely for custom entries where all blocks are hidden
+  if (hasCustomContent) {
+    const allHidden = message.content.every((b) => {
+      if (b.type !== "custom") return false;
+      if (MEMORY_HIDDEN_IN_CHAT.has(b.customType)) return true;
+      if (isLspCustomType(b.customType) && !isLspVisibleInChat(b.customType)) return true;
+      if (!MEMORY_CUSTOM_TYPES.has(b.customType) && !isLspCustomType(b.customType)) return true;
+      return false;
+    });
+    if (allHidden) return null;
+  }
+
+  let label = cardLabel || (isUser ? "你" : "助手");
   let IconComp;
   let labelColor: string;
   let barColor: string;
@@ -66,17 +76,12 @@ export const MessageCard = memo(function MessageCard({ message, prevBarColor }: 
 
   if (isEntry) {
     barColor = ENTRY_DEFAULT.barColor;
-    labelColor = ENTRY_DEFAULT.labelColor;
     bgColor = ENTRY_DEFAULT.bgColor;
     if (prevBarColor === ENTRY_DEFAULT.barColor) { barColor = ENTRY_DEFAULT.altBarColor; bgColor = ENTRY_DEFAULT.altBgColor; }
-    switch (customBlock.customType) {
-      case "bash_background_exit": IconComp = Terminal; break;
-      case "lsp_diagnostics": IconComp = ScanSearch; break;
-      case "memory_prefetch":
-      case "memory_extract":
-      case "memory_dream": IconComp = Brain; break;
-      default: IconComp = FileText;
-    }
+    const iconEntry = getCustomTypeIcon(customBlock.customType);
+    IconComp = iconEntry.icon;
+    labelColor = iconEntry.color;
+    label = cardLabel || iconEntry.label;
   } else {
     const roleCfg = (message.role in ROLE_CONFIG ? ROLE_CONFIG[message.role as keyof typeof ROLE_CONFIG] : ROLE_CONFIG.assistant) ?? ROLE_CONFIG.assistant;
     IconComp = roleCfg.icon;
@@ -94,13 +99,13 @@ export const MessageCard = memo(function MessageCard({ message, prevBarColor }: 
   return (
     <div
       data-msg-card-id={message.id}
-      className={`group/msgcard relative w-full py-1.5 border-l-[3px] ${isSelected ? "border-l-red-500 bg-red-500/[0.06]" : barColor + " " + bgColor} transition-colors overflow-hidden`}
+      className={`group/msgcard relative w-full py-1.5 transition-colors overflow-hidden ${isSelected ? "bg-red-500/[0.06]" : bgColor}`}
     >
       {isSelected && (
         <div className="absolute inset-0 bg-red-500/15 pointer-events-none z-10 rounded-sm" />
       )}
       {/* Header: checkbox + label + timestamp */}
-      <div className="relative z-20 flex items-center gap-2 px-3 pl-2 h-5 select-none">
+      <div className={`relative z-20 flex items-center gap-2 px-3 pl-2 h-5 select-none border-l-[3px] ${isSelected ? "border-l-red-500" : barColor}`}>
         {!isEntry && (
           <input
             type="checkbox"
@@ -141,7 +146,7 @@ export const MessageCard = memo(function MessageCard({ message, prevBarColor }: 
 
       {/* Content */}
       {isCollapsed ? (
-        <div className="relative z-20 px-4 py-1 text-xs text-gray-500 italic leading-relaxed">
+        <div className={`relative z-20 border-l-[3px] ${isSelected ? "border-l-red-500" : barColor} px-4 py-1 text-xs text-gray-500 italic leading-relaxed`}>
           {message.content
             .filter((b) => b.type === "text")
             .map((b) => b.text)
@@ -156,7 +161,7 @@ export const MessageCard = memo(function MessageCard({ message, prevBarColor }: 
 
       {/* Footer — only for assistant messages (not entry) with actions/token */}
       {isAssistant && !isEntry && !isCollapsed && (
-        <div className="relative z-20 mt-0.5">
+        <div className={`relative z-20 border-l-[3px] ${isSelected ? "border-l-red-500" : barColor}`}>
           {message.tokenUsage && (
             <div className="flex items-center justify-end px-4 pb-0.5">
               <span className="flex items-center gap-1 text-[10px] font-mono text-gray-600">

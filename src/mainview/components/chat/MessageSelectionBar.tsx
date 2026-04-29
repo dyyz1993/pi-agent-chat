@@ -51,10 +51,6 @@ export const MessageSelectionBar = memo(function MessageSelectionBar({ messages,
       sessionId,
       messageIds,
       content,
-    }).then(() => {
-      import("../../stores/use-memory-store").then(({ useMemoryStore }) => {
-        useMemoryStore.getState().loadFiles(projectPath, sessionId);
-      });
     }).catch(() => {});
     clear();
   }, [messages, selectedIds, clear]);

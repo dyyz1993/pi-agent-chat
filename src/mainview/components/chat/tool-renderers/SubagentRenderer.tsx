@@ -46,7 +46,7 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({ block
   return (
     <div
       data-block-id={blockId}
-      className={`my-1.5 -mx-2 rounded-none overflow-hidden border-x-0 border-t border-b cursor-pointer transition-colors ${
+      className={`rounded-none overflow-hidden border-x-0 border-t border-b cursor-pointer transition-colors ${
         isRunning
           ? "border-purple-500/30 bg-purple-950/15"
           : isError

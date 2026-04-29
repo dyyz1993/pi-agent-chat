@@ -41,7 +41,7 @@ export const WriteFileCard = memo(function WriteFileCard({ block, blockId }: { b
   const lspDetails = isLspDiagnosticData(block.details) ? block.details : null;
 
   return (
-    <div data-block-id={blockId} className={`my-1 -mx-3 border-x-0 border-t border-b overflow-hidden ${
+    <div data-block-id={blockId} className={`border-x-0 border-t border-b overflow-hidden ${
       isRunning ? "border-green-500/25 bg-green-950/10" : isError ? "border-red-500/15 bg-red-950/8" : "border-gray-700/30 bg-gray-800/15"
     }`}>
       <div className="px-3 py-1.5 flex items-center gap-2 text-xs">
