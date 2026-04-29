@@ -1,7 +1,7 @@
 import { appendFileSync, mkdirSync, existsSync } from "fs";
 import { join } from "path";
 
-export type LogModule = "server" | "gateway" | "system" | "chat" | "file" | "timer" | "git" | "agent";
+export type LogModule = "server" | "gateway" | "system" | "chat" | "file" | "timer" | "git" | "agent" | "bash";
 type LogLevel = "debug" | "info" | "warn" | "error";
 
 interface LogEntry {

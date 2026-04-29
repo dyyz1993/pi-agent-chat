@@ -174,6 +174,17 @@ export function handleSubagentEvent(subId: string, event: Record<string, unknown
     store.updateSubagentStatus(subId, "streaming");
   }
 
+  if (eventType === "auto_retry_start") {
+    store.updateSubagentStatus(subId, "retrying");
+  }
+
+  if (eventType === "auto_retry_end") {
+    const current = useSubagentStore.getState().subagentStatusMap[subId];
+    if (current === "retrying") {
+      store.updateSubagentStatus(subId, "streaming");
+    }
+  }
+
   const existing = store.messagesBySubsession[subId] || [];
 
   if (eventType === "message_start") {
