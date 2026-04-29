@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect } from "react";
+import { useRef, useCallback, useEffect, useState } from "react";
 import type { Virtualizer } from "@tanstack/react-virtual";
 
 interface UseActiveScrollTrackerOptions {
@@ -6,12 +6,13 @@ interface UseActiveScrollTrackerOptions {
   virtualizer: Virtualizer<HTMLDivElement, Element>;
   messageIds: string[];
   sessionId: string | undefined;
-  setActive: (id: string | null) => void;
+  setActive: (id: string | null, anchor?: "top" | "bottom") => void;
   streamVersion: number;
   historyLoadVersion?: number;
 }
 
 const BOTTOM_THRESHOLD_PX = 80;
+const TOP_THRESHOLD_PX = 80;
 const ACTIVE_THROTTLE_MS = 50;
 
 export function useActiveScrollTracker({
@@ -29,16 +30,48 @@ export function useActiveScrollTracker({
   const lastActiveTimeRef = useRef(0);
   const didInitRef = useRef(false);
   const prevSessionRef = useRef(sessionId);
-  const programmaticScrollRef = useRef(false);
+  const programmaticCountRef = useRef(0);
+  const lastScrollTopRef = useRef(0);
+  const scrollDirRef = useRef<"up" | "down">("down");
+
+  const isAtTopRef = useRef(true);
+  const isAtBottomRef = useRef(true);
+  const autoScrollEnabledRef = useRef(true);
+  const messageIdsRef = useRef(messageIds);
+  messageIdsRef.current = messageIds;
+
+  const [toolbarState, setToolbarState] = useState({
+    isAtTop: true,
+    isAtBottom: true,
+    autoScrollEnabled: true,
+  });
+
+  const syncToolbarState = useCallback(() => {
+    setToolbarState((prev) => {
+      const top = isAtTopRef.current;
+      const bottom = isAtBottomRef.current;
+      const auto = autoScrollEnabledRef.current;
+      if (prev.isAtTop === top && prev.isAtBottom === bottom && prev.autoScrollEnabled === auto) return prev;
+      return { isAtTop: top, isAtBottom: bottom, autoScrollEnabled: auto };
+    });
+  }, []);
 
   const markProgrammatic = useCallback((fn: () => void) => {
-    programmaticScrollRef.current = true;
+    programmaticCountRef.current++;
     fn();
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        programmaticScrollRef.current = false;
+        programmaticCountRef.current--;
       });
     });
+  }, []);
+
+  const markProgrammaticLong = useCallback((fn: () => void, duration = 500) => {
+    programmaticCountRef.current++;
+    fn();
+    setTimeout(() => {
+      programmaticCountRef.current--;
+    }, duration);
   }, []);
 
   const isNearBottom = useCallback(() => {
@@ -47,32 +80,51 @@ export function useActiveScrollTracker({
     return el.scrollHeight - el.scrollTop - el.clientHeight < BOTTOM_THRESHOLD_PX;
   }, [scrollRef]);
 
+  const isNearTop = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return true;
+    return el.scrollTop < TOP_THRESHOLD_PX;
+  }, [scrollRef]);
+
   const updateActiveFromScroll = useCallback(() => {
     const now = Date.now();
     if (now - lastActiveTimeRef.current < ACTIVE_THROTTLE_MS) return;
     lastActiveTimeRef.current = now;
 
-    if (messageIds.length === 0) return;
+    const ids = messageIdsRef.current;
+    if (ids.length === 0) return;
     const range = virtualizer.range;
     if (!range) return;
-    const idx = range.startIndex;
-    if (idx >= 0 && idx < messageIds.length) {
-      setActive(messageIds[idx]);
+
+    const el = scrollRef.current;
+    if (el) {
+      const delta = el.scrollTop - lastScrollTopRef.current;
+      if (Math.abs(delta) > 2) {
+        scrollDirRef.current = delta > 0 ? "down" : "up";
+      }
+      lastScrollTopRef.current = el.scrollTop;
     }
-  }, [virtualizer, messageIds, setActive]);
+
+    const idx = scrollDirRef.current === "down" ? range.startIndex : range.endIndex;
+    if (idx >= 0 && idx < ids.length) {
+      setActive(ids[idx], scrollDirRef.current === "down" ? "top" : "bottom");
+    }
+  }, [virtualizer, setActive, scrollRef]);
 
   const doScrollToBottom = useCallback(() => {
     const el = scrollRef.current;
-    if (!el || messageIds.length === 0) return;
+    const ids = messageIdsRef.current;
+    if (!el || ids.length === 0) return;
     markProgrammatic(() => {
       el.scrollTop = el.scrollHeight;
     });
-    setActive(messageIds[messageIds.length - 1]);
-  }, [scrollRef, markProgrammatic, setActive, messageIds]);
+    setActive(ids[ids.length - 1]);
+  }, [scrollRef, markProgrammatic, setActive]);
 
   const scrollToMessage = useCallback(
     (msgId: string) => {
-      const index = messageIds.indexOf(msgId);
+      const ids = messageIdsRef.current;
+      const index = ids.indexOf(msgId);
       if (index === -1) return;
 
       const el = scrollRef.current;
@@ -94,18 +146,26 @@ export function useActiveScrollTracker({
         });
       }
 
-      if (msgId === messageIds[messageIds.length - 1]) {
+      if (msgId === ids[ids.length - 1]) {
         userScrolledUpRef.current = false;
       }
     },
-    [scrollRef, virtualizer, markProgrammatic, setActive, messageIds],
+    [scrollRef, virtualizer, markProgrammatic, setActive],
   );
 
   const handleScroll = useCallback(() => {
-    if (programmaticScrollRef.current) return;
+    if (programmaticCountRef.current > 0) return;
     updateActiveFromScroll();
-    userScrolledUpRef.current = !isNearBottom();
-  }, [updateActiveFromScroll, isNearBottom]);
+    const nearBottom = isNearBottom();
+    const nearTop = isNearTop();
+    userScrolledUpRef.current = !nearBottom;
+    isAtTopRef.current = nearTop;
+    isAtBottomRef.current = nearBottom;
+    if (nearBottom && !autoScrollEnabledRef.current) {
+      autoScrollEnabledRef.current = true;
+    }
+    syncToolbarState();
+  }, [updateActiveFromScroll, isNearBottom, isNearTop, syncToolbarState]);
 
   useEffect(() => {
     if (prevSessionRef.current !== sessionId) {
@@ -114,8 +174,12 @@ export function useActiveScrollTracker({
       userScrolledUpRef.current = false;
       prevCountRef.current = 0;
       prevStreamRef.current = 0;
+      isAtTopRef.current = true;
+      isAtBottomRef.current = true;
+      autoScrollEnabledRef.current = true;
+      syncToolbarState();
     }
-  }, [sessionId]);
+  }, [sessionId, syncToolbarState]);
 
   useEffect(() => {
     if (didInitRef.current || messageIds.length === 0) return;
@@ -195,17 +259,17 @@ export function useActiveScrollTracker({
 
       const totalSize = virtualizer.getTotalSize();
       if (totalSize > el.clientHeight && el.clientHeight > 0) {
-        programmaticScrollRef.current = true;
+        programmaticCountRef.current++;
         el.scrollTop = el.scrollHeight;
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
-            programmaticScrollRef.current = false;
+            programmaticCountRef.current--;
             const finalEl = scrollRef.current;
             if (finalEl && Math.abs(finalEl.scrollTop + finalEl.clientHeight - finalEl.scrollHeight) > 3) {
-              programmaticScrollRef.current = true;
+              programmaticCountRef.current++;
               finalEl.scrollTop = finalEl.scrollHeight;
               requestAnimationFrame(() => {
-                requestAnimationFrame(() => { programmaticScrollRef.current = false; });
+                requestAnimationFrame(() => { programmaticCountRef.current--; });
               });
             }
           });
@@ -216,10 +280,10 @@ export function useActiveScrollTracker({
       if (attempts < MAX_ATTEMPTS) {
         rafId = requestAnimationFrame(tryScroll);
       } else {
-        programmaticScrollRef.current = true;
+        programmaticCountRef.current++;
         el.scrollTop = el.scrollHeight;
         requestAnimationFrame(() => {
-          requestAnimationFrame(() => { programmaticScrollRef.current = false; });
+          requestAnimationFrame(() => { programmaticCountRef.current--; });
         });
       }
     };
@@ -228,6 +292,57 @@ export function useActiveScrollTracker({
     return () => cancelAnimationFrame(rafId);
   }, [historyLoadVersion, scrollRef, virtualizer, messageIds, setActive]);
 
-  return { handleScroll, scrollToBottom: doScrollToBottom, scrollToMessage, markProgrammatic };
+  const scrollToEdge = useCallback((edge: "top" | "bottom") => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const ids = messageIdsRef.current;
+    if (ids.length === 0) return;
 
+    programmaticCountRef.current++;
+    if (edge === "top") {
+      el.scrollTop = 0;
+    } else {
+      el.scrollTop = el.scrollHeight;
+    }
+
+    const nearTop = edge === "top" || el.scrollTop < TOP_THRESHOLD_PX;
+    const nearBottom = edge === "bottom" || (el.scrollHeight - el.scrollTop - el.clientHeight < BOTTOM_THRESHOLD_PX);
+    isAtTopRef.current = nearTop;
+    isAtBottomRef.current = nearBottom;
+    userScrolledUpRef.current = !nearBottom;
+    syncToolbarState();
+
+    if (edge === "top") {
+      setActive(ids[0]);
+    } else {
+      setActive(ids[ids.length - 1]);
+    }
+
+    setTimeout(() => { programmaticCountRef.current--; }, 500);
+  }, [scrollRef, setActive, syncToolbarState]);
+
+  const toggleAutoScroll = useCallback(() => {
+    if (autoScrollEnabledRef.current) {
+      userScrolledUpRef.current = true;
+      autoScrollEnabledRef.current = false;
+    } else {
+      userScrolledUpRef.current = false;
+      autoScrollEnabledRef.current = true;
+      doScrollToBottom();
+    }
+    syncToolbarState();
+  }, [doScrollToBottom, syncToolbarState]);
+
+  return {
+    handleScroll,
+    scrollToBottom: doScrollToBottom,
+    scrollToEdge,
+    scrollToMessage,
+    markProgrammatic,
+    markProgrammaticLong,
+    isAtTop: toolbarState.isAtTop,
+    isAtBottom: toolbarState.isAtBottom,
+    autoScrollEnabled: toolbarState.autoScrollEnabled,
+    toggleAutoScroll,
+  };
 }

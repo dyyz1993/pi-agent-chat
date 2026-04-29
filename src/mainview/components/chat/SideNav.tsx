@@ -87,8 +87,11 @@ function buildNavItems(messages: ChatMessage[]): NavItem[] {
           case "bash_background_exit": icon = Terminal; color = "text-cyan-400"; label = "后台进程"; break;
           case "lsp_diagnostics": icon = ScanSearch; color = "text-yellow-400"; break;
           case "memory_prefetch": color = "text-blue-400"; label = "Memory"; break;
+          case "memory_prefetch_result": color = "text-blue-400"; label = "Memory"; break;
           case "memory_extract": color = "text-green-400"; label = "Memory"; break;
           case "memory_dream": color = "text-purple-400"; label = "Memory"; break;
+          case "memory_created": color = "text-teal-400"; label = "Memory"; break;
+          case "memory_failed": color = "text-red-400"; label = "Memory"; break;
         }
         subs.push({ icon, color, label, blockId });
       }
@@ -147,27 +150,32 @@ const NavSubDot = memo(function NavSubDot({
   color,
   label,
   isActive,
+  blockId,
   onClick,
 }: {
   Icon: React.ComponentType<{ className?: string }>;
   color: string;
   label: string;
   isActive: boolean;
+  blockId: string;
   onClick?: () => void;
 }) {
-  let cls = "relative w-10 h-7 rounded-r flex items-center justify-center transition-colors cursor-pointer ";
+  let cls = "relative w-10 h-8 rounded-r flex items-center justify-center transition-all cursor-pointer ";
   let iconColor = color;
+  let barCls = "absolute left-0 top-1 bottom-1 w-[3px] rounded-full transition-all opacity-0 ";
 
   if (isActive) {
     cls += "bg-indigo-500/25 shadow-[0_0_6px_rgba(99,102,241,0.25)] ";
     iconColor = "text-indigo-300";
+    barCls += "bg-indigo-400 opacity-100 ";
   } else {
     cls += "hover:bg-gray-800/60 ";
   }
 
   return (
-    <button className={cls} title={label} onClick={onClick}>
-      <Icon className={`w-3.5 h-3.5 ${iconColor}`} />
+    <button className={cls} title={label} data-block-id={blockId} onClick={onClick}>
+      <span className={barCls} />
+      <Icon className={`w-4 h-4 ${iconColor} transition-colors`} />
     </button>
   );
 });
@@ -182,6 +190,9 @@ export function SideNav({
   const sessionId = useSessionStore((s) => s.activeSessionId);
   const selectedNavId = useTurnStore(
     useCallback((s) => sessionId ? (s.selectedNavIdBySession[sessionId] ?? null) : null, [sessionId])
+  );
+  const navAnchor = useTurnStore(
+    useCallback((s) => sessionId ? (s.navAnchorBySession[sessionId] ?? "top") : "top", [sessionId])
   );
   const setNavId = useTurnStore((s) => s.setNavId);
   const selectedItems = useChatNavStore(
@@ -214,20 +225,33 @@ export function SideNav({
 
   useEffect(() => {
     if (!selectedNavId || !scrollContainerRef.current) return;
-    const msgId = selectedNavId.includes("-") ? selectedNavId.slice(0, selectedNavId.lastIndexOf("-")) : selectedNavId;
-    const groupEl = scrollContainerRef.current.querySelector(`[data-nav-id="${msgId}"]`);
-    if (!groupEl) return;
-    const target = selectedNavId.includes("-")
-      ? groupEl.querySelector("button[title]")
-      : groupEl.querySelector("button:not([title])");
-    if (target) {
-      target.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    }
-  }, [selectedNavId]);
+    const container = scrollContainerRef.current;
+
+    const raf = requestAnimationFrame(() => {
+      const target = container.querySelector(
+        `[data-nav-id="${selectedNavId}"], [data-block-id="${selectedNavId}"]`
+      );
+      if (!target) return;
+
+      const containerRect = container.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      const isAbove = targetRect.top < containerRect.top;
+      const isBelow = targetRect.bottom > containerRect.bottom;
+      if (!isAbove && !isBelow) return;
+
+      if (navAnchor === "top") {
+        container.scrollTop += targetRect.top - containerRect.top;
+      } else {
+        container.scrollTop += targetRect.bottom - containerRect.bottom;
+      }
+    });
+
+    return () => cancelAnimationFrame(raf);
+  }, [selectedNavId, navItems, navAnchor]);
 
   return (
-    <div className="h-full flex flex-col bg-gray-900/30 border-l border-gray-800/30">
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto sidenav-scroll" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
+    <div className="h-full min-h-0 flex flex-col bg-gray-900/30 border-l border-gray-800/30">
+      <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto sidenav-scroll" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
         <div className="flex flex-col items-center py-2 space-y-1.5">
           {navItems.map(({ id, icon: Icon, color, subs }) => (
             <div key={id} data-nav-id={id}>
@@ -249,6 +273,7 @@ export function SideNav({
                           Icon={sub.icon}
                           color={sub.color}
                           label={sub.label}
+                          blockId={sub.blockId}
                           isActive={selectedNavId === sub.blockId}
                           onClick={() => handleSubDotClick(sub.blockId)}
                         />

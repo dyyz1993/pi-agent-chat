@@ -8,6 +8,7 @@ interface MessageState {
   collapsedMessageIdsBySession: Record<string, Set<string>>;
   isMultiSelectModeBySession: Record<string, boolean>;
   selectedNavIdBySession: Record<string, string | null>;
+  navAnchorBySession: Record<string, "top" | "bottom">;
 
   toggleMessageSelection: (messageId: string) => void;
   selectMessageRange: (fromIndex: number, toIndex: number, messageIds: string[]) => void;
@@ -15,7 +16,7 @@ interface MessageState {
   selectAll: (messageIds: string[]) => void;
   toggleMultiSelectMode: () => void;
   toggleCollapse: (messageId: string) => void;
-  setNavId: (navId: string | null) => void;
+  setNavId: (navId: string | null, anchor?: "top" | "bottom") => void;
   clearSessionUI: (sessionId: string) => void;
 }
 
@@ -24,6 +25,7 @@ export const useTurnStore = create<MessageState>((set) => ({
   collapsedMessageIdsBySession: {},
   isMultiSelectModeBySession: {},
   selectedNavIdBySession: {},
+  navAnchorBySession: {},
 
   toggleMessageSelection: (messageId) => {
     const sessionId = useSessionStore.getState().activeSessionId;
@@ -106,11 +108,12 @@ export const useTurnStore = create<MessageState>((set) => ({
     });
   },
 
-  setNavId: (navId) => {
+  setNavId: (navId, anchor) => {
     const sessionId = useSessionStore.getState().activeSessionId;
     if (!sessionId) return;
     set((s) => ({
       selectedNavIdBySession: { ...s.selectedNavIdBySession, [sessionId]: navId },
+      ...(anchor != null ? { navAnchorBySession: { ...s.navAnchorBySession, [sessionId]: anchor } } : {}),
     }));
   },
 
@@ -120,11 +123,13 @@ export const useTurnStore = create<MessageState>((set) => ({
       const { [sessionId]: _c, ...restCol } = s.collapsedMessageIdsBySession;
       const { [sessionId]: _m, ...restMulti } = s.isMultiSelectModeBySession;
       const { [sessionId]: _n, ...restNav } = s.selectedNavIdBySession;
+      const { [sessionId]: _a, ...restAnchor } = s.navAnchorBySession;
       return {
         selectedMessageIdsBySession: restSel,
         collapsedMessageIdsBySession: restCol,
         isMultiSelectModeBySession: restMulti,
         selectedNavIdBySession: restNav,
+        navAnchorBySession: restAnchor,
       };
     }),
 }));
