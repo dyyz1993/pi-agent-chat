@@ -7,6 +7,9 @@ import {
 	FileText,
 	ChevronDown,
 	ChevronRight,
+	Bookmark,
+	Loader,
+	CheckCircle,
 } from "lucide-react"
 import { useMemoryStore } from "../../stores/use-memory-store"
 import { useSessionStore } from "../../stores/use-session-store"
@@ -31,13 +34,18 @@ const TYPE_BADGES: Record<string, { label: string; cls: string }> = {
 	reference: { label: "参考", cls: "bg-sky-400/15 text-sky-400" },
 }
 
-const EVENT_CONFIG: Record<string, { icon: typeof Brain; label: string; color: string }> = {
+const EVENT_CONFIG: Record<string, { icon: typeof Brain; label: string; color: string; pulse?: boolean }> = {
 	memory_prefetch: { icon: Search, label: "搜索记忆", color: "text-blue-400" },
 	memory_prefetch_result: { icon: Search, label: "记忆匹配", color: "text-blue-400" },
 	memory_extract: { icon: Save, label: "保存记忆", color: "text-green-400" },
 	memory_extract_result: { icon: Save, label: "提取结果", color: "text-green-400" },
-	memory_dream: { icon: Sparkles, label: "整合记忆", color: "text-purple-400" },
+	memory_dream: { icon: Sparkles, label: "整理记忆", color: "text-purple-400" },
 	memory_dream_result: { icon: Sparkles, label: "整合结果", color: "text-purple-400" },
+	bookmark_creating: { icon: Loader, label: "正在创建收藏...", color: "text-teal-400", pulse: true },
+	memory_created: { icon: CheckCircle, label: "已创建收藏", color: "text-teal-400" },
+	memory_failed: { icon: Bookmark, label: "收藏失败", color: "text-red-400" },
+	memory_updated: { icon: Bookmark, label: "收藏完成", color: "text-yellow-400" },
+	memory_update_failed: { icon: Bookmark, label: "收藏失败", color: "text-red-400" },
 }
 
 function SectionHeader({
@@ -155,9 +163,37 @@ export function MemoryPanel() {
 			if (match) return `匹配 ${match[1]} 条记忆`
 			return "记忆匹配"
 		}
+		if (customType === "memory_updated") {
+			const d = data as { files?: Array<{ filename: string }> } | undefined
+			const count = d?.files?.length ?? 0
+			return count > 0 ? `收藏 ${count} 条` : "收藏完成"
+		}
+		if (customType === "memory_update_failed") {
+			const d = data as { reason?: string } | undefined
+			return d?.reason || "收藏失败"
+		}
 		const cfg = EVENT_CONFIG[customType]
 		if (cfg) return cfg.label
 		return customType
+	}
+
+	function getEventDetail(customType: string, data: unknown): React.ReactNode {
+		if (customType === "memory_updated") {
+			const d = data as { files?: Array<{ filename: string }> } | undefined
+			const files = d?.files || []
+			return files.length > 0 ? (
+				<span className="text-[9px] text-gray-500 truncate max-w-[120px]">
+					{files.map((f) => f.filename).join(", ")}
+				</span>
+			) : null
+		}
+		if (customType === "memory_prefetch_result") {
+			const d = data as { durationMs?: number } | undefined
+			return d?.durationMs != null ? (
+				<span className="text-[9px] text-gray-500">{d.durationMs}ms</span>
+			) : null
+		}
+		return null
 	}
 
 	return (
@@ -277,6 +313,7 @@ export function MemoryPanel() {
 								}
 								const Icon = config.icon
 								const label = getEventLabel(event.customType, event.data)
+								const detailEl = getEventDetail(event.customType, event.data)
 								const timeStr = new Date(event.timestamp).toLocaleTimeString("zh-CN", {
 									hour: "2-digit",
 									minute: "2-digit",
@@ -284,12 +321,13 @@ export function MemoryPanel() {
 								return (
 									<div
 										key={event.id}
-										className="flex items-center gap-1.5 py-0.5 px-1 rounded hover:bg-gray-800/40 transition-colors"
+										className={`flex items-center gap-1.5 py-0.5 px-1 rounded transition-colors ${config.pulse ? "bg-teal-400/5" : "hover:bg-gray-800/40"}`}
 									>
-										<Icon className={`w-3 h-3 shrink-0 ${config.color}`} />
+										<Icon className={`w-3 h-3 shrink-0 ${config.color} ${config.pulse ? "animate-spin" : ""}`} />
 										<span className={`text-[10px] font-medium ${config.color}`}>
 											{label}
 										</span>
+										{detailEl}
 										<span className="ml-auto text-[9px] text-gray-600 shrink-0">
 											{timeStr}
 										</span>

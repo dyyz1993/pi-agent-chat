@@ -15,7 +15,7 @@ interface MemoryFile {
 	description: string | null
 	type: string | null
 	mtimeMs: number
-	size: number
+	size?: number
 }
 
 interface InjectedMemory {
@@ -30,6 +30,7 @@ interface MemoryState {
 	injectedBySession: Record<string, InjectedMemory[]>
 	expandedFileBySession: Record<string, string | null>
 	collapsedSections: Set<string>
+	bookmarkCreatingBySession: Record<string, boolean>
 
 	addEvent: (sessionId: string, event: MemoryEvent) => void
 	loadFiles: (projectPath: string, sessionId: string) => Promise<void>
@@ -37,6 +38,7 @@ interface MemoryState {
 	setExpandedFile: (filePath: string | null) => void
 	toggleSection: (section: string) => void
 	clearSession: (sessionId: string) => void
+	setBookmarkCreating: (sessionId: string, creating: boolean) => void
 }
 
 export const useMemoryStore = create<MemoryState>()((set) => ({
@@ -46,6 +48,7 @@ export const useMemoryStore = create<MemoryState>()((set) => ({
 	injectedBySession: {},
 	expandedFileBySession: {},
 	collapsedSections: new Set(["operations"]),
+	bookmarkCreatingBySession: {},
 
 	addEvent: (sessionId, event) => {
 		set((s) => {
@@ -110,12 +113,20 @@ export const useMemoryStore = create<MemoryState>()((set) => ({
 			const { [sessionId]: _f, ...restFiles } = s.filesBySession
 			const { [sessionId]: _i, ...restInjected } = s.injectedBySession
 			const { [sessionId]: _p, ...restEntrypoint } = s.entrypointBySession
+			const { [sessionId]: _b, ...restBookmark } = s.bookmarkCreatingBySession
 			return {
 				eventsBySession: restEvents,
 				filesBySession: restFiles,
 				injectedBySession: restInjected,
 				entrypointBySession: restEntrypoint,
+				bookmarkCreatingBySession: restBookmark,
 			}
 		})
+	},
+
+	setBookmarkCreating: (sessionId, creating) => {
+		set((s) => ({
+			bookmarkCreatingBySession: { ...s.bookmarkCreatingBySession, [sessionId]: creating },
+		}))
 	},
 }))
