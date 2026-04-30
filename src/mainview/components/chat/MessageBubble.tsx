@@ -1,5 +1,5 @@
 import { useCallback, useEffect, memo, useMemo, useRef, useState } from "react";
-import { Brain, AlertTriangle, FileText, ChevronDown, ChevronRight, CheckCircle, XCircle, Type } from "lucide-react";
+import { Brain, AlertTriangle, FileText, ChevronDown, ChevronRight, CheckCircle, XCircle, Type, Maximize2 } from "lucide-react";
 import { CachedReactMarkdown } from "./CachedReactMarkdown";
 import { CopyButton } from "./CopyButton";
 import type { ChatMessage, ContentBlock } from "../../types";
@@ -10,6 +10,7 @@ import { SubagentExecutionCard } from "./tool-renderers/SubagentRenderer";
 import { getToolRenderer } from "./tool-renderers";
 import { getCustomTypeIcon } from "./tool-icon-map";
 import { tryFormatAsYaml } from "../../../shared/lib/json-to-yaml";
+import { useExpandStore } from "../../stores/use-expand-store";
 
 export function getBlockBorderColor(block: ContentBlock, role: "user" | "assistant"): string {
   const roleDefault = role === "user"
@@ -267,11 +268,14 @@ const MEMORY_ICONS: Record<string, { label: string; color: string }> = {
   memory_dream_result: { label: "Dream Result", color: "text-purple-400" },
   memory_created: { label: "已创建收藏", color: "text-teal-400" },
   memory_failed: { label: "收藏失败", color: "text-red-400" },
+  bookmark_creating: { label: "正在创建收藏...", color: "text-teal-400" },
+  memory_updated: { label: "收藏完成", color: "text-yellow-400" },
+  memory_update_failed: { label: "收藏失败", color: "text-red-400" },
 }
 
 export const MEMORY_CUSTOM_TYPES = new Set(Object.keys(MEMORY_ICONS))
 
-export const MEMORY_HIDDEN_IN_CHAT = new Set(["memory_prefetch"])
+export const MEMORY_HIDDEN_IN_CHAT = new Set<string>([]);
 
 const LSP_CUSTOM_TYPES: Record<string, { label: string; color: string }> = {
   lsp: { label: "LSP", color: "text-blue-400" },
@@ -411,10 +415,19 @@ export const MemoryCard = memo(function MemoryCard({ customType, data, blockId, 
   );
 });
 
+function isLongContent(text: string): boolean {
+  const lineCount = text.split("\n").length;
+  return lineCount > 20;
+}
+
 export const ContentBlockRenderer = memo(function ContentBlockRenderer({ block, isStreaming, msgId, blockIndex, isEntry }: { block: ContentBlock; isStreaming?: boolean; msgId: string; blockIndex: number; isEntry?: boolean }) {
   const blockId = `${msgId}-${blockIndex}`;
+  const openExpand = useExpandStore((s) => s.openExpand);
+
   switch (block.type) {
-    case "text":
+    case "text": {
+      const shouldShowExpand = !isStreaming && isLongContent(block.text);
+
       if (isStreaming) {
         return (
           <div data-block-id={blockId} className="my-0.5 group relative px-3 py-2 pr-10 text-sm text-gray-200 whitespace-pre-wrap break-words overflow-auto max-h-[60vh]">
@@ -425,14 +438,25 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({ block, 
           </div>
         );
       }
+
       return (
         <div data-block-id={blockId} className="my-0.5 group relative px-3 py-2 pr-10 prose prose-invert prose-sm max-w-none overflow-auto max-h-[60vh] prose-p:my-1 prose-pre:bg-transparent">
-          <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="absolute top-2 right-2 z-10 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            {shouldShowExpand && (
+              <button
+                onClick={() => openExpand(block.text, `消息内容 (${block.text.split("\n").length} 行)`)}
+                className="p-1 rounded text-gray-600 hover:text-indigo-300 hover:bg-gray-800/60 transition-colors"
+                title="展开查看全文"
+              >
+                <Maximize2 className="w-3.5 h-3.5" />
+              </button>
+            )}
             <CopyButton text={block.text} size="xs" />
           </div>
           <CachedReactMarkdown>{block.text}</CachedReactMarkdown>
         </div>
       );
+    }
     case "thinking":
       return <ThinkingCard thinking={block.thinking} isStreaming={!!isStreaming} blockId={blockId} />;
     case "toolCall":

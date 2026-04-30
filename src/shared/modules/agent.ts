@@ -179,8 +179,12 @@ export interface AgentMethods {
     result: { text: string; cancelled: boolean; newSessionFile?: string; newSessionId?: string };
   };
   "agent.navigateTree": {
-    params: { sessionId: string; targetId: string; summarize?: boolean };
+    params: { sessionId: string; targetId: string; summarize?: boolean; skipFiles?: boolean };
     result: { cancelled: boolean };
+  };
+  "agent.rollbackPreview": {
+    params: { sessionId: string; targetId: string };
+    result: { restored: string[]; deleted: string[] };
   };
   "agent.getTree": {
     params: { sessionId: string };
@@ -260,7 +264,7 @@ export type AgentEvent =
   | { type: "queue_update"; steering: string[]; followUp: string[] }
   | ExtensionUIRequestEvent
   | ChannelDataEvent
-  | { type: "custom_entry"; customType: string; data: unknown; id: string }
+  | { type: "custom_entry"; customType: string; data: unknown; id: string; display?: boolean }
   | { type: "session_rename"; oldName: string | undefined; newName: string }
   | { type: "auto_retry_start"; attempt: number; maxAttempts: number; delayMs: number; errorMessage: string }
   | { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string };

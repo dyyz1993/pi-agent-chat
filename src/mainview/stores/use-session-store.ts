@@ -14,22 +14,27 @@ import { useLspStore } from "./use-lsp-store";
 import { useRulesStore } from "./use-rules-store";
 import { useExplorerStore } from "./use-explorer-store";
 import { useMemoryStore } from "./use-memory-store";
-import { useStatusStore } from "./use-status-store";
+import { useStatusStore, deriveSkillScope } from "./use-status-store";
 import { useTurnStore } from "./use-turn-store";
 import { useChatNavStore } from "./use-chat-nav-store";
 import { useRetryStore } from "./use-retry-store";
 import { notificationGateway } from "../lib/notification-gateway";
 import { batchMessageUpdate, flushNow } from "./message-batcher";
 
+export type TodoPriority = "high" | "medium" | "low";
+
 export interface TodoItem {
   id: number;
   text: string;
   done: boolean;
+  priority?: TodoPriority;
+  deleted?: boolean;
 }
 
 export interface ModelInfo {
   provider: string;
   id: string;
+  name?: string;
 }
 
 /** toolCallId → toolName 映射，供 toolResult 查找工具名 */
@@ -56,13 +61,17 @@ interface SessionState {
   queueBySession: Record<string, { steering: string[]; followUp: string[] }>;
   currentModel: ModelInfo | null;
   currentThinkingLevel: string;
-  availableModels: Array<{ provider: string; id: string; contextWindow?: number; reasoning?: boolean }>;
+  availableModels: Array<{ provider: string; id: string; name?: string; contextWindow?: number; reasoning?: boolean }>;
+  projectStartFailed: Record<string, boolean>;
+  projectStartError: Record<string, string>;
+  _projectVersion: number;
 
   addProjectTab: (tab: ProjectTab) => void;
   removeProjectTab: (id: string) => void;
   setActiveProject: (id: string) => void;
   loadSessionsForProject: (projectPath: string) => Promise<SessionMeta[]>;
-  setActiveSession: (id: string | null) => void;
+  setActiveSession: (id: string | null, force?: boolean) => void;
+  retryActiveProject: () => void;
   createNewSession: () => Promise<void>;
   renameSession: (sessionId: string, newName: string) => void;
   deleteSession: (sessionId: string) => void;
@@ -94,9 +103,7 @@ function setupSubscriptions(
     }).then((subId) => {
       set((s) => ({
         agentSubscriptions: { ...s.agentSubscriptions, [id]: subId },
-        sessionReady: { ...s.sessionReady, [id]: true },
       }));
-      useChatStore.getState().loadSessionMessages(id, { sessionPath: session.sessionPath }).catch(() => {});
       apiClient.call("rules.requestSnapshot", { sessionId: id }).then((raw: unknown) => {
         const result = raw && typeof raw === "object" && "result" in raw ? (raw as Record<string, unknown>).result : raw;
         if (result && typeof result === "object" && "type" in result && (result as Record<string, unknown>).type === "snapshot") {
@@ -159,9 +166,9 @@ function setupSubscriptions(
   if (!todoSubscriptions[id]) {
     apiClient.subscribe(
       "todo.event",
-      (payload: { sessionId: string; action: string; todos: Array<{ id: number; text: string; done: boolean }>; timestamp: number }) => {
+      (payload: { sessionId: string; action: string; todos: TodoItem[]; timestamp: number }) => {
         if (payload.sessionId !== id) return;
-        storeGet().setSessionTodos(id, payload.todos as TodoItem[]);
+        storeGet().setSessionTodos(id, payload.todos);
       },
       { sessionId: id },
     ).then((subId) => {
@@ -270,6 +277,7 @@ function setupSubscriptions(
           timestamp: payload.timestamp || Date.now(),
         });
         memStore.setBookmarkCreating(id, true);
+
       },
       { sessionId: id },
     ).catch(() => {});
@@ -289,6 +297,7 @@ function setupSubscriptions(
         if (projectTab) {
           memStore.loadFiles(projectTab.path, id);
         }
+
       },
       { sessionId: id },
     ).then((subId) => {
@@ -309,6 +318,7 @@ function setupSubscriptions(
           timestamp: payload.timestamp,
         });
         memStore.setBookmarkCreating(id, false);
+
       },
       { sessionId: id },
     ).catch(() => {});
@@ -351,24 +361,10 @@ function setupSubscriptions(
             }
           }
 
-          // Add to chat messages (for chat area MemoryCard)
-          const chat = useChatStore.getState();
-          const existing = chat.messagesBySession[id] || [];
-          const customMsg: import("../types").ChatMessage = {
-            id: `custom-${timestamp}-${Math.random().toString(36).slice(2, 6)}`,
-            role: "custom",
-            content: [{ type: "custom", customType, data: eventData }],
-            timestamp,
-          };
-          chat.setMessagesForSession(id, [...existing, customMsg]);
         },
         { sessionId: id },
       ).catch(() => {});
     }
-  }
-
-  if (agentSubscriptions[id]) {
-    set((s) => ({ sessionReady: { ...s.sessionReady, [id]: true } }));
   }
 }
 
@@ -401,6 +397,9 @@ export const useSessionStore = create<SessionState>()(
       currentModel: null,
       currentThinkingLevel: "medium",
       availableModels: [],
+      projectStartFailed: {},
+      projectStartError: {},
+      _projectVersion: 0,
 
       addProjectTab: (tab) =>
         set((s) => {
@@ -432,7 +431,8 @@ export const useSessionStore = create<SessionState>()(
         }),
 
       setActiveProject: (id) => {
-        set({ activeProjectId: id });
+        const version = get()._projectVersion + 1;
+        set({ activeProjectId: id, _projectVersion: version });
         const tabs = get().projectTabs;
         syncTabsToBackend(tabs, id);
         const tab = tabs.find((t) => t.id === id);
@@ -443,6 +443,13 @@ export const useSessionStore = create<SessionState>()(
         explorer.listRootDir();
 
         get().loadSessionsForProject(tab.path).then(async (sessions) => {
+          if (version !== get()._projectVersion) return;
+
+          set((s) => ({
+            projectStartFailed: { ...s.projectStartFailed, [id]: false },
+            projectStartError: { ...s.projectStartError, [id]: "" },
+          }));
+
           if (sessions.length > 0) {
             const current = get().activeSessionId;
             const belongs = sessions.some((s) => s.sessionId === current);
@@ -471,9 +478,9 @@ export const useSessionStore = create<SessionState>()(
         }
       },
 
-      setActiveSession: (id) => {
+      setActiveSession: (id, force) => {
         const prevId = get().activeSessionId;
-        if (prevId === id) return;
+        if (!force && prevId === id) return;
 
         const sid = id ?? "";
         useRulesStore.getState().clearSession(sid);
@@ -508,15 +515,64 @@ export const useSessionStore = create<SessionState>()(
             sessionPath: session.sessionPath,
           }).then((result) => {
             if (result.status === "already_running" || result.status === "started") {
+              set((s) => {
+                const projectId = s.activeProjectId;
+                if (!projectId) return {};
+                return {
+                  projectStartFailed: { ...s.projectStartFailed, [projectId]: false },
+                  projectStartError: { ...s.projectStartError, [projectId]: "" },
+                };
+              });
+              set((s) => ({ sessionReady: { ...s.sessionReady, [id]: true } }));
               get().fetchInitialState(id);
+              useChatStore.getState().loadSessionMessages(id, { sessionPath: session.sessionPath }).catch(() => {});
               if (result.status === "already_running") {
                 apiClient.call("agent.replayHoldEvents", { sessionId: id }).catch(() => {});
               }
             }
           }).catch((err) => {
-            useAppStore.getState().addLog(`agent.start failed: ${err instanceof Error ? err.message : String(err)}`);
+            const errMsg = err instanceof Error ? err.message : String(err);
+            useAppStore.getState().addLog(`agent.start failed: ${errMsg}`);
+            set((s) => {
+              const projectId = s.activeProjectId;
+              if (!projectId) return {};
+              return {
+                projectStartFailed: { ...s.projectStartFailed, [projectId]: true },
+                projectStartError: { ...s.projectStartError, [projectId]: errMsg },
+              };
+            });
           });
         });
+      },
+
+      retryActiveProject: () => {
+        const { activeProjectId, activeSessionId, projectTabs, agentSubscriptions, subagentSubscriptions } = get();
+        if (!activeProjectId) return;
+        const tab = projectTabs.find((t) => t.id === activeProjectId);
+        if (!tab) return;
+
+        const newAgentSubs = { ...agentSubscriptions };
+        const newSubagentSubs = { ...subagentSubscriptions };
+        if (activeSessionId) {
+          delete newAgentSubs[activeSessionId];
+          delete newSubagentSubs[activeSessionId];
+        }
+
+        set((s) => ({
+          projectStartFailed: { ...s.projectStartFailed, [activeProjectId]: false },
+          projectStartError: { ...s.projectStartError, [activeProjectId]: "" },
+          agentSubscriptions: newAgentSubs,
+          subagentSubscriptions: newSubagentSubs,
+        }));
+
+        if (activeSessionId) {
+          get().setActiveSession(activeSessionId, true);
+        } else {
+          const sessions = get().sessionsByProject[tab.path];
+          if (sessions && sessions.length > 0) {
+            get().setActiveSession(sessions[0].sessionId, true);
+          }
+        }
       },
 
       createNewSession: async () => {
@@ -709,30 +765,58 @@ export const useSessionStore = create<SessionState>()(
 
           apiClient.call("agent.getSkills", { sessionId }).then((res) => {
             const skills = (res as Record<string, unknown>)?.skills ?? res;
-            if (!Array.isArray(skills)) return;
-            useStatusStore.getState().setSkills((skills as Array<Record<string, unknown>>).map((s) => ({
-              name: s.name as string ?? "",
-              description: s.description as string ?? "",
-              filePath: s.filePath as string ?? "",
-              baseDir: s.baseDir as string ?? "",
-              disableModelInvocation: s.disableModelInvocation as boolean ?? false,
-              enabled: true,
-            })));
+            if (!Array.isArray(skills)) {
+              useAppStore.getState().addLog(`[skills] non-array response, type=${typeof skills}, isArray=${Array.isArray(res)}`);
+              return;
+            }
+            useAppStore.getState().addLog(`[skills] loaded ${skills.length} items`);
+            useStatusStore.getState().setSkills((skills as Array<Record<string, unknown>>).map((s) => {
+              const fp = s.filePath as string ?? "";
+              return {
+                name: s.name as string ?? "",
+                description: s.description as string ?? "",
+                filePath: fp,
+                baseDir: s.baseDir as string ?? "",
+                disableModelInvocation: s.disableModelInvocation as boolean ?? false,
+                enabled: true,
+                scope: deriveSkillScope(fp),
+              };
+            }));
+          }).catch((err) => {
+            useAppStore.getState().addLog(`[skills] call failed: ${err instanceof Error ? err.message : String(err)}`);
+          });
+
+          apiClient.call("agent.getQueue", { sessionId }).then((result) => {
+            if (!result) return;
+            const q = result as { steering?: unknown[]; followUp?: unknown[] };
+            const steering = (Array.isArray(q.steering) ? q.steering : []) as string[];
+            const followUp = (Array.isArray(q.followUp) ? q.followUp : []) as string[];
+            if (steering.length > 0 || followUp.length > 0) {
+              useSessionStore.setState((s) => ({
+                queueBySession: {
+                  ...s.queueBySession,
+                  [sessionId]: { steering, followUp },
+                },
+              }));
+            }
           }).catch(() => {});
         }).catch(() => {});
       },
 
       fetchModelState: (sessionId) => {
-        apiClient.call("agent.getState", { sessionId }).then((result) => {
-          if (!result?.model) return;
-          set({
-            currentModel: { provider: result.model.provider || "", id: result.model.id },
-            currentThinkingLevel: result.thinkingLevel || "medium",
-          });
-        }).catch(() => {});
-        apiClient.call("agent.getAvailableModels", { sessionId }).then((models) => {
-          if (!Array.isArray(models)) return;
-          set({ availableModels: models });
+        Promise.all([
+          apiClient.call("agent.getState", { sessionId }),
+          apiClient.call("agent.getAvailableModels", { sessionId }),
+        ]).then(([stateResult, modelsResult]) => {
+          if (stateResult?.model) {
+            set({
+              currentModel: { provider: stateResult.model.provider || "", id: stateResult.model.id, name: stateResult.model.name },
+              currentThinkingLevel: stateResult.thinkingLevel || "medium",
+            });
+          }
+          if (Array.isArray(modelsResult)) {
+            set({ availableModels: modelsResult });
+          }
         }).catch(() => {});
       },
 
@@ -761,8 +845,12 @@ export const useSessionStore = create<SessionState>()(
           get().setActiveSession(targetId);
 
           await new Promise<void>((resolve) => {
+            const timeout = setTimeout(() => {
+              resolve();
+            }, 10000);
             const check = () => {
               if (useSessionStore.getState().sessionReady[targetId]) {
+                clearTimeout(timeout);
                 resolve();
               } else {
                 setTimeout(check, 50);
@@ -783,6 +871,22 @@ export const useSessionStore = create<SessionState>()(
         projectTabs: state.projectTabs,
         activeProjectId: state.activeProjectId,
         activeSessionId: state.activeSessionId,
+      }),
+      merge: (persisted, current) => ({
+        ...current,
+        ...(persisted as Partial<SessionState>),
+        projectStartFailed: current.projectStartFailed,
+        projectStartError: current.projectStartError,
+        _projectVersion: current._projectVersion,
+        agentSubscriptions: current.agentSubscriptions,
+        subagentSubscriptions: current.subagentSubscriptions,
+        todoSubscriptions: current.todoSubscriptions,
+        bashSubscriptions: current.bashSubscriptions,
+        lspSubscriptions: current.lspSubscriptions,
+        rulesSubscriptions: current.rulesSubscriptions,
+        notifySubscriptions: current.notifySubscriptions,
+        memorySubscriptions: current.memorySubscriptions,
+        sessionReady: current.sessionReady,
       }),
       onRehydrateStorage: () => () => {},
     }
@@ -936,6 +1040,23 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
       return;
     }
 
+    if (role === "user") {
+      const msg = messageToChatMessage(raw);
+      if (msg) {
+        const chat = useChatStore.getState();
+        const existing = chat.messagesBySession[sessionId] || [];
+        const localIdx = existing.findIndex((m) => m.role === "user" && m._local);
+        if (localIdx >= 0) {
+          const updated = [...existing];
+          updated[localIdx] = { ...msg };
+          chat.setMessagesForSession(sessionId, updated);
+        } else {
+          chat.setMessagesForSession(sessionId, [...existing, msg]);
+        }
+      }
+      return;
+    }
+
     if (role !== "assistant") return;
 
     const msg = messageToChatMessage(raw, undefined, toolCallNameMap);
@@ -1059,6 +1180,21 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
 		}
 
 		flushNow();
+
+		const hasContent = lastMsg.content.some(
+			(b) => (b.type === "text" && b.text.trim().length > 0)
+				|| b.type === "thinking"
+				|| b.type === "toolCall"
+				|| b.type === "toolResult"
+				|| b.type === "toolExecution"
+				|| b.type === "custom",
+		);
+
+		if (!hasContent) {
+			chat.setMessagesForSession(sessionId, existing.slice(0, -1));
+			return;
+		}
+
 		chat.setMessagesForSession(sessionId, [...existing.slice(0, -1), {
 			...lastMsg,
 			isStreaming: false,
@@ -1161,16 +1297,6 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
   }
 
   if (event.type === "custom_entry") {
-    const chat = useChatStore.getState();
-    const existing = chat.messagesBySession[sessionId] || [];
-    const customMsg: import("../types").ChatMessage = {
-      id: event.id || `custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      role: "custom",
-      content: [{ type: "custom", customType: event.customType, data: event.data }],
-      timestamp: Date.now(),
-    };
-    chat.setMessagesForSession(sessionId, [...existing, customMsg]);
-
     const memoryStore = useMemoryStore.getState();
     memoryStore.addEvent(sessionId, {
       id: event.id || `custom-${Date.now()}`,
@@ -1188,6 +1314,18 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
         });
       }
     }
+
+    if (event.display === false) return;
+
+    const chat = useChatStore.getState();
+    const existing = chat.messagesBySession[sessionId] || [];
+    const customMsg: import("../types").ChatMessage = {
+      id: event.id || `custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      role: "custom",
+      content: [{ type: "custom", customType: event.customType, data: event.data }],
+      timestamp: Date.now(),
+    };
+    chat.setMessagesForSession(sessionId, [...existing, customMsg]);
 
     return;
   }

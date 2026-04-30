@@ -11,12 +11,12 @@ function getCardLabel(msg: ChatMessage): string | undefined {
     switch (custom.customType) {
       case "bash_background_exit": return "后台进程";
       case "lsp_diagnostics": return "LSP";
-      case "memory_prefetch": return "Memory";
-      case "memory_prefetch_result": return "Memory";
-      case "memory_extract": return "Memory";
-      case "memory_dream": return "Memory";
-      case "memory_created": return "Memory";
-      case "memory_failed": return "Memory";
+      case "memory_prefetch":
+      case "memory_prefetch_result":
+      case "memory_extract":
+      case "memory_dream":
+      case "memory_created":
+      case "memory_failed": return undefined;
       default: return custom.customType;
     }
   }
@@ -54,7 +54,7 @@ export function MessageListView({ messages, scrollRef, onScroll, virtualizer }: 
 
   if (messages.length === 0 && scrollRef) {
     return (
-      <div ref={scrollRef as React.Ref<HTMLDivElement>} className="h-full overflow-y-auto overflow-x-hidden overscroll-y-contain" onScroll={onScroll}>
+      <div ref={scrollRef as React.Ref<HTMLDivElement>} className="h-full overflow-y-auto overflow-x-hidden overscroll-y-contain" style={{ overflowAnchor: 'none' }} onScroll={onScroll}>
         <div className="flex flex-col items-center justify-center h-full text-gray-600 text-sm gap-2">
           <p>开始对话吧</p>
         </div>
@@ -64,7 +64,7 @@ export function MessageListView({ messages, scrollRef, onScroll, virtualizer }: 
 
   if (virtualizer) {
     return (
-      <div ref={scrollRef as React.Ref<HTMLDivElement>} className="h-full overflow-y-auto overflow-x-hidden overscroll-y-contain" onScroll={onScroll}>
+      <div ref={scrollRef as React.Ref<HTMLDivElement>} className="h-full overflow-y-auto overflow-x-hidden overscroll-y-contain" style={{ overflowAnchor: 'none' }} onScroll={onScroll}>
         <div style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}>
           {virtualizer.getVirtualItems().map((vr) => {
             const msg = messages[vr.index];
@@ -90,7 +90,7 @@ export function MessageListView({ messages, scrollRef, onScroll, virtualizer }: 
     <div
       ref={scrollRef as React.Ref<HTMLDivElement>}
       className="flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain"
-      style={{ scrollbarWidth: 'thin', scrollbarColor: 'transparent transparent' }}
+      style={{ scrollbarWidth: 'thin', scrollbarColor: 'transparent transparent', overflowAnchor: 'none' }}
       onMouseEnter={(e) => { (e.target as HTMLElement).style.scrollbarColor = '#37415120 transparent' }}
       onMouseLeave={(e) => { (e.target as HTMLElement).style.scrollbarColor = 'transparent transparent' }}
       onScroll={onScroll}

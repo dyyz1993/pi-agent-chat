@@ -1,4 +1,4 @@
-import { memo, useCallback } from "react";
+import { memo, useCallback, useRef, useState } from "react";
 import {
   ChevronDown,
   User,
@@ -6,10 +6,13 @@ import {
   RotateCcw,
   Undo2,
   GitBranch,
+  Loader2,
+  FileWarning,
 } from "lucide-react";
 import { useTurnStore, EMPTY_SET } from "../../stores/use-turn-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useChatStore } from "../../stores/use-chat-store";
+import { useNotificationStore } from "../../stores/use-notification-store";
 import { apiClient } from "../../lib/api-client";
 import type { SessionMeta } from "../../types";
 import { MessageBubble, MEMORY_HIDDEN_IN_CHAT, MEMORY_CUSTOM_TYPES, isLspCustomType, isLspVisibleInChat } from "./MessageBubble";
@@ -67,6 +70,14 @@ export const MessageCard = memo(function MessageCard({ message, cardLabel, prevB
     if (allHidden) return null;
   }
 
+  if (hasCustomContent && customBlock && MEMORY_CUSTOM_TYPES.has(customBlock.customType)) {
+    return (
+      <div data-msg-card-id={message.id} className="relative w-full py-0.5">
+        <MessageBubble message={message} />
+      </div>
+    );
+  }
+
   let label = cardLabel || (isUser ? "你" : "助手");
   let IconComp;
   let labelColor: string;
@@ -112,14 +123,16 @@ export const MessageCard = memo(function MessageCard({ message, cardLabel, prevB
             checked={isSelected}
             onChange={() => toggleMessageSelection(message.id)}
             onClick={(e) => e.stopPropagation()}
-            className="w-3.5 h-3.5 rounded border border-gray-600 accent-emerald-500 shrink-0 cursor-pointer"
+            className="w-3 h-3 rounded border border-gray-600 accent-emerald-500 shrink-0 cursor-pointer"
           />
         )}
 
-        <span className={`flex items-center gap-1 text-[11px] font-medium ${labelColor}`}>
-          <IconComp className="w-3 h-3" />
-          {label}
-        </span>
+        {isEntry && MEMORY_CUSTOM_TYPES.has(customBlock?.customType ?? "") ? null : (
+          <span className={`flex items-center gap-1 text-[11px] font-medium ${labelColor}`}>
+            <IconComp className="w-3 h-3" />
+            {label}
+          </span>
+        )}
 
         {!isUser && !isEntry && (message.provider || message.model) && (
           <span className="text-[10px] text-gray-600 opacity-0 group-hover/msgcard:opacity-100 transition-opacity">
@@ -128,10 +141,10 @@ export const MessageCard = memo(function MessageCard({ message, cardLabel, prevB
         )}
 
         <div className="flex items-center gap-0.5 ml-auto shrink-0">
-          {isAssistant && !isEntry && !isCollapsed && (
-            <HeaderActions message={message} />
+          {(isAssistant || isUser) && !isEntry && !isCollapsed && (
+            <HeaderActions message={message} isUserCard={isUser} />
           )}
-          {(isAssistant || isEntry) && (
+          {(isAssistant || isUser || isEntry) && (
             <button
               onClick={(e) => { e.stopPropagation(); handleToggleCollapse(); }}
               className="p-0.5 text-gray-600 hover:text-gray-300 transition-colors"
@@ -179,51 +192,85 @@ export const MessageCard = memo(function MessageCard({ message, cardLabel, prevB
   );
 });
 
-const HeaderActions = memo(function HeaderActions({ message }: { message: ChatMessage }) {
+const HeaderActions = memo(function HeaderActions({ message, isUserCard }: { message: ChatMessage; isUserCard?: boolean }) {
   const sessionId = useSessionStore((s) => s.activeSessionId);
   const messages = useChatStore((s) => sessionId ? (s.messagesBySession[sessionId] || []) : []);
+  const pushNotification = useNotificationStore((s) => s.push);
+  const rollingBackRef = useRef(false);
+  const [confirmState, setConfirmState] = useState<{
+    mode: "message" | "withFiles";
+    targetId: string;
+    preview: { restored: string[]; deleted: string[] };
+  } | null>(null);
 
-  const resolveEntryId = useCallback(async (): Promise<string | null> => {
-    if (message.entryId) return message.entryId;
+  const fetchTree = useCallback(async (): Promise<Array<Record<string, unknown>> | null> => {
     if (!sessionId) return null;
     try {
-      const tree = await apiClient.call("agent.getTree", { sessionId }) as Record<string, unknown>;
+      const tree = await apiClient.call("agent.getTree", { sessionId }) as unknown as Record<string, unknown>;
       const rawEntries = Array.isArray(tree) ? tree : ((tree as Record<string, unknown>)?.entries as unknown[] || []);
-      const allAssistantMsgs = messages.filter(m => m.role === "assistant");
-      const assistantMsgIdx = allAssistantMsgs.findIndex(m => m.id === message.id);
-      const assistantTreeEntries = rawEntries.filter((e: Record<string, unknown>) => (e as { type: string }).type === "message" && (e as { label: string }).label === "assistant");
-      if (assistantMsgIdx !== -1 && assistantMsgIdx < assistantTreeEntries.length) {
-        return (assistantTreeEntries[assistantMsgIdx] as { id: string }).id;
+      return Array.isArray(rawEntries) ? rawEntries as Array<Record<string, unknown>> : null;
+    } catch { return null }
+  }, [sessionId]);
+
+  const resolveEntryId = useCallback(async (treeEntries?: Array<Record<string, unknown>> | null): Promise<string | null> => {
+    if (message.entryId) return message.entryId;
+    const entries = treeEntries ?? await fetchTree();
+    if (!entries || !sessionId) return null;
+    if (isUserCard) {
+      const allUserMsgs = messages.filter(m => m.role === "user");
+      const userMsgIdx = allUserMsgs.findIndex(m => m.id === message.id);
+      const userTreeEntries = entries.filter((e: Record<string, unknown>) => (e as { type: string }).type === "message" && (e as { label: string }).label === "user");
+      if (userMsgIdx !== -1 && userMsgIdx < userTreeEntries.length) {
+        return (userTreeEntries[userMsgIdx] as { id: string }).id;
       }
       return null;
-    } catch { return null; }
-  }, [sessionId, message.id, message.entryId, messages]);
+    }
+    const allAssistantMsgs = messages.filter(m => m.role === "assistant");
+    const assistantMsgIdx = allAssistantMsgs.findIndex(m => m.id === message.id);
+    const assistantTreeEntries = entries.filter((e: Record<string, unknown>) => (e as { type: string }).type === "message" && (e as { label: string }).label === "assistant");
+    if (assistantMsgIdx !== -1 && assistantMsgIdx < assistantTreeEntries.length) {
+      return (assistantTreeEntries[assistantMsgIdx] as { id: string }).id;
+    }
+    return null;
+  }, [sessionId, message.id, message.entryId, messages, isUserCard, fetchTree]);
 
-  const resolveRollbackTarget = useCallback(async (mode: "message" | "all"): Promise<string | null> => {
-    if (!sessionId) return null;
-    try {
-      const tree = await apiClient.call("agent.getTree", { sessionId }) as unknown as Array<Record<string, unknown>>;
-      const entries = Array.isArray(tree) ? tree : [];
-      if (entries.length === 0) return null;
-
-      if (mode === "all") {
-        const root = entries.find((e) => e.parentId == null);
-        return (root?.id as string) ?? (entries[0]?.id as string) ?? null;
+  const findTurnBoundary = useCallback((entryId: string, entries: Array<Record<string, unknown>>): string | null => {
+    const byId = new Map(entries.map(e => [e.id, e]));
+    let current = byId.get(entryId);
+    if (!current) return null;
+    let currentLabel = (current as Record<string, unknown>).label as string | undefined;
+    while (current) {
+      const parentId = current.parentId as string | null | undefined;
+      if (parentId == null) return null;
+      const parent = byId.get(parentId);
+      if (!parent) return parentId;
+      const parentLabel = parent.label as string | undefined;
+      if (currentLabel === "assistant" && parentLabel === "user") {
+        const grandParentId = parent.parentId as string | null | undefined;
+        if (grandParentId == null) return grandParentId ?? null;
+        const grandParent = byId.get(grandParentId);
+        return grandParent ? grandParentId : null;
       }
+      current = parent;
+      currentLabel = parentLabel;
+    }
+    return null;
+  }, []);
 
-      const entryId = await resolveEntryId();
-      if (!entryId) return null;
-      const assistantEntry = entries.find((e) => e.id === entryId);
-      if (!assistantEntry) return null;
-      const userEntry = entries.find((e) => e.id === assistantEntry.parentId);
-      if (!userEntry) return null;
-      const prevLeaf = entries.find((e) => e.id === userEntry.parentId);
-      return (prevLeaf?.id as string) ?? null;
-    } catch { return null; }
-  }, [sessionId, resolveEntryId]);
+  const resolveRollbackTarget = useCallback(async (): Promise<{ targetId: string; tree: Array<Record<string, unknown>> } | null> => {
+    if (!sessionId) return null;
+    const tree = await fetchTree();
+    if (!tree || tree.length === 0) return null;
+
+    const entryId = await resolveEntryId(tree);
+    if (!entryId) return null;
+    const targetId = findTurnBoundary(entryId, tree);
+    return targetId ? { targetId, tree } : null;
+  }, [sessionId, fetchTree, resolveEntryId, findTurnBoundary]);
 
   const handleFork = useCallback(async () => {
-    const entryId = await resolveEntryId();
+    const tree = await fetchTree();
+    const entryId = await resolveEntryId(tree);
     if (!sessionId || !entryId) return;
     const result = await apiClient.call("agent.fork", { sessionId, entryId, position: "at" }).catch(() => undefined);
     if (!result || result.cancelled || !result.newSessionId || !result.newSessionFile) return;
@@ -254,27 +301,136 @@ const HeaderActions = memo(function HeaderActions({ message }: { message: ChatMe
 
     state.setActiveSession(result.newSessionId);
     useChatStore.getState().loadSessionMessages(result.newSessionId, { force: true });
-  }, [sessionId, resolveEntryId]);
+    pushNotification({ message: "已 Fork 为新会话", level: "info" });
+  }, [sessionId, fetchTree, resolveEntryId, pushNotification]);
 
-  const handleRollbackMessage = useCallback(async () => {
-    const targetId = await resolveRollbackTarget("message");
-    if (!sessionId || !targetId) return;
-    await apiClient.call("agent.navigateTree", { sessionId, targetId, summarize: false }).catch(() => {});
-    useChatStore.getState().loadSessionMessages(sessionId, { force: true });
-  }, [sessionId, resolveRollbackTarget]);
+  const executeRollback = useCallback(async (mode: "message" | "withFiles") => {
+    try {
+      const result = await resolveRollbackTarget();
+      if (!sessionId || !result) {
+        pushNotification({ message: "回滚失败：无法确定回滚目标", level: "error" });
+        return;
+      }
+      const textToRefill = isUserCard
+        ? message.content
+            .filter((b): b is { type: "text"; text: string } => b.type === "text")
+            .map((b) => b.text)
+            .join("")
+            .trim()
+        : null;
+      if (textToRefill) {
+        const currentInput = useChatStore.getState().inputText?.trim();
+        if (currentInput) {
+          try {
+            const HISTORY_KEY = "pi-input-history";
+            const raw = localStorage.getItem(`${HISTORY_KEY}:${sessionId}`);
+            const history: string[] = raw ? JSON.parse(raw) : [];
+            if (!history.includes(currentInput)) {
+              history.unshift(currentInput);
+              localStorage.setItem(`${HISTORY_KEY}:${sessionId}`, JSON.stringify(history.slice(0, 10)));
+            }
+          } catch {}
+        }
+      }
+      const skipFiles = mode === "message";
+      await apiClient.call("agent.navigateTree", { sessionId, targetId: result.targetId, summarize: false, skipFiles });
+      await useChatStore.getState().loadSessionMessages(sessionId, { force: true });
+      if (textToRefill) {
+        useChatStore.getState().setInputText(textToRefill);
+      }
+      pushNotification({ message: "已回滚到上一轮对话", level: "info" });
+    } catch (err) {
+      pushNotification({ message: `回滚失败：${err instanceof Error ? err.message : "未知错误"}`, level: "error" });
+    }
+  }, [sessionId, resolveRollbackTarget, isUserCard, message, pushNotification]);
 
-  const handleRollbackAll = useCallback(async () => {
-    const targetId = await resolveRollbackTarget("all");
-    if (!sessionId || !targetId) return;
-    await apiClient.call("agent.navigateTree", { sessionId, targetId, summarize: false }).catch(() => {});
-    useChatStore.getState().loadSessionMessages(sessionId, { force: true });
-  }, [sessionId, resolveRollbackTarget]);
+  const requestRollback = useCallback(async (mode: "message" | "withFiles") => {
+    if (rollingBackRef.current) return;
+    rollingBackRef.current = true;
+    try {
+      const result = await resolveRollbackTarget();
+      if (!sessionId || !result) {
+        pushNotification({ message: "回滚失败：无法确定回滚目标", level: "error" });
+        return;
+      }
+      if (mode === "message") {
+        await executeRollback("message");
+        return;
+      }
+      const preview = await apiClient.call("agent.rollbackPreview", { sessionId, targetId: result.targetId }).catch(() => ({ restored: [], deleted: [] }));
+      setConfirmState({ mode, targetId: result.targetId, preview });
+    } catch (err) {
+      pushNotification({ message: `预览失败：${err instanceof Error ? err.message : "未知错误"}`, level: "error" });
+    } finally {
+      rollingBackRef.current = false;
+    }
+  }, [sessionId, resolveRollbackTarget, executeRollback, pushNotification]);
+
+  const confirmRollback = useCallback(async () => {
+    if (rollingBackRef.current) return;
+    rollingBackRef.current = true;
+    setConfirmState(null);
+    try {
+      await executeRollback("withFiles");
+    } finally {
+      rollingBackRef.current = false;
+    }
+  }, [executeRollback]);
+
+  const cancelRollback = useCallback(() => {
+    setConfirmState(null);
+  }, []);
 
   return (
     <>
       <ActionBtn icon={GitBranch} title="Fork" onClick={handleFork} />
-      <ActionBtn icon={RotateCcw} title="回滚消息" onClick={handleRollbackMessage} />
-      <ActionBtn icon={Undo2} title="回滚全部" onClick={handleRollbackAll} />
+      <ActionBtn icon={Undo2} title="回滚消息" onClick={() => requestRollback("message")} disabled={rollingBackRef.current} />
+      <ActionBtn icon={RotateCcw} title="回滚消息+代码" onClick={() => requestRollback("withFiles")} disabled={rollingBackRef.current} />
+      {confirmState && (
+        <div className="absolute right-0 top-6 z-50 w-72 rounded-lg border border-amber-500/30 bg-gray-900 px-3 py-2.5 shadow-xl">
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <FileWarning className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span className="text-[11px] font-medium text-amber-300">回滚将恢复以下文件</span>
+          </div>
+          {confirmState.preview.restored.length > 0 && (
+            <div className="mb-1">
+              <span className="text-[10px] text-emerald-400">恢复:</span>
+              <ul className="ml-2 mt-0.5 space-y-0.5 max-h-24 overflow-y-auto">
+                {confirmState.preview.restored.map((f) => (
+                  <li key={f} className="text-[10px] text-gray-300 truncate" title={f}>{f}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {confirmState.preview.deleted.length > 0 && (
+            <div className="mb-1.5">
+              <span className="text-[10px] text-red-400">删除:</span>
+              <ul className="ml-2 mt-0.5 space-y-0.5 max-h-24 overflow-y-auto">
+                {confirmState.preview.deleted.map((f) => (
+                  <li key={f} className="text-[10px] text-gray-300 truncate" title={f}>{f}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {confirmState.preview.restored.length === 0 && confirmState.preview.deleted.length === 0 && (
+            <p className="text-[10px] text-gray-400 mb-1.5">无文件变更</p>
+          )}
+          <div className="flex items-center justify-end gap-2">
+            <button
+              onClick={(e) => { e.stopPropagation(); confirmRollback(); }}
+              className="rounded bg-amber-500/20 px-2 py-0.5 text-[11px] font-medium text-amber-400 hover:bg-amber-500/30 transition-colors"
+            >
+              确认回滚
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); cancelRollback(); }}
+              className="rounded bg-gray-700 px-2 py-0.5 text-[11px] font-medium text-gray-400 hover:bg-gray-600 transition-colors"
+            >
+              取消
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 });
@@ -285,21 +441,28 @@ const ActionBtn = memo(function ActionBtn({
   onClick,
   active,
   activeClassName,
+  disabled,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   title?: string;
   onClick?: () => void;
   active?: boolean;
   activeClassName?: string;
+  disabled?: boolean;
 }) {
   if (!onClick) return null;
   return (
     <button
-      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      onClick={(e) => { e.stopPropagation(); if (!disabled) onClick(); }}
       title={title}
-      className={`p-1 rounded transition-colors ${active ? activeClassName : "text-gray-600 hover:text-gray-300 hover:bg-gray-700/50"}`}
+      disabled={disabled}
+      className={`p-1 rounded transition-colors ${disabled ? "text-gray-700 cursor-not-allowed" : active ? activeClassName : "text-gray-600 hover:text-gray-300 hover:bg-gray-700/50"}`}
     >
-      <Icon className={`w-3.5 h-3.5 ${active ? "fill-current" : ""}`} />
+      {disabled ? (
+        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+      ) : (
+        <Icon className={`w-3.5 h-3.5 ${active ? "fill-current" : ""}`} />
+      )}
     </button>
   );
 });

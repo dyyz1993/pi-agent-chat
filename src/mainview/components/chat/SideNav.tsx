@@ -66,9 +66,7 @@ function buildNavItems(messages: ChatMessage[]): NavItem[] {
       const b = msg.content[bi];
       const blockId = `${msg.id}-${bi}`;
 
-      if (b.type === "thinking") {
-        subs.push({ icon: Brain, color: "text-purple-400", label: "Thinking", blockId });
-      } else if (b.type === "text") {
+      if (b.type === "text") {
         subs.push({ icon: FileText, color: "text-gray-400", label: "文本", blockId });
       } else if (b.type === "toolExecution" && !seenTools.has(b.toolName)) {
         seenTools.add(b.toolName);
