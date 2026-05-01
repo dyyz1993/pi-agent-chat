@@ -266,7 +266,10 @@ function SessionItem({
   const hasSubagents = subsessions && subsessions.length > 0;
   const hasExpandableChildren = hasPiChildren || hasSubagents;
   const workspaceInfo = useMemo(
-    () => worktrees.find((wt) => session.projectPath.startsWith(wt.path)) ?? null,
+    () =>
+      worktrees.find((wt) => session.projectPath === wt.path) ??
+      [...worktrees].sort((a, b) => b.path.length - a.path.length).find((wt) => session.projectPath.startsWith(wt.path)) ??
+      null,
     [worktrees, session.projectPath]
   );
 

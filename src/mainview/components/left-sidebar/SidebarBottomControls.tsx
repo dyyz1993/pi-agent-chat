@@ -113,7 +113,8 @@ export function SidebarBottomControls() {
   const currentWorkspace = useMemo(() => {
     if (!currentSession) return worktrees[0] ?? null;
     return (
-      worktrees.find((wt) => currentSession.projectPath.startsWith(wt.path)) ??
+      worktrees.find((wt) => currentSession.projectPath === wt.path) ??
+      [...worktrees].sort((a, b) => b.path.length - a.path.length).find((wt) => currentSession.projectPath.startsWith(wt.path)) ??
       worktrees[0] ??
       null
     );
