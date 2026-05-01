@@ -183,18 +183,11 @@ export function SidebarBottomControls() {
     setCreating(true);
     try {
       const wt = await addWorktreeAction(activeTabPath, newBranch.trim(), sourceBranch || undefined);
-      addProjectTab({
-        id: wt.path,
-        name: wt.branch,
-        path: wt.path,
-        connected: false,
-      });
       setShowCreateDialog(false);
       setNewBranch("");
       setSourceBranch("");
       setWorkspaceOpen(false);
-      useSessionStore.getState().setActiveProject(wt.path);
-      await useSessionStore.getState().createNewSession();
+      await useSessionStore.getState().createNewSession(wt.path);
     } catch {
     }
     setCreating(false);
