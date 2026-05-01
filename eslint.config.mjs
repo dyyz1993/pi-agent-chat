@@ -19,6 +19,7 @@ export default tseslint.config(
       '.codenomad/**',
       'test*/**',
       'test-*.ts',
+      'src/electrobun-shim.d.ts',
     ],
   },
   {
@@ -51,6 +52,7 @@ export default tseslint.config(
       'rpc/module-file-naming': 'error',
       'rpc/require-typed-register': 'error',
       'rpc/require-api-client': 'error',
+      'rpc/no-namespace-iterate': 'error',
     },
   },
   {

@@ -1474,5 +1474,5 @@ function buildTokenUsage(usage: unknown): { tokenUsage?: import("../types").Toke
 }
 
 if (typeof window !== "undefined") {
-  (window as any).__toolCallNameMap = toolCallNameMap;
+  (window as unknown as Record<string, unknown>).__toolCallNameMap = toolCallNameMap;
 }
