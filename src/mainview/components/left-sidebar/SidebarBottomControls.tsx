@@ -171,12 +171,12 @@ export function SidebarBottomControls() {
   }, []);
 
   const handleSwitchWorkspace = useCallback((wt: { path: string }) => {
-    const sessions = sessionsByProject[wt.path];
-    if (sessions && sessions.length > 0) {
-      useSessionStore.getState().setActiveSession(sessions[0].sessionId);
+    const state = useSessionStore.getState();
+    if (state.activeSessionId) {
+      state.updateSessionProjectPath(state.activeSessionId, wt.path);
     }
     setWorkspaceOpen(false);
-  }, [sessionsByProject]);
+  }, []);
 
   const handleCreateWorktree = useCallback(async () => {
     if (!newBranch.trim() || !activeTabPath || creating) return;
