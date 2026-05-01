@@ -110,8 +110,9 @@ export function QuickActionToolbar() {
           });
         }
       }
-      const skillsRes = await apiClient.call("agent.getSkills", { sessionId: activeSessionId });
-      for (const skill of skillsRes.skills) {
+      const skillsRaw = await apiClient.call("agent.getSkills", { sessionId: activeSessionId });
+      const skillsArr = Array.isArray(skillsRaw) ? skillsRaw : (skillsRaw.skills ?? []);
+      for (const skill of skillsArr) {
         result.push({
           id: `skill-${skill.filePath}`,
           label: skill.name,
@@ -240,8 +241,9 @@ export function QuickActionToolbar() {
           insertText: `/${cmd.name}`,
         });
       }
-      const skillsRes = await apiClient.call("agent.getSkills", { sessionId: activeSessionId });
-      for (const skill of skillsRes.skills) {
+      const skillsRaw = await apiClient.call("agent.getSkills", { sessionId: activeSessionId });
+      const skillsArr = Array.isArray(skillsRaw) ? skillsRaw : (skillsRaw.skills ?? []);
+      for (const skill of skillsArr) {
         const exists = result.some((r) => r.label === skill.name);
         if (exists) continue;
         result.push({

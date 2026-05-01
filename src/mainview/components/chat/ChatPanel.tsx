@@ -11,6 +11,8 @@ import {
   Zap,
   Clock,
   Loader2,
+  RefreshCw,
+  AlertTriangle,
 } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useChatStore } from "../../stores/use-chat-store";
@@ -31,6 +33,7 @@ import { MessageSelectionBar } from "./MessageSelectionBar";
 import { QuickActionToolbar } from "./QuickActionToolbar";
 import { ScrollToolbar } from "./ScrollToolbar";
 import { QueueCards } from "./QueueCards";
+import { MarkdownExpandOverlay } from "./MarkdownExpandOverlay";
 import type { ChatMessage } from "../../types";
 
 const EMPTY_MSGS: never[] = [];
@@ -67,6 +70,18 @@ export function ChatPanel() {
 
   const effectiveStatus = isViewingSubagent ? subStatus : parentStatus;
 
+  const activeProjectId = useSessionStore((s) => s.activeProjectId);
+  const projectFailed = useSessionStore(
+    useCallback((s) => !!activeProjectId && s.projectStartFailed[activeProjectId], [activeProjectId]),
+  );
+  const projectError = useSessionStore(
+    useCallback((s) => (activeProjectId ? s.projectStartError[activeProjectId] ?? "" : ""), [activeProjectId]),
+  );
+  const retryActiveProject = useSessionStore((s) => s.retryActiveProject);
+  const sessionReady = useSessionStore(
+    useCallback((s) => !!activeSessionId && s.sessionReady[activeSessionId], [activeSessionId]),
+  );
+
   const isLoading = useChatStore(useCallback(
     (s) => !!activeSessionId && s.loadingSessions.has(activeSessionId),
     [activeSessionId],
@@ -79,8 +94,6 @@ export function ChatPanel() {
   const setActive = useChatNavStore((s) => s.setActive);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const inputBarRef = useRef<InputBarHandle>(null);
-  const scrollCaptureRef = useRef<HTMLDivElement>(null);
-
   const messageIds = useMemo(() => messages.map((m) => m.id), [messages]);
   const isStreaming = effectiveStatus === "streaming" || effectiveStatus === "compacting" || effectiveStatus === "retrying";
   const breakpoint = useLayoutStore((s) => s.breakpoint);
@@ -208,51 +221,6 @@ export function ChatPanel() {
     return () => { clearInterval(timer); sessionInitRef.current = false; };
   }, [activeSessionId, activeSubId]);
 
-  useEffect(() => {
-    const strip = scrollCaptureRef.current;
-    if (!strip) return;
-    let lastY = 0;
-    let startX = 0;
-    let startY = 0;
-    let moved = false;
-
-    const onTouchStart = (e: TouchEvent) => {
-      lastY = e.touches[0].clientY;
-      startX = e.touches[0].clientX;
-      startY = e.touches[0].clientY;
-      moved = false;
-    };
-
-    const onTouchMove = (e: TouchEvent) => {
-      e.preventDefault();
-      const el = messagesScrollRef.current;
-      if (!el) return;
-      const y = e.touches[0].clientY;
-      el.scrollTop -= y - lastY;
-      lastY = y;
-      const dx = e.touches[0].clientX - startX;
-      const dy = e.touches[0].clientY - startY;
-      if (Math.abs(dx) > 5 || Math.abs(dy) > 5) moved = true;
-    };
-
-    const onTouchEnd = () => {
-      if (moved) return;
-      strip.style.pointerEvents = 'none';
-      const target = document.elementFromPoint(startX, startY);
-      strip.style.pointerEvents = '';
-      if (target instanceof HTMLElement) target.click();
-    };
-
-    strip.addEventListener('touchstart', onTouchStart, { passive: true });
-    strip.addEventListener('touchmove', onTouchMove, { passive: false });
-    strip.addEventListener('touchend', onTouchEnd, { passive: true });
-    return () => {
-      strip.removeEventListener('touchstart', onTouchStart);
-      strip.removeEventListener('touchmove', onTouchMove);
-      strip.removeEventListener('touchend', onTouchEnd);
-    };
-  }, [isMobileOrTablet]);
-
   const handleBackToMain = () => {
     if (activeSessionId) {
       useSubagentStore.getState().setActiveSubsession(activeSessionId, null);
@@ -261,6 +229,7 @@ export function ChatPanel() {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative bg-gray-950">
+      <MarkdownExpandOverlay />
       <div className="flex items-center gap-4 px-4 py-1.5 bg-gray-900/80 border-b border-gray-800 text-[11px] text-gray-500 flex-shrink-0">
         <SessionToggleIcon />
         {isViewingSubagent && (
@@ -284,7 +253,24 @@ export function ChatPanel() {
 
       <div className="flex-1 flex overflow-hidden">
         <div className="flex-1 min-w-0 relative">
-          {isLoading ? (
+          {projectFailed && !isViewingSubagent && !isLoading ? (
+            <div className="h-full flex items-center justify-center">
+              <div className="flex flex-col items-center gap-3 max-w-xs text-center">
+                <AlertTriangle className="w-8 h-8 text-amber-400" />
+                <div className="text-sm text-gray-300">会话启动失败</div>
+                {projectError && (
+                  <div className="text-xs text-gray-500 break-all">{projectError}</div>
+                )}
+                <button
+                  onClick={retryActiveProject}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs hover:bg-indigo-700 transition-colors"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  重试
+                </button>
+              </div>
+            </div>
+          ) : isLoading ? (
             <div className="h-full flex items-center justify-center">
               <div className="flex flex-col items-center gap-2 opacity-50">
                 <Loader2 className="w-5 h-5 text-gray-500 animate-spin" />
@@ -295,13 +281,6 @@ export function ChatPanel() {
             <MessageListView messages={messages} scrollRef={messagesScrollRef} onScroll={handleScroll} virtualizer={subVirtualizer} />
           ) : (
             <MessageListView messages={mainMessages} scrollRef={messagesScrollRef} onScroll={handleScroll} virtualizer={mainVirtualizer} />
-          )}
-          {isMobileOrTablet && (
-            <div
-              ref={scrollCaptureRef}
-              className="absolute right-0 top-0 bottom-0 w-10 z-20"
-              style={{ touchAction: 'none' }}
-            />
           )}
           {messages.length > 0 && (
             <ScrollToolbar
@@ -339,42 +318,51 @@ export function ChatPanel() {
       <div className="px-3 pb-3 pt-2 flex-shrink-0 flex items-stretch gap-1.5 bg-gray-900 border-t border-gray-800" style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
         {!isViewingSubagent && (
           <>
-            {!isMobileOrTablet && (
-              <div className="flex flex-col gap-1 shrink-0 justify-between py-1">
-                <button className="p-1.5 rounded-md hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors" title="附件">
-                  <Paperclip className="w-4 h-4" />
-                </button>
-                <button className="p-1.5 rounded-md hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors" title="图片">
-                  <ImageIcon className="w-4 h-4" />
-                </button>
+            {!sessionReady && !projectFailed ? (
+              <div className="flex-1 flex items-center justify-center gap-2 py-2">
+                <Loader2 className="w-3.5 h-3.5 text-gray-500 animate-spin" />
+                <span className="text-xs text-gray-500">会话启动中...</span>
               </div>
+            ) : (
+              <>
+                {!isMobileOrTablet && (
+                  <div className="flex flex-col gap-1 shrink-0 justify-between py-1">
+                    <button className="p-1.5 rounded-md hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors" title="附件">
+                      <Paperclip className="w-4 h-4" />
+                    </button>
+                    <button className="p-1.5 rounded-md hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors" title="图片">
+                      <ImageIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+
+                <InputBar ref={inputBarRef} value={inputText} onChange={setInputText} onSend={handleSend} sessionId={activeSessionId ?? ""} />
+
+                <div className="flex flex-col gap-1 shrink-0 justify-between py-1">
+                  {isStreaming && inputText.trim() ? (
+                    <button onClick={handleSteer} className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-amber-600 text-white hover:bg-amber-700 shadow-sm shadow-amber-500/20" title="插入消息 (Steer)">
+                      <Zap className="w-4 h-4" />
+                    </button>
+                  ) : isStreaming ? (
+                    <button onClick={handleAbort} disabled={!isStreaming} className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-red-600 text-white hover:bg-red-700" title="停止">
+                      <Square className="w-4 h-4" />
+                    </button>
+                  ) : (
+                    <button disabled className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-red-900/30 text-red-500/50 cursor-not-allowed" title="停止">
+                      <Square className="w-4 h-4" />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => inputBarRef.current?.send()}
+                    disabled={!inputText.trim() || !sessionReady}
+                    className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${inputText.trim() && sessionReady ? (isStreaming ? "bg-blue-600 text-white hover:bg-blue-700 shadow-sm shadow-blue-500/20" : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm shadow-indigo-500/20") : "bg-gray-800 text-gray-600 cursor-not-allowed"}`}
+                    title={isStreaming ? "排队发送 (Follow-up)" : "发送"}
+                  >
+                    {isStreaming ? <Clock className="w-4 h-4" /> : <ArrowUp className="w-4 h-4" />}
+                  </button>
+                </div>
+              </>
             )}
-
-            <InputBar ref={inputBarRef} value={inputText} onChange={setInputText} onSend={handleSend} sessionId={activeSessionId ?? ""} />
-
-            <div className="flex flex-col gap-1 shrink-0 justify-between py-1">
-              {isStreaming && inputText.trim() ? (
-                <button onClick={handleSteer} className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-amber-600 text-white hover:bg-amber-700 shadow-sm shadow-amber-500/20" title="插入消息 (Steer)">
-                  <Zap className="w-4 h-4" />
-                </button>
-              ) : isStreaming ? (
-                <button onClick={handleAbort} disabled={!isStreaming} className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-red-600 text-white hover:bg-red-700" title="停止">
-                  <Square className="w-4 h-4" />
-                </button>
-              ) : (
-                <button disabled className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-red-900/30 text-red-500/50 cursor-not-allowed" title="停止">
-                  <Square className="w-4 h-4" />
-                </button>
-              )}
-              <button
-                onClick={() => inputBarRef.current?.send()}
-                disabled={!inputText.trim()}
-                className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${inputText.trim() ? (isStreaming ? "bg-blue-600 text-white hover:bg-blue-700 shadow-sm shadow-blue-500/20" : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm shadow-indigo-500/20") : "bg-gray-800 text-gray-600 cursor-not-allowed"}`}
-                title={isStreaming ? "排队发送 (Follow-up)" : "发送"}
-              >
-                {isStreaming ? <Clock className="w-4 h-4" /> : <ArrowUp className="w-4 h-4" />}
-              </button>
-            </div>
           </>
         )}
         {isViewingSubagent && (

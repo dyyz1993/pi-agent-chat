@@ -23,7 +23,7 @@ export type FilePreview = {
   totalLines?: number;
 };
 
-export type ToolExecutionStatus = "running" | "done" | "error";
+export type ToolExecutionStatus = "running" | "done" | "error" | "background";
 
 export type ContentBlock =
   | { type: "text"; text: string }
@@ -53,6 +53,7 @@ export type ChatMessage = {
   isStreaming?: boolean;
   tokenUsage?: TokenUsage;
   entryId?: string;
+  _local?: boolean;
 };
 
 export type Turn = {

@@ -3,11 +3,89 @@ import type { Dirent } from "fs";
 import type { MethodParams, MethodResult } from "@dyyz1993/rpc-core";
 import type { RPCMethods, HandlerOptions } from "../rpc-schema";
 import { readdir, stat, writeFile, readFile, mkdir, rename, rm, cp } from "fs/promises";
-import { existsSync } from "fs";
+import { existsSync, watch } from "fs";
 import { join, dirname, resolve } from "path";
 import { createLogger } from "../lib/logger";
 
 const log = createLogger("file");
+
+const DEBOUNCE_MS = 800;
+
+const watcherState = new WeakMap<RPCServer, {
+  watcher: ReturnType<typeof watch> | null;
+  path: string | null;
+  debounceTimer: ReturnType<typeof setTimeout> | null;
+  pendingChanges: Map<string, "create" | "delete" | "rename">;
+}>();
+
+function getWatcherState(server: RPCServer) {
+  if (!watcherState.has(server)) {
+    watcherState.set(server, {
+      watcher: null,
+      path: null,
+      debounceTimer: null,
+      pendingChanges: new Map(),
+    });
+  }
+  return watcherState.get(server)!;
+}
+
+function startFileWatcher(server: RPCServer, projectPath: string): void {
+  const state = getWatcherState(server);
+  if (state.path === projectPath && state.watcher) return;
+  stopFileWatcher(server);
+
+  state.path = projectPath;
+
+  try {
+    state.watcher = watch(
+      projectPath,
+      { recursive: true },
+      (eventType, filename) => {
+        if (!filename) return;
+        const segments = filename.split(/[/\\]/);
+        if (segments.includes("node_modules") || segments.includes(".git")) return;
+
+        const changedPath = join(projectPath, filename);
+        const changeType: "create" | "delete" | "rename" =
+          eventType === "rename" ? (existsSync(changedPath) ? "create" : "delete") : "create";
+
+        state.pendingChanges.set(changedPath, changeType);
+
+        if (state.debounceTimer) clearTimeout(state.debounceTimer);
+        state.debounceTimer = setTimeout(() => {
+          const s = getWatcherState(server);
+          s.debounceTimer = null;
+          for (const [path, type] of s.pendingChanges) {
+            server.emitEvent("file.changed", { changedPath: path, type });
+          }
+          s.pendingChanges.clear();
+        }, DEBOUNCE_MS);
+      },
+    );
+
+    state.watcher.on("error", (err) => {
+      log.error("File watcher error", { error: err instanceof Error ? err.message : String(err) });
+    });
+
+    log.info("File watcher started", { path: projectPath });
+  } catch (err) {
+    log.error("Failed to start file watcher", { error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+function stopFileWatcher(server: RPCServer): void {
+  const state = getWatcherState(server);
+  if (state.debounceTimer) {
+    clearTimeout(state.debounceTimer);
+    state.debounceTimer = null;
+  }
+  if (state.watcher) {
+    state.watcher.close();
+    state.watcher = null;
+  }
+  state.path = null;
+}
 
 function parseGitignore(content: string): ((path: string, isDir: boolean) => boolean) {
   const patterns: { pattern: string; isDirOnly: boolean; isNegated: boolean }[] = [];
@@ -76,6 +154,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
   r("file.listDir", async (params) => {
     const basePath = resolve(params.path || process.cwd());
+    startFileWatcher(server, basePath);
     const entries: { name: string; path: string; type: "file" | "directory"; size?: number; isIgnored?: boolean }[] = [];
     try {
       const files = await readdir(basePath, { withFileTypes: true });

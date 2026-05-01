@@ -80,7 +80,8 @@ class APIClientImpl {
         this.client = createTypedClient<RPCMethods, RPCEvents>(this.wsTransport);
 
         const wsUrlObj = new URL(wsUrl);
-        this._baseUrl = `http://${wsUrlObj.host}`;
+        const httpProto = wsUrlObj.protocol === "wss:" ? "https:" : "http:";
+        this._baseUrl = `${httpProto}//${wsUrlObj.host}`;
       }
     })();
 

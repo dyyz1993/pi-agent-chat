@@ -1,13 +1,39 @@
-export { register as system } from "./system";
-export { register as file } from "./file";
-export { register as timer } from "./timer";
-export { register as git } from "./git";
-export { register as project } from "./project";
-export { register as session } from "./session";
-export { register as agent } from "./agent";
-export { register as subagent } from "./subagent";
-export { register as todo } from "./todo";
-export { register as bash } from "./bash";
-export { register as lsp } from "./lsp";
-export { register as memory } from "./memory";
-export { register as rules } from "./rules";
+import type { RPCServer } from "@dyyz1993/rpc-core";
+import type { HandlerOptions } from "../rpc-schema";
+import { register as system } from "./system";
+import { register as file } from "./file";
+import { register as timer } from "./timer";
+import { register as git } from "./git";
+import { register as project } from "./project";
+import { register as session } from "./session";
+import { register as agent } from "./agent";
+import { register as subagent } from "./subagent";
+import { register as todo } from "./todo";
+import { register as bash } from "./bash";
+import { register as lsp } from "./lsp";
+import { register as memory } from "./memory";
+import { register as rules } from "./rules";
+import { unregister as agentCleanup } from "./agent";
+
+type RegisterFn = (server: RPCServer, options: HandlerOptions) => void;
+type CleanupFn = (server: RPCServer) => void;
+
+export const handlerMap: Record<string, RegisterFn> = {
+  system,
+  file,
+  timer,
+  git,
+  project,
+  session,
+  agent,
+  subagent,
+  todo,
+  bash,
+  lsp,
+  memory,
+  rules,
+};
+
+export const cleanupMap: Record<string, CleanupFn> = {
+  agentCleanup,
+};

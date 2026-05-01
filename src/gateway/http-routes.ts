@@ -1,6 +1,6 @@
 /**
  * HTTP route handlers for the web gateway.
- * Handles: /health, /info/{path}, /file/{path}, /file/upload
+ * Handles: /health, /info/{path}, /file/{path}, /file/upload, /fs/{path}
  */
 
 import type { IncomingMessage, ServerResponse } from "http";
@@ -11,6 +11,9 @@ import { createLogger } from "../shared/lib/logger";
 import { listRecentProjects, restoreOpenTabs } from "../shared/lib/project-config";
 
 const log = createLogger("gateway");
+
+const FS_COOKIE_NAME = "fs_token";
+const FS_COOKIE_MAX_AGE = 3600;
 
 // MIME 类型映射
 const MIME_TYPES: Record<string, string> = {
@@ -127,6 +130,12 @@ export function createHttpHandler(deps: HttpRouteDeps): (req: IncomingMessage, r
       return;
     }
 
+    // 文件服务（干净路径，支持 HTML 相对资源）: GET /fs/{path}
+    if (url.pathname.startsWith("/fs/")) {
+      await handleFsRoute(url, req, res, cfg.authToken);
+      return;
+    }
+
     // 文件元数据: GET /info/{path}
     if (url.pathname.startsWith("/info/")) {
       await handleFileInfo(url.pathname.slice(6), res);
@@ -165,6 +174,87 @@ export function createHttpHandler(deps: HttpRouteDeps): (req: IncomingMessage, r
     res.writeHead(404);
     res.end();
   };
+}
+
+function parseFsCookie(req: IncomingMessage): string | null {
+  const cookieHeader = req.headers["cookie"] || "";
+  for (const part of cookieHeader.split(";")) {
+    const [k, v] = part.trim().split("=");
+    if (k === FS_COOKIE_NAME && v) return v;
+  }
+  return null;
+}
+
+async function handleFsRoute(
+  url: URL,
+  req: IncomingMessage,
+  res: ServerResponse,
+  authToken: string,
+): Promise<void> {
+  const queryToken = url.searchParams.get("token");
+  const cookieToken = parseFsCookie(req);
+  const token = queryToken || cookieToken;
+
+  if (token !== authToken) {
+    res.writeHead(401, { "Content-Type": "text/plain" }).end("Unauthorized");
+    return;
+  }
+
+  if (queryToken) {
+    res.setHeader("Set-Cookie", `${FS_COOKIE_NAME}=${authToken}; Path=/fs/; HttpOnly; Max-Age=${FS_COOKIE_MAX_AGE}; SameSite=Strict`);
+    res.writeHead(302, { Location: url.pathname }).end();
+    return;
+  }
+
+  const filePath = url.pathname.slice(4);
+  if (!filePath) {
+    res.writeHead(400, { "Content-Type": "text/plain" }).end("Missing file path");
+    return;
+  }
+
+  if (!(await isPathAllowed(filePath))) {
+    res.writeHead(403, { "Content-Type": "text/plain" }).end("Path not allowed");
+    return;
+  }
+
+  try {
+    if (!existsSync(filePath)) {
+      res.writeHead(404, { "Content-Type": "text/plain" }).end("File not found");
+      return;
+    }
+    const s = await stat(filePath);
+    if (s.isDirectory()) {
+      res.writeHead(400, { "Content-Type": "text/plain" }).end("Is a directory");
+      return;
+    }
+    const mimeType = MIME_TYPES[extname(filePath)] || "application/octet-stream";
+
+    const range = req.headers["range"];
+    if (range) {
+      const parts = range.replace(/bytes=/, "").split("-");
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : s.size - 1;
+      res.writeHead(206, {
+        "Content-Range": `bytes ${start}-${end}/${s.size}`,
+        "Accept-Ranges": "bytes",
+        "Content-Length": end - start + 1,
+        "Content-Type": mimeType,
+      });
+      const buffer = await readFile(filePath);
+      res.end(buffer.subarray(start, end + 1));
+    } else {
+      res.writeHead(200, {
+        "Content-Length": s.size,
+        "Content-Type": mimeType,
+        "Accept-Ranges": "bytes",
+      });
+      const buffer = await readFile(filePath);
+      res.end(buffer);
+    }
+    log.info("FS served", { path: filePath });
+  } catch {
+    res.writeHead(500, { "Content-Type": "text/plain" }).end("Failed to read file");
+  }
 }
 
 async function handleFileInfo(encodedPath: string, res: ServerResponse): Promise<void> {

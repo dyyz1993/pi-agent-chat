@@ -2,19 +2,16 @@ import { useState, useEffect, useCallback } from "react"
 import {
 	Brain,
 	Search,
-	Save,
-	Sparkles,
 	FileText,
 	ChevronDown,
 	ChevronRight,
-	Bookmark,
-	Loader,
-	CheckCircle,
 } from "lucide-react"
 import { useMemoryStore } from "../../stores/use-memory-store"
 import { useSessionStore } from "../../stores/use-session-store"
 import { useShallow } from "zustand/react/shallow"
 import { apiClient } from "../../lib/api-client"
+import { ALL_MEMORY_TYPES, getMemorySummary } from "../chat/memory-config"
+import type { MemoryTypeConfig } from "../chat/memory-config"
 
 function relativeTime(ms: number): string {
 	const diff = Date.now() - ms
@@ -34,18 +31,49 @@ const TYPE_BADGES: Record<string, { label: string; cls: string }> = {
 	reference: { label: "参考", cls: "bg-sky-400/15 text-sky-400" },
 }
 
-const EVENT_CONFIG: Record<string, { icon: typeof Brain; label: string; color: string; pulse?: boolean }> = {
-	memory_prefetch: { icon: Search, label: "搜索记忆", color: "text-blue-400" },
-	memory_prefetch_result: { icon: Search, label: "记忆匹配", color: "text-blue-400" },
-	memory_extract: { icon: Save, label: "保存记忆", color: "text-green-400" },
-	memory_extract_result: { icon: Save, label: "提取结果", color: "text-green-400" },
-	memory_dream: { icon: Sparkles, label: "整理记忆", color: "text-purple-400" },
-	memory_dream_result: { icon: Sparkles, label: "整合结果", color: "text-purple-400" },
-	bookmark_creating: { icon: Loader, label: "正在创建收藏...", color: "text-teal-400", pulse: true },
-	memory_created: { icon: CheckCircle, label: "已创建收藏", color: "text-teal-400" },
-	memory_failed: { icon: Bookmark, label: "收藏失败", color: "text-red-400" },
-	memory_updated: { icon: Bookmark, label: "收藏完成", color: "text-yellow-400" },
-	memory_update_failed: { icon: Bookmark, label: "收藏失败", color: "text-red-400" },
+const EVENT_FALLBACK: MemoryTypeConfig = { icon: Brain, label: "", color: "text-gray-400" }
+
+const MEMORY_PANEL_LABELS: Record<string, string> = {
+	memory_prefetch: "搜索记忆",
+	memory_prefetch_result: "记忆匹配",
+	memory_extract: "保存记忆",
+	memory_extract_result: "提取结果",
+	memory_dream: "整理记忆",
+	memory_dream_result: "整合结果",
+	bookmark_creating: "正在创建收藏...",
+	memory_created: "已创建收藏",
+	memory_failed: "收藏失败",
+	memory_updated: "收藏完成",
+	memory_update_failed: "收藏失败",
+}
+
+function getEventIcon(customType: string) {
+	return ALL_MEMORY_TYPES[customType] ?? EVENT_FALLBACK
+}
+
+function getPanelEventLabel(customType: string, data: unknown): string {
+	if (customType === "memory_prefetch_result") {
+		const d = data as { summary?: string } | undefined
+		const summary = d?.summary || ""
+		const match = summary.match(/(\d+)/)
+		if (match) return `匹配 ${match[1]} 条记忆`
+		return "记忆匹配"
+	}
+	if (customType === "memory_prefetch") {
+		const summary = getMemorySummary(customType, data)
+		if (summary) return summary
+		return MEMORY_PANEL_LABELS[customType] ?? customType
+	}
+	if (customType === "memory_updated") {
+		const d = data as { files?: Array<{ filename: string }> } | undefined
+		const count = d?.files?.length ?? 0
+		return count > 0 ? `收藏 ${count} 条` : "收藏完成"
+	}
+	if (customType === "memory_update_failed") {
+		const d = data as { reason?: string } | undefined
+		return d?.reason || "收藏失败"
+	}
+	return MEMORY_PANEL_LABELS[customType] ?? customType
 }
 
 function SectionHeader({
@@ -143,39 +171,7 @@ export function MemoryPanel() {
 	const hasEntrypoint = !!entrypoint
 	const hasEvents = events.length > 0
 
-	if (!hasFiles && !hasEvents && !hasInjected && !hasEntrypoint) {
-		return (
-			<div className="p-3 text-xs text-gray-500 text-center">
-				<Brain className="w-6 h-6 mx-auto mb-2 text-gray-600" />
-				<p>暂无记忆</p>
-				<p className="mt-1 text-gray-600">对话后将自动提取和管理记忆</p>
-			</div>
-		)
-	}
-
 	const last10Events = [...events].reverse().slice(0, 10)
-
-	function getEventLabel(customType: string, data: unknown): string {
-		if (customType === "memory_prefetch_result") {
-			const d = data as { summary?: string } | undefined
-			const summary = d?.summary || ""
-			const match = summary.match(/(\d+)/)
-			if (match) return `匹配 ${match[1]} 条记忆`
-			return "记忆匹配"
-		}
-		if (customType === "memory_updated") {
-			const d = data as { files?: Array<{ filename: string }> } | undefined
-			const count = d?.files?.length ?? 0
-			return count > 0 ? `收藏 ${count} 条` : "收藏完成"
-		}
-		if (customType === "memory_update_failed") {
-			const d = data as { reason?: string } | undefined
-			return d?.reason || "收藏失败"
-		}
-		const cfg = EVENT_CONFIG[customType]
-		if (cfg) return cfg.label
-		return customType
-	}
 
 	function getEventDetail(customType: string, data: unknown): React.ReactNode {
 		if (customType === "memory_updated") {
@@ -226,17 +222,17 @@ export function MemoryPanel() {
 				</div>
 			)}
 
-			{hasFiles && (
-				<div className="border-b border-gray-800/50">
-					<SectionHeader
-						collapsed={collapsedSections.has("files")}
-						onToggle={() => toggleSection("files")}
-						icon={FileText}
-						iconCls="text-gray-400"
-						label="记忆文件"
-						badge={files.length}
-					/>
-					{!collapsedSections.has("files") && (
+			<div className="border-b border-gray-800/50">
+				<SectionHeader
+					collapsed={collapsedSections.has("files")}
+					onToggle={() => toggleSection("files")}
+					icon={FileText}
+					iconCls="text-gray-400"
+					label="记忆文件"
+					badge={files.length}
+				/>
+				{!collapsedSections.has("files") && (
+					hasFiles ? (
 						<div className="px-2.5 pb-1.5 space-y-0.5">
 							{files.map((f) => {
 								const badge = TYPE_BADGES[f.type || ""]
@@ -270,9 +266,15 @@ export function MemoryPanel() {
 								)
 							})}
 						</div>
-					)}
-				</div>
-			)}
+					) : (
+						<div className="px-2.5 pb-2 py-2 text-center">
+							<FileText className="w-4 h-4 mx-auto mb-1 text-gray-600" />
+							<p className="text-[10px] text-gray-500">暂无记忆文件</p>
+							<p className="text-[9px] text-gray-600 mt-0.5">对话后将自动提取</p>
+						</div>
+					)
+				)}
+			</div>
 
 			{hasEntrypoint && (
 				<div className="border-b border-gray-800/50">
@@ -293,26 +295,22 @@ export function MemoryPanel() {
 				</div>
 			)}
 
-			{hasEvents && (
-				<div className="border-b border-gray-800/50 last:border-b-0">
-					<SectionHeader
-						collapsed={collapsedSections.has("operations")}
-						onToggle={() => toggleSection("operations")}
-						icon={Brain}
-						iconCls="text-gray-400"
-						label="最近操作"
-						badge={events.length}
-					/>
-					{!collapsedSections.has("operations") && (
+			<div className="border-b border-gray-800/50 last:border-b-0">
+				<SectionHeader
+					collapsed={collapsedSections.has("operations")}
+					onToggle={() => toggleSection("operations")}
+					icon={Brain}
+					iconCls="text-gray-400"
+					label="最近操作"
+					badge={events.length}
+				/>
+				{!collapsedSections.has("operations") && (
+					hasEvents ? (
 						<div className="px-2.5 pb-1.5 space-y-0.5">
 							{last10Events.map((event) => {
-								const config = EVENT_CONFIG[event.customType] || {
-									icon: Brain,
-									label: event.customType,
-									color: "text-gray-400",
-								}
+								const config = getEventIcon(event.customType)
 								const Icon = config.icon
-								const label = getEventLabel(event.customType, event.data)
+								const label = getPanelEventLabel(event.customType, event.data)
 								const detailEl = getEventDetail(event.customType, event.data)
 								const timeStr = new Date(event.timestamp).toLocaleTimeString("zh-CN", {
 									hour: "2-digit",
@@ -335,9 +333,14 @@ export function MemoryPanel() {
 								)
 							})}
 						</div>
-					)}
-				</div>
-			)}
+					) : (
+						<div className="px-2.5 pb-2 py-2 text-center">
+							<Brain className="w-4 h-4 mx-auto mb-1 text-gray-600" />
+							<p className="text-[10px] text-gray-500">暂无操作记录</p>
+						</div>
+					)
+				)}
+			</div>
 		</div>
 	)
 }

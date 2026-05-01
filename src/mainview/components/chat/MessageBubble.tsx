@@ -11,6 +11,7 @@ import { getToolRenderer } from "./tool-renderers";
 import { getCustomTypeIcon } from "./tool-icon-map";
 import { tryFormatAsYaml } from "../../../shared/lib/json-to-yaml";
 import { useExpandStore } from "../../stores/use-expand-store";
+import { ENTRY_TYPE_KEYS, getMemoryConfig, getMemorySummary } from "./memory-config";
 
 export function getBlockBorderColor(block: ContentBlock, role: "user" | "assistant"): string {
   const roleDefault = role === "user"
@@ -259,21 +260,7 @@ export const ThinkingCard = memo(function ThinkingCard({
   );
 });
 
-const MEMORY_ICONS: Record<string, { label: string; color: string }> = {
-  memory_prefetch: { label: "搜索记忆", color: "text-blue-400" },
-  memory_prefetch_result: { label: "找到相关记忆", color: "text-blue-400" },
-  memory_extract: { label: "保存记忆", color: "text-green-400" },
-  memory_extract_result: { label: "Extraction Result", color: "text-green-400" },
-  memory_dream: { label: "整理记忆", color: "text-purple-400" },
-  memory_dream_result: { label: "Dream Result", color: "text-purple-400" },
-  memory_created: { label: "已创建收藏", color: "text-teal-400" },
-  memory_failed: { label: "收藏失败", color: "text-red-400" },
-  bookmark_creating: { label: "正在创建收藏...", color: "text-teal-400" },
-  memory_updated: { label: "收藏完成", color: "text-yellow-400" },
-  memory_update_failed: { label: "收藏失败", color: "text-red-400" },
-}
-
-export const MEMORY_CUSTOM_TYPES = new Set(Object.keys(MEMORY_ICONS))
+export const MEMORY_CUSTOM_TYPES = ENTRY_TYPE_KEYS
 
 export const MEMORY_HIDDEN_IN_CHAT = new Set<string>([]);
 
@@ -340,57 +327,12 @@ export const LspDiagnosticsCard = memo(function LspDiagnosticsCard({ data }: { d
   )
 })
 
-function getMemorySummary(customType: string, data: unknown): string | null {
-  if (!data || typeof data !== "object") return null;
-  const d = data as Record<string, unknown>;
-  switch (customType) {
-    case "memory_prefetch": {
-      const q = typeof d.query === "string" ? d.query : "";
-      const n = typeof d.availableFiles === "number" ? d.availableFiles : 0;
-      return q ? `「${q.length > 40 ? q.slice(0, 40) + "…" : q}」(${n} 个文件)` : null;
-    }
-    case "memory_prefetch_result": {
-      const summary = typeof d.summary === "string" ? d.summary : "";
-      const bytes = typeof d.injectedBytes === "number" ? d.injectedBytes : 0;
-      return summary ? `${summary}${bytes > 0 ? ` · ${Math.round(bytes / 1024)}KB` : ""}` : null;
-    }
-    case "memory_extract": {
-      const created = Array.isArray(d.created) ? d.created as string[] : [];
-      const updated = Array.isArray(d.updated) ? d.updated as string[] : [];
-      const parts: string[] = [];
-      if (created.length > 0) parts.push(`新建 ${created.length} 条`);
-      if (updated.length > 0) parts.push(`更新 ${updated.length} 条`);
-      return parts.length > 0 ? parts.join("，") : null;
-    }
-    case "memory_dream": {
-      const merges = typeof d.merges === "number" ? d.merges : 0;
-      const deletions = typeof d.deletions === "number" ? d.deletions : 0;
-      const updates = typeof d.updates === "number" ? d.updates : 0;
-      const parts: string[] = [];
-      if (merges > 0) parts.push(`合并 ${merges}`);
-      if (deletions > 0) parts.push(`删除 ${deletions}`);
-      if (updates > 0) parts.push(`更新 ${updates}`);
-      return parts.length > 0 ? parts.join("，") : null;
-    }
-    case "memory_created": {
-      const filename = typeof d.filename === "string" ? d.filename : "";
-      return filename ? filename : null;
-    }
-    case "memory_failed": {
-      const reason = typeof d.reason === "string" ? d.reason : "";
-      return reason || "未知错误";
-    }
-    default:
-      return null;
-  }
-}
 
 export const MemoryCard = memo(function MemoryCard({ customType, data, blockId, isEntry: _isEntry }: { customType: string; data: unknown; blockId: string; isEntry?: boolean }) {
   const [expanded, setExpanded] = useState(false);
-  const config = MEMORY_ICONS[customType] ?? { label: customType, color: "text-gray-400" };
+  const config = getMemoryConfig(customType) ?? { label: customType, color: "text-gray-400" };
   const Icon = getCustomTypeIcon(customType).icon;
   const summary = getMemorySummary(customType, data);
-  const dataStr = typeof data === "string" ? data : data ? JSON.stringify(data, null, 2) : "";
 
   return (
     <div className="my-0.5" data-block-id={blockId}>
@@ -406,14 +348,123 @@ export const MemoryCard = memo(function MemoryCard({ customType, data, blockId, 
           {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
         </span>
       </button>
-      {expanded && dataStr && (
-        <pre className="px-3 pb-1 text-[11px] text-gray-500 overflow-x-auto whitespace-pre-wrap max-h-40 overflow-y-auto">
-          {dataStr.length > 500 ? dataStr.slice(0, 500) + "…" : dataStr}
-        </pre>
+      {expanded && (
+        <MemoryExpandedContent customType={customType} data={data} />
       )}
     </div>
   );
 });
+
+function MemoryExpandedContent({ customType, data }: { customType: string; data: unknown }) {
+  if (customType === "memory_prefetch_result") {
+    return <PrefetchResultDetail data={data} />;
+  }
+  if (customType === "memory_prefetch") {
+    return <PrefetchStartDetail data={data} />;
+  }
+  const dataStr = typeof data === "string" ? data : data ? JSON.stringify(data, null, 2) : "";
+  if (!dataStr) return null;
+  return (
+    <pre className="px-3 pb-1 text-[11px] text-gray-500 overflow-x-auto whitespace-pre-wrap max-h-40 overflow-y-auto">
+      {dataStr.length > 500 ? dataStr.slice(0, 500) + "…" : dataStr}
+    </pre>
+  );
+}
+
+function PrefetchResultDetail({ data }: { data: unknown }) {
+  const d = data as Record<string, unknown> | undefined;
+  if (!d) return null;
+
+  const layer = typeof d.layer === "string" ? d.layer : "unknown";
+  const durationMs = typeof d.durationMs === "number" ? d.durationMs : 0;
+  const injectedBytes = typeof d.injectedBytes === "number" ? d.injectedBytes : 0;
+  const selectedFiles = Array.isArray(d.selectedFiles) ? (d.selectedFiles as string[]) : [];
+  const skipHits = Array.isArray(d.skipHits) ? (d.skipHits as string[]) : [];
+  const guardHits = Array.isArray(d.guardHits) ? (d.guardHits as string[]) : [];
+
+  const layerColor = layer === "skip" ? "text-yellow-400" : layer === "llm" ? "text-blue-400" : "text-gray-500";
+  const layerLabel = layer === "skip" ? "Skip 规则匹配（复用缓存）" : layer === "llm" ? "LLM 智能选择" : layer === "none" ? "无匹配结果" : "未知";
+
+  return (
+    <div className="px-3 pb-2 text-[11px] space-y-1.5">
+      <div className="flex items-center gap-2 py-1 border-b border-gray-800/50">
+        <span className="text-gray-500">决策层:</span>
+        <span className={`font-medium ${layerColor}`}>{layerLabel}</span>
+        {durationMs > 0 && <span className="text-gray-600 ml-auto">{durationMs}ms</span>}
+      </div>
+
+      {(skipHits.length > 0 || guardHits.length > 0) && (
+        <div className="space-y-0.5">
+          {skipHits.length > 0 && (
+            <div className="flex gap-1.5">
+              <span className="text-yellow-500 shrink-0">Skip:</span>
+              <span className="text-gray-400">{skipHits.join(", ")}</span>
+            </div>
+          )}
+          {guardHits.length > 0 && (
+            <div className="flex gap-1.5">
+              <span className="text-green-400 shrink-0">Guard:</span>
+              <span className="text-gray-400">{guardHits.join(", ")}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {selectedFiles.length > 0 && (
+        <div className="space-y-0.5">
+          <div className="text-gray-500 flex items-center gap-1">
+            选中文件 ({selectedFiles.length})
+            {injectedBytes > 0 && <span className="text-gray-600 ml-auto">{Math.round(injectedBytes / 1024)}KB</span>}
+          </div>
+          {selectedFiles.map((f) => (
+            <div key={f} className="flex items-center gap-1.5 pl-2 py-0.5 bg-gray-800/30 rounded text-gray-300">
+              <FileText className="w-3 h-3 text-blue-400/60 shrink-0" />
+              <span className="truncate">{f}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {selectedFiles.length === 0 && layer !== "none" && (
+        <div className="text-gray-600 italic py-0.5">未选中任何文件</div>
+      )}
+
+      {typeof d.snippet === "string" && d.snippet && (
+        <details className="group">
+          <summary className="cursor-pointer text-gray-500 hover:text-gray-300 flex items-center gap-1 py-0.5">
+            <ChevronRight className="w-3 h-3 group-open:rotate-90 transition-transform" />
+            内容预览
+          </summary>
+          <pre className="mt-1 p-1.5 bg-gray-800/40 rounded text-[10px] text-gray-400 overflow-x-auto max-h-32 overflow-y-auto whitespace-pre-wrap">
+            {d.snippet as string}
+          </pre>
+        </details>
+      )}
+    </div>
+  );
+}
+
+function PrefetchStartDetail({ data }: { data: unknown }) {
+  const d = data as Record<string, unknown> | undefined;
+  if (!d) return null;
+  const query = typeof d.query === "string" ? d.query : "";
+  const availableFiles = typeof d.availableFiles === "number" ? d.availableFiles : 0;
+
+  return (
+    <div className="px-3 pb-2 text-[11px] space-y-1">
+      {query && (
+        <div className="flex gap-1.5">
+          <span className="text-gray-500 shrink-0">查询:</span>
+          <span className="text-gray-300 truncate">{query}</span>
+        </div>
+      )}
+      <div className="flex gap-1.5">
+        <span className="text-gray-500 shrink-0">可用文件:</span>
+        <span className="text-gray-300">{availableFiles} 个</span>
+      </div>
+    </div>
+  );
+}
 
 function isLongContent(text: string): boolean {
   const lineCount = text.split("\n").length;
@@ -459,26 +510,38 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({ block, 
     }
     case "thinking":
       return <ThinkingCard thinking={block.thinking} isStreaming={!!isStreaming} blockId={blockId} />;
-    case "toolCall":
-      return (
-        <div data-block-id={blockId} className="my-1 overflow-hidden">
-          <div className="px-4 py-1 text-[11px] text-yellow-400/70 flex items-center gap-1.5">
-            <span>▶</span><span>Tool: {block.name}</span>
-            <CopyButton text={typeof block.input === "string" ? block.input : JSON.stringify(block.input)} size="xs" className="ml-auto" title="复制工具输入" />
-          </div>
-          <pre className="px-4 pb-2 text-[11px] text-gray-400 overflow-x-auto whitespace-pre-wrap">{tryFormatAsYaml(typeof block.input === "string" ? block.input : JSON.stringify(block.input))}</pre>
-        </div>
-      );
-    case "toolResult":
-      return (
-        <details data-block-id={blockId} className="my-1 overflow-hidden group">
-          <summary className={`px-3 pl-2 py-1 text-[11px] cursor-pointer flex items-center gap-1.5 ${block.isError ? "text-red-400" : "text-green-400"} hover:bg-gray-800/20`}>
-            <span>{block.isError ? "✗" : "✓"}</span><span>Result{block.isError ? " (error)" : ""}</span>
-            <CopyButton text={block.content} size="xs" className="ml-auto" title="复制结果内容" />
-          </summary>
-          <pre className="px-3 pl-2 pb-2 text-[11px] text-gray-400 overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap">{block.content}</pre>
-        </details>
-      );
+    case "toolCall": {
+      const execBlock: Extract<ContentBlock, { type: "toolExecution" }> = {
+        type: "toolExecution",
+        toolCallId: block.id,
+        toolName: block.name,
+        args: typeof block.input === "string" ? block.input : JSON.stringify(block.input ?? {}),
+        status: "running",
+      };
+      const renderer = getToolRenderer(execBlock.toolName);
+      if (renderer?.renderExecution) {
+        const CustomCard = renderer.renderExecution;
+        return <CustomCard block={execBlock} blockId={blockId} />;
+      }
+      return <ToolExecutionCard block={execBlock} blockId={blockId} />;
+    }
+    case "toolResult": {
+      const execBlock: Extract<ContentBlock, { type: "toolExecution" }> = {
+        type: "toolExecution",
+        toolCallId: block.toolCallId,
+        toolName: block.toolName,
+        args: typeof block.args === "string" ? block.args : JSON.stringify(block.args ?? ""),
+        status: block.isError ? "error" : "done",
+        output: block.content,
+        details: block.details,
+      };
+      const renderer = getToolRenderer(execBlock.toolName);
+      if (renderer?.renderExecution) {
+        const CustomCard = renderer.renderExecution;
+        return <CustomCard block={execBlock} blockId={blockId} />;
+      }
+      return <ToolExecutionCard block={execBlock} blockId={blockId} />;
+    }
     case "toolExecution": {
       if (block.toolName.toLowerCase() === "subagent") {
         return <SubagentExecutionCard block={block} blockId={blockId} />;

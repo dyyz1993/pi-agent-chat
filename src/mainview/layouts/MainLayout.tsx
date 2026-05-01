@@ -27,8 +27,6 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
 
   const leftResizingRef = useRef(false);
   const rightResizingRef = useRef(false);
-  const startXRef = useRef(0);
-  const startWRef = useRef(0);
 
   useEffect(() => {
     const observer = new ResizeObserver((entries) => {
@@ -48,54 +46,62 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
     return "wide";
   }
 
+  function attachDrag(
+    startX: number,
+    startWidth: number,
+    direction: "left" | "right",
+    setter: (w: number) => void,
+    resizingRef: React.MutableRefObject<boolean>,
+  ) {
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    resizingRef.current = true;
+
+    const sign = direction === "left" ? 1 : -1;
+
+    const onMove = (ev: MouseEvent | TouchEvent) => {
+      if (!resizingRef.current) return;
+      const clientX = "touches" in ev ? ev.touches[0].clientX : ev.clientX;
+      setter(startWidth + sign * (clientX - startX));
+    };
+
+    const onTouchMove = (ev: TouchEvent) => {
+      ev.preventDefault();
+      onMove(ev);
+    };
+
+    const onUp = () => {
+      resizingRef.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onUp);
+    };
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
+    window.addEventListener("touchend", onUp);
+  }
+
   const handleLeftResize = useCallback(
-    (e: React.MouseEvent) => {
+    (e: React.MouseEvent | React.TouchEvent) => {
       e.preventDefault();
-      leftResizingRef.current = true;
-      startXRef.current = e.clientX;
-      startWRef.current = sessionWidth;
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
-      const onMove = (ev: MouseEvent) => {
-        if (!leftResizingRef.current) return;
-        setSessionWidth(startWRef.current + ev.clientX - startXRef.current);
-      };
-      const onUp = () => {
-        leftResizingRef.current = false;
-        document.body.style.cursor = "";
-        document.body.style.userSelect = "";
-        window.removeEventListener("mousemove", onMove);
-        window.removeEventListener("mouseup", onUp);
-      };
-      window.addEventListener("mousemove", onMove);
-      window.addEventListener("mouseup", onUp);
+      const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
+      attachDrag(clientX, sessionWidth, "left", setSessionWidth, leftResizingRef);
     },
-    [sessionWidth, setSessionWidth]
+    [sessionWidth, setSessionWidth],
   );
 
   const handleRightResize = useCallback(
-    (e: React.MouseEvent) => {
+    (e: React.MouseEvent | React.TouchEvent) => {
       e.preventDefault();
-      rightResizingRef.current = true;
-      startXRef.current = e.clientX;
-      startWRef.current = statusWidth;
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
-      const onMove = (ev: MouseEvent) => {
-        if (!rightResizingRef.current) return;
-        setStatusWidth(startWRef.current - ev.clientX + startXRef.current);
-      };
-      const onUp = () => {
-        rightResizingRef.current = false;
-        document.body.style.cursor = "";
-        document.body.style.userSelect = "";
-        window.removeEventListener("mousemove", onMove);
-        window.removeEventListener("mouseup", onUp);
-      };
-      window.addEventListener("mousemove", onMove);
-      window.addEventListener("mouseup", onUp);
+      const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
+      attachDrag(clientX, statusWidth, "right", setStatusWidth, rightResizingRef);
     },
-    [statusWidth, setStatusWidth]
+    [statusWidth, setStatusWidth],
   );
 
   const isMobile = breakpoint === "mobile";
@@ -141,17 +147,18 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
         {/* ---- Left Resize Handle ---- */}
         {showLeftHandle && (
           <div
-            className="absolute top-0 bottom-0 cursor-col-resize flex items-center justify-center z-30"
-            style={{ left: sessionWidth, width: 12 }}
+            className="resize-handle"
+            style={{ left: sessionWidth }}
             onMouseDown={handleLeftResize}
+            onTouchStart={handleLeftResize}
           >
-            <div className="w-0.5 h-8 rounded-full bg-gray-700 hover:bg-indigo-400 hover:h-12 transition-all duration-150" />
+            <div className="resize-handle-indicator w-0.5 h-8 rounded-full bg-gray-700 transition-all duration-150 mx-auto mt-[50vh] -translate-y-1/2" />
           </div>
         )}
 
         {/* ---- COL 2: Chat Area (center) ---- */}
         <div
-          className="flex-1 flex flex-col overflow-hidden relative min-w-0 transition-all duration-200 ease-out"
+          className="flex-1 flex flex-col overflow-hidden relative min-w-0"
           onClick={handleChatAreaClick}
         >
           <ChatPanel />
@@ -174,11 +181,12 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
         {/* ---- Right Resize Handle ---- */}
         {showRightHandle && (
           <div
-            className="absolute top-0 bottom-0 cursor-col-resize flex items-center justify-center z-30"
-            style={{ right: statusWidth, width: 12 }}
+            className="resize-handle"
+            style={{ right: statusWidth }}
             onMouseDown={handleRightResize}
+            onTouchStart={handleRightResize}
           >
-            <div className="w-0.5 h-8 rounded-full bg-gray-700 hover:bg-indigo-400 hover:h-12 transition-all duration-150" />
+            <div className="resize-handle-indicator w-0.5 h-8 rounded-full bg-gray-700 transition-all duration-150 mx-auto mt-[50vh] -translate-y-1/2" />
           </div>
         )}
 

@@ -1,5 +1,7 @@
 import { create } from "zustand";
 import type { SubagentSessionInfo, ChatMessage, ContentBlock, SessionStatus, ContextUsage, TokenUsage } from "../types";
+import type { AgentEvent } from "@dyyz1993/pi-agent-core";
+import type { AssistantMessage, Message, Usage } from "@dyyz1993/pi-ai";
 import { apiClient } from "../lib/api-client";
 import { messageToChatMessage } from "../lib/message-mapper";
 import { batchMessageUpdate } from "./message-batcher";
@@ -98,9 +100,9 @@ export const useSubagentStore = create<SubagentState>()((set, get) => ({
       const msgs: ChatMessage[] = [];
       for (const entry of result.entries) {
         const data = entry.data as Record<string, unknown>;
-        const raw = data?.message as Record<string, unknown> | undefined;
+        const raw = data?.message;
         if (!raw) continue;
-        const msg = messageToChatMessage(raw, entry.id);
+        const msg = messageToChatMessage(raw as Message, entry.id);
         if (msg) msgs.push(msg);
       }
       if (msgs.length > 0) {
@@ -148,11 +150,19 @@ function extractTokenUsage(usage: unknown): TokenUsage | null {
   };
 }
 
-export function handleSubagentEvent(subId: string, event: Record<string, unknown>, parentSessionId?: string) {
-  const eventType = event.type as string;
+type SubagentCustomEvent =
+  | { type: "subagent_start"; description: string; instruction: string }
+  | { type: "compaction_start"; reason: string }
+  | { type: "compaction_end"; reason: string; result: { tokensAfter?: number }; aborted: boolean }
+  | { type: "auto_retry_start"; attempt: number; maxAttempts: number; delayMs: number; errorMessage: string }
+  | { type: "auto_retry_end" };
+
+type SubagentEvent = AgentEvent | SubagentCustomEvent;
+
+export function handleSubagentEvent(subId: string, event: SubagentEvent, parentSessionId?: string) {
   const store = useSubagentStore.getState();
 
-  if (eventType === "agent_start" || eventType === "subagent_start") {
+  if (event.type === "agent_start" || event.type === "subagent_start") {
     store.updateSubagentStatus(subId, "streaming");
     if (parentSessionId) {
       const parentContext = useSessionStore.getState().sessionContextMap[parentSessionId];
@@ -162,23 +172,22 @@ export function handleSubagentEvent(subId: string, event: Record<string, unknown
     }
   }
 
-  if (eventType === "compaction_start") {
+  if (event.type === "compaction_start") {
     store.updateSubagentStatus(subId, "compacting");
   }
 
-  if (eventType === "compaction_end") {
-    const result = event.result as { tokensAfter?: number } | undefined;
-    if (result?.tokensAfter != null) {
-      store.updateSubagentContext(subId, { tokens: result.tokensAfter });
+  if (event.type === "compaction_end") {
+    if (event.result?.tokensAfter != null) {
+      store.updateSubagentContext(subId, { tokens: event.result.tokensAfter });
     }
     store.updateSubagentStatus(subId, "streaming");
   }
 
-  if (eventType === "auto_retry_start") {
+  if (event.type === "auto_retry_start") {
     store.updateSubagentStatus(subId, "retrying");
   }
 
-  if (eventType === "auto_retry_end") {
+  if (event.type === "auto_retry_end") {
     const current = useSubagentStore.getState().subagentStatusMap[subId];
     if (current === "retrying") {
       store.updateSubagentStatus(subId, "streaming");
@@ -187,13 +196,14 @@ export function handleSubagentEvent(subId: string, event: Record<string, unknown
 
   const existing = store.messagesBySubsession[subId] || [];
 
-  if (eventType === "message_start") {
-    const raw = event.message as Record<string, unknown>;
-    const msg = messageToChatMessage(raw, undefined, subToolCallNameMap);
-    if (msg) {
-      store.setSubMessages(subId, [...existing, msg]);
+  if (event.type === "message_start") {
+    if (event.message) {
+      const msg = messageToChatMessage(event.message as Message, undefined, subToolCallNameMap);
+      if (msg) {
+        store.setSubMessages(subId, [...existing, msg]);
+      }
     }
-  } else if (eventType === "message_update") {
+  } else if (event.type === "message_update") {
     batchMessageUpdate(subId, () => {
       const freshStore = useSubagentStore.getState();
       const freshExisting = freshStore.messagesBySubsession[subId] || [];
@@ -201,7 +211,8 @@ export function handleSubagentEvent(subId: string, event: Record<string, unknown
       if (!lastMsg) return;
 
       const blocks = (lastMsg.content as ContentBlock[]) || [];
-      const content = (event.message as Record<string, unknown>)?.content as ContentBlock[];
+      const msg = event.message as Message;
+      const content = msg.content as Array<ContentBlock> | undefined;
       if (!content || !Array.isArray(content)) return;
 
       const updated: ContentBlock[] = [...blocks];
@@ -221,37 +232,52 @@ export function handleSubagentEvent(subId: string, event: Record<string, unknown
 
       freshStore.setSubMessages(subId, [...freshExisting.slice(0, -1), { ...lastMsg, content: updated }]);
     });
-  } else if (eventType === "message_end") {
-    const raw = event.message as Record<string, unknown>;
+  } else if (event.type === "message_end") {
     const lastMsg = existing[existing.length - 1];
     if (!lastMsg) return;
 
+    const msg = event.message as AssistantMessage;
     let finalText = "";
-    const content = raw.content as Array<Record<string, unknown>> | undefined;
+    const content = msg.content;
     if (Array.isArray(content)) {
       for (const part of content) {
         if (part.type === "text" && typeof part.text === "string") finalText += part.text;
       }
     }
 
-    const provider = (raw.provider as string) || lastMsg.provider;
-    const model = (raw.model as string) || lastMsg.model;
-    const tokenUsage = extractTokenUsage(raw.usage);
+    const provider = (msg.provider as string) || lastMsg.provider;
+    const model = (msg.model as string) || lastMsg.model;
+    const tokenUsage = extractTokenUsage(msg.usage);
+
+    const hasContent = lastMsg.content.some(
+      (b) => (b.type === "text" && b.text.trim().length > 0)
+        || b.type === "thinking"
+        || b.type === "toolCall"
+        || b.type === "toolResult"
+        || b.type === "toolExecution"
+        || b.type === "custom",
+    );
+
+    if (!hasContent) {
+      store.setSubMessages(subId, existing.slice(0, -1));
+      return;
+    }
 
     store.setSubMessages(subId, [
       ...existing.slice(0, -1),
       {
         ...lastMsg,
         isStreaming: false,
-        stopReason: (raw.stopReason as string) ?? null,
+        stopReason: (msg.stopReason as string) ?? null,
         provider,
         model,
         tokenUsage: tokenUsage ?? lastMsg.tokenUsage,
       },
     ]);
 
-    if (raw.usage) {
-      const totalTokens = Number((raw.usage as Record<string, unknown>).totalTokens ?? 0);
+    const usage = msg.usage as Usage;
+    if (usage) {
+      const totalTokens = Number(usage.input ?? 0) + Number(usage.output ?? 0);
       if (totalTokens > 0) {
         store.updateSubagentContext(subId, { tokens: totalTokens });
       }
@@ -272,31 +298,30 @@ export function handleSubagentEvent(subId: string, event: Record<string, unknown
         }
       }
     }
-  } else if (event.message) {
-    const raw = event.message as Record<string, unknown>;
-    const msg = messageToChatMessage(raw, undefined, subToolCallNameMap);
-    if (msg) {
-      store.setSubMessages(subId, [...existing, msg]);
+  } else if (event.type === "turn_end") {
+    if (event.message) {
+      const msg = messageToChatMessage(event.message as Message, undefined, subToolCallNameMap);
+      if (msg) {
+        store.setSubMessages(subId, [...existing, msg]);
+      }
     }
   }
 
-  if (eventType === "tool_execution_start") {
-    const toolCallId = event.toolCallId as string;
-    const toolName = (event.toolName as string) || "unknown";
-    subToolCallNameMap[toolCallId] = toolName;
+  if (event.type === "tool_execution_start") {
+    subToolCallNameMap[event.toolCallId] = event.toolName;
   }
 
   if (
-    eventType === "tool_execution_start" ||
-    eventType === "tool_execution_update" ||
-    eventType === "tool_execution_end"
+    event.type === "tool_execution_start" ||
+    event.type === "tool_execution_update" ||
+    event.type === "tool_execution_end"
   ) {
     type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
-    const toolCallId = event.toolCallId as string;
-    const toolName = (event.toolName as string) || "unknown";
-    const args = event.args as Record<string, unknown> | undefined;
+    const toolCallId = event.toolCallId;
+    const toolName = event.toolName;
+    const args = event.type === "tool_execution_end" ? undefined : event.args;
     const argsStr = args
-      ? typeof args.command === "string"
+      ? typeof args === "object" && typeof args.command === "string"
         ? args.command
         : JSON.stringify(args, null, 2)
       : "";
@@ -311,11 +336,11 @@ export function handleSubagentEvent(subId: string, event: Record<string, unknown
         (b): b is ToolExecBlock => b.type === "toolExecution" && b.toolCallId === toolCallId,
       );
 
-      if (eventType === "tool_execution_start") {
+      if (event.type === "tool_execution_start") {
         blocks.push({ type: "toolExecution", toolCallId, toolName, args: argsStr, status: "running" });
-      } else if (eventType === "tool_execution_update") {
-        const partial = event.partialResult as Record<string, unknown> | undefined;
+      } else if (event.type === "tool_execution_update") {
         let output = "";
+        const partial = event.partialResult;
         if (partial) {
           const partialContent = partial.content as Array<{ type: string; text?: string }> | undefined;
           if (Array.isArray(partialContent)) {
@@ -330,9 +355,9 @@ export function handleSubagentEvent(subId: string, event: Record<string, unknown
           const prev = blocks[targetIdx] as ToolExecBlock;
           blocks[targetIdx] = { ...prev, output: (prev.output ?? "") + output };
         }
-      } else if (eventType === "tool_execution_end") {
-        const result = event.result as Record<string, unknown> | undefined;
-        const isError = event.isError as boolean;
+      } else if (event.type === "tool_execution_end") {
+        const result = event.result;
+        const isError = event.isError;
         let output = "";
         if (result) {
           const resultContent = result.content as Array<{ type: string; text?: string }> | undefined;
@@ -354,7 +379,7 @@ export function handleSubagentEvent(subId: string, event: Record<string, unknown
     });
   }
 
-  if (eventType === "agent_end") {
+  if (event.type === "agent_end") {
     const { subsessionsByParent } = useSubagentStore.getState();
     for (const [path, subs] of Object.entries(subsessionsByParent)) {
       if (subs.some((s) => s.sessionId === subId)) {

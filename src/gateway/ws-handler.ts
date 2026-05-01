@@ -1,7 +1,7 @@
 import type { Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { RPCServer, type Transport } from "@dyyz1993/rpc-core";
-import { registerAllHandlers } from "../shared/register-all-handlers";
+import { registerAllHandlers, unregisterAllHandlers } from "../shared/register-all-handlers";
 import { createLogger } from "../shared/lib/logger";
 
 const log = createLogger("gateway");
@@ -78,6 +78,7 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
     ws.on("close", () => {
       clients.delete(ws);
       log.info("Client disconnected", { total: clients.size });
+      unregisterAllHandlers(rpcServer);
       rpcServer.close();
     });
 

@@ -8,7 +8,6 @@ import { TreeNodeItem } from "./TreeNodeItem";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { InlineInput } from "./InlineInput";
-import { PinButton } from "../sidebar/PinButton";
 
 interface ExplorerSidebarProps {
   treeNodes: TreeNode[];
@@ -142,7 +141,13 @@ export function ExplorerSidebar({
         <Folder className="w-3.5 h-3.5" />
         Explorer
       </div>
-      <PinButton />
+      <button
+        onClick={onRefresh}
+        className="p-0.5 rounded hover:bg-gray-700 text-gray-400 hover:text-gray-200 transition-colors"
+        title="Refresh"
+      >
+        <RefreshCw className="w-3.5 h-3.5" />
+      </button>
     </div>
   );
 

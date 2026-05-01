@@ -15,6 +15,7 @@ import { useChatStore } from "../../stores/use-chat-store";
 import { useNotificationStore } from "../../stores/use-notification-store";
 import { apiClient } from "../../lib/api-client";
 import type { SessionMeta } from "../../types";
+import type { TreeEntry } from "@dyyz1993/pi-coding-agent";
 import { MessageBubble, MEMORY_HIDDEN_IN_CHAT, MEMORY_CUSTOM_TYPES, isLspCustomType, isLspVisibleInChat } from "./MessageBubble";
 import type { ChatMessage } from "../../types";
 import { formatTokenCount } from "../../utils/turn-utils";
@@ -203,51 +204,53 @@ const HeaderActions = memo(function HeaderActions({ message, isUserCard }: { mes
     preview: { restored: string[]; deleted: string[] };
   } | null>(null);
 
-  const fetchTree = useCallback(async (): Promise<Array<Record<string, unknown>> | null> => {
+  const fetchTree = useCallback(async (): Promise<TreeEntry[] | null> => {
     if (!sessionId) return null;
     try {
-      const tree = await apiClient.call("agent.getTree", { sessionId }) as unknown as Record<string, unknown>;
-      const rawEntries = Array.isArray(tree) ? tree : ((tree as Record<string, unknown>)?.entries as unknown[] || []);
-      return Array.isArray(rawEntries) ? rawEntries as Array<Record<string, unknown>> : null;
+      const tree = await apiClient.call("agent.getTree", { sessionId });
+      return tree.entries ?? [];
     } catch { return null }
   }, [sessionId]);
 
-  const resolveEntryId = useCallback(async (treeEntries?: Array<Record<string, unknown>> | null): Promise<string | null> => {
+  const resolveEntryId = useCallback(async (treeEntries?: TreeEntry[] | null): Promise<string | null> => {
     if (message.entryId) return message.entryId;
     const entries = treeEntries ?? await fetchTree();
     if (!entries || !sessionId) return null;
     if (isUserCard) {
       const allUserMsgs = messages.filter(m => m.role === "user");
       const userMsgIdx = allUserMsgs.findIndex(m => m.id === message.id);
-      const userTreeEntries = entries.filter((e: Record<string, unknown>) => (e as { type: string }).type === "message" && (e as { label: string }).label === "user");
+      const userTreeEntries = entries.filter(e => e.type === "message" && e.label === "user");
       if (userMsgIdx !== -1 && userMsgIdx < userTreeEntries.length) {
-        return (userTreeEntries[userMsgIdx] as { id: string }).id;
+        return userTreeEntries[userMsgIdx].id;
       }
       return null;
     }
     const allAssistantMsgs = messages.filter(m => m.role === "assistant");
     const assistantMsgIdx = allAssistantMsgs.findIndex(m => m.id === message.id);
-    const assistantTreeEntries = entries.filter((e: Record<string, unknown>) => (e as { type: string }).type === "message" && (e as { label: string }).label === "assistant");
+    const assistantTreeEntries = entries.filter(e => e.type === "message" && e.label === "assistant");
     if (assistantMsgIdx !== -1 && assistantMsgIdx < assistantTreeEntries.length) {
-      return (assistantTreeEntries[assistantMsgIdx] as { id: string }).id;
+      return assistantTreeEntries[assistantMsgIdx].id;
     }
     return null;
   }, [sessionId, message.id, message.entryId, messages, isUserCard, fetchTree]);
 
-  const findTurnBoundary = useCallback((entryId: string, entries: Array<Record<string, unknown>>): string | null => {
+  const findTurnBoundary = useCallback((entryId: string, entries: TreeEntry[]): string | null => {
     const byId = new Map(entries.map(e => [e.id, e]));
     let current = byId.get(entryId);
     if (!current) return null;
-    let currentLabel = (current as Record<string, unknown>).label as string | undefined;
+    let currentLabel = current.label;
+    if (currentLabel === "user") {
+      return current.parentId ?? null;
+    }
     while (current) {
-      const parentId = current.parentId as string | null | undefined;
+      const parentId = current.parentId;
       if (parentId == null) return null;
       const parent = byId.get(parentId);
       if (!parent) return parentId;
-      const parentLabel = parent.label as string | undefined;
+      const parentLabel = parent.label;
       if (currentLabel === "assistant" && parentLabel === "user") {
-        const grandParentId = parent.parentId as string | null | undefined;
-        if (grandParentId == null) return grandParentId ?? null;
+        const grandParentId = parent.parentId;
+        if (grandParentId == null) return null;
         const grandParent = byId.get(grandParentId);
         return grandParent ? grandParentId : null;
       }
@@ -257,7 +260,7 @@ const HeaderActions = memo(function HeaderActions({ message, isUserCard }: { mes
     return null;
   }, []);
 
-  const resolveRollbackTarget = useCallback(async (): Promise<{ targetId: string; tree: Array<Record<string, unknown>> } | null> => {
+  const resolveRollbackTarget = useCallback(async (): Promise<{ targetId: string; tree: TreeEntry[] } | null> => {
     if (!sessionId) return null;
     const tree = await fetchTree();
     if (!tree || tree.length === 0) return null;

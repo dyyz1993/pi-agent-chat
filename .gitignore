@@ -41,6 +41,15 @@ electrobun-build/
 # Testing
 coverage/
 .nyc_output/
+test-results/
+test-*.ts
+test/*.test.ts
+test/*.ts
+test/*.json
+
+# UI Debug/Test tools
+.ui-debugger/
+.ui-tester/
 
 # Misc
 .cache/

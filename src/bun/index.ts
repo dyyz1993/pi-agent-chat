@@ -46,7 +46,6 @@ const mainWindow = new BrowserWindow({
     handlers: {
       requests: {},
       messages: {
-        // @ts-expect-error Electrobun's messages schema doesn't support custom keys at compile time
         "rpc-message": (data: unknown) => {
           try {
             const message = typeof data === "string" ? JSON.parse(data) : data;

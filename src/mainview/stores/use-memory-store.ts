@@ -53,6 +53,11 @@ export const useMemoryStore = create<MemoryState>()((set) => ({
 	addEvent: (sessionId, event) => {
 		set((s) => {
 			const existing = s.eventsBySession[sessionId] || []
+			const dedupeKey = `${event.customType}::${event.timestamp}`
+			const isDuplicate = existing.some(
+				(e) => `${e.customType}::${e.timestamp}` === dedupeKey,
+			)
+			if (isDuplicate) return s
 			return {
 				eventsBySession: {
 					...s.eventsBySession,
@@ -81,6 +86,10 @@ export const useMemoryStore = create<MemoryState>()((set) => ({
 	addInjected: (sessionId, injected) => {
 		set((s) => {
 			const existing = s.injectedBySession[sessionId] || []
+			const isDuplicate = existing.some(
+				(e) => e.summary === injected.summary && e.snippet === injected.snippet,
+			)
+			if (isDuplicate) return s
 			return {
 				injectedBySession: {
 					...s.injectedBySession,

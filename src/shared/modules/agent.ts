@@ -1,5 +1,6 @@
 import type { AgentEvent as UpstreamAgentEvent } from "@dyyz1993/pi-agent-core";
-import type { AssistantMessage, AssistantMessageEvent, TextContent } from "@dyyz1993/pi-ai";
+import type { TreeEntry } from "@dyyz1993/pi-coding-agent";
+import type { AssistantMessage, AssistantMessageEvent, TextContent, Usage, StopReason, ToolCall, ThinkingContent } from "@dyyz1993/pi-ai";
 
 export interface AgentMethods {
   "agent.start": {
@@ -188,7 +189,7 @@ export interface AgentMethods {
   };
   "agent.getTree": {
     params: { sessionId: string };
-    result: { entries: unknown[] };
+    result: { entries: TreeEntry[] };
   };
   "agent.clone": {
     params: { sessionId: string };
@@ -206,9 +207,9 @@ export interface AgentMethods {
 
 export interface AgentMessageForUI {
   role: string;
-  content: unknown[];
-  usage?: unknown;
-  stopReason?: string;
+  content: (TextContent | ThinkingContent | ToolCall)[];
+  usage?: Usage;
+  stopReason?: StopReason;
   provider?: string;
   model?: string;
   id?: string;

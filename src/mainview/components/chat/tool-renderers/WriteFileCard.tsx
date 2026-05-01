@@ -1,8 +1,15 @@
-import { memo } from "react";
-import { Pencil, AlertTriangle, FileText } from "lucide-react";
+import { memo, useCallback, useMemo } from "react";
+import { Pencil, AlertTriangle, FileText, Maximize2 } from "lucide-react";
 import type { ContentBlock } from "../../../types";
+import { CachedReactMarkdown } from "../CachedReactMarkdown";
+import { useExpandStore } from "../../../stores/use-expand-store";
 
 type Block = Extract<ContentBlock, { type: "toolExecution" }>;
+
+interface WriteToolArgs {
+  path: string;
+  content: string;
+}
 
 interface LspDiagnosticIssue {
   severity?: number;
@@ -26,19 +33,51 @@ function isLspDiagnosticData(d: unknown): d is LspDiagnosticData {
   return Array.isArray(obj.files);
 }
 
+const MARKDOWN_EXTENSIONS = new Set([".md", ".mdc", ".mdx", ".markdown"]);
+
+function isMarkdownFile(path: string): boolean {
+  const lower = path.toLowerCase();
+  for (const ext of MARKDOWN_EXTENSIONS) {
+    if (lower.endsWith(ext)) return true;
+  }
+  return false;
+}
+
+function extractFileName(path: string): string {
+  const sep = path.includes("/") ? "/" : "\\";
+  const parts = path.split(sep);
+  return parts[parts.length - 1] || path;
+}
+
+function parseWriteArgs(args: string): WriteToolArgs {
+  try {
+    return JSON.parse(args || "{}") as WriteToolArgs;
+  } catch {
+    return { path: "", content: "" };
+  }
+}
+
 export const WriteFileCard = memo(function WriteFileCard({ block, blockId }: { block: Block; blockId?: string }) {
   const isRunning = block.status === "running";
   const isError = block.status === "error";
+  const openExpand = useExpandStore((s) => s.openExpand);
 
-  let filePath = "";
-  try {
-    const parsed = JSON.parse(block.args || "{}");
-    filePath = parsed.path || parsed.file_path || "";
-  } catch {}
+  const args = useMemo(() => parseWriteArgs(block.args), [block.args]);
+  const filePath = args.path;
+  const fileContent = args.content;
 
   const displayPath = filePath || block.args?.slice(0, 80) || "";
+  const isMd = isMarkdownFile(filePath);
+  const hasContent = (fileContent ?? "").length > 0;
 
   const lspDetails = isLspDiagnosticData(block.details) ? block.details : null;
+
+  const handleExpand = useCallback(() => {
+    if (!fileContent) return;
+    const name = extractFileName(filePath);
+    const lines = fileContent.split("\n").length;
+    openExpand(fileContent, `${name} (${lines} 行)`);
+  }, [filePath, fileContent, openExpand]);
 
   return (
     <div data-block-id={blockId} className={`border-x-0 border-t border-b overflow-hidden ${
@@ -51,19 +90,36 @@ export const WriteFileCard = memo(function WriteFileCard({ block, blockId }: { b
             <span style={{ direction: "ltr", display: "inline" }}>{displayPath}</span>
           </span>
         </span>
+        {isMd && hasContent && !isRunning && (
+          <button
+            onClick={handleExpand}
+            className="p-0.5 rounded text-gray-500 hover:text-gray-300 hover:bg-gray-700/50 transition-colors shrink-0"
+            title="全屏预览 Markdown"
+          >
+            <Maximize2 className="w-3.5 h-3.5" />
+          </button>
+        )}
         {isRunning && <span className="ml-auto text-[10px] text-green-400 animate-pulse shrink-0">writing</span>}
       </div>
 
-      <details open className="group">
-        <summary className="sr-only">展开</summary>
-        <div className="px-3 pb-2">
-          {block.output ? (
-            <pre className="text-[11px] text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-72 overflow-y-auto bg-black/20 rounded px-2 py-1.5">{block.output}</pre>
-          ) : isRunning ? (
-            <div className="text-[11px] text-gray-600 italic py-1">写入中...</div>
-          ) : null}
+      {isMd && hasContent ? (
+        <div className="px-3 pb-2 max-h-80 overflow-y-auto bg-gray-900/40 rounded-sm mx-2 mb-2">
+          <div className="px-2 py-2 prose prose-invert prose-sm max-w-none overflow-auto prose-p:my-1 prose-pre:bg-black/30 prose-pre:rounded prose-pre:px-2 prose-pre:py-1.5 prose-headings:text-gray-100 prose-a:text-indigo-400 prose-code:text-pink-300 prose-code:before:content-[''] prose-code:after:content-[''] prose-code:bg-gray-800/60 prose-code:px-1 prose-code:rounded prose-code:text-[11px] prose-strong:text-gray-100 prose-blockquote:border-l-indigo-400/50 prose-blockquote:text-gray-300 prose-li:my-0.5 prose-ul:my-1 prose-ol:my-1">
+            <CachedReactMarkdown>{fileContent}</CachedReactMarkdown>
+          </div>
         </div>
-      </details>
+      ) : (
+        <details open className="group">
+          <summary className="sr-only">展开</summary>
+          <div className="px-3 pb-2">
+            {block.output ? (
+              <pre className="text-[11px] text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-72 overflow-y-auto bg-black/20 rounded px-2 py-1.5">{block.output}</pre>
+            ) : isRunning ? (
+              <div className="text-[11px] text-gray-600 italic py-1">写入中...</div>
+            ) : null}
+          </div>
+        </details>
+      )}
 
       {lspDetails && lspDetails.files && lspDetails.files.length > 0 && (
         <details className="group border-t border-yellow-700/20">

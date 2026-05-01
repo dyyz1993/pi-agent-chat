@@ -14,6 +14,9 @@ interface ExplorerState {
   filePreview: FilePreview | null;
   loadingFile: boolean;
   editingNode: EditingNode | null;
+  _fileWatchSubId: string | null;
+  _refreshDebounceTimer: ReturnType<typeof setTimeout> | null;
+  _pendingRefreshDirs: Set<string>;
 
   setCurrentPath: (path: string) => void;
   listRootDir: () => Promise<void>;
@@ -29,6 +32,8 @@ interface ExplorerState {
   startEditing: (path: string, type: EditingNode["type"]) => void;
   cancelEditing: () => void;
   importFiles: (entries: DropEntry[], destDir: string) => Promise<number>;
+  subscribeFileWatcher: () => Promise<void>;
+  unsubscribeFileWatcher: () => void;
 }
 
 function entriesToTreeNodes(entries: RPCMethods["file.listDir"]["result"]["entries"]): TreeNode[] {
@@ -124,6 +129,9 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
   filePreview: null,
   loadingFile: false,
   editingNode: null,
+  _fileWatchSubId: null,
+  _refreshDebounceTimer: null,
+  _pendingRefreshDirs: new Set<string>(),
 
   setCurrentPath: (path) => set({ currentPath: path }),
 
@@ -135,10 +143,10 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
       const res = await apiClient.call("file.listDir", { path: currentPath });
       set({
         treeNodes: entriesToTreeNodes(res.entries),
-        // Update currentPath to the resolved absolute path
         currentPath: res.basePath,
       });
       addLog(`Found ${res.entries.length} items`);
+      get().subscribeFileWatcher();
     } catch (err) {
       addLog(`Error: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -328,5 +336,54 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
       addLog(`Import error: ${err instanceof Error ? err.message : String(err)}`);
       throw err;
     }
+  },
+
+  subscribeFileWatcher: async () => {
+    const { _fileWatchSubId, currentPath } = get();
+    if (_fileWatchSubId || !currentPath) return;
+
+    try {
+      const subId = await apiClient.subscribe(
+        "file.changed",
+        (payload) => {
+          const state = get();
+          const { currentPath: cp, treeNodes, _refreshDebounceTimer, _pendingRefreshDirs } = state;
+          if (!cp) return;
+
+          const changedDir = payload.changedPath.includes("/") || payload.changedPath.includes("\\")
+            ? payload.changedPath.substring(0, payload.changedPath.lastIndexOf(payload.changedPath.includes("/") ? "/" : "\\"))
+            : cp;
+
+          if (changedDir !== cp) {
+            const node = findNode(treeNodes, changedDir);
+            if (!node || !node.expanded) return;
+          }
+
+          _pendingRefreshDirs.add(changedDir === cp ? cp : changedDir);
+
+          if (_refreshDebounceTimer) clearTimeout(_refreshDebounceTimer);
+          const timer = setTimeout(() => {
+            const dirs = new Set(get()._pendingRefreshDirs);
+            set({ _refreshDebounceTimer: null, _pendingRefreshDirs: new Set() });
+            for (const dir of dirs) {
+              get().refreshDir(dir);
+            }
+          }, 500);
+          set({ _refreshDebounceTimer: timer });
+        },
+      );
+      set({ _fileWatchSubId: subId });
+    } catch {
+      // subscription failed silently
+    }
+  },
+
+  unsubscribeFileWatcher: () => {
+    const { _fileWatchSubId, _refreshDebounceTimer } = get();
+    if (_refreshDebounceTimer) clearTimeout(_refreshDebounceTimer);
+    if (_fileWatchSubId) {
+      apiClient.unsubscribe(_fileWatchSubId);
+    }
+    set({ _fileWatchSubId: null, _refreshDebounceTimer: null, _pendingRefreshDirs: new Set() });
   },
 }));

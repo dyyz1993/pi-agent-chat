@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Zap, ClipboardList, Terminal, Plug, Network, Puzzle, CheckCircle2, Circle, AlertTriangle, BookOpen, Eye, EyeOff } from "lucide-react";
+import { ChevronDown, ChevronRight, Zap, ClipboardList, Terminal, Plug, Network, Puzzle, CheckCircle2, Circle, AlertTriangle, BookOpen, Eye, EyeOff, Trash2 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { useStatusStore } from "../../stores/use-status-store";
 import { useSessionStore } from "../../stores/use-session-store";
@@ -9,6 +9,13 @@ import { useBashStore } from "../../stores/use-bash-store";
 import { BashProcessCard, LogViewer } from "../bash-panel/BashPanel";
 import type { LspDiagnosticsMode } from "../../../shared/modules/lsp";
 import type { StatusSection } from "../../stores/use-status-store";
+import type { TodoPriority } from "../../stores/use-session-store";
+
+const PRIORITY_STYLES: Record<TodoPriority, { dot: string; label: string }> = {
+  high: { dot: "bg-red-400", label: "H" },
+  medium: { dot: "bg-yellow-400", label: "M" },
+  low: { dot: "bg-gray-500", label: "L" },
+};
 
 const SECTIONS: { id: StatusSection; label: string; icon: React.ElementType }[] = [
   { id: "yolo", label: "YOLO 模式", icon: Zap },
@@ -72,12 +79,19 @@ export function StatusPanel() {
                     {todos && todos.length > 0 && (
                       <div className="space-y-0.5 pt-0.5">
                         {todos.map((t) => (
-                          <div key={t.id} className="flex items-center gap-1.5 py-0.5 px-1 rounded hover:bg-gray-800/40 transition-colors">
-                            {t.done
-                              ? <CheckCircle2 className="w-3 h-3 shrink-0 text-emerald-400" />
-                              : <Circle className="w-3 h-3 shrink-0 text-gray-500" />
+                          <div key={t.id} className={`flex items-center gap-1.5 py-0.5 px-1 rounded hover:bg-gray-800/40 transition-colors${t.deleted ? " opacity-40" : ""}`}>
+                            {t.deleted
+                              ? <Trash2 className="w-3 h-3 shrink-0 text-red-400" />
+                              : t.done
+                                ? <CheckCircle2 className="w-3 h-3 shrink-0 text-emerald-400" />
+                                : <Circle className="w-3 h-3 shrink-0 text-gray-500" />
                             }
-                            <span className={`${t.done ? "text-gray-500 line-through" : "text-gray-300"} truncate`}>
+                            {t.priority && !t.deleted && (
+                              <span className={`w-3 h-3 shrink-0 rounded-full flex items-center justify-center text-[7px] font-bold ${PRIORITY_STYLES[t.priority].dot}`} style={{ color: "#fff" }}>
+                                {PRIORITY_STYLES[t.priority].label}
+                              </span>
+                            )}
+                            <span className={`${t.deleted ? "text-red-400/60 line-through" : t.done ? "text-gray-500 line-through" : "text-gray-300"} truncate`}>
                               {t.text}
                             </span>
                           </div>
@@ -195,6 +209,9 @@ export function StatusPanel() {
                           >
                             <span className={`w-1.5 h-1.5 rounded-full ${sk.enabled ? "bg-green-400" : "bg-gray-600"}`} />
                             <span className="truncate flex-1 text-gray-300">{sk.name}</span>
+                            <span className={`text-[9px] px-1 py-px rounded ${sk.scope === "global" ? "bg-purple-500/15 text-purple-400" : "bg-blue-500/15 text-blue-400"}`}>
+                              {sk.scope === "global" ? "全局" : "项目"}
+                            </span>
                             <button
                               onClick={(e) => { e.stopPropagation(); toggleSkillEnabled(sk.name); }}
                               className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-gray-700/50 rounded transition-opacity"

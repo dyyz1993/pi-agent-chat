@@ -1,6 +1,15 @@
 /**
  * File 模块 — 文件系统操作
  */
+export interface FileChangedEvent {
+  changedPath: string;
+  type: "create" | "delete" | "rename";
+}
+
+export interface FileEvents {
+  "file.changed": FileChangedEvent;
+}
+
 export interface FileMethods {
   "file.findProjectRoot": {
     params: Record<string, never>;

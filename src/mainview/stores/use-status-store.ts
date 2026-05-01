@@ -10,6 +10,8 @@ export interface PluginInfo {
   commandNames: string[];
 }
 
+export type SkillScope = "global" | "project";
+
 export interface SkillInfo {
   name: string;
   description: string;
@@ -17,6 +19,18 @@ export interface SkillInfo {
   baseDir: string;
   disableModelInvocation: boolean;
   enabled: boolean;
+  scope: SkillScope;
+}
+
+export function deriveSkillScope(filePath: string): SkillScope {
+  const home = process.env.HOME ?? "";
+  const globalPatterns = [
+    `${home}/.agents/skills`,
+    `${home}/.claude/skills`,
+    `${home}/.config/opencode/skills`,
+    `${home}/.pi/agent/skills`,
+  ];
+  return globalPatterns.some((p) => filePath.startsWith(p)) ? "global" : "project";
 }
 
 interface StatusState {

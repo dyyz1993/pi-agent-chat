@@ -8,6 +8,7 @@
  *   - rpc/module-file-naming      : 模块文件命名、导出、方法前缀强制规范
  *   - rpc/require-typed-register  : 入口文件必须导入 registerAllHandlers
  *   - rpc/require-api-client      : 前端必须通过 apiClient 调用 RPC
+ *   - rpc/no-namespace-iterate    : 禁止 Object.values() 遍历 namespace import
  */
 "use strict";
 
@@ -17,6 +18,7 @@ const schemaMergeOnly = require("./rules/schema-merge-only");
 const moduleFileNaming = require("./rules/module-file-naming");
 const requireTypedRegister = require("./rules/require-typed-register");
 const requireApiClient = require("./rules/require-api-client");
+const noNamespaceIterate = require("./rules/no-namespace-iterate");
 
 module.exports = {
   meta: {
@@ -30,6 +32,7 @@ module.exports = {
     "module-file-naming": moduleFileNaming,
     "require-typed-register": requireTypedRegister,
     "require-api-client": requireApiClient,
+    "no-namespace-iterate": noNamespaceIterate,
   },
   configs: {
     recommended: {
@@ -41,6 +44,7 @@ module.exports = {
         "rpc/module-file-naming": "error",
         "rpc/require-typed-register": "error",
         "rpc/require-api-client": "error",
+        "rpc/no-namespace-iterate": "error",
       },
     },
   },

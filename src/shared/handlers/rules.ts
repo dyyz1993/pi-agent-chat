@@ -57,18 +57,10 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
 		let cwd: string | undefined;
 		try {
-			const managed = (pm as unknown as { clients: Map<string, { info: { projectPath: string } }> }).clients.get(sid);
-			if (managed?.info?.projectPath) cwd = managed.info.projectPath;
+			cwd = pm.getProjectPath(sid);
 		} catch {}
 
-		const hasActiveSession = (() => {
-			try {
-				const clients = (pm as unknown as { clients: Map<string, unknown> }).clients;
-				return clients?.has(sid) ?? false;
-			} catch {
-				return false;
-			}
-		})();
+		const hasActiveSession = pm.hasSession(sid);
 
 		if (!hasActiveSession) return emptySnapshot();
 

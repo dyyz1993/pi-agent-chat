@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import type { Virtualizer } from "@tanstack/react-virtual";
 import { MessageCard } from "./MessageCard";
 import type { ChatMessage } from "../../types";
+import { ALL_MEMORY_TYPE_KEYS } from "./memory-config";
 
 function getCardLabel(msg: ChatMessage): string | undefined {
   const hasCustom = msg.content.some((b) => b.type === "custom");
@@ -11,13 +12,9 @@ function getCardLabel(msg: ChatMessage): string | undefined {
     switch (custom.customType) {
       case "bash_background_exit": return "后台进程";
       case "lsp_diagnostics": return "LSP";
-      case "memory_prefetch":
-      case "memory_prefetch_result":
-      case "memory_extract":
-      case "memory_dream":
-      case "memory_created":
-      case "memory_failed": return undefined;
-      default: return custom.customType;
+      default:
+        if (ALL_MEMORY_TYPE_KEYS.has(custom.customType)) return undefined;
+        return custom.customType;
     }
   }
   if (msg.role === "user") return "你";

@@ -11,6 +11,7 @@ type DemoResult = MethodResult<RPCMethods, "system.ping">
 interface AppState {
   mode: "desktop" | "web";
   ready: boolean;
+  restored: boolean;
   logs: string[];
   method: DemoMethod;
   result: DemoResult | null;
@@ -30,6 +31,7 @@ interface AppState {
 export const useAppStore = create<AppState>((set, get) => ({
   mode: "web",
   ready: false,
+  restored: false,
   logs: [],
   method: "system.ping",
   result: null,

@@ -14,6 +14,7 @@ import { useChatNavStore } from "../../stores/use-chat-nav-store";
 import { useTurnStore, EMPTY_SET } from "../../stores/use-turn-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { getToolIcon, getPreviewResourceIcon, getCustomTypeIcon } from "./tool-icon-map";
+import { ALL_MEMORY_TYPE_KEYS } from "./memory-config";
 
 type SubItem = {
   icon: LucideIcon;
@@ -84,12 +85,14 @@ function buildNavItems(messages: ChatMessage[]): NavItem[] {
         switch (b.customType) {
           case "bash_background_exit": icon = Terminal; color = "text-cyan-400"; label = "后台进程"; break;
           case "lsp_diagnostics": icon = ScanSearch; color = "text-yellow-400"; break;
-          case "memory_prefetch": color = "text-blue-400"; label = "Memory"; break;
-          case "memory_prefetch_result": color = "text-blue-400"; label = "Memory"; break;
-          case "memory_extract": color = "text-green-400"; label = "Memory"; break;
-          case "memory_dream": color = "text-purple-400"; label = "Memory"; break;
-          case "memory_created": color = "text-teal-400"; label = "Memory"; break;
-          case "memory_failed": color = "text-red-400"; label = "Memory"; break;
+          default:
+            if (ALL_MEMORY_TYPE_KEYS.has(b.customType)) {
+              const memIcon = getCustomTypeIcon(b.customType);
+              icon = memIcon.icon;
+              color = memIcon.color;
+              label = "Memory";
+            }
+            break;
         }
         subs.push({ icon, color, label, blockId });
       }

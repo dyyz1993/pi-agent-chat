@@ -47,6 +47,7 @@ function formatDuration(ms: number): string {
 	const blockIsError = block.status === "error";
 	const [elapsed, setElapsed] = useState(0);
 	const [showLogViewer, setShowLogViewer] = useState(false);
+	const [outputOpen, setOutputOpen] = useState(true);
 	const startedAt = useRef(Date.now());
 
 	const bashDetails = block.details as BashDetails | undefined;
@@ -55,6 +56,12 @@ function formatDuration(ms: number): string {
 	const isTerminated = !!bashDetails?.terminated || storeStatus === "terminated";
 	const isRunning = blockIsRunning && !isBackground && !isTerminated;
 	const isError = blockIsError;
+
+	useEffect(() => {
+		if (isBackground) {
+			setOutputOpen(false);
+		}
+	}, [isBackground]);
 
 	useEffect(() => {
 		if (!isRunning) return;
@@ -116,7 +123,7 @@ function formatDuration(ms: number): string {
 				</div>
 			</details>
 
-			<details open className="group">
+			<details open={outputOpen} onToggle={(e) => setOutputOpen(e.currentTarget.open)} className="group">
 				<summary className="px-3 py-1 text-[11px] text-gray-500 cursor-pointer hover:text-gray-400 select-none flex items-center gap-1.5 border-t border-gray-700/30">
 					<svg className="w-3 h-3 transition-transform group-open:rotate-90 shrink-0" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4.5 3l3 3-3 3" /></svg>
 					<span>Output</span>

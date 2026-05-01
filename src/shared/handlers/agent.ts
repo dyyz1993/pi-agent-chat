@@ -14,11 +14,19 @@ export function getProcessManager(): AgentProcessManager | null {
   return manager;
 }
 
+export function unregister(server: RPCServer): void {
+  if (manager) {
+    manager.removeServer(server);
+  }
+}
+
 export function register(server: RPCServer, _options: HandlerOptions): void {
   if (!manager) {
     manager = new AgentProcessManager(server);
+    log.info("Created new AgentProcessManager", { servers: 1 });
   } else {
     manager.updateServer(server);
+    log.info("Updated server on AgentProcessManager", { servers: manager.serverCount() });
   }
 
   const r = <K extends keyof RPCMethods & string>(
@@ -42,6 +50,9 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   r("agent.send", async (params) => {
     log.info("send called", { sessionId: params.sessionId, content: params.content });
     const ok = manager!.send(params.sessionId, params.content);
+    if (!ok) {
+      throw new Error(`Agent not started for session ${params.sessionId}`);
+    }
     return { ok };
   });
 
@@ -201,7 +212,11 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("agent.navigateTree", async (params) => {
-    return manager!.navigateTree(params.sessionId, params.targetId, { summarize: params.summarize }) as Promise<R<"agent.navigateTree">>;
+    return manager!.navigateTree(params.sessionId, params.targetId, { summarize: params.summarize, skipFiles: params.skipFiles }) as Promise<R<"agent.navigateTree">>;
+  });
+
+  r("agent.rollbackPreview", async (params) => {
+    return manager!.previewRollback(params.sessionId, params.targetId) as Promise<R<"agent.rollbackPreview">>;
   });
 
   r("agent.getTree", async (params) => {

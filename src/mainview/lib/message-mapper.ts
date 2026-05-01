@@ -1,90 +1,78 @@
 import type { ChatMessage, ContentBlock, TokenUsage } from "../types";
+import type { Message, AssistantMessage, UserMessage, ToolResultMessage, TextContent, ThinkingContent, ToolCall, Usage } from "@dyyz1993/pi-ai";
 
-function extractTokenUsage(raw: unknown): TokenUsage | undefined {
-  if (typeof raw !== "object" || raw === null) return undefined;
-  const u = raw as Record<string, unknown>;
-  const input = Number(u.inputTokens ?? u.promptTokens ?? u.input ?? 0);
-  const output = Number(u.outputTokens ?? u.completionTokens ?? u.output ?? 0);
-  const reasoning = Number(u.reasoningTokens ?? u.reasoning ?? 0);
-  const cacheRead = Number(u.cacheReadInputTokens ?? u.cacheRead ?? 0);
-  const cacheWrite = Number(u.cacheCreationInputTokens ?? u.cacheWrite ?? 0);
-  const cost = Number(u.cost ?? u.totalCost ?? 0);
+function extractTokenUsage(usage: Usage): TokenUsage | undefined {
+  const input = usage.input;
+  const output = usage.output;
+  const cacheRead = usage.cacheRead;
+  const cacheWrite = usage.cacheWrite;
+  const cost = usage.cost.total;
 
-  if (!input && !output && !reasoning && !cacheRead && !cacheWrite) return undefined;
+  if (!input && !output && !cacheRead && !cacheWrite) return undefined;
 
-  return { input, output, reasoning: reasoning || undefined, cacheRead: cacheRead || undefined, cacheWrite: cacheWrite || undefined, cost: cost || undefined };
+  return { input, output, cacheRead: cacheRead || undefined, cacheWrite: cacheWrite || undefined, cost: cost || undefined };
 }
 
-function extractTimestamp(msg: unknown): number {
-  if (typeof msg === "object" && msg !== null && "timestamp" in msg && typeof (msg as Record<string, unknown>).timestamp === "number") return (msg as Record<string, unknown>).timestamp as number;
-  return Date.now();
+function extractTimestamp(msg: Message): number {
+  return msg.timestamp;
 }
 
-function extractContent(raw: unknown): ContentBlock[] {
-  if (!Array.isArray(raw)) return [];
+function extractContent(msg: UserMessage | AssistantMessage): ContentBlock[] {
   const blocks: ContentBlock[] = [];
-  for (const b of raw) {
-    if (typeof b === "string" && b) {
-      blocks.push({ type: "text", text: b });
-      continue;
+
+  if (typeof msg.content === "string") {
+    if (msg.content) {
+      blocks.push({ type: "text", text: msg.content });
     }
-    if (typeof b !== "object" || b === null) continue;
-    const block = b as Record<string, unknown>;
-    const type = block.type as string;
-    if (type === "text" && typeof block.text === "string" && block.text) {
-      blocks.push({ type: "text", text: block.text });
-    } else if (type === "thinking" && typeof block.thinking === "string" && block.thinking) {
-      blocks.push({ type: "thinking", thinking: block.thinking });
-    } else if (type === "toolCall" && typeof block.id === "string" && typeof block.name === "string") {
-      const input = typeof block.input === "string"
-        ? block.input
-        : block.arguments != null
-          ? (typeof block.arguments === "string" ? block.arguments : JSON.stringify(block.arguments, null, 2))
-          : "";
-      blocks.push({ type: "toolCall", id: block.id, name: block.name, input });
+    return blocks;
+  }
+
+  for (const block of msg.content) {
+    if (block.type === "text") {
+      const textBlock = block as TextContent;
+      if (textBlock.text) {
+        blocks.push({ type: "text", text: textBlock.text });
+      }
+    } else if (block.type === "thinking") {
+      const thinkingBlock = block as ThinkingContent;
+      if (thinkingBlock.thinking) {
+        blocks.push({ type: "thinking", thinking: thinkingBlock.thinking });
+      }
+    } else if (block.type === "toolCall") {
+      const toolCall = block as ToolCall;
+      const input = JSON.stringify(toolCall.arguments, null, 2);
+      blocks.push({ type: "toolCall", id: toolCall.id, name: toolCall.name, input });
     }
   }
+
   return blocks;
 }
 
-function extractToolCallNameMap(msg: unknown, toolCallNameMap: Record<string, string>): void {
-  if (typeof msg !== "object" || msg === null) return;
-  const content = (msg as Record<string, unknown>).content;
-  if (!Array.isArray(content)) return;
-  for (const block of content) {
-    if (typeof block === "object" && block !== null && "type" in block) {
-      const b = block as Record<string, unknown>;
-      if (b.type === "toolCall" && typeof b.id === "string" && typeof b.name === "string") {
-        toolCallNameMap[b.id] = b.name;
-      }
+function extractToolCallNameMap(msg: AssistantMessage, toolCallNameMap: Record<string, string>): void {
+  for (const block of msg.content) {
+    if (block.type === "toolCall") {
+      const toolCall = block as ToolCall;
+      toolCallNameMap[toolCall.id] = toolCall.name;
     }
   }
 }
 
 export function parseToolResultBlock(
-  message: unknown,
+  message: ToolResultMessage,
   toolCallNameMap: Record<string, string>,
 ): ContentBlock | null {
-  if (typeof message !== "object" || message === null) return null;
-  const toolCallId = "toolCallId" in message && typeof (message as Record<string, unknown>).toolCallId === "string"
-    ? (message as Record<string, unknown>).toolCallId as string : null;
-  if (!toolCallId) return null;
+  const toolCallId = message.toolCallId;
+  const toolName = toolCallNameMap[toolCallId] ?? message.toolName;
 
-  const msg = message as Record<string, unknown>;
-  const toolName = toolCallNameMap[toolCallId]
-    ?? (typeof msg.toolName === "string" ? msg.toolName : "unknown");
-  const rawContent = msg.content;
   let contentText = "";
-  if (Array.isArray(rawContent)) {
-    contentText = rawContent
+  if (Array.isArray(message.content)) {
+    contentText = message.content
       .map((c) => {
-        if (typeof c === "object" && c !== null && "text" in c) return String(c.text ?? "");
+        if (c.type === "text") return c.text;
         return "";
       })
       .filter(Boolean)
       .join("");
-  } else if (typeof rawContent === "string") {
-    contentText = rawContent;
   }
 
   return {
@@ -92,23 +80,22 @@ export function parseToolResultBlock(
     toolCallId,
     toolName,
     content: contentText,
-    isError: typeof msg.isError === "boolean" ? msg.isError : false,
-    args: typeof msg.args === "string" ? msg.args : typeof msg.input === "string" ? msg.input as string : undefined,
-    details: "details" in msg ? msg.details : undefined,
+    isError: message.isError,
+    args: undefined,
+    details: message.details,
   };
 }
 
 export function messageToChatMessage(
-  message: unknown,
+  message: Message,
   id?: string,
   toolCallNameMap?: Record<string, string>,
 ): ChatMessage | null {
-  if (typeof message !== "object" || message === null || !("role" in message)) return null;
-  const role = typeof message.role === "string" ? message.role : "";
-  if (role !== "user" && role !== "assistant" && role !== "toolResult" && role !== "custom") return null;
+  const role = message.role;
 
   if (role === "toolResult") {
-    const block = parseToolResultBlock(message, toolCallNameMap ?? {});
+    const toolMsg = message as ToolResultMessage;
+    const block = parseToolResultBlock(toolMsg, toolCallNameMap ?? {});
     if (!block) return null;
     return {
       id: id || `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -118,41 +105,35 @@ export function messageToChatMessage(
     };
   }
 
-  if (role === "custom") {
-    const msgObj = message as Record<string, unknown>;
-    const customType = typeof msgObj.customType === "string" ? msgObj.customType : "unknown";
-    const data = "details" in msgObj ? msgObj.details
-      : "data" in msgObj ? msgObj.data
-      : {};
+  if (role === "user") {
+    const userMsg = message as UserMessage;
+    const content = extractContent(userMsg);
+    if (content.length === 0) return null;
+
     return {
       id: id || `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      role: "custom",
-      content: [{ type: "custom", customType, data }],
+      role: "user",
+      content,
       timestamp: extractTimestamp(message),
     };
   }
 
-  const msgObj = message as Record<string, unknown>;
-  const rawContent = msgObj.content;
-  const content = extractContent(rawContent);
-  if (content.length === 0) {
-    const fallback = typeof rawContent === "string" ? rawContent : undefined;
-    if (!fallback) return null;
-    content.push({ type: "text", text: fallback });
-  }
+  const asstMsg = message as AssistantMessage;
+  const content = extractContent(asstMsg);
+  if (content.length === 0) return null;
 
   const msg: ChatMessage = {
     id: id || `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    role: role as "user" | "assistant",
+    role: "assistant",
     content,
     timestamp: extractTimestamp(message),
   };
 
-  if (typeof msgObj.provider === "string") msg.provider = msgObj.provider;
-  if (typeof msgObj.model === "string") msg.model = msgObj.model;
-  if ("stopReason" in msgObj) msg.stopReason = msgObj.stopReason as string | null;
+  if (asstMsg.provider) msg.provider = asstMsg.provider;
+  if (asstMsg.model) msg.model = asstMsg.model;
+  if (asstMsg.stopReason) msg.stopReason = asstMsg.stopReason;
 
-  const usage = extractTokenUsage(msgObj.usage);
+  const usage = extractTokenUsage(asstMsg.usage);
   if (usage) msg.tokenUsage = usage;
 
   return msg;

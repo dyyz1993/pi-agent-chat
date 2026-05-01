@@ -26,10 +26,10 @@ export const ScrollToolbar = memo(function ScrollToolbar({
   const showNavButtons = !isAtTop || !isAtBottom;
 
   return (
-    <div className="absolute bottom-3 right-1 flex flex-col gap-1.5 z-10">
+    <div className="absolute bottom-3 right-2.5 flex flex-col gap-1.5 z-10">
       <button
         onClick={onToggleAutoScroll}
-        className={`w-8 h-8 rounded-full border flex items-center justify-center transition-colors ${
+        className={`w-9 h-9 rounded-full border flex items-center justify-center transition-colors ${
           autoScrollEnabled
             ? "border-indigo-400/40 text-indigo-400 hover:text-indigo-300 hover:border-indigo-300/50"
             : "border-gray-500/30 text-gray-500 hover:text-gray-300 hover:border-gray-400/40"
@@ -43,7 +43,7 @@ export const ScrollToolbar = memo(function ScrollToolbar({
           {!isAtTop && (
             <button
               onClick={onScrollToTop}
-              className="w-8 h-8 rounded-full border border-gray-500/30 text-gray-500 hover:text-indigo-300 hover:border-indigo-400/40 flex items-center justify-center transition-colors"
+              className="w-9 h-9 rounded-full border border-gray-500/30 text-gray-500 hover:text-indigo-300 hover:border-indigo-400/40 flex items-center justify-center transition-colors"
               title="回到顶部"
             >
               <ChevronUp className="w-4 h-4" />
@@ -52,7 +52,7 @@ export const ScrollToolbar = memo(function ScrollToolbar({
           {!isAtBottom && (
             <button
               onClick={onScrollToBottom}
-              className="w-8 h-8 rounded-full border border-gray-500/30 text-gray-500 hover:text-indigo-300 hover:border-indigo-400/40 flex items-center justify-center transition-colors"
+              className="w-9 h-9 rounded-full border border-gray-500/30 text-gray-500 hover:text-indigo-300 hover:border-indigo-400/40 flex items-center justify-center transition-colors"
               title="回到底部"
             >
               <ChevronDown className="w-4 h-4" />

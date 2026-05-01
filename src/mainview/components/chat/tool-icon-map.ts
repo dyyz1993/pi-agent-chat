@@ -19,14 +19,10 @@ import {
   Music,
   File,
   Brain,
-  SearchCheck,
-  Save,
-  Sparkles,
   Activity,
-  CheckCircle,
-  XCircle,
   type LucideIcon,
 } from "lucide-react";
+import { ALL_MEMORY_TYPES } from "./memory-config";
 
 export type ToolIconEntry = {
   icon: LucideIcon;
@@ -99,14 +95,12 @@ export function getToolIcon(toolName: string): ToolIconEntry {
 }
 
 const CUSTOM_TYPE_ICON_MAP: Record<string, ToolIconEntry> = {
-  memory_prefetch: { icon: SearchCheck, color: "text-blue-400", label: "搜索记忆" },
-  memory_prefetch_result: { icon: SearchCheck, color: "text-blue-400", label: "找到相关记忆" },
-  memory_extract: { icon: Save, color: "text-green-400", label: "保存记忆" },
-  memory_extract_result: { icon: Save, color: "text-green-400", label: "Extraction Result" },
-  memory_dream: { icon: Sparkles, color: "text-purple-400", label: "整理记忆" },
-  memory_dream_result: { icon: Sparkles, color: "text-purple-400", label: "Dream Result" },
-  memory_created: { icon: CheckCircle, color: "text-teal-400", label: "已创建收藏" },
-  memory_failed: { icon: XCircle, color: "text-red-400", label: "收藏失败" },
+  ...Object.fromEntries(
+    Object.entries(ALL_MEMORY_TYPES).map(([key, cfg]) => [
+      key,
+      { icon: cfg.icon, color: cfg.color, label: cfg.label },
+    ])
+  ),
   lsp_diagnostics: { icon: Network, color: "text-yellow-400", label: "LSP Diagnostics" },
   bash_background_exit: { icon: Terminal, color: "text-cyan-400", label: "Background Exit" },
   step_snapshot: { icon: Activity, color: "text-gray-400", label: "Step Snapshot" },

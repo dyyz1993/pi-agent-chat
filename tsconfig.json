@@ -17,7 +17,8 @@
 		"noFallthroughCasesInSwitch": true,
 		"baseUrl": ".",
 		"paths": {
-			"@dyyz1993/rpc-core": ["../packages/rpc-core/src/index.ts"]
+			"@dyyz1993/rpc-core": ["../packages/rpc-core/src/index.ts"],
+			"electrobun/bun": ["./src/electrobun-shim.d.ts"]
 		}
 	},
 	"include": ["src"],

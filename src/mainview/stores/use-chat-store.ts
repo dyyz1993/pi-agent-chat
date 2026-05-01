@@ -1,9 +1,11 @@
 import { create } from "zustand";
+import type { Message } from "@dyyz1993/pi-ai";
 import type { ChatMessage, ContentBlock } from "../types";
 import { apiClient } from "../lib/api-client";
 import { useAppStore } from "./use-app-store";
 import { useSessionStore } from "./use-session-store";
 import { useMemoryStore } from "./use-memory-store";
+import { ALL_MEMORY_TYPE_KEYS } from "../components/chat/memory-config";
 import { messageToChatMessage } from "../lib/message-mapper";
 import type { CustomEntryForUI } from "../../shared/modules/agent";
 
@@ -72,6 +74,15 @@ function normalizeToolBlocks(msgs: ChatMessage[]): void {
         const exec = biToBlock.get(bi) || biToBlock.get(-1);
         if (exec) {
           newContent.push(exec);
+        } else {
+          const args = typeof b.input === "string" ? b.input : b.input != null ? JSON.stringify(b.input, null, 2) : "";
+          newContent.push({
+            type: "toolExecution",
+            toolCallId: b.id,
+            toolName: b.name,
+            args,
+            status: "done",
+          });
         }
       } else {
         newContent.push(b);
@@ -142,6 +153,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       role: "user",
       content: [{ type: "text", text }],
       timestamp: Date.now(),
+      _local: true,
     };
     set((s) => {
       const existing = s.messagesBySession[sessionId] || [];
@@ -155,6 +167,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     try {
       set({ isStreaming: true });
+
+      const sessionReady = useSessionStore.getState().sessionReady[sessionId];
+      if (!sessionReady) {
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error("Session startup timed out")), 15000);
+          const check = () => {
+            if (useSessionStore.getState().sessionReady[sessionId]) {
+              clearTimeout(timeout);
+              resolve();
+            } else {
+              setTimeout(check, 100);
+            }
+          };
+          setTimeout(check, 100);
+        });
+      }
+
       await apiClient.call("agent.send", { sessionId, content: text });
       set({ isStreaming: false });
     } catch (err) {
@@ -170,6 +199,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const sessionId = useSessionStore.getState().activeSessionId;
     if (!sessionId) return;
     set({ inputText: "" });
+
+    const userMsg: ChatMessage = {
+      id: `user_steer_${Date.now()}`,
+      role: "user",
+      content: [{ type: "text", text }],
+      timestamp: Date.now(),
+    };
+    set((s) => {
+      const existing = s.messagesBySession[sessionId] || [];
+      return {
+        messagesBySession: {
+          ...s.messagesBySession,
+          [sessionId]: [...existing, userMsg],
+        },
+      };
+    });
+
     try {
       await apiClient.call("agent.steer", { sessionId, content: text });
     } catch (err) {
@@ -184,6 +230,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const sessionId = useSessionStore.getState().activeSessionId;
     if (!sessionId) return;
     set({ inputText: "" });
+
+    const userMsg: ChatMessage = {
+      id: `user_followup_${Date.now()}`,
+      role: "user",
+      content: [{ type: "text", text }],
+      timestamp: Date.now(),
+    };
+    set((s) => {
+      const existing = s.messagesBySession[sessionId] || [];
+      return {
+        messagesBySession: {
+          ...s.messagesBySession,
+          [sessionId]: [...existing, userMsg],
+        },
+      };
+    });
+
     try {
       await apiClient.call("agent.followUp", { sessionId, content: text });
     } catch (err) {
@@ -287,7 +350,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       const msgs: ChatMessage[] = [];
       for (const { raw, id } of rawMessages) {
-        const msg = messageToChatMessage(raw, id, toolCallNameMap);
+        const msg = messageToChatMessage(raw as unknown as Message, id, toolCallNameMap);
         if (msg) msgs.push(msg);
       }
 
@@ -298,6 +361,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const memoryStore = useMemoryStore.getState();
 
         for (const entry of customEntries) {
+          if (!ALL_MEMORY_TYPE_KEYS.has(entry.customType)) continue;
+
           memoryStore.addEvent(sid, {
             id: entry.id,
             customType: entry.customType,
@@ -330,7 +395,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       set((s) => ({
         messagesBySession: { ...s.messagesBySession, [sid]: msgs },
         historyLoadVersion: s.historyLoadVersion + 1,
-      }));
+}));
 
       useSessionStore.getState().restoreContextFromHistory(sid);
     } catch (err) {

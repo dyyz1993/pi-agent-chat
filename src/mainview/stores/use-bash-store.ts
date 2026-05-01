@@ -118,13 +118,27 @@ export function handleBashEvent(sessionId: string, event: BashChannelEvent): voi
     return;
   }
 
-  if ((event.type === "output" || event.type === "end" || event.type === "error" || event.type === "terminated" || event.type === "background") && event.processes) {
+  if (event.type === "background" && event.toolCallId) {
+    if (event.processes) {
+      const updatedProc = event.processes.find((p) => p.toolCallId === event.toolCallId);
+      if (updatedProc) {
+        store.upsertProcess(sessionId, updatedProc);
+      }
+    } else {
+      const procs = store.processesBySession[sessionId] || [];
+      const existing = procs.find((p) => p.toolCallId === event.toolCallId);
+      if (existing) {
+        store.upsertProcess(sessionId, { ...existing, status: "background" });
+      }
+    }
+    store.markBackgrounded(event.toolCallId);
+    return;
+  }
+
+  if ((event.type === "output" || event.type === "end" || event.type === "error" || event.type === "terminated") && event.processes) {
     const updatedProc = event.processes.find((p) => p.toolCallId === event.toolCallId);
     if (updatedProc) {
       store.upsertProcess(sessionId, updatedProc);
-      if (event.type === "background") {
-        store.markBackgrounded(updatedProc.toolCallId);
-      }
     }
     return;
   }
