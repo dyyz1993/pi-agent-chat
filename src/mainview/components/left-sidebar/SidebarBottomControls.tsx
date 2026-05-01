@@ -1,11 +1,13 @@
-import { useEffect, useState, useRef, useCallback } from "react";
-import { ChevronDown, Check, Cpu, Brain, Star, Search } from "lucide-react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
+import { ChevronDown, Check, Cpu, Brain, Star, Search, FolderTree, GitBranch, Plus } from "lucide-react";
 import { useSessionStore } from "../../stores/use-session-store";
+import { useGitStore } from "../../stores/use-git-store";
 import { apiClient } from "../../lib/api-client";
 
 interface ModelInfo {
   provider: string;
   id: string;
+  name?: string;
   contextWindow?: number;
   reasoning?: boolean;
 }
@@ -72,25 +74,79 @@ export function SidebarBottomControls() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [switching, setSwitching] = useState(false);
 
+  const sessionsByProject = useSessionStore((s) => s.sessionsByProject);
+  const projectTabs = useSessionStore((s) => s.projectTabs);
+  const activeProjectId = useSessionStore((s) => s.activeProjectId);
+  const addProjectTab = useSessionStore((s) => s.addProjectTab);
+
+  const worktrees = useGitStore((s) => s.worktrees);
+  const fetchWorktrees = useGitStore((s) => s.fetchWorktrees);
+  const addWorktreeAction = useGitStore((s) => s.addWorktree);
+
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [newBranch, setNewBranch] = useState("");
+  const [sourceBranch, setSourceBranch] = useState("");
+  const [creating, setCreating] = useState(false);
+  const workspaceRef = useRef<HTMLDivElement>(null);
+
+  const sessionFetchedRef = useRef<string | null>(null);
   useEffect(() => {
     if (!activeSessionId) return;
+    if (sessionFetchedRef.current === activeSessionId) return;
+    sessionFetchedRef.current = activeSessionId;
     fetchModelState(activeSessionId);
   }, [activeSessionId, fetchModelState]);
 
+  const currentTab = projectTabs.find((t) => t.id === activeProjectId);
+  const activeTabPath = currentTab?.path ?? "";
+
+  const currentSession = useMemo(() => {
+    if (!activeSessionId) return null;
+    for (const sessions of Object.values(sessionsByProject)) {
+      const found = sessions.find((s) => s.sessionId === activeSessionId);
+      if (found) return found;
+    }
+    return null;
+  }, [activeSessionId, sessionsByProject]);
+
+  const currentWorkspace = useMemo(() => {
+    if (!currentSession) return worktrees[0] ?? null;
+    return (
+      worktrees.find((wt) => currentSession.projectPath.startsWith(wt.path)) ??
+      worktrees[0] ??
+      null
+    );
+  }, [currentSession, worktrees]);
+
+  const workspaceName = currentWorkspace
+    ? currentWorkspace.isMain
+      ? "主工作区"
+      : currentWorkspace.branch
+    : "未加载";
+  const workspacePath = currentWorkspace?.path ?? "";
+
   useEffect(() => {
-    if (!modelOpen && !thinkingOpen) return;
+    if (activeTabPath && worktrees.length === 0) {
+      fetchWorktrees(activeTabPath);
+    }
+  }, [activeTabPath, worktrees.length, fetchWorktrees]);
+
+  useEffect(() => {
+    if (!modelOpen && !thinkingOpen && !workspaceOpen) return;
     const handleClick = (e: MouseEvent) => {
       if (modelRef.current && !modelRef.current.contains(e.target as Node)) setModelOpen(false);
       if (thinkingRef.current && !thinkingRef.current.contains(e.target as Node)) setThinkingOpen(false);
+      if (workspaceRef.current && !workspaceRef.current.contains(e.target as Node)) setWorkspaceOpen(false);
     };
-    const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape") { setModelOpen(false); setThinkingOpen(false); } };
+    const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape") { setModelOpen(false); setThinkingOpen(false); setWorkspaceOpen(false); } };
     document.addEventListener("mousedown", handleClick);
     document.addEventListener("keydown", handleKey);
     return () => {
       document.removeEventListener("mousedown", handleClick);
       document.removeEventListener("keydown", handleKey);
     };
-  }, [modelOpen, thinkingOpen]);
+  }, [modelOpen, thinkingOpen, workspaceOpen]);
 
   useEffect(() => {
     if (modelOpen) {
@@ -113,6 +169,36 @@ export function SidebarBottomControls() {
       return next;
     });
   }, []);
+
+  const handleSwitchWorkspace = useCallback((wt: { path: string }) => {
+    const sessions = sessionsByProject[wt.path];
+    if (sessions && sessions.length > 0) {
+      useSessionStore.getState().setActiveSession(sessions[0].sessionId);
+    }
+    setWorkspaceOpen(false);
+  }, [sessionsByProject]);
+
+  const handleCreateWorktree = useCallback(async () => {
+    if (!newBranch.trim() || !activeTabPath || creating) return;
+    setCreating(true);
+    try {
+      const wt = await addWorktreeAction(activeTabPath, newBranch.trim(), sourceBranch || undefined);
+      addProjectTab({
+        id: wt.path,
+        name: wt.branch,
+        path: wt.path,
+        connected: false,
+      });
+      setShowCreateDialog(false);
+      setNewBranch("");
+      setSourceBranch("");
+      setWorkspaceOpen(false);
+      useSessionStore.getState().setActiveProject(wt.path);
+      await useSessionStore.getState().createNewSession();
+    } catch {
+    }
+    setCreating(false);
+  }, [newBranch, activeTabPath, sourceBranch, creating, addWorktreeAction, addProjectTab]);
 
   const handleSelectModel = useCallback(async (model: ModelInfo) => {
     if (!activeSessionId || switching) return;
@@ -156,6 +242,7 @@ export function SidebarBottomControls() {
     displayModels = displayModels.filter(
       (m) =>
         m.id.toLowerCase().includes(q) ||
+        (m.name?.toLowerCase().includes(q) ?? false) ||
         formatModelName(m.id).toLowerCase().includes(q) ||
         m.provider.toLowerCase().includes(q),
     );
@@ -164,14 +251,105 @@ export function SidebarBottomControls() {
     displayModels = displayModels.filter((m) => favorites.has(modelKey(m)));
   }
 
-  const modelDisplay = currentModel?.id ? formatModelName(currentModel.id) : "未加载";
+  const modelDisplay = currentModel
+    ? `${currentModel.provider}/${currentModel.name || formatModelName(currentModel.id)}`
+    : "未加载";
   const thinkingDisplay = currentThinkingLevel ? formatThinkingLabel(currentThinkingLevel as ThinkingLevel) : "默认";
 
   return (
     <div className="shrink-0 border-t border-gray-800/80 px-3 py-2 space-y-1.5">
+      <div className="relative" ref={workspaceRef}>
+        <button
+          onClick={() => { setWorkspaceOpen(!workspaceOpen); setModelOpen(false); setThinkingOpen(false); }}
+          disabled={!activeSessionId}
+          className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-gray-400 hover:bg-gray-800/60 hover:text-gray-300 transition-colors disabled:opacity-40"
+        >
+          <FolderTree className="w-3 h-3 shrink-0 text-gray-500" />
+          <div className="flex flex-col min-w-0 flex-1 text-left">
+            <span className="truncate">{workspaceName}</span>
+            <span className="text-[10px] text-gray-600 truncate">{workspacePath}</span>
+          </div>
+          <ChevronDown className={`w-3 h-3 shrink-0 transition-transform ${workspaceOpen ? "rotate-180" : ""}`} />
+        </button>
+        {workspaceOpen && (
+          <div className="absolute bottom-full left-0 right-0 mb-1 z-50 max-h-64 overflow-hidden bg-gray-800 border border-gray-600 rounded-md shadow-xl flex flex-col">
+            <div className="overflow-y-auto flex-1 py-1">
+              {worktrees.map((wt) => {
+                const isActive = currentWorkspace?.path === wt.path;
+                const name = wt.isMain ? "主工作区" : wt.branch;
+                return (
+                  <button
+                    key={wt.path}
+                    className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors ${
+                      isActive ? "bg-indigo-500/15 text-indigo-300" : "text-gray-200 hover:bg-gray-700"
+                    }`}
+                    onClick={() => handleSwitchWorkspace(wt)}
+                  >
+                    {isActive ? <Check className="w-3 h-3 shrink-0 text-indigo-400" /> : <span className="w-3 shrink-0" />}
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <span className="truncate">{name}</span>
+                      <span className="text-[10px] text-gray-500 truncate">{wt.path}</span>
+                    </div>
+                    {!wt.isMain && <GitBranch className="w-3 h-3 shrink-0 text-cyan-500/60" />}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="border-t border-gray-700/60">
+              <button
+                className="w-full text-left px-3 py-1.5 text-xs text-cyan-400 hover:bg-gray-700 flex items-center gap-2 transition-colors"
+                onClick={() => { setShowCreateDialog(true); setSourceBranch(currentWorkspace?.branch ?? ""); }}
+              >
+                <Plus className="w-3 h-3 shrink-0" />
+                <span>新建 Workspace...</span>
+              </button>
+            </div>
+          </div>
+        )}
+        {showCreateDialog && (
+          <div className="absolute bottom-full left-0 right-0 mb-1 z-50 bg-gray-800 border border-gray-600 rounded-md shadow-xl p-3 space-y-2">
+            <div className="text-xs font-medium text-gray-200">新建 Workspace</div>
+            <div className="space-y-1.5">
+              <div>
+                <label className="text-[10px] text-gray-500 block mb-0.5">基于分支</label>
+                <select
+                  value={sourceBranch}
+                  onChange={(e) => setSourceBranch(e.target.value)}
+                  className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-gray-300 outline-none"
+                >
+                  {worktrees.map((wt) => (
+                    <option key={wt.path} value={wt.branch}>{wt.branch}{wt.isMain ? " (主)" : ""}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] text-gray-500 block mb-0.5">新分支名</label>
+                <input
+                  value={newBranch}
+                  onChange={(e) => setNewBranch(e.target.value)}
+                  placeholder="feature-xxx"
+                  className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-gray-300 outline-none"
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                onClick={() => { setShowCreateDialog(false); setNewBranch(""); }}
+                className="px-2 py-1 rounded text-xs text-gray-400 hover:bg-gray-700"
+              >取消</button>
+              <button
+                onClick={handleCreateWorktree}
+                disabled={!newBranch.trim() || creating}
+                className="px-2 py-1 rounded text-xs bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-40"
+              >{creating ? "创建中..." : "创建"}</button>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="relative" ref={modelRef}>
         <button
-          onClick={() => { setModelOpen(!modelOpen); setThinkingOpen(false); }}
+          onClick={() => { setModelOpen(!modelOpen); setThinkingOpen(false); setWorkspaceOpen(false); }}
           disabled={!activeSessionId}
           className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-gray-400 hover:bg-gray-800/60 hover:text-gray-300 transition-colors disabled:opacity-40"
         >
@@ -218,7 +396,7 @@ export function SidebarBottomControls() {
 
       <div className="relative" ref={thinkingRef}>
         <button
-          onClick={() => { setThinkingOpen(!thinkingOpen); setModelOpen(false); }}
+          onClick={() => { setThinkingOpen(!thinkingOpen); setModelOpen(false); setWorkspaceOpen(false); }}
           disabled={!activeSessionId}
           className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-gray-400 hover:bg-gray-800/60 hover:text-gray-300 transition-colors disabled:opacity-40"
         >
@@ -270,7 +448,10 @@ export function SidebarBottomControls() {
           className="flex-1 flex items-center gap-2 min-w-0 text-left"
         >
           {isActive ? <Check className="w-3 h-3 shrink-0 text-indigo-400" /> : <span className="w-3 shrink-0" />}
-          <span className="truncate text-xs">{formatModelName(m.id)}</span>
+          <div className="flex flex-col min-w-0">
+            <span className="truncate text-xs">{m.name || formatModelName(m.id)}</span>
+            <span className="text-[10px] text-cyan-500/60 font-mono">{m.provider} · {m.id}</span>
+          </div>
         </button>
         <button
           onClick={(e) => { e.stopPropagation(); toggleFavorite(key); }}

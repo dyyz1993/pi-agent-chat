@@ -14,6 +14,7 @@ import { useLspStore } from "./use-lsp-store";
 import { useRulesStore } from "./use-rules-store";
 import { useExplorerStore } from "./use-explorer-store";
 import { useMemoryStore } from "./use-memory-store";
+import { ALL_MEMORY_TYPE_KEYS } from "../components/chat/memory-config";
 import { useStatusStore, deriveSkillScope } from "./use-status-store";
 import { useTurnStore } from "./use-turn-store";
 import { useChatNavStore } from "./use-chat-nav-store";
@@ -53,7 +54,7 @@ interface SessionState {
   lspSubscriptions: Record<string, string>;
   rulesSubscriptions: Record<string, string>;
   notifySubscriptions: Record<string, string>;
-  memorySubscriptions: Record<string, string>;
+  memorySubscriptions: Record<string, string[]>;
   sessionReady: Record<string, boolean>;
   todosBySession: Record<string, TodoItem[]>;
   sessionContextMap: Record<string, ContextUsage>;
@@ -72,7 +73,7 @@ interface SessionState {
   loadSessionsForProject: (projectPath: string) => Promise<SessionMeta[]>;
   setActiveSession: (id: string | null, force?: boolean) => void;
   retryActiveProject: () => void;
-  createNewSession: () => Promise<void>;
+  createNewSession: (projectPath?: string) => Promise<void>;
   renameSession: (sessionId: string, newName: string) => void;
   deleteSession: (sessionId: string) => void;
   togglePinSession: (sessionId: string) => void;
@@ -263,9 +264,20 @@ function setupSubscriptions(
     }).catch(() => {});
   }
 
-  if (!memorySubscriptions[id]) {
+  if (!memorySubscriptions[id] || memorySubscriptions[id].length === 0) {
     const projectTab = useSessionStore.getState().projectTabs.find((t) => t.id === useSessionStore.getState().activeProjectId);
-    apiClient.subscribe(
+    const memorySubIds: string[] = [];
+
+    function trackSub(promise: Promise<string>) {
+      promise.then((subId) => {
+        memorySubIds.push(subId);
+        set((s) => ({
+          memorySubscriptions: { ...s.memorySubscriptions, [id]: [...memorySubIds] },
+        }));
+      }).catch(() => {});
+    }
+
+    trackSub(apiClient.subscribe(
       "memory.bookmark_creating",
       (payload: { sessionId: string; timestamp: number }) => {
         if (payload.sessionId !== id) return;
@@ -280,9 +292,9 @@ function setupSubscriptions(
 
       },
       { sessionId: id },
-    ).catch(() => {});
+    ));
 
-    apiClient.subscribe(
+    trackSub(apiClient.subscribe(
       "memory.updated",
       (payload: { sessionId: string; files: Array<{ filename: string; filePath: string; description: string | null; type: string | null; mtimeMs: number }>; timestamp: number }) => {
         if (payload.sessionId !== id) return;
@@ -300,13 +312,9 @@ function setupSubscriptions(
 
       },
       { sessionId: id },
-    ).then((subId) => {
-      set((s) => ({
-        memorySubscriptions: { ...s.memorySubscriptions, [id]: subId },
-      }));
-    }).catch(() => {});
+    ));
 
-    apiClient.subscribe(
+    trackSub(apiClient.subscribe(
       "memory.update_failed",
       (payload: { sessionId: string; reason: string; timestamp: number }) => {
         if (payload.sessionId !== id) return;
@@ -321,9 +329,8 @@ function setupSubscriptions(
 
       },
       { sessionId: id },
-    ).catch(() => {});
+    ));
 
-    // Subscribe to memory operation events (prefetch, extract, dream) for real-time display
     const MEMORY_OPERATION_EVENTS = [
       "memory.memory_prefetch",
       "memory.memory_prefetch_result",
@@ -334,7 +341,7 @@ function setupSubscriptions(
     ] as const;
 
     for (const eventName of MEMORY_OPERATION_EVENTS) {
-      apiClient.subscribe(
+      trackSub(apiClient.subscribe(
         eventName,
         (payload: { sessionId: string; timestamp?: number; [key: string]: unknown }) => {
           if (payload.sessionId !== id) return;
@@ -342,7 +349,6 @@ function setupSubscriptions(
           const timestamp = payload.timestamp || Date.now();
           const eventData = (({ sessionId: _s, timestamp: _t, ...rest }) => rest)(payload);
 
-          // Add to memory store (for right panel)
           const memStore = useMemoryStore.getState();
           memStore.addEvent(id, {
             id: `mem-${customType}-${timestamp}-${Math.random().toString(36).slice(2, 8)}`,
@@ -363,7 +369,7 @@ function setupSubscriptions(
 
         },
         { sessionId: id },
-      ).catch(() => {});
+      ));
     }
   }
 }
@@ -507,13 +513,30 @@ export const useSessionStore = create<SessionState>()(
         };
 
         ensureSession().then((session) => {
-          if (!session) return;
+          if (!session) {
+            set((s) => {
+              const projectId = s.activeProjectId;
+              if (!projectId) return {};
+              return {
+                projectStartFailed: { ...s.projectStartFailed, [projectId]: true },
+                projectStartError: { ...s.projectStartError, [projectId]: "Session metadata not found" },
+              };
+            });
+            return;
+          }
           setupSubscriptions(get(), set, id, session);
-          apiClient.call("agent.start", {
+
+          const startPromise = apiClient.call("agent.start", {
             sessionId: id,
             projectPath: session.projectPath,
             sessionPath: session.sessionPath,
-          }).then((result) => {
+          });
+
+          const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("agent.start timed out (30s)")), 30_000)
+          );
+
+          Promise.race([startPromise, timeoutPromise]).then((result) => {
             if (result.status === "already_running" || result.status === "started") {
               set((s) => {
                 const projectId = s.activeProjectId;
@@ -529,6 +552,14 @@ export const useSessionStore = create<SessionState>()(
               if (result.status === "already_running") {
                 apiClient.call("agent.replayHoldEvents", { sessionId: id }).catch(() => {});
               }
+            } else {
+              const projectId = get().activeProjectId;
+              if (projectId) {
+                set((s) => ({
+                  projectStartFailed: { ...s.projectStartFailed, [projectId]: true },
+                  projectStartError: { ...s.projectStartError, [projectId]: `Unexpected status: ${result.status}` },
+                }));
+              }
             }
           }).catch((err) => {
             const errMsg = err instanceof Error ? err.message : String(err);
@@ -541,6 +572,17 @@ export const useSessionStore = create<SessionState>()(
                 projectStartError: { ...s.projectStartError, [projectId]: errMsg },
               };
             });
+          });
+        }).catch((err) => {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          useAppStore.getState().addLog(`ensureSession failed: ${errMsg}`);
+          set((s) => {
+            const projectId = s.activeProjectId;
+            if (!projectId) return {};
+            return {
+              projectStartFailed: { ...s.projectStartFailed, [projectId]: true },
+              projectStartError: { ...s.projectStartError, [projectId]: errMsg },
+            };
           });
         });
       },
@@ -575,20 +617,22 @@ export const useSessionStore = create<SessionState>()(
         }
       },
 
-      createNewSession: async () => {
+      createNewSession: async (projectPath?: string) => {
         const { projectTabs, activeProjectId } = get();
         const tab = projectTabs.find((t) => t.id === activeProjectId);
         if (!tab) return;
 
+        const targetPath = projectPath ?? tab.path;
+
         try {
-          const result = await apiClient.call("session.create", { projectPath: tab.path });
+          const result = await apiClient.call("session.create", { projectPath: targetPath });
 
           const now = Date.now();
           const newSession: SessionMeta = {
             sessionId: result.sessionId,
             name: "",
             sessionPath: result.sessionPath,
-            projectPath: tab.path,
+            projectPath: targetPath,
             parentSessionPath: null,
             messageCount: 0,
             firstMessage: "",
@@ -600,7 +644,7 @@ export const useSessionStore = create<SessionState>()(
           set((s) => ({
             sessionsByProject: {
               ...s.sessionsByProject,
-              [tab.path]: [newSession, ...(s.sessionsByProject[tab.path] || [])],
+              [targetPath]: [newSession, ...(s.sessionsByProject[targetPath] || [])],
             },
           }));
 
@@ -801,6 +845,8 @@ export const useSessionStore = create<SessionState>()(
             }
           }).catch(() => {});
         }).catch(() => {});
+
+        get().fetchModelState(sessionId);
       },
 
       fetchModelState: (sessionId) => {
@@ -905,6 +951,7 @@ apiClient.onReconnect(() => {
     lspSubscriptions: {},
     rulesSubscriptions: {},
     notifySubscriptions: {},
+    memorySubscriptions: {},
     sessionReady: {},
   });
 
@@ -915,12 +962,45 @@ apiClient.onReconnect(() => {
   const sessions = state.sessionsByProject[tab.path];
   const session = sessions?.find((s) => s.sessionId === activeSessionId);
   if (session) {
-    setupSubscriptions(
-      useSessionStore.getState(),
-      (fn) => useSessionStore.setState(fn(useSessionStore.getState())),
-      activeSessionId,
-      session,
-    );
+    const storeGet = useSessionStore.getState.bind(useSessionStore);
+    const storeSet = (fn: (s: SessionState) => Partial<SessionState>) =>
+      useSessionStore.setState(fn(useSessionStore.getState()));
+
+    setupSubscriptions(useSessionStore.getState(), storeSet, activeSessionId, session);
+
+    apiClient.call("agent.start", {
+        sessionId: activeSessionId,
+        projectPath: session.projectPath,
+        sessionPath: session.sessionPath,
+      }).then((result) => {
+        if (result.status === "already_running" || result.status === "started") {
+          useSessionStore.setState((s) => {
+            const projectId = s.activeProjectId;
+            if (!projectId) return {};
+            return {
+              projectStartFailed: { ...s.projectStartFailed, [projectId]: false },
+              projectStartError: { ...s.projectStartError, [projectId]: "" },
+            };
+          });
+          useSessionStore.setState((s) => ({ sessionReady: { ...s.sessionReady, [activeSessionId]: true } }));
+          storeGet().fetchInitialState(activeSessionId);
+          useChatStore.getState().loadSessionMessages(activeSessionId, { sessionPath: session.sessionPath }).catch(() => {});
+          if (result.status === "already_running") {
+            apiClient.call("agent.replayHoldEvents", { sessionId: activeSessionId }).catch(() => {});
+          }
+        }
+      }).catch((err) => {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        useAppStore.getState().addLog(`reconnect agent.start failed: ${errMsg}`);
+        useSessionStore.setState((s) => {
+          const projectId = s.activeProjectId;
+          if (!projectId) return {};
+          return {
+            projectStartFailed: { ...s.projectStartFailed, [projectId]: true },
+            projectStartError: { ...s.projectStartError, [projectId]: errMsg },
+          };
+        });
+      });
   }
 });
 
@@ -962,6 +1042,7 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
     const tokensAfter = result?.tokensAfter;
     storeGet().updateSessionContext(sessionId, { tokens: tokensAfter ?? null });
     storeGet().updateSessionStatus(sessionId, "idle");
+    useChatStore.getState().loadSessionMessages(sessionId, { force: true });
     return;
   }
 
@@ -1066,10 +1147,22 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
     const lastMsg = existing[existing.length - 1];
 
     if (lastMsg && lastMsg.role === "assistant" && lastMsg.isStreaming === true) {
-      const content = msg ? msg.content.filter((b) => b.type !== "toolCall") : lastMsg.content;
+      const content = msg ? msg.content.map((b) => {
+        if (b.type === "toolCall") {
+          const args = typeof b.input === "string" ? b.input : b.input != null ? JSON.stringify(b.input, null, 2) : "";
+          return { type: "toolExecution" as const, toolCallId: b.id, toolName: b.name, args, status: "running" as const };
+        }
+        return b;
+      }) : lastMsg.content;
       chat.setMessagesForSession(sessionId, [...existing.slice(0, -1), { ...lastMsg, content, isStreaming: true }]);
     } else if (msg) {
-      msg.content = msg.content.filter((b) => b.type !== "toolCall");
+      msg.content = msg.content.map((b) => {
+        if (b.type === "toolCall") {
+          const args = typeof b.input === "string" ? b.input : b.input != null ? JSON.stringify(b.input, null, 2) : "";
+          return { type: "toolExecution" as const, toolCallId: b.id, toolName: b.name, args, status: "running" as const };
+        }
+        return b;
+      });
       chat.setMessagesForSession(sessionId, [...existing, { ...msg, isStreaming: true }]);
     } else {
       chat.setMessagesForSession(sessionId, [...existing, {
@@ -1122,6 +1215,20 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
           const exec = execByCallId.get(block.id);
           if (exec) {
             otherBlocks.push(exec);
+            usedExecs.add(block.id);
+          } else {
+            const rawArgs = ("arguments" in block ? block.arguments : undefined) ?? ("input" in block ? (block as unknown as { input?: unknown }).input : undefined);
+            const args = typeof rawArgs === "string"
+              ? rawArgs
+              : rawArgs != null ? JSON.stringify(rawArgs, null, 2) : "";
+            const toolName = ("name" in block && typeof block.name === "string") ? block.name : "unknown";
+            otherBlocks.push({
+              type: "toolExecution",
+              toolCallId: block.id,
+              toolName,
+              args,
+              status: "running",
+            });
             usedExecs.add(block.id);
           }
         } else if (block.type === "text") {
@@ -1233,7 +1340,11 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
 					const argsStr = args && typeof args === "object" && "command" in args && typeof args.command === "string"
 						? args.command
 						: args ? JSON.stringify(args, null, 2) : "";
-					blocks.push({ type: "toolExecution", toolCallId, toolName, args: argsStr, status: "running" });
+					if (targetIdx >= 0) {
+						blocks[targetIdx] = { type: "toolExecution", toolCallId, toolName, args: argsStr, status: "running" };
+					} else {
+						blocks.push({ type: "toolExecution", toolCallId, toolName, args: argsStr, status: "running" });
+					}
 				} else if (event.type === "tool_execution_update") {
 					const partial = event.partialResult as { content?: Array<{ type: string; text?: string }> } | undefined;
 					let output = "";
@@ -1297,6 +1408,8 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
   }
 
   if (event.type === "custom_entry") {
+    if (!ALL_MEMORY_TYPE_KEYS.has(event.customType as string)) return;
+
     const memoryStore = useMemoryStore.getState();
     memoryStore.addEvent(sessionId, {
       id: event.id || `custom-${Date.now()}`,
@@ -1358,4 +1471,8 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
 function buildTokenUsage(usage: unknown): { tokenUsage?: import("../types").TokenUsage } {
   const result = extractTokenUsage(usage);
   return result ? { tokenUsage: result } : {};
+}
+
+if (typeof window !== "undefined") {
+  (window as any).__toolCallNameMap = toolCallNameMap;
 }

@@ -1,3 +1,4 @@
+import { dirname, basename, join } from "node:path";
 import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { MethodParams, MethodResult } from "@dyyz1993/rpc-core";
 import type { RPCMethods, HandlerOptions } from "../rpc-schema";
@@ -301,5 +302,23 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     }
 
     return { worktrees };
+  });
+
+  r("git.worktreeAdd", async (params) => {
+    const repoRoot = getRepoRoot(params.repoPath);
+    const repoDir = dirname(repoRoot);
+    const newDir = join(repoDir, `${basename(repoRoot)}-${params.branch}`);
+    const args = ["worktree", "add", newDir, "-b", params.branch];
+    if (params.sourceBranch) {
+      args.push(params.sourceBranch);
+    }
+    execGit(args, repoRoot);
+    return {
+      worktree: {
+        path: newDir,
+        branch: params.branch,
+        isMain: false,
+      },
+    };
   });
 }

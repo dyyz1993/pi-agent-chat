@@ -62,6 +62,7 @@ interface GitState {
   push: (repoPath: string) => Promise<void>;
   pull: (repoPath: string) => Promise<void>;
   fetchWorktrees: (repoPath: string) => Promise<void>;
+  addWorktree: (repoPath: string, branch: string, sourceBranch?: string) => Promise<GitWorktree>;
   refresh: (repoPath: string) => Promise<void>;
 }
 
@@ -289,6 +290,18 @@ export const useGitStore = create<GitState>((set, get) => ({
     } catch (err) {
       const addLog = useAppStore.getState().addLog;
       addLog(`Git worktreeList error: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  },
+
+  addWorktree: async (repoPath, branch, sourceBranch) => {
+    const addLog = useAppStore.getState().addLog;
+    try {
+      const res = await apiClient.call("git.worktreeAdd", { repoPath, branch, sourceBranch });
+      set((s) => ({ worktrees: [...s.worktrees, res.worktree] }));
+      return res.worktree;
+    } catch (err) {
+      addLog(`Git worktreeAdd error: ${err instanceof Error ? err.message : String(err)}`);
+      throw err;
     }
   },
 }));

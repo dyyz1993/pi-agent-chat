@@ -1,6 +1,7 @@
 import { Pin, Plus, PanelLeft } from "lucide-react";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import { useSessionStore } from "../../stores/use-session-store";
+import { useGitStore } from "../../stores/use-git-store";
 import { SessionSidebar } from "../session-sidebar/SessionSidebar";
 import { SidebarBottomControls } from "./SidebarBottomControls";
 
@@ -37,7 +38,20 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
         </div>
         <div className="flex items-center gap-0.5">
           <button
-            onClick={(e) => { e.stopPropagation(); useSessionStore.getState().createNewSession(); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              const state = useSessionStore.getState();
+              const worktrees = useGitStore.getState().worktrees;
+              const activeSession = state.activeSessionId
+                ? Object.values(state.sessionsByProject)
+                    .flat()
+                    .find((s) => s.sessionId === state.activeSessionId)
+                : null;
+              const workspace = activeSession
+                ? worktrees.find((wt) => activeSession.projectPath.startsWith(wt.path))
+                : null;
+              state.createNewSession(workspace?.path);
+            }}
             className="p-1 rounded hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors"
             title="新建会话"
           >

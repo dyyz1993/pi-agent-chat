@@ -73,6 +73,10 @@ export interface GitMethods {
       worktrees: { path: string; branch: string; isMain: boolean }[];
     };
   };
+  "git.worktreeAdd": {
+    params: { repoPath: string; branch: string; sourceBranch?: string };
+    result: { worktree: { path: string; branch: string; isMain: boolean } };
+  };
 }
 
 export interface GitFileChange {

@@ -205,11 +205,12 @@ function StatusBadge({ sessionId }: { sessionId: string }) {
   );
 }
 
-function WorktreeBranchBadge({ branch }: { branch: string }) {
+function WorkspaceBadge({ workspace }: { workspace: { path: string; branch: string; isMain: boolean } }) {
+  const name = workspace.isMain ? workspace.path.split("/").pop() : workspace.branch;
   return (
     <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-cyan-500/15 text-cyan-400 border border-cyan-500/20">
-      <GitBranch className="w-2.5 h-2.5" />
-      {branch}
+      {!workspace.isMain && <GitBranch className="w-2.5 h-2.5" />}
+      {name}
     </span>
   );
 }
@@ -264,8 +265,8 @@ function SessionItem({
   const hasPiChildren = children && children.length > 0;
   const hasSubagents = subsessions && subsessions.length > 0;
   const hasExpandableChildren = hasPiChildren || hasSubagents;
-  const worktreeInfo = useMemo(
-    () => worktrees.find((wt) => !wt.isMain && session.projectPath.startsWith(wt.path)),
+  const workspaceInfo = useMemo(
+    () => worktrees.find((wt) => session.projectPath.startsWith(wt.path)) ?? null,
     [worktrees, session.projectPath]
   );
 
@@ -376,7 +377,7 @@ function SessionItem({
               </button>
             )}
             <StatusBadge sessionId={session.sessionId} />
-            {worktreeInfo && <WorktreeBranchBadge branch={worktreeInfo.branch} />}
+            {workspaceInfo && !workspaceInfo.isMain && <WorkspaceBadge workspace={workspaceInfo} />}
             <div className="ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
               <button onClick={handleTogglePin} className={`p-1 rounded hover:bg-gray-700 ${session.pinned ? "text-indigo-400" : "text-gray-500 hover:text-gray-300"}`} title={session.pinned ? "取消置顶" : "置顶"}>
                 {session.pinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
