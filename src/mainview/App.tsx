@@ -1,18 +1,12 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { apiClient } from "./lib/api-client";
 import { useAppStore } from "./stores/use-app-store";
 import { useExplorerStore } from "./stores/use-explorer-store";
 import { useSessionStore } from "./stores/use-session-store";
-import { useChatStore } from "./stores/use-chat-store";
-import { useTurnStore } from "./stores/use-turn-store";
-import { useChatNavStore } from "./stores/use-chat-nav-store";
-import { useSubagentStore } from "./stores/use-subagent-store";
-import { useMemoryStore } from "./stores/use-memory-store";
-import { useRulesStore } from "./stores/use-rules-store";
-import { useBashStore } from "./stores/use-bash-store";
-import { useLspStore } from "./stores/use-lsp-store";
 import { MainLayout } from "./layouts/MainLayout";
 import { ProjectPickerDialog } from "./components/project-picker/ProjectPickerDialog";
+import { DiagnosticPanel } from "./components/debug/DiagnosticPanel";
+import { useDiagnosticStore } from "./stores/use-diagnostic-store";
 
 function waitForSessionReady(sessionId: string): Promise<void> {
   return new Promise((resolve) => {
@@ -34,19 +28,31 @@ function App() {
   const listRootDir = useExplorerStore((s) => s.listRootDir);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [projectLoading, setProjectLoading] = useState(false);
-  const [restoring, setRestoring] = useState(true);
+  const restoredFlag = useAppStore((s) => s.restored);
+  const [restoring, setRestoring] = useState(!useAppStore.getState().restored);
   const addProjectTab = useSessionStore((s) => s.addProjectTab);
   const loadSessionsForProject = useSessionStore((s) => s.loadSessionsForProject);
   const restoreFromPersisted = useSessionStore((s) => s.restoreFromPersisted);
-  const restoredRef = useRef(false);
+
+  const handleDiagnosticToggle = useCallback((e: KeyboardEvent) => {
+    if (e.ctrlKey && e.shiftKey && e.key === "D") {
+      e.preventDefault();
+      useDiagnosticStore.getState().toggle();
+    }
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener("keydown", handleDiagnosticToggle);
+    return () => window.removeEventListener("keydown", handleDiagnosticToggle);
+  }, [handleDiagnosticToggle]);
 
   useEffect(() => {
     initializeConnection();
   }, [initializeConnection]);
 
   useEffect(() => {
-    if (!ready || restoredRef.current) return;
-    restoredRef.current = true;
+    if (!ready || restoredFlag) return;
+    useAppStore.setState({ restored: true });
     setRestoring(true);
 
     (async () => {
@@ -128,14 +134,7 @@ function App() {
 
     const prevSessionId = useSessionStore.getState().activeSessionId;
     if (prevSessionId) {
-      useChatStore.getState().clearSessionMessages(prevSessionId);
-      useTurnStore.getState().clearSessionUI(prevSessionId);
-      useChatNavStore.getState().clearSessionUI(prevSessionId);
-      useMemoryStore.getState().clearSession(prevSessionId);
-      useRulesStore.getState().clearSession(prevSessionId);
-      useBashStore.getState().clearSession(prevSessionId);
-      useLspStore.getState().clearSession(prevSessionId);
-      useSubagentStore.getState().setActiveSubsession(prevSessionId, null);
+      useSessionStore.getState().cleanupActiveSession(prevSessionId);
     }
 
     try {
@@ -174,6 +173,7 @@ function App() {
         onClose={() => setPickerOpen(false)}
         onSelect={handleSelectProject}
       />
+      <DiagnosticPanel />
     </>
   );
 }

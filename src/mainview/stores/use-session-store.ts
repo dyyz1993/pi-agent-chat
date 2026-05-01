@@ -1,10 +1,10 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { SessionMeta, ProjectTab, ContentBlock, ContextUsage, SessionStatus } from "../types";
+import type { SessionMeta, ProjectTab, ContentBlock, ContextUsage, SessionStatus, TokenUsage, ChatMessage } from "../types";
 import { apiClient } from "../lib/api-client";
 import { messageToChatMessage } from "../lib/message-mapper";
 import type { AgentEvent } from "../../shared/modules/agent";
-import type { AssistantMessage } from "@dyyz1993/pi-ai";
+import type { AssistantMessage, Message, Usage } from "@dyyz1993/pi-ai";
 import { extractTokenUsage } from "../lib/message-mapper";
 import { useChatStore } from "./use-chat-store";
 import { useAppStore } from "./use-app-store";
@@ -86,6 +86,7 @@ interface SessionState {
   fetchModelState: (sessionId: string) => void;
   setCurrentModel: (provider: string, modelId: string) => void;
   setThinkingLevel: (level: string) => void;
+  cleanupActiveSession: (sessionId: string) => void;
 }
 
 function setupSubscriptions(
@@ -95,49 +96,46 @@ function setupSubscriptions(
   session: SessionMeta,
 ): void {
   const { agentSubscriptions, subagentSubscriptions, todoSubscriptions, bashSubscriptions, lspSubscriptions, rulesSubscriptions, notifySubscriptions, memorySubscriptions } = state;
-  const storeGet = () => useSessionStore.getState() as SessionState;
+  const storeGet = () => useSessionStore.getState();
 
   if (!agentSubscriptions[id]) {
-    apiClient.subscribe("agent.event", (payload: { sessionId: string; event: AgentEvent }) => {
+    apiClient.subscribe("agent.event", (payload) => {
       if (payload.sessionId !== id) return;
       handleAgentEvent(id, payload.event);
     }).then((subId) => {
       set((s) => ({
         agentSubscriptions: { ...s.agentSubscriptions, [id]: subId },
       }));
-      apiClient.call("rules.requestSnapshot", { sessionId: id }).then((raw: unknown) => {
-        const result = raw && typeof raw === "object" && "result" in raw ? (raw as Record<string, unknown>).result : raw;
-        if (result && typeof result === "object" && "type" in result && (result as Record<string, unknown>).type === "snapshot") {
-          const snap = result as { totalRules?: number };
-          const current = useRulesStore.getState().bySession[id];
-          if (snap.totalRules === 0 && current && current.totalRules > 0) return;
-          useRulesStore.getState().handleRulesEvent(id, result as import("../../shared/modules/rules").RulesChannelEvent);
-        }
+      apiClient.call("rules.requestSnapshot", { sessionId: id }).then((result) => {
+        const current = useRulesStore.getState().bySession[id];
+        if (result.totalRules === 0 && current && current.totalRules > 0) return;
+        useRulesStore.getState().handleRulesEvent(id, { type: "snapshot", rules: result.rules, totalRules: result.totalRules, unconditionalCount: result.unconditionalCount, conditionalCount: result.conditionalCount, injectedRuleNames: [], matchHistory: [], lifecycleLog: [], loadedAt: Date.now(), cacheTTL: 0 });
       }).catch(() => {});
     }).catch(() => {});
   }
 
   if (!subagentSubscriptions[id]) {
-    apiClient.subscribe(
-      "subagent.event",
-      (payload: { parentSessionId: string; parentSessionPath?: string; subSessionId: string; event: Record<string, unknown> }) => {
-        if (payload.parentSessionId !== id) return;
+      apiClient.subscribe(
+        "subagent.event",
+        (payload) => {
+          if (payload.parentSessionId !== id) return;
 
-        const subStore = useSubagentStore.getState();
-        const sid = payload.subSessionId;
-        const path = payload.parentSessionPath || session.sessionPath;
-        const eventType = payload.event.type as string;
+          const subStore = useSubagentStore.getState();
+          const sid = payload.subSessionId;
+          const path = payload.parentSessionPath || session.sessionPath;
+          const eventType = payload.event.type;
 
-        if (eventType === "subagent_start") {
-          subStore.upsertLiveSubagent(path, sid, {
-            sessionId: sid,
-            toolCallId: (payload.event.toolCallId as string) || undefined,
-            description: (payload.event.description as string) || "",
-            instruction: (payload.event.instruction as string) || "",
-            startedAt: Date.now(),
-          });
-          return;
-        }
+          if (eventType === "subagent_start") {
+            const evt = payload.event as { type: "subagent_start"; description: string; instruction: string; toolCallId?: string };
+            subStore.upsertLiveSubagent(path, sid, {
+              sessionId: sid,
+              toolCallId: evt.toolCallId,
+              description: evt.description,
+              instruction: evt.instruction,
+              startedAt: Date.now(),
+            });
+            return;
+          }
 
         const existing = subStore.subsessionsByParent[path] || [];
         if (!existing.find((s) => s.sessionId === sid)) {
@@ -147,7 +145,7 @@ function setupSubscriptions(
           });
         }
 
-        handleSubagentEvent(sid, payload.event, id);
+        handleSubagentEvent(sid, payload.event as Parameters<typeof handleSubagentEvent>[1], id);
 
         if (eventType === "agent_end") {
           subStore.upsertLiveSubagent(path, sid, {
@@ -177,9 +175,8 @@ function setupSubscriptions(
         todoSubscriptions: { ...s.todoSubscriptions, [id]: subId },
       }));
       apiClient.call("todo.list", { sessionPath: session.sessionPath }).then((result) => {
-        const todos = (result as { todos: TodoItem[] }).todos || [];
-        if (todos.length > 0) {
-          storeGet().setSessionTodos(id, todos);
+        if (result.todos.length > 0) {
+          storeGet().setSessionTodos(id, result.todos);
         }
       }).catch(() => {});
     }).catch(() => {});
@@ -232,11 +229,8 @@ function setupSubscriptions(
       const store = useRulesStore.getState();
       const sessionState = store.bySession[id];
       if (!sessionState || sessionState.totalRules === 0) {
-        apiClient.call("rules.requestSnapshot", { sessionId: id }).then((raw: unknown) => {
-          const result = raw && typeof raw === "object" && "result" in raw ? (raw as Record<string, unknown>).result : raw;
-          if (result && typeof result === "object" && "type" in result && result.type === "snapshot") {
-            useRulesStore.getState().handleRulesEvent(id, result as import("../../shared/modules/rules").RulesChannelEvent);
-          }
+        apiClient.call("rules.requestSnapshot", { sessionId: id }).then((result) => {
+          useRulesStore.getState().handleRulesEvent(id, { type: "snapshot", rules: result.rules, totalRules: result.totalRules, unconditionalCount: result.unconditionalCount, conditionalCount: result.conditionalCount, injectedRuleNames: [], matchHistory: [], lifecycleLog: [], loadedAt: Date.now(), cacheTTL: 0 });
         }).catch(() => {});
       }
     }).catch(() => {});
@@ -343,7 +337,7 @@ function setupSubscriptions(
     for (const eventName of MEMORY_OPERATION_EVENTS) {
       trackSub(apiClient.subscribe(
         eventName,
-        (payload: { sessionId: string; timestamp?: number; [key: string]: unknown }) => {
+        (payload) => {
           if (payload.sessionId !== id) return;
           const customType = eventName.replace("memory.", "");
           const timestamp = payload.timestamp || Date.now();
@@ -372,6 +366,75 @@ function setupSubscriptions(
       ));
     }
   }
+}
+
+function cleanupSession(state: SessionState, sessionId: string): void {
+  const singleSubMaps: Array<Record<string, string>> = [
+    state.agentSubscriptions,
+    state.subagentSubscriptions,
+    state.todoSubscriptions,
+    state.bashSubscriptions,
+    state.lspSubscriptions,
+    state.rulesSubscriptions,
+    state.notifySubscriptions,
+  ];
+
+  for (const map of singleSubMaps) {
+    const subId = map[sessionId];
+    if (subId) apiClient.unsubscribe(subId);
+  }
+
+  const memSubIds = state.memorySubscriptions[sessionId];
+  if (Array.isArray(memSubIds)) {
+    for (const subId of memSubIds) {
+      if (subId) apiClient.unsubscribe(subId);
+    }
+  }
+
+  const msgs = useChatStore.getState().messagesBySession[sessionId] || [];
+  for (const msg of msgs) {
+    if (msg.role === "assistant") {
+      for (const block of msg.content) {
+        if (block.type === "toolExecution") {
+          delete toolCallNameMap[block.toolCallId];
+        }
+      }
+    }
+  }
+}
+
+function cleanupSessionData(sessionId: string): void {
+  useChatStore.getState().clearSessionMessages(sessionId);
+  useTurnStore.getState().clearSessionUI(sessionId);
+  useChatNavStore.getState().clearSessionUI(sessionId);
+  useMemoryStore.getState().clearSession(sessionId);
+  useRulesStore.getState().clearSession(sessionId);
+  useBashStore.getState().clearSession(sessionId);
+  useLspStore.getState().clearSession(sessionId);
+  useSubagentStore.getState().setActiveSubsession(sessionId, null);
+}
+
+function clearSubscriptionState(state: SessionState, sessionId: string): Partial<SessionState> {
+  const { [sessionId]: _a, ...restAgent } = state.agentSubscriptions;
+  const { [sessionId]: _b, ...restSubagent } = state.subagentSubscriptions;
+  const { [sessionId]: _c, ...restTodo } = state.todoSubscriptions;
+  const { [sessionId]: _d, ...restBash } = state.bashSubscriptions;
+  const { [sessionId]: _e, ...restLsp } = state.lspSubscriptions;
+  const { [sessionId]: _f, ...restRules } = state.rulesSubscriptions;
+  const { [sessionId]: _g, ...restNotify } = state.notifySubscriptions;
+  const { [sessionId]: _h, ...restMemory } = state.memorySubscriptions;
+  const { [sessionId]: _i, ...restReady } = state.sessionReady;
+  return {
+    agentSubscriptions: restAgent,
+    subagentSubscriptions: restSubagent,
+    todoSubscriptions: restTodo,
+    bashSubscriptions: restBash,
+    lspSubscriptions: restLsp,
+    rulesSubscriptions: restRules,
+    notifySubscriptions: restNotify,
+    memorySubscriptions: restMemory,
+    sessionReady: restReady,
+  };
 }
 
 function syncTabsToBackend(tabs: ProjectTab[], activeTabId: string | null) {
@@ -422,7 +485,14 @@ export const useSessionStore = create<SessionState>()(
           };
         }),
 
-      removeProjectTab: (id) =>
+      removeProjectTab: (id) => {
+        const state = get();
+        if (state.activeProjectId === id && state.activeSessionId) {
+          cleanupSession(state, state.activeSessionId);
+          cleanupSessionData(state.activeSessionId);
+          set((s) => clearSubscriptionState(s, state.activeSessionId!));
+        }
+
         set((s) => {
           const filtered = s.projectTabs.filter((t) => t.id !== id);
           const newActiveId =
@@ -434,9 +504,19 @@ export const useSessionStore = create<SessionState>()(
             projectTabs: filtered,
             activeProjectId: newActiveId,
           };
-        }),
+        });
+      },
 
       setActiveProject: (id) => {
+        const prevProjectId = get().activeProjectId;
+        const prevSessionId = get().activeSessionId;
+
+        if (prevProjectId && prevProjectId !== id && prevSessionId) {
+          cleanupSession(get(), prevSessionId);
+          cleanupSessionData(prevSessionId);
+          set((s) => clearSubscriptionState(s, prevSessionId));
+        }
+
         const version = get()._projectVersion + 1;
         set({ activeProjectId: id, _projectVersion: version });
         const tabs = get().projectTabs;
@@ -488,11 +568,11 @@ export const useSessionStore = create<SessionState>()(
         const prevId = get().activeSessionId;
         if (!force && prevId === id) return;
 
-        const sid = id ?? "";
-        useRulesStore.getState().clearSession(sid);
-        useMemoryStore.getState().clearSession(sid);
-        useBashStore.getState().clearSession(sid);
-        useLspStore.getState().clearSession(sid);
+        if (prevId && prevId !== id) {
+          cleanupSession(get(), prevId);
+          cleanupSessionData(prevId);
+          set((s) => clearSubscriptionState(s, prevId));
+        }
 
         set({
           activeSessionId: id,
@@ -513,6 +593,7 @@ export const useSessionStore = create<SessionState>()(
         };
 
         ensureSession().then((session) => {
+          if (get().activeSessionId !== id) return;
           if (!session) {
             set((s) => {
               const projectId = s.activeProjectId;
@@ -675,6 +756,10 @@ export const useSessionStore = create<SessionState>()(
       },
 
       deleteSession: (sessionId) => {
+        cleanupSession(get(), sessionId);
+        cleanupSessionData(sessionId);
+        set((s) => clearSubscriptionState(s, sessionId));
+
         const { sessionsByProject, activeSessionId } = get();
         let deletedPath = "";
         let deletedSessionPath = "";
@@ -795,33 +880,31 @@ export const useSessionStore = create<SessionState>()(
           }).catch(() => {});
 
           apiClient.call("agent.getExtensions", { sessionId }).then((res) => {
-            const exts = (res as Record<string, unknown>)?.extensions ?? res;
-            if (!Array.isArray(exts)) return;
-            const plugins = (exts as Array<Record<string, unknown>>).map((e) => ({
-              name: (e.path as string)?.split("/").pop()?.replace(/\.(ts|js|tsx|jsx)$/, "") ?? "unknown",
-              path: (e.path as string) ?? "",
+            if (!Array.isArray(res.extensions)) return;
+            const plugins = res.extensions.map((e) => ({
+              name: e.path.split("/").pop()?.replace(/\.(ts|js|tsx|jsx)$/, "") ?? "unknown",
+              path: e.path,
               enabled: true,
-              toolNames: e.toolNames as string[] ?? [],
-              commandNames: e.commandNames as string[] ?? [],
+              toolNames: e.toolNames,
+              commandNames: e.commandNames,
             }));
             useStatusStore.getState().setPlugins(plugins);
           }).catch(() => {});
 
           apiClient.call("agent.getSkills", { sessionId }).then((res) => {
-            const skills = (res as Record<string, unknown>)?.skills ?? res;
-            if (!Array.isArray(skills)) {
-              useAppStore.getState().addLog(`[skills] non-array response, type=${typeof skills}, isArray=${Array.isArray(res)}`);
+            if (!Array.isArray(res.skills)) {
+              useAppStore.getState().addLog(`[skills] non-array response, type=${typeof res.skills}, isArray=${Array.isArray(res.skills)}`);
               return;
             }
-            useAppStore.getState().addLog(`[skills] loaded ${skills.length} items`);
-            useStatusStore.getState().setSkills((skills as Array<Record<string, unknown>>).map((s) => {
-              const fp = s.filePath as string ?? "";
+            useAppStore.getState().addLog(`[skills] loaded ${res.skills.length} items`);
+            useStatusStore.getState().setSkills(res.skills.map((s) => {
+              const fp = s.filePath;
               return {
-                name: s.name as string ?? "",
-                description: s.description as string ?? "",
+                name: s.name,
+                description: s.description,
                 filePath: fp,
-                baseDir: s.baseDir as string ?? "",
-                disableModelInvocation: s.disableModelInvocation as boolean ?? false,
+                baseDir: s.baseDir,
+                disableModelInvocation: s.disableModelInvocation,
                 enabled: true,
                 scope: deriveSkillScope(fp),
               };
@@ -832,9 +915,7 @@ export const useSessionStore = create<SessionState>()(
 
           apiClient.call("agent.getQueue", { sessionId }).then((result) => {
             if (!result) return;
-            const q = result as { steering?: unknown[]; followUp?: unknown[] };
-            const steering = (Array.isArray(q.steering) ? q.steering : []) as string[];
-            const followUp = (Array.isArray(q.followUp) ? q.followUp : []) as string[];
+            const { steering, followUp } = result;
             if (steering.length > 0 || followUp.length > 0) {
               useSessionStore.setState((s) => ({
                 queueBySession: {
@@ -868,6 +949,12 @@ export const useSessionStore = create<SessionState>()(
 
       setCurrentModel: (provider, modelId) => set({ currentModel: { provider, id: modelId } }),
       setThinkingLevel: (level) => set({ currentThinkingLevel: level }),
+
+      cleanupActiveSession: (sessionId) => {
+        cleanupSession(get(), sessionId);
+        cleanupSessionData(sessionId);
+        set((s) => clearSubscriptionState(s, sessionId));
+      },
 
       restoreFromPersisted: async () => {
         const { activeProjectId, activeSessionId, projectTabs } = get();
@@ -943,6 +1030,10 @@ apiClient.onReconnect(() => {
   const state = useSessionStore.getState();
   const { activeSessionId, projectTabs, activeProjectId } = state;
 
+  for (const sid of Object.keys(state.agentSubscriptions)) {
+    cleanupSession(state, sid);
+  }
+
   useSessionStore.setState({
     agentSubscriptions: {},
     subagentSubscriptions: {},
@@ -1005,7 +1096,7 @@ apiClient.onReconnect(() => {
 });
 
 function handleAgentEvent(sessionId: string, event: AgentEvent) {
-  const storeGet = () => useSessionStore.getState() as SessionState;
+  const storeGet = () => useSessionStore.getState();
 
   if (event.type === "agent_start") {
     storeGet().updateSessionStatus(sessionId, "streaming");
@@ -1096,22 +1187,22 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
   if (event.type === "message_start") {
     const raw = event.message;
-    const msgObj = typeof raw === "object" && raw !== null ? raw as unknown as Record<string, unknown> : null;
-    const role = msgObj && typeof msgObj.role === "string" ? msgObj.role : "";
+    const msgObj = typeof raw === "object" && raw !== null ? raw : null;
+    const role = msgObj && "role" in msgObj && typeof msgObj.role === "string" ? msgObj.role : "";
 
     if (role === "custom") {
-      const customType = typeof (msgObj as Record<string, unknown>).customType === "string"
-        ? (msgObj as Record<string, unknown>).customType as string : "unknown";
+      if (!msgObj) return;
+      const customType = "customType" in msgObj && typeof msgObj.customType === "string" ? msgObj.customType : "unknown";
 
-      const data = "details" in (msgObj as Record<string, unknown>)
-        ? (msgObj as Record<string, unknown>).details
-        : "data" in (msgObj as Record<string, unknown>)
-          ? (msgObj as Record<string, unknown>).data
+      const data = "details" in msgObj
+        ? msgObj.details
+        : "data" in msgObj
+          ? msgObj.data
           : {};
 
       const chat = useChatStore.getState();
       const existing = chat.messagesBySession[sessionId] || [];
-      const customMsg: import("../types").ChatMessage = {
+      const customMsg: ChatMessage = {
         id: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         role: "custom",
         content: [{ type: "custom", customType, data }],
@@ -1122,7 +1213,7 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
     }
 
     if (role === "user") {
-      const msg = messageToChatMessage(raw);
+      const msg = messageToChatMessage(raw as Message);
       if (msg) {
         const chat = useChatStore.getState();
         const existing = chat.messagesBySession[sessionId] || [];
@@ -1140,7 +1231,7 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
     if (role !== "assistant") return;
 
-    const msg = messageToChatMessage(raw, undefined, toolCallNameMap);
+    const msg = messageToChatMessage(raw as Message, undefined, toolCallNameMap);
 
     const chat = useChatStore.getState();
     const existing = chat.messagesBySession[sessionId] || [];
@@ -1187,7 +1278,7 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
       if (!incoming || !Array.isArray(incoming)) return;
 
       if (!lastMsg || lastMsg.role !== "assistant" || !lastMsg.isStreaming) {
-        const synthMsg: import("../types").ChatMessage = {
+        const synthMsg: ChatMessage = {
           id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           role: "assistant",
           content: [],
@@ -1217,11 +1308,10 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
             otherBlocks.push(exec);
             usedExecs.add(block.id);
           } else {
-            const rawArgs = ("arguments" in block ? block.arguments : undefined) ?? ("input" in block ? (block as unknown as { input?: unknown }).input : undefined);
-            const args = typeof rawArgs === "string"
-              ? rawArgs
-              : rawArgs != null ? JSON.stringify(rawArgs, null, 2) : "";
-            const toolName = ("name" in block && typeof block.name === "string") ? block.name : "unknown";
+            const args = typeof block.arguments === "string"
+              ? block.arguments
+              : block.arguments != null ? JSON.stringify(block.arguments, null, 2) : "";
+            const toolName = block.name;
             otherBlocks.push({
               type: "toolExecution",
               toolCallId: block.id,
@@ -1256,9 +1346,9 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
   }
 
 	if (event.type === "message_end") {
-		const entryId = (event as Record<string, unknown>).entryId as string | undefined;
-		const message = event.message as unknown as Record<string, unknown>;
-		const role = typeof message.role === "string" ? message.role : "";
+		const entryId = (event as { entryId?: string }).entryId;
+		const message = event.message as Message;
+		const role = message.role;
 
 		if (role === "user" && entryId) {
 			const chat = useChatStore.getState();
@@ -1278,9 +1368,9 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
 		const lastMsg = existing[existing.length - 1];
 		if (!lastMsg || lastMsg.role !== "assistant") return;
 
-		if (message.usage) {
-			const raw = message.usage as unknown as Record<string, unknown>;
-			const totalTokens = Number(raw.totalTokens ?? 0);
+		const assistantMsg = message as AssistantMessage;
+		if (assistantMsg.usage) {
+			const totalTokens = assistantMsg.usage.input + assistantMsg.usage.output + assistantMsg.usage.cacheRead + assistantMsg.usage.cacheWrite;
 			if (totalTokens > 0) {
 				storeGet().updateSessionContext(sessionId, { tokens: totalTokens });
 			}
@@ -1305,10 +1395,10 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
 		chat.setMessagesForSession(sessionId, [...existing.slice(0, -1), {
 			...lastMsg,
 			isStreaming: false,
-			stopReason: (message as Record<string, unknown>).stopReason as string | null | undefined ?? lastMsg.stopReason ?? null,
-			provider: ((message as Record<string, unknown>).provider as string | undefined) || lastMsg.provider,
-			model: ((message as Record<string, unknown>).model as string | undefined) || lastMsg.model,
-			...buildTokenUsage((message as Record<string, unknown>).usage as Record<string, unknown> | undefined),
+			stopReason: assistantMsg.stopReason ?? lastMsg.stopReason ?? null,
+			provider: assistantMsg.api ?? lastMsg.provider,
+			model: assistantMsg.model ?? lastMsg.model,
+			...buildTokenUsage(assistantMsg.usage),
 			entryId,
 		}]);
 		return;
@@ -1408,12 +1498,12 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
   }
 
   if (event.type === "custom_entry") {
-    if (!ALL_MEMORY_TYPE_KEYS.has(event.customType as string)) return;
+    if (!ALL_MEMORY_TYPE_KEYS.has(event.customType)) return;
 
     const memoryStore = useMemoryStore.getState();
     memoryStore.addEvent(sessionId, {
       id: event.id || `custom-${Date.now()}`,
-      customType: event.customType as string,
+      customType: event.customType,
       data: event.data,
       timestamp: Date.now(),
     });
@@ -1432,7 +1522,7 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
     const chat = useChatStore.getState();
     const existing = chat.messagesBySession[sessionId] || [];
-    const customMsg: import("../types").ChatMessage = {
+    const customMsg: ChatMessage = {
       id: event.id || `custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       role: "custom",
       content: [{ type: "custom", customType: event.customType, data: event.data }],
@@ -1446,9 +1536,9 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
   if (event.type === "session_rename") {
     const { newName } = event;
     useSessionStore.setState((s) => {
-      const updated: Record<string, import("../types").SessionMeta[]> = {};
+      const updated: Record<string, SessionMeta[]> = {};
       for (const [path, sessions] of Object.entries(s.sessionsByProject)) {
-        updated[path] = (sessions as import("../types").SessionMeta[]).map((sess) =>
+        updated[path] = sessions.map((sess) =>
           sess.sessionId === sessionId ? { ...sess, name: newName } : sess,
         );
       }
@@ -1468,7 +1558,7 @@ function handleAgentEvent(sessionId: string, event: AgentEvent) {
   }
 }
 
-function buildTokenUsage(usage: unknown): { tokenUsage?: import("../types").TokenUsage } {
+function buildTokenUsage(usage: Usage): { tokenUsage?: TokenUsage } {
   const result = extractTokenUsage(usage);
   return result ? { tokenUsage: result } : {};
 }
