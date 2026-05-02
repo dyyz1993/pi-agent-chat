@@ -29,6 +29,7 @@ interface JsonlEntry {
     content?: Array<{ type: string; text?: string }>;
   };
   name?: string;
+  cwd?: string;
 }
 
 async function parseJsonlHeader(filePath: string): Promise<JsonlHeader | null> {
@@ -49,6 +50,7 @@ async function parseJsonlMeta(filePath: string): Promise<{
   firstMessage: string;
   sessionName: string;
   parentSessionPath: string | null;
+  effectiveCwd: string | null;
 } | null> {
   try {
     const content = await readFile(filePath, "utf-8");
@@ -57,6 +59,7 @@ async function parseJsonlMeta(filePath: string): Promise<{
     let firstMessage = "";
     let sessionName = "";
     let parentSessionPath: string | null = null;
+    let effectiveCwd: string | null = null;
 
     for (const line of lines) {
       try {
@@ -70,8 +73,9 @@ async function parseJsonlMeta(filePath: string): Promise<{
             }
           }
         }
-        if (entry.type === "session_info" && entry.name) {
-          sessionName = entry.name;
+        if (entry.type === "session_info") {
+          if (entry.name) sessionName = entry.name;
+          if (entry.cwd) effectiveCwd = entry.cwd;
         }
         if (entry.type === "session" && "parentSession" in entry) {
           parentSessionPath = (entry as Record<string, unknown>).parentSession as string;
@@ -81,7 +85,7 @@ async function parseJsonlMeta(filePath: string): Promise<{
       }
     }
 
-    return { messageCount, firstMessage, sessionName, parentSessionPath };
+    return { messageCount, firstMessage, sessionName, parentSessionPath, effectiveCwd };
   } catch {
     return null;
   }
@@ -110,7 +114,7 @@ async function scanSessionDir(sessionDir: string, pinnedIds?: Set<string>): Prom
         sessionId: header.id,
         name: meta?.sessionName || basename(file, ".jsonl"),
         sessionPath: filePath,
-        projectPath: header.cwd,
+        projectPath: meta?.effectiveCwd ?? header.cwd,
         parentSessionPath: meta?.parentSessionPath ?? null,
         messageCount: meta?.messageCount ?? 0,
         firstMessage: meta?.firstMessage ?? "",

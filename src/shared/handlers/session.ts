@@ -144,4 +144,43 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const pinnedSessionIds = await listPinnedSessionIds();
     return { pinnedSessionIds };
   });
+
+  r("session.updateCwd", async (params) => {
+    const { sessionPath, newCwd } = params;
+    if (!existsSync(sessionPath)) {
+      return { ok: false };
+    }
+
+    const content = await readFile(sessionPath, "utf-8");
+    const lines = content.split("\n").filter((l) => l.trim());
+
+    let found = false;
+    for (let i = lines.length - 1; i >= 0; i--) {
+      try {
+        const entry = JSON.parse(lines[i]);
+        if (entry.type === "session_info") {
+          entry.cwd = newCwd;
+          lines[i] = JSON.stringify(entry);
+          found = true;
+          break;
+        }
+      } catch {
+        continue;
+      }
+    }
+
+    if (!found) {
+      const cwdEntry = {
+        type: "session_info",
+        id: randomUUID(),
+        parentId: null,
+        timestamp: new Date().toISOString(),
+        cwd: newCwd,
+      };
+      lines.push(JSON.stringify(cwdEntry));
+    }
+
+    await writeFile(sessionPath, lines.join("\n") + "\n", "utf-8");
+    return { ok: true };
+  });
 }

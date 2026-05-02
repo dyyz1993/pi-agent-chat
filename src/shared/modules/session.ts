@@ -27,6 +27,10 @@ export interface SessionMethods {
     params: {};
     result: { pinnedSessionIds: string[] };
   };
+  "session.updateCwd": {
+    params: { sessionPath: string; newCwd: string };
+    result: { ok: boolean };
+  };
 }
 
 export interface SessionEntry {

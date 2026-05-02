@@ -362,15 +362,23 @@ export const useSessionStore = create<SessionState>()(
       },
 
       updateSessionProjectPath: (sessionId, projectPath) => {
+        let sessionPath = "";
         set((s) => {
           const updated: Record<string, SessionMeta[]> = {};
           for (const [path, sessions] of Object.entries(s.sessionsByProject)) {
-            updated[path] = sessions.map((sess) =>
-              sess.sessionId === sessionId ? { ...sess, projectPath } : sess
-            );
+            updated[path] = sessions.map((sess) => {
+              if (sess.sessionId === sessionId) {
+                sessionPath = sess.sessionPath;
+                return { ...sess, projectPath };
+              }
+              return sess;
+            });
           }
           return { sessionsByProject: updated };
         });
+        if (sessionPath) {
+          apiClient.call("session.updateCwd", { sessionPath, newCwd: projectPath }).catch(() => {});
+        }
       },
 
       renameSession: (sessionId, newName) => {
