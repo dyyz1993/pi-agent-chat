@@ -307,7 +307,7 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
 
   const handleOpenFile = useCallback((filePath: string) => {
     const fullPath = `${currentPath}/${filePath}`;
-    openFile({ name: filePath.split("/").pop() || filePath, path: fullPath, type: "file" as const });
+    openFile({ name: filePath.split("/").pop() ?? filePath, path: fullPath, type: "file" as const });
   }, [openFile, currentPath]);
 
   const handleCopyPath = useCallback(async (filePath: string) => {

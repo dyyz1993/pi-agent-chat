@@ -273,7 +273,7 @@ export const useDiagnosticStore = create<DiagnosticState>((set, get) => ({
       dataSizes: getDataSizes(),
       rpcDebugEntries: useRpcDebugStore.getState().entries.length,
       toolCallNameMapSize: Object.keys(
-        (window as unknown as Record<string, unknown>).__toolCallNameMap || {}
+        (window as unknown as Record<string, unknown>).__toolCallNameMap ?? {}
       ).length,
       jsHeapUsed: (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory?.usedJSHeapSize,
       jsHeapTotal: (performance as unknown as { memory?: { totalJSHeapSize: number } }).memory?.totalJSHeapSize,

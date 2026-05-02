@@ -14,9 +14,9 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({ block
   let description = "";
   let instruction = "";
   try {
-    const parsed = JSON.parse(block.args || "{}");
-    description = parsed.description || "";
-    instruction = parsed.instruction || "";
+    const parsed = JSON.parse(block.args ?? "{}") as { description?: string; instruction?: string };
+    description = parsed.description ?? "";
+    instruction = parsed.instruction ?? "";
   } catch {}
 
   const displayTitle = description || instruction.slice(0, 120) || "子代理任务";
@@ -66,7 +66,7 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({ block
 
       {isRunning && <RunningInstruction instruction={instruction} />}
 
-      {(block.output || (!isRunning && block.args)) && (
+      {(block.output ?? (!isRunning && block.args)) && (
         <OutputSection block={block} isRunning={isRunning} />
       )}
     </div>

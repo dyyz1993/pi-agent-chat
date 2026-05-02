@@ -27,7 +27,12 @@ function getWatcherState(server: RPCServer) {
       pendingChanges: new Map(),
     });
   }
-  return watcherState.get(server)!;
+  return watcherState.get(server) as {
+    watcher: ReturnType<typeof watch> | null;
+    path: string | null;
+    debounceTimer: ReturnType<typeof setTimeout> | null;
+    pendingChanges: Map<string, "create" | "delete" | "rename">;
+  };
 }
 
 function startFileWatcher(server: RPCServer, projectPath: string): void {
@@ -209,7 +214,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
   r("file.copy", async (params) => {
     const { srcPath, destDir } = params;
-    const name = srcPath.split("/").pop() || srcPath;
+    const name = srcPath.split("/").pop() ?? srcPath;
     const destPath = join(destDir, name);
     await cp(srcPath, destPath, { recursive: true });
     return { path: destPath };

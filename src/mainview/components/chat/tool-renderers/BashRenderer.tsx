@@ -103,10 +103,10 @@ function formatDuration(ms: number): string {
 				{isRunning && !statusLabel && <span className="text-blue-400 animate-pulse text-[10px]">running</span>}
 				{statusLabel}
 			{bashDetails?.background && <span className="text-[10px] text-gray-500">PID: {bashDetails.background.pid}</span>}
-			{(bashDetails?.background || (storeStatus === "background" && bashProcess)) && (
+			{(bashDetails?.background ?? (storeStatus === "background" && bashProcess)) && (
 				<span className="text-[10px] text-gray-500">{formatDuration(bashDetails?.background?.durationMs ?? ((Date.now() - (bashProcess?.startedAt ?? Date.now()))))}</span>
 			)}
-			{(bashDetails?.terminated || (storeStatus === "terminated" && bashProcess)) && (
+			{(bashDetails?.terminated ?? (storeStatus === "terminated" && bashProcess)) && (
 				<span className="text-[10px] text-gray-500">{formatDuration(bashDetails?.terminated?.durationMs ?? ((bashProcess?.endedAt ?? Date.now()) - (bashProcess?.startedAt ?? Date.now())))}</span>
 			)}
 			</div>

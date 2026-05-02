@@ -56,7 +56,7 @@ function SectionHeader({
 			className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium text-gray-300 hover:bg-gray-800/30 transition-colors"
 		>
 			{collapsed ? <ChevronRight className="w-3 h-3 shrink-0" /> : <ChevronDown className="w-3 h-3 shrink-0" />}
-			<Icon className={`w-3 h-3 shrink-0 ${iconCls || ""}`} />
+			<Icon className={`w-3 h-3 shrink-0 ${iconCls ?? ""}`} />
 			<span>{label}</span>
 			{badge != null && badge > 0 && (
 				<span className="ml-auto text-[9px] text-gray-600">{badge}</span>
@@ -177,7 +177,7 @@ function RuleCard({
 }
 
 function MatchRecordCard({ record }: { record: MatchRecord }) {
-	const details = record.matchedRuleDetails || []
+	const details = record.matchedRuleDetails ?? []
 	return (
 		<div className="px-2.5 py-1 text-[10px] space-y-0.5">
 			<div className="flex items-center gap-1.5">
@@ -255,7 +255,7 @@ export function RulesPanel() {
 	const setExpandedRule = useRulesStore((s) => s.setExpandedRule)
 
 	const session = useRulesStore(
-		useShallow((s) => s.bySession[activeSessionId || ""] || null),
+		useShallow((s) => s.bySession[activeSessionId ?? ""] ?? null),
 	)
 
 	const rules = session?.rules || []

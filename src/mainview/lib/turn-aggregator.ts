@@ -59,14 +59,16 @@ export function aggregateTurns(messages: ChatMessage[]): { turns: TimelineTurn[]
           const block = msg.content[bi];
 
           if (block.type === "text" || block.type === "thinking") {
-            currentTurn.items!.push({
+            currentTurn.items = currentTurn.items ?? [];
+            currentTurn.items.push({
               itemType: "assistantText",
               blockIndex: bi,
               text: block.type === "text" ? block.text : block.thinking,
               messageId: msg.id,
             });
           } else if (block.type === "toolExecution") {
-            currentTurn.items!.push({
+            currentTurn.items = currentTurn.items ?? [];
+            currentTurn.items.push({
               itemType: "toolExecution",
               blockIndex: bi,
               toolCallId: block.toolCallId,
@@ -78,7 +80,8 @@ export function aggregateTurns(messages: ChatMessage[]): { turns: TimelineTurn[]
               messageId: msg.id,
             });
           } else if (block.type === "custom") {
-            currentTurn.items!.push({
+            currentTurn.items = currentTurn.items ?? [];
+            currentTurn.items.push({
               itemType: "customEntry",
               entryId: `${msg.id}_${bi}`,
               customType: block.customType,
@@ -102,7 +105,8 @@ export function aggregateTurns(messages: ChatMessage[]): { turns: TimelineTurn[]
         };
 
         if (currentTurn && currentTurn.assistantMessageId) {
-          currentTurn.items!.push({
+          currentTurn.items = currentTurn.items ?? [];
+          currentTurn.items.push({
             itemType: "customEntry",
             entryId: msg.id,
             customType: customBlock.customType,

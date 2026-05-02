@@ -91,7 +91,7 @@ export async function addRecentProject(
 
   config.activeProject = projectPath;
   await save(config);
-  return existing || config.recentProjects[0];
+  return existing ?? config.recentProjects[0];
 }
 
 export async function removeRecentProject(projectPath: string): Promise<void> {
@@ -127,7 +127,7 @@ export async function addConfiguredPath(
   if (!config.configuredPaths.find((p) => p.path === path)) {
     config.configuredPaths.push({
       path,
-      name: name || basename(path),
+      name: name ?? basename(path),
       type: "custom",
     });
     await save(config);

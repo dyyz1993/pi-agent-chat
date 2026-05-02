@@ -32,7 +32,32 @@ registerAllHandlers(server, { platform: "desktop" });
 
 // --- 创建窗口 ---
 
-const mainWindow = new BrowserWindow({
+interface RpcDefinition {
+  maxRequestTime: number;
+  handlers: {
+    requests: Record<string, unknown>;
+    messages: Record<string, (data: unknown) => void>;
+  };
+}
+
+const rpcConfig = BrowserView.defineRPC({
+  maxRequestTime: 60000,
+  handlers: {
+    requests: {} as Record<string, unknown>,
+    messages: {
+      "rpc-message": (data: unknown) => {
+        try {
+          const message = typeof data === "string" ? (JSON.parse(data) as Record<string, unknown>) : (data as Record<string, unknown>);
+          transport.handleMessage(message);
+        } catch (error) {
+          log.error("Failed to parse RPC message", { error });
+        }
+      },
+    },
+  },
+}) as unknown as RpcDefinition;
+
+const windowOptions = {
   title: "PiAgentChat",
   url,
   frame: {
@@ -41,25 +66,12 @@ const mainWindow = new BrowserWindow({
     x: 200,
     y: 200,
   },
-  rpc: BrowserView.defineRPC({
-    maxRequestTime: 60000,
-    handlers: {
-      requests: {},
-      messages: {
-        "rpc-message": (data: unknown) => {
-          try {
-            const message = typeof data === "string" ? JSON.parse(data) : data;
-            transport.handleMessage(message);
-          } catch (error) {
-            log.error("Failed to parse RPC message", { error });
-          }
-        },
-      },
-    },
-  }),
-});
+  rpc: rpcConfig,
+} satisfies ConstructorParameters<typeof BrowserWindow>[0];
 
-transport.setBrowserView(mainWindow.webview);
+const mainWindow = new BrowserWindow(windowOptions);
+
+transport.setBrowserView(mainWindow.webview as Parameters<typeof transport.setBrowserView>[0]);
 
 log.info("PiAgentChat desktop app started!");
 

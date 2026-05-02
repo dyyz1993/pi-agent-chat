@@ -12,7 +12,7 @@ function readSizes(key: string, fallback: number[]): number[] {
   try {
     const v = localStorage.getItem(key);
     if (!v) return fallback;
-    const arr = JSON.parse(v);
+    const arr = JSON.parse(v) as number[];
     if (!Array.isArray(arr) || arr.length !== fallback.length) return fallback;
     return arr.map((n: number, i: number) =>
       typeof n === "number" && isFinite(n) && n > 0 ? n : fallback[i]

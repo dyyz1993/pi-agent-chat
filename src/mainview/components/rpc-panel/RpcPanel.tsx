@@ -19,7 +19,7 @@ function RpcEntry({ entry }: { entry: RpcLogEntry }) {
   const { copied, copy } = useClipboard();
   const Icon = DIR_ICONS[entry.direction];
   const color = DIR_COLORS[entry.direction];
-  const label = entry.method || entry.eventType || entry.direction;
+  const label = entry.method ?? entry.eventType ?? entry.direction;
   const time = new Date(entry.timestamp).toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
   const fullPayload = JSON.stringify(entry.payload, null, 2);
   const truncated = JSON.stringify(entry.payload).slice(0, 200);

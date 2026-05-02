@@ -28,7 +28,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
     for (const line of lines) {
       try {
-        const entry = JSON.parse(line);
+        const entry = JSON.parse(line) as Record<string, unknown>;
 
         if (entry.type === "custom" && entry.customType === "subagent") {
           const data = entry.data as SubagentSessionInfo | undefined;

@@ -102,9 +102,10 @@ export function handleBashEvent(sessionId: string, event: BashChannelEvent): voi
           store.markBackgrounded(p.toolCallId);
         }
       }
+      const processes = event.processes;
       useBashStore.setState((s) => ({
         ...s,
-        processesBySession: { ...s.processesBySession, [sessionId]: event.processes! },
+        processesBySession: { ...s.processesBySession, [sessionId]: processes },
       }));
     }
     return;

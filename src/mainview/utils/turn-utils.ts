@@ -9,7 +9,7 @@ export function groupMessagesIntoTurns(messages: ChatMessage[]): Turn[] {
     if (msg.role === "user") {
       if (currentTurn != null && (currentTurn.userMessageId != null || currentTurn.assistantMessageIds?.length)) {
         turns.push({
-          id: currentTurn.id!,
+          id: currentTurn.id as string,
           userMessageId: currentTurn.userMessageId ?? null,
           assistantMessageIds: currentTurn.assistantMessageIds ?? [],
           index: turnIndex++,
@@ -24,17 +24,13 @@ export function groupMessagesIntoTurns(messages: ChatMessage[]): Turn[] {
         timestamp: msg.timestamp,
       };
     } else if (msg.role === "assistant") {
-      if (!currentTurn) {
-        currentTurn = {
-          id: `turn-orphan-${msg.id}`,
-          userMessageId: null,
-          assistantMessageIds: [],
-          timestamp: msg.timestamp,
-        };
-      }
-      if (!currentTurn.assistantMessageIds) {
-        currentTurn.assistantMessageIds = [];
-      }
+      currentTurn ??= {
+        id: `turn-orphan-${msg.id}`,
+        userMessageId: null,
+        assistantMessageIds: [],
+        timestamp: msg.timestamp,
+      };
+      currentTurn.assistantMessageIds ??= [];
       currentTurn.assistantMessageIds.push(msg.id);
       if (msg.tokenUsage) {
         currentTurn.tokenUsage = msg.tokenUsage;
@@ -44,7 +40,7 @@ export function groupMessagesIntoTurns(messages: ChatMessage[]): Turn[] {
 
   if (currentTurn != null && (currentTurn.userMessageId != null || currentTurn.assistantMessageIds?.length)) {
     turns.push({
-      id: currentTurn.id!,
+      id: currentTurn.id as string,
       userMessageId: currentTurn.userMessageId ?? null,
       assistantMessageIds: currentTurn.assistantMessageIds ?? [],
       index: turnIndex,

@@ -4,6 +4,7 @@ import { readFile } from "fs/promises";
 import { existsSync } from "fs";
 import { getProcessManager } from "./agent";
 import { ClientChannel } from "../lib/client-channel";
+import type { LspDiagnosticsMode, LspServerStatus } from "../modules/lsp";
 
 type P<K extends keyof RPCMethods> = RPCMethods[K] extends { params: infer P } ? P : never;
 type R<K extends keyof RPCMethods> = RPCMethods[K] extends { result: infer R } ? R : never;
@@ -32,7 +33,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
       for (const line of lines.reverse()) {
         try {
-          const entry = JSON.parse(line);
+          const entry = JSON.parse(line) as Record<string, unknown>;
           if (entry.type === "custom" && entry.customType === "lsp") {
             const data = entry.data as { event: string; state?: string; mode?: string; servers?: unknown[]; reason?: string };
             if (data.event === "status_changed" && !lastStatus) {
@@ -50,8 +51,8 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
       return {
         state: (lastStatus?.state ?? "inactive") as "inactive" | "starting" | "ready" | "error",
-        servers: (lastStatus?.servers ?? []) as unknown as import("../modules/lsp").LspServerStatus[],
-        mode: lastMode as import("../modules/lsp").LspDiagnosticsMode,
+        servers: (lastStatus?.servers ?? []) as unknown as LspServerStatus[],
+        mode: lastMode as LspDiagnosticsMode,
       };
     } catch {
       return { state: "inactive" as const, servers: [], mode: "agent_end" as const };
@@ -59,10 +60,12 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("lsp.setMode", async (params) => {
-    const { sessionId, mode } = params as { sessionId: string; mode: import("../modules/lsp").LspDiagnosticsMode };
+    const { sessionId, mode } = params as { sessionId: string; mode: LspDiagnosticsMode };
     const pm = getProcessManager();
     if (!pm) throw new Error("No process manager available");
-    const channel = new ClientChannel((data) => pm.sendChannelMessage!(sessionId, "lsp", data));
+    const sendFn = pm.sendChannelMessage;
+    if (!sendFn) throw new Error("No channel message sender available");
+    const channel = new ClientChannel((data) => sendFn(sessionId, "lsp", data));
     const result = await channel.call("lsp.setMode", { mode });
     return result as { ok: boolean; mode: typeof mode };
   });

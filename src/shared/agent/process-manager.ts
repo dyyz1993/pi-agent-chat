@@ -245,13 +245,13 @@ export class AgentProcessManager {
       for await (const line of rl) {
         if (!line.trim()) continue;
         try {
-          const parsed = JSON.parse(line);
+          const parsed = JSON.parse(line) as Record<string, unknown>;
           if (parsed.id && parsed.type) {
             entries.push({
-              id: parsed.id,
-              parentId: parsed.parentId ?? null,
-              type: parsed.type,
-              customType: parsed.customType,
+              id: parsed.id as string,
+              parentId: (parsed.parentId as string | null | undefined) ?? null,
+              type: parsed.type as string,
+              customType: parsed.customType as string | undefined,
             });
           }
         } catch {}
@@ -264,7 +264,7 @@ export class AgentProcessManager {
   private resolveSessionPath(sessionId: string): string {
     const managed = this.clients.get(sessionId);
     if (managed) return managed.info.sessionPath;
-    return this.sessionPaths.get(sessionId) || "";
+    return this.sessionPaths.get(sessionId) ?? "";
   }
 
   private buildMessagesFromJsonl(
@@ -360,7 +360,7 @@ export class AgentProcessManager {
     const managed = this.clients.get(sessionId);
 
     let messages: unknown[] = [];
-    let resolvedSessionPath = sessionPath || "";
+    let resolvedSessionPath = sessionPath ?? "";
     let activePathIds: Set<string> | null = null;
 
     if (managed) {
@@ -390,7 +390,7 @@ export class AgentProcessManager {
         }
       } catch {}
     } else {
-      resolvedSessionPath = this.resolveSessionPath(sessionId) || sessionPath || "";
+      resolvedSessionPath = this.resolveSessionPath(sessionId) ?? sessionPath ?? "";
       const leafId = this.leafIds.get(sessionId) ?? null;
       if (resolvedSessionPath && leafId !== undefined) {
         const jsonlEntries = await this.readJsonlEntries(resolvedSessionPath);
@@ -419,17 +419,17 @@ export class AgentProcessManager {
         for await (const line of rl) {
           if (!line.trim()) continue;
           try {
-            const parsed = JSON.parse(line);
+            const parsed = JSON.parse(line) as Record<string, unknown>;
             if (parsed.type === "custom") {
-              if (activePathIds && typeof parsed.id === "string" && !activePathIds.has(parsed.id)) continue;
+              if (activePathIds && typeof parsed.id === "string" && !activePathIds.has(parsed.id as string)) continue;
               customEntries.push({
-                id: parsed.id || `custom-${Date.now()}`,
-                customType: parsed.customType || "unknown",
+                id: (parsed.id as string) ?? `custom-${Date.now()}`,
+                customType: (parsed.customType as string) ?? "unknown",
                 data: parsed.data,
-                timestamp: new Date(parsed.timestamp || 0).getTime(),
+                timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
               });
             } else if (!managed && parsed.type === "message" && parsed.message) {
-              if (activePathIds && typeof parsed.id === "string" && !activePathIds.has(parsed.id)) continue;
+              if (activePathIds && typeof parsed.id === "string" && !activePathIds.has(parsed.id as string)) continue;
               messages.push(parsed.message);
             }
           } catch {}
@@ -464,7 +464,7 @@ export class AgentProcessManager {
   async setThinkingLevel(sessionId: string, level: string): Promise<void> {
     const managed = this.clients.get(sessionId);
     if (!managed) return;
-    await managed.client.setThinkingLevel(level as import("@dyyz1993/pi-agent-core").ThinkingLevel).catch(() => {});
+    await managed.client.setThinkingLevel(level as Parameters<typeof managed.client.setThinkingLevel>[0]).catch(() => {});
   }
 
   async cycleThinkingLevel(sessionId: string): Promise<unknown> {
@@ -747,7 +747,7 @@ export class AgentProcessManager {
     if (eventType === "response") return;
 
     const managed = this.clients.get(parentSessionId);
-    const sessionPath = managed?.info.sessionPath || "";
+    const sessionPath = managed?.info.sessionPath ?? "";
 
     if (eventType === "message_end" && subEvent.message) {
       const msg = subEvent.message as { content?: Array<{ type: string; text?: string }> };

@@ -53,7 +53,7 @@ export const TimelineTurn = memo(function TimelineTurn({ turn, isLast: _isLast }
           {/* User dot (blue) */}
           <div className="w-[9px] h-[9px] rounded-full bg-blue-500 ring-2 ring-blue-500/20 shadow-sm shadow-blue-500/20" />
           {/* Bot dot (green) - only if there's an assistant response */}
-          {(turn.assistantMessageId || turn.items.length > 0) && (
+          {(turn.assistantMessageId ?? turn.items.length > 0) && (
             <div className="mt-4 w-[7px] h-[7px] rounded-full bg-green-500 ring-2 ring-green-500/20 shadow-sm shadow-green-500/20" />
           )}
         </div>
@@ -75,7 +75,7 @@ export const TimelineTurn = memo(function TimelineTurn({ turn, isLast: _isLast }
 
           {/* Model / summary info */}
           <span className="text-[11px] text-gray-500 font-medium truncate">
-            {turn.model || "Assistant"}
+            {turn.model ?? "Assistant"}
             {toolCount > 0 && (
               <span className="ml-1.5 text-gray-600">· {toolCount} tool{toolCount > 1 ? "s" : ""}</span>
             )}

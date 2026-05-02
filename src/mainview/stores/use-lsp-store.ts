@@ -71,7 +71,7 @@ export const useLspStore = create<LspState>()((set, get) => ({
       case "server_ready":
       case "server_error": {
         const logEntry: ServerStartupLog = {
-          name: event.serverName!,
+          name: event.serverName ?? "unknown",
           state: event.event === "server_ready" ? "ready" : event.event === "server_error" ? "error" : "starting",
           fileTypes: undefined,
           timestamp: event.timestamp,

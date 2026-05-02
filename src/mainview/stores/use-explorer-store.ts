@@ -180,7 +180,7 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
     const addLog = useAppStore.getState().addLog;
     set({ selectedPath: node.path, loadingFile: true });
 
-    const fileSize = node.size || 0;
+    const fileSize = node.size ?? 0;
     const preview: FilePreview = {
       path: node.path,
       name: node.name,
@@ -217,7 +217,7 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
           const res = await fetch(url);
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           text = await res.text();
-          preview.mimeType = res.headers.get("content-type") || "text/plain";
+          preview.mimeType = res.headers.get("content-type") ?? "text/plain";
         }
         preview.content = text;
         preview.totalLines = text.split("\n").length;

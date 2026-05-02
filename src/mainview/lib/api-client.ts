@@ -125,7 +125,7 @@ class APIClientImpl {
     if (typeof window === "undefined") return `ws://localhost:3100/ws?token=${AUTH_TOKEN}`;
     // 优先级：URL query ?ws= > localStorage > 当前 hostname
     const customUrl = (
-      new URLSearchParams(window.location.search).get("ws") ||
+      new URLSearchParams(window.location.search).get("ws") ??
       localStorage.getItem("rpc-websocket-url")
     );
     if (customUrl) return customUrl.includes("token=") ? customUrl : `${customUrl}?token=${AUTH_TOKEN}`;
@@ -185,7 +185,8 @@ class APIClientImpl {
     await this.initialize();
     this.debugLog("call", method as string, params);
     try {
-      const result = await this.client!.call(method, params);
+      if (!this.client) throw new Error("Client not initialized");
+      const result = await this.client.call(method, params);
       this.debugLog("response", method as string, result);
       return result;
     } catch (err) {
@@ -204,7 +205,8 @@ class APIClientImpl {
       this.debugLog("event", eventType as string, payload);
       handler(payload, metadata);
     };
-    return this.client!.subscribe(eventType, wrappedHandler, filter);
+    if (!this.client) throw new Error("Client not initialized");
+    return this.client.subscribe(eventType, wrappedHandler, filter);
   }
 
   private _debugEnabled = true;

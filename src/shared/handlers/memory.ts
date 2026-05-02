@@ -92,10 +92,12 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 		if (manager) {
 			const sessionId = params.sessionId
 			if (sessionId) {
-				try {
-					const channel = new ClientChannel((data) =>
-						manager.sendChannelMessage!(sessionId, "memory", data),
-					)
+			const sendFn = manager.sendChannelMessage;
+			if (!sendFn) return fallbackListFiles(params.projectPath);
+			try {
+				const channel = new ClientChannel((data) =>
+					sendFn(sessionId, "memory", data),
+				)
 					const result = await channel.call("memory.list", { projectPath: params.projectPath }) as { files: MemoryFile[]; entrypointContent: string | null; memoryDir?: string } | null
 					if (result) return { ...result, memoryDir: result.memoryDir ?? "" }
 				} catch {}
@@ -119,14 +121,17 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 	r("memory.remember", async (params) => {
 		const manager = getProcessManager()
 		if (manager) {
-			const channel = new ClientChannel((data) =>
-				manager.sendChannelMessage!(params.sessionId, "memory", data),
-			)
-			await channel.call("memory.userRemember", {
-				sourceSessionId: params.sessionId,
-				sourceMessageIds: params.messageIds,
-				content: params.content,
-			})
+			const sendFn = manager.sendChannelMessage;
+			if (sendFn) {
+				const channel = new ClientChannel((data) =>
+					sendFn(params.sessionId, "memory", data),
+				)
+				await channel.call("memory.userRemember", {
+					sourceSessionId: params.sessionId,
+					sourceMessageIds: params.messageIds,
+					content: params.content,
+				})
+			}
 		}
 
 		return { ok: true }

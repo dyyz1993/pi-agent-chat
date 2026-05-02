@@ -37,8 +37,8 @@ async function parseJsonlHeader(filePath: string): Promise<JsonlHeader | null> {
     const content = await readFile(filePath, "utf-8");
     const firstLine = content.split("\n")[0];
     if (!firstLine?.trim()) return null;
-    const header = JSON.parse(firstLine);
-    if (header.type !== "session") return null;
+    const header: unknown = JSON.parse(firstLine);
+    if (typeof header === "object" && header !== null && "type" in header && (header as { type: string }).type !== "session") return null;
     return header as JsonlHeader;
   } catch {
     return null;
@@ -63,7 +63,7 @@ async function parseJsonlMeta(filePath: string): Promise<{
 
     for (const line of lines) {
       try {
-        const entry: JsonlEntry = JSON.parse(line);
+        const entry: JsonlEntry = JSON.parse(line) as JsonlEntry;
         if (entry.type === "message" && entry.message?.role === "user") {
           messageCount++;
           if (!firstMessage && entry.message.content) {
@@ -112,7 +112,7 @@ async function scanSessionDir(sessionDir: string, pinnedIds?: Set<string>): Prom
 
       sessions.push({
         sessionId: header.id,
-        name: meta?.sessionName || basename(file, ".jsonl"),
+        name: meta?.sessionName ?? basename(file, ".jsonl"),
         sessionPath: filePath,
         projectPath: meta?.effectiveCwd ?? header.cwd,
         parentSessionPath: meta?.parentSessionPath ?? null,

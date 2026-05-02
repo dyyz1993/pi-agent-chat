@@ -1,4 +1,7 @@
 import type { SessionMeta, ProjectTab } from "../types";
+import type { BashChannelEvent } from "../../shared/modules/bash";
+import type { LspChannelEvent } from "../../shared/modules/lsp";
+import type { RulesChannelEvent } from "../../shared/modules/rules";
 import { apiClient } from "../lib/api-client";
 import { useSessionStore } from "./use-session-store";
 import { useChatStore } from "./use-chat-store";
@@ -67,7 +70,7 @@ export function setupSubscriptions(
 
           const subStore = useSubagentStore.getState();
           const sid = payload.subSessionId;
-          const path = payload.parentSessionPath || session.sessionPath;
+          const path = payload.parentSessionPath ?? session.sessionPath;
           const eventType = payload.event.type;
 
           if (eventType === "subagent_start") {
@@ -130,7 +133,7 @@ export function setupSubscriptions(
   if (!bashSubscriptions[id]) {
     apiClient.subscribe(
       "bash.event",
-      (payload: { sessionId: string; event: import("../../shared/modules/bash").BashChannelEvent }) => {
+      (payload: { sessionId: string; event: BashChannelEvent }) => {
         if (payload.sessionId !== id) return;
         handleBashEvent(id, payload.event);
       },
@@ -146,7 +149,7 @@ export function setupSubscriptions(
   if (!lspSubscriptions[id]) {
     apiClient.subscribe(
       "lsp.event",
-      (payload: { sessionId: string; event: import("../../shared/modules/lsp").LspChannelEvent }) => {
+      (payload: { sessionId: string; event: LspChannelEvent }) => {
         if (payload.sessionId !== id) return;
         useLspStore.getState().handleLspEvent(id, payload.event);
       },
@@ -162,7 +165,7 @@ export function setupSubscriptions(
   if (!rulesSubscriptions[id]) {
     apiClient.subscribe(
       "rules.event",
-      (payload: { sessionId: string; event: import("../../shared/modules/rules").RulesChannelEvent }) => {
+      (payload: { sessionId: string; event: RulesChannelEvent }) => {
         if (payload.sessionId !== id) return;
         useRulesStore.getState().handleRulesEvent(id, payload.event);
       },
@@ -300,8 +303,8 @@ export function setupSubscriptions(
             const data = eventData as { summary?: string; snippet?: string };
             if (data) {
               memStore.addInjected(id, {
-                summary: data.summary || "",
-                snippet: data.snippet || "",
+                 summary: data.summary ?? "",
+                 snippet: data.snippet ?? "",
               });
             }
           }

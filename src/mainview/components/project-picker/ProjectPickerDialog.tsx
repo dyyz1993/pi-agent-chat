@@ -27,13 +27,13 @@ const CACHE_KEY_RECENTS = "pi-picker-recents";
 const CACHE_KEY_FAVORITES = "pi-picker-favorites";
 const CACHE_TTL = 5 * 60 * 1000;
 
-function readCache<T>(key: string): { data: T; ts: number } | null {
+function readCache<T>(key: string): { data: T; ts: number } | undefined {
   try {
     const raw = localStorage.getItem(key);
-    if (!raw) return null;
-    return JSON.parse(raw);
+    if (!raw) return undefined;
+    return JSON.parse(raw) as { data: T; ts: number };
   } catch {
-    return null;
+    return undefined;
   }
 }
 
@@ -57,7 +57,7 @@ function timeAgo(ts: number): string {
 }
 
 function pathBasename(p: string): string {
-  return p.replace(/\\/g, "/").split("/").pop() || p;
+  return p.replace(/\\/g, "/").split("/").pop() ?? p;
 }
 
 function pathDirname(p: string): string | null {

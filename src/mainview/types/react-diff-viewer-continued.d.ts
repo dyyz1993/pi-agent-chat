@@ -1,5 +1,5 @@
 declare module 'react-diff-viewer-continued' {
-  import { ComponentType } from 'react';
+  import { type ComponentType } from 'react';
 
   interface DiffViewerProps {
     oldValue: string;

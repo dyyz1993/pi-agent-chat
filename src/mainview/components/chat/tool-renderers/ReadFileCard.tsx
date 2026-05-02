@@ -28,8 +28,8 @@ export const ReadFileCard = memo(function ReadFileCard({ block, blockId }: { blo
 
 	let filePath = "";
 	try {
-		const parsed = JSON.parse(block.args || "{}");
-		filePath = parsed.path || "";
+		const parsed = JSON.parse(block.args ?? "{}") as { path?: string };
+		filePath = parsed.path ?? "";
 	} catch {}
 
 	const displayPath = filePath || block.args?.slice(0, 80) || "";

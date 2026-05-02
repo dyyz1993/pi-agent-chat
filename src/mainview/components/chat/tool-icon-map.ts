@@ -71,7 +71,7 @@ const PREVIEW_TYPE_ICON_MAP: Record<string, ToolIconEntry> = {
 };
 
 export function getPreviewResourceIcon(resourceType: string): ToolIconEntry {
-  return PREVIEW_TYPE_ICON_MAP[resourceType.toLowerCase()] ?? PREVIEW_TYPE_ICON_MAP["text"]!;
+  return PREVIEW_TYPE_ICON_MAP[resourceType.toLowerCase()] ?? PREVIEW_TYPE_ICON_MAP["text"] ?? DEFAULT_ENTRY;
 }
 
 const USER_ENTRY: ToolIconEntry = {

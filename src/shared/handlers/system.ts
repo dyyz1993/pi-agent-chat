@@ -19,7 +19,7 @@ export function register(server: RPCServer, options: HandlerOptions): void {
   }));
 
   r("system.hello", async (params) => ({
-    message: `Hello ${params.name || "World"}!`,
+    message: `Hello ${params.name ?? "World"}!`,
     timestamp: Date.now(),
   }));
 

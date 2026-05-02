@@ -1,5 +1,5 @@
 export function getLanguage(filename: string): string {
-  const ext = filename.split(".").pop()?.toLowerCase() || "";
+  const ext = filename.split(".").pop()?.toLowerCase() ?? "";
   const map: Record<string, string> = {
     ts: "typescript", tsx: "tsx", js: "javascript", jsx: "jsx",
     mjs: "javascript", cjs: "javascript", mts: "typescript", cts: "typescript",
@@ -9,11 +9,11 @@ export function getLanguage(filename: string): string {
     sql: "sql", graphql: "graphql",
     mdc: "markdown",
   };
-  return map[ext] || "";
+  return map[ext] ?? "";
 }
 
 export function isTextFile(filename: string): boolean {
-  const ext = filename.split(".").pop()?.toLowerCase() || "";
+  const ext = filename.split(".").pop()?.toLowerCase() ?? "";
   const textExts = new Set([
     "ts", "tsx", "js", "jsx", "json", "html", "css", "scss", "less",
     "md", "txt", "py", "rs", "go", "sh", "bash", "yml", "yaml", "toml",
@@ -26,7 +26,7 @@ export function isTextFile(filename: string): boolean {
 }
 
 export function isImageFile(filename: string): boolean {
-  const ext = filename.split(".").pop()?.toLowerCase() || "";
+  const ext = filename.split(".").pop()?.toLowerCase() ?? "";
   return ["png", "jpg", "jpeg", "gif", "svg", "webp", "ico", "bmp"].includes(ext);
 }
 

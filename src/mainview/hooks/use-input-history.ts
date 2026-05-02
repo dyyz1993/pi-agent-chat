@@ -11,8 +11,8 @@ function readHistory(sessionId: string): string[] {
   try {
     const raw = localStorage.getItem(getStorageKey(sessionId));
     if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) return parsed.slice(0, MAX_ITEMS);
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed)) return (parsed as string[]).slice(0, MAX_ITEMS);
   } catch { /* ignore */ }
   return [];
 }

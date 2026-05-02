@@ -79,7 +79,7 @@ export const MessageCard = memo(function MessageCard({ message, cardLabel, prevB
     );
   }
 
-  let label = cardLabel || (isUser ? "你" : "助手");
+  let label = cardLabel ?? (isUser ? "你" : "助手");
   let IconComp;
   let labelColor: string;
   let barColor: string;
@@ -93,10 +93,9 @@ export const MessageCard = memo(function MessageCard({ message, cardLabel, prevB
     const iconEntry = getCustomTypeIcon(customBlock.customType);
     IconComp = iconEntry.icon;
     labelColor = iconEntry.color;
-    label = cardLabel || iconEntry.label;
+    label = cardLabel ?? iconEntry.label;
   } else {
-    const roleCfg = (message.role in ROLE_CONFIG ? ROLE_CONFIG[message.role as keyof typeof ROLE_CONFIG] : ROLE_CONFIG.assistant) ?? ROLE_CONFIG.assistant;
-    IconComp = roleCfg.icon;
+    const roleCfg = (message.role in ROLE_CONFIG ? ROLE_CONFIG[message.role as keyof typeof ROLE_CONFIG] : ROLE_CONFIG.assistant) ?? ROLE_CONFIG.assistant;    IconComp = roleCfg.icon;
     labelColor = roleCfg.color;
     barColor = roleCfg.barColor;
     bgColor = roleCfg.bgColor;
@@ -135,7 +134,7 @@ export const MessageCard = memo(function MessageCard({ message, cardLabel, prevB
           </span>
         )}
 
-        {!isUser && !isEntry && (message.provider || message.model) && (
+        {!isUser && !isEntry && (message.provider ?? message.model) && (
           <span className="text-[10px] text-gray-600 opacity-0 group-hover/msgcard:opacity-100 transition-opacity">
             {message.provider}{message.model ? ` · ${message.model}` : ""}
           </span>
@@ -327,7 +326,7 @@ const HeaderActions = memo(function HeaderActions({ message, isUserCard }: { mes
           try {
             const HISTORY_KEY = "pi-input-history";
             const raw = localStorage.getItem(`${HISTORY_KEY}:${sessionId}`);
-            const history: string[] = raw ? JSON.parse(raw) : [];
+            const history: string[] = raw ? JSON.parse(raw) as string[] : [];
             if (!history.includes(currentInput)) {
               history.unshift(currentInput);
               localStorage.setItem(`${HISTORY_KEY}:${sessionId}`, JSON.stringify(history.slice(0, 10)));

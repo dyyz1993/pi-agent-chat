@@ -75,7 +75,7 @@ export function jsonToYaml(input: string): string {
   if (!input || !input.trim()) return "";
 
   try {
-    const parsed = JSON.parse(input);
+    const parsed: unknown = JSON.parse(input);
     return toYamlValue(parsed, 0).trimStart();
   } catch {
     return input;
@@ -89,7 +89,7 @@ export function tryFormatAsYaml(input: string): string {
 
   if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
     try {
-      const parsed = JSON.parse(trimmed);
+      const parsed: unknown = JSON.parse(trimmed);
       return toYamlValue(parsed, 0).trimStart();
     } catch {
       return input;

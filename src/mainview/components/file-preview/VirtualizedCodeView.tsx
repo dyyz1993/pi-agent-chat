@@ -18,7 +18,7 @@ export function VirtualizedCodeView({ code, filename }: VirtualizedCodeViewProps
 
   const avgLineLength = code.length / Math.max(lines.length, 1);
   const NO_HIGHLIGHT_EXTS = new Set(["json", "lock", "map", "log", "csv"]);
-  const ext = filename.split(".").pop()?.toLowerCase() || "";
+  const ext = filename.split(".").pop()?.toLowerCase() ?? "";
   const forcePlainText = !language || avgLineLength > 500 || NO_HIGHLIGHT_EXTS.has(ext);
 
   const virtualizer = useVirtualizer({

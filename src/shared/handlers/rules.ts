@@ -65,8 +65,10 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 		if (!hasActiveSession) return emptySnapshot();
 
 		try {
+			const sendFn = pm.sendChannelMessage;
+			if (!sendFn) return emptySnapshot();
 			const channel = new ClientChannel<RulesChannelContract>((data) =>
-				pm.sendChannelMessage!(sid, "rules-engine", data),
+				sendFn(sid, "rules-engine", data),
 			);
 
 			const result = await Promise.race([

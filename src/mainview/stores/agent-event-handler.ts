@@ -121,10 +121,10 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       if (!msgObj) return;
       const customType = "customType" in msgObj && typeof msgObj.customType === "string" ? msgObj.customType : "unknown";
 
-      const data = "details" in msgObj
-        ? msgObj.details
+      const data: Record<string, unknown> = "details" in msgObj
+        ? msgObj.details as Record<string, unknown>
         : "data" in msgObj
-          ? msgObj.data
+          ? msgObj.data as Record<string, unknown>
           : {};
 
       const chat = useChatStore.getState();
@@ -440,8 +440,8 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       const data = event.data as { summary?: string; snippet?: string } | undefined;
       if (data) {
         memoryStore.addInjected(sessionId, {
-          summary: data.summary || "",
-          snippet: data.snippet || "",
+          summary: data.summary ?? "",
+          snippet: data.snippet ?? "",
         });
       }
     }

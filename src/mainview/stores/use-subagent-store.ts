@@ -388,7 +388,7 @@ export function handleSubagentEvent(subId: string, event: SubagentEvent, parentS
           useSubagentStore.getState().upsertLiveSubagent(path, subId, {
             completedAt: Date.now(),
             exitCode: 0,
-            finalText: sub.finalText || "(completed)",
+            finalText: sub.finalText ?? "(completed)",
           });
         }
         break;

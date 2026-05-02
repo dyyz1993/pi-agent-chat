@@ -80,10 +80,10 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
 
   const fullTextForCopy = useMemo(() => {
     if (isUser) {
-      return message.content
-        .filter((b): b is Extract<ContentBlock, { type: "text" }> => b.type === "text")
-        .map((b) => b.text)
-        .join("\n");
+    return message.content
+      .filter((b): b is Extract<ContentBlock, { type: "text" }> => b.type === "text")
+      .map((b) => b.text)
+      .join("\n");
     }
     return message.content
       .map((b) => {
@@ -142,7 +142,7 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
               <span className="inline-block w-1.5 h-4 bg-indigo-400 animate-pulse ml-3 align-text-bottom" />
             </div>
           )}
-          {(message.tokenUsage || message.model) && (
+          {(message.tokenUsage ?? message.model) && (
             <div className={`border-l-[3px] ${getDefaultBorderColor(message.role as "user" | "assistant")}`}>
               <MessageMetaFooter message={message} />
             </div>
@@ -675,7 +675,7 @@ export const MessageMetaFooter = memo(function MessageMetaFooter({ message }: { 
 
   return (
     <div className="mt-1.5 pt-1.5 pl-2 pb-0.5 border-t border-gray-800/20 space-y-1">
-      {(model || provider) && (
+      {(model ?? provider) && (
         <div className="text-[10px] text-gray-600">
           {provider && <span>智能体: {provider}</span>}
           {model && <>{provider && "  "}<span>模型: {model}</span></>}

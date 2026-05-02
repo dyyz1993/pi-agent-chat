@@ -51,7 +51,7 @@ export function DiffViewerPanel() {
 
   if (!currentDiff && !loadingDiff) return null;
 
-  const fileName = currentDiff?.filePath.split("/").pop() || "";
+  const fileName = currentDiff?.filePath.split("/").pop() ?? "";
 
   return (
     <div className="absolute inset-0 bg-gray-900 flex flex-col" style={{ zIndex: 40 }}>

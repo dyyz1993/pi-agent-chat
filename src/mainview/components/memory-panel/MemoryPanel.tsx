@@ -54,7 +54,7 @@ function getEventIcon(customType: string) {
 function getPanelEventLabel(customType: string, data: unknown): string {
 	if (customType === "memory_prefetch_result") {
 		const d = data as { summary?: string } | undefined
-		const summary = d?.summary || ""
+		const summary = d?.summary ?? ""
 		const match = summary.match(/(\d+)/)
 		if (match) return `匹配 ${match[1]} 条记忆`
 		return "记忆匹配"
@@ -71,7 +71,7 @@ function getPanelEventLabel(customType: string, data: unknown): string {
 	}
 	if (customType === "memory_update_failed") {
 		const d = data as { reason?: string } | undefined
-		return d?.reason || "收藏失败"
+		return d?.reason ?? "收藏失败"
 	}
 	return MEMORY_PANEL_LABELS[customType] ?? customType
 }
@@ -97,7 +97,7 @@ function SectionHeader({
 			className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium text-gray-300 hover:bg-gray-800/30 transition-colors"
 		>
 			{collapsed ? <ChevronRight className="w-3 h-3 shrink-0" /> : <ChevronDown className="w-3 h-3 shrink-0" />}
-			<Icon className={`w-3 h-3 shrink-0 ${iconCls || ""}`} />
+			<Icon className={`w-3 h-3 shrink-0 ${iconCls ?? ""}`} />
 			<span>{label}</span>
 			{badge != null && badge > 0 && (
 				<span className="ml-auto text-[9px] text-gray-600">{badge}</span>
@@ -142,8 +142,8 @@ export function MemoryPanel() {
 	const projectTabs = useSessionStore((s) => s.projectTabs)
 	const activeProjectId = useSessionStore((s) => s.activeProjectId)
 
-	const events = useMemoryStore(useShallow((s) => s.eventsBySession[sessionId || ""] || []))
-	const files = useMemoryStore(useShallow((s) => s.filesBySession[sessionId || ""] || []))
+	const events = useMemoryStore(useShallow((s) => s.eventsBySession[sessionId ?? ""] ?? []))
+	const files = useMemoryStore(useShallow((s) => s.filesBySession[sessionId ?? ""] ?? []))
 	const entrypoint = useMemoryStore((s) => sessionId ? s.entrypointBySession[sessionId] : null)
 	const injected = useMemoryStore(useShallow((s) => sessionId ? (s.injectedBySession[sessionId] || []) : []))
 	const expandedFile = useMemoryStore(
@@ -176,7 +176,7 @@ export function MemoryPanel() {
 	function getEventDetail(customType: string, data: unknown): React.ReactNode {
 		if (customType === "memory_updated") {
 			const d = data as { files?: Array<{ filename: string }> } | undefined
-			const files = d?.files || []
+			const files = d?.files ?? []
 			return files.length > 0 ? (
 				<span className="text-[9px] text-gray-500 truncate max-w-[120px]">
 					{files.map((f) => f.filename).join(", ")}
@@ -235,7 +235,7 @@ export function MemoryPanel() {
 					hasFiles ? (
 						<div className="px-2.5 pb-1.5 space-y-0.5">
 							{files.map((f) => {
-								const badge = TYPE_BADGES[f.type || ""]
+								const badge = TYPE_BADGES[f.type ?? ""]
 								const isExpanded = expandedFile === f.filePath
 								return (
 									<div key={f.filePath}>
@@ -253,7 +253,7 @@ export function MemoryPanel() {
 												</span>
 											)}
 											<span className="text-[10px] text-gray-300 truncate flex-1">
-												{f.description || f.filename}
+												{f.description ?? f.filename}
 											</span>
 											<span className="text-[9px] text-gray-600 shrink-0">
 												{relativeTime(f.mtimeMs)}

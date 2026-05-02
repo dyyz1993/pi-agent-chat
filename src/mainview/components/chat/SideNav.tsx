@@ -99,7 +99,7 @@ function buildNavItems(messages: ChatMessage[]): NavItem[] {
     }
 
     const hasError = msg.content.some(
-      (b) => (b.type === "toolResult" && b.isError) || (b.type === "toolExecution" && b.status === "error")
+      (b) => b.type === "toolResult" && b.isError ? true : b.type === "toolExecution" && b.status === "error"
     );
     return { id: msg.id, role: "assistant", icon: Bot, color: hasError ? "text-red-400" : "text-green-400", subs };
   });

@@ -246,7 +246,7 @@ export function SidebarBottomControls() {
   }
 
   const modelDisplay = currentModel
-    ? `${currentModel.provider}/${currentModel.name || formatModelName(currentModel.id)}`
+    ? `${currentModel.provider}/${currentModel.name ?? formatModelName(currentModel.id)}`
     : "未加载";
   const thinkingDisplay = currentThinkingLevel ? formatThinkingLabel(currentThinkingLevel as ThinkingLevel) : "默认";
 
@@ -443,7 +443,7 @@ export function SidebarBottomControls() {
         >
           {isActive ? <Check className="w-3 h-3 shrink-0 text-indigo-400" /> : <span className="w-3 shrink-0" />}
           <div className="flex flex-col min-w-0">
-            <span className="truncate text-xs">{m.name || formatModelName(m.id)}</span>
+            <span className="truncate text-xs">{m.name ?? formatModelName(m.id)}</span>
             <span className="text-[10px] text-cyan-500/60 font-mono">{m.provider} · {m.id}</span>
           </div>
         </button>

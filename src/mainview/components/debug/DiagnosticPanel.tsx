@@ -289,7 +289,7 @@ export function DiagnosticPanel() {
         {snapshot ? (
           <div className="text-[11px]">
             <div className="px-3 py-1.5 bg-gray-800/50 flex items-center justify-between text-[10px] text-gray-400">
-              <span>Active: {snapshot.activeSessionId || "none"} | Tabs: {snapshot.projectTabs} | Sessions: {snapshot.totalSessions}</span>
+              <span>Active: {snapshot.activeSessionId ?? "none"} | Tabs: {snapshot.projectTabs} | Sessions: {snapshot.totalSessions}</span>
               <span>{formatTime(snapshot.timestamp)}</span>
             </div>
 

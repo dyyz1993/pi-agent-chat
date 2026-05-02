@@ -89,7 +89,7 @@ function SessionList({
   useEffect(() => {
     if (!activeSessionId) return;
     if (autoExpandedRef.current.has(activeSessionId)) return;
-    const sessionPath = rawSessions.find((s) => s.sessionId === activeSessionId)?.sessionPath || "";
+    const sessionPath = rawSessions.find((s) => s.sessionId === activeSessionId)?.sessionPath ?? "";
     const subs = subsessionsByParent[sessionPath];
     if (subs && subs.length > 0) {
       autoExpandedRef.current.add(activeSessionId);
@@ -262,9 +262,9 @@ function SessionItem({
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
-  const hasPiChildren = children && children.length > 0;
-  const hasSubagents = subsessions && subsessions.length > 0;
-  const hasExpandableChildren = hasPiChildren || hasSubagents;
+  const hasPiChildren = !!(children && children.length > 0);
+  const hasSubagents = !!(subsessions && subsessions.length > 0);
+  const hasExpandableChildren = Boolean(hasPiChildren) || Boolean(hasSubagents);
   const workspaceInfo = useMemo(
     () =>
       worktrees.find((wt) => session.projectPath === wt.path) ??
@@ -407,7 +407,7 @@ function SessionItem({
               加载子代理...
             </div>
           )}
-          {!loadingSubs && hasPiChildren && children!.map((child) => (
+          {!loadingSubs && hasPiChildren && children?.map((child) => (
             <SessionItem
               key={child.sessionId}
               session={child}
@@ -416,7 +416,7 @@ function SessionItem({
               onToggleExpand={() => { }}
             />
           ))}
-          {!loadingSubs && hasSubagents && subsessions!.map((sub) => (
+          {!loadingSubs && hasSubagents && subsessions?.map((sub) => (
             <SubagentItem
               key={sub.sessionId}
               sub={sub}

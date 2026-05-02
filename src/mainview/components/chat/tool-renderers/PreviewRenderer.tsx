@@ -14,8 +14,8 @@ export const PreviewRenderer = memo(function PreviewRenderer({ block, blockId }:
 
     let filePath = "";
     try {
-      const parsed = JSON.parse(block.args || "{}");
-      filePath = parsed.source || "";
+      const parsed = JSON.parse(block.args ?? "{}") as { source?: string };
+      filePath = parsed.source ?? "";
     } catch {}
 
     return (

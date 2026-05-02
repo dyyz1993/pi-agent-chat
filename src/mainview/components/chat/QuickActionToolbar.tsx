@@ -28,6 +28,30 @@ type PopupMode = "at" | "slash" | null;
 type AtTab = "agents" | "files" | "memory";
 type SlashCategory = "commands" | "skills";
 
+interface ExtensionInfo {
+  path: string;
+  toolNames: string[];
+}
+
+interface SkillInfo {
+  filePath: string;
+  name: string;
+  description?: string;
+}
+
+interface CommandInfo {
+  name: string;
+  source: string;
+  description?: string;
+}
+
+interface DirEntry {
+  path: string;
+  name: string;
+  type: "file" | "directory";
+  isIgnored?: boolean;
+}
+
 interface PopupItem {
   id: string;
   label: string;
@@ -97,7 +121,7 @@ export function QuickActionToolbar() {
     setLoading(true);
     const result: PopupItem[] = [];
     try {
-      const extRes = await apiClient.call("agent.getExtensions", { sessionId: activeSessionId });
+      const extRes = await apiClient.call("agent.getExtensions", { sessionId: activeSessionId }) as { extensions: ExtensionInfo[] };
       for (const ext of extRes.extensions) {
         for (const toolName of ext.toolNames) {
           result.push({
@@ -110,8 +134,8 @@ export function QuickActionToolbar() {
           });
         }
       }
-      const skillsRaw = await apiClient.call("agent.getSkills", { sessionId: activeSessionId });
-      const skillsArr = Array.isArray(skillsRaw) ? skillsRaw : (skillsRaw.skills ?? []);
+      const skillsRaw = await apiClient.call("agent.getSkills", { sessionId: activeSessionId }) as SkillInfo[] | { skills: SkillInfo[] };
+      const skillsArr: SkillInfo[] = Array.isArray(skillsRaw) ? skillsRaw : (skillsRaw.skills ?? []);
       for (const skill of skillsArr) {
         result.push({
           id: `skill-${skill.filePath}`,
@@ -132,7 +156,7 @@ export function QuickActionToolbar() {
     const result: PopupItem[] = [];
     try {
       if (dirPath) {
-        const res = await apiClient.call("file.listDir", { path: dirPath });
+        const res = await apiClient.call("file.listDir", { path: dirPath }) as { entries: DirEntry[] };
         for (const e of res.entries) {
           if (e.isIgnored) continue;
           result.push({
@@ -207,7 +231,7 @@ export function QuickActionToolbar() {
     setLoading(true);
     const result: PopupItem[] = [];
     try {
-      const cmdRes = await apiClient.call("agent.getCommands", { sessionId: activeSessionId });
+      const cmdRes = await apiClient.call("agent.getCommands", { sessionId: activeSessionId }) as CommandInfo[];
       for (const cmd of cmdRes) {
         if (cmd.source === "skill") continue;
         result.push({
@@ -229,7 +253,7 @@ export function QuickActionToolbar() {
     setLoading(true);
     const result: PopupItem[] = [];
     try {
-      const cmdRes = await apiClient.call("agent.getCommands", { sessionId: activeSessionId });
+      const cmdRes = await apiClient.call("agent.getCommands", { sessionId: activeSessionId }) as CommandInfo[];
       for (const cmd of cmdRes) {
         if (cmd.source !== "skill") continue;
         result.push({
@@ -241,8 +265,8 @@ export function QuickActionToolbar() {
           insertText: `/${cmd.name}`,
         });
       }
-      const skillsRaw = await apiClient.call("agent.getSkills", { sessionId: activeSessionId });
-      const skillsArr = Array.isArray(skillsRaw) ? skillsRaw : (skillsRaw.skills ?? []);
+      const skillsRaw = await apiClient.call("agent.getSkills", { sessionId: activeSessionId }) as SkillInfo[] | { skills: SkillInfo[] };
+      const skillsArr: SkillInfo[] = Array.isArray(skillsRaw) ? skillsRaw : (skillsRaw.skills ?? []);
       for (const skill of skillsArr) {
         const exists = result.some((r) => r.label === skill.name);
         if (exists) continue;
@@ -288,7 +312,7 @@ export function QuickActionToolbar() {
   const handleSelect = useCallback((item: PopupItem) => {
     if (item.isFolder && item.folderPath && popupMode === "at" && atTab === "files") {
       setCurrentDir(item.folderPath);
-      setFileBreadcrumbs((prev) => [...prev, { path: item.folderPath!, label: item.label }]);
+      setFileBreadcrumbs((prev) => [...prev, { path: item.folderPath ?? "", label: item.label }]);
       return;
     }
 

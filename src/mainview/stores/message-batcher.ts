@@ -12,9 +12,7 @@ function flush() {
 
 export function batchMessageUpdate(sessionId: string, apply: () => void) {
   queue.push({ sessionId, apply });
-  if (!rafId) {
-    rafId = requestAnimationFrame(flush);
-  }
+  rafId ??= requestAnimationFrame(flush);
 }
 
 export function flushNow() {

@@ -117,9 +117,10 @@ export const useSessionStore = create<SessionState>()(
       removeProjectTab: (id) => {
         const state = get();
         if (state.activeProjectId === id && state.activeSessionId) {
-          cleanupSession(state, state.activeSessionId);
-          cleanupSessionData(state.activeSessionId);
-          set((s) => clearSubscriptionState(s, state.activeSessionId!));
+          const sid = state.activeSessionId;
+          cleanupSession(state, sid);
+          cleanupSessionData(sid);
+          set((s) => clearSubscriptionState(s, sid));
         }
 
         set((s) => {
@@ -519,7 +520,7 @@ export const useSessionStore = create<SessionState>()(
       fetchInitialState: (sessionId) => {
         apiClient.call("agent.getState", { sessionId }).then((result) => {
           if (!result) return;
-          const cw = result.model?.contextWindow || 0;
+          const cw = result.model?.contextWindow ?? 0;
           if (cw > 0) {
             get().updateSessionContext(sessionId, { contextWindow: cw });
           }
@@ -600,8 +601,8 @@ export const useSessionStore = create<SessionState>()(
         ]).then(([stateResult, modelsResult]) => {
           if (stateResult?.model) {
             set({
-              currentModel: { provider: stateResult.model.provider || "", id: stateResult.model.id, name: stateResult.model.name },
-              currentThinkingLevel: stateResult.thinkingLevel || "medium",
+              currentModel: { provider: stateResult.model.provider ?? "", id: stateResult.model.id, name: stateResult.model.name },
+              currentThinkingLevel: stateResult.thinkingLevel ?? "medium",
             });
           }
           if (Array.isArray(modelsResult)) {

@@ -96,7 +96,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     // Parse branch info from first line
     const branchLine = lines[0] || "";
     const branchMatch = branchLine.match(/^## (.+?)(?:\.\.\.(\S+))?(?:\s+\[(ahead\s+(\d+))?(?:,\s*)?(behind\s+(\d+))?\])?$/);
-    const branch = branchMatch?.[1]?.replace("HEAD detached", "").replace(/[()]/g, "").trim() || "unknown";
+    const branch = branchMatch?.[1]?.replace("HEAD detached", "").replace(/[()]/g, "").trim() ?? "unknown";
     const ahead = branchMatch?.[3] ? parseInt(branchMatch[3]) : 0;
     const behind = branchMatch?.[5] ? parseInt(branchMatch[5]) : 0;
 
@@ -162,7 +162,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
   r("git.log", async (params) => {
     const repoRoot = getRepoRoot(params.repoPath);
-    const count = params.maxCount || 50;
+    const count = params.maxCount ?? 50;
     const output = execGit([
       "log", `--max-count=${count}`,
       "--pretty=format:%H|%h|%s|%an|%aI",
@@ -188,8 +188,9 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
     const files: GitFileChange[] = output.split("\n").filter(Boolean).map((line) => {
       const [status, ...pathParts] = line.split("\t");
-      const path = pathParts.join("\t"); // handle paths with tabs (renames: old\tnew)
-      return { path: status === "R" ? path.split("\t").pop()! : path, status: statusMap[status] || "modified" };
+      const path = pathParts.join("\t");
+      const resolvedPath = status === "R" ? path.split("\t").pop() ?? path : path;
+      return { path: resolvedPath, status: statusMap[status] ?? "modified" };
     });
 
     return { files };
@@ -256,7 +257,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const output = execGit(["commit", "-m", params.message], repoRoot);
     // Extract hash from output like "[main abc1234] message"
     const hashMatch = output.match(/\[[\w\-/.]+\s+([0-9a-f]{7,40})\]/);
-    const shortHash = hashMatch?.[1] || "";
+    const shortHash = hashMatch?.[1] ?? "";
     let hash = "";
     if (shortHash) {
       hash = execGit(["rev-parse", shortHash], repoRoot).trim();
@@ -285,7 +286,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     for (const line of output.split("\n")) {
       if (line.startsWith("worktree ")) {
         if (current.path) {
-          worktrees.push({ path: current.path!, branch: current.branch || "", isMain: !!current.isMain });
+          worktrees.push({ path: current.path, branch: current.branch ?? "", isMain: !!current.isMain });
         }
         current = { path: line.slice(9), isMain: false };
       } else if (line.startsWith("branch ")) {
@@ -298,7 +299,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       }
     }
     if (current.path) {
-      worktrees.push({ path: current.path!, branch: current.branch || "", isMain: !!current.isMain });
+      worktrees.push({ path: current.path, branch: current.branch ?? "", isMain: !!current.isMain });
     }
 
     return { worktrees };

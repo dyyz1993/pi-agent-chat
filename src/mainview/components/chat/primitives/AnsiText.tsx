@@ -34,8 +34,9 @@ export function parseAnsi(input: string): AnsiSpan[] {
 
 	for (let i = 0; i < parts.length; i++) {
 		if (i % 2 === 1) {
-			const codes = parts[i]!.split(";");
-			const reset = codes.includes("0") || parts[i] === "";
+			const codesStr = parts[i];
+			const codes = codesStr ? codesStr.split(";") : [];
+			const reset = codes.includes("0") || codesStr === "";
 			if (reset) {
 				currentClass = "text-gray-300";
 			}
@@ -43,11 +44,11 @@ export function parseAnsi(input: string): AnsiSpan[] {
 				if (code === "1") {
 					currentClass += " font-bold";
 				} else if (COLOR_MAP[code]) {
-					currentClass = COLOR_MAP[code]!;
+					currentClass = COLOR_MAP[code] ?? currentClass;
 				}
 			}
 		} else if (parts[i]) {
-			spans.push({ text: parts[i]!, className: currentClass });
+			spans.push({ text: parts[i] as string, className: currentClass });
 		}
 	}
 

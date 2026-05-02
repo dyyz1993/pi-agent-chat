@@ -1,4 +1,4 @@
-import type { AnyMethods } from "@dyyz1993/rpc-core";
+import type { AnyMethods, RPCServer } from "@dyyz1993/rpc-core";
 import type { SystemMethods } from "./modules/system";
 import type { FileMethods, FileEvents } from "./modules/file";
 import type { TimerMethods, TimerEvents } from "./modules/timer";
@@ -23,19 +23,19 @@ export interface HandlerOptions {
 }
 
 export interface HandlerRegister {
-  (server: import("@dyyz1993/rpc-core").RPCServer, options: HandlerOptions): void;
+  (server: RPCServer, options: HandlerOptions): void;
   readonly __handlerType: "register";
 }
 
 export interface HandlerCleanup {
-  (server: import("@dyyz1993/rpc-core").RPCServer): void;
+  (server: RPCServer): void;
   readonly __handlerType: "cleanup";
 }
 
-export function asRegister(fn: (server: import("@dyyz1993/rpc-core").RPCServer, options: HandlerOptions) => void): HandlerRegister {
+export function asRegister(fn: (server: RPCServer, options: HandlerOptions) => void): HandlerRegister {
   return fn as HandlerRegister;
 }
 
-export function asCleanup(fn: (server: import("@dyyz1993/rpc-core").RPCServer) => void): HandlerCleanup {
+export function asCleanup(fn: (server: RPCServer) => void): HandlerCleanup {
   return fn as HandlerCleanup;
 }

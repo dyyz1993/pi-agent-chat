@@ -43,9 +43,9 @@ const MIME_TYPES: Record<string, string> = {
 // 路径白名单校验：阻止路径遍历攻击
 const ALLOWED_ROOTS = [
 	resolve(process.cwd()),
-	resolve(process.env.HOME || "", ".claude", "rules"),
-	resolve(process.env.HOME || "", ".config", "opencode", "rules"),
-	resolve(process.env.HOME || "", ".opencode", "rules"),
+	resolve(process.env.HOME ?? "", ".claude", "rules"),
+ 	resolve(process.env.HOME ?? "", ".config", "opencode", "rules"),
+ 	resolve(process.env.HOME ?? "", ".opencode", "rules"),
 ];
 let cachedAllowedRoots: string[] | null = null;
 let rootsCacheTime = 0;
@@ -155,9 +155,9 @@ export function createHttpHandler(deps: HttpRouteDeps): (req: IncomingMessage, r
     // Debug log endpoint (不需要鉴权，仅开发用)
     if (url.pathname === "/api/debug-log" && req.method === "POST") {
       const chunks: Buffer[] = [];
-      for await (const chunk of req) chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
-      const body = JSON.parse(Buffer.concat(chunks).toString());
-      await appendFile("logs/debug.log", `${body.line}\n`);
+      for await (const chunk of req as AsyncIterable<Buffer | string>) chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+      const body = JSON.parse(Buffer.concat(chunks).toString()) as { line?: string };
+      await appendFile("logs/debug.log", `${body.line ?? ""}\n`);
       res.writeHead(200).end("ok");
       return;
     }
@@ -177,7 +177,7 @@ export function createHttpHandler(deps: HttpRouteDeps): (req: IncomingMessage, r
 }
 
 function parseFsCookie(req: IncomingMessage): string | null {
-  const cookieHeader = req.headers["cookie"] || "";
+  const cookieHeader = req.headers["cookie"] ?? "";
   for (const part of cookieHeader.split(";")) {
     const [k, v] = part.trim().split("=");
     if (k === FS_COOKIE_NAME && v) return v;
@@ -193,7 +193,7 @@ async function handleFsRoute(
 ): Promise<void> {
   const queryToken = url.searchParams.get("token");
   const cookieToken = parseFsCookie(req);
-  const token = queryToken || cookieToken;
+  const token = queryToken ?? cookieToken;
 
   if (token !== authToken) {
     res.writeHead(401, { "Content-Type": "text/plain" }).end("Unauthorized");
@@ -344,7 +344,7 @@ async function handleFileUpload(
     res.end(JSON.stringify({ error: "Path not allowed" }));
     return;
   }
-  const contentLength = parseInt(req.headers["content-length"] || "0", 10);
+  const contentLength = parseInt(req.headers["content-length"] ?? "0", 10);
   if (contentLength > maxUploadSize) {
     res.writeHead(413, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: `File too large, max ${maxUploadSize / 1024 / 1024}MB` }));
@@ -352,7 +352,7 @@ async function handleFileUpload(
   }
   try {
     const chunks: Buffer[] = [];
-    for await (const chunk of req) {
+    for await (const chunk of req as AsyncIterable<Buffer | string>) {
       chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
     }
     const body = Buffer.concat(chunks);

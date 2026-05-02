@@ -44,12 +44,12 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     for await (const line of rl) {
       if (!line.trim()) { lineIdx++; continue; }
       try {
-        const parsed = JSON.parse(line);
+        const parsed = JSON.parse(line) as Record<string, unknown>;
         entries.push({
-          id: parsed.id || `entry-${lineIdx}`,
-          type: (parsed.type || "custom") as SessionEntry["type"],
-          parentId: parsed.parentId || null,
-          timestamp: new Date(parsed.timestamp || 0).getTime(),
+          id: (parsed.id as string) ?? `entry-${lineIdx}`,
+          type: ((parsed.type as string) ?? "custom") as SessionEntry["type"],
+          parentId: (parsed.parentId as string | null) ?? null,
+          timestamp: new Date((parsed.timestamp as string | number) ?? 0).getTime(),
           data: parsed,
         });
       } catch {}
@@ -93,7 +93,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     let found = false;
     for (let i = 0; i < lines.length; i++) {
       try {
-        const entry = JSON.parse(lines[i]);
+        const entry = JSON.parse(lines[i]) as Record<string, unknown>;
         if (entry.type === "session_info") {
           entry.name = newName;
           lines[i] = JSON.stringify(entry);
@@ -157,7 +157,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     let found = false;
     for (let i = lines.length - 1; i >= 0; i--) {
       try {
-        const entry = JSON.parse(lines[i]);
+        const entry = JSON.parse(lines[i]) as Record<string, unknown>;
         if (entry.type === "session_info") {
           entry.cwd = newCwd;
           lines[i] = JSON.stringify(entry);

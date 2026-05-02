@@ -99,7 +99,7 @@ export function messageToChatMessage(
     const block = parseToolResultBlock(toolMsg, toolCallNameMap ?? {});
     if (!block) return null;
     return {
-      id: id || `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      id: id ?? `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       role: "toolResult",
       content: [block],
       timestamp: extractTimestamp(message),
@@ -112,7 +112,7 @@ export function messageToChatMessage(
     if (content.length === 0) return null;
 
     return {
-      id: id || `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      id: id ?? `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       role: "user",
       content,
       timestamp: extractTimestamp(message),
@@ -124,7 +124,7 @@ export function messageToChatMessage(
   if (content.length === 0) return null;
 
   const msg: ChatMessage = {
-    id: id || `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    id: id ?? `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     role: "assistant",
     content,
     timestamp: extractTimestamp(message),

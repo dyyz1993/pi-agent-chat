@@ -30,7 +30,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
       for (const line of lines) {
         try {
-          const entry = JSON.parse(line);
+          const entry = JSON.parse(line) as Record<string, unknown>;
 
           if (entry.type === "custom" && entry.customType === "todo") {
             const data = entry.data as { action: string; todos: TodoItem[]; nextId: number } | undefined;
@@ -40,7 +40,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
           }
 
           if (entry.type === "message") {
-            const msg = entry.message;
+            const msg = entry.message as Record<string, unknown> | undefined;
             if (msg?.role === "toolResult" && msg?.toolName === "todo") {
               const details = msg.details as { action: string; todos: TodoItem[]; nextId: number } | undefined;
               if (details?.todos) {

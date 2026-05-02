@@ -38,13 +38,13 @@ function normalizeToolBlocks(msgs: ChatMessage[]): void {
     toRemove.add(ti);
 
     const match = toolCallById.get(resultBlock.toolCallId);
-    const rawInput = match?.input || resultBlock.args;
+    const rawInput = match?.input ?? resultBlock.args;
     const args = typeof rawInput === "string" ? rawInput : rawInput != null ? JSON.stringify(rawInput, null, 2) : "";
 
     const execBlock: Extract<ContentBlock, { type: "toolExecution" }> = {
       type: "toolExecution",
       toolCallId: resultBlock.toolCallId,
-      toolName: resultBlock.toolName || match?.name || "unknown",
+      toolName: resultBlock.toolName ?? match?.name ?? "unknown",
       args,
       status: resultBlock.isError ? "error" : "done",
       output: resultBlock.content || undefined,
@@ -64,7 +64,7 @@ function normalizeToolBlocks(msgs: ChatMessage[]): void {
 
     if (targetMi >= 0) {
       if (!execByMsg.has(targetMi)) execByMsg.set(targetMi, new Map());
-      execByMsg.get(targetMi)!.set(targetBi, execBlock);
+      execByMsg.get(targetMi)?.set(targetBi, execBlock);
     }
   }
 
@@ -74,7 +74,7 @@ function normalizeToolBlocks(msgs: ChatMessage[]): void {
     for (let bi = 0; bi < msg.content.length; bi++) {
       const b = msg.content[bi];
       if (b.type === "toolCall") {
-        const exec = biToBlock.get(bi) || biToBlock.get(-1);
+        const exec = biToBlock.get(bi) ?? biToBlock.get(-1);
         if (exec) {
           newContent.push(exec);
         } else {
@@ -391,8 +391,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
           if (entry.customType === "memory_prefetch_result" && entry.data) {
             const payload = entry.data as { summary?: string; snippet?: string };
             memoryStore.addInjected(sid, {
-              summary: payload.summary || "",
-              snippet: payload.snippet || "",
+              summary: payload.summary ?? "",
+              snippet: payload.snippet ?? "",
             });
           }
 
