@@ -102,6 +102,11 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     return { ok };
   });
 
+  r("agent.setCwd", async (params) => {
+    const ok = await manager!.setCwd(params.sessionId, params.cwd);
+    return { ok };
+  });
+
   r("agent.getAvailableModels", async (params) => {
     return manager!.getAvailableModels(params.sessionId) as Promise<R<"agent.getAvailableModels">>;
   });

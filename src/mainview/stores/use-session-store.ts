@@ -253,11 +253,18 @@ export const useSessionStore = create<SessionState>()(
                   projectStartError: { ...s.projectStartError, [projectId]: "" },
                 };
               });
+              console.log("[setActiveSession] agent.start result:", result.status, "id:", id);
               set((s) => ({ sessionReady: { ...s.sessionReady, [id]: true } }));
               get().fetchInitialState(id);
-              useChatStore.getState().loadSessionMessages(id, { sessionPath: session.sessionPath }).catch(() => {});
+              useChatStore.getState().loadSessionMessages(id, { sessionPath: session.sessionPath }).then(() => {
+                console.log("[setActiveSession] loadSessionMessages done, msgs count:", useChatStore.getState().messagesBySession[id]?.length);
+              }).catch((e) => {
+                console.error("[setActiveSession] loadSessionMessages FAILED:", e);
+              });
               if (result.status === "already_running") {
-                apiClient.call("agent.replayHoldEvents", { sessionId: id }).catch(() => {});
+                apiClient.call("agent.replayHoldEvents", { sessionId: id }).then((r) => {
+                  console.log("[setActiveSession] replayHoldEvents replayed:", r.replayed);
+                }).catch(() => {});
               }
             } else {
               const projectId = get().activeProjectId;
@@ -379,6 +386,7 @@ export const useSessionStore = create<SessionState>()(
         if (sessionPath) {
           apiClient.call("session.updateCwd", { sessionPath, newCwd: projectPath }).catch(() => {});
         }
+        apiClient.call("agent.setCwd", { sessionId, cwd: projectPath }).catch(() => {});
       },
 
       renameSession: (sessionId, newName) => {
@@ -677,6 +685,7 @@ export const useSessionStore = create<SessionState>()(
 );
 
 apiClient.onReconnect(() => {
+  console.warn("[onReconnect] TRIGGERED!");
   const state = useSessionStore.getState();
   const { activeSessionId, projectTabs, activeProjectId } = state;
 

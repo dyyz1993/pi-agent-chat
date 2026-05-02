@@ -201,6 +201,13 @@ export class AgentProcessManager {
     return true;
   }
 
+  async setCwd(sessionId: string, cwd: string): Promise<boolean> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return false;
+    await managed.client.setCwd(cwd).catch(() => {});
+    return true;
+  }
+
   respondUI(sessionId: string, requestId: string, response: Record<string, unknown>): boolean {
     const managed = this.clients.get(sessionId);
     if (!managed) return false;

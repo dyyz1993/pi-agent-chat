@@ -79,6 +79,10 @@ export interface AgentMethods {
     params: { sessionId: string };
     result: { ok: boolean };
   };
+  "agent.setCwd": {
+    params: { sessionId: string; cwd: string };
+    result: { ok: boolean };
+  };
   "agent.getAvailableModels": {
     params: { sessionId: string };
     result: Array<{ provider: string; id: string; contextWindow: number; reasoning: boolean }>;
