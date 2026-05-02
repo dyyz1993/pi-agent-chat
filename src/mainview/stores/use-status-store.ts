@@ -23,7 +23,8 @@ export interface SkillInfo {
 }
 
 export function deriveSkillScope(filePath: string): SkillScope {
-  const home = process.env.HOME ?? "";
+  const home = typeof process !== "undefined" && process.env?.HOME ? process.env.HOME : "";
+  if (!home) return "project";
   const globalPatterns = [
     `${home}/.agents/skills`,
     `${home}/.claude/skills`,

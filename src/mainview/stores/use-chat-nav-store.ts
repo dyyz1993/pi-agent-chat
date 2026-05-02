@@ -26,7 +26,7 @@ interface ChatNavState {
   pendingActionBySession: Record<string, BatchAction | null>;
   setPendingAction: (action: BatchAction | null) => void;
 
-  collapsedTurnsBySession: Record<string, Set<string>>;
+  collapsedTurnsBySession: Record<string, Set<string> | "all">;
   toggleTurnCollapse: (turnId: string) => void;
   isTurnCollapsed: (turnId: string) => boolean;
   collapseAll: () => void;
@@ -177,14 +177,14 @@ export const useChatNavStore = create<ChatNavState>((set, get) => ({
     const sessionId = useSessionStore.getState().activeSessionId;
     if (!sessionId) return false;
     const collapsed = get().collapsedTurnsBySession[sessionId];
-    if (collapsed === ("all" as unknown as Set<string>)) return true;
+    if (collapsed === "all") return true;
     return (collapsed ?? EMPTY_SET).has(turnId);
   },
   collapseAll: () => {
     const sessionId = useSessionStore.getState().activeSessionId;
     if (!sessionId) return;
     set((s) => ({
-      collapsedTurnsBySession: { ...s.collapsedTurnsBySession, [sessionId]: "all" as unknown as Set<string> },
+      collapsedTurnsBySession: { ...s.collapsedTurnsBySession, [sessionId]: "all" as const },
     }));
   },
   expandAll: () => {

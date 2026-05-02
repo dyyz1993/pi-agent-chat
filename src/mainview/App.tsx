@@ -7,17 +7,17 @@ import { MainLayout } from "./layouts/MainLayout";
 import { ProjectPickerDialog } from "./components/project-picker/ProjectPickerDialog";
 import { DiagnosticPanel } from "./components/debug/DiagnosticPanel";
 import { useDiagnosticStore } from "./stores/use-diagnostic-store";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 function waitForSessionReady(sessionId: string): Promise<void> {
-  return new Promise((resolve) => {
-    const check = () => {
-      if (useSessionStore.getState().sessionReady[sessionId]) {
+  if (useSessionStore.getState().sessionReady[sessionId]) return Promise.resolve();
+  return new Promise<void>((resolve) => {
+    const unsub = useSessionStore.subscribe((state) => {
+      if (state.sessionReady[sessionId]) {
+        unsub();
         resolve();
-      } else {
-        setTimeout(check, 50);
       }
-    };
-    setTimeout(check, 50);
+    });
   });
 }
 
@@ -154,27 +154,31 @@ function App() {
 
   if (!ready || restoring || projectLoading) {
     return (
-      <div className="h-screen flex items-center justify-center" style={{ backgroundColor: '#030712' }}>
-        <div className="text-center">
-          <div className="inline-block w-8 h-8 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin mb-4" />
-          <div className="text-gray-400 text-sm">
-            {!ready ? "Connecting to RPC server..." : projectLoading ? `加载项目中...` : "恢复会话中..."}
+      <ErrorBoundary>
+        <div className="h-screen flex items-center justify-center" style={{ backgroundColor: '#030712' }}>
+          <div className="text-center">
+            <div className="inline-block w-8 h-8 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin mb-4" />
+            <div className="text-gray-400 text-sm">
+              {!ready ? "Connecting to RPC server..." : projectLoading ? `加载项目中...` : "恢复会话中..."}
+            </div>
           </div>
         </div>
-      </div>
+      </ErrorBoundary>
     );
   }
 
   return (
-    <>
-      <MainLayout onAddProject={() => setPickerOpen(true)} />
-      <ProjectPickerDialog
-        open={pickerOpen}
-        onClose={() => setPickerOpen(false)}
-        onSelect={handleSelectProject}
-      />
-      <DiagnosticPanel />
-    </>
+    <ErrorBoundary>
+      <>
+        <MainLayout onAddProject={() => setPickerOpen(true)} />
+        <ProjectPickerDialog
+          open={pickerOpen}
+          onClose={() => setPickerOpen(false)}
+          onSelect={handleSelectProject}
+        />
+        <DiagnosticPanel />
+      </>
+    </ErrorBoundary>
   );
 }
 
