@@ -10,6 +10,9 @@ import { notificationGateway } from "../lib/notification-gateway";
 import { batchMessageUpdate, flushNow } from "./message-batcher";
 import { messageToChatMessage, extractTokenUsage } from "../lib/message-mapper";
 import { ALL_MEMORY_TYPE_KEYS } from "../components/chat/memory-config";
+import { createLogger } from "../../shared/lib/logger";
+
+const log = createLogger("event-handler");
 
 export const toolCallNameMap: Record<string, string> = {};
 
@@ -52,6 +55,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
   }
 
   if (event.type === "compaction_end") {
+    log.info("compaction_end → force reload", { sessionId });
     const result = event.result as { tokensAfter?: number; tokensBefore?: number } | undefined;
     const tokensAfter = result?.tokensAfter;
     storeGet().updateSessionContext(sessionId, { tokens: tokensAfter ?? null });
@@ -138,6 +142,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     if (role === "user") {
       const msg = messageToChatMessage(raw as Message);
       if (msg) {
+        log.info("message_start user → adding to store", { sessionId });
         const chat = useChatStore.getState();
         const existing = chat.messagesBySession[sessionId] || [];
         const localIdx = existing.findIndex((m) => m.role === "user" && m._local);

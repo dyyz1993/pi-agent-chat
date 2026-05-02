@@ -8,6 +8,9 @@ import { useMemoryStore } from "./use-memory-store";
 import { ALL_MEMORY_TYPE_KEYS } from "../components/chat/memory-config";
 import { messageToChatMessage } from "../lib/message-mapper";
 import type { CustomEntryForUI } from "../../shared/modules/agent";
+import { createLogger } from "../../shared/lib/logger";
+
+const log = createLogger("chat-store");
 
 function normalizeToolBlocks(msgs: ChatMessage[]): void {
   const toolCallById = new Map<string, { msgIndex: number; blockIndex: number; name: string; input: string }>();
@@ -295,11 +298,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const sid = sessionId;
     if (!sid) return;
 
-    if (get().loadingSessions.has(sid)) return;
+    if (get().loadingSessions.has(sid)) {
+      log.warn("GUARD-1: already loading, skip", { sessionId: sid });
+      return;
+    }
     if (!options?.force) {
       const preflight = get().messagesBySession[sid] || [];
       const hasRealMessages = preflight.some((m) => m.role === "user" || (m.role === "assistant" && m.tokenUsage));
-      if (hasRealMessages) return;
+      if (hasRealMessages) {
+        log.warn("GUARD-2: existing real messages, skip", { sessionId: sid, count: preflight.length });
+        return;
+      }
     }
     if (options?.force) {
       set((s) => {
@@ -313,18 +322,26 @@ export const useChatStore = create<ChatState>((set, get) => ({
     try {
       const { apiClient } = await import("../lib/api-client");
       const result = await apiClient.call("agent.getMessages", { sessionId: sid, sessionPath: options?.sessionPath });
+      log.info("RPC returned", { sessionId: sid, force: !!options?.force });
 
       if (!options?.force) {
         const current = get().messagesBySession[sid] || [];
         const hasRealNow = current.some((m) => m.role === "user" || (m.role === "assistant" && m.tokenUsage));
-        if (hasRealNow) return;
+        if (hasRealNow) {
+          log.warn("GUARD-3: messages added during RPC, skip", { sessionId: sid, count: current.length, roles: current.map((m) => m.role) });
+          return;
+        }
       }
 
       const toolCallNameMap: Record<string, string> = {};
       const rawMessages: Array<{ raw: Record<string, unknown>; id?: string }> = [];
 
       const messages = (result as unknown as { messages: Array<Record<string, unknown>> }).messages;
-      if (!Array.isArray(messages)) return;
+      if (!Array.isArray(messages)) {
+        log.warn("GUARD-4: messages is not array", { sessionId: sid, type: typeof messages });
+        return;
+      }
+      log.info("Raw messages count", { sessionId: sid, count: messages.length });
 
       for (const msg of messages) {
         rawMessages.push({ raw: msg, id: msg.id as string | undefined });
@@ -353,6 +370,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const msg = messageToChatMessage(raw as unknown as Message, id, toolCallNameMap);
         if (msg) msgs.push(msg);
       }
+      log.info("After messageToChatMessage", { sessionId: sid, mapped: msgs.length, raw: rawMessages.length });
 
       normalizeToolBlocks(msgs);
 
@@ -392,6 +410,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         });
       }
 
+      log.info("SET messages", { sessionId: sid, count: msgs.length });
       set((s) => ({
         messagesBySession: { ...s.messagesBySession, [sid]: msgs },
         historyLoadVersion: s.historyLoadVersion + 1,
@@ -399,6 +418,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       useSessionStore.getState().restoreContextFromHistory(sid);
     } catch (err) {
+      log.error("Failed to load session", { error: err instanceof Error ? err.message : String(err) });
       useAppStore.getState().addLog(`Failed to load session: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       set((s) => {

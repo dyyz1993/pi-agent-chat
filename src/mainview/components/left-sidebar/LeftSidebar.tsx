@@ -4,6 +4,7 @@ import { useSessionStore } from "../../stores/use-session-store";
 import { useGitStore } from "../../stores/use-git-store";
 import { SessionSidebar } from "../session-sidebar/SessionSidebar";
 import { SidebarBottomControls } from "./SidebarBottomControls";
+import { useState } from "react";
 
 interface LeftSidebarProps {
   width: number;
@@ -16,6 +17,10 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
 
   const isPinned = sessionPanel === "pinned";
   const hideSession = useLayoutStore((s) => s.hideSession);
+
+  const [showSuccessToast, setShowSuccessToast] = useState(false);
+  const [showErrorToast, setShowErrorToast] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
 
   return (
     <div
@@ -38,8 +43,12 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
         </div>
         <div className="flex items-center gap-0.5">
           <button
-            onClick={(e) => {
+            data-testid="new-session-button"
+            onClick={async (e) => {
               e.stopPropagation();
+              if (isCreating) return;
+
+              setIsCreating(true);
               const state = useSessionStore.getState();
               const worktrees = useGitStore.getState().worktrees;
               const activeSession = state.activeSessionId
@@ -50,12 +59,29 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
               const workspace = activeSession
                 ? worktrees.find((wt) => activeSession.projectPath.startsWith(wt.path))
                 : null;
-              state.createNewSession(workspace?.path);
+
+              try {
+                await state.createNewSession(workspace?.path);
+                setShowSuccessToast(true);
+                setTimeout(() => setShowSuccessToast(false), 2000);
+              } catch (error) {
+                const errMsg = error instanceof Error ? error.message : String(error);
+                setShowErrorToast(errMsg);
+                setTimeout(() => setShowErrorToast(""), 3000);
+              } finally {
+                setIsCreating(false);
+              }
             }}
-            className="p-1 rounded hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors"
+            disabled={isCreating}
+            className="p-1 rounded hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed relative"
             title="新建会话"
           >
             <Plus className="w-3.5 h-3.5" />
+            {isCreating && (
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80 rounded">
+                <div className="w-2.5 h-2.5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); toggleSession(); }}
@@ -81,6 +107,26 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
       </div>
 
       <SidebarBottomControls />
+
+      {/* Success Toast */}
+      {showSuccessToast && (
+        <div className="fixed bottom-16 left-4 z-50 bg-green-600/90 text-white px-4 py-2 rounded-md shadow-lg animate-slide-in-left">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-white" />
+            <span className="text-sm">会话创建成功</span>
+          </div>
+        </div>
+      )}
+
+      {/* Error Toast */}
+      {showErrorToast && (
+        <div className="fixed bottom-16 left-4 z-50 bg-red-600/90 text-white px-4 py-2 rounded-md shadow-lg animate-slide-in-left max-w-md">
+          <div className="flex items-start gap-2">
+            <div className="w-2 h-2 rounded-full bg-white mt-0.5 shrink-0" />
+            <span className="text-sm">创建失败: {showErrorToast}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

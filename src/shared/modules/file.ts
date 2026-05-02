@@ -46,4 +46,12 @@ export interface FileMethods {
     params: { path: string };
     result: { content: string; size: number };
   };
+  "file.writeFile": {
+    params: { path: string; content: string };
+    result: { ok: boolean };
+  };
+  "file.editFile": {
+    params: { path: string; edits: Array<{ oldText: string; newText: string }> };
+    result: { ok: boolean };
+  };
 }

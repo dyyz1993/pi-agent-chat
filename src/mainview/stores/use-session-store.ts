@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { SessionMeta, ProjectTab, ContextUsage, SessionStatus } from "../types";
 import { apiClient } from "../lib/api-client";
+import { createLogger } from "../../shared/lib/logger";
 import { useChatStore } from "./use-chat-store";
 import { useAppStore } from "./use-app-store";
 import { useExplorerStore } from "./use-explorer-store";
@@ -12,6 +13,8 @@ import { setupSubscriptions, cleanupSession, cleanupSessionData, clearSubscripti
 import type { TodoItem } from "./session-subscriptions";
 
 export type { TodoItem, TodoPriority } from "./session-subscriptions";
+
+const log = createLogger("session");
 
 export interface ModelInfo {
   provider: string;
@@ -253,17 +256,17 @@ export const useSessionStore = create<SessionState>()(
                   projectStartError: { ...s.projectStartError, [projectId]: "" },
                 };
               });
-              console.log("[setActiveSession] agent.start result:", result.status, "id:", id);
+              log.info("agent.start result", { status: result.status, sessionId: id });
               set((s) => ({ sessionReady: { ...s.sessionReady, [id]: true } }));
               get().fetchInitialState(id);
               useChatStore.getState().loadSessionMessages(id, { sessionPath: session.sessionPath }).then(() => {
-                console.log("[setActiveSession] loadSessionMessages done, msgs count:", useChatStore.getState().messagesBySession[id]?.length);
+                log.info("loadSessionMessages done", { sessionId: id, count: useChatStore.getState().messagesBySession[id]?.length });
               }).catch((e) => {
-                console.error("[setActiveSession] loadSessionMessages FAILED:", e);
+                log.error("loadSessionMessages FAILED", { error: e instanceof Error ? e.message : String(e) });
               });
               if (result.status === "already_running") {
                 apiClient.call("agent.replayHoldEvents", { sessionId: id }).then((r) => {
-                  console.log("[setActiveSession] replayHoldEvents replayed:", r.replayed);
+                  log.info("replayHoldEvents replayed", { replayed: (r as Record<string, unknown>).replayed });
                 }).catch(() => {});
               }
             } else {
@@ -334,9 +337,13 @@ export const useSessionStore = create<SessionState>()(
       createNewSession: async (projectPath?: string) => {
         const { projectTabs, activeProjectId } = get();
         const tab = projectTabs.find((t) => t.id === activeProjectId);
-        if (!tab) return;
+        if (!tab) {
+          log.error("createNewSession: no active tab");
+          return;
+        }
 
         const targetPath = projectPath ?? tab.path;
+        log.info("Creating session", { targetPath });
 
         try {
           const result = await apiClient.call("session.create", { projectPath: targetPath });
@@ -363,8 +370,10 @@ export const useSessionStore = create<SessionState>()(
           }));
 
           get().setActiveSession(result.sessionId);
-        } catch {
-          useAppStore.getState().addLog("Failed to create session");
+        } catch (error) {
+          const errMsg = error instanceof Error ? error.message : String(error);
+          log.error("Failed to create session", { error: errMsg });
+          useAppStore.getState().addLog(`Failed to create session: ${errMsg}`);
         }
       },
 

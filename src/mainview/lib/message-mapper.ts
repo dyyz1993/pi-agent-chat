@@ -1,12 +1,13 @@
 import type { ChatMessage, ContentBlock, TokenUsage } from "../types";
 import type { Message, AssistantMessage, UserMessage, ToolResultMessage, TextContent, ThinkingContent, ToolCall, Usage } from "@dyyz1993/pi-ai";
 
-function extractTokenUsage(usage: Usage): TokenUsage | undefined {
+function extractTokenUsage(usage: Usage | undefined): TokenUsage | undefined {
+  if (!usage) return undefined;
   const input = usage.input;
   const output = usage.output;
   const cacheRead = usage.cacheRead;
   const cacheWrite = usage.cacheWrite;
-  const cost = usage.cost.total;
+  const cost = usage.cost?.total;
 
   if (!input && !output && !cacheRead && !cacheWrite) return undefined;
 

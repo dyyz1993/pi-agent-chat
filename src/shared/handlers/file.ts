@@ -220,4 +220,29 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const content = await readFile(filePath);
     return { content: content.toString(), size: content.length };
   });
+
+  r("file.writeFile", async (params) => {
+    const filePath = resolve(params.path);
+    await writeFile(filePath, params.content, "utf-8");
+    log.info("File written", { path: filePath });
+    return { ok: true };
+  });
+
+  r("file.editFile", async (params) => {
+    const filePath = resolve(params.path);
+    const content = await readFile(filePath, "utf-8");
+
+    let newContent = content;
+    for (const edit of params.edits) {
+      if (!newContent.includes(edit.oldText)) {
+        log.error("Old text not found in file", { path: filePath, oldText: edit.oldText });
+        continue;
+      }
+      newContent = newContent.replace(edit.oldText, edit.newText);
+    }
+
+    await writeFile(filePath, newContent, "utf-8");
+    log.info("File edited", { path: filePath, editsCount: params.edits.length });
+    return { ok: true };
+  });
 }
