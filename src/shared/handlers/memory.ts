@@ -6,7 +6,6 @@ import { existsSync } from "fs"
 import { join, resolve } from "path"
 import { homedir } from "os"
 import { getProcessManager } from "./agent"
-import { ClientChannel } from "../lib/client-channel"
 
 type P<K extends keyof RPCMethods> = RPCMethods[K] extends { params: infer P } ? P : never
 type R<K extends keyof RPCMethods> = RPCMethods[K] extends { result: infer R } ? R : never
@@ -91,14 +90,9 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 		const manager = getProcessManager()
 		if (manager) {
 			const sessionId = params.sessionId
-			if (sessionId) {
-			const sendFn = manager.sendChannelMessage;
-			if (!sendFn) return fallbackListFiles(params.projectPath);
-			try {
-				const channel = new ClientChannel((data) =>
-					sendFn(sessionId, "memory", data),
-				)
-					const result = await channel.call("memory.list", { projectPath: params.projectPath }) as { files: MemoryFile[]; entrypointContent: string | null; memoryDir?: string } | null
+			if (sessionId && manager.hasSession(sessionId)) {
+				try {
+					const result = await manager.callChannel(sessionId, "memory", "memory.list", { projectPath: params.projectPath }) as { files: MemoryFile[]; entrypointContent: string | null; memoryDir?: string } | null
 					if (result) return { ...result, memoryDir: result.memoryDir ?? "" }
 				} catch {}
 			}
@@ -120,18 +114,12 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
 	r("memory.remember", async (params) => {
 		const manager = getProcessManager()
-		if (manager) {
-			const sendFn = manager.sendChannelMessage;
-			if (sendFn) {
-				const channel = new ClientChannel((data) =>
-					sendFn(params.sessionId, "memory", data),
-				)
-				await channel.call("memory.userRemember", {
-					sourceSessionId: params.sessionId,
-					sourceMessageIds: params.messageIds,
-					content: params.content,
-				})
-			}
+		if (manager && manager.hasSession(params.sessionId)) {
+			await manager.callChannel(params.sessionId, "memory", "memory.userRemember", {
+				sourceSessionId: params.sessionId,
+				sourceMessageIds: params.messageIds,
+				content: params.content,
+			})
 		}
 
 		return { ok: true }

@@ -17,7 +17,7 @@ export const config = {
     preview: process.env.PI_EXT_PREVIEW ?? "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/extensions/preview/index.ts",
     autoMemory: process.env.PI_EXT_AUTO_MEMORY ?? "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/extensions/auto-memory/index.ts",
     rules: process.env.PI_EXT_RULES ?? "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/extensions/rules-engine/index.ts",
-    autoSessionTitle: process.env.PI_EXT_AUTO_SESSION_TITLE ?? "",
-    fileSnapshot: process.env.PI_EXT_FILE_SNAPSHOT ?? "",
+    autoSessionTitle: process.env.PI_EXT_AUTO_SESSION_TITLE ?? "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/extensions/auto-session-title/index.ts",
+    fileSnapshot: process.env.PI_EXT_FILE_SNAPSHOT ?? "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/extensions/file-snapshot/index.ts",
   },
 } as const;

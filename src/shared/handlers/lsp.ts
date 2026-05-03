@@ -3,7 +3,6 @@ import type { RPCMethods, HandlerOptions } from "../rpc-schema";
 import { readFile } from "fs/promises";
 import { existsSync } from "fs";
 import { getProcessManager } from "./agent";
-import { ClientChannel } from "../lib/client-channel";
 import type { LspDiagnosticsMode, LspServerStatus } from "../modules/lsp";
 
 type P<K extends keyof RPCMethods> = RPCMethods[K] extends { params: infer P } ? P : never;
@@ -18,6 +17,59 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   };
 
   r("lsp.status", async (params) => {
+    const pm = getProcessManager();
+
+    if (params.sessionId && pm) {
+      const cached = pm.getCachedLspState(params.sessionId);
+      if (cached) {
+        const servers = (cached.servers as Array<Record<string, unknown>>).map((s) => {
+          const st = s.status as { state?: string; reason?: string; transport?: string; activeCommand?: string[]; configuredCommand?: string[] } | undefined;
+          return {
+            name: s.name as string,
+            fileTypes: s.fileTypes as string[] | undefined,
+            state: (st?.state ?? s.state ?? "inactive") as LspServerStatus["state"],
+            reason: st?.reason ?? (s.reason as string | undefined) ?? "",
+            transport: st?.transport,
+            activeCommand: st?.activeCommand,
+            configuredCommand: st?.configuredCommand,
+          } satisfies LspServerStatus;
+        });
+        return {
+          state: cached.state as "inactive" | "starting" | "ready" | "error",
+          servers,
+          mode: (cached.mode ?? "agent_end") as LspDiagnosticsMode,
+        };
+      }
+
+      if (pm.hasSession(params.sessionId)) {
+        try {
+          const result = await pm.callChannel(params.sessionId, "lsp", "getStatus", {}) as {
+            state?: string;
+            servers?: Array<{
+              name?: string;
+              fileTypes?: string[];
+              state?: string;
+              reason?: string;
+              serverId?: string;
+              root?: string;
+            }>;
+            brokenServers?: string[];
+            mode?: string;
+          };
+          const servers: LspServerStatus[] = (result?.servers ?? []).map((s) => ({
+            name: s.name ?? s.serverId ?? "unknown",
+            fileTypes: s.fileTypes,
+            state: (s.state ?? "inactive") as LspServerStatus["state"],
+            reason: s.reason ?? "",
+          }));
+          const state = (result?.state ?? "inactive") as "inactive" | "starting" | "ready" | "error";
+          return { state, servers, mode: (result?.mode ?? "agent_end") as LspDiagnosticsMode };
+        } catch {
+          // agent process alive but LSP channel not ready yet
+        }
+      }
+    }
+
     const { sessionPath } = params;
 
     if (!existsSync(sessionPath)) {
@@ -63,10 +115,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const { sessionId, mode } = params as { sessionId: string; mode: LspDiagnosticsMode };
     const pm = getProcessManager();
     if (!pm) throw new Error("No process manager available");
-    const sendFn = pm.sendChannelMessage;
-    if (!sendFn) throw new Error("No channel message sender available");
-    const channel = new ClientChannel((data) => sendFn(sessionId, "lsp", data));
-    const result = await channel.call("lsp.setMode", { mode });
+    const result = await pm.callChannel(sessionId, "lsp", "lsp.setMode", { mode });
     return result as { ok: boolean; mode: typeof mode };
   });
 }

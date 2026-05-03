@@ -15,7 +15,7 @@ export interface RuleDetail {
 	source: string;
 	severity: RuleSeverity;
 	isUnconditional: boolean;
-	paths: string[];
+	globs: string[];
 	description?: string;
 }
 

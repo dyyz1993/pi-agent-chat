@@ -139,7 +139,7 @@ function RuleCard({
 					{rule.isUnconditional ? (
 						<span className="text-[9px] text-green-500/70">始终活跃</span>
 					) : (
-						<span className="text-[9px] text-gray-600 truncate">{rule.paths.join(", ")}</span>
+						<span className="text-[9px] text-gray-600 truncate">{rule.globs.join(", ")}</span>
 					)}
 				</div>
 			</button>
@@ -154,9 +154,9 @@ function RuleCard({
 							来源: {rule.source}
 						</div>
 					)}
-					{!rule.isUnconditional && rule.paths.length > 0 && (
+					{!rule.isUnconditional && rule.globs.length > 0 && (
 						<div className="text-[10px] text-gray-600">
-							匹配模式: <code className="text-[9px] text-indigo-400/70">{rule.paths.join(", ")}</code>
+							匹配模式: <code className="text-[9px] text-indigo-400/70">{rule.globs.join(", ")}</code>
 						</div>
 					)}
 					{loading && (

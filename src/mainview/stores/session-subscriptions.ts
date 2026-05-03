@@ -54,11 +54,6 @@ export function setupSubscriptions(
       set((s) => ({
         agentSubscriptions: { ...s.agentSubscriptions, [id]: subId },
       }));
-      apiClient.call("rules.requestSnapshot", { sessionId: id }).then((result) => {
-        const current = useRulesStore.getState().bySession[id];
-        if (result.totalRules === 0 && current && current.totalRules > 0) return;
-        useRulesStore.getState().handleRulesEvent(id, { type: "snapshot", rules: result.rules, totalRules: result.totalRules, unconditionalCount: result.unconditionalCount, conditionalCount: result.conditionalCount, injectedRuleNames: [], matchHistory: [], lifecycleLog: [], loadedAt: Date.now(), cacheTTL: 0 });
-      }).catch((err) => { useAppStore.getState().addLog(`[sub] ${String(err)}`); });
     }).catch((err) => { useAppStore.getState().addLog(`[sub] ${String(err)}`); });
   }
 
@@ -178,6 +173,7 @@ export function setupSubscriptions(
       const sessionState = store.bySession[id];
       if (!sessionState || sessionState.totalRules === 0) {
         apiClient.call("rules.requestSnapshot", { sessionId: id }).then((result) => {
+          if (result.totalRules === 0) return;
           useRulesStore.getState().handleRulesEvent(id, { type: "snapshot", rules: result.rules, totalRules: result.totalRules, unconditionalCount: result.unconditionalCount, conditionalCount: result.conditionalCount, injectedRuleNames: [], matchHistory: [], lifecycleLog: [], loadedAt: Date.now(), cacheTTL: 0 });
         }).catch((err) => { useAppStore.getState().addLog(`[sub] ${String(err)}`); });
       }

@@ -1,7 +1,9 @@
 import type { RPCServer } from "@dyyz1993/rpc-core";
-import { ClientChannel } from "../lib/client-channel";
 import type { HandlerOptions } from "../rpc-schema";
 import { getProcessManager } from "./agent";
+import { createLogger } from "../lib/logger";
+
+const log = createLogger("agent");
 
 interface RulesSnapshot {
 	type: "snapshot";
@@ -14,16 +16,6 @@ interface RulesSnapshot {
 	lifecycleLog: unknown[];
 	loadedAt: number;
 	cacheTTL: number;
-}
-
-interface RulesChannelContract {
-	methods: {
-		"rules.getSnapshot": {
-			params: { cwd?: string };
-			return: RulesSnapshot;
-		};
-	};
-	events: Record<string, unknown>;
 }
 
 function emptySnapshot(): RulesSnapshot {
@@ -46,40 +38,46 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
 	server.register("rules.requestSnapshot", async (params: unknown) => {
 		const pm = getProcessManager();
-		if (!pm?.sendChannelMessage) return emptySnapshot();
+		if (!pm) {
+			log.warn("requestSnapshot: no processManager");
+			return emptySnapshot();
+		}
 
 		const sid =
 			params && typeof params === "object" && "sessionId" in params
 				? String((params as Record<string, unknown>).sessionId)
 				: "";
 
-		if (!sid) return emptySnapshot();
+		if (!sid) {
+			log.warn("requestSnapshot: no sessionId");
+			return emptySnapshot();
+		}
+
+		if (!pm.hasSession(sid)) {
+			log.warn("requestSnapshot: no active session", { sid });
+			return emptySnapshot();
+		}
 
 		let cwd: string | undefined;
 		try {
 			cwd = pm.getProjectPath(sid);
 		} catch {}
 
-		const hasActiveSession = pm.hasSession(sid);
-
-		if (!hasActiveSession) return emptySnapshot();
-
 		try {
-			const sendFn = pm.sendChannelMessage;
-			if (!sendFn) return emptySnapshot();
-			const channel = new ClientChannel<RulesChannelContract>((data) =>
-				sendFn(sid, "rules-engine", data),
-			);
-
 			const result = await Promise.race([
-			channel.call("rules.getSnapshot", { cwd }),
+				pm.callChannel(sid, "rules-engine", "getSnapshot", { cwd: cwd ?? "" }),
 				new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
 			]);
 
-			if (result && typeof result === "object" && "type" in result && result.type === "snapshot") {
-				return result;
+			if (result && typeof result === "object" && "type" in result && (result as Record<string, unknown>).type === "snapshot") {
+				const snap = result as RulesSnapshot;
+				log.info("requestSnapshot: got snapshot", { sid, totalRules: snap.totalRules });
+				return snap;
 			}
-		} catch {}
+			log.warn("requestSnapshot: channel call returned no valid result", { sid });
+		} catch (err) {
+			log.warn("requestSnapshot: channel call failed", { sid, err: String(err) });
+		}
 
 		return emptySnapshot();
 	});
