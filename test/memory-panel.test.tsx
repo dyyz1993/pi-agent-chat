@@ -76,7 +76,7 @@ describe("MemoryPanel", () => {
 			injectedBySession: {},
 		})
 		render(<MemoryPanel />)
-		expect(screen.getByText("暂无记忆")).toBeInTheDocument()
+		expect(screen.getByText("暂无记忆文件")).toBeInTheDocument()
 	})
 
 	it("renders injected memories section", () => {
