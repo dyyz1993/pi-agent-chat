@@ -17,8 +17,7 @@ export default tseslint.config(
       'preview-test/**',
       '*.html',
       '.codenomad/**',
-      'test*/**',
-      'test-*.ts',
+
       'src/electrobun-shim.d.ts',
     ],
   },

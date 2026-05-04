@@ -1,6 +1,6 @@
 #!/bin/sh
 bun run lint
-ERRORS=$(npx tsc --noEmit 2>&1 | grep "error TS" | grep -v "node_modules" || true)
+ERRORS=$(bunx tsc --noEmit 2>&1 | grep "error TS" | grep -v "node_modules" || true)
 if [ -n "$ERRORS" ]; then
   echo "$ERRORS"
   exit 1

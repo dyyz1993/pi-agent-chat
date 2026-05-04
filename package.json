@@ -58,12 +58,8 @@
 		"typescript": "^5.7.2",
 		"typescript-eslint": "^8.0.0",
 		"vite": "^6.0.3",
-		"vite-plugin-pwa": "^1.2.0",
 		"vitest": "^4.1.5",
 		"workbox-window": "^7.4.0",
 		"ws": "^8.20.0"
-	},
-	"workspaces": [
-		"packages/*"
-	]
+	}
 }
