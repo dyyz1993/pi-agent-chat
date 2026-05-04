@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useCallback } from "react";
 import { ChevronRight, ChevronDown } from "lucide-react";
 import type { TreeNode, EditingNode } from "../../types";
 import { getFileIcon } from "../../utils/file-icon";
@@ -37,14 +37,33 @@ function TreeNodeItemInner({
     (editingNode.type === "newFile" || editingNode.type === "newDir");
   const isIgnored = node.isIgnored;
 
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        if (isDir) onToggle(node.path);
+        else onOpenFile(node);
+      } else if (e.key === "ArrowRight" && isDir && !node.expanded) {
+        e.preventDefault();
+        onToggle(node.path);
+      } else if (e.key === "ArrowLeft" && isDir && node.expanded) {
+        e.preventDefault();
+        onToggle(node.path);
+      }
+    },
+    [isDir, node, onToggle, onOpenFile],
+  );
+
   return (
-    <li>
+    <li role="treeitem" aria-expanded={isDir ? node.expanded : undefined}>
       <div
-        className={`flex items-center gap-1.5 px-2 py-0.5 text-xs rounded cursor-pointer transition-colors ${
+        tabIndex={0}
+        className={`flex items-center gap-1.5 px-2 py-0.5 text-xs rounded cursor-pointer transition-colors outline-none focus:ring-1 focus:ring-indigo-500/50 ${
           isSelected ? "bg-indigo-600/30 text-white" : "hover:bg-gray-700"
         }`}
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
         onClick={() => isDir ? onToggle(node.path) : onOpenFile(node)}
+        onKeyDown={handleKeyDown}
         onContextMenu={(e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -75,7 +94,7 @@ function TreeNodeItemInner({
         )}
       </div>
       {isDir && node.expanded && node.children && (
-        <ul>
+        <ul role="group">
           {node.children.map((child) => (
             <TreeNodeItem
               key={child.path}

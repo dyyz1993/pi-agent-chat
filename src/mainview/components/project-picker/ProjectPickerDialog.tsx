@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { apiClient } from "../../lib/api-client";
 import type { RecentProject, DirectoryEntry, FavoriteFolder } from "../../types";
+import { useFocusTrap } from "../../hooks/use-focus-trap";
 
 interface ProjectPickerDialogProps {
   open: boolean;
@@ -92,6 +93,10 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
 
   const homePathRef = useRef<string>("");
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mobileDialogRef = useRef<HTMLDivElement>(null);
+  const desktopDialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(mobileDialogRef, { onEscape: onClose });
+  useFocusTrap(desktopDialogRef, { onEscape: onClose });
 
   const loadRecentsAndFavorites = useCallback((forceRefresh = false) => {
     const cachedRecents = readCache<RecentProject[]>(CACHE_KEY_RECENTS);
@@ -536,7 +541,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
   return (
     <>
       {/* Mobile view */}
-      <div className="md:hidden fixed inset-0 z-[100] bg-gray-950 flex flex-col animate-slide-in-up" role="dialog" aria-modal="true" aria-label="选择项目">
+      <div ref={mobileDialogRef} className="md:hidden fixed inset-0 z-[100] bg-gray-950 flex flex-col animate-slide-in-up" role="dialog" aria-modal="true" aria-label="选择项目">
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 shrink-0">
           <h2 className="text-sm font-semibold text-white">选择项目</h2>
           <button onClick={onClose} className="p-1.5 rounded-md hover:bg-gray-800 text-gray-400" aria-label="关闭">
@@ -607,7 +612,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
       <div className="hidden md:flex fixed inset-0 z-[100] items-center justify-center">
         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
-        <div className="relative w-full max-w-4xl h-[70vh] mx-4 bg-gray-900 rounded-xl border border-gray-700/50 shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200" role="dialog" aria-modal="true" aria-label="选择项目">
+        <div ref={desktopDialogRef} className="relative w-full max-w-4xl h-[70vh] mx-4 bg-gray-900 rounded-xl border border-gray-700/50 shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200" role="dialog" aria-modal="true" aria-label="选择项目">
           <div className="flex items-center justify-between px-5 py-3 border-b border-gray-800 shrink-0">
             <h2 className="text-sm font-semibold text-white">选择项目</h2>
             <button onClick={onClose} className="p-1.5 rounded-md hover:bg-gray-800 text-gray-400 hover:text-white transition-colors" aria-label="关闭">

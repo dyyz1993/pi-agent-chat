@@ -353,6 +353,26 @@ export function QuickActionToolbar() {
     setSlashCategory("commands");
   }, [inputText, setInputText]);
 
+  const handleListKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setActiveIndex((prev) => (prev + 1) % items.length);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setActiveIndex((prev) => (prev - 1 + items.length) % items.length);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        closePopup();
+      } else if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        const item = items[activeIndex];
+        if (item) handleSelect(item);
+      }
+    },
+    [items, activeIndex, closePopup, handleSelect],
+  );
+
   if (!isMobileOrTablet) return null;
 
   const atTabs: { key: AtTab; label: string }[] = [
@@ -500,7 +520,7 @@ export function QuickActionToolbar() {
             </div>
           )}
 
-          <div className="max-h-[240px] min-h-[80px] overflow-y-auto">
+          <div className="max-h-[240px] min-h-[80px] overflow-y-auto" role="listbox">
             {items.length === 0 && !loading && (
               <div className="px-3 py-6 text-center text-xs text-gray-600">
                 {query ? "没有匹配结果" : "暂无数据"}
@@ -509,7 +529,11 @@ export function QuickActionToolbar() {
             {items.map((item, idx) => (
               <button
                 key={item.id}
+                role="option"
+                aria-selected={idx === activeIndex}
+                tabIndex={idx === activeIndex ? 0 : -1}
                 onClick={() => handleSelect(item)}
+                onKeyDown={handleListKeyDown}
                 className={`w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors ${
                   idx === activeIndex ? "bg-gray-800/80" : "hover:bg-gray-800/50"
                 }`}

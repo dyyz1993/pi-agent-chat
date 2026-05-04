@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   MessageCircleQuestion,
   X,
@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { useUIDialogStore } from "../../stores/use-ui-dialog-store";
 import { useSessionStore } from "../../stores/use-session-store";
+import { useFocusTrap } from "../../hooks/use-focus-trap";
 
 const METHOD_LABEL: Record<string, string> = {
   confirm: "确认",
@@ -169,14 +170,8 @@ export function UIPendingCenter() {
   const panelOpen = useUIDialogStore((s) => s.panelOpen);
   const setPanelOpen = useUIDialogStore((s) => s.setPanelOpen);
   const togglePanel = useUIDialogStore((s) => s.togglePanel);
-
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setPanelOpen(false);
-    }
-    if (panelOpen) document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [panelOpen, setPanelOpen]);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, { onEscape: () => setPanelOpen(false) });
 
   useEffect(() => {
     if (!panelOpen || pending.length > 0) return;
@@ -216,7 +211,7 @@ export function UIPendingCenter() {
           className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/50"
           onClick={(e) => e.target === e.currentTarget && setPanelOpen(false)}
         >
-          <div className="w-full max-w-lg bg-gray-800 border border-gray-600 rounded-lg shadow-2xl overflow-hidden" role="dialog" aria-modal="true" aria-label="待处理请求">
+          <div ref={dialogRef} className="w-full max-w-lg bg-gray-800 border border-gray-600 rounded-lg shadow-2xl overflow-hidden" role="dialog" aria-modal="true" aria-label="待处理请求">
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-700/60">
               <div className="flex items-center gap-2">
                 <span className="text-[13px] font-medium text-gray-200">待处理请求</span>
