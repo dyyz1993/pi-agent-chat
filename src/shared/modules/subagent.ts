@@ -17,6 +17,14 @@ export interface SubagentMethods {
     params: { sessionPath: string };
     result: { subsessions: SubagentSessionInfo[] };
   };
+  "subagent.rename": {
+    params: { parentSessionPath: string; subSessionId: string; newDescription: string };
+    result: { ok: boolean };
+  };
+  "subagent.delete": {
+    params: { parentSessionPath: string; subSessionId: string };
+    result: { ok: boolean };
+  };
 }
 
 export interface SubagentEvents {

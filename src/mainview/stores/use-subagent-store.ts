@@ -6,6 +6,9 @@ import { apiClient } from "../lib/api-client";
 import { messageToChatMessage } from "../lib/message-mapper";
 import { batchMessageUpdate } from "./message-batcher";
 import { useSessionStore } from "./use-session-store";
+import { createLogger } from "../../shared/lib/logger";
+
+const log = createLogger("subagent");
 
 const subToolCallNameMap: Record<string, string> = {};
 
@@ -24,6 +27,8 @@ interface SubagentState {
   upsertLiveSubagent: (parentSessionPath: string, subId: string, partial: Partial<SubagentSessionInfo>) => void;
   updateSubagentStatus: (subId: string, status: SessionStatus) => void;
   updateSubagentContext: (subId: string, update: Partial<ContextUsage>) => void;
+  renameSubagent: (parentSessionPath: string, subSessionId: string, newDescription: string) => void;
+  deleteSubagent: (parentSessionPath: string, subSessionId: string) => void;
 }
 
 export const useSubagentStore = create<SubagentState>()((set, get) => ({
@@ -130,6 +135,52 @@ export const useSubagentStore = create<SubagentState>()((set, get) => ({
         updated = [...existing, merged];
       }
       return { ...s, subsessionsByParent: { ...s.subsessionsByParent, [parentSessionPath]: updated } };
+    });
+  },
+
+  renameSubagent: (parentSessionPath: string, subSessionId: string, newDescription: string) => {
+    const trimmed = newDescription.trim();
+    if (!trimmed) return;
+
+    set((s) => {
+      const existing = s.subsessionsByParent[parentSessionPath];
+      if (!existing) return s;
+      const idx = existing.findIndex((e) => e.sessionId === subSessionId);
+      if (idx < 0) return s;
+      const updated = [...existing];
+      updated[idx] = { ...updated[idx], description: trimmed };
+      return { subsessionsByParent: { ...s.subsessionsByParent, [parentSessionPath]: updated } };
+    });
+
+    apiClient.call("subagent.rename", { parentSessionPath, subSessionId, newDescription: trimmed }).catch((err) => {
+      log.warn("subagent.rename failed", { err: err instanceof Error ? err.message : String(err) });
+    });
+  },
+
+  deleteSubagent: (parentSessionPath: string, subSessionId: string) => {
+    set((s) => {
+      const existing = s.subsessionsByParent[parentSessionPath];
+      if (!existing) return s;
+      const updated = existing.filter((e) => e.sessionId !== subSessionId);
+      if (updated.length === existing.length) return s;
+      const newMessages = { ...s.messagesBySubsession };
+      delete newMessages[subSessionId];
+      const newStatus = { ...s.subagentStatusMap };
+      delete newStatus[subSessionId];
+      const newContext = { ...s.subagentContextMap };
+      delete newContext[subSessionId];
+      const newActive = s.activeSubsessionId === subSessionId ? null : s.activeSubsessionId;
+      return {
+        subsessionsByParent: { ...s.subsessionsByParent, [parentSessionPath]: updated },
+        messagesBySubsession: newMessages,
+        subagentStatusMap: newStatus,
+        subagentContextMap: newContext,
+        activeSubsessionId: newActive,
+      };
+    });
+
+    apiClient.call("subagent.delete", { parentSessionPath, subSessionId }).catch((err) => {
+      log.warn("subagent.delete failed", { err: err instanceof Error ? err.message : String(err) });
     });
   },
 }));

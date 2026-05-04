@@ -438,8 +438,19 @@ function SubagentItem({
 }) {
   const activeSubId = useSubagentStore((s) => s.activeSubsessionId);
   const isActive = activeSubId === sub.sessionId;
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isEditing]);
 
   const handleClick = () => {
+    if (isEditing) return;
     useSubagentStore.getState().setActiveSubsession(parentSessionId, sub.sessionId);
     const layout = useLayoutStore.getState();
     if (layout.breakpoint === "mobile" && layout.sessionPanel === "visible") {
@@ -451,6 +462,43 @@ function SubagentItem({
     e.stopPropagation();
     copyToClipboard(sub.sessionId);
   }, [sub.sessionId]);
+
+  const handleStartRename = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditName(sub.description || "");
+    setIsEditing(true);
+  }, [sub.description]);
+
+  const handleConfirmRename = useCallback(() => {
+    const trimmed = editName.trim();
+    if (trimmed && trimmed !== sub.description) {
+      const { subsessionsByParent } = useSubagentStore.getState();
+      for (const [path, subs] of Object.entries(subsessionsByParent)) {
+        if (subs.some((s) => s.sessionId === sub.sessionId)) {
+          useSubagentStore.getState().renameSubagent(path, sub.sessionId, trimmed);
+          break;
+        }
+      }
+    }
+    setIsEditing(false);
+  }, [editName, sub.description, sub.sessionId]);
+
+  const handleCancelRename = useCallback(() => {
+    setIsEditing(false);
+  }, []);
+
+  const handleDelete = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (confirm(`确定删除子代理 "${sub.description || sub.instruction.slice(0, 30)}" 吗？`)) {
+      const { subsessionsByParent } = useSubagentStore.getState();
+      for (const [path, subs] of Object.entries(subsessionsByParent)) {
+        if (subs.some((s) => s.sessionId === sub.sessionId)) {
+          useSubagentStore.getState().deleteSubagent(path, sub.sessionId);
+          break;
+        }
+      }
+    }
+  }, [sub.sessionId, sub.description, sub.instruction]);
 
   const displayName = sub.description || sub.instruction.slice(0, 80);
 
@@ -464,7 +512,28 @@ function SubagentItem({
     >
       <div className="flex items-center justify-center gap-1.5">
         <Bot className="w-4 h-4 shrink-0 text-purple-500/70 group-hover:text-purple-400" />
-        <span className="truncate leading-tight flex-1 min-w-0">{displayName}</span>
+        {isEditing ? (
+          <div className="flex items-center gap-1 flex-1 min-w-0" onClick={(e) => e.stopPropagation()}>
+            <input
+              ref={inputRef}
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleConfirmRename();
+                if (e.key === "Escape") handleCancelRename();
+              }}
+              className="flex-1 bg-gray-800 border border-purple-500/50 rounded px-1.5 py-0.5 text-[11px] text-gray-200 outline-none"
+            />
+            <button onClick={handleConfirmRename} className="p-0.5 rounded hover:bg-gray-700 text-emerald-400">
+              <Check className="w-3 h-3" />
+            </button>
+            <button onClick={handleCancelRename} className="p-0.5 rounded hover:bg-gray-700 text-gray-500">
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        ) : (
+          <span className="truncate leading-tight flex-1 min-w-0">{displayName}</span>
+        )}
       </div>
       <div className="flex items-center justify-center gap-1.5 mt-1">
         <SubagentStatusBadge sub={sub} />
@@ -472,7 +541,12 @@ function SubagentItem({
           <button onClick={handleCopyId} className="p-1 rounded hover:bg-gray-700 text-gray-500 hover:text-gray-300" title="复制 ID">
             <Copy className="w-3 h-3" />
           </button>
-
+          <button onClick={handleStartRename} className="p-1 rounded hover:bg-gray-700 text-gray-500 hover:text-gray-300" title="重命名">
+            <Pencil className="w-3 h-3" />
+          </button>
+          <button onClick={handleDelete} className="p-1 rounded hover:bg-red-900/50 text-gray-500 hover:text-red-400" title="删除">
+            <Trash2 className="w-3 h-3" />
+          </button>
         </div>
       </div>
     </div>
