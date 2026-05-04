@@ -1,0 +1,51 @@
+import { memo, useCallback, useEffect } from "react";
+import { X } from "lucide-react";
+import { useMermaidStore } from "../../../stores/use-mermaid-store";
+import { MermaidBlock } from "./MermaidBlock";
+
+export const MermaidFullscreen = memo(function MermaidFullscreen() {
+  const code = useMermaidStore((s) => s.code);
+  const closeFullscreen = useMermaidStore((s) => s.closeFullscreen);
+
+  useEffect(() => {
+    if (!code) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeFullscreen();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [code, closeFullscreen]);
+
+  const handleBackdropClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (e.target === e.currentTarget) closeFullscreen();
+    },
+    [closeFullscreen],
+  );
+
+  if (!code) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex flex-col bg-gray-950/98 backdrop-blur-sm"
+      onClick={handleBackdropClick}
+    >
+      <div className="flex items-center gap-2 px-4 py-2 bg-gray-900/90 border-b border-gray-800 flex-shrink-0">
+        <span className="text-xs text-gray-400 font-medium">Mermaid 图表</span>
+        <div className="flex-1" />
+        <button
+          onClick={closeFullscreen}
+          className="p-1.5 rounded text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors"
+          title="关闭 (Esc)"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+      <div className="flex-1 overflow-auto p-6">
+        <div className="max-w-[90vw] mx-auto">
+          <MermaidBlock code={code} inline={false} />
+        </div>
+      </div>
+    </div>
+  );
+});

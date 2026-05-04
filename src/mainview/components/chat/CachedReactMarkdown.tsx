@@ -6,6 +6,7 @@ import remarkRehype from "remark-rehype";
 import { toJsxRuntime } from "hast-util-to-jsx-runtime";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 import { VFile } from "vfile";
+import { MermaidPreBlock } from "./mermaid/MermaidPreBlock";
 
 const MAX_CACHE = 200;
 
@@ -44,5 +45,8 @@ export const CachedReactMarkdown = memo(function CachedReactMarkdown({
     jsxs,
     passKeys: true,
     passNode: true,
+    components: {
+      pre: MermaidPreBlock,
+    },
   });
 });
