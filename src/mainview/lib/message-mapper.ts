@@ -28,7 +28,7 @@ function extractContent(msg: UserMessage | AssistantMessage): ContentBlock[] {
     return blocks;
   }
 
-  for (const block of msg.content) {
+  for (const block of msg.content ?? []) {
     if (block.type === "text") {
       const textBlock = block as TextContent;
       if (textBlock.text) {
@@ -92,7 +92,21 @@ export function messageToChatMessage(
   id?: string,
   toolCallNameMap?: Record<string, string>,
 ): ChatMessage | null {
+  if (!message || typeof message !== "object" || !("role" in message)) return null;
+
   const role = message.role as string;
+
+  if (role === "custom") {
+    const customMsg = message as unknown as { customType?: string; data?: unknown; details?: unknown };
+    const customType = customMsg.customType ?? "unknown";
+    const data = (customMsg.details ?? customMsg.data) ?? {};
+    return {
+      id: id ?? `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      role: "custom",
+      content: [{ type: "custom" as const, customType, data }],
+      timestamp: extractTimestamp(message),
+    };
+  }
 
   if (role === "compactionSummary") {
     const raw = message as unknown as { summary?: string; tokensBefore?: number };
@@ -130,6 +144,8 @@ export function messageToChatMessage(
       timestamp: extractTimestamp(message),
     };
   }
+
+  if (role !== "assistant") return null;
 
   const asstMsg = message as AssistantMessage;
   const content = extractContent(asstMsg);
