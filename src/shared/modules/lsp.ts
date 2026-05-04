@@ -20,7 +20,8 @@ export interface LspChannelEvent {
     | "startup_complete"
     | "server_starting"
     | "server_ready"
-    | "server_error";
+    | "server_error"
+    | "language_activated";
   timestamp: number;
   servers?: LspServerStatus[];
   diagnostics?: unknown;
@@ -29,13 +30,14 @@ export interface LspChannelEvent {
   error?: string;
   serverName?: string;
   totalServers?: number;
+  languages?: string[];
 }
 
 export type LspDiagnosticsMode = "agent_end" | "edit_write" | "disabled";
 
 export interface LspMethods {
   "lsp.status": {
-    params: { sessionPath: string };
+    params: { sessionPath: string; sessionId?: string };
     result: { state: LspState; servers: LspServerStatus[]; mode: LspDiagnosticsMode };
   };
   "lsp.setMode": {

@@ -67,6 +67,10 @@ export interface AgentMethods {
     params: { sessionId: string; sessionPath?: string };
     result: { messages: AgentMessageForUI[]; customEntries: CustomEntryForUI[] };
   };
+  "agent.getFullMessages": {
+    params: { sessionId: string; sessionPath?: string };
+    result: { messages: AgentMessageForUI[]; customEntries: CustomEntryForUI[] };
+  };
   "agent.steer": {
     params: { sessionId: string; content: string };
     result: { ok: boolean };
@@ -150,6 +154,14 @@ export interface AgentMethods {
   "agent.getSkills": {
     params: { sessionId: string };
     result: { skills: Array<{ name: string; description: string; filePath: string; baseDir: string; disableModelInvocation: boolean }> };
+  };
+  "agent.getDisabledSkills": {
+    params: Record<string, never>;
+    result: { disabledSkills: string[] };
+  };
+  "agent.setDisabledSkill": {
+    params: { skillName: string; disabled: boolean };
+    result: { disabledSkills: string[] };
   };
   "agent.getTools": {
     params: { sessionId: string };
@@ -250,6 +262,7 @@ export interface ExtensionUIRequestEvent {
   title?: string;
   message?: string;
   options?: string[];
+  multiple?: boolean;
   placeholder?: string;
   prefill?: string;
   timeout?: number;

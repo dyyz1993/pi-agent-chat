@@ -32,12 +32,13 @@ interface ProjectConfig {
   activeTabId: string | null;
   pinnedSessionIds: string[];
   favoriteFolders: FavoriteFolder[];
+  disabledSkills: string[];
 }
 
 async function load(): Promise<ProjectConfig> {
   try {
     if (!existsSync(CONFIG_PATH)) {
-    return { recentProjects: [], activeProject: null, configuredPaths: [], openTabs: [], activeTabId: null, pinnedSessionIds: [], favoriteFolders: [] };
+    return { recentProjects: [], activeProject: null, configuredPaths: [], openTabs: [], activeTabId: null, pinnedSessionIds: [], favoriteFolders: [], disabledSkills: [] };
     }
     const raw = await readFile(CONFIG_PATH, "utf-8");
     const parsed = JSON.parse(raw) as Partial<ProjectConfig>;
@@ -49,9 +50,10 @@ async function load(): Promise<ProjectConfig> {
       activeTabId: parsed.activeTabId ?? null,
       pinnedSessionIds: parsed.pinnedSessionIds ?? [],
       favoriteFolders: parsed.favoriteFolders ?? [],
+      disabledSkills: parsed.disabledSkills ?? [],
     };
   } catch {
-    return { recentProjects: [], activeProject: null, configuredPaths: [], openTabs: [], activeTabId: null, pinnedSessionIds: [], favoriteFolders: [] };
+    return { recentProjects: [], activeProject: null, configuredPaths: [], openTabs: [], activeTabId: null, pinnedSessionIds: [], favoriteFolders: [], disabledSkills: [] };
   }
 }
 
@@ -244,4 +246,22 @@ export async function listDirectory(dirPath: string, searchQuery?: string): Prom
   } catch {
     return [];
   }
+}
+
+export async function listDisabledSkills(): Promise<string[]> {
+  const config = await load();
+  return config.disabledSkills;
+}
+
+export async function setDisabledSkill(skillName: string, disabled: boolean): Promise<string[]> {
+  const config = await load();
+  if (disabled) {
+    if (!config.disabledSkills.includes(skillName)) {
+      config.disabledSkills.push(skillName);
+    }
+  } else {
+    config.disabledSkills = config.disabledSkills.filter((n) => n !== skillName);
+  }
+  await save(config);
+  return config.disabledSkills;
 }

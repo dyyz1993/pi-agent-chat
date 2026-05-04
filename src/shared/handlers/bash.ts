@@ -1,6 +1,6 @@
 import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { RPCMethods, HandlerOptions } from "../rpc-schema";
-import type { BashChannelCommand } from "../modules/bash";
+import type { BashChannelCommand, BashProcess } from "../modules/bash";
 import { getProcessManager } from "./agent";
 import { statSync } from "node:fs";
 import { createReadStream } from "node:fs";
@@ -29,8 +29,12 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const pm = getProcessManager();
     if (!pm) return { processes: [] };
 
-    pm.sendChannelData(sessionId, "bash", { action: "list" });
-    return { processes: [] };
+    try {
+      const result = await pm.callChannel(sessionId, "bash", "list", {}) as { processes?: BashProcess[] };
+      return { processes: result?.processes ?? [] };
+    } catch {
+      return { processes: [] };
+    }
   });
 
   r("bash.command", async (params) => {
@@ -48,7 +52,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
     const pm = getProcessManager();
     if (!pm) throw new Error("No process manager available");
-    pm.sendChannelData(sessionId, "bash", { action, toolCallId, data });
+    await pm.callChannel(sessionId, "bash", action, { toolCallId, data });
 
     return { ok: true };
   });

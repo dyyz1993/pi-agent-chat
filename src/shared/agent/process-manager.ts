@@ -12,24 +12,18 @@ import type { TodoChannelEvent } from "../modules/todo";
 import type { BashChannelEvent } from "../modules/bash";
 import type { LspChannelEvent } from "../modules/lsp";
 import type { RulesChannelEvent } from "../modules/rules";
-import type { RpcClientAPI } from "@dyyz1993/pi-coding-agent";
+import type { RpcClientAPI } from "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/dist/modes/rpc/rpc-client-types";
 import { createLogger } from "../lib/logger";
 import { config } from "../../server-config";
 
 const log = createLogger("agent");
 
-const { subagent, todo, bash, lsp, preview, autoMemory, autoSessionTitle, rules, fileSnapshot } = config.piExtensionPaths;
+const { subagent, todo, bash, lsp, preview, autoMemory, autoSessionTitle, rules, fileSnapshot, askTools, messageBridge } = config.piExtensionPaths;
 const EXTENSION_ARGS = [
   "--no-extensions",
-  "--extension", subagent,
-  "--extension", todo,
-  "--extension", bash,
-  "--extension", lsp,
-  "--extension", preview,
-  "--extension", autoMemory,
-  "--extension", autoSessionTitle,
-  ...(rules ? ["--extension", rules] : []),
-  ...(fileSnapshot ? ["--extension", fileSnapshot] : []),
+  ...[subagent, todo, bash, lsp, preview, autoMemory, autoSessionTitle, rules, fileSnapshot, askTools, messageBridge]
+    .filter((p): p is string => !!p)
+    .flatMap((p) => ["--extension", p]),
 ];
 
 type SanitizedMessageUpdate = Extract<AgentEvent, { type: "message_update" }> & {
@@ -94,6 +88,7 @@ export class AgentProcessManager {
   private servers = new Set<RPCServer>();
   private sessionPaths = new Map<string, string>();
   private leafIds = new Map<string, string | null>();
+  private lastLspState = new Map<string, { state: string; servers: unknown[]; mode?: string; activeLanguages?: string[] }>();
 
   constructor(server: RPCServer) {
     this.servers.add(server);
@@ -139,21 +134,22 @@ export class AgentProcessManager {
       holdEvents: [],
     };
 
-    const unsubscribe = client.onEvent((event) => {
-      this.handleEvent(sessionId, event);
-    });
+    const bridge = (event: unknown): void => {
+      this.handleEvent(sessionId, event as AgentEvent);
+    };
+    const unsubscribe = client.onEvent(bridge);
 
-    for (const name of ["bash", "todo", "subagent", "lsp", "rules-engine"] as const) {
+    for (const name of ["bash", "todo", "subagent", "lsp", "rules-engine", "memory"] as const) {
       client.channel(name).onReceive((data: unknown) => {
         this.handleEvent(sessionId, { type: "channel_data", name, data } as ChannelDataEvent);
       });
     }
 
+    this.clients.set(sessionId, { client, info, unsubscribe });
+
     await client.start();
 
-    log.info("RpcClient started");
-
-    this.clients.set(sessionId, { client, info, unsubscribe });
+    log.info("RpcClient started", { sessionId });
     this.sessionPaths.set(sessionId, sessionPath);
     return { agentId: sessionId, status: "started" };
   }
@@ -212,14 +208,16 @@ export class AgentProcessManager {
     const managed = this.clients.get(sessionId);
     if (!managed) return false;
 
-    const ch = managed.client.channel("ui");
-    ch.send({ id: requestId, ...response });
+    managed.client.respondUI(requestId, response);
     return true;
   }
 
   stop(sessionId: string): boolean {
     const managed = this.clients.get(sessionId);
     if (!managed) return false;
+
+    managed.info.status = "idle";
+    this.emitAgentEvent(sessionId, { type: "agent_end" } as SanitizedEvent).catch(() => {});
 
     managed.unsubscribe();
     managed.client.stop().catch(() => {});
@@ -426,6 +424,116 @@ export class AgentProcessManager {
                 id: (parsed.id as string) ?? `custom-${Date.now()}`,
                 customType: (parsed.customType as string) ?? "unknown",
                 data: parsed.data,
+                timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
+              });
+            } else if (parsed.type === "compaction") {
+              if (activePathIds && typeof parsed.id === "string" && !activePathIds.has(parsed.id as string)) continue;
+              messages.push({
+                id: parsed.id,
+                role: "compactionSummary",
+                summary: parsed.summary ?? "",
+                tokensBefore: parsed.tokensBefore,
+                timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
+              });
+            } else if (!managed && parsed.type === "message" && parsed.message) {
+              if (activePathIds && typeof parsed.id === "string" && !activePathIds.has(parsed.id as string)) continue;
+              messages.push(parsed.message);
+            }
+          } catch {}
+        }
+        rl.close();
+      } catch (err) {
+        log.warn("Failed to read entries from JSONL", { err: err instanceof Error ? err.message : String(err) });
+      }
+    }
+
+    return { messages, customEntries };
+  }
+
+  async getFullMessages(sessionId: string, sessionPath?: string): Promise<{ messages: unknown[]; customEntries: Array<{ id: string; customType: string; data: unknown; timestamp: number }> }> {
+    const managed = this.clients.get(sessionId);
+
+    let messages: unknown[] = [];
+    let resolvedSessionPath = sessionPath ?? "";
+    let activePathIds: Set<string> | null = null;
+
+    if (managed) {
+      resolvedSessionPath = managed.info.sessionPath;
+      try {
+        const result = await managed.client.getFullMessages();
+        log.info("getFullMessages SDK result", { count: result?.messages?.length ?? 0, hasMore: result?.hasMore, totalCount: result?.totalCount });
+        if (result?.messages) {
+          messages = result.messages;
+        }
+      } catch (err) {
+        log.error("getFullMessages SDK failed, falling back to getMessages", { err: err instanceof Error ? err.message : String(err) });
+        try {
+          const fallback = await managed.client.getMessages();
+          if (fallback) messages = fallback;
+        } catch {}
+      }
+      try {
+        const treeResult = await managed.client.getTreeWithLeaf();
+        const entries = treeResult.entries;
+        const leafId = treeResult.leafId;
+        if (Array.isArray(entries) && leafId) {
+          const byId = new Map<string, { id: string; parentId: string | null; type: string; label?: string }>();
+          for (const e of entries) byId.set(e.id, e);
+          activePathIds = new Set<string>();
+          let curId: string | null | undefined = leafId;
+          while (curId) {
+            activePathIds.add(curId);
+            const node = byId.get(curId);
+            curId = node && typeof node.parentId === "string" && node.parentId ? node.parentId : undefined;
+          }
+        }
+      } catch {}
+    } else {
+      resolvedSessionPath = this.resolveSessionPath(sessionId) ?? sessionPath ?? "";
+      const leafId = this.leafIds.get(sessionId) ?? null;
+      if (resolvedSessionPath && leafId !== undefined) {
+        const jsonlEntries = await this.readJsonlEntries(resolvedSessionPath);
+        if (jsonlEntries.length > 0 && leafId !== null) {
+          const byId = new Map<string, { id: string; parentId: string | null; type: string; customType?: string }>();
+          for (const e of jsonlEntries) byId.set(e.id, e);
+          activePathIds = new Set<string>();
+          let curId: string | null = leafId;
+          while (curId) {
+            activePathIds.add(curId);
+            const node = byId.get(curId);
+            curId = node?.parentId ?? null;
+          }
+        }
+        messages = this.buildMessagesFromJsonl(jsonlEntries, leafId);
+      }
+    }
+
+    const customEntries: Array<{ id: string; customType: string; data: unknown; timestamp: number }> = [];
+    if (resolvedSessionPath && existsSync(resolvedSessionPath)) {
+      try {
+        const rl = readline.createInterface({
+          input: createReadStream(resolvedSessionPath, { encoding: "utf-8" }),
+          crlfDelay: Infinity,
+        });
+        for await (const line of rl) {
+          if (!line.trim()) continue;
+          try {
+            const parsed = JSON.parse(line) as Record<string, unknown>;
+            if (parsed.type === "custom") {
+              if (activePathIds && typeof parsed.id === "string" && !activePathIds.has(parsed.id as string)) continue;
+              customEntries.push({
+                id: (parsed.id as string) ?? `custom-${Date.now()}`,
+                customType: (parsed.customType as string) ?? "unknown",
+                data: parsed.data,
+                timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
+              });
+            } else if (parsed.type === "compaction") {
+              if (activePathIds && typeof parsed.id === "string" && !activePathIds.has(parsed.id as string)) continue;
+              messages.push({
+                id: parsed.id,
+                role: "compactionSummary",
+                summary: parsed.summary ?? "",
+                tokensBefore: parsed.tokensBefore,
                 timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
               });
             } else if (!managed && parsed.type === "message" && parsed.message) {
@@ -660,6 +768,13 @@ export class AgentProcessManager {
     ch.send(data);
   }
 
+  async callChannel(sessionId: string, channelName: string, method: string, params: Record<string, unknown>): Promise<unknown> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) throw new Error("Client not found");
+    const ch = managed.client.channel(channelName);
+    return ch.call(method, params);
+  }
+
   private handleEvent(sessionId: string, event: AgentEvent): void {
     const managed = this.clients.get(sessionId);
     if (!managed) return;
@@ -812,6 +927,28 @@ export class AgentProcessManager {
 
     log.info("LSP channel data", { sessionId, event: data.event });
 
+    if (data.event === "startup_complete" || data.event === "status_changed") {
+      const servers = (data.servers ?? []) as Array<{ state?: string; status?: { state?: string } }>;
+      const cached = this.lastLspState.get(sessionId);
+      this.lastLspState.set(sessionId, {
+        state: servers.some((s) => s.state === "ready" || s.status?.state === "ready") ? "ready"
+          : servers.some((s) => s.state === "error" || s.status?.state === "error") ? "error"
+          : servers.length > 0 ? "starting" : "inactive",
+        servers: data.servers ?? [],
+        activeLanguages: cached?.activeLanguages ?? [],
+      });
+    }
+    if (data.event === "mode_changed" && data.mode) {
+      const cached = this.lastLspState.get(sessionId);
+      if (cached) cached.mode = data.mode;
+    }
+    if (data.event === "language_activated" && data.languages?.length) {
+      const cached = this.lastLspState.get(sessionId);
+      if (cached) {
+        cached.activeLanguages = Array.from(new Set([...(cached.activeLanguages ?? []), ...data.languages]));
+      }
+    }
+
     await this.broadcastEvent(
       "lsp.event",
       { sessionId, event: data },
@@ -886,5 +1023,9 @@ export class AgentProcessManager {
   getProjectPath(sessionId: string): string | undefined {
     const managed = this.clients.get(sessionId);
     return managed?.info?.projectPath;
+  }
+
+  getCachedLspState(sessionId: string): { state: string; servers: unknown[]; mode?: string } | undefined {
+    return this.lastLspState.get(sessionId);
   }
 }

@@ -2,6 +2,7 @@ import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { RPCMethods, HandlerOptions } from "../rpc-schema";
 import { AgentProcessManager } from "../agent/process-manager";
 import { createLogger } from "../lib/logger";
+import { listDisabledSkills, setDisabledSkill } from "../lib/project-config";
 
 const log = createLogger("agent");
 
@@ -94,6 +95,11 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   r("agent.getMessages", async (params) => {
     const result = await m.getMessages(params.sessionId, params.sessionPath);
     return { messages: result.messages, customEntries: result.customEntries } as R<"agent.getMessages">;
+  });
+
+  r("agent.getFullMessages", async (params) => {
+    const result = await m.getFullMessages(params.sessionId, params.sessionPath);
+    return { messages: result.messages, customEntries: result.customEntries } as R<"agent.getFullMessages">;
   });
 
   r("agent.steer", async (params) => {
@@ -189,6 +195,16 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
   r("agent.getSkills", async (params) => {
     return m.getSkills(params.sessionId) as Promise<R<"agent.getSkills">>;
+  });
+
+  r("agent.getDisabledSkills", async () => {
+    const disabledSkills = await listDisabledSkills();
+    return { disabledSkills };
+  });
+
+  r("agent.setDisabledSkill", async (params) => {
+    const disabledSkills = await setDisabledSkill(params.skillName, params.disabled);
+    return { disabledSkills };
   });
 
   r("agent.getTools", async (params) => {

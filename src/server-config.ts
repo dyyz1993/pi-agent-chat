@@ -19,5 +19,7 @@ export const config = {
     rules: process.env.PI_EXT_RULES ?? "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/extensions/rules-engine/index.ts",
     autoSessionTitle: process.env.PI_EXT_AUTO_SESSION_TITLE ?? "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/extensions/auto-session-title/index.ts",
     fileSnapshot: process.env.PI_EXT_FILE_SNAPSHOT ?? "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/extensions/file-snapshot/index.ts",
+    askTools: process.env.PI_EXT_ASK_TOOLS ?? "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/extensions/ask-tools/index.ts",
+    messageBridge: process.env.PI_EXT_MESSAGE_BRIDGE ?? "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/extensions/message-bridge/index.ts",
   },
 } as const;

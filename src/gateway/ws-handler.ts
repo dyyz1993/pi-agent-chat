@@ -75,9 +75,9 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
     const rpcServer = new RPCServer(wsTransport as Transport);
     registerAllHandlers(rpcServer, { platform: "web" });
 
-    ws.on("close", () => {
+    ws.on("close", (code: number, reason: Buffer) => {
       clients.delete(ws);
-      log.info("Client disconnected", { total: clients.size });
+      log.info("Client disconnected", { total: clients.size, code, reason: reason.toString() });
       unregisterAllHandlers(rpcServer);
       rpcServer.close();
     });
@@ -85,6 +85,14 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
     ws.on("error", (err: Error) => {
       log.error("Client error", { error: err.message });
     });
+
+    const pingInterval = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.ping();
+      } else {
+        clearInterval(pingInterval);
+      }
+    }, 30000);
   });
 
   Object.defineProperty(wss, "clients", {
