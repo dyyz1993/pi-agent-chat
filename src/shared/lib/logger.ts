@@ -1,4 +1,4 @@
-export type LogModule = "server" | "gateway" | "system" | "chat" | "chat-store" | "event-handler" | "session" | "file" | "timer" | "git" | "agent" | "bash" | "config";
+export type LogModule = "server" | "gateway" | "system" | "chat" | "chat-store" | "event-handler" | "session" | "file" | "timer" | "git" | "agent" | "bash" | "config" | "snapshot" | "subagent" | "linked-projects";
 type LogLevel = "debug" | "info" | "warn" | "error";
 
 interface LogEntry {

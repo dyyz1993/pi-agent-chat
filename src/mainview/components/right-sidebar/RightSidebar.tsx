@@ -7,6 +7,7 @@ import { GitPanel } from "../git/GitPanel";
 import { RpcPanel } from "../rpc-panel/RpcPanel";
 import { MemoryPanel } from "../memory-panel/MemoryPanel";
 import { RulesPanel } from "../rules-panel/RulesPanel";
+import { SnapshotPanel } from "../snapshot-panel/SnapshotPanel";
 import { useExplorerStore } from "../../stores/use-explorer-store";
 import { useEffect } from "react";
 
@@ -77,6 +78,8 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
         return <MemoryPanel />;
       case "rules":
         return <RulesPanel />;
+      case "snapshot":
+        return <SnapshotPanel />;
       default:
         return null;
     }

@@ -2,7 +2,7 @@ export type Breakpoint = "mobile" | "tablet" | "desktop" | "wide";
 
 export type PanelVisibility = "pinned" | "visible" | "hidden";
 
-export type PanelTabId = "git" | "files" | "status" | "rpc" | "memory" | "rules";
+export type PanelTabId = "git" | "files" | "status" | "rpc" | "memory" | "rules" | "snapshot";
 
 export interface PanelTab {
   id: PanelTabId;
@@ -16,6 +16,7 @@ export const PANEL_TABS: PanelTab[] = [
 	{ id: "rpc", label: "RPC" },
 	{ id: "memory", label: "记忆" },
 	{ id: "rules", label: "Rules" },
+	{ id: "snapshot", label: "快照" },
 ];
 
 export interface ActivityItem {

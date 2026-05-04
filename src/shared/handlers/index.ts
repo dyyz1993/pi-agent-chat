@@ -13,6 +13,7 @@ import { register as bash } from "./bash";
 import { register as lsp } from "./lsp";
 import { register as memory } from "./memory";
 import { register as rules } from "./rules";
+import { register as snapshot } from "./snapshot";
 import { unregister as agentCleanup } from "./agent";
 
 type RegisterFn = (server: RPCServer, options: HandlerOptions) => void;
@@ -32,6 +33,7 @@ export const handlerMap: Record<string, RegisterFn> = {
   lsp,
   memory,
   rules,
+  snapshot,
 };
 
 export const cleanupMap: Record<string, CleanupFn> = {
