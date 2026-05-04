@@ -8,11 +8,14 @@ import {
   GitBranch,
   Loader2,
   FileWarning,
+  Archive,
 } from "lucide-react";
 import { useTurnStore, EMPTY_SET } from "../../stores/use-turn-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useChatStore } from "../../stores/use-chat-store";
 import { useNotificationStore } from "../../stores/use-notification-store";
+
+const EMPTY_MSGS: never[] = [];
 import { apiClient } from "../../lib/api-client";
 import type { SessionMeta } from "../../types";
 import type { TreeEntry } from "@dyyz1993/pi-coding-agent";
@@ -30,6 +33,7 @@ interface MessageCardProps {
 const ROLE_CONFIG = {
   user: { icon: User, color: "text-blue-400/80", barColor: "border-l-blue-500/60", bgColor: "bg-blue-500/[0.03]", altBarColor: "border-l-blue-400/45", altBgColor: "bg-blue-400/[0.02]" },
   assistant: { icon: Bot, color: "text-emerald-400/70", barColor: "border-l-emerald-500/50", bgColor: "bg-emerald-500/[0.03]", altBarColor: "border-l-emerald-400/35", altBgColor: "bg-emerald-400/[0.02]" },
+  compactionSummary: { icon: Archive, color: "text-cyan-400/70", barColor: "border-l-cyan-500/50", bgColor: "bg-cyan-500/[0.03]", altBarColor: "border-l-cyan-400/35", altBgColor: "bg-cyan-400/[0.02]" },
 };
 
 const ENTRY_DEFAULT = { barColor: "border-l-yellow-500/50", labelColor: "text-yellow-400/70", bgColor: "bg-yellow-500/[0.04]", altBarColor: "border-l-yellow-400/35", altBgColor: "bg-yellow-400/[0.02]" };
@@ -55,6 +59,8 @@ export const MessageCard = memo(function MessageCard({ message, cardLabel, prevB
 
   const isUser = message.role === "user";
   const isAssistant = message.role === "assistant";
+  const isCompaction = message.role === "compactionSummary";
+  const timeStr = formatTime(message.timestamp);
 
   const hasCustomContent = message.content.some((b) => b.type === "custom");
   const customBlock = message.content.find((b): b is Extract<typeof b, { type: "custom" }> => b.type === "custom");
@@ -75,6 +81,51 @@ export const MessageCard = memo(function MessageCard({ message, cardLabel, prevB
     return (
       <div data-msg-card-id={message.id} className="relative w-full py-0.5">
         <MessageBubble message={message} />
+      </div>
+    );
+  }
+
+  if (isCompaction) {
+    const compactionBlock = message.content.find((b): b is Extract<typeof b, { type: "compactionSummary" }> => b.type === "compactionSummary");
+    const roleCfg = ROLE_CONFIG.compactionSummary;
+    const summary = compactionBlock?.summary ?? "";
+    const firstLine = summary.split("\n").find((l) => l.trim() && !l.startsWith("#"))?.trim() ?? summary.slice(0, 100);
+
+    return (
+      <div
+        data-msg-card-id={message.id}
+        className={`group/msgcard relative w-full py-1 transition-colors overflow-hidden ${roleCfg.bgColor}`}
+      >
+        <div className={`relative z-20 flex items-center gap-2 px-3 pl-2 h-5 select-none border-l-[3px] ${roleCfg.barColor}`}>
+          <span className={`flex items-center gap-1 text-[11px] font-medium ${roleCfg.color}`}>
+            <Archive className="w-3 h-3" />
+            上下文压缩
+          </span>
+          {compactionBlock?.tokensBefore != null && (
+            <span className="text-[10px] text-gray-600">
+              {Math.round(compactionBlock.tokensBefore / 1000)}k tokens
+            </span>
+          )}
+          <div className="flex items-center gap-0.5 ml-auto shrink-0">
+            <button
+              onClick={(e) => { e.stopPropagation(); toggleCollapse(message.id); }}
+              className="p-0.5 text-gray-600 hover:text-gray-300 transition-colors"
+              title={isCollapsed ? "展开" : "折叠"}
+            >
+              <ChevronDown className={`w-3 h-3 transition-transform ${isCollapsed ? "" : "-rotate-90"}`} />
+            </button>
+            <span className="text-[10px] text-gray-600">{timeStr}</span>
+          </div>
+        </div>
+        {isCollapsed ? (
+          <div className={`relative z-20 border-l-[3px] ${roleCfg.barColor} px-4 py-1 text-xs text-gray-500 italic leading-relaxed`}>
+            {firstLine}
+          </div>
+        ) : (
+          <div className="relative z-20">
+            <MessageBubble message={message} />
+          </div>
+        )}
       </div>
     );
   }
@@ -104,8 +155,6 @@ export const MessageCard = memo(function MessageCard({ message, cardLabel, prevB
   const handleToggleCollapse = useCallback(() => {
     toggleCollapse(message.id);
   }, [message.id, toggleCollapse]);
-
-  const timeStr = formatTime(message.timestamp);
 
   return (
     <div
@@ -142,7 +191,7 @@ export const MessageCard = memo(function MessageCard({ message, cardLabel, prevB
 
         <div className="flex items-center gap-0.5 ml-auto shrink-0">
           {(isAssistant || isUser) && !isEntry && !isCollapsed && (
-            <HeaderActions message={message} isUserCard={isUser} />
+            <LazyHeaderActions message={message} isUserCard={isUser} />
           )}
           {(isAssistant || isUser || isEntry) && (
             <button
@@ -192,9 +241,26 @@ export const MessageCard = memo(function MessageCard({ message, cardLabel, prevB
   );
 });
 
+const LazyHeaderActions = memo(function LazyHeaderActions({ message, isUserCard }: { message: ChatMessage; isUserCard?: boolean }) {
+  const [visible, setVisible] = useState(false);
+
+  if (!visible) {
+    return (
+      <span
+        className="inline-flex items-center opacity-0 group-hover/msgcard:opacity-100 transition-opacity"
+        onMouseEnter={() => setVisible(true)}
+      >
+        <span className="p-1 text-gray-700 cursor-pointer">···</span>
+      </span>
+    );
+  }
+
+  return <HeaderActions message={message} isUserCard={isUserCard} />;
+});
+
 const HeaderActions = memo(function HeaderActions({ message, isUserCard }: { message: ChatMessage; isUserCard?: boolean }) {
   const sessionId = useSessionStore((s) => s.activeSessionId);
-  const messages = useChatStore((s) => sessionId ? (s.messagesBySession[sessionId] || []) : []);
+  const messages = useChatStore((s) => sessionId ? (s.messagesBySession[sessionId] || EMPTY_MSGS) : EMPTY_MSGS);
   const pushNotification = useNotificationStore((s) => s.push);
   const rollingBackRef = useRef(false);
   const [confirmState, setConfirmState] = useState<{

@@ -25,13 +25,36 @@ export type FilePreview = {
 
 export type ToolExecutionStatus = "running" | "done" | "error" | "background";
 
+export type UIMethod = "confirm" | "select" | "input" | "editor" | "notify";
+
+export type UIInteractionStatus = "pending" | "responded" | "dismissed" | "notified";
+
+export type UIInteractionBlock = {
+  type: "uiInteraction";
+  id: string;
+  method: UIMethod;
+  status: UIInteractionStatus;
+  toolName?: string;
+  title?: string;
+  message?: string;
+  options?: string[];
+  multiple?: boolean;
+  placeholder?: string;
+  prefill?: string;
+  notifyType?: "info" | "warning" | "error";
+  response?: Record<string, unknown>;
+  respondedAt?: number;
+};
+
 export type ContentBlock =
   | { type: "text"; text: string }
   | { type: "thinking"; thinking: string }
   | { type: "toolCall"; id: string; name: string; input: string }
   | { type: "toolResult"; toolCallId: string; toolName: string; content: string; isError?: boolean; args?: string; details?: unknown }
   | { type: "toolExecution"; toolCallId: string; toolName: string; args: string; status: ToolExecutionStatus; output?: string; details?: unknown }
-  | { type: "custom"; customType: string; data: unknown };
+  | { type: "custom"; customType: string; data: unknown }
+  | { type: "compactionSummary"; summary: string; tokensBefore?: number }
+  | UIInteractionBlock;
 
 export type TokenUsage = {
   input: number;
@@ -44,7 +67,7 @@ export type TokenUsage = {
 
 export type ChatMessage = {
   id: string;
-  role: "user" | "assistant" | "toolResult" | "custom";
+  role: "user" | "assistant" | "toolResult" | "custom" | "compactionSummary";
   content: ContentBlock[];
   timestamp: number;
   provider?: string;

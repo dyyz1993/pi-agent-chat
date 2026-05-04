@@ -122,6 +122,26 @@ export function aggregateTurns(messages: ChatMessage[]): { turns: TimelineTurn[]
       case "toolResult": {
         break;
       }
+
+      case "compactionSummary": {
+        if (currentTurn && currentTurn.items && currentTurn.items.length > 0) {
+          turns.push(finalizeTurn(currentTurn, turnIndex++));
+        } else if (currentTurn && currentTurn.userMessageId) {
+          turns.push(finalizeTurn(currentTurn, turnIndex++));
+        }
+        currentTurn = null;
+        const summaryBlock = msg.content.find((b) => b.type === "compactionSummary");
+        const summary = summaryBlock && "summary" in summaryBlock ? summaryBlock.summary : "";
+        standalone.push({
+          id: msg.id,
+          customType: "compactionSummary",
+          data: { summary },
+          timestamp: msg.timestamp,
+          icon: "Archive",
+          label: "上下文压缩",
+        });
+        break;
+      }
     }
   }
 

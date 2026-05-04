@@ -92,7 +92,19 @@ export function messageToChatMessage(
   id?: string,
   toolCallNameMap?: Record<string, string>,
 ): ChatMessage | null {
-  const role = message.role;
+  const role = message.role as string;
+
+  if (role === "compactionSummary") {
+    const raw = message as unknown as { summary?: string; tokensBefore?: number };
+    const summary = raw.summary ?? "";
+    if (!summary) return null;
+    return {
+      id: id ?? `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      role: "compactionSummary",
+      content: [{ type: "compactionSummary" as const, summary, tokensBefore: raw.tokensBefore }],
+      timestamp: extractTimestamp(message),
+    };
+  }
 
   if (role === "toolResult") {
     const toolMsg = message as ToolResultMessage;

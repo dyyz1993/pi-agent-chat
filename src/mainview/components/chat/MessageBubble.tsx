@@ -7,10 +7,12 @@ import { useChatNavStore } from "../../stores/use-chat-nav-store";
 import { EMPTY_SET } from "../../stores/use-turn-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { SubagentExecutionCard } from "./tool-renderers/SubagentRenderer";
+import { UIInteractionCard } from "./tool-renderers/UICardRenderer";
 import { getToolRenderer } from "./tool-renderers";
 import { getCustomTypeIcon } from "./tool-icon-map";
 import { tryFormatAsYaml } from "../../../shared/lib/json-to-yaml";
 import { useExpandStore } from "../../stores/use-expand-store";
+import { useUIBlockMap } from "../../stores/use-ui-dialog-store";
 import { ENTRY_TYPE_KEYS, getMemoryConfig, getMemorySummary } from "./memory-config";
 
 export function getBlockBorderColor(block: ContentBlock, role: "user" | "assistant"): string {
@@ -45,6 +47,14 @@ export function getBlockBorderColor(block: ContentBlock, role: "user" | "assista
       if (ct === "memory_failed") return "border-l-red-400/40";
       return roleDefault;
     }
+    case "compactionSummary":
+      return "border-l-cyan-500/40";
+    case "uiInteraction": {
+      if (block.status === "pending") return "border-l-amber-400/50";
+      if (block.status === "responded") return "border-l-emerald-400/50";
+      if (block.status === "dismissed") return "border-l-gray-500/40";
+      return "border-l-cyan-400/40";
+    }
     default:
       return roleDefault;
   }
@@ -61,6 +71,7 @@ interface MessageBubbleProps {
 export const MessageBubble = memo(function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const sessionId = useSessionStore((s) => s.activeSessionId);
+  const uiBlockMap = useUIBlockMap(message.content, sessionId ?? "");
   const isActive = useChatNavStore(
     useCallback((s) => sessionId ? (s.activeIdBySession[sessionId] ?? null) === message.id : false, [sessionId, message.id])
   );
@@ -133,7 +144,7 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
             const borderColor = getBlockBorderColor(block, role);
             return (
               <div key={i} className={`border-l-[3px] ${borderColor}`}>
-                <ContentBlockRenderer block={block} isStreaming={message.isStreaming} msgId={message.id} blockIndex={i} isEntry={isEntryMsg} />
+                <ContentBlockRenderer block={block} isStreaming={message.isStreaming} msgId={message.id} blockIndex={i} isEntry={isEntryMsg} uiBlockMap={uiBlockMap} />
               </div>
             );
           })}
@@ -375,71 +386,197 @@ function PrefetchResultDetail({ data }: { data: unknown }) {
   const d = data as Record<string, unknown> | undefined;
   if (!d) return null;
 
-  const layer = typeof d.layer === "string" ? d.layer : "unknown";
-  const durationMs = typeof d.durationMs === "number" ? d.durationMs : 0;
-  const injectedBytes = typeof d.injectedBytes === "number" ? d.injectedBytes : 0;
+  const snippet = typeof d.snippet === "string" ? d.snippet : "";
   const selectedFiles = Array.isArray(d.selectedFiles) ? (d.selectedFiles as string[]) : [];
-  const skipHits = Array.isArray(d.skipHits) ? (d.skipHits as string[]) : [];
-  const guardHits = Array.isArray(d.guardHits) ? (d.guardHits as string[]) : [];
+  const injectedBytes = typeof d.injectedBytes === "number" ? d.injectedBytes : 0;
+  const durationMs = typeof d.durationMs === "number" ? d.durationMs : 0;
+  const layer = typeof d.layer === "string" ? d.layer : "unknown";
+  const rawSkipHits = d.skipHits;
+  const rawGuardHits = d.guardHits;
+  const rawTriggerHits = d.triggerHits;
+  const isForce = d.isForce === true;
+  const availableFiles = typeof d.availableFiles === "number" ? d.availableFiles : 0;
+  const query = typeof d.query === "string" ? d.query : "";
 
-  const layerColor = layer === "skip" ? "text-yellow-400" : layer === "llm" ? "text-blue-400" : "text-gray-500";
-  const layerLabel = layer === "skip" ? "Skip 规则匹配（复用缓存）" : layer === "llm" ? "LLM 智能选择" : layer === "none" ? "无匹配结果" : "未知";
+  const skipHits = Array.isArray(rawSkipHits)
+    ? (rawSkipHits as Array<Record<string, string>>).map((h) =>
+        typeof h === "string" ? { pattern: h, mode: "" } : { pattern: h.pattern ?? "", mode: h.mode ?? "" },
+      )
+    : [];
+  const guardHits = Array.isArray(rawGuardHits)
+    ? (rawGuardHits as Array<Record<string, string>>).map((h) =>
+        typeof h === "string" ? { pattern: h, mode: "" } : { pattern: h.pattern ?? "", mode: h.mode ?? "" },
+      )
+    : [];
+  const triggerHits = Array.isArray(rawTriggerHits)
+    ? (rawTriggerHits as Array<Record<string, string>>).map((h) =>
+        typeof h === "string" ? { pattern: h, mode: "" } : { pattern: h.pattern ?? "", mode: h.mode ?? "" },
+      )
+    : [];
+
+  const hasMemory = snippet || selectedFiles.length > 0;
+
+  const memoryCount = snippet
+    ? (snippet.match(/^###/gm)?.length || 1)
+    : selectedFiles.length;
+  const tokenCount = injectedBytes > 0
+    ? Math.round(injectedBytes / 4)
+    : 0;
+
+  const modeLabel = (mode: string) => {
+    switch (mode) {
+      case "exact": return "精确匹配";
+      case "prefix": return "前缀匹配";
+      case "contains": return "包含匹配";
+      case "regex": return "正则匹配";
+      default: return "";
+    }
+  };
 
   return (
     <div className="px-3 pb-2 text-[11px] space-y-1.5">
-      <div className="flex items-center gap-2 py-1 border-b border-gray-800/50">
-        <span className="text-gray-500">决策层:</span>
-        <span className={`font-medium ${layerColor}`}>{layerLabel}</span>
-        {durationMs > 0 && <span className="text-gray-600 ml-auto">{durationMs}ms</span>}
-      </div>
-
-      {(skipHits.length > 0 || guardHits.length > 0) && (
-        <div className="space-y-0.5">
-          {skipHits.length > 0 && (
-            <div className="flex gap-1.5">
-              <span className="text-yellow-500 shrink-0">Skip:</span>
-              <span className="text-gray-400">{skipHits.join(", ")}</span>
-            </div>
-          )}
-          {guardHits.length > 0 && (
-            <div className="flex gap-1.5">
-              <span className="text-green-400 shrink-0">Guard:</span>
-              <span className="text-gray-400">{guardHits.join(", ")}</span>
-            </div>
-          )}
-        </div>
+      {!hasMemory && (
+        <div className="text-gray-500 italic py-1">未找到相关记忆</div>
       )}
 
-      {selectedFiles.length > 0 && (
+      {snippet && (
         <div className="space-y-0.5">
-          <div className="text-gray-500 flex items-center gap-1">
-            选中文件 ({selectedFiles.length})
-            {injectedBytes > 0 && <span className="text-gray-600 ml-auto">{Math.round(injectedBytes / 1024)}KB</span>}
+          <div className="text-gray-400 flex items-center gap-1 font-medium">
+            <Brain className="w-3 h-3 text-blue-400/60 shrink-0" />
+            <span>相关记忆</span>
+            <span className="text-gray-500 ml-auto">
+              {memoryCount} 条 · ~{tokenCount} tokens · {Math.round(injectedBytes / 1024)}KB
+            </span>
           </div>
-          {selectedFiles.map((f) => (
-            <div key={f} className="flex items-center gap-1.5 pl-2 py-0.5 bg-gray-800/30 rounded text-gray-300">
-              <FileText className="w-3 h-3 text-blue-400/60 shrink-0" />
-              <span className="truncate">{f}</span>
-            </div>
-          ))}
+          <pre className="p-2 bg-gray-800/40 rounded text-[11px] text-gray-300 overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap leading-relaxed border border-gray-700/30">
+            {snippet}
+          </pre>
         </div>
       )}
 
-      {selectedFiles.length === 0 && layer !== "none" && (
-        <div className="text-gray-600 italic py-0.5">未选中任何文件</div>
+      {!snippet && selectedFiles.length > 0 && (
+        <div className="text-gray-500 italic py-0.5">
+          已检索 {selectedFiles.length} 个记忆文件
+          {injectedBytes > 0 && <span className="text-gray-600 ml-auto">~{Math.round(injectedBytes / 4)} tokens</span>}
+        </div>
       )}
 
-      {typeof d.snippet === "string" && d.snippet && (
-        <details className="group">
-          <summary className="cursor-pointer text-gray-500 hover:text-gray-300 flex items-center gap-1 py-0.5">
-            <ChevronRight className="w-3 h-3 group-open:rotate-90 transition-transform" />
-            内容预览
-          </summary>
-          <pre className="mt-1 p-1.5 bg-gray-800/40 rounded text-[10px] text-gray-400 overflow-x-auto max-h-32 overflow-y-auto whitespace-pre-wrap">
-            {d.snippet as string}
-          </pre>
-        </details>
-      )}
+      <details className="group">
+        <summary className="cursor-pointer text-gray-600 hover:text-gray-400 flex items-center gap-1 py-0.5 text-[10px]">
+          <ChevronRight className="w-2.5 h-2.5 group-open:rotate-90 transition-transform" />
+          搜索详情
+        </summary>
+        <div className="mt-1 space-y-1.5 pl-1 text-[10px] text-gray-500">
+          {query && (
+            <div className="text-gray-400">
+              搜索词: <span className="text-gray-300">「{query}」</span>
+            </div>
+          )}
+
+          <div className="space-y-0.5">
+            {layer === "not_triggered" && (
+              <div className="text-gray-500">
+                未触发搜索 — 无匹配关键词，默认跳过
+              </div>
+            )}
+            {layer === "skip" && (
+              <div className="text-yellow-500/80">
+                跳过 LLM → 规则命中，复用上次缓存结果
+              </div>
+            )}
+            {layer === "llm" && isForce && (
+              <div className="text-red-400/80">
+                强制触发 → 使用 LLM 进行语义匹配
+              </div>
+            )}
+            {layer === "llm" && !isForce && (
+              <div className="text-blue-400/80">
+                关键词命中 → 使用 LLM 进行语义匹配
+              </div>
+            )}
+            {layer === "none" && (
+              <div className="text-gray-500">
+                无可用记忆文件
+              </div>
+            )}
+            {layer === "error" && (
+              <div className="text-red-400/80">
+                搜索出错
+              </div>
+            )}
+            {layer !== "skip" && layer !== "llm" && layer !== "not_triggered" && layer !== "none" && (
+              <div className="text-gray-400">
+                匹配方式: {layer}
+              </div>
+            )}
+          </div>
+
+          {skipHits.length > 0 && (
+            <div className="space-y-0.5">
+              <div className="text-yellow-600/80">Skip 规则命中:</div>
+              {skipHits.map((h, i) => (
+                <div key={i} className="pl-2 flex items-center gap-1.5">
+                  <span className="text-yellow-500/60">•</span>
+                  <span className="text-gray-300 font-mono">「{h.pattern}」</span>
+                  {h.mode && <span className="text-gray-600">({modeLabel(h.mode)})</span>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {guardHits.length > 0 && (
+            <div className="space-y-0.5">
+              <div className="text-green-600/80">Guard 规则命中（阻止跳过）:</div>
+              {guardHits.map((h, i) => (
+                <div key={i} className="pl-2 flex items-center gap-1.5">
+                  <span className="text-green-500/60">•</span>
+                  <span className="text-gray-300 font-mono">「{h.pattern}」</span>
+                  {h.mode && <span className="text-gray-600">({modeLabel(h.mode)})</span>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {triggerHits.length > 0 && (
+            <div className="space-y-0.5">
+              <div className="text-cyan-600/80">触发关键词:</div>
+              {triggerHits.map((h, i) => (
+                <div key={i} className="pl-2 flex items-center gap-1.5">
+                  <span className="text-cyan-500/60">•</span>
+                  <span className="text-gray-300 font-mono">「{h.pattern}」</span>
+                  {h.mode && <span className="text-gray-600">({modeLabel(h.mode)})</span>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {selectedFiles.length > 0 && (
+            <div className="space-y-0.5">
+              <div className="text-gray-400 flex items-center gap-1">
+                来源文件 ({selectedFiles.length})
+              </div>
+              {selectedFiles.map((f) => {
+                const fileName = f.split("/").pop() || f;
+                return (
+                  <div key={f} className="flex items-center gap-1.5 pl-2 py-0.5 text-gray-500 truncate">
+                    <FileText className="w-2.5 h-2.5 text-blue-400/50 shrink-0" />
+                    <span className="truncate" title={f}>{fileName}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="space-y-0.5">
+            {availableFiles > 0 && (
+              <div className="text-gray-600">可用文件: {availableFiles} 个</div>
+            )}
+            {durationMs > 0 && (
+              <div className="text-gray-600">搜索耗时: {durationMs}ms</div>
+            )}
+          </div>
+        </div>
+      </details>
     </div>
   );
 }
@@ -471,9 +608,49 @@ function isLongContent(text: string): boolean {
   return lineCount > 20;
 }
 
-export const ContentBlockRenderer = memo(function ContentBlockRenderer({ block, isStreaming, msgId, blockIndex, isEntry }: { block: ContentBlock; isStreaming?: boolean; msgId: string; blockIndex: number; isEntry?: boolean }) {
+const CompactionSummaryCard = memo(function CompactionSummaryCard({ summary, blockId }: { summary: string; blockId: string }) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  const lines = summary.split("\n");
+  const firstMeaningfulLine = lines.find((l) => l.trim() && !l.startsWith("#"))?.trim() ?? "";
+  const preview = firstMeaningfulLine.slice(0, 120);
+  const isLong = summary.length > 200 || lines.length > 6;
+
+  return (
+    <div data-block-id={blockId} className="my-0.5">
+      <div className="px-3 py-1.5 text-[13px] text-gray-300 leading-relaxed">
+        {isLong ? (
+          <>
+            <div className="flex items-start gap-1.5">
+              <span className="text-gray-500 flex-1">{preview}{firstMeaningfulLine.length > 120 ? "..." : ""}</span>
+              <button
+                onClick={() => setIsOpen(!isOpen)}
+                className="shrink-0 p-0.5 text-cyan-400/60 hover:text-cyan-300 transition-colors text-[11px] underline decoration-dotted underline-offset-2"
+              >
+                {isOpen ? "收起" : "详情"}
+              </button>
+            </div>
+            {isOpen && (
+              <div className="mt-1.5 pl-0 border-l-2 border-cyan-500/20 prose prose-invert prose-sm max-w-none prose-p:my-0.5 prose-headings:my-1">
+                <CachedReactMarkdown>{summary}</CachedReactMarkdown>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="prose prose-invert prose-sm max-w-none prose-p:my-0.5 prose-headings:my-1">
+            <CachedReactMarkdown>{summary}</CachedReactMarkdown>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
+
+export const ContentBlockRenderer = memo(function ContentBlockRenderer({ block, isStreaming, msgId, blockIndex, isEntry, uiBlockMap }: { block: ContentBlock; isStreaming?: boolean; msgId: string; blockIndex: number; isEntry?: boolean; uiBlockMap: Map<string, import("../../types").UIInteractionBlock> }) {
   const blockId = `${msgId}-${blockIndex}`;
   const openExpand = useExpandStore((s) => s.openExpand);
+  const toolCallId = block.type === "toolExecution" ? block.toolCallId : block.type === "toolCall" ? block.id : block.type === "toolResult" ? block.toolCallId : undefined;
+  const uiBlock = toolCallId ? uiBlockMap.get(toolCallId) : undefined;
 
   switch (block.type) {
     case "text": {
@@ -523,7 +700,7 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({ block, 
         const CustomCard = renderer.renderExecution;
         return <CustomCard block={execBlock} blockId={blockId} />;
       }
-      return <ToolExecutionCard block={execBlock} blockId={blockId} />;
+      return <ToolExecutionCard block={execBlock} blockId={blockId} uiBlock={uiBlock} />;
     }
     case "toolResult": {
       const execBlock: Extract<ContentBlock, { type: "toolExecution" }> = {
@@ -543,6 +720,9 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({ block, 
       return <ToolExecutionCard block={execBlock} blockId={blockId} />;
     }
     case "toolExecution": {
+      if (uiBlock) {
+        return <UIInteractionCard block={uiBlock} />;
+      }
       if (block.toolName.toLowerCase() === "subagent") {
         return <SubagentExecutionCard block={block} blockId={blockId} />;
       }
@@ -551,7 +731,7 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({ block, 
         const CustomCard = renderer.renderExecution;
         return <CustomCard block={block} blockId={blockId} />;
       }
-      return <ToolExecutionCard block={block} blockId={blockId} />;
+      return <ToolExecutionCard block={block} blockId={blockId} uiBlock={uiBlock} />;
     }
     case "custom":
       if (isLspCustomType(block.customType)) {
@@ -567,10 +747,14 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({ block, 
         return null;
       }
       return <MemoryCard customType={block.customType} data={block.data} blockId={blockId} isEntry={isEntry} />;
+    case "compactionSummary":
+      return <CompactionSummaryCard summary={block.summary} blockId={blockId} />;
+    case "uiInteraction":
+      return <UIInteractionCard block={block} />;
   }
 });
 
-export const ToolExecutionCard = memo(function ToolExecutionCard({ block, blockId }: { block: Extract<ContentBlock, { type: "toolExecution" }>; blockId: string }) {
+export const ToolExecutionCard = memo(function ToolExecutionCard({ block, blockId, uiBlock }: { block: Extract<ContentBlock, { type: "toolExecution" }>; blockId: string; uiBlock?: import("../../types").UIInteractionBlock }) {
   const isRunning = block.status === "running";
   const isError = block.status === "error";
   const [inputOpen, setInputOpen] = useState(false);
@@ -656,7 +840,9 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({ block, blockI
           </div>
           {outputOpen && (
             <div className="px-3 pb-2 pt-0.5">
-              {block.output ? (
+              {uiBlock && uiBlock.status === "pending" ? (
+                <UIInteractionCard block={uiBlock} />
+              ) : block.output ? (
                 <pre className="text-[11px] text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-72 overflow-y-auto pl-2">{block.output}</pre>
               ) : isRunning ? (
                 <div className="text-[11px] text-gray-600 italic py-1">waiting...</div>
