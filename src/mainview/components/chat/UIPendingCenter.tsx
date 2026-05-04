@@ -216,7 +216,7 @@ export function UIPendingCenter() {
           className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/50"
           onClick={(e) => e.target === e.currentTarget && setPanelOpen(false)}
         >
-          <div className="w-full max-w-lg bg-gray-800 border border-gray-600 rounded-lg shadow-2xl overflow-hidden">
+          <div className="w-full max-w-lg bg-gray-800 border border-gray-600 rounded-lg shadow-2xl overflow-hidden" role="dialog" aria-modal="true" aria-label="待处理请求">
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-700/60">
               <div className="flex items-center gap-2">
                 <span className="text-[13px] font-medium text-gray-200">待处理请求</span>
@@ -235,6 +235,7 @@ export function UIPendingCenter() {
                 <button
                   onClick={() => setPanelOpen(false)}
                   className="text-gray-500 hover:text-gray-300 p-1 transition-colors"
+                  aria-label="关闭"
                 >
                   <X className="w-4 h-4" />
                 </button>

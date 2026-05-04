@@ -189,6 +189,8 @@ export const TextContentCard = memo(function TextContentCard({
             onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}
             className="p-0.5 text-gray-600 hover:text-gray-300 transition-colors ml-auto"
             title={isOpen ? "折叠" : "展开"}
+            aria-expanded={isOpen}
+            aria-label={isOpen ? "折叠文本" : "展开文本"}
           >
             {isOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
           </button>
@@ -351,6 +353,8 @@ export const MemoryCard = memo(function MemoryCard({ customType, data, blockId, 
         type="button"
         onClick={() => setExpanded(!expanded)}
         className={`w-full px-2 py-0.5 flex items-center gap-1.5 text-[11px] ${config.color} hover:bg-gray-800/15 rounded cursor-pointer select-none`}
+        aria-expanded={expanded}
+        aria-label={`${config.label}${summary ? `: ${summary}` : ""}`}
       >
         <Icon className="w-3 h-3 shrink-0" />
         <span className="font-medium">{config.label}</span>
@@ -626,6 +630,8 @@ const CompactionSummaryCard = memo(function CompactionSummaryCard({ summary, blo
               <button
                 onClick={() => setIsOpen(!isOpen)}
                 className="shrink-0 p-0.5 text-cyan-400/60 hover:text-cyan-300 transition-colors text-[11px] underline decoration-dotted underline-offset-2"
+                aria-expanded={isOpen}
+                aria-label={isOpen ? "收起思考详情" : "展开思考详情"}
               >
                 {isOpen ? "收起" : "详情"}
               </button>
@@ -791,6 +797,8 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({ block, blockI
           onClick={handleToggleCollapse}
           className="p-0.5 text-gray-600 hover:text-gray-300 transition-colors shrink-0"
           title={collapsed ? "展开工具卡片" : "折叠工具卡片"}
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? "展开工具卡片" : "折叠工具卡片"}
         >
           {collapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
         </button>

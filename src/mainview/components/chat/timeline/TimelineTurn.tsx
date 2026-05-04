@@ -65,6 +65,8 @@ export const TimelineTurn = memo(function TimelineTurn({ turn, isLast: _isLast }
             onClick={toggleCollapse}
             className="shrink-0 p-0.5 rounded hover:bg-gray-800 transition-colors"
             title={collapsed ? "展开" : "折叠"}
+            aria-expanded={!collapsed}
+            aria-label={collapsed ? "展开回合" : "折叠回合"}
           >
             {collapsed ? (
               <ChevronRight size={13} className="text-gray-500" />

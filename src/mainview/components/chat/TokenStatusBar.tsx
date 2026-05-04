@@ -41,7 +41,7 @@ const ContextRing = memo(function ContextRing({ percent, color, isWorking }: { p
   const offset = circumference - clamped * circumference;
 
   return (
-    <svg width={size} height={size} className={`shrink-0 ${isWorking ? "animate-pulse" : ""}`} viewBox={`0 0 ${size} ${size}`}>
+    <svg width={size} height={size} className={`shrink-0 ${isWorking ? "animate-pulse" : ""}`} viewBox={`0 0 ${size} ${size}`} role="progressbar" aria-valuenow={Math.round(clamped * 100)} aria-valuemin={0} aria-valuemax={100} aria-label={`上下文使用 ${Math.round(clamped * 100)}%`}>
       <circle
         cx={size / 2}
         cy={size / 2}

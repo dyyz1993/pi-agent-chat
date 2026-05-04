@@ -189,8 +189,7 @@ export function SidebarBottomControls() {
       setSourceBranch("");
       setWorkspaceOpen(false);
       await useSessionStore.getState().createNewSession(wt.path);
-    } catch {
-    }
+    } catch (err) { console.warn("[SidebarControls] worktree add failed:", err); }
     setCreating(false);
   }, [newBranch, activeTabPath, sourceBranch, creating, addWorktreeAction, addProjectTab]);
 
@@ -208,7 +207,7 @@ export function SidebarBottomControls() {
         modelId: model.id,
       });
       setCurrentModel(model.provider, model.id);
-    } catch {}
+    } catch (err) { console.warn("[SidebarControls] setModel failed:", err); }
     setSwitching(false);
     setModelOpen(false);
   }, [activeSessionId, switching, currentModel, setCurrentModel]);
@@ -225,7 +224,7 @@ export function SidebarBottomControls() {
         level,
       });
       setThinkingLevel(level);
-    } catch {}
+    } catch (err) { console.warn("[SidebarControls] setThinkingLevel failed:", err); }
     setSwitching(false);
     setThinkingOpen(false);
   }, [activeSessionId, switching, currentThinkingLevel, setThinkingLevel]);
@@ -257,6 +256,8 @@ export function SidebarBottomControls() {
           onClick={() => { setWorkspaceOpen(!workspaceOpen); setModelOpen(false); setThinkingOpen(false); }}
           disabled={!activeSessionId}
           className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-gray-400 hover:bg-gray-800/60 hover:text-gray-300 transition-colors disabled:opacity-40"
+          aria-expanded={workspaceOpen}
+          aria-label="工作区选择"
         >
           <FolderTree className="w-3 h-3 shrink-0 text-gray-500" />
           <div className="flex flex-col min-w-0 flex-1 text-left">
@@ -346,6 +347,8 @@ export function SidebarBottomControls() {
           onClick={() => { setModelOpen(!modelOpen); setThinkingOpen(false); setWorkspaceOpen(false); }}
           disabled={!activeSessionId}
           className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-gray-400 hover:bg-gray-800/60 hover:text-gray-300 transition-colors disabled:opacity-40"
+          aria-expanded={modelOpen}
+          aria-label="模型选择"
         >
           <Cpu className="w-3 h-3 shrink-0 text-gray-500" />
           <span className="truncate flex-1 text-left">模型: {modelDisplay}</span>
@@ -393,6 +396,8 @@ export function SidebarBottomControls() {
           onClick={() => { setThinkingOpen(!thinkingOpen); setModelOpen(false); setWorkspaceOpen(false); }}
           disabled={!activeSessionId}
           className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-gray-400 hover:bg-gray-800/60 hover:text-gray-300 transition-colors disabled:opacity-40"
+          aria-expanded={thinkingOpen}
+          aria-label="思考级别选择"
         >
           <Brain className="w-3 h-3 shrink-0 text-gray-500" />
           <span className="truncate flex-1 text-left">思考: {thinkingDisplay}</span>

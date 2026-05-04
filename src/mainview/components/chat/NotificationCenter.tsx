@@ -72,6 +72,8 @@ export function NotificationCenter() {
         }}
         className="p-1 rounded transition-colors text-gray-600 hover:text-gray-300 relative"
         title="通知"
+        aria-label={`通知${unread > 0 ? `，${unread} 条未读` : ""}`}
+        aria-expanded={panelOpen}
       >
         <Bell className="w-3.5 h-3.5" />
         {unread > 0 && (
@@ -82,7 +84,7 @@ export function NotificationCenter() {
       </button>
 
       {panelOpen && (
-        <div className="absolute right-0 top-full mt-1 w-72 max-h-80 overflow-hidden flex flex-col bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50">
+        <div className="absolute right-0 top-full mt-1 w-72 max-h-80 overflow-hidden flex flex-col bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50" role="log" aria-label="通知列表">
           <div className="flex items-center justify-between px-3 py-2 border-b border-gray-700">
             <span className="text-[11px] text-gray-400 font-medium">通知</span>
             {notifications.length > 0 && (
@@ -126,6 +128,7 @@ export function NotificationCenter() {
                         dismiss(n.id);
                       }}
                       className="shrink-0 text-gray-600 hover:text-gray-300 transition-colors"
+                      aria-label="关闭通知"
                     >
                       <X className="w-2.5 h-2.5" />
                     </button>
