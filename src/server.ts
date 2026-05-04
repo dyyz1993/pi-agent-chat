@@ -6,9 +6,11 @@ import { createServer } from "http";
 import { config } from "./server-config";
 import { createHttpHandler } from "./gateway/http-routes";
 import { createWsHandler } from "./gateway/ws-handler";
-import { createLogger, configureLogDir } from "./shared/lib/logger";
+import { createLogger, setLogSink } from "./shared/lib/logger";
+import { configureLogDir, writeLogLine } from "./shared/lib/logger.node";
 
 configureLogDir(config.logDir);
+setLogSink(writeLogLine);
 const log = createLogger("server");
 
 const httpServer = createServer();

@@ -1,6 +1,3 @@
-import { appendFileSync, mkdirSync, existsSync } from "fs";
-import { join } from "path";
-
 export type LogModule = "server" | "gateway" | "system" | "chat" | "chat-store" | "event-handler" | "session" | "file" | "timer" | "git" | "agent" | "bash";
 type LogLevel = "debug" | "info" | "warn" | "error";
 
@@ -12,39 +9,19 @@ interface LogEntry {
   data?: Record<string, unknown>;
 }
 
-let _logDir: string | null = null;
+export type LogSink = (line: string) => void;
 
-/** Configure the log output directory (call once at startup) */
-export function configureLogDir(dir: string): void {
-  _logDir = dir;
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
-  }
+let _sink: LogSink | null = null;
+
+export function setLogSink(sink: LogSink): void {
+  _sink = sink;
 }
 
-function getLogDir(): string {
-  if (!_logDir) {
-    _logDir = "logs";
-    if (!existsSync(_logDir)) {
-      mkdirSync(_logDir, { recursive: true });
-    }
-  }
-  return _logDir;
-}
+export function configureLogDir(_dir: string): void {}
 
 function formatLine(entry: LogEntry): string {
   const base = `[${entry.timestamp}] [${entry.level.toUpperCase()}] [${entry.module}] ${entry.message}`;
   return entry.data ? `${base} ${JSON.stringify(entry.data)}` : base;
-}
-
-function writeToFile(line: string): void {
-  try {
-    const date = new Date().toISOString().slice(0, 10);
-    const filePath = join(getLogDir(), `${date}.log`);
-    appendFileSync(filePath, `${line}\n`);
-  } catch {
-    // File write failure should not crash the app
-  }
 }
 
 export class Logger {
@@ -81,7 +58,6 @@ export class Logger {
 
     const line = formatLine(entry);
 
-    // Console output
     if (level === "error") {
       console.error(line);
     } else if (level === "warn") {
@@ -90,14 +66,12 @@ export class Logger {
       console.log(line);
     }
 
-    // File output (skip debug in production)
-    if (process.env.NODE_ENV !== "production" || level !== "debug") {
-      writeToFile(line);
+    if (_sink) {
+      _sink(line);
     }
   }
 }
 
-/** Factory: create a module-scoped logger */
 export function createLogger(module: LogModule): Logger {
   return new Logger(module);
 }

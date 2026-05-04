@@ -2,9 +2,11 @@ import { BrowserWindow, BrowserView, Updater, ApplicationMenu } from "electrobun
 import { RPCServer } from "@dyyz1993/rpc-core";
 import { ElectrobunTransport } from "../gateway/ipc-transport";
 import { registerAllHandlers } from "../shared/register-all-handlers";
-import { createLogger, configureLogDir } from "../shared/lib/logger";
+import { createLogger, setLogSink } from "../shared/lib/logger";
+import { configureLogDir, writeLogLine } from "../shared/lib/logger.node";
 
 configureLogDir("logs");
+setLogSink(writeLogLine);
 const log = createLogger("server");
 
 async function getMainViewUrl(): Promise<string> {
