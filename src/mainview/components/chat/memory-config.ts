@@ -124,20 +124,36 @@ export function getMemorySummary(
       const summary = typeof d.summary === "string" ? d.summary : "";
       const bytes = typeof d.injectedBytes === "number" ? d.injectedBytes : 0;
       const layer = typeof d.layer === "string" ? d.layer : "";
+      const isForce = d.isForce === true;
       const files = Array.isArray(d.selectedFiles) ? (d.selectedFiles as string[]) : [];
       const durationMs = typeof d.durationMs === "number" ? d.durationMs : 0;
-      const layerLabel = layer === "skip" ? "Skip规则" : layer === "llm" ? "LLM选择" : layer === "none" ? "无匹配" : "";
+      const availableFiles = typeof d.availableFiles === "number" ? d.availableFiles : 0;
       const isNoResult = summary === "No relevant memories" || (bytes === 0 && files.length === 0);
       if (isNoResult) {
-        const parts = [layerLabel, durationMs > 0 ? `${durationMs}ms` : ""].filter(Boolean);
+        if (layer === "not_triggered") {
+          return "未触发搜索（默认跳过）";
+        }
+        if (layer === "skip") {
+          return `规则命中，跳过搜索 · 复用缓存`;
+        }
+        if (layer === "error") {
+          return `搜索出错`;
+        }
+        const parts: string[] = [];
+        if (availableFiles > 0) parts.push(`${availableFiles}个文件`);
+        if (durationMs > 0) parts.push(`${durationMs}ms`);
         const detail = parts.length > 0 ? ` (${parts.join(" · ")})` : "";
         return `无匹配结果${detail}`;
       }
-      const fileLabel = files.length > 0 ? `${files.length}个文件` : "";
+      const sizeLabel = bytes > 0 ? `${Math.round(bytes / 1024)}KB` : "";
+      const fileCountLabel = availableFiles > 0 ? `${availableFiles}个文件` : files.length > 0 ? `${files.length}个文件` : "";
       const durationLabel = durationMs > 0 ? `${durationMs}ms` : "";
-      const parts = [layerLabel, fileLabel, durationLabel].filter(Boolean);
-      const detail = parts.length > 0 ? ` (${parts.join(" · ")})` : "";
-      return summary ? `${summary}${bytes > 0 ? ` · ${Math.round(bytes / 1024)}KB` : ""}${detail}` : null;
+      const layerLabel = layer === "llm"
+        ? (isForce ? "强制触发" : "关键词触发")
+        : layer === "skip" ? "规则" : layer === "not_triggered" ? "未触发" : "";
+      const parts = [layerLabel, sizeLabel, fileCountLabel, durationLabel].filter(Boolean);
+      const detail = parts.length > 0 ? ` · ${parts.join(" · ")}` : "";
+      return `已注入记忆${detail}`;
     }
     case "memory_extract": {
       const created = Array.isArray(d.created) ? (d.created as string[]).length : (typeof d.created === "number" ? d.created : 0);
