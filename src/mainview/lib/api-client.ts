@@ -232,7 +232,7 @@ class APIClientImpl {
         eventType: direction === "event" ? method : undefined,
         payload,
       });
-    } catch {}
+    } catch (err) { console.warn("[api-client] emit failed:", err); }
   }
 
   unsubscribe(subscriptionId: string): void {

@@ -87,7 +87,8 @@ function useRuleContent(filePath: string | undefined, expanded: boolean) {
 					setLoading(false)
 				}
 			})
-			.catch(() => {
+			.catch((err) => {
+				console.warn("[RulesPanel] load failed:", err)
 				if (!cancelled) {
 					setContent(null)
 					setLoading(false)

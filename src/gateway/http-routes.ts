@@ -167,7 +167,7 @@ export function createHttpHandler(deps: HttpRouteDeps): (req: IncomingMessage, r
       try {
         const content = await readFile("logs/debug.log", "utf-8").catch(() => "");
         res.writeHead(200, { "Content-Type": "text/plain" }).end(content);
-      } catch { res.writeHead(200, { "Content-Type": "text/plain" }).end(""); }
+      } catch (err) { console.error("[http-routes] debug-log read failed:", err); res.writeHead(200, { "Content-Type": "text/plain" }).end(""); }
       return;
     }
 

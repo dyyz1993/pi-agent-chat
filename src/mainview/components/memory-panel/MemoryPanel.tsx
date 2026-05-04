@@ -118,7 +118,8 @@ function FileContentPreview({ filePath }: { filePath: string }) {
 				setContent((result as { content: string }).content)
 				setLoading(false)
 			}
-		}).catch(() => {
+		}).catch((err) => {
+			console.warn("[MemoryPanel] load failed:", err)
 			if (!cancelled) setLoading(false)
 		})
 		return () => { cancelled = true }

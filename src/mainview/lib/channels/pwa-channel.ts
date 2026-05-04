@@ -35,7 +35,7 @@ const PwaChannel: NotificationChannel = {
         window.focus();
         n.close();
       };
-    } catch {}
+    } catch (err) { console.warn("[pwa-channel] notification failed:", err); }
   },
 };
 

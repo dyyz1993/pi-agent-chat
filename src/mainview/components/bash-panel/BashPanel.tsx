@@ -212,7 +212,7 @@ function LogViewer({ logPath, toolCallId, onClose }: { logPath: string; toolCall
 
 				if (cancelled) return;
 				await apiClient.call("bash.watchLog", { logPath, sessionId: sid ?? undefined });
-			} catch {}
+			} catch (err) { console.warn("[BashPanel] watchLog failed:", err); }
 		})();
 
 		return () => {
@@ -220,7 +220,7 @@ function LogViewer({ logPath, toolCallId, onClose }: { logPath: string; toolCall
 			mountedRef.current = false;
 			if (subIdRef.current) apiClient.unsubscribe(subIdRef.current);
 			const sid = useSessionStore.getState().activeSessionId;
-			apiClient.call("bash.unwatchLog", { logPath, sessionId: sid ?? undefined }).catch(() => {});
+			apiClient.call("bash.unwatchLog", { logPath, sessionId: sid ?? undefined }).catch((err) => { console.warn("[BashPanel] unwatchLog failed:", err); });
 		};
 	}, [logPath]);
 
@@ -243,7 +243,7 @@ function LogViewer({ logPath, toolCallId, onClose }: { logPath: string; toolCall
 				setTotalLines(result.totalLines);
 				setHasMore(result.hasMore);
 				offsetRef.current += result.lines.length;
-			} catch {} finally {
+			} catch (err) { console.warn("[BashPanel] loadMore failed:", err); } finally {
 				if (mountedRef.current) loadingRef.current = false;
 			}
 		}

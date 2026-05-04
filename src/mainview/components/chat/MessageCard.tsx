@@ -274,7 +274,7 @@ const HeaderActions = memo(function HeaderActions({ message, isUserCard }: { mes
     try {
       const tree = await apiClient.call("agent.getTree", { sessionId });
       return tree.entries ?? [];
-    } catch { return null }
+    } catch { /* tree fetch failed */ return null }
   }, [sessionId]);
 
   const resolveEntryId = useCallback(async (treeEntries?: TreeEntry[] | null): Promise<string | null> => {
@@ -340,7 +340,7 @@ const HeaderActions = memo(function HeaderActions({ message, isUserCard }: { mes
     const tree = await fetchTree();
     const entryId = await resolveEntryId(tree);
     if (!sessionId || !entryId) return;
-    const result = await apiClient.call("agent.fork", { sessionId, entryId, position: "at" }).catch(() => undefined);
+    const result = await apiClient.call("agent.fork", { sessionId, entryId, position: "at" }).catch((err) => { console.warn("[MessageCard] fork failed:", err); return undefined; });
     if (!result || result.cancelled || !result.newSessionId || !result.newSessionFile) return;
     const state = useSessionStore.getState();
     const activeTab = state.projectTabs.find((t: { id: string }) => t.id === state.activeProjectId);
@@ -397,7 +397,7 @@ const HeaderActions = memo(function HeaderActions({ message, isUserCard }: { mes
               history.unshift(currentInput);
               localStorage.setItem(`${HISTORY_KEY}:${sessionId}`, JSON.stringify(history.slice(0, 10)));
             }
-          } catch {}
+          } catch { /* localStorage unavailable, ignore */ }
         }
       }
       const skipFiles = mode === "message";
@@ -425,7 +425,7 @@ const HeaderActions = memo(function HeaderActions({ message, isUserCard }: { mes
         await executeRollback("message");
         return;
       }
-      const preview = await apiClient.call("agent.rollbackPreview", { sessionId, targetId: result.targetId }).catch(() => ({ restored: [], deleted: [] }));
+      const preview = await apiClient.call("agent.rollbackPreview", { sessionId, targetId: result.targetId }).catch((err) => { console.warn("[MessageCard] rollbackPreview failed:", err); return ({ restored: [], deleted: [] }); });
       setConfirmState({ mode, targetId: result.targetId, preview });
     } catch (err) {
       pushNotification({ message: `预览失败：${err instanceof Error ? err.message : "未知错误"}`, level: "error" });

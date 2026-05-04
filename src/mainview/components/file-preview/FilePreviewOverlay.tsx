@@ -55,7 +55,8 @@ export function FilePreviewOverlay({ preview, loading, onClose }: FilePreviewOve
         .then((text) => {
           setSvgContent(text);
         })
-        .catch(() => {
+        .catch((err) => {
+          console.warn("[FilePreview] SVG fetch failed:", err);
           setSvgContent(null);
         })
         .finally(() => setSvgLoading(false));

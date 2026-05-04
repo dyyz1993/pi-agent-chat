@@ -51,7 +51,7 @@ export const MessageSelectionBar = memo(function MessageSelectionBar({ messages,
       sessionId,
       messageIds,
       content,
-    }).catch(() => {});
+    }).catch((err) => { console.warn("[MessageSelectionBar] memory.remember failed:", err); });
     clear();
   }, [messages, selectedIds, clear]);
 
