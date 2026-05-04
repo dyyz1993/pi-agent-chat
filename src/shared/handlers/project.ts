@@ -4,11 +4,13 @@ import { existsSync } from "fs";
 import { basename } from "path";
 import { addRecentProject, listRecentProjects, removeRecentProject, listConfiguredPaths, addConfiguredPath, removeConfiguredPath, syncOpenTabs, restoreOpenTabs, listDirectory, removeFavoriteFolder, listFavoriteFolders, toggleProjectPin, toggleFavoriteFolder } from "../lib/project-config";
 import { scanSessionsForProject, scanAllProjects, listPiProjects, listMergedProjects, findSessionById } from "../lib/session-scanner";
+import { openFolder } from "../lib/native-dialog";
+import { linkProject, unlinkProject, getLinkedProjects } from "../lib/linked-projects-config";
 
 type P<K extends keyof RPCMethods> = RPCMethods[K] extends { params: infer P } ? P : never;
 type R<K extends keyof RPCMethods> = RPCMethods[K] extends { result: infer R } ? R : never;
 
-export function register(server: RPCServer, _options: HandlerOptions): void {
+export function register(server: RPCServer, options: HandlerOptions): void {
   const r = <K extends keyof RPCMethods & string>(
     method: K,
     handler: (params: P<K>) => Promise<R<K>>,
@@ -90,8 +92,19 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     return { ok: true };
   });
 
-  r("project.browseFolder", async (_params) => {
-    return { cancelled: true } as { path: string } | { cancelled: true };
+  r("project.browseFolder", async (params) => {
+    if (options.platform !== "desktop") {
+      return { cancelled: true } as { path: string } | { cancelled: true };
+    }
+    try {
+      const paths = await openFolder({ startingFolder: params.defaultPath });
+      if (paths.length === 0) {
+        return { cancelled: true } as { path: string } | { cancelled: true };
+      }
+      return { path: paths[0] } as { path: string } | { cancelled: true };
+    } catch {
+      return { cancelled: true } as { path: string } | { cancelled: true };
+    }
   });
 
   r("project.syncTabs", async (params) => {
@@ -126,5 +139,18 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   r("project.toggleProjectPin", async (params) => {
     const pinned = await toggleProjectPin(params.projectPath);
     return { pinned };
+  });
+
+  r("project.linkProject", async (params) => {
+    return linkProject(params.projectRoot, params.project);
+  });
+
+  r("project.unlinkProject", async (params) => {
+    return unlinkProject(params.projectRoot, params.projectId);
+  });
+
+  r("project.getLinkedProjects", async (params) => {
+    const projects = await getLinkedProjects(params.projectRoot);
+    return { projects };
   });
 }

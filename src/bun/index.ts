@@ -1,9 +1,20 @@
-import { BrowserWindow, BrowserView, Updater, ApplicationMenu } from "electrobun/bun";
+// @ts-expect-error electrobun Utils not exported in type definitions
+import { BrowserWindow, BrowserView, Updater, ApplicationMenu, Utils } from "electrobun/bun";
 import { RPCServer } from "@dyyz1993/rpc-core";
 import { ElectrobunTransport } from "../gateway/ipc-transport";
 import { registerAllHandlers } from "../shared/register-all-handlers";
 import { createLogger, setLogSink } from "../shared/lib/logger";
 import { configureLogDir, writeLogLine } from "../shared/lib/logger.node";
+import { setOpenFolderFn } from "../shared/lib/native-dialog";
+
+setOpenFolderFn(async (opts) => {
+  return Utils.openFileDialog({
+    startingFolder: opts.startingFolder ?? "~/",
+    canChooseFiles: false,
+    canChooseDirectory: true,
+    allowsMultipleSelection: false,
+  });
+});
 
 configureLogDir("logs");
 setLogSink(writeLogLine);
