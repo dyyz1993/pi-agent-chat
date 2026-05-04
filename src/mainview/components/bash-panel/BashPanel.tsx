@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import {
 	ChevronDown,
@@ -11,6 +11,7 @@ import {
 	Send,
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useBashStore } from "../../stores/use-bash-store";
 import type { BashProcess } from "../../../shared/modules/bash";
@@ -131,6 +132,8 @@ function BashProcessCard({ process: p, onOpenLog }: {
 	);
 }
 
+const LINE_HEIGHT = 20;
+
 function LogViewer({ logPath, toolCallId, onClose }: { logPath: string; toolCallId: string; onClose: () => void }) {
 	const [lines, setLines] = useState<string[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -138,13 +141,31 @@ function LogViewer({ logPath, toolCallId, onClose }: { logPath: string; toolCall
 	const [hasMore, setHasMore] = useState(false);
 	const [autoScroll, setAutoScroll] = useState(true);
 	const [stdinInput, setStdinInput] = useState("");
-	const containerRef = useRef<HTMLDivElement>(null);
+	const scrollRef = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLInputElement>(null);
 	const offsetRef = useRef(0);
 	const mountedRef = useRef(true);
 	const loadingRef = useRef(false);
 	const initTag = useRef(0);
 	const subIdRef = useRef<string | null>(null);
+	const autoScrollRef = useRef(autoScroll);
+
+	autoScrollRef.current = autoScroll;
+
+	const virtualizer = useVirtualizer({
+		count: lines.length,
+		getScrollElement: () => scrollRef.current,
+		estimateSize: () => LINE_HEIGHT,
+		overscan: 20,
+	});
+
+	const scrollToBottom = useCallback(() => {
+		virtualizer.scrollToIndex(lines.length - 1, { align: "end" });
+	}, [virtualizer, lines.length]);
+
+	useEffect(() => {
+		if (autoScroll && lines.length > 0) scrollToBottom();
+	}, [lines, autoScroll, scrollToBottom]);
 
 	useEffect(() => {
 		const tag = ++initTag.current;
@@ -203,12 +224,8 @@ function LogViewer({ logPath, toolCallId, onClose }: { logPath: string; toolCall
 		};
 	}, [logPath]);
 
-	useEffect(() => {
-		if (autoScroll && containerRef.current) containerRef.current.scrollTop = containerRef.current.scrollHeight;
-	}, [lines, autoScroll]);
-
 	async function handleScroll() {
-		const el = containerRef.current;
+		const el = scrollRef.current;
 		if (!el) return;
 		const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
 		setAutoScroll(nearBottom);
@@ -241,6 +258,8 @@ function LogViewer({ logPath, toolCallId, onClose }: { logPath: string; toolCall
 		setStdinInput("");
 	}
 
+	const virtualItems = virtualizer.getVirtualItems();
+
 	return (
 		<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 sm:p-6" onClick={onClose}>
 			<div
@@ -257,7 +276,7 @@ function LogViewer({ logPath, toolCallId, onClose }: { logPath: string; toolCall
 				</div>
 
 				<div
-					ref={containerRef}
+					ref={scrollRef}
 					onScroll={handleScroll}
 					className="flex-1 overflow-auto p-3 sm:p-4 min-h-0"
 				>
@@ -269,15 +288,36 @@ function LogViewer({ logPath, toolCallId, onClose }: { logPath: string; toolCall
 					) : lines.length === 0 ? (
 						<div className="text-[11px] text-gray-600 italic">暂无输出</div>
 					) : (
-						<pre className="text-[11px] text-gray-300 font-mono whitespace-pre-wrap break-all leading-relaxed">
-							{lines.join("\n")}
-						</pre>
+						<div
+							style={{
+								height: virtualizer.getTotalSize(),
+								width: "100%",
+								position: "relative",
+							}}
+						>
+							{virtualItems.map((virtualRow) => {
+								const line = lines[virtualRow.index];
+								return (
+									<pre
+										key={virtualRow.index}
+										data-index={virtualRow.index}
+										ref={virtualizer.measureElement}
+										className="text-[11px] text-gray-300 font-mono whitespace-pre-wrap break-all leading-relaxed absolute top-0 left-0 w-full"
+										style={{
+											transform: `translateY(${virtualRow.start}px)`,
+										}}
+									>
+										{line}
+									</pre>
+								);
+							})}
+						</div>
 					)}
 				</div>
 
 				<div className="flex items-center gap-2 px-3 sm:px-4 py-2 border-t border-gray-700 shrink-0" style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}>
 					<span className="text-[9px] text-gray-600 shrink-0">{lines.length}/{totalLines}</span>
-					<button onClick={() => setAutoScroll(true)} className="text-[9px] text-gray-500 hover:text-gray-400 transition-colors shrink-0">
+					<button onClick={() => { setAutoScroll(true); scrollToBottom(); }} className="text-[9px] text-gray-500 hover:text-gray-400 transition-colors shrink-0">
 						滚动到底部
 					</button>
 					<div className="flex-1 flex items-center gap-1.5 ml-2">
