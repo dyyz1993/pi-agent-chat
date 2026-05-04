@@ -17,7 +17,7 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({ block
     const parsed = JSON.parse(block.args ?? "{}") as { description?: string; instruction?: string };
     description = parsed.description ?? "";
     instruction = parsed.instruction ?? "";
-  } catch {}
+  } catch { /* args not valid JSON, use default */ }
 
   const displayTitle = description || instruction.slice(0, 120) || "子代理任务";
 

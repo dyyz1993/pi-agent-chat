@@ -99,7 +99,7 @@ export const useUIDialogStore = create<UIDialogState>((set, get) => ({
       sessionId: state.request.sessionId,
       requestId,
       response,
-    }).catch(() => {});
+    }).catch((err) => { console.warn("[ui-dialog] respondUI failed:", err); });
 
     const newStates = new Map(requestStates);
     newStates.set(requestId, { ...state, status: "responded", response });
@@ -121,7 +121,7 @@ export const useUIDialogStore = create<UIDialogState>((set, get) => ({
       sessionId: state.request.sessionId,
       requestId,
       response: { cancelled: true },
-    }).catch(() => {});
+    }).catch((err) => { console.warn("[ui-dialog] dismissUI failed:", err); });
 
     const newStates = new Map(requestStates);
     newStates.set(requestId, { ...state, status: "dismissed", response: { cancelled: true } });

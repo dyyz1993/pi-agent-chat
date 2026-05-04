@@ -70,7 +70,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 					mtimeMs: s.mtimeMs,
 					size: s.size,
 				})
-			} catch {}
+			} catch (err) { console.warn("[memory] failed to parse memory file:", filePath, err) }
 		}
 
 		files.sort((a, b) => b.mtimeMs - a.mtimeMs)
@@ -80,7 +80,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 		if (existsSync(entrypointPath)) {
 			try {
 				entrypointContent = await readFile(entrypointPath, "utf-8")
-			} catch {}
+			} catch (err) { console.warn("[memory] failed to read MEMORY.md:", err) }
 		}
 
 		return { files, entrypointContent, memoryDir }
@@ -94,7 +94,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 				try {
 					const result = await manager.callChannel(sessionId, "memory", "memory.list", { projectPath: params.projectPath }) as { files: MemoryFile[]; entrypointContent: string | null; memoryDir?: string } | null
 					if (result) return { ...result, memoryDir: result.memoryDir ?? "" }
-				} catch {}
+				} catch (err) { console.warn("[memory] channel call failed:", err) }
 			}
 		}
 

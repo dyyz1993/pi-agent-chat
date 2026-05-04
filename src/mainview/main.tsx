@@ -8,7 +8,7 @@ import "./lib/channels/pwa-channel";
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch(() => {});
+    navigator.serviceWorker.register("/sw.js").catch(() => { /* service worker registration fails in non-PWA contexts */ });
   });
 }
 

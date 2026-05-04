@@ -67,7 +67,7 @@ function parseWriteArgs(args: string): WriteToolArgs {
     content: typeof obj.content === "string" ? obj.content : "",
   };
     }
-  } catch {}
+  } catch { /* args not valid JSON, use default */ }
   return { path: "", content: "" };
 }
 

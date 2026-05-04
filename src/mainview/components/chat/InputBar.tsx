@@ -107,18 +107,18 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
         />
         <div className="flex shrink-0 py-1.5 pr-1.5 gap-1">
           <div className="flex flex-col justify-between">
-            <button onClick={handleClear} className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${hasContent ? "border-gray-600 text-gray-300 hover:text-white hover:border-gray-400" : "border-gray-700/50 text-gray-700 pointer-events-none"}`} title="清除">
+            <button onClick={handleClear} className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${hasContent ? "border-gray-600 text-gray-300 hover:text-white hover:border-gray-400" : "border-gray-700/50 text-gray-700 pointer-events-none"}`} title="清除" aria-label="清除输入">
               <X className="w-3 h-3" />
             </button>
           </div>
           <div className={`flex flex-col shrink ${expanded ? "gap-0.5 justify-start" : "justify-between"}`}>
-            <button onClick={toggleExpand} className="w-5 h-5 rounded border border-gray-600 text-gray-300 hover:text-white hover:border-gray-400 transition-colors flex items-center justify-center" title={expanded ? "收起" : "展开"}>
+            <button onClick={toggleExpand} className="w-5 h-5 rounded border border-gray-600 text-gray-300 hover:text-white hover:border-gray-400 transition-colors flex items-center justify-center" title={expanded ? "收起" : "展开"} aria-expanded={expanded} aria-label={expanded ? "收起输入框" : "展开输入框"}>
               {expanded ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
             </button>
-            <button onClick={handleNavPrev} disabled={!hasPrev} className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${hasPrev ? "border-gray-600 text-gray-300 hover:text-white hover:border-gray-400" : "border-gray-700/50 text-gray-700 pointer-events-none"}`} title="上一条">
+            <button onClick={handleNavPrev} disabled={!hasPrev} className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${hasPrev ? "border-gray-600 text-gray-300 hover:text-white hover:border-gray-400" : "border-gray-700/50 text-gray-700 pointer-events-none"}`} title="上一条" aria-label="上一条历史消息">
               <ChevronUp className="w-3 h-3" />
             </button>
-            <button onClick={handleNavNext} disabled={!hasNext} className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${hasNext ? "border-gray-600 text-gray-300 hover:text-white hover:border-gray-400" : "border-gray-700/50 text-gray-700 pointer-events-none"}`} title="下一条">
+            <button onClick={handleNavNext} disabled={!hasNext} className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${hasNext ? "border-gray-600 text-gray-300 hover:text-white hover:border-gray-400" : "border-gray-700/50 text-gray-700 pointer-events-none"}`} title="下一条" aria-label="下一条历史消息">
               <ChevronDown className="w-3 h-3" />
             </button>
           </div>

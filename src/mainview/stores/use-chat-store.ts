@@ -292,7 +292,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (!sessionId) return;
     try {
       await apiClient.call("agent.clearQueue", { sessionId });
-    } catch {}
+    } catch (err) { console.warn("[chat] clearQueue failed:", err); }
   },
 
   addMessage: (msg) => {

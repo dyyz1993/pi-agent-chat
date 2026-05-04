@@ -88,8 +88,8 @@ export function MessageListView({ messages, scrollRef, onScroll, virtualizer }: 
       ref={scrollRef as React.Ref<HTMLDivElement>}
       className="flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain"
       style={{ scrollbarWidth: 'thin', scrollbarColor: 'transparent transparent', overflowAnchor: 'none' }}
-      onMouseEnter={(e) => { (e.target as HTMLElement).style.scrollbarColor = '#37415120 transparent' }}
-      onMouseLeave={(e) => { (e.target as HTMLElement).style.scrollbarColor = 'transparent transparent' }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.scrollbarColor = '#37415120 transparent' }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.scrollbarColor = 'transparent transparent' }}
       onScroll={onScroll}
     >
       <div className="py-0.5 pl-2 pr-3">

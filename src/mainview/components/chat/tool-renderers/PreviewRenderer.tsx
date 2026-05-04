@@ -16,7 +16,7 @@ export const PreviewRenderer = memo(function PreviewRenderer({ block, blockId }:
     try {
       const parsed = JSON.parse(block.args ?? "{}") as { source?: string };
       filePath = parsed.source ?? "";
-    } catch {}
+    } catch { /* args not valid JSON, use default */ }
 
     return (
       <div data-block-id={blockId} className={`border-x-0 border-t border-b overflow-hidden ${

@@ -108,7 +108,7 @@ export const useStatusStore = create<StatusState>((set) => ({
       const skill = s.skills.find((sk) => sk.name === name);
       if (!skill) return s;
       const newEnabled = !skill.enabled;
-      apiClient.call("agent.setDisabledSkill", { skillName: name, disabled: !newEnabled }).catch(() => {});
+      apiClient.call("agent.setDisabledSkill", { skillName: name, disabled: !newEnabled }).catch((err) => { console.warn("[status] setDisabledSkill failed:", err); });
       return {
         skills: s.skills.map((sk) => sk.name === name ? { ...sk, enabled: newEnabled } : sk),
       };

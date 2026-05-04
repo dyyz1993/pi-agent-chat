@@ -57,7 +57,7 @@ export const useBashStore = create<BashState>()((set, get) => ({
   loadHistory: async (sessionId: string) => {
     try {
       await apiClient.call("bash.list", { sessionId });
-    } catch {}
+    } catch (err) { console.warn("[bash] loadHistory failed:", err); }
   },
 
   subscribeOutput: async (sessionId: string, toolCallId: string) => {

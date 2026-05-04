@@ -110,7 +110,8 @@ export class AgentProcessManager {
     for (const server of this.servers) {
       try {
         await server.emitEvent(eventType, payload, metadata);
-      } catch {
+      } catch (err) {
+        log.warn("broadcastEvent failed, removing server", { eventType, err: err instanceof Error ? err.message : String(err) });
         this.servers.delete(server);
       }
     }
@@ -179,28 +180,28 @@ export class AgentProcessManager {
   steer(sessionId: string, content: string): boolean {
     const managed = this.clients.get(sessionId);
     if (!managed) return false;
-    managed.client.steer(content).catch(() => {});
+    managed.client.steer(content).catch((err) => { log.warn("steer error", { sessionId, err: err instanceof Error ? err.message : String(err) }); });
     return true;
   }
 
   followUp(sessionId: string, content: string): boolean {
     const managed = this.clients.get(sessionId);
     if (!managed) return false;
-    managed.client.followUp(content).catch(() => {});
+    managed.client.followUp(content).catch((err) => { log.warn("followUp error", { sessionId, err: err instanceof Error ? err.message : String(err) }); });
     return true;
   }
 
   async abort(sessionId: string): Promise<boolean> {
     const managed = this.clients.get(sessionId);
     if (!managed) return false;
-    await managed.client.abort().catch(() => {});
+    await managed.client.abort().catch((err) => { log.warn("abort error", { sessionId, err: err instanceof Error ? err.message : String(err) }); });
     return true;
   }
 
   async setCwd(sessionId: string, cwd: string): Promise<boolean> {
     const managed = this.clients.get(sessionId);
     if (!managed) return false;
-    await managed.client.setCwd(cwd).catch(() => {});
+    await managed.client.setCwd(cwd).catch((err) => { log.warn("setCwd error", { sessionId, cwd, err: err instanceof Error ? err.message : String(err) }); });
     return true;
   }
 
@@ -217,10 +218,10 @@ export class AgentProcessManager {
     if (!managed) return false;
 
     managed.info.status = "idle";
-    this.emitAgentEvent(sessionId, { type: "agent_end" } as SanitizedEvent).catch(() => {});
+    this.emitAgentEvent(sessionId, { type: "agent_end" } as SanitizedEvent).catch((err) => { log.warn("emitAgentEvent(agent_end) error", { sessionId, err: err instanceof Error ? err.message : String(err) }); });
 
     managed.unsubscribe();
-    managed.client.stop().catch(() => {});
+    managed.client.stop().catch((err) => { log.warn("stop error", { sessionId, err: err instanceof Error ? err.message : String(err) }); });
     this.clients.delete(sessionId);
     this.sessionPaths.delete(sessionId);
     return true;
@@ -252,10 +253,10 @@ export class AgentProcessManager {
               customType: parsed.customType as string | undefined,
             });
           }
-        } catch {}
+        } catch (err) { log.warn("readJsonlEntries: skipping malformed entry", { err: err instanceof Error ? err.message : String(err) }); }
       }
       rl.close();
-    } catch {}
+    } catch (err) { log.warn("readJsonlEntries: failed to read file", { err: err instanceof Error ? err.message : String(err) }); }
     return entries;
   }
 
@@ -316,7 +317,8 @@ export class AgentProcessManager {
         description: String(c.description ?? ""),
         source: c.source ?? "extension",
       }));
-    } catch {
+    } catch (err) {
+      log.warn("getCommands failed", { sessionId, err: err instanceof Error ? err.message : String(err) });
       return [];
     }
   }
@@ -349,7 +351,8 @@ export class AgentProcessManager {
           percent: cu.percent,
         } : undefined,
       };
-    } catch {
+    } catch (err) {
+      log.warn("getSessionStats failed", { sessionId, err: err instanceof Error ? err.message : String(err) });
       return null;
     }
   }
@@ -368,7 +371,7 @@ export class AgentProcessManager {
         if (messagesResult) {
           messages = messagesResult;
         }
-      } catch {}
+      } catch (err) { log.warn("getMessages SDK failed", { sessionId, err: err instanceof Error ? err.message : String(err) }); }
       try {
         const treeResult = await managed.client.getTreeWithLeaf();
         const entries = treeResult.entries;
@@ -386,7 +389,7 @@ export class AgentProcessManager {
             curId = node && typeof node.parentId === "string" && node.parentId ? node.parentId : undefined;
           }
         }
-      } catch {}
+      } catch (err) { log.warn("getTreeWithLeaf failed in getMessages", { sessionId, err: err instanceof Error ? err.message : String(err) }); }
     } else {
       resolvedSessionPath = this.resolveSessionPath(sessionId) ?? sessionPath ?? "";
       const leafId = this.leafIds.get(sessionId) ?? null;
@@ -439,7 +442,7 @@ export class AgentProcessManager {
               if (activePathIds && typeof parsed.id === "string" && !activePathIds.has(parsed.id as string)) continue;
               messages.push(parsed.message);
             }
-          } catch {}
+          } catch (err) { log.debug("skipping malformed JSONL entry", { err: err instanceof Error ? err.message : String(err) }); }
         }
         rl.close();
       } catch (err) {
@@ -470,7 +473,7 @@ export class AgentProcessManager {
         try {
           const fallback = await managed.client.getMessages();
           if (fallback) messages = fallback;
-        } catch {}
+        } catch (err) { log.warn("getMessages fallback also failed", { sessionId, err: err instanceof Error ? err.message : String(err) }); }
       }
       try {
         const treeResult = await managed.client.getTreeWithLeaf();
@@ -487,7 +490,7 @@ export class AgentProcessManager {
             curId = node && typeof node.parentId === "string" && node.parentId ? node.parentId : undefined;
           }
         }
-      } catch {}
+      } catch (err) { log.warn("getTreeWithLeaf failed in getFullMessages", { sessionId, err: err instanceof Error ? err.message : String(err) }); }
     } else {
       resolvedSessionPath = this.resolveSessionPath(sessionId) ?? sessionPath ?? "";
       const leafId = this.leafIds.get(sessionId) ?? null;
@@ -540,7 +543,7 @@ export class AgentProcessManager {
               if (activePathIds && typeof parsed.id === "string" && !activePathIds.has(parsed.id as string)) continue;
               messages.push(parsed.message);
             }
-          } catch {}
+          } catch (err) { log.debug("skipping malformed JSONL entry", { err: err instanceof Error ? err.message : String(err) }); }
         }
         rl.close();
       } catch (err) {
@@ -554,7 +557,7 @@ export class AgentProcessManager {
   async getAvailableModels(sessionId: string): Promise<unknown> {
     const managed = this.clients.get(sessionId);
     if (!managed) return [];
-    return managed.client.getAvailableModels().catch(() => []);
+    return managed.client.getAvailableModels().catch((err) => { log.warn("getAvailableModels error", { sessionId, err: err instanceof Error ? err.message : String(err) }); return []; });
   }
 
   async setModel(sessionId: string, provider: string, modelId: string): Promise<unknown> {
@@ -566,19 +569,19 @@ export class AgentProcessManager {
   async cycleModel(sessionId: string): Promise<unknown> {
     const managed = this.clients.get(sessionId);
     if (!managed) return null;
-    return managed.client.cycleModel().catch(() => null);
+    return managed.client.cycleModel().catch((err) => { log.warn("cycleModel error", { sessionId, err: err instanceof Error ? err.message : String(err) }); return null; });
   }
 
   async setThinkingLevel(sessionId: string, level: string): Promise<void> {
     const managed = this.clients.get(sessionId);
     if (!managed) return;
-    await managed.client.setThinkingLevel(level as Parameters<typeof managed.client.setThinkingLevel>[0]).catch(() => {});
+    await managed.client.setThinkingLevel(level as Parameters<typeof managed.client.setThinkingLevel>[0]).catch((err) => { log.warn("setThinkingLevel error", { sessionId, err: err instanceof Error ? err.message : String(err) }); });
   }
 
   async cycleThinkingLevel(sessionId: string): Promise<unknown> {
     const managed = this.clients.get(sessionId);
     if (!managed) return null;
-    return managed.client.cycleThinkingLevel().catch(() => null);
+    return managed.client.cycleThinkingLevel().catch((err) => { log.warn("cycleThinkingLevel error", { sessionId, err: err instanceof Error ? err.message : String(err) }); return null; });
   }
 
   async compact(sessionId: string, customInstructions?: string): Promise<unknown> {
@@ -590,109 +593,109 @@ export class AgentProcessManager {
   async setAutoCompaction(sessionId: string, enabled: boolean): Promise<void> {
     const managed = this.clients.get(sessionId);
     if (!managed) return;
-    await managed.client.setAutoCompaction(enabled).catch(() => {});
+    await managed.client.setAutoCompaction(enabled).catch((err) => { log.warn("setAutoCompaction error", { sessionId, err: err instanceof Error ? err.message : String(err) }); });
   }
 
   async setAutoRetry(sessionId: string, enabled: boolean): Promise<void> {
     const managed = this.clients.get(sessionId);
     if (!managed) return;
-    await managed.client.setAutoRetry(enabled).catch(() => {});
+    await managed.client.setAutoRetry(enabled).catch((err) => { log.warn("setAutoRetry error", { sessionId, err: err instanceof Error ? err.message : String(err) }); });
   }
 
   async abortRetry(sessionId: string): Promise<void> {
     const managed = this.clients.get(sessionId);
     if (!managed) return;
-    await managed.client.abortRetry().catch(() => {});
+    await managed.client.abortRetry().catch((err) => { log.warn("abortRetry error", { sessionId, err: err instanceof Error ? err.message : String(err) }); });
   }
 
   async setSteeringMode(sessionId: string, mode: string): Promise<void> {
     const managed = this.clients.get(sessionId);
     if (!managed) return;
-    await managed.client.setSteeringMode(mode as "all" | "one-at-a-time").catch(() => {});
+    await managed.client.setSteeringMode(mode as "all" | "one-at-a-time").catch((err) => { log.warn("setSteeringMode error", { sessionId, err: err instanceof Error ? err.message : String(err) }); });
   }
 
   async setFollowUpMode(sessionId: string, mode: string): Promise<void> {
     const managed = this.clients.get(sessionId);
     if (!managed) return;
-    await managed.client.setFollowUpMode(mode as "all" | "one-at-a-time").catch(() => {});
+    await managed.client.setFollowUpMode(mode as "all" | "one-at-a-time").catch((err) => { log.warn("setFollowUpMode error", { sessionId, err: err instanceof Error ? err.message : String(err) }); });
   }
 
   async getActiveTools(sessionId: string): Promise<unknown> {
     const managed = this.clients.get(sessionId);
     if (!managed) return { toolNames: [] };
-    return managed.client.getActiveTools().catch(() => ({ toolNames: [] }));
+    return managed.client.getActiveTools().catch((err) => { log.warn("getActiveTools error", { sessionId, err: err instanceof Error ? err.message : String(err) }); return ({ toolNames: [] }); });
   }
 
   async setActiveTools(sessionId: string, toolNames: string[]): Promise<void> {
     const managed = this.clients.get(sessionId);
     if (!managed) return;
-    await managed.client.setActiveTools(toolNames).catch(() => {});
+    await managed.client.setActiveTools(toolNames).catch((err) => { log.warn("setActiveTools error", { sessionId, err: err instanceof Error ? err.message : String(err) }); });
   }
 
   async getQueue(sessionId: string): Promise<unknown> {
     const managed = this.clients.get(sessionId);
     if (!managed) return { steering: [], followUp: [] };
-    return managed.client.getQueue().catch(() => ({ steering: [], followUp: [] }));
+    return managed.client.getQueue().catch((err) => { log.warn("getQueue error", { sessionId, err: err instanceof Error ? err.message : String(err) }); return ({ steering: [], followUp: [] }); });
   }
 
   async clearQueue(sessionId: string): Promise<unknown> {
     const managed = this.clients.get(sessionId);
     if (!managed) return { steering: [], followUp: [] };
-    return managed.client.clearQueue().catch(() => ({ steering: [], followUp: [] }));
+    return managed.client.clearQueue().catch((err) => { log.warn("clearQueue error", { sessionId, err: err instanceof Error ? err.message : String(err) }); return ({ steering: [], followUp: [] }); });
   }
 
   async getExtensions(sessionId: string): Promise<unknown> {
     const managed = this.clients.get(sessionId);
     if (!managed) return { extensions: [] };
-    return managed.client.getExtensions().catch(() => ({ extensions: [] }));
+    return managed.client.getExtensions().catch((err) => { log.warn("getExtensions error", { sessionId, err: err instanceof Error ? err.message : String(err) }); return ({ extensions: [] }); });
   }
 
   async getSkills(sessionId: string): Promise<unknown> {
     const managed = this.clients.get(sessionId);
     if (!managed) return { skills: [] };
-    return managed.client.getSkills().catch(() => ({ skills: [] }));
+    return managed.client.getSkills().catch((err) => { log.warn("getSkills error", { sessionId, err: err instanceof Error ? err.message : String(err) }); return ({ skills: [] }); });
   }
 
   async getTools(sessionId: string): Promise<unknown> {
     const managed = this.clients.get(sessionId);
     if (!managed) return { tools: [] };
-    return managed.client.getTools().catch(() => ({ tools: [] }));
+    return managed.client.getTools().catch((err) => { log.warn("getTools error", { sessionId, err: err instanceof Error ? err.message : String(err) }); return ({ tools: [] }); });
   }
 
   async getContextUsage(sessionId: string): Promise<unknown> {
     const managed = this.clients.get(sessionId);
     if (!managed) return { tokens: null, contextWindow: 0, percent: null };
-    return managed.client.getContextUsage().catch(() => ({ tokens: null, contextWindow: 0, percent: null }));
+    return managed.client.getContextUsage().catch((err) => { log.warn("getContextUsage error", { sessionId, err: err instanceof Error ? err.message : String(err) }); return ({ tokens: null, contextWindow: 0, percent: null }); });
   }
 
   async getSettings(sessionId: string, scope?: string): Promise<unknown> {
     const managed = this.clients.get(sessionId);
     if (!managed) return {};
-    return managed.client.getSettings(scope as "global" | "project" | undefined).catch(() => ({}));
+    return managed.client.getSettings(scope as "global" | "project" | undefined).catch((err) => { log.warn("getSettings error", { sessionId, err: err instanceof Error ? err.message : String(err) }); return ({}); });
   }
 
   async setSettings(sessionId: string, settings: Record<string, unknown>, scope?: string): Promise<void> {
     const managed = this.clients.get(sessionId);
     if (!managed) return;
-    await managed.client.setSettings(settings, scope as "global" | "project" | undefined).catch(() => {});
+    await managed.client.setSettings(settings, scope as "global" | "project" | undefined).catch((err) => { log.warn("setSettings error", { sessionId, err: err instanceof Error ? err.message : String(err) }); });
   }
 
   async setSessionName(sessionId: string, name: string): Promise<void> {
     const managed = this.clients.get(sessionId);
     if (!managed) return;
-    await managed.client.setSessionName(name).catch(() => {});
+    await managed.client.setSessionName(name).catch((err) => { log.warn("setSessionName error", { sessionId, err: err instanceof Error ? err.message : String(err) }); });
   }
 
   async getLastAssistantText(sessionId: string): Promise<unknown> {
     const managed = this.clients.get(sessionId);
     if (!managed) return { text: null };
-    return managed.client.getLastAssistantText().catch(() => ({ text: null }));
+    return managed.client.getLastAssistantText().catch((err) => { log.warn("getLastAssistantText error", { sessionId, err: err instanceof Error ? err.message : String(err) }); return ({ text: null }); });
   }
 
   async getForkMessages(sessionId: string): Promise<unknown> {
     const managed = this.clients.get(sessionId);
     if (!managed) return { messages: [] };
-    return managed.client.getForkMessages().catch(() => ({ messages: [] }));
+    return managed.client.getForkMessages().catch((err) => { log.warn("getForkMessages error", { sessionId, err: err instanceof Error ? err.message : String(err) }); return ({ messages: [] }); });
   }
 
   async fork(sessionId: string, entryId: string, options?: { position?: "before" | "at" }): Promise<unknown> {
@@ -727,7 +730,7 @@ export class AgentProcessManager {
     if (managed) {
       try {
         return await managed.client.getTree();
-      } catch {}
+      } catch (err) { log.warn("getTree SDK failed, falling back to JSONL", { sessionId, err: err instanceof Error ? err.message : String(err) }); }
     }
     const sessionPath = this.resolveSessionPath(sessionId);
     if (!sessionPath) throw new Error("Client not found and no session path");
@@ -815,7 +818,7 @@ export class AgentProcessManager {
           sessionId,
           message: ui.message ?? "",
           notifyType: ui.notifyType ?? "info",
-        }, { sessionId }).catch(() => {});
+        }, { sessionId }).catch((err) => { log.warn("broadcastEvent(agent.notify) error", { sessionId, err: err instanceof Error ? err.message : String(err) }); });
         return;
       }
       if (!INTERACTIVE_METHODS.has(ui.method)) return;

@@ -89,7 +89,7 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
       isDragging.current = false;
       setDragIndex(null);
       setDropIndex(null);
-      try { (e.target as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
+      try { (e.target as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* pointer capture may already be released */ }
     },
     [cancelLongPress, dragIndex, dropIndex, reorderProjectTabs],
   );

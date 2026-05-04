@@ -30,7 +30,7 @@ export const ReadFileCard = memo(function ReadFileCard({ block, blockId }: { blo
 	try {
 		const parsed = JSON.parse(block.args ?? "{}") as { path?: string };
 		filePath = parsed.path ?? "";
-	} catch {}
+	} catch { /* args not valid JSON, use default */ }
 
 	const displayPath = filePath || block.args?.slice(0, 80) || "";
 	const rulesData = isRulesMatchedData(block.details) ? block.details : null;

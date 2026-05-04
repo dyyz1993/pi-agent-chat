@@ -275,7 +275,7 @@ export const useSessionStore = create<SessionState>()(
               const replayPromise = result.status === "already_running"
                 ? apiClient.call("agent.replayHoldEvents", { sessionId: id }).then((r) => {
                     log.info("replayHoldEvents replayed", { replayed: (r as Record<string, unknown>).replayed });
-                  }).catch(() => {})
+                  }).catch((err) => { log.warn("replayHoldEvents failed", { sessionId: id, err: err instanceof Error ? err.message : String(err) }); })
                 : Promise.resolve();
 
               replayPromise.then(() => {
@@ -409,9 +409,9 @@ export const useSessionStore = create<SessionState>()(
           return { sessionsByProject: updated };
         });
         if (sessionPath) {
-          apiClient.call("session.updateCwd", { sessionPath, newCwd: projectPath }).catch(() => {});
+          apiClient.call("session.updateCwd", { sessionPath, newCwd: projectPath }).catch((err) => { log.warn("session.updateCwd failed", { err: err instanceof Error ? err.message : String(err) }); });
         }
-        apiClient.call("agent.setCwd", { sessionId, cwd: projectPath }).catch(() => {});
+        apiClient.call("agent.setCwd", { sessionId, cwd: projectPath }).catch((err) => { log.warn("agent.setCwd failed", { err: err instanceof Error ? err.message : String(err) }); });
       },
 
       renameSession: (sessionId, newName) => {
@@ -430,7 +430,7 @@ export const useSessionStore = create<SessionState>()(
           return { sessionsByProject: updated };
         });
         if (sessionPath) {
-          apiClient.call("session.rename", { sessionId, sessionPath, newName }).catch(() => {});
+          apiClient.call("session.rename", { sessionId, sessionPath, newName }).catch((err) => { log.warn("session.rename failed", { err: err instanceof Error ? err.message : String(err) }); });
         }
       },
 
@@ -464,7 +464,7 @@ export const useSessionStore = create<SessionState>()(
         useTurnStore.getState().clearSessionUI(sessionId);
         useChatNavStore.getState().clearSessionUI(sessionId);
         if (deletedSessionPath) {
-          apiClient.call("session.delete", { sessionId, sessionPath: deletedSessionPath }).catch(() => {});
+          apiClient.call("session.delete", { sessionId, sessionPath: deletedSessionPath }).catch((err) => { log.warn("session.delete failed", { err: err instanceof Error ? err.message : String(err) }); });
         }
       },
 
@@ -485,9 +485,9 @@ export const useSessionStore = create<SessionState>()(
         });
 
         if (isCurrentlyPinned) {
-          apiClient.call("session.unpin", { sessionId }).catch(() => {});
+          apiClient.call("session.unpin", { sessionId }).catch((err) => { log.warn("session.unpin failed", { err: err instanceof Error ? err.message : String(err) }); });
         } else {
-          apiClient.call("session.pin", { sessionId }).catch(() => {});
+          apiClient.call("session.pin", { sessionId }).catch((err) => { log.warn("session.pin failed", { err: err instanceof Error ? err.message : String(err) }); });
         }
       },
 
@@ -570,7 +570,7 @@ export const useSessionStore = create<SessionState>()(
             if (update.contextWindow || update.tokens != null) {
               get().updateSessionContext(sessionId, update);
             }
-          }).catch(() => {});
+          }).catch((err) => { log.warn("agent.getSessionStats failed", { sessionId, err: err instanceof Error ? err.message : String(err) }); });
 
           apiClient.call("agent.getExtensions", { sessionId }).then((res) => {
             const exts = Array.isArray(res) ? res : res.extensions;
@@ -590,7 +590,7 @@ export const useSessionStore = create<SessionState>()(
               };
             });
             useStatusStore.getState().setPlugins(plugins);
-          }).catch(() => {});
+          }).catch((err) => { log.warn("agent.getExtensions failed", { sessionId, err: err instanceof Error ? err.message : String(err) }); });
 
           Promise.all([
             apiClient.call("agent.getSkills", { sessionId }),
@@ -631,8 +631,8 @@ export const useSessionStore = create<SessionState>()(
                 },
               }));
             }
-          }).catch(() => {});
-        }).catch(() => {});
+          }).catch((err) => { log.warn("agent.getQueue failed", { sessionId, err: err instanceof Error ? err.message : String(err) }); });
+        }).catch((err) => { log.warn("agent.getSkills/getDisabledSkills failed", { sessionId, err: err instanceof Error ? err.message : String(err) }); });
       },
 
       fetchModelState: (sessionId) => {
@@ -640,7 +640,7 @@ export const useSessionStore = create<SessionState>()(
           if (Array.isArray(modelsResult)) {
             set({ availableModels: modelsResult });
           }
-        }).catch(() => {});
+        }).catch((err) => { log.warn("agent.getAvailableModels failed", { sessionId, err: err instanceof Error ? err.message : String(err) }); });
       },
 
       setCurrentModel: (provider, modelId) => set({ currentModel: { provider, id: modelId } }),
@@ -747,7 +747,7 @@ apiClient.onReconnect(() => {
         useSessionStore.setState((s) => ({ sessionReady: { ...s.sessionReady, [activeSessionId]: true } }));
         storeGet().fetchInitialState(activeSessionId);
         if (result.status === "already_running") {
-          apiClient.call("agent.replayHoldEvents", { sessionId: activeSessionId }).catch(() => {});
+          apiClient.call("agent.replayHoldEvents", { sessionId: activeSessionId }).catch((err) => { log.warn("agent.replayHoldEvents failed", { sessionId: activeSessionId, err: err instanceof Error ? err.message : String(err) }); });
         }
       }
     }).catch((err) => {

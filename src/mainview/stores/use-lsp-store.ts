@@ -210,12 +210,12 @@ export const useLspStore = create<LspState>()((set, get) => ({
         startupLog: [],
         activeLanguages,
       });
-    } catch { }
+    } catch (err) { console.warn("[lsp] loadHistory failed:", err); }
   },
 
   setMode: (sessionId, mode) => {
     get().updateStatus(sessionId, { mode });
-    apiClient.call("lsp.setMode", { sessionId, mode }).catch(() => { });
+    apiClient.call("lsp.setMode", { sessionId, mode }).catch((err) => { console.warn("[lsp] setMode failed:", err); });
   },
 
   clearSession: (sessionId) => {

@@ -80,7 +80,7 @@ export const useMemoryStore = create<MemoryState>()((set) => ({
 					[sessionId]: result.entrypointContent,
 				},
 			}))
-		} catch {}
+		} catch (err) { console.warn("[memory-store] loadEntrypoint failed:", err) }
 	},
 
 	addInjected: (sessionId, injected) => {
