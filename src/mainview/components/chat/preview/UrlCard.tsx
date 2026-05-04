@@ -95,7 +95,7 @@ export const UrlCard = memo(function UrlCard({ details }: { details: PreviewDeta
 
   if (fullscreen) {
     return createPortal(
-      <div className="fixed inset-0 z-[9999] bg-black flex flex-col">
+      <div className="fixed inset-0 z-[200] bg-black flex flex-col">
         {header}
         <iframe
           src={src}

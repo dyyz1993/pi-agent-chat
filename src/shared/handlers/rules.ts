@@ -61,7 +61,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 		let cwd: string | undefined;
 		try {
 			cwd = pm.getProjectPath(sid);
-		} catch {}
+		} catch (err) { log.debug("getProjectPath failed:", { err: String(err) }) }
 
 		try {
 			const result = await Promise.race([

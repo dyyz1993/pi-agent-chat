@@ -8,6 +8,9 @@ import { join } from "path";
 import { homedir } from "os";
 import { randomUUID } from "crypto";
 import { pinSession, unpinSession, listPinnedSessionIds } from "../lib/project-config";
+import { createLogger } from "../lib/logger";
+
+const log = createLogger("session");
 
 type P<K extends keyof RPCMethods> = RPCMethods[K] extends { params: infer P } ? P : never;
 type R<K extends keyof RPCMethods> = RPCMethods[K] extends { result: infer R } ? R : never;
@@ -52,7 +55,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
           timestamp: new Date((parsed.timestamp as string | number) ?? 0).getTime(),
           data: parsed,
         });
-      } catch {}
+      } catch (err) { log.debug("skipping malformed JSONL entry:", { err: String(err) }) }
       lineIdx++;
     }
 
@@ -100,9 +103,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
           found = true;
           break;
         }
-      } catch {
-        continue;
-      }
+      } catch (err) { log.debug("renameSession: skipping malformed entry:", { err: String(err) }) }
     }
 
     if (!found) {
@@ -164,9 +165,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
           found = true;
           break;
         }
-      } catch {
-        continue;
-      }
+      } catch (err) { log.debug("updateCwd: skipping malformed entry:", { err: String(err) }) }
     }
 
     if (!found) {

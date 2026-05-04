@@ -70,7 +70,7 @@ export const HtmlCard = memo(function HtmlCard({ details }: { details: PreviewDe
 
   if (fullscreen) {
     return createPortal(
-      <div className="fixed inset-0 z-[9999] bg-black flex flex-col">
+      <div className="fixed inset-0 z-[200] bg-black flex flex-col">
         {header}
         <iframe
           key={iframeKey}
