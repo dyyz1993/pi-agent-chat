@@ -31,7 +31,7 @@ export function VirtualizedCodeView({ code, filename }: VirtualizedCodeViewProps
   // --- Plain text path: no Prism tokenization ---
   if (forcePlainText) {
     return (
-      <div ref={parentRef} className="flex-1 min-h-0 overflow-auto" style={{ background: "#011627" }}>
+      <div ref={parentRef} className="flex-1 min-h-0 overflow-auto bg-gray-900">
         <div
           style={{ height: `${virtualizer.getTotalSize()}px`, width: "100%", position: "relative" }}
         >
@@ -61,7 +61,7 @@ export function VirtualizedCodeView({ code, filename }: VirtualizedCodeViewProps
       {({ tokens, getTokenProps }) => {
         const tokensValid = tokens.length === lines.length;
         return (
-          <div ref={parentRef} className="flex-1 min-h-0 overflow-auto" style={{ background: "#011627" }}>
+          <div ref={parentRef} className="flex-1 min-h-0 overflow-auto bg-gray-900">
             <div
               style={{ height: `${virtualizer.getTotalSize()}px`, width: "100%", position: "relative" }}
             >

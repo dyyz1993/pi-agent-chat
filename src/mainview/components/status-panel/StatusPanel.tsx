@@ -121,7 +121,7 @@ export function StatusPanel() {
                                 : <Circle className="w-3 h-3 shrink-0 text-gray-500" />
                             }
                             {t.priority && !t.deleted && (
-                              <span className={`w-3 h-3 shrink-0 rounded-full flex items-center justify-center text-[7px] font-bold ${PRIORITY_STYLES[t.priority].dot}`} style={{ color: "#fff" }}>
+                              <span className={`w-3 h-3 shrink-0 rounded-full flex items-center justify-center text-[7px] font-bold text-white ${PRIORITY_STYLES[t.priority].dot}`}>
                                 {PRIORITY_STYLES[t.priority].label}
                               </span>
                             )}

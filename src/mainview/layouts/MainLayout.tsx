@@ -18,6 +18,8 @@ interface MainLayoutProps {
 export function MainLayout({ onAddProject }: MainLayoutProps) {
   const breakpoint = useLayoutStore((s) => s.breakpoint);
   const setBreakpoint = useLayoutStore((s) => s.setBreakpoint);
+  const contentWidth = useLayoutStore((s) => s.contentWidth);
+  const setContentWidth = useLayoutStore((s) => s.setContentWidth);
   const sessionWidth = useLayoutStore((s) => s.sessionWidth);
   const statusWidth = useLayoutStore((s) => s.statusWidth);
   const setSessionWidth = useLayoutStore((s) => s.setSessionWidth);
@@ -34,11 +36,12 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
       for (const entry of entries) {
         const w = entry.contentRect.width;
         setBreakpoint(getBP(w));
+        setContentWidth(Math.round(w));
       }
     });
     observer.observe(document.documentElement);
     return () => observer.disconnect();
-  }, [setBreakpoint]);
+  }, [setBreakpoint, setContentWidth]);
 
   function getBP(w: number): Breakpoint {
     if (w < 640) return "mobile";
@@ -141,7 +144,7 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
         {/* ---- COL 1: Left Sidebar ---- */}
         {sessionPanel !== "hidden" && (!isMobile || sessionPanel === "visible") && (
           <LeftSidebar
-            width={isMobile ? Math.round(window.innerWidth * 0.85) : sessionWidth}
+            width={isMobile ? Math.round(contentWidth * 0.85) : sessionWidth}
             overlay={sessionPanel === "visible"}
           />
         )}
@@ -195,7 +198,7 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
         {/* ---- COL 3: Right Sidebar ---- */}
         {statusPanel !== "hidden" && (!isMobile || statusPanel === "visible") && (
           <RightSidebar
-            width={isMobile ? Math.round(window.innerWidth * 0.85) : statusWidth}
+            width={isMobile ? Math.round(contentWidth * 0.85) : statusWidth}
             overlay={statusPanel === "visible"}
           />
         )}

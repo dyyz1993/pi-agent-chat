@@ -1,5 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useCallback, useRef, useEffect } from "react";
 import type { Virtualizer } from "@tanstack/react-virtual";
+import { Loader2 } from "lucide-react";
 import { MessageCard } from "./MessageCard";
 import type { ChatMessage } from "../../types";
 import { ALL_MEMORY_TYPE_KEYS } from "./memory-config";
@@ -44,10 +45,36 @@ interface MessageListViewProps {
   scrollRef?: React.RefObject<HTMLDivElement | null>;
   onScroll?: () => void;
   virtualizer?: Virtualizer<HTMLDivElement, Element>;
+  isLoadingMore?: boolean;
+  hasMoreMessages?: boolean;
 }
 
-export function MessageListView({ messages, scrollRef, onScroll, virtualizer }: MessageListViewProps) {
+export function MessageListView({ messages, scrollRef, onScroll, virtualizer, isLoadingMore, hasMoreMessages }: MessageListViewProps) {
   const cardMeta = useMemo(() => buildCardMeta(messages), [messages]);
+  const prevScrollHeightRef = useRef(0);
+  const scrollElRef = useRef<HTMLDivElement | null>(null);
+
+  const handleScrollRef = useCallback((el: HTMLDivElement | null) => {
+    scrollElRef.current = el;
+  }, []);
+
+  useEffect(() => {
+    const el = scrollElRef.current;
+    if (!el || !virtualizer) return;
+    prevScrollHeightRef.current = el.scrollHeight;
+  }, [messages, virtualizer]);
+
+  useEffect(() => {
+    const el = scrollElRef.current;
+    if (!el || !virtualizer) return;
+    const prevHeight = prevScrollHeightRef.current;
+    const newHeight = el.scrollHeight;
+    if (newHeight > prevHeight) {
+      const diff = newHeight - prevHeight;
+      el.scrollTop = el.scrollTop + diff;
+    }
+    prevScrollHeightRef.current = newHeight;
+  }, [messages.length, virtualizer]);
 
   if (messages.length === 0 && scrollRef) {
     return (
@@ -61,7 +88,16 @@ export function MessageListView({ messages, scrollRef, onScroll, virtualizer }: 
 
   if (virtualizer) {
     return (
-      <div ref={scrollRef as React.Ref<HTMLDivElement>} className="h-full overflow-y-auto overflow-x-hidden overscroll-y-contain" style={{ overflowAnchor: 'none' }} onScroll={onScroll}>
+      <div ref={(el) => { handleScrollRef(el); if (scrollRef) (scrollRef as React.MutableRefObject<HTMLDivElement | null>).current = el; }} className="h-full overflow-y-auto overflow-x-hidden overscroll-y-contain" style={{ overflowAnchor: 'none' }} onScroll={onScroll}>
+        {(isLoadingMore || hasMoreMessages) && (
+          <div className="flex items-center justify-center py-2">
+            {isLoadingMore ? (
+              <Loader2 className="w-4 h-4 text-gray-500 animate-spin" />
+            ) : hasMoreMessages ? (
+              <span className="text-[10px] text-gray-600">↑ 向上滚动加载更多</span>
+            ) : null}
+          </div>
+        )}
         <div style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}>
           {virtualizer.getVirtualItems().map((vr) => {
             const msg = messages[vr.index];
@@ -88,12 +124,12 @@ export function MessageListView({ messages, scrollRef, onScroll, virtualizer }: 
       ref={scrollRef as React.Ref<HTMLDivElement>}
       className="flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain"
       style={{ scrollbarWidth: 'thin', scrollbarColor: 'transparent transparent', overflowAnchor: 'none' }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.scrollbarColor = '#37415120 transparent' }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.scrollbarColor = 'rgba(55, 65, 81, 0.12) transparent' }}
       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.scrollbarColor = 'transparent transparent' }}
       onScroll={onScroll}
     >
       <div className="py-0.5 pl-2 pr-3">
-        {useMemo(() => messages.map((msg) => {
+        {messages.map((msg) => {
           const meta = cardMeta.get(msg.id);
           return (
             <MessageCard
@@ -103,7 +139,7 @@ export function MessageListView({ messages, scrollRef, onScroll, virtualizer }: 
               prevBarColor={meta?.prevBarColor}
             />
           );
-        }), [messages, cardMeta])}
+        })}
       </div>
     </div>
   );

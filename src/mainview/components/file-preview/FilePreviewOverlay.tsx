@@ -76,7 +76,7 @@ export function FilePreviewOverlay({ preview, loading, onClose }: FilePreviewOve
     if (isSvg && svgContent) {
       return (
         <div
-          className="flex items-center justify-center h-full p-4 bg-[#1a1a2e]"
+          className="flex items-center justify-center h-full p-4 bg-gray-900"
           dangerouslySetInnerHTML={{
             __html: sanitizeSvg(svgContent).replace(/<svg/, '<svg style="max-width: 100%; max-height: 100%;"'),
           }}
@@ -86,7 +86,7 @@ export function FilePreviewOverlay({ preview, loading, onClose }: FilePreviewOve
 
     if (preview.isImage && preview.imageUrl) {
       return (
-        <div className="flex items-center justify-center h-full p-4 bg-[#1a1a2e]">
+        <div className="flex items-center justify-center h-full p-4 bg-gray-900">
           <img
             src={preview.imageUrl}
             alt={preview.name}

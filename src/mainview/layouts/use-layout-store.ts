@@ -61,6 +61,7 @@ function readPanel(key: string, fallback: PanelVisibility): PanelVisibility {
 
 export interface LayoutState {
   breakpoint: Breakpoint;
+  contentWidth: number;
   sessionPanel: PanelVisibility;
   statusPanel: PanelVisibility;
   sessionWidth: number;
@@ -68,6 +69,7 @@ export interface LayoutState {
   activePanelTab: PanelTabId;
 
   setBreakpoint: (bp: Breakpoint) => void;
+  setContentWidth: (w: number) => void;
 
   toggleSession: () => void;
   pinSession: () => void;
@@ -88,6 +90,7 @@ export interface LayoutState {
 
 export const useLayoutStore = create<LayoutState>((set, get) => ({
   breakpoint: getBreakpoint(typeof window !== "undefined" ? window.innerWidth : 1440),
+  contentWidth: typeof window !== "undefined" ? window.innerWidth : 1440,
 
   sessionPanel: readPanel(SESSION_PANEL_KEY, "pinned"),
   statusPanel: readPanel(STATUS_PANEL_KEY, "pinned"),
@@ -95,6 +98,8 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
   sessionWidth: clampSession(readNum(SESSION_WIDTH_KEY, 240)),
   statusWidth: clampStatus(readNum(STATUS_WIDTH_KEY, 300)),
   activePanelTab: "status",
+
+  setContentWidth: (w) => set({ contentWidth: w }),
 
   setBreakpoint: (bp) => {
     const prev = get().breakpoint;

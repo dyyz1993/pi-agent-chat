@@ -75,3 +75,17 @@ body {
   background-color: var(--color-indigo-400, #818cf8);
   height: 3rem;
 }
+
+:root {
+  --diff-bg: theme('colors.gray.900');
+  --diff-color: theme('colors.gray.200');
+  --diff-added-bg: theme('colors.green.950');
+  --diff-added-color: theme('colors.green.400');
+  --diff-removed-bg: theme('colors.red.950');
+  --diff-removed-color: theme('colors.red.300');
+  --diff-word-added-bg: theme('colors.green.800');
+  --diff-word-removed-bg: theme('colors.red.900');
+  --diff-gutter-bg: theme('colors.gray.800');
+  --diff-gutter-color: theme('colors.gray.500');
+  --diff-highlight-bg: theme('colors.gray.700');
+}

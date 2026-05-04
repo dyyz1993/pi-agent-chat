@@ -10,11 +10,11 @@ function formatTokens(tokens: number | null | undefined): string {
 }
 
 const STATUS_CONFIGS = {
-  streaming: { color: "#facc15", strokeClass: "text-yellow-400", animClass: "animate-pulse", label: "工作中" },
-  compacting: { color: "#facc15", strokeClass: "text-yellow-400", animClass: "animate-pulse", label: "工作中" },
-  permission: { color: "#f87171", strokeClass: "text-red-400", animClass: "", label: "需要协助" },
-  retrying: { color: "#f87171", strokeClass: "text-red-400", animClass: "animate-pulse", label: "重试中" },
-  idle: { color: "#4ade80", strokeClass: "text-green-400", animClass: "", label: "空闲" },
+  streaming: { strokeClass: "text-yellow-400", animClass: "animate-pulse", label: "工作中" },
+  compacting: { strokeClass: "text-yellow-400", animClass: "animate-pulse", label: "工作中" },
+  permission: { strokeClass: "text-red-400", animClass: "", label: "需要协助" },
+  retrying: { strokeClass: "text-red-400", animClass: "animate-pulse", label: "重试中" },
+  idle: { strokeClass: "text-green-400", animClass: "", label: "空闲" },
 } as const;
 
 function statusConfig(status: SessionStatus | undefined) {
@@ -32,7 +32,7 @@ function statusConfig(status: SessionStatus | undefined) {
   }
 }
 
-const ContextRing = memo(function ContextRing({ percent, color, isWorking }: { percent: number; color: string; isWorking: boolean }) {
+const ContextRing = memo(function ContextRing({ percent, strokeClass, isWorking }: { percent: number; strokeClass: string; isWorking: boolean }) {
   const size = 18;
   const stroke = 2.5;
   const radius = (size - stroke) / 2;
@@ -41,7 +41,7 @@ const ContextRing = memo(function ContextRing({ percent, color, isWorking }: { p
   const offset = circumference - clamped * circumference;
 
   return (
-    <svg width={size} height={size} className={`shrink-0 ${isWorking ? "animate-pulse" : ""}`} viewBox={`0 0 ${size} ${size}`} role="progressbar" aria-valuenow={Math.round(clamped * 100)} aria-valuemin={0} aria-valuemax={100} aria-label={`上下文使用 ${Math.round(clamped * 100)}%`}>
+    <svg width={size} height={size} className={`shrink-0 ${isWorking ? "animate-pulse" : ""} ${strokeClass}`} viewBox={`0 0 ${size} ${size}`} role="progressbar" aria-valuenow={Math.round(clamped * 100)} aria-valuemin={0} aria-valuemax={100} aria-label={`上下文使用 ${Math.round(clamped * 100)}%`}>
       <circle
         cx={size / 2}
         cy={size / 2}
@@ -56,7 +56,7 @@ const ContextRing = memo(function ContextRing({ percent, color, isWorking }: { p
         cy={size / 2}
         r={radius}
         fill="none"
-        stroke={color}
+        stroke="currentColor"
         strokeWidth={stroke}
         strokeLinecap="round"
         strokeDasharray={circumference}
@@ -93,7 +93,7 @@ export const TokenStatusBar = memo(function TokenStatusBar({ sessionId }: { sess
 
   return (
     <div className="flex items-center gap-1.5">
-      <ContextRing percent={percent} color={config.color} isWorking={isWorking} />
+      <ContextRing percent={percent} strokeClass={config.strokeClass} isWorking={isWorking} />
       <span>{activeSubId ? "子代理" : "已用"}</span>
       <span className="text-gray-400 font-medium">{used}</span>
       {contextUsage?.contextWindow ? (
