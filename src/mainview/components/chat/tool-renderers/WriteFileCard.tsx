@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo } from "react";
+import { memo, useCallback, useMemo, useEffect, useRef } from "react";
 import { Pencil, AlertTriangle, FileText, Maximize2 } from "lucide-react";
 import type { ContentBlock } from "../../../types";
 import { CachedReactMarkdown } from "../CachedReactMarkdown";
@@ -7,6 +7,9 @@ import { useExpandStore } from "../../../stores/use-expand-store";
 type Block = Extract<ContentBlock, { type: "toolExecution" }>;
 
 interface WriteToolArgs {
+  id?: string;
+  type?: string;
+  filename?: string;
   path: string;
   content: string;
 }
@@ -36,6 +39,7 @@ function isLspDiagnosticData(d: unknown): d is LspDiagnosticData {
 const MARKDOWN_EXTENSIONS = new Set([".md", ".mdc", ".mdx", ".markdown"]);
 
 function isMarkdownFile(path: string): boolean {
+  if (!path || typeof path !== "string") return false;
   const lower = path.toLowerCase();
   for (const ext of MARKDOWN_EXTENSIONS) {
     if (lower.endsWith(ext)) return true;
@@ -44,6 +48,7 @@ function isMarkdownFile(path: string): boolean {
 }
 
 function extractFileName(path: string): string {
+  if (!path || typeof path !== "string") return "";
   const sep = path.includes("/") ? "/" : "\\";
   const parts = path.split(sep);
   return parts[parts.length - 1] || path;
@@ -51,20 +56,37 @@ function extractFileName(path: string): string {
 
 function parseWriteArgs(args: string): WriteToolArgs {
   try {
-    return JSON.parse(args || "{}") as WriteToolArgs;
-  } catch {
-    return { path: "", content: "" };
-  }
+    const parsed: unknown = JSON.parse(args || "{}");
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const obj = parsed as Record<string, unknown>;
+  return {
+    id: "write_file",
+    type: "file-write",
+    filename: typeof obj.filename === "string" ? obj.filename : "",
+    path: typeof obj.path === "string" ? obj.path : "",
+    content: typeof obj.content === "string" ? obj.content : "",
+  };
+    }
+  } catch {}
+  return { path: "", content: "" };
 }
 
 export const WriteFileCard = memo(function WriteFileCard({ block, blockId }: { block: Block; blockId?: string }) {
   const isRunning = block.status === "running";
   const isError = block.status === "error";
   const openExpand = useExpandStore((s) => s.openExpand);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const args = useMemo(() => parseWriteArgs(block.args), [block.args]);
   const filePath = args.path;
   const fileContent = args.content;
+
+  // 自动滚动到底部
+  useEffect(() => {
+    if (scrollContainerRef.current && !isRunning && fileContent) {
+      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+    }
+  }, [fileContent, isRunning]);
 
   const displayPath = filePath || block.args?.slice(0, 80) || "";
   const isMd = isMarkdownFile(filePath);
@@ -75,10 +97,9 @@ export const WriteFileCard = memo(function WriteFileCard({ block, blockId }: { b
   const handleExpand = useCallback(() => {
     if (!fileContent) return;
     const name = extractFileName(filePath);
-    const lines = fileContent.split("\n").length;
+    const lines = fileContent.length > 0 ? fileContent.split("\n").length : 0;
     openExpand(fileContent, `${name} (${lines} 行)`);
   }, [filePath, fileContent, openExpand]);
-
   return (
     <div data-block-id={blockId} className={`border-x-0 border-t border-b overflow-hidden ${
       isRunning ? "border-green-500/25 bg-green-950/10" : isError ? "border-red-500/15 bg-red-950/8" : "border-gray-700/30 bg-gray-800/15"
@@ -103,7 +124,7 @@ export const WriteFileCard = memo(function WriteFileCard({ block, blockId }: { b
       </div>
 
       {isMd && hasContent ? (
-        <div className="px-3 pb-2 max-h-80 overflow-y-auto bg-gray-900/40 rounded-sm mx-2 mb-2">
+        <div ref={scrollContainerRef} className="px-3 pb-2 max-h-80 overflow-y-auto bg-gray-900/40 rounded-sm mx-2 mb-2">
           <div className="px-2 py-2 prose prose-invert prose-sm max-w-none overflow-auto prose-p:my-1 prose-pre:bg-black/30 prose-pre:rounded prose-pre:px-2 prose-pre:py-1.5 prose-headings:text-gray-100 prose-a:text-indigo-400 prose-code:text-pink-300 prose-code:before:content-[''] prose-code:after:content-[''] prose-code:bg-gray-800/60 prose-code:px-1 prose-code:rounded prose-code:text-[11px] prose-strong:text-gray-100 prose-blockquote:border-l-indigo-400/50 prose-blockquote:text-gray-300 prose-li:my-0.5 prose-ul:my-1 prose-ol:my-1">
             <CachedReactMarkdown>{fileContent}</CachedReactMarkdown>
           </div>

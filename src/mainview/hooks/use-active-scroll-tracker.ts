@@ -203,7 +203,7 @@ export function useActiveScrollTracker({
 
   useEffect(() => {
     if (messageIds.length > prevCountRef.current && !userScrolledUpRef.current) {
-      doScrollToBottom();
+      requestAnimationFrame(() => doScrollToBottom());
     }
     prevCountRef.current = messageIds.length;
   }, [messageIds, doScrollToBottom]);
@@ -212,7 +212,7 @@ export function useActiveScrollTracker({
     if (streamVersion === 0 || streamVersion === prevStreamRef.current) return;
     prevStreamRef.current = streamVersion;
     if (userScrolledUpRef.current) return;
-    doScrollToBottom();
+    requestAnimationFrame(() => doScrollToBottom());
   }, [streamVersion, doScrollToBottom]);
 
   useEffect(() => {

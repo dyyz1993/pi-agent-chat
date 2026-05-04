@@ -1,4 +1,5 @@
 import { useMemo, useCallback, useEffect, useRef, memo } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   User,
   Bot,
@@ -7,6 +8,7 @@ import {
   Terminal,
   ScanSearch,
   Brain,
+  Archive,
   type LucideIcon,
 } from "lucide-react";
 import type { ChatMessage } from "../../types";
@@ -51,6 +53,10 @@ function buildNavItems(messages: ChatMessage[]): NavItem[] {
         label: iconEntry.label,
         subs: [],
       };
+    }
+
+    if (msg.role === "compactionSummary") {
+      return { id: msg.id, role: "assistant" as const, icon: Archive, color: "text-cyan-400", subs: [] };
     }
 
     const customBlock = msg.content.find((b) => b.type === "custom") as
@@ -192,9 +198,6 @@ export function SideNav({
   const selectedNavId = useTurnStore(
     useCallback((s) => sessionId ? (s.selectedNavIdBySession[sessionId] ?? null) : null, [sessionId])
   );
-  const navAnchor = useTurnStore(
-    useCallback((s) => sessionId ? (s.navAnchorBySession[sessionId] ?? "top") : "top", [sessionId])
-  );
   const setNavId = useTurnStore((s) => s.setNavId);
   const selectedItems = useChatNavStore(
     useCallback((s) => sessionId ? (s.selectedItemsBySession[sessionId] ?? EMPTY_SET) : EMPTY_SET, [sessionId])
@@ -224,39 +227,43 @@ export function SideNav({
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
+  const getItemHeight = useCallback((index: number) => {
+    const item = navItems[index];
+    if (!item) return 44;
+    return item.subs.length > 0 ? 32 + item.subs.length * 30 : 44;
+  }, [navItems]);
+
+  const virtualizer = useVirtualizer({
+    count: navItems.length,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: getItemHeight,
+    overscan: 20,
+    measureElement: (el) => el.getBoundingClientRect().height,
+  });
+
   useEffect(() => {
     if (!selectedNavId || !scrollContainerRef.current) return;
-    const container = scrollContainerRef.current;
-
-    const raf = requestAnimationFrame(() => {
-      const target = container.querySelector(
-        `[data-nav-id="${selectedNavId}"], [data-block-id="${selectedNavId}"]`
-      );
-      if (!target) return;
-
-      const containerRect = container.getBoundingClientRect();
-      const targetRect = target.getBoundingClientRect();
-      const isAbove = targetRect.top < containerRect.top;
-      const isBelow = targetRect.bottom > containerRect.bottom;
-      if (!isAbove && !isBelow) return;
-
-      if (navAnchor === "top") {
-        container.scrollTop += targetRect.top - containerRect.top;
-      } else {
-        container.scrollTop += targetRect.bottom - containerRect.bottom;
-      }
-    });
-
-    return () => cancelAnimationFrame(raf);
-  }, [selectedNavId, navItems, navAnchor]);
+    const idx = navItems.findIndex((n) => n.id === selectedNavId);
+    if (idx >= 0) {
+      virtualizer.scrollToIndex(idx, { align: "auto" });
+    }
+  }, [selectedNavId, navItems, virtualizer]);
 
   return (
     <div className="h-full min-h-0 flex flex-col bg-gray-900/30 border-l border-gray-800/30">
       <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto sidenav-scroll" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
-        <div className="flex flex-col items-center py-2 space-y-1.5">
-          {navItems.map(({ id, icon: Icon, color, subs }) => (
-            <div key={id} data-nav-id={id}>
-              <div className="flex flex-col items-center w-full">
+        <div style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}>
+          {virtualizer.getVirtualItems().map((vr) => {
+            const { id, icon: Icon, color, subs } = navItems[vr.index];
+            return (
+              <div
+                key={id}
+                data-nav-id={id}
+                ref={virtualizer.measureElement}
+                data-index={vr.index}
+                style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${vr.start}px)` }}
+              >
+                <div className="flex flex-col items-center w-full">
                   <NavDot
                     Icon={Icon}
                     color={color}
@@ -282,8 +289,9 @@ export function SideNav({
                     </div>
                   )}
                 </div>
-            </div>
-          ))}
+              </div>
+            );
+          })}
         </div>
       </div>
 

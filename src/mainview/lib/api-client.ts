@@ -29,17 +29,14 @@ class APIClientImpl {
   private _baseUrl: string | null = null;
   private wsTransport: WebSocketTransport | null = null;
   private _reconnectCallback: (() => void) | null = null;
-  private _wasDisconnected: boolean = false;
+  private _reconnectDetected: boolean = false;
 
-  /**
-   * 桌面端同步初始化：通过 executeJavascript 接收 + __electrobunBunBridge 发送
-   */
   initSyncForDesktop(): void {
     if (this.client) return;
 
     const ipcTransport = new IPCTransport();
     this._transport = "ipc";
-    this._baseUrl = null; // 桌面端不走 HTTP
+    this._baseUrl = null;
     this.client = createTypedClient<RPCMethods, RPCEvents>(ipcTransport);
     this.setupElectrobunBridge(ipcTransport);
     useAppStore.getState().addLog("[APIClient] Desktop (IPC) initialized synchronously");
@@ -49,19 +46,9 @@ class APIClientImpl {
     this._reconnectCallback = callback;
   }
 
-  /**
-   * 异步初始化：Web 端使用（连接 WebSocket）
-   */
   async initialize(): Promise<void> {
     if (this.client && (this._transport === "ipc" || this.wsTransport?.isConnected())) {
       return;
-    }
-
-    if (this.client && this.wsTransport && !this.wsTransport.isConnected()) {
-      this.wsTransport.close();
-      this.wsTransport = null;
-      this.client = null;
-      this.initPromise = null;
     }
 
     if (this.initPromise) return this.initPromise;
@@ -75,9 +62,10 @@ class APIClientImpl {
         this._transport = "websocket";
         const wsUrl = this.getWebSocketUrl();
         this.wsTransport = new WebSocketTransport(wsUrl);
-        this.setupReconnectDetection();
         await this.wsTransport.connect();
         this.client = createTypedClient<RPCMethods, RPCEvents>(this.wsTransport);
+        this._reconnectDetected = false;
+        this.setupReconnectDetection();
 
         const wsUrlObj = new URL(wsUrl);
         const httpProto = wsUrlObj.protocol === "wss:" ? "https:" : "http:";
@@ -91,28 +79,30 @@ class APIClientImpl {
   private setupReconnectDetection(): void {
     if (!this.wsTransport) return;
 
-    let wasConnected = true;
+    const transport = this.wsTransport;
+    let wasConnected = transport.isConnected();
 
     const checkInterval = setInterval(() => {
-      if (!this.wsTransport) {
+      if (!this.wsTransport || this.wsTransport !== transport) {
         clearInterval(checkInterval);
         return;
       }
 
-      const connected = this.wsTransport.isConnected();
+      const connected = transport.isConnected();
 
       if (wasConnected && !connected) {
-        this._wasDisconnected = true;
+        this._reconnectDetected = true;
       }
 
-      if (!wasConnected && connected && this._wasDisconnected) {
-        this._wasDisconnected = false;
-        this.client = createTypedClient<RPCMethods, RPCEvents>(this.wsTransport);
+      if (!wasConnected && connected && this._reconnectDetected) {
+        this._reconnectDetected = false;
+        this.client = createTypedClient<RPCMethods, RPCEvents>(transport);
+        this.initPromise = null;
         this._reconnectCallback?.();
       }
 
       wasConnected = connected;
-    }, 1000);
+    }, 500);
   }
 
   private detectEnvironment(): "electrobun" | "browser" {
@@ -123,7 +113,6 @@ class APIClientImpl {
 
   private getWebSocketUrl(): string {
     if (typeof window === "undefined") return `ws://localhost:3100/ws?token=${AUTH_TOKEN}`;
-    // 优先级：URL query ?ws= > localStorage > 当前 hostname
     const customUrl = (
       new URLSearchParams(window.location.search).get("ws") ??
       localStorage.getItem("rpc-websocket-url")

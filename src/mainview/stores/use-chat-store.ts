@@ -12,7 +12,7 @@ import { createLogger } from "../../shared/lib/logger";
 
 const log = createLogger("chat-store");
 
-function normalizeToolBlocks(msgs: ChatMessage[]): void {
+export function normalizeToolBlocks(msgs: ChatMessage[]): void {
   const toolCallById = new Map<string, { msgIndex: number; blockIndex: number; name: string; input: string }>();
 
   for (let mi = 0; mi < msgs.length; mi++) {
@@ -84,9 +84,39 @@ function normalizeToolBlocks(msgs: ChatMessage[]): void {
             toolCallId: b.id,
             toolName: b.name,
             args,
-            status: "done",
+            status: "running",
           });
         }
+      } else {
+        newContent.push(b);
+      }
+    }
+    msgs[mi] = { ...msg, content: newContent };
+  }
+
+  for (let mi = 0; mi < msgs.length; mi++) {
+    const msg = msgs[mi];
+    if (msg.role !== "assistant") continue;
+
+    let hasToolCall = false;
+    for (const b of msg.content) {
+      if (b.type === "toolCall") { hasToolCall = true; break; }
+    }
+    if (!hasToolCall) continue;
+
+    if (execByMsg.has(mi)) continue;
+
+    const newContent: ContentBlock[] = [];
+    for (const b of msg.content) {
+      if (b.type === "toolCall") {
+        const args = typeof b.input === "string" ? b.input : b.input != null ? JSON.stringify(b.input, null, 2) : "";
+        newContent.push({
+          type: "toolExecution",
+          toolCallId: b.id,
+          toolName: b.name,
+          args,
+          status: "running",
+        });
       } else {
         newContent.push(b);
       }
@@ -321,7 +351,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     try {
       const { apiClient } = await import("../lib/api-client");
-      const result = await apiClient.call("agent.getMessages", { sessionId: sid, sessionPath: options?.sessionPath });
+      const result = await apiClient.call("agent.getFullMessages", { sessionId: sid, sessionPath: options?.sessionPath });
       log.info("RPC returned", { sessionId: sid, force: !!options?.force });
 
       if (!options?.force) {
@@ -410,9 +440,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
         });
       }
 
-      log.info("SET messages", { sessionId: sid, count: msgs.length });
+      const MAX_INITIAL_MESSAGES = 200;
+      const displayMsgs = msgs.length > MAX_INITIAL_MESSAGES
+        ? msgs.slice(-MAX_INITIAL_MESSAGES)
+        : msgs;
+
+      log.info("SET messages", { sessionId: sid, total: msgs.length, displayed: displayMsgs.length });
       set((s) => ({
-        messagesBySession: { ...s.messagesBySession, [sid]: msgs },
+        messagesBySession: { ...s.messagesBySession, [sid]: displayMsgs },
         historyLoadVersion: s.historyLoadVersion + 1,
 }));
 

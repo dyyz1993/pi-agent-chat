@@ -3,25 +3,16 @@ import { apiClient } from "./lib/api-client";
 import { useAppStore } from "./stores/use-app-store";
 import { useExplorerStore } from "./stores/use-explorer-store";
 import { useSessionStore } from "./stores/use-session-store";
+import { useChatStore } from "./stores/use-chat-store";
+import { createLogger } from "../shared/lib/logger";
 import { MainLayout } from "./layouts/MainLayout";
 import { ProjectPickerDialog } from "./components/project-picker/ProjectPickerDialog";
 import { DiagnosticPanel } from "./components/debug/DiagnosticPanel";
 import { useDiagnosticStore } from "./stores/use-diagnostic-store";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
-function waitForSessionReady(sessionId: string): Promise<void> {
-  if (useSessionStore.getState().sessionReady[sessionId]) return Promise.resolve();
-  return new Promise<void>((resolve) => {
-    const unsub = useSessionStore.subscribe((state) => {
-      if (state.sessionReady[sessionId]) {
-        unsub();
-        resolve();
-      }
-    });
-  });
-}
-
 function App() {
+  const log = createLogger("chat");
   const ready = useAppStore((s) => s.ready);
   const initializeConnection = useAppStore((s) => s.initializeConnection);
   const addLog = useAppStore((s) => s.addLog);
@@ -59,6 +50,48 @@ function App() {
       try {
         listRootDir();
 
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlSessionId = urlParams.get("session");
+
+        if (urlSessionId) {
+          addLog(`Loading session from URL: ${urlSessionId}`);
+          try {
+            const lookup = await apiClient.call("project.findSessionById", { sessionId: urlSessionId });
+            const sessionInfo = lookup.session as { sessionPath: string; projectPath: string; name: string } | null;
+
+            if (!sessionInfo) {
+              addLog(`Session not found: ${urlSessionId}`);
+              setRestoring(false);
+              return;
+            }
+
+            const { projectPath, sessionPath, name: sessionName } = sessionInfo;
+            const projectName = projectPath.split("/").filter(Boolean).pop() ?? projectPath;
+            const tabId = `proj-${projectPath.replace(/\//g, "-")}`;
+
+            addProjectTab({ id: tabId, name: projectName, path: projectPath });
+            useSessionStore.getState().setActiveProject(tabId);
+
+            await loadSessionsForProject(projectPath);
+
+            const result = await apiClient.call("agent.start", {
+              sessionId: urlSessionId,
+              projectPath,
+              sessionPath,
+            });
+            log.info("agent.start for URL session", { status: result.status, sessionId: urlSessionId });
+
+            useSessionStore.getState().setActiveSession(urlSessionId, true);
+            useChatStore.getState().loadSessionMessages(urlSessionId, { force: true, sessionPath });
+
+            addLog(`URL session loaded: ${sessionName} (${projectName})`);
+          } catch (err) {
+            addLog(`Failed to load URL session: ${err instanceof Error ? err.message : String(err)}`);
+          }
+          setRestoring(false);
+          return;
+        }
+
         const restored = await restoreFromPersisted();
         if (restored) {
           addLog("Restored last session from cache");
@@ -91,7 +124,6 @@ function App() {
             if (sessions.length > 0) {
               const sid = sessions[0].sessionId;
               useSessionStore.getState().setActiveSession(sid);
-              await waitForSessionReady(sid);
             } else {
               await useSessionStore.getState().createNewSession();
             }
@@ -117,7 +149,6 @@ function App() {
         if (sessions.length > 0) {
           const sid = sessions[0].sessionId;
           useSessionStore.getState().setActiveSession(sid);
-          await waitForSessionReady(sid);
         } else {
           await useSessionStore.getState().createNewSession();
         }

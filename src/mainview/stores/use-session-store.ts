@@ -6,7 +6,7 @@ import { createLogger } from "../../shared/lib/logger";
 import { useChatStore } from "./use-chat-store";
 import { useAppStore } from "./use-app-store";
 import { useExplorerStore } from "./use-explorer-store";
-import { useStatusStore, deriveSkillScope } from "./use-status-store";
+import { useStatusStore, deriveSkillScope, derivePluginScope } from "./use-status-store";
 import { useTurnStore } from "./use-turn-store";
 import { useChatNavStore } from "./use-chat-nav-store";
 import { setupSubscriptions, cleanupSession, cleanupSessionData, clearSubscriptionState, syncTabsToBackend } from "./session-subscriptions";
@@ -50,6 +50,7 @@ interface SessionState {
 
   addProjectTab: (tab: ProjectTab) => void;
   removeProjectTab: (id: string) => void;
+  reorderProjectTabs: (fromIndex: number, toIndex: number) => void;
   setActiveProject: (id: string) => void;
   loadSessionsForProject: (projectPath: string) => Promise<SessionMeta[]>;
   setActiveSession: (id: string | null, force?: boolean) => void;
@@ -134,6 +135,16 @@ export const useSessionStore = create<SessionState>()(
             projectTabs: filtered,
             activeProjectId: newActiveId,
           };
+        });
+      },
+
+      reorderProjectTabs: (fromIndex: number, toIndex: number) => {
+        set((s) => {
+          const tabs = [...s.projectTabs];
+          const [moved] = tabs.splice(fromIndex, 1);
+          tabs.splice(toIndex, 0, moved);
+          syncTabsToBackend(tabs, s.activeProjectId);
+          return { projectTabs: tabs };
         });
       },
 
@@ -260,16 +271,20 @@ export const useSessionStore = create<SessionState>()(
               log.info("agent.start result", { status: result.status, sessionId: id });
               set((s) => ({ sessionReady: { ...s.sessionReady, [id]: true } }));
               get().fetchInitialState(id);
-              useChatStore.getState().loadSessionMessages(id, { sessionPath: session.sessionPath }).then(() => {
-                log.info("loadSessionMessages done", { sessionId: id, count: useChatStore.getState().messagesBySession[id]?.length });
-              }).catch((e) => {
-                log.error("loadSessionMessages FAILED", { error: e instanceof Error ? e.message : String(e) });
+
+              const replayPromise = result.status === "already_running"
+                ? apiClient.call("agent.replayHoldEvents", { sessionId: id }).then((r) => {
+                    log.info("replayHoldEvents replayed", { replayed: (r as Record<string, unknown>).replayed });
+                  }).catch(() => {})
+                : Promise.resolve();
+
+              replayPromise.then(() => {
+                useChatStore.getState().loadSessionMessages(id, { sessionPath: session.sessionPath }).then(() => {
+                  log.info("loadSessionMessages done", { sessionId: id, count: useChatStore.getState().messagesBySession[id]?.length });
+                }).catch((e) => {
+                  log.error("loadSessionMessages FAILED", { error: e instanceof Error ? e.message : String(e) });
+                });
               });
-              if (result.status === "already_running") {
-                apiClient.call("agent.replayHoldEvents", { sessionId: id }).then((r) => {
-                  log.info("replayHoldEvents replayed", { replayed: (r as Record<string, unknown>).replayed });
-                }).catch(() => {});
-              }
             } else {
               const projectId = get().activeProjectId;
               if (projectId) {
@@ -518,8 +533,12 @@ export const useSessionStore = create<SessionState>()(
       },
 
       fetchInitialState: (sessionId) => {
-        apiClient.call("agent.getState", { sessionId }).then((result) => {
+        Promise.all([
+          apiClient.call("agent.getState", { sessionId }),
+          apiClient.call("agent.getAvailableModels", { sessionId }),
+        ]).then(([result, modelsResult]) => {
           if (!result) return;
+
           const cw = result.model?.contextWindow ?? 0;
           if (cw > 0) {
             get().updateSessionContext(sessionId, { contextWindow: cw });
@@ -530,6 +549,16 @@ export const useSessionStore = create<SessionState>()(
             get().updateSessionStatus(sessionId, "compacting");
           } else {
             get().updateSessionStatus(sessionId, "idle");
+          }
+
+          if (result.model) {
+            set({
+              currentModel: { provider: result.model.provider ?? "", id: result.model.id, name: result.model.name },
+              currentThinkingLevel: result.thinkingLevel ?? "medium",
+            });
+          }
+          if (Array.isArray(modelsResult)) {
+            set({ availableModels: modelsResult });
           }
 
           apiClient.call("agent.getSessionStats", { sessionId }).then((stats) => {
@@ -544,33 +573,47 @@ export const useSessionStore = create<SessionState>()(
           }).catch(() => {});
 
           apiClient.call("agent.getExtensions", { sessionId }).then((res) => {
-            if (!Array.isArray(res.extensions)) return;
-            const plugins = res.extensions.map((e) => ({
-              name: e.path.split("/").pop()?.replace(/\.(ts|js|tsx|jsx)$/, "") ?? "unknown",
-              path: e.path,
-              enabled: true,
-              toolNames: e.toolNames,
-              commandNames: e.commandNames,
-            }));
+            const exts = Array.isArray(res) ? res : res.extensions;
+            if (!Array.isArray(exts)) return;
+            const plugins = exts.map((e) => {
+              const parts = e.path.split("/");
+              const fileName = parts.pop()?.replace(/\.(ts|js|tsx|jsx)$/, "") ?? "unknown";
+              const dirName = parts.pop() ?? fileName;
+              const name = fileName === "index" ? dirName : fileName;
+              return {
+                name,
+                path: e.path,
+                enabled: true,
+                toolNames: e.toolNames,
+                commandNames: e.commandNames,
+                scope: derivePluginScope(e.path),
+              };
+            });
             useStatusStore.getState().setPlugins(plugins);
           }).catch(() => {});
 
-          apiClient.call("agent.getSkills", { sessionId }).then((res) => {
-            if (!Array.isArray(res.skills)) {
-              useAppStore.getState().addLog(`[skills] non-array response, type=${typeof res.skills}, isArray=${Array.isArray(res.skills)}`);
+          Promise.all([
+            apiClient.call("agent.getSkills", { sessionId }),
+            apiClient.call("agent.getDisabledSkills", {}),
+          ]).then(([skillsRes, disabledRes]) => {
+            const skillsArr = Array.isArray(skillsRes) ? skillsRes : skillsRes?.skills;
+            if (!Array.isArray(skillsArr)) {
+              useAppStore.getState().addLog(`[skills] non-array response, type=${typeof skillsRes}`);
               return;
             }
-            useAppStore.getState().addLog(`[skills] loaded ${res.skills.length} items`);
-            useStatusStore.getState().setSkills(res.skills.map((s) => {
+            const disabledSet = new Set(disabledRes?.disabledSkills ?? []);
+            useAppStore.getState().addLog(`[skills] loaded ${skillsArr.length} items, ${disabledSet.size} disabled`);
+            useStatusStore.getState().setSkills(skillsArr.map((s) => {
               const fp = s.filePath;
+              const scope: "global" | "project" = s.sourceInfo?.scope === "user" ? "global" : deriveSkillScope(fp);
               return {
                 name: s.name,
                 description: s.description,
                 filePath: fp,
                 baseDir: s.baseDir,
                 disableModelInvocation: s.disableModelInvocation,
-                enabled: true,
-                scope: deriveSkillScope(fp),
+                enabled: !disabledSet.has(s.name),
+                scope,
               };
             }));
           }).catch((err) => {
@@ -590,21 +633,10 @@ export const useSessionStore = create<SessionState>()(
             }
           }).catch(() => {});
         }).catch(() => {});
-
-        get().fetchModelState(sessionId);
       },
 
       fetchModelState: (sessionId) => {
-        Promise.all([
-          apiClient.call("agent.getState", { sessionId }),
-          apiClient.call("agent.getAvailableModels", { sessionId }),
-        ]).then(([stateResult, modelsResult]) => {
-          if (stateResult?.model) {
-            set({
-              currentModel: { provider: stateResult.model.provider ?? "", id: stateResult.model.id, name: stateResult.model.name },
-              currentThinkingLevel: stateResult.thinkingLevel ?? "medium",
-            });
-          }
+        apiClient.call("agent.getAvailableModels", { sessionId }).then((modelsResult) => {
           if (Array.isArray(modelsResult)) {
             set({ availableModels: modelsResult });
           }
@@ -641,25 +673,6 @@ export const useSessionStore = create<SessionState>()(
           set({ activeSessionId: null });
           get().setActiveSession(targetId);
 
-          await new Promise<void>((resolve) => {
-            const timeout = setTimeout(() => {
-              unsub();
-              resolve();
-            }, 10000);
-            const unsub = useSessionStore.subscribe((state) => {
-              if (state.sessionReady[targetId]) {
-                clearTimeout(timeout);
-                unsub();
-                resolve();
-              }
-            });
-            if (useSessionStore.getState().sessionReady[targetId]) {
-              clearTimeout(timeout);
-              unsub();
-              resolve();
-            }
-          });
-
           return true;
         } catch {
           return false;
@@ -695,25 +708,9 @@ export const useSessionStore = create<SessionState>()(
 );
 
 apiClient.onReconnect(() => {
-  console.warn("[onReconnect] TRIGGERED!");
+  log.info("[onReconnect] triggered");
   const state = useSessionStore.getState();
   const { activeSessionId, projectTabs, activeProjectId } = state;
-
-  for (const sid of Object.keys(state.agentSubscriptions)) {
-    cleanupSession(state, sid);
-  }
-
-  useSessionStore.setState({
-    agentSubscriptions: {},
-    subagentSubscriptions: {},
-    todoSubscriptions: {},
-    bashSubscriptions: {},
-    lspSubscriptions: {},
-    rulesSubscriptions: {},
-    notifySubscriptions: {},
-    memorySubscriptions: {},
-    sessionReady: {},
-  });
 
   if (!activeSessionId || !activeProjectId) return;
   const tab = projectTabs.find((t) => t.id === activeProjectId);
@@ -721,45 +718,48 @@ apiClient.onReconnect(() => {
 
   const sessions = state.sessionsByProject[tab.path];
   const session = sessions?.find((s) => s.sessionId === activeSessionId);
-  if (session) {
-    const storeGet = useSessionStore.getState.bind(useSessionStore);
-    const storeSet = (fn: (s: SessionState) => Partial<SessionState>) =>
-      useSessionStore.setState(fn(useSessionStore.getState()));
+  if (!session) return;
 
-    setupSubscriptions(useSessionStore.getState(), storeSet, activeSessionId, session);
+  const storeGet = useSessionStore.getState.bind(useSessionStore);
+  const storeSet = (fn: (s: SessionState) => Partial<SessionState>) =>
+    useSessionStore.setState(fn(useSessionStore.getState()));
 
-    apiClient.call("agent.start", {
-        sessionId: activeSessionId,
-        projectPath: session.projectPath,
-        sessionPath: session.sessionPath,
-      }).then((result) => {
-        if (result.status === "already_running" || result.status === "started") {
-          useSessionStore.setState((s) => {
-            const projectId = s.activeProjectId;
-            if (!projectId) return {};
-            return {
-              projectStartFailed: { ...s.projectStartFailed, [projectId]: false },
-              projectStartError: { ...s.projectStartError, [projectId]: "" },
-            };
-          });
-          useSessionStore.setState((s) => ({ sessionReady: { ...s.sessionReady, [activeSessionId]: true } }));
-          storeGet().fetchInitialState(activeSessionId);
-          useChatStore.getState().loadSessionMessages(activeSessionId, { sessionPath: session.sessionPath }).catch(() => {});
-          if (result.status === "already_running") {
-            apiClient.call("agent.replayHoldEvents", { sessionId: activeSessionId }).catch(() => {});
-          }
-        }
-      }).catch((err) => {
-        const errMsg = err instanceof Error ? err.message : String(err);
-        useAppStore.getState().addLog(`reconnect agent.start failed: ${errMsg}`);
+  for (const sid of Object.keys(state.agentSubscriptions)) {
+    cleanupSession(state, sid);
+  }
+
+  setupSubscriptions(useSessionStore.getState(), storeSet, activeSessionId, session);
+
+  apiClient.call("agent.start", {
+      sessionId: activeSessionId,
+      projectPath: session.projectPath,
+      sessionPath: session.sessionPath,
+    }).then((result) => {
+      if (result.status === "already_running" || result.status === "started") {
         useSessionStore.setState((s) => {
           const projectId = s.activeProjectId;
           if (!projectId) return {};
           return {
-            projectStartFailed: { ...s.projectStartFailed, [projectId]: true },
-            projectStartError: { ...s.projectStartError, [projectId]: errMsg },
+            projectStartFailed: { ...s.projectStartFailed, [projectId]: false },
+            projectStartError: { ...s.projectStartError, [projectId]: "" },
           };
         });
+        useSessionStore.setState((s) => ({ sessionReady: { ...s.sessionReady, [activeSessionId]: true } }));
+        storeGet().fetchInitialState(activeSessionId);
+        if (result.status === "already_running") {
+          apiClient.call("agent.replayHoldEvents", { sessionId: activeSessionId }).catch(() => {});
+        }
+      }
+    }).catch((err) => {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      useAppStore.getState().addLog(`reconnect agent.start failed: ${errMsg}`);
+      useSessionStore.setState((s) => {
+        const projectId = s.activeProjectId;
+        if (!projectId) return {};
+        return {
+          projectStartFailed: { ...s.projectStartFailed, [projectId]: true },
+          projectStartError: { ...s.projectStartError, [projectId]: errMsg },
+        };
       });
-  }
+    });
 });

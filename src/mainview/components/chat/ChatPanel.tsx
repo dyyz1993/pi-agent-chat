@@ -18,6 +18,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { useChatStore } from "../../stores/use-chat-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { NotificationCenter } from "./NotificationCenter";
+import { UIPendingCenter } from "./UIPendingCenter";
 import { RetryNotification } from "./RetryNotification";
 import { useSubagentStore } from "../../stores/use-subagent-store";
 import { useLayoutStore } from "../../layouts/use-layout-store";
@@ -34,6 +35,7 @@ import { QuickActionToolbar } from "./QuickActionToolbar";
 import { ScrollToolbar } from "./ScrollToolbar";
 import { QueueCards } from "./QueueCards";
 import { MarkdownExpandOverlay } from "./MarkdownExpandOverlay";
+import { MermaidFullscreen } from "./mermaid";
 import type { ChatMessage } from "../../types";
 
 const EMPTY_MSGS: never[] = [];
@@ -101,10 +103,13 @@ export function ChatPanel() {
 
   const streamVersion = useChatStore((s) => s.streamContentVersion);
 
+  const estimateMainSize = useCallback((index: number) => estimateMessageSize(mainMessages[index]), [mainMessages]);
+  const estimateSubSize = useCallback((index: number) => estimateMessageSize(subMessages[index]), [subMessages]);
+
   const mainVirtualizer = useVirtualizer({
     count: mainMessages.length,
     getScrollElement: () => messagesScrollRef.current,
-    estimateSize: (index) => estimateMessageSize(mainMessages[index]),
+    estimateSize: estimateMainSize,
     overscan: isMobileOrTablet ? 2 : 5,
     measureElement: (el) => el.getBoundingClientRect().height,
   });
@@ -112,7 +117,7 @@ export function ChatPanel() {
   const subVirtualizer = useVirtualizer({
     count: subMessages.length,
     getScrollElement: () => messagesScrollRef.current,
-    estimateSize: (index) => estimateMessageSize(subMessages[index]),
+    estimateSize: estimateSubSize,
     overscan: isMobileOrTablet ? 2 : 5,
     measureElement: (el) => el.getBoundingClientRect().height,
   });
@@ -230,6 +235,7 @@ export function ChatPanel() {
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative bg-gray-950">
       <MarkdownExpandOverlay />
+      <MermaidFullscreen />
       <div className="flex items-center gap-4 px-4 py-1.5 bg-gray-900/80 border-b border-gray-800 text-[11px] text-gray-500 flex-shrink-0">
         <SessionToggleIcon />
         {isViewingSubagent && (
@@ -244,6 +250,7 @@ export function ChatPanel() {
         )}
         {activeSessionId && <TokenStatusBar sessionId={activeSessionId} />}
         <div className="ml-auto flex items-center gap-1">
+          <UIPendingCenter />
           <NotificationCenter />
           <StatusToggleIcon />
         </div>

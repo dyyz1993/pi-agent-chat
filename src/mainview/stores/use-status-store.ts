@@ -1,6 +1,9 @@
 import { create } from "zustand";
+import { apiClient } from "../lib/api-client";
 
 export type StatusSection = "yolo" | "plan" | "shell" | "mcp" | "lsp" | "plugins" | "skills";
+
+export type PluginScope = "global" | "project";
 
 export interface PluginInfo {
   name: string;
@@ -8,6 +11,7 @@ export interface PluginInfo {
   enabled: boolean;
   toolNames: string[];
   commandNames: string[];
+  scope: PluginScope;
 }
 
 export type SkillScope = "global" | "project";
@@ -22,6 +26,19 @@ export interface SkillInfo {
   scope: SkillScope;
 }
 
+export function derivePluginScope(filePath: string): PluginScope {
+  const home = typeof process !== "undefined" && process.env?.HOME ? process.env.HOME : "";
+  if (!home) return "project";
+  const globalPatterns = [
+    `${home}/.agents`,
+    `${home}/.claude`,
+    `${home}/.config/opencode`,
+    `${home}/.pi`,
+    `${home}/.nvm`,
+  ];
+  return globalPatterns.some((p) => filePath.startsWith(p)) ? "global" : "project";
+}
+
 export function deriveSkillScope(filePath: string): SkillScope {
   const home = typeof process !== "undefined" && process.env?.HOME ? process.env.HOME : "";
   if (!home) return "project";
@@ -30,6 +47,7 @@ export function deriveSkillScope(filePath: string): SkillScope {
     `${home}/.claude/skills`,
     `${home}/.config/opencode/skills`,
     `${home}/.pi/agent/skills`,
+    `${home}/.nvm`,
   ];
   return globalPatterns.some((p) => filePath.startsWith(p)) ? "global" : "project";
 }
@@ -43,6 +61,7 @@ interface StatusState {
   plugins: PluginInfo[];
   skills: SkillInfo[];
   expandedSkill: string | null;
+  expandedPlugin: string | null;
   collapsedSections: Set<StatusSection>;
 
   toggleYolo: () => void;
@@ -54,6 +73,7 @@ interface StatusState {
   setSkills: (skills: StatusState["skills"]) => void;
   toggleSkillExpanded: (name: string) => void;
   toggleSkillEnabled: (name: string) => void;
+  togglePluginExpanded: (path: string) => void;
 }
 
 export const useStatusStore = create<StatusState>((set) => ({
@@ -65,6 +85,7 @@ export const useStatusStore = create<StatusState>((set) => ({
   plugins: [],
   skills: [],
   expandedSkill: null,
+  expandedPlugin: null,
   collapsedSections: new Set(),
 
   toggleYolo: () => set((s) => ({ yoloEnabled: !s.yoloEnabled })),
@@ -83,7 +104,15 @@ export const useStatusStore = create<StatusState>((set) => ({
   toggleSkillExpanded: (name) =>
     set((s) => ({ expandedSkill: s.expandedSkill === name ? null : name })),
   toggleSkillEnabled: (name) =>
-    set((s) => ({
-      skills: s.skills.map((sk) => sk.name === name ? { ...sk, enabled: !sk.enabled } : sk),
-    })),
+    set((s) => {
+      const skill = s.skills.find((sk) => sk.name === name);
+      if (!skill) return s;
+      const newEnabled = !skill.enabled;
+      apiClient.call("agent.setDisabledSkill", { skillName: name, disabled: !newEnabled }).catch(() => {});
+      return {
+        skills: s.skills.map((sk) => sk.name === name ? { ...sk, enabled: newEnabled } : sk),
+      };
+    }),
+  togglePluginExpanded: (path) =>
+    set((s) => ({ expandedPlugin: s.expandedPlugin === path ? null : path })),
 }));

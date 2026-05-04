@@ -10,6 +10,7 @@ import { AnsiText } from "../primitives/AnsiText";
 import { LogViewer } from "../../bash-panel/BashPanel";
 
 type Block = Extract<ContentBlock, { type: "toolExecution" }>;
+const EMPTY_PROCS: never[] = [];
 
 interface BashDetails {
 	background?: {
@@ -40,7 +41,7 @@ function formatDuration(ms: number): string {
 	export const BashExecutionCard = memo(function BashExecutionCard({ block, blockId }: { block: Block; blockId?: string }) {
 	const sid = useSessionStore((s) => s.activeSessionId);
 	const bashProcess = useBashStore((s) => {
-		const procs = s.processesBySession[sid ?? ""] || [];
+		const procs = s.processesBySession[sid ?? ""] || EMPTY_PROCS;
 		return procs.find((p) => p.toolCallId === block.toolCallId);
 	});
 	const blockIsRunning = block.status === "running";
