@@ -4,7 +4,7 @@
  */
 
 import type { IncomingMessage, ServerResponse } from "http";
-import { stat, readFile, writeFile, mkdir, appendFile } from "fs/promises";
+import { stat, readFile, writeFile, mkdir, appendFile, unlink } from "fs/promises";
 import { existsSync } from "fs";
 import { extname, basename, dirname, resolve } from "path";
 import { createLogger } from "../shared/lib/logger";
@@ -146,6 +146,10 @@ export function createHttpHandler(deps: HttpRouteDeps): (req: IncomingMessage, r
     if (url.pathname.startsWith("/file/")) {
       if (url.pathname === "/file/upload" && req.method === "POST") {
         await handleFileUpload(req, url.searchParams.get("path"), res, cfg.maxUploadSize);
+        return;
+      }
+      if (url.pathname === "/file/delete" && req.method === "POST") {
+        await handleFileDelete(url.searchParams.get("path"), res);
         return;
       }
       await handleFileContent(url.pathname.slice(6), req, res);
@@ -364,5 +368,36 @@ async function handleFileUpload(
   } catch (err) {
     res.writeHead(500, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: err instanceof Error ? err.message : "Upload failed" }));
+  }
+}
+
+async function handleFileDelete(
+  filePath: string | null,
+  res: ServerResponse,
+): Promise<void> {
+  if (!filePath) {
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Missing path parameter" }));
+    return;
+  }
+  const decodedPath = decodeURIComponent(filePath);
+  if (!(await isPathAllowed(decodedPath))) {
+    res.writeHead(403, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Path not allowed" }));
+    return;
+  }
+  try {
+    if (!existsSync(decodedPath)) {
+      res.writeHead(404, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "File not found" }));
+      return;
+    }
+    await unlink(decodedPath);
+    log.info("File deleted", { path: decodedPath });
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok: true }));
+  } catch (err) {
+    res.writeHead(500, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: err instanceof Error ? err.message : "Delete failed" }));
   }
 }
