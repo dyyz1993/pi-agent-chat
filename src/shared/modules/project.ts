@@ -77,6 +77,18 @@ export interface ProjectMethods {
     params: { projectPath: string };
     result: { pinned: boolean };
   };
+  "project.linkProject": {
+    params: { projectRoot: string; project: LinkedProjectConfig };
+    result: LinkedProjectResult;
+  };
+  "project.unlinkProject": {
+    params: { projectRoot: string; projectId: string };
+    result: LinkedProjectResult;
+  };
+  "project.getLinkedProjects": {
+    params: { projectRoot: string };
+    result: { projects: LinkedProjectConfig[] };
+  };
 }
 
 export interface RecentProject {
@@ -134,4 +146,18 @@ export interface FavoriteFolder {
   path: string;
   name: string;
   addedAt: number;
+}
+
+export interface LinkedProjectConfig {
+  id: string;
+  path: string;
+  description: string;
+  relationship: "upstream" | "downstream" | "sibling";
+  keyPaths: Array<{ path: string; description: string }>;
+  readonly: boolean;
+}
+
+export interface LinkedProjectResult {
+  ok: boolean;
+  error?: string;
 }
