@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { ChevronDown, ChevronRight, Zap, ClipboardList, Terminal, Plug, Network, Puzzle, CheckCircle2, Circle, AlertTriangle, BookOpen, Eye, EyeOff, Trash2 } from "lucide-react";
+import { useState, useCallback } from "react";
+import { ChevronDown, ChevronRight, Zap, ClipboardList, Terminal, Plug, Network, Puzzle, CheckCircle2, Circle, AlertTriangle, BookOpen, Eye, EyeOff, Trash2, Copy, Check } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { useStatusStore } from "../../stores/use-status-store";
 import { useSessionStore } from "../../stores/use-session-store";
@@ -10,6 +10,8 @@ import { BashProcessCard, LogViewer } from "../bash-panel/BashPanel";
 import type { LspDiagnosticsMode } from "../../../shared/modules/lsp";
 import type { StatusSection } from "../../stores/use-status-store";
 import type { TodoPriority } from "../../stores/use-session-store";
+import { copyToClipboard } from "../../utils/clipboard";
+import type { PluginInfo } from "../../stores/use-status-store";
 
 const PRIORITY_STYLES: Record<TodoPriority, { dot: string; label: string }> = {
   high: { dot: "bg-red-400", label: "H" },
@@ -27,6 +29,35 @@ const SECTIONS: { id: StatusSection; label: string; icon: React.ElementType }[] 
   { id: "skills", label: "技能", icon: BookOpen },
 ];
 
+function PluginCopyButton({ plugin }: { plugin: PluginInfo }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = useCallback(() => {
+    const lines = [
+      `名称: ${plugin.name}`,
+      `位置: ${plugin.scope === "global" ? "全局" : "项目"}`,
+      `路径: ${plugin.path}`,
+      `工具 (${plugin.toolNames.length}): ${plugin.toolNames.join(", ") || "无"}`,
+      `命令 (${plugin.commandNames.length}): ${plugin.commandNames.join(", ") || "无"}`,
+    ];
+    copyToClipboard(lines.join("\n")).then((ok) => {
+      if (ok) {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }
+    });
+  }, [plugin]);
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="flex items-center gap-1 text-gray-500 hover:text-gray-300 transition-colors mt-0.5"
+    >
+      {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+      <span>{copied ? "已复制" : "复制信息"}</span>
+    </button>
+  );
+}
+
 export function StatusPanel() {
   const yoloEnabled = useStatusStore((s) => s.yoloEnabled);
   const mcpTools = useStatusStore((s) => s.mcpTools);
@@ -37,6 +68,7 @@ export function StatusPanel() {
   const activeSubId = useSubagentStore((s) => s.activeSubsessionId);
   const todosBySession = useSessionStore((s) => s.todosBySession);
   const allProcesses = useBashStore(useShallow((s) => s.processesBySession[activeSessionId ?? ""]));
+  const backgroundedIds = useBashStore((s) => s.backgroundedIds);
   const [logViewer, setLogViewer] = useState<{ logPath: string; toolCallId: string } | null>(null);
   const todos = activeSessionId ? todosBySession[activeSessionId] : undefined;
   const lspStore = useLspStore((s) => s.statusBySession);
@@ -46,9 +78,11 @@ export function StatusPanel() {
   const toggleYolo = useStatusStore((s) => s.toggleYolo);
   const toggleSkillExpanded = useStatusStore((s) => s.toggleSkillExpanded);
   const toggleSkillEnabled = useStatusStore((s) => s.toggleSkillEnabled);
+  const expandedPlugin = useStatusStore((s) => s.expandedPlugin);
+  const togglePluginExpanded = useStatusStore((s) => s.togglePluginExpanded);
 
   const backgroundProcesses = allProcesses?.filter((p) =>
-    p.status === "background" || p.status === "done" || p.status === "error" || p.status === "terminated",
+    backgroundedIds.has(p.toolCallId),
   ) ?? [];
   const hasProcesses = backgroundProcesses.length > 0;
 
@@ -124,26 +158,35 @@ export function StatusPanel() {
                 {id === "lsp" && (
                   <div className="space-y-1">
                     {!lspData || lspData.startupComplete ? (
-                      <div className="flex items-center gap-1">
-                        <span className={`w-1.5 h-1.5 rounded-full ${lspData?.state === "ready" ? "bg-green-400" : lspData?.state === "error" ? "bg-red-400" : lspData?.state === "starting" ? "bg-yellow-400 animate-pulse" : "bg-gray-600"}`} />
-                        <span>
-                          {!lspData
-                            ? "Inactive"
-                            : lspData.state === "ready"
-                              ? `Connected (${lspData.servers.length} server${lspData.servers.length !== 1 ? "s" : ""})`
-                              : lspData.state === "error"
-                                ? "Error"
-                                : lspData.state === "starting"
-                                  ? "Starting..."
-                                  : lspData.state}
-                        </span>
+                      <div>
+                        <div className="flex items-center gap-1">
+                          <span className={`w-1.5 h-1.5 rounded-full ${lspData?.state === "ready" ? "bg-green-400" : lspData?.state === "error" ? "bg-red-400" : lspData?.state === "starting" ? "bg-yellow-400 animate-pulse" : "bg-gray-600"}`} />
+                          <span>
+                            {!lspData
+                              ? "Inactive"
+                              : lspData.state === "ready"
+                                ? `Connected (${lspData.servers.length} server${lspData.servers.length !== 1 ? "s" : ""})`
+                                : lspData.state === "error"
+                                  ? "Error"
+                                  : lspData.state === "starting"
+                                    ? "Starting..."
+                                    : lspData.state}
+                          </span>
+                        </div>
+                        {lspData?.activeLanguages && lspData.activeLanguages.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {lspData.activeLanguages.map((lang) => (
+                              <span key={lang} className="px-1 py-px rounded text-[9px] bg-cyan-500/15 text-cyan-400">{lang}</span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className="flex items-center gap-1 text-[10px] text-gray-400">
                         <span className="animate-pulse">Starting {lspData.totalServers ?? lspData.startupLog.length} servers...</span>
                       </div>
                     )}
-                    {lspData?.startupLog && lspData.startupLog.length > 0 && (
+                    {lspData?.startupLog && lspData.startupLog.length > 0 && lspData.state === "starting" && (
                       <div className="space-y-0.5 pl-1 pt-0.5">
                         {lspData.startupLog.map((log, i) => (
                           <div key={`${log.name}-${i}`} className="flex items-center gap-1">
@@ -156,12 +199,12 @@ export function StatusPanel() {
                         ))}
                       </div>
                     )}
-                    {lspData?.state === "ready" && lspData.servers.length > 0 && !lspData?.startupLog && (
+                    {lspData && lspData.servers.length > 0 && !lspData.startupLog?.length && (
                       <div className="space-y-0.5 pl-1">
                         {lspData.servers.map((srv, i) => (
                           <div key={`${srv.name}-${i}`} className="flex items-center gap-1">
-                            <span className={`w-1 h-1 rounded-full ${srv.state === "ready" ? "bg-green-400" : srv.state === "error" ? "bg-red-400" : "bg-yellow-400"}`} />
-                            <span className="truncate">{srv.name}{srv.fileTypes && srv.fileTypes.length > 0 ? ` (${srv.fileTypes.join(",")})` : ""}</span>
+                            <span className={`w-1 h-1 rounded-full ${srv.state === "ready" ? "bg-green-400" : srv.state === "error" ? "bg-red-400" : srv.state === "starting" ? "bg-yellow-400" : "bg-gray-600"}`} />
+                            <span className={`truncate text-gray-500`}>{srv.name}{srv.fileTypes && srv.fileTypes.length > 0 ? <span className="text-gray-600"> ({srv.fileTypes.join(",")})</span> : null}</span>
                           </div>
                         ))}
                       </div>
@@ -187,14 +230,59 @@ export function StatusPanel() {
                 )}
                 {id === "plugins" && (
                   <div className="space-y-0.5">
-                    {plugins.length === 0 ? <span>无插件</span> : plugins.map((p) => (
-                      <div key={p.path} className="flex items-center gap-1">
-                        <span className={`w-1.5 h-1.5 rounded-full ${p.enabled ? "bg-green-400" : "bg-gray-600"}`} />
-                        <span>{p.name}</span>
-                        {p.toolNames.length > 0 && <span className="text-gray-600">({p.toolNames.length} tools)</span>}
-                        {p.commandNames.length > 0 && <span className="text-gray-600">({p.commandNames.length} cmds)</span>}
-                      </div>
-                    ))}
+                    {plugins.length === 0 ? <span>无插件</span> : plugins.map((p) => {
+                      const isExpanded = expandedPlugin === p.path;
+                      return (
+                        <div key={p.path}>
+                          <div
+                            className="flex items-center gap-1 py-0.5 px-1 rounded hover:bg-gray-800/40 transition-colors cursor-pointer group"
+                            onClick={() => togglePluginExpanded(p.path)}
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full ${p.enabled ? "bg-green-400" : "bg-gray-600"}`} />
+                            <span className={`shrink-0 ${isExpanded ? "" : ""}`}>
+                              {isExpanded ? <ChevronDown className="w-3 h-3 text-gray-500" /> : <ChevronRight className="w-3 h-3 text-gray-500" />}
+                            </span>
+                            <span className="truncate flex-1 text-gray-300">{p.name}</span>
+                            {p.toolNames.length > 0 && <span className="text-gray-600">({p.toolNames.length} tools)</span>}
+                            {p.commandNames.length > 0 && <span className="text-gray-600">({p.commandNames.length} cmds)</span>}
+                            <span className={`text-[9px] px-1 py-px rounded shrink-0 ${p.scope === "global" ? "bg-purple-500/15 text-purple-400" : "bg-blue-500/15 text-blue-400"}`}>
+                              {p.scope === "global" ? "全局" : "项目"}
+                            </span>
+                          </div>
+                          {isExpanded && (
+                            <div className="ml-4 pl-2 border-l border-gray-800 space-y-1 pt-1 text-[10px]">
+                              <div className="text-gray-400 break-all">
+                                <span className="text-gray-600">路径:</span> {p.path}
+                              </div>
+                              {p.toolNames.length > 0 && (
+                                <div>
+                                  <span className="text-gray-600 block mb-0.5">工具:</span>
+                                  <div className="space-y-px">
+                                    {p.toolNames.map((tn) => (
+                                      <div key={tn} className="text-gray-400 pl-2 font-mono truncate">{tn}</div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {p.commandNames.length > 0 && (
+                                <div>
+                                  <span className="text-gray-600 block mb-0.5">命令:</span>
+                                  <div className="space-y-px">
+                                    {p.commandNames.map((cn) => (
+                                      <div key={cn} className="text-gray-400 pl-2 font-mono truncate">{cn}</div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {p.toolNames.length === 0 && p.commandNames.length === 0 && (
+                                <div className="text-gray-600">无工具或命令</div>
+                              )}
+                              <PluginCopyButton plugin={p} />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
                 {id === "skills" && (

@@ -56,3 +56,5 @@ test/*.json
 .temp/
 tmp/
 .codenomad/
+*.bak
+*.bak2
