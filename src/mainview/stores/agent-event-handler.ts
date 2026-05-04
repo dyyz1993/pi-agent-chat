@@ -6,6 +6,7 @@ import { useChatStore } from "./use-chat-store";
 import { useSessionStore } from "./use-session-store";
 import { useMemoryStore } from "./use-memory-store";
 import { useRetryStore } from "./use-retry-store";
+import { useUIDialogStore } from "./use-ui-dialog-store";
 import { notificationGateway } from "../lib/notification-gateway";
 import { batchMessageUpdate, flushNow } from "./message-batcher";
 import { messageToChatMessage, extractTokenUsage } from "../lib/message-mapper";
@@ -99,16 +100,36 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
   }
 
   if (event.type === "extension_ui_request") {
-    if (event.method === "confirm" || event.method === "select" || event.method === "input") {
+    const INTERACTIVE = new Set(["confirm", "input", "select", "editor"]);
+    const method = event.method;
+    const id = event.id;
+    if (!id || !method) return;
+
+    if (INTERACTIVE.has(method)) {
+      useUIDialogStore.getState().registerUIRequest({
+        requestId: id,
+        sessionId,
+        method: method as "confirm" | "input" | "select" | "editor",
+        title: event.title,
+        message: event.message,
+        options: event.options,
+        multiple: event.multiple,
+        placeholder: event.placeholder,
+        prefill: event.prefill,
+        timeout: event.timeout,
+      });
+
       storeGet().updateSessionStatus(sessionId, "permission");
       notificationGateway.emit({
         type: "permission_request",
         sessionId,
         title: "权限请求",
-        body: "Agent 需要你的确认",
+        body: event.title ?? "Agent 需要你的确认",
         level: "warning",
+        data: { requestId: id },
       });
     }
+
     return;
   }
 
@@ -373,7 +394,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 					}
 					if (targetIdx >= 0) {
 						const prev = blocks[targetIdx] as ToolExecBlock;
-						blocks[targetIdx] = { ...prev, output };
+						blocks[targetIdx] = { ...prev, output, status: "running" };
 					}
 				}
 

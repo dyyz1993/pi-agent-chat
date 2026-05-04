@@ -20,6 +20,12 @@ import {
   File,
   Brain,
   Activity,
+  CircleCheckBig,
+  ListChecks,
+  TextCursorInput,
+  FileCode2,
+  Bell,
+  Zap,
   type LucideIcon,
 } from "lucide-react";
 import { ALL_MEMORY_TYPES } from "./memory-config";
@@ -51,6 +57,12 @@ const TOOL_ICON_MAP: Record<string, ToolIconEntry> = {
   lsp: { icon: Network, color: "text-blue-400", label: "LSP" },
   lsp_health: { icon: Network, color: "text-blue-400", label: "LSP Health" },
   preview: { icon: Eye, color: "text-emerald-400", label: "Preview" },
+  ui_confirm: { icon: CircleCheckBig, color: "text-emerald-400", label: "确认" },
+  ui_select: { icon: ListChecks, color: "text-sky-400", label: "选择" },
+  ui_input: { icon: TextCursorInput, color: "text-amber-400", label: "输入" },
+  ui_editor: { icon: FileCode2, color: "text-violet-400", label: "编辑" },
+  ui_notify: { icon: Bell, color: "text-cyan-400", label: "通知" },
+  ui_respond: { icon: Zap, color: "text-orange-400", label: "响应注入" },
 };
 
 const DEFAULT_ENTRY: ToolIconEntry = {
@@ -105,6 +117,19 @@ const CUSTOM_TYPE_ICON_MAP: Record<string, ToolIconEntry> = {
   bash_background_exit: { icon: Terminal, color: "text-cyan-400", label: "Background Exit" },
   step_snapshot: { icon: Activity, color: "text-gray-400", label: "Step Snapshot" },
 };
+
+const UI_METHOD_ICON_MAP: Record<string, ToolIconEntry> = {
+  confirm: { icon: CircleCheckBig, color: "text-emerald-400", label: "确认" },
+  select: { icon: ListChecks, color: "text-sky-400", label: "选择" },
+  input: { icon: TextCursorInput, color: "text-amber-400", label: "输入" },
+  editor: { icon: FileCode2, color: "text-violet-400", label: "编辑" },
+  notify: { icon: Bell, color: "text-cyan-400", label: "通知" },
+  respondUI: { icon: Zap, color: "text-orange-400", label: "响应注入" },
+};
+
+export function getUIMethodIcon(method: string): ToolIconEntry {
+  return UI_METHOD_ICON_MAP[method] ?? DEFAULT_ENTRY;
+}
 
 const CUSTOM_TYPE_DEFAULT: ToolIconEntry = {
   icon: Brain,

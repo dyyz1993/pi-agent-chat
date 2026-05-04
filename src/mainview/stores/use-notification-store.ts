@@ -8,6 +8,7 @@ export interface AppNotification {
   level: NotificationLevel;
   timestamp: number;
   sessionId?: string;
+  requestId?: string;
   read: boolean;
 }
 

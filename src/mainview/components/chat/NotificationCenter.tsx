@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Bell, X, Info, AlertTriangle, AlertCircle, Trash2, BellRing } from "lucide-react";
 import { useNotificationStore, type AppNotification } from "../../stores/use-notification-store";
+import { useSessionStore } from "../../stores/use-session-store";
 import { requestNotificationPermission, getNotificationPermission } from "../../lib/channels/pwa-channel";
 
 const LEVEL_ICON: Record<AppNotification["level"], typeof Info> = {
@@ -29,6 +30,24 @@ export function NotificationCenter() {
   const handleEnablePwa = async () => {
     const result = await requestNotificationPermission();
     setPwaPerm(result);
+  };
+
+  const handleNotificationClick = (n: AppNotification) => {
+    if (n.requestId && n.sessionId) {
+      useSessionStore.getState().setActiveSession(n.sessionId);
+      requestAnimationFrame(() => {
+        const el = document.querySelector(`[data-ui-request-id="${n.requestId}"]`);
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+          el.classList.add("ring-1", "ring-amber-400/50");
+          setTimeout(() => {
+            el.classList.remove("ring-1", "ring-amber-400/50");
+          }, 2000);
+        }
+      });
+    }
+    if (!n.read) markRead(n.id);
+    setPanelOpen(false);
   };
 
   const unread = notifications.filter((n) => !n.read).length;
@@ -85,12 +104,16 @@ export function NotificationCenter() {
             ) : (
               notifications.map((n) => {
                 const Icon = LEVEL_ICON[n.level];
+                const isClickable = !!n.requestId && !!n.sessionId;
                 return (
                   <div
                     key={n.id}
-                    className={`flex items-start gap-2 px-3 py-2 border-b border-gray-700/50 hover:bg-gray-700/30 transition-colors ${!n.read ? "bg-gray-700/20" : ""}`}
+                    className={`flex items-start gap-2 px-3 py-2 border-b border-gray-700/50 transition-colors ${!n.read ? "bg-gray-700/20" : ""} ${isClickable ? "hover:bg-gray-700/30 cursor-pointer" : ""}`}
                     onMouseEnter={() => {
                       if (!n.read) markRead(n.id);
+                    }}
+                    onClick={() => {
+                      if (isClickable) handleNotificationClick(n);
                     }}
                   >
                     <Icon className={`w-3 h-3 mt-0.5 shrink-0 ${LEVEL_COLOR[n.level]}`} />
@@ -98,7 +121,10 @@ export function NotificationCenter() {
                       {n.message}
                     </span>
                     <button
-                      onClick={() => dismiss(n.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        dismiss(n.id);
+                      }}
                       className="shrink-0 text-gray-600 hover:text-gray-300 transition-colors"
                     >
                       <X className="w-2.5 h-2.5" />
