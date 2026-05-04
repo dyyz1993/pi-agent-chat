@@ -3,7 +3,7 @@ import type { RPCMethods, HandlerOptions } from "../rpc-schema";
 import { existsSync } from "fs";
 import { basename } from "path";
 import { addRecentProject, listRecentProjects, removeRecentProject, listConfiguredPaths, addConfiguredPath, removeConfiguredPath, syncOpenTabs, restoreOpenTabs, listDirectory, removeFavoriteFolder, listFavoriteFolders, toggleProjectPin, toggleFavoriteFolder } from "../lib/project-config";
-import { scanSessionsForProject, scanAllProjects, listPiProjects, listMergedProjects } from "../lib/session-scanner";
+import { scanSessionsForProject, scanAllProjects, listPiProjects, listMergedProjects, findSessionById } from "../lib/session-scanner";
 
 type P<K extends keyof RPCMethods> = RPCMethods[K] extends { params: infer P } ? P : never;
 type R<K extends keyof RPCMethods> = RPCMethods[K] extends { result: infer R } ? R : never;
@@ -58,6 +58,11 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   r("project.scanSessions", async (params) => {
     const sessions = await scanSessionsForProject(params.projectPath);
     return { sessions };
+  });
+
+  r("project.findSessionById", async (params) => {
+    const session = await findSessionById(params.sessionId);
+    return { session };
   });
 
   r("project.listPiProjects", async () => {

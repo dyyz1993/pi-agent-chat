@@ -21,6 +21,10 @@ export interface ProjectMethods {
     params: { projectPath: string };
     result: { sessions: SessionMeta[] };
   };
+  "project.findSessionById": {
+    params: { sessionId: string };
+    result: { session: (SessionMeta & { sessionPath: string }) | null };
+  };
   "project.listPiProjects": {
     params: {};
     result: { projects: PiProject[] };

@@ -95,44 +95,94 @@ async function scanSessionDir(sessionDir: string, pinnedIds?: Set<string>): Prom
   if (!existsSync(sessionDir)) return [];
 
   const files = await readdir(sessionDir);
-  const sessions: SessionMeta[] = [];
+  const jsonlFiles = files.filter((f) => f.endsWith(".jsonl"));
 
-  for (const file of files) {
-    if (!file.endsWith(".jsonl")) continue;
-    const filePath = join(sessionDir, file);
+  const results = await Promise.all(
+    jsonlFiles.map(async (file) => {
+      const filePath = join(sessionDir, file);
+      try {
+        const [header, meta, fileStat] = await Promise.all([
+          parseJsonlHeader(filePath),
+          parseJsonlMeta(filePath),
+          stat(filePath),
+        ]);
+        if (!header) return null;
+        return {
+          sessionId: header.id,
+          name: meta?.sessionName ?? basename(file, ".jsonl"),
+          sessionPath: filePath,
+          projectPath: meta?.effectiveCwd ?? header.cwd,
+          parentSessionPath: meta?.parentSessionPath ?? null,
+          messageCount: meta?.messageCount ?? 0,
+          firstMessage: meta?.firstMessage ?? "",
+          createdAt: new Date(header.timestamp).getTime(),
+          updatedAt: fileStat.mtimeMs,
+          status: "idle" as const,
+          pinned: pinnedIds ? pinnedIds.has(header.id) : false,
+        };
+      } catch {
+        return null;
+      }
+    })
+  );
 
-    try {
-      const [header, meta, fileStat] = await Promise.all([
-        parseJsonlHeader(filePath),
-        parseJsonlMeta(filePath),
-        stat(filePath),
-      ]);
-
-      if (!header) continue;
-
-      sessions.push({
-        sessionId: header.id,
-        name: meta?.sessionName ?? basename(file, ".jsonl"),
-        sessionPath: filePath,
-        projectPath: meta?.effectiveCwd ?? header.cwd,
-        parentSessionPath: meta?.parentSessionPath ?? null,
-        messageCount: meta?.messageCount ?? 0,
-        firstMessage: meta?.firstMessage ?? "",
-        createdAt: new Date(header.timestamp).getTime(),
-        updatedAt: fileStat.mtimeMs,
-        status: "idle",
-        pinned: pinnedIds ? pinnedIds.has(header.id) : false,
-      });
-    } catch {
-      continue;
-    }
-  }
-
-  sessions.sort((a, b) => {
+  const filtered = results
+    .filter((s): s is NonNullable<typeof s> => s !== null)
+    .filter((s) => existsSync(s.projectPath));
+  filtered.sort((a, b) => {
     if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
     return b.updatedAt - a.updatedAt;
   });
-  return sessions;
+  return filtered as SessionMeta[];
+}
+
+export async function findSessionById(
+  sessionId: string,
+): Promise<(SessionMeta & { sessionPath: string }) | null> {
+  if (!existsSync(SESSIONS_DIR)) return null;
+
+  const dirs = await readdir(SESSIONS_DIR);
+  const targetFile = `${sessionId}.jsonl`;
+
+  for (const dir of dirs) {
+    const fullPath = join(SESSIONS_DIR, dir);
+    try {
+      const dirStat = await stat(fullPath);
+      if (!dirStat.isDirectory()) continue;
+    } catch {
+      continue;
+    }
+
+    const candidate = join(fullPath, targetFile);
+    if (!existsSync(candidate)) continue;
+
+    const [header, meta, fileStat] = await Promise.all([
+      parseJsonlHeader(candidate),
+      parseJsonlMeta(candidate),
+      stat(candidate),
+    ]);
+    if (!header) continue;
+
+    const projectPath = meta?.effectiveCwd ?? header.cwd;
+    if (!existsSync(projectPath)) continue;
+
+    const pinnedIds = await loadPinnedSet();
+    return {
+      sessionId: header.id,
+      name: meta?.sessionName ?? basename(candidate, ".jsonl"),
+      sessionPath: candidate,
+      projectPath,
+      parentSessionPath: meta?.parentSessionPath ?? null,
+      messageCount: meta?.messageCount ?? 0,
+      firstMessage: meta?.firstMessage ?? "",
+      createdAt: new Date(header.timestamp).getTime(),
+      updatedAt: fileStat.mtimeMs,
+      status: "idle" as const,
+      pinned: pinnedIds.has(header.id),
+    };
+  }
+
+  return null;
 }
 
 export async function scanSessionsForProject(projectPath: string): Promise<SessionMeta[]> {
@@ -158,23 +208,27 @@ export async function scanAllProjects(): Promise<
 
   const pinnedIds = await loadPinnedSet();
   const dirs = await readdir(SESSIONS_DIR);
-  const results: { projectPath: string; sessionCount: number; sessions: SessionMeta[] }[] = [];
 
-  for (const dir of dirs) {
-    const fullPath = join(SESSIONS_DIR, dir);
-    try {
-      const dirStat = await stat(fullPath);
-      if (!dirStat.isDirectory()) continue;
-    } catch {
-      continue;
-    }
+  const allResults = await Promise.all(
+    dirs.map(async (dir) => {
+      const fullPath = join(SESSIONS_DIR, dir);
+      try {
+        const dirStat = await stat(fullPath);
+        if (!dirStat.isDirectory()) return null;
+      } catch {
+        return null;
+      }
 
-    const sessions = await scanSessionDir(fullPath, pinnedIds);
-    if (sessions.length === 0) continue;
+      const sessions = await scanSessionDir(fullPath, pinnedIds);
+      if (sessions.length === 0) return null;
 
-    const projectPath = sessions[0].projectPath;
-    results.push({ projectPath, sessionCount: sessions.length, sessions });
-  }
+      return { projectPath: sessions[0].projectPath, sessionCount: sessions.length, sessions };
+    })
+  );
+
+  const results = allResults.filter(
+    (r): r is { projectPath: string; sessionCount: number; sessions: SessionMeta[] } => r !== null
+  );
 
   results.sort((a, b) => {
     const aLatest = a.sessions[0]?.updatedAt ?? 0;
