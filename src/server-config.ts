@@ -1,25 +1,47 @@
 /**
  * Web server configuration — single source of truth.
  * Values are read from environment variables with sensible defaults.
+ *
+ * PI路径相关变量（PI_CLI_PATH, PI_EXT_*）必须通过环境变量或 .env 文件设置，
+ * 无内置默认值。启动时若未设置会打印警告。
  */
+
+const MISSING_PI_VARS: string[] = [];
+
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    MISSING_PI_VARS.push(name);
+    return "";
+  }
+  return value;
+}
 
 export const config = {
   port: parseInt(process.env.PORT ?? "3100"),
-  authToken: process.env.AUTH_TOKEN ?? "pi-agent-chat-chat-token",
+  authToken: process.env.AUTH_TOKEN ?? "",
   maxUploadSize: parseInt(process.env.MAX_UPLOAD_SIZE ?? String(50 * 1024 * 1024)),
   logDir: process.env.LOG_DIR ?? "logs",
-  piCliPath: process.env.PI_CLI_PATH ?? "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/dist/cli.js",
+  piCliPath: requireEnv("PI_CLI_PATH"),
   piExtensionPaths: {
-    subagent: process.env.PI_EXT_SUBAGENT ?? "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/extensions/subagent-ext/index.ts",
-    todo: process.env.PI_EXT_TODO ?? "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/extensions/todo-ext/index.ts",
-    bash: process.env.PI_EXT_BASH ?? "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/extensions/bash-ext/index.ts",
-    lsp: process.env.PI_EXT_LSP ?? "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/extensions/lsp/lsp/index.ts",
-    preview: process.env.PI_EXT_PREVIEW ?? "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/extensions/preview/index.ts",
-    autoMemory: process.env.PI_EXT_AUTO_MEMORY ?? "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/extensions/auto-memory/index.ts",
-    rules: process.env.PI_EXT_RULES ?? "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/extensions/rules-engine/index.ts",
-    autoSessionTitle: process.env.PI_EXT_AUTO_SESSION_TITLE ?? "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/extensions/auto-session-title/index.ts",
-    fileSnapshot: process.env.PI_EXT_FILE_SNAPSHOT ?? "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/extensions/file-snapshot/index.ts",
-    askTools: process.env.PI_EXT_ASK_TOOLS ?? "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/extensions/ask-tools/index.ts",
-    messageBridge: process.env.PI_EXT_MESSAGE_BRIDGE ?? "/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/extensions/message-bridge/index.ts",
+    subagent: requireEnv("PI_EXT_SUBAGENT"),
+    todo: requireEnv("PI_EXT_TODO"),
+    bash: requireEnv("PI_EXT_BASH"),
+    lsp: requireEnv("PI_EXT_LSP"),
+    preview: requireEnv("PI_EXT_PREVIEW"),
+    autoMemory: requireEnv("PI_EXT_AUTO_MEMORY"),
+    rules: requireEnv("PI_EXT_RULES"),
+    autoSessionTitle: requireEnv("PI_EXT_AUTO_SESSION_TITLE"),
+    fileSnapshot: requireEnv("PI_EXT_FILE_SNAPSHOT"),
+    askTools: requireEnv("PI_EXT_ASK_TOOLS"),
+    messageBridge: requireEnv("PI_EXT_MESSAGE_BRIDGE"),
   },
 } as const;
+
+if (MISSING_PI_VARS.length > 0) {
+  console.warn(
+    `[config] ⚠ 以下环境变量未设置，PI Agent 功能将无法正常工作:\n` +
+      MISSING_PI_VARS.map((v) => `  - ${v}`).join("\n") +
+      `\n请在 .env 文件中配置这些变量，参考 .env.example`,
+  );
+}

@@ -19,6 +19,7 @@ interface AppState {
   tickCount: number;
   subscriptionId: string | null;
   timerRunning: boolean;
+  connectionStatus: "connected" | "disconnected";
 
   initializeConnection: () => void;
   addLog: (msg: string) => void;
@@ -39,6 +40,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   tickCount: 0,
   subscriptionId: null,
   timerRunning: false,
+  connectionStatus: "connected",
 
   initializeConnection: () => {
     const MAX_RETRIES = 5;
@@ -62,6 +64,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
     };
     init();
+
+    apiClient.onConnectionChange((status) => {
+      set({ connectionStatus: status });
+      get().addLog(`Connection: ${status}`);
+    });
   },
 
   addLog: (msg: string) => {

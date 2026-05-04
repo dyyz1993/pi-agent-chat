@@ -52,7 +52,7 @@ async function loadMermaid(): Promise<MermaidAPI> {
     mermaidModule.initialize({
       startOnLoad: false,
       theme: "dark",
-      securityLevel: "loose",
+      securityLevel: "strict",
     });
     initialized = true;
   }

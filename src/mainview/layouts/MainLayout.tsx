@@ -7,6 +7,7 @@ import { LeftSidebar } from "../components/left-sidebar/LeftSidebar";
 import { RightSidebar } from "../components/right-sidebar/RightSidebar";
 import { FilePreviewOverlay } from "../components/file-preview/FilePreviewOverlay";
 import { DiffViewerPanel } from "../components/diff/DiffViewerPanel";
+import { ConnectionBanner } from "../components/ConnectionBanner";
 import { useExplorerStore } from "../stores/use-explorer-store";
 import { useGitStore } from "../stores/use-git-store";
 
@@ -123,6 +124,7 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
 
   return (
     <div className="h-screen bg-gray-950 text-white flex flex-col overflow-hidden">
+      <ConnectionBanner />
       {/* === ROW 1: Top Tab Bar === */}
       <TabBar onAddProject={onAddProject} />
 

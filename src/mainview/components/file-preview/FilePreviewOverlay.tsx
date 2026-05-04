@@ -15,6 +15,15 @@ function isSvgFile(filename: string): boolean {
   return filename.toLowerCase().endsWith(".svg");
 }
 
+function sanitizeSvg(svg: string): string {
+  let clean = svg.replace(/<script[\s\S]*?<\/script\s*>/gi, "");
+  clean = clean.replace(/<script[\s\S]*?\/>/gi, "");
+  clean = clean.replace(/\son\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "");
+  clean = clean.replace(/(href|xlink:href)\s*=\s*(?:"javascript:[^"]*"|'javascript:[^']*')/gi, "");
+  clean = clean.replace(/<foreignObject[\s\S]*?<\/foreignObject\s*>/gi, "");
+  return clean;
+}
+
 function isHtmlFile(filename: string): boolean {
   const lower = filename.toLowerCase();
   return lower.endsWith(".html") || lower.endsWith(".htm");
@@ -68,7 +77,7 @@ export function FilePreviewOverlay({ preview, loading, onClose }: FilePreviewOve
         <div
           className="flex items-center justify-center h-full p-4 bg-[#1a1a2e]"
           dangerouslySetInnerHTML={{
-            __html: svgContent.replace(/<svg/, '<svg style="max-width: 100%; max-height: 100%;"'),
+            __html: sanitizeSvg(svgContent).replace(/<svg/, '<svg style="max-width: 100%; max-height: 100%;"'),
           }}
         />
       );

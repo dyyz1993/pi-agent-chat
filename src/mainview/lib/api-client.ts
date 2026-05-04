@@ -8,7 +8,7 @@ import { useAppStore } from "../stores/use-app-store";
  * Token 来源优先级：
  * 1. URL query ?token=xxx（部署时注入）
  * 2. localStorage "rpc-auth-token"
- * 3. 默认值（开发用）
+ * 3. 空字符串（连接将被服务端 401 拒绝，需通过上述方式提供有效 token）
  */
 function resolveAuthToken(): string {
   if (typeof window !== "undefined") {
@@ -17,7 +17,7 @@ function resolveAuthToken(): string {
     const fromStorage = localStorage.getItem("rpc-auth-token");
     if (fromStorage) return fromStorage;
   }
-  return "pi-agent-chat-chat-token";
+  return "";
 }
 
 const AUTH_TOKEN = resolveAuthToken();
@@ -30,6 +30,23 @@ class APIClientImpl {
   private wsTransport: WebSocketTransport | null = null;
   private _reconnectCallback: (() => void) | null = null;
   private _reconnectDetected: boolean = false;
+  private _connectionStatus: "connected" | "disconnected" = "connected";
+  private _connectionListeners: Set<(status: "connected" | "disconnected") => void> = new Set();
+
+  onConnectionChange(listener: (status: "connected" | "disconnected") => void): () => void {
+    this._connectionListeners.add(listener);
+    return () => { this._connectionListeners.delete(listener); };
+  }
+
+  getConnectionStatus(): "connected" | "disconnected" {
+    return this._connectionStatus;
+  }
+
+  private setConnectionStatus(status: "connected" | "disconnected"): void {
+    if (this._connectionStatus === status) return;
+    this._connectionStatus = status;
+    this._connectionListeners.forEach((fn) => fn(status));
+  }
 
   initSyncForDesktop(): void {
     if (this.client) return;
@@ -92,12 +109,14 @@ class APIClientImpl {
 
       if (wasConnected && !connected) {
         this._reconnectDetected = true;
+        this.setConnectionStatus("disconnected");
       }
 
       if (!wasConnected && connected && this._reconnectDetected) {
         this._reconnectDetected = false;
         this.client = createTypedClient<RPCMethods, RPCEvents>(transport);
         this.initPromise = null;
+        this.setConnectionStatus("connected");
         this._reconnectCallback?.();
       }
 
