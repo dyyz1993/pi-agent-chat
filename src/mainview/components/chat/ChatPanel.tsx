@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   ArrowUp,
-  Paperclip,
-  Image as ImageIcon,
   PanelLeft,
   PanelRight,
   Bot,
@@ -332,7 +330,8 @@ export function ChatPanel() {
               </div>
             ) : (
               <>
-                {!isMobileOrTablet && (
+                {/* TODO: 实现附件和图片上传功能后再显示这些按钮 */}
+                {/* {!isMobileOrTablet && (
                   <div className="flex flex-col gap-1 shrink-0 justify-between py-1">
                     <button className="p-1.5 rounded-md hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors" title="附件">
                       <Paperclip className="w-4 h-4" />
@@ -341,7 +340,7 @@ export function ChatPanel() {
                       <ImageIcon className="w-4 h-4" />
                     </button>
                   </div>
-                )}
+                )} */}
 
                 <InputBar ref={inputBarRef} value={inputText} onChange={setInputText} onSend={handleSend} sessionId={activeSessionId ?? ""} />
 
