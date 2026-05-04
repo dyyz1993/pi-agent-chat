@@ -73,12 +73,12 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
         return <StatusPanel />;
       case "rpc":
         return <RpcPanel />;
-		case "memory":
-				return <MemoryPanel />;
-			case "rules":
-				return <RulesPanel />;
-			default:
-				return null;
+      case "memory":
+        return <MemoryPanel />;
+      case "rules":
+        return <RulesPanel />;
+      default:
+        return null;
     }
   }
 

@@ -40,12 +40,12 @@ textarea {
 }
 
 html {
-  background-color: #030712;
+  background-color: theme('colors.gray.950');
   overscroll-behavior-y: none;
 }
 
 body {
-  background-color: #030712;
+  background-color: theme('colors.gray.950');
 }
 
 .sidenav-scroll::-webkit-scrollbar {

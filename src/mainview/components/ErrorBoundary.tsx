@@ -34,7 +34,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     }
 
     return (
-      <div className="h-screen flex items-center justify-center bg-[#030712]">
+      <div className="h-screen flex items-center justify-center bg-gray-950">
         <div className="text-center max-w-md px-6">
           <div className="text-2xl font-semibold text-white mb-2">出错了</div>
           <div className="text-gray-400 text-sm mb-6">页面渲染遇到了问题</div>
