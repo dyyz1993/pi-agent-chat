@@ -131,6 +131,8 @@ export function normalizeToolBlocks(msgs: ChatMessage[]): void {
   }
 }
 
+const PAGE_SIZE = 50;
+
 interface ChatState {
   messagesBySession: Record<string, ChatMessage[]>;
   inputText: string;
@@ -138,6 +140,8 @@ interface ChatState {
   streamContentVersion: number;
   loadingSessions: Set<string>;
   historyLoadVersion: number;
+  hasMoreMessagesBySession: Record<string, boolean>;
+  isLoadingMoreBySession: Record<string, boolean>;
 
   setInputText: (text: string) => void;
   sendMessage: () => Promise<void>;
@@ -148,6 +152,7 @@ interface ChatState {
   setMessagesForSession: (sessionId: string, msgs: ChatMessage[]) => void;
   clearSessionMessages: (sessionId: string) => void;
   loadSessionMessages: (sessionId: string, options?: { force?: boolean; sessionPath?: string }) => Promise<void>;
+  loadMoreMessages: (sessionId: string) => Promise<void>;
   setIsStreaming: (v: boolean) => void;
   incrementStreamVersion: () => void;
 }
@@ -159,6 +164,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   streamContentVersion: 0,
   loadingSessions: new Set<string>(),
   historyLoadVersion: 0,
+  hasMoreMessagesBySession: {},
+  isLoadingMoreBySession: {},
 
   setInputText: (text) => set({ inputText: text }),
 
@@ -440,16 +447,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
         });
       }
 
-      const MAX_INITIAL_MESSAGES = 200;
-      const displayMsgs = msgs.length > MAX_INITIAL_MESSAGES
-        ? msgs.slice(-MAX_INITIAL_MESSAGES)
+      const hasMore = msgs.length > PAGE_SIZE;
+      const displayMsgs = hasMore
+        ? msgs.slice(-PAGE_SIZE)
         : msgs;
 
-      log.info("SET messages", { sessionId: sid, total: msgs.length, displayed: displayMsgs.length });
+      log.info("SET messages", { sessionId: sid, total: msgs.length, displayed: displayMsgs.length, hasMore });
       set((s) => ({
         messagesBySession: { ...s.messagesBySession, [sid]: displayMsgs },
         historyLoadVersion: s.historyLoadVersion + 1,
-}));
+        hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: hasMore },
+      }));
 
       useSessionStore.getState().restoreContextFromHistory(sid);
     } catch (err) {
@@ -461,6 +469,94 @@ export const useChatStore = create<ChatState>((set, get) => ({
         next.delete(sid);
         return { loadingSessions: next };
       });
+    }
+  },
+
+  loadMoreMessages: async (sessionId: string) => {
+    const sid = sessionId;
+    if (!sid) return;
+
+    const hasMore = get().hasMoreMessagesBySession[sid];
+    if (!hasMore) {
+      log.info("No more messages to load", { sessionId: sid });
+      return;
+    }
+    if (get().isLoadingMoreBySession[sid]) {
+      log.warn("Already loading more", { sessionId: sid });
+      return;
+    }
+
+    set((s) => ({
+      isLoadingMoreBySession: { ...s.isLoadingMoreBySession, [sid]: true },
+    }));
+
+    try {
+      const result = await apiClient.call("agent.getFullMessages", { sessionId: sid });
+      const messages = (result as unknown as { messages: Array<Record<string, unknown>> }).messages;
+      if (!Array.isArray(messages)) return;
+
+      const toolCallNameMap: Record<string, string> = {};
+      const rawMessages: Array<{ raw: Record<string, unknown>; id?: string }> = [];
+
+      for (const msg of messages) {
+        rawMessages.push({ raw: msg, id: msg.id as string | undefined });
+        const role = msg.role as string;
+        if (role === "assistant") {
+          const content = msg.content as Array<Record<string, unknown>> | undefined;
+          if (Array.isArray(content)) {
+            for (const block of content) {
+              if (block.type === "toolCall" && block.id && block.name) {
+                toolCallNameMap[block.id as string] = block.name as string;
+              }
+            }
+          }
+        }
+        if (role === "toolResult" && msg.toolCallId && msg.name) {
+          const tcId = msg.toolCallId as string;
+          if (!toolCallNameMap[tcId]) {
+            toolCallNameMap[tcId] = msg.name as string;
+          }
+        }
+      }
+
+      const allMsgs: ChatMessage[] = [];
+      for (const { raw, id } of rawMessages) {
+        const msg = messageToChatMessage(raw as unknown as Message, id, toolCallNameMap);
+        if (msg) allMsgs.push(msg);
+      }
+      normalizeToolBlocks(allMsgs);
+
+      const currentMsgs = get().messagesBySession[sid] || [];
+      const currentFirstId = currentMsgs[0]?.id;
+      if (!currentFirstId) {
+        set((s) => ({
+          hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: false },
+        }));
+        return;
+      }
+
+      const currentFirstIdx = allMsgs.findIndex((m) => m.id === currentFirstId);
+      if (currentFirstIdx <= 0) {
+        set((s) => ({
+          hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: false },
+        }));
+        return;
+      }
+
+      const olderMsgs = allMsgs.slice(0, currentFirstIdx);
+      const prepended = [...olderMsgs, ...currentMsgs];
+      log.info("LOAD MORE messages", { sessionId: sid, older: olderMsgs.length, total: prepended.length });
+
+      set((s) => ({
+        messagesBySession: { ...s.messagesBySession, [sid]: prepended },
+        hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: currentFirstIdx > PAGE_SIZE },
+      }));
+    } catch (err) {
+      log.error("Failed to load more messages", { error: err instanceof Error ? err.message : String(err) });
+    } finally {
+      set((s) => ({
+        isLoadingMoreBySession: { ...s.isLoadingMoreBySession, [sid]: false },
+      }));
     }
   },
 }));

@@ -34,6 +34,8 @@ import { ScrollToolbar } from "./ScrollToolbar";
 import { QueueCards } from "./QueueCards";
 import { MarkdownExpandOverlay } from "./MarkdownExpandOverlay";
 import { MermaidFullscreen } from "./mermaid";
+import { AttachmentButtons, AttachmentBar } from "./FileAttachment";
+import { useAttachmentStore } from "../../stores/use-attachment-store";
 import type { ChatMessage } from "../../types";
 
 const EMPTY_MSGS: never[] = [];
@@ -86,6 +88,15 @@ export function ChatPanel() {
     (s) => !!activeSessionId && s.loadingSessions.has(activeSessionId),
     [activeSessionId],
   ));
+  const hasMoreMessages = useChatStore(useCallback(
+    (s) => !!activeSessionId && !!s.hasMoreMessagesBySession?.[activeSessionId],
+    [activeSessionId],
+  ));
+  const isLoadingMore = useChatStore(useCallback(
+    (s) => !!activeSessionId && !!s.isLoadingMoreBySession?.[activeSessionId],
+    [activeSessionId],
+  ));
+  const loadMoreMessages = useChatStore((s) => s.loadMoreMessages);
   const inputText = useChatStore((s) => s.inputText);
   const sendMessage = useChatStore((s) => s.sendMessage);
   const sendSteer = useChatStore((s) => s.sendSteer);
@@ -185,7 +196,27 @@ export function ChatPanel() {
   );
 
   const handleSend = async () => {
-    if (!inputText.trim()) return;
+    if (!inputText.trim() && useAttachmentStore.getState().attachments.length === 0) return;
+
+    const attachmentStore = useAttachmentStore.getState();
+    const hasAttachments = attachmentStore.attachments.length > 0;
+
+    if (hasAttachments) {
+      const uploaded = await attachmentStore.uploadAll();
+      const failedCount = attachmentStore.attachments.filter((a) => a.status === "error").length;
+
+      if (failedCount > 0 && uploaded.length === 0) return;
+
+      const filePaths = uploaded.map((a) => a.uploadedPath).filter(Boolean) as string[];
+      attachmentStore.clearAll();
+
+      if (filePaths.length > 0) {
+        const fileRefs = filePaths.map((p) => `@${p}`).join(" ");
+        const text = inputText.trim() ? `${inputText.trim()}\n${fileRefs}` : fileRefs;
+        useChatStore.getState().setInputText(text);
+      }
+    }
+
     if (isStreaming) {
       await sendFollowUp();
     } else {
@@ -223,6 +254,11 @@ export function ChatPanel() {
     }, 80);
     return () => { clearInterval(timer); sessionInitRef.current = false; };
   }, [activeSessionId, activeSubId]);
+
+  useEffect(() => {
+    if (!activeSessionId || !isAtTop || !hasMoreMessages || isLoadingMore || isViewingSubagent) return;
+    loadMoreMessages?.(activeSessionId);
+  }, [activeSessionId, isAtTop, hasMoreMessages, isLoadingMore, isViewingSubagent, loadMoreMessages]);
 
   const handleBackToMain = () => {
     if (activeSessionId) {
@@ -285,7 +321,7 @@ export function ChatPanel() {
           ) : isViewingSubagent ? (
             <MessageListView messages={messages} scrollRef={messagesScrollRef} onScroll={handleScroll} virtualizer={subVirtualizer} />
           ) : (
-            <MessageListView messages={mainMessages} scrollRef={messagesScrollRef} onScroll={handleScroll} virtualizer={mainVirtualizer} />
+            <MessageListView messages={mainMessages} scrollRef={messagesScrollRef} onScroll={handleScroll} virtualizer={mainVirtualizer} isLoadingMore={isLoadingMore} hasMoreMessages={hasMoreMessages} />
           )}
           {messages.length > 0 && (
             <ScrollToolbar
@@ -330,17 +366,8 @@ export function ChatPanel() {
               </div>
             ) : (
               <>
-                {/* TODO: 实现附件和图片上传功能后再显示这些按钮 */}
-                {/* {!isMobileOrTablet && (
-                  <div className="flex flex-col gap-1 shrink-0 justify-between py-1">
-                    <button className="p-1.5 rounded-md hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors" title="附件">
-                      <Paperclip className="w-4 h-4" />
-                    </button>
-                    <button className="p-1.5 rounded-md hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors" title="图片">
-                      <ImageIcon className="w-4 h-4" />
-                    </button>
-                  </div>
-                )} */}
+                <AttachmentBar />
+                {!isMobileOrTablet && <AttachmentButtons />}
 
                 <InputBar ref={inputBarRef} value={inputText} onChange={setInputText} onSend={handleSend} sessionId={activeSessionId ?? ""} />
 
@@ -360,8 +387,8 @@ export function ChatPanel() {
                   )}
                   <button
                     onClick={() => inputBarRef.current?.send()}
-                    disabled={!inputText.trim() || !sessionReady}
-                    className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${inputText.trim() && sessionReady ? (isStreaming ? "bg-blue-600 text-white hover:bg-blue-700 shadow-sm shadow-blue-500/20" : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm shadow-indigo-500/20") : "bg-gray-800 text-gray-600 cursor-not-allowed"}`}
+                    disabled={(!inputText.trim() && useAttachmentStore.getState().attachments.length === 0) || !sessionReady}
+                    className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${(inputText.trim() || useAttachmentStore.getState().attachments.length > 0) && sessionReady ? (isStreaming ? "bg-blue-600 text-white hover:bg-blue-700 shadow-sm shadow-blue-500/20" : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm shadow-indigo-500/20") : "bg-gray-800 text-gray-600 cursor-not-allowed"}`}
                     title={isStreaming ? "排队发送 (Follow-up)" : "发送"}
                   >
                     {isStreaming ? <Clock className="w-4 h-4" /> : <ArrowUp className="w-4 h-4" />}
