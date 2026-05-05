@@ -21,6 +21,7 @@ export default tseslint.config(
 
       'src/electrobun-shim.d.ts',
       'eslint.config.mjs',
+      'commitlint.config.js',
     ],
   },
   {
