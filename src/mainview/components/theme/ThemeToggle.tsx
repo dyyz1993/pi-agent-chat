@@ -1,16 +1,18 @@
 import { Moon, Sun, Monitor } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useThemeStore } from "../../stores/use-theme-store";
 import type { Theme } from "../../stores/use-theme-store";
 
-const THEME_OPTIONS: { value: Theme; icon: typeof Moon; label: string }[] = [
-  { value: "light", icon: Sun, label: "亮色" },
-  { value: "dark", icon: Moon, label: "暗色" },
-  { value: "system", icon: Monitor, label: "跟随系统" },
-];
-
 export function ThemeToggle() {
+  const { t } = useTranslation("theme");
   const theme = useThemeStore((s) => s.theme);
   const setTheme = useThemeStore((s) => s.setTheme);
+
+  const THEME_OPTIONS: { value: Theme; icon: typeof Moon; label: string }[] = [
+    { value: "light", icon: Sun, label: t("light") },
+    { value: "dark", icon: Moon, label: t("dark") },
+    { value: "system", icon: Monitor, label: t("system") },
+  ];
 
   const current = THEME_OPTIONS.find((o) => o.value === theme) ?? THEME_OPTIONS[1];
   const Icon = current.icon;
@@ -26,7 +28,7 @@ export function ThemeToggle() {
       data-testid="theme-toggle"
       onClick={cycleTheme}
       className="p-1 rounded hover:bg-gray-800 dark:hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors"
-      title={`主题: ${current.label}（点击切换）`}
+      title={t("toggle", { theme: current.label })}
     >
       <Icon className="w-3.5 h-3.5" />
     </button>

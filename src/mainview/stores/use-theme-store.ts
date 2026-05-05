@@ -1,12 +1,15 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import i18n from "../lib/i18n";
 
 export type Theme = "light" | "dark" | "system";
 
 interface ThemeState {
   theme: Theme;
   resolvedTheme: "light" | "dark";
+  language: string;
   setTheme: (theme: Theme) => void;
+  setLanguage: (lang: string) => void;
 }
 
 function getSystemTheme(): "light" | "dark" {
@@ -36,10 +39,15 @@ export const useThemeStore = create<ThemeState>()(
     (set) => ({
       theme: "dark" as Theme,
       resolvedTheme: "dark" as "light" | "dark",
+      language: i18n.language || "zh-CN",
       setTheme: (theme: Theme) => {
         const resolved = resolveTheme(theme);
         applyTheme(resolved);
         set({ theme, resolvedTheme: resolved });
+      },
+      setLanguage: (lang: string) => {
+        i18n.changeLanguage(lang);
+        set({ language: lang });
       },
     }),
     {

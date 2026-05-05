@@ -1,0 +1,9 @@
+{
+  "title": "调试",
+  "rpcLog": "RPC 日志",
+  "clearLog": "清空日志",
+  "noLogs": "暂无日志",
+  "rpcEvents": "RPC 事件",
+  "copyPayload": "复制完整 payload",
+  "noRpcEvents": "暂无 RPC 事件"
+}

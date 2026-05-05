@@ -1,0 +1,17 @@
+{
+  "newFile": "New File",
+  "newFolder": "New Folder",
+  "rename": "Rename",
+  "delete": "Delete",
+  "copyPath": "Copy Path",
+  "refresh": "Refresh",
+  "confirmDelete": "Confirm Delete",
+  "preview": "Preview",
+  "source": "Source",
+  "switchPreview": "Switch to Preview",
+  "switchSource": "Switch to Source",
+  "explorer": "Explorer",
+  "enterPathRefresh": "Enter path and click refresh",
+  "confirmDeleteMessage": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone.",
+  "contextMenu": "Context menu"
+}

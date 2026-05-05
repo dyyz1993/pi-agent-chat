@@ -1,0 +1,17 @@
+{
+  "newFile": "新建文件",
+  "newFolder": "新建文件夹",
+  "rename": "重命名",
+  "delete": "删除",
+  "copyPath": "复制路径",
+  "refresh": "刷新",
+  "confirmDelete": "确认删除",
+  "preview": "预览",
+  "source": "源码",
+  "switchPreview": "切换到预览",
+  "switchSource": "切换到源码",
+  "explorer": "Explorer",
+  "enterPathRefresh": "输入路径并点击刷新",
+  "confirmDeleteMessage": "确定删除 \"{{name}}\" 吗？此操作不可撤销。",
+  "contextMenu": "上下文菜单"
+}

@@ -1,0 +1,9 @@
+{
+  "title": "Debug",
+  "rpcLog": "RPC Log",
+  "clearLog": "Clear Log",
+  "noLogs": "No logs",
+  "rpcEvents": "RPC Events",
+  "copyPayload": "Copy full payload",
+  "noRpcEvents": "No RPC events"
+}

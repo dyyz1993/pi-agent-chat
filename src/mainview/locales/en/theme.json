@@ -1,0 +1,10 @@
+{
+  "light": "Light",
+  "dark": "Dark",
+  "system": "System",
+  "toggle": "Theme: {{theme}} (click to toggle)",
+  "switchLabel": "Theme:",
+  "chinese": "Chinese",
+  "english": "English",
+  "ariaThemeSwitch": "Theme switch"
+}

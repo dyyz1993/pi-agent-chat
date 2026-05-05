@@ -1,0 +1,13 @@
+{
+  "title": "Snapshots",
+  "create": "Create Snapshot",
+  "restore": "Restore",
+  "noSnapshots": "No snapshots",
+  "deleteConfirm": "Delete this snapshot?",
+  "snapshots": "Snapshots ({{count}})",
+  "refresh": "Refresh",
+  "noActiveSession": "No active session",
+  "noSnapshotsYet": "No snapshots yet",
+  "cancelRollback": "Cancel rollback",
+  "rollbackToSnapshot": "Rollback to this snapshot"
+}
