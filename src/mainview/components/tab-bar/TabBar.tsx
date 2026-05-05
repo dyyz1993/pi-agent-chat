@@ -177,7 +177,7 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
               data-testid={`tab-close-${index}`}
               onClick={(e) => handleCloseClick(e, tab.id)}
               onMouseDown={(e) => e.stopPropagation()}
-              className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-gray-300 dark:hover:bg-gray-700 transition-all pointer-events-auto"
+              className="opacity-100 md:opacity-0 md:group-hover:opacity-100 p-0.5 rounded hover:bg-gray-300 dark:hover:bg-gray-700 transition-all pointer-events-auto"
             >
               <X className="w-3 h-3" />
             </span>

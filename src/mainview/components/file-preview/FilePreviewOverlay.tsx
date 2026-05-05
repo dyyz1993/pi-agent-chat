@@ -45,6 +45,14 @@ export function FilePreviewOverlay({ preview, loading, onClose }: FilePreviewOve
   const [svgLoading, setSvgLoading] = useState(false);
   const [htmlSourceMode, setHtmlSourceMode] = useState(false);
 
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
   const isSvg = isSvgFile(preview.name);
   const isHtml = isHtmlFile(preview.name) && canUseFsRoute();
   const fsUrl = isHtml ? getFsUrl(preview.path) : "";

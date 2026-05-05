@@ -17,6 +17,7 @@ import { useSessionStore } from "../../stores/use-session-store";
 import { useBashStore } from "../../stores/use-bash-store";
 import type { BashProcess } from "../../../shared/modules/bash";
 import { apiClient } from "../../lib/api-client";
+import { useFocusTrap } from "../../hooks/use-focus-trap";
 
 function formatDuration(ms: number): string {
   const s = Math.floor(ms / 1000);
@@ -173,8 +174,18 @@ function LogViewer({
   const initTag = useRef(0);
   const subIdRef = useRef<string | null>(null);
   const autoScrollRef = useRef(autoScroll);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(overlayRef, { onEscape: onClose });
 
   autoScrollRef.current = autoScroll;
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
 
   const virtualizer = useVirtualizer({
     count: lines.length,
@@ -307,6 +318,7 @@ function LogViewer({
 
   return (
     <div
+      ref={overlayRef}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 sm:p-6"
       onClick={onClose}
     >

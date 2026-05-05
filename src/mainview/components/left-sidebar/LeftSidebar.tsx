@@ -26,7 +26,7 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
 
   return (
     <div
-      className={`flex flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 overflow-hidden z-20 ${
+      className={`flex flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 overflow-x-hidden z-20 ${
         overlay
           ? "animate-slide-in-left shadow-xl shadow-black/10 dark:shadow-black/30 will-change-transform"
           : ""

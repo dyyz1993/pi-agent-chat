@@ -10,6 +10,7 @@ import { DiffViewerPanel } from "../components/diff/DiffViewerPanel";
 import { ConnectionBanner } from "../components/ConnectionBanner";
 import { useExplorerStore } from "../stores/use-explorer-store";
 import { useGitStore } from "../stores/use-git-store";
+import { MobileTabBar } from "../components/activity-bar/MobileTabBar";
 
 interface MainLayoutProps {
   onAddProject: () => void;
@@ -163,7 +164,7 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
 
         {/* ---- COL 2: Chat Area (center) ---- */}
         <div
-          className="flex-1 flex flex-col overflow-hidden relative min-w-0"
+          className="flex-1 flex flex-col overflow-hidden relative min-w-[240px]"
           onClick={handleChatAreaClick}
         >
           <ChatPanel />
@@ -203,6 +204,8 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
           />
         )}
       </div>
+
+      {isMobile && <MobileTabBar />}
     </div>
   );
 }

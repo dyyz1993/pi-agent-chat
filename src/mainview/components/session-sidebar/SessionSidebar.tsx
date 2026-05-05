@@ -22,6 +22,7 @@ import { useGitStore } from "../../stores/use-git-store";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import type { SessionMeta, SubagentSessionInfo } from "../../types";
 import { copyToClipboard } from "../../utils/clipboard";
+import { ConfirmDialog } from "../explorer/ConfirmDialog";
 
 const EMPTY: never[] = [];
 
@@ -300,6 +301,7 @@ function SessionItem({
   const worktrees = useGitStore((s) => s.worktrees);
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const hasPiChildren = !!(children && children.length > 0);
   const hasSubagents = !!(subsessions && subsessions.length > 0);
@@ -363,19 +365,19 @@ function SessionItem({
     setIsEditing(false);
   }, []);
 
-  const handleDelete = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
-      if (
-        confirm(
-          t("sidebar:deleteSessionConfirm", { name: session.name || t("sidebar:emptySession") }),
-        )
-      ) {
-        deleteSession(session.sessionId);
-      }
-    },
-    [session.name, session.sessionId, deleteSession],
-  );
+  const handleDelete = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDeleteConfirm(true);
+  }, []);
+
+  const handleConfirmDelete = useCallback(() => {
+    deleteSession(session.sessionId);
+    setDeleteConfirm(false);
+  }, [session.sessionId, deleteSession]);
+
+  const handleCancelDelete = useCallback(() => {
+    setDeleteConfirm(false);
+  }, []);
 
   const handleTogglePin = useCallback(
     (e: React.MouseEvent) => {
@@ -457,7 +459,7 @@ function SessionItem({
             )}
             <StatusBadge sessionId={session.sessionId} />
             {workspaceInfo && !workspaceInfo.isMain && <WorkspaceBadge workspace={workspaceInfo} />}
-            <div className="ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="ml-auto flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
               <button
                 onClick={handleTogglePin}
                 className={`p-1 rounded hover:bg-gray-700 ${session.pinned ? "text-indigo-400" : "text-gray-500 hover:text-gray-300"}`}
@@ -517,6 +519,17 @@ function SessionItem({
             ))}
         </div>
       )}
+
+      {deleteConfirm && (
+        <ConfirmDialog
+          title={t("common:delete")}
+          message={t("sidebar:deleteSessionConfirm", {
+            name: session.name || t("sidebar:emptySession"),
+          })}
+          onConfirm={handleConfirmDelete}
+          onCancel={handleCancelDelete}
+        />
+      )}
     </div>
   );
 }
@@ -533,6 +546,7 @@ function SubagentItem({
   const isActive = activeSubId === sub.sessionId;
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -586,27 +600,25 @@ function SubagentItem({
     setIsEditing(false);
   }, []);
 
-  const handleDelete = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
-      if (
-        confirm(
-          t("sidebar:deleteSubagentConfirm", {
-            name: sub.description || sub.instruction.slice(0, 30),
-          }),
-        )
-      ) {
-        const { subsessionsByParent } = useSubagentStore.getState();
-        for (const [path, subs] of Object.entries(subsessionsByParent)) {
-          if (subs.some((s) => s.sessionId === sub.sessionId)) {
-            useSubagentStore.getState().deleteSubagent(path, sub.sessionId);
-            break;
-          }
-        }
+  const handleDelete = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDeleteConfirm(true);
+  }, []);
+
+  const handleConfirmDelete = useCallback(() => {
+    const { subsessionsByParent } = useSubagentStore.getState();
+    for (const [path, subs] of Object.entries(subsessionsByParent)) {
+      if (subs.some((s) => s.sessionId === sub.sessionId)) {
+        useSubagentStore.getState().deleteSubagent(path, sub.sessionId);
+        break;
       }
-    },
-    [sub.sessionId, sub.description, sub.instruction],
-  );
+    }
+    setDeleteConfirm(false);
+  }, [sub.sessionId]);
+
+  const handleCancelDelete = useCallback(() => {
+    setDeleteConfirm(false);
+  }, []);
 
   const displayName = sub.description || sub.instruction.slice(0, 80);
 
@@ -655,7 +667,7 @@ function SubagentItem({
       </div>
       <div className="flex items-center justify-center gap-1.5 mt-1">
         <SubagentStatusBadge sub={sub} />
-        <div className="ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="ml-auto flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
           <button
             onClick={handleCopyId}
             className="p-1 rounded hover:bg-gray-700 text-gray-500 hover:text-gray-300"
@@ -679,6 +691,17 @@ function SubagentItem({
           </button>
         </div>
       </div>
+
+      {deleteConfirm && (
+        <ConfirmDialog
+          title={t("common:delete")}
+          message={t("sidebar:deleteSubagentConfirm", {
+            name: sub.description || sub.instruction.slice(0, 30),
+          })}
+          onConfirm={handleConfirmDelete}
+          onCancel={handleCancelDelete}
+        />
+      )}
     </div>
   );
 }

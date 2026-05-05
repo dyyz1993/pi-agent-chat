@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Activity,
   X,
@@ -10,6 +10,7 @@ import {
   CheckCircle,
 } from "lucide-react";
 import { useDiagnosticStore } from "../../stores/use-diagnostic-store";
+import { useFocusTrap } from "../../hooks/use-focus-trap";
 import type {
   SubscriptionSnapshot,
   DataSizeSnapshot,
@@ -305,6 +306,8 @@ export function DiagnosticPanel() {
   const takeSnapshot = useDiagnosticStore((s) => s.takeSnapshot);
   const setAutoRefresh = useDiagnosticStore((s) => s.setAutoRefresh);
   const clearHistory = useDiagnosticStore((s) => s.clearHistory);
+  const panelRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(panelRef, { onEscape: toggle });
 
   useEffect(() => {
     if (!open || !autoRefresh) return;
@@ -318,7 +321,10 @@ export function DiagnosticPanel() {
   const prev = history.length > 1 ? history[history.length - 2] : undefined;
 
   return (
-    <div className="fixed top-10 right-2 w-[420px] max-h-[85vh] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-2xl z-50 flex flex-col overflow-hidden">
+    <div
+      ref={panelRef}
+      className="fixed top-10 right-2 w-[420px] max-h-[85vh] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-2xl z-50 flex flex-col overflow-hidden"
+    >
       <div className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-850 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
         <div className="flex items-center gap-1.5 text-xs font-medium text-indigo-400">
           <Activity className="w-3.5 h-3.5" />

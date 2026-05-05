@@ -111,3 +111,9 @@ html.dark {
   --diff-gutter-color: theme("colors.gray.500");
   --diff-highlight-bg: theme("colors.gray.700");
 }
+
+button:focus-visible,
+a:focus-visible,
+[tabindex]:focus-visible {
+  @apply outline-none ring-2 ring-indigo-500 ring-offset-2 ring-offset-white dark:ring-offset-gray-950;
+}

@@ -1,13 +1,16 @@
-import { memo, useCallback, useEffect } from "react";
+import { memo, useCallback, useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useMermaidStore } from "../../../stores/use-mermaid-store";
 import { MermaidBlock } from "./MermaidBlock";
+import { useFocusTrap } from "../../../hooks/use-focus-trap";
 
 export const MermaidFullscreen = memo(function MermaidFullscreen() {
   const { t } = useTranslation("chat");
   const code = useMermaidStore((s) => s.code);
   const closeFullscreen = useMermaidStore((s) => s.closeFullscreen);
+  const containerRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(containerRef, { onEscape: closeFullscreen });
 
   useEffect(() => {
     if (!code) return;
@@ -29,6 +32,7 @@ export const MermaidFullscreen = memo(function MermaidFullscreen() {
 
   return (
     <div
+      ref={containerRef}
       className="fixed inset-0 z-[60] flex flex-col bg-white/98 dark:bg-gray-950/98 backdrop-blur-sm"
       onClick={handleBackdropClick}
     >

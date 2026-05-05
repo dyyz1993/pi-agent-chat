@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { CachedReactMarkdown } from "./CachedReactMarkdown";
 import { useExpandStore } from "../../stores/use-expand-store";
 import { copyToClipboard } from "../../utils/clipboard";
+import { useFocusTrap } from "../../hooks/use-focus-trap";
 
 export const MarkdownExpandOverlay = memo(function MarkdownExpandOverlay() {
   const { t } = useTranslation("chat");
@@ -12,6 +13,8 @@ export const MarkdownExpandOverlay = memo(function MarkdownExpandOverlay() {
   const closeExpand = useExpandStore((s) => s.closeExpand);
   const scrollRef = useRef<HTMLDivElement>(null);
   const prevContentRef = useRef<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(containerRef, { onEscape: closeExpand });
 
   useEffect(() => {
     if (expandedContent && expandedContent !== prevContentRef.current) {
@@ -38,7 +41,10 @@ export const MarkdownExpandOverlay = memo(function MarkdownExpandOverlay() {
   if (!expandedContent) return null;
 
   return (
-    <div className="absolute inset-0 z-50 flex flex-col bg-white/98 dark:bg-gray-950/98 backdrop-blur-sm">
+    <div
+      ref={containerRef}
+      className="absolute inset-0 z-50 flex flex-col bg-white/98 dark:bg-gray-950/98 backdrop-blur-sm"
+    >
       <div className="flex items-center gap-2 px-4 py-2 bg-gray-50/90 dark:bg-gray-900/90 border-b border-gray-200 dark:border-gray-800 flex-shrink-0">
         <span className="text-xs text-gray-500 dark:text-gray-400 font-medium truncate flex-1 min-w-0">
           {expandedTitle}

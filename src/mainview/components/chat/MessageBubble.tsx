@@ -138,7 +138,7 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
         <div
           className={`relative my-1 mr-2 px-3 py-2 text-[13px] leading-relaxed whitespace-pre-wrap break-words text-gray-800 dark:text-gray-100 bg-blue-500/[0.06] rounded-r-lg border-l-[3px] border-l-blue-500/60 ${styleMemo.bg} min-w-0`}
         >
-          <div className="absolute -top-0.5 right-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+          <div className="absolute -top-0.5 right-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-10">
             <CopyButton text={fullTextForCopy} size="xs" />
           </div>
           {message.content
@@ -812,7 +812,7 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({
             data-block-id={blockId}
             className="my-0.5 group relative px-3 py-2 pr-10 text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words overflow-auto max-h-[60vh]"
           >
-            <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="absolute top-2 right-2 z-10 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
               <CopyButton text={block.text} size="xs" />
             </div>
             {block.text}
@@ -825,7 +825,7 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({
           data-block-id={blockId}
           className="my-0.5 group relative px-3 py-2 pr-10 prose dark:prose-invert prose-sm max-w-none overflow-auto max-h-[60vh] prose-p:my-1 prose-pre:bg-transparent"
         >
-          <div className="absolute top-2 right-2 z-10 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="absolute top-2 right-2 z-10 flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
             {shouldShowExpand && (
               <button
                 onClick={() =>
