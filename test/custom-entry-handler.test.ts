@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
 
 vi.mock("../src/mainview/lib/api-client", () => ({
-	apiClient: { call: vi.fn() },
+	apiClient: { call: vi.fn(), onReconnect: vi.fn() },
 }))
 
 vi.mock("../src/mainview/stores/use-rpc-debug-store", () => ({

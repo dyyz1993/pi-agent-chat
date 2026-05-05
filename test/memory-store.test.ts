@@ -3,12 +3,19 @@ import { describe, it, expect, beforeEach, vi } from "vitest"
 vi.mock("../src/mainview/lib/api-client", () => ({
 	apiClient: {
 		call: vi.fn(),
+		onReconnect: vi.fn(),
 	},
 }))
 
 vi.mock("../src/mainview/stores/use-rpc-debug-store", () => ({
 	useRpcDebugStore: {
 		getState: vi.fn(() => ({ addEntry: vi.fn() })),
+	},
+}))
+
+vi.mock("../src/mainview/stores/use-session-store", () => ({
+	useSessionStore: {
+		getState: vi.fn(() => ({ activeSessionId: "test-session" })),
 	},
 }))
 
@@ -25,7 +32,7 @@ beforeEach(() => {
 		filesBySession: {},
 		entrypointBySession: {},
 		injectedBySession: {},
-		expandedFile: null,
+		expandedFileBySession: {},
 		collapsedSections: new Set(["operations"]),
 	})
 })
@@ -115,13 +122,13 @@ describe("addInjected", () => {
 describe("setExpandedFile", () => {
 	it("sets expanded file", () => {
 		useMemoryStore.getState().setExpandedFile("/path/to/file.md")
-		expect(useMemoryStore.getState().expandedFile).toBe("/path/to/file.md")
+		expect(useMemoryStore.getState().expandedFileBySession["test-session"]).toBe("/path/to/file.md")
 	})
 
 	it("clears expanded file with null", () => {
 		useMemoryStore.getState().setExpandedFile("/path/to/file.md")
 		useMemoryStore.getState().setExpandedFile(null)
-		expect(useMemoryStore.getState().expandedFile).toBeNull()
+		expect(useMemoryStore.getState().expandedFileBySession["test-session"]).toBeNull()
 	})
 })
 
