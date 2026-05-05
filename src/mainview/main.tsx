@@ -5,6 +5,7 @@ import "./index.css";
 import App from "./App";
 import "./lib/channels/in-app-channel";
 import "./lib/channels/pwa-channel";
+import "./stores/use-theme-store";
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {

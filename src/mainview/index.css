@@ -40,11 +40,19 @@ textarea {
 }
 
 html {
-  background-color: theme('colors.gray.950');
+  background-color: white;
   overscroll-behavior-y: none;
 }
 
+html.dark {
+  background-color: theme('colors.gray.950');
+}
+
 body {
+  background-color: white;
+}
+
+html.dark body {
   background-color: theme('colors.gray.950');
 }
 
@@ -77,6 +85,20 @@ body {
 }
 
 :root {
+  --diff-bg: theme('colors.gray.100');
+  --diff-color: theme('colors.gray.800');
+  --diff-added-bg: theme('colors.green.100');
+  --diff-added-color: theme('colors.green.700');
+  --diff-removed-bg: theme('colors.red.100');
+  --diff-removed-color: theme('colors.red.600');
+  --diff-word-added-bg: theme('colors.green.200');
+  --diff-word-removed-bg: theme('colors.red.200');
+  --diff-gutter-bg: theme('colors.gray.200');
+  --diff-gutter-color: theme('colors.gray.500');
+  --diff-highlight-bg: theme('colors.gray.300');
+}
+
+html.dark {
   --diff-bg: theme('colors.gray.900');
   --diff-color: theme('colors.gray.200');
   --diff-added-bg: theme('colors.green.950');

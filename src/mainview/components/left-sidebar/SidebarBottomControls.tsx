@@ -3,6 +3,7 @@ import { ChevronDown, Check, Cpu, Brain, Star, Search, FolderTree, GitBranch, Pl
 import { useSessionStore } from "../../stores/use-session-store";
 import { useGitStore } from "../../stores/use-git-store";
 import { apiClient } from "../../lib/api-client";
+import { ThemeMenu } from "../theme/ThemeMenu";
 
 interface ModelInfo {
   provider: string;
@@ -250,24 +251,24 @@ export function SidebarBottomControls() {
   const thinkingDisplay = currentThinkingLevel ? formatThinkingLabel(currentThinkingLevel as ThinkingLevel) : "默认";
 
   return (
-    <div className="shrink-0 border-t border-gray-800/80 px-3 py-2 space-y-1.5">
+    <div className="shrink-0 border-t border-gray-200/80 dark:border-gray-800/80 px-3 py-2 space-y-1.5">
       <div className="relative" ref={workspaceRef}>
         <button
           onClick={() => { setWorkspaceOpen(!workspaceOpen); setModelOpen(false); setThinkingOpen(false); }}
           disabled={!activeSessionId}
-          className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-gray-400 hover:bg-gray-800/60 hover:text-gray-300 transition-colors disabled:opacity-40"
+          className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-100/60 dark:hover:bg-gray-800/60 hover:text-gray-700 dark:hover:text-gray-300 transition-colors disabled:opacity-40"
           aria-expanded={workspaceOpen}
           aria-label="工作区选择"
         >
-          <FolderTree className="w-3 h-3 shrink-0 text-gray-500" />
+          <FolderTree className="w-3 h-3 shrink-0 text-gray-400 dark:text-gray-500" />
           <div className="flex flex-col min-w-0 flex-1 text-left">
             <span className="truncate">{workspaceName}</span>
-            <span className="text-[10px] text-gray-600 truncate">{workspacePath}</span>
+            <span className="text-[10px] text-gray-400 dark:text-gray-600 truncate">{workspacePath}</span>
           </div>
           <ChevronDown className={`w-3 h-3 shrink-0 transition-transform ${workspaceOpen ? "rotate-180" : ""}`} />
         </button>
         {workspaceOpen && (
-          <div className="absolute bottom-full left-0 right-0 mb-1 z-50 max-h-64 overflow-hidden bg-gray-800 border border-gray-600 rounded-md shadow-xl flex flex-col">
+          <div className="absolute bottom-full left-0 right-0 mb-1 z-50 max-h-64 overflow-hidden bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md shadow-xl flex flex-col">
             <div className="overflow-y-auto flex-1 py-1">
               {worktrees.map((wt) => {
                 const isActive = currentWorkspace?.path === wt.path;
@@ -276,23 +277,23 @@ export function SidebarBottomControls() {
                   <button
                     key={wt.path}
                     className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors ${
-                      isActive ? "bg-indigo-500/15 text-indigo-300" : "text-gray-200 hover:bg-gray-700"
+                      isActive ? "bg-indigo-500/15 text-indigo-600 dark:text-indigo-300" : "text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
                     }`}
                     onClick={() => handleSwitchWorkspace(wt)}
                   >
                     {isActive ? <Check className="w-3 h-3 shrink-0 text-indigo-400" /> : <span className="w-3 shrink-0" />}
                     <div className="flex flex-col min-w-0 flex-1">
                       <span className="truncate">{name}</span>
-                      <span className="text-[10px] text-gray-500 truncate">{wt.path}</span>
+                      <span className="text-[10px] text-gray-400 dark:text-gray-500 truncate">{wt.path}</span>
                     </div>
                     {!wt.isMain && <GitBranch className="w-3 h-3 shrink-0 text-cyan-500/60" />}
                   </button>
                 );
               })}
             </div>
-            <div className="border-t border-gray-700/60">
+            <div className="border-t border-gray-200/60 dark:border-gray-700/60">
               <button
-                className="w-full text-left px-3 py-1.5 text-xs text-cyan-400 hover:bg-gray-700 flex items-center gap-2 transition-colors"
+                className="w-full text-left px-3 py-1.5 text-xs text-cyan-600 dark:text-cyan-400 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors"
                 onClick={() => { setShowCreateDialog(true); setSourceBranch(currentWorkspace?.branch ?? ""); }}
               >
                 <Plus className="w-3 h-3 shrink-0" />
@@ -302,15 +303,15 @@ export function SidebarBottomControls() {
           </div>
         )}
         {showCreateDialog && (
-          <div className="absolute bottom-full left-0 right-0 mb-1 z-50 bg-gray-800 border border-gray-600 rounded-md shadow-xl p-3 space-y-2">
-            <div className="text-xs font-medium text-gray-200">新建 Workspace</div>
+          <div className="absolute bottom-full left-0 right-0 mb-1 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md shadow-xl p-3 space-y-2">
+            <div className="text-xs font-medium text-gray-800 dark:text-gray-200">新建 Workspace</div>
             <div className="space-y-1.5">
               <div>
-                <label className="text-[10px] text-gray-500 block mb-0.5">基于分支</label>
+                <label className="text-[10px] text-gray-400 dark:text-gray-500 block mb-0.5">基于分支</label>
                 <select
                   value={sourceBranch}
                   onChange={(e) => setSourceBranch(e.target.value)}
-                  className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-gray-300 outline-none"
+                  className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded px-2 py-1 text-xs text-gray-700 dark:text-gray-300 outline-none"
                 >
                   {worktrees.map((wt) => (
                     <option key={wt.path} value={wt.branch}>{wt.branch}{wt.isMain ? " (主)" : ""}</option>
@@ -318,19 +319,19 @@ export function SidebarBottomControls() {
                 </select>
               </div>
               <div>
-                <label className="text-[10px] text-gray-500 block mb-0.5">新分支名</label>
+                <label className="text-[10px] text-gray-400 dark:text-gray-500 block mb-0.5">新分支名</label>
                 <input
                   value={newBranch}
                   onChange={(e) => setNewBranch(e.target.value)}
                   placeholder="feature-xxx"
-                  className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-gray-300 outline-none"
+                  className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded px-2 py-1 text-xs text-gray-700 dark:text-gray-300 outline-none"
                 />
               </div>
             </div>
             <div className="flex items-center justify-end gap-2 pt-1">
               <button
                 onClick={() => { setShowCreateDialog(false); setNewBranch(""); }}
-                className="px-2 py-1 rounded text-xs text-gray-400 hover:bg-gray-700"
+                className="px-2 py-1 rounded text-xs text-gray-400 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
               >取消</button>
               <button
                 onClick={handleCreateWorktree}
@@ -346,31 +347,31 @@ export function SidebarBottomControls() {
         <button
           onClick={() => { setModelOpen(!modelOpen); setThinkingOpen(false); setWorkspaceOpen(false); }}
           disabled={!activeSessionId}
-          className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-gray-400 hover:bg-gray-800/60 hover:text-gray-300 transition-colors disabled:opacity-40"
+          className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-100/60 dark:hover:bg-gray-800/60 hover:text-gray-700 dark:hover:text-gray-300 transition-colors disabled:opacity-40"
           aria-expanded={modelOpen}
           aria-label="模型选择"
         >
-          <Cpu className="w-3 h-3 shrink-0 text-gray-500" />
+          <Cpu className="w-3 h-3 shrink-0 text-gray-400 dark:text-gray-500" />
           <span className="truncate flex-1 text-left">模型: {modelDisplay}</span>
           <ChevronDown className={`w-3 h-3 shrink-0 transition-transform ${modelOpen ? "rotate-180" : ""}`} />
         </button>
         {modelOpen && (
-          <div className="absolute bottom-full left-0 right-0 mb-1 z-50 max-h-64 overflow-hidden bg-gray-800 border border-gray-600 rounded-md shadow-xl flex flex-col">
-            <div className="px-2 py-1.5 border-b border-gray-700/60 shrink-0">
-              <div className="flex items-center gap-1.5 px-1.5 py-0.5 rounded bg-gray-900/60 border border-gray-700/50">
-                <Search className="w-3 h-3 shrink-0 text-gray-500" />
+          <div className="absolute bottom-full left-0 right-0 mb-1 z-50 max-h-64 overflow-hidden bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md shadow-xl flex flex-col">
+            <div className="px-2 py-1.5 border-b border-gray-200/60 dark:border-gray-700/60 shrink-0">
+              <div className="flex items-center gap-1.5 px-1.5 py-0.5 rounded bg-gray-100/60 dark:bg-gray-900/60 border border-gray-200/50 dark:border-gray-700/50">
+                <Search className="w-3 h-3 shrink-0 text-gray-400 dark:text-gray-500" />
                 <input
                   ref={searchInputRef}
                   type="text"
                   placeholder="搜索模型..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="flex-1 bg-transparent text-[11px] text-gray-300 placeholder-gray-600 outline-none min-w-0"
+                  className="flex-1 bg-transparent text-[11px] text-gray-700 dark:text-gray-300 placeholder-gray-400 dark:placeholder-gray-600 outline-none min-w-0"
                 />
                 <button
                   onClick={() => setShowFavoritesOnly((v) => !v)}
                   className={`p-0.5 rounded transition-colors shrink-0 ${
-                    showFavoritesOnly ? "text-amber-400" : "text-gray-500 hover:text-gray-300"
+                    showFavoritesOnly ? "text-amber-400" : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                   }`}
                   title={showFavoritesOnly ? "显示全部" : "仅显示收藏"}
                 >
@@ -380,9 +381,9 @@ export function SidebarBottomControls() {
             </div>
             <div className="overflow-y-auto flex-1 py-1">
               {availableModels.length === 0 ? (
-                <div className="text-gray-500 text-xs text-center py-3">暂无可用模型</div>
+                <div className="text-gray-400 dark:text-gray-500 text-xs text-center py-3">暂无可用模型</div>
               ) : displayModels.length === 0 ? (
-                <div className="text-gray-500 text-xs text-center py-3">{showFavoritesOnly ? "暂无收藏模型" : "无匹配结果"}</div>
+                <div className="text-gray-400 dark:text-gray-500 text-xs text-center py-3">{showFavoritesOnly ? "暂无收藏模型" : "无匹配结果"}</div>
               ) : (
                 displayModels.map((m) => renderModelItem(m))
               )}
@@ -395,16 +396,16 @@ export function SidebarBottomControls() {
         <button
           onClick={() => { setThinkingOpen(!thinkingOpen); setModelOpen(false); setWorkspaceOpen(false); }}
           disabled={!activeSessionId}
-          className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-gray-400 hover:bg-gray-800/60 hover:text-gray-300 transition-colors disabled:opacity-40"
+          className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-100/60 dark:hover:bg-gray-800/60 hover:text-gray-700 dark:hover:text-gray-300 transition-colors disabled:opacity-40"
           aria-expanded={thinkingOpen}
           aria-label="思考级别选择"
         >
-          <Brain className="w-3 h-3 shrink-0 text-gray-500" />
+          <Brain className="w-3 h-3 shrink-0 text-gray-400 dark:text-gray-500" />
           <span className="truncate flex-1 text-left">思考: {thinkingDisplay}</span>
           <ChevronDown className={`w-3 h-3 shrink-0 transition-transform ${thinkingOpen ? "rotate-180" : ""}`} />
         </button>
         {thinkingOpen && (
-          <div className="absolute bottom-full left-0 right-0 mb-1 z-50 bg-gray-800 border border-gray-600 rounded-md shadow-xl py-1">
+          <div className="absolute bottom-full left-0 right-0 mb-1 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md shadow-xl py-1">
             {THINKING_LEVELS.map((l) => {
               const isActive = currentThinkingLevel === l.value;
               return (
@@ -412,20 +413,22 @@ export function SidebarBottomControls() {
                   key={l.value}
                   className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors ${
                     isActive
-                      ? "bg-indigo-500/15 text-indigo-300"
-                      : "text-gray-200 hover:bg-gray-700"
+                      ? "bg-indigo-500/15 text-indigo-600 dark:text-indigo-300"
+                      : "text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
                   }`}
                   onClick={() => handleSelectThinking(l.value)}
                 >
                   {isActive ? <Check className="w-3 h-3 shrink-0 text-indigo-400" /> : <span className="w-3 shrink-0" />}
                   <span>{l.label}</span>
-                  <span className="text-gray-500 ml-auto text-[10px] font-mono">{l.value}</span>
+                  <span className="text-gray-400 dark:text-gray-500 ml-auto text-[10px] font-mono">{l.value}</span>
                 </button>
               );
             })}
           </div>
         )}
       </div>
+
+      <ThemeMenu />
     </div>
   );
 
@@ -438,8 +441,8 @@ export function SidebarBottomControls() {
         key={key}
         className={`group flex items-center px-2 py-1.5 transition-colors ${
           isActive
-            ? "bg-indigo-500/15 text-indigo-300"
-            : "text-gray-200 hover:bg-gray-700"
+            ? "bg-indigo-500/15 text-indigo-600 dark:text-indigo-300"
+            : "text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
         }`}
       >
         <button
@@ -454,10 +457,10 @@ export function SidebarBottomControls() {
         </button>
         <button
           onClick={(e) => { e.stopPropagation(); toggleFavorite(key); }}
-          className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-gray-600/50 transition-all shrink-0"
+          className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-gray-300/50 dark:hover:bg-gray-600/50 transition-all shrink-0"
           title={isFav ? "取消收藏" : "收藏"}
         >
-          <Star className={`w-3 h-3 ${isFav ? "fill-amber-400 text-amber-400 opacity-100" : "text-gray-500"}`} />
+          <Star className={`w-3 h-3 ${isFav ? "fill-amber-400 text-amber-400 opacity-100" : "text-gray-400 dark:text-gray-500"}`} />
         </button>
       </div>
     );
