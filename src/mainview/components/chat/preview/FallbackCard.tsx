@@ -26,8 +26,14 @@ export const FallbackCard = memo(function FallbackCard({ details }: { details: P
         ) : (
           <>
             <div className="text-gray-600 dark:text-gray-400">Type: {details.resourceType}</div>
-            {details.mimeType && <div className="text-gray-400 dark:text-gray-500">MIME: {details.mimeType}</div>}
-            {details.size != null && <div className="text-gray-400 dark:text-gray-500">Size: {formatFileSize(details.size)}</div>}
+            {details.mimeType && (
+              <div className="text-gray-400 dark:text-gray-500">MIME: {details.mimeType}</div>
+            )}
+            {details.size != null && (
+              <div className="text-gray-400 dark:text-gray-500">
+                Size: {formatFileSize(details.size)}
+              </div>
+            )}
           </>
         )}
       </div>

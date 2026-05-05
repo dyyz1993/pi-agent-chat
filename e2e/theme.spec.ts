@@ -11,9 +11,8 @@ test.describe("Theme", () => {
     await page.goto("/");
 
     const themeToggle = page.locator('[data-testid="theme-toggle"]');
-    if (await themeToggle.isVisible()) {
-      await themeToggle.click();
-    }
+    await expect(themeToggle).toBeVisible();
+    await themeToggle.click();
 
     await page.reload();
     const html = page.locator("html");
@@ -23,5 +22,7 @@ test.describe("Theme", () => {
   test("should follow system preference", async ({ context, page }) => {
     await context.emulateMedia({ colorScheme: "light" });
     await page.goto("/");
+    const html = page.locator("html");
+    await expect(html).not.toHaveClass(/dark/);
   });
 });

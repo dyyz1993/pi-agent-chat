@@ -75,17 +75,22 @@ export function ExplorerSidebar({
     setIsDragOver(false);
   }, []);
 
-  const handleDrop = useCallback(async (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragOver(false);
-    const entries = await readDropItems(e.dataTransfer);
-    if (entries.length > 0) {
-      try {
-        await onImportFiles(entries, currentPath);
-      } catch { /* error logged in store */ }
-    }
-  }, [onImportFiles, currentPath]);
+  const handleDrop = useCallback(
+    async (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragOver(false);
+      const entries = await readDropItems(e.dataTransfer);
+      if (entries.length > 0) {
+        try {
+          await onImportFiles(entries, currentPath);
+        } catch {
+          /* error logged in store */
+        }
+      }
+    },
+    [onImportFiles, currentPath],
+  );
 
   const buildMenuItems = useCallback((): MenuItem[] => {
     if (!contextMenu) return [];
@@ -94,23 +99,58 @@ export function ExplorerSidebar({
     if (!node) {
       // Blank area — root context menu
       return [
-        { label: "New File", icon: <File className="w-3 h-3" />, onClick: () => onStartEditing(currentPath, "newFile") },
-        { label: "New Folder", icon: <FolderPlus className="w-3 h-3" />, onClick: () => onStartEditing(currentPath, "newDir") },
-        { label: "Refresh", icon: <RefreshCw className="w-3 h-3" />, onClick: onRefresh, divider: true },
+        {
+          label: "New File",
+          icon: <File className="w-3 h-3" />,
+          onClick: () => onStartEditing(currentPath, "newFile"),
+        },
+        {
+          label: "New Folder",
+          icon: <FolderPlus className="w-3 h-3" />,
+          onClick: () => onStartEditing(currentPath, "newDir"),
+        },
+        {
+          label: "Refresh",
+          icon: <RefreshCw className="w-3 h-3" />,
+          onClick: onRefresh,
+          divider: true,
+        },
       ];
     }
 
     const items: MenuItem[] = [];
     if (node.type === "directory") {
       items.push(
-        { label: "New File", icon: <File className="w-3 h-3" />, onClick: () => onStartEditing(node.path, "newFile") },
-        { label: "New Folder", icon: <FolderPlus className="w-3 h-3" />, onClick: () => onStartEditing(node.path, "newDir") },
+        {
+          label: "New File",
+          icon: <File className="w-3 h-3" />,
+          onClick: () => onStartEditing(node.path, "newFile"),
+        },
+        {
+          label: "New Folder",
+          icon: <FolderPlus className="w-3 h-3" />,
+          onClick: () => onStartEditing(node.path, "newDir"),
+        },
       );
     }
     items.push(
-      { label: "Rename", icon: <Pencil className="w-3 h-3" />, onClick: () => onStartEditing(node.path, "rename"), divider: items.length > 0 },
-      { label: "Delete", icon: <Trash2 className="w-3 h-3" />, onClick: () => setPendingDelete(node.path), danger: true },
-      { label: "Copy Path", icon: <Copy className="w-3 h-3" />, onClick: () => copyToClipboard(node.path) },
+      {
+        label: "Rename",
+        icon: <Pencil className="w-3 h-3" />,
+        onClick: () => onStartEditing(node.path, "rename"),
+        divider: items.length > 0,
+      },
+      {
+        label: "Delete",
+        icon: <Trash2 className="w-3 h-3" />,
+        onClick: () => setPendingDelete(node.path),
+        danger: true,
+      },
+      {
+        label: "Copy Path",
+        icon: <Copy className="w-3 h-3" />,
+        onClick: () => copyToClipboard(node.path),
+      },
     );
     return items;
   }, [contextMenu, currentPath, onRefresh, onStartEditing]);
@@ -157,7 +197,9 @@ export function ExplorerSidebar({
       <div className="flex-1 overflow-hidden flex flex-col">
         <div
           className={`flex-1 overflow-y-auto p-1 transition-colors ${
-            isDragOver ? "bg-indigo-100/50 dark:bg-indigo-900/30 ring-1 ring-inset ring-indigo-500/50" : ""
+            isDragOver
+              ? "bg-indigo-100/50 dark:bg-indigo-900/30 ring-1 ring-inset ring-indigo-500/50"
+              : ""
           }`}
           onContextMenu={handleBlankContextMenu}
           onDragOver={handleDragOver}
@@ -165,7 +207,9 @@ export function ExplorerSidebar({
           onDrop={handleDrop}
         >
           {treeNodes.length === 0 ? (
-            <div className="text-gray-500 text-xs text-center py-4">Enter path and click refresh</div>
+            <div className="text-gray-500 text-xs text-center py-4">
+              Enter path and click refresh
+            </div>
           ) : (
             <ul className="space-y-0.5">
               {treeNodes.map((node) => (
@@ -183,11 +227,7 @@ export function ExplorerSidebar({
                 />
               ))}
               {isRootEditing && (
-                <InlineInput
-                  depth={0}
-                  onSubmit={handleSubmitEdit}
-                  onCancel={onCancelEditing}
-                />
+                <InlineInput depth={0} onSubmit={handleSubmitEdit} onCancel={onCancelEditing} />
               )}
             </ul>
           )}
@@ -222,7 +262,10 @@ export function ExplorerSidebar({
   }
 
   return (
-    <div className="w-60 bg-gray-50 dark:bg-gray-850 border-r border-gray-200 dark:border-gray-700 flex flex-col flex-shrink-0">
+    <div
+      data-testid="explorer-sidebar"
+      className="w-60 bg-gray-50 dark:bg-gray-850 border-r border-gray-200 dark:border-gray-700 flex flex-col flex-shrink-0"
+    >
       {content}
     </div>
   );

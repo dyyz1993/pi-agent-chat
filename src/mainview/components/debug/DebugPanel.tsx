@@ -70,9 +70,7 @@ export function DebugPanel() {
             )}
           </h2>
           <div className="flex gap-2 items-center">
-            <span className="text-[11px] text-gray-400">
-              {tickCount} events
-            </span>
+            <span className="text-[11px] text-gray-400">{tickCount} events</span>
             {!subscriptionId ? (
               <button
                 onClick={handleSubscribe}
@@ -95,7 +93,9 @@ export function DebugPanel() {
             <div className="text-gray-500 text-center py-1">No events yet</div>
           ) : (
             tickEvents.map((ev, i) => (
-              <div key={i} className="text-cyan-400">{ev}</div>
+              <div key={i} className="text-cyan-400">
+                {ev}
+              </div>
             ))
           )}
         </div>

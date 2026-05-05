@@ -31,8 +31,7 @@ export function useScrollIntent(scrollElement: HTMLElement | null) {
     if (!scrollElement) return;
 
     const onWheel = (e: WheelEvent) => {
-      const dir: "up" | "down" | null =
-        e.deltaY < 0 ? "up" : e.deltaY > 0 ? "down" : null;
+      const dir: "up" | "down" | null = e.deltaY < 0 ? "up" : e.deltaY > 0 ? "down" : null;
       markIntent(dir);
     };
 

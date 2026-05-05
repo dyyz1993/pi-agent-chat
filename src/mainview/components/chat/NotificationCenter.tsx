@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { Bell, X, Info, AlertTriangle, AlertCircle, Trash2, BellRing } from "lucide-react";
 import { useNotificationStore, type AppNotification } from "../../stores/use-notification-store";
 import { useSessionStore } from "../../stores/use-session-store";
-import { requestNotificationPermission, getNotificationPermission } from "../../lib/channels/pwa-channel";
+import {
+  requestNotificationPermission,
+  getNotificationPermission,
+} from "../../lib/channels/pwa-channel";
 
 const LEVEL_ICON: Record<AppNotification["level"], typeof Info> = {
   info: Info,
@@ -66,6 +69,7 @@ export function NotificationCenter() {
   return (
     <div className="relative" ref={panelRef}>
       <button
+        data-testid="notification-bell"
         onClick={(e) => {
           e.stopPropagation();
           togglePanel();
@@ -84,7 +88,11 @@ export function NotificationCenter() {
       </button>
 
       {panelOpen && (
-        <div className="absolute right-0 top-full mt-1 w-72 max-h-80 overflow-hidden flex flex-col bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-xl z-50" role="log" aria-label="通知列表">
+        <div
+          className="absolute right-0 top-full mt-1 w-72 max-h-80 overflow-hidden flex flex-col bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-xl z-50"
+          role="log"
+          aria-label="通知列表"
+        >
           <div className="flex items-center justify-between px-3 py-2 border-b border-gray-300 dark:border-gray-700">
             <span className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">通知</span>
             {notifications.length > 0 && (

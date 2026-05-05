@@ -1,5 +1,9 @@
 import { create } from "zustand";
-import type { LspServerStatus, LspDiagnosticsMode, LspChannelEvent } from "../../shared/modules/lsp";
+import type {
+  LspServerStatus,
+  LspDiagnosticsMode,
+  LspChannelEvent,
+} from "../../shared/modules/lsp";
 import { apiClient } from "../lib/api-client";
 
 interface RawLspServerFromChannel {
@@ -7,7 +11,13 @@ interface RawLspServerFromChannel {
   fileTypes?: string[];
   state?: string;
   reason?: string;
-  status?: { state?: string; reason?: string; transport?: string; activeCommand?: string[]; configuredCommand?: string[] };
+  status?: {
+    state?: string;
+    reason?: string;
+    transport?: string;
+    activeCommand?: string[];
+    configuredCommand?: string[];
+  };
 }
 
 interface ServerStartupLog {
@@ -18,16 +28,19 @@ interface ServerStartupLog {
 }
 
 interface LspState {
-  statusBySession: Record<string, {
-    state: "inactive" | "starting" | "ready" | "error";
-    servers: LspServerStatus[];
-    mode: LspDiagnosticsMode;
-    lastDiagnostics?: { filePath: string; count: number; timestamp: number };
-    startupLog: ServerStartupLog[];
-    totalServers?: number;
-    startupComplete?: boolean;
-    activeLanguages: string[];
-  }>;
+  statusBySession: Record<
+    string,
+    {
+      state: "inactive" | "starting" | "ready" | "error";
+      servers: LspServerStatus[];
+      mode: LspDiagnosticsMode;
+      lastDiagnostics?: { filePath: string; count: number; timestamp: number };
+      startupLog: ServerStartupLog[];
+      totalServers?: number;
+      startupComplete?: boolean;
+      activeLanguages: string[];
+    }
+  >;
 
   updateStatus: (sessionId: string, update: Partial<LspState["statusBySession"][string]>) => void;
   handleLspEvent: (sessionId: string, event: LspChannelEvent) => void;
@@ -41,7 +54,13 @@ export const useLspStore = create<LspState>()((set, get) => ({
 
   updateStatus: (sessionId, update) => {
     set((s) => {
-      const existing = s.statusBySession[sessionId] || { state: "inactive" as const, servers: [], mode: "agent_end" as const, startupLog: [], activeLanguages: [] };
+      const existing = s.statusBySession[sessionId] || {
+        state: "inactive" as const,
+        servers: [],
+        mode: "agent_end" as const,
+        startupLog: [],
+        activeLanguages: [],
+      };
       return {
         statusBySession: {
           ...s.statusBySession,
@@ -74,7 +93,12 @@ export const useLspStore = create<LspState>()((set, get) => ({
       case "server_starting":
       case "server_ready":
       case "server_error": {
-        const srvState = event.event === "server_ready" ? "ready" as const : event.event === "server_error" ? "error" as const : "starting" as const;
+        const srvState =
+          event.event === "server_ready"
+            ? ("ready" as const)
+            : event.event === "server_error"
+              ? ("error" as const)
+              : ("starting" as const);
         const logEntry: ServerStartupLog = {
           name: event.serverName ?? "unknown",
           state: srvState,
@@ -94,7 +118,9 @@ export const useLspStore = create<LspState>()((set, get) => ({
             updatedLog.push(logEntry);
           }
           const updatedServers = [...current.servers];
-          const srvIdx = updatedServers.findIndex((s) => s.name === (event.serverName ?? "unknown"));
+          const srvIdx = updatedServers.findIndex(
+            (s) => s.name === (event.serverName ?? "unknown"),
+          );
           if (srvIdx >= 0) {
             updatedServers[srvIdx] = { ...updatedServers[srvIdx], state: srvState };
           } else {
@@ -108,8 +134,18 @@ export const useLspStore = create<LspState>()((set, get) => ({
           const hasReady = updatedServers.some((s) => s.state === "ready");
           const hasError = updatedServers.some((s) => s.state === "error");
           const hasStarting = updatedServers.some((s) => s.state === "starting");
-          const newState = hasReady ? "ready" as const : hasError ? "error" as const : hasStarting ? "starting" as const : current.state;
-          store.updateStatus(sessionId, { startupLog: updatedLog, servers: updatedServers, state: newState });
+          const newState = hasReady
+            ? ("ready" as const)
+            : hasError
+              ? ("error" as const)
+              : hasStarting
+                ? ("starting" as const)
+                : current.state;
+          store.updateStatus(sessionId, {
+            startupLog: updatedLog,
+            servers: updatedServers,
+            state: newState,
+          });
         }
         break;
       }
@@ -122,17 +158,26 @@ export const useLspStore = create<LspState>()((set, get) => ({
           state: getServerState(s) as LspServerStatus["state"],
           reason: s.status?.reason ?? s.reason ?? "",
           transport: (s.status as Record<string, unknown>)?.transport as string | undefined,
-          activeCommand: (s.status as Record<string, unknown>)?.activeCommand as string[] | undefined,
-          configuredCommand: (s.status as Record<string, unknown>)?.configuredCommand as string[] | undefined,
+          activeCommand: (s.status as Record<string, unknown>)?.activeCommand as
+            | string[]
+            | undefined,
+          configuredCommand: (s.status as Record<string, unknown>)?.configuredCommand as
+            | string[]
+            | undefined,
         }));
         const hasReady = servers.some((s) => s.state === "ready");
         const hasError = servers.some((s) => s.state === "error");
         const hasStarting = servers.some((s) => s.state === "starting");
-        const state = hasReady ? "ready"
-          : hasError ? "error"
-          : hasStarting ? "starting"
-          : "inactive";
-        const activeLanguages = Array.from(new Set(servers.filter((s) => s.state === "ready").flatMap((s) => s.fileTypes ?? [])));
+        const state = hasReady
+          ? "ready"
+          : hasError
+            ? "error"
+            : hasStarting
+              ? "starting"
+              : "inactive";
+        const activeLanguages = Array.from(
+          new Set(servers.filter((s) => s.state === "ready").flatMap((s) => s.fileTypes ?? [])),
+        );
         store.updateStatus(sessionId, {
           state,
           servers,
@@ -165,7 +210,8 @@ export const useLspStore = create<LspState>()((set, get) => ({
         if (langs.length > 0 || serverName) {
           const current = store.statusBySession[sessionId];
           const existingLangs = current?.activeLanguages ?? [];
-          const mergedLangs = langs.length > 0 ? Array.from(new Set([...existingLangs, ...langs])) : existingLangs;
+          const mergedLangs =
+            langs.length > 0 ? Array.from(new Set([...existingLangs, ...langs])) : existingLangs;
           const updatedServers = current?.servers ? [...current.servers] : [];
           if (serverName) {
             const idx = updatedServers.findIndex((s) => s.name === serverName);
@@ -175,8 +221,16 @@ export const useLspStore = create<LspState>()((set, get) => ({
           }
           const hasReady = updatedServers.some((s) => s.state === "ready");
           const hasStarting = updatedServers.some((s) => s.state === "starting");
-          const newState = hasReady ? "ready" as const : hasStarting ? "starting" as const : current?.state ?? "inactive";
-          store.updateStatus(sessionId, { activeLanguages: mergedLangs, servers: updatedServers, state: newState });
+          const newState = hasReady
+            ? ("ready" as const)
+            : hasStarting
+              ? ("starting" as const)
+              : (current?.state ?? "inactive");
+          store.updateStatus(sessionId, {
+            activeLanguages: mergedLangs,
+            servers: updatedServers,
+            state: newState,
+          });
         }
         break;
       }
@@ -201,7 +255,9 @@ export const useLspStore = create<LspState>()((set, get) => ({
       const liveState = get().statusBySession[sessionId];
       if (liveState && liveState.state !== "inactive" && liveState.startupComplete) return;
 
-      const activeLanguages = Array.from(new Set(data.servers.filter((s) => s.state === "ready").flatMap((s) => s.fileTypes ?? [])));
+      const activeLanguages = Array.from(
+        new Set(data.servers.filter((s) => s.state === "ready").flatMap((s) => s.fileTypes ?? [])),
+      );
       get().updateStatus(sessionId, {
         state: data.state as LspState["statusBySession"][string]["state"],
         servers: data.servers,
@@ -210,12 +266,16 @@ export const useLspStore = create<LspState>()((set, get) => ({
         startupLog: [],
         activeLanguages,
       });
-    } catch (err) { console.warn("[lsp] loadHistory failed:", err); }
+    } catch (err) {
+      console.warn("[lsp] loadHistory failed:", err);
+    }
   },
 
   setMode: (sessionId, mode) => {
     get().updateStatus(sessionId, { mode });
-    apiClient.call("lsp.setMode", { sessionId, mode }).catch((err) => { console.warn("[lsp] setMode failed:", err); });
+    apiClient.call("lsp.setMode", { sessionId, mode }).catch((err) => {
+      console.warn("[lsp] setMode failed:", err);
+    });
   },
 
   clearSession: (sessionId) => {

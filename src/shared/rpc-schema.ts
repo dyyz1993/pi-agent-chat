@@ -14,9 +14,35 @@ import type { MemoryMethods, MemoryEvents } from "./modules/memory";
 import type { RulesMethods, RulesEvents } from "./modules/rules";
 import type { SnapshotMethods } from "./modules/snapshot";
 
-export interface RPCMethods extends AnyMethods, SystemMethods, FileMethods, TimerMethods, GitMethods, ProjectMethods, SessionMethods, AgentMethods, SubagentMethods, TodoMethods, BashMethods, LspMethods, MemoryMethods, RulesMethods, SnapshotMethods {}
+export interface RPCMethods
+  extends
+    AnyMethods,
+    SystemMethods,
+    FileMethods,
+    TimerMethods,
+    GitMethods,
+    ProjectMethods,
+    SessionMethods,
+    AgentMethods,
+    SubagentMethods,
+    TodoMethods,
+    BashMethods,
+    LspMethods,
+    MemoryMethods,
+    RulesMethods,
+    SnapshotMethods {}
 
-export interface RPCEvents extends TimerEvents, AgentEvents, SubagentEvents, TodoEvents, BashEvents, LspEvents, RulesEvents, MemoryEvents, FileEvents {}
+export interface RPCEvents
+  extends
+    TimerEvents,
+    AgentEvents,
+    SubagentEvents,
+    TodoEvents,
+    BashEvents,
+    LspEvents,
+    RulesEvents,
+    MemoryEvents,
+    FileEvents {}
 
 export interface HandlerOptions {
   platform: "desktop" | "web";
@@ -32,7 +58,9 @@ export interface HandlerCleanup {
   readonly __handlerType: "cleanup";
 }
 
-export function asRegister(fn: (server: RPCServer, options: HandlerOptions) => void): HandlerRegister {
+export function asRegister(
+  fn: (server: RPCServer, options: HandlerOptions) => void,
+): HandlerRegister {
   return fn as HandlerRegister;
 }
 

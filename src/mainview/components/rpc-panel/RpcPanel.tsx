@@ -20,7 +20,12 @@ function RpcEntry({ entry }: { entry: RpcLogEntry }) {
   const Icon = DIR_ICONS[entry.direction];
   const color = DIR_COLORS[entry.direction];
   const label = entry.method ?? entry.eventType ?? entry.direction;
-  const time = new Date(entry.timestamp).toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const time = new Date(entry.timestamp).toLocaleTimeString("en-US", {
+    hour12: false,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
   const fullPayload = JSON.stringify(entry.payload, null, 2);
   const truncated = JSON.stringify(entry.payload).slice(0, 200);
 
@@ -39,7 +44,11 @@ function RpcEntry({ entry }: { entry: RpcLogEntry }) {
           className="p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
           title="复制完整 payload"
         >
-          {copied ? <Check className="w-2.5 h-2.5 text-green-400" /> : <Copy className="w-2.5 h-2.5" />}
+          {copied ? (
+            <Check className="w-2.5 h-2.5 text-green-400" />
+          ) : (
+            <Copy className="w-2.5 h-2.5" />
+          )}
         </button>
       </div>
       <div className="text-gray-500 dark:text-gray-500 break-all leading-tight pl-3.5">
@@ -59,7 +68,10 @@ export function RpcPanel() {
         <span className="text-[11px] font-medium text-gray-700 dark:text-gray-300">RPC 事件</span>
         <div className="flex items-center gap-1">
           <span className="text-[10px] text-gray-400 dark:text-gray-600">{entries.length}</span>
-          <button onClick={clear} className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300">
+          <button
+            onClick={clear}
+            className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300"
+          >
             <Trash2 className="w-3 h-3" />
           </button>
         </div>

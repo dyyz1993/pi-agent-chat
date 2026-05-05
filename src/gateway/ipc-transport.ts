@@ -30,7 +30,7 @@ export class ElectrobunTransport implements Transport {
     // Pass JSON directly as a JS expression — JSON is valid JavaScript
     const msgJson = JSON.stringify(message);
     this.browserView.executeJavascript(
-      `if(typeof window.__piAgentIPC==="function"){window.__piAgentIPC(${msgJson})}`
+      `if(typeof window.__piAgentIPC==="function"){window.__piAgentIPC(${msgJson})}`,
     );
   }
 

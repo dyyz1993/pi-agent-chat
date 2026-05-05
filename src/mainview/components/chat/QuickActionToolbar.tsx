@@ -121,7 +121,9 @@ export function QuickActionToolbar() {
     setLoading(true);
     const result: PopupItem[] = [];
     try {
-      const extRes = await apiClient.call("agent.getExtensions", { sessionId: activeSessionId }) as { extensions: ExtensionInfo[] };
+      const extRes = (await apiClient.call("agent.getExtensions", {
+        sessionId: activeSessionId,
+      })) as { extensions: ExtensionInfo[] };
       for (const ext of extRes.extensions) {
         for (const toolName of ext.toolNames) {
           result.push({
@@ -134,8 +136,12 @@ export function QuickActionToolbar() {
           });
         }
       }
-      const skillsRaw = await apiClient.call("agent.getSkills", { sessionId: activeSessionId }) as SkillInfo[] | { skills: SkillInfo[] };
-      const skillsArr: SkillInfo[] = Array.isArray(skillsRaw) ? skillsRaw : (skillsRaw.skills ?? []);
+      const skillsRaw = (await apiClient.call("agent.getSkills", {
+        sessionId: activeSessionId,
+      })) as SkillInfo[] | { skills: SkillInfo[] };
+      const skillsArr: SkillInfo[] = Array.isArray(skillsRaw)
+        ? skillsRaw
+        : (skillsRaw.skills ?? []);
       for (const skill of skillsArr) {
         result.push({
           id: `skill-${skill.filePath}`,
@@ -146,8 +152,11 @@ export function QuickActionToolbar() {
           insertText: `@${skill.name}`,
         });
       }
-    } catch { /* ignore */ }
-    finally { setLoading(false); }
+    } catch {
+      /* ignore */
+    } finally {
+      setLoading(false);
+    }
     setCachedItems(result);
   }, [activeSessionId]);
 
@@ -156,7 +165,9 @@ export function QuickActionToolbar() {
     const result: PopupItem[] = [];
     try {
       if (dirPath) {
-        const res = await apiClient.call("file.listDir", { path: dirPath }) as { entries: DirEntry[] };
+        const res = (await apiClient.call("file.listDir", { path: dirPath })) as {
+          entries: DirEntry[];
+        };
         for (const e of res.entries) {
           if (e.isIgnored) continue;
           result.push({
@@ -191,7 +202,9 @@ export function QuickActionToolbar() {
           });
         }
       }
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
     setCachedItems(result);
   }, []);
 
@@ -221,8 +234,11 @@ export function QuickActionToolbar() {
           insertText: `@memory:${f.filename}`,
         });
       }
-    } catch { /* ignore */ }
-    finally { setLoading(false); }
+    } catch {
+      /* ignore */
+    } finally {
+      setLoading(false);
+    }
     setCachedItems(result);
   }, [activeSessionId]);
 
@@ -231,7 +247,9 @@ export function QuickActionToolbar() {
     setLoading(true);
     const result: PopupItem[] = [];
     try {
-      const cmdRes = await apiClient.call("agent.getCommands", { sessionId: activeSessionId }) as CommandInfo[];
+      const cmdRes = (await apiClient.call("agent.getCommands", {
+        sessionId: activeSessionId,
+      })) as CommandInfo[];
       for (const cmd of cmdRes) {
         if (cmd.source === "skill") continue;
         result.push({
@@ -243,8 +261,11 @@ export function QuickActionToolbar() {
           insertText: `/${cmd.name}`,
         });
       }
-    } catch { /* ignore */ }
-    finally { setLoading(false); }
+    } catch {
+      /* ignore */
+    } finally {
+      setLoading(false);
+    }
     setCachedItems(result);
   }, [activeSessionId]);
 
@@ -253,7 +274,9 @@ export function QuickActionToolbar() {
     setLoading(true);
     const result: PopupItem[] = [];
     try {
-      const cmdRes = await apiClient.call("agent.getCommands", { sessionId: activeSessionId }) as CommandInfo[];
+      const cmdRes = (await apiClient.call("agent.getCommands", {
+        sessionId: activeSessionId,
+      })) as CommandInfo[];
       for (const cmd of cmdRes) {
         if (cmd.source !== "skill") continue;
         result.push({
@@ -265,8 +288,12 @@ export function QuickActionToolbar() {
           insertText: `/${cmd.name}`,
         });
       }
-      const skillsRaw = await apiClient.call("agent.getSkills", { sessionId: activeSessionId }) as SkillInfo[] | { skills: SkillInfo[] };
-      const skillsArr: SkillInfo[] = Array.isArray(skillsRaw) ? skillsRaw : (skillsRaw.skills ?? []);
+      const skillsRaw = (await apiClient.call("agent.getSkills", {
+        sessionId: activeSessionId,
+      })) as SkillInfo[] | { skills: SkillInfo[] };
+      const skillsArr: SkillInfo[] = Array.isArray(skillsRaw)
+        ? skillsRaw
+        : (skillsRaw.skills ?? []);
       for (const skill of skillsArr) {
         const exists = result.some((r) => r.label === skill.name);
         if (exists) continue;
@@ -279,8 +306,11 @@ export function QuickActionToolbar() {
           insertText: `/${skill.name}`,
         });
       }
-    } catch { /* ignore */ }
-    finally { setLoading(false); }
+    } catch {
+      /* ignore */
+    } finally {
+      setLoading(false);
+    }
     setCachedItems(result);
   }, [activeSessionId]);
 
@@ -294,7 +324,17 @@ export function QuickActionToolbar() {
       if (slashCategory === "commands") fetchSlashCommands();
       else fetchSlashSkills();
     }
-  }, [popupMode, atTab, currentDir, slashCategory, fetchAtAgents, fetchAtFiles, fetchAtMemory, fetchSlashCommands, fetchSlashSkills]);
+  }, [
+    popupMode,
+    atTab,
+    currentDir,
+    slashCategory,
+    fetchAtAgents,
+    fetchAtFiles,
+    fetchAtMemory,
+    fetchSlashCommands,
+    fetchSlashSkills,
+  ]);
 
   useEffect(() => {
     if (!popupMode || cachedItems.length === 0) {
@@ -303,41 +343,51 @@ export function QuickActionToolbar() {
     }
     const q = query.toLowerCase();
     const filtered = q
-      ? cachedItems.filter((it) => it.label.toLowerCase().includes(q) || (it.description && it.description.toLowerCase().includes(q)))
+      ? cachedItems.filter(
+          (it) =>
+            it.label.toLowerCase().includes(q) ||
+            (it.description && it.description.toLowerCase().includes(q)),
+        )
       : cachedItems;
     setItems(filtered.slice(0, 50));
     setActiveIndex(0);
   }, [query, cachedItems, popupMode, loading]);
 
-  const handleSelect = useCallback((item: PopupItem) => {
-    if (item.isFolder && item.folderPath && popupMode === "at" && atTab === "files") {
-      setCurrentDir(item.folderPath);
-      setFileBreadcrumbs((prev) => [...prev, { path: item.folderPath ?? "", label: item.label }]);
-      return;
-    }
+  const handleSelect = useCallback(
+    (item: PopupItem) => {
+      if (item.isFolder && item.folderPath && popupMode === "at" && atTab === "files") {
+        setCurrentDir(item.folderPath);
+        setFileBreadcrumbs((prev) => [...prev, { path: item.folderPath ?? "", label: item.label }]);
+        return;
+      }
 
-    const trigger = popupMode === "at" ? "@" : "/";
-    const triggerIdx = inputText.lastIndexOf(trigger);
-    let newText: string;
-    if (triggerIdx >= 0) {
-      newText = inputText.slice(0, triggerIdx) + item.insertText + " ";
-    } else {
-      newText = inputText + item.insertText + " ";
-    }
-    setInputText(newText);
-    closePopup();
-  }, [inputText, setInputText, popupMode, atTab, closePopup]);
+      const trigger = popupMode === "at" ? "@" : "/";
+      const triggerIdx = inputText.lastIndexOf(trigger);
+      let newText: string;
+      if (triggerIdx >= 0) {
+        newText = inputText.slice(0, triggerIdx) + item.insertText + " ";
+      } else {
+        newText = inputText + item.insertText + " ";
+      }
+      setInputText(newText);
+      closePopup();
+    },
+    [inputText, setInputText, popupMode, atTab, closePopup],
+  );
 
-  const handleBreadcrumb = useCallback((idx: number) => {
-    if (idx === -1) {
-      setCurrentDir(null);
-      setFileBreadcrumbs([]);
-    } else {
-      const target = fileBreadcrumbs[idx];
-      setCurrentDir(target.path);
-      setFileBreadcrumbs((prev) => prev.slice(0, idx + 1));
-    }
-  }, [fileBreadcrumbs]);
+  const handleBreadcrumb = useCallback(
+    (idx: number) => {
+      if (idx === -1) {
+        setCurrentDir(null);
+        setFileBreadcrumbs([]);
+      } else {
+        const target = fileBreadcrumbs[idx];
+        setCurrentDir(target.path);
+        setFileBreadcrumbs((prev) => prev.slice(0, idx + 1));
+      }
+    },
+    [fileBreadcrumbs],
+  );
 
   const handleOpenAt = useCallback(() => {
     setInputText(inputText + "@");
@@ -383,14 +433,22 @@ export function QuickActionToolbar() {
 
   const renderIcon = (icon: PopupItem["icon"]) => {
     switch (icon) {
-      case "bot": return <Bot className="w-4 h-4" />;
-      case "file": return <File className="w-4 h-4" />;
-      case "folder": return <Folder className="w-4 h-4" />;
-      case "sparkles": return <Sparkles className="w-4 h-4" />;
-      case "puzzle": return <Puzzle className="w-4 h-4" />;
-      case "filetext": return <FileText className="w-4 h-4" />;
-      case "brain": return <Brain className="w-4 h-4" />;
-      case "book": return <BookOpen className="w-4 h-4" />;
+      case "bot":
+        return <Bot className="w-4 h-4" />;
+      case "file":
+        return <File className="w-4 h-4" />;
+      case "folder":
+        return <Folder className="w-4 h-4" />;
+      case "sparkles":
+        return <Sparkles className="w-4 h-4" />;
+      case "puzzle":
+        return <Puzzle className="w-4 h-4" />;
+      case "filetext":
+        return <FileText className="w-4 h-4" />;
+      case "brain":
+        return <Brain className="w-4 h-4" />;
+      case "book":
+        return <BookOpen className="w-4 h-4" />;
     }
   };
 
@@ -458,12 +516,15 @@ export function QuickActionToolbar() {
                       key={tab.key}
                       onClick={() => {
                         setAtTab(tab.key);
-                        if (tab.key !== "files") { setCurrentDir(null); setFileBreadcrumbs([]); }
+                        if (tab.key !== "files") {
+                          setCurrentDir(null);
+                          setFileBreadcrumbs([]);
+                        }
                       }}
                       className={`px-2 py-0.5 rounded text-[11px] transition-colors whitespace-nowrap ${
                         atTab === tab.key
                           ? "bg-indigo-600/30 text-indigo-300"
-                           : "text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                          : "text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
                       }`}
                     >
                       {tab.label}
@@ -478,8 +539,8 @@ export function QuickActionToolbar() {
                       onClick={() => setSlashCategory(cat)}
                       className={`px-2 py-0.5 rounded text-[11px] transition-colors ${
                         slashCategory === cat
-                           ? "bg-amber-600/30 text-amber-300"
-                           : "text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                          ? "bg-amber-600/30 text-amber-300"
+                          : "text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
                       }`}
                     >
                       {cat === "commands" ? "命令" : "技能"}
@@ -535,16 +596,20 @@ export function QuickActionToolbar() {
                 onClick={() => handleSelect(item)}
                 onKeyDown={handleListKeyDown}
                 className={`w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors ${
-                  idx === activeIndex ? "bg-gray-100/80 dark:bg-gray-800/80" : "hover:bg-gray-100/50 dark:hover:bg-gray-800/50"
+                  idx === activeIndex
+                    ? "bg-gray-100/80 dark:bg-gray-800/80"
+                    : "hover:bg-gray-100/50 dark:hover:bg-gray-800/50"
                 }`}
               >
-                <div className={`shrink-0 ${item.accentColor}`}>
-                  {renderIcon(item.icon)}
-                </div>
+                <div className={`shrink-0 ${item.accentColor}`}>{renderIcon(item.icon)}</div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm text-gray-800 dark:text-gray-200 truncate">{item.label}</div>
+                  <div className="text-sm text-gray-800 dark:text-gray-200 truncate">
+                    {item.label}
+                  </div>
                   {item.description && !item.isFolder && (
-                    <div className="text-[11px] text-gray-400 dark:text-gray-600 truncate">{item.description}</div>
+                    <div className="text-[11px] text-gray-400 dark:text-gray-600 truncate">
+                      {item.description}
+                    </div>
                   )}
                 </div>
                 {item.isFolder && (

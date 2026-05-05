@@ -1,12 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import {
-  MessageCircleQuestion,
-  X,
-  ArrowRight,
-  CheckSquare,
-  Square,
-  Send,
-} from "lucide-react";
+import { MessageCircleQuestion, X, ArrowRight, CheckSquare, Square, Send } from "lucide-react";
 import { useUIDialogStore } from "../../stores/use-ui-dialog-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useFocusTrap } from "../../hooks/use-focus-trap";
@@ -18,7 +11,11 @@ const METHOD_LABEL: Record<string, string> = {
   editor: "编辑",
 };
 
-function PanelCard({ req }: { req: ReturnType<typeof useUIDialogStore.getState>["pending"][number] }) {
+function PanelCard({
+  req,
+}: {
+  req: ReturnType<typeof useUIDialogStore.getState>["pending"][number];
+}) {
   const respondById = useUIDialogStore((s) => s.respondById);
   const dismissById = useUIDialogStore((s) => s.dismissById);
 
@@ -35,13 +32,17 @@ function PanelCard({ req }: { req: ReturnType<typeof useUIDialogStore.getState>[
     return (
       <div className="border border-gray-300/40 dark:border-gray-700/40 rounded-xl overflow-hidden bg-gray-50/50 dark:bg-gray-900/50">
         <div className="flex items-center gap-1.5 px-4 py-2 border-b border-gray-300/50 dark:border-gray-700/50">
-          <span className={`text-[11px] font-medium ${req.method === "select" ? "text-sky-400" : "text-emerald-400"}`}>
+          <span
+            className={`text-[11px] font-medium ${req.method === "select" ? "text-sky-400" : "text-emerald-400"}`}
+          >
             {METHOD_LABEL[req.method] ?? req.method}
           </span>
           <span className="text-[10px] text-gray-500 ml-auto">{req.title}</span>
         </div>
         <div className="px-4 py-2">
-          {req.message && <p className="text-[12px] text-gray-300 mb-2 leading-relaxed">{req.message}</p>}
+          {req.message && (
+            <p className="text-[12px] text-gray-300 mb-2 leading-relaxed">{req.message}</p>
+          )}
           <div className="space-y-0.5 mb-2">
             {options.map((opt, i) => {
               const descParts = opt.split(" ");
@@ -51,15 +52,30 @@ function PanelCard({ req }: { req: ReturnType<typeof useUIDialogStore.getState>[
               return (
                 <button
                   key={i}
-                  onClick={() => setCheckedSet((prev) => { const next = new Set(prev); if (next.has(i)) next.delete(i); else next.add(i); return next; })}
+                  onClick={() =>
+                    setCheckedSet((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(i)) next.delete(i);
+                      else next.add(i);
+                      return next;
+                    })
+                  }
                   className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left transition-colors ${
-                    checked ? "bg-sky-600/15 text-sky-300" : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400"
+                    checked
+                      ? "bg-sky-600/15 text-sky-300"
+                      : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400"
                   }`}
                 >
-                  {checked ? <CheckSquare className="w-3.5 h-3.5 shrink-0 text-sky-400" /> : <Square className="w-3.5 h-3.5 shrink-0 text-gray-400 dark:text-gray-600" />}
+                  {checked ? (
+                    <CheckSquare className="w-3.5 h-3.5 shrink-0 text-sky-400" />
+                  ) : (
+                    <Square className="w-3.5 h-3.5 shrink-0 text-gray-400 dark:text-gray-600" />
+                  )}
                   <div className="min-w-0">
                     <div className="text-[11px]">{label}</div>
-                    {desc && <div className="text-[10px] text-gray-400 dark:text-gray-500">{desc}</div>}
+                    {desc && (
+                      <div className="text-[10px] text-gray-400 dark:text-gray-500">{desc}</div>
+                    )}
                   </div>
                 </button>
               );
@@ -72,12 +88,20 @@ function PanelCard({ req }: { req: ReturnType<typeof useUIDialogStore.getState>[
               onChange={(e) => setCustomValue(e.target.value)}
               placeholder={req.placeholder ?? "自定义答案"}
               className="flex-1 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-2 py-1 text-[11px] text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-600 focus:outline-none focus:border-amber-500/50"
-              onKeyDown={(e) => e.key === "Enter" && customValue.trim() && respondById(req.requestId, { value: customValue.trim() })}
+              onKeyDown={(e) =>
+                e.key === "Enter" &&
+                customValue.trim() &&
+                respondById(req.requestId, { value: customValue.trim() })
+              }
             />
             <button
               onClick={() => {
-                if (checkedSet.size > 0) respondById(req.requestId, { value: Array.from(checkedSet).map((i) => options[i]) });
-                else if (customValue.trim()) respondById(req.requestId, { value: customValue.trim() });
+                if (checkedSet.size > 0)
+                  respondById(req.requestId, {
+                    value: Array.from(checkedSet).map((i) => options[i]),
+                  });
+                else if (customValue.trim())
+                  respondById(req.requestId, { value: customValue.trim() });
               }}
               disabled={checkedSet.size === 0 && !customValue.trim()}
               className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-md bg-amber-600/20 text-amber-400 hover:bg-amber-600/30 disabled:opacity-40 disabled:cursor-not-allowed text-[11px] transition-colors"
@@ -104,7 +128,11 @@ function PanelCard({ req }: { req: ReturnType<typeof useUIDialogStore.getState>[
           <span className="text-[10px] text-gray-500 ml-auto">{req.title}</span>
         </div>
         <div className="px-4 py-2">
-          {req.message && <p className="text-[12px] text-gray-700 dark:text-gray-300 mb-2.5 leading-relaxed">{req.message}</p>}
+          {req.message && (
+            <p className="text-[12px] text-gray-700 dark:text-gray-300 mb-2.5 leading-relaxed">
+              {req.message}
+            </p>
+          )}
           <div className="flex gap-2">
             <button
               onClick={() => respondById(req.requestId, { confirmed: true })}
@@ -133,7 +161,11 @@ function PanelCard({ req }: { req: ReturnType<typeof useUIDialogStore.getState>[
           <span className="text-[10px] text-gray-500 ml-auto">{req.title}</span>
         </div>
         <div className="px-4 py-2">
-          {req.message && <p className="text-[12px] text-gray-700 dark:text-gray-300 mb-2.5 leading-relaxed">{req.message}</p>}
+          {req.message && (
+            <p className="text-[12px] text-gray-700 dark:text-gray-300 mb-2.5 leading-relaxed">
+              {req.message}
+            </p>
+          )}
           <input
             type="text"
             value={value}
@@ -194,7 +226,10 @@ export function UIPendingCenter() {
   return (
     <>
       <button
-        onClick={(e) => { e.stopPropagation(); togglePanel(); }}
+        onClick={(e) => {
+          e.stopPropagation();
+          togglePanel();
+        }}
         className="p-1 rounded transition-colors text-amber-400 hover:text-amber-300 relative animate-pulse"
         title={`${pending.length} 个待处理请求`}
       >
@@ -211,10 +246,18 @@ export function UIPendingCenter() {
           className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/50"
           onClick={(e) => e.target === e.currentTarget && setPanelOpen(false)}
         >
-          <div ref={dialogRef} className="w-full max-w-lg bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-2xl overflow-hidden" role="dialog" aria-modal="true" aria-label="待处理请求">
+          <div
+            ref={dialogRef}
+            className="w-full max-w-lg bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-2xl overflow-hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-label="待处理请求"
+          >
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-300/60 dark:border-gray-700/60">
               <div className="flex items-center gap-2">
-                <span className="text-[13px] font-medium text-gray-800 dark:text-gray-200">待处理请求</span>
+                <span className="text-[13px] font-medium text-gray-800 dark:text-gray-200">
+                  待处理请求
+                </span>
                 <span className="px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 text-[11px] font-medium tabular-nums">
                   {pending.length}
                 </span>
@@ -242,7 +285,9 @@ export function UIPendingCenter() {
                 <PanelCard key={req.requestId} req={req} />
               ))}
               {pending.length === 0 && (
-                <div className="py-8 text-center text-[12px] text-gray-400 dark:text-gray-500">暂无待处理请求</div>
+                <div className="py-8 text-center text-[12px] text-gray-400 dark:text-gray-500">
+                  暂无待处理请求
+                </div>
               )}
             </div>
           </div>

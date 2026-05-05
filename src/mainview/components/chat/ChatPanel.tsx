@@ -45,10 +45,17 @@ function estimateMessageSize(msg: ChatMessage): number {
   let h = 48;
   for (const block of msg.content) {
     switch (block.type) {
-      case "text": h += Math.min(200, Math.max(40, (block.text.length / 80) * 22)); break;
-      case "thinking": h += 80; break;
-      case "toolExecution": h += block.status === "running" ? 180 : 120; break;
-      default: h += 60;
+      case "text":
+        h += Math.min(200, Math.max(40, (block.text.length / 80) * 22));
+        break;
+      case "thinking":
+        h += 80;
+        break;
+      case "toolExecution":
+        h += block.status === "running" ? 180 : 120;
+        break;
+      default:
+        h += 60;
     }
   }
   return h;
@@ -56,9 +63,13 @@ function estimateMessageSize(msg: ChatMessage): number {
 
 export function ChatPanel() {
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
-  const parentStatus = useSessionStore((s) => activeSessionId ? (s.sessionStatusMap[activeSessionId] ?? "idle") : "idle");
+  const parentStatus = useSessionStore((s) =>
+    activeSessionId ? (s.sessionStatusMap[activeSessionId] ?? "idle") : "idle",
+  );
   const activeSubId = useSubagentStore((s) => s.activeSubsessionId);
-  const subStatus = useSubagentStore((s) => activeSubId ? (s.subagentStatusMap[activeSubId] ?? "idle") : "idle");
+  const subStatus = useSubagentStore((s) =>
+    activeSubId ? (s.subagentStatusMap[activeSubId] ?? "idle") : "idle",
+  );
   const subMessages = useSubagentStore((s) => {
     if (!activeSubId) return EMPTY_MSGS;
     return s.messagesBySubsession[activeSubId] || EMPTY_MSGS;
@@ -74,28 +85,40 @@ export function ChatPanel() {
 
   const activeProjectId = useSessionStore((s) => s.activeProjectId);
   const projectFailed = useSessionStore(
-    useCallback((s) => !!activeProjectId && s.projectStartFailed[activeProjectId], [activeProjectId]),
+    useCallback(
+      (s) => !!activeProjectId && s.projectStartFailed[activeProjectId],
+      [activeProjectId],
+    ),
   );
   const projectError = useSessionStore(
-    useCallback((s) => (activeProjectId ? s.projectStartError[activeProjectId] ?? "" : ""), [activeProjectId]),
+    useCallback(
+      (s) => (activeProjectId ? (s.projectStartError[activeProjectId] ?? "") : ""),
+      [activeProjectId],
+    ),
   );
   const retryActiveProject = useSessionStore((s) => s.retryActiveProject);
   const sessionReady = useSessionStore(
     useCallback((s) => !!activeSessionId && s.sessionReady[activeSessionId], [activeSessionId]),
   );
 
-  const isLoading = useChatStore(useCallback(
-    (s) => !!activeSessionId && s.loadingSessions.has(activeSessionId),
-    [activeSessionId],
-  ));
-  const hasMoreMessages = useChatStore(useCallback(
-    (s) => !!activeSessionId && !!s.hasMoreMessagesBySession?.[activeSessionId],
-    [activeSessionId],
-  ));
-  const isLoadingMore = useChatStore(useCallback(
-    (s) => !!activeSessionId && !!s.isLoadingMoreBySession?.[activeSessionId],
-    [activeSessionId],
-  ));
+  const isLoading = useChatStore(
+    useCallback(
+      (s) => !!activeSessionId && s.loadingSessions.has(activeSessionId),
+      [activeSessionId],
+    ),
+  );
+  const hasMoreMessages = useChatStore(
+    useCallback(
+      (s) => !!activeSessionId && !!s.hasMoreMessagesBySession?.[activeSessionId],
+      [activeSessionId],
+    ),
+  );
+  const isLoadingMore = useChatStore(
+    useCallback(
+      (s) => !!activeSessionId && !!s.isLoadingMoreBySession?.[activeSessionId],
+      [activeSessionId],
+    ),
+  );
   const loadMoreMessages = useChatStore((s) => s.loadMoreMessages);
   const inputText = useChatStore((s) => s.inputText);
   const sendMessage = useChatStore((s) => s.sendMessage);
@@ -106,14 +129,23 @@ export function ChatPanel() {
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const inputBarRef = useRef<InputBarHandle>(null);
   const messageIds = useMemo(() => messages.map((m) => m.id), [messages]);
-  const isStreaming = effectiveStatus === "streaming" || effectiveStatus === "compacting" || effectiveStatus === "retrying";
+  const isStreaming =
+    effectiveStatus === "streaming" ||
+    effectiveStatus === "compacting" ||
+    effectiveStatus === "retrying";
   const breakpoint = useLayoutStore((s) => s.breakpoint);
   const isMobileOrTablet = breakpoint === "mobile" || breakpoint === "tablet";
 
   const streamVersion = useChatStore((s) => s.streamContentVersion);
 
-  const estimateMainSize = useCallback((index: number) => estimateMessageSize(mainMessages[index]), [mainMessages]);
-  const estimateSubSize = useCallback((index: number) => estimateMessageSize(subMessages[index]), [subMessages]);
+  const estimateMainSize = useCallback(
+    (index: number) => estimateMessageSize(mainMessages[index]),
+    [mainMessages],
+  );
+  const estimateSubSize = useCallback(
+    (index: number) => estimateMessageSize(subMessages[index]),
+    [subMessages],
+  );
 
   const mainVirtualizer = useVirtualizer({
     count: mainMessages.length,
@@ -138,7 +170,9 @@ export function ChatPanel() {
     if (activeSubId) return;
     try {
       await apiClient.call("agent.stop", { sessionId: activeSessionId });
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, [activeSessionId, activeSubId]);
 
   const setNavId = useTurnStore((s) => s.setNavId);
@@ -150,26 +184,35 @@ export function ChatPanel() {
   const latestVizRef = useRef(activeVirtualizer);
   latestVizRef.current = activeVirtualizer;
 
-  const { handleScroll, scrollToEdge, isAtTop, isAtBottom, autoScrollEnabled, toggleAutoScroll } = useActiveScrollTracker({
-    scrollRef: messagesScrollRef,
-    virtualizer: activeVirtualizer,
-    messageIds,
-    sessionId: isViewingSubagent ? activeSubId : activeSessionId ?? undefined,
-    setActive: useCallback((id: string | null) => {
-      setActive(id);
-      if (id && !clickScrollRef.current && !sessionInitRef.current) setNavId(id);
-    }, [setActive, setNavId]),
-    streamVersion,
-  });
+  const { handleScroll, scrollToEdge, isAtTop, isAtBottom, autoScrollEnabled, toggleAutoScroll } =
+    useActiveScrollTracker({
+      scrollRef: messagesScrollRef,
+      virtualizer: activeVirtualizer,
+      messageIds,
+      sessionId: isViewingSubagent ? activeSubId : (activeSessionId ?? undefined),
+      setActive: useCallback(
+        (id: string | null) => {
+          setActive(id);
+          if (id && !clickScrollRef.current && !sessionInitRef.current) setNavId(id);
+        },
+        [setActive, setNavId],
+      ),
+      streamVersion,
+    });
 
-  const handleScrollToEdge = useCallback((edge: "top" | "bottom") => {
-    if (messageIds.length === 0) return;
-    const id = edge === "top" ? messageIds[0] : messageIds[messageIds.length - 1];
-    setNavId(id);
-    clickScrollRef.current = true;
-    scrollToEdge(edge);
-    setTimeout(() => { clickScrollRef.current = false; }, 500);
-  }, [messageIds, setNavId, scrollToEdge]);
+  const handleScrollToEdge = useCallback(
+    (edge: "top" | "bottom") => {
+      if (messageIds.length === 0) return;
+      const id = edge === "top" ? messageIds[0] : messageIds[messageIds.length - 1];
+      setNavId(id);
+      clickScrollRef.current = true;
+      scrollToEdge(edge);
+      setTimeout(() => {
+        clickScrollRef.current = false;
+      }, 500);
+    },
+    [messageIds, setNavId, scrollToEdge],
+  );
 
   const handleNavDotClick = useCallback(
     (navId: string) => {
@@ -180,7 +223,10 @@ export function ChatPanel() {
       const idx = mainMessages.findIndex((m) => m.id === msgId);
       const viz = idx >= 0 ? mainVirtualizer : subVirtualizer;
       const vIdx = idx >= 0 ? idx : subMessages.findIndex((m) => m.id === msgId);
-      if (vIdx < 0) { clickScrollRef.current = false; return; }
+      if (vIdx < 0) {
+        clickScrollRef.current = false;
+        return;
+      }
       viz.scrollToIndex(vIdx, { align: "start" });
       if (isSubDot) {
         requestAnimationFrame(() => {
@@ -190,7 +236,9 @@ export function ChatPanel() {
           });
         });
       }
-      setTimeout(() => { clickScrollRef.current = false; }, 400);
+      setTimeout(() => {
+        clickScrollRef.current = false;
+      }, 400);
     },
     [mainMessages, subMessages, mainVirtualizer, subVirtualizer],
   );
@@ -238,10 +286,23 @@ export function ChatPanel() {
       attempts++;
       const ids = latestMsgIdsRef.current;
       if (ids.length === 0) {
-        if (attempts > 20) { done = true; clearInterval(timer); setTimeout(() => { sessionInitRef.current = false; }, 200); }
+        if (attempts > 20) {
+          done = true;
+          clearInterval(timer);
+          setTimeout(() => {
+            sessionInitRef.current = false;
+          }, 200);
+        }
         return;
       }
-      if (attempts > 20) { done = true; clearInterval(timer); setTimeout(() => { sessionInitRef.current = false; }, 200); return; }
+      if (attempts > 20) {
+        done = true;
+        clearInterval(timer);
+        setTimeout(() => {
+          sessionInitRef.current = false;
+        }, 200);
+        return;
+      }
       const lastIdx = ids.length - 1;
       latestVizRef.current.scrollToIndex(lastIdx, { align: "end" });
       setNavId(ids[lastIdx]);
@@ -249,16 +310,29 @@ export function ChatPanel() {
       if (el && Math.abs(el.scrollHeight - el.scrollTop - el.clientHeight) < 50) {
         done = true;
         clearInterval(timer);
-        setTimeout(() => { sessionInitRef.current = false; }, 300);
+        setTimeout(() => {
+          sessionInitRef.current = false;
+        }, 300);
       }
     }, 80);
-    return () => { clearInterval(timer); sessionInitRef.current = false; };
+    return () => {
+      clearInterval(timer);
+      sessionInitRef.current = false;
+    };
   }, [activeSessionId, activeSubId]);
 
   useEffect(() => {
-    if (!activeSessionId || !isAtTop || !hasMoreMessages || isLoadingMore || isViewingSubagent) return;
+    if (!activeSessionId || !isAtTop || !hasMoreMessages || isLoadingMore || isViewingSubagent)
+      return;
     loadMoreMessages?.(activeSessionId);
-  }, [activeSessionId, isAtTop, hasMoreMessages, isLoadingMore, isViewingSubagent, loadMoreMessages]);
+  }, [
+    activeSessionId,
+    isAtTop,
+    hasMoreMessages,
+    isLoadingMore,
+    isViewingSubagent,
+    loadMoreMessages,
+  ]);
 
   const handleBackToMain = () => {
     if (activeSessionId) {
@@ -300,7 +374,9 @@ export function ChatPanel() {
                 <AlertTriangle className="w-8 h-8 text-amber-400" />
                 <div className="text-sm text-gray-700 dark:text-gray-300">会话启动失败</div>
                 {projectError && (
-                  <div className="text-xs text-gray-400 dark:text-gray-500 break-all">{projectError}</div>
+                  <div className="text-xs text-gray-400 dark:text-gray-500 break-all">
+                    {projectError}
+                  </div>
                 )}
                 <button
                   onClick={retryActiveProject}
@@ -319,9 +395,21 @@ export function ChatPanel() {
               </div>
             </div>
           ) : isViewingSubagent ? (
-            <MessageListView messages={messages} scrollRef={messagesScrollRef} onScroll={handleScroll} virtualizer={subVirtualizer} />
+            <MessageListView
+              messages={messages}
+              scrollRef={messagesScrollRef}
+              onScroll={handleScroll}
+              virtualizer={subVirtualizer}
+            />
           ) : (
-            <MessageListView messages={mainMessages} scrollRef={messagesScrollRef} onScroll={handleScroll} virtualizer={mainVirtualizer} isLoadingMore={isLoadingMore} hasMoreMessages={hasMoreMessages} />
+            <MessageListView
+              messages={mainMessages}
+              scrollRef={messagesScrollRef}
+              onScroll={handleScroll}
+              virtualizer={mainVirtualizer}
+              isLoadingMore={isLoadingMore}
+              hasMoreMessages={hasMoreMessages}
+            />
           )}
           {messages.length > 0 && (
             <ScrollToolbar
@@ -335,10 +423,7 @@ export function ChatPanel() {
           )}
         </div>
         <div className="w-12 shrink-0 overflow-hidden">
-          <SideNav
-            messages={messages}
-            onNavDotClick={handleNavDotClick}
-          />
+          <SideNav messages={messages} onNavDotClick={handleNavDotClick} />
         </div>
       </div>
 
@@ -346,17 +431,18 @@ export function ChatPanel() {
         messageIds={messageIds}
         messages={messages}
         onDeleteSelected={(ids) => {
-          void ids
+          void ids;
         }}
       />
 
       {!isViewingSubagent && <QuickActionToolbar />}
 
-      {activeSessionId && !isViewingSubagent && (
-        <QueueCards sessionId={activeSessionId} />
-      )}
+      {activeSessionId && !isViewingSubagent && <QueueCards sessionId={activeSessionId} />}
 
-      <div className="px-3 pb-3 pt-2 flex-shrink-0 flex items-stretch gap-1.5 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800" style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
+      <div
+        className="px-3 pb-3 pt-2 flex-shrink-0 flex items-stretch gap-1.5 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800"
+        style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
+      >
         {!isViewingSubagent && (
           <>
             {!sessionReady && !projectFailed ? (
@@ -369,25 +455,48 @@ export function ChatPanel() {
                 <AttachmentBar />
                 {!isMobileOrTablet && <AttachmentButtons />}
 
-                <InputBar ref={inputBarRef} value={inputText} onChange={setInputText} onSend={handleSend} sessionId={activeSessionId ?? ""} />
+                <InputBar
+                  ref={inputBarRef}
+                  value={inputText}
+                  onChange={setInputText}
+                  onSend={handleSend}
+                  sessionId={activeSessionId ?? ""}
+                />
 
                 <div className="flex flex-col gap-1 shrink-0 justify-between py-1">
                   {isStreaming && inputText.trim() ? (
-                    <button onClick={handleSteer} className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-amber-600 text-white hover:bg-amber-700 shadow-sm shadow-amber-500/20" title="插入消息 (Steer)">
+                    <button
+                      onClick={handleSteer}
+                      className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-amber-600 text-white hover:bg-amber-700 shadow-sm shadow-amber-500/20"
+                      title="插入消息 (Steer)"
+                    >
                       <Zap className="w-4 h-4" />
                     </button>
                   ) : isStreaming ? (
-                    <button onClick={handleAbort} disabled={!isStreaming} className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-red-600 text-white hover:bg-red-700" title="停止">
+                    <button
+                      onClick={handleAbort}
+                      disabled={!isStreaming}
+                      className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-red-600 text-white hover:bg-red-700"
+                      title="停止"
+                    >
                       <Square className="w-4 h-4" />
                     </button>
                   ) : (
-                    <button disabled className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-red-900/30 text-red-500/50 cursor-not-allowed" title="停止">
+                    <button
+                      disabled
+                      className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-red-900/30 text-red-500/50 cursor-not-allowed"
+                      title="停止"
+                    >
                       <Square className="w-4 h-4" />
                     </button>
                   )}
                   <button
                     onClick={() => inputBarRef.current?.send()}
-                    disabled={(!inputText.trim() && useAttachmentStore.getState().attachments.length === 0) || !sessionReady}
+                    disabled={
+                      (!inputText.trim() &&
+                        useAttachmentStore.getState().attachments.length === 0) ||
+                      !sessionReady
+                    }
                     className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${(inputText.trim() || useAttachmentStore.getState().attachments.length > 0) && sessionReady ? (isStreaming ? "bg-blue-600 text-white hover:bg-blue-700 shadow-sm shadow-blue-500/20" : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm shadow-indigo-500/20") : "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed"}`}
                     title={isStreaming ? "排队发送 (Follow-up)" : "发送"}
                   >
@@ -404,7 +513,6 @@ export function ChatPanel() {
           </div>
         )}
       </div>
-
     </div>
   );
 }
@@ -420,10 +528,15 @@ function SessionToggleIcon() {
   const isVisible = sessionPanel === "visible";
 
   return (
-    <button onClick={(e) => {
-      e.stopPropagation();
-      if (isVisible) { hideSession(); } else { showSession(); }
-    }}
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        if (isVisible) {
+          hideSession();
+        } else {
+          showSession();
+        }
+      }}
       className={`p-1 rounded transition-colors ${isVisible ? "text-indigo-400 hover:text-indigo-300" : "text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300"}`}
       title={isVisible ? "关闭会话面板" : "打开会话面板"}
     >
@@ -443,10 +556,15 @@ function StatusToggleIcon() {
   const isVisible = statusPanel === "visible";
 
   return (
-    <button onClick={(e) => {
-      e.stopPropagation();
-      if (isVisible) { hideStatus(); } else { showStatus(); }
-    }}
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        if (isVisible) {
+          hideStatus();
+        } else {
+          showStatus();
+        }
+      }}
       className={`p-1 rounded transition-colors ${isVisible ? "text-indigo-400 hover:text-indigo-300" : "text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300"}`}
       title={isVisible ? "关闭状态面板" : "打开状态面板"}
     >

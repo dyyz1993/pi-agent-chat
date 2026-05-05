@@ -38,7 +38,16 @@ interface ProjectConfig {
 async function load(): Promise<ProjectConfig> {
   try {
     if (!existsSync(CONFIG_PATH)) {
-    return { recentProjects: [], activeProject: null, configuredPaths: [], openTabs: [], activeTabId: null, pinnedSessionIds: [], favoriteFolders: [], disabledSkills: [] };
+      return {
+        recentProjects: [],
+        activeProject: null,
+        configuredPaths: [],
+        openTabs: [],
+        activeTabId: null,
+        pinnedSessionIds: [],
+        favoriteFolders: [],
+        disabledSkills: [],
+      };
     }
     const raw = await readFile(CONFIG_PATH, "utf-8");
     const parsed = JSON.parse(raw) as Partial<ProjectConfig>;
@@ -53,7 +62,16 @@ async function load(): Promise<ProjectConfig> {
       disabledSkills: parsed.disabledSkills ?? [],
     };
   } catch {
-    return { recentProjects: [], activeProject: null, configuredPaths: [], openTabs: [], activeTabId: null, pinnedSessionIds: [], favoriteFolders: [], disabledSkills: [] };
+    return {
+      recentProjects: [],
+      activeProject: null,
+      configuredPaths: [],
+      openTabs: [],
+      activeTabId: null,
+      pinnedSessionIds: [],
+      favoriteFolders: [],
+      disabledSkills: [],
+    };
   }
 }
 
@@ -121,10 +139,7 @@ export async function listConfiguredPaths(): Promise<ConfiguredPath[]> {
   return config.configuredPaths;
 }
 
-export async function addConfiguredPath(
-  path: string,
-  name?: string,
-): Promise<void> {
+export async function addConfiguredPath(path: string, name?: string): Promise<void> {
   const config = await load();
   if (!config.configuredPaths.find((p) => p.path === path)) {
     config.configuredPaths.push({
@@ -142,14 +157,20 @@ export async function removeConfiguredPath(path: string): Promise<void> {
   await save(config);
 }
 
-export async function syncOpenTabs(tabs: PersistedTab[], activeTabId: string | null): Promise<void> {
+export async function syncOpenTabs(
+  tabs: PersistedTab[],
+  activeTabId: string | null,
+): Promise<void> {
   const config = await load();
   config.openTabs = tabs;
   config.activeTabId = activeTabId;
   await save(config);
 }
 
-export async function restoreOpenTabs(): Promise<{ tabs: PersistedTab[]; activeTabId: string | null }> {
+export async function restoreOpenTabs(): Promise<{
+  tabs: PersistedTab[];
+  activeTabId: string | null;
+}> {
   const config = await load();
   return { tabs: config.openTabs, activeTabId: config.activeTabId };
 }
@@ -190,7 +211,9 @@ export async function addFavoriteFolder(folderPath: string): Promise<FavoriteFol
   return fav;
 }
 
-export async function toggleFavoriteFolder(folderPath: string): Promise<{ added: boolean; favorites: FavoriteFolder[] }> {
+export async function toggleFavoriteFolder(
+  folderPath: string,
+): Promise<{ added: boolean; favorites: FavoriteFolder[] }> {
   const config = await load();
   const idx = config.favoriteFolders.findIndex((f) => f.path === folderPath);
   if (idx >= 0) {
@@ -226,7 +249,10 @@ export async function toggleProjectPin(projectPath: string): Promise<boolean> {
   return false;
 }
 
-export async function listDirectory(dirPath: string, searchQuery?: string): Promise<DirectoryEntry[]> {
+export async function listDirectory(
+  dirPath: string,
+  searchQuery?: string,
+): Promise<DirectoryEntry[]> {
   if (!existsSync(dirPath)) return [];
   try {
     const entries = await readdir(dirPath, { withFileTypes: true });

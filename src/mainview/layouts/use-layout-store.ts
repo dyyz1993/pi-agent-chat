@@ -42,17 +42,25 @@ function readNum(key: string, fallback: number): number {
 }
 
 function writeNum(key: string, v: number) {
-  try { localStorage.setItem(key, String(v)); } catch { /* storage unavailable */ }
+  try {
+    localStorage.setItem(key, String(v));
+  } catch {
+    /* storage unavailable */
+  }
 }
 
 function writePanel(key: string, v: PanelVisibility) {
-  try { localStorage.setItem(key, v); } catch { /* storage unavailable */ }
+  try {
+    localStorage.setItem(key, v);
+  } catch {
+    /* storage unavailable */
+  }
 }
 
 function readPanel(key: string, fallback: PanelVisibility): PanelVisibility {
   try {
     const v = localStorage.getItem(key);
-    if (v === null || v !== "pinned" && v !== "visible" && v !== "hidden") return fallback;
+    if (v === null || (v !== "pinned" && v !== "visible" && v !== "hidden")) return fallback;
     return v as PanelVisibility;
   } catch {
     return fallback;
@@ -109,14 +117,26 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
     if (bp === "mobile" && prev !== "mobile") {
       const sp = get().sessionPanel;
       const st = get().statusPanel;
-      if (sp === "pinned") { set({ sessionPanel: "hidden" }); writePanel(SESSION_PANEL_KEY, "hidden"); }
-      if (st === "pinned") { set({ statusPanel: "hidden" }); writePanel(STATUS_PANEL_KEY, "hidden"); }
+      if (sp === "pinned") {
+        set({ sessionPanel: "hidden" });
+        writePanel(SESSION_PANEL_KEY, "hidden");
+      }
+      if (st === "pinned") {
+        set({ statusPanel: "hidden" });
+        writePanel(STATUS_PANEL_KEY, "hidden");
+      }
     }
     if (bp !== "mobile" && prev === "mobile") {
       const sp = get().sessionPanel;
       const st = get().statusPanel;
-      if (sp === "hidden") { set({ sessionPanel: "pinned" }); writePanel(SESSION_PANEL_KEY, "pinned"); }
-      if (st === "hidden") { set({ statusPanel: "pinned" }); writePanel(STATUS_PANEL_KEY, "pinned"); }
+      if (sp === "hidden") {
+        set({ sessionPanel: "pinned" });
+        writePanel(SESSION_PANEL_KEY, "pinned");
+      }
+      if (st === "hidden") {
+        set({ statusPanel: "pinned" });
+        writePanel(STATUS_PANEL_KEY, "pinned");
+      }
     }
 
     if (reclamp) {
@@ -134,10 +154,22 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
     set({ sessionPanel: next });
     writePanel(SESSION_PANEL_KEY, next);
   },
-  pinSession: () => { set({ sessionPanel: "pinned" }); writePanel(SESSION_PANEL_KEY, "pinned"); },
-  unpinSession: () => { set({ sessionPanel: "visible" }); writePanel(SESSION_PANEL_KEY, "visible"); },
-  showSession: () => { set({ sessionPanel: "visible" }); writePanel(SESSION_PANEL_KEY, "visible"); },
-  hideSession: () => { set({ sessionPanel: "hidden" }); writePanel(SESSION_PANEL_KEY, "hidden"); },
+  pinSession: () => {
+    set({ sessionPanel: "pinned" });
+    writePanel(SESSION_PANEL_KEY, "pinned");
+  },
+  unpinSession: () => {
+    set({ sessionPanel: "visible" });
+    writePanel(SESSION_PANEL_KEY, "visible");
+  },
+  showSession: () => {
+    set({ sessionPanel: "visible" });
+    writePanel(SESSION_PANEL_KEY, "visible");
+  },
+  hideSession: () => {
+    set({ sessionPanel: "hidden" });
+    writePanel(SESSION_PANEL_KEY, "hidden");
+  },
   setSessionWidth: (w) => {
     const clamped = clampSession(w);
     set({ sessionWidth: clamped });
@@ -150,10 +182,22 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
     set({ statusPanel: next });
     writePanel(STATUS_PANEL_KEY, next);
   },
-  pinStatus: () => { set({ statusPanel: "pinned" }); writePanel(STATUS_PANEL_KEY, "pinned"); },
-  unpinStatus: () => { set({ statusPanel: "visible" }); writePanel(STATUS_PANEL_KEY, "visible"); },
-  showStatus: () => { set({ statusPanel: "visible" }); writePanel(STATUS_PANEL_KEY, "visible"); },
-  hideStatus: () => { set({ statusPanel: "hidden" }); writePanel(STATUS_PANEL_KEY, "hidden"); },
+  pinStatus: () => {
+    set({ statusPanel: "pinned" });
+    writePanel(STATUS_PANEL_KEY, "pinned");
+  },
+  unpinStatus: () => {
+    set({ statusPanel: "visible" });
+    writePanel(STATUS_PANEL_KEY, "visible");
+  },
+  showStatus: () => {
+    set({ statusPanel: "visible" });
+    writePanel(STATUS_PANEL_KEY, "visible");
+  },
+  hideStatus: () => {
+    set({ statusPanel: "hidden" });
+    writePanel(STATUS_PANEL_KEY, "hidden");
+  },
   setStatusWidth: (w) => {
     const clamped = clampStatus(w);
     set({ statusWidth: clamped });

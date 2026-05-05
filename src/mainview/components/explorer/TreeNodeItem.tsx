@@ -62,7 +62,7 @@ function TreeNodeItemInner({
           isSelected ? "bg-indigo-600/30 text-white" : "hover:bg-gray-700"
         }`}
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
-        onClick={() => isDir ? onToggle(node.path) : onOpenFile(node)}
+        onClick={() => (isDir ? onToggle(node.path) : onOpenFile(node))}
         onKeyDown={handleKeyDown}
         onContextMenu={(e) => {
           e.preventDefault();
@@ -88,7 +88,9 @@ function TreeNodeItemInner({
             onCancel={onCancelEdit}
           />
         ) : (
-          <span className={`truncate ${isDir ? "text-blue-300 font-medium" : "text-gray-300"} ${isIgnored ? "!text-gray-500 !font-normal" : ""}`}>
+          <span
+            className={`truncate ${isDir ? "text-blue-300 font-medium" : "text-gray-300"} ${isIgnored ? "!text-gray-500 !font-normal" : ""}`}
+          >
             {node.name}
           </span>
         )}
@@ -110,11 +112,7 @@ function TreeNodeItemInner({
             />
           ))}
           {isAddingChild && (
-            <InlineInput
-              depth={depth + 1}
-              onSubmit={onSubmitEdit}
-              onCancel={onCancelEdit}
-            />
+            <InlineInput depth={depth + 1} onSubmit={onSubmitEdit} onCancel={onCancelEdit} />
           )}
         </ul>
       )}

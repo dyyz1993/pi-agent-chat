@@ -36,7 +36,11 @@ function parseStatus(output: string): {
     const filePath = line.slice(3).trim();
 
     const statusMap: Record<string, "modified" | "added" | "deleted" | "renamed" | "copied"> = {
-      M: "modified", A: "added", D: "deleted", R: "renamed", C: "copied",
+      M: "modified",
+      A: "added",
+      D: "deleted",
+      R: "renamed",
+      C: "copied",
     };
 
     // Index (staged) - first char
@@ -61,7 +65,10 @@ function parseStatus(output: string): {
   return { staged, changed, untracked };
 }
 
-function getNumStats(repoRoot: string, staged: boolean): Map<string, { additions: number; deletions: number }> {
+function getNumStats(
+  repoRoot: string,
+  staged: boolean,
+): Map<string, { additions: number; deletions: number }> {
   const stats = new Map<string, { additions: number; deletions: number }>();
   try {
     const args = staged ? ["diff", "--cached", "--numstat"] : ["diff", "--numstat"];
@@ -95,8 +102,11 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
     // Parse branch info from first line
     const branchLine = lines[0] || "";
-    const branchMatch = branchLine.match(/^## (.+?)(?:\.\.\.(\S+))?(?:\s+\[(ahead\s+(\d+))?(?:,\s*)?(behind\s+(\d+))?\])?$/);
-    const branch = branchMatch?.[1]?.replace("HEAD detached", "").replace(/[()]/g, "").trim() ?? "unknown";
+    const branchMatch = branchLine.match(
+      /^## (.+?)(?:\.\.\.(\S+))?(?:\s+\[(ahead\s+(\d+))?(?:,\s*)?(behind\s+(\d+))?\])?$/,
+    );
+    const branch =
+      branchMatch?.[1]?.replace("HEAD detached", "").replace(/[()]/g, "").trim() ?? "unknown";
     const ahead = branchMatch?.[3] ? parseInt(branchMatch[3]) : 0;
     const behind = branchMatch?.[5] ? parseInt(branchMatch[5]) : 0;
 
@@ -163,35 +173,46 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   r("git.log", async (params) => {
     const repoRoot = getRepoRoot(params.repoPath);
     const count = params.maxCount ?? 50;
-    const output = execGit([
-      "log", `--max-count=${count}`,
-      "--pretty=format:%H|%h|%s|%an|%aI",
-    ], repoRoot);
+    const output = execGit(
+      ["log", `--max-count=${count}`, "--pretty=format:%H|%h|%s|%an|%aI"],
+      repoRoot,
+    );
 
-    const commits = output.split("\n").filter(Boolean).map((line) => {
-      const [hash, shortHash, message, author, date] = line.split("|");
-      return { hash, shortHash, message, author, date };
-    });
+    const commits = output
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => {
+        const [hash, shortHash, message, author, date] = line.split("|");
+        return { hash, shortHash, message, author, date };
+      });
 
     return { commits };
   });
 
   r("git.commitFiles", async (params) => {
     const repoRoot = getRepoRoot(params.repoPath);
-    const output = execGit([
-      "diff-tree", "--no-commit-id", "--name-status", "-r", params.hash,
-    ], repoRoot);
+    const output = execGit(
+      ["diff-tree", "--no-commit-id", "--name-status", "-r", params.hash],
+      repoRoot,
+    );
 
     const statusMap: Record<string, GitFileChange["status"]> = {
-      M: "modified", A: "added", D: "deleted", R: "renamed", C: "copied",
+      M: "modified",
+      A: "added",
+      D: "deleted",
+      R: "renamed",
+      C: "copied",
     };
 
-    const files: GitFileChange[] = output.split("\n").filter(Boolean).map((line) => {
-      const [status, ...pathParts] = line.split("\t");
-      const path = pathParts.join("\t");
-      const resolvedPath = status === "R" ? path.split("\t").pop() ?? path : path;
-      return { path: resolvedPath, status: statusMap[status] ?? "modified" };
-    });
+    const files: GitFileChange[] = output
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => {
+        const [status, ...pathParts] = line.split("\t");
+        const path = pathParts.join("\t");
+        const resolvedPath = status === "R" ? (path.split("\t").pop() ?? path) : path;
+        return { path: resolvedPath, status: statusMap[status] ?? "modified" };
+      });
 
     return { files };
   });
@@ -225,12 +246,15 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   r("git.branches", async (params) => {
     const repoRoot = getRepoRoot(params.repoPath);
     const output = execGit(["branch", "-a", "--no-color"], repoRoot);
-    const branches = output.split("\n").filter(Boolean).map((line) => {
-      const isCurrent = line.startsWith("*");
-      const name = line.replace(/^\*?\s+/, "").trim();
-      const isRemote = name.startsWith("remotes/");
-      return { name, isCurrent, isRemote };
-    });
+    const branches = output
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => {
+        const isCurrent = line.startsWith("*");
+        const name = line.replace(/^\*?\s+/, "").trim();
+        const isRemote = name.startsWith("remotes/");
+        return { name, isCurrent, isRemote };
+      });
     return { branches };
   });
 
@@ -281,12 +305,16 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const repoRoot = getRepoRoot(params.repoPath);
     const output = execGit(["worktree", "list", "--porcelain"], repoRoot);
     const worktrees: { path: string; branch: string; isMain: boolean }[] = [];
-    let current: Partial<typeof worktrees[0]> = {};
+    let current: Partial<(typeof worktrees)[0]> = {};
 
     for (const line of output.split("\n")) {
       if (line.startsWith("worktree ")) {
         if (current.path) {
-          worktrees.push({ path: current.path, branch: current.branch ?? "", isMain: !!current.isMain });
+          worktrees.push({
+            path: current.path,
+            branch: current.branch ?? "",
+            isMain: !!current.isMain,
+          });
         }
         current = { path: line.slice(9), isMain: false };
       } else if (line.startsWith("branch ")) {
@@ -299,7 +327,11 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       }
     }
     if (current.path) {
-      worktrees.push({ path: current.path, branch: current.branch ?? "", isMain: !!current.isMain });
+      worktrees.push({
+        path: current.path,
+        branch: current.branch ?? "",
+        isMain: !!current.isMain,
+      });
     }
 
     return { worktrees };

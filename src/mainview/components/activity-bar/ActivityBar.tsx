@@ -16,6 +16,7 @@ export function ActivityBar() {
       {items.map(({ id, icon: Icon, label }) => (
         <button
           key={id}
+          data-testid={`activity-${id}`}
           title={label}
           onClick={() => togglePanel(id)}
           className={`w-10 h-10 flex items-center justify-center rounded transition-colors ${

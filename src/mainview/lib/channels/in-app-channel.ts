@@ -1,4 +1,8 @@
-import { notificationGateway, type NotificationChannel, type GatewayEvent } from "../notification-gateway";
+import {
+  notificationGateway,
+  type NotificationChannel,
+  type GatewayEvent,
+} from "../notification-gateway";
 import { useNotificationStore } from "../../stores/use-notification-store";
 
 const InAppChannel: NotificationChannel = {
@@ -6,10 +10,15 @@ const InAppChannel: NotificationChannel = {
 
   send(event: GatewayEvent) {
     useNotificationStore.getState().push({
-      message: event.type === "agent_notify" ? event.title : event.title + (event.body ? `：${event.body}` : ""),
+      message:
+        event.type === "agent_notify"
+          ? event.title
+          : event.title + (event.body ? `：${event.body}` : ""),
       level: event.level,
       sessionId: event.sessionId,
-      requestId: (event.data as Record<string, unknown> | undefined)?.requestId as string | undefined,
+      requestId: (event.data as Record<string, unknown> | undefined)?.requestId as
+        | string
+        | undefined,
     });
   },
 };

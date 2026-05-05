@@ -38,7 +38,13 @@ async function parseJsonlHeader(filePath: string): Promise<JsonlHeader | null> {
     const firstLine = content.split("\n")[0];
     if (!firstLine?.trim()) return null;
     const header: unknown = JSON.parse(firstLine);
-    if (typeof header === "object" && header !== null && "type" in header && (header as { type: string }).type !== "session") return null;
+    if (
+      typeof header === "object" &&
+      header !== null &&
+      "type" in header &&
+      (header as { type: string }).type !== "session"
+    )
+      return null;
     return header as JsonlHeader;
   } catch {
     return null;
@@ -123,7 +129,7 @@ async function scanSessionDir(sessionDir: string, pinnedIds?: Set<string>): Prom
       } catch {
         return null;
       }
-    })
+    }),
   );
 
   const filtered = results
@@ -223,11 +229,11 @@ export async function scanAllProjects(): Promise<
       if (sessions.length === 0) return null;
 
       return { projectPath: sessions[0].projectPath, sessionCount: sessions.length, sessions };
-    })
+    }),
   );
 
   const results = allResults.filter(
-    (r): r is { projectPath: string; sessionCount: number; sessions: SessionMeta[] } => r !== null
+    (r): r is { projectPath: string; sessionCount: number; sessions: SessionMeta[] } => r !== null,
   );
 
   results.sort((a, b) => {
@@ -251,10 +257,7 @@ export async function listPiProjects(): Promise<PiProject[]> {
 }
 
 export async function listMergedProjects(): Promise<MergedProject[]> {
-  const [piProjects, recentProjects] = await Promise.all([
-    listPiProjects(),
-    listRecentProjects(),
-  ]);
+  const [piProjects, recentProjects] = await Promise.all([listPiProjects(), listRecentProjects()]);
 
   const mergedMap = new Map<string, MergedProject>();
 

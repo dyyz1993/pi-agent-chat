@@ -41,11 +41,14 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
     }
   }, []);
 
-  const handleClickOutside = useCallback((e: MouseEvent) => {
-    if (ref.current && !ref.current.contains(e.target as Node)) {
-      onClose();
-    }
-  }, [onClose]);
+  const handleClickOutside = useCallback(
+    (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        onClose();
+      }
+    },
+    [onClose],
+  );
 
   const handleMenuKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -96,7 +99,9 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
     >
       {items.map((item, i) => (
         <div key={i}>
-          {item.divider && i > 0 && <div className="border-t border-gray-200 dark:border-gray-600 my-1" role="separator" />}
+          {item.divider && i > 0 && (
+            <div className="border-t border-gray-200 dark:border-gray-600 my-1" role="separator" />
+          )}
           <button
             role="menuitem"
             tabIndex={i === activeIndex ? 0 : -1}

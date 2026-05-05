@@ -12,10 +12,16 @@ interface Props {
   onDeleteSelected?: (ids: string[]) => void;
 }
 
-export const MessageSelectionBar = memo(function MessageSelectionBar({ messages, onDeleteSelected }: Props) {
+export const MessageSelectionBar = memo(function MessageSelectionBar({
+  messages,
+  onDeleteSelected,
+}: Props) {
   const sessionId = useSessionStore((s) => s.activeSessionId);
   const selectedIds = useTurnStore(
-    useCallback((s) => sessionId ? (s.selectedMessageIdsBySession[sessionId] ?? EMPTY_SET) : EMPTY_SET, [sessionId])
+    useCallback(
+      (s) => (sessionId ? (s.selectedMessageIdsBySession[sessionId] ?? EMPTY_SET) : EMPTY_SET),
+      [sessionId],
+    ),
   );
   const clear = useTurnStore((s) => s.clearSelection);
 
@@ -46,12 +52,16 @@ export const MessageSelectionBar = memo(function MessageSelectionBar({ messages,
       })
       .join("\n\n");
     const messageIds = Array.from(selectedIds);
-    apiClient.call("memory.remember", {
-      projectPath,
-      sessionId,
-      messageIds,
-      content,
-    }).catch((err) => { console.warn("[MessageSelectionBar] memory.remember failed:", err); });
+    apiClient
+      .call("memory.remember", {
+        projectPath,
+        sessionId,
+        messageIds,
+        content,
+      })
+      .catch((err) => {
+        console.warn("[MessageSelectionBar] memory.remember failed:", err);
+      });
     clear();
   }, [messages, selectedIds, clear]);
 
@@ -71,26 +81,48 @@ export const MessageSelectionBar = memo(function MessageSelectionBar({ messages,
 
   return (
     <div className="mx-auto w-fit flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100/90 dark:bg-gray-800/90 border border-gray-300/60 dark:border-gray-700/60 shadow-lg backdrop-blur-sm">
-      <span className="text-sm font-semibold text-indigo-400 tabular-nums leading-none min-w-[1.25rem] text-center">{count}</span>
+      <span className="text-sm font-semibold text-indigo-400 tabular-nums leading-none min-w-[1.25rem] text-center">
+        {count}
+      </span>
       {(input > 0 || output > 0) && (
         <>
           <div className="w-px h-3.5 bg-gray-300 dark:bg-gray-700" />
-          <span className="text-[11px] text-gray-500 dark:text-gray-400 font-mono tabular-nums">{formatTokenCount(input)}</span>
-          <span className="text-[11px] text-emerald-400/70 font-mono tabular-nums">{formatTokenCount(output)}</span>
+          <span className="text-[11px] text-gray-500 dark:text-gray-400 font-mono tabular-nums">
+            {formatTokenCount(input)}
+          </span>
+          <span className="text-[11px] text-emerald-400/70 font-mono tabular-nums">
+            {formatTokenCount(output)}
+          </span>
         </>
       )}
       <div className="w-px h-3.5 bg-gray-300 dark:bg-gray-700" />
-      <button onClick={handleSummarize} className="flex items-center justify-center w-7 h-7 rounded-full text-purple-400 hover:text-purple-300 hover:bg-purple-500/15 transition-colors" title="总结所选">
+      <button
+        onClick={handleSummarize}
+        className="flex items-center justify-center w-7 h-7 rounded-full text-purple-400 hover:text-purple-300 hover:bg-purple-500/15 transition-colors"
+        title="总结所选"
+      >
         <Sparkles className="w-3.5 h-3.5" />
       </button>
-      <button onClick={handleRemember} className="flex items-center justify-center w-7 h-7 rounded-full text-teal-400 hover:text-teal-300 hover:bg-teal-500/15 transition-colors" title="存为记忆">
+      <button
+        onClick={handleRemember}
+        className="flex items-center justify-center w-7 h-7 rounded-full text-teal-400 hover:text-teal-300 hover:bg-teal-500/15 transition-colors"
+        title="存为记忆"
+      >
         <Brain className="w-3.5 h-3.5" />
       </button>
-      <button onClick={handleDelete} className="flex items-center justify-center w-7 h-7 rounded-full text-gray-400 dark:text-gray-500 hover:text-red-400 hover:bg-red-500/15 transition-colors" title="删除所选">
+      <button
+        onClick={handleDelete}
+        className="flex items-center justify-center w-7 h-7 rounded-full text-gray-400 dark:text-gray-500 hover:text-red-400 hover:bg-red-500/15 transition-colors"
+        title="删除所选"
+      >
         <Trash2 className="w-3.5 h-3.5" />
       </button>
       <div className="w-px h-3.5 bg-gray-300 dark:bg-gray-700" />
-      <button onClick={clear} className="flex items-center justify-center w-7 h-7 rounded-full text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors" title="取消选择">
+      <button
+        onClick={clear}
+        className="flex items-center justify-center w-7 h-7 rounded-full text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors"
+        title="取消选择"
+      >
         <X className="w-3.5 h-3.5" />
       </button>
     </div>

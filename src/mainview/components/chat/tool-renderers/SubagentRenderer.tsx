@@ -6,7 +6,13 @@ import { useSessionStore } from "../../../stores/use-session-store";
 
 type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
 
-export const SubagentExecutionCard = memo(function SubagentExecutionCard({ block, blockId }: { block: ToolExecBlock; blockId?: string }) {
+export const SubagentExecutionCard = memo(function SubagentExecutionCard({
+  block,
+  blockId,
+}: {
+  block: ToolExecBlock;
+  blockId?: string;
+}) {
   const isRunning = block.status === "running";
   const isError = block.status === "error";
   const isDone = block.status === "done";
@@ -17,16 +23,16 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({ block
     const parsed = JSON.parse(block.args ?? "{}") as { description?: string; instruction?: string };
     description = parsed.description ?? "";
     instruction = parsed.instruction ?? "";
-  } catch { /* args not valid JSON, use default */ }
+  } catch {
+    /* args not valid JSON, use default */
+  }
 
   const displayTitle = description || instruction.slice(0, 120) || "子代理任务";
 
   const matchedSub = useSubagentStore((s): SubagentSessionInfo | null => {
     for (const subs of Object.values(s.subsessionsByParent)) {
       const found = subs.find(
-        (sub) =>
-          sub.toolCallId === block.toolCallId ||
-          sub.description === description
+        (sub) => sub.toolCallId === block.toolCallId || sub.description === description,
       );
       if (found) return found;
     }
@@ -37,9 +43,7 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({ block
 
   const handleViewSubagent = useCallback(() => {
     if (matchedSub && activeSessionId) {
-      useSubagentStore
-        .getState()
-        .setActiveSubsession(activeSessionId, matchedSub.sessionId);
+      useSubagentStore.getState().setActiveSubsession(activeSessionId, matchedSub.sessionId);
     }
   }, [matchedSub, activeSessionId]);
 
@@ -115,11 +119,7 @@ export const Header = memo(function Header({
           <span className="text-[11px] font-medium text-purple-700 dark:text-purple-300">
             SubAgent
           </span>
-          <StatusChip
-            isRunning={isRunning}
-            isDone={isDone}
-            isError={isError}
-          />
+          <StatusChip isRunning={isRunning} isDone={isDone} isError={isError} />
         </div>
         <p className="text-[11px] text-gray-600 dark:text-gray-400 leading-relaxed line-clamp-2">
           {displayTitle}
@@ -177,14 +177,16 @@ export const StatusChip = memo(function StatusChip({
   return null;
 });
 
-export const RunningInstruction = memo(function RunningInstruction({ instruction }: { instruction: string }) {
+export const RunningInstruction = memo(function RunningInstruction({
+  instruction,
+}: {
+  instruction: string;
+}) {
   return (
     <div className="px-3 pb-2 pt-1 border-t border-purple-300/20 dark:border-purple-500/10">
       <div className="flex items-center gap-1.5 text-[11px] text-purple-500/70 dark:text-purple-400/60">
         <ArrowRight className="w-3 h-3 animate-pulse" />
-        <span className="truncate">
-          {instruction.slice(0, 200) || "执行中..."}
-        </span>
+        <span className="truncate">{instruction.slice(0, 200) || "执行中..."}</span>
       </div>
     </div>
   );
@@ -222,9 +224,7 @@ export const OutputSection = memo(function OutputSection({
             {block.output}
           </pre>
         ) : (
-          <div className="text-[11px] text-gray-400 dark:text-gray-600 italic py-1">
-            暂无输出
-          </div>
+          <div className="text-[11px] text-gray-400 dark:text-gray-600 italic py-1">暂无输出</div>
         )}
       </div>
     </details>

@@ -7,7 +7,10 @@ export function groupMessagesIntoTurns(messages: ChatMessage[]): Turn[] {
 
   for (const msg of messages) {
     if (msg.role === "user") {
-      if (currentTurn != null && (currentTurn.userMessageId != null || currentTurn.assistantMessageIds?.length)) {
+      if (
+        currentTurn != null &&
+        (currentTurn.userMessageId != null || currentTurn.assistantMessageIds?.length)
+      ) {
         turns.push({
           id: currentTurn.id as string,
           userMessageId: currentTurn.userMessageId ?? null,
@@ -38,7 +41,10 @@ export function groupMessagesIntoTurns(messages: ChatMessage[]): Turn[] {
     }
   }
 
-  if (currentTurn != null && (currentTurn.userMessageId != null || currentTurn.assistantMessageIds?.length)) {
+  if (
+    currentTurn != null &&
+    (currentTurn.userMessageId != null || currentTurn.assistantMessageIds?.length)
+  ) {
     turns.push({
       id: currentTurn.id as string,
       userMessageId: currentTurn.userMessageId ?? null,

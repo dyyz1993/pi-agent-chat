@@ -56,8 +56,14 @@ function App() {
         if (urlSessionId) {
           addLog(`Loading session from URL: ${urlSessionId}`);
           try {
-            const lookup = await apiClient.call("project.findSessionById", { sessionId: urlSessionId });
-            const sessionInfo = lookup.session as { sessionPath: string; projectPath: string; name: string } | null;
+            const lookup = await apiClient.call("project.findSessionById", {
+              sessionId: urlSessionId,
+            });
+            const sessionInfo = lookup.session as {
+              sessionPath: string;
+              projectPath: string;
+              name: string;
+            } | null;
 
             if (!sessionInfo) {
               addLog(`Session not found: ${urlSessionId}`);
@@ -79,14 +85,19 @@ function App() {
               projectPath,
               sessionPath,
             });
-            log.info("agent.start for URL session", { status: result.status, sessionId: urlSessionId });
+            log.info("agent.start for URL session", {
+              status: result.status,
+              sessionId: urlSessionId,
+            });
 
             useSessionStore.getState().setActiveSession(urlSessionId, true);
             useChatStore.getState().loadSessionMessages(urlSessionId, { force: true, sessionPath });
 
             addLog(`URL session loaded: ${sessionName} (${projectName})`);
           } catch (err) {
-            addLog(`Failed to load URL session: ${err instanceof Error ? err.message : String(err)}`);
+            addLog(
+              `Failed to load URL session: ${err instanceof Error ? err.message : String(err)}`,
+            );
           }
           setRestoring(false);
           return;
@@ -112,15 +123,18 @@ function App() {
             }
           }
 
-          const targetId = savedActiveId && savedTabs.some((t) => t.id === savedActiveId)
-            ? savedActiveId
-            : savedTabs[0].id;
+          const targetId =
+            savedActiveId && savedTabs.some((t) => t.id === savedActiveId)
+              ? savedActiveId
+              : savedTabs[0].id;
           useSessionStore.getState().setActiveProject(targetId);
 
           const tab = savedTabs.find((t) => t.id === targetId);
           if (tab) {
             const sessions = await loadSessionsForProject(tab.path);
-            addLog(`Restored ${savedTabs.length} tabs from server config (${sessions.length} sessions)`);
+            addLog(
+              `Restored ${savedTabs.length} tabs from server config (${sessions.length} sessions)`,
+            );
             if (sessions.length > 0) {
               const sid = sessions[0].sessionId;
               useSessionStore.getState().setActiveSession(sid);
@@ -133,7 +147,8 @@ function App() {
         }
 
         const result = await apiClient.call("project.listRecent", {});
-        const projects = (result.projects as Array<{ path: string; name: string; sessionCount: number }>) || [];
+        const projects =
+          (result.projects as Array<{ path: string; name: string; sessionCount: number }>) || [];
         if (projects.length === 0) {
           setRestoring(false);
           return;
@@ -190,7 +205,11 @@ function App() {
           <div className="text-center">
             <div className="inline-block w-8 h-8 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin mb-4" />
             <div className="text-gray-500 dark:text-gray-400 text-sm">
-              {!ready ? "Connecting to RPC server..." : projectLoading ? `加载项目中...` : "恢复会话中..."}
+              {!ready
+                ? "Connecting to RPC server..."
+                : projectLoading
+                  ? `加载项目中...`
+                  : "恢复会话中..."}
             </div>
           </div>
         </div>

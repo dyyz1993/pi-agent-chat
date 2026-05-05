@@ -124,7 +124,10 @@ export const useAttachmentStore = create<AttachmentState>((set, get) => ({
           const { Buffer: BunBuffer } = await import("buffer");
           const buf = BunBuffer.from(arrayBuffer);
 
-          await apiClient.call("file.writeFile" as never, { path: destPath, content: buf.toString("base64") } as never);
+          await apiClient.call(
+            "file.writeFile" as never,
+            { path: destPath, content: buf.toString("base64") } as never,
+          );
 
           set((s) => ({
             attachments: s.attachments.map((a) =>
@@ -138,7 +141,11 @@ export const useAttachmentStore = create<AttachmentState>((set, get) => ({
         set((s) => ({
           attachments: s.attachments.map((a) =>
             a.id === att.id
-              ? { ...a, status: "error" as const, error: err instanceof Error ? err.message : String(err) }
+              ? {
+                  ...a,
+                  status: "error" as const,
+                  error: err instanceof Error ? err.message : String(err),
+                }
               : a,
           ),
         }));

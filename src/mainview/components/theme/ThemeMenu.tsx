@@ -45,9 +45,7 @@ export function ThemeMenu() {
         aria-label="主题切换"
       >
         <Icon className="w-3 h-3 shrink-0 text-gray-500" />
-        <span className="truncate flex-1 text-left">
-          主题: {current.label}
-        </span>
+        <span className="truncate flex-1 text-left">主题: {current.label}</span>
       </button>
       {open && (
         <div className="absolute bottom-full left-0 right-0 mb-1 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md shadow-xl py-1">

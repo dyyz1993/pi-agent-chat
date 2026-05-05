@@ -1,7 +1,20 @@
 import { useEffect, useState } from "react";
-import { Activity, X, RefreshCw, Trash2, ChevronDown, ChevronRight, AlertTriangle, CheckCircle } from "lucide-react";
+import {
+  Activity,
+  X,
+  RefreshCw,
+  Trash2,
+  ChevronDown,
+  ChevronRight,
+  AlertTriangle,
+  CheckCircle,
+} from "lucide-react";
 import { useDiagnosticStore } from "../../stores/use-diagnostic-store";
-import type { SubscriptionSnapshot, DataSizeSnapshot, DiagnosticSnapshot } from "../../stores/use-diagnostic-store";
+import type {
+  SubscriptionSnapshot,
+  DataSizeSnapshot,
+  DiagnosticSnapshot,
+} from "../../stores/use-diagnostic-store";
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -13,19 +26,34 @@ function formatTime(ts: number): string {
   return new Date(ts).toLocaleTimeString();
 }
 
-function HealthIndicator({ current, previous, label }: { current: number; previous: number | undefined; label: string }) {
+function HealthIndicator({
+  current,
+  previous,
+  label,
+}: {
+  current: number;
+  previous: number | undefined;
+  label: string;
+}) {
   if (previous === undefined) return null;
   const diff = current - previous;
   if (diff === 0) return <span className="text-gray-500 text-[10px]">=</span>;
   const isGood = diff < 0;
   return (
     <span className={`text-[10px] ${isGood ? "text-emerald-400" : "text-red-400"}`}>
-      {diff > 0 ? "+" : ""}{diff} {label}
+      {diff > 0 ? "+" : ""}
+      {diff} {label}
     </span>
   );
 }
 
-function SubscriptionTable({ subs, prevSubs }: { subs: SubscriptionSnapshot[]; prevSubs: SubscriptionSnapshot[] | undefined }) {
+function SubscriptionTable({
+  subs,
+  prevSubs,
+}: {
+  subs: SubscriptionSnapshot[];
+  prevSubs: SubscriptionSnapshot[] | undefined;
+}) {
   const totalNow = subs.reduce((s, c) => s + c.total, 0);
   const totalPrev = prevSubs?.reduce((s, c) => s + c.total, 0);
   const uniqueSessions = new Set(subs.flatMap((c) => c.bySession.map((s) => s.sessionId)));
@@ -36,7 +64,9 @@ function SubscriptionTable({ subs, prevSubs }: { subs: SubscriptionSnapshot[]; p
         <span className="text-[11px] font-medium text-gray-300">WebSocket Subscriptions</span>
         <div className="flex items-center gap-2">
           <HealthIndicator current={totalNow} previous={totalPrev} label="subs" />
-          <span className={`text-xs font-mono ${totalPrev !== undefined && totalNow > totalPrev ? "text-red-400" : totalNow > 0 ? "text-amber-400" : "text-gray-500"}`}>
+          <span
+            className={`text-xs font-mono ${totalPrev !== undefined && totalNow > totalPrev ? "text-red-400" : totalNow > 0 ? "text-amber-400" : "text-gray-500"}`}
+          >
             {totalNow} total
           </span>
           {uniqueSessions.size > 1 && (
@@ -71,7 +101,13 @@ function SubscriptionTable({ subs, prevSubs }: { subs: SubscriptionSnapshot[]; p
   );
 }
 
-function DataTable({ sizes, prevSizes }: { sizes: DataSizeSnapshot[]; prevSizes: DataSizeSnapshot[] | undefined }) {
+function DataTable({
+  sizes,
+  prevSizes,
+}: {
+  sizes: DataSizeSnapshot[];
+  prevSizes: DataSizeSnapshot[] | undefined;
+}) {
   const totalBytes = sizes.reduce((s, d) => s + d.estimatedBytes, 0);
   const prevTotalBytes = prevSizes?.reduce((s, d) => s + d.estimatedBytes, 0);
 
@@ -91,9 +127,15 @@ function DataTable({ sizes, prevSizes }: { sizes: DataSizeSnapshot[]; prevSizes:
             <div key={d.store} className="flex items-center gap-2 text-[11px]">
               <span className="w-44 text-gray-400 truncate">{d.store}</span>
               <span className="font-mono text-gray-300 w-16 text-right">{d.totalItems} items</span>
-              <span className="font-mono text-gray-400 w-20 text-right">{formatBytes(d.estimatedBytes)}</span>
+              <span className="font-mono text-gray-400 w-20 text-right">
+                {formatBytes(d.estimatedBytes)}
+              </span>
               <span className="text-gray-500 text-[10px]">{d.sessionsWithData} sessions</span>
-              <HealthIndicator current={d.estimatedBytes} previous={prev?.estimatedBytes} label="" />
+              <HealthIndicator
+                current={d.estimatedBytes}
+                previous={prev?.estimatedBytes}
+                label=""
+              />
             </div>
           );
         })}
@@ -107,7 +149,7 @@ function LeakDetector({ snap }: { snap: DiagnosticSnapshot }) {
 
   const totalSubs = snap.subscriptions.reduce((s, c) => s + c.total, 0);
   const subSessions = new Set(
-    snap.subscriptions.flatMap((c) => c.bySession.map((s) => s.sessionId))
+    snap.subscriptions.flatMap((c) => c.bySession.map((s) => s.sessionId)),
   );
 
   if (subSessions.size > 1) {
@@ -176,7 +218,11 @@ function LeakDetector({ snap }: { snap: DiagnosticSnapshot }) {
 
 function TrendChart({ history }: { history: DiagnosticSnapshot[] }) {
   if (history.length < 2) {
-    return <div className="text-[10px] text-gray-500 px-1">Collecting data... ({history.length} samples)</div>;
+    return (
+      <div className="text-[10px] text-gray-500 px-1">
+        Collecting data... ({history.length} samples)
+      </div>
+    );
   }
 
   const first = history[0];
@@ -196,7 +242,8 @@ function TrendChart({ history }: { history: DiagnosticSnapshot[] }) {
   return (
     <div className="space-y-2">
       <div className="text-[10px] text-gray-500">
-        Trend: {formatTime(first.timestamp)} → {formatTime(last.timestamp)} ({history.length} samples)
+        Trend: {formatTime(first.timestamp)} → {formatTime(last.timestamp)} ({history.length}{" "}
+        samples)
       </div>
       <div className="flex items-end gap-px h-8">
         {subBars.map((v, i) => (
@@ -209,11 +256,22 @@ function TrendChart({ history }: { history: DiagnosticSnapshot[] }) {
         ))}
       </div>
       <div className="flex justify-between text-[10px]">
-        <span className={subTrend > 0 ? "text-red-400" : subTrend < 0 ? "text-emerald-400" : "text-gray-500"}>
-          Subs: {totalSubsFirst} → {totalSubsLast} ({subTrend > 0 ? "+" : ""}{subTrend})
+        <span
+          className={
+            subTrend > 0 ? "text-red-400" : subTrend < 0 ? "text-emerald-400" : "text-gray-500"
+          }
+        >
+          Subs: {totalSubsFirst} → {totalSubsLast} ({subTrend > 0 ? "+" : ""}
+          {subTrend})
         </span>
-        <span className={byteTrend > 0 ? "text-red-400" : byteTrend < 0 ? "text-emerald-400" : "text-gray-500"}>
-          Data: {formatBytes(totalBytesFirst)} → {formatBytes(totalBytesLast)} ({byteTrend > 0 ? "+" : ""}{formatBytes(byteTrend)})
+        <span
+          className={
+            byteTrend > 0 ? "text-red-400" : byteTrend < 0 ? "text-emerald-400" : "text-gray-500"
+          }
+        >
+          Data: {formatBytes(totalBytesFirst)} → {formatBytes(totalBytesLast)} (
+          {byteTrend > 0 ? "+" : ""}
+          {formatBytes(byteTrend)})
         </span>
       </div>
     </div>
@@ -273,13 +331,24 @@ export function DiagnosticPanel() {
           >
             {autoRefresh ? "AUTO" : "MANUAL"}
           </button>
-          <button onClick={takeSnapshot} className="p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" title="Take snapshot">
+          <button
+            onClick={takeSnapshot}
+            className="p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+            title="Take snapshot"
+          >
             <RefreshCw className="w-3 h-3" />
           </button>
-          <button onClick={clearHistory} className="p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" title="Clear history">
+          <button
+            onClick={clearHistory}
+            className="p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+            title="Clear history"
+          >
             <Trash2 className="w-3 h-3" />
           </button>
-          <button onClick={toggle} className="p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
+          <button
+            onClick={toggle}
+            className="p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+          >
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -289,7 +358,10 @@ export function DiagnosticPanel() {
         {snapshot ? (
           <div className="text-[11px]">
             <div className="px-3 py-1.5 bg-gray-100 dark:bg-gray-800/50 flex items-center justify-between text-[10px] text-gray-500 dark:text-gray-400">
-              <span>Active: {snapshot.activeSessionId ?? "none"} | Tabs: {snapshot.projectTabs} | Sessions: {snapshot.totalSessions}</span>
+              <span>
+                Active: {snapshot.activeSessionId ?? "none"} | Tabs: {snapshot.projectTabs} |
+                Sessions: {snapshot.totalSessions}
+              </span>
               <span>{formatTime(snapshot.timestamp)}</span>
             </div>
 
@@ -317,9 +389,12 @@ export function DiagnosticPanel() {
 
             {snapshot.jsHeapUsed != null && snapshot.jsHeapTotal != null && (
               <div className="px-3 py-2 border-t border-gray-200 dark:border-gray-800">
-                <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300 mb-1">JS Heap</div>
+                <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  JS Heap
+                </div>
                 <div className="text-[11px] text-gray-500 dark:text-gray-400">
-                  Used: {formatBytes(snapshot.jsHeapUsed)} / Total: {formatBytes(snapshot.jsHeapTotal)}
+                  Used: {formatBytes(snapshot.jsHeapUsed)} / Total:{" "}
+                  {formatBytes(snapshot.jsHeapTotal)}
                 </div>
                 <div className="h-1.5 bg-gray-200 dark:bg-gray-700 rounded mt-1">
                   <div
@@ -331,7 +406,8 @@ export function DiagnosticPanel() {
             )}
 
             <div className="px-3 py-2 border-t border-gray-200 dark:border-gray-800 text-[10px] text-gray-400 dark:text-gray-500">
-              RPC debug entries: {snapshot.rpcDebugEntries} | toolCallNameMap: {snapshot.toolCallNameMapSize}
+              RPC debug entries: {snapshot.rpcDebugEntries} | toolCallNameMap:{" "}
+              {snapshot.toolCallNameMapSize}
             </div>
           </div>
         ) : (

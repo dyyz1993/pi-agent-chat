@@ -11,15 +11,9 @@ function AttachmentPreview({ att, onRemove }: { att: AttachmentFile; onRemove: (
       {att.status === "uploading" && (
         <Loader2 className="w-3 h-3 text-indigo-400 animate-spin shrink-0" />
       )}
-      {att.status === "error" && (
-        <AlertCircle className="w-3 h-3 text-red-400 shrink-0" />
-      )}
-      {att.status === "done" && (
-        <div className="w-3 h-3 rounded-full bg-green-500/80 shrink-0" />
-      )}
-      {att.status === "pending" && (
-        <div className="w-3 h-3 rounded-full bg-gray-600 shrink-0" />
-      )}
+      {att.status === "error" && <AlertCircle className="w-3 h-3 text-red-400 shrink-0" />}
+      {att.status === "done" && <div className="w-3 h-3 rounded-full bg-green-500/80 shrink-0" />}
+      {att.status === "pending" && <div className="w-3 h-3 rounded-full bg-gray-600 shrink-0" />}
 
       {isImage && att.preview ? (
         <img src={att.preview} alt={att.name} className="w-6 h-6 rounded object-cover shrink-0" />
@@ -29,7 +23,9 @@ function AttachmentPreview({ att, onRemove }: { att: AttachmentFile; onRemove: (
 
       <div className="min-w-0 flex-1">
         <div className="text-[10px] text-gray-700 dark:text-gray-300 truncate">{att.name}</div>
-        <div className="text-[9px] text-gray-400 dark:text-gray-500">{formatFileSize(att.size)}</div>
+        <div className="text-[9px] text-gray-400 dark:text-gray-500">
+          {formatFileSize(att.size)}
+        </div>
       </div>
 
       <button

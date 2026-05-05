@@ -1,5 +1,20 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
-import { Search, ChevronRight, ChevronDown, Copy, Pencil, Trash2, User, Check, X, Loader2, Bot, GitBranch, Pin, PinOff } from "lucide-react";
+import {
+  Search,
+  ChevronRight,
+  ChevronDown,
+  Copy,
+  Pencil,
+  Trash2,
+  User,
+  Check,
+  X,
+  Loader2,
+  Bot,
+  GitBranch,
+  Pin,
+  PinOff,
+} from "lucide-react";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useSubagentStore } from "../../stores/use-subagent-store";
 import { useGitStore } from "../../stores/use-git-store";
@@ -41,6 +56,7 @@ export function SessionSidebar(_props: SessionSidebarProps) {
         <div className="flex items-center gap-1.5 px-2 py-1 bg-gray-100/50 dark:bg-gray-800/50 rounded text-[11px] text-gray-400 dark:text-gray-500">
           <Search className="w-3 h-3 shrink-0" />
           <input
+            data-testid="session-search"
             placeholder="搜索会话..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -49,7 +65,12 @@ export function SessionSidebar(_props: SessionSidebarProps) {
         </div>
       </div>
 
-      <SessionList searchQuery={searchQuery} expandedIds={expandedIds} onToggleExpand={toggleExpand} onExpandSession={expandSession} />
+      <SessionList
+        searchQuery={searchQuery}
+        expandedIds={expandedIds}
+        onToggleExpand={toggleExpand}
+        onExpandSession={expandSession}
+      />
     </div>
   );
 }
@@ -123,7 +144,7 @@ function SessionList({
           (sess) =>
             sess.name?.toLowerCase().includes(q) ||
             sess.firstMessage?.toLowerCase().includes(q) ||
-            sess.sessionId.toLowerCase().includes(q)
+            sess.sessionId.toLowerCase().includes(q),
         );
       const filteredRoots = sortPinnedFirst(filter(roots));
       const filteredChildren: Record<string, SessionMeta[]> = {};
@@ -131,7 +152,11 @@ function SessionList({
         const filtered = filter(kids);
         if (filtered.length > 0) filteredChildren[parentPath] = filtered;
         else {
-          const parentMatch = roots.find((r) => r.sessionPath === parentPath && (r.name?.toLowerCase().includes(q) || r.firstMessage?.toLowerCase().includes(q)));
+          const parentMatch = roots.find(
+            (r) =>
+              r.sessionPath === parentPath &&
+              (r.name?.toLowerCase().includes(q) || r.firstMessage?.toLowerCase().includes(q)),
+          );
           if (parentMatch) filteredChildren[parentPath] = filtered;
         }
       }
@@ -151,7 +176,11 @@ function SessionList({
   }
 
   if (rootSessions.length === 0) {
-    return <div className="flex-1 flex items-center justify-center text-gray-400 dark:text-gray-600 text-xs p-4 text-center">{searchQuery ? "无匹配会话" : "暂无会话"}</div>;
+    return (
+      <div className="flex-1 flex items-center justify-center text-gray-400 dark:text-gray-600 text-xs p-4 text-center">
+        {searchQuery ? "无匹配会话" : "暂无会话"}
+      </div>
+    );
   }
 
   return (
@@ -205,7 +234,11 @@ function StatusBadge({ sessionId }: { sessionId: string }) {
   );
 }
 
-function WorkspaceBadge({ workspace }: { workspace: { path: string; branch: string; isMain: boolean } }) {
+function WorkspaceBadge({
+  workspace,
+}: {
+  workspace: { path: string; branch: string; isMain: boolean };
+}) {
   const name = workspace.isMain ? workspace.path.split("/").pop() : workspace.branch;
   return (
     <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-cyan-500/15 text-cyan-400 border border-cyan-500/20">
@@ -268,9 +301,11 @@ function SessionItem({
   const workspaceInfo = useMemo(
     () =>
       worktrees.find((wt) => session.projectPath === wt.path) ??
-      [...worktrees].sort((a, b) => b.path.length - a.path.length).find((wt) => session.projectPath.startsWith(wt.path)) ??
+      [...worktrees]
+        .sort((a, b) => b.path.length - a.path.length)
+        .find((wt) => session.projectPath.startsWith(wt.path)) ??
       null,
-    [worktrees, session.projectPath]
+    [worktrees, session.projectPath],
   );
 
   useEffect(() => {
@@ -293,16 +328,22 @@ function SessionItem({
     }
   };
 
-  const handleCopyId = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    copyToClipboard(session.sessionId);
-  }, [session.sessionId]);
+  const handleCopyId = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      copyToClipboard(session.sessionId);
+    },
+    [session.sessionId],
+  );
 
-  const handleStartRename = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    setEditName(session.name || "");
-    setIsEditing(true);
-  }, [session.name]);
+  const handleStartRename = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      setEditName(session.name || "");
+      setIsEditing(true);
+    },
+    [session.name],
+  );
 
   const handleConfirmRename = useCallback(() => {
     const trimmed = editName.trim();
@@ -316,33 +357,44 @@ function SessionItem({
     setIsEditing(false);
   }, []);
 
-  const handleDelete = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (confirm(`确定删除会话 "${session.name || "空会话"}" 吗？`)) {
-      deleteSession(session.sessionId);
-    }
-  }, [session.name, session.sessionId, deleteSession]);
+  const handleDelete = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (confirm(`确定删除会话 "${session.name || "空会话"}" 吗？`)) {
+        deleteSession(session.sessionId);
+      }
+    },
+    [session.name, session.sessionId, deleteSession],
+  );
 
-  const handleTogglePin = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    togglePinSession(session.sessionId);
-  }, [session.sessionId, togglePinSession]);
+  const handleTogglePin = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      togglePinSession(session.sessionId);
+    },
+    [session.sessionId, togglePinSession],
+  );
 
   const displayName = session.name || session.firstMessage || "空会话";
 
   return (
     <div>
       <div
-        className={`group w-full text-left px-2.5 py-2 rounded text-[11px] transition-colors cursor-pointer ${isActive
+        data-testid={`session-item-${session.sessionId}`}
+        className={`group w-full text-left px-2.5 py-2 rounded text-[11px] transition-colors cursor-pointer ${
+          isActive
             ? "bg-indigo-600/20 text-indigo-700 dark:text-indigo-200"
             : "text-gray-500 dark:text-gray-400 hover:bg-gray-100/60 dark:hover:bg-gray-800/60 hover:text-gray-800 dark:hover:text-gray-200"
-          } ${isActive ? "border-l-2 border-indigo-500 -ml-[2px] pl-[calc(0.625rem+2px)]" : ""}`}
+        } ${isActive ? "border-l-2 border-indigo-500 -ml-[2px] pl-[calc(0.625rem+2px)]" : ""}`}
         onClick={handleClick}
       >
         <div className="flex items-center justify-center gap-1.5">
           <User className="w-4 h-4 shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-400" />
           {isEditing ? (
-            <div className="flex items-center gap-1 flex-1 min-w-0" onClick={(e) => e.stopPropagation()}>
+            <div
+              className="flex items-center gap-1 flex-1 min-w-0"
+              onClick={(e) => e.stopPropagation()}
+            >
               <input
                 ref={inputRef}
                 value={editName}
@@ -353,17 +405,25 @@ function SessionItem({
                 }}
                 className="flex-1 bg-white dark:bg-gray-800 border border-indigo-500/50 rounded px-1.5 py-0.5 text-[11px] text-gray-800 dark:text-gray-200 outline-none"
               />
-              <button onClick={handleConfirmRename} className="p-0.5 rounded hover:bg-gray-700 text-emerald-400">
+              <button
+                onClick={handleConfirmRename}
+                className="p-0.5 rounded hover:bg-gray-700 text-emerald-400"
+              >
                 <Check className="w-3 h-3" />
               </button>
-              <button onClick={handleCancelRename} className="p-0.5 rounded hover:bg-gray-700 text-gray-500">
+              <button
+                onClick={handleCancelRename}
+                className="p-0.5 rounded hover:bg-gray-700 text-gray-500"
+              >
                 <X className="w-3 h-3" />
               </button>
             </div>
           ) : (
             <>
               {session.pinned && <Pin className="w-3 h-3 shrink-0 text-indigo-400" />}
-              <span className="truncate font-medium leading-tight flex-1 min-w-0">{displayName}</span>
+              <span className="truncate font-medium leading-tight flex-1 min-w-0">
+                {displayName}
+              </span>
             </>
           )}
         </div>
@@ -372,25 +432,48 @@ function SessionItem({
           <div className="flex items-center justify-center gap-1.5 mt-1">
             {hasExpandableChildren && (
               <button
-                onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleExpand();
+                }}
                 className="shrink-0 p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
               >
-                {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                {isExpanded ? (
+                  <ChevronDown className="w-3.5 h-3.5" />
+                ) : (
+                  <ChevronRight className="w-3.5 h-3.5" />
+                )}
               </button>
             )}
             <StatusBadge sessionId={session.sessionId} />
             {workspaceInfo && !workspaceInfo.isMain && <WorkspaceBadge workspace={workspaceInfo} />}
             <div className="ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button onClick={handleTogglePin} className={`p-1 rounded hover:bg-gray-700 ${session.pinned ? "text-indigo-400" : "text-gray-500 hover:text-gray-300"}`} title={session.pinned ? "取消置顶" : "置顶"}>
+              <button
+                onClick={handleTogglePin}
+                className={`p-1 rounded hover:bg-gray-700 ${session.pinned ? "text-indigo-400" : "text-gray-500 hover:text-gray-300"}`}
+                title={session.pinned ? "取消置顶" : "置顶"}
+              >
                 {session.pinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
               </button>
-              <button onClick={handleCopyId} className="p-1 rounded hover:bg-gray-700 text-gray-500 hover:text-gray-300" title="复制 ID">
+              <button
+                onClick={handleCopyId}
+                className="p-1 rounded hover:bg-gray-700 text-gray-500 hover:text-gray-300"
+                title="复制 ID"
+              >
                 <Copy className="w-3 h-3" />
               </button>
-              <button onClick={handleStartRename} className="p-1 rounded hover:bg-gray-700 text-gray-500 hover:text-gray-300" title="重命名">
+              <button
+                onClick={handleStartRename}
+                className="p-1 rounded hover:bg-gray-700 text-gray-500 hover:text-gray-300"
+                title="重命名"
+              >
                 <Pencil className="w-3 h-3" />
               </button>
-              <button onClick={handleDelete} className="p-1 rounded hover:bg-red-900/50 text-gray-500 hover:text-red-400" title="删除">
+              <button
+                onClick={handleDelete}
+                className="p-1 rounded hover:bg-red-900/50 text-gray-500 hover:text-red-400"
+                title="删除"
+              >
                 <Trash2 className="w-3 h-3" />
               </button>
             </div>
@@ -406,22 +489,22 @@ function SessionItem({
               加载子代理...
             </div>
           )}
-          {!loadingSubs && hasPiChildren && children?.map((child) => (
-            <SessionItem
-              key={child.sessionId}
-              session={child}
-              isActive={false}
-              isExpanded={false}
-              onToggleExpand={() => { }}
-            />
-          ))}
-          {!loadingSubs && hasSubagents && subsessions?.map((sub) => (
-            <SubagentItem
-              key={sub.sessionId}
-              sub={sub}
-              parentSessionId={session.sessionId}
-            />
-          ))}
+          {!loadingSubs &&
+            hasPiChildren &&
+            children?.map((child) => (
+              <SessionItem
+                key={child.sessionId}
+                session={child}
+                isActive={false}
+                isExpanded={false}
+                onToggleExpand={() => {}}
+              />
+            ))}
+          {!loadingSubs &&
+            hasSubagents &&
+            subsessions?.map((sub) => (
+              <SubagentItem key={sub.sessionId} sub={sub} parentSessionId={session.sessionId} />
+            ))}
         </div>
       )}
     </div>
@@ -457,16 +540,22 @@ function SubagentItem({
     }
   };
 
-  const handleCopyId = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    copyToClipboard(sub.sessionId);
-  }, [sub.sessionId]);
+  const handleCopyId = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      copyToClipboard(sub.sessionId);
+    },
+    [sub.sessionId],
+  );
 
-  const handleStartRename = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    setEditName(sub.description || "");
-    setIsEditing(true);
-  }, [sub.description]);
+  const handleStartRename = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      setEditName(sub.description || "");
+      setIsEditing(true);
+    },
+    [sub.description],
+  );
 
   const handleConfirmRename = useCallback(() => {
     const trimmed = editName.trim();
@@ -486,33 +575,40 @@ function SubagentItem({
     setIsEditing(false);
   }, []);
 
-  const handleDelete = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (confirm(`确定删除子代理 "${sub.description || sub.instruction.slice(0, 30)}" 吗？`)) {
-      const { subsessionsByParent } = useSubagentStore.getState();
-      for (const [path, subs] of Object.entries(subsessionsByParent)) {
-        if (subs.some((s) => s.sessionId === sub.sessionId)) {
-          useSubagentStore.getState().deleteSubagent(path, sub.sessionId);
-          break;
+  const handleDelete = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (confirm(`确定删除子代理 "${sub.description || sub.instruction.slice(0, 30)}" 吗？`)) {
+        const { subsessionsByParent } = useSubagentStore.getState();
+        for (const [path, subs] of Object.entries(subsessionsByParent)) {
+          if (subs.some((s) => s.sessionId === sub.sessionId)) {
+            useSubagentStore.getState().deleteSubagent(path, sub.sessionId);
+            break;
+          }
         }
       }
-    }
-  }, [sub.sessionId, sub.description, sub.instruction]);
+    },
+    [sub.sessionId, sub.description, sub.instruction],
+  );
 
   const displayName = sub.description || sub.instruction.slice(0, 80);
 
   return (
     <div
-      className={`group w-full text-left px-2.5 py-2 rounded text-[11px] cursor-pointer transition-colors ${isActive
+      className={`group w-full text-left px-2.5 py-2 rounded text-[11px] cursor-pointer transition-colors ${
+        isActive
           ? "bg-purple-600/20 text-purple-200"
           : "text-gray-500 hover:bg-gray-800/60 hover:text-gray-300"
-        }`}
+      }`}
       onClick={handleClick}
     >
       <div className="flex items-center justify-center gap-1.5">
         <Bot className="w-4 h-4 shrink-0 text-purple-500/70 group-hover:text-purple-400" />
         {isEditing ? (
-          <div className="flex items-center gap-1 flex-1 min-w-0" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="flex items-center gap-1 flex-1 min-w-0"
+            onClick={(e) => e.stopPropagation()}
+          >
             <input
               ref={inputRef}
               value={editName}
@@ -523,10 +619,16 @@ function SubagentItem({
               }}
               className="flex-1 bg-gray-800 border border-purple-500/50 rounded px-1.5 py-0.5 text-[11px] text-gray-200 outline-none"
             />
-            <button onClick={handleConfirmRename} className="p-0.5 rounded hover:bg-gray-700 text-emerald-400">
+            <button
+              onClick={handleConfirmRename}
+              className="p-0.5 rounded hover:bg-gray-700 text-emerald-400"
+            >
               <Check className="w-3 h-3" />
             </button>
-            <button onClick={handleCancelRename} className="p-0.5 rounded hover:bg-gray-700 text-gray-500">
+            <button
+              onClick={handleCancelRename}
+              className="p-0.5 rounded hover:bg-gray-700 text-gray-500"
+            >
               <X className="w-3 h-3" />
             </button>
           </div>
@@ -537,13 +639,25 @@ function SubagentItem({
       <div className="flex items-center justify-center gap-1.5 mt-1">
         <SubagentStatusBadge sub={sub} />
         <div className="ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={handleCopyId} className="p-1 rounded hover:bg-gray-700 text-gray-500 hover:text-gray-300" title="复制 ID">
+          <button
+            onClick={handleCopyId}
+            className="p-1 rounded hover:bg-gray-700 text-gray-500 hover:text-gray-300"
+            title="复制 ID"
+          >
             <Copy className="w-3 h-3" />
           </button>
-          <button onClick={handleStartRename} className="p-1 rounded hover:bg-gray-700 text-gray-500 hover:text-gray-300" title="重命名">
+          <button
+            onClick={handleStartRename}
+            className="p-1 rounded hover:bg-gray-700 text-gray-500 hover:text-gray-300"
+            title="重命名"
+          >
             <Pencil className="w-3 h-3" />
           </button>
-          <button onClick={handleDelete} className="p-1 rounded hover:bg-red-900/50 text-gray-500 hover:text-red-400" title="删除">
+          <button
+            onClick={handleDelete}
+            className="p-1 rounded hover:bg-red-900/50 text-gray-500 hover:text-red-400"
+            title="删除"
+          >
             <Trash2 className="w-3 h-3" />
           </button>
         </div>

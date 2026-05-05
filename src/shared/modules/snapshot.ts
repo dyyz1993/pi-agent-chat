@@ -10,8 +10,8 @@ export interface SnapshotMethods {
     result: SnapshotInfo | null;
   };
   "snapshot.rollback": {
-    params: { 
-      sessionId: string; 
+    params: {
+      sessionId: string;
       snapshotId: string;
       files?: string[];
     };

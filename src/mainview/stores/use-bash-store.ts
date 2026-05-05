@@ -1,5 +1,9 @@
 import { create } from "zustand";
-import type { BashProcess, BashChannelEvent, BashBackgroundExitEvent } from "../../shared/modules/bash";
+import type {
+  BashProcess,
+  BashChannelEvent,
+  BashBackgroundExitEvent,
+} from "../../shared/modules/bash";
 import { apiClient } from "../lib/api-client";
 
 interface BashState {
@@ -41,7 +45,9 @@ export const useBashStore = create<BashState>()((set, get) => ({
     set((s) => ({
       processesBySession: {
         ...s.processesBySession,
-        [sessionId]: (s.processesBySession[sessionId] || []).filter((p) => p.toolCallId !== toolCallId),
+        [sessionId]: (s.processesBySession[sessionId] || []).filter(
+          (p) => p.toolCallId !== toolCallId,
+        ),
       },
     }));
   },
@@ -57,7 +63,9 @@ export const useBashStore = create<BashState>()((set, get) => ({
   loadHistory: async (sessionId: string) => {
     try {
       await apiClient.call("bash.list", { sessionId });
-    } catch (err) { console.warn("[bash] loadHistory failed:", err); }
+    } catch (err) {
+      console.warn("[bash] loadHistory failed:", err);
+    }
   },
 
   subscribeOutput: async (sessionId: string, toolCallId: string) => {
@@ -93,12 +101,17 @@ export const useBashStore = create<BashState>()((set, get) => ({
 }));
 
 export function handleBashEvent(sessionId: string, event: BashChannelEvent): void {
-	const store = useBashStore.getState();
+  const store = useBashStore.getState();
 
   if (event.type === "list") {
     if (event.processes) {
       for (const p of event.processes) {
-        if (p.status === "background" || p.status === "done" || p.status === "error" || p.status === "terminated") {
+        if (
+          p.status === "background" ||
+          p.status === "done" ||
+          p.status === "error" ||
+          p.status === "terminated"
+        ) {
           store.markBackgrounded(p.toolCallId);
         }
       }
@@ -136,7 +149,13 @@ export function handleBashEvent(sessionId: string, event: BashChannelEvent): voi
     return;
   }
 
-  if ((event.type === "output" || event.type === "end" || event.type === "error" || event.type === "terminated") && event.processes) {
+  if (
+    (event.type === "output" ||
+      event.type === "end" ||
+      event.type === "error" ||
+      event.type === "terminated") &&
+    event.processes
+  ) {
     const updatedProc = event.processes.find((p) => p.toolCallId === event.toolCallId);
     if (updatedProc) {
       store.upsertProcess(sessionId, updatedProc);
@@ -148,9 +167,11 @@ export function handleBashEvent(sessionId: string, event: BashChannelEvent): voi
 export function handleBackgroundExit(sessionId: string, data: BashBackgroundExitEvent): void {
   const store = useBashStore.getState();
   const procs = store.processesBySession[sessionId] || [];
-  const match = procs.find((p) =>
-    p.status === "background" && data.details.command === p.command
-    && Math.abs(p.startedAt - data.details.startedAt) < 5000,
+  const match = procs.find(
+    (p) =>
+      p.status === "background" &&
+      data.details.command === p.command &&
+      Math.abs(p.startedAt - data.details.startedAt) < 5000,
   );
   if (!match) return;
 

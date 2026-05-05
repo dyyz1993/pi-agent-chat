@@ -1,5 +1,23 @@
 import { useState, useCallback } from "react";
-import { ChevronDown, ChevronRight, Zap, ClipboardList, Terminal, Plug, Network, Puzzle, CheckCircle2, Circle, AlertTriangle, BookOpen, Eye, EyeOff, Trash2, Copy, Check } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  Zap,
+  ClipboardList,
+  Terminal,
+  Plug,
+  Network,
+  Puzzle,
+  CheckCircle2,
+  Circle,
+  AlertTriangle,
+  BookOpen,
+  Eye,
+  EyeOff,
+  Trash2,
+  Copy,
+  Check,
+} from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { useStatusStore } from "../../stores/use-status-store";
 import { useSessionStore } from "../../stores/use-session-store";
@@ -81,268 +99,403 @@ export function StatusPanel() {
   const expandedPlugin = useStatusStore((s) => s.expandedPlugin);
   const togglePluginExpanded = useStatusStore((s) => s.togglePluginExpanded);
 
-  const backgroundProcesses = allProcesses?.filter((p) =>
-    backgroundedIds.has(p.toolCallId),
-  ) ?? [];
+  const backgroundProcesses = allProcesses?.filter((p) => backgroundedIds.has(p.toolCallId)) ?? [];
   const hasProcesses = backgroundProcesses.length > 0;
 
   return (
     <>
       <div className="py-1">
-      {SECTIONS.map(({ id, label, icon: Icon }) => {
-        const collapsed = collapsedSections.has(id);
-        return (
-          <div key={id} className="border-b border-gray-200 dark:border-gray-800/50 last:border-b-0">
-            <button
-              onClick={() => toggleSection(id)}
-              className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-800/30 transition-colors"
+        {SECTIONS.map(({ id, label, icon: Icon }) => {
+          const collapsed = collapsedSections.has(id);
+          return (
+            <div
+              key={id}
+              className="border-b border-gray-200 dark:border-gray-800/50 last:border-b-0"
             >
-              {collapsed ? <ChevronRight className="w-3 h-3 shrink-0" /> : <ChevronDown className="w-3 h-3 shrink-0" />}
-              <Icon className="w-3 h-3 shrink-0" />
-              <span>{label}</span>
-            </button>
-            {!collapsed && (
-              <div className="px-2.5 pb-1.5 text-[10px] text-gray-500">
-                {id === "yolo" && (
-                  <button onClick={toggleYolo} className={`px-2 py-0.5 rounded text-[10px] ${yoloEnabled ? "bg-yellow-600/30 text-yellow-400" : "bg-gray-200 dark:bg-gray-800 text-gray-500"}`}>
-                    {yoloEnabled ? "已开启" : "已关闭"}
-                  </button>
+              <button
+                onClick={() => toggleSection(id)}
+                className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-800/30 transition-colors"
+              >
+                {collapsed ? (
+                  <ChevronRight className="w-3 h-3 shrink-0" />
+                ) : (
+                  <ChevronDown className="w-3 h-3 shrink-0" />
                 )}
-                {id === "plan" && (
-                  <div className="space-y-1">
-                    {todos && todos.length > 0 && (
-                      <div className="space-y-0.5 pt-0.5">
-                        {todos.map((t) => (
-                          <div key={t.id} className={`flex items-center gap-1.5 py-0.5 px-1 rounded hover:bg-gray-200/50 dark:hover:bg-gray-800/40 transition-colors${t.deleted ? " opacity-40" : ""}`}>
-                            {t.deleted
-                              ? <Trash2 className="w-3 h-3 shrink-0 text-red-400" />
-                              : t.done
-                                ? <CheckCircle2 className="w-3 h-3 shrink-0 text-emerald-400" />
-                                : <Circle className="w-3 h-3 shrink-0 text-gray-500" />
-                            }
-                            {t.priority && !t.deleted && (
-                              <span className={`w-3 h-3 shrink-0 rounded-full flex items-center justify-center text-[7px] font-bold text-white ${PRIORITY_STYLES[t.priority].dot}`}>
-                                {PRIORITY_STYLES[t.priority].label}
+                <Icon className="w-3 h-3 shrink-0" />
+                <span>{label}</span>
+              </button>
+              {!collapsed && (
+                <div className="px-2.5 pb-1.5 text-[10px] text-gray-500">
+                  {id === "yolo" && (
+                    <button
+                      onClick={toggleYolo}
+                      className={`px-2 py-0.5 rounded text-[10px] ${yoloEnabled ? "bg-yellow-600/30 text-yellow-400" : "bg-gray-200 dark:bg-gray-800 text-gray-500"}`}
+                    >
+                      {yoloEnabled ? "已开启" : "已关闭"}
+                    </button>
+                  )}
+                  {id === "plan" && (
+                    <div className="space-y-1">
+                      {todos && todos.length > 0 && (
+                        <div className="space-y-0.5 pt-0.5">
+                          {todos.map((t) => (
+                            <div
+                              key={t.id}
+                              className={`flex items-center gap-1.5 py-0.5 px-1 rounded hover:bg-gray-200/50 dark:hover:bg-gray-800/40 transition-colors${t.deleted ? " opacity-40" : ""}`}
+                            >
+                              {t.deleted ? (
+                                <Trash2 className="w-3 h-3 shrink-0 text-red-400" />
+                              ) : t.done ? (
+                                <CheckCircle2 className="w-3 h-3 shrink-0 text-emerald-400" />
+                              ) : (
+                                <Circle className="w-3 h-3 shrink-0 text-gray-500" />
+                              )}
+                              {t.priority && !t.deleted && (
+                                <span
+                                  className={`w-3 h-3 shrink-0 rounded-full flex items-center justify-center text-[7px] font-bold text-white ${PRIORITY_STYLES[t.priority].dot}`}
+                                >
+                                  {PRIORITY_STYLES[t.priority].label}
+                                </span>
+                              )}
+                              <span
+                                className={`${t.deleted ? "text-red-400/60 line-through" : t.done ? "text-gray-500 line-through" : "text-gray-700 dark:text-gray-300"} truncate`}
+                              >
+                                {t.text}
                               </span>
-                            )}
-                            <span className={`${t.deleted ? "text-red-400/60 line-through" : t.done ? "text-gray-500 line-through" : "text-gray-700 dark:text-gray-300"} truncate`}>
-                              {t.text}
-                            </span>
-                          </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {id === "shell" &&
+                    (hasProcesses ? (
+                      <div className="space-y-1.5 pt-0.5">
+                        {backgroundProcesses.map((p) => (
+                          <BashProcessCard
+                            key={p.toolCallId}
+                            process={p}
+                            onOpenLog={() =>
+                              setLogViewer({ logPath: p.logPath ?? "", toolCallId: p.toolCallId })
+                            }
+                          />
                         ))}
                       </div>
-                    )}
-                  </div>
-                )}
-                {id === "shell" && (
-                  hasProcesses ? (
-                    <div className="space-y-1.5 pt-0.5">
-                      {backgroundProcesses.map((p) => (
-                        <BashProcessCard key={p.toolCallId} process={p} onOpenLog={() => setLogViewer({ logPath: p.logPath ?? "", toolCallId: p.toolCallId })} />
-                      ))}
-                    </div>
-                  ) : (
-                    <span>空闲</span>
-                  )
-                )}
-                {id === "mcp" && (
-                  <div className="space-y-0.5">
-                    {mcpTools.length === 0 ? <span>未连接</span> : mcpTools.map((t) => (
-                      <div key={t.name} className="flex items-center gap-1">
-                        <span className={`w-1.5 h-1.5 rounded-full ${t.status === "ready" ? "bg-green-400" : t.status === "error" ? "bg-red-400" : "bg-yellow-400 animate-pulse"}`} />
-                        <span>{t.name}</span>
-                      </div>
+                    ) : (
+                      <span>空闲</span>
                     ))}
-                  </div>
-                )}
-                {id === "lsp" && (
-                  <div className="space-y-1">
-                    {!lspData || lspData.startupComplete ? (
-                      <div>
-                        <div className="flex items-center gap-1">
-                          <span className={`w-1.5 h-1.5 rounded-full ${lspData?.state === "ready" ? "bg-green-400" : lspData?.state === "error" ? "bg-red-400" : lspData?.state === "starting" ? "bg-yellow-400 animate-pulse" : "bg-gray-600"}`} />
-                          <span>
-                            {!lspData
-                              ? "Inactive"
-                              : lspData.state === "ready"
-                                ? `Connected (${lspData.servers.length} server${lspData.servers.length !== 1 ? "s" : ""})`
-                                : lspData.state === "error"
-                                  ? "Error"
-                                  : lspData.state === "starting"
-                                    ? "Starting..."
-                                    : lspData.state}
+                  {id === "mcp" && (
+                    <div className="space-y-0.5">
+                      {mcpTools.length === 0 ? (
+                        <span>未连接</span>
+                      ) : (
+                        mcpTools.map((t) => (
+                          <div key={t.name} className="flex items-center gap-1">
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${t.status === "ready" ? "bg-green-400" : t.status === "error" ? "bg-red-400" : "bg-yellow-400 animate-pulse"}`}
+                            />
+                            <span>{t.name}</span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                  {id === "lsp" && (
+                    <div className="space-y-1">
+                      {!lspData || lspData.startupComplete ? (
+                        <div>
+                          <div className="flex items-center gap-1">
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${lspData?.state === "ready" ? "bg-green-400" : lspData?.state === "error" ? "bg-red-400" : lspData?.state === "starting" ? "bg-yellow-400 animate-pulse" : "bg-gray-600"}`}
+                            />
+                            <span>
+                              {!lspData
+                                ? "Inactive"
+                                : lspData.state === "ready"
+                                  ? `Connected (${lspData.servers.length} server${lspData.servers.length !== 1 ? "s" : ""})`
+                                  : lspData.state === "error"
+                                    ? "Error"
+                                    : lspData.state === "starting"
+                                      ? "Starting..."
+                                      : lspData.state}
+                            </span>
+                          </div>
+                          {lspData?.activeLanguages && lspData.activeLanguages.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {lspData.activeLanguages.map((lang) => (
+                                <span
+                                  key={lang}
+                                  className="px-1 py-px rounded text-[9px] bg-cyan-500/15 text-cyan-400"
+                                >
+                                  {lang}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1 text-[10px] text-gray-400">
+                          <span className="animate-pulse">
+                            Starting {lspData.totalServers ?? lspData.startupLog.length} servers...
                           </span>
                         </div>
-                        {lspData?.activeLanguages && lspData.activeLanguages.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {lspData.activeLanguages.map((lang) => (
-                              <span key={lang} className="px-1 py-px rounded text-[9px] bg-cyan-500/15 text-cyan-400">{lang}</span>
+                      )}
+                      {lspData?.startupLog &&
+                        lspData.startupLog.length > 0 &&
+                        lspData.state === "starting" && (
+                          <div className="space-y-0.5 pl-1 pt-0.5">
+                            {lspData.startupLog.map((log, i) => (
+                              <div key={`${log.name}-${i}`} className="flex items-center gap-1">
+                                <span
+                                  className={`w-1 h-1 rounded-full ${log.state === "ready" ? "bg-green-400" : log.state === "error" ? "bg-red-400" : "bg-yellow-400 animate-pulse"}`}
+                                />
+                                <span
+                                  className={`truncate ${log.state === "error" ? "text-red-400/80" : log.state === "ready" ? "text-green-400/80" : "text-gray-500"}`}
+                                >
+                                  {log.name}
+                                  {log.fileTypes && log.fileTypes.length > 0 ? (
+                                    <span className="text-gray-600">
+                                      {" "}
+                                      ({log.fileTypes.join(",")})
+                                    </span>
+                                  ) : null}
+                                </span>
+                              </div>
                             ))}
                           </div>
                         )}
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1 text-[10px] text-gray-400">
-                        <span className="animate-pulse">Starting {lspData.totalServers ?? lspData.startupLog.length} servers...</span>
-                      </div>
-                    )}
-                    {lspData?.startupLog && lspData.startupLog.length > 0 && lspData.state === "starting" && (
-                      <div className="space-y-0.5 pl-1 pt-0.5">
-                        {lspData.startupLog.map((log, i) => (
-                          <div key={`${log.name}-${i}`} className="flex items-center gap-1">
-                            <span className={`w-1 h-1 rounded-full ${log.state === "ready" ? "bg-green-400" : log.state === "error" ? "bg-red-400" : "bg-yellow-400 animate-pulse"}`} />
-                            <span className={`truncate ${log.state === "error" ? "text-red-400/80" : log.state === "ready" ? "text-green-400/80" : "text-gray-500"}`}>
-                              {log.name}
-                              {log.fileTypes && log.fileTypes.length > 0 ? <span className="text-gray-600"> ({log.fileTypes.join(",")})</span> : null}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {lspData && lspData.servers.length > 0 && !lspData.startupLog?.length && (
-                      <div className="space-y-0.5 pl-1">
-                        {lspData.servers.map((srv, i) => (
-                          <div key={`${srv.name}-${i}`} className="flex items-center gap-1">
-                            <span className={`w-1 h-1 rounded-full ${srv.state === "ready" ? "bg-green-400" : srv.state === "error" ? "bg-red-400" : srv.state === "starting" ? "bg-yellow-400" : "bg-gray-600"}`} />
-                            <span className={`truncate text-gray-500`}>{srv.name}{srv.fileTypes && srv.fileTypes.length > 0 ? <span className="text-gray-600"> ({srv.fileTypes.join(",")})</span> : null}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <div className="flex gap-1 pt-0.5">
-                      {(["agent_end", "edit_write", "disabled"] as LspDiagnosticsMode[]).map((m) => (
-                        <button
-                          key={m}
-                          onClick={() => { if (activeSessionId && !activeSubId) useLspStore.getState().setMode(activeSessionId, m); }}
-                           className={`px-1.5 py-0.5 rounded text-[9px] ${lspData?.mode === m ? "bg-blue-600/30 text-blue-400" : "bg-gray-200 dark:bg-gray-800 text-gray-500 hover:bg-gray-300/50 dark:hover:bg-gray-700/50"}`}
-                        >
-                          {m === "agent_end" ? "On End" : m === "edit_write" ? "On Write" : "Off"}
-                        </button>
-                      ))}
-                    </div>
-                    {lspData?.lastDiagnostics && (
-                      <div className="flex items-center gap-1 text-[9px] pt-0.5">
-                        <AlertTriangle className={`w-2.5 h-2.5 ${lspData.lastDiagnostics.count > 0 ? "text-yellow-400" : "text-green-400"}`} />
-                        <span className="truncate">{lspData.lastDiagnostics.filePath}: {lspData.lastDiagnostics.count} issue{lspData.lastDiagnostics.count !== 1 ? "s" : ""}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-                {id === "plugins" && (
-                  <div className="space-y-0.5">
-                    {plugins.length === 0 ? <span>无插件</span> : plugins.map((p) => {
-                      const isExpanded = expandedPlugin === p.path;
-                      return (
-                        <div key={p.path}>
-                          <div
-                             className="flex items-center gap-1 py-0.5 px-1 rounded hover:bg-gray-200/50 dark:hover:bg-gray-800/40 transition-colors cursor-pointer group"
-                             onClick={() => togglePluginExpanded(p.path)}
-                           >
-                             <span className={`w-1.5 h-1.5 rounded-full ${p.enabled ? "bg-green-400" : "bg-gray-400 dark:bg-gray-600"}`} />
-                             <span className={`shrink-0 ${isExpanded ? "" : ""}`}>
-                               {isExpanded ? <ChevronDown className="w-3 h-3 text-gray-500" /> : <ChevronRight className="w-3 h-3 text-gray-500" />}
-                             </span>
-                             <span className="truncate flex-1 text-gray-700 dark:text-gray-300">{p.name}</span>
-                             {p.toolNames.length > 0 && <span className="text-gray-400 dark:text-gray-600">({p.toolNames.length} tools)</span>}
-                             {p.commandNames.length > 0 && <span className="text-gray-400 dark:text-gray-600">({p.commandNames.length} cmds)</span>}
-                            <span className={`text-[9px] px-1 py-px rounded shrink-0 ${p.scope === "global" ? "bg-purple-500/15 text-purple-400" : "bg-blue-500/15 text-blue-400"}`}>
-                              {p.scope === "global" ? "全局" : "项目"}
-                            </span>
-                          </div>
-                          {isExpanded && (
-                            <div className="ml-4 pl-2 border-l border-gray-200 dark:border-gray-800 space-y-1 pt-1 text-[10px]">
-                               <div className="text-gray-500 dark:text-gray-400 break-all">
-                                 <span className="text-gray-400 dark:text-gray-600">路径:</span> {p.path}
-                              </div>
-                               {p.toolNames.length > 0 && (
-                                 <div>
-                                   <span className="text-gray-400 dark:text-gray-600 block mb-0.5">工具:</span>
-                                   <div className="space-y-px">
-                                     {p.toolNames.map((tn) => (
-                                       <div key={tn} className="text-gray-500 dark:text-gray-400 pl-2 font-mono truncate">{tn}</div>
-                                     ))}
-                                   </div>
-                                 </div>
-                               )}
-                               {p.commandNames.length > 0 && (
-                                 <div>
-                                   <span className="text-gray-400 dark:text-gray-600 block mb-0.5">命令:</span>
-                                   <div className="space-y-px">
-                                     {p.commandNames.map((cn) => (
-                                       <div key={cn} className="text-gray-500 dark:text-gray-400 pl-2 font-mono truncate">{cn}</div>
-                                     ))}
-                                   </div>
-                                 </div>
-                               )}
-                              {p.toolNames.length === 0 && p.commandNames.length === 0 && (
-                                 <div className="text-gray-400 dark:text-gray-600">无工具或命令</div>
-                              )}
-                              <PluginCopyButton plugin={p} />
+                      {lspData && lspData.servers.length > 0 && !lspData.startupLog?.length && (
+                        <div className="space-y-0.5 pl-1">
+                          {lspData.servers.map((srv, i) => (
+                            <div key={`${srv.name}-${i}`} className="flex items-center gap-1">
+                              <span
+                                className={`w-1 h-1 rounded-full ${srv.state === "ready" ? "bg-green-400" : srv.state === "error" ? "bg-red-400" : srv.state === "starting" ? "bg-yellow-400" : "bg-gray-600"}`}
+                              />
+                              <span className={`truncate text-gray-500`}>
+                                {srv.name}
+                                {srv.fileTypes && srv.fileTypes.length > 0 ? (
+                                  <span className="text-gray-600">
+                                    {" "}
+                                    ({srv.fileTypes.join(",")})
+                                  </span>
+                                ) : null}
+                              </span>
                             </div>
-                          )}
+                          ))}
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-                {id === "skills" && (
-                  <div className="space-y-0.5">
-                    {skills.length === 0 ? <span>无技能</span> : skills.map((sk) => {
-                      const isExpanded = expandedSkill === sk.name;
-                      return (
-                        <div key={sk.filePath}>
-                          <div
-                             className="flex items-center gap-1 py-0.5 px-1 rounded hover:bg-gray-200/50 dark:hover:bg-gray-800/40 transition-colors cursor-pointer group"
-                             onClick={() => toggleSkillExpanded(sk.name)}
-                          >
-                             <span className={`w-1.5 h-1.5 rounded-full ${sk.enabled ? "bg-green-400" : "bg-gray-400 dark:bg-gray-600"}`} />
-                             <span className="truncate flex-1 text-gray-700 dark:text-gray-300">{sk.name}</span>
-                            <span className={`text-[9px] px-1 py-px rounded ${sk.scope === "global" ? "bg-purple-500/15 text-purple-400" : "bg-blue-500/15 text-blue-400"}`}>
-                              {sk.scope === "global" ? "全局" : "项目"}
-                            </span>
+                      )}
+                      <div className="flex gap-1 pt-0.5">
+                        {(["agent_end", "edit_write", "disabled"] as LspDiagnosticsMode[]).map(
+                          (m) => (
                             <button
-                              onClick={(e) => { e.stopPropagation(); toggleSkillEnabled(sk.name); }}
-                               className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-gray-300/50 dark:hover:bg-gray-700/50 rounded transition-opacity"
-                              title={sk.enabled ? "禁用技能" : "启用技能"}
+                              key={m}
+                              onClick={() => {
+                                if (activeSessionId && !activeSubId)
+                                  useLspStore.getState().setMode(activeSessionId, m);
+                              }}
+                              className={`px-1.5 py-0.5 rounded text-[9px] ${lspData?.mode === m ? "bg-blue-600/30 text-blue-400" : "bg-gray-200 dark:bg-gray-800 text-gray-500 hover:bg-gray-300/50 dark:hover:bg-gray-700/50"}`}
                             >
-                              {sk.enabled ? <EyeOff className="w-3 h-3 text-gray-500" /> : <Eye className="w-3 h-3 text-gray-400" />}
+                              {m === "agent_end"
+                                ? "On End"
+                                : m === "edit_write"
+                                  ? "On Write"
+                                  : "Off"}
                             </button>
-                          </div>
-                          {isExpanded && (
-                             <div className="ml-4 pl-2 border-l border-gray-200 dark:border-gray-800 space-y-1 pt-1 text-[10px]">
-                               <div className="text-gray-500 dark:text-gray-400 break-all">{sk.description || "无描述"}</div>
-                               <div className="space-y-0.5 text-gray-500">
-                                 <div className="truncate" title={sk.filePath}>
-                                   <span className="text-gray-400 dark:text-gray-600">文件:</span> {sk.filePath.split("/").pop()}
-                                 </div>
-                                 <div>
-                                   <span className="text-gray-400 dark:text-gray-600">路径:</span>
-                                  <span className="break-all">{sk.filePath}</span>
-                                </div>
-                                {sk.disableModelInvocation && (
-                                  <div className="text-amber-400/70">禁用模型自动调用</div>
-                                )}
-                                {!sk.enabled && (
-                                  <div className="text-red-400/70">已禁用</div>
-                                )}
-                              </div>
-                            </div>
-                          )}
+                          ),
+                        )}
+                      </div>
+                      {lspData?.lastDiagnostics && (
+                        <div className="flex items-center gap-1 text-[9px] pt-0.5">
+                          <AlertTriangle
+                            className={`w-2.5 h-2.5 ${lspData.lastDiagnostics.count > 0 ? "text-yellow-400" : "text-green-400"}`}
+                          />
+                          <span className="truncate">
+                            {lspData.lastDiagnostics.filePath}: {lspData.lastDiagnostics.count}{" "}
+                            issue{lspData.lastDiagnostics.count !== 1 ? "s" : ""}
+                          </span>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-    {logViewer && (
-      <LogViewer logPath={logViewer.logPath} toolCallId={logViewer.toolCallId} onClose={() => setLogViewer(null)} />
-    )}
-  </>
+                      )}
+                    </div>
+                  )}
+                  {id === "plugins" && (
+                    <div className="space-y-0.5">
+                      {plugins.length === 0 ? (
+                        <span>无插件</span>
+                      ) : (
+                        plugins.map((p) => {
+                          const isExpanded = expandedPlugin === p.path;
+                          return (
+                            <div key={p.path}>
+                              <div
+                                className="flex items-center gap-1 py-0.5 px-1 rounded hover:bg-gray-200/50 dark:hover:bg-gray-800/40 transition-colors cursor-pointer group"
+                                onClick={() => togglePluginExpanded(p.path)}
+                              >
+                                <span
+                                  className={`w-1.5 h-1.5 rounded-full ${p.enabled ? "bg-green-400" : "bg-gray-400 dark:bg-gray-600"}`}
+                                />
+                                <span className={`shrink-0 ${isExpanded ? "" : ""}`}>
+                                  {isExpanded ? (
+                                    <ChevronDown className="w-3 h-3 text-gray-500" />
+                                  ) : (
+                                    <ChevronRight className="w-3 h-3 text-gray-500" />
+                                  )}
+                                </span>
+                                <span className="truncate flex-1 text-gray-700 dark:text-gray-300">
+                                  {p.name}
+                                </span>
+                                {p.toolNames.length > 0 && (
+                                  <span className="text-gray-400 dark:text-gray-600">
+                                    ({p.toolNames.length} tools)
+                                  </span>
+                                )}
+                                {p.commandNames.length > 0 && (
+                                  <span className="text-gray-400 dark:text-gray-600">
+                                    ({p.commandNames.length} cmds)
+                                  </span>
+                                )}
+                                <span
+                                  className={`text-[9px] px-1 py-px rounded shrink-0 ${p.scope === "global" ? "bg-purple-500/15 text-purple-400" : "bg-blue-500/15 text-blue-400"}`}
+                                >
+                                  {p.scope === "global" ? "全局" : "项目"}
+                                </span>
+                              </div>
+                              {isExpanded && (
+                                <div className="ml-4 pl-2 border-l border-gray-200 dark:border-gray-800 space-y-1 pt-1 text-[10px]">
+                                  <div className="text-gray-500 dark:text-gray-400 break-all">
+                                    <span className="text-gray-400 dark:text-gray-600">路径:</span>{" "}
+                                    {p.path}
+                                  </div>
+                                  {p.toolNames.length > 0 && (
+                                    <div>
+                                      <span className="text-gray-400 dark:text-gray-600 block mb-0.5">
+                                        工具:
+                                      </span>
+                                      <div className="space-y-px">
+                                        {p.toolNames.map((tn) => (
+                                          <div
+                                            key={tn}
+                                            className="text-gray-500 dark:text-gray-400 pl-2 font-mono truncate"
+                                          >
+                                            {tn}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {p.commandNames.length > 0 && (
+                                    <div>
+                                      <span className="text-gray-400 dark:text-gray-600 block mb-0.5">
+                                        命令:
+                                      </span>
+                                      <div className="space-y-px">
+                                        {p.commandNames.map((cn) => (
+                                          <div
+                                            key={cn}
+                                            className="text-gray-500 dark:text-gray-400 pl-2 font-mono truncate"
+                                          >
+                                            {cn}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {p.toolNames.length === 0 && p.commandNames.length === 0 && (
+                                    <div className="text-gray-400 dark:text-gray-600">
+                                      无工具或命令
+                                    </div>
+                                  )}
+                                  <PluginCopyButton plugin={p} />
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                  {id === "skills" && (
+                    <div className="space-y-0.5">
+                      {skills.length === 0 ? (
+                        <span>无技能</span>
+                      ) : (
+                        skills.map((sk) => {
+                          const isExpanded = expandedSkill === sk.name;
+                          return (
+                            <div key={sk.filePath}>
+                              <div
+                                className="flex items-center gap-1 py-0.5 px-1 rounded hover:bg-gray-200/50 dark:hover:bg-gray-800/40 transition-colors cursor-pointer group"
+                                onClick={() => toggleSkillExpanded(sk.name)}
+                              >
+                                <span
+                                  className={`w-1.5 h-1.5 rounded-full ${sk.enabled ? "bg-green-400" : "bg-gray-400 dark:bg-gray-600"}`}
+                                />
+                                <span className="truncate flex-1 text-gray-700 dark:text-gray-300">
+                                  {sk.name}
+                                </span>
+                                <span
+                                  className={`text-[9px] px-1 py-px rounded ${sk.scope === "global" ? "bg-purple-500/15 text-purple-400" : "bg-blue-500/15 text-blue-400"}`}
+                                >
+                                  {sk.scope === "global" ? "全局" : "项目"}
+                                </span>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleSkillEnabled(sk.name);
+                                  }}
+                                  className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-gray-300/50 dark:hover:bg-gray-700/50 rounded transition-opacity"
+                                  title={sk.enabled ? "禁用技能" : "启用技能"}
+                                >
+                                  {sk.enabled ? (
+                                    <EyeOff className="w-3 h-3 text-gray-500" />
+                                  ) : (
+                                    <Eye className="w-3 h-3 text-gray-400" />
+                                  )}
+                                </button>
+                              </div>
+                              {isExpanded && (
+                                <div className="ml-4 pl-2 border-l border-gray-200 dark:border-gray-800 space-y-1 pt-1 text-[10px]">
+                                  <div className="text-gray-500 dark:text-gray-400 break-all">
+                                    {sk.description || "无描述"}
+                                  </div>
+                                  <div className="space-y-0.5 text-gray-500">
+                                    <div className="truncate" title={sk.filePath}>
+                                      <span className="text-gray-400 dark:text-gray-600">
+                                        文件:
+                                      </span>{" "}
+                                      {sk.filePath.split("/").pop()}
+                                    </div>
+                                    <div>
+                                      <span className="text-gray-400 dark:text-gray-600">
+                                        路径:
+                                      </span>
+                                      <span className="break-all">{sk.filePath}</span>
+                                    </div>
+                                    {sk.disableModelInvocation && (
+                                      <div className="text-amber-400/70">禁用模型自动调用</div>
+                                    )}
+                                    {!sk.enabled && <div className="text-red-400/70">已禁用</div>}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {logViewer && (
+        <LogViewer
+          logPath={logViewer.logPath}
+          toolCallId={logViewer.toolCallId}
+          onClose={() => setLogViewer(null)}
+        />
+      )}
+    </>
   );
 }
-

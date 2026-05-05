@@ -42,15 +42,24 @@ export function VirtualizedCodeView({ code, filename }: VirtualizedCodeViewProps
             <div
               key={vr.key}
               style={{
-                position: "absolute", top: 0, left: 0, width: "100%",
-                height: `${vr.size}px`, transform: `translateY(${vr.start}px)`,
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                height: `${vr.size}px`,
+                transform: `translateY(${vr.start}px)`,
               }}
               className="flex text-xs leading-5 font-mono"
             >
               <span className="inline-block w-10 text-right pr-4 text-gray-400 dark:text-gray-600 select-none shrink-0">
                 {vr.index + 1}
               </span>
-              <span className="flex-1 text-gray-800 dark:text-gray-300 whitespace-pre" style={{ tabSize: 2 }}>{lines[vr.index]}</span>
+              <span
+                className="flex-1 text-gray-800 dark:text-gray-300 whitespace-pre"
+                style={{ tabSize: 2 }}
+              >
+                {lines[vr.index]}
+              </span>
             </div>
           ))}
         </div>
@@ -66,7 +75,11 @@ export function VirtualizedCodeView({ code, filename }: VirtualizedCodeViewProps
         return (
           <div ref={parentRef} className="flex-1 min-h-0 overflow-auto bg-white dark:bg-gray-900">
             <div
-              style={{ height: `${virtualizer.getTotalSize()}px`, width: "100%", position: "relative" }}
+              style={{
+                height: `${virtualizer.getTotalSize()}px`,
+                width: "100%",
+                position: "relative",
+              }}
             >
               {virtualizer.getVirtualItems().map((vr) => {
                 const lineTokens = tokens[vr.index];
@@ -77,8 +90,12 @@ export function VirtualizedCodeView({ code, filename }: VirtualizedCodeViewProps
                   <div
                     key={vr.key}
                     style={{
-                      position: "absolute", top: 0, left: 0, width: "100%",
-                      height: `${vr.size}px`, transform: `translateY(${vr.start}px)`,
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      width: "100%",
+                      height: `${vr.size}px`,
+                      transform: `translateY(${vr.start}px)`,
                     }}
                     className="flex text-xs leading-5 font-mono"
                   >
@@ -86,7 +103,12 @@ export function VirtualizedCodeView({ code, filename }: VirtualizedCodeViewProps
                       {vr.index + 1}
                     </span>
                     {isLongLine || !tokensValid || !lineTokens ? (
-                      <span className="flex-1 text-gray-800 dark:text-gray-300 whitespace-pre" style={{ tabSize: 2 }}>{lineText}</span>
+                      <span
+                        className="flex-1 text-gray-800 dark:text-gray-300 whitespace-pre"
+                        style={{ tabSize: 2 }}
+                      >
+                        {lineText}
+                      </span>
                     ) : (
                       <span className="flex-1 whitespace-pre" style={{ tabSize: 2 }}>
                         {lineTokens.map((token, key) => (

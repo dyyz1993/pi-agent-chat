@@ -57,11 +57,16 @@ export function DiffViewerPanel() {
   const fileName = currentDiff?.filePath.split("/").pop() ?? "";
 
   return (
-    <div className="absolute inset-0 bg-white dark:bg-gray-900 flex flex-col" style={{ zIndex: 40 }}>
+    <div
+      className="absolute inset-0 bg-white dark:bg-gray-900 flex flex-col"
+      style={{ zIndex: 40 }}
+    >
       {/* Header */}
       <div className="h-9 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center px-3 text-xs flex-shrink-0 gap-2">
         <span className="text-gray-800 dark:text-gray-300 font-medium">{fileName}</span>
-        <span className="text-gray-400 dark:text-gray-500 truncate text-[10px]">{currentDiff?.filePath}</span>
+        <span className="text-gray-400 dark:text-gray-500 truncate text-[10px]">
+          {currentDiff?.filePath}
+        </span>
         <div className="ml-auto flex items-center gap-1">
           <button
             onClick={() => setSplitView(false)}

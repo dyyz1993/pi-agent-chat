@@ -15,7 +15,7 @@ function readSizes(key: string, fallback: number[]): number[] {
     const arr = JSON.parse(v) as number[];
     if (!Array.isArray(arr) || arr.length !== fallback.length) return fallback;
     return arr.map((n: number, i: number) =>
-      typeof n === "number" && isFinite(n) && n > 0 ? n : fallback[i]
+      typeof n === "number" && isFinite(n) && n > 0 ? n : fallback[i],
     );
   } catch {
     return fallback;
@@ -25,7 +25,9 @@ function readSizes(key: string, fallback: number[]): number[] {
 function writeSizes(key: string, sizes: number[]) {
   try {
     localStorage.setItem(key, JSON.stringify(sizes));
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 export function SplitPanel({
@@ -37,7 +39,7 @@ export function SplitPanel({
 }: SplitPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [sizes, setSizes] = useState(() =>
-    persistKey ? readSizes(persistKey, defaultSizes) : defaultSizes
+    persistKey ? readSizes(persistKey, defaultSizes) : defaultSizes,
   );
   const draggingRef = useRef(-1);
 
@@ -56,7 +58,12 @@ export function SplitPanel({
 
       const rect = container.getBoundingClientRect();
       const totalSize = isHorizontal ? rect.width : rect.height;
-      const startPos = "touches" in e ? e.touches[0].clientX : isHorizontal ? (e as React.MouseEvent).clientX : (e as React.MouseEvent).clientY;
+      const startPos =
+        "touches" in e
+          ? e.touches[0].clientX
+          : isHorizontal
+            ? (e as React.MouseEvent).clientX
+            : (e as React.MouseEvent).clientY;
       const startSizes = [...sizes];
 
       const calcDelta = (clientX: number, clientY: number) => {
@@ -75,13 +82,9 @@ export function SplitPanel({
           newSizes[i] = Math.max(
             minPct,
             Math.min(
-              100 -
-                minSizes.reduce(
-                  (a, _, j) => (j !== i ? a + minSizes[j] : a),
-                  0
-                ),
-              newSizes[i]
-            )
+              100 - minSizes.reduce((a, _, j) => (j !== i ? a + minSizes[j] : a), 0),
+              newSizes[i],
+            ),
           );
         }
         setSizes(newSizes);
@@ -109,7 +112,7 @@ export function SplitPanel({
       window.addEventListener("touchmove", onTouchMove, { passive: false });
       window.addEventListener("touchend", handleUp);
     },
-    [sizes, minSizes, isHorizontal]
+    [sizes, minSizes, isHorizontal],
   );
 
   return (
@@ -118,10 +121,7 @@ export function SplitPanel({
       className={`flex ${isHorizontal ? "flex-row" : "flex-col"} w-full h-full overflow-hidden`}
     >
       {children.map((child, i) => (
-        <div
-          key={i}
-          style={{ flex: `0 0 ${sizes[i]}%`, overflow: "hidden" }}
-        >
+        <div key={i} style={{ flex: `0 0 ${sizes[i]}%`, overflow: "hidden" }}>
           {child}
           {i < children.length - 1 && (
             <div

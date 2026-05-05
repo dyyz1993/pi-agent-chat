@@ -72,18 +72,22 @@ const DEFAULT_ENTRY: ToolIconEntry = {
 };
 
 const PREVIEW_TYPE_ICON_MAP: Record<string, ToolIconEntry> = {
-  image:    { icon: ImageIcon,  color: "text-pink-400",    label: "Image" },
-  url:      { icon: Globe,      color: "text-sky-400",     label: "URL" },
-  html:     { icon: Code,       color: "text-orange-400",  label: "HTML" },
-  pdf:      { icon: FileText,   color: "text-red-400",     label: "PDF" },
-  video:    { icon: Video,      color: "text-purple-400",  label: "Video" },
-  audio:    { icon: Music,      color: "text-cyan-400",    label: "Audio" },
-  markdown: { icon: File,       color: "text-amber-400",   label: "Markdown" },
-  text:     { icon: FileText,   color: "text-gray-400",    label: "Text" },
+  image: { icon: ImageIcon, color: "text-pink-400", label: "Image" },
+  url: { icon: Globe, color: "text-sky-400", label: "URL" },
+  html: { icon: Code, color: "text-orange-400", label: "HTML" },
+  pdf: { icon: FileText, color: "text-red-400", label: "PDF" },
+  video: { icon: Video, color: "text-purple-400", label: "Video" },
+  audio: { icon: Music, color: "text-cyan-400", label: "Audio" },
+  markdown: { icon: File, color: "text-amber-400", label: "Markdown" },
+  text: { icon: FileText, color: "text-gray-400", label: "Text" },
 };
 
 export function getPreviewResourceIcon(resourceType: string): ToolIconEntry {
-  return PREVIEW_TYPE_ICON_MAP[resourceType.toLowerCase()] ?? PREVIEW_TYPE_ICON_MAP["text"] ?? DEFAULT_ENTRY;
+  return (
+    PREVIEW_TYPE_ICON_MAP[resourceType.toLowerCase()] ??
+    PREVIEW_TYPE_ICON_MAP["text"] ??
+    DEFAULT_ENTRY
+  );
 }
 
 const USER_ENTRY: ToolIconEntry = {
@@ -111,7 +115,7 @@ const CUSTOM_TYPE_ICON_MAP: Record<string, ToolIconEntry> = {
     Object.entries(ALL_MEMORY_TYPES).map(([key, cfg]) => [
       key,
       { icon: cfg.icon, color: cfg.color, label: cfg.label },
-    ])
+    ]),
   ),
   lsp_diagnostics: { icon: Network, color: "text-yellow-400", label: "LSP Diagnostics" },
   bash_background_exit: { icon: Terminal, color: "text-cyan-400", label: "Background Exit" },
@@ -154,7 +158,10 @@ export function getRoleIcon(role: "user" | "assistant" | "toolResult" | "custom"
   }
 }
 
-export function getMessageIcon(message: { role: string; content: Array<{ type: string; name?: string; toolName?: string; customType?: string }> }): ToolIconEntry {
+export function getMessageIcon(message: {
+  role: string;
+  content: Array<{ type: string; name?: string; toolName?: string; customType?: string }>;
+}): ToolIconEntry {
   if (message.role === "user") return getRoleIcon("user");
   if (message.role === "custom") {
     const customBlock = message.content.find((b) => b.type === "custom");
@@ -165,13 +172,11 @@ export function getMessageIcon(message: { role: string; content: Array<{ type: s
   }
 
   const toolBlock = message.content.find(
-    (b) => b.type === "toolCall" || b.type === "toolExecution" || b.type === "toolResult"
+    (b) => b.type === "toolCall" || b.type === "toolExecution" || b.type === "toolResult",
   );
   if (toolBlock) {
     const name =
-      toolBlock.type === "toolCall"
-        ? (toolBlock.name ?? "tool")
-        : (toolBlock.toolName ?? "tool");
+      toolBlock.type === "toolCall" ? (toolBlock.name ?? "tool") : (toolBlock.toolName ?? "tool");
     return getToolIcon(name);
   }
 

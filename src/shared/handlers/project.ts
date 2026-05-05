@@ -2,8 +2,28 @@ import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { RPCMethods, HandlerOptions } from "../rpc-schema";
 import { existsSync } from "fs";
 import { basename } from "path";
-import { addRecentProject, listRecentProjects, removeRecentProject, listConfiguredPaths, addConfiguredPath, removeConfiguredPath, syncOpenTabs, restoreOpenTabs, listDirectory, removeFavoriteFolder, listFavoriteFolders, toggleProjectPin, toggleFavoriteFolder } from "../lib/project-config";
-import { scanSessionsForProject, scanAllProjects, listPiProjects, listMergedProjects, findSessionById } from "../lib/session-scanner";
+import {
+  addRecentProject,
+  listRecentProjects,
+  removeRecentProject,
+  listConfiguredPaths,
+  addConfiguredPath,
+  removeConfiguredPath,
+  syncOpenTabs,
+  restoreOpenTabs,
+  listDirectory,
+  removeFavoriteFolder,
+  listFavoriteFolders,
+  toggleProjectPin,
+  toggleFavoriteFolder,
+} from "../lib/project-config";
+import {
+  scanSessionsForProject,
+  scanAllProjects,
+  listPiProjects,
+  listMergedProjects,
+  findSessionById,
+} from "../lib/session-scanner";
 import { openFolder } from "../lib/native-dialog";
 import { linkProject, unlinkProject, getLinkedProjects } from "../lib/linked-projects-config";
 

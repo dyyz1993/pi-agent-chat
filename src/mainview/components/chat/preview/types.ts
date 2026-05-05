@@ -1,6 +1,14 @@
 import { apiClient } from "../../../lib/api-client";
 
-export type ResourceType = "image" | "url" | "html" | "pdf" | "video" | "audio" | "markdown" | "text";
+export type ResourceType =
+  | "image"
+  | "url"
+  | "html"
+  | "pdf"
+  | "video"
+  | "audio"
+  | "markdown"
+  | "text";
 
 export interface PreviewDetails {
   source: string;

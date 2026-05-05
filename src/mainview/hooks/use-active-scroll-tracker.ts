@@ -53,7 +53,8 @@ export function useActiveScrollTracker({
       const top = isAtTopRef.current;
       const bottom = isAtBottomRef.current;
       const auto = autoScrollEnabledRef.current;
-      if (prev.isAtTop === top && prev.isAtBottom === bottom && prev.autoScrollEnabled === auto) return prev;
+      if (prev.isAtTop === top && prev.isAtBottom === bottom && prev.autoScrollEnabled === auto)
+        return prev;
       return { isAtTop: top, isAtBottom: bottom, autoScrollEnabled: auto };
     });
   }, []);
@@ -235,7 +236,10 @@ export function useActiveScrollTracker({
     const tryScroll = () => {
       attempts++;
       const el = scrollRef.current;
-      if (!el) { rafId = requestAnimationFrame(tryScroll); return; }
+      if (!el) {
+        rafId = requestAnimationFrame(tryScroll);
+        return;
+      }
 
       const totalSize = virtualizer.getTotalSize();
       if (totalSize > el.clientHeight && el.clientHeight > 0) {
@@ -243,7 +247,10 @@ export function useActiveScrollTracker({
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
             const finalEl = scrollRef.current;
-            if (finalEl && Math.abs(finalEl.scrollTop + finalEl.clientHeight - finalEl.scrollHeight) > 3) {
+            if (
+              finalEl &&
+              Math.abs(finalEl.scrollTop + finalEl.clientHeight - finalEl.scrollHeight) > 3
+            ) {
               finalEl.scrollTop = finalEl.scrollHeight;
             }
           });
@@ -262,33 +269,37 @@ export function useActiveScrollTracker({
     return () => cancelAnimationFrame(rafId);
   }, [historyLoadVersion, scrollRef, virtualizer, messageIds, setActive]);
 
-  const scrollToEdge = useCallback((edge: "top" | "bottom") => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const ids = messageIdsRef.current;
-    if (ids.length === 0) return;
+  const scrollToEdge = useCallback(
+    (edge: "top" | "bottom") => {
+      const el = scrollRef.current;
+      if (!el) return;
+      const ids = messageIdsRef.current;
+      if (ids.length === 0) return;
 
-    if (edge === "top") {
-      el.scrollTop = 0;
-    } else {
-      el.scrollTop = el.scrollHeight;
-    }
+      if (edge === "top") {
+        el.scrollTop = 0;
+      } else {
+        el.scrollTop = el.scrollHeight;
+      }
 
-    const nearTop = edge === "top" || el.scrollTop < TOP_THRESHOLD_PX;
-    const nearBottom = edge === "bottom" || (el.scrollHeight - el.scrollTop - el.clientHeight < BOTTOM_THRESHOLD_PX);
-    isAtTopRef.current = nearTop;
-    isAtBottomRef.current = nearBottom;
-    userScrolledUpRef.current = !nearBottom;
-    syncToolbarState();
+      const nearTop = edge === "top" || el.scrollTop < TOP_THRESHOLD_PX;
+      const nearBottom =
+        edge === "bottom" || el.scrollHeight - el.scrollTop - el.clientHeight < BOTTOM_THRESHOLD_PX;
+      isAtTopRef.current = nearTop;
+      isAtBottomRef.current = nearBottom;
+      userScrolledUpRef.current = !nearBottom;
+      syncToolbarState();
 
-    if (edge === "top") {
-      setActive(ids[0]);
-    } else {
-      setActive(ids[ids.length - 1]);
-    }
+      if (edge === "top") {
+        setActive(ids[0]);
+      } else {
+        setActive(ids[ids.length - 1]);
+      }
 
-    markIntent();
-  }, [scrollRef, setActive, syncToolbarState, markIntent]);
+      markIntent();
+    },
+    [scrollRef, setActive, syncToolbarState, markIntent],
+  );
 
   const toggleAutoScroll = useCallback(() => {
     if (autoScrollEnabledRef.current) {

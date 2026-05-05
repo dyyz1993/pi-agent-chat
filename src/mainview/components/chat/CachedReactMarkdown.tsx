@@ -10,10 +10,7 @@ import { MermaidPreBlock } from "./mermaid/MermaidPreBlock";
 
 const MAX_CACHE = 200;
 
-const processor = unified()
-  .use(remarkParse)
-  .use(remarkGfm)
-  .use(remarkRehype);
+const processor = unified().use(remarkParse).use(remarkGfm).use(remarkRehype);
 
 const cache = new Map<string, ReturnType<typeof processor.runSync>>();
 

@@ -45,9 +45,26 @@ export type SubagentStreamEvent =
   | { type: "message_start"; message: Record<string, unknown> }
   | { type: "message_update"; message: Record<string, unknown> }
   | { type: "message_end"; message: Record<string, unknown> }
-  | { type: "tool_execution_start"; toolCallId: string; toolName: string; args: Record<string, unknown> }
-  | { type: "tool_execution_update"; toolCallId: string; toolName: string; args: Record<string, unknown>; partialResult: unknown }
-  | { type: "tool_execution_end"; toolCallId: string; toolName: string; result: unknown; isError: boolean }
+  | {
+      type: "tool_execution_start";
+      toolCallId: string;
+      toolName: string;
+      args: Record<string, unknown>;
+    }
+  | {
+      type: "tool_execution_update";
+      toolCallId: string;
+      toolName: string;
+      args: Record<string, unknown>;
+      partialResult: unknown;
+    }
+  | {
+      type: "tool_execution_end";
+      toolCallId: string;
+      toolName: string;
+      result: unknown;
+      isError: boolean;
+    }
   | { type: "compaction_start"; reason: string }
   | { type: "compaction_end"; reason: string; result: unknown; aborted: boolean }
   | { type: "queue_update"; steering: string[]; followUp: string[] }

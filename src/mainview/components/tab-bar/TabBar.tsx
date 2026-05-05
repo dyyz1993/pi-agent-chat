@@ -3,7 +3,10 @@ import { useCallback, useRef, useState } from "react";
 import { useSessionStore } from "../../stores/use-session-store";
 import type { SessionStatus } from "../../types";
 
-function resolveDotClass(sessions: { sessionId: string }[], statusMap: Record<string, SessionStatus | undefined>): string {
+function resolveDotClass(
+  sessions: { sessionId: string }[],
+  statusMap: Record<string, SessionStatus | undefined>,
+): string {
   for (const s of sessions) {
     const st = statusMap[s.sessionId];
     if (st === "permission" || st === "retrying") return "bg-red-400";
@@ -37,21 +40,18 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
     }
   }, []);
 
-  const handlePointerDown = useCallback(
-    (e: React.PointerEvent, index: number) => {
-      if (e.button !== 0) return;
-      pressStartPos.current = { x: e.clientX, y: e.clientY };
-      isDragging.current = false;
+  const handlePointerDown = useCallback((e: React.PointerEvent, index: number) => {
+    if (e.button !== 0) return;
+    pressStartPos.current = { x: e.clientX, y: e.clientY };
+    isDragging.current = false;
 
-      longPressTimer.current = setTimeout(() => {
-        isDragging.current = true;
-        setDragIndex(index);
-        setDropIndex(index);
-        (e.target as HTMLElement).setPointerCapture(e.pointerId);
-      }, LONG_PRESS_MS);
-    },
-    [],
-  );
+    longPressTimer.current = setTimeout(() => {
+      isDragging.current = true;
+      setDragIndex(index);
+      setDropIndex(index);
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    }, LONG_PRESS_MS);
+  }, []);
 
   const handlePointerMove = useCallback(
     (e: React.PointerEvent) => {
@@ -82,14 +82,23 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
     (e: React.PointerEvent, _index: number) => {
       cancelLongPress();
 
-      if (isDragging.current && dragIndex !== null && dropIndex !== null && dragIndex !== dropIndex) {
+      if (
+        isDragging.current &&
+        dragIndex !== null &&
+        dropIndex !== null &&
+        dragIndex !== dropIndex
+      ) {
         reorderProjectTabs(dragIndex, dropIndex);
       }
 
       isDragging.current = false;
       setDragIndex(null);
       setDropIndex(null);
-      try { (e.target as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* pointer capture may already be released */ }
+      try {
+        (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {
+        /* pointer capture may already be released */
+      }
     },
     [cancelLongPress, dragIndex, dropIndex, reorderProjectTabs],
   );
@@ -115,8 +124,12 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
 
   return (
     <div
+      data-testid="tab-bar"
       className="h-9 bg-gray-100 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex items-center px-1 gap-0.5 flex-shrink-0 overflow-x-auto"
-      style={{ paddingTop: "env(safe-area-inset-top)", height: "calc(2.25rem + env(safe-area-inset-top))" }}
+      style={{
+        paddingTop: "env(safe-area-inset-top)",
+        height: "calc(2.25rem + env(safe-area-inset-top))",
+      }}
     >
       {projectTabs.map((tab, index) => {
         const sessions = sessionsByProject[tab.path] || [];
@@ -125,14 +138,22 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
         const isDragSource = dragIndex === index;
         const showLeftIndicator = dropIndex === index && dragIndex !== null && dragIndex > index;
         const showRightIndicator =
-          dropIndex === index && dragIndex !== null && dragIndex < index && index < projectTabs.length - 1;
+          dropIndex === index &&
+          dragIndex !== null &&
+          dragIndex < index &&
+          index < projectTabs.length - 1;
         const isLastDropTarget =
-          dropIndex === index && dragIndex !== null && dragIndex < index && index === projectTabs.length - 1;
+          dropIndex === index &&
+          dragIndex !== null &&
+          dragIndex < index &&
+          index === projectTabs.length - 1;
 
         return (
           <button
             key={tab.id}
-            ref={(el) => { tabRefs.current[index] = el; }}
+            ref={(el) => {
+              tabRefs.current[index] = el;
+            }}
             onClick={() => handleTabClick(tab.id)}
             onPointerDown={(e) => handlePointerDown(e, index)}
             onPointerMove={handlePointerMove}
@@ -151,6 +172,7 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
             <span className={`w-2 h-2 rounded-full ${dotClass} flex-shrink-0`} />
             <span className="truncate max-w-[120px]">{tab.name}</span>
             <span
+              data-testid={`tab-close-${index}`}
               onClick={(e) => handleCloseClick(e, tab.id)}
               onMouseDown={(e) => e.stopPropagation()}
               className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-gray-300 dark:hover:bg-gray-700 transition-all pointer-events-auto"

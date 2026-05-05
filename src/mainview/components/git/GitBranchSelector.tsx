@@ -28,7 +28,9 @@ export function GitBranchSelector({ onClose }: GitBranchSelectorProps) {
     const handleClick = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     };
-    const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
     document.addEventListener("mousedown", handleClick);
     document.addEventListener("keydown", handleKey);
     return () => {
@@ -37,13 +39,16 @@ export function GitBranchSelector({ onClose }: GitBranchSelectorProps) {
     };
   }, [onClose]);
 
-  const handleCheckout = useCallback((branch: GitBranch) => {
-    if (branch.isCurrent) return;
-    const name = branch.isRemote ? branch.name.split("/").slice(1).join("/") : branch.name;
-    if (!name) return;
-    checkout(currentPath, name);
-    onClose();
-  }, [checkout, currentPath, onClose]);
+  const handleCheckout = useCallback(
+    (branch: GitBranch) => {
+      if (branch.isCurrent) return;
+      const name = branch.isRemote ? branch.name.split("/").slice(1).join("/") : branch.name;
+      if (!name) return;
+      checkout(currentPath, name);
+      onClose();
+    },
+    [checkout, currentPath, onClose],
+  );
 
   const localBranches = branches.filter((b) => !b.isRemote);
   const remoteBranches = branches.filter((b) => b.isRemote);
@@ -52,7 +57,9 @@ export function GitBranchSelector({ onClose }: GitBranchSelectorProps) {
     <button
       key={b.name}
       className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors ${
-        b.isCurrent ? "text-indigo-400" : "text-gray-800 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700"
+        b.isCurrent
+          ? "text-indigo-400"
+          : "text-gray-800 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700"
       }`}
       onClick={() => handleCheckout(b)}
       disabled={loadingAction === "checkout"}
@@ -68,21 +75,31 @@ export function GitBranchSelector({ onClose }: GitBranchSelectorProps) {
     <div
       ref={ref}
       className="fixed z-50 w-56 max-h-64 overflow-y-auto bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md shadow-xl py-1"
-      style={{ /* positioned by parent via absolute */ }}
+      style={
+        {
+          /* positioned by parent via absolute */
+        }
+      }
     >
       {loadingBranches ? (
-        <div className="text-gray-400 dark:text-gray-500 text-xs text-center py-4">Loading branches...</div>
+        <div className="text-gray-400 dark:text-gray-500 text-xs text-center py-4">
+          Loading branches...
+        </div>
       ) : (
         <>
           {localBranches.length > 0 && (
             <>
-              <div className="px-3 py-1 text-[10px] uppercase tracking-wide text-gray-500 font-semibold">Local</div>
+              <div className="px-3 py-1 text-[10px] uppercase tracking-wide text-gray-500 font-semibold">
+                Local
+              </div>
               {localBranches.map(renderBranch)}
             </>
           )}
           {remoteBranches.length > 0 && (
             <>
-              <div className="px-3 py-1 mt-1 text-[10px] uppercase tracking-wide text-gray-500 font-semibold border-t border-gray-200 dark:border-gray-700 pt-1">Remote</div>
+              <div className="px-3 py-1 mt-1 text-[10px] uppercase tracking-wide text-gray-500 font-semibold border-t border-gray-200 dark:border-gray-700 pt-1">
+                Remote
+              </div>
               {remoteBranches.map(renderBranch)}
             </>
           )}

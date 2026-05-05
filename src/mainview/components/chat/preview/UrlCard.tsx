@@ -25,7 +25,9 @@ export const UrlCard = memo(function UrlCard({ details }: { details: PreviewDeta
       <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700/40 bg-white dark:bg-gray-900/60">
         <div className="px-3 py-1.5 flex items-center gap-2 text-xs border-b border-gray-200 dark:border-gray-700/30">
           <Globe className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400 shrink-0" />
-          <span className="text-gray-800 dark:text-gray-300 truncate min-w-0">{details.title ?? src}</span>
+          <span className="text-gray-800 dark:text-gray-300 truncate min-w-0">
+            {details.title ?? src}
+          </span>
         </div>
         <button
           onClick={() => setShowIframe(true)}
@@ -44,7 +46,10 @@ export const UrlCard = memo(function UrlCard({ details }: { details: PreviewDeta
   const headerButtons = (
     <div className="flex items-center gap-1 ml-auto shrink-0">
       <button
-        onClick={() => { setShowIframe(false); setFullscreen(false); }}
+        onClick={() => {
+          setShowIframe(false);
+          setFullscreen(false);
+        }}
         className="p-0.5 rounded text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors"
         title="重新加载"
       >
@@ -64,7 +69,11 @@ export const UrlCard = memo(function UrlCard({ details }: { details: PreviewDeta
         className="p-0.5 rounded text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors"
         title="复制链接"
       >
-        {copied ? <Check className="w-3 h-3 text-green-500 dark:text-green-400" /> : <Copy className="w-3 h-3" />}
+        {copied ? (
+          <Check className="w-3 h-3 text-green-500 dark:text-green-400" />
+        ) : (
+          <Copy className="w-3 h-3" />
+        )}
       </button>
       <button
         onClick={() => window.open(displayUrl, "_blank", "noopener,noreferrer")}
@@ -88,7 +97,9 @@ export const UrlCard = memo(function UrlCard({ details }: { details: PreviewDeta
   const header = (
     <div className="px-3 py-1.5 flex items-center gap-2 text-xs border-b border-gray-200 dark:border-gray-700/30">
       <Globe className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400 shrink-0" />
-      <span className="text-gray-800 dark:text-gray-300 truncate min-w-0">{details.title ?? src}</span>
+      <span className="text-gray-800 dark:text-gray-300 truncate min-w-0">
+        {details.title ?? src}
+      </span>
       {headerButtons}
     </div>
   );

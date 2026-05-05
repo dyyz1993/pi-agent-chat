@@ -29,10 +29,9 @@ export function SnapshotPanel() {
     });
   }
 
-  const fileCount = (snap: typeof snapshots[number]) =>
-    Object.keys(snap.files).length;
+  const fileCount = (snap: (typeof snapshots)[number]) => Object.keys(snap.files).length;
 
-  const diffSummary = (snap: typeof snapshots[number]) => {
+  const diffSummary = (snap: (typeof snapshots)[number]) => {
     const { added, modified, deleted } = snap.diff;
     const parts: string[] = [];
     if (added.length) parts.push(`+${added.length}`);
@@ -86,11 +85,11 @@ export function SnapshotPanel() {
                   ) : (
                     <Camera className="w-3 h-3 text-indigo-400 shrink-0" />
                   )}
-                   <span className="text-xs text-gray-700 dark:text-gray-300 truncate">
+                  <span className="text-xs text-gray-700 dark:text-gray-300 truncate">
                     Step #{snap.stepIndex}
                   </span>
                 </div>
-                 <div className="flex items-center gap-2 mt-0.5 text-[10px] text-gray-500 dark:text-gray-500">
+                <div className="flex items-center gap-2 mt-0.5 text-[10px] text-gray-500 dark:text-gray-500">
                   <span>{formatTime(snap.timestamp)}</span>
                   <span className="flex items-center gap-0.5">
                     <File className="w-2.5 h-2.5" />
@@ -104,7 +103,7 @@ export function SnapshotPanel() {
                 {snap.rolledBack ? (
                   <button
                     onClick={() => unrevert(sessionId, snap.id)}
-                     className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-amber-400 hover:text-amber-300 transition-colors"
+                    className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-amber-400 hover:text-amber-300 transition-colors"
                     title="取消回滚"
                   >
                     <RefreshCw className="w-3 h-3" />
@@ -112,7 +111,7 @@ export function SnapshotPanel() {
                 ) : (
                   <button
                     onClick={() => rollback(sessionId, snap.id)}
-                     className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+                    className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
                     title="回滚到此快照"
                   >
                     <RotateCcw className="w-3 h-3" />

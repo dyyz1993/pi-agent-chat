@@ -41,7 +41,9 @@ function readCache<T>(key: string): { data: T; ts: number } | undefined {
 function writeCache<T>(key: string, data: T) {
   try {
     localStorage.setItem(key, JSON.stringify({ data, ts: Date.now() }));
-  } catch { /* localStorage unavailable in some contexts */ }
+  } catch {
+    /* localStorage unavailable in some contexts */
+  }
 }
 
 function isCacheValid(ts: number) {
@@ -171,7 +173,9 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
       .finally(() => {
         if (!cancelled) setBrowsingLoading(false);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [open, leftView, currentPath, browserSearchQuery]);
 
   const navigateTo = useCallback((path: string) => {
@@ -210,7 +214,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
       onSelect(path, pathBasename(path));
       onClose();
     },
-    [onSelect, onClose]
+    [onSelect, onClose],
   );
 
   const handleToggleFavoriteFolder = useCallback(
@@ -221,55 +225,53 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
         const updated = (result.favorites as FavoriteFolder[]) || [];
         setFavoriteFolders(updated);
         writeCache(CACHE_KEY_FAVORITES, updated);
-      } catch (err) { console.warn("[ProjectPicker] toggleFavorite failed:", err); }
+      } catch (err) {
+        console.warn("[ProjectPicker] toggleFavorite failed:", err);
+      }
     },
-    []
+    [],
   );
 
-  const handleTogglePin = useCallback(
-    async (e: React.MouseEvent, projectPath: string) => {
-      e.stopPropagation();
-      try {
-        await apiClient.call("project.toggleProjectPin", { projectPath });
-        setRecents((prev) => {
-          const updated = prev.map((r) =>
-            r.path === projectPath ? { ...r, pinned: !r.pinned } : r
-          );
-          writeCache(CACHE_KEY_RECENTS, updated);
-          return updated;
-        });
-      } catch (err) { console.warn("[ProjectPicker] togglePin failed:", err); }
-    },
-    []
-  );
+  const handleTogglePin = useCallback(async (e: React.MouseEvent, projectPath: string) => {
+    e.stopPropagation();
+    try {
+      await apiClient.call("project.toggleProjectPin", { projectPath });
+      setRecents((prev) => {
+        const updated = prev.map((r) => (r.path === projectPath ? { ...r, pinned: !r.pinned } : r));
+        writeCache(CACHE_KEY_RECENTS, updated);
+        return updated;
+      });
+    } catch (err) {
+      console.warn("[ProjectPicker] togglePin failed:", err);
+    }
+  }, []);
 
   const handleSelectRecent = useCallback(
     (proj: RecentProject) => {
       onSelect(proj.path, proj.name);
       onClose();
     },
-    [onClose, onSelect]
+    [onClose, onSelect],
   );
 
-  const handleRemoveRecent = useCallback(
-    async (e: React.MouseEvent, projectPath: string) => {
-      e.stopPropagation();
-      try {
-        await apiClient.call("project.removeRecent", { projectPath });
-        setRecents((prev) => {
-          const updated = prev.filter((r) => r.path !== projectPath);
-          writeCache(CACHE_KEY_RECENTS, updated);
-          return updated;
-        });
-      } catch (err) { console.warn("[ProjectPicker] removeRecent failed:", err); }
-    },
-    []
-  );
+  const handleRemoveRecent = useCallback(async (e: React.MouseEvent, projectPath: string) => {
+    e.stopPropagation();
+    try {
+      await apiClient.call("project.removeRecent", { projectPath });
+      setRecents((prev) => {
+        const updated = prev.filter((r) => r.path !== projectPath);
+        writeCache(CACHE_KEY_RECENTS, updated);
+        return updated;
+      });
+    } catch (err) {
+      console.warn("[ProjectPicker] removeRecent failed:", err);
+    }
+  }, []);
 
   const filtered = recents.filter(
     (r) =>
       r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      r.path.toLowerCase().includes(searchQuery.toLowerCase())
+      r.path.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   const sortedRecents = [...filtered].sort((a, b) => {
@@ -306,19 +308,35 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
         role="button"
         tabIndex={0}
         onClick={() => handleSelectRecent(proj)}
-        onKeyDown={(e) => { if (e.key === "Enter") handleSelectRecent(proj); }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") handleSelectRecent(proj);
+        }}
         className={`w-full flex items-center gap-3 text-left group transition-colors cursor-pointer ${
           mobile
             ? "px-4 py-3.5 rounded-xl active:bg-gray-800/80"
             : "px-3 py-2.5 rounded-lg hover:bg-gray-800/60"
         }`}
       >
-        <Folder className={mobile ? "w-5 h-5 text-indigo-400/70 shrink-0" : "w-4 h-4 text-indigo-400/70 shrink-0"} />
+        <Folder
+          className={
+            mobile ? "w-5 h-5 text-indigo-400/70 shrink-0" : "w-4 h-4 text-indigo-400/70 shrink-0"
+          }
+        />
         <div className="flex-1 min-w-0">
-          <div className={mobile ? "text-sm font-medium text-gray-200 truncate" : "text-[12px] font-medium text-gray-200 truncate"}>
+          <div
+            className={
+              mobile
+                ? "text-sm font-medium text-gray-200 truncate"
+                : "text-[12px] font-medium text-gray-200 truncate"
+            }
+          >
             {proj.name}
           </div>
-          <div className={mobile ? "text-[11px] text-gray-500 truncate" : "text-[10px] text-gray-500 truncate"}>
+          <div
+            className={
+              mobile ? "text-[11px] text-gray-500 truncate" : "text-[10px] text-gray-500 truncate"
+            }
+          >
             {proj.path}
           </div>
           {proj.sessionCount > 0 && (
@@ -329,7 +347,9 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
         <button
           onClick={(e) => handleTogglePin(e, proj.path)}
           className={`p-1 rounded hover:bg-gray-700/50 transition-all shrink-0 ${
-            proj.pinned ? "text-amber-400 opacity-100" : "opacity-0 group-hover:opacity-100 text-gray-600 hover:text-amber-400"
+            proj.pinned
+              ? "text-amber-400 opacity-100"
+              : "opacity-0 group-hover:opacity-100 text-gray-600 hover:text-amber-400"
           }`}
         >
           <Pin className="w-3 h-3" fill={proj.pinned ? "currentColor" : "none"} />
@@ -403,7 +423,9 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
           role="button"
           tabIndex={0}
           onClick={() => navigateTo(entry.path)}
-          onKeyDown={(e) => { if (e.key === "Enter") navigateTo(entry.path); }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") navigateTo(entry.path);
+          }}
           className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer"
         >
           <Folder className="w-4 h-4 text-blue-400/70 shrink-0" />
@@ -450,7 +472,9 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
         role="button"
         tabIndex={0}
         onClick={() => handleSelectFolder(folder.path)}
-        onKeyDown={(e) => { if (e.key === "Enter") handleSelectFolder(folder.path); }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") handleSelectFolder(folder.path);
+        }}
         className="w-full flex items-center gap-2.5 px-3 py-2 text-left group cursor-pointer hover:bg-gray-800/50 rounded-lg transition-colors"
       >
         <Folder className="w-4 h-4 text-amber-400/70 shrink-0" />
@@ -541,10 +565,20 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
   return (
     <>
       {/* Mobile view */}
-      <div ref={mobileDialogRef} className="md:hidden fixed inset-0 z-[100] bg-gray-950 flex flex-col animate-slide-in-up" role="dialog" aria-modal="true" aria-label="选择项目">
+      <div
+        ref={mobileDialogRef}
+        className="md:hidden fixed inset-0 z-[100] bg-gray-950 flex flex-col animate-slide-in-up"
+        role="dialog"
+        aria-modal="true"
+        aria-label="选择项目"
+      >
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 shrink-0">
           <h2 className="text-sm font-semibold text-white">选择项目</h2>
-          <button onClick={onClose} className="p-1.5 rounded-md hover:bg-gray-800 text-gray-400" aria-label="关闭">
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-md hover:bg-gray-800 text-gray-400"
+            aria-label="关闭"
+          >
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -575,12 +609,16 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
                     role="button"
                     tabIndex={0}
                     onClick={() => handleSelectFolder(folder.path)}
-                    onKeyDown={(e) => { if (e.key === "Enter") handleSelectFolder(folder.path); }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleSelectFolder(folder.path);
+                    }}
                     className="w-full flex items-center gap-3 px-4 py-3 rounded-xl active:bg-gray-800/80 cursor-pointer"
                   >
                     <Folder className="w-5 h-5 text-amber-400/70 shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-gray-200 truncate">{folder.name}</div>
+                      <div className="text-sm font-medium text-gray-200 truncate">
+                        {folder.name}
+                      </div>
                       <div className="text-[11px] text-gray-500 truncate">{folder.path}</div>
                     </div>
                   </div>
@@ -612,10 +650,20 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
       <div className="hidden md:flex fixed inset-0 z-[100] items-center justify-center">
         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
-        <div ref={desktopDialogRef} className="relative w-full max-w-4xl h-[70vh] mx-4 bg-gray-900 rounded-xl border border-gray-700/50 shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200" role="dialog" aria-modal="true" aria-label="选择项目">
+        <div
+          ref={desktopDialogRef}
+          className="relative w-full max-w-4xl h-[70vh] mx-4 bg-gray-900 rounded-xl border border-gray-700/50 shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+          role="dialog"
+          aria-modal="true"
+          aria-label="选择项目"
+        >
           <div className="flex items-center justify-between px-5 py-3 border-b border-gray-800 shrink-0">
             <h2 className="text-sm font-semibold text-white">选择项目</h2>
-            <button onClick={onClose} className="p-1.5 rounded-md hover:bg-gray-800 text-gray-400 hover:text-white transition-colors" aria-label="关闭">
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-md hover:bg-gray-800 text-gray-400 hover:text-white transition-colors"
+              aria-label="关闭"
+            >
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -641,7 +689,9 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto px-3 py-2 space-y-0.5">{renderProjectList(sortedRecents)}</div>
+              <div className="flex-1 overflow-y-auto px-3 py-2 space-y-0.5">
+                {renderProjectList(sortedRecents)}
+              </div>
             </div>
           </div>
         </div>

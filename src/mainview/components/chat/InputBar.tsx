@@ -15,22 +15,27 @@ interface InputBarProps {
 }
 
 export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function InputBar(
-  { value = "", onChange, onSend, disabled, sessionId = "" }, ref
+  { value = "", onChange, onSend, disabled, sessionId = "" },
+  ref,
 ) {
   const [internalValue, setInternalValue] = useState(value);
   const [expanded, setExpanded] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const { saveToHistory, navigatePrev, navigateNext, clearHistory, resetIndex, hasPrev, hasNext } = useInputHistory(sessionId);
+  const { saveToHistory, navigatePrev, navigateNext, clearHistory, resetIndex, hasPrev, hasNext } =
+    useInputHistory(sessionId);
 
   const currentValue = onChange ? value : internalValue;
 
-  const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const v = e.target.value;
-    if (onChange) onChange(v);
-    else setInternalValue(v);
-    resetIndex();
-  }, [onChange, resetIndex]);
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      const v = e.target.value;
+      if (onChange) onChange(v);
+      else setInternalValue(v);
+      resetIndex();
+    },
+    [onChange, resetIndex],
+  );
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -42,7 +47,7 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
         }
       }
     },
-    [disabled, onSend, currentValue, saveToHistory]
+    [disabled, onSend, currentValue, saveToHistory],
   );
 
   const handleClear = useCallback(() => {
@@ -86,15 +91,21 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = expanded ? `${Math.max(el.scrollHeight, 200)}px` : `${Math.min(el.scrollHeight, maxHeight ?? 160)}px`;
+    el.style.height = expanded
+      ? `${Math.max(el.scrollHeight, 200)}px`
+      : `${Math.min(el.scrollHeight, maxHeight ?? 160)}px`;
   }, [currentValue, expanded, maxHeight]);
 
   const hasContent = currentValue.trim().length > 0;
 
   return (
-    <div className="flex-1 rounded-lg border border-gray-300/50 dark:border-gray-700/50 focus-within:border-indigo-500/50 bg-gray-100/50 dark:bg-gray-800/50 overflow-hidden transition-colors" style={{ minHeight: expanded ? "200px" : "80px" }}>
+    <div
+      className="flex-1 rounded-lg border border-gray-300/50 dark:border-gray-700/50 focus-within:border-indigo-500/50 bg-gray-100/50 dark:bg-gray-800/50 overflow-hidden transition-colors"
+      style={{ minHeight: expanded ? "200px" : "80px" }}
+    >
       <div className="relative h-full flex">
         <textarea
+          data-testid="chat-input"
           ref={textareaRef}
           value={currentValue}
           onChange={handleChange}
@@ -103,22 +114,50 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
           rows={1}
           placeholder="输入消息、@file、@agent，或粘贴图片与文本..."
           className="flex-1 px-3 py-2 text-sm bg-transparent text-gray-900 dark:text-white resize-none outline-none placeholder:text-gray-400 dark:placeholder:text-gray-600"
-          style={{ maxHeight: expanded ? "none" : `${maxHeight}px`, minHeight: expanded ? "200px" : "80px" }}
+          style={{
+            maxHeight: expanded ? "none" : `${maxHeight}px`,
+            minHeight: expanded ? "200px" : "80px",
+          }}
         />
         <div className="flex shrink-0 py-1.5 pr-1.5 gap-1">
           <div className="flex flex-col justify-between">
-            <button onClick={handleClear} className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${hasContent ? "border-gray-400 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:border-gray-400" : "border-gray-300/50 dark:border-gray-700/50 text-gray-400 dark:text-gray-700 pointer-events-none"}`} title="清除" aria-label="清除输入">
+            <button
+              onClick={handleClear}
+              className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${hasContent ? "border-gray-400 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:border-gray-400" : "border-gray-300/50 dark:border-gray-700/50 text-gray-400 dark:text-gray-700 pointer-events-none"}`}
+              title="清除"
+              aria-label="清除输入"
+            >
               <X className="w-3 h-3" />
             </button>
           </div>
-          <div className={`flex flex-col shrink ${expanded ? "gap-0.5 justify-start" : "justify-between"}`}>
-            <button onClick={toggleExpand} className="w-5 h-5 rounded border border-gray-400 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:border-gray-400 transition-colors flex items-center justify-center" title={expanded ? "收起" : "展开"} aria-expanded={expanded} aria-label={expanded ? "收起输入框" : "展开输入框"}>
+          <div
+            className={`flex flex-col shrink ${expanded ? "gap-0.5 justify-start" : "justify-between"}`}
+          >
+            <button
+              onClick={toggleExpand}
+              className="w-5 h-5 rounded border border-gray-400 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:border-gray-400 transition-colors flex items-center justify-center"
+              title={expanded ? "收起" : "展开"}
+              aria-expanded={expanded}
+              aria-label={expanded ? "收起输入框" : "展开输入框"}
+            >
               {expanded ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
             </button>
-            <button onClick={handleNavPrev} disabled={!hasPrev} className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${hasPrev ? "border-gray-400 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:border-gray-400" : "border-gray-300/50 dark:border-gray-700/50 text-gray-400 dark:text-gray-700 pointer-events-none"}`} title="上一条" aria-label="上一条历史消息">
+            <button
+              onClick={handleNavPrev}
+              disabled={!hasPrev}
+              className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${hasPrev ? "border-gray-400 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:border-gray-400" : "border-gray-300/50 dark:border-gray-700/50 text-gray-400 dark:text-gray-700 pointer-events-none"}`}
+              title="上一条"
+              aria-label="上一条历史消息"
+            >
               <ChevronUp className="w-3 h-3" />
             </button>
-            <button onClick={handleNavNext} disabled={!hasNext} className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${hasNext ? "border-gray-400 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:border-gray-400" : "border-gray-300/50 dark:border-gray-700/50 text-gray-400 dark:text-gray-700 pointer-events-none"}`} title="下一条" aria-label="下一条历史消息">
+            <button
+              onClick={handleNavNext}
+              disabled={!hasNext}
+              className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${hasNext ? "border-gray-400 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:border-gray-400" : "border-gray-300/50 dark:border-gray-700/50 text-gray-400 dark:text-gray-700 pointer-events-none"}`}
+              title="下一条"
+              aria-label="下一条历史消息"
+            >
               <ChevronDown className="w-3 h-3" />
             </button>
           </div>

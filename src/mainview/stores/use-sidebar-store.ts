@@ -73,7 +73,9 @@ export const useSidebarStore = create<SidebarState>((set, get) => ({
   setPinned: (pinned) => {
     try {
       localStorage.setItem(PINNED_KEY, String(pinned));
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     set({ isPinned: pinned, drawerOpen: false });
   },
 
@@ -91,7 +93,9 @@ export const useSidebarStore = create<SidebarState>((set, get) => ({
     const clamped = Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, width));
     try {
       localStorage.setItem(WIDTH_KEY, String(clamped));
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     set({ sidebarWidth: clamped });
   },
 

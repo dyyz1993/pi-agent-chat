@@ -42,10 +42,10 @@ const MIME_TYPES: Record<string, string> = {
 
 // 路径白名单校验：阻止路径遍历攻击
 const ALLOWED_ROOTS = [
-	resolve(process.cwd()),
-	resolve(process.env.HOME ?? "", ".claude", "rules"),
- 	resolve(process.env.HOME ?? "", ".config", "opencode", "rules"),
- 	resolve(process.env.HOME ?? "", ".opencode", "rules"),
+  resolve(process.cwd()),
+  resolve(process.env.HOME ?? "", ".claude", "rules"),
+  resolve(process.env.HOME ?? "", ".config", "opencode", "rules"),
+  resolve(process.env.HOME ?? "", ".opencode", "rules"),
 ];
 let cachedAllowedRoots: string[] | null = null;
 let rootsCacheTime = 0;
@@ -58,11 +58,7 @@ async function getAllowedRoots(): Promise<string[]> {
     const projects = await listRecentProjects();
     const { tabs } = await restoreOpenTabs();
     const tabPaths = tabs.map((t) => resolve(t.path));
-    cachedAllowedRoots = [
-      ...ALLOWED_ROOTS,
-      ...projects.map((p) => resolve(p.path)),
-      ...tabPaths,
-    ];
+    cachedAllowedRoots = [...ALLOWED_ROOTS, ...projects.map((p) => resolve(p.path)), ...tabPaths];
     rootsCacheTime = now;
   } catch {
     cachedAllowedRoots = [...ALLOWED_ROOTS];
@@ -85,7 +81,9 @@ function verifyToken(req: IncomingMessage, authToken: string): boolean {
     try {
       const url = new URL(req.url, "http://localhost");
       if (url.searchParams.get("token") === authToken) return true;
-    } catch { /* invalid URL */ }
+    } catch {
+      /* invalid URL */
+    }
   }
   return false;
 }
@@ -95,7 +93,9 @@ export interface HttpRouteDeps {
   getWebSocketClientCount: () => number;
 }
 
-export function createHttpHandler(deps: HttpRouteDeps): (req: IncomingMessage, res: ServerResponse) => void {
+export function createHttpHandler(
+  deps: HttpRouteDeps,
+): (req: IncomingMessage, res: ServerResponse) => void {
   const { config: cfg, getWebSocketClientCount } = deps;
 
   return async (req, res) => {
@@ -159,7 +159,8 @@ export function createHttpHandler(deps: HttpRouteDeps): (req: IncomingMessage, r
     // Debug log endpoint (不需要鉴权，仅开发用)
     if (url.pathname === "/api/debug-log" && req.method === "POST") {
       const chunks: Buffer[] = [];
-      for await (const chunk of req as AsyncIterable<Buffer | string>) chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+      for await (const chunk of req as AsyncIterable<Buffer | string>)
+        chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
       const body = JSON.parse(Buffer.concat(chunks).toString()) as { line?: string };
       await appendFile("logs/debug.log", `${body.line ?? ""}\n`);
       res.writeHead(200).end("ok");
@@ -171,7 +172,10 @@ export function createHttpHandler(deps: HttpRouteDeps): (req: IncomingMessage, r
       try {
         const content = await readFile("logs/debug.log", "utf-8").catch(() => "");
         res.writeHead(200, { "Content-Type": "text/plain" }).end(content);
-      } catch (err) { console.error("[http-routes] debug-log read failed:", err); res.writeHead(200, { "Content-Type": "text/plain" }).end(""); }
+      } catch (err) {
+        console.error("[http-routes] debug-log read failed:", err);
+        res.writeHead(200, { "Content-Type": "text/plain" }).end("");
+      }
       return;
     }
 
@@ -205,7 +209,10 @@ async function handleFsRoute(
   }
 
   if (queryToken) {
-    res.setHeader("Set-Cookie", `${FS_COOKIE_NAME}=${authToken}; Path=/fs/; HttpOnly; Max-Age=${FS_COOKIE_MAX_AGE}; SameSite=Strict`);
+    res.setHeader(
+      "Set-Cookie",
+      `${FS_COOKIE_NAME}=${authToken}; Path=/fs/; HttpOnly; Max-Age=${FS_COOKIE_MAX_AGE}; SameSite=Strict`,
+    );
     res.writeHead(302, { Location: url.pathname }).end();
     return;
   }
@@ -271,21 +278,29 @@ async function handleFileInfo(encodedPath: string, res: ServerResponse): Promise
   try {
     const s = await stat(filePath);
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({
-      name: basename(filePath),
-      path: filePath,
-      size: s.size,
-      isDirectory: s.isDirectory(),
-      modified: s.mtime.toISOString(),
-      mimeType: s.isFile() ? (MIME_TYPES[extname(filePath)] || "application/octet-stream") : undefined,
-    }));
+    res.end(
+      JSON.stringify({
+        name: basename(filePath),
+        path: filePath,
+        size: s.size,
+        isDirectory: s.isDirectory(),
+        modified: s.mtime.toISOString(),
+        mimeType: s.isFile()
+          ? MIME_TYPES[extname(filePath)] || "application/octet-stream"
+          : undefined,
+      }),
+    );
   } catch {
     res.writeHead(404, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "File not found" }));
   }
 }
 
-async function handleFileContent(encodedPath: string, req: IncomingMessage, res: ServerResponse): Promise<void> {
+async function handleFileContent(
+  encodedPath: string,
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
   const filePath = decodeURIComponent(encodedPath);
   if (!(await isPathAllowed(filePath))) {
     res.writeHead(403, { "Content-Type": "application/json" });
@@ -371,10 +386,7 @@ async function handleFileUpload(
   }
 }
 
-async function handleFileDelete(
-  filePath: string | null,
-  res: ServerResponse,
-): Promise<void> {
+async function handleFileDelete(filePath: string | null, res: ServerResponse): Promise<void> {
   if (!filePath) {
     res.writeHead(400, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Missing path parameter" }));

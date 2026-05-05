@@ -76,7 +76,10 @@ export const useTurnStore = create<MessageState>((set) => ({
     const sessionId = useSessionStore.getState().activeSessionId;
     if (!sessionId) return;
     set((s) => ({
-      selectedMessageIdsBySession: { ...s.selectedMessageIdsBySession, [sessionId]: new Set(messageIds) },
+      selectedMessageIdsBySession: {
+        ...s.selectedMessageIdsBySession,
+        [sessionId]: new Set(messageIds),
+      },
     }));
   },
 
@@ -88,7 +91,10 @@ export const useTurnStore = create<MessageState>((set) => ({
       return {
         isMultiSelectModeBySession: { ...s.isMultiSelectModeBySession, [sessionId]: !prev },
         selectedMessageIdsBySession: prev
-          ? (() => { const { [sessionId]: _, ...rest } = s.selectedMessageIdsBySession; return rest; })()
+          ? (() => {
+              const { [sessionId]: _, ...rest } = s.selectedMessageIdsBySession;
+              return rest;
+            })()
           : s.selectedMessageIdsBySession,
       };
     });
@@ -113,7 +119,9 @@ export const useTurnStore = create<MessageState>((set) => ({
     if (!sessionId) return;
     set((s) => ({
       selectedNavIdBySession: { ...s.selectedNavIdBySession, [sessionId]: navId },
-      ...(anchor != null ? { navAnchorBySession: { ...s.navAnchorBySession, [sessionId]: anchor } } : {}),
+      ...(anchor != null
+        ? { navAnchorBySession: { ...s.navAnchorBySession, [sessionId]: anchor } }
+        : {}),
     }));
   },
 

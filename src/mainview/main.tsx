@@ -9,7 +9,9 @@ import "./stores/use-theme-store";
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch(() => { /* service worker registration fails in non-PWA contexts */ });
+    navigator.serviceWorker.register("/sw.js").catch(() => {
+      /* service worker registration fails in non-PWA contexts */
+    });
   });
 }
 
@@ -24,6 +26,6 @@ if (root) {
   createRoot(root).render(
     <StrictMode>
       <App />
-    </StrictMode>
+    </StrictMode>,
   );
 }

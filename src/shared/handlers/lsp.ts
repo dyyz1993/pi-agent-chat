@@ -23,7 +23,15 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       const cached = pm.getCachedLspState(params.sessionId);
       if (cached) {
         const servers = (cached.servers as Array<Record<string, unknown>>).map((s) => {
-          const st = s.status as { state?: string; reason?: string; transport?: string; activeCommand?: string[]; configuredCommand?: string[] } | undefined;
+          const st = s.status as
+            | {
+                state?: string;
+                reason?: string;
+                transport?: string;
+                activeCommand?: string[];
+                configuredCommand?: string[];
+              }
+            | undefined;
           return {
             name: s.name as string,
             fileTypes: s.fileTypes as string[] | undefined,
@@ -43,7 +51,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
       if (pm.hasSession(params.sessionId)) {
         try {
-          const result = await pm.callChannel(params.sessionId, "lsp", "getStatus", {}) as {
+          const result = (await pm.callChannel(params.sessionId, "lsp", "getStatus", {})) as {
             state?: string;
             servers?: Array<{
               name?: string;
@@ -62,7 +70,11 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
             state: (s.state ?? "inactive") as LspServerStatus["state"],
             reason: s.reason ?? "",
           }));
-          const state = (result?.state ?? "inactive") as "inactive" | "starting" | "ready" | "error";
+          const state = (result?.state ?? "inactive") as
+            | "inactive"
+            | "starting"
+            | "ready"
+            | "error";
           return { state, servers, mode: (result?.mode ?? "agent_end") as LspDiagnosticsMode };
         } catch {
           // agent process alive but LSP channel not ready yet
@@ -87,9 +99,19 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
         try {
           const entry = JSON.parse(line) as Record<string, unknown>;
           if (entry.type === "custom" && entry.customType === "lsp") {
-            const data = entry.data as { event: string; state?: string; mode?: string; servers?: unknown[]; reason?: string };
+            const data = entry.data as {
+              event: string;
+              state?: string;
+              mode?: string;
+              servers?: unknown[];
+              reason?: string;
+            };
             if (data.event === "status_changed" && !lastStatus) {
-              lastStatus = { state: data.state ?? "inactive", servers: data.servers, reason: data.reason };
+              lastStatus = {
+                state: data.state ?? "inactive",
+                servers: data.servers,
+                reason: data.reason,
+              };
             }
             if (data.event === "mode_changed" && lastMode === "agent_end") {
               lastMode = data.mode ?? "agent_end";

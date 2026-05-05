@@ -25,11 +25,11 @@ export const CardActionBar = memo(function CardActionBar({
       {onRetry && (
         <button
           onClick={onRetry}
-        className="p-0.5 rounded text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors"
-        title="重新加载"
-      >
-        <RefreshCw className="w-3 h-3" />
-      </button>
+          className="p-0.5 rounded text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors"
+          title="重新加载"
+        >
+          <RefreshCw className="w-3 h-3" />
+        </button>
       )}
       {onExpand && (
         <button
@@ -45,7 +45,11 @@ export const CardActionBar = memo(function CardActionBar({
         className="p-0.5 rounded text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors"
         title="复制链接"
       >
-        {copied ? <Check className="w-3 h-3 text-green-500 dark:text-green-400" /> : <Copy className="w-3 h-3" />}
+        {copied ? (
+          <Check className="w-3 h-3 text-green-500 dark:text-green-400" />
+        ) : (
+          <Copy className="w-3 h-3" />
+        )}
       </button>
       <button
         onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
@@ -79,7 +83,9 @@ export const CardHeader = memo(function CardHeader({
     <div className="px-3 py-1.5 flex items-center gap-2 text-xs border-b border-gray-200 dark:border-gray-700/30">
       {icon}
       <span className="text-gray-800 dark:text-gray-300 truncate min-w-0">{label}</span>
-      {meta && <span className="text-gray-400 dark:text-gray-500 shrink-0 text-[10px]">{meta}</span>}
+      {meta && (
+        <span className="text-gray-400 dark:text-gray-500 shrink-0 text-[10px]">{meta}</span>
+      )}
       <CardActionBar absolutePath={absolutePath} onRetry={onRetry} onExpand={onExpand} />
     </div>
   );

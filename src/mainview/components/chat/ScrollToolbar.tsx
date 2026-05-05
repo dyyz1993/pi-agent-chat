@@ -1,10 +1,5 @@
 import { memo } from "react";
-import {
-  ChevronUp,
-  ChevronDown,
-  Pause,
-  Play,
-} from "lucide-react";
+import { ChevronUp, ChevronDown, Pause, Play } from "lucide-react";
 
 interface ScrollToolbarProps {
   isAtTop: boolean;

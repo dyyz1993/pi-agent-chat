@@ -18,25 +18,23 @@ type UIBlock = UIInteractionBlock;
 
 const BG_MAP: Record<string, string> = {
   pending: "bg-amber-50 dark:bg-amber-950/8 border border-amber-400/30 dark:border-amber-500/30",
-  responded: "bg-emerald-50 dark:bg-emerald-950/6 border-l-2 border-emerald-400/30 dark:border-emerald-500/30",
+  responded:
+    "bg-emerald-50 dark:bg-emerald-950/6 border-l-2 border-emerald-400/30 dark:border-emerald-500/30",
   dismissed: "bg-gray-50 dark:bg-gray-950/5 border-l-2 border-gray-300 dark:border-gray-600/30",
   notified: "bg-cyan-50 dark:bg-cyan-950/6 border-l-2 border-cyan-400/30 dark:border-cyan-500/30",
 };
 
-function CardShell({
-  block,
-  children,
-}: {
-  block: UIBlock;
-  children: React.ReactNode;
-}) {
+function CardShell({ block, children }: { block: UIBlock; children: React.ReactNode }) {
   const { icon: Icon, color, label } = getUIMethodIcon(block.method);
   const isPending = block.status === "pending";
   const isResponded = block.status === "responded";
   const isDismissed = block.status === "dismissed";
 
   return (
-    <div className={`overflow-hidden rounded ${BG_MAP[block.status] ?? ""}`} data-ui-request-id={block.id}>
+    <div
+      className={`overflow-hidden rounded ${BG_MAP[block.status] ?? ""}`}
+      data-ui-request-id={block.id}
+    >
       <div className="px-3 py-1.5 pl-2 flex items-center gap-2 text-xs">
         <Icon className={`w-3.5 h-3.5 shrink-0 ${color}`} />
         <span className={`font-medium ${color}`}>{block.title ?? label}</span>
@@ -46,12 +44,8 @@ function CardShell({
             等待响应
           </span>
         )}
-        {isResponded && (
-          <CheckCircle className="w-3 h-3 text-emerald-500 shrink-0 ml-auto" />
-        )}
-        {isDismissed && (
-          <XCircle className="w-3 h-3 text-gray-500 shrink-0 ml-auto" />
-        )}
+        {isResponded && <CheckCircle className="w-3 h-3 text-emerald-500 shrink-0 ml-auto" />}
+        {isDismissed && <XCircle className="w-3 h-3 text-gray-500 shrink-0 ml-auto" />}
       </div>
       {block.message && (
         <div className="px-3 pb-1 text-[11px] text-gray-600 dark:text-gray-400 leading-relaxed">
@@ -63,11 +57,7 @@ function CardShell({
   );
 }
 
-export const ConfirmCard = memo(function ConfirmCard({
-  block,
-}: {
-  block: UIBlock;
-}) {
+export const ConfirmCard = memo(function ConfirmCard({ block }: { block: UIBlock }) {
   const respondById = useUIDialogStore((s) => s.respondById);
   const dismissById = useUIDialogStore((s) => s.dismissById);
   const isPending = block.status === "pending";
@@ -111,11 +101,7 @@ export const ConfirmCard = memo(function ConfirmCard({
   );
 });
 
-export const SelectCard = memo(function SelectCard({
-  block,
-}: {
-  block: UIBlock;
-}) {
+export const SelectCard = memo(function SelectCard({ block }: { block: UIBlock }) {
   const respondById = useUIDialogStore((s) => s.respondById);
   const dismissById = useUIDialogStore((s) => s.dismissById);
   const isPending = block.status === "pending";
@@ -171,19 +157,32 @@ export const SelectCard = memo(function SelectCard({
                   )}
                   <div className="min-w-0">
                     <div>{label}</div>
-                    {desc && <div className="text-[10px] text-gray-400 dark:text-gray-500">{desc}</div>}
+                    {desc && (
+                      <div className="text-[10px] text-gray-400 dark:text-gray-500">{desc}</div>
+                    )}
                   </div>
                 </button>
               );
             })}
             <div className="flex items-center gap-2 px-2 py-1.5">
               <button
-                onClick={() => { setCustomSelected(true); setCheckedSet(new Set()); }}
+                onClick={() => {
+                  setCustomSelected(true);
+                  setCheckedSet(new Set());
+                }}
                 className={`shrink-0 ${customSelected ? "text-sky-500 dark:text-sky-400" : "text-gray-400 dark:text-gray-600"}`}
               >
-                {customSelected ? <CheckSquare className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}
+                {customSelected ? (
+                  <CheckSquare className="w-3.5 h-3.5" />
+                ) : (
+                  <Square className="w-3.5 h-3.5" />
+                )}
               </button>
-              <span className={`text-[11px] ${customSelected ? "text-sky-700 dark:text-sky-300" : "text-gray-600 dark:text-gray-400"}`}>自定义答案</span>
+              <span
+                className={`text-[11px] ${customSelected ? "text-sky-700 dark:text-sky-300" : "text-gray-600 dark:text-gray-400"}`}
+              >
+                自定义答案
+              </span>
             </div>
             {customSelected && (
               <input
@@ -192,13 +191,18 @@ export const SelectCard = memo(function SelectCard({
                 onChange={(e) => setCustomValue(e.target.value)}
                 placeholder={block.placeholder ?? "输入你的答案"}
                 className="w-full ml-6 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-2 py-1 text-[11px] text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-600 focus:outline-none focus:border-amber-500/50"
-                onKeyDown={(e) => e.key === "Enter" && customValue.trim() && respondById(block.id, { value: customValue.trim() })}
+                onKeyDown={(e) =>
+                  e.key === "Enter" &&
+                  customValue.trim() &&
+                  respondById(block.id, { value: customValue.trim() })
+                }
               />
             )}
             <div className="flex gap-2 pt-1">
               <button
                 onClick={() => {
-                  if (checkedSet.size > 0) respondById(block.id, { value: Array.from(checkedSet).map((i) => options[i]) });
+                  if (checkedSet.size > 0)
+                    respondById(block.id, { value: Array.from(checkedSet).map((i) => options[i]) });
                   else if (customValue.trim()) respondById(block.id, { value: customValue.trim() });
                 }}
                 disabled={checkedSet.size === 0 && !customValue.trim()}
@@ -226,29 +230,47 @@ export const SelectCard = memo(function SelectCard({
             return (
               <button
                 key={i}
-                onClick={() => { setSelectedIdx(i); setCustomSelected(false); }}
+                onClick={() => {
+                  setSelectedIdx(i);
+                  setCustomSelected(false);
+                }}
                 className={`w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-md text-[11px] transition-colors ${
                   selectedIdx === i
                     ? "bg-sky-100 dark:bg-sky-600/15 text-sky-700 dark:text-sky-300"
                     : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/50 hover:text-gray-800 dark:hover:text-gray-300"
                 }`}
               >
-                <CircleDot className={`w-3.5 h-3.5 shrink-0 ${selectedIdx === i ? "text-sky-500 dark:text-sky-400" : "text-gray-400 dark:text-gray-600"}`} />
+                <CircleDot
+                  className={`w-3.5 h-3.5 shrink-0 ${selectedIdx === i ? "text-sky-500 dark:text-sky-400" : "text-gray-400 dark:text-gray-600"}`}
+                />
                 <div className="min-w-0">
                   <div>{label}</div>
-                  {desc && <div className="text-[10px] text-gray-400 dark:text-gray-500">{desc}</div>}
+                  {desc && (
+                    <div className="text-[10px] text-gray-400 dark:text-gray-500">{desc}</div>
+                  )}
                 </div>
               </button>
             );
           })}
           <div className="flex items-center gap-2 px-2 py-1.5">
             <button
-              onClick={() => { setCustomSelected(true); setSelectedIdx(null); }}
+              onClick={() => {
+                setCustomSelected(true);
+                setSelectedIdx(null);
+              }}
               className={`shrink-0 ${customSelected || selectedIdx === -1 ? "text-sky-500 dark:text-sky-400" : "text-gray-400 dark:text-gray-600"}`}
             >
-              {(customSelected || selectedIdx === -1) ? <CircleDot className="w-3.5 h-3.5 text-sky-500 dark:text-sky-400" /> : <CircleDot className="w-3.5 h-3.5 text-gray-400 dark:text-gray-600" />}
+              {customSelected || selectedIdx === -1 ? (
+                <CircleDot className="w-3.5 h-3.5 text-sky-500 dark:text-sky-400" />
+              ) : (
+                <CircleDot className="w-3.5 h-3.5 text-gray-400 dark:text-gray-600" />
+              )}
             </button>
-            <span className={`text-[11px] ${customSelected || selectedIdx === -1 ? "text-sky-700 dark:text-sky-300" : "text-gray-600 dark:text-gray-400"}`}>自定义答案</span>
+            <span
+              className={`text-[11px] ${customSelected || selectedIdx === -1 ? "text-sky-700 dark:text-sky-300" : "text-gray-600 dark:text-gray-400"}`}
+            >
+              自定义答案
+            </span>
           </div>
           {customSelected && (
             <input
@@ -257,13 +279,18 @@ export const SelectCard = memo(function SelectCard({
               onChange={(e) => setCustomValue(e.target.value)}
               placeholder={block.placeholder ?? "输入你的答案"}
               className="w-full ml-7 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-2 py-1 text-[11px] text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-600 focus:outline-none focus:border-amber-500/50"
-              onKeyDown={(e) => e.key === "Enter" && customValue.trim() && respondById(block.id, { value: customValue.trim() })}
+              onKeyDown={(e) =>
+                e.key === "Enter" &&
+                customValue.trim() &&
+                respondById(block.id, { value: customValue.trim() })
+              }
             />
           )}
           <div className="flex gap-2 pt-1">
             <button
               onClick={() => {
-                if (selectedIdx != null && selectedIdx >= 0) respondById(block.id, { value: options[selectedIdx] });
+                if (selectedIdx != null && selectedIdx >= 0)
+                  respondById(block.id, { value: options[selectedIdx] });
                 else if (customValue.trim()) respondById(block.id, { value: customValue.trim() });
               }}
               disabled={selectedIdx == null && !customValue.trim()}
@@ -300,19 +327,13 @@ export const SelectCard = memo(function SelectCard({
   return <CardShell block={block}>{null}</CardShell>;
 });
 
-export const InputCard = memo(function InputCard({
-  block,
-}: {
-  block: UIBlock;
-}) {
+export const InputCard = memo(function InputCard({ block }: { block: UIBlock }) {
   const respondById = useUIDialogStore((s) => s.respondById);
   const isPending = block.status === "pending";
   const [value, setValue] = useState("");
 
   const responseValue =
-    block.status === "responded" && block.response
-      ? (block.response.value as string)
-      : null;
+    block.status === "responded" && block.response ? (block.response.value as string) : null;
 
   return (
     <CardShell block={block}>
@@ -346,20 +367,14 @@ export const InputCard = memo(function InputCard({
   );
 });
 
-export const EditorCard = memo(function EditorCard({
-  block,
-}: {
-  block: UIBlock;
-}) {
+export const EditorCard = memo(function EditorCard({ block }: { block: UIBlock }) {
   const respondById = useUIDialogStore((s) => s.respondById);
   const dismissById = useUIDialogStore((s) => s.dismissById);
   const isPending = block.status === "pending";
   const [value, setValue] = useState(block.prefill ?? "");
 
   const responseValue =
-    block.status === "responded" && block.response
-      ? (block.response.value as string)
-      : null;
+    block.status === "responded" && block.response ? (block.response.value as string) : null;
   const wasDismissed =
     block.status === "dismissed" ||
     (block.response && (block.response as Record<string, unknown>).cancelled);
@@ -412,11 +427,7 @@ export const EditorCard = memo(function EditorCard({
   );
 });
 
-export const NotifyCard = memo(function NotifyCard({
-  block,
-}: {
-  block: UIBlock;
-}) {
+export const NotifyCard = memo(function NotifyCard({ block }: { block: UIBlock }) {
   const notifyColors: Record<string, string> = {
     info: "text-cyan-400",
     warning: "text-amber-400",
@@ -428,11 +439,7 @@ export const NotifyCard = memo(function NotifyCard({
     <CardShell block={block}>
       <div className="px-3 pb-1.5">
         <span className={`text-[11px] ${colorClass}`}>
-          {block.notifyType === "warning"
-            ? "⚠️ "
-            : block.notifyType === "error"
-              ? "❌ "
-              : "ℹ️ "}
+          {block.notifyType === "warning" ? "⚠️ " : block.notifyType === "error" ? "❌ " : "ℹ️ "}
           {block.message ?? "通知已发送"}
         </span>
       </div>
@@ -440,20 +447,17 @@ export const NotifyCard = memo(function NotifyCard({
   );
 });
 
-export const RespondUICard = memo(function RespondUICard({
-  block,
-}: {
-  block: UIBlock;
-}) {
+export const RespondUICard = memo(function RespondUICard({ block }: { block: UIBlock }) {
   const { icon: Icon, color } = getUIMethodIcon("respondUI");
 
   return (
-    <div className="overflow-hidden rounded bg-orange-50 dark:bg-orange-950/6 border-l-2 border-orange-400/30 dark:border-orange-500/30" data-ui-request-id={block.id}>
+    <div
+      className="overflow-hidden rounded bg-orange-50 dark:bg-orange-950/6 border-l-2 border-orange-400/30 dark:border-orange-500/30"
+      data-ui-request-id={block.id}
+    >
       <div className="px-3 py-1.5 pl-2 flex items-center gap-2 text-xs">
         <Icon className={`w-3.5 h-3.5 shrink-0 ${color}`} />
-        <span className={`font-medium ${color}`}>
-          {block.title ?? "异步响应注入"}
-        </span>
+        <span className={`font-medium ${color}`}>{block.title ?? "异步响应注入"}</span>
         <Zap className="w-3 h-3 text-orange-500 dark:text-orange-400 shrink-0 ml-auto" />
       </div>
       {block.message && (
@@ -465,11 +469,7 @@ export const RespondUICard = memo(function RespondUICard({
   );
 });
 
-export const UIInteractionCard = memo(function UIInteractionCard({
-  block,
-}: {
-  block: UIBlock;
-}) {
+export const UIInteractionCard = memo(function UIInteractionCard({ block }: { block: UIBlock }) {
   switch (block.method) {
     case "confirm":
       return <ConfirmCard block={block} />;

@@ -1,6 +1,14 @@
 import type { AgentEvent as UpstreamAgentEvent } from "@dyyz1993/pi-agent-core";
 import type { TreeEntry } from "@dyyz1993/pi-coding-agent";
-import type { AssistantMessage, AssistantMessageEvent, TextContent, Usage, StopReason, ToolCall, ThinkingContent } from "@dyyz1993/pi-ai";
+import type {
+  AssistantMessage,
+  AssistantMessageEvent,
+  TextContent,
+  Usage,
+  StopReason,
+  ToolCall,
+  ThinkingContent,
+} from "@dyyz1993/pi-ai";
 
 export interface AgentMethods {
   "agent.start": {
@@ -58,7 +66,13 @@ export interface AgentMethods {
   "agent.getSessionStats": {
     params: { sessionId: string };
     result: {
-      tokens: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number };
+      tokens: {
+        input: number;
+        output: number;
+        cacheRead: number;
+        cacheWrite: number;
+        total: number;
+      };
       cost: number;
       contextUsage?: { tokens: number | null; contextWindow: number; percent: number | null };
     } | null;
@@ -97,7 +111,11 @@ export interface AgentMethods {
   };
   "agent.cycleModel": {
     params: { sessionId: string };
-    result: { model: { provider: string; id: string }; thinkingLevel: string; isScoped: boolean } | null;
+    result: {
+      model: { provider: string; id: string };
+      thinkingLevel: string;
+      isScoped: boolean;
+    } | null;
   };
   "agent.setThinkingLevel": {
     params: { sessionId: string; level: string };
@@ -149,11 +167,26 @@ export interface AgentMethods {
   };
   "agent.getExtensions": {
     params: { sessionId: string };
-    result: { extensions: Array<{ path: string; resolvedPath: string; toolNames: string[]; commandNames: string[] }> };
+    result: {
+      extensions: Array<{
+        path: string;
+        resolvedPath: string;
+        toolNames: string[];
+        commandNames: string[];
+      }>;
+    };
   };
   "agent.getSkills": {
     params: { sessionId: string };
-    result: { skills: Array<{ name: string; description: string; filePath: string; baseDir: string; disableModelInvocation: boolean }> };
+    result: {
+      skills: Array<{
+        name: string;
+        description: string;
+        filePath: string;
+        baseDir: string;
+        disableModelInvocation: boolean;
+      }>;
+    };
   };
   "agent.getDisabledSkills": {
     params: Record<string, never>;
@@ -258,7 +291,16 @@ export interface ChannelDataEvent {
 export interface ExtensionUIRequestEvent {
   type: "extension_ui_request";
   id: string;
-  method: "select" | "confirm" | "input" | "editor" | "notify" | "setStatus" | "setWidget" | "setTitle" | "set_editor_text";
+  method:
+    | "select"
+    | "confirm"
+    | "input"
+    | "editor"
+    | "notify"
+    | "setStatus"
+    | "setWidget"
+    | "setTitle"
+    | "set_editor_text";
   title?: string;
   message?: string;
   options?: string[];
@@ -284,7 +326,13 @@ export type AgentEvent =
   | ChannelDataEvent
   | { type: "custom_entry"; customType: string; data: unknown; id: string; display?: boolean }
   | { type: "session_rename"; oldName: string | undefined; newName: string }
-  | { type: "auto_retry_start"; attempt: number; maxAttempts: number; delayMs: number; errorMessage: string }
+  | {
+      type: "auto_retry_start";
+      attempt: number;
+      maxAttempts: number;
+      delayMs: number;
+      errorMessage: string;
+    }
   | { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string };
 
 export type { AssistantMessage, AssistantMessageEvent, TextContent };

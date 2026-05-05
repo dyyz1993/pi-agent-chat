@@ -33,7 +33,9 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
           const entry = JSON.parse(line) as Record<string, unknown>;
 
           if (entry.type === "custom" && entry.customType === "todo") {
-            const data = entry.data as { action: string; todos: TodoItem[]; nextId: number } | undefined;
+            const data = entry.data as
+              | { action: string; todos: TodoItem[]; nextId: number }
+              | undefined;
             if (data?.todos) {
               todos = data.todos;
             }
@@ -42,7 +44,9 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
           if (entry.type === "message") {
             const msg = entry.message as Record<string, unknown> | undefined;
             if (msg?.role === "toolResult" && msg?.toolName === "todo") {
-              const details = msg.details as { action: string; todos: TodoItem[]; nextId: number } | undefined;
+              const details = msg.details as
+                | { action: string; todos: TodoItem[]; nextId: number }
+                | undefined;
               if (details?.todos) {
                 todos = details.todos;
               }

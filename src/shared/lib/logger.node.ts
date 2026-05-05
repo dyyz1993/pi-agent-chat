@@ -25,5 +25,7 @@ export function writeLogLine(line: string): void {
     const date = new Date().toISOString().slice(0, 10);
     const filePath = join(getLogDir(), `${date}.log`);
     appendFileSync(filePath, `${line}\n`);
-  } catch { /* logger write failed — must not recurse */ }
+  } catch {
+    /* logger write failed — must not recurse */
+  }
 }

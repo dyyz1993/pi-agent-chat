@@ -32,7 +32,15 @@ function statusConfig(status: SessionStatus | undefined) {
   }
 }
 
-const ContextRing = memo(function ContextRing({ percent, strokeClass, isWorking }: { percent: number; strokeClass: string; isWorking: boolean }) {
+const ContextRing = memo(function ContextRing({
+  percent,
+  strokeClass,
+  isWorking,
+}: {
+  percent: number;
+  strokeClass: string;
+  isWorking: boolean;
+}) {
   const size = 18;
   const stroke = 2.5;
   const radius = (size - stroke) / 2;
@@ -41,7 +49,17 @@ const ContextRing = memo(function ContextRing({ percent, strokeClass, isWorking 
   const offset = circumference - clamped * circumference;
 
   return (
-    <svg width={size} height={size} className={`shrink-0 ${isWorking ? "animate-pulse" : ""} ${strokeClass}`} viewBox={`0 0 ${size} ${size}`} role="progressbar" aria-valuenow={Math.round(clamped * 100)} aria-valuemin={0} aria-valuemax={100} aria-label={`上下文使用 ${Math.round(clamped * 100)}%`}>
+    <svg
+      width={size}
+      height={size}
+      className={`shrink-0 ${isWorking ? "animate-pulse" : ""} ${strokeClass}`}
+      viewBox={`0 0 ${size} ${size}`}
+      role="progressbar"
+      aria-valuenow={Math.round(clamped * 100)}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-label={`上下文使用 ${Math.round(clamped * 100)}%`}
+    >
       <circle
         cx={size / 2}
         cy={size / 2}
@@ -49,7 +67,7 @@ const ContextRing = memo(function ContextRing({ percent, strokeClass, isWorking 
         fill="none"
         stroke="currentColor"
         strokeWidth={stroke}
-className="text-gray-300 dark:text-gray-700"
+        className="text-gray-300 dark:text-gray-700"
       />
       <circle
         cx={size / 2}
@@ -74,8 +92,12 @@ export const TokenStatusBar = memo(function TokenStatusBar({ sessionId }: { sess
   const parentContext = useSessionStore((s) => s.sessionContextMap[sessionId]);
   const parentStatus = useSessionStore((s) => s.sessionStatusMap[sessionId]);
 
-  const subContext = useSubagentStore((s) => activeSubId ? s.subagentContextMap[activeSubId] : undefined);
-  const subStatus = useSubagentStore((s) => activeSubId ? s.subagentStatusMap[activeSubId] : undefined);
+  const subContext = useSubagentStore((s) =>
+    activeSubId ? s.subagentContextMap[activeSubId] : undefined,
+  );
+  const subStatus = useSubagentStore((s) =>
+    activeSubId ? s.subagentStatusMap[activeSubId] : undefined,
+  );
 
   const contextUsage: ContextUsage | undefined = activeSubId ? subContext : parentContext;
   const sessionStatus: SessionStatus | undefined = activeSubId ? subStatus : parentStatus;
@@ -89,7 +111,8 @@ export const TokenStatusBar = memo(function TokenStatusBar({ sessionId }: { sess
     percent = contextUsage.tokens / contextUsage.contextWindow;
   }
 
-  const isWorking = sessionStatus === "streaming" || sessionStatus === "compacting" || sessionStatus === "retrying";
+  const isWorking =
+    sessionStatus === "streaming" || sessionStatus === "compacting" || sessionStatus === "retrying";
 
   return (
     <div className="flex items-center gap-1.5">

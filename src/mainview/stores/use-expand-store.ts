@@ -12,6 +12,5 @@ export const useExpandStore = create<ExpandState>((set) => ({
   expandedTitle: "",
   openExpand: (content, title = "展开内容") =>
     set({ expandedContent: content, expandedTitle: title }),
-  closeExpand: () =>
-    set({ expandedContent: null, expandedTitle: "" }),
+  closeExpand: () => set({ expandedContent: null, expandedTitle: "" }),
 }));

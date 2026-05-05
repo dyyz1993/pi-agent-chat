@@ -1,5 +1,11 @@
 import { createTypedClient, WebSocketTransport, IPCTransport } from "@dyyz1993/rpc-core";
-import type { TypedClient, MethodParams, MethodResult, EventPayload, EventMetadata } from "@dyyz1993/rpc-core";
+import type {
+  TypedClient,
+  MethodParams,
+  MethodResult,
+  EventPayload,
+  EventMetadata,
+} from "@dyyz1993/rpc-core";
 import type { RPCMethods, RPCEvents } from "../../shared/rpc-schema";
 import { useRpcDebugStore } from "../stores/use-rpc-debug-store";
 import { useAppStore } from "../stores/use-app-store";
@@ -35,7 +41,9 @@ class APIClientImpl {
 
   onConnectionChange(listener: (status: "connected" | "disconnected") => void): () => void {
     this._connectionListeners.add(listener);
-    return () => { this._connectionListeners.delete(listener); };
+    return () => {
+      this._connectionListeners.delete(listener);
+    };
   }
 
   getConnectionStatus(): "connected" | "disconnected" {
@@ -132,11 +140,11 @@ class APIClientImpl {
 
   private getWebSocketUrl(): string {
     if (typeof window === "undefined") return `ws://localhost:3100/ws?token=${AUTH_TOKEN}`;
-    const customUrl = (
+    const customUrl =
       new URLSearchParams(window.location.search).get("ws") ??
-      localStorage.getItem("rpc-websocket-url")
-    );
-    if (customUrl) return customUrl.includes("token=") ? customUrl : `${customUrl}?token=${AUTH_TOKEN}`;
+      localStorage.getItem("rpc-websocket-url");
+    if (customUrl)
+      return customUrl.includes("token=") ? customUrl : `${customUrl}?token=${AUTH_TOKEN}`;
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     return `${protocol}//${window.location.host}/ws?token=${AUTH_TOKEN}`;
   }
@@ -188,7 +196,7 @@ class APIClientImpl {
 
   async call<K extends keyof RPCMethods>(
     method: K,
-    params: MethodParams<RPCMethods, K>
+    params: MethodParams<RPCMethods, K>,
   ): Promise<MethodResult<RPCMethods, K>> {
     await this.initialize();
     this.debugLog("call", method as string, params);
@@ -198,7 +206,9 @@ class APIClientImpl {
       this.debugLog("response", method as string, result);
       return result;
     } catch (err) {
-      this.debugLog("response", method as string, { error: err instanceof Error ? err.message : String(err) });
+      this.debugLog("response", method as string, {
+        error: err instanceof Error ? err.message : String(err),
+      });
       throw err;
     }
   }
@@ -206,10 +216,13 @@ class APIClientImpl {
   async subscribe<K extends keyof RPCEvents>(
     eventType: K,
     handler: (payload: EventPayload<RPCEvents[K]>, metadata: EventMetadata<RPCEvents[K]>) => void,
-    filter?: Record<string, unknown>
+    filter?: Record<string, unknown>,
   ): Promise<string> {
     await this.initialize();
-    const wrappedHandler = (payload: EventPayload<RPCEvents[K]>, metadata: EventMetadata<RPCEvents[K]>) => {
+    const wrappedHandler = (
+      payload: EventPayload<RPCEvents[K]>,
+      metadata: EventMetadata<RPCEvents[K]>,
+    ) => {
       this.debugLog("event", eventType as string, payload);
       handler(payload, metadata);
     };
@@ -223,7 +236,11 @@ class APIClientImpl {
     this._debugEnabled = enabled;
   }
 
-  private debugLog(direction: "call" | "event" | "response", method: string, payload: unknown): void {
+  private debugLog(
+    direction: "call" | "event" | "response",
+    method: string,
+    payload: unknown,
+  ): void {
     if (!this._debugEnabled) return;
     try {
       useRpcDebugStore.getState().addEntry({
@@ -232,7 +249,9 @@ class APIClientImpl {
         eventType: direction === "event" ? method : undefined,
         payload,
       });
-    } catch (err) { console.warn("[api-client] emit failed:", err); }
+    } catch (err) {
+      console.warn("[api-client] emit failed:", err);
+    }
   }
 
   unsubscribe(subscriptionId: string): void {

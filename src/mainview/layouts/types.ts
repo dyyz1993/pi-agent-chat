@@ -10,13 +10,13 @@ export interface PanelTab {
 }
 
 export const PANEL_TABS: PanelTab[] = [
-	{ id: "git", label: "Git" },
-	{ id: "files", label: "文件" },
-	{ id: "status", label: "状态" },
-	{ id: "rpc", label: "RPC" },
-	{ id: "memory", label: "记忆" },
-	{ id: "rules", label: "Rules" },
-	{ id: "snapshot", label: "快照" },
+  { id: "git", label: "Git" },
+  { id: "files", label: "文件" },
+  { id: "status", label: "状态" },
+  { id: "rpc", label: "RPC" },
+  { id: "memory", label: "记忆" },
+  { id: "rules", label: "Rules" },
+  { id: "snapshot", label: "快照" },
 ];
 
 export interface ActivityItem {

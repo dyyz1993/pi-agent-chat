@@ -18,7 +18,11 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     server.register(method, handler as (params: unknown) => Promise<unknown>);
   };
 
-  const serverSubs = (server as unknown as { subscriptions: Map<string, { eventType: string; filter: Record<string, unknown> }> }).subscriptions;
+  const serverSubs = (
+    server as unknown as {
+      subscriptions: Map<string, { eventType: string; filter: Record<string, unknown> }>;
+    }
+  ).subscriptions;
 
   const killedToolCalls = new Set<string>();
 
@@ -30,7 +34,9 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     if (!pm) return { processes: [] };
 
     try {
-      const result = await pm.callChannel(sessionId, "bash", "list", {}) as { processes?: BashProcess[] };
+      const result = (await pm.callChannel(sessionId, "bash", "list", {})) as {
+        processes?: BashProcess[];
+      };
       return { processes: result?.processes ?? [] };
     } catch {
       return { processes: [] };
@@ -58,7 +64,11 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("bash.readLog", async (params) => {
-    const { logPath, offset = 0, limit = 500 } = params as {
+    const {
+      logPath,
+      offset = 0,
+      limit = 500,
+    } = params as {
       logPath: string;
       offset?: number;
       limit?: number;
@@ -97,7 +107,10 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     };
   });
 
-  const watchers = new Map<string, { tail: ChildProcess; subId: string; sendQueue: Promise<void> }>();
+  const watchers = new Map<
+    string,
+    { tail: ChildProcess; subId: string; sendQueue: Promise<void> }
+  >();
 
   const isValidLogPath = (path: string): boolean => {
     if (!path || typeof path !== "string") return false;
@@ -146,7 +159,11 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       const completeLines = lines.filter((l) => l.length > 0);
       if (completeLines.length > 0) {
         entry.sendQueue = entry.sendQueue.then(() =>
-          server.emitEvent("bash.logUpdate", { logPath, newLines: completeLines }, sessionId ? { sessionId } : undefined)
+          server.emitEvent(
+            "bash.logUpdate",
+            { logPath, newLines: completeLines },
+            sessionId ? { sessionId } : undefined,
+          ),
         );
       }
     });

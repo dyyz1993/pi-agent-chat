@@ -8,11 +8,15 @@ import { ALL_MEMORY_TYPE_KEYS } from "./memory-config";
 function getCardLabel(msg: ChatMessage): string | undefined {
   const hasCustom = msg.content.some((b) => b.type === "custom");
   if (hasCustom) {
-    const custom = msg.content.find((b): b is Extract<typeof b, { type: "custom" }> => b.type === "custom");
+    const custom = msg.content.find(
+      (b): b is Extract<typeof b, { type: "custom" }> => b.type === "custom",
+    );
     if (!custom) return undefined;
     switch (custom.customType) {
-      case "bash_background_exit": return "后台进程";
-      case "lsp_diagnostics": return "LSP";
+      case "bash_background_exit":
+        return "后台进程";
+      case "lsp_diagnostics":
+        return "LSP";
       default:
         if (ALL_MEMORY_TYPE_KEYS.has(custom.customType)) return undefined;
         return custom.customType;
@@ -31,8 +35,13 @@ function getPrevBarColor(messages: ChatMessage[], index: number): string | undef
   return "border-l-emerald-500/50";
 }
 
-function buildCardMeta(messages: ChatMessage[]): Map<string, { cardLabel: string | undefined; prevBarColor: string | undefined }> {
-  const map = new Map<string, { cardLabel: string | undefined; prevBarColor: string | undefined }>();
+function buildCardMeta(
+  messages: ChatMessage[],
+): Map<string, { cardLabel: string | undefined; prevBarColor: string | undefined }> {
+  const map = new Map<
+    string,
+    { cardLabel: string | undefined; prevBarColor: string | undefined }
+  >();
   for (let i = 0; i < messages.length; i++) {
     const msg = messages[i];
     map.set(msg.id, { cardLabel: getCardLabel(msg), prevBarColor: getPrevBarColor(messages, i) });
@@ -49,7 +58,14 @@ interface MessageListViewProps {
   hasMoreMessages?: boolean;
 }
 
-export function MessageListView({ messages, scrollRef, onScroll, virtualizer, isLoadingMore, hasMoreMessages }: MessageListViewProps) {
+export function MessageListView({
+  messages,
+  scrollRef,
+  onScroll,
+  virtualizer,
+  isLoadingMore,
+  hasMoreMessages,
+}: MessageListViewProps) {
   const cardMeta = useMemo(() => buildCardMeta(messages), [messages]);
   const prevScrollHeightRef = useRef(0);
   const scrollElRef = useRef<HTMLDivElement | null>(null);
@@ -78,7 +94,12 @@ export function MessageListView({ messages, scrollRef, onScroll, virtualizer, is
 
   if (messages.length === 0 && scrollRef) {
     return (
-      <div ref={scrollRef as React.Ref<HTMLDivElement>} className="h-full overflow-y-auto overflow-x-hidden overscroll-y-contain" style={{ overflowAnchor: 'none' }} onScroll={onScroll}>
+      <div
+        ref={scrollRef as React.Ref<HTMLDivElement>}
+        className="h-full overflow-y-auto overflow-x-hidden overscroll-y-contain"
+        style={{ overflowAnchor: "none" }}
+        onScroll={onScroll}
+      >
         <div className="flex flex-col items-center justify-center h-full text-gray-600 text-sm gap-2">
           <p>开始对话吧</p>
         </div>
@@ -88,8 +109,16 @@ export function MessageListView({ messages, scrollRef, onScroll, virtualizer, is
 
   if (virtualizer) {
     return (
-      <div ref={(el) => { handleScrollRef(el); if (scrollRef) (scrollRef as React.MutableRefObject<HTMLDivElement | null>).current = el; }} className="h-full overflow-y-auto overflow-x-hidden overscroll-y-contain" style={{ overflowAnchor: 'none' }} onScroll={onScroll}>
-        {(isLoadingMore || hasMoreMessages) && (
+      <div
+        ref={(el) => {
+          handleScrollRef(el);
+          if (scrollRef) (scrollRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+        }}
+        className="h-full overflow-y-auto overflow-x-hidden overscroll-y-contain"
+        style={{ overflowAnchor: "none" }}
+        onScroll={onScroll}
+      >
+        {(isLoadingMore ?? hasMoreMessages) && (
           <div className="flex items-center justify-center py-2">
             {isLoadingMore ? (
               <Loader2 className="w-4 h-4 text-gray-500 animate-spin" />
@@ -108,9 +137,19 @@ export function MessageListView({ messages, scrollRef, onScroll, virtualizer, is
                 data-index={vr.index}
                 data-msg-id={msg.id}
                 ref={virtualizer.measureElement}
-                style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${vr.start}px)` }}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  transform: `translateY(${vr.start}px)`,
+                }}
               >
-                <MessageCard message={msg} cardLabel={meta?.cardLabel} prevBarColor={meta?.prevBarColor} />
+                <MessageCard
+                  message={msg}
+                  cardLabel={meta?.cardLabel}
+                  prevBarColor={meta?.prevBarColor}
+                />
               </div>
             );
           })}
@@ -123,9 +162,18 @@ export function MessageListView({ messages, scrollRef, onScroll, virtualizer, is
     <div
       ref={scrollRef as React.Ref<HTMLDivElement>}
       className="flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain"
-      style={{ scrollbarWidth: 'thin', scrollbarColor: 'transparent transparent', overflowAnchor: 'none' }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.scrollbarColor = 'rgba(55, 65, 81, 0.12) transparent' }}
-      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.scrollbarColor = 'transparent transparent' }}
+      style={{
+        scrollbarWidth: "thin",
+        scrollbarColor: "transparent transparent",
+        overflowAnchor: "none",
+      }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLElement).style.scrollbarColor =
+          "rgba(55, 65, 81, 0.12) transparent";
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLElement).style.scrollbarColor = "transparent transparent";
+      }}
       onScroll={onScroll}
     >
       <div className="py-0.5 pl-2 pr-3">

@@ -1,6 +1,9 @@
 import type { ChatMessage, TimelineTurn, TimelineItem, StandaloneEntry } from "../types";
 
-export function aggregateTurns(messages: ChatMessage[]): { turns: TimelineTurn[]; standalone: StandaloneEntry[] } {
+export function aggregateTurns(messages: ChatMessage[]): {
+  turns: TimelineTurn[];
+  standalone: StandaloneEntry[];
+} {
   const turns: TimelineTurn[] = [];
   const standalone: StandaloneEntry[] = [];
 
@@ -14,10 +17,11 @@ export function aggregateTurns(messages: ChatMessage[]): { turns: TimelineTurn[]
           turns.push(finalizeTurn(currentTurn, turnIndex++));
         }
 
-        const text = msg.content
-          .filter((b) => b.type === "text")
-          .map((b) => b.text)
-          .join("\n") || "";
+        const text =
+          msg.content
+            .filter((b) => b.type === "text")
+            .map((b) => b.text)
+            .join("\n") || "";
 
         currentTurn = {
           id: `turn_${msg.id}`,
@@ -94,7 +98,9 @@ export function aggregateTurns(messages: ChatMessage[]): { turns: TimelineTurn[]
       }
 
       case "custom": {
-        const customBlock = msg.content.find((b): b is Extract<typeof b, { type: "custom" }> => b.type === "custom");
+        const customBlock = msg.content.find(
+          (b): b is Extract<typeof b, { type: "custom" }> => b.type === "custom",
+        );
         if (!customBlock) break;
 
         const entry: StandaloneEntry = {

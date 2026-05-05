@@ -87,20 +87,20 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
 
   return (
     <div
+      data-testid="right-sidebar"
       className={`flex flex-col bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 overflow-hidden z-20 ${
         overlay ? "animate-slide-in-right shadow-xl shadow-black/10 dark:shadow-black/30" : ""
       }`}
-      style={
-        overlay
-          ? { position: "absolute", right: 0, top: 0, bottom: 0, width }
-          : { width }
-      }
+      style={overlay ? { position: "absolute", right: 0, top: 0, bottom: 0, width } : { width }}
       onClick={(e) => e.stopPropagation()}
     >
       <div className="flex items-center border-b border-gray-200 dark:border-gray-800 shrink-0">
         {overlay && (
           <button
-            onClick={(e) => { e.stopPropagation(); hideStatus(); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              hideStatus();
+            }}
             className="p-1.5 mr-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors shrink-0"
             title="关闭面板"
           >
@@ -108,32 +108,36 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
           </button>
         )}
         <button
-          onClick={(e) => { e.stopPropagation(); toggleStatus(); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleStatus();
+          }}
           className={`p-1.5 mr-1 rounded transition-colors shrink-0 max-sm:hidden ${isPinned ? "text-indigo-400" : "text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400"}`}
           title={isPinned ? "取消固定" : "固定面板"}
         >
           <Pin className="w-3.5 h-3.5" fill={isPinned ? "currentColor" : "none"} />
         </button>
         <div className="flex items-center overflow-x-auto scrollbar-none">
-        {PANEL_TABS.map((tab: { id: PanelTabId; label: string }) => (
-          <button
-            key={tab.id}
-            onClick={(e) => { e.stopPropagation(); setActivePanelTab(tab.id); }}
-            className={`px-2.5 py-1.5 text-[11px] font-medium transition-colors whitespace-nowrap shrink-0 ${
-              activePanelTab === tab.id
-                ? "text-indigo-500 dark:text-indigo-400 border-b-2 border-indigo-500 dark:border-indigo-400"
-                : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+          {PANEL_TABS.map((tab: { id: PanelTabId; label: string }) => (
+            <button
+              key={tab.id}
+              onClick={(e) => {
+                e.stopPropagation();
+                setActivePanelTab(tab.id);
+              }}
+              className={`px-2.5 py-1.5 text-[11px] font-medium transition-colors whitespace-nowrap shrink-0 ${
+                activePanelTab === tab.id
+                  ? "text-indigo-500 dark:text-indigo-400 border-b-2 border-indigo-500 dark:border-indigo-400"
+                  : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto overflow-x-hidden">
-        {renderContent()}
-      </div>
+      <div className="flex-1 overflow-y-auto overflow-x-hidden">{renderContent()}</div>
     </div>
   );
 }

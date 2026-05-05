@@ -94,10 +94,7 @@ export async function linkProject(
   return { ok: true };
 }
 
-export async function unlinkProject(
-  projectRoot: string,
-  projectId: string,
-): Promise<LinkResult> {
+export async function unlinkProject(projectRoot: string, projectId: string): Promise<LinkResult> {
   const config = await loadLinkedProjects(projectRoot);
   const idx = config.projects.findIndex((p) => p.id === projectId);
   if (idx === -1) {

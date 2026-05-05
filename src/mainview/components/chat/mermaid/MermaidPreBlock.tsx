@@ -27,13 +27,9 @@ type PreBlockProps = ClassAttributes<HTMLPreElement> &
 
 export function MermaidPreBlock({ children, node, ...rest }: PreBlockProps) {
   if (node?.children) {
-    const codeEl = node.children.find(
-      (c) => c.type === "element" && "tagName" in c,
-    );
+    const codeEl = node.children.find((c) => c.type === "element" && "tagName" in c);
     if (codeEl && codeEl.properties?.className) {
-      const langClass = codeEl.properties.className.find((cls) =>
-        cls.startsWith("language-"),
-      );
+      const langClass = codeEl.properties.className.find((cls) => cls.startsWith("language-"));
       if (langClass) {
         const lang = langClass.replace("language-", "");
         if (isMermaidLang(lang)) {

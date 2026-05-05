@@ -11,12 +11,15 @@ const log = createLogger("file");
 
 const DEBOUNCE_MS = 800;
 
-const watcherState = new WeakMap<RPCServer, {
-  watcher: ReturnType<typeof watch> | null;
-  path: string | null;
-  debounceTimer: ReturnType<typeof setTimeout> | null;
-  pendingChanges: Map<string, "create" | "delete" | "rename">;
-}>();
+const watcherState = new WeakMap<
+  RPCServer,
+  {
+    watcher: ReturnType<typeof watch> | null;
+    path: string | null;
+    debounceTimer: ReturnType<typeof setTimeout> | null;
+    pendingChanges: Map<string, "create" | "delete" | "rename">;
+  }
+>();
 
 function getWatcherState(server: RPCServer) {
   if (!watcherState.has(server)) {
@@ -43,31 +46,27 @@ function startFileWatcher(server: RPCServer, projectPath: string): void {
   state.path = projectPath;
 
   try {
-    state.watcher = watch(
-      projectPath,
-      { recursive: true },
-      (eventType, filename) => {
-        if (!filename) return;
-        const segments = filename.split(/[/\\]/);
-        if (segments.includes("node_modules") || segments.includes(".git")) return;
+    state.watcher = watch(projectPath, { recursive: true }, (eventType, filename) => {
+      if (!filename) return;
+      const segments = filename.split(/[/\\]/);
+      if (segments.includes("node_modules") || segments.includes(".git")) return;
 
-        const changedPath = join(projectPath, filename);
-        const changeType: "create" | "delete" | "rename" =
-          eventType === "rename" ? (existsSync(changedPath) ? "create" : "delete") : "create";
+      const changedPath = join(projectPath, filename);
+      const changeType: "create" | "delete" | "rename" =
+        eventType === "rename" ? (existsSync(changedPath) ? "create" : "delete") : "create";
 
-        state.pendingChanges.set(changedPath, changeType);
+      state.pendingChanges.set(changedPath, changeType);
 
-        if (state.debounceTimer) clearTimeout(state.debounceTimer);
-        state.debounceTimer = setTimeout(() => {
-          const s = getWatcherState(server);
-          s.debounceTimer = null;
-          for (const [path, type] of s.pendingChanges) {
-            server.emitEvent("file.changed", { changedPath: path, type });
-          }
-          s.pendingChanges.clear();
-        }, DEBOUNCE_MS);
-      },
-    );
+      if (state.debounceTimer) clearTimeout(state.debounceTimer);
+      state.debounceTimer = setTimeout(() => {
+        const s = getWatcherState(server);
+        s.debounceTimer = null;
+        for (const [path, type] of s.pendingChanges) {
+          server.emitEvent("file.changed", { changedPath: path, type });
+        }
+        s.pendingChanges.clear();
+      }, DEBOUNCE_MS);
+    });
 
     state.watcher.on("error", (err) => {
       log.error("File watcher error", { error: err instanceof Error ? err.message : String(err) });
@@ -75,7 +74,9 @@ function startFileWatcher(server: RPCServer, projectPath: string): void {
 
     log.info("File watcher started", { path: projectPath });
   } catch (err) {
-    log.error("Failed to start file watcher", { error: err instanceof Error ? err.message : String(err) });
+    log.error("Failed to start file watcher", {
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 }
 
@@ -92,7 +93,7 @@ function stopFileWatcher(server: RPCServer): void {
   state.path = null;
 }
 
-function parseGitignore(content: string): ((path: string, isDir: boolean) => boolean) {
+function parseGitignore(content: string): (path: string, isDir: boolean) => boolean {
   const patterns: { pattern: string; isDirOnly: boolean; isNegated: boolean }[] = [];
   for (const line of content.split("\n")) {
     const trimmed = line.trim();
@@ -107,22 +108,29 @@ function parseGitignore(content: string): ((path: string, isDir: boolean) => boo
   return (relativePath: string, isDir: boolean) => {
     for (const { pattern, isDirOnly, isNegated } of patterns) {
       if (isDirOnly && !isDir) continue;
-      const regexStr = "^" + pattern.replace(/\./g, "\\.").replace(/\*/g, ".*").replace(/\?/g, ".") + "$";
+      const regexStr =
+        "^" + pattern.replace(/\./g, "\\.").replace(/\*/g, ".*").replace(/\?/g, ".") + "$";
       try {
         if (new RegExp(regexStr, "i").test(relativePath)) return !isNegated;
-      } catch { /* skip invalid regex */ }
+      } catch {
+        /* skip invalid regex */
+      }
     }
     return false;
   };
 }
 
-async function loadGitignoreRules(dirPath: string): Promise<(path: string, isDir: boolean) => boolean> {
+async function loadGitignoreRules(
+  dirPath: string,
+): Promise<(path: string, isDir: boolean) => boolean> {
   const gitignorePath = join(dirPath, ".gitignore");
   if (existsSync(gitignorePath)) {
     try {
       const content = await readFile(gitignorePath, "utf-8");
       return parseGitignore(content);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
   return () => false;
 }
@@ -160,7 +168,13 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   r("file.listDir", async (params) => {
     const basePath = resolve(params.path || process.cwd());
     startFileWatcher(server, basePath);
-    const entries: { name: string; path: string; type: "file" | "directory"; size?: number; isIgnored?: boolean }[] = [];
+    const entries: {
+      name: string;
+      path: string;
+      type: "file" | "directory";
+      size?: number;
+      isIgnored?: boolean;
+    }[] = [];
     try {
       const files = await readdir(basePath, { withFileTypes: true });
       const sorted = sortEntries(files);

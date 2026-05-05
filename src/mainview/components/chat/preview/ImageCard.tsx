@@ -31,7 +31,9 @@ export const ImageCard = memo(function ImageCard({ details }: { details: Preview
       />
       <div className="relative bg-gray-100 dark:bg-black/30 flex items-center justify-center min-h-[120px] max-h-[400px]">
         {!loaded && !error && (
-          <div className="text-gray-400 dark:text-gray-500 text-xs animate-pulse">Loading image...</div>
+          <div className="text-gray-400 dark:text-gray-500 text-xs animate-pulse">
+            Loading image...
+          </div>
         )}
         {error ? (
           <div className="flex flex-col items-center gap-2 py-6">
@@ -68,7 +70,9 @@ function FallbackCard({ details }: { details: PreviewDetails }) {
         icon={<ImageIcon className="w-3.5 h-3.5 text-gray-400 dark:text-gray-400 shrink-0" />}
         label={details.title ?? details.source}
       />
-      <div className="px-3 py-4 text-xs text-gray-400 dark:text-gray-500 italic">No path available for preview</div>
+      <div className="px-3 py-4 text-xs text-gray-400 dark:text-gray-500 italic">
+        No path available for preview
+      </div>
     </div>
   );
 }

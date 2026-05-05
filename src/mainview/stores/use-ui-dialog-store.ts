@@ -32,7 +32,18 @@ const TOOL_METHOD_MAP: Record<string, UIPendingRequest["method"]> = {
 };
 
 export function toolNameToMethod(toolName: string): UIPendingRequest["method"] | undefined {
-  return TOOL_METHOD_MAP[toolName.toLowerCase()] ?? (toolName.toLowerCase().includes("confirm") ? "confirm" : toolName.toLowerCase().includes("select") ? "select" : toolName.toLowerCase().includes("input") ? "input" : toolName.toLowerCase().includes("editor") ? "editor" : undefined);
+  return (
+    TOOL_METHOD_MAP[toolName.toLowerCase()] ??
+    (toolName.toLowerCase().includes("confirm")
+      ? "confirm"
+      : toolName.toLowerCase().includes("select")
+        ? "select"
+        : toolName.toLowerCase().includes("input")
+          ? "input"
+          : toolName.toLowerCase().includes("editor")
+            ? "editor"
+            : undefined)
+  );
 }
 
 function toBlock(state: UIRequestState): UIInteractionBlock {
@@ -95,11 +106,15 @@ export const useUIDialogStore = create<UIDialogState>((set, get) => ({
     const state = requestStates.get(requestId);
     if (!state) return;
 
-    apiClient.call("agent.respondUI", {
-      sessionId: state.request.sessionId,
-      requestId,
-      response,
-    }).catch((err) => { console.warn("[ui-dialog] respondUI failed:", err); });
+    apiClient
+      .call("agent.respondUI", {
+        sessionId: state.request.sessionId,
+        requestId,
+        response,
+      })
+      .catch((err) => {
+        console.warn("[ui-dialog] respondUI failed:", err);
+      });
 
     const newStates = new Map(requestStates);
     newStates.set(requestId, { ...state, status: "responded", response });
@@ -117,11 +132,15 @@ export const useUIDialogStore = create<UIDialogState>((set, get) => ({
     const state = requestStates.get(requestId);
     if (!state) return;
 
-    apiClient.call("agent.respondUI", {
-      sessionId: state.request.sessionId,
-      requestId,
-      response: { cancelled: true },
-    }).catch((err) => { console.warn("[ui-dialog] dismissUI failed:", err); });
+    apiClient
+      .call("agent.respondUI", {
+        sessionId: state.request.sessionId,
+        requestId,
+        response: { cancelled: true },
+      })
+      .catch((err) => {
+        console.warn("[ui-dialog] dismissUI failed:", err);
+      });
 
     const newStates = new Map(requestStates);
     newStates.set(requestId, { ...state, status: "dismissed", response: { cancelled: true } });

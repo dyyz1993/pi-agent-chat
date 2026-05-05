@@ -1,5 +1,14 @@
 import type { ChatMessage, ContentBlock, TokenUsage } from "../types";
-import type { Message, AssistantMessage, UserMessage, ToolResultMessage, TextContent, ThinkingContent, ToolCall, Usage } from "@dyyz1993/pi-ai";
+import type {
+  Message,
+  AssistantMessage,
+  UserMessage,
+  ToolResultMessage,
+  TextContent,
+  ThinkingContent,
+  ToolCall,
+  Usage,
+} from "@dyyz1993/pi-ai";
 
 function extractTokenUsage(usage: Usage | undefined): TokenUsage | undefined {
   if (!usage) return undefined;
@@ -11,7 +20,13 @@ function extractTokenUsage(usage: Usage | undefined): TokenUsage | undefined {
 
   if (!input && !output && !cacheRead && !cacheWrite) return undefined;
 
-  return { input, output, cacheRead: cacheRead || undefined, cacheWrite: cacheWrite || undefined, cost: cost || undefined };
+  return {
+    input,
+    output,
+    cacheRead: cacheRead || undefined,
+    cacheWrite: cacheWrite || undefined,
+    cost: cost || undefined,
+  };
 }
 
 function extractTimestamp(msg: Message): number {
@@ -49,7 +64,10 @@ function extractContent(msg: UserMessage | AssistantMessage): ContentBlock[] {
   return blocks;
 }
 
-function extractToolCallNameMap(msg: AssistantMessage, toolCallNameMap: Record<string, string>): void {
+function extractToolCallNameMap(
+  msg: AssistantMessage,
+  toolCallNameMap: Record<string, string>,
+): void {
   for (const block of msg.content) {
     if (block.type === "toolCall") {
       const toolCall = block as ToolCall;
@@ -97,9 +115,13 @@ export function messageToChatMessage(
   const role = message.role as string;
 
   if (role === "custom") {
-    const customMsg = message as unknown as { customType?: string; data?: unknown; details?: unknown };
+    const customMsg = message as unknown as {
+      customType?: string;
+      data?: unknown;
+      details?: unknown;
+    };
     const customType = customMsg.customType ?? "unknown";
-    const data = (customMsg.details ?? customMsg.data) ?? {};
+    const data = customMsg.details ?? customMsg.data ?? {};
     return {
       id: id ?? `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       role: "custom",
@@ -169,7 +191,10 @@ export function messageToChatMessage(
 }
 
 export function getTextContent(msg: ChatMessage): string {
-  return msg.content.filter((b): b is { type: "text"; text: string } => b.type === "text").map((b) => b.text).join("");
+  return msg.content
+    .filter((b): b is { type: "text"; text: string } => b.type === "text")
+    .map((b) => b.text)
+    .join("");
 }
 
 export { extractTokenUsage, extractTimestamp, extractContent, extractToolCallNameMap };

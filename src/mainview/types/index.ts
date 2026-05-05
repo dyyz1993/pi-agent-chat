@@ -50,8 +50,24 @@ export type ContentBlock =
   | { type: "text"; text: string }
   | { type: "thinking"; thinking: string }
   | { type: "toolCall"; id: string; name: string; input: string }
-  | { type: "toolResult"; toolCallId: string; toolName: string; content: string; isError?: boolean; args?: string; details?: unknown }
-  | { type: "toolExecution"; toolCallId: string; toolName: string; args: string; status: ToolExecutionStatus; output?: string; details?: unknown }
+  | {
+      type: "toolResult";
+      toolCallId: string;
+      toolName: string;
+      content: string;
+      isError?: boolean;
+      args?: string;
+      details?: unknown;
+    }
+  | {
+      type: "toolExecution";
+      toolCallId: string;
+      toolName: string;
+      args: string;
+      status: ToolExecutionStatus;
+      output?: string;
+      details?: unknown;
+    }
   | { type: "custom"; customType: string; data: unknown }
   | { type: "compactionSummary"; summary: string; tokensBefore?: number }
   | UIInteractionBlock;
@@ -174,20 +190,20 @@ export type ProjectTab = {
 };
 
 export type SubagentSessionInfo = {
-	toolCallId?: string;
-	sessionId: string;
-	sessionPath: string;
-	description: string;
-	instruction: string;
-	startedAt: number;
-	completedAt?: number;
-	exitCode?: number;
-	finalText?: string;
-	error?: string;
-	agent?: string;
-	provider?: string;
-	model?: string;
-	contextUsage?: ContextUsage;
+  toolCallId?: string;
+  sessionId: string;
+  sessionPath: string;
+  description: string;
+  instruction: string;
+  startedAt: number;
+  completedAt?: number;
+  exitCode?: number;
+  finalText?: string;
+  error?: string;
+  agent?: string;
+  provider?: string;
+  model?: string;
+  contextUsage?: ContextUsage;
 };
 
 export type FileDiffEntry = {
@@ -215,8 +231,24 @@ export type SnapshotInfo = {
 export type TimelineItem =
   | { itemType: "userMessage"; messageId: string; text: string; timestamp: number }
   | { itemType: "assistantText"; blockIndex: number; text: string; messageId: string }
-  | { itemType: "toolExecution"; blockIndex: number; toolCallId: string; toolName: string; args: string; status: ToolExecutionStatus; output?: string; details?: unknown; messageId: string }
-  | { itemType: "customEntry"; entryId: string; customType: string; data: unknown; timestamp: number };
+  | {
+      itemType: "toolExecution";
+      blockIndex: number;
+      toolCallId: string;
+      toolName: string;
+      args: string;
+      status: ToolExecutionStatus;
+      output?: string;
+      details?: unknown;
+      messageId: string;
+    }
+  | {
+      itemType: "customEntry";
+      entryId: string;
+      customType: string;
+      data: unknown;
+      timestamp: number;
+    };
 
 /** A "Turn" = one user message + the assistant's full response (text blocks + tool executions) */
 export type TimelineTurn = {

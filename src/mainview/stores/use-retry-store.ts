@@ -24,13 +24,16 @@ function scheduleStaleCleanup(sessionId: string, delayMs: number) {
   if (existingTimer) {
     clearTimeout(existingTimer);
   }
-  const timer = setTimeout(() => {
-    const info = useRetryStore.getState().retryBySession[sessionId];
-    if (info) {
-      useRetryStore.getState().endRetry(sessionId);
-    }
-    cleanupTimers.delete(sessionId);
-  }, Math.max(delayMs + 30_000, STALE_TIMEOUT_MS));
+  const timer = setTimeout(
+    () => {
+      const info = useRetryStore.getState().retryBySession[sessionId];
+      if (info) {
+        useRetryStore.getState().endRetry(sessionId);
+      }
+      cleanupTimers.delete(sessionId);
+    },
+    Math.max(delayMs + 30_000, STALE_TIMEOUT_MS),
+  );
   cleanupTimers.set(sessionId, timer);
 }
 

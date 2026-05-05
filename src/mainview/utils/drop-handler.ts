@@ -11,10 +11,7 @@ export interface DropEntry {
 /**
  * 递归读取 webkitGetAsEntry，返回扁平文件列表 + 目录结构
  */
-function readEntry(
-  entry: FileSystemEntry,
-  path: string,
-): Promise<DropEntry> {
+function readEntry(entry: FileSystemEntry, path: string): Promise<DropEntry> {
   if (entry.isFile) {
     return new Promise((resolve) => {
       (entry as FileSystemFileEntry).file((file) => {
@@ -59,7 +56,9 @@ export async function readDropItems(dataTransfer: DataTransfer): Promise<DropEnt
     const entry = item.webkitGetAsEntry?.();
     if (entry) {
       tasks.push(
-        readEntry(entry, entry.name).then<void>((e) => { entries.push(e); }),
+        readEntry(entry, entry.name).then<void>((e) => {
+          entries.push(e);
+        }),
       );
     }
   }

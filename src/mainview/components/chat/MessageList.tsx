@@ -8,7 +8,11 @@ interface MessageListProps {
   onSelect?: (id: string) => void;
 }
 
-export function MessageList({ conversations = mockConversations, activeId, onSelect }: MessageListProps) {
+export function MessageList({
+  conversations = mockConversations,
+  activeId,
+  onSelect,
+}: MessageListProps) {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -55,7 +59,9 @@ function ConversationItem({
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
-          <div className={`text-[11px] font-medium truncate ${isActive ? "text-indigo-300" : "text-gray-300"}`}>
+          <div
+            className={`text-[11px] font-medium truncate ${isActive ? "text-indigo-300" : "text-gray-300"}`}
+          >
             {conv.title || "新会话"}
           </div>
           <div className="text-[10px] text-gray-600 mt-0.5 flex items-center gap-1 truncate">
@@ -64,11 +70,15 @@ function ConversationItem({
           </div>
         </div>
         {conv.status && (
-          <span className={`text-[9px] px-1.5 py-0.5 rounded shrink-0 ${
-            conv.status === "running" ? "bg-green-600/20 text-green-400 animate-pulse" :
-            conv.status === "error" ? "bg-red-600/20 text-red-400" :
-            "bg-gray-700 text-gray-500"
-          }`}>
+          <span
+            className={`text-[9px] px-1.5 py-0.5 rounded shrink-0 ${
+              conv.status === "running"
+                ? "bg-green-600/20 text-green-400 animate-pulse"
+                : conv.status === "error"
+                  ? "bg-red-600/20 text-red-400"
+                  : "bg-gray-700 text-gray-500"
+            }`}
+          >
             {conv.status}
           </span>
         )}

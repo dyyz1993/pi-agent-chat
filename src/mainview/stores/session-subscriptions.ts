@@ -43,22 +43,37 @@ export function setupSubscriptions(
   id: string,
   session: SessionMeta,
 ): void {
-  const { agentSubscriptions, subagentSubscriptions, todoSubscriptions, bashSubscriptions, lspSubscriptions, rulesSubscriptions, notifySubscriptions, memorySubscriptions } = state;
+  const {
+    agentSubscriptions,
+    subagentSubscriptions,
+    todoSubscriptions,
+    bashSubscriptions,
+    lspSubscriptions,
+    rulesSubscriptions,
+    notifySubscriptions,
+    memorySubscriptions,
+  } = state;
   const storeGet = () => useSessionStore.getState();
 
   if (!agentSubscriptions[id]) {
-    apiClient.subscribe("agent.event", (payload) => {
-      if (payload.sessionId !== id) return;
-      handleAgentEvent(id, payload.event);
-    }).then((subId) => {
-      set((s) => ({
-        agentSubscriptions: { ...s.agentSubscriptions, [id]: subId },
-      }));
-    }).catch((err) => { useAppStore.getState().addLog(`[sub] ${String(err)}`); });
+    apiClient
+      .subscribe("agent.event", (payload) => {
+        if (payload.sessionId !== id) return;
+        handleAgentEvent(id, payload.event);
+      })
+      .then((subId) => {
+        set((s) => ({
+          agentSubscriptions: { ...s.agentSubscriptions, [id]: subId },
+        }));
+      })
+      .catch((err) => {
+        useAppStore.getState().addLog(`[sub] ${String(err)}`);
+      });
   }
 
   if (!subagentSubscriptions[id]) {
-      apiClient.subscribe(
+    apiClient
+      .subscribe(
         "subagent.event",
         (payload) => {
           if (payload.parentSessionId !== id) return;
@@ -69,7 +84,12 @@ export function setupSubscriptions(
           const eventType = payload.event.type;
 
           if (eventType === "subagent_start") {
-            const evt = payload.event as { type: "subagent_start"; description: string; instruction: string; toolCallId?: string };
+            const evt = payload.event as {
+              type: "subagent_start";
+              description: string;
+              instruction: string;
+              toolCallId?: string;
+            };
             subStore.upsertLiveSubagent(path, sid, {
               sessionId: sid,
               toolCallId: evt.toolCallId,
@@ -80,194 +100,277 @@ export function setupSubscriptions(
             return;
           }
 
-        const existing = subStore.subsessionsByParent[path] || [];
-        if (!existing.find((s) => s.sessionId === sid)) {
-          subStore.upsertLiveSubagent(path, sid, {
-            sessionId: sid,
-            startedAt: Date.now(),
-          });
-        }
+          const existing = subStore.subsessionsByParent[path] || [];
+          if (!existing.find((s) => s.sessionId === sid)) {
+            subStore.upsertLiveSubagent(path, sid, {
+              sessionId: sid,
+              startedAt: Date.now(),
+            });
+          }
 
-        handleSubagentEvent(sid, payload.event as Parameters<typeof handleSubagentEvent>[1], id);
+          handleSubagentEvent(sid, payload.event as Parameters<typeof handleSubagentEvent>[1], id);
 
-        if (eventType === "agent_end") {
-          subStore.upsertLiveSubagent(path, sid, {
-            completedAt: Date.now(),
-            exitCode: 0,
-          });
-        }
-      },
-      { parentSessionId: id },
-    ).then((subId) => {
-      set((s) => ({
-        subagentSubscriptions: { ...s.subagentSubscriptions, [id]: subId },
-      }));
-    }).catch((err) => { useAppStore.getState().addLog(`[sub] ${String(err)}`); });
+          if (eventType === "agent_end") {
+            subStore.upsertLiveSubagent(path, sid, {
+              completedAt: Date.now(),
+              exitCode: 0,
+            });
+          }
+        },
+        { parentSessionId: id },
+      )
+      .then((subId) => {
+        set((s) => ({
+          subagentSubscriptions: { ...s.subagentSubscriptions, [id]: subId },
+        }));
+      })
+      .catch((err) => {
+        useAppStore.getState().addLog(`[sub] ${String(err)}`);
+      });
   }
 
   if (!todoSubscriptions[id]) {
-    apiClient.subscribe(
-      "todo.event",
-      (payload: { sessionId: string; action: string; todos: TodoItem[]; timestamp: number }) => {
-        if (payload.sessionId !== id) return;
-        storeGet().setSessionTodos(id, payload.todos);
-      },
-      { sessionId: id },
-    ).then((subId) => {
-      set((s) => ({
-        todoSubscriptions: { ...s.todoSubscriptions, [id]: subId },
-      }));
-      apiClient.call("todo.list", { sessionPath: session.sessionPath }).then((result) => {
-        if (result.todos.length > 0) {
-          storeGet().setSessionTodos(id, result.todos);
-        }
-      }).catch((err) => { useAppStore.getState().addLog(`[sub] ${String(err)}`); });
-    }).catch((err) => { useAppStore.getState().addLog(`[sub] ${String(err)}`); });
+    apiClient
+      .subscribe(
+        "todo.event",
+        (payload: { sessionId: string; action: string; todos: TodoItem[]; timestamp: number }) => {
+          if (payload.sessionId !== id) return;
+          storeGet().setSessionTodos(id, payload.todos);
+        },
+        { sessionId: id },
+      )
+      .then((subId) => {
+        set((s) => ({
+          todoSubscriptions: { ...s.todoSubscriptions, [id]: subId },
+        }));
+        apiClient
+          .call("todo.list", { sessionPath: session.sessionPath })
+          .then((result) => {
+            if (result.todos.length > 0) {
+              storeGet().setSessionTodos(id, result.todos);
+            }
+          })
+          .catch((err) => {
+            useAppStore.getState().addLog(`[sub] ${String(err)}`);
+          });
+      })
+      .catch((err) => {
+        useAppStore.getState().addLog(`[sub] ${String(err)}`);
+      });
   }
 
   if (!bashSubscriptions[id]) {
-    apiClient.subscribe(
-      "bash.event",
-      (payload: { sessionId: string; event: BashChannelEvent }) => {
-        if (payload.sessionId !== id) return;
-        handleBashEvent(id, payload.event);
-      },
-      { sessionId: id },
-    ).then((subId) => {
-      set((s) => ({
-        bashSubscriptions: { ...s.bashSubscriptions, [id]: subId },
-      }));
-      useBashStore.getState().loadHistory(id).catch((err) => { useAppStore.getState().addLog(`[sub] ${String(err)}`); });
-    }).catch((err) => { useAppStore.getState().addLog(`[sub] ${String(err)}`); });
+    apiClient
+      .subscribe(
+        "bash.event",
+        (payload: { sessionId: string; event: BashChannelEvent }) => {
+          if (payload.sessionId !== id) return;
+          handleBashEvent(id, payload.event);
+        },
+        { sessionId: id },
+      )
+      .then((subId) => {
+        set((s) => ({
+          bashSubscriptions: { ...s.bashSubscriptions, [id]: subId },
+        }));
+        useBashStore
+          .getState()
+          .loadHistory(id)
+          .catch((err) => {
+            useAppStore.getState().addLog(`[sub] ${String(err)}`);
+          });
+      })
+      .catch((err) => {
+        useAppStore.getState().addLog(`[sub] ${String(err)}`);
+      });
   }
 
   if (!lspSubscriptions[id]) {
-    apiClient.subscribe(
-      "lsp.event",
-      (payload: { sessionId: string; event: LspChannelEvent }) => {
-        if (payload.sessionId !== id) return;
-        useLspStore.getState().handleLspEvent(id, payload.event);
-      },
-      { sessionId: id },
-    ).then((subId) => {
-      set((s) => ({
-        lspSubscriptions: { ...s.lspSubscriptions, [id]: subId },
-      }));
-      useLspStore.getState().loadHistory(session.sessionPath, id).catch((err) => { useAppStore.getState().addLog(`[sub] ${String(err)}`); });
-    }).catch((err) => { useAppStore.getState().addLog(`[sub] ${String(err)}`); });
+    apiClient
+      .subscribe(
+        "lsp.event",
+        (payload: { sessionId: string; event: LspChannelEvent }) => {
+          if (payload.sessionId !== id) return;
+          useLspStore.getState().handleLspEvent(id, payload.event);
+        },
+        { sessionId: id },
+      )
+      .then((subId) => {
+        set((s) => ({
+          lspSubscriptions: { ...s.lspSubscriptions, [id]: subId },
+        }));
+        useLspStore
+          .getState()
+          .loadHistory(session.sessionPath, id)
+          .catch((err) => {
+            useAppStore.getState().addLog(`[sub] ${String(err)}`);
+          });
+      })
+      .catch((err) => {
+        useAppStore.getState().addLog(`[sub] ${String(err)}`);
+      });
   }
 
   if (!rulesSubscriptions[id]) {
-    apiClient.subscribe(
-      "rules.event",
-      (payload: { sessionId: string; event: RulesChannelEvent }) => {
-        if (payload.sessionId !== id) return;
-        useRulesStore.getState().handleRulesEvent(id, payload.event);
-      },
-      { sessionId: id },
-    ).then((subId) => {
-      set((s) => ({
-        rulesSubscriptions: { ...s.rulesSubscriptions, [id]: subId },
-      }));
-      const store = useRulesStore.getState();
-      const sessionState = store.bySession[id];
-      if (!sessionState || sessionState.totalRules === 0) {
-        apiClient.call("rules.requestSnapshot", { sessionId: id }).then((result) => {
-          if (result.totalRules === 0) return;
-          useRulesStore.getState().handleRulesEvent(id, { type: "snapshot", rules: result.rules, totalRules: result.totalRules, unconditionalCount: result.unconditionalCount, conditionalCount: result.conditionalCount, injectedRuleNames: [], matchHistory: [], lifecycleLog: [], loadedAt: Date.now(), cacheTTL: 0 });
-        }).catch((err) => { useAppStore.getState().addLog(`[sub] ${String(err)}`); });
-      }
-    }).catch((err) => { useAppStore.getState().addLog(`[sub] ${String(err)}`); });
+    apiClient
+      .subscribe(
+        "rules.event",
+        (payload: { sessionId: string; event: RulesChannelEvent }) => {
+          if (payload.sessionId !== id) return;
+          useRulesStore.getState().handleRulesEvent(id, payload.event);
+        },
+        { sessionId: id },
+      )
+      .then((subId) => {
+        set((s) => ({
+          rulesSubscriptions: { ...s.rulesSubscriptions, [id]: subId },
+        }));
+        const store = useRulesStore.getState();
+        const sessionState = store.bySession[id];
+        if (!sessionState || sessionState.totalRules === 0) {
+          apiClient
+            .call("rules.requestSnapshot", { sessionId: id })
+            .then((result) => {
+              if (result.totalRules === 0) return;
+              useRulesStore.getState().handleRulesEvent(id, {
+                type: "snapshot",
+                rules: result.rules,
+                totalRules: result.totalRules,
+                unconditionalCount: result.unconditionalCount,
+                conditionalCount: result.conditionalCount,
+                injectedRuleNames: [],
+                matchHistory: [],
+                lifecycleLog: [],
+                loadedAt: Date.now(),
+                cacheTTL: 0,
+              });
+            })
+            .catch((err) => {
+              useAppStore.getState().addLog(`[sub] ${String(err)}`);
+            });
+        }
+      })
+      .catch((err) => {
+        useAppStore.getState().addLog(`[sub] ${String(err)}`);
+      });
   }
 
   if (!notifySubscriptions[id]) {
-    apiClient.subscribe(
-      "agent.notify",
-      (payload: { sessionId: string; message: string; notifyType: "info" | "warning" | "error" }) => {
-        if (payload.sessionId !== id) return;
+    apiClient
+      .subscribe(
+        "agent.notify",
+        (payload: {
+          sessionId: string;
+          message: string;
+          notifyType: "info" | "warning" | "error";
+        }) => {
+          if (payload.sessionId !== id) return;
 
-        notificationGateway.emit({
-          type: "agent_notify",
-          sessionId: payload.sessionId,
-          title: payload.message,
-          body: "",
-          level: payload.notifyType,
-        });
-      },
-      { sessionId: id },
-    ).then((subId) => {
-      set((s) => ({
-        notifySubscriptions: { ...s.notifySubscriptions, [id]: subId },
-      }));
-    }).catch((err) => { useAppStore.getState().addLog(`[sub] ${String(err)}`); });
+          notificationGateway.emit({
+            type: "agent_notify",
+            sessionId: payload.sessionId,
+            title: payload.message,
+            body: "",
+            level: payload.notifyType,
+          });
+        },
+        { sessionId: id },
+      )
+      .then((subId) => {
+        set((s) => ({
+          notifySubscriptions: { ...s.notifySubscriptions, [id]: subId },
+        }));
+      })
+      .catch((err) => {
+        useAppStore.getState().addLog(`[sub] ${String(err)}`);
+      });
   }
 
   if (!memorySubscriptions[id] || memorySubscriptions[id].length === 0) {
-    const projectTab = useSessionStore.getState().projectTabs.find((t) => t.id === useSessionStore.getState().activeProjectId);
+    const projectTab = useSessionStore
+      .getState()
+      .projectTabs.find((t) => t.id === useSessionStore.getState().activeProjectId);
     const memorySubIds: string[] = [];
 
     function trackSub(promise: Promise<string>) {
-      promise.then((subId) => {
-        memorySubIds.push(subId);
-        set((s) => ({
-          memorySubscriptions: { ...s.memorySubscriptions, [id]: [...memorySubIds] },
-        }));
-      }).catch((err) => { useAppStore.getState().addLog(`[sub] ${String(err)}`); });
+      promise
+        .then((subId) => {
+          memorySubIds.push(subId);
+          set((s) => ({
+            memorySubscriptions: { ...s.memorySubscriptions, [id]: [...memorySubIds] },
+          }));
+        })
+        .catch((err) => {
+          useAppStore.getState().addLog(`[sub] ${String(err)}`);
+        });
     }
 
-    trackSub(apiClient.subscribe(
-      "memory.bookmark_creating",
-      (payload: { sessionId: string; timestamp: number }) => {
-        if (payload.sessionId !== id) return;
-        const memStore = useMemoryStore.getState();
-        memStore.addEvent(id, {
-          id: `mem-creating-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          customType: "bookmark_creating",
-          data: payload,
-          timestamp: payload.timestamp || Date.now(),
-        });
-        memStore.setBookmarkCreating(id, true);
+    trackSub(
+      apiClient.subscribe(
+        "memory.bookmark_creating",
+        (payload: { sessionId: string; timestamp: number }) => {
+          if (payload.sessionId !== id) return;
+          const memStore = useMemoryStore.getState();
+          memStore.addEvent(id, {
+            id: `mem-creating-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            customType: "bookmark_creating",
+            data: payload,
+            timestamp: payload.timestamp || Date.now(),
+          });
+          memStore.setBookmarkCreating(id, true);
+        },
+        { sessionId: id },
+      ),
+    );
 
-      },
-      { sessionId: id },
-    ));
+    trackSub(
+      apiClient.subscribe(
+        "memory.updated",
+        (payload: {
+          sessionId: string;
+          files: Array<{
+            filename: string;
+            filePath: string;
+            description: string | null;
+            type: string | null;
+            mtimeMs: number;
+          }>;
+          timestamp: number;
+        }) => {
+          if (payload.sessionId !== id) return;
+          const memStore = useMemoryStore.getState();
+          memStore.addEvent(id, {
+            id: `mem-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            customType: "memory_updated",
+            data: payload,
+            timestamp: payload.timestamp,
+          });
+          memStore.setBookmarkCreating(id, false);
+          if (projectTab) {
+            memStore.loadFiles(projectTab.path, id);
+          }
+        },
+        { sessionId: id },
+      ),
+    );
 
-    trackSub(apiClient.subscribe(
-      "memory.updated",
-      (payload: { sessionId: string; files: Array<{ filename: string; filePath: string; description: string | null; type: string | null; mtimeMs: number }>; timestamp: number }) => {
-        if (payload.sessionId !== id) return;
-        const memStore = useMemoryStore.getState();
-        memStore.addEvent(id, {
-          id: `mem-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          customType: "memory_updated",
-          data: payload,
-          timestamp: payload.timestamp,
-        });
-        memStore.setBookmarkCreating(id, false);
-        if (projectTab) {
-          memStore.loadFiles(projectTab.path, id);
-        }
-
-      },
-      { sessionId: id },
-    ));
-
-    trackSub(apiClient.subscribe(
-      "memory.update_failed",
-      (payload: { sessionId: string; reason: string; timestamp: number }) => {
-        if (payload.sessionId !== id) return;
-        const memStore = useMemoryStore.getState();
-        memStore.addEvent(id, {
-          id: `mem-fail-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          customType: "memory_update_failed",
-          data: payload,
-          timestamp: payload.timestamp,
-        });
-        memStore.setBookmarkCreating(id, false);
-
-      },
-      { sessionId: id },
-    ));
+    trackSub(
+      apiClient.subscribe(
+        "memory.update_failed",
+        (payload: { sessionId: string; reason: string; timestamp: number }) => {
+          if (payload.sessionId !== id) return;
+          const memStore = useMemoryStore.getState();
+          memStore.addEvent(id, {
+            id: `mem-fail-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            customType: "memory_update_failed",
+            data: payload,
+            timestamp: payload.timestamp,
+          });
+          memStore.setBookmarkCreating(id, false);
+        },
+        { sessionId: id },
+      ),
+    );
 
     const MEMORY_OPERATION_EVENTS = [
       "memory.memory_prefetch",
@@ -279,35 +382,36 @@ export function setupSubscriptions(
     ] as const;
 
     for (const eventName of MEMORY_OPERATION_EVENTS) {
-      trackSub(apiClient.subscribe(
-        eventName,
-        (payload) => {
-          if (payload.sessionId !== id) return;
-          const customType = eventName.replace("memory.", "");
-          const timestamp = payload.timestamp || Date.now();
-          const eventData = (({ sessionId: _s, timestamp: _t, ...rest }) => rest)(payload);
+      trackSub(
+        apiClient.subscribe(
+          eventName,
+          (payload) => {
+            if (payload.sessionId !== id) return;
+            const customType = eventName.replace("memory.", "");
+            const timestamp = payload.timestamp || Date.now();
+            const eventData = (({ sessionId: _s, timestamp: _t, ...rest }) => rest)(payload);
 
-          const memStore = useMemoryStore.getState();
-          memStore.addEvent(id, {
-            id: `mem-${customType}-${timestamp}-${Math.random().toString(36).slice(2, 8)}`,
-            customType,
-            data: eventData,
-            timestamp,
-          });
+            const memStore = useMemoryStore.getState();
+            memStore.addEvent(id, {
+              id: `mem-${customType}-${timestamp}-${Math.random().toString(36).slice(2, 8)}`,
+              customType,
+              data: eventData,
+              timestamp,
+            });
 
-          if (customType === "memory_prefetch_result") {
-            const data = eventData as { summary?: string; snippet?: string };
-            if (data) {
-              memStore.addInjected(id, {
-                 summary: data.summary ?? "",
-                 snippet: data.snippet ?? "",
-              });
+            if (customType === "memory_prefetch_result") {
+              const data = eventData as { summary?: string; snippet?: string };
+              if (data) {
+                memStore.addInjected(id, {
+                  summary: data.summary ?? "",
+                  snippet: data.snippet ?? "",
+                });
+              }
             }
-          }
-
-        },
-        { sessionId: id },
-      ));
+          },
+          { sessionId: id },
+        ),
+      );
     }
   }
 }
@@ -358,7 +462,10 @@ export function cleanupSessionData(sessionId: string): void {
   useSubagentStore.getState().setActiveSubsession(sessionId, null);
 }
 
-export function clearSubscriptionState(state: SubscriptionMaps & { sessionReady: Record<string, boolean> }, sessionId: string): Partial<SubscriptionMaps & { sessionReady: Record<string, boolean> }> {
+export function clearSubscriptionState(
+  state: SubscriptionMaps & { sessionReady: Record<string, boolean> },
+  sessionId: string,
+): Partial<SubscriptionMaps & { sessionReady: Record<string, boolean> }> {
   const { [sessionId]: _a, ...restAgent } = state.agentSubscriptions;
   const { [sessionId]: _b, ...restSubagent } = state.subagentSubscriptions;
   const { [sessionId]: _c, ...restTodo } = state.todoSubscriptions;
@@ -383,5 +490,7 @@ export function clearSubscriptionState(state: SubscriptionMaps & { sessionReady:
 
 export function syncTabsToBackend(tabs: ProjectTab[], activeTabId: string | null) {
   const persistTabs = tabs.map((t) => ({ id: t.id, name: t.name, path: t.path }));
-  apiClient.call("project.syncTabs", { tabs: persistTabs, activeTabId }).catch((err) => { useAppStore.getState().addLog(`[sub] ${String(err)}`); });
+  apiClient.call("project.syncTabs", { tabs: persistTabs, activeTabId }).catch((err) => {
+    useAppStore.getState().addLog(`[sub] ${String(err)}`);
+  });
 }

@@ -1,4 +1,8 @@
-import { notificationGateway, type NotificationChannel, type GatewayEvent } from "../notification-gateway";
+import {
+  notificationGateway,
+  type NotificationChannel,
+  type GatewayEvent,
+} from "../notification-gateway";
 
 function shouldShowPwa(event: GatewayEvent): boolean {
   if (!notificationGateway.appVisible) return true;
@@ -35,7 +39,9 @@ const PwaChannel: NotificationChannel = {
         window.focus();
         n.close();
       };
-    } catch (err) { console.warn("[pwa-channel] notification failed:", err); }
+    } catch (err) {
+      console.warn("[pwa-channel] notification failed:", err);
+    }
   },
 };
 

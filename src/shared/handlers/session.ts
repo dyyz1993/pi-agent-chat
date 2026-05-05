@@ -45,7 +45,10 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     });
 
     for await (const line of rl) {
-      if (!line.trim()) { lineIdx++; continue; }
+      if (!line.trim()) {
+        lineIdx++;
+        continue;
+      }
       try {
         const parsed = JSON.parse(line) as Record<string, unknown>;
         entries.push({
@@ -55,7 +58,9 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
           timestamp: new Date((parsed.timestamp as string | number) ?? 0).getTime(),
           data: parsed,
         });
-      } catch (err) { log.debug("skipping malformed JSONL entry:", { err: String(err) }) }
+      } catch (err) {
+        log.debug("skipping malformed JSONL entry:", { err: String(err) });
+      }
       lineIdx++;
     }
 
@@ -103,7 +108,9 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
           found = true;
           break;
         }
-      } catch (err) { log.debug("renameSession: skipping malformed entry:", { err: String(err) }) }
+      } catch (err) {
+        log.debug("renameSession: skipping malformed entry:", { err: String(err) });
+      }
     }
 
     if (!found) {
@@ -165,7 +172,9 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
           found = true;
           break;
         }
-      } catch (err) { log.debug("updateCwd: skipping malformed entry:", { err: String(err) }) }
+      } catch (err) {
+        log.debug("updateCwd: skipping malformed entry:", { err: String(err) });
+      }
     }
 
     if (!found) {

@@ -71,10 +71,16 @@ function findNode(nodes: TreeNode[], path: string): TreeNode | null {
 function updateExpanded(nodes: TreeNode[], path: string, expanded: boolean): TreeNode[] {
   let changed = false;
   const result = nodes.map((n) => {
-    if (n.path === path) { changed = true; return { ...n, expanded }; }
+    if (n.path === path) {
+      changed = true;
+      return { ...n, expanded };
+    }
     if (n.children) {
       const newChildren = updateExpanded(n.children, path, expanded);
-      if (newChildren !== n.children) { changed = true; return { ...n, children: newChildren }; }
+      if (newChildren !== n.children) {
+        changed = true;
+        return { ...n, children: newChildren };
+      }
     }
     return n;
   });
@@ -84,10 +90,16 @@ function updateExpanded(nodes: TreeNode[], path: string, expanded: boolean): Tre
 function loadChildren(nodes: TreeNode[], nodePath: string, children: TreeNode[]): TreeNode[] {
   let changed = false;
   const result = nodes.map((n) => {
-    if (n.path === nodePath) { changed = true; return { ...n, children, expanded: true, loaded: true }; }
+    if (n.path === nodePath) {
+      changed = true;
+      return { ...n, children, expanded: true, loaded: true };
+    }
     if (n.children) {
       const newChildren = loadChildren(n.children, nodePath, children);
-      if (newChildren !== n.children) { changed = true; return { ...n, children: newChildren }; }
+      if (newChildren !== n.children) {
+        changed = true;
+        return { ...n, children: newChildren };
+      }
     }
     return n;
   });
@@ -96,26 +108,45 @@ function loadChildren(nodes: TreeNode[], nodePath: string, children: TreeNode[])
 
 function removeNode(nodes: TreeNode[], path: string): TreeNode[] {
   let changed = false;
-  const result = nodes.filter((n) => {
-    if (n.path === path) { changed = true; return false; }
-    return true;
-  }).map((n) => {
-    if (n.children) {
-      const newChildren = removeNode(n.children, path);
-      if (newChildren !== n.children) { changed = true; return { ...n, children: newChildren }; }
-    }
-    return n;
-  });
+  const result = nodes
+    .filter((n) => {
+      if (n.path === path) {
+        changed = true;
+        return false;
+      }
+      return true;
+    })
+    .map((n) => {
+      if (n.children) {
+        const newChildren = removeNode(n.children, path);
+        if (newChildren !== n.children) {
+          changed = true;
+          return { ...n, children: newChildren };
+        }
+      }
+      return n;
+    });
   return changed ? result : nodes;
 }
 
-function renameInTree(nodes: TreeNode[], oldPath: string, newPath: string, newName: string): TreeNode[] {
+function renameInTree(
+  nodes: TreeNode[],
+  oldPath: string,
+  newPath: string,
+  newName: string,
+): TreeNode[] {
   let changed = false;
   const result = nodes.map((n) => {
-    if (n.path === oldPath) { changed = true; return { ...n, name: newName, path: newPath }; }
+    if (n.path === oldPath) {
+      changed = true;
+      return { ...n, name: newName, path: newPath };
+    }
     if (n.children) {
       const newChildren = renameInTree(n.children, oldPath, newPath, newName);
-      if (newChildren !== n.children) { changed = true; return { ...n, children: newChildren }; }
+      if (newChildren !== n.children) {
+        changed = true;
+        return { ...n, children: newChildren };
+      }
     }
     return n;
   });
@@ -326,9 +357,10 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
     const addLog = useAppStore.getState().addLog;
     const mode = useAppStore.getState().mode;
     try {
-      const count = mode === "desktop"
-        ? await importFilesDesktop(entries, destDir)
-        : await uploadEntriesWeb(entries, destDir);
+      const count =
+        mode === "desktop"
+          ? await importFilesDesktop(entries, destDir)
+          : await uploadEntriesWeb(entries, destDir);
       addLog(`Imported ${count} items to ${destDir}`);
       await get().refreshDir(destDir);
       return count;
@@ -343,35 +375,36 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
     if (_fileWatchSubId || !currentPath) return;
 
     try {
-      const subId = await apiClient.subscribe(
-        "file.changed",
-        (payload) => {
-          const state = get();
-          const { currentPath: cp, treeNodes, _refreshDebounceTimer, _pendingRefreshDirs } = state;
-          if (!cp) return;
+      const subId = await apiClient.subscribe("file.changed", (payload) => {
+        const state = get();
+        const { currentPath: cp, treeNodes, _refreshDebounceTimer, _pendingRefreshDirs } = state;
+        if (!cp) return;
 
-          const changedDir = payload.changedPath.includes("/") || payload.changedPath.includes("\\")
-            ? payload.changedPath.substring(0, payload.changedPath.lastIndexOf(payload.changedPath.includes("/") ? "/" : "\\"))
+        const changedDir =
+          payload.changedPath.includes("/") || payload.changedPath.includes("\\")
+            ? payload.changedPath.substring(
+                0,
+                payload.changedPath.lastIndexOf(payload.changedPath.includes("/") ? "/" : "\\"),
+              )
             : cp;
 
-          if (changedDir !== cp) {
-            const node = findNode(treeNodes, changedDir);
-            if (!node || !node.expanded) return;
+        if (changedDir !== cp) {
+          const node = findNode(treeNodes, changedDir);
+          if (!node || !node.expanded) return;
+        }
+
+        _pendingRefreshDirs.add(changedDir === cp ? cp : changedDir);
+
+        if (_refreshDebounceTimer) clearTimeout(_refreshDebounceTimer);
+        const timer = setTimeout(() => {
+          const dirs = new Set(get()._pendingRefreshDirs);
+          set({ _refreshDebounceTimer: null, _pendingRefreshDirs: new Set() });
+          for (const dir of dirs) {
+            get().refreshDir(dir);
           }
-
-          _pendingRefreshDirs.add(changedDir === cp ? cp : changedDir);
-
-          if (_refreshDebounceTimer) clearTimeout(_refreshDebounceTimer);
-          const timer = setTimeout(() => {
-            const dirs = new Set(get()._pendingRefreshDirs);
-            set({ _refreshDebounceTimer: null, _pendingRefreshDirs: new Set() });
-            for (const dir of dirs) {
-              get().refreshDir(dir);
-            }
-          }, 500);
-          set({ _refreshDebounceTimer: timer });
-        },
-      );
+        }, 500);
+        set({ _refreshDebounceTimer: timer });
+      });
       set({ _fileWatchSubId: subId });
     } catch {
       // subscription failed silently

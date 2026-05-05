@@ -4,7 +4,8 @@ import type { RPCMethods } from "../lib/api-client";
 import type { MethodResult } from "@dyyz1993/rpc-core";
 import type { DemoMethod } from "../types";
 
-type DemoResult = MethodResult<RPCMethods, "system.ping">
+type DemoResult =
+  | MethodResult<RPCMethods, "system.ping">
   | MethodResult<RPCMethods, "system.hello">
   | MethodResult<RPCMethods, "system.echo">;
 
@@ -53,7 +54,9 @@ export const useAppStore = create<AppState>((set, get) => ({
           mode: transport === "ipc" ? "desktop" : "web",
           ready: true,
         });
-        get().addLog(`${transport === "ipc" ? "Desktop" : "Web"} mode - ${transport.toUpperCase()}`);
+        get().addLog(
+          `${transport === "ipc" ? "Desktop" : "Web"} mode - ${transport.toUpperCase()}`,
+        );
       } catch {
         retries++;
         if (retries < MAX_RETRIES) {
@@ -106,13 +109,17 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ timerRunning: true });
       addLog("Timer started");
 
-      const subId = await apiClient.subscribe("timer.tick", (payload) => {
-        const time = new Date(payload.timestamp).toLocaleTimeString();
-        set((s) => ({
-          tickEvents: [...s.tickEvents.slice(-19), `#${payload.count} @ ${time}`],
-          tickCount: s.tickCount + 1,
-        }));
-      }, {});
+      const subId = await apiClient.subscribe(
+        "timer.tick",
+        (payload) => {
+          const time = new Date(payload.timestamp).toLocaleTimeString();
+          set((s) => ({
+            tickEvents: [...s.tickEvents.slice(-19), `#${payload.count} @ ${time}`],
+            tickCount: s.tickCount + 1,
+          }));
+        },
+        {},
+      );
       set({ subscriptionId: subId });
       addLog(`Subscribed: ${subId}`);
     } catch (err) {

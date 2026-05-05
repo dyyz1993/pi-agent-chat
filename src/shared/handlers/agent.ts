@@ -94,12 +94,18 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
   r("agent.getMessages", async (params) => {
     const result = await m.getMessages(params.sessionId, params.sessionPath);
-    return { messages: result.messages, customEntries: result.customEntries } as R<"agent.getMessages">;
+    return {
+      messages: result.messages,
+      customEntries: result.customEntries,
+    } as R<"agent.getMessages">;
   });
 
   r("agent.getFullMessages", async (params) => {
     const result = await m.getFullMessages(params.sessionId, params.sessionPath);
-    return { messages: result.messages, customEntries: result.customEntries } as R<"agent.getFullMessages">;
+    return {
+      messages: result.messages,
+      customEntries: result.customEntries,
+    } as R<"agent.getFullMessages">;
   });
 
   r("agent.steer", async (params) => {
@@ -127,7 +133,9 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("agent.setModel", async (params) => {
-    return m.setModel(params.sessionId, params.provider, params.modelId) as Promise<R<"agent.setModel">>;
+    return m.setModel(params.sessionId, params.provider, params.modelId) as Promise<
+      R<"agent.setModel">
+    >;
   });
 
   r("agent.cycleModel", async (params) => {
@@ -238,15 +246,24 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("agent.fork", async (params) => {
-    return m.fork(params.sessionId, params.entryId, params.position ? { position: params.position } : undefined) as Promise<R<"agent.fork">>;
+    return m.fork(
+      params.sessionId,
+      params.entryId,
+      params.position ? { position: params.position } : undefined,
+    ) as Promise<R<"agent.fork">>;
   });
 
   r("agent.navigateTree", async (params) => {
-    return m.navigateTree(params.sessionId, params.targetId, { summarize: params.summarize, skipFiles: params.skipFiles }) as Promise<R<"agent.navigateTree">>;
+    return m.navigateTree(params.sessionId, params.targetId, {
+      summarize: params.summarize,
+      skipFiles: params.skipFiles,
+    }) as Promise<R<"agent.navigateTree">>;
   });
 
   r("agent.rollbackPreview", async (params) => {
-    return m.previewRollback(params.sessionId, params.targetId) as Promise<R<"agent.rollbackPreview">>;
+    return m.previewRollback(params.sessionId, params.targetId) as Promise<
+      R<"agent.rollbackPreview">
+    >;
   });
 
   r("agent.getTree", async (params) => {

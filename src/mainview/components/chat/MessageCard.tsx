@@ -19,7 +19,13 @@ const EMPTY_MSGS: never[] = [];
 import { apiClient } from "../../lib/api-client";
 import type { SessionMeta } from "../../types";
 import type { TreeEntry } from "@dyyz1993/pi-coding-agent";
-import { MessageBubble, MEMORY_HIDDEN_IN_CHAT, MEMORY_CUSTOM_TYPES, isLspCustomType, isLspVisibleInChat } from "./MessageBubble";
+import {
+  MessageBubble,
+  MEMORY_HIDDEN_IN_CHAT,
+  MEMORY_CUSTOM_TYPES,
+  isLspCustomType,
+  isLspVisibleInChat,
+} from "./MessageBubble";
 import type { ChatMessage } from "../../types";
 import { formatTokenCount } from "../../utils/turn-utils";
 import { getCustomTypeIcon } from "./tool-icon-map";
@@ -31,12 +37,39 @@ interface MessageCardProps {
 }
 
 const ROLE_CONFIG = {
-  user: { icon: User, color: "text-blue-400/80", barColor: "border-l-blue-500/60", bgColor: "bg-blue-500/[0.03]", altBarColor: "border-l-blue-400/45", altBgColor: "bg-blue-400/[0.02]" },
-  assistant: { icon: Bot, color: "text-emerald-400/70", barColor: "border-l-emerald-500/50", bgColor: "bg-emerald-500/[0.03]", altBarColor: "border-l-emerald-400/35", altBgColor: "bg-emerald-400/[0.02]" },
-  compactionSummary: { icon: Archive, color: "text-cyan-400/70", barColor: "border-l-cyan-500/50", bgColor: "bg-cyan-500/[0.03]", altBarColor: "border-l-cyan-400/35", altBgColor: "bg-cyan-400/[0.02]" },
+  user: {
+    icon: User,
+    color: "text-blue-400/80",
+    barColor: "border-l-blue-500/60",
+    bgColor: "bg-blue-500/[0.03]",
+    altBarColor: "border-l-blue-400/45",
+    altBgColor: "bg-blue-400/[0.02]",
+  },
+  assistant: {
+    icon: Bot,
+    color: "text-emerald-400/70",
+    barColor: "border-l-emerald-500/50",
+    bgColor: "bg-emerald-500/[0.03]",
+    altBarColor: "border-l-emerald-400/35",
+    altBgColor: "bg-emerald-400/[0.02]",
+  },
+  compactionSummary: {
+    icon: Archive,
+    color: "text-cyan-400/70",
+    barColor: "border-l-cyan-500/50",
+    bgColor: "bg-cyan-500/[0.03]",
+    altBarColor: "border-l-cyan-400/35",
+    altBgColor: "bg-cyan-400/[0.02]",
+  },
 };
 
-const ENTRY_DEFAULT = { barColor: "border-l-yellow-500/50", labelColor: "text-yellow-400/70", bgColor: "bg-yellow-500/[0.04]", altBarColor: "border-l-yellow-400/35", altBgColor: "bg-yellow-400/[0.02]" };
+const ENTRY_DEFAULT = {
+  barColor: "border-l-yellow-500/50",
+  labelColor: "text-yellow-400/70",
+  bgColor: "bg-yellow-500/[0.04]",
+  altBarColor: "border-l-yellow-400/35",
+  altBgColor: "bg-yellow-400/[0.02]",
+};
 
 function formatTime(ts: number): string {
   const d = new Date(ts);
@@ -45,16 +78,30 @@ function formatTime(ts: number): string {
   return `${hh}:${mm}`;
 }
 
-export const MessageCard = memo(function MessageCard({ message, cardLabel, prevBarColor }: MessageCardProps) {
+export const MessageCard = memo(function MessageCard({
+  message,
+  cardLabel,
+  prevBarColor,
+}: MessageCardProps) {
   const sessionId = useSessionStore((s) => s.activeSessionId);
   const toggleCollapse = useTurnStore((s) => s.toggleCollapse);
   const toggleMessageSelection = useTurnStore((s) => s.toggleMessageSelection);
 
   const isCollapsed = useTurnStore(
-    useCallback((s) => sessionId ? (s.collapsedMessageIdsBySession[sessionId] ?? EMPTY_SET).has(message.id) : false, [sessionId, message.id])
+    useCallback(
+      (s) =>
+        sessionId
+          ? (s.collapsedMessageIdsBySession[sessionId] ?? EMPTY_SET).has(message.id)
+          : false,
+      [sessionId, message.id],
+    ),
   );
   const isSelected = useTurnStore(
-    useCallback((s) => sessionId ? (s.selectedMessageIdsBySession[sessionId] ?? EMPTY_SET).has(message.id) : false, [sessionId, message.id])
+    useCallback(
+      (s) =>
+        sessionId ? (s.selectedMessageIdsBySession[sessionId] ?? EMPTY_SET).has(message.id) : false,
+      [sessionId, message.id],
+    ),
   );
 
   const isUser = message.role === "user";
@@ -63,7 +110,9 @@ export const MessageCard = memo(function MessageCard({ message, cardLabel, prevB
   const timeStr = formatTime(message.timestamp);
 
   const hasCustomContent = message.content.some((b) => b.type === "custom");
-  const customBlock = message.content.find((b): b is Extract<typeof b, { type: "custom" }> => b.type === "custom");
+  const customBlock = message.content.find(
+    (b): b is Extract<typeof b, { type: "custom" }> => b.type === "custom",
+  );
 
   // Skip rendering entirely for custom entries where all blocks are hidden
   if (hasCustomContent) {
@@ -86,17 +135,25 @@ export const MessageCard = memo(function MessageCard({ message, cardLabel, prevB
   }
 
   if (isCompaction) {
-    const compactionBlock = message.content.find((b): b is Extract<typeof b, { type: "compactionSummary" }> => b.type === "compactionSummary");
+    const compactionBlock = message.content.find(
+      (b): b is Extract<typeof b, { type: "compactionSummary" }> => b.type === "compactionSummary",
+    );
     const roleCfg = ROLE_CONFIG.compactionSummary;
     const summary = compactionBlock?.summary ?? "";
-    const firstLine = summary.split("\n").find((l) => l.trim() && !l.startsWith("#"))?.trim() ?? summary.slice(0, 100);
+    const firstLine =
+      summary
+        .split("\n")
+        .find((l) => l.trim() && !l.startsWith("#"))
+        ?.trim() ?? summary.slice(0, 100);
 
     return (
       <div
         data-msg-card-id={message.id}
         className={`group/msgcard relative w-full py-1 transition-colors overflow-hidden ${roleCfg.bgColor}`}
       >
-        <div className={`relative z-20 flex items-center gap-2 px-3 pl-2 h-5 select-none border-l-[3px] ${roleCfg.barColor}`}>
+        <div
+          className={`relative z-20 flex items-center gap-2 px-3 pl-2 h-5 select-none border-l-[3px] ${roleCfg.barColor}`}
+        >
           <span className={`flex items-center gap-1 text-[11px] font-medium ${roleCfg.color}`}>
             <Archive className="w-3 h-3" />
             上下文压缩
@@ -108,17 +165,24 @@ export const MessageCard = memo(function MessageCard({ message, cardLabel, prevB
           )}
           <div className="flex items-center gap-0.5 ml-auto shrink-0">
             <button
-              onClick={(e) => { e.stopPropagation(); toggleCollapse(message.id); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleCollapse(message.id);
+              }}
               className="p-0.5 text-gray-600 hover:text-gray-300 transition-colors"
               title={isCollapsed ? "展开" : "折叠"}
             >
-              <ChevronDown className={`w-3 h-3 transition-transform ${isCollapsed ? "" : "-rotate-90"}`} />
+              <ChevronDown
+                className={`w-3 h-3 transition-transform ${isCollapsed ? "" : "-rotate-90"}`}
+              />
             </button>
             <span className="text-[10px] text-gray-400 dark:text-gray-600">{timeStr}</span>
           </div>
         </div>
         {isCollapsed ? (
-          <div className={`relative z-20 border-l-[3px] ${roleCfg.barColor} px-4 py-1 text-xs text-gray-400 dark:text-gray-500 italic leading-relaxed`}>
+          <div
+            className={`relative z-20 border-l-[3px] ${roleCfg.barColor} px-4 py-1 text-xs text-gray-400 dark:text-gray-500 italic leading-relaxed`}
+          >
             {firstLine}
           </div>
         ) : (
@@ -140,13 +204,20 @@ export const MessageCard = memo(function MessageCard({ message, cardLabel, prevB
   if (isEntry) {
     barColor = ENTRY_DEFAULT.barColor;
     bgColor = ENTRY_DEFAULT.bgColor;
-    if (prevBarColor === ENTRY_DEFAULT.barColor) { barColor = ENTRY_DEFAULT.altBarColor; bgColor = ENTRY_DEFAULT.altBgColor; }
+    if (prevBarColor === ENTRY_DEFAULT.barColor) {
+      barColor = ENTRY_DEFAULT.altBarColor;
+      bgColor = ENTRY_DEFAULT.altBgColor;
+    }
     const iconEntry = getCustomTypeIcon(customBlock.customType);
     IconComp = iconEntry.icon;
     labelColor = iconEntry.color;
     label = cardLabel ?? iconEntry.label;
   } else {
-    const roleCfg = (message.role in ROLE_CONFIG ? ROLE_CONFIG[message.role as keyof typeof ROLE_CONFIG] : ROLE_CONFIG.assistant) ?? ROLE_CONFIG.assistant;    IconComp = roleCfg.icon;
+    const roleCfg =
+      (message.role in ROLE_CONFIG
+        ? ROLE_CONFIG[message.role as keyof typeof ROLE_CONFIG]
+        : ROLE_CONFIG.assistant) ?? ROLE_CONFIG.assistant;
+    IconComp = roleCfg.icon;
     labelColor = roleCfg.color;
     barColor = roleCfg.barColor;
     bgColor = roleCfg.bgColor;
@@ -165,7 +236,9 @@ export const MessageCard = memo(function MessageCard({ message, cardLabel, prevB
         <div className="absolute inset-0 bg-red-500/15 pointer-events-none z-10 rounded-sm" />
       )}
       {/* Header: checkbox + label + timestamp */}
-      <div className={`relative z-20 flex items-center gap-2 px-3 pl-2 h-5 select-none border-l-[3px] ${isSelected ? "border-l-red-500" : barColor}`}>
+      <div
+        className={`relative z-20 flex items-center gap-2 px-3 pl-2 h-5 select-none border-l-[3px] ${isSelected ? "border-l-red-500" : barColor}`}
+      >
         {!isEntry && (
           <input
             type="checkbox"
@@ -184,8 +257,9 @@ export const MessageCard = memo(function MessageCard({ message, cardLabel, prevB
         )}
 
         {!isUser && !isEntry && (message.provider ?? message.model) && (
-           <span className="text-[10px] text-gray-400 dark:text-gray-600 opacity-0 group-hover/msgcard:opacity-100 transition-opacity">
-            {message.provider}{message.model ? ` · ${message.model}` : ""}
+          <span className="text-[10px] text-gray-400 dark:text-gray-600 opacity-0 group-hover/msgcard:opacity-100 transition-opacity">
+            {message.provider}
+            {message.model ? ` · ${message.model}` : ""}
           </span>
         )}
 
@@ -195,11 +269,16 @@ export const MessageCard = memo(function MessageCard({ message, cardLabel, prevB
           )}
           {(isAssistant || isUser || isEntry) && (
             <button
-              onClick={(e) => { e.stopPropagation(); handleToggleCollapse(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleToggleCollapse();
+              }}
               className="p-0.5 text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
               title={isCollapsed ? "展开" : "折叠"}
             >
-              <ChevronDown className={`w-3 h-3 transition-transform ${isCollapsed ? "" : "-rotate-90"}`} />
+              <ChevronDown
+                className={`w-3 h-3 transition-transform ${isCollapsed ? "" : "-rotate-90"}`}
+              />
             </button>
           )}
           <span className="text-[10px] text-gray-400 dark:text-gray-600">{timeStr}</span>
@@ -208,7 +287,9 @@ export const MessageCard = memo(function MessageCard({ message, cardLabel, prevB
 
       {/* Content */}
       {isCollapsed ? (
-        <div className={`relative z-20 border-l-[3px] ${isSelected ? "border-l-red-500" : barColor} px-4 py-1 text-xs text-gray-400 dark:text-gray-500 italic leading-relaxed`}>
+        <div
+          className={`relative z-20 border-l-[3px] ${isSelected ? "border-l-red-500" : barColor} px-4 py-1 text-xs text-gray-400 dark:text-gray-500 italic leading-relaxed`}
+        >
           {message.content
             .filter((b) => b.type === "text")
             .map((b) => b.text)
@@ -217,13 +298,15 @@ export const MessageCard = memo(function MessageCard({ message, cardLabel, prevB
         </div>
       ) : (
         <div className="relative z-20">
-        <MessageBubble message={message} />
+          <MessageBubble message={message} />
         </div>
       )}
 
       {/* Footer — only for assistant messages (not entry) with actions/token */}
       {isAssistant && !isEntry && !isCollapsed && (
-        <div className={`relative z-20 border-l-[3px] ${isSelected ? "border-l-red-500" : barColor}`}>
+        <div
+          className={`relative z-20 border-l-[3px] ${isSelected ? "border-l-red-500" : barColor}`}
+        >
           {message.tokenUsage && (
             <div className="flex items-center justify-end px-4 pb-0.5">
               <span className="flex items-center gap-1 text-[10px] font-mono text-gray-400 dark:text-gray-600">
@@ -231,7 +314,9 @@ export const MessageCard = memo(function MessageCard({ message, cardLabel, prevB
                 <span className="text-gray-400 dark:text-gray-800">→</span>
                 <span>输出 {formatTokenCount(message.tokenUsage.output)}</span>
                 <span className="text-gray-400 dark:text-gray-800">·</span>
-                <span>{formatTokenCount(message.tokenUsage.input + message.tokenUsage.output)}</span>
+                <span>
+                  {formatTokenCount(message.tokenUsage.input + message.tokenUsage.output)}
+                </span>
               </span>
             </div>
           )}
@@ -241,7 +326,13 @@ export const MessageCard = memo(function MessageCard({ message, cardLabel, prevB
   );
 });
 
-const LazyHeaderActions = memo(function LazyHeaderActions({ message, isUserCard }: { message: ChatMessage; isUserCard?: boolean }) {
+const LazyHeaderActions = memo(function LazyHeaderActions({
+  message,
+  isUserCard,
+}: {
+  message: ChatMessage;
+  isUserCard?: boolean;
+}) {
   const [visible, setVisible] = useState(false);
 
   if (!visible) {
@@ -258,9 +349,17 @@ const LazyHeaderActions = memo(function LazyHeaderActions({ message, isUserCard 
   return <HeaderActions message={message} isUserCard={isUserCard} />;
 });
 
-const HeaderActions = memo(function HeaderActions({ message, isUserCard }: { message: ChatMessage; isUserCard?: boolean }) {
+const HeaderActions = memo(function HeaderActions({
+  message,
+  isUserCard,
+}: {
+  message: ChatMessage;
+  isUserCard?: boolean;
+}) {
   const sessionId = useSessionStore((s) => s.activeSessionId);
-  const messages = useChatStore((s) => sessionId ? (s.messagesBySession[sessionId] || EMPTY_MSGS) : EMPTY_MSGS);
+  const messages = useChatStore((s) =>
+    sessionId ? s.messagesBySession[sessionId] || EMPTY_MSGS : EMPTY_MSGS,
+  );
   const pushNotification = useNotificationStore((s) => s.push);
   const rollingBackRef = useRef(false);
   const [confirmState, setConfirmState] = useState<{
@@ -274,33 +373,40 @@ const HeaderActions = memo(function HeaderActions({ message, isUserCard }: { mes
     try {
       const tree = await apiClient.call("agent.getTree", { sessionId });
       return tree.entries ?? [];
-    } catch { /* tree fetch failed */ return null }
+    } catch {
+      /* tree fetch failed */ return null;
+    }
   }, [sessionId]);
 
-  const resolveEntryId = useCallback(async (treeEntries?: TreeEntry[] | null): Promise<string | null> => {
-    if (message.entryId) return message.entryId;
-    const entries = treeEntries ?? await fetchTree();
-    if (!entries || !sessionId) return null;
-    if (isUserCard) {
-      const allUserMsgs = messages.filter(m => m.role === "user");
-      const userMsgIdx = allUserMsgs.findIndex(m => m.id === message.id);
-      const userTreeEntries = entries.filter(e => e.type === "message" && e.label === "user");
-      if (userMsgIdx !== -1 && userMsgIdx < userTreeEntries.length) {
-        return userTreeEntries[userMsgIdx].id;
+  const resolveEntryId = useCallback(
+    async (treeEntries?: TreeEntry[] | null): Promise<string | null> => {
+      if (message.entryId) return message.entryId;
+      const entries = treeEntries ?? (await fetchTree());
+      if (!entries || !sessionId) return null;
+      if (isUserCard) {
+        const allUserMsgs = messages.filter((m) => m.role === "user");
+        const userMsgIdx = allUserMsgs.findIndex((m) => m.id === message.id);
+        const userTreeEntries = entries.filter((e) => e.type === "message" && e.label === "user");
+        if (userMsgIdx !== -1 && userMsgIdx < userTreeEntries.length) {
+          return userTreeEntries[userMsgIdx].id;
+        }
+        return null;
+      }
+      const allAssistantMsgs = messages.filter((m) => m.role === "assistant");
+      const assistantMsgIdx = allAssistantMsgs.findIndex((m) => m.id === message.id);
+      const assistantTreeEntries = entries.filter(
+        (e) => e.type === "message" && e.label === "assistant",
+      );
+      if (assistantMsgIdx !== -1 && assistantMsgIdx < assistantTreeEntries.length) {
+        return assistantTreeEntries[assistantMsgIdx].id;
       }
       return null;
-    }
-    const allAssistantMsgs = messages.filter(m => m.role === "assistant");
-    const assistantMsgIdx = allAssistantMsgs.findIndex(m => m.id === message.id);
-    const assistantTreeEntries = entries.filter(e => e.type === "message" && e.label === "assistant");
-    if (assistantMsgIdx !== -1 && assistantMsgIdx < assistantTreeEntries.length) {
-      return assistantTreeEntries[assistantMsgIdx].id;
-    }
-    return null;
-  }, [sessionId, message.id, message.entryId, messages, isUserCard, fetchTree]);
+    },
+    [sessionId, message.id, message.entryId, messages, isUserCard, fetchTree],
+  );
 
   const findTurnBoundary = useCallback((entryId: string, entries: TreeEntry[]): string | null => {
-    const byId = new Map(entries.map(e => [e.id, e]));
+    const byId = new Map(entries.map((e) => [e.id, e]));
     let current = byId.get(entryId);
     if (!current) return null;
     let currentLabel = current.label;
@@ -325,7 +431,10 @@ const HeaderActions = memo(function HeaderActions({ message, isUserCard }: { mes
     return null;
   }, []);
 
-  const resolveRollbackTarget = useCallback(async (): Promise<{ targetId: string; tree: TreeEntry[] } | null> => {
+  const resolveRollbackTarget = useCallback(async (): Promise<{
+    targetId: string;
+    tree: TreeEntry[];
+  } | null> => {
     if (!sessionId) return null;
     const tree = await fetchTree();
     if (!tree || tree.length === 0) return null;
@@ -340,7 +449,12 @@ const HeaderActions = memo(function HeaderActions({ message, isUserCard }: { mes
     const tree = await fetchTree();
     const entryId = await resolveEntryId(tree);
     if (!sessionId || !entryId) return;
-    const result = await apiClient.call("agent.fork", { sessionId, entryId, position: "at" }).catch((err) => { console.warn("[MessageCard] fork failed:", err); return undefined; });
+    const result = await apiClient
+      .call("agent.fork", { sessionId, entryId, position: "at" })
+      .catch((err) => {
+        console.warn("[MessageCard] fork failed:", err);
+        return undefined;
+      });
     if (!result || result.cancelled || !result.newSessionId || !result.newSessionFile) return;
     const state = useSessionStore.getState();
     const activeTab = state.projectTabs.find((t: { id: string }) => t.id === state.activeProjectId);
@@ -372,67 +486,94 @@ const HeaderActions = memo(function HeaderActions({ message, isUserCard }: { mes
     pushNotification({ message: "已 Fork 为新会话", level: "info" });
   }, [sessionId, fetchTree, resolveEntryId, pushNotification]);
 
-  const executeRollback = useCallback(async (mode: "message" | "withFiles") => {
-    try {
-      const result = await resolveRollbackTarget();
-      if (!sessionId || !result) {
-        pushNotification({ message: "回滚失败：无法确定回滚目标", level: "error" });
-        return;
-      }
-      const textToRefill = isUserCard
-        ? message.content
-            .filter((b): b is { type: "text"; text: string } => b.type === "text")
-            .map((b) => b.text)
-            .join("")
-            .trim()
-        : null;
-      if (textToRefill) {
-        const currentInput = useChatStore.getState().inputText?.trim();
-        if (currentInput) {
-          try {
-            const HISTORY_KEY = "pi-input-history";
-            const raw = localStorage.getItem(`${HISTORY_KEY}:${sessionId}`);
-            const history: string[] = raw ? JSON.parse(raw) as string[] : [];
-            if (!history.includes(currentInput)) {
-              history.unshift(currentInput);
-              localStorage.setItem(`${HISTORY_KEY}:${sessionId}`, JSON.stringify(history.slice(0, 10)));
-            }
-          } catch { /* localStorage unavailable, ignore */ }
+  const executeRollback = useCallback(
+    async (mode: "message" | "withFiles") => {
+      try {
+        const result = await resolveRollbackTarget();
+        if (!sessionId || !result) {
+          pushNotification({ message: "回滚失败：无法确定回滚目标", level: "error" });
+          return;
         }
+        const textToRefill = isUserCard
+          ? message.content
+              .filter((b): b is { type: "text"; text: string } => b.type === "text")
+              .map((b) => b.text)
+              .join("")
+              .trim()
+          : null;
+        if (textToRefill) {
+          const currentInput = useChatStore.getState().inputText?.trim();
+          if (currentInput) {
+            try {
+              const HISTORY_KEY = "pi-input-history";
+              const raw = localStorage.getItem(`${HISTORY_KEY}:${sessionId}`);
+              const history: string[] = raw ? (JSON.parse(raw) as string[]) : [];
+              if (!history.includes(currentInput)) {
+                history.unshift(currentInput);
+                localStorage.setItem(
+                  `${HISTORY_KEY}:${sessionId}`,
+                  JSON.stringify(history.slice(0, 10)),
+                );
+              }
+            } catch {
+              /* localStorage unavailable, ignore */
+            }
+          }
+        }
+        const skipFiles = mode === "message";
+        await apiClient.call("agent.navigateTree", {
+          sessionId,
+          targetId: result.targetId,
+          summarize: false,
+          skipFiles,
+        });
+        await useChatStore.getState().loadSessionMessages(sessionId, { force: true });
+        if (textToRefill) {
+          useChatStore.getState().setInputText(textToRefill);
+        }
+        pushNotification({ message: "已回滚到上一轮对话", level: "info" });
+      } catch (err) {
+        pushNotification({
+          message: `回滚失败：${err instanceof Error ? err.message : "未知错误"}`,
+          level: "error",
+        });
       }
-      const skipFiles = mode === "message";
-      await apiClient.call("agent.navigateTree", { sessionId, targetId: result.targetId, summarize: false, skipFiles });
-      await useChatStore.getState().loadSessionMessages(sessionId, { force: true });
-      if (textToRefill) {
-        useChatStore.getState().setInputText(textToRefill);
-      }
-      pushNotification({ message: "已回滚到上一轮对话", level: "info" });
-    } catch (err) {
-      pushNotification({ message: `回滚失败：${err instanceof Error ? err.message : "未知错误"}`, level: "error" });
-    }
-  }, [sessionId, resolveRollbackTarget, isUserCard, message, pushNotification]);
+    },
+    [sessionId, resolveRollbackTarget, isUserCard, message, pushNotification],
+  );
 
-  const requestRollback = useCallback(async (mode: "message" | "withFiles") => {
-    if (rollingBackRef.current) return;
-    rollingBackRef.current = true;
-    try {
-      const result = await resolveRollbackTarget();
-      if (!sessionId || !result) {
-        pushNotification({ message: "回滚失败：无法确定回滚目标", level: "error" });
-        return;
+  const requestRollback = useCallback(
+    async (mode: "message" | "withFiles") => {
+      if (rollingBackRef.current) return;
+      rollingBackRef.current = true;
+      try {
+        const result = await resolveRollbackTarget();
+        if (!sessionId || !result) {
+          pushNotification({ message: "回滚失败：无法确定回滚目标", level: "error" });
+          return;
+        }
+        if (mode === "message") {
+          await executeRollback("message");
+          return;
+        }
+        const preview = await apiClient
+          .call("agent.rollbackPreview", { sessionId, targetId: result.targetId })
+          .catch((err) => {
+            console.warn("[MessageCard] rollbackPreview failed:", err);
+            return { restored: [], deleted: [] };
+          });
+        setConfirmState({ mode, targetId: result.targetId, preview });
+      } catch (err) {
+        pushNotification({
+          message: `预览失败：${err instanceof Error ? err.message : "未知错误"}`,
+          level: "error",
+        });
+      } finally {
+        rollingBackRef.current = false;
       }
-      if (mode === "message") {
-        await executeRollback("message");
-        return;
-      }
-      const preview = await apiClient.call("agent.rollbackPreview", { sessionId, targetId: result.targetId }).catch((err) => { console.warn("[MessageCard] rollbackPreview failed:", err); return ({ restored: [], deleted: [] }); });
-      setConfirmState({ mode, targetId: result.targetId, preview });
-    } catch (err) {
-      pushNotification({ message: `预览失败：${err instanceof Error ? err.message : "未知错误"}`, level: "error" });
-    } finally {
-      rollingBackRef.current = false;
-    }
-  }, [sessionId, resolveRollbackTarget, executeRollback, pushNotification]);
+    },
+    [sessionId, resolveRollbackTarget, executeRollback, pushNotification],
+  );
 
   const confirmRollback = useCallback(async () => {
     if (rollingBackRef.current) return;
@@ -452,8 +593,18 @@ const HeaderActions = memo(function HeaderActions({ message, isUserCard }: { mes
   return (
     <>
       <ActionBtn icon={GitBranch} title="Fork" onClick={handleFork} />
-      <ActionBtn icon={Undo2} title="回滚消息" onClick={() => requestRollback("message")} disabled={rollingBackRef.current} />
-      <ActionBtn icon={RotateCcw} title="回滚消息+代码" onClick={() => requestRollback("withFiles")} disabled={rollingBackRef.current} />
+      <ActionBtn
+        icon={Undo2}
+        title="回滚消息"
+        onClick={() => requestRollback("message")}
+        disabled={rollingBackRef.current}
+      />
+      <ActionBtn
+        icon={RotateCcw}
+        title="回滚消息+代码"
+        onClick={() => requestRollback("withFiles")}
+        disabled={rollingBackRef.current}
+      />
       {confirmState && (
         <div className="absolute right-0 top-6 z-50 w-72 rounded-lg border border-amber-500/30 bg-gray-50 dark:bg-gray-900 px-3 py-2.5 shadow-xl">
           <div className="flex items-center gap-1.5 mb-1.5">
@@ -465,7 +616,13 @@ const HeaderActions = memo(function HeaderActions({ message, isUserCard }: { mes
               <span className="text-[10px] text-emerald-400">恢复:</span>
               <ul className="ml-2 mt-0.5 space-y-0.5 max-h-24 overflow-y-auto">
                 {confirmState.preview.restored.map((f) => (
-                  <li key={f} className="text-[10px] text-gray-700 dark:text-gray-300 truncate" title={f}>{f}</li>
+                  <li
+                    key={f}
+                    className="text-[10px] text-gray-700 dark:text-gray-300 truncate"
+                    title={f}
+                  >
+                    {f}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -475,23 +632,36 @@ const HeaderActions = memo(function HeaderActions({ message, isUserCard }: { mes
               <span className="text-[10px] text-red-400">删除:</span>
               <ul className="ml-2 mt-0.5 space-y-0.5 max-h-24 overflow-y-auto">
                 {confirmState.preview.deleted.map((f) => (
-                  <li key={f} className="text-[10px] text-gray-700 dark:text-gray-300 truncate" title={f}>{f}</li>
+                  <li
+                    key={f}
+                    className="text-[10px] text-gray-700 dark:text-gray-300 truncate"
+                    title={f}
+                  >
+                    {f}
+                  </li>
                 ))}
               </ul>
             </div>
           )}
-          {confirmState.preview.restored.length === 0 && confirmState.preview.deleted.length === 0 && (
-            <p className="text-[10px] text-gray-500 dark:text-gray-400 mb-1.5">无文件变更</p>
-          )}
+          {confirmState.preview.restored.length === 0 &&
+            confirmState.preview.deleted.length === 0 && (
+              <p className="text-[10px] text-gray-500 dark:text-gray-400 mb-1.5">无文件变更</p>
+            )}
           <div className="flex items-center justify-end gap-2">
             <button
-              onClick={(e) => { e.stopPropagation(); confirmRollback(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                confirmRollback();
+              }}
               className="rounded bg-amber-500/20 px-2 py-0.5 text-[11px] font-medium text-amber-400 hover:bg-amber-500/30 transition-colors"
             >
               确认回滚
             </button>
             <button
-              onClick={(e) => { e.stopPropagation(); cancelRollback(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                cancelRollback();
+              }}
               className="rounded bg-gray-200 dark:bg-gray-700 px-2 py-0.5 text-[11px] font-medium text-gray-700 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
             >
               取消
@@ -521,7 +691,10 @@ const ActionBtn = memo(function ActionBtn({
   if (!onClick) return null;
   return (
     <button
-      onClick={(e) => { e.stopPropagation(); if (!disabled) onClick(); }}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (!disabled) onClick();
+      }}
       title={title}
       disabled={disabled}
       className={`p-1 rounded transition-colors ${disabled ? "text-gray-400 dark:text-gray-700 cursor-not-allowed" : active ? activeClassName : "text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50"}`}

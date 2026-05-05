@@ -19,7 +19,10 @@ export const conversations: Conversation[] = [
   {
     id: "conv-1",
     title: "重构布局系统",
-    messages: [{ role: "user", content: "帮我重构五栏布局" }, { role: "assistant", content: "好的，开始分析..." }],
+    messages: [
+      { role: "user", content: "帮我重构五栏布局" },
+      { role: "assistant", content: "好的，开始分析..." },
+    ],
     status: "done",
     createdAt: Date.now() - 3600000,
     updatedAt: Date.now() - 1800000,

@@ -25,7 +25,11 @@ interface SnapshotState {
 
   fetchSnapshots: (sessionId: string) => Promise<void>;
   getSnapshot: (sessionId: string, snapshotId: string) => Promise<SnapshotInfo | null>;
-  rollback: (sessionId: string, snapshotId: string, files?: string[]) => Promise<{ ok: boolean; restoredFiles: string[]; error?: string }>;
+  rollback: (
+    sessionId: string,
+    snapshotId: string,
+    files?: string[],
+  ) => Promise<{ ok: boolean; restoredFiles: string[]; error?: string }>;
   unrevert: (sessionId: string, snapshotId: string) => Promise<{ ok: boolean; error?: string }>;
   navigateTree: (sessionId: string, snapshotId?: string, path?: string) => Promise<void>;
   getFileContent: (sessionId: string, snapshotId: string, filePath: string) => Promise<void>;
@@ -73,7 +77,11 @@ export const useSnapshotStore = create<SnapshotState>()((set, get) => ({
       }
       return result;
     } catch (err) {
-      return { ok: false, restoredFiles: [], error: err instanceof Error ? err.message : String(err) };
+      return {
+        ok: false,
+        restoredFiles: [],
+        error: err instanceof Error ? err.message : String(err),
+      };
     }
   },
 
@@ -92,7 +100,11 @@ export const useSnapshotStore = create<SnapshotState>()((set, get) => ({
   navigateTree: async (sessionId, snapshotId, path) => {
     set({ loading: true, error: null });
     try {
-      const result = await apiClient.call("snapshot.navigate_tree", { sessionId, snapshotId, path });
+      const result = await apiClient.call("snapshot.navigate_tree", {
+        sessionId,
+        snapshotId,
+        path,
+      });
       set((s) => ({
         treeEntriesBySession: {
           ...s.treeEntriesBySession,

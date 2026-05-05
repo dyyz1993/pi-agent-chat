@@ -1,8 +1,18 @@
 import { useCallback, useEffect, memo, useMemo, useRef, useState } from "react";
-import { Brain, AlertTriangle, FileText, ChevronDown, ChevronRight, CheckCircle, XCircle, Type, Maximize2 } from "lucide-react";
+import {
+  Brain,
+  AlertTriangle,
+  FileText,
+  ChevronDown,
+  ChevronRight,
+  CheckCircle,
+  XCircle,
+  Type,
+  Maximize2,
+} from "lucide-react";
 import { CachedReactMarkdown } from "./CachedReactMarkdown";
 import { CopyButton } from "./CopyButton";
-import type { ChatMessage, ContentBlock } from "../../types";
+import type { ChatMessage, ContentBlock, UIInteractionBlock } from "../../types";
 import { useChatNavStore } from "../../stores/use-chat-nav-store";
 import { EMPTY_SET } from "../../stores/use-turn-store";
 import { useSessionStore } from "../../stores/use-session-store";
@@ -16,9 +26,7 @@ import { useUIBlockMap } from "../../stores/use-ui-dialog-store";
 import { ENTRY_TYPE_KEYS, getMemoryConfig, getMemorySummary } from "./memory-config";
 
 export function getBlockBorderColor(block: ContentBlock, role: "user" | "assistant"): string {
-  const roleDefault = role === "user"
-    ? "border-l-blue-500/60"
-    : "border-l-emerald-500/50";
+  const roleDefault = role === "user" ? "border-l-blue-500/60" : "border-l-emerald-500/50";
 
   switch (block.type) {
     case "thinking":
@@ -29,9 +37,7 @@ export function getBlockBorderColor(block: ContentBlock, role: "user" | "assista
       return block.isError ? "border-l-red-400/50" : "border-l-amber-500/40";
     case "toolExecution": {
       if (block.toolName.toLowerCase() === "subagent") {
-        return block.status === "error"
-          ? "border-l-red-400/50"
-          : "border-l-purple-400/50";
+        return block.status === "error" ? "border-l-red-400/50" : "border-l-purple-400/50";
       }
       if (block.status === "running") return "border-l-blue-400/50";
       if (block.status === "error") return "border-l-red-400/50";
@@ -73,10 +79,17 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
   const sessionId = useSessionStore((s) => s.activeSessionId);
   const uiBlockMap = useUIBlockMap(message.content, sessionId ?? "");
   const isActive = useChatNavStore(
-    useCallback((s) => sessionId ? (s.activeIdBySession[sessionId] ?? null) === message.id : false, [sessionId, message.id])
+    useCallback(
+      (s) => (sessionId ? (s.activeIdBySession[sessionId] ?? null) === message.id : false),
+      [sessionId, message.id],
+    ),
   );
   const isSelected = useChatNavStore(
-    useCallback((s) => sessionId ? (s.selectedItemsBySession[sessionId] ?? EMPTY_SET).has(message.id) : false, [sessionId, message.id])
+    useCallback(
+      (s) =>
+        sessionId ? (s.selectedItemsBySession[sessionId] ?? EMPTY_SET).has(message.id) : false,
+      [sessionId, message.id],
+    ),
   );
 
   const styleMemo = useMemo(() => {
@@ -91,18 +104,20 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
 
   const fullTextForCopy = useMemo(() => {
     if (isUser) {
-    return message.content
-      .filter((b): b is Extract<ContentBlock, { type: "text" }> => b.type === "text")
-      .map((b) => b.text)
-      .join("\n");
+      return message.content
+        .filter((b): b is Extract<ContentBlock, { type: "text" }> => b.type === "text")
+        .map((b) => b.text)
+        .join("\n");
     }
     return message.content
       .map((b) => {
         if (b.type === "text") return b.text;
         if (b.type === "thinking") return `Thinking:\n${b.thinking}`;
         if (b.type === "toolCall") return `[Tool: ${b.name}] ${b.input}`;
-        if (b.type === "toolResult") return b.isError ? `[Error] ${b.content}` : `[Result] ${b.content}`;
-        if (b.type === "toolExecution") return `[Execution: ${b.toolName}]\nInput: ${b.args ?? ""}\nOutput: ${b.output ?? ""}`;
+        if (b.type === "toolResult")
+          return b.isError ? `[Error] ${b.content}` : `[Result] ${b.content}`;
+        if (b.type === "toolExecution")
+          return `[Execution: ${b.toolName}]\nInput: ${b.args ?? ""}\nOutput: ${b.output ?? ""}`;
         return "";
       })
       .filter(Boolean)
@@ -119,42 +134,67 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
         <div className="absolute inset-0 rounded-lg bg-indigo-500/[0.06] pointer-events-none" />
       )}
       {isUser ? (
-        <div className={`relative my-1 mr-2 px-3 py-2 text-[13px] leading-relaxed whitespace-pre-wrap break-words text-gray-800 dark:text-gray-100 bg-blue-500/[0.06] rounded-r-lg border-l-[3px] border-l-blue-500/60 ${styleMemo.bg} min-w-0`}>
+        <div
+          className={`relative my-1 mr-2 px-3 py-2 text-[13px] leading-relaxed whitespace-pre-wrap break-words text-gray-800 dark:text-gray-100 bg-blue-500/[0.06] rounded-r-lg border-l-[3px] border-l-blue-500/60 ${styleMemo.bg} min-w-0`}
+        >
           <div className="absolute -top-0.5 right-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
             <CopyButton text={fullTextForCopy} size="xs" />
           </div>
-          {message.content.filter((b) => b.type === "text").map((b, i) => (
-            <span key={i}>{(b as Extract<ContentBlock, { type: "text" }>).text}</span>
-          ))}
+          {message.content
+            .filter((b) => b.type === "text")
+            .map((b, i) => (
+              <span key={i}>{(b as Extract<ContentBlock, { type: "text" }>).text}</span>
+            ))}
         </div>
       ) : (
-        <div className={`w-full text-gray-800 dark:text-gray-200 transition-colors ${styleMemo.bg} min-w-0`}>
+        <div
+          className={`w-full text-gray-800 dark:text-gray-200 transition-colors ${styleMemo.bg} min-w-0`}
+        >
           {message.content.map((block, i) => {
             const role = message.role as "user" | "assistant";
             const isEntryMsg = message.content.some((b) => b.type === "custom");
             if (block.type === "custom" && MEMORY_HIDDEN_IN_CHAT.has(block.customType)) {
               return null;
             }
-            if (block.type === "custom" && isLspCustomType(block.customType) && !isLspVisibleInChat(block.customType)) {
+            if (
+              block.type === "custom" &&
+              isLspCustomType(block.customType) &&
+              !isLspVisibleInChat(block.customType)
+            ) {
               return null;
             }
-            if (block.type === "custom" && !MEMORY_CUSTOM_TYPES.has(block.customType) && !isLspCustomType(block.customType)) {
+            if (
+              block.type === "custom" &&
+              !MEMORY_CUSTOM_TYPES.has(block.customType) &&
+              !isLspCustomType(block.customType)
+            ) {
               return null;
             }
             const borderColor = getBlockBorderColor(block, role);
             return (
               <div key={i} className={`border-l-[3px] ${borderColor}`}>
-                <ContentBlockRenderer block={block} isStreaming={message.isStreaming} msgId={message.id} blockIndex={i} isEntry={isEntryMsg} uiBlockMap={uiBlockMap} />
+                <ContentBlockRenderer
+                  block={block}
+                  isStreaming={message.isStreaming}
+                  msgId={message.id}
+                  blockIndex={i}
+                  isEntry={isEntryMsg}
+                  uiBlockMap={uiBlockMap}
+                />
               </div>
             );
           })}
           {message.isStreaming && (
-            <div className={`border-l-[3px] ${getDefaultBorderColor(message.role as "user" | "assistant")}`}>
+            <div
+              className={`border-l-[3px] ${getDefaultBorderColor(message.role as "user" | "assistant")}`}
+            >
               <span className="inline-block w-1.5 h-4 bg-indigo-400 animate-pulse ml-3 align-text-bottom" />
             </div>
           )}
           {(message.tokenUsage ?? message.model) && (
-            <div className={`border-l-[3px] ${getDefaultBorderColor(message.role as "user" | "assistant")}`}>
+            <div
+              className={`border-l-[3px] ${getDefaultBorderColor(message.role as "user" | "assistant")}`}
+            >
               <MessageMetaFooter message={message} />
             </div>
           )}
@@ -174,19 +214,22 @@ export const TextContentCard = memo(function TextContentCard({
   blockId: string;
 }) {
   const [isOpen, setIsOpen] = useState(true);
-  const firstLine = text.split('\n')[0] || '';
-  const hasMore = text.includes('\n') || text.length > 120;
+  const firstLine = text.split("\n")[0] || "";
+  const hasMore = text.includes("\n") || text.length > 120;
 
   return (
     <div className="my-0.5 overflow-hidden" data-block-id={blockId}>
       <div
-        className={`flex items-center gap-2 px-2 pl-1 py-0.5 text-[11px] ${!isStreaming ? 'cursor-pointer hover:bg-gray-200/30 dark:hover:bg-gray-800/30' : ''}`}
+        className={`flex items-center gap-2 px-2 pl-1 py-0.5 text-[11px] ${!isStreaming ? "cursor-pointer hover:bg-gray-200/30 dark:hover:bg-gray-800/30" : ""}`}
         onClick={() => !isStreaming && setIsOpen(!isOpen)}
       >
         <Type className="w-3 h-3 text-gray-500 shrink-0" />
         {!isStreaming && (
           <button
-            onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsOpen(!isOpen);
+            }}
             className="p-0.5 text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 transition-colors ml-auto"
             title={isOpen ? "折叠" : "展开"}
             aria-expanded={isOpen}
@@ -200,30 +243,26 @@ export const TextContentCard = memo(function TextContentCard({
 
       {isOpen ? (
         <div className="px-3 py-1.5 prose dark:prose-invert prose-sm max-w-none overflow-auto max-h-[60vh] prose-p:my-1 prose-pre:bg-transparent">
-          {isStreaming ? (
-            <span>{text}</span>
-          ) : (
-            <CachedReactMarkdown>{text}</CachedReactMarkdown>
-          )}
+          {isStreaming ? <span>{text}</span> : <CachedReactMarkdown>{text}</CachedReactMarkdown>}
         </div>
       ) : hasMore ? (
         <div className="px-2 pl-1 py-0.5 text-[11px] text-gray-400 dark:text-gray-500 truncate">
-          {firstLine.length > 120 ? firstLine.slice(0, 120) + '...' : firstLine}
+          {firstLine.length > 120 ? firstLine.slice(0, 120) + "..." : firstLine}
         </div>
       ) : null}
     </div>
   );
 });
 
-export const ThinkingCard = memo(function ThinkingCard({ 
-    thinking, 
-    isStreaming,
-    blockId,
-  }: { 
-    thinking: string; 
-    isStreaming: boolean;
-    blockId: string;
-  }) {
+export const ThinkingCard = memo(function ThinkingCard({
+  thinking,
+  isStreaming,
+  blockId,
+}: {
+  thinking: string;
+  isStreaming: boolean;
+  blockId: string;
+}) {
   const [isOpen, setIsOpen] = useState(true);
 
   const wasStreamingRef = useRef(isStreaming);
@@ -234,13 +273,13 @@ export const ThinkingCard = memo(function ThinkingCard({
     wasStreamingRef.current = isStreaming;
   }, [isStreaming]);
 
-  const firstLine = thinking.split('\n')[0] || 'Thinking...';
-  const hasMore = thinking.includes('\n') || thinking.length > 80;
+  const firstLine = thinking.split("\n")[0] || "Thinking...";
+  const hasMore = thinking.includes("\n") || thinking.length > 80;
 
   return (
     <div className="my-1 overflow-hidden" data-block-id={blockId}>
-      <div 
-        className={`px-2 pl-1 py-0.5 text-[11px] flex items-center gap-2 ${!isStreaming ? 'cursor-pointer hover:bg-gray-200/30 dark:hover:bg-gray-800/30' : ''}`}
+      <div
+        className={`px-2 pl-1 py-0.5 text-[11px] flex items-center gap-2 ${!isStreaming ? "cursor-pointer hover:bg-gray-200/30 dark:hover:bg-gray-800/30" : ""}`}
         onClick={() => !isStreaming && setIsOpen(!isOpen)}
       >
         <Brain className="w-3 h-3 text-purple-400/60 shrink-0" />
@@ -259,21 +298,21 @@ export const ThinkingCard = memo(function ThinkingCard({
           </div>
         )}
       </div>
-      
+
       {isOpen ? (
         <div className="px-2 pl-1 pb-1.5 text-[11px] text-gray-500 dark:text-gray-400 whitespace-pre-wrap leading-relaxed">
           {thinking || <span className="text-gray-400 dark:text-gray-600 italic">thinking...</span>}
         </div>
       ) : hasMore ? (
         <div className="px-2 pl-1 py-0.5 text-[11px] text-gray-400 dark:text-gray-500 truncate">
-          {firstLine.length > 100 ? firstLine.slice(0, 100) + '...' : firstLine}
+          {firstLine.length > 100 ? firstLine.slice(0, 100) + "..." : firstLine}
         </div>
       ) : null}
     </div>
   );
 });
 
-export const MEMORY_CUSTOM_TYPES = ENTRY_TYPE_KEYS
+export const MEMORY_CUSTOM_TYPES = ENTRY_TYPE_KEYS;
 
 export const MEMORY_HIDDEN_IN_CHAT = new Set<string>([]);
 
@@ -281,18 +320,18 @@ const LSP_CUSTOM_TYPES: Record<string, { label: string; color: string }> = {
   lsp: { label: "LSP", color: "text-blue-400" },
   lsp_notify: { label: "LSP Diagnostics", color: "text-yellow-400" },
   lsp_diagnostics: { label: "LSP Diagnostics", color: "text-yellow-400" },
-}
+};
 
-export const LSP_CUSTOM_TYPES_SET = new Set(Object.keys(LSP_CUSTOM_TYPES))
+export const LSP_CUSTOM_TYPES_SET = new Set(Object.keys(LSP_CUSTOM_TYPES));
 
-export const LSP_VISIBLE_TYPES = new Set(["lsp_diagnostics"])
+export const LSP_VISIBLE_TYPES = new Set(["lsp_diagnostics"]);
 
 export function isLspCustomType(customType: string): boolean {
-  return LSP_CUSTOM_TYPES_SET.has(customType)
+  return LSP_CUSTOM_TYPES_SET.has(customType);
 }
 
 export function isLspVisibleInChat(customType: string): boolean {
-  return LSP_VISIBLE_TYPES.has(customType)
+  return LSP_VISIBLE_TYPES.has(customType);
 }
 
 export const LspDiagnosticsCard = memo(function LspDiagnosticsCard({ data }: { data: unknown }) {
@@ -304,10 +343,22 @@ export const LspDiagnosticsCard = memo(function LspDiagnosticsCard({ data }: { d
           <span>LSP Diagnostics</span>
         </div>
       </div>
-    )
+    );
   }
 
-  const details = data as { files?: Array<{ filePath: string; summary: string; issues: Array<{ severity?: number; line: number; message: string; source?: string; code?: string | number }> }> }
+  const details = data as {
+    files?: Array<{
+      filePath: string;
+      summary: string;
+      issues: Array<{
+        severity?: number;
+        line: number;
+        message: string;
+        source?: string;
+        code?: string | number;
+      }>;
+    }>;
+  };
 
   return (
     <div className="my-1 border border-yellow-700/30 rounded-lg overflow-hidden bg-yellow-50/50 dark:bg-yellow-900/10">
@@ -317,7 +368,10 @@ export const LspDiagnosticsCard = memo(function LspDiagnosticsCard({ data }: { d
       </div>
       <div className="border-t border-yellow-700/20">
         {details.files?.map((f) => (
-          <div key={f.filePath} className="px-3 py-1.5 border-b last:border-b-0 border-yellow-700/10">
+          <div
+            key={f.filePath}
+            className="px-3 py-1.5 border-b last:border-b-0 border-yellow-700/10"
+          >
             <div className="text-[11px] text-yellow-300 font-medium flex items-center gap-1">
               <FileText className="w-3 h-3 shrink-0" />
               <span>{f.filePath}</span>
@@ -325,11 +379,23 @@ export const LspDiagnosticsCard = memo(function LspDiagnosticsCard({ data }: { d
             </div>
             {f.issues.map((issue, i) => (
               <div key={i} className="text-[10px] text-gray-500 dark:text-gray-400 pl-4 pt-0.5">
-                <span className={issue.severity === 1 ? "text-red-400" : issue.severity === 2 ? "text-yellow-400" : "text-gray-500"}>
+                <span
+                  className={
+                    issue.severity === 1
+                      ? "text-red-400"
+                      : issue.severity === 2
+                        ? "text-yellow-400"
+                        : "text-gray-500"
+                  }
+                >
                   L{issue.line}
                 </span>
-                {issue.source && <span className="text-gray-400 dark:text-gray-600"> [{issue.source}]</span>}
-                {issue.code != null && <span className="text-gray-400 dark:text-gray-600"> ({String(issue.code)})</span>}
+                {issue.source && (
+                  <span className="text-gray-400 dark:text-gray-600"> [{issue.source}]</span>
+                )}
+                {issue.code != null && (
+                  <span className="text-gray-400 dark:text-gray-600"> ({String(issue.code)})</span>
+                )}
                 : {issue.message}
               </div>
             ))}
@@ -337,11 +403,20 @@ export const LspDiagnosticsCard = memo(function LspDiagnosticsCard({ data }: { d
         ))}
       </div>
     </div>
-  )
-})
+  );
+});
 
-
-export const MemoryCard = memo(function MemoryCard({ customType, data, blockId, isEntry: _isEntry }: { customType: string; data: unknown; blockId: string; isEntry?: boolean }) {
+export const MemoryCard = memo(function MemoryCard({
+  customType,
+  data,
+  blockId,
+  isEntry: _isEntry,
+}: {
+  customType: string;
+  data: unknown;
+  blockId: string;
+  isEntry?: boolean;
+}) {
   const [expanded, setExpanded] = useState(false);
   const config = getMemoryConfig(customType) ?? { label: customType, color: "text-gray-400" };
   const Icon = getCustomTypeIcon(customType).icon;
@@ -363,9 +438,7 @@ export const MemoryCard = memo(function MemoryCard({ customType, data, blockId, 
           {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
         </span>
       </button>
-      {expanded && (
-        <MemoryExpandedContent customType={customType} data={data} />
-      )}
+      {expanded && <MemoryExpandedContent customType={customType} data={data} />}
     </div>
   );
 });
@@ -404,36 +477,43 @@ function PrefetchResultDetail({ data }: { data: unknown }) {
 
   const skipHits = Array.isArray(rawSkipHits)
     ? (rawSkipHits as Array<Record<string, string>>).map((h) =>
-        typeof h === "string" ? { pattern: h, mode: "" } : { pattern: h.pattern ?? "", mode: h.mode ?? "" },
+        typeof h === "string"
+          ? { pattern: h, mode: "" }
+          : { pattern: h.pattern ?? "", mode: h.mode ?? "" },
       )
     : [];
   const guardHits = Array.isArray(rawGuardHits)
     ? (rawGuardHits as Array<Record<string, string>>).map((h) =>
-        typeof h === "string" ? { pattern: h, mode: "" } : { pattern: h.pattern ?? "", mode: h.mode ?? "" },
+        typeof h === "string"
+          ? { pattern: h, mode: "" }
+          : { pattern: h.pattern ?? "", mode: h.mode ?? "" },
       )
     : [];
   const triggerHits = Array.isArray(rawTriggerHits)
     ? (rawTriggerHits as Array<Record<string, string>>).map((h) =>
-        typeof h === "string" ? { pattern: h, mode: "" } : { pattern: h.pattern ?? "", mode: h.mode ?? "" },
+        typeof h === "string"
+          ? { pattern: h, mode: "" }
+          : { pattern: h.pattern ?? "", mode: h.mode ?? "" },
       )
     : [];
 
   const hasMemory = snippet || selectedFiles.length > 0;
 
-  const memoryCount = snippet
-    ? (snippet.match(/^###/gm)?.length || 1)
-    : selectedFiles.length;
-  const tokenCount = injectedBytes > 0
-    ? Math.round(injectedBytes / 4)
-    : 0;
+  const memoryCount = snippet ? (snippet.match(/^###/gm)?.length ?? 1) : selectedFiles.length;
+  const tokenCount = injectedBytes > 0 ? Math.round(injectedBytes / 4) : 0;
 
   const modeLabel = (mode: string) => {
     switch (mode) {
-      case "exact": return "精确匹配";
-      case "prefix": return "前缀匹配";
-      case "contains": return "包含匹配";
-      case "regex": return "正则匹配";
-      default: return "";
+      case "exact":
+        return "精确匹配";
+      case "prefix":
+        return "前缀匹配";
+      case "contains":
+        return "包含匹配";
+      case "regex":
+        return "正则匹配";
+      default:
+        return "";
     }
   };
 
@@ -461,7 +541,11 @@ function PrefetchResultDetail({ data }: { data: unknown }) {
       {!snippet && selectedFiles.length > 0 && (
         <div className="text-gray-400 dark:text-gray-500 italic py-0.5">
           已检索 {selectedFiles.length} 个记忆文件
-          {injectedBytes > 0 && <span className="text-gray-400 dark:text-gray-600 ml-auto">~{Math.round(injectedBytes / 4)} tokens</span>}
+          {injectedBytes > 0 && (
+            <span className="text-gray-400 dark:text-gray-600 ml-auto">
+              ~{Math.round(injectedBytes / 4)} tokens
+            </span>
+          )}
         </div>
       )}
 
@@ -484,35 +568,24 @@ function PrefetchResultDetail({ data }: { data: unknown }) {
               </div>
             )}
             {layer === "skip" && (
-              <div className="text-yellow-500/80">
-                跳过 LLM → 规则命中，复用上次缓存结果
-              </div>
+              <div className="text-yellow-500/80">跳过 LLM → 规则命中，复用上次缓存结果</div>
             )}
             {layer === "llm" && isForce && (
-              <div className="text-red-400/80">
-                强制触发 → 使用 LLM 进行语义匹配
-              </div>
+              <div className="text-red-400/80">强制触发 → 使用 LLM 进行语义匹配</div>
             )}
             {layer === "llm" && !isForce && (
-              <div className="text-blue-400/80">
-                关键词命中 → 使用 LLM 进行语义匹配
-              </div>
+              <div className="text-blue-400/80">关键词命中 → 使用 LLM 进行语义匹配</div>
             )}
             {layer === "none" && (
-              <div className="text-gray-400 dark:text-gray-500">
-                无可用记忆文件
-              </div>
+              <div className="text-gray-400 dark:text-gray-500">无可用记忆文件</div>
             )}
-            {layer === "error" && (
-              <div className="text-red-400/80">
-                搜索出错
-              </div>
-            )}
-            {layer !== "skip" && layer !== "llm" && layer !== "not_triggered" && layer !== "none" && (
-              <div className="text-gray-500 dark:text-gray-400">
-                匹配方式: {layer}
-              </div>
-            )}
+            {layer === "error" && <div className="text-red-400/80">搜索出错</div>}
+            {layer !== "skip" &&
+              layer !== "llm" &&
+              layer !== "not_triggered" &&
+              layer !== "none" && (
+                <div className="text-gray-500 dark:text-gray-400">匹配方式: {layer}</div>
+              )}
           </div>
 
           {skipHits.length > 0 && (
@@ -521,8 +594,12 @@ function PrefetchResultDetail({ data }: { data: unknown }) {
               {skipHits.map((h, i) => (
                 <div key={i} className="pl-2 flex items-center gap-1.5">
                   <span className="text-yellow-500/60">•</span>
-                  <span className="text-gray-700 dark:text-gray-300 font-mono">「{h.pattern}」</span>
-                  {h.mode && <span className="text-gray-400 dark:text-gray-600">({modeLabel(h.mode)})</span>}
+                  <span className="text-gray-700 dark:text-gray-300 font-mono">
+                    「{h.pattern}」
+                  </span>
+                  {h.mode && (
+                    <span className="text-gray-400 dark:text-gray-600">({modeLabel(h.mode)})</span>
+                  )}
                 </div>
               ))}
             </div>
@@ -534,8 +611,12 @@ function PrefetchResultDetail({ data }: { data: unknown }) {
               {guardHits.map((h, i) => (
                 <div key={i} className="pl-2 flex items-center gap-1.5">
                   <span className="text-green-500/60">•</span>
-                  <span className="text-gray-700 dark:text-gray-300 font-mono">「{h.pattern}」</span>
-                  {h.mode && <span className="text-gray-400 dark:text-gray-600">({modeLabel(h.mode)})</span>}
+                  <span className="text-gray-700 dark:text-gray-300 font-mono">
+                    「{h.pattern}」
+                  </span>
+                  {h.mode && (
+                    <span className="text-gray-400 dark:text-gray-600">({modeLabel(h.mode)})</span>
+                  )}
                 </div>
               ))}
             </div>
@@ -547,8 +628,12 @@ function PrefetchResultDetail({ data }: { data: unknown }) {
               {triggerHits.map((h, i) => (
                 <div key={i} className="pl-2 flex items-center gap-1.5">
                   <span className="text-cyan-500/60">•</span>
-                  <span className="text-gray-700 dark:text-gray-300 font-mono">「{h.pattern}」</span>
-                  {h.mode && <span className="text-gray-400 dark:text-gray-600">({modeLabel(h.mode)})</span>}
+                  <span className="text-gray-700 dark:text-gray-300 font-mono">
+                    「{h.pattern}」
+                  </span>
+                  {h.mode && (
+                    <span className="text-gray-400 dark:text-gray-600">({modeLabel(h.mode)})</span>
+                  )}
                 </div>
               ))}
             </div>
@@ -560,11 +645,16 @@ function PrefetchResultDetail({ data }: { data: unknown }) {
                 来源文件 ({selectedFiles.length})
               </div>
               {selectedFiles.map((f) => {
-                const fileName = f.split("/").pop() || f;
+                const fileName = f.split("/").pop() ?? f;
                 return (
-                  <div key={f} className="flex items-center gap-1.5 pl-2 py-0.5 text-gray-400 dark:text-gray-500 truncate">
+                  <div
+                    key={f}
+                    className="flex items-center gap-1.5 pl-2 py-0.5 text-gray-400 dark:text-gray-500 truncate"
+                  >
                     <FileText className="w-2.5 h-2.5 text-blue-400/50 shrink-0" />
-                    <span className="truncate" title={f}>{fileName}</span>
+                    <span className="truncate" title={f}>
+                      {fileName}
+                    </span>
                   </div>
                 );
               })}
@@ -612,7 +702,13 @@ function isLongContent(text: string): boolean {
   return lineCount > 20;
 }
 
-const CompactionSummaryCard = memo(function CompactionSummaryCard({ summary, blockId }: { summary: string; blockId: string }) {
+const CompactionSummaryCard = memo(function CompactionSummaryCard({
+  summary,
+  blockId,
+}: {
+  summary: string;
+  blockId: string;
+}) {
   const [isOpen, setIsOpen] = useState(false);
 
   const lines = summary.split("\n");
@@ -626,7 +722,10 @@ const CompactionSummaryCard = memo(function CompactionSummaryCard({ summary, blo
         {isLong ? (
           <>
             <div className="flex items-start gap-1.5">
-              <span className="text-gray-400 dark:text-gray-500 flex-1">{preview}{firstMeaningfulLine.length > 120 ? "..." : ""}</span>
+              <span className="text-gray-400 dark:text-gray-500 flex-1">
+                {preview}
+                {firstMeaningfulLine.length > 120 ? "..." : ""}
+              </span>
               <button
                 onClick={() => setIsOpen(!isOpen)}
                 className="shrink-0 p-0.5 text-cyan-400/60 hover:text-cyan-300 transition-colors text-[11px] underline decoration-dotted underline-offset-2"
@@ -652,10 +751,31 @@ const CompactionSummaryCard = memo(function CompactionSummaryCard({ summary, blo
   );
 });
 
-export const ContentBlockRenderer = memo(function ContentBlockRenderer({ block, isStreaming, msgId, blockIndex, isEntry, uiBlockMap }: { block: ContentBlock; isStreaming?: boolean; msgId: string; blockIndex: number; isEntry?: boolean; uiBlockMap: Map<string, import("../../types").UIInteractionBlock> }) {
+export const ContentBlockRenderer = memo(function ContentBlockRenderer({
+  block,
+  isStreaming,
+  msgId,
+  blockIndex,
+  isEntry,
+  uiBlockMap,
+}: {
+  block: ContentBlock;
+  isStreaming?: boolean;
+  msgId: string;
+  blockIndex: number;
+  isEntry?: boolean;
+  uiBlockMap: Map<string, UIInteractionBlock>;
+}) {
   const blockId = `${msgId}-${blockIndex}`;
   const openExpand = useExpandStore((s) => s.openExpand);
-  const toolCallId = block.type === "toolExecution" ? block.toolCallId : block.type === "toolCall" ? block.id : block.type === "toolResult" ? block.toolCallId : undefined;
+  const toolCallId =
+    block.type === "toolExecution"
+      ? block.toolCallId
+      : block.type === "toolCall"
+        ? block.id
+        : block.type === "toolResult"
+          ? block.toolCallId
+          : undefined;
   const uiBlock = toolCallId ? uiBlockMap.get(toolCallId) : undefined;
 
   switch (block.type) {
@@ -664,7 +784,10 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({ block, 
 
       if (isStreaming) {
         return (
-          <div data-block-id={blockId} className="my-0.5 group relative px-3 py-2 pr-10 text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words overflow-auto max-h-[60vh]">
+          <div
+            data-block-id={blockId}
+            className="my-0.5 group relative px-3 py-2 pr-10 text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words overflow-auto max-h-[60vh]"
+          >
             <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
               <CopyButton text={block.text} size="xs" />
             </div>
@@ -674,11 +797,16 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({ block, 
       }
 
       return (
-        <div data-block-id={blockId} className="my-0.5 group relative px-3 py-2 pr-10 prose dark:prose-invert prose-sm max-w-none overflow-auto max-h-[60vh] prose-p:my-1 prose-pre:bg-transparent">
+        <div
+          data-block-id={blockId}
+          className="my-0.5 group relative px-3 py-2 pr-10 prose dark:prose-invert prose-sm max-w-none overflow-auto max-h-[60vh] prose-p:my-1 prose-pre:bg-transparent"
+        >
           <div className="absolute top-2 right-2 z-10 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
             {shouldShowExpand && (
               <button
-                onClick={() => openExpand(block.text, `消息内容 (${block.text.split("\n").length} 行)`)}
+                onClick={() =>
+                  openExpand(block.text, `消息内容 (${block.text.split("\n").length} 行)`)
+                }
                 className="p-1 rounded text-gray-400 dark:text-gray-600 hover:text-indigo-300 hover:bg-gray-200/60 dark:hover:bg-gray-800/60 transition-colors"
                 title="展开查看全文"
               >
@@ -692,7 +820,9 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({ block, 
       );
     }
     case "thinking":
-      return <ThinkingCard thinking={block.thinking} isStreaming={!!isStreaming} blockId={blockId} />;
+      return (
+        <ThinkingCard thinking={block.thinking} isStreaming={!!isStreaming} blockId={blockId} />
+      );
     case "toolCall": {
       const execBlock: Extract<ContentBlock, { type: "toolExecution" }> = {
         type: "toolExecution",
@@ -752,7 +882,14 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({ block, 
       if (!MEMORY_CUSTOM_TYPES.has(block.customType)) {
         return null;
       }
-      return <MemoryCard customType={block.customType} data={block.data} blockId={blockId} isEntry={isEntry} />;
+      return (
+        <MemoryCard
+          customType={block.customType}
+          data={block.data}
+          blockId={blockId}
+          isEntry={isEntry}
+        />
+      );
     case "compactionSummary":
       return <CompactionSummaryCard summary={block.summary} blockId={blockId} />;
     case "uiInteraction":
@@ -760,7 +897,15 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({ block, 
   }
 });
 
-export const ToolExecutionCard = memo(function ToolExecutionCard({ block, blockId, uiBlock }: { block: Extract<ContentBlock, { type: "toolExecution" }>; blockId: string; uiBlock?: import("../../types").UIInteractionBlock }) {
+export const ToolExecutionCard = memo(function ToolExecutionCard({
+  block,
+  blockId,
+  uiBlock,
+}: {
+  block: Extract<ContentBlock, { type: "toolExecution" }>;
+  blockId: string;
+  uiBlock?: UIInteractionBlock;
+}) {
   const isRunning = block.status === "running";
   const isError = block.status === "error";
   const [inputOpen, setInputOpen] = useState(false);
@@ -784,7 +929,7 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({ block, blockI
   const handleToggleCollapse = useCallback(() => {
     setCollapsed((prev) => {
       if (!prev && cardRef.current) {
-        cardRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        cardRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
       }
       return !prev;
     });
@@ -802,20 +947,22 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({ block, blockI
         >
           {collapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
         </button>
-        <span className={`font-medium ${isRunning ? "text-blue-400" : isError ? "text-red-400" : "text-amber-300/80"}`}>{block.toolName}</span>
+        <span
+          className={`font-medium ${isRunning ? "text-blue-400" : isError ? "text-red-400" : "text-amber-300/80"}`}
+        >
+          {block.toolName}
+        </span>
         {isRunning && <span className="text-blue-400 animate-pulse text-[10px]">running</span>}
         {!isRunning && !isError && (
           <CheckCircle className="w-3.5 h-3.5 text-green-500 shrink-0 ml-auto" />
         )}
-        {isError && (
-          <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0 ml-auto" />
-        )}
+        {isError && <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0 ml-auto" />}
         <CopyButton text={fullExecutionText} size="xs" title="复制全部执行结果" />
       </div>
 
       {collapsed ? (
         <div className="px-3 pl-2 pb-1 text-[11px] text-gray-400 dark:text-gray-500 truncate">
-          {block.output ? block.output.split('\n')[0].slice(0, 100) : "(等待输出)"}
+          {block.output ? block.output.split("\n")[0].slice(0, 100) : "(等待输出)"}
         </div>
       ) : (
         <>
@@ -823,15 +970,30 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({ block, blockI
             className="px-3 pl-2 py-1 text-[11px] text-gray-400 dark:text-gray-500 cursor-pointer hover:text-gray-600 dark:hover:text-gray-400 select-none flex items-center gap-1.5"
             onClick={() => setInputOpen(!inputOpen)}
           >
-            <svg className={`w-3 h-3 transition-transform shrink-0 ${inputOpen ? "rotate-90" : ""}`} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4.5 3l3 3-3 3" /></svg>
+            <svg
+              className={`w-3 h-3 transition-transform shrink-0 ${inputOpen ? "rotate-90" : ""}`}
+              viewBox="0 0 12 12"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            >
+              <path d="M4.5 3l3 3-3 3" />
+            </svg>
             <span>Input</span>
             {block.args && (
-              <CopyButton text={typeof block.args === "string" ? block.args : JSON.stringify(block.args)} size="xs" className="ml-auto" title="复制输入" />
+              <CopyButton
+                text={typeof block.args === "string" ? block.args : JSON.stringify(block.args)}
+                size="xs"
+                className="ml-auto"
+                title="复制输入"
+              />
             )}
           </div>
           {inputOpen && block.args && (
             <div className="px-3 pb-2 pt-0.5">
-              <pre className="text-[11px] text-yellow-300/60 overflow-x-auto whitespace-pre-wrap font-mono max-h-40 overflow-y-auto leading-relaxed pl-2">{tryFormatAsYaml(block.args)}</pre>
+              <pre className="text-[11px] text-yellow-300/60 overflow-x-auto whitespace-pre-wrap font-mono max-h-40 overflow-y-auto leading-relaxed pl-2">
+                {tryFormatAsYaml(block.args)}
+              </pre>
             </div>
           )}
 
@@ -839,9 +1001,19 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({ block, blockI
             className="px-3 pl-2 py-1 text-[11px] text-gray-400 dark:text-gray-500 cursor-pointer hover:text-gray-600 dark:hover:text-gray-400 select-none flex items-center gap-1.5"
             onClick={() => setOutputOpen(!outputOpen)}
           >
-            <svg className={`w-3 h-3 transition-transform shrink-0 ${outputOpen ? "rotate-90" : ""}`} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4.5 3l3 3-3 3" /></svg>
+            <svg
+              className={`w-3 h-3 transition-transform shrink-0 ${outputOpen ? "rotate-90" : ""}`}
+              viewBox="0 0 12 12"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            >
+              <path d="M4.5 3l3 3-3 3" />
+            </svg>
             <span>Output</span>
-            {isRunning && <span className="ml-auto text-blue-400/70 animate-pulse text-[10px]">streaming</span>}
+            {isRunning && (
+              <span className="ml-auto text-blue-400/70 animate-pulse text-[10px]">streaming</span>
+            )}
             {block.output && !isRunning && (
               <CopyButton text={block.output} size="xs" className="ml-auto" title="复制输出" />
             )}
@@ -851,9 +1023,13 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({ block, blockI
               {uiBlock && uiBlock.status === "pending" ? (
                 <UIInteractionCard block={uiBlock} />
               ) : block.output ? (
-                <pre className="text-[11px] text-gray-700 dark:text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-72 overflow-y-auto pl-2">{block.output}</pre>
+                <pre className="text-[11px] text-gray-700 dark:text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-72 overflow-y-auto pl-2">
+                  {block.output}
+                </pre>
               ) : isRunning ? (
-                <div className="text-[11px] text-gray-400 dark:text-gray-600 italic py-1">waiting...</div>
+                <div className="text-[11px] text-gray-400 dark:text-gray-600 italic py-1">
+                  waiting...
+                </div>
               ) : null}
             </div>
           )}
@@ -863,8 +1039,11 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({ block, blockI
   );
 });
 
-
-export const MessageMetaFooter = memo(function MessageMetaFooter({ message }: { message: ChatMessage }) {
+export const MessageMetaFooter = memo(function MessageMetaFooter({
+  message,
+}: {
+  message: ChatMessage;
+}) {
   const { tokenUsage, model, provider } = message;
 
   return (
@@ -872,7 +1051,12 @@ export const MessageMetaFooter = memo(function MessageMetaFooter({ message }: { 
       {(model ?? provider) && (
         <div className="text-[10px] text-gray-400 dark:text-gray-600">
           {provider && <span>智能体: {provider}</span>}
-          {model && <>{provider && "  "}<span>模型: {model}</span></>}
+          {model && (
+            <>
+              {provider && "  "}
+              <span>模型: {model}</span>
+            </>
+          )}
         </div>
       )}
       {tokenUsage && (
@@ -880,8 +1064,12 @@ export const MessageMetaFooter = memo(function MessageMetaFooter({ message }: { 
           <span>输入 {tokenUsage.input}</span>
           <span>输出 {tokenUsage.output}</span>
           {(tokenUsage.reasoning ?? 0) > 0 && <span>推理 {tokenUsage.reasoning}</span>}
-          {(tokenUsage.cacheRead ?? 0) > 0 && <span>缓存读取 {formatK(tokenUsage.cacheRead ?? 0)}</span>}
-          {(tokenUsage.cacheWrite ?? 0) > 0 && <span>缓存写入 {formatK(tokenUsage.cacheWrite ?? 0)}</span>}
+          {(tokenUsage.cacheRead ?? 0) > 0 && (
+            <span>缓存读取 {formatK(tokenUsage.cacheRead ?? 0)}</span>
+          )}
+          {(tokenUsage.cacheWrite ?? 0) > 0 && (
+            <span>缓存写入 {formatK(tokenUsage.cacheWrite ?? 0)}</span>
+          )}
           {tokenUsage.cost != null && <span>费用 ${tokenUsage.cost.toFixed(2)}</span>}
         </div>
       )}

@@ -18,7 +18,13 @@ export interface FileMethods {
   "file.listDir": {
     params: { path: string };
     result: {
-      entries: { name: string; path: string; type: "file" | "directory"; size?: number; isIgnored?: boolean }[];
+      entries: {
+        name: string;
+        path: string;
+        type: "file" | "directory";
+        size?: number;
+        isIgnored?: boolean;
+      }[];
       basePath: string;
     };
   };

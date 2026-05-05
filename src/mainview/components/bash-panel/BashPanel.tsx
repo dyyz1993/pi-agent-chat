@@ -1,14 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import {
-	ChevronDown,
-	ChevronRight,
-	Terminal,
-	ArrowDownToLine,
-	X,
-	Trash2,
-	Loader2,
-	Send,
+  ChevronDown,
+  ChevronRight,
+  Terminal,
+  ArrowDownToLine,
+  X,
+  Trash2,
+  Loader2,
+  Send,
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -18,375 +18,439 @@ import type { BashProcess } from "../../../shared/modules/bash";
 import { apiClient } from "../../lib/api-client";
 
 function formatDuration(ms: number): string {
-	const s = Math.floor(ms / 1000);
-	if (s < 60) return `${s}s`;
-	const m = Math.floor(s / 60);
-	return `${m}m${s % 60}s`;
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  return `${m}m${s % 60}s`;
 }
 
-function BashProcessCard({ process: p, onOpenLog }: {
-	process: BashProcess;
-	onOpenLog: () => void;
+function BashProcessCard({
+  process: p,
+  onOpenLog,
+}: {
+  process: BashProcess;
+  onOpenLog: () => void;
 }) {
-	const [elapsed, setElapsed] = useState(Date.now() - p.startedAt);
+  const [elapsed, setElapsed] = useState(Date.now() - p.startedAt);
 
-	useEffect(() => {
-		if (p.status !== "running" && p.status !== "background") return;
-		setElapsed(Date.now() - p.startedAt);
-		const id = setInterval(() => setElapsed(Date.now() - p.startedAt), 1000);
-		return () => clearInterval(id);
-	}, [p.status, p.startedAt]);
+  useEffect(() => {
+    if (p.status !== "running" && p.status !== "background") return;
+    setElapsed(Date.now() - p.startedAt);
+    const id = setInterval(() => setElapsed(Date.now() - p.startedAt), 1000);
+    return () => clearInterval(id);
+  }, [p.status, p.startedAt]);
 
-	async function sendAction(action: "kill" | "background") {
-		const sid = useSessionStore.getState().activeSessionId;
-		if (!sid) return;
-		await apiClient.call("bash.command", {
-			sessionId: sid,
-			action,
-			toolCallId: p.toolCallId,
-		});
-	}
+  async function sendAction(action: "kill" | "background") {
+    const sid = useSessionStore.getState().activeSessionId;
+    if (!sid) return;
+    await apiClient.call("bash.command", {
+      sessionId: sid,
+      action,
+      toolCallId: p.toolCallId,
+    });
+  }
 
-	const isRunning = p.status === "running";
-	const isBackground = p.status === "background";
-	const isActive = isRunning || isBackground;
-	const isEnded = p.status === "done" || p.status === "error" || p.status === "terminated";
+  const isRunning = p.status === "running";
+  const isBackground = p.status === "background";
+  const isActive = isRunning || isBackground;
+  const isEnded = p.status === "done" || p.status === "error" || p.status === "terminated";
 
-	const statusColor = isBackground
-		? "text-yellow-400"
-		: p.status === "done"
-			? "text-green-400"
-			: p.status === "error" || p.status === "terminated"
-				? "text-red-400"
-				: "text-blue-400";
+  const statusColor = isBackground
+    ? "text-yellow-400"
+    : p.status === "done"
+      ? "text-green-400"
+      : p.status === "error" || p.status === "terminated"
+        ? "text-red-400"
+        : "text-blue-400";
 
-	const statusText = isBackground
-		? "后台运行"
-		: p.status === "done"
-			? "已完成"
-			: p.status === "error"
-				? "错误"
-				: p.status === "terminated"
-					? "已取消"
-					: "执行中";
+  const statusText = isBackground
+    ? "后台运行"
+    : p.status === "done"
+      ? "已完成"
+      : p.status === "error"
+        ? "错误"
+        : p.status === "terminated"
+          ? "已取消"
+          : "执行中";
 
-	return (
-		<div className="rounded-lg bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-800 px-3 py-2.5 space-y-1.5">
-			<div className="flex items-center gap-2">
-				<span className="text-[11px] font-medium text-gray-800 dark:text-gray-200 truncate font-mono flex-1" title={p.command}>
-					{p.command}
-				</span>
-			</div>
-			<div className="flex items-center gap-3 text-[9px] text-gray-500">
-				<span className={statusColor}>{statusText}</span>
-				{isActive ? (
-					<span>运行: {formatDuration(elapsed)}</span>
-				) : (
-					p.endedAt && <span>耗时: {formatDuration(p.endedAt - p.startedAt)}</span>
-				)}
-			</div>
-			<div className="flex items-center gap-1.5 pt-0.5">
-				<button
-					onClick={onOpenLog}
-					className="flex items-center justify-center w-8 h-7 rounded border border-gray-300 dark:border-gray-700/50 text-gray-500 hover:text-gray-800 dark:hover:text-white hover:border-gray-400 dark:hover:border-gray-600 transition-colors shrink-0"
-					title="查看日志"
-				>
-					<Terminal className="w-3.5 h-3.5" />
-				</button>
+  return (
+    <div className="rounded-lg bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-800 px-3 py-2.5 space-y-1.5">
+      <div className="flex items-center gap-2">
+        <span
+          className="text-[11px] font-medium text-gray-800 dark:text-gray-200 truncate font-mono flex-1"
+          title={p.command}
+        >
+          {p.command}
+        </span>
+      </div>
+      <div className="flex items-center gap-3 text-[9px] text-gray-500">
+        <span className={statusColor}>{statusText}</span>
+        {isActive ? (
+          <span>运行: {formatDuration(elapsed)}</span>
+        ) : (
+          p.endedAt && <span>耗时: {formatDuration(p.endedAt - p.startedAt)}</span>
+        )}
+      </div>
+      <div className="flex items-center gap-1.5 pt-0.5">
+        <button
+          onClick={onOpenLog}
+          className="flex items-center justify-center w-8 h-7 rounded border border-gray-300 dark:border-gray-700/50 text-gray-500 hover:text-gray-800 dark:hover:text-white hover:border-gray-400 dark:hover:border-gray-600 transition-colors shrink-0"
+          title="查看日志"
+        >
+          <Terminal className="w-3.5 h-3.5" />
+        </button>
 
-				{isActive && (
-					<button
-						onClick={() => sendAction("kill")}
-						className="flex items-center justify-center w-8 h-7 rounded border border-red-600/30 text-red-400 hover:bg-red-600/10 transition-colors shrink-0"
-						title={isRunning ? "取消执行" : "终止进程"}
-					>
-						<X className="w-3.5 h-3.5" />
-					</button>
-				)}
+        {isActive && (
+          <button
+            onClick={() => sendAction("kill")}
+            className="flex items-center justify-center w-8 h-7 rounded border border-red-600/30 text-red-400 hover:bg-red-600/10 transition-colors shrink-0"
+            title={isRunning ? "取消执行" : "终止进程"}
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
 
-				{isRunning && !isBackground && elapsed > 5000 && (
-					<button
-						onClick={() => sendAction("background")}
-						className="flex items-center justify-center w-auto px-2 h-7 rounded border border-yellow-600/40 text-[10px] text-yellow-400 hover:bg-yellow-600/15 transition-colors shrink-0"
-						title="转为后台运行"
-					>
-						<ArrowDownToLine className="w-3 h-3 mr-1" />
-						<span>后台</span>
-					</button>
-				)}
+        {isRunning && !isBackground && elapsed > 5000 && (
+          <button
+            onClick={() => sendAction("background")}
+            className="flex items-center justify-center w-auto px-2 h-7 rounded border border-yellow-600/40 text-[10px] text-yellow-400 hover:bg-yellow-600/15 transition-colors shrink-0"
+            title="转为后台运行"
+          >
+            <ArrowDownToLine className="w-3 h-3 mr-1" />
+            <span>后台</span>
+          </button>
+        )}
 
-				{isEnded && (
-					<button
-						onClick={() => useBashStore.getState().removeProcess(
-							useSessionStore.getState().activeSessionId ?? "",
-							p.toolCallId,
-						)}
-						className="flex items-center justify-center w-8 h-7 rounded border border-gray-300 dark:border-gray-700/50 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-400 dark:hover:border-gray-600 transition-colors shrink-0"
-						title="从列表移除"
-					>
-						<Trash2 className="w-3.5 h-3.5" />
-					</button>
-				)}
-			</div>
-		</div>
-	);
+        {isEnded && (
+          <button
+            onClick={() =>
+              useBashStore
+                .getState()
+                .removeProcess(useSessionStore.getState().activeSessionId ?? "", p.toolCallId)
+            }
+            className="flex items-center justify-center w-8 h-7 rounded border border-gray-300 dark:border-gray-700/50 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-400 dark:hover:border-gray-600 transition-colors shrink-0"
+            title="从列表移除"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
 }
 
 const LINE_HEIGHT = 20;
 
-function LogViewer({ logPath, toolCallId, onClose }: { logPath: string; toolCallId: string; onClose: () => void }) {
-	const [lines, setLines] = useState<string[]>([]);
-	const [loading, setLoading] = useState(true);
-	const [totalLines, setTotalLines] = useState(0);
-	const [hasMore, setHasMore] = useState(false);
-	const [autoScroll, setAutoScroll] = useState(true);
-	const [stdinInput, setStdinInput] = useState("");
-	const scrollRef = useRef<HTMLDivElement>(null);
-	const inputRef = useRef<HTMLInputElement>(null);
-	const offsetRef = useRef(0);
-	const mountedRef = useRef(true);
-	const loadingRef = useRef(false);
-	const initTag = useRef(0);
-	const subIdRef = useRef<string | null>(null);
-	const autoScrollRef = useRef(autoScroll);
+function LogViewer({
+  logPath,
+  toolCallId,
+  onClose,
+}: {
+  logPath: string;
+  toolCallId: string;
+  onClose: () => void;
+}) {
+  const [lines, setLines] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [totalLines, setTotalLines] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [autoScroll, setAutoScroll] = useState(true);
+  const [stdinInput, setStdinInput] = useState("");
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const offsetRef = useRef(0);
+  const mountedRef = useRef(true);
+  const loadingRef = useRef(false);
+  const initTag = useRef(0);
+  const subIdRef = useRef<string | null>(null);
+  const autoScrollRef = useRef(autoScroll);
 
-	autoScrollRef.current = autoScroll;
+  autoScrollRef.current = autoScroll;
 
-	const virtualizer = useVirtualizer({
-		count: lines.length,
-		getScrollElement: () => scrollRef.current,
-		estimateSize: () => LINE_HEIGHT,
-		overscan: 20,
-	});
+  const virtualizer = useVirtualizer({
+    count: lines.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => LINE_HEIGHT,
+    overscan: 20,
+  });
 
-	const scrollToBottom = useCallback(() => {
-		virtualizer.scrollToIndex(lines.length - 1, { align: "end" });
-	}, [virtualizer, lines.length]);
+  const scrollToBottom = useCallback(() => {
+    virtualizer.scrollToIndex(lines.length - 1, { align: "end" });
+  }, [virtualizer, lines.length]);
 
-	useEffect(() => {
-		if (autoScroll && lines.length > 0) scrollToBottom();
-	}, [lines, autoScroll, scrollToBottom]);
+  useEffect(() => {
+    if (autoScroll && lines.length > 0) scrollToBottom();
+  }, [lines, autoScroll, scrollToBottom]);
 
-	useEffect(() => {
-		const tag = ++initTag.current;
-		mountedRef.current = true;
-		offsetRef.current = 0;
-		loadingRef.current = false;
-		setLoading(true);
-		setLines([]);
-		setTotalLines(0);
-		setHasMore(false);
-		subIdRef.current = null;
+  useEffect(() => {
+    const tag = ++initTag.current;
+    mountedRef.current = true;
+    offsetRef.current = 0;
+    loadingRef.current = false;
+    setLoading(true);
+    setLines([]);
+    setTotalLines(0);
+    setHasMore(false);
+    subIdRef.current = null;
 
-		let cancelled = false;
+    let cancelled = false;
 
-		(async () => {
-			try {
-				const sid = useSessionStore.getState().activeSessionId;
-				const id = await apiClient.subscribe("bash.logUpdate", (payload: { logPath: string; newLines: string[] }) => {
-					if (payload.logPath !== logPath || initTag.current !== tag) return;
-					if (payload.newLines.length === 0) return;
-					setLines((prev) => [...prev, ...payload.newLines]);
-					setTotalLines((prev) => prev + payload.newLines.length);
-				}, sid ? { sessionId: sid } : undefined);
-				if (cancelled) { apiClient.unsubscribe(id); return; }
-				subIdRef.current = id;
+    (async () => {
+      try {
+        const sid = useSessionStore.getState().activeSessionId;
+        const id = await apiClient.subscribe(
+          "bash.logUpdate",
+          (payload: { logPath: string; newLines: string[] }) => {
+            if (payload.logPath !== logPath || initTag.current !== tag) return;
+            if (payload.newLines.length === 0) return;
+            setLines((prev) => [...prev, ...payload.newLines]);
+            setTotalLines((prev) => prev + payload.newLines.length);
+          },
+          sid ? { sessionId: sid } : undefined,
+        );
+        if (cancelled) {
+          apiClient.unsubscribe(id);
+          return;
+        }
+        subIdRef.current = id;
 
-				if (loadingRef.current || cancelled) return;
-				loadingRef.current = true;
-				try {
-					const result = await apiClient.call("bash.readLog", {
-						logPath,
-						offset: offsetRef.current,
-						limit: 500,
-					}) as { lines: string[]; totalLines: number; hasMore: boolean };
-					if (cancelled || !mountedRef.current) return;
-					setLines((prev) => (offsetRef.current === 0 ? result.lines : [...prev, ...result.lines]));
-					setTotalLines(result.totalLines);
-					setHasMore(result.hasMore);
-					offsetRef.current += result.lines.length;
-				} catch {
-				} finally {
-					if (!cancelled && mountedRef.current) { setLoading(false); loadingRef.current = false; }
-				}
+        if (loadingRef.current || cancelled) return;
+        loadingRef.current = true;
+        try {
+          const result = (await apiClient.call("bash.readLog", {
+            logPath,
+            offset: offsetRef.current,
+            limit: 500,
+          })) as { lines: string[]; totalLines: number; hasMore: boolean };
+          if (cancelled || !mountedRef.current) return;
+          setLines((prev) => (offsetRef.current === 0 ? result.lines : [...prev, ...result.lines]));
+          setTotalLines(result.totalLines);
+          setHasMore(result.hasMore);
+          offsetRef.current += result.lines.length;
+        } catch {
+        } finally {
+          if (!cancelled && mountedRef.current) {
+            setLoading(false);
+            loadingRef.current = false;
+          }
+        }
 
-				if (cancelled) return;
-				await apiClient.call("bash.watchLog", { logPath, sessionId: sid ?? undefined });
-			} catch (err) { console.warn("[BashPanel] watchLog failed:", err); }
-		})();
+        if (cancelled) return;
+        await apiClient.call("bash.watchLog", { logPath, sessionId: sid ?? undefined });
+      } catch (err) {
+        console.warn("[BashPanel] watchLog failed:", err);
+      }
+    })();
 
-		return () => {
-			cancelled = true;
-			mountedRef.current = false;
-			if (subIdRef.current) apiClient.unsubscribe(subIdRef.current);
-			const sid = useSessionStore.getState().activeSessionId;
-			apiClient.call("bash.unwatchLog", { logPath, sessionId: sid ?? undefined }).catch((err) => { console.warn("[BashPanel] unwatchLog failed:", err); });
-		};
-	}, [logPath]);
+    return () => {
+      cancelled = true;
+      mountedRef.current = false;
+      if (subIdRef.current) apiClient.unsubscribe(subIdRef.current);
+      const sid = useSessionStore.getState().activeSessionId;
+      apiClient.call("bash.unwatchLog", { logPath, sessionId: sid ?? undefined }).catch((err) => {
+        console.warn("[BashPanel] unwatchLog failed:", err);
+      });
+    };
+  }, [logPath]);
 
-	async function handleScroll() {
-		const el = scrollRef.current;
-		if (!el) return;
-		const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-		setAutoScroll(nearBottom);
-		if (nearBottom && hasMore && !loadingRef.current) {
-			loadingRef.current = true;
-			try {
-				const tag = initTag.current;
-				const result = await apiClient.call("bash.readLog", {
-					logPath,
-					offset: offsetRef.current,
-					limit: 500,
-				}) as { lines: string[]; totalLines: number; hasMore: boolean };
-				if (!mountedRef.current || initTag.current !== tag) return;
-				setLines((prev) => [...prev, ...result.lines]);
-				setTotalLines(result.totalLines);
-				setHasMore(result.hasMore);
-				offsetRef.current += result.lines.length;
-			} catch (err) { console.warn("[BashPanel] loadMore failed:", err); } finally {
-				if (mountedRef.current) loadingRef.current = false;
-			}
-		}
-	}
+  async function handleScroll() {
+    const el = scrollRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    setAutoScroll(nearBottom);
+    if (nearBottom && hasMore && !loadingRef.current) {
+      loadingRef.current = true;
+      try {
+        const tag = initTag.current;
+        const result = (await apiClient.call("bash.readLog", {
+          logPath,
+          offset: offsetRef.current,
+          limit: 500,
+        })) as { lines: string[]; totalLines: number; hasMore: boolean };
+        if (!mountedRef.current || initTag.current !== tag) return;
+        setLines((prev) => [...prev, ...result.lines]);
+        setTotalLines(result.totalLines);
+        setHasMore(result.hasMore);
+        offsetRef.current += result.lines.length;
+      } catch (err) {
+        console.warn("[BashPanel] loadMore failed:", err);
+      } finally {
+        if (mountedRef.current) loadingRef.current = false;
+      }
+    }
+  }
 
-	async function sendStdin() {
-		const text = stdinInput.trim();
-		if (!text) return;
-		const sid = useSessionStore.getState().activeSessionId;
-		if (!sid || !toolCallId) return;
-		await apiClient.call("bash.command", { sessionId: sid, action: "write_stdin" as const, toolCallId, data: text + "\n" });
-		setStdinInput("");
-	}
+  async function sendStdin() {
+    const text = stdinInput.trim();
+    if (!text) return;
+    const sid = useSessionStore.getState().activeSessionId;
+    if (!sid || !toolCallId) return;
+    await apiClient.call("bash.command", {
+      sessionId: sid,
+      action: "write_stdin" as const,
+      toolCallId,
+      data: text + "\n",
+    });
+    setStdinInput("");
+  }
 
-	const virtualItems = virtualizer.getVirtualItems();
+  const virtualItems = virtualizer.getVirtualItems();
 
-	return (
-		<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 sm:p-6" onClick={onClose}>
-			<div
-				className="bg-white dark:bg-gray-900 border-t sm:border border-gray-200 dark:border-gray-700 sm:rounded-lg w-full sm:max-w-4xl flex flex-col h-full sm:h-[70vh] sm:max-h-[85vh]"
-				onClick={(e) => e.stopPropagation()}
-			>
-				<div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-200 dark:border-gray-700 shrink-0">
-					<div className="flex items-center gap-2 min-w-0">
-						<Terminal className="w-3.5 h-3.5 text-gray-500 shrink-0" />
-						<span className="text-xs text-gray-700 dark:text-gray-300 font-mono truncate">{logPath.split("/").pop()}</span>
-						<span className="text-[9px] text-gray-400 dark:text-gray-600 shrink-0">{totalLines} 行</span>
-					</div>
-					<button onClick={onClose} className="text-gray-500 hover:text-gray-800 dark:hover:text-white text-sm leading-none shrink-0">✕</button>
-				</div>
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 sm:p-6"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white dark:bg-gray-900 border-t sm:border border-gray-200 dark:border-gray-700 sm:rounded-lg w-full sm:max-w-4xl flex flex-col h-full sm:h-[70vh] sm:max-h-[85vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-200 dark:border-gray-700 shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <Terminal className="w-3.5 h-3.5 text-gray-500 shrink-0" />
+            <span className="text-xs text-gray-700 dark:text-gray-300 font-mono truncate">
+              {logPath.split("/").pop()}
+            </span>
+            <span className="text-[9px] text-gray-400 dark:text-gray-600 shrink-0">
+              {totalLines} 行
+            </span>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-800 dark:hover:text-white text-sm leading-none shrink-0"
+          >
+            ✕
+          </button>
+        </div>
 
-				<div
-					ref={scrollRef}
-					onScroll={handleScroll}
-					className="flex-1 overflow-auto p-3 sm:p-4 min-h-0"
-				>
-					{loading ? (
-						<div className="flex items-center justify-center py-12">
-							<Loader2 className="w-4 h-4 animate-spin text-gray-500" />
-							<span className="ml-2 text-[11px] text-gray-500">加载中...</span>
-						</div>
-					) : lines.length === 0 ? (
-						<div className="text-[11px] text-gray-400 dark:text-gray-600 italic">暂无输出</div>
-					) : (
-						<div
-							style={{
-								height: virtualizer.getTotalSize(),
-								width: "100%",
-								position: "relative",
-							}}
-						>
-							{virtualItems.map((virtualRow) => {
-								const line = lines[virtualRow.index];
-								return (
-									<pre
-										key={virtualRow.index}
-										data-index={virtualRow.index}
-										ref={virtualizer.measureElement}
-										className="text-[11px] text-gray-700 dark:text-gray-300 font-mono whitespace-pre-wrap break-all leading-relaxed absolute top-0 left-0 w-full"
-										style={{
-											transform: `translateY(${virtualRow.start}px)`,
-										}}
-									>
-										{line}
-									</pre>
-								);
-							})}
-						</div>
-					)}
-				</div>
+        <div
+          ref={scrollRef}
+          onScroll={handleScroll}
+          className="flex-1 overflow-auto p-3 sm:p-4 min-h-0"
+        >
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
+              <span className="ml-2 text-[11px] text-gray-500">加载中...</span>
+            </div>
+          ) : lines.length === 0 ? (
+            <div className="text-[11px] text-gray-400 dark:text-gray-600 italic">暂无输出</div>
+          ) : (
+            <div
+              style={{
+                height: virtualizer.getTotalSize(),
+                width: "100%",
+                position: "relative",
+              }}
+            >
+              {virtualItems.map((virtualRow) => {
+                const line = lines[virtualRow.index];
+                return (
+                  <pre
+                    key={virtualRow.index}
+                    data-index={virtualRow.index}
+                    ref={virtualizer.measureElement}
+                    className="text-[11px] text-gray-700 dark:text-gray-300 font-mono whitespace-pre-wrap break-all leading-relaxed absolute top-0 left-0 w-full"
+                    style={{
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                  >
+                    {line}
+                  </pre>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
-				<div className="flex items-center gap-2 px-3 sm:px-4 py-2 border-t border-gray-200 dark:border-gray-700 shrink-0" style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}>
-					<span className="text-[9px] text-gray-400 dark:text-gray-600 shrink-0">{lines.length}/{totalLines}</span>
-					<button onClick={() => { setAutoScroll(true); scrollToBottom(); }} className="text-[9px] text-gray-500 hover:text-gray-700 dark:hover:text-gray-400 transition-colors shrink-0">
-						滚动到底部
-					</button>
-					<div className="flex-1 flex items-center gap-1.5 ml-2">
-						<input
-							ref={inputRef}
-							value={stdinInput}
-							onChange={(e) => setStdinInput(e.target.value)}
-							onKeyDown={(e) => { if (e.key === "Enter") sendStdin(); }}
-							placeholder="输入内容发送到进程..."
-							className="flex-1 h-7 px-2 rounded bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-[11px] text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-600 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 font-mono"
-						/>
-						<button
-							onClick={sendStdin}
-							disabled={!stdinInput.trim()}
-							className="h-7 w-7 flex items-center justify-center rounded bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 disabled:opacity-30 disabled:hover:bg-blue-600/20 transition-colors shrink-0"
-							title="发送"
-						>
-							<Send className="w-3.5 h-3.5" />
-						</button>
-					</div>
-				</div>
-			</div>
-		</div>
-	);
+        <div
+          className="flex items-center gap-2 px-3 sm:px-4 py-2 border-t border-gray-200 dark:border-gray-700 shrink-0"
+          style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
+        >
+          <span className="text-[9px] text-gray-400 dark:text-gray-600 shrink-0">
+            {lines.length}/{totalLines}
+          </span>
+          <button
+            onClick={() => {
+              setAutoScroll(true);
+              scrollToBottom();
+            }}
+            className="text-[9px] text-gray-500 hover:text-gray-700 dark:hover:text-gray-400 transition-colors shrink-0"
+          >
+            滚动到底部
+          </button>
+          <div className="flex-1 flex items-center gap-1.5 ml-2">
+            <input
+              ref={inputRef}
+              value={stdinInput}
+              onChange={(e) => setStdinInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") sendStdin();
+              }}
+              placeholder="输入内容发送到进程..."
+              className="flex-1 h-7 px-2 rounded bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-[11px] text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-600 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 font-mono"
+            />
+            <button
+              onClick={sendStdin}
+              disabled={!stdinInput.trim()}
+              className="h-7 w-7 flex items-center justify-center rounded bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 disabled:opacity-30 disabled:hover:bg-blue-600/20 transition-colors shrink-0"
+              title="发送"
+            >
+              <Send className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export { BashProcessCard, LogViewer };
 
 export function BashPanel() {
-	const activeSessionId = useSessionStore((s) => s.activeSessionId);
-	const allProcesses = useBashStore(useShallow((s) => s.processesBySession[activeSessionId ?? ""]));
-	const backgroundedIds = useBashStore(useShallow((s) => s.backgroundedIds));
-	const [collapsed, setCollapsed] = useState(false);
-	const [logViewer, setLogViewer] = useState<{ logPath: string; toolCallId: string } | null>(null);
+  const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const allProcesses = useBashStore(useShallow((s) => s.processesBySession[activeSessionId ?? ""]));
+  const backgroundedIds = useBashStore(useShallow((s) => s.backgroundedIds));
+  const [collapsed, setCollapsed] = useState(false);
+  const [logViewer, setLogViewer] = useState<{ logPath: string; toolCallId: string } | null>(null);
 
-	const backgroundProcesses = allProcesses?.filter((p) =>
-		backgroundedIds.has(p.toolCallId),
-	) ?? [];
+  const backgroundProcesses = allProcesses?.filter((p) => backgroundedIds.has(p.toolCallId)) ?? [];
 
-	if (backgroundProcesses.length === 0) return null;
+  if (backgroundProcesses.length === 0) return null;
 
-	return (
-		<div className="px-3 py-2 space-y-2">
-			<button
-				onClick={() => setCollapsed(!collapsed)}
-				className="w-full flex items-center gap-1.5 text-[11px] font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
-			>
-				{collapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-				<Terminal className="w-3 h-3" />
-				<span>SHELL</span>
-				<span className="ml-auto text-[9px] text-gray-600">{backgroundProcesses.length}</span>
-			</button>
+  return (
+    <div className="px-3 py-2 space-y-2">
+      <button
+        onClick={() => setCollapsed(!collapsed)}
+        className="w-full flex items-center gap-1.5 text-[11px] font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
+      >
+        {collapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+        <Terminal className="w-3 h-3" />
+        <span>SHELL</span>
+        <span className="ml-auto text-[9px] text-gray-600">{backgroundProcesses.length}</span>
+      </button>
 
-			{!collapsed && (
-				<div className="space-y-2 pl-1">
-					{backgroundProcesses.map((p) => (
-						<BashProcessCard
-							key={p.toolCallId}
-							process={p}
-							onOpenLog={() => setLogViewer({ logPath: p.logPath ?? "", toolCallId: p.toolCallId })}
-						/>
-					))}
-				</div>
-			)}
+      {!collapsed && (
+        <div className="space-y-2 pl-1">
+          {backgroundProcesses.map((p) => (
+            <BashProcessCard
+              key={p.toolCallId}
+              process={p}
+              onOpenLog={() => setLogViewer({ logPath: p.logPath ?? "", toolCallId: p.toolCallId })}
+            />
+          ))}
+        </div>
+      )}
 
-			{logViewer && createPortal(
-				<LogViewer logPath={logViewer.logPath} toolCallId={logViewer.toolCallId} onClose={() => setLogViewer(null)} />,
-				document.body,
-			)}
-		</div>
-	);
+      {logViewer &&
+        createPortal(
+          <LogViewer
+            logPath={logViewer.logPath}
+            toolCallId={logViewer.toolCallId}
+            onClose={() => setLogViewer(null)}
+          />,
+          document.body,
+        )}
+    </div>
+  );
 }

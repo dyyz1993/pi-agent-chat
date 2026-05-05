@@ -92,13 +92,9 @@ export const ENTRY_TYPE_KEYS = new Set<string>([
   ...Object.keys(LEGACY_ENTRY_TYPES),
 ]);
 
-export const ALL_MEMORY_TYPE_KEYS = new Set<string>(
-  Object.keys(ALL_MEMORY_TYPES),
-);
+export const ALL_MEMORY_TYPE_KEYS = new Set<string>(Object.keys(ALL_MEMORY_TYPES));
 
-export function getMemoryConfig(
-  customType: string,
-): MemoryTypeConfig | undefined {
+export function getMemoryConfig(customType: string): MemoryTypeConfig | undefined {
   return ALL_MEMORY_TYPES[customType];
 }
 
@@ -106,10 +102,7 @@ export function isMemoryEntryType(customType: string): boolean {
   return ENTRY_TYPE_KEYS.has(customType);
 }
 
-export function getMemorySummary(
-  customType: string,
-  data: unknown,
-): string | null {
+export function getMemorySummary(customType: string, data: unknown): string | null {
   const d = data as Record<string, unknown> | undefined;
   if (!d) return null;
 
@@ -117,7 +110,12 @@ export function getMemorySummary(
     case "memory_prefetch": {
       if (d.skipped === true) return "跳过搜索，复用上次结果";
       const q = typeof d.query === "string" ? d.query : "";
-      const n = typeof d.availableFiles === "number" ? d.availableFiles : (Array.isArray(d.availableFiles) ? d.availableFiles.length : 0);
+      const n =
+        typeof d.availableFiles === "number"
+          ? d.availableFiles
+          : Array.isArray(d.availableFiles)
+            ? d.availableFiles.length
+            : 0;
       return q ? `「${q.length > 40 ? q.slice(0, 40) + "…" : q}」(${n} 个文件)` : null;
     }
     case "memory_prefetch_result": {
@@ -146,18 +144,38 @@ export function getMemorySummary(
         return `无匹配结果${detail}`;
       }
       const sizeLabel = bytes > 0 ? `${Math.round(bytes / 1024)}KB` : "";
-      const fileCountLabel = availableFiles > 0 ? `${availableFiles}个文件` : files.length > 0 ? `${files.length}个文件` : "";
+      const fileCountLabel =
+        availableFiles > 0
+          ? `${availableFiles}个文件`
+          : files.length > 0
+            ? `${files.length}个文件`
+            : "";
       const durationLabel = durationMs > 0 ? `${durationMs}ms` : "";
-      const layerLabel = layer === "llm"
-        ? (isForce ? "强制触发" : "关键词触发")
-        : layer === "skip" ? "规则" : layer === "not_triggered" ? "未触发" : "";
+      const layerLabel =
+        layer === "llm"
+          ? isForce
+            ? "强制触发"
+            : "关键词触发"
+          : layer === "skip"
+            ? "规则"
+            : layer === "not_triggered"
+              ? "未触发"
+              : "";
       const parts = [layerLabel, sizeLabel, fileCountLabel, durationLabel].filter(Boolean);
       const detail = parts.length > 0 ? ` · ${parts.join(" · ")}` : "";
       return `已注入记忆${detail}`;
     }
     case "memory_extract": {
-      const created = Array.isArray(d.created) ? (d.created as string[]).length : (typeof d.created === "number" ? d.created : 0);
-      const updated = Array.isArray(d.updated) ? (d.updated as string[]).length : (typeof d.updated === "number" ? d.updated : 0);
+      const created = Array.isArray(d.created)
+        ? (d.created as string[]).length
+        : typeof d.created === "number"
+          ? d.created
+          : 0;
+      const updated = Array.isArray(d.updated)
+        ? (d.updated as string[]).length
+        : typeof d.updated === "number"
+          ? d.updated
+          : 0;
       const parts: string[] = [];
       if (created > 0) parts.push(`新建 ${created} 条`);
       if (updated > 0) parts.push(`更新 ${updated} 条`);
@@ -170,8 +188,7 @@ export function getMemorySummary(
     case "memory_dream": {
       const parts: string[] = [];
       if (typeof d.merges === "number") parts.push(`合并 ${d.merges}`);
-      if (typeof d.deletions === "number")
-        parts.push(`删除 ${d.deletions}`);
+      if (typeof d.deletions === "number") parts.push(`删除 ${d.deletions}`);
       if (typeof d.updates === "number") parts.push(`更新 ${d.updates}`);
       return parts.length > 0 ? parts.join("，") : null;
     }
@@ -181,8 +198,7 @@ export function getMemorySummary(
     }
     case "memory_created":
     case "memory_updated": {
-      if (typeof d.filename === "string" && d.filename)
-        return d.filename as string;
+      if (typeof d.filename === "string" && d.filename) return d.filename as string;
       if (Array.isArray(d.files)) return `${(d.files as unknown[]).length} 个文件`;
       return null;
     }

@@ -13,14 +13,18 @@ function readHistory(sessionId: string): string[] {
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
     if (Array.isArray(parsed)) return (parsed as string[]).slice(0, MAX_ITEMS);
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return [];
 }
 
 function writeHistory(sessionId: string, items: string[]) {
   try {
     localStorage.setItem(getStorageKey(sessionId), JSON.stringify(items.slice(0, MAX_ITEMS)));
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 export function useInputHistory(sessionId: string) {
@@ -31,17 +35,20 @@ export function useInputHistory(sessionId: string) {
   const hasPrev = historyRef.current.length > 0 && indexRef.current < historyRef.current.length - 1;
   const hasNext = indexRef.current > 0;
 
-  const saveToHistory = useCallback((text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    const h = historyRef.current;
-    const filtered = h.filter((item) => item !== trimmed);
-    const updated = [trimmed, ...filtered].slice(0, MAX_ITEMS);
-    historyRef.current = updated;
-    writeHistory(sessionId, updated);
-    indexRef.current = -1;
-    forceUpdate((n) => n + 1);
-  }, [sessionId]);
+  const saveToHistory = useCallback(
+    (text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      const h = historyRef.current;
+      const filtered = h.filter((item) => item !== trimmed);
+      const updated = [trimmed, ...filtered].slice(0, MAX_ITEMS);
+      historyRef.current = updated;
+      writeHistory(sessionId, updated);
+      indexRef.current = -1;
+      forceUpdate((n) => n + 1);
+    },
+    [sessionId],
+  );
 
   const navigatePrev = useCallback((): string | null => {
     const h = historyRef.current;
@@ -71,7 +78,9 @@ export function useInputHistory(sessionId: string) {
     indexRef.current = -1;
     try {
       localStorage.removeItem(getStorageKey(sessionId));
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     forceUpdate((n) => n + 1);
   }, [sessionId]);
 

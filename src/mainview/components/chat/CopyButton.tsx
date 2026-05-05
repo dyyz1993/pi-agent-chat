@@ -9,7 +9,12 @@ interface CopyButtonProps {
   title?: string;
 }
 
-export const CopyButton = memo(function CopyButton({ text, size = "xs", className = "", title = "复制" }: CopyButtonProps) {
+export const CopyButton = memo(function CopyButton({
+  text,
+  size = "xs",
+  className = "",
+  title = "复制",
+}: CopyButtonProps) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = useCallback(() => {

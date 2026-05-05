@@ -21,7 +21,9 @@ export const AudioCard = memo(function AudioCard({ details }: { details: Preview
             Your browser does not support audio playback.
           </audio>
         ) : (
-          <div className="text-xs text-gray-400 dark:text-gray-500 italic">No path available for preview</div>
+          <div className="text-xs text-gray-400 dark:text-gray-500 italic">
+            No path available for preview
+          </div>
         )}
       </div>
     </div>

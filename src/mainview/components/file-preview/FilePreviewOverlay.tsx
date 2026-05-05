@@ -78,7 +78,10 @@ export function FilePreviewOverlay({ preview, loading, onClose }: FilePreviewOve
         <div
           className="flex items-center justify-center h-full p-4 bg-gray-100 dark:bg-gray-900"
           dangerouslySetInnerHTML={{
-            __html: sanitizeSvg(svgContent).replace(/<svg/, '<svg style="max-width: 100%; max-height: 100%;"'),
+            __html: sanitizeSvg(svgContent).replace(
+              /<svg/,
+              '<svg style="max-width: 100%; max-height: 100%;"',
+            ),
           }}
         />
       );
@@ -119,7 +122,9 @@ export function FilePreviewOverlay({ preview, loading, onClose }: FilePreviewOve
       <div className="flex items-center justify-between px-4 py-2 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
         <div className="flex items-center gap-2">
           <FileText className="w-4 h-4 text-gray-400" />
-          <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{preview.name}</span>
+          <span className="text-sm font-medium text-gray-800 dark:text-gray-200">
+            {preview.name}
+          </span>
           {preview.size > 0 && (
             <span className="text-xs text-gray-500">{formatSize(preview.size)}</span>
           )}
@@ -133,7 +138,7 @@ export function FilePreviewOverlay({ preview, loading, onClose }: FilePreviewOve
               onClick={() => setHtmlSourceMode((v) => !v)}
               className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors ${
                 htmlSourceMode
-                   ? "text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20"
+                  ? "text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20"
                   : "text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-700/50"
               }`}
               title={htmlSourceMode ? "切换到预览" : "切换到源码"}
@@ -151,9 +156,7 @@ export function FilePreviewOverlay({ preview, loading, onClose }: FilePreviewOve
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 flex flex-col">
-        {renderPreview()}
-      </div>
+      <div className="flex-1 min-h-0 flex flex-col">{renderPreview()}</div>
     </div>
   );
 }

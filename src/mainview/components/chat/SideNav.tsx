@@ -56,14 +56,26 @@ function buildNavItems(messages: ChatMessage[]): NavItem[] {
     }
 
     if (msg.role === "compactionSummary") {
-      return { id: msg.id, role: "assistant" as const, icon: Archive, color: "text-cyan-400", subs: [] };
+      return {
+        id: msg.id,
+        role: "assistant" as const,
+        icon: Archive,
+        color: "text-cyan-400",
+        subs: [],
+      };
     }
 
     const customBlock = msg.content.find((b) => b.type === "custom") as
       | { type: "custom"; customType: string; data: unknown }
       | undefined;
     if (customBlock && customBlock.customType === "lsp_diagnostics") {
-      return { id: msg.id, role: "assistant", icon: AlertTriangle, color: "text-yellow-400", subs: [] };
+      return {
+        id: msg.id,
+        role: "assistant",
+        icon: AlertTriangle,
+        color: "text-yellow-400",
+        subs: [],
+      };
     }
 
     const subs: SubItem[] = [];
@@ -80,8 +92,13 @@ function buildNavItems(messages: ChatMessage[]): NavItem[] {
         let ti = getToolIcon(b.toolName);
         let label = ti.label;
         if (b.toolName.toLowerCase() === "preview" && (b as { details?: unknown }).details) {
-          const rt = ((b as { details?: { resourceType?: string } }).details as { resourceType?: string })?.resourceType;
-          if (rt) { ti = getPreviewResourceIcon(rt); label = ti.label; }
+          const rt = (
+            (b as { details?: { resourceType?: string } }).details as { resourceType?: string }
+          )?.resourceType;
+          if (rt) {
+            ti = getPreviewResourceIcon(rt);
+            label = ti.label;
+          }
         }
         subs.push({ icon: ti.icon, color: ti.color, label, blockId });
       } else if (b.type === "custom") {
@@ -89,8 +106,15 @@ function buildNavItems(messages: ChatMessage[]): NavItem[] {
         let color = "text-yellow-400";
         let label = b.customType;
         switch (b.customType) {
-          case "bash_background_exit": icon = Terminal; color = "text-cyan-400"; label = "后台进程"; break;
-          case "lsp_diagnostics": icon = ScanSearch; color = "text-yellow-400"; break;
+          case "bash_background_exit":
+            icon = Terminal;
+            color = "text-cyan-400";
+            label = "后台进程";
+            break;
+          case "lsp_diagnostics":
+            icon = ScanSearch;
+            color = "text-yellow-400";
+            break;
           default:
             if (ALL_MEMORY_TYPE_KEYS.has(b.customType)) {
               const memIcon = getCustomTypeIcon(b.customType);
@@ -104,10 +128,18 @@ function buildNavItems(messages: ChatMessage[]): NavItem[] {
       }
     }
 
-    const hasError = msg.content.some(
-      (b) => b.type === "toolResult" && b.isError ? true : b.type === "toolExecution" && b.status === "error"
+    const hasError = msg.content.some((b) =>
+      b.type === "toolResult" && b.isError
+        ? true
+        : b.type === "toolExecution" && b.status === "error",
     );
-    return { id: msg.id, role: "assistant", icon: Bot, color: hasError ? "text-red-400" : "text-green-400", subs };
+    return {
+      id: msg.id,
+      role: "assistant",
+      icon: Bot,
+      color: hasError ? "text-red-400" : "text-green-400",
+      subs,
+    };
   });
 }
 
@@ -128,7 +160,8 @@ const NavDot = memo(function NavDot({
   onContextMenu: (e: React.MouseEvent) => void;
   onDoubleClick: () => void;
 }) {
-  let cls = "relative w-10 h-8 rounded-r flex items-center justify-center transition-all cursor-pointer ";
+  let cls =
+    "relative w-10 h-8 rounded-r flex items-center justify-center transition-all cursor-pointer ";
   let iconColor = color;
   let barCls = "absolute left-0 top-1 bottom-1 w-[3px] rounded-full transition-all opacity-0 ";
 
@@ -145,7 +178,12 @@ const NavDot = memo(function NavDot({
   }
 
   return (
-    <button className={cls} onClick={onClick} onContextMenu={onContextMenu} onDoubleClick={onDoubleClick}>
+    <button
+      className={cls}
+      onClick={onClick}
+      onContextMenu={onContextMenu}
+      onDoubleClick={onDoubleClick}
+    >
       <span className={barCls} />
       <Icon className={`w-4 h-4 ${iconColor} transition-colors`} />
     </button>
@@ -167,7 +205,8 @@ const NavSubDot = memo(function NavSubDot({
   blockId: string;
   onClick?: () => void;
 }) {
-  let cls = "relative w-10 h-8 rounded-r flex items-center justify-center transition-all cursor-pointer ";
+  let cls =
+    "relative w-10 h-8 rounded-r flex items-center justify-center transition-all cursor-pointer ";
   let iconColor = color;
   let barCls = "absolute left-0 top-1 bottom-1 w-[3px] rounded-full transition-all opacity-0 ";
 
@@ -196,42 +235,63 @@ export function SideNav({
 }) {
   const sessionId = useSessionStore((s) => s.activeSessionId);
   const selectedNavId = useTurnStore(
-    useCallback((s) => sessionId ? (s.selectedNavIdBySession[sessionId] ?? null) : null, [sessionId])
+    useCallback(
+      (s) => (sessionId ? (s.selectedNavIdBySession[sessionId] ?? null) : null),
+      [sessionId],
+    ),
   );
   const setNavId = useTurnStore((s) => s.setNavId);
   const selectedItems = useChatNavStore(
-    useCallback((s) => sessionId ? (s.selectedItemsBySession[sessionId] ?? EMPTY_SET) : EMPTY_SET, [sessionId])
+    useCallback(
+      (s) => (sessionId ? (s.selectedItemsBySession[sessionId] ?? EMPTY_SET) : EMPTY_SET),
+      [sessionId],
+    ),
   );
   const toggleItemSelect = useChatNavStore((s) => s.toggleItemSelect);
 
   const navItems = useMemo(() => buildNavItems(messages), [messages]);
 
-  const handleDotClick = useCallback((id: string) => {
-    setNavId(id);
-    onNavDotClick(id);
-  }, [onNavDotClick, setNavId]);
+  const handleDotClick = useCallback(
+    (id: string) => {
+      setNavId(id);
+      onNavDotClick(id);
+    },
+    [onNavDotClick, setNavId],
+  );
 
-  const handleSubDotClick = useCallback((blockId: string) => {
-    setNavId(blockId);
-    onNavDotClick(blockId);
-  }, [onNavDotClick, setNavId]);
+  const handleSubDotClick = useCallback(
+    (blockId: string) => {
+      setNavId(blockId);
+      onNavDotClick(blockId);
+    },
+    [onNavDotClick, setNavId],
+  );
 
-  const handleContextMenu = useCallback((e: React.MouseEvent, id: string) => {
-    e.preventDefault();
-    toggleItemSelect(id);
-  }, [toggleItemSelect]);
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent, id: string) => {
+      e.preventDefault();
+      toggleItemSelect(id);
+    },
+    [toggleItemSelect],
+  );
 
-  const handleDoubleClick = useCallback((id: string) => {
-    toggleItemSelect(id);
-  }, [toggleItemSelect]);
+  const handleDoubleClick = useCallback(
+    (id: string) => {
+      toggleItemSelect(id);
+    },
+    [toggleItemSelect],
+  );
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  const getItemHeight = useCallback((index: number) => {
-    const item = navItems[index];
-    if (!item) return 44;
-    return item.subs.length > 0 ? 32 + item.subs.length * 30 : 44;
-  }, [navItems]);
+  const getItemHeight = useCallback(
+    (index: number) => {
+      const item = navItems[index];
+      if (!item) return 44;
+      return item.subs.length > 0 ? 32 + item.subs.length * 30 : 44;
+    },
+    [navItems],
+  );
 
   const virtualizer = useVirtualizer({
     count: navItems.length,
@@ -251,7 +311,11 @@ export function SideNav({
 
   return (
     <div className="h-full min-h-0 flex flex-col bg-gray-50/30 dark:bg-gray-900/30 border-l border-gray-200/30 dark:border-gray-800/30">
-      <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto sidenav-scroll" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 min-h-0 overflow-y-auto sidenav-scroll"
+        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+      >
         <div style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}>
           {virtualizer.getVirtualItems().map((vr) => {
             const { id, icon: Icon, color, subs } = navItems[vr.index];
@@ -261,7 +325,13 @@ export function SideNav({
                 data-nav-id={id}
                 ref={virtualizer.measureElement}
                 data-index={vr.index}
-                style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${vr.start}px)` }}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  transform: `translateY(${vr.start}px)`,
+                }}
               >
                 <div className="flex flex-col items-center w-full">
                   <NavDot

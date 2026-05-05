@@ -19,15 +19,26 @@ interface TimelineTurnProps {
   isLast?: boolean;
 }
 
-export const TimelineTurn = memo(function TimelineTurn({ turn, isLast: _isLast }: TimelineTurnProps) {
+export const TimelineTurn = memo(function TimelineTurn({
+  turn,
+  isLast: _isLast,
+}: TimelineTurnProps) {
   void _isLast;
   const { copied: turnCopied, copy: copyTurn } = useClipboard();
   const collapsed = useChatNavStore(
-    useCallback((s: { isTurnCollapsed: (id: string) => boolean }) => s.isTurnCollapsed(turn.id), [turn.id])
+    useCallback(
+      (s: { isTurnCollapsed: (id: string) => boolean }) => s.isTurnCollapsed(turn.id),
+      [turn.id],
+    ),
   );
-  const hasSelection = useChatNavStore(useCallback((s: { hasSelection: () => boolean }) => s.hasSelection(), []));
+  const hasSelection = useChatNavStore(
+    useCallback((s: { hasSelection: () => boolean }) => s.hasSelection(), []),
+  );
   const isTurnSelected = useChatNavStore(
-    useCallback((s: { isTurnSelected: (id: string) => boolean }) => s.isTurnSelected(turn.id), [turn.id])
+    useCallback(
+      (s: { isTurnSelected: (id: string) => boolean }) => s.isTurnSelected(turn.id),
+      [turn.id],
+    ),
   );
 
   const allItemIds = turn.items.map(getItemId);
@@ -38,11 +49,7 @@ export const TimelineTurn = memo(function TimelineTurn({ turn, isLast: _isLast }
   const toggleSelectAll = () => useChatNavStore.getState().toggleTurnSelect(turn.id, allItemIds);
 
   return (
-    <div
-      id={`turn-${turn.id}`}
-      data-turn-id={turn.id}
-      className="relative group/turn"
-    >
+    <div id={`turn-${turn.id}`} data-turn-id={turn.id} className="relative group/turn">
       {/* ── Left Timeline Line & Dots ── */}
       <div className="absolute left-[11px] top-6 bottom-0 w-px bg-gradient-to-b from-indigo-500/40 via-green-500/30 to-transparent" />
 
@@ -79,7 +86,9 @@ export const TimelineTurn = memo(function TimelineTurn({ turn, isLast: _isLast }
           <span className="text-[11px] text-gray-400 dark:text-gray-500 font-medium truncate">
             {turn.model ?? "Assistant"}
             {toolCount > 0 && (
-              <span className="ml-1.5 text-gray-400 dark:text-gray-600">· {toolCount} tool{toolCount > 1 ? "s" : ""}</span>
+              <span className="ml-1.5 text-gray-400 dark:text-gray-600">
+                · {toolCount} tool{toolCount > 1 ? "s" : ""}
+              </span>
             )}
           </span>
 
@@ -117,15 +126,28 @@ export const TimelineTurn = memo(function TimelineTurn({ turn, isLast: _isLast }
               onClick={toggleSelectAll}
               active={isTurnSelected}
             />
-            <TurnActionButton icon={<RotateCcw size={12} />} label="回滚代码" onClick={() => useChatNavStore.getState().openRollbackOverlay("code")} variant="warning" />
-            <TurnActionButton icon={<MessageSquare size={12} />} label="回滚聊天" onClick={() => useChatNavStore.getState().openRollbackOverlay("chat")} variant="info" />
+            <TurnActionButton
+              icon={<RotateCcw size={12} />}
+              label="回滚代码"
+              onClick={() => useChatNavStore.getState().openRollbackOverlay("code")}
+              variant="warning"
+            />
+            <TurnActionButton
+              icon={<MessageSquare size={12} />}
+              label="回滚聊天"
+              onClick={() => useChatNavStore.getState().openRollbackOverlay("chat")}
+              variant="info"
+            />
           </div>
         </div>
       </div>
 
       {/* ── Collapsed Summary ── */}
       {collapsed && (
-        <div className="ml-[38px] py-1.5 px-3 text-[11px] text-gray-400 dark:text-gray-500 bg-gray-50/40 dark:bg-gray-900/40 rounded-md border border-gray-200/50 dark:border-gray-800/50 cursor-pointer" onClick={toggleCollapse}>
+        <div
+          className="ml-[38px] py-1.5 px-3 text-[11px] text-gray-400 dark:text-gray-500 bg-gray-50/40 dark:bg-gray-900/40 rounded-md border border-gray-200/50 dark:border-gray-800/50 cursor-pointer"
+          onClick={toggleCollapse}
+        >
           {turn.userText ? truncate(turn.userText, 60) : "(empty)"}
           {textCount > 0 && ` · ${textCount} text`}
           {toolCount > 0 && ` · ${toolCount} tools`}
@@ -182,7 +204,10 @@ function TimelineItemRenderer({
 }) {
   void _turnId;
   const isSelected = useChatNavStore(
-    useCallback((s: { isItemSelected: (id: string) => boolean }) => s.isItemSelected(itemId), [itemId])
+    useCallback(
+      (s: { isItemSelected: (id: string) => boolean }) => s.isItemSelected(itemId),
+      [itemId],
+    ),
   );
 
   const handleToggle = () => useChatNavStore.getState().toggleItemSelect(itemId);
@@ -191,30 +216,28 @@ function TimelineItemRenderer({
     case "assistantText":
       return (
         <div className="group/item relative flex gap-2">
-          {showCheckbox && (
-            <ItemCheckbox checked={isSelected} onChange={handleToggle} />
-          )}
+          {showCheckbox && <ItemCheckbox checked={isSelected} onChange={handleToggle} />}
           <AssistantTextBlock text={item.text} isStreaming={false} />
         </div>
       );
     case "toolExecution":
       return (
         <div className="group/item relative">
-          {showCheckbox && (
-            <ItemCheckbox checked={isSelected} onChange={handleToggle} />
-          )}
+          {showCheckbox && <ItemCheckbox checked={isSelected} onChange={handleToggle} />}
           <div className="px-3 py-2 rounded-lg bg-gray-100/60 dark:bg-gray-800/60 text-sm text-gray-700 dark:text-gray-300 font-mono">
             <span className="text-indigo-400">{item.toolName}</span>
-            {item.args && <span className="text-gray-400 dark:text-gray-500 ml-1">{item.args.slice(0, 80)}</span>}
+            {item.args && (
+              <span className="text-gray-400 dark:text-gray-500 ml-1">
+                {item.args.slice(0, 80)}
+              </span>
+            )}
           </div>
         </div>
       );
     case "customEntry":
       return (
         <div className="group/item relative flex gap-2">
-          {showCheckbox && (
-            <ItemCheckbox checked={isSelected} onChange={handleToggle} />
-          )}
+          {showCheckbox && <ItemCheckbox checked={isSelected} onChange={handleToggle} />}
           <div className="px-3 py-2 rounded-lg bg-gray-100/40 dark:bg-gray-800/40 text-sm text-gray-700 dark:text-gray-300">
             <span className="text-cyan-400 font-medium">[{item.customType}]</span>
           </div>
@@ -225,16 +248,13 @@ function TimelineItemRenderer({
   }
 }
 
-function ItemCheckbox({
-  checked,
-  onChange,
-}: {
-  checked: boolean;
-  onChange: () => void;
-}) {
+function ItemCheckbox({ checked, onChange }: { checked: boolean; onChange: () => void }) {
   return (
     <button
-      onClick={(e) => { e.stopPropagation(); onChange(); }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onChange();
+      }}
       className={`absolute -left-[26px] top-2 w-4 h-4 rounded border flex items-center justify-center transition-all shrink-0 ${
         checked
           ? "bg-indigo-500 border-indigo-400 text-white"
@@ -246,13 +266,7 @@ function ItemCheckbox({
   );
 }
 
-function AssistantTextBlock({
-  text,
-  isStreaming,
-}: {
-  text: string;
-  isStreaming?: boolean;
-}) {
+function AssistantTextBlock({ text, isStreaming }: { text: string; isStreaming?: boolean }) {
   const { copied, copy } = useClipboard();
 
   if (isStreaming) {
@@ -266,13 +280,18 @@ function AssistantTextBlock({
 
   return (
     <div className="group/text relative px-3 py-2 rounded-lg bg-gray-100/40 dark:bg-gray-800/40 prose dark:prose-invert prose-sm max-w-none">
-      <pre className="whitespace-pre-wrap break-words text-sm text-gray-800 dark:text-gray-200">{text}</pre>
+      <pre className="whitespace-pre-wrap break-words text-sm text-gray-800 dark:text-gray-200">
+        {text}
+      </pre>
       <button
         onClick={() => copy(text)}
         className="absolute top-1.5 right-1.5 p-1 rounded opacity-0 group-hover/text:opacity-100 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all"
         title={copied ? "已复制" : "复制文本"}
       >
-        <Copy size={11} className={copied ? "text-green-400" : "text-gray-400 dark:text-gray-500"} />
+        <Copy
+          size={11}
+          className={copied ? "text-green-400" : "text-gray-400 dark:text-gray-500"}
+        />
       </button>
     </div>
   );
@@ -302,7 +321,10 @@ function TurnActionButton({
 
   return (
     <button
-      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
       className={`p-1 rounded transition-colors ${colorClass} ${activeClass}`}
       title={label}
     >

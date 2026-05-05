@@ -13,7 +13,10 @@ import { createLogger } from "../../shared/lib/logger";
 const log = createLogger("chat-store");
 
 export function normalizeToolBlocks(msgs: ChatMessage[]): void {
-  const toolCallById = new Map<string, { msgIndex: number; blockIndex: number; name: string; input: string }>();
+  const toolCallById = new Map<
+    string,
+    { msgIndex: number; blockIndex: number; name: string; input: string }
+  >();
 
   for (let mi = 0; mi < msgs.length; mi++) {
     const msg = msgs[mi];
@@ -32,14 +35,21 @@ export function normalizeToolBlocks(msgs: ChatMessage[]): void {
   for (let ti = 0; ti < msgs.length; ti++) {
     const trMsg = msgs[ti];
     if (trMsg.role !== "toolResult") continue;
-    const resultBlock = trMsg.content.find((b): b is Extract<ContentBlock, { type: "toolResult" }> => b.type === "toolResult");
+    const resultBlock = trMsg.content.find(
+      (b): b is Extract<ContentBlock, { type: "toolResult" }> => b.type === "toolResult",
+    );
     if (!resultBlock) continue;
 
     toRemove.add(ti);
 
     const match = toolCallById.get(resultBlock.toolCallId);
     const rawInput = match?.input ?? resultBlock.args;
-    const args = typeof rawInput === "string" ? rawInput : rawInput != null ? JSON.stringify(rawInput, null, 2) : "";
+    const args =
+      typeof rawInput === "string"
+        ? rawInput
+        : rawInput != null
+          ? JSON.stringify(rawInput, null, 2)
+          : "";
 
     const execBlock: Extract<ContentBlock, { type: "toolExecution" }> = {
       type: "toolExecution",
@@ -78,7 +88,12 @@ export function normalizeToolBlocks(msgs: ChatMessage[]): void {
         if (exec) {
           newContent.push(exec);
         } else {
-          const args = typeof b.input === "string" ? b.input : b.input != null ? JSON.stringify(b.input, null, 2) : "";
+          const args =
+            typeof b.input === "string"
+              ? b.input
+              : b.input != null
+                ? JSON.stringify(b.input, null, 2)
+                : "";
           newContent.push({
             type: "toolExecution",
             toolCallId: b.id,
@@ -100,7 +115,10 @@ export function normalizeToolBlocks(msgs: ChatMessage[]): void {
 
     let hasToolCall = false;
     for (const b of msg.content) {
-      if (b.type === "toolCall") { hasToolCall = true; break; }
+      if (b.type === "toolCall") {
+        hasToolCall = true;
+        break;
+      }
     }
     if (!hasToolCall) continue;
 
@@ -109,7 +127,12 @@ export function normalizeToolBlocks(msgs: ChatMessage[]): void {
     const newContent: ContentBlock[] = [];
     for (const b of msg.content) {
       if (b.type === "toolCall") {
-        const args = typeof b.input === "string" ? b.input : b.input != null ? JSON.stringify(b.input, null, 2) : "";
+        const args =
+          typeof b.input === "string"
+            ? b.input
+            : b.input != null
+              ? JSON.stringify(b.input, null, 2)
+              : "";
         newContent.push({
           type: "toolExecution",
           toolCallId: b.id,
@@ -151,7 +174,10 @@ interface ChatState {
   addMessage: (msg: ChatMessage) => void;
   setMessagesForSession: (sessionId: string, msgs: ChatMessage[]) => void;
   clearSessionMessages: (sessionId: string) => void;
-  loadSessionMessages: (sessionId: string, options?: { force?: boolean; sessionPath?: string }) => Promise<void>;
+  loadSessionMessages: (
+    sessionId: string,
+    options?: { force?: boolean; sessionPath?: string },
+  ) => Promise<void>;
   loadMoreMessages: (sessionId: string) => Promise<void>;
   setIsStreaming: (v: boolean) => void;
   incrementStreamVersion: () => void;
@@ -180,7 +206,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return;
     }
 
-    const activeSubId = (await import("./use-subagent-store")).useSubagentStore.getState().activeSubsessionId;
+    const activeSubId = (await import("./use-subagent-store")).useSubagentStore.getState()
+      .activeSubsessionId;
     if (activeSubId) {
       useAppStore.getState().addLog("Cannot send to subagent session");
       return;
@@ -228,7 +255,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
       set({ isStreaming: false });
     } catch (err) {
       set({ isStreaming: false });
-      useAppStore.getState().addLog(`Send error: ${err instanceof Error ? err.message : String(err)}`);
+      useAppStore
+        .getState()
+        .addLog(`Send error: ${err instanceof Error ? err.message : String(err)}`);
     }
   },
 
@@ -259,7 +288,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
     try {
       await apiClient.call("agent.steer", { sessionId, content: text });
     } catch (err) {
-      useAppStore.getState().addLog(`Steer error: ${err instanceof Error ? err.message : String(err)}`);
+      useAppStore
+        .getState()
+        .addLog(`Steer error: ${err instanceof Error ? err.message : String(err)}`);
     }
   },
 
@@ -290,7 +321,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
     try {
       await apiClient.call("agent.followUp", { sessionId, content: text });
     } catch (err) {
-      useAppStore.getState().addLog(`FollowUp error: ${err instanceof Error ? err.message : String(err)}`);
+      useAppStore
+        .getState()
+        .addLog(`FollowUp error: ${err instanceof Error ? err.message : String(err)}`);
     }
   },
 
@@ -299,7 +332,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (!sessionId) return;
     try {
       await apiClient.call("agent.clearQueue", { sessionId });
-    } catch (err) { console.warn("[chat] clearQueue failed:", err); }
+    } catch (err) {
+      console.warn("[chat] clearQueue failed:", err);
+    }
   },
 
   addMessage: (msg) => {
@@ -331,7 +366,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   incrementStreamVersion: () => set((s) => ({ streamContentVersion: s.streamContentVersion + 1 })),
 
-  loadSessionMessages: async (sessionId: string, options?: { force?: boolean; sessionPath?: string }) => {
+  loadSessionMessages: async (
+    sessionId: string,
+    options?: { force?: boolean; sessionPath?: string },
+  ) => {
     const sid = sessionId;
     if (!sid) return;
 
@@ -341,9 +379,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
     if (!options?.force) {
       const preflight = get().messagesBySession[sid] || [];
-      const hasRealMessages = preflight.some((m) => m.role === "user" || (m.role === "assistant" && m.tokenUsage));
+      const hasRealMessages = preflight.some(
+        (m) => m.role === "user" || (m.role === "assistant" && m.tokenUsage),
+      );
       if (hasRealMessages) {
-        log.warn("GUARD-2: existing real messages, skip", { sessionId: sid, count: preflight.length });
+        log.warn("GUARD-2: existing real messages, skip", {
+          sessionId: sid,
+          count: preflight.length,
+        });
         return;
       }
     }
@@ -358,14 +401,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     try {
       const { apiClient } = await import("../lib/api-client");
-      const result = await apiClient.call("agent.getFullMessages", { sessionId: sid, sessionPath: options?.sessionPath });
+      const result = await apiClient.call("agent.getFullMessages", {
+        sessionId: sid,
+        sessionPath: options?.sessionPath,
+      });
       log.info("RPC returned", { sessionId: sid, force: !!options?.force });
 
       if (!options?.force) {
         const current = get().messagesBySession[sid] || [];
-        const hasRealNow = current.some((m) => m.role === "user" || (m.role === "assistant" && m.tokenUsage));
+        const hasRealNow = current.some(
+          (m) => m.role === "user" || (m.role === "assistant" && m.tokenUsage),
+        );
         if (hasRealNow) {
-          log.warn("GUARD-3: messages added during RPC, skip", { sessionId: sid, count: current.length, roles: current.map((m) => m.role) });
+          log.warn("GUARD-3: messages added during RPC, skip", {
+            sessionId: sid,
+            count: current.length,
+            roles: current.map((m) => m.role),
+          });
           return;
         }
       }
@@ -407,11 +459,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const msg = messageToChatMessage(raw as unknown as Message, id, toolCallNameMap);
         if (msg) msgs.push(msg);
       }
-      log.info("After messageToChatMessage", { sessionId: sid, mapped: msgs.length, raw: rawMessages.length });
+      log.info("After messageToChatMessage", {
+        sessionId: sid,
+        mapped: msgs.length,
+        raw: rawMessages.length,
+      });
 
       normalizeToolBlocks(msgs);
 
-      const customEntries = (result as unknown as { customEntries: CustomEntryForUI[] }).customEntries;
+      const customEntries = (result as unknown as { customEntries: CustomEntryForUI[] })
+        .customEntries;
       if (Array.isArray(customEntries) && customEntries.length > 0) {
         const memoryStore = useMemoryStore.getState();
 
@@ -448,11 +505,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
 
       const hasMore = msgs.length > PAGE_SIZE;
-      const displayMsgs = hasMore
-        ? msgs.slice(-PAGE_SIZE)
-        : msgs;
+      const displayMsgs = hasMore ? msgs.slice(-PAGE_SIZE) : msgs;
 
-      log.info("SET messages", { sessionId: sid, total: msgs.length, displayed: displayMsgs.length, hasMore });
+      log.info("SET messages", {
+        sessionId: sid,
+        total: msgs.length,
+        displayed: displayMsgs.length,
+        hasMore,
+      });
       set((s) => ({
         messagesBySession: { ...s.messagesBySession, [sid]: displayMsgs },
         historyLoadVersion: s.historyLoadVersion + 1,
@@ -461,8 +521,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       useSessionStore.getState().restoreContextFromHistory(sid);
     } catch (err) {
-      log.error("Failed to load session", { error: err instanceof Error ? err.message : String(err) });
-      useAppStore.getState().addLog(`Failed to load session: ${err instanceof Error ? err.message : String(err)}`);
+      log.error("Failed to load session", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      useAppStore
+        .getState()
+        .addLog(`Failed to load session: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       set((s) => {
         const next = new Set(s.loadingSessions);
@@ -545,14 +609,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       const olderMsgs = allMsgs.slice(0, currentFirstIdx);
       const prepended = [...olderMsgs, ...currentMsgs];
-      log.info("LOAD MORE messages", { sessionId: sid, older: olderMsgs.length, total: prepended.length });
+      log.info("LOAD MORE messages", {
+        sessionId: sid,
+        older: olderMsgs.length,
+        total: prepended.length,
+      });
 
       set((s) => ({
         messagesBySession: { ...s.messagesBySession, [sid]: prepended },
-        hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: currentFirstIdx > PAGE_SIZE },
+        hasMoreMessagesBySession: {
+          ...s.hasMoreMessagesBySession,
+          [sid]: currentFirstIdx > PAGE_SIZE,
+        },
       }));
     } catch (err) {
-      log.error("Failed to load more messages", { error: err instanceof Error ? err.message : String(err) });
+      log.error("Failed to load more messages", {
+        error: err instanceof Error ? err.message : String(err),
+      });
     } finally {
       set((s) => ({
         isLoadingMoreBySession: { ...s.isLoadingMoreBySession, [sid]: false },

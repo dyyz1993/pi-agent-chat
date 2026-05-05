@@ -72,10 +72,7 @@ interface MermaidBlockProps {
   inline?: boolean;
 }
 
-export const MermaidBlock = memo(function MermaidBlock({
-  code,
-  inline = true,
-}: MermaidBlockProps) {
+export const MermaidBlock = memo(function MermaidBlock({ code, inline = true }: MermaidBlockProps) {
   const [svg, setSvg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -125,19 +122,10 @@ export const MermaidBlock = memo(function MermaidBlock({
     return () => el.removeEventListener("wheel", handleWheel);
   }, [inline]);
 
-  const handleZoomIn = useCallback(
-    () => setScale((s) => Math.min(5, s + 0.25)),
-    [],
-  );
-  const handleZoomOut = useCallback(
-    () => setScale((s) => Math.max(0.25, s - 0.25)),
-    [],
-  );
+  const handleZoomIn = useCallback(() => setScale((s) => Math.min(5, s + 0.25)), []);
+  const handleZoomOut = useCallback(() => setScale((s) => Math.max(0.25, s - 0.25)), []);
   const handleReset = useCallback(() => setScale(1), []);
-  const handleFullscreen = useCallback(
-    () => openFullscreen(code),
-    [code, openFullscreen],
-  );
+  const handleFullscreen = useCallback(() => openFullscreen(code), [code, openFullscreen]);
 
   if (loading && !svg && !error) {
     return (

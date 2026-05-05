@@ -19,7 +19,9 @@ export const VideoCard = memo(function VideoCard({ details }: { details: Preview
           icon={<Video className="w-3.5 h-3.5 text-purple-500 dark:text-purple-400 shrink-0" />}
           label={details.title ?? details.source}
         />
-        <div className="px-3 py-4 text-xs text-gray-400 dark:text-gray-500 italic">No path available for preview</div>
+        <div className="px-3 py-4 text-xs text-gray-400 dark:text-gray-500 italic">
+          No path available for preview
+        </div>
       </div>
     );
   }

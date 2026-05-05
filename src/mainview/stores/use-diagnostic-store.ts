@@ -205,16 +205,16 @@ function getDataSizes(): DataSizeSnapshot[] {
     results.push({
       store: "turn.selectedMessageIds",
       sessionsWithData: Object.keys(turnState.selectedMessageIdsBySession).length,
-      totalItems: Object.values(turnState.selectedMessageIdsBySession)
-        .reduce((sum, set) => sum + set.size, 0),
-      estimatedBytes: 0,
-      details: Object.entries(turnState.selectedMessageIdsBySession).map(
-        ([sid, set]) => ({
-          sessionId: sid.slice(0, 8),
-          items: set.size,
-          bytes: set.size * 80,
-        })
+      totalItems: Object.values(turnState.selectedMessageIdsBySession).reduce(
+        (sum, set) => sum + set.size,
+        0,
       ),
+      estimatedBytes: 0,
+      details: Object.entries(turnState.selectedMessageIdsBySession).map(([sid, set]) => ({
+        sessionId: sid.slice(0, 8),
+        items: set.size,
+        bytes: set.size * 80,
+      })),
     });
   }
 
@@ -223,9 +223,10 @@ function getDataSizes(): DataSizeSnapshot[] {
     results.push({
       store: "chatNav (all sub-maps)",
       sessionsWithData: Object.keys(navState.activeIdBySession).length,
-      totalItems: Object.keys(navState.activeIdBySession).length
-        + Object.keys(navState.selectedItemsBySession).length
-        + Object.keys(navState.collapsedTurnsBySession).length,
+      totalItems:
+        Object.keys(navState.activeIdBySession).length +
+        Object.keys(navState.selectedItemsBySession).length +
+        Object.keys(navState.collapsedTurnsBySession).length,
       estimatedBytes: 0,
       details: [],
     });
@@ -267,16 +268,20 @@ export const useDiagnosticStore = create<DiagnosticState>((set, get) => ({
       activeSessionId: sessionState.activeSessionId?.slice(0, 8) ?? null,
       activeProjectId: sessionState.activeProjectId?.slice(0, 8) ?? null,
       projectTabs: sessionState.projectTabs.length,
-      totalSessions: Object.values(sessionState.sessionsByProject)
-        .reduce((sum, arr) => sum + arr.length, 0),
+      totalSessions: Object.values(sessionState.sessionsByProject).reduce(
+        (sum, arr) => sum + arr.length,
+        0,
+      ),
       subscriptions: getSubscriptions(),
       dataSizes: getDataSizes(),
       rpcDebugEntries: useRpcDebugStore.getState().entries.length,
       toolCallNameMapSize: Object.keys(
-        (window as unknown as Record<string, unknown>).__toolCallNameMap ?? {}
+        (window as unknown as Record<string, unknown>).__toolCallNameMap ?? {},
       ).length,
-      jsHeapUsed: (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory?.usedJSHeapSize,
-      jsHeapTotal: (performance as unknown as { memory?: { totalJSHeapSize: number } }).memory?.totalJSHeapSize,
+      jsHeapUsed: (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory
+        ?.usedJSHeapSize,
+      jsHeapTotal: (performance as unknown as { memory?: { totalJSHeapSize: number } }).memory
+        ?.totalJSHeapSize,
       history: [],
     };
 

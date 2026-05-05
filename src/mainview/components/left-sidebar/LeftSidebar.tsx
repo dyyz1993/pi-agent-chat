@@ -25,18 +25,18 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
   return (
     <div
       className={`flex flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 overflow-hidden z-20 ${
-        overlay ? "animate-slide-in-left shadow-xl shadow-black/10 dark:shadow-black/30 will-change-transform" : ""
-      }`}
-      style={
         overlay
-          ? { position: "absolute", left: 0, top: 0, bottom: 0, width }
-          : { width }
-      }
+          ? "animate-slide-in-left shadow-xl shadow-black/10 dark:shadow-black/30 will-change-transform"
+          : ""
+      }`}
+      style={overlay ? { position: "absolute", left: 0, top: 0, bottom: 0, width } : { width }}
       onClick={(e) => e.stopPropagation()}
     >
       <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200/80 dark:border-gray-800/80 shrink-0">
         <div className="flex items-center gap-1.5">
-          <span className="text-xs font-semibold text-gray-800 dark:text-gray-200 tracking-wide">会话</span>
+          <span className="text-xs font-semibold text-gray-800 dark:text-gray-200 tracking-wide">
+            会话
+          </span>
           <span className="text-[10px] text-gray-400 dark:text-gray-600 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded-full font-mono">
             {useSessionCount()}
           </span>
@@ -84,7 +84,10 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
             )}
           </button>
           <button
-            onClick={(e) => { e.stopPropagation(); toggleSession(); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleSession();
+            }}
             className={`p-1 rounded transition-colors max-sm:hidden ${isPinned ? "text-indigo-400" : "text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400"}`}
             title={isPinned ? "取消固定" : "固定面板"}
           >
@@ -92,7 +95,10 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
           </button>
           {overlay && (
             <button
-              onClick={(e) => { e.stopPropagation(); hideSession(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                hideSession();
+              }}
               className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
               title="关闭面板"
             >

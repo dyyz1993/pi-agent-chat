@@ -35,14 +35,18 @@ function toYamlValue(value: unknown, indent: number): string {
         const entries = Object.entries(item as Record<string, unknown>);
         if (entries.length > 0) {
           const [fk, fv] = entries[0];
-          lines.push(`${pad(indent)}- ${quoteIfNeeds(String(fk))}: ${inlineOrBlock(fv, indent + 2)}`);
+          lines.push(
+            `${pad(indent)}- ${quoteIfNeeds(String(fk))}: ${inlineOrBlock(fv, indent + 2)}`,
+          );
           for (let i = 1; i < entries.length; i++) {
             const [k, v] = entries[i];
-            lines.push(`${pad(indent + 2)}${quoteIfNeeds(String(k))}: ${inlineOrBlock(v, indent + 2)}`);
+            lines.push(
+              `${pad(indent + 2)}${quoteIfNeeds(String(k))}: ${inlineOrBlock(v, indent + 2)}`,
+            );
           }
         } else {
           lines.push(`${pad(indent)}- {}`);
-      }
+        }
       } else {
         lines.push(`${pad(indent)}- ${toYamlValue(item, indent + 2)}`);
       }

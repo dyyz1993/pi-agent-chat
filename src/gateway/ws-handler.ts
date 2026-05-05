@@ -56,7 +56,9 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
             const msg = JSON.parse(data.toString()) as Record<string, unknown>;
             handler(msg);
           } catch (err) {
-            log.error("Failed to parse message", { error: err instanceof Error ? err.message : String(err) });
+            log.error("Failed to parse message", {
+              error: err instanceof Error ? err.message : String(err),
+            });
           }
         };
         ws.on("message", listener);

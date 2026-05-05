@@ -1,5 +1,12 @@
 import { create } from "zustand";
-import type { SubagentSessionInfo, ChatMessage, ContentBlock, SessionStatus, ContextUsage, TokenUsage } from "../types";
+import type {
+  SubagentSessionInfo,
+  ChatMessage,
+  ContentBlock,
+  SessionStatus,
+  ContextUsage,
+  TokenUsage,
+} from "../types";
 import type { AgentEvent } from "@dyyz1993/pi-agent-core";
 import type { AssistantMessage, Message, Usage } from "@dyyz1993/pi-ai";
 import { apiClient } from "../lib/api-client";
@@ -24,7 +31,11 @@ interface SubagentState {
   setActiveSubsession: (parentSessionId: string, subId: string | null) => void;
   setSubMessages: (subId: string, msgs: ChatMessage[]) => void;
   loadSubHistory: (subSessionPath: string, subId: string) => Promise<void>;
-  upsertLiveSubagent: (parentSessionPath: string, subId: string, partial: Partial<SubagentSessionInfo>) => void;
+  upsertLiveSubagent: (
+    parentSessionPath: string,
+    subId: string,
+    partial: Partial<SubagentSessionInfo>,
+  ) => void;
   updateSubagentStatus: (subId: string, status: SessionStatus) => void;
   updateSubagentContext: (subId: string, update: Partial<ContextUsage>) => void;
   renameSubagent: (parentSessionPath: string, subSessionId: string, newDescription: string) => void;
@@ -59,10 +70,13 @@ export const useSubagentStore = create<SubagentState>()((set, get) => ({
 
   loadSubsessions: async (parentSessionPath: string) => {
     if (get().loadingByParent[parentSessionPath]) return [];
-    if (get().subsessionsByParent[parentSessionPath]) return get().subsessionsByParent[parentSessionPath];
+    if (get().subsessionsByParent[parentSessionPath])
+      return get().subsessionsByParent[parentSessionPath];
     set((s) => ({ loadingByParent: { ...s.loadingByParent, [parentSessionPath]: true } }));
     try {
-      const result = await apiClient.call("subagent.listBySession", { sessionPath: parentSessionPath });
+      const result = await apiClient.call("subagent.listBySession", {
+        sessionPath: parentSessionPath,
+      });
       const subs = result.subsessions as SubagentSessionInfo[];
       set((s) => ({
         subsessionsByParent: { ...s.subsessionsByParent, [parentSessionPath]: subs },
@@ -119,13 +133,24 @@ export const useSubagentStore = create<SubagentState>()((set, get) => ({
     }
   },
 
-  upsertLiveSubagent: (parentSessionPath: string, subId: string, partial: Partial<SubagentSessionInfo>) => {
+  upsertLiveSubagent: (
+    parentSessionPath: string,
+    subId: string,
+    partial: Partial<SubagentSessionInfo>,
+  ) => {
     set((s) => {
       const existing = s.subsessionsByParent[parentSessionPath] || [];
       const idx = existing.findIndex((e) => e.sessionId === subId);
-      const base = idx >= 0
-        ? existing[idx]
-        : { sessionId: subId, sessionPath: "", description: "", instruction: "", startedAt: Date.now() };
+      const base =
+        idx >= 0
+          ? existing[idx]
+          : {
+              sessionId: subId,
+              sessionPath: "",
+              description: "",
+              instruction: "",
+              startedAt: Date.now(),
+            };
       const merged: SubagentSessionInfo = { ...base, ...partial };
       let updated: SubagentSessionInfo[];
       if (idx >= 0) {
@@ -134,7 +159,10 @@ export const useSubagentStore = create<SubagentState>()((set, get) => ({
       } else {
         updated = [...existing, merged];
       }
-      return { ...s, subsessionsByParent: { ...s.subsessionsByParent, [parentSessionPath]: updated } };
+      return {
+        ...s,
+        subsessionsByParent: { ...s.subsessionsByParent, [parentSessionPath]: updated },
+      };
     });
   },
 
@@ -152,9 +180,13 @@ export const useSubagentStore = create<SubagentState>()((set, get) => ({
       return { subsessionsByParent: { ...s.subsessionsByParent, [parentSessionPath]: updated } };
     });
 
-    apiClient.call("subagent.rename", { parentSessionPath, subSessionId, newDescription: trimmed }).catch((err) => {
-      log.warn("subagent.rename failed", { err: err instanceof Error ? err.message : String(err) });
-    });
+    apiClient
+      .call("subagent.rename", { parentSessionPath, subSessionId, newDescription: trimmed })
+      .catch((err) => {
+        log.warn("subagent.rename failed", {
+          err: err instanceof Error ? err.message : String(err),
+        });
+      });
   },
 
   deleteSubagent: (parentSessionPath: string, subSessionId: string) => {
@@ -205,7 +237,13 @@ type SubagentCustomEvent =
   | { type: "subagent_start"; description: string; instruction: string }
   | { type: "compaction_start"; reason: string }
   | { type: "compaction_end"; reason: string; result: { tokensAfter?: number }; aborted: boolean }
-  | { type: "auto_retry_start"; attempt: number; maxAttempts: number; delayMs: number; errorMessage: string }
+  | {
+      type: "auto_retry_start";
+      attempt: number;
+      maxAttempts: number;
+      delayMs: number;
+      errorMessage: string;
+    }
   | { type: "auto_retry_end" };
 
 type SubagentEvent = AgentEvent | SubagentCustomEvent;
@@ -281,7 +319,10 @@ export function handleSubagentEvent(subId: string, event: SubagentEvent, parentS
         }
       }
 
-      freshStore.setSubMessages(subId, [...freshExisting.slice(0, -1), { ...lastMsg, content: updated }]);
+      freshStore.setSubMessages(subId, [
+        ...freshExisting.slice(0, -1),
+        { ...lastMsg, content: updated },
+      ]);
     });
   } else if (event.type === "message_end") {
     const lastMsg = existing[existing.length - 1];
@@ -301,12 +342,13 @@ export function handleSubagentEvent(subId: string, event: SubagentEvent, parentS
     const tokenUsage = extractTokenUsage(msg.usage);
 
     const hasContent = lastMsg.content.some(
-      (b) => (b.type === "text" && b.text.trim().length > 0)
-        || b.type === "thinking"
-        || b.type === "toolCall"
-        || b.type === "toolResult"
-        || b.type === "toolExecution"
-        || b.type === "custom",
+      (b) =>
+        (b.type === "text" && b.text.trim().length > 0) ||
+        b.type === "thinking" ||
+        b.type === "toolCall" ||
+        b.type === "toolResult" ||
+        b.type === "toolExecution" ||
+        b.type === "custom",
     );
 
     if (!hasContent) {
@@ -388,12 +430,20 @@ export function handleSubagentEvent(subId: string, event: SubagentEvent, parentS
       );
 
       if (event.type === "tool_execution_start") {
-        blocks.push({ type: "toolExecution", toolCallId, toolName, args: argsStr, status: "running" });
+        blocks.push({
+          type: "toolExecution",
+          toolCallId,
+          toolName,
+          args: argsStr,
+          status: "running",
+        });
       } else if (event.type === "tool_execution_update") {
         let output = "";
         const partial = event.partialResult;
         if (partial) {
-          const partialContent = partial.content as Array<{ type: string; text?: string }> | undefined;
+          const partialContent = partial.content as
+            | Array<{ type: string; text?: string }>
+            | undefined;
           if (Array.isArray(partialContent)) {
             output = partialContent.map((c) => c.text ?? "").join("");
           } else if (typeof partial === "string") {
@@ -411,7 +461,9 @@ export function handleSubagentEvent(subId: string, event: SubagentEvent, parentS
         const isError = event.isError;
         let output = "";
         if (result) {
-          const resultContent = result.content as Array<{ type: string; text?: string }> | undefined;
+          const resultContent = result.content as
+            | Array<{ type: string; text?: string }>
+            | undefined;
           if (Array.isArray(resultContent)) {
             output = resultContent.map((c) => c.text ?? "").join("");
           } else {
@@ -420,7 +472,12 @@ export function handleSubagentEvent(subId: string, event: SubagentEvent, parentS
         }
         if (targetIdx >= 0) {
           const prev = blocks[targetIdx] as ToolExecBlock;
-          blocks[targetIdx] = { ...prev, status: isError ? "error" : "done", output: (prev.output ?? "") + output, details: result?.details };
+          blocks[targetIdx] = {
+            ...prev,
+            status: isError ? "error" : "done",
+            output: (prev.output ?? "") + output,
+            details: result?.details,
+          };
         }
       }
 

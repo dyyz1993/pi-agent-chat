@@ -22,7 +22,14 @@ export interface BashChannelEvent {
 }
 
 export interface BashChannelCommand {
-  action: "list" | "kill" | "background" | "remove" | "subscribe_output" | "unsubscribe_output" | "write_stdin";
+  action:
+    | "list"
+    | "kill"
+    | "background"
+    | "remove"
+    | "subscribe_output"
+    | "unsubscribe_output"
+    | "write_stdin";
   toolCallId?: string;
   data?: string;
 }
@@ -33,9 +40,21 @@ export interface BashMethods {
     result: { processes: BashProcess[] };
   };
   "bash.command": {
-    params: { sessionId: string; action: "kill" | "background" | "remove" | "subscribe_output" | "unsubscribe_output" | "write_stdin"; toolCallId?: string; data?: string };
+    params: {
+      sessionId: string;
+      action:
+        | "kill"
+        | "background"
+        | "remove"
+        | "subscribe_output"
+        | "unsubscribe_output"
+        | "write_stdin";
+      toolCallId?: string;
+      data?: string;
+    };
     result: { ok: boolean };
-  };  "bash.readLog": {
+  };
+  "bash.readLog": {
     params: { logPath: string; offset?: number; limit?: number };
     result: { lines: string[]; totalLines: number; hasMore: boolean };
   };

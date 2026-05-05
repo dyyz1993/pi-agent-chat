@@ -25,7 +25,17 @@ const CARD_MAP: Record<ResourceType, ComponentType<CardProps>> = {
   text: TextCard,
 };
 
-export { ImageCard, UrlCard, HtmlCard, PdfCard, VideoCard, AudioCard, MarkdownCard, TextCard, FallbackCard };
+export {
+  ImageCard,
+  UrlCard,
+  HtmlCard,
+  PdfCard,
+  VideoCard,
+  AudioCard,
+  MarkdownCard,
+  TextCard,
+  FallbackCard,
+};
 
 export function PreviewCard({ details }: { details: PreviewDetails }) {
   const Card = CARD_MAP[details.resourceType] ?? FallbackCard;
