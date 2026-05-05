@@ -40,8 +40,8 @@
   },
   "dependencies": {
     "@dyyz1993/pi-agent-core": "^0.70.2",
-    "@dyyz1993/pi-ai": "^0.70.2",
-    "@dyyz1993/pi-coding-agent": "^0.70.4",
+    "@dyyz1993/pi-ai": "^0.70.5",
+    "@dyyz1993/pi-coding-agent": "^0.70.5",
     "@dyyz1993/rpc-core": "^1.2.0",
     "@tanstack/react-virtual": "^3.13.24",
     "dotenv-cli": "^11.0.0",
