@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from "react";
 import { X, Maximize2, Minimize2, ChevronUp, ChevronDown } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useInputHistory } from "../../hooks/use-input-history";
 
 export interface InputBarHandle {
@@ -18,6 +19,7 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
   { value = "", onChange, onSend, disabled, sessionId = "" },
   ref,
 ) {
+  const { t } = useTranslation("chat");
   const [internalValue, setInternalValue] = useState(value);
   const [expanded, setExpanded] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -112,7 +114,7 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
           onKeyDown={handleKeyDown}
           disabled={disabled}
           rows={1}
-          placeholder="输入消息、@file、@agent，或粘贴图片与文本..."
+          placeholder={t("inputPlaceholder")}
           className="flex-1 px-3 py-2 text-sm bg-transparent text-gray-900 dark:text-white resize-none outline-none placeholder:text-gray-400 dark:placeholder:text-gray-600"
           style={{
             maxHeight: expanded ? "none" : `${maxHeight}px`,
@@ -124,8 +126,8 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
             <button
               onClick={handleClear}
               className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${hasContent ? "border-gray-400 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:border-gray-400" : "border-gray-300/50 dark:border-gray-700/50 text-gray-400 dark:text-gray-700 pointer-events-none"}`}
-              title="清除"
-              aria-label="清除输入"
+              title={t("clearInput")}
+              aria-label={t("clearInput")}
             >
               <X className="w-3 h-3" />
             </button>
@@ -136,9 +138,9 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
             <button
               onClick={toggleExpand}
               className="w-5 h-5 rounded border border-gray-400 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:border-gray-400 transition-colors flex items-center justify-center"
-              title={expanded ? "收起" : "展开"}
+              title={expanded ? t("collapse") : t("expand")}
               aria-expanded={expanded}
-              aria-label={expanded ? "收起输入框" : "展开输入框"}
+              aria-label={expanded ? t("collapseInput") : t("expandInput")}
             >
               {expanded ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
             </button>
@@ -146,8 +148,8 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
               onClick={handleNavPrev}
               disabled={!hasPrev}
               className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${hasPrev ? "border-gray-400 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:border-gray-400" : "border-gray-300/50 dark:border-gray-700/50 text-gray-400 dark:text-gray-700 pointer-events-none"}`}
-              title="上一条"
-              aria-label="上一条历史消息"
+              title={t("collapse")}
+              aria-label={t("prevHistory")}
             >
               <ChevronUp className="w-3 h-3" />
             </button>
@@ -155,8 +157,8 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
               onClick={handleNavNext}
               disabled={!hasNext}
               className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${hasNext ? "border-gray-400 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:border-gray-400" : "border-gray-300/50 dark:border-gray-700/50 text-gray-400 dark:text-gray-700 pointer-events-none"}`}
-              title="下一条"
-              aria-label="下一条历史消息"
+              title={t("expand")}
+              aria-label={t("nextHistory")}
             >
               <ChevronDown className="w-3 h-3" />
             </button>

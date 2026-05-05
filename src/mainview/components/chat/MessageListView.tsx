@@ -1,11 +1,12 @@
 import { useMemo, useCallback, useRef, useEffect } from "react";
 import type { Virtualizer } from "@tanstack/react-virtual";
 import { Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { MessageCard } from "./MessageCard";
 import type { ChatMessage } from "../../types";
 import { ALL_MEMORY_TYPE_KEYS } from "./memory-config";
 
-function getCardLabel(msg: ChatMessage): string | undefined {
+function getCardLabel(msg: ChatMessage, t: (key: string) => string): string | undefined {
   const hasCustom = msg.content.some((b) => b.type === "custom");
   if (hasCustom) {
     const custom = msg.content.find(
@@ -14,7 +15,7 @@ function getCardLabel(msg: ChatMessage): string | undefined {
     if (!custom) return undefined;
     switch (custom.customType) {
       case "bash_background_exit":
-        return "后台进程";
+        return t("sideNav.backgroundProcess");
       case "lsp_diagnostics":
         return "LSP";
       default:
@@ -22,8 +23,8 @@ function getCardLabel(msg: ChatMessage): string | undefined {
         return custom.customType;
     }
   }
-  if (msg.role === "user") return "你";
-  return "助手";
+  if (msg.role === "user") return t("messageCard.you");
+  return t("messageCard.assistant");
 }
 
 function getPrevBarColor(messages: ChatMessage[], index: number): string | undefined {
@@ -37,6 +38,7 @@ function getPrevBarColor(messages: ChatMessage[], index: number): string | undef
 
 function buildCardMeta(
   messages: ChatMessage[],
+  t: (key: string) => string,
 ): Map<string, { cardLabel: string | undefined; prevBarColor: string | undefined }> {
   const map = new Map<
     string,
@@ -44,7 +46,10 @@ function buildCardMeta(
   >();
   for (let i = 0; i < messages.length; i++) {
     const msg = messages[i];
-    map.set(msg.id, { cardLabel: getCardLabel(msg), prevBarColor: getPrevBarColor(messages, i) });
+    map.set(msg.id, {
+      cardLabel: getCardLabel(msg, t),
+      prevBarColor: getPrevBarColor(messages, i),
+    });
   }
   return map;
 }
@@ -66,7 +71,8 @@ export function MessageListView({
   isLoadingMore,
   hasMoreMessages,
 }: MessageListViewProps) {
-  const cardMeta = useMemo(() => buildCardMeta(messages), [messages]);
+  const { t } = useTranslation("chat");
+  const cardMeta = useMemo(() => buildCardMeta(messages, t), [messages, t]);
   const prevScrollHeightRef = useRef(0);
   const scrollElRef = useRef<HTMLDivElement | null>(null);
 
@@ -101,7 +107,7 @@ export function MessageListView({
         onScroll={onScroll}
       >
         <div className="flex flex-col items-center justify-center h-full text-gray-600 text-sm gap-2">
-          <p>开始对话吧</p>
+          <p>{t("startConversation")}</p>
         </div>
       </div>
     );
@@ -123,7 +129,7 @@ export function MessageListView({
             {isLoadingMore ? (
               <Loader2 className="w-4 h-4 text-gray-500 animate-spin" />
             ) : hasMoreMessages ? (
-              <span className="text-[10px] text-gray-600">↑ 向上滚动加载更多</span>
+              <span className="text-[10px] text-gray-600">{t("scrollUpToLoadMore")}</span>
             ) : null}
           </div>
         )}

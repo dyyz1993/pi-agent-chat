@@ -1,5 +1,6 @@
 import { memo, useCallback } from "react";
 import { Trash2, Brain, Sparkles, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useTurnStore, EMPTY_SET } from "../../stores/use-turn-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { apiClient } from "../../lib/api-client";
@@ -16,6 +17,7 @@ export const MessageSelectionBar = memo(function MessageSelectionBar({
   messages,
   onDeleteSelected,
 }: Props) {
+  const { t } = useTranslation("chat");
   const sessionId = useSessionStore((s) => s.activeSessionId);
   const selectedIds = useTurnStore(
     useCallback(
@@ -99,21 +101,21 @@ export const MessageSelectionBar = memo(function MessageSelectionBar({
       <button
         onClick={handleSummarize}
         className="flex items-center justify-center w-7 h-7 rounded-full text-purple-400 hover:text-purple-300 hover:bg-purple-500/15 transition-colors"
-        title="总结所选"
+        title={t("summarizeSelected")}
       >
         <Sparkles className="w-3.5 h-3.5" />
       </button>
       <button
         onClick={handleRemember}
         className="flex items-center justify-center w-7 h-7 rounded-full text-teal-400 hover:text-teal-300 hover:bg-teal-500/15 transition-colors"
-        title="存为记忆"
+        title={t("saveAsMemory")}
       >
         <Brain className="w-3.5 h-3.5" />
       </button>
       <button
         onClick={handleDelete}
         className="flex items-center justify-center w-7 h-7 rounded-full text-gray-400 dark:text-gray-500 hover:text-red-400 hover:bg-red-500/15 transition-colors"
-        title="删除所选"
+        title={t("deleteSelected")}
       >
         <Trash2 className="w-3.5 h-3.5" />
       </button>
@@ -121,7 +123,7 @@ export const MessageSelectionBar = memo(function MessageSelectionBar({
       <button
         onClick={clear}
         className="flex items-center justify-center w-7 h-7 rounded-full text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors"
-        title="取消选择"
+        title={t("cancelSelection")}
       >
         <X className="w-3.5 h-3.5" />
       </button>

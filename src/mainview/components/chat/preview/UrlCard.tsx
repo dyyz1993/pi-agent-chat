@@ -1,11 +1,13 @@
 import { memo, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Globe, X, RefreshCw, Maximize2, Copy, Check, ExternalLink } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { PreviewDetails } from "./types";
 import { getFileHttpUrl } from "./types";
 import { useClipboard } from "./use-clipboard";
 
 export const UrlCard = memo(function UrlCard({ details }: { details: PreviewDetails }) {
+  const { t } = useTranslation("chat");
   const [showIframe, setShowIframe] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const src = details.absolutePath ?? details.source;
@@ -34,7 +36,7 @@ export const UrlCard = memo(function UrlCard({ details }: { details: PreviewDeta
           className="w-full px-3 py-8 flex flex-col items-center gap-2 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors"
         >
           <Globe className="w-6 h-6 text-blue-400/60 dark:text-blue-400/60" />
-          <span>Click to load preview</span>
+          <span>{t("clickToLoadPreview")}</span>
           <span className="text-gray-400 dark:text-gray-600 font-mono text-[10px]">{src}</span>
         </button>
       </div>
@@ -51,7 +53,7 @@ export const UrlCard = memo(function UrlCard({ details }: { details: PreviewDeta
           setFullscreen(false);
         }}
         className="p-0.5 rounded text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors"
-        title="重新加载"
+        title={t("reloadTitle")}
       >
         <RefreshCw className="w-3 h-3" />
       </button>
@@ -59,7 +61,7 @@ export const UrlCard = memo(function UrlCard({ details }: { details: PreviewDeta
         <button
           onClick={() => setFullscreen(true)}
           className="p-0.5 rounded text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors"
-          title="全屏展开"
+          title={t("fullscreenTitle")}
         >
           <Maximize2 className="w-3 h-3" />
         </button>
@@ -67,7 +69,7 @@ export const UrlCard = memo(function UrlCard({ details }: { details: PreviewDeta
       <button
         onClick={() => copy(displayUrl)}
         className="p-0.5 rounded text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors"
-        title="复制链接"
+        title={t("copyLinkTitle")}
       >
         {copied ? (
           <Check className="w-3 h-3 text-green-500 dark:text-green-400" />
@@ -78,7 +80,7 @@ export const UrlCard = memo(function UrlCard({ details }: { details: PreviewDeta
       <button
         onClick={() => window.open(displayUrl, "_blank", "noopener,noreferrer")}
         className="p-0.5 rounded text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors"
-        title="在新窗口打开"
+        title={t("openInNewWindowTitle")}
       >
         <ExternalLink className="w-3 h-3" />
       </button>
@@ -86,7 +88,7 @@ export const UrlCard = memo(function UrlCard({ details }: { details: PreviewDeta
         <button
           onClick={() => setFullscreen(false)}
           className="p-0.5 rounded text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-gray-700/50 transition-colors ml-1"
-          title="关闭 (Esc)"
+          title={t("closeEscTitle")}
         >
           <X className="w-3.5 h-3.5" />
         </button>

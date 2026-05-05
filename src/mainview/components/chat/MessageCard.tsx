@@ -10,6 +10,7 @@ import {
   FileWarning,
   Archive,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useTurnStore, EMPTY_SET } from "../../stores/use-turn-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useChatStore } from "../../stores/use-chat-store";
@@ -83,6 +84,7 @@ export const MessageCard = memo(function MessageCard({
   cardLabel,
   prevBarColor,
 }: MessageCardProps) {
+  const { t } = useTranslation("chat");
   const sessionId = useSessionStore((s) => s.activeSessionId);
   const toggleCollapse = useTurnStore((s) => s.toggleCollapse);
   const toggleMessageSelection = useTurnStore((s) => s.toggleMessageSelection);
@@ -156,7 +158,7 @@ export const MessageCard = memo(function MessageCard({
         >
           <span className={`flex items-center gap-1 text-[11px] font-medium ${roleCfg.color}`}>
             <Archive className="w-3 h-3" />
-            上下文压缩
+            {t("contextCompaction")}
           </span>
           {compactionBlock?.tokensBefore != null && (
             <span className="text-[10px] text-gray-400 dark:text-gray-600">
@@ -170,7 +172,7 @@ export const MessageCard = memo(function MessageCard({
                 toggleCollapse(message.id);
               }}
               className="p-0.5 text-gray-600 hover:text-gray-300 transition-colors"
-              title={isCollapsed ? "展开" : "折叠"}
+              title={isCollapsed ? t("expand") : t("collapse")}
             >
               <ChevronDown
                 className={`w-3 h-3 transition-transform ${isCollapsed ? "" : "-rotate-90"}`}
@@ -194,7 +196,7 @@ export const MessageCard = memo(function MessageCard({
     );
   }
 
-  let label = cardLabel ?? (isUser ? "你" : "助手");
+  let label = cardLabel ?? (isUser ? t("messageCard.you") : t("messageCard.assistant"));
   let IconComp;
   let labelColor: string;
   let barColor: string;
@@ -274,7 +276,7 @@ export const MessageCard = memo(function MessageCard({
                 handleToggleCollapse();
               }}
               className="p-0.5 text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
-              title={isCollapsed ? "展开" : "折叠"}
+              title={isCollapsed ? t("expand") : t("collapse")}
             >
               <ChevronDown
                 className={`w-3 h-3 transition-transform ${isCollapsed ? "" : "-rotate-90"}`}
@@ -294,7 +296,7 @@ export const MessageCard = memo(function MessageCard({
             .filter((b) => b.type === "text")
             .map((b) => b.text)
             .join(" ")
-            .slice(0, 120) || "(空)"}
+            .slice(0, 120) || t("emptyTurn")}
         </div>
       ) : (
         <div className="relative z-20">
@@ -310,9 +312,13 @@ export const MessageCard = memo(function MessageCard({
           {message.tokenUsage && (
             <div className="flex items-center justify-end px-4 pb-0.5">
               <span className="flex items-center gap-1 text-[10px] font-mono text-gray-400 dark:text-gray-600">
-                <span>输入 {formatTokenCount(message.tokenUsage.input)}</span>
+                <span>
+                  {t("messageCard.tokenInput")} {formatTokenCount(message.tokenUsage.input)}
+                </span>
                 <span className="text-gray-400 dark:text-gray-800">→</span>
-                <span>输出 {formatTokenCount(message.tokenUsage.output)}</span>
+                <span>
+                  {t("messageCard.tokenOutput")} {formatTokenCount(message.tokenUsage.output)}
+                </span>
                 <span className="text-gray-400 dark:text-gray-800">·</span>
                 <span>
                   {formatTokenCount(message.tokenUsage.input + message.tokenUsage.output)}
@@ -356,6 +362,7 @@ const HeaderActions = memo(function HeaderActions({
   message: ChatMessage;
   isUserCard?: boolean;
 }) {
+  const { t } = useTranslation("chat");
   const sessionId = useSessionStore((s) => s.activeSessionId);
   const messages = useChatStore((s) =>
     sessionId ? s.messagesBySession[sessionId] || EMPTY_MSGS : EMPTY_MSGS,
@@ -483,7 +490,7 @@ const HeaderActions = memo(function HeaderActions({
 
     state.setActiveSession(result.newSessionId);
     useChatStore.getState().loadSessionMessages(result.newSessionId, { force: true });
-    pushNotification({ message: "已 Fork 为新会话", level: "info" });
+    pushNotification({ message: t("messageCard.forked"), level: "info" });
   }, [sessionId, fetchTree, resolveEntryId, pushNotification]);
 
   const executeRollback = useCallback(
@@ -491,7 +498,7 @@ const HeaderActions = memo(function HeaderActions({
       try {
         const result = await resolveRollbackTarget();
         if (!sessionId || !result) {
-          pushNotification({ message: "回滚失败：无法确定回滚目标", level: "error" });
+          pushNotification({ message: t("messageCard.rollbackFailed"), level: "error" });
           return;
         }
         const textToRefill = isUserCard
@@ -531,10 +538,12 @@ const HeaderActions = memo(function HeaderActions({
         if (textToRefill) {
           useChatStore.getState().setInputText(textToRefill);
         }
-        pushNotification({ message: "已回滚到上一轮对话", level: "info" });
+        pushNotification({ message: t("messageCard.rollbackDone"), level: "info" });
       } catch (err) {
         pushNotification({
-          message: `回滚失败：${err instanceof Error ? err.message : "未知错误"}`,
+          message: t("messageCard.rollbackFailedMsg", {
+            error: err instanceof Error ? err.message : "未知错误",
+          }),
           level: "error",
         });
       }
@@ -549,7 +558,7 @@ const HeaderActions = memo(function HeaderActions({
       try {
         const result = await resolveRollbackTarget();
         if (!sessionId || !result) {
-          pushNotification({ message: "回滚失败：无法确定回滚目标", level: "error" });
+          pushNotification({ message: t("messageCard.rollbackFailed"), level: "error" });
           return;
         }
         if (mode === "message") {
@@ -565,7 +574,9 @@ const HeaderActions = memo(function HeaderActions({
         setConfirmState({ mode, targetId: result.targetId, preview });
       } catch (err) {
         pushNotification({
-          message: `预览失败：${err instanceof Error ? err.message : "未知错误"}`,
+          message: t("messageCard.previewFailed", {
+            error: err instanceof Error ? err.message : "未知错误",
+          }),
           level: "error",
         });
       } finally {
@@ -592,16 +603,16 @@ const HeaderActions = memo(function HeaderActions({
 
   return (
     <>
-      <ActionBtn icon={GitBranch} title="Fork" onClick={handleFork} />
+      <ActionBtn icon={GitBranch} title={t("fork")} onClick={handleFork} />
       <ActionBtn
         icon={Undo2}
-        title="回滚消息"
+        title={t("messageCard.rollbackMessage")}
         onClick={() => requestRollback("message")}
         disabled={rollingBackRef.current}
       />
       <ActionBtn
         icon={RotateCcw}
-        title="回滚消息+代码"
+        title={t("messageCard.rollbackMessageAndCode")}
         onClick={() => requestRollback("withFiles")}
         disabled={rollingBackRef.current}
       />
@@ -609,11 +620,13 @@ const HeaderActions = memo(function HeaderActions({
         <div className="absolute right-0 top-6 z-50 w-72 rounded-lg border border-amber-500/30 bg-gray-50 dark:bg-gray-900 px-3 py-2.5 shadow-xl">
           <div className="flex items-center gap-1.5 mb-1.5">
             <FileWarning className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            <span className="text-[11px] font-medium text-amber-300">回滚将恢复以下文件</span>
+            <span className="text-[11px] font-medium text-amber-300">
+              {t("messageCard.rollbackPreview")}
+            </span>
           </div>
           {confirmState.preview.restored.length > 0 && (
             <div className="mb-1">
-              <span className="text-[10px] text-emerald-400">恢复:</span>
+              <span className="text-[10px] text-emerald-400">{t("messageCard.restore")}</span>
               <ul className="ml-2 mt-0.5 space-y-0.5 max-h-24 overflow-y-auto">
                 {confirmState.preview.restored.map((f) => (
                   <li
@@ -629,7 +642,7 @@ const HeaderActions = memo(function HeaderActions({
           )}
           {confirmState.preview.deleted.length > 0 && (
             <div className="mb-1.5">
-              <span className="text-[10px] text-red-400">删除:</span>
+              <span className="text-[10px] text-red-400">{t("messageCard.deleteLabel")}</span>
               <ul className="ml-2 mt-0.5 space-y-0.5 max-h-24 overflow-y-auto">
                 {confirmState.preview.deleted.map((f) => (
                   <li
@@ -645,7 +658,9 @@ const HeaderActions = memo(function HeaderActions({
           )}
           {confirmState.preview.restored.length === 0 &&
             confirmState.preview.deleted.length === 0 && (
-              <p className="text-[10px] text-gray-500 dark:text-gray-400 mb-1.5">无文件变更</p>
+              <p className="text-[10px] text-gray-500 dark:text-gray-400 mb-1.5">
+                {t("messageCard.noFileChanges")}
+              </p>
             )}
           <div className="flex items-center justify-end gap-2">
             <button
@@ -655,7 +670,7 @@ const HeaderActions = memo(function HeaderActions({
               }}
               className="rounded bg-amber-500/20 px-2 py-0.5 text-[11px] font-medium text-amber-400 hover:bg-amber-500/30 transition-colors"
             >
-              确认回滚
+              {t("messageCard.confirmRollback")}
             </button>
             <button
               onClick={(e) => {
@@ -664,7 +679,7 @@ const HeaderActions = memo(function HeaderActions({
               }}
               className="rounded bg-gray-200 dark:bg-gray-700 px-2 py-0.5 text-[11px] font-medium text-gray-700 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
             >
-              取消
+              {t("messageCard.cancel")}
             </button>
           </div>
         </div>

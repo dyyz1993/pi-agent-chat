@@ -1,10 +1,12 @@
 import { memo, useCallback, useEffect, useRef } from "react";
 import { X, Copy } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { CachedReactMarkdown } from "./CachedReactMarkdown";
 import { useExpandStore } from "../../stores/use-expand-store";
 import { copyToClipboard } from "../../utils/clipboard";
 
 export const MarkdownExpandOverlay = memo(function MarkdownExpandOverlay() {
+  const { t } = useTranslation("chat");
   const expandedContent = useExpandStore((s) => s.expandedContent);
   const expandedTitle = useExpandStore((s) => s.expandedTitle);
   const closeExpand = useExpandStore((s) => s.closeExpand);
@@ -45,14 +47,14 @@ export const MarkdownExpandOverlay = memo(function MarkdownExpandOverlay() {
           <button
             onClick={handleCopy}
             className="p-1.5 rounded text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors"
-            title="复制内容"
+            title={t("copyContentTitle")}
           >
             <Copy className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={closeExpand}
             className="p-1.5 rounded text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors"
-            title="关闭 (Esc)"
+            title={t("markdownOverlay.closeEsc")}
           >
             <X className="w-4 h-4" />
           </button>

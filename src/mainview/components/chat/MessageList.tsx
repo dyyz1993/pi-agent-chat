@@ -1,4 +1,5 @@
 import { MessageSquare, Clock, Settings2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { Conversation } from "./mock-data";
 import { conversations as mockConversations } from "./mock-data";
 
@@ -13,13 +14,14 @@ export function MessageList({
   activeId,
   onSelect,
 }: MessageListProps) {
+  const { t } = useTranslation("chat");
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="px-3 py-2 border-b border-gray-800 flex items-center justify-between shrink-0">
         <span className="text-xs font-medium text-gray-300 flex items-center gap-1.5">
           <MessageSquare className="w-3.5 h-3.5 text-indigo-400" />
-          会话列表
+          {t("sessionList")}
         </span>
         <button className="p-1 rounded hover:bg-gray-800 text-gray-500">
           <Settings2 className="w-3 h-3" />
@@ -50,6 +52,7 @@ function ConversationItem({
   isActive: boolean;
   onClick: () => void;
 }) {
+  const { t, i18n } = useTranslation("chat");
   return (
     <button
       onClick={onClick}
@@ -62,11 +65,11 @@ function ConversationItem({
           <div
             className={`text-[11px] font-medium truncate ${isActive ? "text-indigo-300" : "text-gray-300"}`}
           >
-            {conv.title || "新会话"}
+            {conv.title || t("newSession")}
           </div>
           <div className="text-[10px] text-gray-600 mt-0.5 flex items-center gap-1 truncate">
             <Clock className="w-2.5 h-2.5 shrink-0" />
-            {new Date(conv.updatedAt).toLocaleString("zh-CN")}
+            {new Date(conv.updatedAt).toLocaleString(i18n.language)}
           </div>
         </div>
         {conv.status && (

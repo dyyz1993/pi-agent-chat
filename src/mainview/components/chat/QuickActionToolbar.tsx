@@ -16,6 +16,7 @@ import {
   Brain,
   BookOpen,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import { useChatStore } from "../../stores/use-chat-store";
 import { useSessionStore } from "../../stores/use-session-store";
@@ -69,6 +70,7 @@ interface FileBreadcrumb {
 }
 
 export function QuickActionToolbar() {
+  const { t } = useTranslation("chat");
   const breakpoint = useLayoutStore((s) => s.breakpoint);
   const isMobileOrTablet = breakpoint === "mobile" || breakpoint === "tablet";
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
@@ -426,9 +428,9 @@ export function QuickActionToolbar() {
   if (!isMobileOrTablet) return null;
 
   const atTabs: { key: AtTab; label: string }[] = [
-    { key: "agents", label: "智能体" },
-    { key: "files", label: "文件" },
-    { key: "memory", label: "记忆" },
+    { key: "agents", label: t("quickAction.agents") },
+    { key: "files", label: t("quickAction.files") },
+    { key: "memory", label: t("quickAction.memory") },
   ];
 
   const renderIcon = (icon: PopupItem["icon"]) => {
@@ -458,13 +460,13 @@ export function QuickActionToolbar() {
         <div className="flex items-center gap-0.5">
           <button
             className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
-            title="附件"
+            title={t("quickAction.attachment")}
           >
             <Paperclip className="w-4 h-4" />
           </button>
           <button
             className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
-            title="图片"
+            title={t("quickAction.image")}
           >
             <ImageIcon className="w-4 h-4" />
           </button>
@@ -478,7 +480,7 @@ export function QuickActionToolbar() {
                 ? "bg-indigo-600/30 text-indigo-300 border border-indigo-500/50"
                 : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 border border-transparent"
             }`}
-            title="@提及"
+            title={t("quickAction.atMention")}
           >
             <div className="flex items-center gap-1">
               <AtSign className="w-3.5 h-3.5" />
@@ -492,7 +494,7 @@ export function QuickActionToolbar() {
                 ? "bg-amber-600/30 text-amber-300 border border-amber-500/50"
                 : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 border border-transparent"
             }`}
-            title="命令与技能"
+            title={t("quickAction.commandsAndSkills")}
           >
             <div className="flex items-center gap-1">
               <Slash className="w-3.5 h-3.5" />
@@ -543,7 +545,7 @@ export function QuickActionToolbar() {
                           : "text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
                       }`}
                     >
-                      {cat === "commands" ? "命令" : "技能"}
+                      {cat === "commands" ? t("quickAction.commands") : t("quickAction.skills")}
                     </button>
                   ))}
                 </div>
@@ -553,7 +555,7 @@ export function QuickActionToolbar() {
             <button
               onClick={closePopup}
               className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors shrink-0 ml-1"
-              title="关闭"
+              title={t("common:close")}
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -565,7 +567,7 @@ export function QuickActionToolbar() {
                 onClick={() => handleBreadcrumb(-1)}
                 className="text-indigo-400 hover:text-indigo-300 shrink-0"
               >
-                根目录
+                {t("quickAction.rootDir")}
               </button>
               {fileBreadcrumbs.map((bc, i) => (
                 <span key={bc.path} className="flex items-center gap-1 shrink-0">
@@ -584,7 +586,7 @@ export function QuickActionToolbar() {
           <div className="max-h-[240px] min-h-[80px] overflow-y-auto" role="listbox">
             {items.length === 0 && !loading && (
               <div className="px-3 py-6 text-center text-xs text-gray-400 dark:text-gray-600">
-                {query ? "没有匹配结果" : "暂无数据"}
+                {query ? t("quickAction.noMatchResults") : t("common:noData")}
               </div>
             )}
             {items.map((item, idx) => (

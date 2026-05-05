@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowDownToLine, X, Eye } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { ContentBlock } from "../../../types";
 import { useSessionStore } from "../../../stores/use-session-store";
 import { useBashStore } from "../../../stores/use-bash-store";
@@ -46,6 +47,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
   blockId?: string;
 }) {
   const sid = useSessionStore((s) => s.activeSessionId);
+  const { t } = useTranslation("chat");
   const bashProcess = useBashStore((s) => {
     const procs = s.processesBySession[sid ?? ""] || EMPTY_PROCS;
     return procs.find((p) => p.toolCallId === block.toolCallId);
@@ -92,11 +94,15 @@ export const BashExecutionCard = memo(function BashExecutionCard({
   if (isBackground) {
     borderBg = "border-yellow-500/30 bg-yellow-50 dark:bg-yellow-950/10";
     statusLabel = (
-      <span className="text-yellow-600 dark:text-yellow-400 text-[10px]">已后台运行</span>
+      <span className="text-yellow-600 dark:text-yellow-400 text-[10px]">
+        {t("bash.backgroundRunning")}
+      </span>
     );
   } else if (isTerminated) {
     borderBg = "border-red-500/20 bg-red-50 dark:bg-red-950/10";
-    statusLabel = <span className="text-red-500 dark:text-red-400 text-[10px]">已取消</span>;
+    statusLabel = (
+      <span className="text-red-500 dark:text-red-400 text-[10px]">{t("common:cancelled")}</span>
+    );
   } else if (isRunning) {
     borderBg = "border-blue-500/30 bg-blue-50 dark:bg-blue-950/15";
   } else if (isError) {
@@ -118,7 +124,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
         </span>
         {isRunning && !statusLabel && (
           <span className="text-blue-500 dark:text-blue-400 animate-pulse text-[10px]">
-            running
+            {t("running")}
           </span>
         )}
         {statusLabel}
@@ -156,7 +162,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
           >
             <path d="M4.5 3l3 3-3 3" />
           </svg>
-          <span>Input</span>
+          <span>{t("input")}</span>
         </summary>
         <div className="px-3 pb-2">
           {block.args ? (
@@ -182,10 +188,10 @@ export const BashExecutionCard = memo(function BashExecutionCard({
           >
             <path d="M4.5 3l3 3-3 3" />
           </svg>
-          <span>Output</span>
+          <span>{t("output")}</span>
           {isRunning && (
             <span className="ml-auto text-blue-500/70 dark:text-blue-400/70 animate-pulse text-[10px]">
-              streaming
+              {t("streaming")}
             </span>
           )}
         </summary>
@@ -197,7 +203,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
             />
           ) : isRunning ? (
             <div className="text-[11px] text-gray-400 dark:text-gray-600 italic py-1">
-              waiting...
+              {t("waiting")}
             </div>
           ) : null}
         </div>
@@ -209,20 +215,20 @@ export const BashExecutionCard = memo(function BashExecutionCard({
             <button
               onClick={() => sendAction("background")}
               className="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded border border-yellow-500/40 dark:border-yellow-600/40 text-[10px] text-yellow-600 dark:text-yellow-400 hover:bg-yellow-100 dark:hover:bg-yellow-600/15 transition-colors"
-              title="转为后台运行"
+              title={t("bash.moveToBackground")}
             >
               <ArrowDownToLine className="w-3 h-3" />
-              <span>后台运行</span>
+              <span>{t("bash.background")}</span>
             </button>
           )}
           {!showBackground && <div className="flex-1" />}
           <button
             onClick={() => sendAction("kill")}
             className="flex items-center justify-center gap-1 px-2 py-1 rounded border border-red-500/30 dark:border-red-600/30 text-[10px] text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-600/10 transition-colors"
-            title="取消执行"
+            title={t("bash.cancelExecution")}
           >
             <X className="w-3 h-3" />
-            <span>取消</span>
+            <span>{t("common:cancel")}</span>
           </button>
         </div>
       )}
@@ -233,10 +239,10 @@ export const BashExecutionCard = memo(function BashExecutionCard({
           <button
             onClick={() => setShowLogViewer(true)}
             className="flex items-center justify-center gap-1 px-2 py-1 rounded border border-cyan-500/40 dark:border-cyan-600/40 text-[10px] text-cyan-600 dark:text-cyan-400 hover:bg-cyan-50 dark:hover:bg-cyan-600/15 transition-colors"
-            title="查看输出"
+            title={t("bash.viewOutput")}
           >
             <Eye className="w-3 h-3" />
-            <span>查看输出</span>
+            <span>{t("bash.viewOutput")}</span>
           </button>
         </div>
       )}

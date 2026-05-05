@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { RefreshCw, AlertCircle } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useRetryStore } from "../../stores/use-retry-store";
 import { useSessionStore } from "../../stores/use-session-store";
 
 export function RetryNotification() {
+  const { t } = useTranslation("chat");
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const retryInfo = useRetryStore((s) =>
     activeSessionId ? s.retryBySession[activeSessionId] : undefined,
@@ -41,15 +43,15 @@ export function RetryNotification() {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-0.5">
             <AlertCircle className="w-3 h-3 text-red-400 shrink-0" />
-            <span className="text-[11px] font-semibold text-red-300">自动重试中</span>
+            <span className="text-[11px] font-semibold text-red-300">{t("autoRetrying")}</span>
           </div>
           <div className="text-[10px] text-red-400/80 space-y-0.5">
             <div>
-              第 {retryInfo.attempt} / {retryInfo.maxAttempts} 次重试
+              {t("attemptRetry", { current: retryInfo.attempt, max: retryInfo.maxAttempts })}
             </div>
             {remaining > 0 && (
               <div className="flex items-center gap-1.5">
-                <span>{remaining}s 后重试</span>
+                <span>{t("retryInSeconds", { seconds: remaining })}</span>
                 <div className="flex-1 h-1 bg-red-900/60 rounded-full overflow-hidden min-w-[40px]">
                   <div
                     className="h-full bg-red-400 rounded-full transition-all duration-200"

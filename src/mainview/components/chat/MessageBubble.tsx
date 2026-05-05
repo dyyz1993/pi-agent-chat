@@ -1,4 +1,5 @@
 import { useCallback, useEffect, memo, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Brain,
   AlertTriangle,
@@ -213,6 +214,7 @@ export const TextContentCard = memo(function TextContentCard({
   isStreaming?: boolean;
   blockId: string;
 }) {
+  const { t } = useTranslation("chat");
   const [isOpen, setIsOpen] = useState(true);
   const firstLine = text.split("\n")[0] || "";
   const hasMore = text.includes("\n") || text.length > 120;
@@ -231,14 +233,14 @@ export const TextContentCard = memo(function TextContentCard({
               setIsOpen(!isOpen);
             }}
             className="p-0.5 text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 transition-colors ml-auto"
-            title={isOpen ? "折叠" : "展开"}
+            title={isOpen ? t("collapse") : t("expand")}
             aria-expanded={isOpen}
-            aria-label={isOpen ? "折叠文本" : "展开文本"}
+            aria-label={isOpen ? t("collapseText") : t("expandText")}
           >
             {isOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
           </button>
         )}
-        <CopyButton text={text} size="xs" title="复制文本内容" />
+        <CopyButton text={text} size="xs" title={t("copyTextContent")} />
       </div>
 
       {isOpen ? (
@@ -263,6 +265,7 @@ export const ThinkingCard = memo(function ThinkingCard({
   isStreaming: boolean;
   blockId: string;
 }) {
+  const { t } = useTranslation("chat");
   const [isOpen, setIsOpen] = useState(true);
 
   const wasStreamingRef = useRef(isStreaming);
@@ -273,7 +276,7 @@ export const ThinkingCard = memo(function ThinkingCard({
     wasStreamingRef.current = isStreaming;
   }, [isStreaming]);
 
-  const firstLine = thinking.split("\n")[0] || "Thinking...";
+  const firstLine = thinking.split("\n")[0] || t("thinkingPlaceholder");
   const hasMore = thinking.includes("\n") || thinking.length > 80;
 
   return (
@@ -283,25 +286,29 @@ export const ThinkingCard = memo(function ThinkingCard({
         onClick={() => !isStreaming && setIsOpen(!isOpen)}
       >
         <Brain className="w-3 h-3 text-purple-400/60 shrink-0" />
-        <span className="text-purple-300/70 font-medium">Thinking</span>
+        <span className="text-purple-300/70 font-medium">{t("thinkingLabel")}</span>
         {isStreaming && <span className="text-purple-400/50 animate-pulse text-[10px]">...</span>}
         {!isStreaming && (
           <div className="ml-auto flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => setIsOpen(!isOpen)}
-              title={isOpen ? "折叠" : "展开"}
+              title={isOpen ? t("collapse") : t("expand")}
               className="p-0.5 text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
             >
               {isOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
             </button>
-            <CopyButton text={thinking} size="xs" title="复制思考内容" />
+            <CopyButton text={thinking} size="xs" title={t("copyThinkingContent")} />
           </div>
         )}
       </div>
 
       {isOpen ? (
         <div className="px-2 pl-1 pb-1.5 text-[11px] text-gray-500 dark:text-gray-400 whitespace-pre-wrap leading-relaxed">
-          {thinking || <span className="text-gray-400 dark:text-gray-600 italic">thinking...</span>}
+          {thinking || (
+            <span className="text-gray-400 dark:text-gray-600 italic">
+              {t("thinkingPlaceholder")}
+            </span>
+          )}
         </div>
       ) : hasMore ? (
         <div className="px-2 pl-1 py-0.5 text-[11px] text-gray-400 dark:text-gray-500 truncate">
@@ -335,12 +342,13 @@ export function isLspVisibleInChat(customType: string): boolean {
 }
 
 export const LspDiagnosticsCard = memo(function LspDiagnosticsCard({ data }: { data: unknown }) {
+  const { t } = useTranslation("chat");
   if (!data || typeof data !== "object") {
     return (
       <div className="my-1 overflow-hidden bg-yellow-950/5">
         <div className="px-4 py-1 text-[11px] font-medium text-yellow-400 flex items-center gap-1.5">
           <AlertTriangle className="w-3 h-3 shrink-0" />
-          <span>LSP Diagnostics</span>
+          <span>{t("lspDiagnostics")}</span>
         </div>
       </div>
     );
@@ -364,7 +372,7 @@ export const LspDiagnosticsCard = memo(function LspDiagnosticsCard({ data }: { d
     <div className="my-1 border border-yellow-700/30 rounded-lg overflow-hidden bg-yellow-50/50 dark:bg-yellow-900/10">
       <div className="px-3 py-1.5 text-xs font-medium text-yellow-400 flex items-center gap-1.5">
         <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-        <span>LSP Diagnostics</span>
+        <span>{t("lspDiagnostics")}</span>
       </div>
       <div className="border-t border-yellow-700/20">
         {details.files?.map((f) => (
@@ -460,6 +468,7 @@ function MemoryExpandedContent({ customType, data }: { customType: string; data:
 }
 
 function PrefetchResultDetail({ data }: { data: unknown }) {
+  const { t } = useTranslation("chat");
   const d = data as Record<string, unknown> | undefined;
   if (!d) return null;
 
@@ -505,13 +514,13 @@ function PrefetchResultDetail({ data }: { data: unknown }) {
   const modeLabel = (mode: string) => {
     switch (mode) {
       case "exact":
-        return "精确匹配";
+        return t("exactMatch");
       case "prefix":
-        return "前缀匹配";
+        return t("prefixMatch");
       case "contains":
-        return "包含匹配";
+        return t("containsMatch");
       case "regex":
-        return "正则匹配";
+        return t("regexMatch");
       default:
         return "";
     }
@@ -520,16 +529,21 @@ function PrefetchResultDetail({ data }: { data: unknown }) {
   return (
     <div className="px-3 pb-2 text-[11px] space-y-1.5">
       {!hasMemory && (
-        <div className="text-gray-400 dark:text-gray-500 italic py-1">未找到相关记忆</div>
+        <div className="text-gray-400 dark:text-gray-500 italic py-1">{t("noRelevantMemory")}</div>
       )}
 
       {snippet && (
         <div className="space-y-0.5">
           <div className="text-gray-500 dark:text-gray-400 flex items-center gap-1 font-medium">
             <Brain className="w-3 h-3 text-blue-400/60 shrink-0" />
-            <span>相关记忆</span>
+            <span>{t("relatedMemory")}</span>
             <span className="text-gray-400 dark:text-gray-500 ml-auto">
-              {memoryCount} 条 · ~{tokenCount} tokens · {Math.round(injectedBytes / 1024)}KB
+              {memoryCount}{" "}
+              {t("memoryCountTokens", {
+                count: memoryCount,
+                tokens: tokenCount,
+                size: Math.round(injectedBytes / 1024),
+              })}
             </span>
           </div>
           <pre className="p-2 bg-gray-100/80 dark:bg-gray-800/40 rounded text-[11px] text-gray-700 dark:text-gray-300 overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap leading-relaxed border border-gray-200/50 dark:border-gray-700/30">
@@ -540,7 +554,7 @@ function PrefetchResultDetail({ data }: { data: unknown }) {
 
       {!snippet && selectedFiles.length > 0 && (
         <div className="text-gray-400 dark:text-gray-500 italic py-0.5">
-          已检索 {selectedFiles.length} 个记忆文件
+          {t("retrievedMemoryFiles", { count: selectedFiles.length })}
           {injectedBytes > 0 && (
             <span className="text-gray-400 dark:text-gray-600 ml-auto">
               ~{Math.round(injectedBytes / 4)} tokens
@@ -552,45 +566,44 @@ function PrefetchResultDetail({ data }: { data: unknown }) {
       <details className="group">
         <summary className="cursor-pointer text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400 flex items-center gap-1 py-0.5 text-[10px]">
           <ChevronRight className="w-2.5 h-2.5 group-open:rotate-90 transition-transform" />
-          搜索详情
+          {t("searchDetail")}
         </summary>
         <div className="mt-1 space-y-1.5 pl-1 text-[10px] text-gray-400 dark:text-gray-500">
           {query && (
             <div className="text-gray-500 dark:text-gray-400">
-              搜索词: <span className="text-gray-700 dark:text-gray-300">「{query}」</span>
+              {t("searchQuery")}{" "}
+              <span className="text-gray-700 dark:text-gray-300">「{query}」</span>
             </div>
           )}
 
           <div className="space-y-0.5">
             {layer === "not_triggered" && (
-              <div className="text-gray-400 dark:text-gray-500">
-                未触发搜索 — 无匹配关键词，默认跳过
-              </div>
+              <div className="text-gray-400 dark:text-gray-500">{t("notTriggered")}</div>
             )}
-            {layer === "skip" && (
-              <div className="text-yellow-500/80">跳过 LLM → 规则命中，复用上次缓存结果</div>
-            )}
+            {layer === "skip" && <div className="text-yellow-500/80">{t("skipLayer")}</div>}
             {layer === "llm" && isForce && (
-              <div className="text-red-400/80">强制触发 → 使用 LLM 进行语义匹配</div>
+              <div className="text-red-400/80">{t("forceTrigger")}</div>
             )}
             {layer === "llm" && !isForce && (
-              <div className="text-blue-400/80">关键词命中 → 使用 LLM 进行语义匹配</div>
+              <div className="text-blue-400/80">{t("keywordTrigger")}</div>
             )}
             {layer === "none" && (
-              <div className="text-gray-400 dark:text-gray-500">无可用记忆文件</div>
+              <div className="text-gray-400 dark:text-gray-500">{t("noMemoryFiles")}</div>
             )}
-            {layer === "error" && <div className="text-red-400/80">搜索出错</div>}
+            {layer === "error" && <div className="text-red-400/80">{t("searchError")}</div>}
             {layer !== "skip" &&
               layer !== "llm" &&
               layer !== "not_triggered" &&
               layer !== "none" && (
-                <div className="text-gray-500 dark:text-gray-400">匹配方式: {layer}</div>
+                <div className="text-gray-500 dark:text-gray-400">
+                  {t("matchMethod", { method: layer })}
+                </div>
               )}
           </div>
 
           {skipHits.length > 0 && (
             <div className="space-y-0.5">
-              <div className="text-yellow-600/80">Skip 规则命中:</div>
+              <div className="text-yellow-600/80">{t("skipRuleHit")}</div>
               {skipHits.map((h, i) => (
                 <div key={i} className="pl-2 flex items-center gap-1.5">
                   <span className="text-yellow-500/60">•</span>
@@ -607,7 +620,7 @@ function PrefetchResultDetail({ data }: { data: unknown }) {
 
           {guardHits.length > 0 && (
             <div className="space-y-0.5">
-              <div className="text-green-600/80">Guard 规则命中（阻止跳过）:</div>
+              <div className="text-green-600/80">{t("guardRuleHit")}</div>
               {guardHits.map((h, i) => (
                 <div key={i} className="pl-2 flex items-center gap-1.5">
                   <span className="text-green-500/60">•</span>
@@ -624,7 +637,7 @@ function PrefetchResultDetail({ data }: { data: unknown }) {
 
           {triggerHits.length > 0 && (
             <div className="space-y-0.5">
-              <div className="text-cyan-600/80">触发关键词:</div>
+              <div className="text-cyan-600/80">{t("triggerKeywords")}</div>
               {triggerHits.map((h, i) => (
                 <div key={i} className="pl-2 flex items-center gap-1.5">
                   <span className="text-cyan-500/60">•</span>
@@ -642,7 +655,7 @@ function PrefetchResultDetail({ data }: { data: unknown }) {
           {selectedFiles.length > 0 && (
             <div className="space-y-0.5">
               <div className="text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                来源文件 ({selectedFiles.length})
+                {t("sourceFiles", { count: selectedFiles.length })}
               </div>
               {selectedFiles.map((f) => {
                 const fileName = f.split("/").pop() ?? f;
@@ -663,10 +676,14 @@ function PrefetchResultDetail({ data }: { data: unknown }) {
 
           <div className="space-y-0.5">
             {availableFiles > 0 && (
-              <div className="text-gray-400 dark:text-gray-600">可用文件: {availableFiles} 个</div>
+              <div className="text-gray-400 dark:text-gray-600">
+                {t("availableFiles", { count: availableFiles })}
+              </div>
             )}
             {durationMs > 0 && (
-              <div className="text-gray-400 dark:text-gray-600">搜索耗时: {durationMs}ms</div>
+              <div className="text-gray-400 dark:text-gray-600">
+                {t("searchDuration", { duration: durationMs })}
+              </div>
             )}
           </div>
         </div>
@@ -676,6 +693,7 @@ function PrefetchResultDetail({ data }: { data: unknown }) {
 }
 
 function PrefetchStartDetail({ data }: { data: unknown }) {
+  const { t } = useTranslation("chat");
   const d = data as Record<string, unknown> | undefined;
   if (!d) return null;
   const query = typeof d.query === "string" ? d.query : "";
@@ -685,13 +703,17 @@ function PrefetchStartDetail({ data }: { data: unknown }) {
     <div className="px-3 pb-2 text-[11px] space-y-1">
       {query && (
         <div className="flex gap-1.5">
-          <span className="text-gray-400 dark:text-gray-500 shrink-0">查询:</span>
+          <span className="text-gray-400 dark:text-gray-500 shrink-0">{t("queryLabel")}</span>
           <span className="text-gray-700 dark:text-gray-300 truncate">{query}</span>
         </div>
       )}
       <div className="flex gap-1.5">
-        <span className="text-gray-400 dark:text-gray-500 shrink-0">可用文件:</span>
-        <span className="text-gray-700 dark:text-gray-300">{availableFiles} 个</span>
+        <span className="text-gray-400 dark:text-gray-500 shrink-0">
+          {t("availableFilesLabel")}
+        </span>
+        <span className="text-gray-700 dark:text-gray-300">
+          {t("filesCount", { count: availableFiles })}
+        </span>
       </div>
     </div>
   );
@@ -709,6 +731,7 @@ const CompactionSummaryCard = memo(function CompactionSummaryCard({
   summary: string;
   blockId: string;
 }) {
+  const { t } = useTranslation("chat");
   const [isOpen, setIsOpen] = useState(false);
 
   const lines = summary.split("\n");
@@ -730,9 +753,9 @@ const CompactionSummaryCard = memo(function CompactionSummaryCard({
                 onClick={() => setIsOpen(!isOpen)}
                 className="shrink-0 p-0.5 text-cyan-400/60 hover:text-cyan-300 transition-colors text-[11px] underline decoration-dotted underline-offset-2"
                 aria-expanded={isOpen}
-                aria-label={isOpen ? "收起思考详情" : "展开思考详情"}
+                aria-label={isOpen ? t("collapseThinkingDetail") : t("expandThinkingDetail")}
               >
-                {isOpen ? "收起" : "详情"}
+                {isOpen ? t("collapseDetail") : t("showDetail")}
               </button>
             </div>
             {isOpen && (
@@ -767,6 +790,7 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({
   uiBlockMap: Map<string, UIInteractionBlock>;
 }) {
   const blockId = `${msgId}-${blockIndex}`;
+  const { t } = useTranslation("chat");
   const openExpand = useExpandStore((s) => s.openExpand);
   const toolCallId =
     block.type === "toolExecution"
@@ -805,10 +829,13 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({
             {shouldShowExpand && (
               <button
                 onClick={() =>
-                  openExpand(block.text, `消息内容 (${block.text.split("\n").length} 行)`)
+                  openExpand(
+                    block.text,
+                    t("messageContentLineCount", { count: block.text.split("\n").length }),
+                  )
                 }
                 className="p-1 rounded text-gray-400 dark:text-gray-600 hover:text-indigo-300 hover:bg-gray-200/60 dark:hover:bg-gray-800/60 transition-colors"
-                title="展开查看全文"
+                title={t("expandFullText")}
               >
                 <Maximize2 className="w-3.5 h-3.5" />
               </button>
@@ -906,6 +933,7 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
   blockId: string;
   uiBlock?: UIInteractionBlock;
 }) {
+  const { t } = useTranslation("chat");
   const isRunning = block.status === "running";
   const isError = block.status === "error";
   const [inputOpen, setInputOpen] = useState(false);
@@ -923,7 +951,7 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
   }
 
   const fullExecutionText = useMemo(() => {
-    return `[工具调用] ${block.toolName}\n输入:\n${tryFormatAsYaml(block.args ?? "")}\n输出:\n${block.output ?? ""}`;
+    return `[${t("toolCall")}] ${block.toolName}\n${t("input")}:\n${tryFormatAsYaml(block.args ?? "")}\n${t("output")}:\n${block.output ?? ""}`;
   }, [block.toolName, block.args, block.output]);
 
   const handleToggleCollapse = useCallback(() => {
@@ -941,9 +969,9 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
         <button
           onClick={handleToggleCollapse}
           className="p-0.5 text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 transition-colors shrink-0"
-          title={collapsed ? "展开工具卡片" : "折叠工具卡片"}
+          title={collapsed ? t("expandToolCard") : t("collapseToolCard")}
           aria-expanded={!collapsed}
-          aria-label={collapsed ? "展开工具卡片" : "折叠工具卡片"}
+          aria-label={collapsed ? t("expandToolCard") : t("collapseToolCard")}
         >
           {collapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
         </button>
@@ -957,12 +985,12 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
           <CheckCircle className="w-3.5 h-3.5 text-green-500 shrink-0 ml-auto" />
         )}
         {isError && <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0 ml-auto" />}
-        <CopyButton text={fullExecutionText} size="xs" title="复制全部执行结果" />
+        <CopyButton text={fullExecutionText} size="xs" title={t("copyAllExecution")} />
       </div>
 
       {collapsed ? (
         <div className="px-3 pl-2 pb-1 text-[11px] text-gray-400 dark:text-gray-500 truncate">
-          {block.output ? block.output.split("\n")[0].slice(0, 100) : "(等待输出)"}
+          {block.output ? block.output.split("\n")[0].slice(0, 100) : t("waitingOutput")}
         </div>
       ) : (
         <>
@@ -985,7 +1013,7 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
                 text={typeof block.args === "string" ? block.args : JSON.stringify(block.args)}
                 size="xs"
                 className="ml-auto"
-                title="复制输入"
+                title={t("copyInput")}
               />
             )}
           </div>
@@ -1015,7 +1043,12 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
               <span className="ml-auto text-blue-400/70 animate-pulse text-[10px]">streaming</span>
             )}
             {block.output && !isRunning && (
-              <CopyButton text={block.output} size="xs" className="ml-auto" title="复制输出" />
+              <CopyButton
+                text={block.output}
+                size="xs"
+                className="ml-auto"
+                title={t("copyOutput")}
+              />
             )}
           </div>
           {outputOpen && (
@@ -1028,7 +1061,7 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
                 </pre>
               ) : isRunning ? (
                 <div className="text-[11px] text-gray-400 dark:text-gray-600 italic py-1">
-                  waiting...
+                  {t("waiting")}
                 </div>
               ) : null}
             </div>
@@ -1044,33 +1077,56 @@ export const MessageMetaFooter = memo(function MessageMetaFooter({
 }: {
   message: ChatMessage;
 }) {
+  const { t } = useTranslation("chat");
   const { tokenUsage, model, provider } = message;
 
   return (
     <div className="mt-1.5 pt-1.5 pl-2 pb-0.5 border-t border-gray-200/20 dark:border-gray-800/20 space-y-1">
       {(model ?? provider) && (
         <div className="text-[10px] text-gray-400 dark:text-gray-600">
-          {provider && <span>智能体: {provider}</span>}
+          {provider && (
+            <span>
+              {t("agent")}: {provider}
+            </span>
+          )}
           {model && (
             <>
               {provider && "  "}
-              <span>模型: {model}</span>
+              <span>
+                {t("model")}: {model}
+              </span>
             </>
           )}
         </div>
       )}
       {tokenUsage && (
         <div className="flex items-center gap-2 text-[10px] text-gray-400 dark:text-gray-600">
-          <span>输入 {tokenUsage.input}</span>
-          <span>输出 {tokenUsage.output}</span>
-          {(tokenUsage.reasoning ?? 0) > 0 && <span>推理 {tokenUsage.reasoning}</span>}
+          <span>
+            {t("tokenInput")} {tokenUsage.input}
+          </span>
+          <span>
+            {t("tokenOutput")} {tokenUsage.output}
+          </span>
+          {(tokenUsage.reasoning ?? 0) > 0 && (
+            <span>
+              {t("tokenReasoning")} {tokenUsage.reasoning}
+            </span>
+          )}
           {(tokenUsage.cacheRead ?? 0) > 0 && (
-            <span>缓存读取 {formatK(tokenUsage.cacheRead ?? 0)}</span>
+            <span>
+              {t("tokenCacheRead")} {formatK(tokenUsage.cacheRead ?? 0)}
+            </span>
           )}
           {(tokenUsage.cacheWrite ?? 0) > 0 && (
-            <span>缓存写入 {formatK(tokenUsage.cacheWrite ?? 0)}</span>
+            <span>
+              {t("tokenCacheWrite")} {formatK(tokenUsage.cacheWrite ?? 0)}
+            </span>
           )}
-          {tokenUsage.cost != null && <span>费用 ${tokenUsage.cost.toFixed(2)}</span>}
+          {tokenUsage.cost != null && (
+            <span>
+              {t("tokenCost")} ${tokenUsage.cost.toFixed(2)}
+            </span>
+          )}
         </div>
       )}
     </div>

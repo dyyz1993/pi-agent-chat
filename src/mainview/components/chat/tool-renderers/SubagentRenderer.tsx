@@ -1,5 +1,6 @@
 import { useCallback, memo } from "react";
 import { Bot, ArrowRight, ExternalLink } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { ContentBlock, SubagentSessionInfo } from "../../../types";
 import { useSubagentStore } from "../../../stores/use-subagent-store";
 import { useSessionStore } from "../../../stores/use-session-store";
@@ -13,6 +14,7 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
   block: ToolExecBlock;
   blockId?: string;
 }) {
+  const { t } = useTranslation("chat");
   const isRunning = block.status === "running";
   const isError = block.status === "error";
   const isDone = block.status === "done";
@@ -27,7 +29,7 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
     /* args not valid JSON, use default */
   }
 
-  const displayTitle = description || instruction.slice(0, 120) || "子代理任务";
+  const displayTitle = description || instruction.slice(0, 120) || t("subagent.subagentTask");
 
   const matchedSub = useSubagentStore((s): SubagentSessionInfo | null => {
     for (const subs of Object.values(s.subsessionsByParent)) {
@@ -92,6 +94,7 @@ export const Header = memo(function Header({
   matchedSub: SubagentSessionInfo | null;
   onView: () => void;
 }) {
+  const { t } = useTranslation("chat");
   return (
     <div className="px-3 py-2 flex items-start gap-2.5">
       <div
@@ -135,7 +138,7 @@ export const Header = memo(function Header({
           className="shrink-0 flex items-center gap-1 px-2 py-1 rounded text-[10px] text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-500/10 transition-colors mt-1"
         >
           <ExternalLink className="w-3 h-3" />
-          查看
+          {t("subagent.view")}
         </button>
       )}
     </div>
@@ -151,11 +154,12 @@ export const StatusChip = memo(function StatusChip({
   isDone: boolean;
   isError: boolean;
 }) {
+  const { t } = useTranslation("chat");
   if (isRunning) {
     return (
       <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] bg-purple-100 dark:bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-300 dark:border-purple-500/20">
         <span className="w-1 h-1 rounded-full bg-purple-600 dark:bg-purple-400 animate-pulse" />
-        运行中
+        {t("subagent.running")}
       </span>
     );
   }
@@ -163,14 +167,14 @@ export const StatusChip = memo(function StatusChip({
     return (
       <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-100 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-500/20">
         <span className="w-1 h-1 rounded-full bg-emerald-600 dark:bg-emerald-400" />
-        完成
+        {t("subagent.completed")}
       </span>
     );
   }
   if (isError) {
     return (
       <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] bg-red-100 dark:bg-red-500/15 text-red-600 dark:text-red-400 border border-red-300 dark:border-red-500/20">
-        出错
+        {t("subagent.error")}
       </span>
     );
   }
@@ -182,11 +186,12 @@ export const RunningInstruction = memo(function RunningInstruction({
 }: {
   instruction: string;
 }) {
+  const { t } = useTranslation("chat");
   return (
     <div className="px-3 pb-2 pt-1 border-t border-purple-300/20 dark:border-purple-500/10">
       <div className="flex items-center gap-1.5 text-[11px] text-purple-500/70 dark:text-purple-400/60">
         <ArrowRight className="w-3 h-3 animate-pulse" />
-        <span className="truncate">{instruction.slice(0, 200) || "执行中..."}</span>
+        <span className="truncate">{instruction.slice(0, 200) || t("subagent.executing")}</span>
       </div>
     </div>
   );
@@ -199,6 +204,7 @@ export const OutputSection = memo(function OutputSection({
   block: ToolExecBlock;
   isRunning: boolean;
 }) {
+  const { t } = useTranslation("chat");
   return (
     <details className="group border-t border-purple-300/20 dark:border-purple-500/10">
       <summary className="px-3 py-1 text-[11px] text-gray-400 dark:text-gray-500 cursor-pointer hover:text-gray-600 dark:hover:text-gray-400 select-none flex items-center gap-1.5">
@@ -211,10 +217,10 @@ export const OutputSection = memo(function OutputSection({
         >
           <path d="M4.5 3l3 3-3 3" />
         </svg>
-        <span>{isRunning ? "实时输出" : "输出"}</span>
+        <span>{isRunning ? t("subagent.liveOutput") : t("subagent.output")}</span>
         {isRunning && (
           <span className="ml-auto text-purple-500/70 dark:text-purple-400/70 animate-pulse text-[10px]">
-            streaming
+            {t("streaming")}
           </span>
         )}
       </summary>
@@ -224,7 +230,9 @@ export const OutputSection = memo(function OutputSection({
             {block.output}
           </pre>
         ) : (
-          <div className="text-[11px] text-gray-400 dark:text-gray-600 italic py-1">暂无输出</div>
+          <div className="text-[11px] text-gray-400 dark:text-gray-600 italic py-1">
+            {t("subagent.noOutput")}
+          </div>
         )}
       </div>
     </details>

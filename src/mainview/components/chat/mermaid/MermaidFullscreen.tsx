@@ -1,9 +1,11 @@
 import { memo, useCallback, useEffect } from "react";
 import { X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useMermaidStore } from "../../../stores/use-mermaid-store";
 import { MermaidBlock } from "./MermaidBlock";
 
 export const MermaidFullscreen = memo(function MermaidFullscreen() {
+  const { t } = useTranslation("chat");
   const code = useMermaidStore((s) => s.code);
   const closeFullscreen = useMermaidStore((s) => s.closeFullscreen);
 
@@ -31,12 +33,14 @@ export const MermaidFullscreen = memo(function MermaidFullscreen() {
       onClick={handleBackdropClick}
     >
       <div className="flex items-center gap-2 px-4 py-2 bg-gray-100/90 dark:bg-gray-900/90 border-b border-gray-200 dark:border-gray-800 flex-shrink-0">
-        <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">Mermaid 图表</span>
+        <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">
+          {t("mermaidChart")}
+        </span>
         <div className="flex-1" />
         <button
           onClick={closeFullscreen}
           className="p-1.5 rounded text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors"
-          title="关闭 (Esc)"
+          title={t("closeEscTitle")}
         >
           <X className="w-4 h-4" />
         </button>

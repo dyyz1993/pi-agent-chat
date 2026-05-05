@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { apiClient } from "./lib/api-client";
 import { useAppStore } from "./stores/use-app-store";
 import { useExplorerStore } from "./stores/use-explorer-store";
@@ -12,6 +13,7 @@ import { useDiagnosticStore } from "./stores/use-diagnostic-store";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
 function App() {
+  const { t } = useTranslation("common");
   const log = createLogger("chat");
   const ready = useAppStore((s) => s.ready);
   const initializeConnection = useAppStore((s) => s.initializeConnection);
@@ -206,10 +208,10 @@ function App() {
             <div className="inline-block w-8 h-8 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin mb-4" />
             <div className="text-gray-500 dark:text-gray-400 text-sm">
               {!ready
-                ? "Connecting to RPC server..."
+                ? t("connectingRpc")
                 : projectLoading
-                  ? `加载项目中...`
-                  : "恢复会话中..."}
+                  ? t("loadingProject")
+                  : t("restoringSession")}
             </div>
           </div>
         </div>

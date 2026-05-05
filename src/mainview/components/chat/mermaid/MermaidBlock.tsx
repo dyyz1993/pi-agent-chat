@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Maximize2, ZoomIn, ZoomOut } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useMermaidStore } from "../../../stores/use-mermaid-store";
 import { useThemeStore } from "../../../stores/use-theme-store";
 
@@ -73,6 +74,7 @@ interface MermaidBlockProps {
 }
 
 export const MermaidBlock = memo(function MermaidBlock({ code, inline = true }: MermaidBlockProps) {
+  const { t } = useTranslation("chat");
   const [svg, setSvg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -139,7 +141,7 @@ export const MermaidBlock = memo(function MermaidBlock({ code, inline = true }: 
     return (
       <div className="rounded-lg border border-red-300/50 dark:border-red-900/50 bg-white dark:bg-gray-900/60 my-3 overflow-hidden">
         <div className="px-3 py-1.5 text-xs text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border-b border-red-300/30 dark:border-red-900/30">
-          图表渲染失败
+          {t("chartRenderFailed")}
         </div>
         <pre className="p-3 text-xs text-gray-800 dark:text-gray-300 overflow-x-auto font-mono">
           <code>{code}</code>
@@ -168,21 +170,21 @@ export const MermaidBlock = memo(function MermaidBlock({ code, inline = true }: 
         <button
           onClick={handleZoomOut}
           className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
-          title="缩小"
+          title={t("zoomOut")}
         >
           <ZoomOut className="w-3.5 h-3.5" />
         </button>
         <button
           onClick={handleReset}
           className="px-1.5 py-0.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 rounded min-w-[3rem] text-center"
-          title="重置缩放"
+          title={t("resetZoom")}
         >
           {Math.round(scale * 100)}%
         </button>
         <button
           onClick={handleZoomIn}
           className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
-          title="放大"
+          title={t("zoomIn")}
         >
           <ZoomIn className="w-3.5 h-3.5" />
         </button>
@@ -192,7 +194,7 @@ export const MermaidBlock = memo(function MermaidBlock({ code, inline = true }: 
             <button
               onClick={handleFullscreen}
               className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
-              title="全屏查看"
+              title={t("fullscreenView")}
             >
               <Maximize2 className="w-3.5 h-3.5" />
             </button>

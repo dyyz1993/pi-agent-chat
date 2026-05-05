@@ -1,4 +1,5 @@
 import { memo, useState, useCallback, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import { FileText, X, RefreshCw, Maximize2, Copy, Check, ExternalLink } from "lucide-react";
 import type { PreviewDetails } from "./types";
@@ -6,6 +7,7 @@ import { getFileHttpUrl } from "./types";
 import { useClipboard } from "./use-clipboard";
 
 export const PdfCard = memo(function PdfCard({ details }: { details: PreviewDetails }) {
+  const { t } = useTranslation("chat");
   const httpUrl = details.absolutePath ? getFileHttpUrl(details.absolutePath) : "";
   const [iframeKey, setIframeKey] = useState(0);
   const [fullscreen, setFullscreen] = useState(false);
@@ -34,7 +36,7 @@ export const PdfCard = memo(function PdfCard({ details }: { details: PreviewDeta
           </span>
         </div>
         <div className="px-3 py-4 text-xs text-gray-400 dark:text-gray-500 italic">
-          No path available for preview
+          {t("noPathForPreview")}
         </div>
       </div>
     );
@@ -45,7 +47,7 @@ export const PdfCard = memo(function PdfCard({ details }: { details: PreviewDeta
       <button
         onClick={handleRetry}
         className="p-0.5 rounded text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors"
-        title="重新加载"
+        title={t("reloadTitle")}
       >
         <RefreshCw className="w-3 h-3" />
       </button>
@@ -53,7 +55,7 @@ export const PdfCard = memo(function PdfCard({ details }: { details: PreviewDeta
         <button
           onClick={() => setFullscreen(true)}
           className="p-0.5 rounded text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors"
-          title="全屏展开"
+          title={t("fullscreenTitle")}
         >
           <Maximize2 className="w-3 h-3" />
         </button>
@@ -61,7 +63,7 @@ export const PdfCard = memo(function PdfCard({ details }: { details: PreviewDeta
       <button
         onClick={() => copy(httpUrl)}
         className="p-0.5 rounded text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors"
-        title="复制链接"
+        title={t("copyLinkTitle")}
       >
         {copied ? (
           <Check className="w-3 h-3 text-green-500 dark:text-green-400" />
@@ -72,7 +74,7 @@ export const PdfCard = memo(function PdfCard({ details }: { details: PreviewDeta
       <button
         onClick={() => window.open(httpUrl, "_blank", "noopener,noreferrer")}
         className="p-0.5 rounded text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors"
-        title="在新窗口打开"
+        title={t("openInNewWindowTitle")}
       >
         <ExternalLink className="w-3 h-3" />
       </button>
@@ -80,7 +82,7 @@ export const PdfCard = memo(function PdfCard({ details }: { details: PreviewDeta
         <button
           onClick={() => setFullscreen(false)}
           className="p-0.5 rounded text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-gray-700/50 transition-colors ml-1"
-          title="关闭 (Esc)"
+          title={t("closeEscTitle")}
         >
           <X className="w-3.5 h-3.5" />
         </button>

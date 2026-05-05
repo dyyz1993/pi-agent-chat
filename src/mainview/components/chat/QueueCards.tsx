@@ -1,8 +1,10 @@
 import { Zap, Clock, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useChatStore } from "../../stores/use-chat-store";
 
 export function QueueCards({ sessionId }: { sessionId: string }) {
+  const { t } = useTranslation("chat");
   const queue = useSessionStore((s) => s.queueBySession[sessionId]);
   const clearQueue = useChatStore((s) => s.clearQueue);
 
@@ -30,7 +32,7 @@ export function QueueCards({ sessionId }: { sessionId: string }) {
         <button
           onClick={clearQueue}
           className="shrink-0 p-1 rounded hover:bg-gray-700/60 text-gray-500 hover:text-gray-300 transition-colors"
-          title={`撤销 ${total} 条排队消息`}
+          title={t("revokeQueuedMessages", { count: total })}
         >
           <X className="w-3.5 h-3.5" />
         </button>

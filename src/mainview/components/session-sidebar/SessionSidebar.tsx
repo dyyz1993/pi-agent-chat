@@ -15,6 +15,7 @@ import {
   Pin,
   PinOff,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useSubagentStore } from "../../stores/use-subagent-store";
 import { useGitStore } from "../../stores/use-git-store";
@@ -29,6 +30,7 @@ interface SessionSidebarProps {
 }
 
 export function SessionSidebar(_props: SessionSidebarProps) {
+  const { t } = useTranslation("sidebar");
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
@@ -57,7 +59,7 @@ export function SessionSidebar(_props: SessionSidebarProps) {
           <Search className="w-3 h-3 shrink-0" />
           <input
             data-testid="session-search"
-            placeholder="搜索会话..."
+            placeholder={t("searchSessions")}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="bg-transparent outline-none flex-1 min-w-0 placeholder:text-gray-400 dark:placeholder:text-gray-600"
@@ -86,6 +88,7 @@ function SessionList({
   onToggleExpand: (id: string) => void;
   onExpandSession: (id: string) => void;
 }) {
+  const { t } = useTranslation(["sidebar", "common"]);
   const rawSessions = useSessionStore((s) => {
     const tab = s.projectTabs.find((t) => t.id === s.activeProjectId);
     if (!tab) return EMPTY;
@@ -170,7 +173,7 @@ function SessionList({
     return (
       <div className="flex-1 flex items-center justify-center text-gray-400 dark:text-gray-600 text-xs p-4">
         <div className="w-3 h-3 border-2 border-gray-300 dark:border-gray-600 border-t-transparent rounded-full animate-spin mr-2" />
-        加载中...
+        {t("common:loading")}
       </div>
     );
   }
@@ -178,7 +181,7 @@ function SessionList({
   if (rootSessions.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center text-gray-400 dark:text-gray-600 text-xs p-4 text-center">
-        {searchQuery ? "无匹配会话" : "暂无会话"}
+        {searchQuery ? t("sidebar:noMatchingSessions") : t("sidebar:noSessions")}
       </div>
     );
   }
@@ -200,13 +203,14 @@ function SessionList({
 }
 
 function StatusBadge({ sessionId }: { sessionId: string }) {
+  const { t } = useTranslation("common");
   const status = useSessionStore((s) => s.sessionStatusMap[sessionId]);
 
   if (status === "streaming" || status === "compacting") {
     return (
       <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/15 text-amber-400 border border-amber-500/20">
         <span className="w-1 h-1 rounded-full bg-amber-400 animate-pulse" />
-        工作中
+        {t("working")}
       </span>
     );
   }
@@ -214,7 +218,7 @@ function StatusBadge({ sessionId }: { sessionId: string }) {
     return (
       <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-red-500/15 text-red-400 border border-red-500/20">
         <span className="w-1 h-1 rounded-full bg-red-400" />
-        需要协助
+        {t("needHelp")}
       </span>
     );
   }
@@ -222,14 +226,14 @@ function StatusBadge({ sessionId }: { sessionId: string }) {
     return (
       <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-red-500/15 text-red-400 border border-red-500/20">
         <span className="w-1 h-1 rounded-full bg-red-400 animate-pulse" />
-        重试中
+        {t("retrying")}
       </span>
     );
   }
   return (
     <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
       <span className="w-1 h-1 rounded-full bg-emerald-400" />
-      空闲
+      {t("idle")}
     </span>
   );
 }
@@ -249,25 +253,26 @@ function WorkspaceBadge({
 }
 
 function SubagentStatusBadge({ sub }: { sub: SubagentSessionInfo }) {
+  const { t } = useTranslation("common");
   if (sub.exitCode === 0) {
     return (
       <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
         <span className="w-1 h-1 rounded-full bg-emerald-400" />
-        空闲
+        {t("idle")}
       </span>
     );
   }
   if (sub.error || (sub.exitCode !== undefined && sub.exitCode !== 0)) {
     return (
       <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-red-500/15 text-red-400 border border-red-500/20">
-        出错
+        {t("error")}
       </span>
     );
   }
   return (
     <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/15 text-amber-400 border border-amber-500/20">
       <span className="w-1 h-1 rounded-full bg-amber-400 animate-pulse" />
-      运行中
+      {t("running")}
     </span>
   );
 }
@@ -285,6 +290,7 @@ function SessionItem({
   isExpanded: boolean;
   onToggleExpand: () => void;
 }) {
+  const { t } = useTranslation(["sidebar", "common"]);
   const setActiveSession = useSessionStore((s) => s.setActiveSession);
   const renameSession = useSessionStore((s) => s.renameSession);
   const deleteSession = useSessionStore((s) => s.deleteSession);
@@ -360,7 +366,11 @@ function SessionItem({
   const handleDelete = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      if (confirm(`确定删除会话 "${session.name || "空会话"}" 吗？`)) {
+      if (
+        confirm(
+          t("sidebar:deleteSessionConfirm", { name: session.name || t("sidebar:emptySession") }),
+        )
+      ) {
         deleteSession(session.sessionId);
       }
     },
@@ -375,7 +385,7 @@ function SessionItem({
     [session.sessionId, togglePinSession],
   );
 
-  const displayName = session.name || session.firstMessage || "空会话";
+  const displayName = session.name || session.firstMessage || t("sidebar:emptySession");
 
   return (
     <div>
@@ -451,28 +461,28 @@ function SessionItem({
               <button
                 onClick={handleTogglePin}
                 className={`p-1 rounded hover:bg-gray-700 ${session.pinned ? "text-indigo-400" : "text-gray-500 hover:text-gray-300"}`}
-                title={session.pinned ? "取消置顶" : "置顶"}
+                title={session.pinned ? t("sidebar:unpin") : t("sidebar:pin")}
               >
                 {session.pinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
               </button>
               <button
                 onClick={handleCopyId}
                 className="p-1 rounded hover:bg-gray-700 text-gray-500 hover:text-gray-300"
-                title="复制 ID"
+                title={t("sidebar:copyId")}
               >
                 <Copy className="w-3 h-3" />
               </button>
               <button
                 onClick={handleStartRename}
                 className="p-1 rounded hover:bg-gray-700 text-gray-500 hover:text-gray-300"
-                title="重命名"
+                title={t("common:rename")}
               >
                 <Pencil className="w-3 h-3" />
               </button>
               <button
                 onClick={handleDelete}
                 className="p-1 rounded hover:bg-red-900/50 text-gray-500 hover:text-red-400"
-                title="删除"
+                title={t("common:delete")}
               >
                 <Trash2 className="w-3 h-3" />
               </button>
@@ -486,7 +496,7 @@ function SessionItem({
           {loadingSubs && (
             <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] text-gray-600">
               <Loader2 className="w-3 h-3 animate-spin" />
-              加载子代理...
+              {t("sidebar:loadingSubagents")}
             </div>
           )}
           {!loadingSubs &&
@@ -518,6 +528,7 @@ function SubagentItem({
   sub: SubagentSessionInfo;
   parentSessionId: string;
 }) {
+  const { t } = useTranslation(["sidebar", "common"]);
   const activeSubId = useSubagentStore((s) => s.activeSubsessionId);
   const isActive = activeSubId === sub.sessionId;
   const [isEditing, setIsEditing] = useState(false);
@@ -578,7 +589,13 @@ function SubagentItem({
   const handleDelete = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      if (confirm(`确定删除子代理 "${sub.description || sub.instruction.slice(0, 30)}" 吗？`)) {
+      if (
+        confirm(
+          t("sidebar:deleteSubagentConfirm", {
+            name: sub.description || sub.instruction.slice(0, 30),
+          }),
+        )
+      ) {
         const { subsessionsByParent } = useSubagentStore.getState();
         for (const [path, subs] of Object.entries(subsessionsByParent)) {
           if (subs.some((s) => s.sessionId === sub.sessionId)) {
@@ -642,21 +659,21 @@ function SubagentItem({
           <button
             onClick={handleCopyId}
             className="p-1 rounded hover:bg-gray-700 text-gray-500 hover:text-gray-300"
-            title="复制 ID"
+            title={t("sidebar:copyId")}
           >
             <Copy className="w-3 h-3" />
           </button>
           <button
             onClick={handleStartRename}
             className="p-1 rounded hover:bg-gray-700 text-gray-500 hover:text-gray-300"
-            title="重命名"
+            title={t("common:rename")}
           >
             <Pencil className="w-3 h-3" />
           </button>
           <button
             onClick={handleDelete}
             className="p-1 rounded hover:bg-red-900/50 text-gray-500 hover:text-red-400"
-            title="删除"
+            title={t("common:delete")}
           >
             <Trash2 className="w-3 h-3" />
           </button>

@@ -10,6 +10,7 @@ import {
   Loader2,
   Zap,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { UIInteractionBlock } from "../../../types";
 import { getUIMethodIcon } from "../tool-icon-map";
 import { useUIDialogStore } from "../../../stores/use-ui-dialog-store";
@@ -25,6 +26,7 @@ const BG_MAP: Record<string, string> = {
 };
 
 function CardShell({ block, children }: { block: UIBlock; children: React.ReactNode }) {
+  const { t } = useTranslation("chat");
   const { icon: Icon, color, label } = getUIMethodIcon(block.method);
   const isPending = block.status === "pending";
   const isResponded = block.status === "responded";
@@ -41,7 +43,7 @@ function CardShell({ block, children }: { block: UIBlock; children: React.ReactN
         {isPending && (
           <span className="text-amber-600 dark:text-amber-400 animate-pulse text-[10px] flex items-center gap-1">
             <Loader2 className="w-2.5 h-2.5 animate-spin" />
-            等待响应
+            {t("uiCard.waitingResponse")}
           </span>
         )}
         {isResponded && <CheckCircle className="w-3 h-3 text-emerald-500 shrink-0 ml-auto" />}
@@ -58,6 +60,7 @@ function CardShell({ block, children }: { block: UIBlock; children: React.ReactN
 }
 
 export const ConfirmCard = memo(function ConfirmCard({ block }: { block: UIBlock }) {
+  const { t } = useTranslation("chat");
   const respondById = useUIDialogStore((s) => s.respondById);
   const dismissById = useUIDialogStore((s) => s.dismissById);
   const isPending = block.status === "pending";
@@ -65,8 +68,8 @@ export const ConfirmCard = memo(function ConfirmCard({ block }: { block: UIBlock
   const responseText =
     block.status === "responded" && block.response
       ? block.response.confirmed
-        ? "已确认"
-        : "已拒绝"
+        ? t("uiCard.confirmed")
+        : t("uiCard.rejected")
       : null;
 
   return (
@@ -78,14 +81,14 @@ export const ConfirmCard = memo(function ConfirmCard({ block }: { block: UIBlock
             className="flex-1 flex items-center justify-center gap-1 py-1 text-[11px] rounded bg-emerald-100 dark:bg-emerald-600/20 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-600/30 transition-colors"
           >
             <CheckCircle className="w-3 h-3" />
-            确认
+            {t("common:confirm")}
           </button>
           <button
             onClick={() => dismissById(block.id)}
             className="flex-1 flex items-center justify-center gap-1 py-1 text-[11px] rounded bg-red-100 dark:bg-red-600/15 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-600/25 transition-colors"
           >
             <XCircle className="w-3 h-3" />
-            取消
+            {t("common:cancel")}
           </button>
         </div>
       ) : responseText ? (
@@ -102,6 +105,7 @@ export const ConfirmCard = memo(function ConfirmCard({ block }: { block: UIBlock
 });
 
 export const SelectCard = memo(function SelectCard({ block }: { block: UIBlock }) {
+  const { t } = useTranslation("chat");
   const respondById = useUIDialogStore((s) => s.respondById);
   const dismissById = useUIDialogStore((s) => s.dismissById);
   const isPending = block.status === "pending";
@@ -181,7 +185,7 @@ export const SelectCard = memo(function SelectCard({ block }: { block: UIBlock }
               <span
                 className={`text-[11px] ${customSelected ? "text-sky-700 dark:text-sky-300" : "text-gray-600 dark:text-gray-400"}`}
               >
-                自定义答案
+                {t("uiCard.customAnswer")}
               </span>
             </div>
             {customSelected && (
@@ -189,7 +193,7 @@ export const SelectCard = memo(function SelectCard({ block }: { block: UIBlock }
                 type="text"
                 value={customValue}
                 onChange={(e) => setCustomValue(e.target.value)}
-                placeholder={block.placeholder ?? "输入你的答案"}
+                placeholder={block.placeholder ?? t("uiCard.inputYourAnswer")}
                 className="w-full ml-6 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-2 py-1 text-[11px] text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-600 focus:outline-none focus:border-amber-500/50"
                 onKeyDown={(e) =>
                   e.key === "Enter" &&
@@ -208,13 +212,13 @@ export const SelectCard = memo(function SelectCard({ block }: { block: UIBlock }
                 disabled={checkedSet.size === 0 && !customValue.trim()}
                 className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md bg-amber-100 dark:bg-amber-600/20 text-amber-600 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-600/30 disabled:opacity-40 disabled:cursor-not-allowed text-[11px] transition-colors"
               >
-                提交
+                {t("common:submit")}
               </button>
               <button
                 onClick={() => dismissById(block.id)}
                 className="flex items-center justify-center px-3 py-1.5 rounded-md bg-gray-200/60 dark:bg-gray-700/30 text-gray-600 dark:text-gray-400 hover:bg-gray-300/60 dark:hover:bg-gray-600/50 text-[11px] transition-colors"
               >
-                忽略
+                {t("common:dismiss")}
               </button>
             </div>
           </div>
@@ -269,7 +273,7 @@ export const SelectCard = memo(function SelectCard({ block }: { block: UIBlock }
             <span
               className={`text-[11px] ${customSelected || selectedIdx === -1 ? "text-sky-700 dark:text-sky-300" : "text-gray-600 dark:text-gray-400"}`}
             >
-              自定义答案
+              {t("uiCard.customAnswer")}
             </span>
           </div>
           {customSelected && (
@@ -277,7 +281,7 @@ export const SelectCard = memo(function SelectCard({ block }: { block: UIBlock }
               type="text"
               value={customValue}
               onChange={(e) => setCustomValue(e.target.value)}
-              placeholder={block.placeholder ?? "输入你的答案"}
+              placeholder={block.placeholder ?? t("uiCard.inputYourAnswer")}
               className="w-full ml-7 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-2 py-1 text-[11px] text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-600 focus:outline-none focus:border-amber-500/50"
               onKeyDown={(e) =>
                 e.key === "Enter" &&
@@ -296,13 +300,13 @@ export const SelectCard = memo(function SelectCard({ block }: { block: UIBlock }
               disabled={selectedIdx == null && !customValue.trim()}
               className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md bg-amber-100 dark:bg-amber-600/20 text-amber-600 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-600/30 disabled:opacity-40 disabled:cursor-not-allowed text-[11px] transition-colors"
             >
-              提交
+              {t("common:submit")}
             </button>
             <button
               onClick={() => dismissById(block.id)}
               className="flex items-center justify-center px-3 py-1.5 rounded-md bg-gray-200/60 dark:bg-gray-700/30 text-gray-600 dark:text-gray-400 hover:bg-gray-300/60 dark:hover:bg-gray-600/50 text-[11px] transition-colors"
             >
-              忽略
+              {t("common:dismiss")}
             </button>
           </div>
         </div>
@@ -316,7 +320,9 @@ export const SelectCard = memo(function SelectCard({ block }: { block: UIBlock }
       <CardShell block={block}>
         <div className="px-3 pb-1.5">
           <span className="text-[11px] text-sky-600 dark:text-sky-400">
-            {isMulti ? `已选 (${(responseValue as string[]).length}): ` : "选中: "}
+            {isMulti
+              ? t("uiCard.selected", { count: (responseValue as string[]).length })
+              : t("uiCard.selectedSingle")}
             {display}
           </span>
         </div>
@@ -328,6 +334,7 @@ export const SelectCard = memo(function SelectCard({ block }: { block: UIBlock }
 });
 
 export const InputCard = memo(function InputCard({ block }: { block: UIBlock }) {
+  const { t } = useTranslation("chat");
   const respondById = useUIDialogStore((s) => s.respondById);
   const isPending = block.status === "pending";
   const [value, setValue] = useState("");
@@ -343,7 +350,7 @@ export const InputCard = memo(function InputCard({ block }: { block: UIBlock }) 
             type="text"
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            placeholder={block.placeholder ?? "请输入..."}
+            placeholder={block.placeholder ?? t("uiCard.pleaseInput")}
             className="flex-1 bg-white dark:bg-gray-800/60 border border-gray-300 dark:border-gray-700/50 rounded px-2 py-1 text-[11px] text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-600 focus:outline-none focus:border-amber-500/50"
             onKeyDown={(e) => {
               if (e.key === "Enter") respondById(block.id, { value });
@@ -359,7 +366,8 @@ export const InputCard = memo(function InputCard({ block }: { block: UIBlock }) 
       ) : responseValue != null ? (
         <div className="px-3 pb-1.5">
           <span className="text-[11px] text-amber-600 dark:text-amber-400">
-            输入: {responseValue || "(空)"}
+            {t("uiCard.inputColon")}
+            {responseValue || t("uiCard.empty")}
           </span>
         </div>
       ) : null}
@@ -368,6 +376,7 @@ export const InputCard = memo(function InputCard({ block }: { block: UIBlock }) 
 });
 
 export const EditorCard = memo(function EditorCard({ block }: { block: UIBlock }) {
+  const { t } = useTranslation("chat");
   const respondById = useUIDialogStore((s) => s.respondById);
   const dismissById = useUIDialogStore((s) => s.dismissById);
   const isPending = block.status === "pending";
@@ -386,7 +395,7 @@ export const EditorCard = memo(function EditorCard({ block }: { block: UIBlock }
           <textarea
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            placeholder={block.placeholder ?? "请编辑..."}
+            placeholder={block.placeholder ?? t("uiCard.pleaseEdit")}
             rows={4}
             className="w-full bg-white dark:bg-gray-800/60 border border-gray-300 dark:border-gray-700/50 rounded px-2 py-1 text-[11px] text-gray-800 dark:text-gray-200 font-mono placeholder:text-gray-400 dark:placeholder:text-gray-600 focus:outline-none focus:border-violet-500/50 resize-y"
           />
@@ -396,14 +405,14 @@ export const EditorCard = memo(function EditorCard({ block }: { block: UIBlock }
               className="flex-1 flex items-center justify-center gap-1 py-1 text-[11px] rounded bg-violet-100 dark:bg-violet-600/20 text-violet-600 dark:text-violet-400 hover:bg-violet-200 dark:hover:bg-violet-600/30 transition-colors"
             >
               <Send className="w-3 h-3" />
-              提交
+              {t("common:submit")}
             </button>
             <button
               onClick={() => dismissById(block.id)}
               className="flex items-center justify-center gap-1 px-2 py-1 text-[11px] rounded bg-gray-200/60 dark:bg-gray-600/15 text-gray-600 dark:text-gray-400 hover:bg-gray-300/60 dark:hover:bg-gray-600/25 transition-colors"
             >
               <X className="w-3 h-3" />
-              取消
+              {t("common:cancel")}
             </button>
           </div>
         </div>
@@ -411,7 +420,7 @@ export const EditorCard = memo(function EditorCard({ block }: { block: UIBlock }
         <div className="px-3 pb-1.5">
           <details>
             <summary className="text-[11px] text-violet-600 dark:text-violet-400 cursor-pointer hover:text-violet-500 dark:hover:text-violet-300">
-              编辑内容 ({responseValue.length} 字符)
+              {t("uiCard.editContent", { count: responseValue.length })}
             </summary>
             <pre className="mt-1 text-[11px] text-gray-800 dark:text-gray-300 bg-gray-100 dark:bg-gray-800/40 rounded p-2 max-h-40 overflow-auto whitespace-pre-wrap font-mono">
               {responseValue}
@@ -420,7 +429,9 @@ export const EditorCard = memo(function EditorCard({ block }: { block: UIBlock }
         </div>
       ) : wasDismissed ? (
         <div className="px-3 pb-1.5">
-          <span className="text-[11px] text-gray-400 dark:text-gray-500">已取消编辑</span>
+          <span className="text-[11px] text-gray-400 dark:text-gray-500">
+            {t("uiCard.editCancelled")}
+          </span>
         </div>
       ) : null}
     </CardShell>
@@ -428,6 +439,7 @@ export const EditorCard = memo(function EditorCard({ block }: { block: UIBlock }
 });
 
 export const NotifyCard = memo(function NotifyCard({ block }: { block: UIBlock }) {
+  const { t } = useTranslation("chat");
   const notifyColors: Record<string, string> = {
     info: "text-cyan-400",
     warning: "text-amber-400",
@@ -440,7 +452,7 @@ export const NotifyCard = memo(function NotifyCard({ block }: { block: UIBlock }
       <div className="px-3 pb-1.5">
         <span className={`text-[11px] ${colorClass}`}>
           {block.notifyType === "warning" ? "⚠️ " : block.notifyType === "error" ? "❌ " : "ℹ️ "}
-          {block.message ?? "通知已发送"}
+          {block.message ?? t("uiCard.notificationSent")}
         </span>
       </div>
     </CardShell>
@@ -448,6 +460,7 @@ export const NotifyCard = memo(function NotifyCard({ block }: { block: UIBlock }
 });
 
 export const RespondUICard = memo(function RespondUICard({ block }: { block: UIBlock }) {
+  const { t } = useTranslation("chat");
   const { icon: Icon, color } = getUIMethodIcon("respondUI");
 
   return (
@@ -457,7 +470,9 @@ export const RespondUICard = memo(function RespondUICard({ block }: { block: UIB
     >
       <div className="px-3 py-1.5 pl-2 flex items-center gap-2 text-xs">
         <Icon className={`w-3.5 h-3.5 shrink-0 ${color}`} />
-        <span className={`font-medium ${color}`}>{block.title ?? "异步响应注入"}</span>
+        <span className={`font-medium ${color}`}>
+          {block.title ?? t("uiCard.asyncResponseInjection")}
+        </span>
         <Zap className="w-3 h-3 text-orange-500 dark:text-orange-400 shrink-0 ml-auto" />
       </div>
       {block.message && (

@@ -11,6 +11,7 @@ import {
   Archive,
   type LucideIcon,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { ChatMessage } from "../../types";
 import { useChatNavStore } from "../../stores/use-chat-nav-store";
 import { useTurnStore, EMPTY_SET } from "../../stores/use-turn-store";
@@ -33,7 +34,7 @@ type NavItem = {
   subs: SubItem[];
 };
 
-function buildNavItems(messages: ChatMessage[]): NavItem[] {
+function buildNavItems(messages: ChatMessage[], t: (key: string) => string): NavItem[] {
   return messages.map((msg) => {
     if (msg.role === "user") {
       return { id: msg.id, role: "user" as const, icon: User, color: "text-indigo-400", subs: [] };
@@ -86,7 +87,7 @@ function buildNavItems(messages: ChatMessage[]): NavItem[] {
       const blockId = `${msg.id}-${bi}`;
 
       if (b.type === "text") {
-        subs.push({ icon: FileText, color: "text-gray-400", label: "文本", blockId });
+        subs.push({ icon: FileText, color: "text-gray-400", label: t("sideNav.text"), blockId });
       } else if (b.type === "toolExecution" && !seenTools.has(b.toolName)) {
         seenTools.add(b.toolName);
         let ti = getToolIcon(b.toolName);
@@ -109,7 +110,7 @@ function buildNavItems(messages: ChatMessage[]): NavItem[] {
           case "bash_background_exit":
             icon = Terminal;
             color = "text-cyan-400";
-            label = "后台进程";
+            label = t("sideNav.backgroundProcess");
             break;
           case "lsp_diagnostics":
             icon = ScanSearch;
@@ -120,7 +121,7 @@ function buildNavItems(messages: ChatMessage[]): NavItem[] {
               const memIcon = getCustomTypeIcon(b.customType);
               icon = memIcon.icon;
               color = memIcon.color;
-              label = "Memory";
+              label = t("sideNav.memory");
             }
             break;
         }
@@ -233,6 +234,7 @@ export function SideNav({
   messages: ChatMessage[];
   onNavDotClick: (navId: string) => void;
 }) {
+  const { t } = useTranslation("chat");
   const sessionId = useSessionStore((s) => s.activeSessionId);
   const selectedNavId = useTurnStore(
     useCallback(
@@ -249,7 +251,7 @@ export function SideNav({
   );
   const toggleItemSelect = useChatNavStore((s) => s.toggleItemSelect);
 
-  const navItems = useMemo(() => buildNavItems(messages), [messages]);
+  const navItems = useMemo(() => buildNavItems(messages, t), [messages, t]);
 
   const handleDotClick = useCallback(
     (id: string) => {
@@ -367,7 +369,7 @@ export function SideNav({
 
       {selectedItems.size > 0 && (
         <div className="px-1 py-1 text-[10px] text-red-400 text-center border-t border-red-500/20 bg-red-950/20">
-          已选 {selectedItems.size}
+          {t("sideNav.selected", { count: selectedItems.size })}
         </div>
       )}
     </div>

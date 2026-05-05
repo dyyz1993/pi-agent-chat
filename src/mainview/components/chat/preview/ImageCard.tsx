@@ -1,10 +1,12 @@
 import { memo, useState, useCallback } from "react";
 import { Image as ImageIcon, AlertCircle } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { PreviewDetails } from "./types";
 import { getFileHttpUrl, formatFileSize } from "./types";
 import { CardHeader } from "./CardHeader";
 
 export const ImageCard = memo(function ImageCard({ details }: { details: PreviewDetails }) {
+  const { t } = useTranslation("chat");
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
@@ -32,20 +34,20 @@ export const ImageCard = memo(function ImageCard({ details }: { details: Preview
       <div className="relative bg-gray-100 dark:bg-black/30 flex items-center justify-center min-h-[120px] max-h-[400px]">
         {!loaded && !error && (
           <div className="text-gray-400 dark:text-gray-500 text-xs animate-pulse">
-            Loading image...
+            {t("loadingImage")}
           </div>
         )}
         {error ? (
           <div className="flex flex-col items-center gap-2 py-6">
             <div className="flex items-center gap-1.5 text-red-500 dark:text-red-400 text-xs">
               <AlertCircle className="w-3.5 h-3.5" />
-              <span>Failed to load image</span>
+              <span>{t("failedToLoadImage")}</span>
             </div>
             <button
               onClick={handleRetry}
               className="text-[10px] text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 underline underline-offset-2 transition-colors"
             >
-              Retry
+              {t("retry")}
             </button>
           </div>
         ) : (
@@ -64,6 +66,7 @@ export const ImageCard = memo(function ImageCard({ details }: { details: Preview
 });
 
 function FallbackCard({ details }: { details: PreviewDetails }) {
+  const { t } = useTranslation("chat");
   return (
     <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700/40 bg-white dark:bg-gray-900/60">
       <CardHeader
@@ -71,7 +74,7 @@ function FallbackCard({ details }: { details: PreviewDetails }) {
         label={details.title ?? details.source}
       />
       <div className="px-3 py-4 text-xs text-gray-400 dark:text-gray-500 italic">
-        No path available for preview
+        {t("noPathForPreview")}
       </div>
     </div>
   );

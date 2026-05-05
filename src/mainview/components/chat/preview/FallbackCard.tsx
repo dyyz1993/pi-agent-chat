@@ -1,10 +1,12 @@
 import { memo } from "react";
 import { AlertCircle, FileQuestion } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { PreviewDetails } from "./types";
 import { formatFileSize } from "./types";
 import { CardHeader } from "./CardHeader";
 
 export const FallbackCard = memo(function FallbackCard({ details }: { details: PreviewDetails }) {
+  const { t } = useTranslation("chat");
   const hasError = details.status === "error" || details.status === "not_found";
 
   return (
@@ -25,13 +27,17 @@ export const FallbackCard = memo(function FallbackCard({ details }: { details: P
           <div className="text-red-500 dark:text-red-400">{details.error}</div>
         ) : (
           <>
-            <div className="text-gray-600 dark:text-gray-400">Type: {details.resourceType}</div>
+            <div className="text-gray-600 dark:text-gray-400">
+              {t("typeLabel", { type: details.resourceType })}
+            </div>
             {details.mimeType && (
-              <div className="text-gray-400 dark:text-gray-500">MIME: {details.mimeType}</div>
+              <div className="text-gray-400 dark:text-gray-500">
+                {t("mimeLabel", { mime: details.mimeType })}
+              </div>
             )}
             {details.size != null && (
               <div className="text-gray-400 dark:text-gray-500">
-                Size: {formatFileSize(details.size)}
+                {t("sizeLabel", { size: formatFileSize(details.size) })}
               </div>
             )}
           </>

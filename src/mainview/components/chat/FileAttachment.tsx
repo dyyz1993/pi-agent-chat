@@ -1,5 +1,6 @@
 import { useRef, useCallback } from "react";
 import { Paperclip, ImageIcon, X, Loader2, AlertCircle } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useAttachmentStore, type AttachmentFile } from "../../stores/use-attachment-store";
 import { formatFileSize } from "../chat/preview/types";
 
@@ -54,6 +55,7 @@ export function AttachmentBar() {
 }
 
 export function AttachmentButtons() {
+  const { t } = useTranslation("chat");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const addFiles = useAttachmentStore((s) => s.addFiles);
@@ -92,7 +94,7 @@ export function AttachmentButtons() {
       <button
         onClick={() => fileInputRef.current?.click()}
         className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
-        title="添加附件"
+        title={t("fileAttachment.addAttachment")}
       >
         <Paperclip className="w-4 h-4" />
       </button>
@@ -108,7 +110,7 @@ export function AttachmentButtons() {
       <button
         onClick={() => imageInputRef.current?.click()}
         className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
-        title="添加图片"
+        title={t("fileAttachment.addImage")}
       >
         <ImageIcon className="w-4 h-4" />
       </button>

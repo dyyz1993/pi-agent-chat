@@ -1,4 +1,5 @@
 import { Pin, Plus, PanelLeft } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useGitStore } from "../../stores/use-git-store";
@@ -12,6 +13,7 @@ interface LeftSidebarProps {
 }
 
 export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
+  const { t } = useTranslation("sidebar");
   const sessionPanel = useLayoutStore((s) => s.sessionPanel);
   const toggleSession = useLayoutStore((s) => s.toggleSession);
 
@@ -35,7 +37,7 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
       <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200/80 dark:border-gray-800/80 shrink-0">
         <div className="flex items-center gap-1.5">
           <span className="text-xs font-semibold text-gray-800 dark:text-gray-200 tracking-wide">
-            会话
+            {t("sessions")}
           </span>
           <span className="text-[10px] text-gray-400 dark:text-gray-600 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded-full font-mono">
             {useSessionCount()}
@@ -74,7 +76,7 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
             }}
             disabled={isCreating}
             className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed relative"
-            title="新建会话"
+            title={t("newSession")}
           >
             <Plus className="w-3.5 h-3.5" />
             {isCreating && (
@@ -89,7 +91,7 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
               toggleSession();
             }}
             className={`p-1 rounded transition-colors max-sm:hidden ${isPinned ? "text-indigo-400" : "text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400"}`}
-            title={isPinned ? "取消固定" : "固定面板"}
+            title={isPinned ? t("unpinPanel") : t("pinPanel")}
           >
             <Pin className="w-3.5 h-3.5" fill={isPinned ? "currentColor" : "none"} />
           </button>
@@ -100,7 +102,7 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
                 hideSession();
               }}
               className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-              title="关闭面板"
+              title={t("closePanel")}
             >
               <PanelLeft className="w-3.5 h-3.5" />
             </button>
@@ -118,7 +120,7 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
         <div className="fixed bottom-16 left-4 z-50 bg-green-600/90 text-white px-4 py-2 rounded-md shadow-lg animate-slide-in-left">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-white" />
-            <span className="text-sm">会话创建成功</span>
+            <span className="text-sm">{t("sessionCreated")}</span>
           </div>
         </div>
       )}
@@ -127,7 +129,7 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
         <div className="fixed bottom-16 left-4 z-50 bg-red-600/90 text-white px-4 py-2 rounded-md shadow-lg animate-slide-in-left max-w-md">
           <div className="flex items-start gap-2">
             <div className="w-2 h-2 rounded-full bg-white mt-0.5 shrink-0" />
-            <span className="text-sm">创建失败: {showErrorToast}</span>
+            <span className="text-sm">{t("createFailed", { error: showErrorToast })}</span>
           </div>
         </div>
       )}

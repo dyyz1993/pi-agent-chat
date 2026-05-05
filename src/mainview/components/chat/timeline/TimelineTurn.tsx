@@ -9,6 +9,7 @@ import {
   MessageSquare,
   Check,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { TimelineTurn as TTurn, TimelineItem } from "../../../types";
 import { getItemId } from "../../../lib/turn-aggregator";
 import { useChatNavStore } from "../../../stores/use-chat-nav-store";
@@ -24,6 +25,7 @@ export const TimelineTurn = memo(function TimelineTurn({
   isLast: _isLast,
 }: TimelineTurnProps) {
   void _isLast;
+  const { t } = useTranslation(["chat", "common"]);
   const { copied: turnCopied, copy: copyTurn } = useClipboard();
   const collapsed = useChatNavStore(
     useCallback(
@@ -71,9 +73,9 @@ export const TimelineTurn = memo(function TimelineTurn({
           <button
             onClick={toggleCollapse}
             className="shrink-0 p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors"
-            title={collapsed ? "展开" : "折叠"}
+            title={collapsed ? t("chat:expand") : t("chat:collapse")}
             aria-expanded={!collapsed}
-            aria-label={collapsed ? "展开回合" : "折叠回合"}
+            aria-label={collapsed ? t("chat:expandTurn") : t("chat:collapseTurn")}
           >
             {collapsed ? (
               <ChevronRight size={13} className="text-gray-500" />
@@ -101,14 +103,14 @@ export const TimelineTurn = memo(function TimelineTurn({
 
           {/* Streaming indicator */}
           {turn.isStreaming && (
-            <span className="text-[10px] text-blue-400 animate-pulse">streaming</span>
+            <span className="text-[10px] text-blue-400 animate-pulse">{t("chat:streaming")}</span>
           )}
 
           {/* Turn action buttons (visible on hover) */}
           <div className="flex items-center gap-0.5 opacity-0 group-hover/turn:opacity-100 transition-opacity ml-auto shrink-0">
             <TurnActionButton
               icon={turnCopied ? <Check size={12} /> : <Copy size={12} />}
-              label={turnCopied ? "已复制" : "复制"}
+              label={turnCopied ? t("common:copied") : t("common:copy")}
               onClick={() => {
                 const parts: string[] = [];
                 if (turn.userText) parts.push(turn.userText);
@@ -119,22 +121,26 @@ export const TimelineTurn = memo(function TimelineTurn({
               }}
               active={turnCopied}
             />
-            <TurnActionButton icon={<GitBranch size={12} />} label="Fork" onClick={() => {}} />
+            <TurnActionButton
+              icon={<GitBranch size={12} />}
+              label={t("chat:fork")}
+              onClick={() => {}}
+            />
             <TurnActionButton
               icon={<Trash2 size={12} />}
-              label="删除"
+              label={t("common:delete")}
               onClick={toggleSelectAll}
               active={isTurnSelected}
             />
             <TurnActionButton
               icon={<RotateCcw size={12} />}
-              label="回滚代码"
+              label={t("chat:rollbackCode")}
               onClick={() => useChatNavStore.getState().openRollbackOverlay("code")}
               variant="warning"
             />
             <TurnActionButton
               icon={<MessageSquare size={12} />}
-              label="回滚聊天"
+              label={t("chat:rollbackChat")}
               onClick={() => useChatNavStore.getState().openRollbackOverlay("chat")}
               variant="info"
             />
@@ -267,6 +273,7 @@ function ItemCheckbox({ checked, onChange }: { checked: boolean; onChange: () =>
 }
 
 function AssistantTextBlock({ text, isStreaming }: { text: string; isStreaming?: boolean }) {
+  const { t } = useTranslation(["chat", "common"]);
   const { copied, copy } = useClipboard();
 
   if (isStreaming) {
@@ -286,7 +293,7 @@ function AssistantTextBlock({ text, isStreaming }: { text: string; isStreaming?:
       <button
         onClick={() => copy(text)}
         className="absolute top-1.5 right-1.5 p-1 rounded opacity-0 group-hover/text:opacity-100 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all"
-        title={copied ? "已复制" : "复制文本"}
+        title={copied ? t("common:copied") : t("chat:copyText")}
       >
         <Copy
           size={11}

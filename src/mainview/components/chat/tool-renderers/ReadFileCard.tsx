@@ -1,5 +1,6 @@
 import { memo } from "react";
 import { FileText, Zap } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { ContentBlock } from "../../../types";
 
 type Block = Extract<ContentBlock, { type: "toolExecution" }>;
@@ -31,6 +32,7 @@ export const ReadFileCard = memo(function ReadFileCard({
 }) {
   const isRunning = block.status === "running";
   const isError = block.status === "error";
+  const { t } = useTranslation("chat");
 
   let filePath = "";
   try {
@@ -68,13 +70,13 @@ export const ReadFileCard = memo(function ReadFileCard({
         </span>
         {isRunning && (
           <span className="ml-auto text-[10px] text-blue-500 dark:text-blue-400 animate-pulse shrink-0">
-            reading
+            {t("readFile.reading")}
           </span>
         )}
       </div>
 
       <details className="group" open>
-        <summary className="sr-only">展开</summary>
+        <summary className="sr-only">{t("expand")}</summary>
         <div className="px-3 pb-2">
           {block.output ? (
             <pre className="text-[11px] text-gray-800 dark:text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-72 overflow-y-auto bg-gray-100 dark:bg-black/20 rounded px-2 py-1.5">
@@ -82,7 +84,7 @@ export const ReadFileCard = memo(function ReadFileCard({
             </pre>
           ) : isRunning ? (
             <div className="text-[11px] text-gray-400 dark:text-gray-600 italic py-1">
-              读取中...
+              {t("readFile.readingProgress")}
             </div>
           ) : null}
         </div>
@@ -101,7 +103,7 @@ export const ReadFileCard = memo(function ReadFileCard({
               <path d="M4.5 3l3 3-3 3" />
             </svg>
             <Zap className="w-3 h-3 shrink-0" />
-            <span>Rules Loaded</span>
+            <span>{t("readFile.rulesLoaded")}</span>
             <span className="text-indigo-500 dark:text-indigo-600 ml-1">
               {rulesData.rulesMatched.length} rule{rulesData.rulesMatched.length !== 1 ? "s" : ""}
             </span>

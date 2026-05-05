@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { useTranslation } from "react-i18next";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useSubagentStore } from "../../stores/use-subagent-store";
 import type { SessionStatus, ContextUsage } from "../../types";
@@ -10,11 +11,11 @@ function formatTokens(tokens: number | null | undefined): string {
 }
 
 const STATUS_CONFIGS = {
-  streaming: { strokeClass: "text-yellow-400", animClass: "animate-pulse", label: "工作中" },
-  compacting: { strokeClass: "text-yellow-400", animClass: "animate-pulse", label: "工作中" },
-  permission: { strokeClass: "text-red-400", animClass: "", label: "需要协助" },
-  retrying: { strokeClass: "text-red-400", animClass: "animate-pulse", label: "重试中" },
-  idle: { strokeClass: "text-green-400", animClass: "", label: "空闲" },
+  streaming: { strokeClass: "text-yellow-400", animClass: "animate-pulse" },
+  compacting: { strokeClass: "text-yellow-400", animClass: "animate-pulse" },
+  permission: { strokeClass: "text-red-400", animClass: "" },
+  retrying: { strokeClass: "text-red-400", animClass: "animate-pulse" },
+  idle: { strokeClass: "text-green-400", animClass: "" },
 } as const;
 
 function statusConfig(status: SessionStatus | undefined) {
@@ -36,10 +37,12 @@ const ContextRing = memo(function ContextRing({
   percent,
   strokeClass,
   isWorking,
+  contextLabel,
 }: {
   percent: number;
   strokeClass: string;
   isWorking: boolean;
+  contextLabel: string;
 }) {
   const size = 18;
   const stroke = 2.5;
@@ -58,7 +61,7 @@ const ContextRing = memo(function ContextRing({
       aria-valuenow={Math.round(clamped * 100)}
       aria-valuemin={0}
       aria-valuemax={100}
-      aria-label={`上下文使用 ${Math.round(clamped * 100)}%`}
+      aria-label={contextLabel}
     >
       <circle
         cx={size / 2}
@@ -87,6 +90,7 @@ const ContextRing = memo(function ContextRing({
 });
 
 export const TokenStatusBar = memo(function TokenStatusBar({ sessionId }: { sessionId: string }) {
+  const { t } = useTranslation("chat");
   const activeSubId = useSubagentStore((s) => s.activeSubsessionId);
 
   const parentContext = useSessionStore((s) => s.sessionContextMap[sessionId]);
@@ -116,13 +120,20 @@ export const TokenStatusBar = memo(function TokenStatusBar({ sessionId }: { sess
 
   return (
     <div className="flex items-center gap-1.5">
-      <ContextRing percent={percent} strokeClass={config.strokeClass} isWorking={isWorking} />
-      <span>{activeSubId ? "子代理" : "已用"}</span>
+      <ContextRing
+        percent={percent}
+        strokeClass={config.strokeClass}
+        isWorking={isWorking}
+        contextLabel={t("tokenStatus.contextUsage", { percent: Math.round(percent * 100) })}
+      />
+      <span>{activeSubId ? t("tokenStatus.subagent") : t("tokenStatus.used")}</span>
       <span className="text-gray-500 dark:text-gray-400 font-medium">{used}</span>
       {contextUsage?.contextWindow ? (
         <>
           <span className="text-gray-300 dark:text-gray-700">/</span>
-          <span>可用 {available}</span>
+          <span>
+            {t("tokenStatus.available")} {available}
+          </span>
         </>
       ) : null}
     </div>

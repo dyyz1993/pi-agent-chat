@@ -1,5 +1,6 @@
 import { memo, useCallback, useMemo, useEffect, useRef } from "react";
 import { Pencil, AlertTriangle, FileText, Maximize2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { ContentBlock } from "../../../types";
 import { CachedReactMarkdown } from "../CachedReactMarkdown";
 import { useExpandStore } from "../../../stores/use-expand-store";
@@ -84,6 +85,7 @@ export const WriteFileCard = memo(function WriteFileCard({
   const isError = block.status === "error";
   const openExpand = useExpandStore((s) => s.openExpand);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const { t } = useTranslation("chat");
 
   const args = useMemo(() => parseWriteArgs(block.args), [block.args]);
   const filePath = args.path;
@@ -106,7 +108,7 @@ export const WriteFileCard = memo(function WriteFileCard({
     if (!fileContent) return;
     const name = extractFileName(filePath);
     const lines = fileContent.length > 0 ? fileContent.split("\n").length : 0;
-    openExpand(fileContent, `${name} (${lines} 行)`);
+    openExpand(fileContent, `${name} (${t("common:lineCount", { count: lines })})`);
   }, [filePath, fileContent, openExpand]);
   return (
     <div
@@ -135,14 +137,14 @@ export const WriteFileCard = memo(function WriteFileCard({
           <button
             onClick={handleExpand}
             className="p-0.5 rounded text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors shrink-0"
-            title="全屏预览 Markdown"
+            title={t("writeFile.previewMarkdown")}
           >
             <Maximize2 className="w-3.5 h-3.5" />
           </button>
         )}
         {isRunning && (
           <span className="ml-auto text-[10px] text-green-500 dark:text-green-400 animate-pulse shrink-0">
-            writing
+            {t("writeFile.writing")}
           </span>
         )}
       </div>
@@ -158,7 +160,7 @@ export const WriteFileCard = memo(function WriteFileCard({
         </div>
       ) : (
         <details open className="group">
-          <summary className="sr-only">展开</summary>
+          <summary className="sr-only">{t("expand")}</summary>
           <div className="px-3 pb-2">
             {block.output ? (
               <pre className="text-[11px] text-gray-800 dark:text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-72 overflow-y-auto bg-gray-100 dark:bg-black/20 rounded px-2 py-1.5">
@@ -166,7 +168,7 @@ export const WriteFileCard = memo(function WriteFileCard({
               </pre>
             ) : isRunning ? (
               <div className="text-[11px] text-gray-400 dark:text-gray-600 italic py-1">
-                写入中...
+                {t("writeFile.writingProgress")}
               </div>
             ) : null}
           </div>
@@ -186,7 +188,7 @@ export const WriteFileCard = memo(function WriteFileCard({
               <path d="M4.5 3l3 3-3 3" />
             </svg>
             <AlertTriangle className="w-3 h-3 shrink-0" />
-            <span>LSP Diagnostics</span>
+            <span>{t("lspDiagnostics")}</span>
             <span className="text-yellow-500 dark:text-yellow-600 ml-1">
               {lspDetails.files.reduce((acc, f) => acc + f.issues.length, 0)} issue
               {lspDetails.files.reduce((acc, f) => acc + f.issues.length, 0) !== 1 ? "s" : ""}

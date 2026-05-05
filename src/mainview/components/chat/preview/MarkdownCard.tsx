@@ -1,9 +1,11 @@
 import { memo } from "react";
 import { FileText } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { PreviewDetails } from "./types";
 import { CardHeader } from "./CardHeader";
 
 export const MarkdownCard = memo(function MarkdownCard({ details }: { details: PreviewDetails }) {
+  const { t } = useTranslation("chat");
   return (
     <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700/40 bg-white dark:bg-gray-900/60">
       <CardHeader
@@ -12,7 +14,7 @@ export const MarkdownCard = memo(function MarkdownCard({ details }: { details: P
         absolutePath={details.absolutePath}
       />
       <div className="px-3 py-4 text-xs text-gray-400 dark:text-gray-500 italic">
-        Markdown preview requires content loading. File: {details.source}
+        {t("markdownPreview", { source: details.source })}
       </div>
     </div>
   );

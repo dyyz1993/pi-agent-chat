@@ -1,5 +1,6 @@
 import { memo } from "react";
 import { ExternalLink, Copy, Check, RefreshCw, Maximize2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useClipboard } from "./use-clipboard";
 import { getFileHttpUrl } from "./types";
 
@@ -14,6 +15,7 @@ export const CardActionBar = memo(function CardActionBar({
   onRetry,
   onExpand,
 }: CardActionBarProps) {
+  const { t } = useTranslation("chat");
   const { copied, copy } = useClipboard();
 
   if (!absolutePath) return null;
@@ -26,7 +28,7 @@ export const CardActionBar = memo(function CardActionBar({
         <button
           onClick={onRetry}
           className="p-0.5 rounded text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors"
-          title="重新加载"
+          title={t("reloadTitle")}
         >
           <RefreshCw className="w-3 h-3" />
         </button>
@@ -35,7 +37,7 @@ export const CardActionBar = memo(function CardActionBar({
         <button
           onClick={onExpand}
           className="p-0.5 rounded text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors"
-          title="全屏展开"
+          title={t("fullscreenTitle")}
         >
           <Maximize2 className="w-3 h-3" />
         </button>
@@ -43,7 +45,7 @@ export const CardActionBar = memo(function CardActionBar({
       <button
         onClick={() => copy(url)}
         className="p-0.5 rounded text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors"
-        title="复制链接"
+        title={t("copyLinkTitle")}
       >
         {copied ? (
           <Check className="w-3 h-3 text-green-500 dark:text-green-400" />
@@ -54,7 +56,7 @@ export const CardActionBar = memo(function CardActionBar({
       <button
         onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
         className="p-0.5 rounded text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors"
-        title="在新窗口打开"
+        title={t("openInNewWindowTitle")}
       >
         <ExternalLink className="w-3 h-3" />
       </button>
