@@ -1,7 +1,26 @@
 {
-  "name": "pi-agent-chat-app",
+  "name": "pi-agent-chat",
   "version": "1.0.0",
-  "description": "Electrobun app with React, Tailwind CSS, and Vite HMR",
+  "description": "AI Agent Chat - A full-stack AI coding assistant with desktop and web support",
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dyyz1993/pi-agent-chat"
+  },
+  "bugs": {
+    "url": "https://github.com/dyyz1993/pi-agent-chat/issues"
+  },
+  "homepage": "https://github.com/dyyz1993/pi-agent-chat#readme",
+  "keywords": [
+    "ai",
+    "agent",
+    "chat",
+    "coding",
+    "electrobun",
+    "react",
+    "typescript"
+  ],
   "scripts": {
     "start": "vite build && electrobun dev",
     "dev": "electrobun dev --watch",

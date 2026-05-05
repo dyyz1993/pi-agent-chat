@@ -45,7 +45,9 @@ test-results/
 /playwright-report/
 /playwright/.cache/
 test-*.ts
+test-*.html
 test/*.json
+scripts/verify-*.ts
 
 # UI Debug/Test tools
 .ui-debugger/
