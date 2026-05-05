@@ -16,10 +16,10 @@
 		"test:watch": "vitest"
 	},
 	"dependencies": {
-		"@dyyz1993/pi-agent-core": "^0.69.18",
-		"@dyyz1993/pi-ai": "^0.69.14",
-		"@dyyz1993/pi-coding-agent": "^0.69.25",
-		"@dyyz1993/rpc-core": "^1.0.3",
+		"@dyyz1993/pi-agent-core": "0.69.25",
+		"@dyyz1993/pi-ai": "0.69.25",
+		"@dyyz1993/pi-coding-agent": "0.69.25",
+		"@dyyz1993/rpc-core": "1.0.3",
 		"@tanstack/react-virtual": "^3.13.24",
 		"electrobun": "1.13.1",
 		"hast-util-to-jsx-runtime": "^2.3.6",
