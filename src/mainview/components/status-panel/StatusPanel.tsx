@@ -92,10 +92,10 @@ export function StatusPanel() {
       {SECTIONS.map(({ id, label, icon: Icon }) => {
         const collapsed = collapsedSections.has(id);
         return (
-          <div key={id} className="border-b border-gray-800/50 last:border-b-0">
+          <div key={id} className="border-b border-gray-200 dark:border-gray-800/50 last:border-b-0">
             <button
               onClick={() => toggleSection(id)}
-              className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium text-gray-300 hover:bg-gray-800/30 transition-colors"
+              className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-800/30 transition-colors"
             >
               {collapsed ? <ChevronRight className="w-3 h-3 shrink-0" /> : <ChevronDown className="w-3 h-3 shrink-0" />}
               <Icon className="w-3 h-3 shrink-0" />
@@ -104,7 +104,7 @@ export function StatusPanel() {
             {!collapsed && (
               <div className="px-2.5 pb-1.5 text-[10px] text-gray-500">
                 {id === "yolo" && (
-                  <button onClick={toggleYolo} className={`px-2 py-0.5 rounded text-[10px] ${yoloEnabled ? "bg-yellow-600/30 text-yellow-400" : "bg-gray-800 text-gray-500"}`}>
+                  <button onClick={toggleYolo} className={`px-2 py-0.5 rounded text-[10px] ${yoloEnabled ? "bg-yellow-600/30 text-yellow-400" : "bg-gray-200 dark:bg-gray-800 text-gray-500"}`}>
                     {yoloEnabled ? "已开启" : "已关闭"}
                   </button>
                 )}
@@ -113,7 +113,7 @@ export function StatusPanel() {
                     {todos && todos.length > 0 && (
                       <div className="space-y-0.5 pt-0.5">
                         {todos.map((t) => (
-                          <div key={t.id} className={`flex items-center gap-1.5 py-0.5 px-1 rounded hover:bg-gray-800/40 transition-colors${t.deleted ? " opacity-40" : ""}`}>
+                          <div key={t.id} className={`flex items-center gap-1.5 py-0.5 px-1 rounded hover:bg-gray-200/50 dark:hover:bg-gray-800/40 transition-colors${t.deleted ? " opacity-40" : ""}`}>
                             {t.deleted
                               ? <Trash2 className="w-3 h-3 shrink-0 text-red-400" />
                               : t.done
@@ -125,7 +125,7 @@ export function StatusPanel() {
                                 {PRIORITY_STYLES[t.priority].label}
                               </span>
                             )}
-                            <span className={`${t.deleted ? "text-red-400/60 line-through" : t.done ? "text-gray-500 line-through" : "text-gray-300"} truncate`}>
+                            <span className={`${t.deleted ? "text-red-400/60 line-through" : t.done ? "text-gray-500 line-through" : "text-gray-700 dark:text-gray-300"} truncate`}>
                               {t.text}
                             </span>
                           </div>
@@ -214,7 +214,7 @@ export function StatusPanel() {
                         <button
                           key={m}
                           onClick={() => { if (activeSessionId && !activeSubId) useLspStore.getState().setMode(activeSessionId, m); }}
-                          className={`px-1.5 py-0.5 rounded text-[9px] ${lspData?.mode === m ? "bg-blue-600/30 text-blue-400" : "bg-gray-800 text-gray-500 hover:bg-gray-700/50"}`}
+                           className={`px-1.5 py-0.5 rounded text-[9px] ${lspData?.mode === m ? "bg-blue-600/30 text-blue-400" : "bg-gray-200 dark:bg-gray-800 text-gray-500 hover:bg-gray-300/50 dark:hover:bg-gray-700/50"}`}
                         >
                           {m === "agent_end" ? "On End" : m === "edit_write" ? "On Write" : "Off"}
                         </button>
@@ -235,47 +235,47 @@ export function StatusPanel() {
                       return (
                         <div key={p.path}>
                           <div
-                            className="flex items-center gap-1 py-0.5 px-1 rounded hover:bg-gray-800/40 transition-colors cursor-pointer group"
-                            onClick={() => togglePluginExpanded(p.path)}
-                          >
-                            <span className={`w-1.5 h-1.5 rounded-full ${p.enabled ? "bg-green-400" : "bg-gray-600"}`} />
-                            <span className={`shrink-0 ${isExpanded ? "" : ""}`}>
-                              {isExpanded ? <ChevronDown className="w-3 h-3 text-gray-500" /> : <ChevronRight className="w-3 h-3 text-gray-500" />}
-                            </span>
-                            <span className="truncate flex-1 text-gray-300">{p.name}</span>
-                            {p.toolNames.length > 0 && <span className="text-gray-600">({p.toolNames.length} tools)</span>}
-                            {p.commandNames.length > 0 && <span className="text-gray-600">({p.commandNames.length} cmds)</span>}
+                             className="flex items-center gap-1 py-0.5 px-1 rounded hover:bg-gray-200/50 dark:hover:bg-gray-800/40 transition-colors cursor-pointer group"
+                             onClick={() => togglePluginExpanded(p.path)}
+                           >
+                             <span className={`w-1.5 h-1.5 rounded-full ${p.enabled ? "bg-green-400" : "bg-gray-400 dark:bg-gray-600"}`} />
+                             <span className={`shrink-0 ${isExpanded ? "" : ""}`}>
+                               {isExpanded ? <ChevronDown className="w-3 h-3 text-gray-500" /> : <ChevronRight className="w-3 h-3 text-gray-500" />}
+                             </span>
+                             <span className="truncate flex-1 text-gray-700 dark:text-gray-300">{p.name}</span>
+                             {p.toolNames.length > 0 && <span className="text-gray-400 dark:text-gray-600">({p.toolNames.length} tools)</span>}
+                             {p.commandNames.length > 0 && <span className="text-gray-400 dark:text-gray-600">({p.commandNames.length} cmds)</span>}
                             <span className={`text-[9px] px-1 py-px rounded shrink-0 ${p.scope === "global" ? "bg-purple-500/15 text-purple-400" : "bg-blue-500/15 text-blue-400"}`}>
                               {p.scope === "global" ? "全局" : "项目"}
                             </span>
                           </div>
                           {isExpanded && (
-                            <div className="ml-4 pl-2 border-l border-gray-800 space-y-1 pt-1 text-[10px]">
-                              <div className="text-gray-400 break-all">
-                                <span className="text-gray-600">路径:</span> {p.path}
+                            <div className="ml-4 pl-2 border-l border-gray-200 dark:border-gray-800 space-y-1 pt-1 text-[10px]">
+                               <div className="text-gray-500 dark:text-gray-400 break-all">
+                                 <span className="text-gray-400 dark:text-gray-600">路径:</span> {p.path}
                               </div>
-                              {p.toolNames.length > 0 && (
-                                <div>
-                                  <span className="text-gray-600 block mb-0.5">工具:</span>
-                                  <div className="space-y-px">
-                                    {p.toolNames.map((tn) => (
-                                      <div key={tn} className="text-gray-400 pl-2 font-mono truncate">{tn}</div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                              {p.commandNames.length > 0 && (
-                                <div>
-                                  <span className="text-gray-600 block mb-0.5">命令:</span>
-                                  <div className="space-y-px">
-                                    {p.commandNames.map((cn) => (
-                                      <div key={cn} className="text-gray-400 pl-2 font-mono truncate">{cn}</div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
+                               {p.toolNames.length > 0 && (
+                                 <div>
+                                   <span className="text-gray-400 dark:text-gray-600 block mb-0.5">工具:</span>
+                                   <div className="space-y-px">
+                                     {p.toolNames.map((tn) => (
+                                       <div key={tn} className="text-gray-500 dark:text-gray-400 pl-2 font-mono truncate">{tn}</div>
+                                     ))}
+                                   </div>
+                                 </div>
+                               )}
+                               {p.commandNames.length > 0 && (
+                                 <div>
+                                   <span className="text-gray-400 dark:text-gray-600 block mb-0.5">命令:</span>
+                                   <div className="space-y-px">
+                                     {p.commandNames.map((cn) => (
+                                       <div key={cn} className="text-gray-500 dark:text-gray-400 pl-2 font-mono truncate">{cn}</div>
+                                     ))}
+                                   </div>
+                                 </div>
+                               )}
                               {p.toolNames.length === 0 && p.commandNames.length === 0 && (
-                                <div className="text-gray-600">无工具或命令</div>
+                                 <div className="text-gray-400 dark:text-gray-600">无工具或命令</div>
                               )}
                               <PluginCopyButton plugin={p} />
                             </div>
@@ -292,31 +292,31 @@ export function StatusPanel() {
                       return (
                         <div key={sk.filePath}>
                           <div
-                            className="flex items-center gap-1 py-0.5 px-1 rounded hover:bg-gray-800/40 transition-colors cursor-pointer group"
-                            onClick={() => toggleSkillExpanded(sk.name)}
+                             className="flex items-center gap-1 py-0.5 px-1 rounded hover:bg-gray-200/50 dark:hover:bg-gray-800/40 transition-colors cursor-pointer group"
+                             onClick={() => toggleSkillExpanded(sk.name)}
                           >
-                            <span className={`w-1.5 h-1.5 rounded-full ${sk.enabled ? "bg-green-400" : "bg-gray-600"}`} />
-                            <span className="truncate flex-1 text-gray-300">{sk.name}</span>
+                             <span className={`w-1.5 h-1.5 rounded-full ${sk.enabled ? "bg-green-400" : "bg-gray-400 dark:bg-gray-600"}`} />
+                             <span className="truncate flex-1 text-gray-700 dark:text-gray-300">{sk.name}</span>
                             <span className={`text-[9px] px-1 py-px rounded ${sk.scope === "global" ? "bg-purple-500/15 text-purple-400" : "bg-blue-500/15 text-blue-400"}`}>
                               {sk.scope === "global" ? "全局" : "项目"}
                             </span>
                             <button
                               onClick={(e) => { e.stopPropagation(); toggleSkillEnabled(sk.name); }}
-                              className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-gray-700/50 rounded transition-opacity"
+                               className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-gray-300/50 dark:hover:bg-gray-700/50 rounded transition-opacity"
                               title={sk.enabled ? "禁用技能" : "启用技能"}
                             >
                               {sk.enabled ? <EyeOff className="w-3 h-3 text-gray-500" /> : <Eye className="w-3 h-3 text-gray-400" />}
                             </button>
                           </div>
                           {isExpanded && (
-                            <div className="ml-4 pl-2 border-l border-gray-800 space-y-1 pt-1 text-[10px]">
-                              <div className="text-gray-400 break-all">{sk.description || "无描述"}</div>
-                              <div className="space-y-0.5 text-gray-500">
-                                <div className="truncate" title={sk.filePath}>
-                                  <span className="text-gray-600">文件:</span> {sk.filePath.split("/").pop()}
-                                </div>
-                                <div>
-                                  <span className="text-gray-600">路径:</span>
+                             <div className="ml-4 pl-2 border-l border-gray-200 dark:border-gray-800 space-y-1 pt-1 text-[10px]">
+                               <div className="text-gray-500 dark:text-gray-400 break-all">{sk.description || "无描述"}</div>
+                               <div className="space-y-0.5 text-gray-500">
+                                 <div className="truncate" title={sk.filePath}>
+                                   <span className="text-gray-400 dark:text-gray-600">文件:</span> {sk.filePath.split("/").pop()}
+                                 </div>
+                                 <div>
+                                   <span className="text-gray-400 dark:text-gray-600">路径:</span>
                                   <span className="break-all">{sk.filePath}</span>
                                 </div>
                                 {sk.disableModelInvocation && (

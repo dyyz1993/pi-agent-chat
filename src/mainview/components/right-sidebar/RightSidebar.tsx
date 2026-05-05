@@ -87,8 +87,8 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
 
   return (
     <div
-      className={`flex flex-col bg-gray-900 border-l border-gray-800 overflow-hidden z-20 ${
-        overlay ? "animate-slide-in-right shadow-xl shadow-black/30" : ""
+      className={`flex flex-col bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 overflow-hidden z-20 ${
+        overlay ? "animate-slide-in-right shadow-xl shadow-black/10 dark:shadow-black/30" : ""
       }`}
       style={
         overlay
@@ -97,12 +97,11 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
       }
       onClick={(e) => e.stopPropagation()}
     >
-      {/* Tab bar + pin */}
-      <div className="flex items-center border-b border-gray-800 shrink-0">
+      <div className="flex items-center border-b border-gray-200 dark:border-gray-800 shrink-0">
         {overlay && (
           <button
             onClick={(e) => { e.stopPropagation(); hideStatus(); }}
-            className="p-1.5 mr-1 rounded hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors shrink-0"
+            className="p-1.5 mr-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors shrink-0"
             title="关闭面板"
           >
             <PanelRight className="w-3.5 h-3.5" />
@@ -110,7 +109,7 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
         )}
         <button
           onClick={(e) => { e.stopPropagation(); toggleStatus(); }}
-          className={`p-1.5 mr-1 rounded transition-colors shrink-0 max-sm:hidden ${isPinned ? "text-indigo-400" : "text-gray-600 hover:text-gray-400"}`}
+          className={`p-1.5 mr-1 rounded transition-colors shrink-0 max-sm:hidden ${isPinned ? "text-indigo-400" : "text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400"}`}
           title={isPinned ? "取消固定" : "固定面板"}
         >
           <Pin className="w-3.5 h-3.5" fill={isPinned ? "currentColor" : "none"} />
@@ -122,8 +121,8 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
             onClick={(e) => { e.stopPropagation(); setActivePanelTab(tab.id); }}
             className={`px-2.5 py-1.5 text-[11px] font-medium transition-colors whitespace-nowrap shrink-0 ${
               activePanelTab === tab.id
-                ? "text-indigo-400 border-b-2 border-indigo-400"
-                : "text-gray-500 hover:text-gray-300"
+                ? "text-indigo-500 dark:text-indigo-400 border-b-2 border-indigo-500 dark:border-indigo-400"
+                : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
             }`}
           >
             {tab.label}
@@ -132,7 +131,6 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
         </div>
       </div>
 
-      {/* Content */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
         {renderContent()}
       </div>

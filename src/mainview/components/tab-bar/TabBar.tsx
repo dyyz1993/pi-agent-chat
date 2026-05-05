@@ -115,7 +115,7 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
 
   return (
     <div
-      className="h-9 bg-gray-900 border-b border-gray-800 flex items-center px-1 gap-0.5 flex-shrink-0 overflow-x-auto"
+      className="h-9 bg-gray-100 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex items-center px-1 gap-0.5 flex-shrink-0 overflow-x-auto"
       style={{ paddingTop: "env(safe-area-inset-top)", height: "calc(2.25rem + env(safe-area-inset-top))" }}
     >
       {projectTabs.map((tab, index) => {
@@ -140,8 +140,8 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
             onPointerCancel={handlePointerCancel}
             className={`group flex items-center gap-1.5 px-3 py-1 text-xs rounded-t transition-colors relative cursor-pointer select-none ${
               isActive
-                ? "bg-gray-950 text-white border-t-2 border-t-indigo-500"
-                : "text-gray-400 hover:text-gray-200 hover:bg-gray-800/50"
+                ? "bg-white dark:bg-gray-950 text-gray-900 dark:text-white border-t-2 border-t-indigo-500"
+                : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-800/50"
             } ${isDragSource ? "opacity-40 scale-95" : ""}`}
             style={{ touchAction: "none" }}
           >
@@ -153,7 +153,7 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
             <span
               onClick={(e) => handleCloseClick(e, tab.id)}
               onMouseDown={(e) => e.stopPropagation()}
-              className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-gray-700 transition-all pointer-events-auto"
+              className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-gray-300 dark:hover:bg-gray-700 transition-all pointer-events-auto"
             >
               <X className="w-3 h-3" />
             </span>
@@ -165,7 +165,7 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
       })}
       <button
         onClick={onAddProject}
-        className="p-1 rounded text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors cursor-pointer"
+        className="p-1 rounded text-gray-500 hover:text-gray-800 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors cursor-pointer"
         title="添加项目"
       >
         <Plus className="w-4 h-4" />

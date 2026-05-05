@@ -100,7 +100,7 @@ const FileItem = memo(function FileItem({
   return (
     <div
       className={`group flex items-center gap-1.5 px-2 py-0.5 text-xs rounded cursor-pointer transition-colors ${
-        isSelected ? "bg-indigo-600/30 text-white" : "hover:bg-gray-700 text-gray-300"
+        isSelected ? "bg-indigo-600/30 text-white" : "hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
       }`}
       onClick={() => onClick(path, isStaged)}
       onContextMenu={(e) => { e.preventDefault(); onContextMenu(e, path, isStaged); }}
@@ -115,7 +115,7 @@ const FileItem = memo(function FileItem({
       )}
       <span className={`px-1.5 rounded text-[10px] font-medium ${statusColor(status)}`}>{statusLabel(status)}</span>
       <button
-        className={`opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-gray-600 ${
+        className={`opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-gray-300 dark:hover:bg-gray-600 ${
           isStaged ? "text-orange-400 hover:text-orange-300" : "text-green-400 hover:text-green-300"
         }`}
         onClick={(e) => { e.stopPropagation(); onStageToggle(path, isStaged); }}
@@ -142,7 +142,7 @@ const UntrackedItem = memo(function UntrackedItem({
   return (
     <div
       className={`group flex items-center gap-1.5 px-2 py-0.5 text-xs rounded cursor-pointer transition-colors ${
-        isSelected ? "bg-indigo-600/30 text-white" : "hover:bg-gray-700 text-gray-400"
+        isSelected ? "bg-indigo-600/30 text-white" : "hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
       }`}
       onClick={() => onClick(path)}
       onContextMenu={(e) => { e.preventDefault(); onContextMenu(e, path); }}
@@ -151,7 +151,7 @@ const UntrackedItem = memo(function UntrackedItem({
       <span className="truncate flex-1">{path.split("/").pop()}</span>
       <span className="px-1.5 rounded text-[10px] font-medium text-gray-400 bg-gray-400/10">U</span>
       <button
-        className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded text-green-400 hover:text-green-300 hover:bg-gray-600"
+        className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded text-green-400 hover:text-green-300 hover:bg-gray-300 dark:hover:bg-gray-600"
         onClick={(e) => { e.stopPropagation(); onStage(path); }}
         title="Stage"
       >
@@ -173,7 +173,7 @@ const CommitFileItem = memo(function CommitFileItem({ path, status, isSelected, 
   return (
     <div
       className={`flex items-center gap-1.5 pl-7 pr-2 py-0.5 text-xs rounded cursor-pointer transition-colors ${
-        isSelected ? "bg-indigo-600/30 text-white" : "hover:bg-gray-700 text-gray-400"
+        isSelected ? "bg-indigo-600/30 text-white" : "hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
       }`}
       onClick={onClick}
     >
@@ -202,7 +202,7 @@ const CommitItem = memo(function CommitItem({
   return (
     <div>
       <div
-        className="flex items-start gap-1.5 px-2 py-1 text-xs hover:bg-gray-700/50 rounded cursor-pointer"
+        className="flex items-start gap-1.5 px-2 py-1 text-xs hover:bg-gray-200/50 dark:hover:bg-gray-700/50 rounded cursor-pointer"
         onClick={onToggle}
         onContextMenu={(e) => { e.preventDefault(); onContextMenu(e, commit); }}
       >
@@ -210,7 +210,7 @@ const CommitItem = memo(function CommitItem({
           ? <ChevronDown className="w-3 h-3 text-gray-500 mt-0.5 shrink-0" />
           : <ChevronRight className="w-3 h-3 text-gray-500 mt-0.5 shrink-0" />}
         <div className="flex-1 min-w-0">
-          <div className="text-gray-300 truncate">{commit.message}</div>
+          <div className="text-gray-700 dark:text-gray-300 truncate">{commit.message}</div>
           <div className="text-gray-500 text-[10px] flex items-center gap-1.5 mt-0.5">
             <span className="text-indigo-400 font-mono">{commit.shortHash}</span>
             <span>{commit.author}</span>
@@ -221,7 +221,7 @@ const CommitItem = memo(function CommitItem({
       {expanded && (
         <div className="ml-1">
           {loading ? (
-            <div className="text-gray-600 text-[10px] pl-7 py-1">Loading files...</div>
+            <div className="text-gray-400 dark:text-gray-600 text-[10px] pl-7 py-1">Loading files...</div>
           ) : files && files.length > 0 ? (
             files.map((f) => (
               <CommitFileItem
@@ -233,7 +233,7 @@ const CommitItem = memo(function CommitItem({
               />
             ))
           ) : (
-            <div className="text-gray-600 text-[10px] pl-7 py-1">No files</div>
+            <div className="text-gray-400 dark:text-gray-600 text-[10px] pl-7 py-1">No files</div>
           )}
         </div>
       )}
@@ -378,17 +378,17 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
   const panelContent = (
     <>
       {/* Header: title + branch selector + actions in one row */}
-      <div className="px-2 py-1.5 text-xs text-gray-400 flex items-center gap-1.5 border-b border-gray-700">
-        <GitBranch className="w-3.5 h-3.5 shrink-0 text-gray-500" />
+      <div className="px-2 py-1.5 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5 border-b border-gray-200 dark:border-gray-700">
+        <GitBranch className="w-3.5 h-3.5 shrink-0 text-gray-400 dark:text-gray-500" />
         <button
           ref={branchBtnRef}
-          className="flex items-center gap-1 hover:text-white transition-colors"
+          className="flex items-center gap-1 hover:text-gray-900 dark:hover:text-white transition-colors"
           onClick={() => setShowBranches(!showBranches)}
         >
-          <span className="font-medium">{branch}</span>
+          <span className="font-medium text-gray-900 dark:text-white">{branch}</span>
           {ahead > 0 && <span className="text-green-400">↑{ahead}</span>}
           {behind > 0 && <span className="text-orange-400">↓{behind}</span>}
-          <BranchChevron className="w-3 h-3 text-gray-500" />
+          <BranchChevron className="w-3 h-3 text-gray-400 dark:text-gray-500" />
         </button>
 
         <span className="ml-auto flex items-center gap-1">
@@ -398,13 +398,13 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
             </span>
           )}
           {pinButton}
-          <button onClick={handlePull} className="text-gray-500 hover:text-white" disabled={loadingAction === "pull"} title="Pull">
+          <button onClick={handlePull} className="text-gray-500 hover:text-gray-800 dark:hover:text-white" disabled={loadingAction === "pull"} title="Pull">
             <Download className="w-3 h-3" />
           </button>
-          <button onClick={handlePush} className="text-gray-500 hover:text-white" disabled={loadingAction === "push"} title="Push">
+          <button onClick={handlePush} className="text-gray-500 hover:text-gray-800 dark:hover:text-white" disabled={loadingAction === "push"} title="Push">
             <Upload className="w-3 h-3" />
           </button>
-          <button onClick={refresh} className="text-gray-500 hover:text-white" title="Refresh">
+          <button onClick={refresh} className="text-gray-500 hover:text-gray-800 dark:hover:text-white" title="Refresh">
             <RefreshCw className="w-3 h-3" />
           </button>
         </span>
@@ -420,7 +420,7 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
             <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-gray-500 font-semibold flex items-center flex-wrap gap-x-2">
               <span>Staged Changes ({staged.length})</span>
               {formatChangeSummary(staged) && (
-                <span className="text-gray-600 font-normal normal-case tracking-normal">{formatChangeSummary(staged)}</span>
+                <span className="text-gray-400 dark:text-gray-600 font-normal normal-case tracking-normal">{formatChangeSummary(staged)}</span>
               )}
               <button className="ml-auto text-orange-400 hover:text-orange-300 shrink-0" onClick={handleUnstageAll} title="Unstage all">
                 <ChevronUp className="w-3 h-3" />
@@ -439,7 +439,7 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
             <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-gray-500 font-semibold flex items-center flex-wrap gap-x-2">
               <span>Changes ({changed.length})</span>
               {formatChangeSummary(changed) && (
-                <span className="text-gray-600 font-normal normal-case tracking-normal">{formatChangeSummary(changed)}</span>
+                <span className="text-gray-400 dark:text-gray-600 font-normal normal-case tracking-normal">{formatChangeSummary(changed)}</span>
               )}
               <button className="ml-auto text-green-400 hover:text-green-300 shrink-0" onClick={handleStageAll} title="Stage all">
                 <Plus className="w-3 h-3" />
@@ -466,25 +466,25 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
         )}
 
         {totalChanges === 0 && !commitsExpanded && (
-          <div className="text-gray-500 text-xs text-center py-8">No changes detected</div>
+          <div className="text-gray-500 dark:text-gray-500 text-xs text-center py-8">No changes detected</div>
         )}
 
         {/* Commit History */}
-        <div className="mt-2 border-t border-gray-700 pt-1">
+        <div className="mt-2 border-t border-gray-200 dark:border-gray-700 pt-1">
           <button
-            className="w-full px-2 py-1 text-[10px] uppercase tracking-wide text-gray-500 font-semibold flex items-center gap-1 hover:text-gray-300 transition-colors"
+            className="w-full px-2 py-1 text-[10px] uppercase tracking-wide text-gray-500 font-semibold flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
             onClick={toggleCommits}
           >
             {commitsExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
             Commits
-            {commits.length > 0 && <span className="text-gray-600 ml-auto">{commits.length}</span>}
+            {commits.length > 0 && <span className="text-gray-400 dark:text-gray-600 ml-auto">{commits.length}</span>}
           </button>
           {commitsExpanded && (
             <div className="mt-0.5">
               {loadingCommits ? (
                 <div className="text-gray-500 text-xs text-center py-4">Loading...</div>
               ) : commits.length === 0 ? (
-                <div className="text-gray-600 text-xs text-center py-4">No commits</div>
+                <div className="text-gray-400 dark:text-gray-600 text-xs text-center py-4">No commits</div>
               ) : (
                 commits.map((c) => (
                   <CommitItem key={c.hash} commit={c}
@@ -515,22 +515,22 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
 
       {/* Worktree popup */}
       {showWorktrees && worktrees.length > 1 && (
-        <div className="fixed z-50 min-w-[200px] bg-gray-800 border border-gray-600 rounded-md shadow-xl py-1"
+        <div className="fixed z-50 min-w-[200px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md shadow-xl py-1"
           style={{ top: 80, left: 48 }}>
           <div className="px-3 py-1 text-[10px] uppercase tracking-wide text-gray-500 font-semibold">Worktrees</div>
           {worktrees.map((wt) => (
             <div key={wt.path} className={`px-3 py-1.5 text-xs flex items-center gap-2 ${
-              wt.path === currentPath ? "text-indigo-400" : "text-gray-300"
+              wt.path === currentPath ? "text-indigo-400" : "text-gray-700 dark:text-gray-300"
             }`}>
               <FolderTree className="w-3 h-3 shrink-0" />
               <div className="min-w-0 flex-1">
                 <div className="truncate">{wt.branch}</div>
                 <div className="text-gray-500 text-[10px] truncate">{wt.path}</div>
               </div>
-              {wt.isMain && <span className="text-gray-600 text-[10px]">main</span>}
+              {wt.isMain && <span className="text-gray-400 dark:text-gray-600 text-[10px]">main</span>}
             </div>
           ))}
-          <button className="w-full text-left px-3 py-1 text-[10px] text-gray-500 hover:text-gray-300 border-t border-gray-700 mt-1 pt-1"
+          <button className="w-full text-left px-3 py-1 text-[10px] text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 border-t border-gray-200 dark:border-gray-700 mt-1 pt-1"
             onClick={() => setShowWorktrees(false)}>Close</button>
         </div>
       )}
@@ -554,7 +554,7 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
   }
 
   return (
-    <div className="w-60 bg-gray-850 flex flex-col flex-shrink-0 overflow-hidden">
+    <div className="w-60 bg-gray-50 dark:bg-gray-850 flex flex-col flex-shrink-0 overflow-hidden">
       {panelContent}
     </div>
   );

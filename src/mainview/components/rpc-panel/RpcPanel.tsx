@@ -29,20 +29,20 @@ function RpcEntry({ entry }: { entry: RpcLogEntry }) {
   }, [fullPayload, copy]);
 
   return (
-    <div className="group px-2 py-1 border-b border-gray-800/30 hover:bg-gray-800/30">
+    <div className="group px-2 py-1 border-b border-gray-200/30 dark:border-gray-800/30 hover:bg-gray-200/30 dark:hover:bg-gray-800/30">
       <div className="flex items-center gap-1 mb-0.5">
         <Icon className={`w-2.5 h-2.5 shrink-0 ${color}`} />
         <span className={color}>{label}</span>
-        <span className="text-gray-600 ml-auto">{time}</span>
+        <span className="text-gray-400 dark:text-gray-600 ml-auto">{time}</span>
         <button
           onClick={handleCopy}
-          className="p-0.5 rounded hover:bg-gray-700 text-gray-600 hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+          className="p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
           title="复制完整 payload"
         >
           {copied ? <Check className="w-2.5 h-2.5 text-green-400" /> : <Copy className="w-2.5 h-2.5" />}
         </button>
       </div>
-      <div className="text-gray-500 break-all leading-tight pl-3.5">
+      <div className="text-gray-500 dark:text-gray-500 break-all leading-tight pl-3.5">
         {truncated}
       </div>
     </div>
@@ -55,11 +55,11 @@ export function RpcPanel() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-gray-800 shrink-0">
-        <span className="text-[11px] font-medium text-gray-300">RPC 事件</span>
+      <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-gray-200 dark:border-gray-800 shrink-0">
+        <span className="text-[11px] font-medium text-gray-700 dark:text-gray-300">RPC 事件</span>
         <div className="flex items-center gap-1">
-          <span className="text-[10px] text-gray-600">{entries.length}</span>
-          <button onClick={clear} className="p-1 rounded hover:bg-gray-800 text-gray-600 hover:text-gray-300">
+          <span className="text-[10px] text-gray-400 dark:text-gray-600">{entries.length}</span>
+          <button onClick={clear} className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300">
             <Trash2 className="w-3 h-3" />
           </button>
         </div>
@@ -67,7 +67,7 @@ export function RpcPanel() {
 
       <div className="flex-1 overflow-y-auto text-[10px] font-mono">
         {entries.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-gray-600">
+          <div className="flex items-center justify-center h-full text-gray-400 dark:text-gray-600">
             暂无 RPC 事件
           </div>
         ) : (

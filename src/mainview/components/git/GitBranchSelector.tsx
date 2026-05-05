@@ -52,7 +52,7 @@ export function GitBranchSelector({ onClose }: GitBranchSelectorProps) {
     <button
       key={b.name}
       className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors ${
-        b.isCurrent ? "text-indigo-400" : "text-gray-200 hover:bg-gray-700"
+        b.isCurrent ? "text-indigo-400" : "text-gray-800 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700"
       }`}
       onClick={() => handleCheckout(b)}
       disabled={loadingAction === "checkout"}
@@ -67,11 +67,11 @@ export function GitBranchSelector({ onClose }: GitBranchSelectorProps) {
   return (
     <div
       ref={ref}
-      className="fixed z-50 w-56 max-h-64 overflow-y-auto bg-gray-800 border border-gray-600 rounded-md shadow-xl py-1"
+      className="fixed z-50 w-56 max-h-64 overflow-y-auto bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md shadow-xl py-1"
       style={{ /* positioned by parent via absolute */ }}
     >
       {loadingBranches ? (
-        <div className="text-gray-500 text-xs text-center py-4">Loading branches...</div>
+        <div className="text-gray-400 dark:text-gray-500 text-xs text-center py-4">Loading branches...</div>
       ) : (
         <>
           {localBranches.length > 0 && (
@@ -82,7 +82,7 @@ export function GitBranchSelector({ onClose }: GitBranchSelectorProps) {
           )}
           {remoteBranches.length > 0 && (
             <>
-              <div className="px-3 py-1 mt-1 text-[10px] uppercase tracking-wide text-gray-500 font-semibold border-t border-gray-700 pt-1">Remote</div>
+              <div className="px-3 py-1 mt-1 text-[10px] uppercase tracking-wide text-gray-500 font-semibold border-t border-gray-200 dark:border-gray-700 pt-1">Remote</div>
               {remoteBranches.map(renderBranch)}
             </>
           )}

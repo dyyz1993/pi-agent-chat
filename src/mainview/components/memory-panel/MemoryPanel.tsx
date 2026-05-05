@@ -94,7 +94,7 @@ function SectionHeader({
 	return (
 		<button
 			onClick={onToggle}
-			className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium text-gray-300 hover:bg-gray-800/30 transition-colors"
+			className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-800/30 transition-colors"
 		>
 			{collapsed ? <ChevronRight className="w-3 h-3 shrink-0" /> : <ChevronDown className="w-3 h-3 shrink-0" />}
 			<Icon className={`w-3 h-3 shrink-0 ${iconCls ?? ""}`} />
@@ -126,13 +126,13 @@ function FileContentPreview({ filePath }: { filePath: string }) {
 	}, [filePath])
 
 	if (loading) {
-		return <div className="px-3 py-1.5 text-[10px] text-gray-600">加载中...</div>
+		return <div className="px-3 py-1.5 text-[10px] text-gray-400 dark:text-gray-600">加载中...</div>
 	}
 	if (!content) {
-		return <div className="px-3 py-1.5 text-[10px] text-gray-600">无法读取</div>
+		return <div className="px-3 py-1.5 text-[10px] text-gray-400 dark:text-gray-600">无法读取</div>
 	}
 	return (
-		<pre className="mx-2 mb-1.5 p-2 rounded bg-gray-900/80 border border-gray-800 text-[10px] text-gray-400 overflow-x-auto whitespace-pre-wrap max-h-40 overflow-y-auto">
+		<pre className="mx-2 mb-1.5 p-2 rounded bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-800 text-[10px] text-gray-600 dark:text-gray-400 overflow-x-auto whitespace-pre-wrap max-h-40 overflow-y-auto">
 			{content.length > 2000 ? content.slice(0, 2000) + "..." : content}
 		</pre>
 	)
@@ -164,7 +164,7 @@ export function MemoryPanel() {
 	}, [sessionId, activeProjectId, projectTabs])
 
 	if (!sessionId) {
-		return <div className="p-3 text-xs text-gray-500">无活动会话</div>
+		return <div className="p-3 text-xs text-gray-500 dark:text-gray-500">无活动会话</div>
 	}
 
 	const hasInjected = injected.length > 0
@@ -196,7 +196,7 @@ export function MemoryPanel() {
 	return (
 		<div className="py-1">
 			{hasInjected && (
-				<div className="border-b border-gray-800/50">
+				<div className="border-b border-gray-200 dark:border-gray-800/50">
 					<SectionHeader
 						collapsed={collapsedSections.has("injected")}
 						onToggle={() => toggleSection("injected")}
@@ -223,7 +223,7 @@ export function MemoryPanel() {
 				</div>
 			)}
 
-			<div className="border-b border-gray-800/50">
+			<div className="border-b border-gray-200 dark:border-gray-800/50">
 				<SectionHeader
 					collapsed={collapsedSections.has("files")}
 					onToggle={() => toggleSection("files")}
@@ -242,7 +242,7 @@ export function MemoryPanel() {
 									<div key={f.filePath}>
 										<button
 											onClick={() => setExpandedFile(isExpanded ? null : f.filePath)}
-											className="w-full flex items-center gap-1.5 py-1 px-1 rounded hover:bg-gray-800/40 transition-colors text-left"
+											className="w-full flex items-center gap-1.5 py-1 px-1 rounded hover:bg-gray-200/50 dark:hover:bg-gray-800/40 transition-colors text-left"
 										>
 											{badge ? (
 												<span className={`px-1 py-0 rounded text-[8px] font-medium shrink-0 ${badge.cls}`}>
@@ -253,10 +253,10 @@ export function MemoryPanel() {
 													其他
 												</span>
 											)}
-											<span className="text-[10px] text-gray-300 truncate flex-1">
+											<span className="text-[10px] text-gray-700 dark:text-gray-300 truncate flex-1">
 												{f.description ?? f.filename}
 											</span>
-											<span className="text-[9px] text-gray-600 shrink-0">
+											<span className="text-[9px] text-gray-400 dark:text-gray-600 shrink-0">
 												{relativeTime(f.mtimeMs)}
 											</span>
 										</button>
@@ -269,16 +269,16 @@ export function MemoryPanel() {
 						</div>
 					) : (
 						<div className="px-2.5 pb-2 py-2 text-center">
-							<FileText className="w-4 h-4 mx-auto mb-1 text-gray-600" />
+							<FileText className="w-4 h-4 mx-auto mb-1 text-gray-400 dark:text-gray-600" />
 							<p className="text-[10px] text-gray-500">暂无记忆文件</p>
-							<p className="text-[9px] text-gray-600 mt-0.5">对话后将自动提取</p>
+							<p className="text-[9px] text-gray-400 dark:text-gray-600 mt-0.5">对话后将自动提取</p>
 						</div>
 					)
 				)}
 			</div>
 
 			{hasEntrypoint && (
-				<div className="border-b border-gray-800/50">
+				<div className="border-b border-gray-200 dark:border-gray-800/50">
 					<SectionHeader
 						collapsed={collapsedSections.has("entrypoint")}
 						onToggle={() => toggleSection("entrypoint")}
@@ -288,7 +288,7 @@ export function MemoryPanel() {
 					/>
 					{!collapsedSections.has("entrypoint") && (
 						<div className="px-2.5 pb-1.5">
-							<pre className="p-2 rounded bg-gray-900/80 border border-gray-800 text-[10px] text-gray-400 overflow-x-auto whitespace-pre-wrap max-h-40 overflow-y-auto">
+							<pre className="p-2 rounded bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-800 text-[10px] text-gray-600 dark:text-gray-400 overflow-x-auto whitespace-pre-wrap max-h-40 overflow-y-auto">
 								{(entrypoint || "").length > 2000 ? (entrypoint || "").slice(0, 2000) + "..." : entrypoint}
 							</pre>
 						</div>
@@ -296,7 +296,7 @@ export function MemoryPanel() {
 				</div>
 			)}
 
-			<div className="border-b border-gray-800/50 last:border-b-0">
+			<div className="border-b border-gray-200 dark:border-gray-800/50 last:border-b-0">
 				<SectionHeader
 					collapsed={collapsedSections.has("operations")}
 					onToggle={() => toggleSection("operations")}
@@ -320,14 +320,14 @@ export function MemoryPanel() {
 								return (
 									<div
 										key={event.id}
-										className={`flex items-center gap-1.5 py-0.5 px-1 rounded transition-colors ${config.pulse ? "bg-teal-400/5" : "hover:bg-gray-800/40"}`}
+										className={`flex items-center gap-1.5 py-0.5 px-1 rounded transition-colors ${config.pulse ? "bg-teal-400/5" : "hover:bg-gray-200/50 dark:hover:bg-gray-800/40"}`}
 									>
 										<Icon className={`w-3 h-3 shrink-0 ${config.color} ${config.pulse ? "animate-spin" : ""}`} />
 										<span className={`text-[10px] font-medium ${config.color}`}>
 											{label}
 										</span>
 										{detailEl}
-										<span className="ml-auto text-[9px] text-gray-600 shrink-0">
+										<span className="ml-auto text-[9px] text-gray-400 dark:text-gray-600 shrink-0">
 											{timeStr}
 										</span>
 									</div>
@@ -336,7 +336,7 @@ export function MemoryPanel() {
 						</div>
 					) : (
 						<div className="px-2.5 pb-2 py-2 text-center">
-							<Brain className="w-4 h-4 mx-auto mb-1 text-gray-600" />
+							<Brain className="w-4 h-4 mx-auto mb-1 text-gray-400 dark:text-gray-600" />
 							<p className="text-[10px] text-gray-500">暂无操作记录</p>
 						</div>
 					)

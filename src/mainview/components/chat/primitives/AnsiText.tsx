@@ -30,7 +30,7 @@ interface AnsiSpan {
 export function parseAnsi(input: string): AnsiSpan[] {
 	const spans: AnsiSpan[] = [];
 	const parts = input.split(ANSI_REGEX);
-	let currentClass = "text-gray-300";
+	let currentClass = "text-gray-700 dark:text-gray-300";
 
 	for (let i = 0; i < parts.length; i++) {
 		if (i % 2 === 1) {
@@ -38,7 +38,7 @@ export function parseAnsi(input: string): AnsiSpan[] {
 			const codes = codesStr ? codesStr.split(";") : [];
 			const reset = codes.includes("0") || codesStr === "";
 			if (reset) {
-				currentClass = "text-gray-300";
+				currentClass = "text-gray-700 dark:text-gray-300";
 			}
 			for (const code of codes) {
 				if (code === "1") {

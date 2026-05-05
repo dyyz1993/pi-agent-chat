@@ -71,9 +71,9 @@ function BashProcessCard({ process: p, onOpenLog }: {
 					: "执行中";
 
 	return (
-		<div className="rounded-lg bg-gray-900/80 border border-gray-800 px-3 py-2.5 space-y-1.5">
+		<div className="rounded-lg bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-800 px-3 py-2.5 space-y-1.5">
 			<div className="flex items-center gap-2">
-				<span className="text-[11px] font-medium text-gray-200 truncate font-mono flex-1" title={p.command}>
+				<span className="text-[11px] font-medium text-gray-800 dark:text-gray-200 truncate font-mono flex-1" title={p.command}>
 					{p.command}
 				</span>
 			</div>
@@ -88,7 +88,7 @@ function BashProcessCard({ process: p, onOpenLog }: {
 			<div className="flex items-center gap-1.5 pt-0.5">
 				<button
 					onClick={onOpenLog}
-					className="flex items-center justify-center w-8 h-7 rounded border border-gray-700/50 text-gray-400 hover:text-white hover:border-gray-600 transition-colors shrink-0"
+					className="flex items-center justify-center w-8 h-7 rounded border border-gray-300 dark:border-gray-700/50 text-gray-500 hover:text-gray-800 dark:hover:text-white hover:border-gray-400 dark:hover:border-gray-600 transition-colors shrink-0"
 					title="查看日志"
 				>
 					<Terminal className="w-3.5 h-3.5" />
@@ -121,7 +121,7 @@ function BashProcessCard({ process: p, onOpenLog }: {
 							useSessionStore.getState().activeSessionId ?? "",
 							p.toolCallId,
 						)}
-						className="flex items-center justify-center w-8 h-7 rounded border border-gray-700/50 text-gray-500 hover:text-gray-300 hover:border-gray-600 transition-colors shrink-0"
+						className="flex items-center justify-center w-8 h-7 rounded border border-gray-300 dark:border-gray-700/50 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-400 dark:hover:border-gray-600 transition-colors shrink-0"
 						title="从列表移除"
 					>
 						<Trash2 className="w-3.5 h-3.5" />
@@ -263,16 +263,16 @@ function LogViewer({ logPath, toolCallId, onClose }: { logPath: string; toolCall
 	return (
 		<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 sm:p-6" onClick={onClose}>
 			<div
-				className="bg-gray-900 border-t sm:border border-gray-700 sm:rounded-lg w-full sm:max-w-4xl flex flex-col h-full sm:h-[70vh] sm:max-h-[85vh]"
+				className="bg-white dark:bg-gray-900 border-t sm:border border-gray-200 dark:border-gray-700 sm:rounded-lg w-full sm:max-w-4xl flex flex-col h-full sm:h-[70vh] sm:max-h-[85vh]"
 				onClick={(e) => e.stopPropagation()}
 			>
-				<div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-700 shrink-0">
+				<div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-200 dark:border-gray-700 shrink-0">
 					<div className="flex items-center gap-2 min-w-0">
 						<Terminal className="w-3.5 h-3.5 text-gray-500 shrink-0" />
-						<span className="text-xs text-gray-300 font-mono truncate">{logPath.split("/").pop()}</span>
-						<span className="text-[9px] text-gray-600 shrink-0">{totalLines} 行</span>
+						<span className="text-xs text-gray-700 dark:text-gray-300 font-mono truncate">{logPath.split("/").pop()}</span>
+						<span className="text-[9px] text-gray-400 dark:text-gray-600 shrink-0">{totalLines} 行</span>
 					</div>
-					<button onClick={onClose} className="text-gray-500 hover:text-white text-sm leading-none shrink-0">✕</button>
+					<button onClick={onClose} className="text-gray-500 hover:text-gray-800 dark:hover:text-white text-sm leading-none shrink-0">✕</button>
 				</div>
 
 				<div
@@ -286,7 +286,7 @@ function LogViewer({ logPath, toolCallId, onClose }: { logPath: string; toolCall
 							<span className="ml-2 text-[11px] text-gray-500">加载中...</span>
 						</div>
 					) : lines.length === 0 ? (
-						<div className="text-[11px] text-gray-600 italic">暂无输出</div>
+						<div className="text-[11px] text-gray-400 dark:text-gray-600 italic">暂无输出</div>
 					) : (
 						<div
 							style={{
@@ -302,7 +302,7 @@ function LogViewer({ logPath, toolCallId, onClose }: { logPath: string; toolCall
 										key={virtualRow.index}
 										data-index={virtualRow.index}
 										ref={virtualizer.measureElement}
-										className="text-[11px] text-gray-300 font-mono whitespace-pre-wrap break-all leading-relaxed absolute top-0 left-0 w-full"
+										className="text-[11px] text-gray-700 dark:text-gray-300 font-mono whitespace-pre-wrap break-all leading-relaxed absolute top-0 left-0 w-full"
 										style={{
 											transform: `translateY(${virtualRow.start}px)`,
 										}}
@@ -315,9 +315,9 @@ function LogViewer({ logPath, toolCallId, onClose }: { logPath: string; toolCall
 					)}
 				</div>
 
-				<div className="flex items-center gap-2 px-3 sm:px-4 py-2 border-t border-gray-700 shrink-0" style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}>
-					<span className="text-[9px] text-gray-600 shrink-0">{lines.length}/{totalLines}</span>
-					<button onClick={() => { setAutoScroll(true); scrollToBottom(); }} className="text-[9px] text-gray-500 hover:text-gray-400 transition-colors shrink-0">
+				<div className="flex items-center gap-2 px-3 sm:px-4 py-2 border-t border-gray-200 dark:border-gray-700 shrink-0" style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}>
+					<span className="text-[9px] text-gray-400 dark:text-gray-600 shrink-0">{lines.length}/{totalLines}</span>
+					<button onClick={() => { setAutoScroll(true); scrollToBottom(); }} className="text-[9px] text-gray-500 hover:text-gray-700 dark:hover:text-gray-400 transition-colors shrink-0">
 						滚动到底部
 					</button>
 					<div className="flex-1 flex items-center gap-1.5 ml-2">
@@ -327,7 +327,7 @@ function LogViewer({ logPath, toolCallId, onClose }: { logPath: string; toolCall
 							onChange={(e) => setStdinInput(e.target.value)}
 							onKeyDown={(e) => { if (e.key === "Enter") sendStdin(); }}
 							placeholder="输入内容发送到进程..."
-							className="flex-1 h-7 px-2 rounded bg-gray-800 border border-gray-700 text-[11px] text-gray-200 placeholder:text-gray-600 focus:outline-none focus:border-gray-500 font-mono"
+							className="flex-1 h-7 px-2 rounded bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-[11px] text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-600 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 font-mono"
 						/>
 						<button
 							onClick={sendStdin}
@@ -363,7 +363,7 @@ export function BashPanel() {
 		<div className="px-3 py-2 space-y-2">
 			<button
 				onClick={() => setCollapsed(!collapsed)}
-				className="w-full flex items-center gap-1.5 text-[11px] font-medium text-gray-300 hover:text-white transition-colors"
+				className="w-full flex items-center gap-1.5 text-[11px] font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
 			>
 				{collapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
 				<Terminal className="w-3 h-3" />

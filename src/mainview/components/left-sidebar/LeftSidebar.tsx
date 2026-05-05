@@ -24,8 +24,8 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
 
   return (
     <div
-      className={`flex flex-col bg-gray-900 border-r border-gray-800 overflow-hidden z-20 ${
-        overlay ? "animate-slide-in-left shadow-xl shadow-black/30 will-change-transform" : ""
+      className={`flex flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 overflow-hidden z-20 ${
+        overlay ? "animate-slide-in-left shadow-xl shadow-black/10 dark:shadow-black/30 will-change-transform" : ""
       }`}
       style={
         overlay
@@ -34,10 +34,10 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
       }
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-800/80 shrink-0">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200/80 dark:border-gray-800/80 shrink-0">
         <div className="flex items-center gap-1.5">
-          <span className="text-xs font-semibold text-gray-200 tracking-wide">会话</span>
-          <span className="text-[10px] text-gray-600 bg-gray-800 px-1.5 py-0.5 rounded-full font-mono">
+          <span className="text-xs font-semibold text-gray-800 dark:text-gray-200 tracking-wide">会话</span>
+          <span className="text-[10px] text-gray-400 dark:text-gray-600 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded-full font-mono">
             {useSessionCount()}
           </span>
         </div>
@@ -73,19 +73,19 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
               }
             }}
             disabled={isCreating}
-            className="p-1 rounded hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed relative"
+            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed relative"
             title="新建会话"
           >
             <Plus className="w-3.5 h-3.5" />
             {isCreating && (
-              <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80 rounded">
+              <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-gray-900/80 rounded">
                 <div className="w-2.5 h-2.5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
               </div>
             )}
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); toggleSession(); }}
-            className={`p-1 rounded transition-colors max-sm:hidden ${isPinned ? "text-indigo-400" : "text-gray-600 hover:text-gray-400"}`}
+            className={`p-1 rounded transition-colors max-sm:hidden ${isPinned ? "text-indigo-400" : "text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400"}`}
             title={isPinned ? "取消固定" : "固定面板"}
           >
             <Pin className="w-3.5 h-3.5" fill={isPinned ? "currentColor" : "none"} />
@@ -93,7 +93,7 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
           {overlay && (
             <button
               onClick={(e) => { e.stopPropagation(); hideSession(); }}
-              className="p-1 rounded hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors"
+              className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
               title="关闭面板"
             >
               <PanelLeft className="w-3.5 h-3.5" />
@@ -108,7 +108,6 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
 
       <SidebarBottomControls />
 
-      {/* Success Toast */}
       {showSuccessToast && (
         <div className="fixed bottom-16 left-4 z-50 bg-green-600/90 text-white px-4 py-2 rounded-md shadow-lg animate-slide-in-left">
           <div className="flex items-center gap-2">
@@ -118,7 +117,6 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
         </div>
       )}
 
-      {/* Error Toast */}
       {showErrorToast && (
         <div className="fixed bottom-16 left-4 z-50 bg-red-600/90 text-white px-4 py-2 rounded-md shadow-lg animate-slide-in-left max-w-md">
           <div className="flex items-start gap-2">

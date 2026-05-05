@@ -224,10 +224,10 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   const [open, setOpen] = useState(true);
 
   return (
-    <div className="border-t border-gray-800">
+    <div className="border-t border-gray-200 dark:border-gray-800">
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-1 px-2 py-1.5 text-[11px] font-medium text-gray-300 hover:bg-gray-800/50"
+        className="w-full flex items-center gap-1 px-2 py-1.5 text-[11px] font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-800/50"
       >
         {open ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
         {title}
@@ -260,8 +260,8 @@ export function DiagnosticPanel() {
   const prev = history.length > 1 ? history[history.length - 2] : undefined;
 
   return (
-    <div className="fixed top-10 right-2 w-[420px] max-h-[85vh] bg-gray-900 border border-gray-700 rounded-lg shadow-2xl z-50 flex flex-col overflow-hidden">
-      <div className="flex items-center justify-between px-3 py-2 bg-gray-850 border-b border-gray-700 flex-shrink-0">
+    <div className="fixed top-10 right-2 w-[420px] max-h-[85vh] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-2xl z-50 flex flex-col overflow-hidden">
+      <div className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-850 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
         <div className="flex items-center gap-1.5 text-xs font-medium text-indigo-400">
           <Activity className="w-3.5 h-3.5" />
           Session Diagnostic
@@ -269,17 +269,17 @@ export function DiagnosticPanel() {
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => setAutoRefresh(!autoRefresh)}
-            className={`text-[10px] px-1.5 py-0.5 rounded ${autoRefresh ? "bg-emerald-600/30 text-emerald-400" : "bg-gray-700 text-gray-400"}`}
+            className={`text-[10px] px-1.5 py-0.5 rounded ${autoRefresh ? "bg-emerald-600/30 text-emerald-400" : "bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400"}`}
           >
             {autoRefresh ? "AUTO" : "MANUAL"}
           </button>
-          <button onClick={takeSnapshot} className="p-0.5 rounded hover:bg-gray-700 text-gray-400 hover:text-gray-200" title="Take snapshot">
+          <button onClick={takeSnapshot} className="p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" title="Take snapshot">
             <RefreshCw className="w-3 h-3" />
           </button>
-          <button onClick={clearHistory} className="p-0.5 rounded hover:bg-gray-700 text-gray-400 hover:text-gray-200" title="Clear history">
+          <button onClick={clearHistory} className="p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" title="Clear history">
             <Trash2 className="w-3 h-3" />
           </button>
-          <button onClick={toggle} className="p-0.5 rounded hover:bg-gray-700 text-gray-400 hover:text-gray-200">
+          <button onClick={toggle} className="p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -288,7 +288,7 @@ export function DiagnosticPanel() {
       <div className="flex-1 overflow-y-auto overscroll-contain">
         {snapshot ? (
           <div className="text-[11px]">
-            <div className="px-3 py-1.5 bg-gray-800/50 flex items-center justify-between text-[10px] text-gray-400">
+            <div className="px-3 py-1.5 bg-gray-100 dark:bg-gray-800/50 flex items-center justify-between text-[10px] text-gray-500 dark:text-gray-400">
               <span>Active: {snapshot.activeSessionId ?? "none"} | Tabs: {snapshot.projectTabs} | Sessions: {snapshot.totalSessions}</span>
               <span>{formatTime(snapshot.timestamp)}</span>
             </div>
@@ -316,12 +316,12 @@ export function DiagnosticPanel() {
             </div>
 
             {snapshot.jsHeapUsed != null && snapshot.jsHeapTotal != null && (
-              <div className="px-3 py-2 border-t border-gray-800">
-                <div className="text-[11px] font-medium text-gray-300 mb-1">JS Heap</div>
-                <div className="text-[11px] text-gray-400">
+              <div className="px-3 py-2 border-t border-gray-200 dark:border-gray-800">
+                <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300 mb-1">JS Heap</div>
+                <div className="text-[11px] text-gray-500 dark:text-gray-400">
                   Used: {formatBytes(snapshot.jsHeapUsed)} / Total: {formatBytes(snapshot.jsHeapTotal)}
                 </div>
-                <div className="h-1.5 bg-gray-700 rounded mt-1">
+                <div className="h-1.5 bg-gray-200 dark:bg-gray-700 rounded mt-1">
                   <div
                     className="h-full bg-indigo-500 rounded"
                     style={{ width: `${(snapshot.jsHeapUsed / snapshot.jsHeapTotal) * 100}%` }}
@@ -330,7 +330,7 @@ export function DiagnosticPanel() {
               </div>
             )}
 
-            <div className="px-3 py-2 border-t border-gray-800 text-[10px] text-gray-500">
+            <div className="px-3 py-2 border-t border-gray-200 dark:border-gray-800 text-[10px] text-gray-400 dark:text-gray-500">
               RPC debug entries: {snapshot.rpcDebugEntries} | toolCallNameMap: {snapshot.toolCallNameMapSize}
             </div>
           </div>
@@ -341,7 +341,7 @@ export function DiagnosticPanel() {
         )}
       </div>
 
-      <div className="px-3 py-1.5 bg-gray-800 border-t border-gray-700 text-[10px] text-gray-500 flex items-center justify-between flex-shrink-0">
+      <div className="px-3 py-1.5 bg-gray-100 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 text-[10px] text-gray-500 flex items-center justify-between flex-shrink-0">
         <span>Ctrl+Shift+D to toggle | History: {history.length}/60</span>
       </div>
     </div>

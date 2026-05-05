@@ -6,7 +6,7 @@ export function MobileTabBar() {
   const togglePanel = useSidebarStore((s) => s.togglePanel);
 
   return (
-    <div className="h-14 bg-gray-900 border-t border-gray-700 flex items-center justify-around flex-shrink-0">
+    <div className="h-14 bg-gray-100 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 flex items-center justify-around flex-shrink-0">
       {items.map(({ id, icon: Icon, label }) => (
         <button
           key={id}
@@ -14,7 +14,7 @@ export function MobileTabBar() {
           className={`flex flex-col items-center justify-center gap-0.5 px-3 py-1 rounded transition-colors ${
             activePanel === id
               ? "text-indigo-400"
-              : "text-gray-500 hover:text-gray-300"
+              : "text-gray-500 hover:text-gray-800 dark:hover:text-gray-300"
           }`}
         >
           <Icon className="w-5 h-5" />
