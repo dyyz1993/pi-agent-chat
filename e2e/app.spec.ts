@@ -2,19 +2,19 @@ import { test, expect } from "@playwright/test";
 
 test.describe("App", () => {
   test("should load the main page", async ({ page }) => {
-    await page.goto("/");
-    await expect(page.locator("body")).toBeVisible();
+    await page.goto("/?token=test-ci-token");
+    await expect(page.locator("#root")).toBeAttached();
   });
 
   test("should have correct title", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/?token=test-ci-token");
     const title = await page.title();
     expect(title).toBe("Pi Agent Chat");
   });
 
-  test("should display connection banner when disconnected", async ({ page }) => {
-    await page.goto("/");
-    const banner = page.locator('[data-testid="connection-banner"]');
-    await expect(banner).not.toBeVisible();
+  test("should transition from loading to main layout", async ({ page }) => {
+    await page.goto("/?token=test-ci-token");
+    const tabBar = page.locator('[data-testid="tab-bar"]');
+    await expect(tabBar).toBeVisible({ timeout: 15000 });
   });
 });

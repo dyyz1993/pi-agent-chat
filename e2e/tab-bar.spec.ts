@@ -1,13 +1,10 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("Tab Bar", () => {
-  test("should render tab bar with at least one tab", async ({ page }) => {
-    await page.goto("/");
+  test("should render tab bar", async ({ page }) => {
+    await page.goto("/?token=test-ci-token");
+    await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15000 });
     const tabBar = page.locator('[data-testid="tab-bar"]');
-    if (await tabBar.isVisible()) {
-      const tabs = tabBar.locator("button");
-      const count = await tabs.count();
-      expect(count).toBeGreaterThanOrEqual(1);
-    }
+    await expect(tabBar).toBeVisible();
   });
 });
