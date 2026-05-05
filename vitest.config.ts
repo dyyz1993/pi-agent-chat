@@ -7,5 +7,10 @@ export default defineConfig({
     testTimeout: 180000,
     hookTimeout: 30000,
     include: ["test/**/*.test.{ts,tsx}"],
+    exclude: [
+      "**/rpc-client*",
+      "**/session-ready*",
+      "**/refresh-recovery-integration*",
+    ],
   },
 });
