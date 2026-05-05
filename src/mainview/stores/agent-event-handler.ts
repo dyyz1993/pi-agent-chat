@@ -2,6 +2,7 @@ import type { ContentBlock, ChatMessage, TokenUsage } from "../types";
 import type { SessionMeta } from "../types";
 import type { AgentEvent } from "../../shared/modules/agent";
 import type { AssistantMessage, Message, Usage } from "@dyyz1993/pi-ai";
+import { apiClient } from "../lib/api-client";
 import { useChatStore } from "./use-chat-store";
 import { useSessionStore } from "./use-session-store";
 import { useMemoryStore } from "./use-memory-store";
@@ -361,16 +362,28 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     if (!lastMsg || lastMsg.role !== "assistant") return;
 
     const assistantMsg = message as AssistantMessage;
-    if (assistantMsg.usage) {
-      const totalTokens =
-        assistantMsg.usage.input +
-        assistantMsg.usage.output +
-        assistantMsg.usage.cacheRead +
-        assistantMsg.usage.cacheWrite;
-      if (totalTokens > 0) {
-        storeGet().updateSessionContext(sessionId, { tokens: totalTokens });
-      }
-    }
+
+    apiClient
+      .call("agent.getContextUsage", { sessionId })
+      .then((cu) => {
+        const r = cu as {
+          tokens: number | null;
+          contextWindow: number;
+          percent: number | null;
+        } | null;
+        if (r && r.tokens != null) {
+          storeGet().updateSessionContext(sessionId, {
+            tokens: r.tokens,
+            ...(r.contextWindow > 0 ? { contextWindow: r.contextWindow } : {}),
+          });
+        }
+      })
+      .catch((err) => {
+        log.warn("agent.getContextUsage failed after message_end", {
+          sessionId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      });
 
     flushNow();
 

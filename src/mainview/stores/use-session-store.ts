@@ -629,23 +629,22 @@ export const useSessionStore = create<SessionState>()(
       restoreContextFromHistory: (sessionId) => {
         const existing = get().sessionContextMap[sessionId];
         if (existing?.tokens != null && existing.tokens > 0) return;
-        const msgs = useChatStore.getState().messagesBySession[sessionId];
-        if (!msgs || msgs.length === 0) return;
-        for (let i = msgs.length - 1; i >= 0; i--) {
-          const m = msgs[i];
-          if (m.role === "assistant" && m.tokenUsage) {
-            const total =
-              m.tokenUsage.input +
-              m.tokenUsage.output +
-              (m.tokenUsage.reasoning ?? 0) +
-              (m.tokenUsage.cacheRead ?? 0) +
-              (m.tokenUsage.cacheWrite ?? 0);
-            if (total > 0) {
-              get().updateSessionContext(sessionId, { tokens: total });
+        apiClient
+          .call("agent.getContextUsage", { sessionId })
+          .then((cu) => {
+            const r = cu as {
+              tokens: number | null;
+              contextWindow: number;
+              percent: number | null;
+            } | null;
+            if (r && r.tokens != null) {
+              get().updateSessionContext(sessionId, {
+                tokens: r.tokens,
+                ...(r.contextWindow > 0 ? { contextWindow: r.contextWindow } : {}),
+              });
             }
-            return;
-          }
-        }
+          })
+          .catch(() => {});
       },
 
       fetchInitialState: (sessionId) => {
@@ -684,24 +683,41 @@ export const useSessionStore = create<SessionState>()(
               set({ availableModels: modelsResult });
             }
 
-            apiClient
-              .call("agent.getSessionStats", { sessionId })
-              .then((stats) => {
-                if (!stats?.contextUsage) return;
-                const cu = stats.contextUsage;
-                const update: Partial<ContextUsage> = {};
-                if (cu.contextWindow > 0) update.contextWindow = cu.contextWindow;
-                if (cu.tokens != null) update.tokens = cu.tokens;
-                if (update.contextWindow || update.tokens != null) {
-                  get().updateSessionContext(sessionId, update);
-                }
-              })
-              .catch((err) => {
-                log.warn("agent.getSessionStats failed", {
-                  sessionId,
-                  err: err instanceof Error ? err.message : String(err),
+            const fetchContextUsage = (attempt = 0): void => {
+              apiClient
+                .call("agent.getContextUsage", { sessionId })
+                .then((cu) => {
+                  const r = cu as {
+                    tokens: number | null;
+                    contextWindow: number;
+                    percent: number | null;
+                  } | null;
+                  if (!r) {
+                    if (attempt < 2) setTimeout(() => fetchContextUsage(attempt + 1), 1500);
+                    return;
+                  }
+                  const update: Partial<ContextUsage> = {};
+                  if (r.contextWindow > 0) update.contextWindow = r.contextWindow;
+                  if (r.tokens != null) {
+                    update.tokens = r.tokens;
+                  } else if (attempt < 2) {
+                    setTimeout(() => fetchContextUsage(attempt + 1), 1500);
+                    return;
+                  }
+                  if (update.contextWindow || update.tokens != null) {
+                    get().updateSessionContext(sessionId, update);
+                  }
+                })
+                .catch((err) => {
+                  log.warn("agent.getContextUsage failed in fetchInitialState", {
+                    sessionId,
+                    attempt,
+                    err: err instanceof Error ? err.message : String(err),
+                  });
+                  if (attempt < 2) setTimeout(() => fetchContextUsage(attempt + 1), 1500);
                 });
-              });
+            };
+            fetchContextUsage();
 
             apiClient
               .call("agent.getExtensions", { sessionId })

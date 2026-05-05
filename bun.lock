@@ -5,11 +5,12 @@
     "": {
       "name": "electrobun-react-tailwind-vite",
       "dependencies": {
-        "@dyyz1993/pi-agent-core": "0.69.25",
-        "@dyyz1993/pi-ai": "0.69.25",
-        "@dyyz1993/pi-coding-agent": "0.69.25",
-        "@dyyz1993/rpc-core": "1.0.3",
+        "@dyyz1993/pi-agent-core": "^0.70.2",
+        "@dyyz1993/pi-ai": "^0.70.2",
+        "@dyyz1993/pi-coding-agent": "^0.70.2",
+        "@dyyz1993/rpc-core": "^1.2.0",
         "@tanstack/react-virtual": "^3.13.24",
+        "dotenv-cli": "^11.0.0",
         "electrobun": "1.13.1",
         "hast-util-to-jsx-runtime": "^2.3.6",
         "i18next": "^26.0.8",
@@ -234,15 +235,15 @@
 
     "@conventional-changelog/git-client": ["@conventional-changelog/git-client@2.7.0", "", { "dependencies": { "@simple-libs/child-process-utils": "^1.0.0", "@simple-libs/stream-utils": "^1.2.0", "semver": "^7.5.2" }, "peerDependencies": { "conventional-commits-filter": "^5.0.0", "conventional-commits-parser": "^6.4.0" }, "optionalPeers": ["conventional-commits-filter", "conventional-commits-parser"] }, "sha512-j7A8/LBEQ+3rugMzPXoKYzyUPpw/0CBQCyvtTR7Lmu4olG4yRC/Tfkq79Mr3yuPs0SUitlO2HwGP3gitMJnRFw=="],
 
-    "@dyyz1993/pi-agent-core": ["@dyyz1993/pi-agent-core@0.69.25", "", { "dependencies": { "@dyyz1993/pi-ai": "^0.69.25", "typebox": "^1.1.24" } }, "sha512-iJKFtc15+ppQAzb//JvR6XsPAWOG7CEjHIM6gW5yBNmSMUoQ1GRx2QVDJXWvQS+/zuQ6K0jy/W/pkfjyFdUmhQ=="],
+    "@dyyz1993/pi-agent-core": ["@dyyz1993/pi-agent-core@0.70.2", "", { "dependencies": { "@dyyz1993/pi-ai": "^0.70.1", "typebox": "^1.1.24" } }, "sha512-ojtYtJlpW824rywikJJ+e/mfEjK88qNrPIM7hWOhVj5BPEF3/qmx+FsICLdB72Fqbc2pgMYsqE4LMeJPpTdmfA=="],
 
-    "@dyyz1993/pi-ai": ["@dyyz1993/pi-ai@0.69.25", "", { "dependencies": { "@anthropic-ai/sdk": "^0.90.0", "@aws-sdk/client-bedrock-runtime": "^3.1030.0", "@google/genai": "^1.40.0", "@mistralai/mistralai": "^2.2.0", "chalk": "^5.6.2", "openai": "6.26.0", "partial-json": "^0.1.7", "proxy-agent": "^6.5.0", "typebox": "^1.1.24", "undici": "^7.19.1", "zod-to-json-schema": "^3.24.6" }, "bin": { "pi-ai": "dist/cli.js" } }, "sha512-wUQqqx+WNAaNp3FTwI/lcp3kV6iN45pMArflIZXjb3ZoNFdVZ+TlWq5xu0+l0+NsAOCpd523QFGi7qo1Tga+7g=="],
+    "@dyyz1993/pi-ai": ["@dyyz1993/pi-ai@0.70.2", "", { "dependencies": { "@anthropic-ai/sdk": "^0.90.0", "@aws-sdk/client-bedrock-runtime": "^3.1030.0", "@google/genai": "^1.40.0", "@mistralai/mistralai": "^2.2.0", "chalk": "^5.6.2", "openai": "6.26.0", "partial-json": "^0.1.7", "proxy-agent": "^6.5.0", "typebox": "^1.1.24", "undici": "^7.19.1", "zod-to-json-schema": "^3.24.6" }, "bin": { "pi-ai": "dist/cli.js" } }, "sha512-WpZC2M9FZJvqqqsdah5bE/W/O6QSB9FC9i1Je64NKwT4dI3JnpgcniDDtx8Bo4e3LDNryp03HXAB7IbOGgllcw=="],
 
-    "@dyyz1993/pi-coding-agent": ["@dyyz1993/pi-coding-agent@0.69.25", "", { "dependencies": { "@dyyz1993/pi-agent-core": "^0.69.25", "@dyyz1993/pi-ai": "^0.69.25", "@dyyz1993/pi-tui": "^0.69.25", "@mariozechner/jiti": "^2.6.2", "@silvia-odwyer/photon-node": "^0.3.4", "chalk": "^5.5.0", "cli-highlight": "^2.1.11", "diff": "^8.0.2", "extract-zip": "^2.0.1", "file-type": "^21.1.1", "glob": "^13.0.1", "hosted-git-info": "^9.0.2", "ignore": "^7.0.5", "marked": "^15.0.12", "minimatch": "^10.2.3", "proper-lockfile": "^4.1.2", "strip-ansi": "^7.1.0", "typebox": "^1.1.24", "undici": "^7.19.1", "uuid": "^11.1.0", "yaml": "^2.8.2" }, "optionalDependencies": { "@mariozechner/clipboard": "^0.3.2" }, "bin": { "pi": "dist/cli.js" } }, "sha512-9eFkl2yzqMPhUzOYqQVGf4GhzKENpSx1txDvbK5SAMGM9zDeoUB7SaJsnLg1O19Ue4l0I/wCbXr6RSQTO1g9zQ=="],
+    "@dyyz1993/pi-coding-agent": ["@dyyz1993/pi-coding-agent@0.70.2", "", { "dependencies": { "@dyyz1993/pi-agent-core": "^0.70.1", "@dyyz1993/pi-ai": "^0.70.1", "@dyyz1993/pi-tui": "^0.70.1", "@mariozechner/jiti": "^2.6.2", "@silvia-odwyer/photon-node": "^0.3.4", "chalk": "^5.5.0", "cli-highlight": "^2.1.11", "diff": "^8.0.2", "extract-zip": "^2.0.1", "file-type": "^21.1.1", "glob": "^13.0.1", "hosted-git-info": "^9.0.2", "ignore": "^7.0.5", "marked": "^15.0.12", "minimatch": "^10.2.3", "proper-lockfile": "^4.1.2", "strip-ansi": "^7.1.0", "typebox": "^1.1.24", "undici": "^7.19.1", "uuid": "^11.1.0", "yaml": "^2.8.2" }, "optionalDependencies": { "@mariozechner/clipboard": "^0.3.2" }, "bin": { "pi": "dist/cli.js" } }, "sha512-PdxTquvfjJJi9eipcMlS9KMNk+jQBs6UuNAL/5nDpuzA7GoNHwB/YN/LXldgf+YOF+MwNXhEj1EEKHzq5v8RuQ=="],
 
-    "@dyyz1993/pi-tui": ["@dyyz1993/pi-tui@0.69.25", "", { "dependencies": { "@types/mime-types": "^2.1.4", "chalk": "^5.5.0", "get-east-asian-width": "^1.3.0", "marked": "^15.0.12", "mime-types": "^3.0.1" }, "optionalDependencies": { "koffi": "^2.9.0" } }, "sha512-Esb10hp9kWnp0qijSZ9Y9JHadMtg2oaqV32YRiIXSA6MHdSZldo+CEmoLjaG2/7nzCjJztEbYfeSZSORykPRmg=="],
+    "@dyyz1993/pi-tui": ["@dyyz1993/pi-tui@0.70.2", "", { "dependencies": { "@types/mime-types": "^2.1.4", "chalk": "^5.5.0", "get-east-asian-width": "^1.3.0", "marked": "^15.0.12", "mime-types": "^3.0.1" }, "optionalDependencies": { "koffi": "^2.9.0" } }, "sha512-hYhmZVmmFuiu+WNDK7uMKVwBFZ6CjP0W/4ANlDNQ1fDVPLQPNaecXSDMlfM5L8Hm5leReyi/MPhBwZ9B3xjvbQ=="],
 
-    "@dyyz1993/rpc-core": ["@dyyz1993/rpc-core@1.0.3", "", { "dependencies": { "uuid": "^9.0.0" } }, "sha512-XHNrYzOvwDLambhesUdlltkCGr3/a/JhRlwaL34XD44BPNSW1DdP61ORc4K9LSeevADIv21P6LKJEyIawFHtMg=="],
+    "@dyyz1993/rpc-core": ["@dyyz1993/rpc-core@1.2.0", "", {}, "sha512-hZxeTJx+Vcys1tTEK2aS/RXYIPmaKJGpgZOJh3SuK88y3y8EYQpF+a8fgNwiC+hgtwCeTq1c85x/n+PbQ4OD4A=="],
 
     "@emnapi/runtime": ["@emnapi/runtime@1.10.0", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-ewvYlk86xUoGI0zQRNq/mC+16R1QeDlKQy21Ki3oSYXNgLb45GV1P6A0M+/s6nyCuNDqe5VpaY84BzXGwVbwFA=="],
 
@@ -1089,6 +1090,12 @@
     "dompurify": ["dompurify@3.4.2", "", { "optionalDependencies": { "@types/trusted-types": "^2.0.7" } }, "sha512-lHeS9SA/IKeIFFyYciHBr2n0v1VMPlSj843HdLOwjb2OxNwdq9Xykxqhk+FE42MzAdHvInbAolSE4mhahPpjXA=="],
 
     "dot-prop": ["dot-prop@5.3.0", "", { "dependencies": { "is-obj": "^2.0.0" } }, "sha512-QM8q3zDe58hqUqjraQOmzZ1LIH9SWQJTlEKCH4kJ2oQvLZk7RbQXvtDM2XEq3fwkV9CCvvH4LA0AV+ogFsBM2Q=="],
+
+    "dotenv": ["dotenv@17.4.2", "", {}, "sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw=="],
+
+    "dotenv-cli": ["dotenv-cli@11.0.0", "", { "dependencies": { "cross-spawn": "^7.0.6", "dotenv": "^17.1.0", "dotenv-expand": "^12.0.0", "minimist": "^1.2.6" }, "bin": { "dotenv": "cli.js" } }, "sha512-r5pA8idbk7GFWuHEU7trSTflWcdBpQEK+Aw17UrSHjS6CReuhrrPcyC3zcQBPQvhArRHnBo/h6eLH1fkCvNlww=="],
+
+    "dotenv-expand": ["dotenv-expand@12.0.3", "", { "dependencies": { "dotenv": "^16.4.5" } }, "sha512-uc47g4b+4k/M/SeaW1y4OApx+mtLWl92l5LMPP0GNXctZqELk+YGgOPIIC5elYmUH4OuoK3JLhuRUYegeySiFA=="],
 
     "eastasianwidth": ["eastasianwidth@0.2.0", "", {}, ""],
 
@@ -1974,8 +1981,6 @@
 
     "@dyyz1993/pi-tui/chalk": ["chalk@5.6.2", "", {}, "sha512-7NzBL0rN6fMUW+f7A6Io4h40qQlG+xGmtMxfbnH/K7TAtt8JQWVQK+6g0UXKMeVJoyV5EkkNsErQ8pVD3bLHbA=="],
 
-    "@dyyz1993/rpc-core/uuid": ["uuid@9.0.1", "", { "bin": { "uuid": "dist/bin/uuid" } }, "sha512-b+1eJOlsR9K8HJpow9Ok3fiWOWSIcIzXodvv0rQjVoOVNpWMpxf1wZNpt4y9h10odCNrqnYp1OBzRktckBe3sA=="],
-
     "@emotion/babel-plugin/convert-source-map": ["convert-source-map@1.9.0", "", {}, "sha512-ASFBup0Mz1uyiIjANan1jzLQami9z1PoYSZCiiYW2FczPbenXc45FZdBZLzOT+r6+iciuEModtmCti+hjaAk0A=="],
 
     "@emotion/babel-plugin/source-map": ["source-map@0.5.7", "", {}, "sha512-LbrmJOMUSdEVxIKvdcJzQC+nQhe8FUZQTXQy6+I75skNgn3OoQ0DZA8YnFa7gp8tqtL3KPf1kmo0R5DoApeSGQ=="],
@@ -2029,6 +2034,8 @@
     "d3-sankey/d3-array": ["d3-array@2.12.1", "", { "dependencies": { "internmap": "^1.0.0" } }, "sha512-B0ErZK/66mHtEsR1TkPEEkwdy+WDesimkM5gpZr5Dsg54BiTA5RXtYW5qTLIAcekaS9xfZrzBLF/OAkB3Qn1YQ=="],
 
     "d3-sankey/d3-shape": ["d3-shape@1.3.7", "", { "dependencies": { "d3-path": "1" } }, "sha512-EUkvKjqPFUAZyOlhY5gzCxCeI0Aep04LwIRpsZ/mLFelJiUfnK56jo5JMDSE7yyP2kLSb6LtF+S5chMk7uqPqw=="],
+
+    "dotenv-expand/dotenv": ["dotenv@16.6.1", "", {}, "sha512-uBq4egWHTcTt33a72vpSG0z3HnPuIl6NqYcTrKEg2azoEyl2hpW0zqlxysq2pK9HlDIHyHyakeYaYnSAwd8bow=="],
 
     "fast-glob/glob-parent": ["glob-parent@5.1.2", "", { "dependencies": { "is-glob": "^4.0.1" } }, ""],
 
