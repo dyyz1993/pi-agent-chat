@@ -1,5 +1,5 @@
 #!/bin/sh
-bun run lint
+bunx lint-staged
 ERRORS=$(bunx tsc --noEmit 2>&1 | grep "error TS" | grep -v "node_modules" || true)
 if [ -n "$ERRORS" ]; then
   echo "$ERRORS"

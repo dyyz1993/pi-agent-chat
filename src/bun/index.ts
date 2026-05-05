@@ -7,8 +7,17 @@ import { createLogger, setLogSink } from "../shared/lib/logger";
 import { configureLogDir, writeLogLine } from "../shared/lib/logger.node";
 import { setOpenFolderFn } from "../shared/lib/native-dialog";
 
+const { openFileDialog } = Utils as {
+  openFileDialog: (opts: {
+    startingFolder: string;
+    canChooseFiles: boolean;
+    canChooseDirectory: boolean;
+    allowsMultipleSelection: boolean;
+  }) => Promise<string[]>;
+};
+
 setOpenFolderFn(async (opts) => {
-  return Utils.openFileDialog({
+  return openFileDialog({
     startingFolder: opts.startingFolder ?? "~/",
     canChooseFiles: false,
     canChooseDirectory: true,
@@ -60,7 +69,10 @@ const rpcConfig = BrowserView.defineRPC({
     messages: {
       "rpc-message": (data: unknown) => {
         try {
-          const message = typeof data === "string" ? (JSON.parse(data) as Record<string, unknown>) : (data as Record<string, unknown>);
+          const message =
+            typeof data === "string"
+              ? (JSON.parse(data) as Record<string, unknown>)
+              : (data as Record<string, unknown>);
           transport.handleMessage(message);
         } catch (error) {
           log.error("Failed to parse RPC message", { error });
@@ -89,8 +101,30 @@ transport.setBrowserView(mainWindow.webview as Parameters<typeof transport.setBr
 log.info("PiAgentChat desktop app started!");
 
 ApplicationMenu.setApplicationMenu([
-  { label: "PiAgentChat", submenu: [{ role: "about" }, { type: "separator" }, { role: "hide" }, { role: "hideOthers" }, { role: "showAll" }, { type: "separator" }, { role: "quit" }] },
-  { label: "Edit", submenu: [{ role: "undo" }, { role: "redo" }, { type: "separator" }, { role: "cut" }, { role: "copy" }, { role: "paste" }, { role: "selectAll" }] },
+  {
+    label: "PiAgentChat",
+    submenu: [
+      { role: "about" },
+      { type: "separator" },
+      { role: "hide" },
+      { role: "hideOthers" },
+      { role: "showAll" },
+      { type: "separator" },
+      { role: "quit" },
+    ],
+  },
+  {
+    label: "Edit",
+    submenu: [
+      { role: "undo" },
+      { role: "redo" },
+      { type: "separator" },
+      { role: "cut" },
+      { role: "copy" },
+      { role: "paste" },
+      { role: "selectAll" },
+    ],
+  },
   { label: "View", submenu: [{ role: "toggleFullScreen" }] },
   { label: "Window", submenu: [{ role: "minimize" }, { role: "zoom" }] },
 ]);

@@ -1,5 +1,6 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
+import eslintConfigPrettier from 'eslint-config-prettier';
 import rpcPlugin from './eslint-plugin-rpc/index.js';
 
 export default tseslint.config(
@@ -19,6 +20,7 @@ export default tseslint.config(
       '.codenomad/**',
 
       'src/electrobun-shim.d.ts',
+      'eslint.config.mjs',
     ],
   },
   {
@@ -75,4 +77,5 @@ export default tseslint.config(
       'no-console': 'off',
     },
   },
+  eslintConfigPrettier,
 );
