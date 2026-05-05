@@ -49,7 +49,7 @@ const ContextRing = memo(function ContextRing({ percent, strokeClass, isWorking 
         fill="none"
         stroke="currentColor"
         strokeWidth={stroke}
-        className="text-gray-700"
+className="text-gray-300 dark:text-gray-700"
       />
       <circle
         cx={size / 2}
@@ -95,10 +95,10 @@ export const TokenStatusBar = memo(function TokenStatusBar({ sessionId }: { sess
     <div className="flex items-center gap-1.5">
       <ContextRing percent={percent} strokeClass={config.strokeClass} isWorking={isWorking} />
       <span>{activeSubId ? "子代理" : "已用"}</span>
-      <span className="text-gray-400 font-medium">{used}</span>
+      <span className="text-gray-500 dark:text-gray-400 font-medium">{used}</span>
       {contextUsage?.contextWindow ? (
         <>
-          <span className="text-gray-700">/</span>
+          <span className="text-gray-300 dark:text-gray-700">/</span>
           <span>可用 {available}</span>
         </>
       ) : null}

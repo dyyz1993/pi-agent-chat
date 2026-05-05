@@ -63,7 +63,7 @@ export const TimelineTurn = memo(function TimelineTurn({ turn, isLast: _isLast }
           {/* Collapse toggle */}
           <button
             onClick={toggleCollapse}
-            className="shrink-0 p-0.5 rounded hover:bg-gray-800 transition-colors"
+            className="shrink-0 p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors"
             title={collapsed ? "展开" : "折叠"}
             aria-expanded={!collapsed}
             aria-label={collapsed ? "展开回合" : "折叠回合"}
@@ -76,16 +76,16 @@ export const TimelineTurn = memo(function TimelineTurn({ turn, isLast: _isLast }
           </button>
 
           {/* Model / summary info */}
-          <span className="text-[11px] text-gray-500 font-medium truncate">
+          <span className="text-[11px] text-gray-400 dark:text-gray-500 font-medium truncate">
             {turn.model ?? "Assistant"}
             {toolCount > 0 && (
-              <span className="ml-1.5 text-gray-600">· {toolCount} tool{toolCount > 1 ? "s" : ""}</span>
+              <span className="ml-1.5 text-gray-400 dark:text-gray-600">· {toolCount} tool{toolCount > 1 ? "s" : ""}</span>
             )}
           </span>
 
           {/* Token usage badge */}
           {turn.tokenUsage && (
-            <span className="text-[10px] text-gray-600 font-mono ml-auto">
+            <span className="text-[10px] text-gray-400 dark:text-gray-600 font-mono ml-auto">
               {formatTokens(turn.tokenUsage.input)} / {formatTokens(turn.tokenUsage.output)}
             </span>
           )}
@@ -125,7 +125,7 @@ export const TimelineTurn = memo(function TimelineTurn({ turn, isLast: _isLast }
 
       {/* ── Collapsed Summary ── */}
       {collapsed && (
-        <div className="ml-[38px] py-1.5 px-3 text-[11px] text-gray-500 bg-gray-900/40 rounded-md border border-gray-800/50 cursor-pointer" onClick={toggleCollapse}>
+        <div className="ml-[38px] py-1.5 px-3 text-[11px] text-gray-400 dark:text-gray-500 bg-gray-50/40 dark:bg-gray-900/40 rounded-md border border-gray-200/50 dark:border-gray-800/50 cursor-pointer" onClick={toggleCollapse}>
           {turn.userText ? truncate(turn.userText, 60) : "(empty)"}
           {textCount > 0 && ` · ${textCount} text`}
           {toolCount > 0 && ` · ${toolCount} tools`}
@@ -203,9 +203,9 @@ function TimelineItemRenderer({
           {showCheckbox && (
             <ItemCheckbox checked={isSelected} onChange={handleToggle} />
           )}
-          <div className="px-3 py-2 rounded-lg bg-gray-800/60 text-sm text-gray-300 font-mono">
+          <div className="px-3 py-2 rounded-lg bg-gray-100/60 dark:bg-gray-800/60 text-sm text-gray-700 dark:text-gray-300 font-mono">
             <span className="text-indigo-400">{item.toolName}</span>
-            {item.args && <span className="text-gray-500 ml-1">{item.args.slice(0, 80)}</span>}
+            {item.args && <span className="text-gray-400 dark:text-gray-500 ml-1">{item.args.slice(0, 80)}</span>}
           </div>
         </div>
       );
@@ -215,7 +215,7 @@ function TimelineItemRenderer({
           {showCheckbox && (
             <ItemCheckbox checked={isSelected} onChange={handleToggle} />
           )}
-          <div className="px-3 py-2 rounded-lg bg-gray-800/40 text-sm text-gray-300">
+          <div className="px-3 py-2 rounded-lg bg-gray-100/40 dark:bg-gray-800/40 text-sm text-gray-700 dark:text-gray-300">
             <span className="text-cyan-400 font-medium">[{item.customType}]</span>
           </div>
         </div>
@@ -238,7 +238,7 @@ function ItemCheckbox({
       className={`absolute -left-[26px] top-2 w-4 h-4 rounded border flex items-center justify-center transition-all shrink-0 ${
         checked
           ? "bg-indigo-500 border-indigo-400 text-white"
-          : "border-gray-600 hover:border-gray-400 bg-transparent"
+          : "border-gray-400 dark:border-gray-600 hover:border-gray-400 bg-transparent"
       }`}
     >
       {checked && <Check size={10} />}
@@ -257,7 +257,7 @@ function AssistantTextBlock({
 
   if (isStreaming) {
     return (
-      <div className="px-3 py-2 rounded-lg bg-gray-700/60 text-sm text-gray-200 whitespace-pre-wrap break-words">
+      <div className="px-3 py-2 rounded-lg bg-gray-200/60 dark:bg-gray-700/60 text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words">
         {text}
         <span className="inline-block w-1.5 h-4 bg-indigo-400 animate-pulse ml-0.5 align-text-bottom" />
       </div>
@@ -265,14 +265,14 @@ function AssistantTextBlock({
   }
 
   return (
-    <div className="group/text relative px-3 py-2 rounded-lg bg-gray-800/40 prose prose-invert prose-sm max-w-none">
-      <pre className="whitespace-pre-wrap break-words text-sm text-gray-200">{text}</pre>
+    <div className="group/text relative px-3 py-2 rounded-lg bg-gray-100/40 dark:bg-gray-800/40 prose dark:prose-invert prose-sm max-w-none">
+      <pre className="whitespace-pre-wrap break-words text-sm text-gray-800 dark:text-gray-200">{text}</pre>
       <button
         onClick={() => copy(text)}
-        className="absolute top-1.5 right-1.5 p-1 rounded opacity-0 group-hover/text:opacity-100 hover:bg-gray-700 transition-all"
+        className="absolute top-1.5 right-1.5 p-1 rounded opacity-0 group-hover/text:opacity-100 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all"
         title={copied ? "已复制" : "复制文本"}
       >
-        <Copy size={11} className={copied ? "text-green-400" : "text-gray-500"} />
+        <Copy size={11} className={copied ? "text-green-400" : "text-gray-400 dark:text-gray-500"} />
       </button>
     </div>
   );
@@ -296,7 +296,7 @@ function TurnActionButton({
       ? "text-yellow-400/70 hover:text-yellow-400 hover:bg-yellow-400/10"
       : variant === "info"
         ? "text-blue-400/70 hover:text-blue-400 hover:bg-blue-400/10"
-        : "text-gray-500 hover:text-gray-300 hover:bg-gray-800";
+        : "text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800";
 
   const activeClass = active ? "!bg-indigo-500/20 !text-indigo-400" : "";
 

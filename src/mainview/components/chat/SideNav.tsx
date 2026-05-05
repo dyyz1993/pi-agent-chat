@@ -141,7 +141,7 @@ const NavDot = memo(function NavDot({
     iconColor = "text-indigo-300";
     barCls += "bg-indigo-400 opacity-100 ";
   } else {
-    cls += "hover:bg-gray-800/60 ";
+    cls += "hover:bg-gray-200/60 dark:hover:bg-gray-800/60 ";
   }
 
   return (
@@ -176,7 +176,7 @@ const NavSubDot = memo(function NavSubDot({
     iconColor = "text-indigo-300";
     barCls += "bg-indigo-400 opacity-100 ";
   } else {
-    cls += "hover:bg-gray-800/60 ";
+    cls += "hover:bg-gray-200/60 dark:hover:bg-gray-800/60 ";
   }
 
   return (
@@ -250,7 +250,7 @@ export function SideNav({
   }, [selectedNavId, navItems, virtualizer]);
 
   return (
-    <div className="h-full min-h-0 flex flex-col bg-gray-900/30 border-l border-gray-800/30">
+    <div className="h-full min-h-0 flex flex-col bg-gray-50/30 dark:bg-gray-900/30 border-l border-gray-200/30 dark:border-gray-800/30">
       <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto sidenav-scroll" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
         <div style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}>
           {virtualizer.getVirtualItems().map((vr) => {

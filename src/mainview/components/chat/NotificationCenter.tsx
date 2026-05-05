@@ -70,7 +70,7 @@ export function NotificationCenter() {
           e.stopPropagation();
           togglePanel();
         }}
-        className="p-1 rounded transition-colors text-gray-600 hover:text-gray-300 relative"
+        className="p-1 rounded transition-colors text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 relative"
         title="通知"
         aria-label={`通知${unread > 0 ? `，${unread} 条未读` : ""}`}
         aria-expanded={panelOpen}
@@ -84,13 +84,13 @@ export function NotificationCenter() {
       </button>
 
       {panelOpen && (
-        <div className="absolute right-0 top-full mt-1 w-72 max-h-80 overflow-hidden flex flex-col bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50" role="log" aria-label="通知列表">
-          <div className="flex items-center justify-between px-3 py-2 border-b border-gray-700">
-            <span className="text-[11px] text-gray-400 font-medium">通知</span>
+        <div className="absolute right-0 top-full mt-1 w-72 max-h-80 overflow-hidden flex flex-col bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg shadow-xl z-50" role="log" aria-label="通知列表">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-gray-300 dark:border-gray-700">
+            <span className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">通知</span>
             {notifications.length > 0 && (
               <button
                 onClick={clearAll}
-                className="text-[10px] text-gray-500 hover:text-gray-300 transition-colors flex items-center gap-0.5"
+                className="text-[10px] text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors flex items-center gap-0.5"
               >
                 <Trash2 className="w-2.5 h-2.5" />
                 清空
@@ -100,7 +100,7 @@ export function NotificationCenter() {
 
           <div className="overflow-y-auto flex-1">
             {notifications.length === 0 ? (
-              <div className="py-6 text-center text-[11px] text-gray-600">
+              <div className="py-6 text-center text-[11px] text-gray-400 dark:text-gray-600">
                 暂无通知
               </div>
             ) : (
@@ -110,7 +110,7 @@ export function NotificationCenter() {
                 return (
                   <div
                     key={n.id}
-                    className={`flex items-start gap-2 px-3 py-2 border-b border-gray-700/50 transition-colors ${!n.read ? "bg-gray-700/20" : ""} ${isClickable ? "hover:bg-gray-700/30 cursor-pointer" : ""}`}
+                    className={`flex items-start gap-2 px-3 py-2 border-b border-gray-200/50 dark:border-gray-700/50 transition-colors ${!n.read ? "bg-gray-200/20 dark:bg-gray-700/20" : ""} ${isClickable ? "hover:bg-gray-200/30 dark:hover:bg-gray-700/30 cursor-pointer" : ""}`}
                     onMouseEnter={() => {
                       if (!n.read) markRead(n.id);
                     }}
@@ -119,7 +119,7 @@ export function NotificationCenter() {
                     }}
                   >
                     <Icon className={`w-3 h-3 mt-0.5 shrink-0 ${LEVEL_COLOR[n.level]}`} />
-                    <span className="flex-1 text-[11px] text-gray-300 break-all leading-relaxed">
+                    <span className="flex-1 text-[11px] text-gray-700 dark:text-gray-300 break-all leading-relaxed">
                       {n.message}
                     </span>
                     <button
@@ -127,7 +127,7 @@ export function NotificationCenter() {
                         e.stopPropagation();
                         dismiss(n.id);
                       }}
-                      className="shrink-0 text-gray-600 hover:text-gray-300 transition-colors"
+                      className="shrink-0 text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
                       aria-label="关闭通知"
                     >
                       <X className="w-2.5 h-2.5" />
@@ -139,7 +139,7 @@ export function NotificationCenter() {
           </div>
 
           {pwaPerm !== "granted" && pwaPerm !== "denied" && (
-            <div className="px-3 py-2 border-t border-gray-700">
+            <div className="px-3 py-2 border-t border-gray-300 dark:border-gray-700">
               <button
                 onClick={handleEnablePwa}
                 className="w-full flex items-center justify-center gap-1.5 text-[11px] text-indigo-400 hover:text-indigo-300 transition-colors py-1"

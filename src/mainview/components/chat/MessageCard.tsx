@@ -102,7 +102,7 @@ export const MessageCard = memo(function MessageCard({ message, cardLabel, prevB
             上下文压缩
           </span>
           {compactionBlock?.tokensBefore != null && (
-            <span className="text-[10px] text-gray-600">
+            <span className="text-[10px] text-gray-400 dark:text-gray-600">
               {Math.round(compactionBlock.tokensBefore / 1000)}k tokens
             </span>
           )}
@@ -114,11 +114,11 @@ export const MessageCard = memo(function MessageCard({ message, cardLabel, prevB
             >
               <ChevronDown className={`w-3 h-3 transition-transform ${isCollapsed ? "" : "-rotate-90"}`} />
             </button>
-            <span className="text-[10px] text-gray-600">{timeStr}</span>
+            <span className="text-[10px] text-gray-400 dark:text-gray-600">{timeStr}</span>
           </div>
         </div>
         {isCollapsed ? (
-          <div className={`relative z-20 border-l-[3px] ${roleCfg.barColor} px-4 py-1 text-xs text-gray-500 italic leading-relaxed`}>
+          <div className={`relative z-20 border-l-[3px] ${roleCfg.barColor} px-4 py-1 text-xs text-gray-400 dark:text-gray-500 italic leading-relaxed`}>
             {firstLine}
           </div>
         ) : (
@@ -172,7 +172,7 @@ export const MessageCard = memo(function MessageCard({ message, cardLabel, prevB
             checked={isSelected}
             onChange={() => toggleMessageSelection(message.id)}
             onClick={(e) => e.stopPropagation()}
-            className="w-3 h-3 rounded border border-gray-600 accent-emerald-500 shrink-0 cursor-pointer"
+            className="w-3 h-3 rounded border border-gray-400 dark:border-gray-600 accent-emerald-500 shrink-0 cursor-pointer"
           />
         )}
 
@@ -184,7 +184,7 @@ export const MessageCard = memo(function MessageCard({ message, cardLabel, prevB
         )}
 
         {!isUser && !isEntry && (message.provider ?? message.model) && (
-          <span className="text-[10px] text-gray-600 opacity-0 group-hover/msgcard:opacity-100 transition-opacity">
+           <span className="text-[10px] text-gray-400 dark:text-gray-600 opacity-0 group-hover/msgcard:opacity-100 transition-opacity">
             {message.provider}{message.model ? ` · ${message.model}` : ""}
           </span>
         )}
@@ -196,19 +196,19 @@ export const MessageCard = memo(function MessageCard({ message, cardLabel, prevB
           {(isAssistant || isUser || isEntry) && (
             <button
               onClick={(e) => { e.stopPropagation(); handleToggleCollapse(); }}
-              className="p-0.5 text-gray-600 hover:text-gray-300 transition-colors"
+              className="p-0.5 text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
               title={isCollapsed ? "展开" : "折叠"}
             >
               <ChevronDown className={`w-3 h-3 transition-transform ${isCollapsed ? "" : "-rotate-90"}`} />
             </button>
           )}
-          <span className="text-[10px] text-gray-600">{timeStr}</span>
+          <span className="text-[10px] text-gray-400 dark:text-gray-600">{timeStr}</span>
         </div>
       </div>
 
       {/* Content */}
       {isCollapsed ? (
-        <div className={`relative z-20 border-l-[3px] ${isSelected ? "border-l-red-500" : barColor} px-4 py-1 text-xs text-gray-500 italic leading-relaxed`}>
+        <div className={`relative z-20 border-l-[3px] ${isSelected ? "border-l-red-500" : barColor} px-4 py-1 text-xs text-gray-400 dark:text-gray-500 italic leading-relaxed`}>
           {message.content
             .filter((b) => b.type === "text")
             .map((b) => b.text)
@@ -226,11 +226,11 @@ export const MessageCard = memo(function MessageCard({ message, cardLabel, prevB
         <div className={`relative z-20 border-l-[3px] ${isSelected ? "border-l-red-500" : barColor}`}>
           {message.tokenUsage && (
             <div className="flex items-center justify-end px-4 pb-0.5">
-              <span className="flex items-center gap-1 text-[10px] font-mono text-gray-600">
+              <span className="flex items-center gap-1 text-[10px] font-mono text-gray-400 dark:text-gray-600">
                 <span>输入 {formatTokenCount(message.tokenUsage.input)}</span>
-                <span className="text-gray-800">→</span>
+                <span className="text-gray-400 dark:text-gray-800">→</span>
                 <span>输出 {formatTokenCount(message.tokenUsage.output)}</span>
-                <span className="text-gray-800">·</span>
+                <span className="text-gray-400 dark:text-gray-800">·</span>
                 <span>{formatTokenCount(message.tokenUsage.input + message.tokenUsage.output)}</span>
               </span>
             </div>
@@ -250,7 +250,7 @@ const LazyHeaderActions = memo(function LazyHeaderActions({ message, isUserCard 
         className="inline-flex items-center opacity-0 group-hover/msgcard:opacity-100 transition-opacity"
         onMouseEnter={() => setVisible(true)}
       >
-        <span className="p-1 text-gray-700 cursor-pointer">···</span>
+        <span className="p-1 text-gray-500 dark:text-gray-700 cursor-pointer">···</span>
       </span>
     );
   }
@@ -455,7 +455,7 @@ const HeaderActions = memo(function HeaderActions({ message, isUserCard }: { mes
       <ActionBtn icon={Undo2} title="回滚消息" onClick={() => requestRollback("message")} disabled={rollingBackRef.current} />
       <ActionBtn icon={RotateCcw} title="回滚消息+代码" onClick={() => requestRollback("withFiles")} disabled={rollingBackRef.current} />
       {confirmState && (
-        <div className="absolute right-0 top-6 z-50 w-72 rounded-lg border border-amber-500/30 bg-gray-900 px-3 py-2.5 shadow-xl">
+        <div className="absolute right-0 top-6 z-50 w-72 rounded-lg border border-amber-500/30 bg-gray-50 dark:bg-gray-900 px-3 py-2.5 shadow-xl">
           <div className="flex items-center gap-1.5 mb-1.5">
             <FileWarning className="w-3.5 h-3.5 text-amber-400 shrink-0" />
             <span className="text-[11px] font-medium text-amber-300">回滚将恢复以下文件</span>
@@ -465,7 +465,7 @@ const HeaderActions = memo(function HeaderActions({ message, isUserCard }: { mes
               <span className="text-[10px] text-emerald-400">恢复:</span>
               <ul className="ml-2 mt-0.5 space-y-0.5 max-h-24 overflow-y-auto">
                 {confirmState.preview.restored.map((f) => (
-                  <li key={f} className="text-[10px] text-gray-300 truncate" title={f}>{f}</li>
+                  <li key={f} className="text-[10px] text-gray-700 dark:text-gray-300 truncate" title={f}>{f}</li>
                 ))}
               </ul>
             </div>
@@ -475,13 +475,13 @@ const HeaderActions = memo(function HeaderActions({ message, isUserCard }: { mes
               <span className="text-[10px] text-red-400">删除:</span>
               <ul className="ml-2 mt-0.5 space-y-0.5 max-h-24 overflow-y-auto">
                 {confirmState.preview.deleted.map((f) => (
-                  <li key={f} className="text-[10px] text-gray-300 truncate" title={f}>{f}</li>
+                  <li key={f} className="text-[10px] text-gray-700 dark:text-gray-300 truncate" title={f}>{f}</li>
                 ))}
               </ul>
             </div>
           )}
           {confirmState.preview.restored.length === 0 && confirmState.preview.deleted.length === 0 && (
-            <p className="text-[10px] text-gray-400 mb-1.5">无文件变更</p>
+            <p className="text-[10px] text-gray-500 dark:text-gray-400 mb-1.5">无文件变更</p>
           )}
           <div className="flex items-center justify-end gap-2">
             <button
@@ -492,7 +492,7 @@ const HeaderActions = memo(function HeaderActions({ message, isUserCard }: { mes
             </button>
             <button
               onClick={(e) => { e.stopPropagation(); cancelRollback(); }}
-              className="rounded bg-gray-700 px-2 py-0.5 text-[11px] font-medium text-gray-400 hover:bg-gray-600 transition-colors"
+              className="rounded bg-gray-200 dark:bg-gray-700 px-2 py-0.5 text-[11px] font-medium text-gray-700 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
             >
               取消
             </button>
@@ -524,7 +524,7 @@ const ActionBtn = memo(function ActionBtn({
       onClick={(e) => { e.stopPropagation(); if (!disabled) onClick(); }}
       title={title}
       disabled={disabled}
-      className={`p-1 rounded transition-colors ${disabled ? "text-gray-700 cursor-not-allowed" : active ? activeClassName : "text-gray-600 hover:text-gray-300 hover:bg-gray-700/50"}`}
+      className={`p-1 rounded transition-colors ${disabled ? "text-gray-400 dark:text-gray-700 cursor-not-allowed" : active ? activeClassName : "text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50"}`}
     >
       {disabled ? (
         <Loader2 className="w-3.5 h-3.5 animate-spin" />

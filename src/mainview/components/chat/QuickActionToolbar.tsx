@@ -399,13 +399,13 @@ export function QuickActionToolbar() {
       <div className="flex items-center gap-1 min-h-[40px]">
         <div className="flex items-center gap-0.5">
           <button
-            className="p-1.5 rounded-md hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors"
+            className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
             title="附件"
           >
             <Paperclip className="w-4 h-4" />
           </button>
           <button
-            className="p-1.5 rounded-md hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors"
+            className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
             title="图片"
           >
             <ImageIcon className="w-4 h-4" />
@@ -418,7 +418,7 @@ export function QuickActionToolbar() {
             className={`px-2 py-1 rounded-md text-xs font-medium transition-colors ${
               popupMode === "at"
                 ? "bg-indigo-600/30 text-indigo-300 border border-indigo-500/50"
-                : "hover:bg-gray-800 text-gray-500 hover:text-gray-300 border border-transparent"
+                : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 border border-transparent"
             }`}
             title="@提及"
           >
@@ -432,7 +432,7 @@ export function QuickActionToolbar() {
             className={`px-2 py-1 rounded-md text-xs font-medium transition-colors ${
               popupMode === "slash"
                 ? "bg-amber-600/30 text-amber-300 border border-amber-500/50"
-                : "hover:bg-gray-800 text-gray-500 hover:text-gray-300 border border-transparent"
+                : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 border border-transparent"
             }`}
             title="命令与技能"
           >
@@ -447,9 +447,9 @@ export function QuickActionToolbar() {
       {popupMode && (
         <div
           ref={panelRef}
-          className="absolute left-3 right-3 bottom-full mb-1 bg-gray-900 border border-gray-700 rounded-lg shadow-xl shadow-black/40 overflow-hidden z-50"
+          className="absolute left-3 right-3 bottom-full mb-1 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg shadow-xl shadow-black/40 overflow-hidden z-50"
         >
-          <div className="flex items-center justify-between px-3 py-2 border-b border-gray-800">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-gray-800">
             <div className="flex items-center gap-2 min-w-0">
               {popupMode === "at" ? (
                 <div className="flex gap-1 shrink-0">
@@ -463,7 +463,7 @@ export function QuickActionToolbar() {
                       className={`px-2 py-0.5 rounded text-[11px] transition-colors whitespace-nowrap ${
                         atTab === tab.key
                           ? "bg-indigo-600/30 text-indigo-300"
-                          : "text-gray-500 hover:text-gray-300 hover:bg-gray-800"
+                           : "text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
                       }`}
                     >
                       {tab.label}
@@ -478,8 +478,8 @@ export function QuickActionToolbar() {
                       onClick={() => setSlashCategory(cat)}
                       className={`px-2 py-0.5 rounded text-[11px] transition-colors ${
                         slashCategory === cat
-                          ? "bg-amber-600/30 text-amber-300"
-                          : "text-gray-500 hover:text-gray-300 hover:bg-gray-800"
+                           ? "bg-amber-600/30 text-amber-300"
+                           : "text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
                       }`}
                     >
                       {cat === "commands" ? "命令" : "技能"}
@@ -491,7 +491,7 @@ export function QuickActionToolbar() {
             </div>
             <button
               onClick={closePopup}
-              className="p-1 rounded hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors shrink-0 ml-1"
+              className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors shrink-0 ml-1"
               title="关闭"
             >
               <X className="w-3.5 h-3.5" />
@@ -499,7 +499,7 @@ export function QuickActionToolbar() {
           </div>
 
           {popupMode === "at" && atTab === "files" && fileBreadcrumbs.length > 0 && (
-            <div className="flex items-center gap-1 px-3 py-1 border-b border-gray-800/40 text-[11px] overflow-x-auto">
+            <div className="flex items-center gap-1 px-3 py-1 border-b border-gray-200/40 dark:border-gray-800/40 text-[11px] overflow-x-auto">
               <button
                 onClick={() => handleBreadcrumb(-1)}
                 className="text-indigo-400 hover:text-indigo-300 shrink-0"
@@ -508,10 +508,10 @@ export function QuickActionToolbar() {
               </button>
               {fileBreadcrumbs.map((bc, i) => (
                 <span key={bc.path} className="flex items-center gap-1 shrink-0">
-                  <ChevronRight className="w-3 h-3 text-gray-600" />
+                  <ChevronRight className="w-3 h-3 text-gray-400 dark:text-gray-600" />
                   <button
                     onClick={() => handleBreadcrumb(i)}
-                    className={`${i === fileBreadcrumbs.length - 1 ? "text-gray-300" : "text-indigo-400 hover:text-indigo-300"}`}
+                    className={`${i === fileBreadcrumbs.length - 1 ? "text-gray-700 dark:text-gray-300" : "text-indigo-400 hover:text-indigo-300"}`}
                   >
                     {bc.label}
                   </button>
@@ -522,7 +522,7 @@ export function QuickActionToolbar() {
 
           <div className="max-h-[240px] min-h-[80px] overflow-y-auto" role="listbox">
             {items.length === 0 && !loading && (
-              <div className="px-3 py-6 text-center text-xs text-gray-600">
+              <div className="px-3 py-6 text-center text-xs text-gray-400 dark:text-gray-600">
                 {query ? "没有匹配结果" : "暂无数据"}
               </div>
             )}
@@ -535,20 +535,20 @@ export function QuickActionToolbar() {
                 onClick={() => handleSelect(item)}
                 onKeyDown={handleListKeyDown}
                 className={`w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors ${
-                  idx === activeIndex ? "bg-gray-800/80" : "hover:bg-gray-800/50"
+                  idx === activeIndex ? "bg-gray-100/80 dark:bg-gray-800/80" : "hover:bg-gray-100/50 dark:hover:bg-gray-800/50"
                 }`}
               >
                 <div className={`shrink-0 ${item.accentColor}`}>
                   {renderIcon(item.icon)}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm text-gray-200 truncate">{item.label}</div>
+                  <div className="text-sm text-gray-800 dark:text-gray-200 truncate">{item.label}</div>
                   {item.description && !item.isFolder && (
-                    <div className="text-[11px] text-gray-600 truncate">{item.description}</div>
+                    <div className="text-[11px] text-gray-400 dark:text-gray-600 truncate">{item.description}</div>
                   )}
                 </div>
                 {item.isFolder && (
-                  <ChevronRight className="w-3.5 h-3.5 text-gray-600 shrink-0" />
+                  <ChevronRight className="w-3.5 h-3.5 text-gray-400 dark:text-gray-600 shrink-0" />
                 )}
               </button>
             ))}

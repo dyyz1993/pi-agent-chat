@@ -119,7 +119,7 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
         <div className="absolute inset-0 rounded-lg bg-indigo-500/[0.06] pointer-events-none" />
       )}
       {isUser ? (
-        <div className={`relative my-1 mr-2 px-3 py-2 text-[13px] leading-relaxed whitespace-pre-wrap break-words text-gray-100 bg-blue-500/[0.06] rounded-r-lg border-l-[3px] border-l-blue-500/60 ${styleMemo.bg} min-w-0`}>
+        <div className={`relative my-1 mr-2 px-3 py-2 text-[13px] leading-relaxed whitespace-pre-wrap break-words text-gray-800 dark:text-gray-100 bg-blue-500/[0.06] rounded-r-lg border-l-[3px] border-l-blue-500/60 ${styleMemo.bg} min-w-0`}>
           <div className="absolute -top-0.5 right-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
             <CopyButton text={fullTextForCopy} size="xs" />
           </div>
@@ -128,7 +128,7 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
           ))}
         </div>
       ) : (
-        <div className={`w-full text-gray-200 transition-colors ${styleMemo.bg} min-w-0`}>
+        <div className={`w-full text-gray-800 dark:text-gray-200 transition-colors ${styleMemo.bg} min-w-0`}>
           {message.content.map((block, i) => {
             const role = message.role as "user" | "assistant";
             const isEntryMsg = message.content.some((b) => b.type === "custom");
@@ -180,14 +180,14 @@ export const TextContentCard = memo(function TextContentCard({
   return (
     <div className="my-0.5 overflow-hidden" data-block-id={blockId}>
       <div
-        className={`flex items-center gap-2 px-2 pl-1 py-0.5 text-[11px] ${!isStreaming ? 'cursor-pointer hover:bg-gray-800/30' : ''}`}
+        className={`flex items-center gap-2 px-2 pl-1 py-0.5 text-[11px] ${!isStreaming ? 'cursor-pointer hover:bg-gray-200/30 dark:hover:bg-gray-800/30' : ''}`}
         onClick={() => !isStreaming && setIsOpen(!isOpen)}
       >
         <Type className="w-3 h-3 text-gray-500 shrink-0" />
         {!isStreaming && (
           <button
             onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}
-            className="p-0.5 text-gray-600 hover:text-gray-300 transition-colors ml-auto"
+            className="p-0.5 text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 transition-colors ml-auto"
             title={isOpen ? "折叠" : "展开"}
             aria-expanded={isOpen}
             aria-label={isOpen ? "折叠文本" : "展开文本"}
@@ -199,7 +199,7 @@ export const TextContentCard = memo(function TextContentCard({
       </div>
 
       {isOpen ? (
-        <div className="px-3 py-1.5 prose prose-invert prose-sm max-w-none overflow-auto max-h-[60vh] prose-p:my-1 prose-pre:bg-transparent">
+        <div className="px-3 py-1.5 prose dark:prose-invert prose-sm max-w-none overflow-auto max-h-[60vh] prose-p:my-1 prose-pre:bg-transparent">
           {isStreaming ? (
             <span>{text}</span>
           ) : (
@@ -207,7 +207,7 @@ export const TextContentCard = memo(function TextContentCard({
           )}
         </div>
       ) : hasMore ? (
-        <div className="px-2 pl-1 py-0.5 text-[11px] text-gray-500 truncate">
+        <div className="px-2 pl-1 py-0.5 text-[11px] text-gray-400 dark:text-gray-500 truncate">
           {firstLine.length > 120 ? firstLine.slice(0, 120) + '...' : firstLine}
         </div>
       ) : null}
@@ -240,7 +240,7 @@ export const ThinkingCard = memo(function ThinkingCard({
   return (
     <div className="my-1 overflow-hidden" data-block-id={blockId}>
       <div 
-        className={`px-2 pl-1 py-0.5 text-[11px] flex items-center gap-2 ${!isStreaming ? 'cursor-pointer hover:bg-gray-800/30' : ''}`}
+        className={`px-2 pl-1 py-0.5 text-[11px] flex items-center gap-2 ${!isStreaming ? 'cursor-pointer hover:bg-gray-200/30 dark:hover:bg-gray-800/30' : ''}`}
         onClick={() => !isStreaming && setIsOpen(!isOpen)}
       >
         <Brain className="w-3 h-3 text-purple-400/60 shrink-0" />
@@ -251,7 +251,7 @@ export const ThinkingCard = memo(function ThinkingCard({
             <button
               onClick={() => setIsOpen(!isOpen)}
               title={isOpen ? "折叠" : "展开"}
-              className="p-0.5 text-gray-600 hover:text-gray-300 transition-colors"
+              className="p-0.5 text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
             >
               {isOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
             </button>
@@ -261,11 +261,11 @@ export const ThinkingCard = memo(function ThinkingCard({
       </div>
       
       {isOpen ? (
-        <div className="px-2 pl-1 pb-1.5 text-[11px] text-gray-400 whitespace-pre-wrap leading-relaxed">
-          {thinking || <span className="text-gray-600 italic">thinking...</span>}
+        <div className="px-2 pl-1 pb-1.5 text-[11px] text-gray-500 dark:text-gray-400 whitespace-pre-wrap leading-relaxed">
+          {thinking || <span className="text-gray-400 dark:text-gray-600 italic">thinking...</span>}
         </div>
       ) : hasMore ? (
-        <div className="px-2 pl-1 py-0.5 text-[11px] text-gray-500 truncate">
+        <div className="px-2 pl-1 py-0.5 text-[11px] text-gray-400 dark:text-gray-500 truncate">
           {firstLine.length > 100 ? firstLine.slice(0, 100) + '...' : firstLine}
         </div>
       ) : null}
@@ -310,7 +310,7 @@ export const LspDiagnosticsCard = memo(function LspDiagnosticsCard({ data }: { d
   const details = data as { files?: Array<{ filePath: string; summary: string; issues: Array<{ severity?: number; line: number; message: string; source?: string; code?: string | number }> }> }
 
   return (
-    <div className="my-1 border border-yellow-700/30 rounded-lg overflow-hidden bg-yellow-900/10">
+    <div className="my-1 border border-yellow-700/30 rounded-lg overflow-hidden bg-yellow-50/50 dark:bg-yellow-900/10">
       <div className="px-3 py-1.5 text-xs font-medium text-yellow-400 flex items-center gap-1.5">
         <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
         <span>LSP Diagnostics</span>
@@ -324,12 +324,12 @@ export const LspDiagnosticsCard = memo(function LspDiagnosticsCard({ data }: { d
               <span className="text-yellow-500 ml-1">{f.summary}</span>
             </div>
             {f.issues.map((issue, i) => (
-              <div key={i} className="text-[10px] text-gray-400 pl-4 pt-0.5">
+              <div key={i} className="text-[10px] text-gray-500 dark:text-gray-400 pl-4 pt-0.5">
                 <span className={issue.severity === 1 ? "text-red-400" : issue.severity === 2 ? "text-yellow-400" : "text-gray-500"}>
                   L{issue.line}
                 </span>
-                {issue.source && <span className="text-gray-600"> [{issue.source}]</span>}
-                {issue.code != null && <span className="text-gray-600"> ({String(issue.code)})</span>}
+                {issue.source && <span className="text-gray-400 dark:text-gray-600"> [{issue.source}]</span>}
+                {issue.code != null && <span className="text-gray-400 dark:text-gray-600"> ({String(issue.code)})</span>}
                 : {issue.message}
               </div>
             ))}
@@ -352,14 +352,14 @@ export const MemoryCard = memo(function MemoryCard({ customType, data, blockId, 
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
-        className={`w-full px-2 py-0.5 flex items-center gap-1.5 text-[11px] ${config.color} hover:bg-gray-800/15 rounded cursor-pointer select-none`}
+        className={`w-full px-2 py-0.5 flex items-center gap-1.5 text-[11px] ${config.color} hover:bg-gray-200/15 dark:hover:bg-gray-800/15 rounded cursor-pointer select-none`}
         aria-expanded={expanded}
         aria-label={`${config.label}${summary ? `: ${summary}` : ""}`}
       >
         <Icon className="w-3 h-3 shrink-0" />
         <span className="font-medium">{config.label}</span>
-        {summary && <span className="text-gray-500 truncate">{summary}</span>}
-        <span className="ml-auto text-gray-600">
+        {summary && <span className="text-gray-400 dark:text-gray-500 truncate">{summary}</span>}
+        <span className="ml-auto text-gray-400 dark:text-gray-600">
           {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
         </span>
       </button>
@@ -380,7 +380,7 @@ function MemoryExpandedContent({ customType, data }: { customType: string; data:
   const dataStr = typeof data === "string" ? data : data ? JSON.stringify(data, null, 2) : "";
   if (!dataStr) return null;
   return (
-    <pre className="px-3 pb-1 text-[11px] text-gray-500 overflow-x-auto whitespace-pre-wrap max-h-40 overflow-y-auto">
+    <pre className="px-3 pb-1 text-[11px] text-gray-400 dark:text-gray-500 overflow-x-auto whitespace-pre-wrap max-h-40 overflow-y-auto">
       {dataStr.length > 500 ? dataStr.slice(0, 500) + "…" : dataStr}
     </pre>
   );
@@ -440,46 +440,46 @@ function PrefetchResultDetail({ data }: { data: unknown }) {
   return (
     <div className="px-3 pb-2 text-[11px] space-y-1.5">
       {!hasMemory && (
-        <div className="text-gray-500 italic py-1">未找到相关记忆</div>
+        <div className="text-gray-400 dark:text-gray-500 italic py-1">未找到相关记忆</div>
       )}
 
       {snippet && (
         <div className="space-y-0.5">
-          <div className="text-gray-400 flex items-center gap-1 font-medium">
+          <div className="text-gray-500 dark:text-gray-400 flex items-center gap-1 font-medium">
             <Brain className="w-3 h-3 text-blue-400/60 shrink-0" />
             <span>相关记忆</span>
-            <span className="text-gray-500 ml-auto">
+            <span className="text-gray-400 dark:text-gray-500 ml-auto">
               {memoryCount} 条 · ~{tokenCount} tokens · {Math.round(injectedBytes / 1024)}KB
             </span>
           </div>
-          <pre className="p-2 bg-gray-800/40 rounded text-[11px] text-gray-300 overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap leading-relaxed border border-gray-700/30">
+          <pre className="p-2 bg-gray-100/80 dark:bg-gray-800/40 rounded text-[11px] text-gray-700 dark:text-gray-300 overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap leading-relaxed border border-gray-200/50 dark:border-gray-700/30">
             {snippet}
           </pre>
         </div>
       )}
 
       {!snippet && selectedFiles.length > 0 && (
-        <div className="text-gray-500 italic py-0.5">
+        <div className="text-gray-400 dark:text-gray-500 italic py-0.5">
           已检索 {selectedFiles.length} 个记忆文件
-          {injectedBytes > 0 && <span className="text-gray-600 ml-auto">~{Math.round(injectedBytes / 4)} tokens</span>}
+          {injectedBytes > 0 && <span className="text-gray-400 dark:text-gray-600 ml-auto">~{Math.round(injectedBytes / 4)} tokens</span>}
         </div>
       )}
 
       <details className="group">
-        <summary className="cursor-pointer text-gray-600 hover:text-gray-400 flex items-center gap-1 py-0.5 text-[10px]">
+        <summary className="cursor-pointer text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400 flex items-center gap-1 py-0.5 text-[10px]">
           <ChevronRight className="w-2.5 h-2.5 group-open:rotate-90 transition-transform" />
           搜索详情
         </summary>
-        <div className="mt-1 space-y-1.5 pl-1 text-[10px] text-gray-500">
+        <div className="mt-1 space-y-1.5 pl-1 text-[10px] text-gray-400 dark:text-gray-500">
           {query && (
-            <div className="text-gray-400">
-              搜索词: <span className="text-gray-300">「{query}」</span>
+            <div className="text-gray-500 dark:text-gray-400">
+              搜索词: <span className="text-gray-700 dark:text-gray-300">「{query}」</span>
             </div>
           )}
 
           <div className="space-y-0.5">
             {layer === "not_triggered" && (
-              <div className="text-gray-500">
+              <div className="text-gray-400 dark:text-gray-500">
                 未触发搜索 — 无匹配关键词，默认跳过
               </div>
             )}
@@ -499,7 +499,7 @@ function PrefetchResultDetail({ data }: { data: unknown }) {
               </div>
             )}
             {layer === "none" && (
-              <div className="text-gray-500">
+              <div className="text-gray-400 dark:text-gray-500">
                 无可用记忆文件
               </div>
             )}
@@ -509,7 +509,7 @@ function PrefetchResultDetail({ data }: { data: unknown }) {
               </div>
             )}
             {layer !== "skip" && layer !== "llm" && layer !== "not_triggered" && layer !== "none" && (
-              <div className="text-gray-400">
+              <div className="text-gray-500 dark:text-gray-400">
                 匹配方式: {layer}
               </div>
             )}
@@ -521,8 +521,8 @@ function PrefetchResultDetail({ data }: { data: unknown }) {
               {skipHits.map((h, i) => (
                 <div key={i} className="pl-2 flex items-center gap-1.5">
                   <span className="text-yellow-500/60">•</span>
-                  <span className="text-gray-300 font-mono">「{h.pattern}」</span>
-                  {h.mode && <span className="text-gray-600">({modeLabel(h.mode)})</span>}
+                  <span className="text-gray-700 dark:text-gray-300 font-mono">「{h.pattern}」</span>
+                  {h.mode && <span className="text-gray-400 dark:text-gray-600">({modeLabel(h.mode)})</span>}
                 </div>
               ))}
             </div>
@@ -534,8 +534,8 @@ function PrefetchResultDetail({ data }: { data: unknown }) {
               {guardHits.map((h, i) => (
                 <div key={i} className="pl-2 flex items-center gap-1.5">
                   <span className="text-green-500/60">•</span>
-                  <span className="text-gray-300 font-mono">「{h.pattern}」</span>
-                  {h.mode && <span className="text-gray-600">({modeLabel(h.mode)})</span>}
+                  <span className="text-gray-700 dark:text-gray-300 font-mono">「{h.pattern}」</span>
+                  {h.mode && <span className="text-gray-400 dark:text-gray-600">({modeLabel(h.mode)})</span>}
                 </div>
               ))}
             </div>
@@ -547,8 +547,8 @@ function PrefetchResultDetail({ data }: { data: unknown }) {
               {triggerHits.map((h, i) => (
                 <div key={i} className="pl-2 flex items-center gap-1.5">
                   <span className="text-cyan-500/60">•</span>
-                  <span className="text-gray-300 font-mono">「{h.pattern}」</span>
-                  {h.mode && <span className="text-gray-600">({modeLabel(h.mode)})</span>}
+                  <span className="text-gray-700 dark:text-gray-300 font-mono">「{h.pattern}」</span>
+                  {h.mode && <span className="text-gray-400 dark:text-gray-600">({modeLabel(h.mode)})</span>}
                 </div>
               ))}
             </div>
@@ -556,13 +556,13 @@ function PrefetchResultDetail({ data }: { data: unknown }) {
 
           {selectedFiles.length > 0 && (
             <div className="space-y-0.5">
-              <div className="text-gray-400 flex items-center gap-1">
+              <div className="text-gray-500 dark:text-gray-400 flex items-center gap-1">
                 来源文件 ({selectedFiles.length})
               </div>
               {selectedFiles.map((f) => {
                 const fileName = f.split("/").pop() || f;
                 return (
-                  <div key={f} className="flex items-center gap-1.5 pl-2 py-0.5 text-gray-500 truncate">
+                  <div key={f} className="flex items-center gap-1.5 pl-2 py-0.5 text-gray-400 dark:text-gray-500 truncate">
                     <FileText className="w-2.5 h-2.5 text-blue-400/50 shrink-0" />
                     <span className="truncate" title={f}>{fileName}</span>
                   </div>
@@ -573,10 +573,10 @@ function PrefetchResultDetail({ data }: { data: unknown }) {
 
           <div className="space-y-0.5">
             {availableFiles > 0 && (
-              <div className="text-gray-600">可用文件: {availableFiles} 个</div>
+              <div className="text-gray-400 dark:text-gray-600">可用文件: {availableFiles} 个</div>
             )}
             {durationMs > 0 && (
-              <div className="text-gray-600">搜索耗时: {durationMs}ms</div>
+              <div className="text-gray-400 dark:text-gray-600">搜索耗时: {durationMs}ms</div>
             )}
           </div>
         </div>
@@ -595,13 +595,13 @@ function PrefetchStartDetail({ data }: { data: unknown }) {
     <div className="px-3 pb-2 text-[11px] space-y-1">
       {query && (
         <div className="flex gap-1.5">
-          <span className="text-gray-500 shrink-0">查询:</span>
-          <span className="text-gray-300 truncate">{query}</span>
+          <span className="text-gray-400 dark:text-gray-500 shrink-0">查询:</span>
+          <span className="text-gray-700 dark:text-gray-300 truncate">{query}</span>
         </div>
       )}
       <div className="flex gap-1.5">
-        <span className="text-gray-500 shrink-0">可用文件:</span>
-        <span className="text-gray-300">{availableFiles} 个</span>
+        <span className="text-gray-400 dark:text-gray-500 shrink-0">可用文件:</span>
+        <span className="text-gray-700 dark:text-gray-300">{availableFiles} 个</span>
       </div>
     </div>
   );
@@ -622,11 +622,11 @@ const CompactionSummaryCard = memo(function CompactionSummaryCard({ summary, blo
 
   return (
     <div data-block-id={blockId} className="my-0.5">
-      <div className="px-3 py-1.5 text-[13px] text-gray-300 leading-relaxed">
+      <div className="px-3 py-1.5 text-[13px] text-gray-700 dark:text-gray-300 leading-relaxed">
         {isLong ? (
           <>
             <div className="flex items-start gap-1.5">
-              <span className="text-gray-500 flex-1">{preview}{firstMeaningfulLine.length > 120 ? "..." : ""}</span>
+              <span className="text-gray-400 dark:text-gray-500 flex-1">{preview}{firstMeaningfulLine.length > 120 ? "..." : ""}</span>
               <button
                 onClick={() => setIsOpen(!isOpen)}
                 className="shrink-0 p-0.5 text-cyan-400/60 hover:text-cyan-300 transition-colors text-[11px] underline decoration-dotted underline-offset-2"
@@ -637,13 +637,13 @@ const CompactionSummaryCard = memo(function CompactionSummaryCard({ summary, blo
               </button>
             </div>
             {isOpen && (
-              <div className="mt-1.5 pl-0 border-l-2 border-cyan-500/20 prose prose-invert prose-sm max-w-none prose-p:my-0.5 prose-headings:my-1">
+              <div className="mt-1.5 pl-0 border-l-2 border-cyan-500/20 prose dark:prose-invert prose-sm max-w-none prose-p:my-0.5 prose-headings:my-1">
                 <CachedReactMarkdown>{summary}</CachedReactMarkdown>
               </div>
             )}
           </>
         ) : (
-          <div className="prose prose-invert prose-sm max-w-none prose-p:my-0.5 prose-headings:my-1">
+          <div className="prose dark:prose-invert prose-sm max-w-none prose-p:my-0.5 prose-headings:my-1">
             <CachedReactMarkdown>{summary}</CachedReactMarkdown>
           </div>
         )}
@@ -664,7 +664,7 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({ block, 
 
       if (isStreaming) {
         return (
-          <div data-block-id={blockId} className="my-0.5 group relative px-3 py-2 pr-10 text-sm text-gray-200 whitespace-pre-wrap break-words overflow-auto max-h-[60vh]">
+          <div data-block-id={blockId} className="my-0.5 group relative px-3 py-2 pr-10 text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words overflow-auto max-h-[60vh]">
             <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
               <CopyButton text={block.text} size="xs" />
             </div>
@@ -674,12 +674,12 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({ block, 
       }
 
       return (
-        <div data-block-id={blockId} className="my-0.5 group relative px-3 py-2 pr-10 prose prose-invert prose-sm max-w-none overflow-auto max-h-[60vh] prose-p:my-1 prose-pre:bg-transparent">
+        <div data-block-id={blockId} className="my-0.5 group relative px-3 py-2 pr-10 prose dark:prose-invert prose-sm max-w-none overflow-auto max-h-[60vh] prose-p:my-1 prose-pre:bg-transparent">
           <div className="absolute top-2 right-2 z-10 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
             {shouldShowExpand && (
               <button
                 onClick={() => openExpand(block.text, `消息内容 (${block.text.split("\n").length} 行)`)}
-                className="p-1 rounded text-gray-600 hover:text-indigo-300 hover:bg-gray-800/60 transition-colors"
+                className="p-1 rounded text-gray-400 dark:text-gray-600 hover:text-indigo-300 hover:bg-gray-200/60 dark:hover:bg-gray-800/60 transition-colors"
                 title="展开查看全文"
               >
                 <Maximize2 className="w-3.5 h-3.5" />
@@ -795,7 +795,7 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({ block, blockI
       <div className="px-3 py-1 pl-2 flex items-center gap-2 text-xs">
         <button
           onClick={handleToggleCollapse}
-          className="p-0.5 text-gray-600 hover:text-gray-300 transition-colors shrink-0"
+          className="p-0.5 text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 transition-colors shrink-0"
           title={collapsed ? "展开工具卡片" : "折叠工具卡片"}
           aria-expanded={!collapsed}
           aria-label={collapsed ? "展开工具卡片" : "折叠工具卡片"}
@@ -814,13 +814,13 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({ block, blockI
       </div>
 
       {collapsed ? (
-        <div className="px-3 pl-2 pb-1 text-[11px] text-gray-500 truncate">
+        <div className="px-3 pl-2 pb-1 text-[11px] text-gray-400 dark:text-gray-500 truncate">
           {block.output ? block.output.split('\n')[0].slice(0, 100) : "(等待输出)"}
         </div>
       ) : (
         <>
           <div
-            className="px-3 pl-2 py-1 text-[11px] text-gray-500 cursor-pointer hover:text-gray-400 select-none flex items-center gap-1.5"
+            className="px-3 pl-2 py-1 text-[11px] text-gray-400 dark:text-gray-500 cursor-pointer hover:text-gray-600 dark:hover:text-gray-400 select-none flex items-center gap-1.5"
             onClick={() => setInputOpen(!inputOpen)}
           >
             <svg className={`w-3 h-3 transition-transform shrink-0 ${inputOpen ? "rotate-90" : ""}`} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4.5 3l3 3-3 3" /></svg>
@@ -836,7 +836,7 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({ block, blockI
           )}
 
           <div
-            className="px-3 pl-2 py-1 text-[11px] text-gray-500 cursor-pointer hover:text-gray-400 select-none flex items-center gap-1.5"
+            className="px-3 pl-2 py-1 text-[11px] text-gray-400 dark:text-gray-500 cursor-pointer hover:text-gray-600 dark:hover:text-gray-400 select-none flex items-center gap-1.5"
             onClick={() => setOutputOpen(!outputOpen)}
           >
             <svg className={`w-3 h-3 transition-transform shrink-0 ${outputOpen ? "rotate-90" : ""}`} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4.5 3l3 3-3 3" /></svg>
@@ -851,9 +851,9 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({ block, blockI
               {uiBlock && uiBlock.status === "pending" ? (
                 <UIInteractionCard block={uiBlock} />
               ) : block.output ? (
-                <pre className="text-[11px] text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-72 overflow-y-auto pl-2">{block.output}</pre>
+                <pre className="text-[11px] text-gray-700 dark:text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-72 overflow-y-auto pl-2">{block.output}</pre>
               ) : isRunning ? (
-                <div className="text-[11px] text-gray-600 italic py-1">waiting...</div>
+                <div className="text-[11px] text-gray-400 dark:text-gray-600 italic py-1">waiting...</div>
               ) : null}
             </div>
           )}
@@ -868,15 +868,15 @@ export const MessageMetaFooter = memo(function MessageMetaFooter({ message }: { 
   const { tokenUsage, model, provider } = message;
 
   return (
-    <div className="mt-1.5 pt-1.5 pl-2 pb-0.5 border-t border-gray-800/20 space-y-1">
+    <div className="mt-1.5 pt-1.5 pl-2 pb-0.5 border-t border-gray-200/20 dark:border-gray-800/20 space-y-1">
       {(model ?? provider) && (
-        <div className="text-[10px] text-gray-600">
+        <div className="text-[10px] text-gray-400 dark:text-gray-600">
           {provider && <span>智能体: {provider}</span>}
           {model && <>{provider && "  "}<span>模型: {model}</span></>}
         </div>
       )}
       {tokenUsage && (
-        <div className="flex items-center gap-2 text-[10px] text-gray-600">
+        <div className="flex items-center gap-2 text-[10px] text-gray-400 dark:text-gray-600">
           <span>输入 {tokenUsage.input}</span>
           <span>输出 {tokenUsage.output}</span>
           {(tokenUsage.reasoning ?? 0) > 0 && <span>推理 {tokenUsage.reasoning}</span>}

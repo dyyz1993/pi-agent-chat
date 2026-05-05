@@ -267,10 +267,10 @@ export function ChatPanel() {
   };
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden relative bg-gray-950">
+    <div className="flex-1 flex flex-col overflow-hidden relative bg-white dark:bg-gray-950">
       <MarkdownExpandOverlay />
       <MermaidFullscreen />
-      <div className="flex items-center gap-4 px-4 py-1.5 bg-gray-900/80 border-b border-gray-800 text-[11px] text-gray-500 flex-shrink-0">
+      <div className="flex items-center gap-4 px-4 py-1.5 bg-gray-50/80 dark:bg-gray-900/80 border-b border-gray-200 dark:border-gray-800 text-[11px] text-gray-400 dark:text-gray-500 flex-shrink-0">
         <SessionToggleIcon />
         {isViewingSubagent && (
           <button
@@ -298,9 +298,9 @@ export function ChatPanel() {
             <div className="h-full flex items-center justify-center">
               <div className="flex flex-col items-center gap-3 max-w-xs text-center">
                 <AlertTriangle className="w-8 h-8 text-amber-400" />
-                <div className="text-sm text-gray-300">会话启动失败</div>
+                <div className="text-sm text-gray-700 dark:text-gray-300">会话启动失败</div>
                 {projectError && (
-                  <div className="text-xs text-gray-500 break-all">{projectError}</div>
+                  <div className="text-xs text-gray-400 dark:text-gray-500 break-all">{projectError}</div>
                 )}
                 <button
                   onClick={retryActiveProject}
@@ -314,8 +314,8 @@ export function ChatPanel() {
           ) : isLoading ? (
             <div className="h-full flex items-center justify-center">
               <div className="flex flex-col items-center gap-2 opacity-50">
-                <Loader2 className="w-5 h-5 text-gray-500 animate-spin" />
-                <span className="text-xs text-gray-500">加载会话...</span>
+                <Loader2 className="w-5 h-5 text-gray-400 dark:text-gray-500 animate-spin" />
+                <span className="text-xs text-gray-400 dark:text-gray-500">加载会话...</span>
               </div>
             </div>
           ) : isViewingSubagent ? (
@@ -356,13 +356,13 @@ export function ChatPanel() {
         <QueueCards sessionId={activeSessionId} />
       )}
 
-      <div className="px-3 pb-3 pt-2 flex-shrink-0 flex items-stretch gap-1.5 bg-gray-900 border-t border-gray-800" style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
+      <div className="px-3 pb-3 pt-2 flex-shrink-0 flex items-stretch gap-1.5 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800" style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
         {!isViewingSubagent && (
           <>
             {!sessionReady && !projectFailed ? (
               <div className="flex-1 flex items-center justify-center gap-2 py-2">
-                <Loader2 className="w-3.5 h-3.5 text-gray-500 animate-spin" />
-                <span className="text-xs text-gray-500">会话启动中...</span>
+                <Loader2 className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 animate-spin" />
+                <span className="text-xs text-gray-400 dark:text-gray-500">会话启动中...</span>
               </div>
             ) : (
               <>
@@ -388,7 +388,7 @@ export function ChatPanel() {
                   <button
                     onClick={() => inputBarRef.current?.send()}
                     disabled={(!inputText.trim() && useAttachmentStore.getState().attachments.length === 0) || !sessionReady}
-                    className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${(inputText.trim() || useAttachmentStore.getState().attachments.length > 0) && sessionReady ? (isStreaming ? "bg-blue-600 text-white hover:bg-blue-700 shadow-sm shadow-blue-500/20" : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm shadow-indigo-500/20") : "bg-gray-800 text-gray-600 cursor-not-allowed"}`}
+                    className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${(inputText.trim() || useAttachmentStore.getState().attachments.length > 0) && sessionReady ? (isStreaming ? "bg-blue-600 text-white hover:bg-blue-700 shadow-sm shadow-blue-500/20" : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm shadow-indigo-500/20") : "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed"}`}
                     title={isStreaming ? "排队发送 (Follow-up)" : "发送"}
                   >
                     {isStreaming ? <Clock className="w-4 h-4" /> : <ArrowUp className="w-4 h-4" />}
@@ -399,7 +399,7 @@ export function ChatPanel() {
           </>
         )}
         {isViewingSubagent && (
-          <div className="flex-1 text-center text-[11px] text-gray-600 py-2">
+          <div className="flex-1 text-center text-[11px] text-gray-400 dark:text-gray-600 py-2">
             子代理会话为只读模式
           </div>
         )}
@@ -424,7 +424,7 @@ function SessionToggleIcon() {
       e.stopPropagation();
       if (isVisible) { hideSession(); } else { showSession(); }
     }}
-      className={`p-1 rounded transition-colors ${isVisible ? "text-indigo-400 hover:text-indigo-300" : "text-gray-600 hover:text-gray-300"}`}
+      className={`p-1 rounded transition-colors ${isVisible ? "text-indigo-400 hover:text-indigo-300" : "text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300"}`}
       title={isVisible ? "关闭会话面板" : "打开会话面板"}
     >
       <PanelLeft className="w-3.5 h-3.5" />
@@ -447,7 +447,7 @@ function StatusToggleIcon() {
       e.stopPropagation();
       if (isVisible) { hideStatus(); } else { showStatus(); }
     }}
-      className={`p-1 rounded transition-colors ${isVisible ? "text-indigo-400 hover:text-indigo-300" : "text-gray-600 hover:text-gray-300"}`}
+      className={`p-1 rounded transition-colors ${isVisible ? "text-indigo-400 hover:text-indigo-300" : "text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300"}`}
       title={isVisible ? "关闭状态面板" : "打开状态面板"}
     >
       <PanelRight className="w-3.5 h-3.5" />
