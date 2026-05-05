@@ -42,6 +42,8 @@ electrobun-build/
 coverage/
 .nyc_output/
 test-results/
+/playwright-report/
+/playwright/.cache/
 test-*.ts
 test/*.test.ts
 test/*.ts
