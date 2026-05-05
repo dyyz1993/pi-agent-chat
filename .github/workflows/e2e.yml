@@ -24,13 +24,6 @@ jobs:
 
       - run: bunx playwright install --with-deps chromium
 
-      - run: |
-          bun src/server.ts &
-          sleep 3
-        env:
-          PORT: 3100
-          AUTH_TOKEN: test-ci-token
-
       - run: bunx playwright test
         env:
           CI: true
