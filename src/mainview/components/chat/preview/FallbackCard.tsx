@@ -8,7 +8,7 @@ export const FallbackCard = memo(function FallbackCard({ details }: { details: P
   const hasError = details.status === "error" || details.status === "not_found";
 
   return (
-    <div className="rounded-lg overflow-hidden border border-gray-700/40 bg-gray-900/60">
+    <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700/40 bg-white dark:bg-gray-900/60">
       <CardHeader
         icon={
           hasError ? (
@@ -22,12 +22,12 @@ export const FallbackCard = memo(function FallbackCard({ details }: { details: P
       />
       <div className="px-3 py-3 text-xs space-y-1">
         {details.error ? (
-          <div className="text-red-400">{details.error}</div>
+          <div className="text-red-500 dark:text-red-400">{details.error}</div>
         ) : (
           <>
-            <div className="text-gray-400">Type: {details.resourceType}</div>
-            {details.mimeType && <div className="text-gray-500">MIME: {details.mimeType}</div>}
-            {details.size != null && <div className="text-gray-500">Size: {formatFileSize(details.size)}</div>}
+            <div className="text-gray-600 dark:text-gray-400">Type: {details.resourceType}</div>
+            {details.mimeType && <div className="text-gray-400 dark:text-gray-500">MIME: {details.mimeType}</div>}
+            {details.size != null && <div className="text-gray-400 dark:text-gray-500">Size: {formatFileSize(details.size)}</div>}
           </>
         )}
       </div>

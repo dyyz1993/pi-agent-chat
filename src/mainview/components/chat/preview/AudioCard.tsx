@@ -8,9 +8,9 @@ export const AudioCard = memo(function AudioCard({ details }: { details: Preview
   const httpUrl = details.absolutePath ? getFileHttpUrl(details.absolutePath) : "";
 
   return (
-    <div className="rounded-lg overflow-hidden border border-gray-700/40 bg-gray-900/60">
+    <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700/40 bg-white dark:bg-gray-900/60">
       <CardHeader
-        icon={<Music className="w-3.5 h-3.5 text-amber-400 shrink-0" />}
+        icon={<Music className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400 shrink-0" />}
         label={details.title ?? details.source}
         meta={details.size ? formatFileSize(details.size) : undefined}
         absolutePath={details.absolutePath}
@@ -21,7 +21,7 @@ export const AudioCard = memo(function AudioCard({ details }: { details: Preview
             Your browser does not support audio playback.
           </audio>
         ) : (
-          <div className="text-xs text-gray-500 italic">No path available for preview</div>
+          <div className="text-xs text-gray-400 dark:text-gray-500 italic">No path available for preview</div>
         )}
       </div>
     </div>

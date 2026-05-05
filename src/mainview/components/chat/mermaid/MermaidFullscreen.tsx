@@ -27,15 +27,15 @@ export const MermaidFullscreen = memo(function MermaidFullscreen() {
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex flex-col bg-gray-950/98 backdrop-blur-sm"
+      className="fixed inset-0 z-[60] flex flex-col bg-white/98 dark:bg-gray-950/98 backdrop-blur-sm"
       onClick={handleBackdropClick}
     >
-      <div className="flex items-center gap-2 px-4 py-2 bg-gray-900/90 border-b border-gray-800 flex-shrink-0">
-        <span className="text-xs text-gray-400 font-medium">Mermaid 图表</span>
+      <div className="flex items-center gap-2 px-4 py-2 bg-gray-100/90 dark:bg-gray-900/90 border-b border-gray-200 dark:border-gray-800 flex-shrink-0">
+        <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">Mermaid 图表</span>
         <div className="flex-1" />
         <button
           onClick={closeFullscreen}
-          className="p-1.5 rounded text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors"
+          className="p-1.5 rounded text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors"
           title="关闭 (Esc)"
         >
           <X className="w-4 h-4" />

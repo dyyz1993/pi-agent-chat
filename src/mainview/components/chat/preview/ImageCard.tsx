@@ -21,27 +21,27 @@ export const ImageCard = memo(function ImageCard({ details }: { details: Preview
   }
 
   return (
-    <div className="rounded-lg overflow-hidden border border-gray-700/40 bg-gray-900/60">
+    <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700/40 bg-white dark:bg-gray-900/60">
       <CardHeader
-        icon={<ImageIcon className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
+        icon={<ImageIcon className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400 shrink-0" />}
         label={details.title ?? details.source}
         meta={details.size ? formatFileSize(details.size) : undefined}
         absolutePath={details.absolutePath}
         onRetry={error ? handleRetry : undefined}
       />
-      <div className="relative bg-black/30 flex items-center justify-center min-h-[120px] max-h-[400px]">
+      <div className="relative bg-gray-100 dark:bg-black/30 flex items-center justify-center min-h-[120px] max-h-[400px]">
         {!loaded && !error && (
-          <div className="text-gray-500 text-xs animate-pulse">Loading image...</div>
+          <div className="text-gray-400 dark:text-gray-500 text-xs animate-pulse">Loading image...</div>
         )}
         {error ? (
           <div className="flex flex-col items-center gap-2 py-6">
-            <div className="flex items-center gap-1.5 text-red-400 text-xs">
+            <div className="flex items-center gap-1.5 text-red-500 dark:text-red-400 text-xs">
               <AlertCircle className="w-3.5 h-3.5" />
               <span>Failed to load image</span>
             </div>
             <button
               onClick={handleRetry}
-              className="text-[10px] text-gray-500 hover:text-gray-300 underline underline-offset-2 transition-colors"
+              className="text-[10px] text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 underline underline-offset-2 transition-colors"
             >
               Retry
             </button>
@@ -63,12 +63,12 @@ export const ImageCard = memo(function ImageCard({ details }: { details: Preview
 
 function FallbackCard({ details }: { details: PreviewDetails }) {
   return (
-    <div className="rounded-lg overflow-hidden border border-gray-700/40 bg-gray-900/60">
+    <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700/40 bg-white dark:bg-gray-900/60">
       <CardHeader
-        icon={<ImageIcon className="w-3.5 h-3.5 text-gray-400 shrink-0" />}
+        icon={<ImageIcon className="w-3.5 h-3.5 text-gray-400 dark:text-gray-400 shrink-0" />}
         label={details.title ?? details.source}
       />
-      <div className="px-3 py-4 text-xs text-gray-500 italic">No path available for preview</div>
+      <div className="px-3 py-4 text-xs text-gray-400 dark:text-gray-500 italic">No path available for preview</div>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Maximize2, ZoomIn, ZoomOut } from "lucide-react";
 import { useMermaidStore } from "../../../stores/use-mermaid-store";
+import { useThemeStore } from "../../../stores/use-theme-store";
 
 const MERMAID_LANGS = new Set([
   "mermaid",
@@ -44,14 +45,21 @@ let mermaidModule: MermaidAPI | null = null;
 let initialized = false;
 let counter = 0;
 
-async function loadMermaid(): Promise<MermaidAPI> {
-  if (mermaidModule) return mermaidModule;
+async function loadMermaid(theme: "light" | "dark"): Promise<MermaidAPI> {
+  if (mermaidModule) {
+    mermaidModule.initialize({
+      startOnLoad: false,
+      theme: theme === "dark" ? "dark" : "default",
+      securityLevel: "strict",
+    });
+    return mermaidModule;
+  }
   const mod = await import("mermaid");
   mermaidModule = mod.default as MermaidAPI;
   if (!initialized) {
     mermaidModule.initialize({
       startOnLoad: false,
-      theme: "dark",
+      theme: theme === "dark" ? "dark" : "default",
       securityLevel: "strict",
     });
     initialized = true;
@@ -74,6 +82,7 @@ export const MermaidBlock = memo(function MermaidBlock({
   const [scale, setScale] = useState(1);
   const containerRef = useRef<HTMLDivElement>(null);
   const openFullscreen = useMermaidStore((s) => s.openFullscreen);
+  const resolvedTheme = useThemeStore((s) => s.resolvedTheme);
 
   useEffect(() => {
     let cancelled = false;
@@ -82,7 +91,7 @@ export const MermaidBlock = memo(function MermaidBlock({
     setError(null);
     setSvg(null);
 
-    loadMermaid()
+    loadMermaid(resolvedTheme)
       .then((m) => m.render(id, code))
       .then((result) => {
         if (!cancelled) {
@@ -103,7 +112,7 @@ export const MermaidBlock = memo(function MermaidBlock({
       const el = document.getElementById(id);
       if (el) el.remove();
     };
-  }, [code]);
+  }, [code, resolvedTheme]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -132,19 +141,19 @@ export const MermaidBlock = memo(function MermaidBlock({
 
   if (loading && !svg && !error) {
     return (
-      <div className="rounded-lg border border-gray-800 bg-gray-900/60 p-4 my-3 flex items-center justify-center min-h-[80px]">
-        <div className="inline-block w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+      <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/60 p-4 my-3 flex items-center justify-center min-h-[80px]">
+        <div className="inline-block w-4 h-4 border-2 border-indigo-500 dark:border-indigo-400 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="rounded-lg border border-red-900/50 bg-gray-900/60 my-3 overflow-hidden">
-        <div className="px-3 py-1.5 text-xs text-red-400 bg-red-950/30 border-b border-red-900/30">
+      <div className="rounded-lg border border-red-300/50 dark:border-red-900/50 bg-white dark:bg-gray-900/60 my-3 overflow-hidden">
+        <div className="px-3 py-1.5 text-xs text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border-b border-red-300/30 dark:border-red-900/30">
           图表渲染失败
         </div>
-        <pre className="p-3 text-xs text-gray-300 overflow-x-auto font-mono">
+        <pre className="p-3 text-xs text-gray-800 dark:text-gray-300 overflow-x-auto font-mono">
           <code>{code}</code>
         </pre>
       </div>
@@ -152,7 +161,7 @@ export const MermaidBlock = memo(function MermaidBlock({
   }
 
   return (
-    <div className="rounded-lg border border-gray-800 bg-gray-900/60 my-3 overflow-hidden group relative">
+    <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/60 my-3 overflow-hidden group relative">
       <div
         ref={containerRef}
         className="overflow-auto p-4"
@@ -167,34 +176,34 @@ export const MermaidBlock = memo(function MermaidBlock({
           dangerouslySetInnerHTML={svg ? { __html: svg } : undefined}
         />
       </div>
-      <div className="absolute top-2 right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-800/90 rounded-md border border-gray-700 p-0.5">
+      <div className="absolute top-2 right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 dark:bg-gray-800/90 rounded-md border border-gray-200 dark:border-gray-700 p-0.5">
         <button
           onClick={handleZoomOut}
-          className="p-1 rounded hover:bg-gray-700 text-gray-400 hover:text-gray-200"
+          className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
           title="缩小"
         >
           <ZoomOut className="w-3.5 h-3.5" />
         </button>
         <button
           onClick={handleReset}
-          className="px-1.5 py-0.5 text-xs text-gray-400 hover:text-gray-200 hover:bg-gray-700 rounded min-w-[3rem] text-center"
+          className="px-1.5 py-0.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 rounded min-w-[3rem] text-center"
           title="重置缩放"
         >
           {Math.round(scale * 100)}%
         </button>
         <button
           onClick={handleZoomIn}
-          className="p-1 rounded hover:bg-gray-700 text-gray-400 hover:text-gray-200"
+          className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
           title="放大"
         >
           <ZoomIn className="w-3.5 h-3.5" />
         </button>
         {inline && (
           <>
-            <div className="w-px h-4 bg-gray-600 mx-0.5" />
+            <div className="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-0.5" />
             <button
               onClick={handleFullscreen}
-              className="p-1 rounded hover:bg-gray-700 text-gray-400 hover:text-gray-200"
+              className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
               title="全屏查看"
             >
               <Maximize2 className="w-3.5 h-3.5" />

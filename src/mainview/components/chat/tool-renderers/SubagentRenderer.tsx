@@ -48,10 +48,10 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({ block
       data-block-id={blockId}
       className={`rounded-none overflow-hidden border-x-0 border-t border-b cursor-pointer transition-colors ${
         isRunning
-          ? "border-purple-500/30 bg-purple-950/15"
+          ? "border-purple-500/30 bg-purple-50 dark:bg-purple-950/15"
           : isError
-            ? "border-red-500/20 bg-red-950/10"
-            : "border-purple-700/20 bg-purple-950/8 hover:bg-purple-950/15"
+            ? "border-red-500/20 bg-red-50 dark:bg-red-950/10"
+            : "border-purple-300/20 dark:border-purple-700/20 bg-purple-50/50 dark:bg-purple-950/8 hover:bg-purple-50 dark:hover:bg-purple-950/15"
       }`}
       onClick={handleViewSubagent}
     >
@@ -93,26 +93,26 @@ export const Header = memo(function Header({
       <div
         className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 mt-0.5 ${
           isRunning
-            ? "bg-purple-500/20 border border-purple-500/30"
+            ? "bg-purple-100 dark:bg-purple-500/20 border border-purple-300 dark:border-purple-500/30"
             : isError
-              ? "bg-red-500/15 border border-red-500/20"
-              : "bg-purple-500/10 border border-purple-500/15"
+              ? "bg-red-100 dark:bg-red-500/15 border border-red-300 dark:border-red-500/20"
+              : "bg-purple-100/60 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/15"
         }`}
       >
         <Bot
           className={`w-3.5 h-3.5 ${
             isRunning
-              ? "text-purple-400"
+              ? "text-purple-600 dark:text-purple-400"
               : isError
-                ? "text-red-400"
-                : "text-purple-400/70"
+                ? "text-red-500 dark:text-red-400"
+                : "text-purple-500 dark:text-purple-400/70"
           }`}
         />
       </div>
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 mb-0.5">
-          <span className="text-[11px] font-medium text-purple-300">
+          <span className="text-[11px] font-medium text-purple-700 dark:text-purple-300">
             SubAgent
           </span>
           <StatusChip
@@ -121,7 +121,7 @@ export const Header = memo(function Header({
             isError={isError}
           />
         </div>
-        <p className="text-[11px] text-gray-400 leading-relaxed line-clamp-2">
+        <p className="text-[11px] text-gray-600 dark:text-gray-400 leading-relaxed line-clamp-2">
           {displayTitle}
         </p>
       </div>
@@ -132,7 +132,7 @@ export const Header = memo(function Header({
             e.stopPropagation();
             onView();
           }}
-          className="shrink-0 flex items-center gap-1 px-2 py-1 rounded text-[10px] text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 transition-colors mt-1"
+          className="shrink-0 flex items-center gap-1 px-2 py-1 rounded text-[10px] text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-500/10 transition-colors mt-1"
         >
           <ExternalLink className="w-3 h-3" />
           查看
@@ -153,23 +153,23 @@ export const StatusChip = memo(function StatusChip({
 }) {
   if (isRunning) {
     return (
-      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] bg-purple-500/15 text-purple-400 border border-purple-500/20">
-        <span className="w-1 h-1 rounded-full bg-purple-400 animate-pulse" />
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] bg-purple-100 dark:bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-300 dark:border-purple-500/20">
+        <span className="w-1 h-1 rounded-full bg-purple-600 dark:bg-purple-400 animate-pulse" />
         运行中
       </span>
     );
   }
   if (isDone) {
     return (
-      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
-        <span className="w-1 h-1 rounded-full bg-emerald-400" />
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-100 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-500/20">
+        <span className="w-1 h-1 rounded-full bg-emerald-600 dark:bg-emerald-400" />
         完成
       </span>
     );
   }
   if (isError) {
     return (
-      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] bg-red-500/15 text-red-400 border border-red-500/20">
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] bg-red-100 dark:bg-red-500/15 text-red-600 dark:text-red-400 border border-red-300 dark:border-red-500/20">
         出错
       </span>
     );
@@ -179,8 +179,8 @@ export const StatusChip = memo(function StatusChip({
 
 export const RunningInstruction = memo(function RunningInstruction({ instruction }: { instruction: string }) {
   return (
-    <div className="px-3 pb-2 pt-1 border-t border-purple-500/10">
-      <div className="flex items-center gap-1.5 text-[11px] text-purple-400/60">
+    <div className="px-3 pb-2 pt-1 border-t border-purple-300/20 dark:border-purple-500/10">
+      <div className="flex items-center gap-1.5 text-[11px] text-purple-500/70 dark:text-purple-400/60">
         <ArrowRight className="w-3 h-3 animate-pulse" />
         <span className="truncate">
           {instruction.slice(0, 200) || "执行中..."}
@@ -198,8 +198,8 @@ export const OutputSection = memo(function OutputSection({
   isRunning: boolean;
 }) {
   return (
-    <details className="group border-t border-purple-500/10">
-      <summary className="px-3 py-1 text-[11px] text-gray-500 cursor-pointer hover:text-gray-400 select-none flex items-center gap-1.5">
+    <details className="group border-t border-purple-300/20 dark:border-purple-500/10">
+      <summary className="px-3 py-1 text-[11px] text-gray-400 dark:text-gray-500 cursor-pointer hover:text-gray-600 dark:hover:text-gray-400 select-none flex items-center gap-1.5">
         <svg
           className="w-3 h-3 transition-transform group-open:rotate-90 shrink-0"
           viewBox="0 0 12 12"
@@ -211,18 +211,18 @@ export const OutputSection = memo(function OutputSection({
         </svg>
         <span>{isRunning ? "实时输出" : "输出"}</span>
         {isRunning && (
-          <span className="ml-auto text-purple-400/70 animate-pulse text-[10px]">
+          <span className="ml-auto text-purple-500/70 dark:text-purple-400/70 animate-pulse text-[10px]">
             streaming
           </span>
         )}
       </summary>
       <div className="px-3 pb-2">
         {block.output ? (
-          <pre className="text-[11px] text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-72 overflow-y-auto">
+          <pre className="text-[11px] text-gray-800 dark:text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-72 overflow-y-auto">
             {block.output}
           </pre>
         ) : (
-          <div className="text-[11px] text-gray-600 italic py-1">
+          <div className="text-[11px] text-gray-400 dark:text-gray-600 italic py-1">
             暂无输出
           </div>
         )}
