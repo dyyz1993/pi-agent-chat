@@ -19,6 +19,7 @@ import {
   Check,
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
+import { useTranslation } from "react-i18next";
 import { useStatusStore } from "../../stores/use-status-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useSubagentStore } from "../../stores/use-subagent-store";
@@ -37,25 +38,17 @@ const PRIORITY_STYLES: Record<TodoPriority, { dot: string; label: string }> = {
   low: { dot: "bg-gray-500", label: "L" },
 };
 
-const SECTIONS: { id: StatusSection; label: string; icon: React.ElementType }[] = [
-  { id: "yolo", label: "YOLO 模式", icon: Zap },
-  { id: "plan", label: "计划模式", icon: ClipboardList },
-  { id: "shell", label: "SHELL", icon: Terminal },
-  { id: "mcp", label: "MCP 工具", icon: Plug },
-  { id: "lsp", label: "LSP", icon: Network },
-  { id: "plugins", label: "插件", icon: Puzzle },
-  { id: "skills", label: "技能", icon: BookOpen },
-];
-
 function PluginCopyButton({ plugin }: { plugin: PluginInfo }) {
+  const { t } = useTranslation("status");
   const [copied, setCopied] = useState(false);
   const handleCopy = useCallback(() => {
+    const scopeLabel = plugin.scope === "global" ? t("global") : t("project");
     const lines = [
-      `名称: ${plugin.name}`,
-      `位置: ${plugin.scope === "global" ? "全局" : "项目"}`,
-      `路径: ${plugin.path}`,
-      `工具 (${plugin.toolNames.length}): ${plugin.toolNames.join(", ") || "无"}`,
-      `命令 (${plugin.commandNames.length}): ${plugin.commandNames.join(", ") || "无"}`,
+      `${t("nameLabel")} ${plugin.name}`,
+      `${t("locationLabel")} ${scopeLabel}`,
+      `${t("pathFieldLabel")} ${plugin.path}`,
+      `${t("toolsFieldLabel", { count: plugin.toolNames.length })} ${plugin.toolNames.join(", ") || t("none")}`,
+      `${t("commandsFieldLabel", { count: plugin.commandNames.length })} ${plugin.commandNames.join(", ") || t("none")}`,
     ];
     copyToClipboard(lines.join("\n")).then((ok) => {
       if (ok) {
@@ -63,7 +56,7 @@ function PluginCopyButton({ plugin }: { plugin: PluginInfo }) {
         setTimeout(() => setCopied(false), 1500);
       }
     });
-  }, [plugin]);
+  }, [plugin, t]);
 
   return (
     <button
@@ -71,12 +64,13 @@ function PluginCopyButton({ plugin }: { plugin: PluginInfo }) {
       className="flex items-center gap-1 text-gray-500 hover:text-gray-300 transition-colors mt-0.5"
     >
       {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
-      <span>{copied ? "已复制" : "复制信息"}</span>
+      <span>{copied ? t("copied") : t("copyInfo")}</span>
     </button>
   );
 }
 
 export function StatusPanel() {
+  const { t } = useTranslation("status");
   const yoloEnabled = useStatusStore((s) => s.yoloEnabled);
   const mcpTools = useStatusStore((s) => s.mcpTools);
   const plugins = useStatusStore((s) => s.plugins);
@@ -101,6 +95,16 @@ export function StatusPanel() {
 
   const backgroundProcesses = allProcesses?.filter((p) => backgroundedIds.has(p.toolCallId)) ?? [];
   const hasProcesses = backgroundProcesses.length > 0;
+
+  const SECTIONS: { id: StatusSection; label: string; icon: React.ElementType }[] = [
+    { id: "yolo", label: t("yoloMode"), icon: Zap },
+    { id: "plan", label: t("planMode"), icon: ClipboardList },
+    { id: "shell", label: t("shell"), icon: Terminal },
+    { id: "mcp", label: t("mcpTools"), icon: Plug },
+    { id: "lsp", label: t("lsp"), icon: Network },
+    { id: "plugins", label: t("plugins"), icon: Puzzle },
+    { id: "skills", label: t("skills"), icon: BookOpen },
+  ];
 
   return (
     <>
@@ -131,36 +135,36 @@ export function StatusPanel() {
                       onClick={toggleYolo}
                       className={`px-2 py-0.5 rounded text-[10px] ${yoloEnabled ? "bg-yellow-600/30 text-yellow-400" : "bg-gray-200 dark:bg-gray-800 text-gray-500"}`}
                     >
-                      {yoloEnabled ? "已开启" : "已关闭"}
+                      {yoloEnabled ? t("enabled") : t("disabled")}
                     </button>
                   )}
                   {id === "plan" && (
                     <div className="space-y-1">
                       {todos && todos.length > 0 && (
                         <div className="space-y-0.5 pt-0.5">
-                          {todos.map((t) => (
+                          {todos.map((todo) => (
                             <div
-                              key={t.id}
-                              className={`flex items-center gap-1.5 py-0.5 px-1 rounded hover:bg-gray-200/50 dark:hover:bg-gray-800/40 transition-colors${t.deleted ? " opacity-40" : ""}`}
+                              key={todo.id}
+                              className={`flex items-center gap-1.5 py-0.5 px-1 rounded hover:bg-gray-200/50 dark:hover:bg-gray-800/40 transition-colors${todo.deleted ? " opacity-40" : ""}`}
                             >
-                              {t.deleted ? (
+                              {todo.deleted ? (
                                 <Trash2 className="w-3 h-3 shrink-0 text-red-400" />
-                              ) : t.done ? (
+                              ) : todo.done ? (
                                 <CheckCircle2 className="w-3 h-3 shrink-0 text-emerald-400" />
                               ) : (
                                 <Circle className="w-3 h-3 shrink-0 text-gray-500" />
                               )}
-                              {t.priority && !t.deleted && (
+                              {todo.priority && !todo.deleted && (
                                 <span
-                                  className={`w-3 h-3 shrink-0 rounded-full flex items-center justify-center text-[7px] font-bold text-white ${PRIORITY_STYLES[t.priority].dot}`}
+                                  className={`w-3 h-3 shrink-0 rounded-full flex items-center justify-center text-[7px] font-bold text-white ${PRIORITY_STYLES[todo.priority].dot}`}
                                 >
-                                  {PRIORITY_STYLES[t.priority].label}
+                                  {PRIORITY_STYLES[todo.priority].label}
                                 </span>
                               )}
                               <span
-                                className={`${t.deleted ? "text-red-400/60 line-through" : t.done ? "text-gray-500 line-through" : "text-gray-700 dark:text-gray-300"} truncate`}
+                                className={`${todo.deleted ? "text-red-400/60 line-through" : todo.done ? "text-gray-500 line-through" : "text-gray-700 dark:text-gray-300"} truncate`}
                               >
-                                {t.text}
+                                {todo.text}
                               </span>
                             </div>
                           ))}
@@ -182,19 +186,19 @@ export function StatusPanel() {
                         ))}
                       </div>
                     ) : (
-                      <span>空闲</span>
+                      <span>{t("idle")}</span>
                     ))}
                   {id === "mcp" && (
                     <div className="space-y-0.5">
                       {mcpTools.length === 0 ? (
-                        <span>未连接</span>
+                        <span>{t("notConnected")}</span>
                       ) : (
-                        mcpTools.map((t) => (
-                          <div key={t.name} className="flex items-center gap-1">
+                        mcpTools.map((mcpTool) => (
+                          <div key={mcpTool.name} className="flex items-center gap-1">
                             <span
-                              className={`w-1.5 h-1.5 rounded-full ${t.status === "ready" ? "bg-green-400" : t.status === "error" ? "bg-red-400" : "bg-yellow-400 animate-pulse"}`}
+                              className={`w-1.5 h-1.5 rounded-full ${mcpTool.status === "ready" ? "bg-green-400" : mcpTool.status === "error" ? "bg-red-400" : "bg-yellow-400 animate-pulse"}`}
                             />
-                            <span>{t.name}</span>
+                            <span>{mcpTool.name}</span>
                           </div>
                         ))
                       )}
@@ -210,13 +214,16 @@ export function StatusPanel() {
                             />
                             <span>
                               {!lspData
-                                ? "Inactive"
+                                ? t("lspInactive")
                                 : lspData.state === "ready"
-                                  ? `Connected (${lspData.servers.length} server${lspData.servers.length !== 1 ? "s" : ""})`
+                                  ? t("lspConnected", {
+                                      count: lspData.servers.length,
+                                      plural: lspData.servers.length !== 1 ? "s" : "",
+                                    })
                                   : lspData.state === "error"
-                                    ? "Error"
+                                    ? t("lspError")
                                     : lspData.state === "starting"
-                                      ? "Starting..."
+                                      ? t("lspStarting")
                                       : lspData.state}
                             </span>
                           </div>
@@ -236,7 +243,9 @@ export function StatusPanel() {
                       ) : (
                         <div className="flex items-center gap-1 text-[10px] text-gray-400">
                           <span className="animate-pulse">
-                            Starting {lspData.totalServers ?? lspData.startupLog.length} servers...
+                            {t("lspStartingServers", {
+                              count: lspData.totalServers ?? lspData.startupLog.length,
+                            })}
                           </span>
                         </div>
                       )}
@@ -296,10 +305,10 @@ export function StatusPanel() {
                               className={`px-1.5 py-0.5 rounded text-[9px] ${lspData?.mode === m ? "bg-blue-600/30 text-blue-400" : "bg-gray-200 dark:bg-gray-800 text-gray-500 hover:bg-gray-300/50 dark:hover:bg-gray-700/50"}`}
                             >
                               {m === "agent_end"
-                                ? "On End"
+                                ? t("lspOnEnd")
                                 : m === "edit_write"
-                                  ? "On Write"
-                                  : "Off"}
+                                  ? t("lspOnWrite")
+                                  : t("lspOff")}
                             </button>
                           ),
                         )}
@@ -310,8 +319,11 @@ export function StatusPanel() {
                             className={`w-2.5 h-2.5 ${lspData.lastDiagnostics.count > 0 ? "text-yellow-400" : "text-green-400"}`}
                           />
                           <span className="truncate">
-                            {lspData.lastDiagnostics.filePath}: {lspData.lastDiagnostics.count}{" "}
-                            issue{lspData.lastDiagnostics.count !== 1 ? "s" : ""}
+                            {lspData.lastDiagnostics.filePath}:{" "}
+                            {t("issues", {
+                              count: lspData.lastDiagnostics.count,
+                              plural: lspData.lastDiagnostics.count !== 1 ? "s" : "",
+                            })}
                           </span>
                         </div>
                       )}
@@ -320,7 +332,7 @@ export function StatusPanel() {
                   {id === "plugins" && (
                     <div className="space-y-0.5">
                       {plugins.length === 0 ? (
-                        <span>无插件</span>
+                        <span>{t("noPlugins")}</span>
                       ) : (
                         plugins.map((p) => {
                           const isExpanded = expandedPlugin === p.path;
@@ -345,30 +357,32 @@ export function StatusPanel() {
                                 </span>
                                 {p.toolNames.length > 0 && (
                                   <span className="text-gray-400 dark:text-gray-600">
-                                    ({p.toolNames.length} tools)
+                                    {t("pluginTools", { count: p.toolNames.length })}
                                   </span>
                                 )}
                                 {p.commandNames.length > 0 && (
                                   <span className="text-gray-400 dark:text-gray-600">
-                                    ({p.commandNames.length} cmds)
+                                    {t("pluginCommands", { count: p.commandNames.length })}
                                   </span>
                                 )}
                                 <span
                                   className={`text-[9px] px-1 py-px rounded shrink-0 ${p.scope === "global" ? "bg-purple-500/15 text-purple-400" : "bg-blue-500/15 text-blue-400"}`}
                                 >
-                                  {p.scope === "global" ? "全局" : "项目"}
+                                  {p.scope === "global" ? t("global") : t("project")}
                                 </span>
                               </div>
                               {isExpanded && (
                                 <div className="ml-4 pl-2 border-l border-gray-200 dark:border-gray-800 space-y-1 pt-1 text-[10px]">
                                   <div className="text-gray-500 dark:text-gray-400 break-all">
-                                    <span className="text-gray-400 dark:text-gray-600">路径:</span>{" "}
+                                    <span className="text-gray-400 dark:text-gray-600">
+                                      {t("pathLabel")}
+                                    </span>{" "}
                                     {p.path}
                                   </div>
                                   {p.toolNames.length > 0 && (
                                     <div>
                                       <span className="text-gray-400 dark:text-gray-600 block mb-0.5">
-                                        工具:
+                                        {t("toolsLabel")}
                                       </span>
                                       <div className="space-y-px">
                                         {p.toolNames.map((tn) => (
@@ -385,7 +399,7 @@ export function StatusPanel() {
                                   {p.commandNames.length > 0 && (
                                     <div>
                                       <span className="text-gray-400 dark:text-gray-600 block mb-0.5">
-                                        命令:
+                                        {t("commandsLabel")}
                                       </span>
                                       <div className="space-y-px">
                                         {p.commandNames.map((cn) => (
@@ -401,7 +415,7 @@ export function StatusPanel() {
                                   )}
                                   {p.toolNames.length === 0 && p.commandNames.length === 0 && (
                                     <div className="text-gray-400 dark:text-gray-600">
-                                      无工具或命令
+                                      {t("noToolsOrCommands")}
                                     </div>
                                   )}
                                   <PluginCopyButton plugin={p} />
@@ -416,7 +430,7 @@ export function StatusPanel() {
                   {id === "skills" && (
                     <div className="space-y-0.5">
                       {skills.length === 0 ? (
-                        <span>无技能</span>
+                        <span>{t("noSkills")}</span>
                       ) : (
                         skills.map((sk) => {
                           const isExpanded = expandedSkill === sk.name;
@@ -435,7 +449,7 @@ export function StatusPanel() {
                                 <span
                                   className={`text-[9px] px-1 py-px rounded ${sk.scope === "global" ? "bg-purple-500/15 text-purple-400" : "bg-blue-500/15 text-blue-400"}`}
                                 >
-                                  {sk.scope === "global" ? "全局" : "项目"}
+                                  {sk.scope === "global" ? t("global") : t("project")}
                                 </span>
                                 <button
                                   onClick={(e) => {
@@ -443,7 +457,7 @@ export function StatusPanel() {
                                     toggleSkillEnabled(sk.name);
                                   }}
                                   className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-gray-300/50 dark:hover:bg-gray-700/50 rounded transition-opacity"
-                                  title={sk.enabled ? "禁用技能" : "启用技能"}
+                                  title={sk.enabled ? t("disableSkill") : t("enableSkill")}
                                 >
                                   {sk.enabled ? (
                                     <EyeOff className="w-3 h-3 text-gray-500" />
@@ -455,25 +469,29 @@ export function StatusPanel() {
                               {isExpanded && (
                                 <div className="ml-4 pl-2 border-l border-gray-200 dark:border-gray-800 space-y-1 pt-1 text-[10px]">
                                   <div className="text-gray-500 dark:text-gray-400 break-all">
-                                    {sk.description || "无描述"}
+                                    {sk.description || t("noDescription")}
                                   </div>
                                   <div className="space-y-0.5 text-gray-500">
                                     <div className="truncate" title={sk.filePath}>
                                       <span className="text-gray-400 dark:text-gray-600">
-                                        文件:
+                                        {t("fileLabel")}
                                       </span>{" "}
                                       {sk.filePath.split("/").pop()}
                                     </div>
                                     <div>
                                       <span className="text-gray-400 dark:text-gray-600">
-                                        路径:
+                                        {t("pathLabel")}
                                       </span>
                                       <span className="break-all">{sk.filePath}</span>
                                     </div>
                                     {sk.disableModelInvocation && (
-                                      <div className="text-amber-400/70">禁用模型自动调用</div>
+                                      <div className="text-amber-400/70">
+                                        {t("disableModelInvocation")}
+                                      </div>
                                     )}
-                                    {!sk.enabled && <div className="text-red-400/70">已禁用</div>}
+                                    {!sk.enabled && (
+                                      <div className="text-red-400/70">{t("skillDisabled")}</div>
+                                    )}
                                   </div>
                                 </div>
                               )}

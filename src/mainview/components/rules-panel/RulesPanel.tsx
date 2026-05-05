@@ -5,8 +5,6 @@ import {
   ChevronRight,
   Zap,
   Clock,
-  AlertTriangle,
-  Info,
   FileCode,
   CheckCircle2,
   XCircle,
@@ -14,33 +12,18 @@ import {
   FolderOpen,
   Loader2,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useRulesStore } from "../../stores/use-rules-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useShallow } from "zustand/react/shallow";
 import { apiClient } from "../../lib/api-client";
-import type {
-  RuleDetail,
-  RuleSeverity,
-  MatchRecord,
-  LifecycleEntry,
-} from "../../../shared/modules/rules";
+import type { RuleDetail, MatchRecord, LifecycleEntry } from "../../../shared/modules/rules";
 
-const SEVERITY_CONFIG: Record<
-  RuleSeverity,
-  { label: string; cls: string; icon: typeof AlertTriangle }
-> = {
-  critical: { label: "严重", cls: "text-red-400 bg-red-400/10", icon: AlertTriangle },
-  high: { label: "高", cls: "text-orange-400 bg-orange-400/10", icon: AlertTriangle },
-  medium: { label: "中", cls: "text-yellow-400 bg-yellow-400/10", icon: Info },
-  low: { label: "低", cls: "text-blue-400 bg-blue-400/10", icon: Info },
-  hint: { label: "提示", cls: "text-gray-400 bg-gray-400/10", icon: Info },
-};
-
-const SCOPE_LABELS: Record<string, string> = {
-  user: "用户",
-  pi: "PI",
-  project: "项目",
-  managed: "系统",
+const SCOPE_KEYS: Record<string, string> = {
+  user: "scopeUser",
+  pi: "scopePi",
+  project: "scopeProject",
+  managed: "scopeSystem",
 };
 
 function SectionHeader({
@@ -127,7 +110,15 @@ function RuleCard({
   onTriggered: boolean;
   onToggle: () => void;
 }) {
-  const sev = SEVERITY_CONFIG[rule.severity] || SEVERITY_CONFIG.medium;
+  const { t } = useTranslation("rules");
+  const severityConfig: Record<string, { key: string; cls: string }> = {
+    critical: { key: "severityCritical", cls: "text-red-400 bg-red-400/10" },
+    high: { key: "severityHigh", cls: "text-orange-400 bg-orange-400/10" },
+    medium: { key: "severityMedium", cls: "text-yellow-400 bg-yellow-400/10" },
+    low: { key: "severityLow", cls: "text-blue-400 bg-blue-400/10" },
+    hint: { key: "severityHint", cls: "text-gray-400 bg-gray-400/10" },
+  };
+  const sev = severityConfig[rule.severity] || severityConfig.medium;
   const { content, loading } = useRuleContent(rule.filePath, expanded);
 
   return (
@@ -147,16 +138,16 @@ function RuleCard({
           <span className="text-[11px] text-gray-800 dark:text-gray-200 truncate flex-1">
             {rule.title}
           </span>
-          <span className={`text-[9px] px-1 py-0.5 rounded ${sev.cls}`}>{sev.label}</span>
+          <span className={`text-[9px] px-1 py-0.5 rounded ${sev.cls}`}>{t(sev.key)}</span>
         </div>
         <div className="flex items-center gap-2 mt-0.5">
           <span className="text-[9px] text-gray-500 dark:text-gray-600">{rule.name}</span>
           <span className="text-[9px] text-gray-300 dark:text-gray-700">|</span>
           <span className="text-[9px] text-gray-500 dark:text-gray-600">
-            {SCOPE_LABELS[rule.scope] || rule.scope}
+            {t(SCOPE_KEYS[rule.scope] || rule.scope)}
           </span>
           {rule.isUnconditional ? (
-            <span className="text-[9px] text-green-500/70">始终活跃</span>
+            <span className="text-[9px] text-green-500/70">{t("alwaysActive")}</span>
           ) : (
             <span className="text-[9px] text-gray-500 dark:text-gray-600 truncate">
               {rule.globs.join(", ")}
@@ -171,18 +162,20 @@ function RuleCard({
             <div className="text-[10px] text-gray-500 dark:text-gray-400">{rule.description}</div>
           )}
           {rule.source && (
-            <div className="text-[10px] text-gray-500 dark:text-gray-600">来源: {rule.source}</div>
+            <div className="text-[10px] text-gray-500 dark:text-gray-600">
+              {t("source")}: {rule.source}
+            </div>
           )}
           {!rule.isUnconditional && rule.globs.length > 0 && (
             <div className="text-[10px] text-gray-500 dark:text-gray-600">
-              匹配模式:{" "}
+              {t("globPattern")}{" "}
               <code className="text-[9px] text-indigo-400/70">{rule.globs.join(", ")}</code>
             </div>
           )}
           {loading && (
             <div className="flex items-center gap-1.5 mt-1.5 text-[10px] text-gray-500">
               <Loader2 className="w-2.5 h-2.5 animate-spin" />
-              <span>加载中...</span>
+              <span>{t("loading", { ns: "common" })}</span>
             </div>
           )}
           {!loading && content && (
@@ -268,6 +261,7 @@ function LifecycleEntryCard({ entry }: { entry: LifecycleEntry }) {
 }
 
 export function RulesPanel() {
+  const { t } = useTranslation("rules");
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const collapsedSections = useRulesStore((s) => s.collapsedSections);
   const toggleSection = useRulesStore((s) => s.toggleSection);
@@ -301,17 +295,17 @@ export function RulesPanel() {
       <div className="flex items-center gap-2 px-2.5 py-2 border-b border-gray-200 dark:border-gray-800 shrink-0">
         <Shield className="w-3.5 h-3.5 text-indigo-400" />
         <span className="text-[11px] font-medium text-gray-700 dark:text-gray-300">
-          Rules Engine
+          {t("rulesEngine")}
         </span>
         <span className="text-[9px] text-gray-400 dark:text-gray-600 ml-auto">
-          {totalRules} 条规则
+          {t("totalRules", { count: totalRules })}
         </span>
       </div>
 
       <div className="flex-1 overflow-y-auto">
         {rules.length === 0 ? (
           <div className="flex items-center justify-center py-8 text-gray-400 dark:text-gray-600 text-[11px]">
-            暂无规则加载
+            {t("noRulesLoaded")}
           </div>
         ) : (
           <>
@@ -322,7 +316,7 @@ export function RulesPanel() {
                   onToggle={() => toggleSection("source")}
                   icon={FolderOpen}
                   iconCls="text-indigo-400"
-                  label="加载来源"
+                  label={t("loadingSource")}
                   badge={lifecycleLog.length}
                 />
                 {showSource &&
@@ -339,7 +333,7 @@ export function RulesPanel() {
               onToggle={() => toggleSection("unconditional")}
               icon={CheckCircle2}
               iconCls="text-green-400"
-              label="始终活跃"
+              label={t("alwaysActiveSection")}
               badge={unconditional.length}
             />
             {showUnconditional &&
@@ -359,7 +353,7 @@ export function RulesPanel() {
               onToggle={() => toggleSection("conditional")}
               icon={FileCode}
               iconCls="text-amber-400"
-              label="条件规则"
+              label={t("conditionalRules")}
               badge={conditional.length}
             />
             {showConditional &&
@@ -379,7 +373,7 @@ export function RulesPanel() {
               onToggle={() => toggleSection("history")}
               icon={Zap}
               iconCls="text-amber-400"
-              label="触发历史"
+              label={t("triggerHistory")}
               badge={matchHistory.length}
             />
             {showHistory && matchHistory.length > 0 && (
@@ -391,7 +385,7 @@ export function RulesPanel() {
             )}
             {showHistory && matchHistory.length === 0 && (
               <div className="px-2.5 py-3 text-[10px] text-gray-400 dark:text-gray-600 text-center">
-                暂无触发记录
+                {t("noTriggerHistory")}
               </div>
             )}
 
@@ -402,7 +396,7 @@ export function RulesPanel() {
                   onToggle={() => toggleSection("lifecycle")}
                   icon={Clock}
                   iconCls="text-gray-400"
-                  label="生命周期"
+                  label={t("lifecycle")}
                   badge={lifecycleLog.length}
                 />
                 {showLifecycle &&

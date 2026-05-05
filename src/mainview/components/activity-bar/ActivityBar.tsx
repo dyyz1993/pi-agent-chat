@@ -1,23 +1,25 @@
 import { Folder, GitBranch, Search } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useSidebarStore, type SidebarPanelId } from "../../stores/use-sidebar-store";
 
-const items: { id: SidebarPanelId; icon: typeof Folder; label: string }[] = [
-  { id: "explorer", icon: Folder, label: "Explorer" },
-  { id: "git", icon: GitBranch, label: "Source Control" },
-  { id: "search", icon: Search, label: "Search" },
+const items: { id: SidebarPanelId; icon: typeof Folder; labelKey: string }[] = [
+  { id: "explorer", icon: Folder, labelKey: "activityExplorer" },
+  { id: "git", icon: GitBranch, labelKey: "activitySourceControl" },
+  { id: "search", icon: Search, labelKey: "activitySearch" },
 ];
 
 export function ActivityBar() {
+  const { t } = useTranslation("sidebar");
   const activePanel = useSidebarStore((s) => s.activePanel);
   const togglePanel = useSidebarStore((s) => s.togglePanel);
 
   return (
     <div className="w-12 bg-gray-100 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 flex flex-col items-center py-2 gap-1 flex-shrink-0">
-      {items.map(({ id, icon: Icon, label }) => (
+      {items.map(({ id, icon: Icon, labelKey }) => (
         <button
           key={id}
           data-testid={`activity-${id}`}
-          title={label}
+          title={t(labelKey)}
           onClick={() => togglePanel(id)}
           className={`w-10 h-10 flex items-center justify-center rounded transition-colors ${
             activePanel === id

@@ -1,4 +1,5 @@
 import { Pin, PanelRight } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import { PANEL_TABS, type PanelTabId } from "../../layouts/types";
 import { StatusPanel } from "../status-panel/StatusPanel";
@@ -17,6 +18,7 @@ interface RightSidebarProps {
 }
 
 export function RightSidebar({ width, overlay }: RightSidebarProps) {
+  const { t } = useTranslation("sidebar");
   const statusPanel = useLayoutStore((s) => s.statusPanel);
   const toggleStatus = useLayoutStore((s) => s.toggleStatus);
   const activePanelTab = useLayoutStore((s) => s.activePanelTab);
@@ -102,7 +104,7 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
               hideStatus();
             }}
             className="p-1.5 mr-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors shrink-0"
-            title="关闭面板"
+            title={t("closePanel")}
           >
             <PanelRight className="w-3.5 h-3.5" />
           </button>
@@ -113,7 +115,7 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
             toggleStatus();
           }}
           className={`p-1.5 mr-1 rounded transition-colors shrink-0 max-sm:hidden ${isPinned ? "text-indigo-400" : "text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400"}`}
-          title={isPinned ? "取消固定" : "固定面板"}
+          title={isPinned ? t("unpinPanel") : t("pinPanel")}
         >
           <Pin className="w-3.5 h-3.5" fill={isPinned ? "currentColor" : "none"} />
         </button>

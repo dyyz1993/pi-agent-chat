@@ -1,5 +1,6 @@
 import { FileText, X, Code, Eye } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { FilePreview } from "../../types";
 import { formatSize } from "../../utils/file-utils";
 import { VirtualizedCodeView } from "./VirtualizedCodeView";
@@ -39,6 +40,7 @@ function canUseFsRoute(): boolean {
 }
 
 export function FilePreviewOverlay({ preview, loading, onClose }: FilePreviewOverlayProps) {
+  const { t } = useTranslation("explorer");
   const [svgContent, setSvgContent] = useState<string | null>(null);
   const [svgLoading, setSvgLoading] = useState(false);
   const [htmlSourceMode, setHtmlSourceMode] = useState(false);
@@ -141,10 +143,10 @@ export function FilePreviewOverlay({ preview, loading, onClose }: FilePreviewOve
                   ? "text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20"
                   : "text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-700/50"
               }`}
-              title={htmlSourceMode ? "切换到预览" : "切换到源码"}
+              title={htmlSourceMode ? t("switchPreview") : t("switchSource")}
             >
               {htmlSourceMode ? <Eye className="w-3.5 h-3.5" /> : <Code className="w-3.5 h-3.5" />}
-              <span>{htmlSourceMode ? "预览" : "源码"}</span>
+              <span>{htmlSourceMode ? t("preview") : t("source")}</span>
             </button>
           )}
           <button

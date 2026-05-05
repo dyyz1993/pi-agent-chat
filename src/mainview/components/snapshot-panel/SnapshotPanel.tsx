@@ -1,9 +1,11 @@
 import { useEffect } from "react";
 import { Camera, RotateCcw, RefreshCw, File } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useSnapshotStore } from "../../stores/use-snapshot-store";
 import { useSessionStore } from "../../stores/use-session-store";
 
 export function SnapshotPanel() {
+  const { t } = useTranslation("snapshot");
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const snapshotsBySession = useSnapshotStore((s) => s.snapshotsBySession);
   const loading = useSnapshotStore((s) => s.loading);
@@ -45,13 +47,13 @@ export function SnapshotPanel() {
       <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-gray-800">
         <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
           <Camera className="w-3.5 h-3.5" />
-          <span>快照 ({snapshots.length})</span>
+          <span>{t("snapshots", { count: snapshots.length })}</span>
         </div>
         <button
           onClick={() => sessionId && fetchSnapshots(sessionId)}
           disabled={!sessionId || loading}
           className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors disabled:opacity-30"
-          title="刷新"
+          title={t("refresh")}
         >
           <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} />
         </button>
@@ -60,13 +62,13 @@ export function SnapshotPanel() {
       <div className="flex-1 overflow-y-auto">
         {!sessionId && (
           <div className="px-3 py-6 text-center text-xs text-gray-400 dark:text-gray-600">
-            没有活跃会话
+            {t("noActiveSession")}
           </div>
         )}
 
         {sessionId && snapshots.length === 0 && !loading && (
           <div className="px-3 py-6 text-center text-xs text-gray-400 dark:text-gray-600">
-            暂无快照
+            {t("noSnapshotsYet")}
           </div>
         )}
 
@@ -104,7 +106,7 @@ export function SnapshotPanel() {
                   <button
                     onClick={() => unrevert(sessionId, snap.id)}
                     className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-amber-400 hover:text-amber-300 transition-colors"
-                    title="取消回滚"
+                    title={t("cancelRollback")}
                   >
                     <RefreshCw className="w-3 h-3" />
                   </button>
@@ -112,7 +114,7 @@ export function SnapshotPanel() {
                   <button
                     onClick={() => rollback(sessionId, snap.id)}
                     className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
-                    title="回滚到此快照"
+                    title={t("rollbackToSnapshot")}
                   >
                     <RotateCcw className="w-3 h-3" />
                   </button>

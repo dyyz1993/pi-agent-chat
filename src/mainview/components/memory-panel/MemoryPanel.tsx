@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Brain, Search, FileText, ChevronDown, ChevronRight } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useMemoryStore } from "../../stores/use-memory-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useShallow } from "zustand/react/shallow";
@@ -7,67 +8,17 @@ import { apiClient } from "../../lib/api-client";
 import { ALL_MEMORY_TYPES, getMemorySummary } from "../chat/memory-config";
 import type { MemoryTypeConfig } from "../chat/memory-config";
 
-function relativeTime(ms: number): string {
-  const diff = Date.now() - ms;
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "刚刚";
-  if (mins < 60) return `${mins}分钟前`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h前`;
-  const days = Math.floor(hours / 24);
-  return `${days}d前`;
-}
-
-const TYPE_BADGES: Record<string, { label: string; cls: string }> = {
-  project: { label: "项目", cls: "bg-emerald-400/15 text-emerald-400" },
-  user: { label: "用户", cls: "bg-indigo-400/15 text-indigo-400" },
-  feedback: { label: "反馈", cls: "bg-amber-400/15 text-amber-400" },
-  reference: { label: "参考", cls: "bg-sky-400/15 text-sky-400" },
+const TYPE_BADGES: Record<string, { labelKey: string; cls: string }> = {
+  project: { labelKey: "typeProject", cls: "bg-emerald-400/15 text-emerald-400" },
+  user: { labelKey: "typeUser", cls: "bg-indigo-400/15 text-indigo-400" },
+  feedback: { labelKey: "typeFeedback", cls: "bg-amber-400/15 text-amber-400" },
+  reference: { labelKey: "typeReference", cls: "bg-sky-400/15 text-sky-400" },
 };
 
 const EVENT_FALLBACK: MemoryTypeConfig = { icon: Brain, label: "", color: "text-gray-400" };
 
-const MEMORY_PANEL_LABELS: Record<string, string> = {
-  memory_prefetch: "搜索记忆",
-  memory_prefetch_result: "记忆匹配",
-  memory_extract: "保存记忆",
-  memory_extract_result: "提取结果",
-  memory_dream: "整理记忆",
-  memory_dream_result: "整合结果",
-  bookmark_creating: "正在创建收藏...",
-  memory_created: "已创建收藏",
-  memory_failed: "收藏失败",
-  memory_updated: "收藏完成",
-  memory_update_failed: "收藏失败",
-};
-
 function getEventIcon(customType: string) {
   return ALL_MEMORY_TYPES[customType] ?? EVENT_FALLBACK;
-}
-
-function getPanelEventLabel(customType: string, data: unknown): string {
-  if (customType === "memory_prefetch_result") {
-    const d = data as { summary?: string } | undefined;
-    const summary = d?.summary ?? "";
-    const match = summary.match(/(\d+)/);
-    if (match) return `匹配 ${match[1]} 条记忆`;
-    return "记忆匹配";
-  }
-  if (customType === "memory_prefetch") {
-    const summary = getMemorySummary(customType, data);
-    if (summary) return summary;
-    return MEMORY_PANEL_LABELS[customType] ?? customType;
-  }
-  if (customType === "memory_updated") {
-    const d = data as { files?: Array<{ filename: string }> } | undefined;
-    const count = d?.files?.length ?? 0;
-    return count > 0 ? `收藏 ${count} 条` : "收藏完成";
-  }
-  if (customType === "memory_update_failed") {
-    const d = data as { reason?: string } | undefined;
-    return d?.reason ?? "收藏失败";
-  }
-  return MEMORY_PANEL_LABELS[customType] ?? customType;
 }
 
 function SectionHeader({
@@ -105,6 +56,7 @@ function SectionHeader({
 }
 
 function FileContentPreview({ filePath }: { filePath: string }) {
+  const { t } = useTranslation("memory");
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -130,11 +82,15 @@ function FileContentPreview({ filePath }: { filePath: string }) {
 
   if (loading) {
     return (
-      <div className="px-3 py-1.5 text-[10px] text-gray-400 dark:text-gray-600">加载中...</div>
+      <div className="px-3 py-1.5 text-[10px] text-gray-400 dark:text-gray-600">{t("loading")}</div>
     );
   }
   if (!content) {
-    return <div className="px-3 py-1.5 text-[10px] text-gray-400 dark:text-gray-600">无法读取</div>;
+    return (
+      <div className="px-3 py-1.5 text-[10px] text-gray-400 dark:text-gray-600">
+        {t("cannotRead")}
+      </div>
+    );
   }
   return (
     <pre className="mx-2 mb-1.5 p-2 rounded bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-800 text-[10px] text-gray-600 dark:text-gray-400 overflow-x-auto whitespace-pre-wrap max-h-40 overflow-y-auto">
@@ -144,6 +100,7 @@ function FileContentPreview({ filePath }: { filePath: string }) {
 }
 
 export function MemoryPanel() {
+  const { t } = useTranslation("memory");
   const sessionId = useSessionStore((s) => s.activeSessionId);
   const projectTabs = useSessionStore((s) => s.projectTabs);
   const activeProjectId = useSessionStore((s) => s.activeProjectId);
@@ -168,13 +125,15 @@ export function MemoryPanel() {
 
   useEffect(() => {
     if (!sessionId) return;
-    const tab = projectTabs.find((t) => t.id === activeProjectId);
+    const tab = projectTabs.find((tab) => tab.id === activeProjectId);
     if (!tab) return;
     loadFiles(tab.path, sessionId);
   }, [sessionId, activeProjectId, projectTabs]);
 
   if (!sessionId) {
-    return <div className="p-3 text-xs text-gray-500 dark:text-gray-500">无活动会话</div>;
+    return (
+      <div className="p-3 text-xs text-gray-500 dark:text-gray-500">{t("noActiveSession")}</div>
+    );
   }
 
   const hasInjected = injected.length > 0;
@@ -187,10 +146,10 @@ export function MemoryPanel() {
   function getEventDetail(customType: string, data: unknown): React.ReactNode {
     if (customType === "memory_updated") {
       const d = data as { files?: Array<{ filename: string }> } | undefined;
-      const files = d?.files ?? [];
-      return files.length > 0 ? (
+      const fileList = d?.files ?? [];
+      return fileList.length > 0 ? (
         <span className="text-[9px] text-gray-500 truncate max-w-[120px]">
-          {files.map((f) => f.filename).join(", ")}
+          {fileList.map((f) => f.filename).join(", ")}
         </span>
       ) : null;
     }
@@ -203,6 +162,61 @@ export function MemoryPanel() {
     return null;
   }
 
+  const relativeTimeStr = (ms: number): string => {
+    const diff = Date.now() - ms;
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return t("justNow");
+    if (mins < 60) return t("minutesAgo", { count: mins });
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return t("hoursAgo", { count: hours });
+    const days = Math.floor(hours / 24);
+    return t("daysAgo", { count: days });
+  };
+
+  const getBadgeLabel = (type: string): string => {
+    const badge = TYPE_BADGES[type];
+    return badge ? t(badge.labelKey) : t("typeOther");
+  };
+
+  const getEventLabel = (customType: string, data: unknown): string => {
+    const panelLabels: Record<string, string> = {
+      memory_prefetch: t("searchMemory"),
+      memory_prefetch_result: t("memoryMatch"),
+      memory_extract: t("saveMemory"),
+      memory_extract_result: t("extractResult"),
+      memory_dream: t("organizeMemory"),
+      memory_dream_result: t("integrationResult"),
+      bookmark_creating: t("creatingBookmark"),
+      memory_created: t("bookmarkCreated"),
+      memory_failed: t("bookmarkFailed"),
+      memory_updated: t("bookmarkComplete"),
+      memory_update_failed: t("bookmarkUpdateFailed"),
+    };
+
+    if (customType === "memory_prefetch_result") {
+      const d = data as { summary?: string } | undefined;
+      const summary = d?.summary ?? "";
+      const match = summary.match(/(\d+)/);
+      if (match) return t("matchCount", { count: match[1] });
+      return t("memoryMatch");
+    }
+    if (customType === "memory_prefetch") {
+      const summary = getMemorySummary(customType, data);
+      if (summary) return summary;
+      return panelLabels[customType] ?? customType;
+    }
+    if (customType === "memory_updated") {
+      const d = data as { files?: Array<{ filename: string }> } | undefined;
+      const count = d?.files?.length ?? 0;
+      return count > 0 ? t("bookmarkCount", { count }) : t("bookmarkComplete");
+    }
+    if (customType === "memory_update_failed") {
+      const d = data as { reason?: string } | undefined;
+      return d?.reason ?? t("bookmarkFailed");
+    }
+    return panelLabels[customType] ?? customType;
+  };
+
   return (
     <div className="py-1">
       {hasInjected && (
@@ -212,7 +226,7 @@ export function MemoryPanel() {
             onToggle={() => toggleSection("injected")}
             icon={Search}
             iconCls="text-blue-400"
-            label="本次注入"
+            label={t("thisInjection")}
             badge={injected.length}
           />
           {!collapsedSections.has("injected") && (
@@ -237,7 +251,7 @@ export function MemoryPanel() {
           onToggle={() => toggleSection("files")}
           icon={FileText}
           iconCls="text-gray-400"
-          label="记忆文件"
+          label={t("memoryFiles")}
           badge={files.length}
         />
         {!collapsedSections.has("files") &&
@@ -256,18 +270,18 @@ export function MemoryPanel() {
                         <span
                           className={`px-1 py-0 rounded text-[8px] font-medium shrink-0 ${badge.cls}`}
                         >
-                          {badge.label}
+                          {getBadgeLabel(f.type ?? "")}
                         </span>
                       ) : (
                         <span className="px-1 py-0 rounded text-[8px] font-medium shrink-0 bg-gray-400/15 text-gray-400">
-                          其他
+                          {t("typeOther")}
                         </span>
                       )}
                       <span className="text-[10px] text-gray-700 dark:text-gray-300 truncate flex-1">
                         {f.description ?? f.filename}
                       </span>
                       <span className="text-[9px] text-gray-400 dark:text-gray-600 shrink-0">
-                        {relativeTime(f.mtimeMs)}
+                        {relativeTimeStr(f.mtimeMs)}
                       </span>
                     </button>
                     {isExpanded && <FileContentPreview filePath={f.filePath} />}
@@ -278,8 +292,10 @@ export function MemoryPanel() {
           ) : (
             <div className="px-2.5 pb-2 py-2 text-center">
               <FileText className="w-4 h-4 mx-auto mb-1 text-gray-400 dark:text-gray-600" />
-              <p className="text-[10px] text-gray-500">暂无记忆文件</p>
-              <p className="text-[9px] text-gray-400 dark:text-gray-600 mt-0.5">对话后将自动提取</p>
+              <p className="text-[10px] text-gray-500">{t("noMemoryFiles")}</p>
+              <p className="text-[9px] text-gray-400 dark:text-gray-600 mt-0.5">
+                {t("autoExtract")}
+              </p>
             </div>
           ))}
       </div>
@@ -291,7 +307,7 @@ export function MemoryPanel() {
             onToggle={() => toggleSection("entrypoint")}
             icon={FileText}
             iconCls="text-yellow-400"
-            label="MEMORY.md 索引"
+            label={t("memoryIndex")}
           />
           {!collapsedSections.has("entrypoint") && (
             <div className="px-2.5 pb-1.5">
@@ -311,7 +327,7 @@ export function MemoryPanel() {
           onToggle={() => toggleSection("operations")}
           icon={Brain}
           iconCls="text-gray-400"
-          label="最近操作"
+          label={t("recentOperations")}
           badge={events.length}
         />
         {!collapsedSections.has("operations") &&
@@ -320,7 +336,7 @@ export function MemoryPanel() {
               {last10Events.map((event) => {
                 const config = getEventIcon(event.customType);
                 const Icon = config.icon;
-                const label = getPanelEventLabel(event.customType, event.data);
+                const label = getEventLabel(event.customType, event.data);
                 const detailEl = getEventDetail(event.customType, event.data);
                 const timeStr = new Date(event.timestamp).toLocaleTimeString("zh-CN", {
                   hour: "2-digit",
@@ -346,7 +362,7 @@ export function MemoryPanel() {
           ) : (
             <div className="px-2.5 pb-2 py-2 text-center">
               <Brain className="w-4 h-4 mx-auto mb-1 text-gray-400 dark:text-gray-600" />
-              <p className="text-[10px] text-gray-500">暂无操作记录</p>
+              <p className="text-[10px] text-gray-500">{t("noOperations")}</p>
             </div>
           ))}
       </div>

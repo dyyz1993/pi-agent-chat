@@ -1,5 +1,6 @@
 import { Trash2, ArrowUpRight, ArrowDownLeft, Copy, Check } from "lucide-react";
 import { useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { useRpcDebugStore, type RpcLogEntry } from "../../stores/use-rpc-debug-store";
 import { useClipboard } from "../chat/preview/use-clipboard";
 
@@ -16,6 +17,7 @@ const DIR_COLORS = {
 };
 
 function RpcEntry({ entry }: { entry: RpcLogEntry }) {
+  const { t } = useTranslation("debug");
   const { copied, copy } = useClipboard();
   const Icon = DIR_ICONS[entry.direction];
   const color = DIR_COLORS[entry.direction];
@@ -42,7 +44,7 @@ function RpcEntry({ entry }: { entry: RpcLogEntry }) {
         <button
           onClick={handleCopy}
           className="p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-          title="复制完整 payload"
+          title={t("copyPayload")}
         >
           {copied ? (
             <Check className="w-2.5 h-2.5 text-green-400" />
@@ -59,13 +61,16 @@ function RpcEntry({ entry }: { entry: RpcLogEntry }) {
 }
 
 export function RpcPanel() {
+  const { t } = useTranslation("debug");
   const entries = useRpcDebugStore((s) => s.entries);
   const clear = useRpcDebugStore((s) => s.clear);
 
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-gray-200 dark:border-gray-800 shrink-0">
-        <span className="text-[11px] font-medium text-gray-700 dark:text-gray-300">RPC 事件</span>
+        <span className="text-[11px] font-medium text-gray-700 dark:text-gray-300">
+          {t("rpcEvents")}
+        </span>
         <div className="flex items-center gap-1">
           <span className="text-[10px] text-gray-400 dark:text-gray-600">{entries.length}</span>
           <button
@@ -80,7 +85,7 @@ export function RpcPanel() {
       <div className="flex-1 overflow-y-auto text-[10px] font-mono">
         {entries.length === 0 ? (
           <div className="flex items-center justify-center h-full text-gray-400 dark:text-gray-600">
-            暂无 RPC 事件
+            {t("noRpcEvents")}
           </div>
         ) : (
           entries.map((entry) => <RpcEntry key={entry.id} entry={entry} />)

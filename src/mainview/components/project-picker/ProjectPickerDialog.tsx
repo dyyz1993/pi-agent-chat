@@ -12,6 +12,7 @@ import {
   Pin,
   Loader2,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { apiClient } from "../../lib/api-client";
 import type { RecentProject, DirectoryEntry, FavoriteFolder } from "../../types";
 import { useFocusTrap } from "../../hooks/use-focus-trap";
@@ -50,15 +51,6 @@ function isCacheValid(ts: number) {
   return Date.now() - ts < CACHE_TTL;
 }
 
-function timeAgo(ts: number): string {
-  const diff = Date.now() - ts;
-  const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `${mins} 分钟前`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours} 小时前`;
-  return `${Math.floor(hours / 24)} 天前`;
-}
-
 function pathBasename(p: string): string {
   return p.replace(/\\/g, "/").split("/").pop() ?? p;
 }
@@ -82,7 +74,17 @@ function splitPath(p: string): { label: string; path: string }[] {
 }
 
 export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDialogProps) {
+  const { t } = useTranslation("sidebar");
   const [searchQuery, setSearchQuery] = useState("");
+
+  function timeAgo(ts: number): string {
+    const diff = Date.now() - ts;
+    const mins = Math.floor(diff / 60000);
+    if (mins < 60) return t("picker.timeAgo.minutes", { count: mins });
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return t("picker.timeAgo.hours", { count: hours });
+    return t("picker.timeAgo.days", { count: Math.floor(hours / 24) });
+  }
   const [recents, setRecents] = useState<RecentProject[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -289,7 +291,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
       return (
         <div className="flex items-center justify-center h-full text-gray-500 text-sm gap-2">
           <Loader2 className="w-4 h-4 animate-spin" />
-          加载中...
+          {t("picker.loading")}
         </div>
       );
     }
@@ -297,7 +299,9 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
       return (
         <div className="flex flex-col items-center justify-center h-full text-gray-600 gap-2">
           <FolderOpen className={mobile ? "w-10 h-10 opacity-30" : "w-8 h-8 opacity-30"} />
-          <span className="text-sm">{searchQuery ? "没有匹配的项目" : "暂无最近打开的项目"}</span>
+          <span className="text-sm">
+            {searchQuery ? t("picker.noMatchingProjects") : t("picker.noRecentProjects")}
+          </span>
         </div>
       );
     }
@@ -340,7 +344,9 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
             {proj.path}
           </div>
           {proj.sessionCount > 0 && (
-            <div className="text-[10px] text-gray-600">{proj.sessionCount} 个会话</div>
+            <div className="text-[10px] text-gray-600">
+              {t("picker.sessionCount", { count: proj.sessionCount })}
+            </div>
           )}
         </div>
         <span className="text-[10px] text-gray-600 shrink-0">{timeAgo(proj.lastOpened)}</span>
@@ -401,7 +407,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
       return (
         <div className="flex items-center justify-center py-10 text-gray-500 text-sm gap-2">
           <Loader2 className="w-4 h-4 animate-spin" />
-          加载文件夹...
+          {t("picker.loadingFolders")}
         </div>
       );
     }
@@ -410,7 +416,9 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
       return (
         <div className="flex flex-col items-center justify-center py-10 text-gray-600 gap-2">
           <Folder className="w-8 h-8 opacity-30" />
-          <span className="text-xs">{browserSearchQuery ? "没有匹配的文件夹" : "此目录为空"}</span>
+          <span className="text-xs">
+            {browserSearchQuery ? t("picker.noMatchingFolders") : t("picker.emptyDirectory")}
+          </span>
         </div>
       );
     }
@@ -434,7 +442,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
         <button
           onClick={() => handleSelectFolder(entry.path)}
           className="p-1 rounded hover:bg-indigo-500/20 text-gray-600 hover:text-indigo-400 opacity-0 group-hover:opacity-100 transition-all shrink-0"
-          title="选择此文件夹作为项目"
+          title={t("picker.selectFolderAsProject")}
         >
           <FolderOpen className="w-3.5 h-3.5" />
         </button>
@@ -445,7 +453,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
               ? "text-amber-400 opacity-100"
               : "opacity-0 group-hover:opacity-100 text-gray-600 hover:text-amber-400"
           }`}
-          title={isFav(entry.path) ? "取消收藏" : "收藏此目录"}
+          title={isFav(entry.path) ? t("picker.unfavorite") : t("picker.favoriteDir")}
         >
           <Star className="w-3 h-3" fill={isFav(entry.path) ? "currentColor" : "none"} />
         </button>
@@ -462,7 +470,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
       return (
         <div className="px-4 py-4 text-center">
           <Star className="w-6 h-6 text-gray-700 mx-auto mb-1.5" />
-          <p className="text-[10px] text-gray-600">浏览文件夹时可收藏常用目录</p>
+          <p className="text-[10px] text-gray-600">{t("picker.noFavoritesHint")}</p>
         </div>
       );
     }
@@ -488,14 +496,14 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
             navigateTo(folder.path);
           }}
           className="p-1 rounded hover:bg-gray-700/50 text-gray-600 hover:text-blue-400 opacity-0 group-hover:opacity-100 transition-all shrink-0"
-          title="浏览此目录"
+          title={t("picker.browseDir")}
         >
           <ChevronRight className="w-3 h-3" />
         </button>
         <button
           onClick={(e) => handleToggleFavoriteFolder(e, folder.path)}
           className="p-1 rounded hover:bg-red-600/20 text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all shrink-0"
-          title="取消收藏"
+          title={t("picker.unfavorite")}
         >
           <Trash2 className="w-3 h-3" />
         </button>
@@ -508,9 +516,9 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
       <div className="px-4 py-3 border-b border-gray-800">
         <div className="flex items-center gap-1.5">
           <Star className="w-3.5 h-3.5 text-amber-400" />
-          <p className="text-xs font-medium text-gray-300">收藏的目录</p>
+          <p className="text-xs font-medium text-gray-300">{t("picker.favoritedDirs")}</p>
         </div>
-        <p className="text-[10px] text-gray-500 mt-0.5">点击选择项目，箭头浏览子目录</p>
+        <p className="text-[10px] text-gray-500 mt-0.5">{t("picker.favoritedDirsHint")}</p>
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 py-1.5 space-y-0.5">
@@ -523,7 +531,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
           className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 rounded-lg text-xs text-indigo-300 transition-colors"
         >
           <Home className="w-3.5 h-3.5" />
-          浏览其他目录
+          {t("picker.browseOtherDirs")}
         </button>
       </div>
     </>
@@ -538,7 +546,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
           <input
             value={browserSearchQuery}
             onChange={(e) => setBrowserSearchQuery(e.target.value)}
-            placeholder="搜索当前目录..."
+            placeholder={t("picker.searchCurrentDir")}
             className="w-full pl-7 pr-3 py-1.5 bg-gray-800/50 border border-gray-700/50 rounded-md text-[11px] text-gray-300 placeholder:text-gray-600 outline-none focus:border-indigo-500/50"
           />
         </div>
@@ -550,7 +558,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
           className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-xs font-medium text-white transition-colors"
         >
           <FolderOpen className="w-3.5 h-3.5" />
-          选择当前文件夹
+          {t("picker.selectCurrentFolder")}
         </button>
       </div>
     </>
@@ -570,14 +578,14 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
         className="md:hidden fixed inset-0 z-[100] bg-gray-950 flex flex-col animate-slide-in-up"
         role="dialog"
         aria-modal="true"
-        aria-label="选择项目"
+        aria-label={t("picker.title")}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 shrink-0">
-          <h2 className="text-sm font-semibold text-white">选择项目</h2>
+          <h2 className="text-sm font-semibold text-white">{t("picker.title")}</h2>
           <button
             onClick={onClose}
             className="p-1.5 rounded-md hover:bg-gray-800 text-gray-400"
-            aria-label="关闭"
+            aria-label={t("picker.close")}
           >
             <X className="w-4 h-4" />
           </button>
@@ -589,7 +597,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
             <input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="搜索项目..."
+              placeholder={t("picker.searchProject")}
               className="w-full pl-9 pr-4 py-2.5 bg-gray-800/60 border border-gray-700/50 rounded-xl text-sm text-gray-200 placeholder:text-gray-500 outline-none focus:border-indigo-500/50"
             />
           </div>
@@ -600,7 +608,9 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
             <div className="mb-3">
               <div className="flex items-center gap-1.5 px-1 py-1.5">
                 <Star className="w-3 h-3 text-amber-400" />
-                <span className="text-[11px] font-medium text-gray-400">收藏</span>
+                <span className="text-[11px] font-medium text-gray-400">
+                  {t("picker.favorites")}
+                </span>
               </div>
               <div className="space-y-0.5">
                 {favoriteFolders.map((folder) => (
@@ -631,7 +641,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
             <div>
               <div className="flex items-center gap-1.5 px-1 py-1.5">
                 <FolderOpen className="w-3 h-3 text-gray-500" />
-                <span className="text-[11px] font-medium text-gray-400">最近</span>
+                <span className="text-[11px] font-medium text-gray-400">{t("picker.recents")}</span>
               </div>
               {renderProjectList(sortedRecents, true)}
             </div>
@@ -640,7 +650,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
           {!loading && favoriteFolders.length === 0 && sortedRecents.length === 0 && (
             <div className="flex flex-col items-center justify-center h-40 text-gray-600 gap-2">
               <FolderOpen className="w-10 h-10 opacity-30" />
-              <span className="text-sm">暂无项目</span>
+              <span className="text-sm">{t("picker.noProjects")}</span>
             </div>
           )}
         </div>
@@ -655,14 +665,14 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
           className="relative w-full max-w-4xl h-[70vh] mx-4 bg-gray-900 rounded-xl border border-gray-700/50 shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
           role="dialog"
           aria-modal="true"
-          aria-label="选择项目"
+          aria-label={t("picker.title")}
         >
           <div className="flex items-center justify-between px-5 py-3 border-b border-gray-800 shrink-0">
-            <h2 className="text-sm font-semibold text-white">选择项目</h2>
+            <h2 className="text-sm font-semibold text-white">{t("picker.title")}</h2>
             <button
               onClick={onClose}
               className="p-1.5 rounded-md hover:bg-gray-800 text-gray-400 hover:text-white transition-colors"
-              aria-label="关闭"
+              aria-label={t("picker.close")}
             >
               <X className="w-4 h-4" />
             </button>
@@ -675,15 +685,17 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
             <div className="flex-1 flex flex-col min-w-0">
               <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between shrink-0">
                 <div>
-                  <p className="text-xs font-medium text-gray-300">最近的文件夹</p>
-                  <p className="text-[10px] text-gray-500">{sortedRecents.length} 个文件夹可用</p>
+                  <p className="text-xs font-medium text-gray-300">{t("picker.recentFolders")}</p>
+                  <p className="text-[10px] text-gray-500">
+                    {t("picker.foldersAvailable", { count: sortedRecents.length })}
+                  </p>
                 </div>
                 <div className="relative">
                   <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-500" />
                   <input
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="搜索..."
+                    placeholder={t("picker.searchPlaceholder")}
                     className="pl-7 pr-3 py-1 w-36 bg-gray-800/50 border border-gray-700/50 rounded-md text-[11px] text-gray-300 placeholder:text-gray-600 outline-none focus:border-indigo-500/50"
                   />
                 </div>

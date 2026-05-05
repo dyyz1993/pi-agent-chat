@@ -1,5 +1,6 @@
 import { Plus, X } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useSessionStore } from "../../stores/use-session-store";
 import type { SessionStatus } from "../../types";
 
@@ -18,6 +19,7 @@ function resolveDotClass(
 const LONG_PRESS_MS = 300;
 
 export function TabBar({ onAddProject }: { onAddProject: () => void }) {
+  const { t } = useTranslation("sidebar");
   const projectTabs = useSessionStore((s) => s.projectTabs);
   const activeProjectId = useSessionStore((s) => s.activeProjectId);
   const setActiveProject = useSessionStore((s) => s.setActiveProject);
@@ -188,7 +190,7 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
       <button
         onClick={onAddProject}
         className="p-1 rounded text-gray-500 hover:text-gray-800 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors cursor-pointer"
-        title="添加项目"
+        title={t("addProject")}
       >
         <Plus className="w-4 h-4" />
       </button>

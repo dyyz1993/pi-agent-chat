@@ -11,6 +11,7 @@ import {
   Send,
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
+import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useBashStore } from "../../stores/use-bash-store";
@@ -31,6 +32,7 @@ function BashProcessCard({
   process: BashProcess;
   onOpenLog: () => void;
 }) {
+  const { t } = useTranslation("chat");
   const [elapsed, setElapsed] = useState(Date.now() - p.startedAt);
 
   useEffect(() => {
@@ -64,14 +66,14 @@ function BashProcessCard({
         : "text-blue-400";
 
   const statusText = isBackground
-    ? "后台运行"
+    ? t("backgroundRunning")
     : p.status === "done"
-      ? "已完成"
+      ? t("completed")
       : p.status === "error"
-        ? "错误"
+        ? t("error")
         : p.status === "terminated"
-          ? "已取消"
-          : "执行中";
+          ? t("cancelled")
+          : t("executing");
 
   return (
     <div className="rounded-lg bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-800 px-3 py-2.5 space-y-1.5">
@@ -86,16 +88,22 @@ function BashProcessCard({
       <div className="flex items-center gap-3 text-[9px] text-gray-500">
         <span className={statusColor}>{statusText}</span>
         {isActive ? (
-          <span>运行: {formatDuration(elapsed)}</span>
+          <span>
+            {t("runtime")}: {formatDuration(elapsed)}
+          </span>
         ) : (
-          p.endedAt && <span>耗时: {formatDuration(p.endedAt - p.startedAt)}</span>
+          p.endedAt && (
+            <span>
+              {t("duration")}: {formatDuration(p.endedAt - p.startedAt)}
+            </span>
+          )
         )}
       </div>
       <div className="flex items-center gap-1.5 pt-0.5">
         <button
           onClick={onOpenLog}
           className="flex items-center justify-center w-8 h-7 rounded border border-gray-300 dark:border-gray-700/50 text-gray-500 hover:text-gray-800 dark:hover:text-white hover:border-gray-400 dark:hover:border-gray-600 transition-colors shrink-0"
-          title="查看日志"
+          title={t("viewLog")}
         >
           <Terminal className="w-3.5 h-3.5" />
         </button>
@@ -104,7 +112,7 @@ function BashProcessCard({
           <button
             onClick={() => sendAction("kill")}
             className="flex items-center justify-center w-8 h-7 rounded border border-red-600/30 text-red-400 hover:bg-red-600/10 transition-colors shrink-0"
-            title={isRunning ? "取消执行" : "终止进程"}
+            title={isRunning ? t("cancelExecution") : t("terminateProcess")}
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -114,10 +122,10 @@ function BashProcessCard({
           <button
             onClick={() => sendAction("background")}
             className="flex items-center justify-center w-auto px-2 h-7 rounded border border-yellow-600/40 text-[10px] text-yellow-400 hover:bg-yellow-600/15 transition-colors shrink-0"
-            title="转为后台运行"
+            title={t("toBackground")}
           >
             <ArrowDownToLine className="w-3 h-3 mr-1" />
-            <span>后台</span>
+            <span>{t("background")}</span>
           </button>
         )}
 
@@ -129,7 +137,7 @@ function BashProcessCard({
                 .removeProcess(useSessionStore.getState().activeSessionId ?? "", p.toolCallId)
             }
             className="flex items-center justify-center w-8 h-7 rounded border border-gray-300 dark:border-gray-700/50 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-400 dark:hover:border-gray-600 transition-colors shrink-0"
-            title="从列表移除"
+            title={t("removeFromList")}
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
@@ -150,6 +158,7 @@ function LogViewer({
   toolCallId: string;
   onClose: () => void;
 }) {
+  const { t } = useTranslation("chat");
   const [lines, setLines] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalLines, setTotalLines] = useState(0);
@@ -312,7 +321,7 @@ function LogViewer({
               {logPath.split("/").pop()}
             </span>
             <span className="text-[9px] text-gray-400 dark:text-gray-600 shrink-0">
-              {totalLines} 行
+              {t("lineCountShort", { count: totalLines })}
             </span>
           </div>
           <button
@@ -331,10 +340,12 @@ function LogViewer({
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
-              <span className="ml-2 text-[11px] text-gray-500">加载中...</span>
+              <span className="ml-2 text-[11px] text-gray-500">{t("loadingDots")}</span>
             </div>
           ) : lines.length === 0 ? (
-            <div className="text-[11px] text-gray-400 dark:text-gray-600 italic">暂无输出</div>
+            <div className="text-[11px] text-gray-400 dark:text-gray-600 italic">
+              {t("noOutput")}
+            </div>
           ) : (
             <div
               style={{
@@ -377,7 +388,7 @@ function LogViewer({
             }}
             className="text-[9px] text-gray-500 hover:text-gray-700 dark:hover:text-gray-400 transition-colors shrink-0"
           >
-            滚动到底部
+            {t("scrollToBottom")}
           </button>
           <div className="flex-1 flex items-center gap-1.5 ml-2">
             <input
@@ -387,14 +398,14 @@ function LogViewer({
               onKeyDown={(e) => {
                 if (e.key === "Enter") sendStdin();
               }}
-              placeholder="输入内容发送到进程..."
+              placeholder={t("stdinPlaceholder")}
               className="flex-1 h-7 px-2 rounded bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-[11px] text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-600 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 font-mono"
             />
             <button
               onClick={sendStdin}
               disabled={!stdinInput.trim()}
               className="h-7 w-7 flex items-center justify-center rounded bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 disabled:opacity-30 disabled:hover:bg-blue-600/20 transition-colors shrink-0"
-              title="发送"
+              title={t("sendTitle")}
             >
               <Send className="w-3.5 h-3.5" />
             </button>
