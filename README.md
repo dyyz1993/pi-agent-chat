@@ -104,4 +104,11 @@ Please run `bun run lint:full` before submitting.
 
 ## License
 
-[MIT](./LICENSE)
+This project is licensed under the **GNU Affero General Public License v3.0** (AGPL-3.0).
+
+- ✅ 个人学习、研究、非商业使用：免费
+- ✅ 修改源码：允许，但修改后的版本必须同样以 AGPL-3.0 开源
+- ✅ 网络使用（SaaS）：允许，但必须向用户提供完整源码
+- ❌ 商业闭源使用：**禁止**，需单独联系获取商业授权
+
+详见 [LICENSE](./LICENSE) 文件。
