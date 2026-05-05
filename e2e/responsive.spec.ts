@@ -52,4 +52,63 @@ test.describe("Responsive Layout", () => {
 
     await expect(newSessionBtn).toBeVisible();
   });
+
+  test("no key elements should overflow viewport on mobile", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto("/?token=test-ci-token");
+    await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15000 });
+    await page.waitForTimeout(500);
+
+    const overflowElements = await page.evaluate(() => {
+      const results: { tag: string; testid: string; right: number }[] = [];
+      const skipTags = new Set(["HTML", "BODY", "HEAD", "SCRIPT", "STYLE", "LINK", "META"]);
+      document.querySelectorAll("*").forEach((el) => {
+        if (skipTags.has(el.tagName)) return;
+        const rect = el.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0 && rect.right > window.innerWidth + 2) {
+          results.push({
+            tag: el.tagName,
+            testid: el.getAttribute("data-testid") || "",
+            right: Math.round(rect.right),
+          });
+        }
+      });
+      return results;
+    });
+
+    const significantOverflows = overflowElements.filter((el) => el.right > 400);
+
+    if (significantOverflows.length > 0) {
+      console.log("Significant overflows:", JSON.stringify(significantOverflows, null, 2));
+    }
+
+    const tabBar = page.locator('[data-testid="tab-bar"]');
+    const tabBarBox = await tabBar.boundingBox();
+    expect(tabBarBox).toBeTruthy();
+    expect(tabBarBox!.width).toBeLessThanOrEqual(375);
+
+    const input = page.locator('[data-testid="chat-input"]');
+    const inputBox = await input.boundingBox();
+    if (inputBox) {
+      expect(inputBox.x + inputBox.width).toBeLessThanOrEqual(385);
+    }
+  });
+
+  test("no key elements should overflow viewport on tablet", async ({ page }) => {
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await page.goto("/?token=test-ci-token");
+    await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15000 });
+    await page.waitForTimeout(500);
+
+    const tabBar = page.locator('[data-testid="tab-bar"]');
+    const tabBarBox = await tabBar.boundingBox();
+    expect(tabBarBox).toBeTruthy();
+    expect(tabBarBox!.width).toBeLessThanOrEqual(768);
+
+    const input = page.locator('[data-testid="chat-input"]');
+    const inputBox = await input.boundingBox();
+    if (inputBox) {
+      expect(inputBox.x + inputBox.width).toBeLessThanOrEqual(778);
+    }
+  });
 });
