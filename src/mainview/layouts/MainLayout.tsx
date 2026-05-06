@@ -10,7 +10,6 @@ import { DiffViewerPanel } from "../components/diff/DiffViewerPanel";
 import { ConnectionBanner } from "../components/ConnectionBanner";
 import { useExplorerStore } from "../stores/use-explorer-store";
 import { useGitStore } from "../stores/use-git-store";
-import { MobileTabBar } from "../components/activity-bar/MobileTabBar";
 
 interface MainLayoutProps {
   onAddProject: () => void;
@@ -28,6 +27,8 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
 
   const sessionPanel = useLayoutStore((s) => s.sessionPanel);
   const statusPanel = useLayoutStore((s) => s.statusPanel);
+  const sessionCollapsed = useLayoutStore((s) => s.sessionCollapsed);
+  const toggleSessionCollapse = useLayoutStore((s) => s.toggleSessionCollapse);
 
   const leftResizingRef = useRef(false);
   const rightResizingRef = useRef(false);
@@ -43,6 +44,17 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
     observer.observe(document.documentElement);
     return () => observer.disconnect();
   }, [setBreakpoint, setContentWidth]);
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === "b") {
+        e.preventDefault();
+        toggleSessionCollapse();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [toggleSessionCollapse]);
 
   function getBP(w: number): Breakpoint {
     if (w < 640) return "mobile";
@@ -112,7 +124,7 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
   const isMobile = breakpoint === "mobile";
   const isTablet = breakpoint === "tablet";
 
-  const showLeftHandle = sessionPanel === "pinned" && !isMobile;
+  const showLeftHandle = sessionPanel === "pinned" && !isMobile && !sessionCollapsed;
   const showRightHandle = statusPanel === "pinned" && !isMobile && !isTablet;
 
   const handleChatAreaClick = useCallback(() => {
@@ -143,12 +155,14 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
         )}
 
         {/* ---- COL 1: Left Sidebar ---- */}
-        {sessionPanel !== "hidden" && (!isMobile || sessionPanel === "visible") && (
-          <LeftSidebar
-            width={isMobile ? Math.round(contentWidth * 0.85) : sessionWidth}
-            overlay={sessionPanel === "visible"}
-          />
-        )}
+        {sessionPanel !== "hidden" &&
+          !sessionCollapsed &&
+          (!isMobile || sessionPanel === "visible") && (
+            <LeftSidebar
+              width={isMobile ? Math.round(contentWidth * 0.85) : sessionWidth}
+              overlay={sessionPanel === "visible"}
+            />
+          )}
 
         {/* ---- Left Resize Handle ---- */}
         {showLeftHandle && (
@@ -199,13 +213,11 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
         {/* ---- COL 3: Right Sidebar ---- */}
         {statusPanel !== "hidden" && (!isMobile || statusPanel === "visible") && (
           <RightSidebar
-            width={isMobile ? Math.round(contentWidth * 0.85) : statusWidth}
+            width={isMobile ? Math.round(contentWidth * 0.85) : isTablet ? 48 : statusWidth}
             overlay={statusPanel === "visible"}
           />
         )}
       </div>
-
-      {isMobile && <MobileTabBar />}
     </div>
   );
 }

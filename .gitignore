@@ -60,3 +60,12 @@ tmp/
 .codenomad/
 *.bak
 *.bak2
+
+# Personal files
+resume/
+*简历*
+许映洲-简历.md
+
+# Debug / temporary scripts
+diagnose-ws.ts
+.env.backup

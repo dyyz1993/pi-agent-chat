@@ -117,3 +117,11 @@ a:focus-visible,
 [tabindex]:focus-visible {
   @apply outline-none ring-2 ring-indigo-500 ring-offset-2 ring-offset-white dark:ring-offset-gray-950;
 }
+
+@media (max-width: 768px) {
+  button,
+  [role="button"] {
+    min-width: 28px;
+    min-height: 28px;
+  }
+}

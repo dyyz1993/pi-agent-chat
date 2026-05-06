@@ -79,7 +79,7 @@ export const ReadFileCard = memo(function ReadFileCard({
         <summary className="sr-only">{t("expand")}</summary>
         <div className="px-3 pb-2">
           {block.output ? (
-            <pre className="text-[11px] text-gray-800 dark:text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-72 overflow-y-auto bg-gray-100 dark:bg-black/20 rounded px-2 py-1.5">
+            <pre className="text-[11px] text-gray-800 dark:text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-36 overflow-y-auto bg-gray-100 dark:bg-black/20 rounded px-2 py-1.5">
               {block.output}
             </pre>
           ) : isRunning ? (

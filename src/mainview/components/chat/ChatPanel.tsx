@@ -139,6 +139,7 @@ export function ChatPanel() {
   const isMobileOrTablet = breakpoint === "mobile" || breakpoint === "tablet";
 
   const streamVersion = useChatStore((s) => s.streamContentVersion);
+  const historyLoadVersion = useChatStore((s) => s.historyLoadVersion);
 
   const estimateMainSize = useCallback(
     (index: number) => estimateMessageSize(mainMessages[index]),
@@ -200,6 +201,7 @@ export function ChatPanel() {
         [setActive, setNavId],
       ),
       streamVersion,
+      historyLoadVersion,
     });
 
   const handleScrollToEdge = useCallback(
@@ -428,7 +430,7 @@ export function ChatPanel() {
             />
           )}
         </div>
-        <div className="w-12 shrink-0 overflow-hidden hidden sm:block">
+        <div className="w-12 shrink-0 overflow-hidden">
           <SideNav messages={messages} onNavDotClick={handleNavDotClick} />
         </div>
       </div>
@@ -528,9 +530,26 @@ export function ChatPanel() {
 function SessionToggleIcon() {
   const { t } = useTranslation("chat");
   const sessionPanel = useLayoutStore((s) => s.sessionPanel);
+  const sessionCollapsed = useLayoutStore((s) => s.sessionCollapsed);
+  const toggleSessionCollapse = useLayoutStore((s) => s.toggleSessionCollapse);
   const showSession = useLayoutStore((s) => s.showSession);
   const hideSession = useLayoutStore((s) => s.hideSession);
   const isMobile = useLayoutStore((s) => s.breakpoint) === "mobile";
+
+  if (sessionCollapsed && !isMobile) {
+    return (
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          toggleSessionCollapse();
+        }}
+        className="p-1 rounded transition-colors text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300"
+        title={t("openSessionPanel")}
+      >
+        <PanelLeft className="w-3.5 h-3.5" />
+      </button>
+    );
+  }
 
   if (sessionPanel === "pinned" && !isMobile) return null;
 

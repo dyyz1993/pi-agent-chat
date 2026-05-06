@@ -31,7 +31,11 @@ export function ThemeMenu() {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        setOpen(false);
+      }
     };
     document.addEventListener("mousedown", handleClick);
     document.addEventListener("keydown", handleKey);
@@ -109,7 +113,9 @@ export function ThemeMenu() {
                     ? "bg-indigo-500/15 text-indigo-600 dark:text-indigo-300"
                     : "text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
                 }`}
-                onClick={() => {
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
                   setLanguage(opt.value);
                 }}
               >

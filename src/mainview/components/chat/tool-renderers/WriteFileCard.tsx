@@ -152,7 +152,7 @@ export const WriteFileCard = memo(function WriteFileCard({
       {isMd && hasContent ? (
         <div
           ref={scrollContainerRef}
-          className="px-3 pb-2 max-h-80 overflow-y-auto bg-gray-100 dark:bg-gray-900/40 rounded-sm mx-2 mb-2"
+          className="px-3 pb-2 max-h-40 overflow-y-auto bg-gray-100 dark:bg-gray-900/40 rounded-sm mx-2 mb-2"
         >
           <div className="px-2 py-2 prose prose-sm prose-gray dark:prose-invert max-w-none overflow-auto prose-p:my-1 prose-pre:bg-gray-200 dark:prose-pre:bg-black/30 prose-pre:rounded prose-pre:px-2 prose-pre:py-1.5 prose-headings:text-gray-900 dark:prose-headings:text-gray-100 prose-a:text-indigo-500 dark:prose-a:text-indigo-400 prose-code:text-pink-600 dark:prose-code:text-pink-300 prose-code:before:content-[''] prose-code:after:content-[''] prose-code:bg-gray-200 dark:prose-code:bg-gray-800/60 prose-code:px-1 prose-code:rounded prose-code:text-[11px] prose-strong:text-gray-900 dark:prose-strong:text-gray-100 prose-blockquote:border-l-indigo-400/50 prose-blockquote:text-gray-600 dark:prose-blockquote:text-gray-300 prose-li:my-0.5 prose-ul:my-1 prose-ol:my-1">
             <CachedReactMarkdown>{fileContent}</CachedReactMarkdown>
@@ -163,7 +163,7 @@ export const WriteFileCard = memo(function WriteFileCard({
           <summary className="sr-only">{t("expand")}</summary>
           <div className="px-3 pb-2">
             {block.output ? (
-              <pre className="text-[11px] text-gray-800 dark:text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-72 overflow-y-auto bg-gray-100 dark:bg-black/20 rounded px-2 py-1.5">
+              <pre className="text-[11px] text-gray-800 dark:text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-36 overflow-y-auto bg-gray-100 dark:bg-black/20 rounded px-2 py-1.5">
                 {block.output}
               </pre>
             ) : isRunning ? (

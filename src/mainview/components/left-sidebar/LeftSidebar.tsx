@@ -1,4 +1,4 @@
-import { Pin, Plus, PanelLeft } from "lucide-react";
+import { Pin, Plus, PanelLeft, PanelLeftClose } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import { useSessionStore } from "../../stores/use-session-store";
@@ -95,7 +95,7 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
           >
             <Pin className="w-3.5 h-3.5" fill={isPinned ? "currentColor" : "none"} />
           </button>
-          {overlay && (
+          {overlay ? (
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -105,6 +105,17 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
               title={t("closePanel")}
             >
               <PanelLeft className="w-3.5 h-3.5" />
+            </button>
+          ) : (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                useLayoutStore.getState().toggleSessionCollapse();
+              }}
+              className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors max-sm:hidden"
+              title={t("collapseSidebar")}
+            >
+              <PanelLeftClose className="w-3.5 h-3.5" />
             </button>
           )}
         </div>

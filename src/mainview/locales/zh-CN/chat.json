@@ -52,6 +52,7 @@
   "tokenCacheRead": "缓存读取",
   "tokenCacheWrite": "缓存写入",
   "tokenCost": "费用",
+  "tokenTotal": "总计",
   "noRelevantMemory": "未找到相关记忆",
   "relatedMemory": "相关记忆",
   "memoryCountTokens": "{{count}} 条 · ~{{tokens}} tokens · {{size}}KB",

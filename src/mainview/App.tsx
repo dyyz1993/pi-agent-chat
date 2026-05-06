@@ -1,9 +1,10 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { apiClient } from "./lib/api-client";
+import { apiClient, resolveAuthToken } from "./lib/api-client";
 import { useAppStore } from "./stores/use-app-store";
 import { useExplorerStore } from "./stores/use-explorer-store";
 import { useSessionStore } from "./stores/use-session-store";
+import { setupProjectStatusSubscription } from "./stores/session-subscriptions";
 import { useChatStore } from "./stores/use-chat-store";
 import { createLogger } from "../shared/lib/logger";
 import { MainLayout } from "./layouts/MainLayout";
@@ -11,6 +12,7 @@ import { ProjectPickerDialog } from "./components/project-picker/ProjectPickerDi
 import { DiagnosticPanel } from "./components/debug/DiagnosticPanel";
 import { useDiagnosticStore } from "./stores/use-diagnostic-store";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { LoginPage } from "./components/LoginPage";
 
 function App() {
   const { t } = useTranslation("common");
@@ -26,7 +28,9 @@ function App() {
   const addProjectTab = useSessionStore((s) => s.addProjectTab);
   const loadSessionsForProject = useSessionStore((s) => s.loadSessionsForProject);
   const restoreFromPersisted = useSessionStore((s) => s.restoreFromPersisted);
-
+  const [hasToken, setHasToken] = useState(() => !!resolveAuthToken());
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const loginTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleDiagnosticToggle = useCallback((e: KeyboardEvent) => {
     if (e.ctrlKey && e.shiftKey && e.key === "D") {
       e.preventDefault();
@@ -40,11 +44,54 @@ function App() {
   }, [handleDiagnosticToggle]);
 
   useEffect(() => {
-    initializeConnection();
-  }, [initializeConnection]);
+    return () => {
+      if (loginTimerRef.current) clearTimeout(loginTimerRef.current);
+    };
+  }, []);
+
+  const handleLogin = useCallback(() => {
+    setLoginError(null);
+    setHasToken(true);
+
+    loginTimerRef.current = setTimeout(() => {
+      const currentReady = useAppStore.getState().ready;
+      if (!currentReady) {
+        localStorage.removeItem("rpc-auth-token");
+        setLoginError("连接失败，请检查 Token 是否正确");
+        setHasToken(false);
+      }
+    }, 15000);
+  }, []);
+
+  useEffect(() => {
+    if (ready && loginTimerRef.current) {
+      clearTimeout(loginTimerRef.current);
+      loginTimerRef.current = null;
+    }
+  }, [ready]);
+
+  useEffect(() => {
+    if (!hasToken) return;
+
+    let cancelled = false;
+
+    const doInit = async () => {
+      if (cancelled) return;
+      initializeConnection();
+      setupProjectStatusSubscription();
+    };
+
+    doInit();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initializeConnection, hasToken]);
 
   useEffect(() => {
     if (!ready || restoredFlag) return;
+
+    let cancelled = false;
     useAppStore.setState({ restored: true });
     setRestoring(true);
 
@@ -56,6 +103,7 @@ function App() {
         const urlSessionId = urlParams.get("session");
 
         if (urlSessionId) {
+          if (cancelled) return;
           addLog(`Loading session from URL: ${urlSessionId}`);
           try {
             const lookup = await apiClient.call("project.findSessionById", {
@@ -82,6 +130,7 @@ function App() {
 
             await loadSessionsForProject(projectPath);
 
+            if (cancelled) return;
             const result = await apiClient.call("agent.start", {
               sessionId: urlSessionId,
               projectPath,
@@ -101,17 +150,19 @@ function App() {
               `Failed to load URL session: ${err instanceof Error ? err.message : String(err)}`,
             );
           }
-          setRestoring(false);
+          if (!cancelled) setRestoring(false);
           return;
         }
 
+        if (cancelled) return;
         const restored = await restoreFromPersisted();
         if (restored) {
           addLog("Restored last session from cache");
-          setRestoring(false);
+          if (!cancelled) setRestoring(false);
           return;
         }
 
+        if (cancelled) return;
         const tabResult = await apiClient.call("project.restoreTabs", {});
         const savedTabs = tabResult.tabs as Array<{ id: string; name: string; path: string }>;
         const savedActiveId = tabResult.activeTabId as string | null;
@@ -144,15 +195,16 @@ function App() {
               await useSessionStore.getState().createNewSession();
             }
           }
-          setRestoring(false);
+          if (!cancelled) setRestoring(false);
           return;
         }
 
+        if (cancelled) return;
         const result = await apiClient.call("project.listRecent", {});
         const projects =
           (result.projects as Array<{ path: string; name: string; sessionCount: number }>) || [];
         if (projects.length === 0) {
-          setRestoring(false);
+          if (!cancelled) setRestoring(false);
           return;
         }
 
@@ -169,12 +221,16 @@ function App() {
         } else {
           await useSessionStore.getState().createNewSession();
         }
-        setRestoring(false);
+        if (!cancelled) setRestoring(false);
       } catch (err) {
         addLog(`Restore failed: ${err instanceof Error ? err.message : String(err)}`);
-        setRestoring(false);
+        if (!cancelled) setRestoring(false);
       }
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [ready, addLog, listRootDir, addProjectTab, loadSessionsForProject, restoreFromPersisted]);
 
   const handleSelectProject = async (path: string, name: string) => {
@@ -199,6 +255,18 @@ function App() {
 
     setProjectLoading(false);
   };
+
+  if (!hasToken) {
+    return (
+      <ErrorBoundary>
+        <LoginPage
+          onLogin={handleLogin}
+          loginError={loginError}
+          onClearError={() => setLoginError(null)}
+        />
+      </ErrorBoundary>
+    );
+  }
 
   if (!ready || restoring || projectLoading) {
     return (

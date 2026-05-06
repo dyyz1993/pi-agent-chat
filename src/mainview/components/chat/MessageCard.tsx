@@ -28,7 +28,6 @@ import {
   isLspVisibleInChat,
 } from "./MessageBubble";
 import type { ChatMessage } from "../../types";
-import { formatTokenCount } from "../../utils/turn-utils";
 import { getCustomTypeIcon } from "./tool-icon-map";
 
 interface MessageCardProps {
@@ -301,31 +300,6 @@ export const MessageCard = memo(function MessageCard({
       ) : (
         <div className="relative z-20">
           <MessageBubble message={message} />
-        </div>
-      )}
-
-      {/* Footer — only for assistant messages (not entry) with actions/token */}
-      {isAssistant && !isEntry && !isCollapsed && (
-        <div
-          className={`relative z-20 border-l-[3px] ${isSelected ? "border-l-red-500" : barColor}`}
-        >
-          {message.tokenUsage && (
-            <div className="flex items-center justify-end px-4 pb-0.5">
-              <span className="flex items-center gap-1 text-[10px] font-mono text-gray-400 dark:text-gray-600">
-                <span>
-                  {t("messageCard.tokenInput")} {formatTokenCount(message.tokenUsage.input)}
-                </span>
-                <span className="text-gray-400 dark:text-gray-800">→</span>
-                <span>
-                  {t("messageCard.tokenOutput")} {formatTokenCount(message.tokenUsage.output)}
-                </span>
-                <span className="text-gray-400 dark:text-gray-800">·</span>
-                <span>
-                  {formatTokenCount(message.tokenUsage.input + message.tokenUsage.output)}
-                </span>
-              </span>
-            </div>
-          )}
         </div>
       )}
     </div>

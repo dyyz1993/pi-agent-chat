@@ -46,7 +46,11 @@ export const useThemeStore = create<ThemeState>()(
         set({ theme, resolvedTheme: resolved });
       },
       setLanguage: (lang: string) => {
-        i18n.changeLanguage(lang);
+        try {
+          void i18n.changeLanguage(lang);
+        } catch {
+          // ignore
+        }
         set({ language: lang });
       },
     }),

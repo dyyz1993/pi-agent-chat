@@ -1,4 +1,4 @@
-import type { SessionMeta, ProjectTab } from "../types";
+import type { SessionMeta, ProjectTab, SessionStatus } from "../types";
 import type { BashChannelEvent } from "../../shared/modules/bash";
 import type { LspChannelEvent } from "../../shared/modules/lsp";
 import type { RulesChannelEvent } from "../../shared/modules/rules";
@@ -25,6 +25,7 @@ export interface SubscriptionMaps {
   rulesSubscriptions: Record<string, string>;
   notifySubscriptions: Record<string, string>;
   memorySubscriptions: Record<string, string[]>;
+  coordinatorSubscriptions: Record<string, string>;
 }
 
 export type TodoPriority = "high" | "medium" | "low";
@@ -52,6 +53,7 @@ export function setupSubscriptions(
     rulesSubscriptions,
     notifySubscriptions,
     memorySubscriptions,
+    coordinatorSubscriptions,
   } = state;
   const storeGet = () => useSessionStore.getState();
 
@@ -414,6 +416,38 @@ export function setupSubscriptions(
       );
     }
   }
+
+  if (!coordinatorSubscriptions[id]) {
+    apiClient
+      .subscribe(
+        "coordinator.session_created",
+        (payload: { parentSessionId: string; session: SessionMeta }) => {
+          if (payload.parentSessionId !== id) return;
+
+          const s = useSessionStore.getState();
+          const projectPath = payload.session.projectPath;
+          const sessions = s.sessionsByProject[projectPath] || [];
+
+          if (!sessions.find((sess) => sess.sessionId === payload.session.sessionId)) {
+            useSessionStore.setState({
+              sessionsByProject: {
+                ...s.sessionsByProject,
+                [projectPath]: [payload.session, ...sessions],
+              },
+            });
+          }
+        },
+        { parentSessionId: id },
+      )
+      .then((subId) => {
+        set((s) => ({
+          coordinatorSubscriptions: { ...s.coordinatorSubscriptions, [id]: subId },
+        }));
+      })
+      .catch((err) => {
+        useAppStore.getState().addLog(`[sub] ${String(err)}`);
+      });
+  }
 }
 
 export function cleanupSession(state: SubscriptionMaps, sessionId: string): void {
@@ -425,6 +459,7 @@ export function cleanupSession(state: SubscriptionMaps, sessionId: string): void
     state.lspSubscriptions,
     state.rulesSubscriptions,
     state.notifySubscriptions,
+    state.coordinatorSubscriptions,
   ];
 
   for (const map of singleSubMaps) {
@@ -474,6 +509,7 @@ export function clearSubscriptionState(
   const { [sessionId]: _f, ...restRules } = state.rulesSubscriptions;
   const { [sessionId]: _g, ...restNotify } = state.notifySubscriptions;
   const { [sessionId]: _h, ...restMemory } = state.memorySubscriptions;
+  const { [sessionId]: _j, ...restCoord } = state.coordinatorSubscriptions;
   const { [sessionId]: _i, ...restReady } = state.sessionReady;
   return {
     agentSubscriptions: restAgent,
@@ -484,6 +520,7 @@ export function clearSubscriptionState(
     rulesSubscriptions: restRules,
     notifySubscriptions: restNotify,
     memorySubscriptions: restMemory,
+    coordinatorSubscriptions: restCoord,
     sessionReady: restReady,
   };
 }
@@ -493,4 +530,38 @@ export function syncTabsToBackend(tabs: ProjectTab[], activeTabId: string | null
   apiClient.call("project.syncTabs", { tabs: persistTabs, activeTabId }).catch((err) => {
     useAppStore.getState().addLog(`[sub] ${String(err)}`);
   });
+}
+
+let projectStatusSubId: string | null = null;
+
+export function setupProjectStatusSubscription(): void {
+  if (projectStatusSubId) return;
+
+  apiClient
+    .subscribe(
+      "agent.session_status_changed",
+      (payload: { sessionId: string; projectPath: string; status: string }) => {
+        const s = useSessionStore.getState();
+        s.updateSessionStatus(payload.sessionId, payload.status as SessionStatus);
+
+        const sessions = s.sessionsByProject[payload.projectPath];
+        if (sessions) {
+          const idx = sessions.findIndex((sess) => sess.sessionId === payload.sessionId);
+          if (idx !== -1) {
+            const updated = [...sessions];
+            updated[idx] = { ...updated[idx], status: payload.status as "idle" | "running" };
+            useSessionStore.setState({
+              sessionsByProject: { ...s.sessionsByProject, [payload.projectPath]: updated },
+            });
+          }
+        }
+      },
+      {},
+    )
+    .then((subId) => {
+      projectStatusSubId = subId;
+    })
+    .catch((err) => {
+      useAppStore.getState().addLog(`[sub] ${String(err)}`);
+    });
 }

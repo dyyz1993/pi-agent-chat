@@ -275,6 +275,7 @@ export interface CustomEntryForUI {
 export interface AgentEvents {
   "agent.event": AgentEventPayload;
   "agent.notify": { sessionId: string; message: string; notifyType: "info" | "warning" | "error" };
+  "agent.session_status_changed": { sessionId: string; projectPath: string; status: string };
 }
 
 export interface AgentEventPayload {

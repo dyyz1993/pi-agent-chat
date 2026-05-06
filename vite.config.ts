@@ -2,9 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig({
-  plugins: [
-    react(),
-  ],
+  plugins: [react()],
   root: "src/mainview",
   publicDir: "public",
   build: {
@@ -13,13 +11,19 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          'vendor-react': ['react', 'react-dom'],
-          'vendor-markdown': ['unified', 'remark-parse', 'remark-rehype', 'hast-util-to-jsx-runtime', 'vfile'],
-          'vendor-highlight': ['prism-react-renderer'],
-          'vendor-diff': ['react-diff-viewer-continued'],
-          'vendor-virtual': ['@tanstack/react-virtual'],
-          'vendor-icons': ['lucide-react'],
-          'vendor-state': ['zustand'],
+          "vendor-react": ["react", "react-dom"],
+          "vendor-markdown": [
+            "unified",
+            "remark-parse",
+            "remark-rehype",
+            "hast-util-to-jsx-runtime",
+            "vfile",
+          ],
+          "vendor-highlight": ["prism-react-renderer"],
+          "vendor-diff": ["react-diff-viewer-continued"],
+          "vendor-virtual": ["@tanstack/react-virtual"],
+          "vendor-icons": ["lucide-react"],
+          "vendor-state": ["zustand"],
         },
       },
     },
@@ -51,11 +55,11 @@ export default defineConfig({
       },
       "/api": {
         target: "http://localhost:3100",
-        ws: true,
+        // ws: true,
         changeOrigin: true,
       },
       "/ws": {
-        target: "ws://localhost:3100",
+        target: "http://localhost:3100",
         ws: true,
         changeOrigin: true,
       },

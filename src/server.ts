@@ -13,6 +13,13 @@ configureLogDir(config.logDir);
 setLogSink(writeLogLine);
 const log = createLogger("server");
 
+log.info("=== 服务器环境变量诊断 ===");
+log.info("AUTH_TOKEN:", { value: process.env.AUTH_TOKEN });
+log.info("PORT:", { value: process.env.PORT });
+log.info("LOG_DIR:", { value: process.env.LOG_DIR });
+log.info("PI_CLI_PATH:", { value: process.env.PI_CLI_PATH });
+log.info("==============================");
+
 const httpServer = createServer();
 const wss = createWsHandler(httpServer, { config });
 

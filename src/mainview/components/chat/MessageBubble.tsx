@@ -23,8 +23,10 @@ import { getToolRenderer } from "./tool-renderers";
 import { getCustomTypeIcon } from "./tool-icon-map";
 import { tryFormatAsYaml } from "../../../shared/lib/json-to-yaml";
 import { useExpandStore } from "../../stores/use-expand-store";
+import { useSettingsStore } from "../../stores/use-settings-store";
 import { useUIBlockMap } from "../../stores/use-ui-dialog-store";
 import { ENTRY_TYPE_KEYS, getMemoryConfig, getMemorySummary } from "./memory-config";
+import { formatTokenCount } from "../../utils/turn-utils";
 
 export function getBlockBorderColor(block: ContentBlock, role: "user" | "assistant"): string {
   const roleDefault = role === "user" ? "border-l-blue-500/60" : "border-l-emerald-500/50";
@@ -130,6 +132,7 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
       id={`msg-${message.id}`}
       data-msg-id={message.id}
       className="group relative w-full min-w-0"
+      style={{ maxWidth: 900 }}
     >
       {isSelected && (
         <div className="absolute inset-0 rounded-lg bg-indigo-500/[0.06] pointer-events-none" />
@@ -244,11 +247,11 @@ export const TextContentCard = memo(function TextContentCard({
       </div>
 
       {isOpen ? (
-        <div className="px-3 py-1.5 prose dark:prose-invert prose-sm max-w-none overflow-auto max-h-[60vh] prose-p:my-1 prose-pre:bg-transparent">
+        <div className="prose dark:prose-invert prose-sm max-w-none overflow-auto max-h-[60vh] prose-p:my-1 prose-pre:bg-transparent">
           {isStreaming ? <span>{text}</span> : <CachedReactMarkdown>{text}</CachedReactMarkdown>}
         </div>
       ) : hasMore ? (
-        <div className="px-2 pl-1 py-0.5 text-[11px] text-gray-400 dark:text-gray-500 truncate">
+        <div className="py-0.5 text-[11px] text-gray-400 dark:text-gray-500 truncate">
           {firstLine.length > 120 ? firstLine.slice(0, 120) + "..." : firstLine}
         </div>
       ) : null}
@@ -266,15 +269,16 @@ export const ThinkingCard = memo(function ThinkingCard({
   blockId: string;
 }) {
   const { t } = useTranslation("chat");
-  const [isOpen, setIsOpen] = useState(true);
+  const collapseThinking = useSettingsStore((s) => s.collapseThinking);
+  const [isOpen, setIsOpen] = useState(() => (collapseThinking ? isStreaming : true));
 
   const wasStreamingRef = useRef(isStreaming);
   useEffect(() => {
     if (wasStreamingRef.current && !isStreaming) {
-      setIsOpen(false);
+      setIsOpen(!collapseThinking);
     }
     wasStreamingRef.current = isStreaming;
-  }, [isStreaming]);
+  }, [isStreaming, collapseThinking]);
 
   const firstLine = thinking.split("\n")[0] || t("thinkingPlaceholder");
   const hasMore = thinking.includes("\n") || thinking.length > 80;
@@ -311,7 +315,7 @@ export const ThinkingCard = memo(function ThinkingCard({
           )}
         </div>
       ) : hasMore ? (
-        <div className="px-2 pl-1 py-0.5 text-[11px] text-gray-400 dark:text-gray-500 truncate">
+        <div className="py-0.5 text-[11px] text-gray-400 dark:text-gray-500 truncate">
           {firstLine.length > 100 ? firstLine.slice(0, 100) + "..." : firstLine}
         </div>
       ) : null}
@@ -792,6 +796,9 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({
   const blockId = `${msgId}-${blockIndex}`;
   const { t } = useTranslation("chat");
   const openExpand = useExpandStore((s) => s.openExpand);
+  const showToolCalls = useSettingsStore((s) => s.showToolCalls);
+  const showToolResults = useSettingsStore((s) => s.showToolResults);
+  const showThinking = useSettingsStore((s) => s.showThinking);
   const toolCallId =
     block.type === "toolExecution"
       ? block.toolCallId
@@ -810,7 +817,7 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({
         return (
           <div
             data-block-id={blockId}
-            className="my-0.5 group relative px-3 py-2 pr-10 text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words overflow-auto max-h-[60vh]"
+            className="my-0.5 group relative pr-10 text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words overflow-auto max-h-[60vh]"
           >
             <div className="absolute top-2 right-2 z-10 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
               <CopyButton text={block.text} size="xs" />
@@ -823,7 +830,7 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({
       return (
         <div
           data-block-id={blockId}
-          className="my-0.5 group relative px-3 py-2 pr-10 prose dark:prose-invert prose-sm max-w-none overflow-auto max-h-[60vh] prose-p:my-1 prose-pre:bg-transparent"
+          className="my-0.5 group relative pr-10 prose dark:prose-invert prose-sm max-w-none overflow-auto max-h-[60vh] prose-p:my-1 prose-pre:bg-transparent"
         >
           <div className="absolute top-2 right-2 z-10 flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
             {shouldShowExpand && (
@@ -847,55 +854,62 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({
       );
     }
     case "thinking":
+      if (!showThinking) return null;
       return (
         <ThinkingCard thinking={block.thinking} isStreaming={!!isStreaming} blockId={blockId} />
       );
-    case "toolCall": {
-      const execBlock: Extract<ContentBlock, { type: "toolExecution" }> = {
-        type: "toolExecution",
-        toolCallId: block.id,
-        toolName: block.name,
-        args: typeof block.input === "string" ? block.input : JSON.stringify(block.input ?? {}),
-        status: "running",
-      };
-      const renderer = getToolRenderer(execBlock.toolName);
-      if (renderer?.renderExecution) {
-        const CustomCard = renderer.renderExecution;
-        return <CustomCard block={execBlock} blockId={blockId} />;
+    case "toolCall":
+      if (!showToolCalls) return null;
+      {
+        const execBlock: Extract<ContentBlock, { type: "toolExecution" }> = {
+          type: "toolExecution",
+          toolCallId: block.id,
+          toolName: block.name,
+          args: typeof block.input === "string" ? block.input : JSON.stringify(block.input ?? {}),
+          status: "running",
+        };
+        const renderer = getToolRenderer(execBlock.toolName);
+        if (renderer?.renderExecution) {
+          const CustomCard = renderer.renderExecution;
+          return <CustomCard block={execBlock} blockId={blockId} />;
+        }
+        return <ToolExecutionCard block={execBlock} blockId={blockId} uiBlock={uiBlock} />;
       }
-      return <ToolExecutionCard block={execBlock} blockId={blockId} uiBlock={uiBlock} />;
-    }
-    case "toolResult": {
-      const execBlock: Extract<ContentBlock, { type: "toolExecution" }> = {
-        type: "toolExecution",
-        toolCallId: block.toolCallId,
-        toolName: block.toolName,
-        args: typeof block.args === "string" ? block.args : JSON.stringify(block.args ?? ""),
-        status: block.isError ? "error" : "done",
-        output: block.content,
-        details: block.details,
-      };
-      const renderer = getToolRenderer(execBlock.toolName);
-      if (renderer?.renderExecution) {
-        const CustomCard = renderer.renderExecution;
-        return <CustomCard block={execBlock} blockId={blockId} />;
+    case "toolResult":
+      if (!showToolResults) return null;
+      {
+        const execBlock: Extract<ContentBlock, { type: "toolExecution" }> = {
+          type: "toolExecution",
+          toolCallId: block.toolCallId,
+          toolName: block.toolName,
+          args: typeof block.args === "string" ? block.args : JSON.stringify(block.args ?? ""),
+          status: block.isError ? "error" : "done",
+          output: block.content,
+          details: block.details,
+        };
+        const renderer = getToolRenderer(execBlock.toolName);
+        if (renderer?.renderExecution) {
+          const CustomCard = renderer.renderExecution;
+          return <CustomCard block={execBlock} blockId={blockId} />;
+        }
+        return <ToolExecutionCard block={execBlock} blockId={blockId} />;
       }
-      return <ToolExecutionCard block={execBlock} blockId={blockId} />;
-    }
-    case "toolExecution": {
-      if (uiBlock) {
-        return <UIInteractionCard block={uiBlock} />;
+    case "toolExecution":
+      if (!showToolCalls) return null;
+      {
+        if (uiBlock) {
+          return <UIInteractionCard block={uiBlock} />;
+        }
+        if (block.toolName.toLowerCase() === "subagent") {
+          return <SubagentExecutionCard block={block} blockId={blockId} />;
+        }
+        const renderer = getToolRenderer(block.toolName);
+        if (renderer?.renderExecution) {
+          const CustomCard = renderer.renderExecution;
+          return <CustomCard block={block} blockId={blockId} />;
+        }
+        return <ToolExecutionCard block={block} blockId={blockId} uiBlock={uiBlock} />;
       }
-      if (block.toolName.toLowerCase() === "subagent") {
-        return <SubagentExecutionCard block={block} blockId={blockId} />;
-      }
-      const renderer = getToolRenderer(block.toolName);
-      if (renderer?.renderExecution) {
-        const CustomCard = renderer.renderExecution;
-        return <CustomCard block={block} blockId={blockId} />;
-      }
-      return <ToolExecutionCard block={block} blockId={blockId} uiBlock={uiBlock} />;
-    }
     case "custom":
       if (isLspCustomType(block.customType)) {
         if (!isLspVisibleInChat(block.customType)) {
@@ -1056,7 +1070,7 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
               {uiBlock && uiBlock.status === "pending" ? (
                 <UIInteractionCard block={uiBlock} />
               ) : block.output ? (
-                <pre className="text-[11px] text-gray-700 dark:text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-72 overflow-y-auto pl-2">
+                <pre className="text-[11px] text-gray-700 dark:text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-36 overflow-y-auto pl-2">
                   {block.output}
                 </pre>
               ) : isRunning ? (
@@ -1079,6 +1093,9 @@ export const MessageMetaFooter = memo(function MessageMetaFooter({
 }) {
   const { t } = useTranslation("chat");
   const { tokenUsage, model, provider } = message;
+  const hasMeta = model ?? provider ?? tokenUsage;
+
+  if (!hasMeta) return null;
 
   return (
     <div className="mt-1.5 pt-1.5 pl-2 pb-0.5 border-t border-gray-200/20 dark:border-gray-800/20 space-y-1">
@@ -1100,40 +1117,45 @@ export const MessageMetaFooter = memo(function MessageMetaFooter({
         </div>
       )}
       {tokenUsage && (
-        <div className="flex items-center gap-2 text-[10px] text-gray-400 dark:text-gray-600">
-          <span>
-            {t("tokenInput")} {tokenUsage.input}
+        <div className="flex items-center justify-between text-[10px] text-gray-400 dark:text-gray-600">
+          <span className="flex items-center gap-2">
+            {(tokenUsage.cacheRead ?? 0) > 0 && (
+              <span>
+                {t("tokenCacheRead")} {formatTokenCount(tokenUsage.cacheRead ?? 0)}
+              </span>
+            )}
+            {(tokenUsage.cacheWrite ?? 0) > 0 && (
+              <span>
+                {t("tokenCacheWrite")} {formatTokenCount(tokenUsage.cacheWrite ?? 0)}
+              </span>
+            )}
+            {(tokenUsage.reasoning ?? 0) > 0 && (
+              <span>
+                {t("tokenReasoning")} {tokenUsage.reasoning}
+              </span>
+            )}
           </span>
-          <span>
-            {t("tokenOutput")} {tokenUsage.output}
+          <span className="flex items-center gap-1 font-mono">
+            <span>
+              {t("tokenInput")} {formatTokenCount(tokenUsage.input)}
+            </span>
+            <span className="text-gray-400 dark:text-gray-800">→</span>
+            <span>
+              {t("tokenOutput")} {formatTokenCount(tokenUsage.output)}
+            </span>
+            <span className="text-gray-400 dark:text-gray-800">·</span>
+            <span>
+              {t("tokenTotal")} {formatTokenCount(tokenUsage.input + tokenUsage.output)}
+            </span>
+            {tokenUsage.cost != null && (
+              <>
+                <span className="text-gray-400 dark:text-gray-800">·</span>
+                <span>${tokenUsage.cost.toFixed(2)}</span>
+              </>
+            )}
           </span>
-          {(tokenUsage.reasoning ?? 0) > 0 && (
-            <span>
-              {t("tokenReasoning")} {tokenUsage.reasoning}
-            </span>
-          )}
-          {(tokenUsage.cacheRead ?? 0) > 0 && (
-            <span>
-              {t("tokenCacheRead")} {formatK(tokenUsage.cacheRead ?? 0)}
-            </span>
-          )}
-          {(tokenUsage.cacheWrite ?? 0) > 0 && (
-            <span>
-              {t("tokenCacheWrite")} {formatK(tokenUsage.cacheWrite ?? 0)}
-            </span>
-          )}
-          {tokenUsage.cost != null && (
-            <span>
-              {t("tokenCost")} ${tokenUsage.cost.toFixed(2)}
-            </span>
-          )}
         </div>
       )}
     </div>
   );
 });
-
-function formatK(n: number): string {
-  if (n >= 1000) return `${(n / 1000).toFixed(0)}K`;
-  return `${n}`;
-}

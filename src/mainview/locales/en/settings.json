@@ -1,0 +1,16 @@
+{
+  "title": "Settings",
+  "close": "Close",
+  "chatDisplay": "Chat Display",
+  "showToolCalls": "Show Tool Calls",
+  "showToolCallsDesc": "Display tool invocation blocks in chat",
+  "showToolResults": "Show Tool Results",
+  "showToolResultsDesc": "Display tool execution results in chat",
+  "showThinking": "Show Thinking",
+  "showThinkingDesc": "Display AI reasoning process in chat",
+  "collapseThinking": "Collapse Thinking by Default",
+  "collapseThinkingDesc": "Auto-collapse thinking blocks once streaming completes",
+  "showTimeline": "Show Timeline",
+  "showTimelineDesc": "Display activity timeline in the message area",
+  "reset": "Reset to Defaults"
+}

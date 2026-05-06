@@ -52,6 +52,7 @@
   "tokenCacheRead": "Cache Read",
   "tokenCacheWrite": "Cache Write",
   "tokenCost": "Cost",
+  "tokenTotal": "Total",
   "noRelevantMemory": "No relevant memories found",
   "relatedMemory": "Related memories",
   "memoryCountTokens": "{{count}} entries · ~{{tokens}} tokens · {{size}}KB",

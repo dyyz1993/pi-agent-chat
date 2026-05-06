@@ -35,6 +35,7 @@ export const config = {
     fileSnapshot: requireEnv("PI_EXT_FILE_SNAPSHOT"),
     askTools: requireEnv("PI_EXT_ASK_TOOLS"),
     messageBridge: requireEnv("PI_EXT_MESSAGE_BRIDGE"),
+    coordinator: requireEnv("PI_EXT_COORDINATOR"),
   },
 } as const;
 

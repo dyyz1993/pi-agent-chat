@@ -6,6 +6,7 @@ const SESSION_WIDTH_KEY = `layout-session-width-${V}`;
 const STATUS_WIDTH_KEY = `layout-status-width-${V}`;
 const SESSION_PANEL_KEY = `layout-session-panel-${V}`;
 const STATUS_PANEL_KEY = `layout-status-panel-${V}`;
+const SESSION_COLLAPSED_KEY = `layout-session-collapsed-${V}`;
 
 const SESSION_MIN = 180;
 const SESSION_MAX = 420;
@@ -67,6 +68,24 @@ function readPanel(key: string, fallback: PanelVisibility): PanelVisibility {
   }
 }
 
+function readBool(key: string, fallback: boolean): boolean {
+  try {
+    const v = localStorage.getItem(key);
+    if (v === null) return fallback;
+    return v === "true";
+  } catch {
+    return fallback;
+  }
+}
+
+function writeBool(key: string, v: boolean) {
+  try {
+    localStorage.setItem(key, String(v));
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 export interface LayoutState {
   breakpoint: Breakpoint;
   contentWidth: number;
@@ -75,6 +94,7 @@ export interface LayoutState {
   sessionWidth: number;
   statusWidth: number;
   activePanelTab: PanelTabId;
+  sessionCollapsed: boolean;
 
   setBreakpoint: (bp: Breakpoint) => void;
   setContentWidth: (w: number) => void;
@@ -85,6 +105,7 @@ export interface LayoutState {
   showSession: () => void;
   hideSession: () => void;
   setSessionWidth: (w: number) => void;
+  toggleSessionCollapse: () => void;
 
   toggleStatus: () => void;
   pinStatus: () => void;
@@ -106,6 +127,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
   sessionWidth: clampSession(readNum(SESSION_WIDTH_KEY, 240)),
   statusWidth: clampStatus(readNum(STATUS_WIDTH_KEY, 300)),
   activePanelTab: "status",
+  sessionCollapsed: readBool(SESSION_COLLAPSED_KEY, false),
 
   setContentWidth: (w) => set({ contentWidth: w }),
 
@@ -174,6 +196,11 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
     const clamped = clampSession(w);
     set({ sessionWidth: clamped });
     writeNum(SESSION_WIDTH_KEY, clamped);
+  },
+  toggleSessionCollapse: () => {
+    const next = !get().sessionCollapsed;
+    set({ sessionCollapsed: next });
+    writeBool(SESSION_COLLAPSED_KEY, next);
   },
 
   toggleStatus: () => {

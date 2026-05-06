@@ -80,6 +80,7 @@ interface SessionState {
   rulesSubscriptions: Record<string, string>;
   notifySubscriptions: Record<string, string>;
   memorySubscriptions: Record<string, string[]>;
+  coordinatorSubscriptions: Record<string, string>;
   sessionReady: Record<string, boolean>;
   todosBySession: Record<string, TodoItem[]>;
   sessionContextMap: Record<string, ContextUsage>;
@@ -138,6 +139,7 @@ export const useSessionStore = create<SessionState>()(
       rulesSubscriptions: {},
       notifySubscriptions: {},
       memorySubscriptions: {},
+      coordinatorSubscriptions: {},
       sessionReady: {},
       todosBySession: {},
       sessionContextMap: {},

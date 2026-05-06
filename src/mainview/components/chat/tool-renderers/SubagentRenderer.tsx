@@ -226,7 +226,7 @@ export const OutputSection = memo(function OutputSection({
       </summary>
       <div className="px-3 pb-2">
         {block.output ? (
-          <pre className="text-[11px] text-gray-800 dark:text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-72 overflow-y-auto">
+          <pre className="text-[11px] text-gray-800 dark:text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-36 overflow-y-auto">
             {block.output}
           </pre>
         ) : (

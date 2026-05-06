@@ -1,4 +1,14 @@
-import { Pin, PanelRight } from "lucide-react";
+import {
+  Pin,
+  PanelRight,
+  GitBranch,
+  FolderTree,
+  Activity,
+  Terminal,
+  Brain,
+  Shield,
+  Camera,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import { PANEL_TABS, type PanelTabId } from "../../layouts/types";
@@ -11,6 +21,16 @@ import { RulesPanel } from "../rules-panel/RulesPanel";
 import { SnapshotPanel } from "../snapshot-panel/SnapshotPanel";
 import { useExplorerStore } from "../../stores/use-explorer-store";
 import { useEffect } from "react";
+
+const TAB_ICONS: Record<PanelTabId, React.ComponentType<{ className?: string }>> = {
+  git: GitBranch,
+  files: FolderTree,
+  status: Activity,
+  rpc: Terminal,
+  memory: Brain,
+  rules: Shield,
+  snapshot: Camera,
+};
 
 interface RightSidebarProps {
   width: number;
@@ -85,6 +105,40 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
       default:
         return null;
     }
+  }
+
+  const isIconBar = width <= 48;
+
+  if (isIconBar) {
+    return (
+      <div
+        data-testid="right-sidebar"
+        className="flex flex-col items-center bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 overflow-hidden z-20 pt-1"
+        style={{ width }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {PANEL_TABS.map((tab: { id: PanelTabId; label: string }) => {
+          const Icon = TAB_ICONS[tab.id];
+          return (
+            <button
+              key={tab.id}
+              onClick={(e) => {
+                e.stopPropagation();
+                setActivePanelTab(tab.id);
+              }}
+              className={`w-10 h-10 flex items-center justify-center rounded transition-colors ${
+                activePanelTab === tab.id
+                  ? "text-indigo-500 dark:text-indigo-400 bg-indigo-500/10"
+                  : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+              }`}
+              title={tab.label}
+            >
+              <Icon className="w-4 h-4" />
+            </button>
+          );
+        })}
+      </div>
+    );
   }
 
   return (

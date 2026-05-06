@@ -199,7 +199,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
           {block.output ? (
             <AnsiText
               content={block.output}
-              className="text-[11px] overflow-x-auto leading-relaxed max-h-72 overflow-y-auto"
+              className="text-[11px] overflow-x-auto leading-relaxed max-h-36 overflow-y-auto"
             />
           ) : isRunning ? (
             <div className="text-[11px] text-gray-400 dark:text-gray-600 italic py-1">

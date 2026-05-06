@@ -16,7 +16,7 @@ import { useAppStore } from "../stores/use-app-store";
  * 2. localStorage "rpc-auth-token"
  * 3. 空字符串（连接将被服务端 401 拒绝，需通过上述方式提供有效 token）
  */
-function resolveAuthToken(): string {
+export function resolveAuthToken(): string {
   if (typeof window !== "undefined") {
     const fromQuery = new URLSearchParams(window.location.search).get("token");
     if (fromQuery) return fromQuery;
@@ -25,8 +25,6 @@ function resolveAuthToken(): string {
   }
   return "";
 }
-
-const AUTH_TOKEN = resolveAuthToken();
 
 class APIClientImpl {
   private client: TypedClient<RPCMethods, RPCEvents> | null = null;
@@ -38,6 +36,12 @@ class APIClientImpl {
   private _reconnectDetected: boolean = false;
   private _connectionStatus: "connected" | "disconnected" = "connected";
   private _connectionListeners: Set<(status: "connected" | "disconnected") => void> = new Set();
+  private _reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private _reconnectAttempts: number = 0;
+  private _maxReconnectAttempts: number = 10;
+  private _baseReconnectDelay: number = 3000;
+  private _stopped: boolean = false;
+  private _reconnectCheckInterval: ReturnType<typeof setInterval> | null = null;
 
   onConnectionChange(listener: (status: "connected" | "disconnected") => void): () => void {
     this._connectionListeners.add(listener);
@@ -86,10 +90,11 @@ class APIClientImpl {
       } else {
         this._transport = "websocket";
         const wsUrl = this.getWebSocketUrl();
-        this.wsTransport = new WebSocketTransport(wsUrl);
+        this.wsTransport = new WebSocketTransport({ url: wsUrl, reconnect: false });
         await this.wsTransport.connect();
         this.client = createTypedClient<RPCMethods, RPCEvents>(this.wsTransport);
         this._reconnectDetected = false;
+        this._reconnectAttempts = 0;
         this.setupReconnectDetection();
 
         const wsUrlObj = new URL(wsUrl);
@@ -107,9 +112,14 @@ class APIClientImpl {
     const transport = this.wsTransport;
     let wasConnected = transport.isConnected();
 
-    const checkInterval = setInterval(() => {
+    if (this._reconnectCheckInterval) {
+      clearInterval(this._reconnectCheckInterval);
+    }
+
+    this._reconnectCheckInterval = setInterval(() => {
       if (!this.wsTransport || this.wsTransport !== transport) {
-        clearInterval(checkInterval);
+        clearInterval(this._reconnectCheckInterval as ReturnType<typeof setInterval>);
+        this._reconnectCheckInterval = null;
         return;
       }
 
@@ -118,18 +128,72 @@ class APIClientImpl {
       if (wasConnected && !connected) {
         this._reconnectDetected = true;
         this.setConnectionStatus("disconnected");
+        this._scheduleReconnect();
       }
 
       if (!wasConnected && connected && this._reconnectDetected) {
         this._reconnectDetected = false;
         this.client = createTypedClient<RPCMethods, RPCEvents>(transport);
         this.initPromise = null;
+        this._reconnectAttempts = 0;
         this.setConnectionStatus("connected");
         this._reconnectCallback?.();
       }
 
       wasConnected = connected;
     }, 500);
+  }
+
+  private _scheduleReconnect(): void {
+    if (this._stopped) return;
+    if (this._reconnectTimer) return;
+
+    const token = resolveAuthToken();
+    if (!token && this._reconnectAttempts >= 3) {
+      this.setConnectionStatus("disconnected");
+      return;
+    }
+    if (this._reconnectAttempts >= this._maxReconnectAttempts) {
+      this.setConnectionStatus("disconnected");
+      return;
+    }
+
+    const delay = Math.min(this._baseReconnectDelay * Math.pow(2, this._reconnectAttempts), 30000);
+
+    this._reconnectTimer = setTimeout(async () => {
+      this._reconnectTimer = null;
+      this._reconnectAttempts++;
+
+      try {
+        const freshUrl = this.getWebSocketUrl();
+        const freshToken = resolveAuthToken();
+
+        if (!freshToken) {
+          this.setConnectionStatus("disconnected");
+          return;
+        }
+
+        if (this.wsTransport) {
+          try {
+            this.wsTransport.close();
+          } catch {
+            /* ignore */
+          }
+        }
+
+        this.wsTransport = new WebSocketTransport({ url: freshUrl, reconnect: false });
+        await this.wsTransport.connect();
+
+        this._reconnectAttempts = 0;
+        this.client = createTypedClient<RPCMethods, RPCEvents>(this.wsTransport);
+        this.initPromise = null;
+        this.setConnectionStatus("connected");
+        this.setupReconnectDetection();
+        this._reconnectCallback?.();
+      } catch {
+        this._scheduleReconnect();
+      }
+    }, delay);
   }
 
   private detectEnvironment(): "electrobun" | "browser" {
@@ -139,14 +203,21 @@ class APIClientImpl {
   }
 
   private getWebSocketUrl(): string {
-    if (typeof window === "undefined") return `ws://localhost:3100/ws?token=${AUTH_TOKEN}`;
+    const token = resolveAuthToken();
+
+    if (typeof window === "undefined") {
+      return `ws://localhost:3100/ws?token=${token}`;
+    }
+
     const customUrl =
       new URLSearchParams(window.location.search).get("ws") ??
       localStorage.getItem("rpc-websocket-url");
-    if (customUrl)
-      return customUrl.includes("token=") ? customUrl : `${customUrl}?token=${AUTH_TOKEN}`;
+    if (customUrl) {
+      return customUrl.includes("token=") ? customUrl : `${customUrl}?token=${token}`;
+    }
+
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    return `${protocol}//${window.location.host}/ws?token=${AUTH_TOKEN}`;
+    return `${protocol}//${window.location.host}/ws?token=${token}`;
   }
 
   /**
@@ -191,7 +262,7 @@ class APIClientImpl {
 
   /** 获取当前 auth token（用于需要直接调 HTTP 的场景） */
   getAuthToken(): string {
-    return AUTH_TOKEN;
+    return resolveAuthToken();
   }
 
   async call<K extends keyof RPCMethods>(
@@ -264,6 +335,26 @@ class APIClientImpl {
 
   close(): void {
     this.client?.close();
+  }
+
+  destroy(): void {
+    this._stopped = true;
+    if (this._reconnectTimer) {
+      clearTimeout(this._reconnectTimer);
+      this._reconnectTimer = null;
+    }
+    if (this._reconnectCheckInterval) {
+      clearInterval(this._reconnectCheckInterval);
+      this._reconnectCheckInterval = null;
+    }
+    if (this.wsTransport) {
+      try {
+        this.wsTransport.close();
+      } catch {
+        /* ignore */
+      }
+      this.wsTransport = null;
+    }
   }
 }
 

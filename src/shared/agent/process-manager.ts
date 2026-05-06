@@ -1,5 +1,6 @@
-import { existsSync, mkdirSync } from "fs";
+import { copyFileSync, existsSync, mkdirSync } from "fs";
 import { createReadStream } from "fs";
+import * as path from "path";
 import * as readline from "readline";
 import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { AgentEvent, ChannelDataEvent, ExtensionUIRequestEvent } from "../modules/agent";
@@ -9,6 +10,7 @@ import type { BashChannelEvent } from "../modules/bash";
 import type { LspChannelEvent } from "../modules/lsp";
 import type { RulesChannelEvent } from "../modules/rules";
 import type { RpcClientAPI } from "@dyyz1993/pi-coding-agent";
+import type { CoordinatorMethodCall, CoordinatorChannelEvent } from "../modules/coordinator";
 import { createLogger } from "../lib/logger";
 import { config } from "../../server-config";
 
@@ -26,6 +28,7 @@ const {
   fileSnapshot,
   askTools,
   messageBridge,
+  coordinator,
 } = config.piExtensionPaths;
 const EXTENSION_ARGS = [
   "--no-extensions",
@@ -41,6 +44,7 @@ const EXTENSION_ARGS = [
     fileSnapshot,
     askTools,
     messageBridge,
+    coordinator,
   ]
     .filter((p): p is string => !!p)
     .flatMap((p) => ["--extension", p]),
@@ -114,6 +118,16 @@ export class AgentProcessManager {
     string,
     { state: string; servers: unknown[]; mode?: string; activeLanguages?: string[] }
   >();
+  private parentChildMap = new Map<string, Set<string>>();
+  private delegateReplyCount = new Map<string, number>();
+  private delegateCreatedAt = new Map<string, number>();
+
+  private findParentSession(childSessionId: string): string | null {
+    for (const [parentId, children] of this.parentChildMap.entries()) {
+      if (children.has(childSessionId)) return parentId;
+    }
+    return null;
+  }
 
   constructor(server: RPCServer) {
     this.servers.add(server);
@@ -149,6 +163,21 @@ export class AgentProcessManager {
     }
   }
 
+  private broadcastSessionStatus(sessionId: string, status: string): void {
+    const managed = this.clients.get(sessionId);
+    const projectPath = managed?.info.projectPath ?? "";
+    this.broadcastEvent(
+      "agent.session_status_changed",
+      { sessionId, projectPath, status },
+      {},
+    ).catch((err: unknown) => {
+      log.warn("broadcastEvent(session.status_changed) error", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    });
+  }
+
   async start(
     sessionId: string,
     projectPath: string,
@@ -176,8 +205,20 @@ export class AgentProcessManager {
     };
     const unsubscribe = client.onEvent(bridge);
 
-    for (const name of ["bash", "todo", "subagent", "lsp", "rules-engine", "memory"] as const) {
+    for (const name of [
+      "bash",
+      "todo",
+      "subagent",
+      "lsp",
+      "rules-engine",
+      "memory",
+      "coordinator",
+    ] as const) {
       client.channel(name).onReceive((data: unknown) => {
+        if (name === "coordinator") {
+          this.handleCoordinatorCall(sessionId, data);
+          return;
+        }
         this.handleEvent(sessionId, { type: "channel_data", name, data } as ChannelDataEvent);
       });
     }
@@ -278,12 +319,33 @@ export class AgentProcessManager {
       },
     );
 
+    // Cascade stop delegated children
+    const children = this.parentChildMap.get(sessionId);
+    if (children) {
+      for (const childId of children) {
+        this.stop(childId);
+      }
+      this.parentChildMap.delete(sessionId);
+      this.delegateReplyCount.delete(sessionId);
+      this.delegateCreatedAt.delete(sessionId);
+    }
+
+    // Remove from parent's children set if this is a delegated session
+    for (const [, childSet] of this.parentChildMap) {
+      childSet.delete(sessionId);
+    }
+
+    this.delegateReplyCount.delete(sessionId);
+    this.delegateCreatedAt.delete(sessionId);
+
     managed.unsubscribe();
     managed.client.stop().catch((err: unknown) => {
       log.warn("stop error", { sessionId, err: err instanceof Error ? err.message : String(err) });
     });
     this.clients.delete(sessionId);
     this.sessionPaths.delete(sessionId);
+    this.lastLspState.delete(sessionId);
+    this.leafIds.delete(sessionId);
     return true;
   }
 
@@ -1166,6 +1228,13 @@ export class AgentProcessManager {
         this.handleMemoryChannelData(sessionId, ch);
         return;
       }
+      if (ch.name === "coordinator") {
+        log.warn(
+          "coordinator channel_data reached handleEvent — should have been intercepted in start()",
+          { sessionId },
+        );
+        return;
+      }
     }
 
     if (event.type === "extension_ui_request") {
@@ -1194,11 +1263,13 @@ export class AgentProcessManager {
     if (event.type === "agent_start") {
       managed.info.status = "streaming";
       managed.info.holdEvents = [];
+      this.broadcastSessionStatus(sessionId, "streaming");
     }
 
     if (event.type === "agent_end") {
       managed.info.status = "idle";
       managed.info.holdEvents = [];
+      this.broadcastSessionStatus(sessionId, "idle");
     }
 
     if (event.type === "message_end") {
@@ -1213,6 +1284,24 @@ export class AgentProcessManager {
 
     if (managed.info.status === "streaming") {
       managed.info.holdEvents.push(sanitized);
+    }
+
+    const parentId = this.findParentSession(sessionId);
+    if (parentId) {
+      this.broadcastEvent(
+        "coordinator.session.event",
+        {
+          parentSessionId: parentId,
+          childSessionId: sessionId,
+          event: sanitized,
+        },
+        { parentSessionId: parentId },
+      ).catch((err: unknown) => {
+        log.warn("broadcastEvent(coordinator.session.event) error", {
+          sessionId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      });
     }
 
     this.emitAgentEvent(sessionId, sanitized);
@@ -1388,6 +1477,277 @@ export class AgentProcessManager {
         { sessionId },
       );
     }
+  }
+
+  private async handleCoordinatorCall(sessionId: string, data: unknown): Promise<void> {
+    const msg = data as CoordinatorChannelEvent;
+
+    if (!("__call" in msg)) {
+      this.broadcastEvent("coordinator.event", { sessionId, event: msg }, { sessionId }).catch(
+        (err: unknown) => {
+          log.warn("broadcastEvent(coordinator.event) error", {
+            sessionId,
+            err: err instanceof Error ? err.message : String(err),
+          });
+        },
+      );
+      return;
+    }
+
+    const { __call: method, invokeId } = msg;
+    let result: unknown;
+    try {
+      switch (method) {
+        case "session_delegate":
+          result = await this.handleCoordinatorDelegate(sessionId, msg);
+          break;
+        case "session_delegate_send":
+          result = await this.handleCoordinatorDelegateSend(msg);
+          break;
+        case "session_delegate_status":
+          result = await this.handleCoordinatorDelegateStatus(msg);
+          break;
+        case "session_delegate_list":
+          result = this.handleCoordinatorDelegateList(sessionId);
+          break;
+        case "session_delegate_stop":
+          result = await this.handleCoordinatorDelegateStop(sessionId, msg);
+          break;
+        case "session_delegate_fork":
+          result = await this.handleCoordinatorDelegateFork(sessionId, msg);
+          break;
+        default:
+          log.warn("Unknown coordinator method", { sessionId, method });
+          return;
+      }
+    } catch (err: unknown) {
+      result = { error: err instanceof Error ? err.message : String(err) };
+    }
+
+    if (invokeId) {
+      const managed = this.clients.get(sessionId);
+      if (managed) {
+        managed.client.channel("coordinator").send({ ...(result as object), invokeId });
+      }
+    }
+  }
+
+  private async handleCoordinatorDelegate(
+    parentSessionId: string,
+    msg: Extract<CoordinatorMethodCall, { __call: "session_delegate" }>,
+  ): Promise<{ sessionId: string; status: "started" | "already_running" }> {
+    const { task } = msg;
+    const parent = this.clients.get(parentSessionId);
+    if (!parent) throw new Error("Parent session not found");
+
+    const projectPath = parent.info.projectPath;
+    const newSessionId = `sess_coord_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const sessionDir = path.dirname(parent.info.sessionPath);
+    const sessionPath = path.join(sessionDir, `${newSessionId}.jsonl`);
+
+    const result = await this.start(newSessionId, projectPath, sessionPath);
+
+    this.delegateCreatedAt.set(newSessionId, Date.now());
+    this.delegateReplyCount.set(newSessionId, 0);
+
+    // Register parent-child relationship
+    let children = this.parentChildMap.get(parentSessionId);
+    if (!children) {
+      children = new Set<string>();
+      this.parentChildMap.set(parentSessionId, children);
+    }
+    children.add(newSessionId);
+
+    const rawTitle = msg.title ?? task.slice(0, 60);
+    const title = `指派: ${rawTitle}`;
+    await this.setSessionName(newSessionId, title);
+    const delegatePrompt = [
+      `[系统提示] 你是一个被委派的后台任务会话。`,
+      ``,
+      `**你的身份信息：**`,
+      `- 你的会话 ID: ${newSessionId}`,
+      `- 委派方（父会话）ID: ${parentSessionId}`,
+      `- 任务: ${title}`,
+      `- 项目路径: ${projectPath}`,
+      ``,
+      `**要求：**`,
+      `1. 你是独立执行任务的助手，专注于完成委派给你的任务`,
+      `2. 执行完毕后，请明确总结你的工作成果`,
+      `3. 如果遇到问题无法继续，请说明原因`,
+      `4. 如需向委派方反馈中间进度或最终结果，请使用 session_delegate_send 工具：`,
+      `   - targetSessionId: ${parentSessionId}`,
+      `   - message: 你要反馈的内容`,
+      ``,
+      `---`,
+      ``,
+      task,
+    ].join("\n");
+
+    this.send(newSessionId, delegatePrompt);
+
+    this.broadcastEvent(
+      "coordinator.session_created",
+      {
+        parentSessionId,
+        session: {
+          sessionId: newSessionId,
+          name: title,
+          sessionPath,
+          projectPath,
+          parentSessionPath: null,
+          messageCount: 0,
+          firstMessage: task,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          status: "running" as const,
+        },
+      },
+      { parentSessionId },
+    ).catch((err: unknown) => {
+      log.warn("broadcastEvent(coordinator.session_created) error", {
+        parentSessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    });
+
+    return { sessionId: newSessionId, status: result.status };
+  }
+
+  private async handleCoordinatorDelegateSend(
+    msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_send" }>,
+  ): Promise<{ delivered: boolean; targetStatus: "active" | "started" | "not_found" }> {
+    const { targetSessionId, message } = msg;
+
+    const target = this.clients.get(targetSessionId);
+    if (!target) {
+      return { delivered: false, targetStatus: "not_found" };
+    }
+
+    const count = (this.delegateReplyCount.get(targetSessionId) ?? 0) + 1;
+    this.delegateReplyCount.set(targetSessionId, count);
+
+    const createdAt = this.delegateCreatedAt.get(targetSessionId) ?? Date.now();
+    const elapsedMs = Date.now() - createdAt;
+    const elapsed =
+      elapsedMs < 60000 ? `${Math.round(elapsedMs / 1000)}s` : `${Math.round(elapsedMs / 60000)}m`;
+
+    const parentSessionId = this.findParentSession(targetSessionId);
+    let title = "";
+    if (parentSessionId) {
+      const parent = this.clients.get(parentSessionId);
+      if (parent) {
+        title = target.info.sessionPath.split("/").pop()?.replace(".jsonl", "") ?? "";
+      }
+    }
+
+    const wrappedMessage = [
+      `<delegate-reply from="${targetSessionId}" title="${title}" sequence="${count}" createdAt="${createdAt}" elapsed="${elapsed}" historyCount="${count}">`,
+      message,
+      `</delegate-reply>`,
+    ].join("\n");
+
+    if (target.info.status === "streaming") {
+      this.followUp(targetSessionId, wrappedMessage);
+    } else {
+      this.send(targetSessionId, wrappedMessage);
+    }
+
+    return { delivered: true, targetStatus: "active" };
+  }
+
+  private async handleCoordinatorDelegateStatus(
+    msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_status" }>,
+  ): Promise<{ status: string; isCompacting: boolean; contextUsage: unknown }> {
+    const { sessionId: targetSessionId } = msg;
+
+    const status = this.getStatus(targetSessionId);
+    if (status.status === "stopped") {
+      return {
+        status: "stopped",
+        isCompacting: false,
+        contextUsage: { tokens: null, contextWindow: 0, percent: null },
+      };
+    }
+
+    const state = await this.getState(targetSessionId);
+    const contextUsage = await this.getContextUsage(targetSessionId);
+
+    return {
+      status: state?.isStreaming ? "streaming" : "idle",
+      isCompacting: state?.isCompacting ?? false,
+      contextUsage,
+    };
+  }
+
+  private handleCoordinatorDelegateList(parentSessionId: string): {
+    sessions: Array<{ sessionId: string; status: string; projectPath: string }>;
+  } {
+    const children = this.parentChildMap.get(parentSessionId);
+    if (!children) {
+      return { sessions: [] };
+    }
+    const sessions: Array<{ sessionId: string; status: string; projectPath: string }> = [];
+    for (const childId of children) {
+      const managed = this.clients.get(childId);
+      if (managed) {
+        sessions.push({
+          sessionId: childId,
+          status: managed.info.status,
+          projectPath: managed.info.projectPath,
+        });
+      }
+    }
+    return { sessions };
+  }
+
+  private async handleCoordinatorDelegateStop(
+    parentSessionId: string,
+    msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_stop" }>,
+  ): Promise<{ ok: boolean }> {
+    const { sessionId: targetSessionId } = msg;
+    // Only allow stopping own children
+    const children = this.parentChildMap.get(parentSessionId);
+    if (!children || !children.has(targetSessionId)) {
+      return { ok: false };
+    }
+    const ok = this.stop(targetSessionId);
+    return { ok };
+  }
+
+  private async handleCoordinatorDelegateFork(
+    parentSessionId: string,
+    msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_fork" }>,
+  ): Promise<{ sessionId: string; status: "started" | "already_running" }> {
+    const { task } = msg;
+    const base = this.clients.get(parentSessionId);
+    if (!base) throw new Error("Base session not found");
+
+    const sessionPath = base.info.sessionPath;
+    const projectPath = base.info.projectPath;
+    const sessionDir = path.dirname(sessionPath);
+
+    const forkedSessionId = `sess_fork_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const forkedPath = path.join(sessionDir, `${forkedSessionId}.jsonl`);
+
+    if (existsSync(sessionPath)) {
+      copyFileSync(sessionPath, forkedPath);
+    }
+
+    const result = await this.start(forkedSessionId, projectPath, forkedPath);
+
+    // Register parent-child relationship
+    let children = this.parentChildMap.get(parentSessionId);
+    if (!children) {
+      children = new Set<string>();
+      this.parentChildMap.set(parentSessionId, children);
+    }
+    children.add(forkedSessionId);
+
+    const title = msg.title ?? task.slice(0, 60);
+    await this.setSessionName(forkedSessionId, title);
+    this.send(forkedSessionId, task);
+
+    return { sessionId: forkedSessionId, status: result.status };
   }
 
   private async emitAgentEvent(sessionId: string, event: SanitizedEvent): Promise<void> {

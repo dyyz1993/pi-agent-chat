@@ -1,0 +1,16 @@
+{
+  "title": "设置",
+  "close": "关闭",
+  "chatDisplay": "聊天显示",
+  "showToolCalls": "显示工具调用",
+  "showToolCallsDesc": "在聊天中展示工具调用信息",
+  "showToolResults": "显示工具结果",
+  "showToolResultsDesc": "在聊天中展示工具执行结果",
+  "showThinking": "显示思考过程",
+  "showThinkingDesc": "在聊天中展示 AI 推理过程",
+  "collapseThinking": "默认折叠思考",
+  "collapseThinkingDesc": "思考完成后自动折叠思考块",
+  "showTimeline": "显示时间线",
+  "showTimelineDesc": "在消息区域展示活动时间线",
+  "reset": "恢复默认设置"
+}
