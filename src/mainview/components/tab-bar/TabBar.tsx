@@ -165,7 +165,7 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
               onPointerMove={handlePointerMove}
               onPointerUp={(e) => handlePointerUp(e, index)}
               onPointerCancel={handlePointerCancel}
-              className={`group flex items-center gap-1.5 px-3 py-1 text-xs rounded-t transition-colors relative cursor-pointer select-none ${
+              className={`group flex items-center gap-1.5 px-3 py-1 text-xs rounded-t transition-colors relative cursor-pointer select-none shrink-0 ${
                 isActive
                   ? "bg-white dark:bg-gray-950 text-gray-900 dark:text-white border-t-2 border-t-indigo-500"
                   : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-800/50"
