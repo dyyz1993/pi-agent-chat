@@ -2,7 +2,7 @@ name: Android CI/CD
 
 on:
   push:
-    branches: [master, main]
+    branches: [master, main, app-android]
     paths-ignore:
       - 'docs/**'
       - '*.md'
