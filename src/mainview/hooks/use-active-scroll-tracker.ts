@@ -33,6 +33,7 @@ export function useActiveScrollTracker({
   const prevSessionRef = useRef(sessionId);
   const lastScrollTopRef = useRef(0);
   const scrollDirRef = useRef<"up" | "down">("down");
+  const isProgrammaticScrollRef = useRef(false);
 
   const isAtTopRef = useRef(true);
   const isAtBottomRef = useRef(true);
@@ -99,6 +100,7 @@ export function useActiveScrollTracker({
     const el = scrollRef.current;
     const ids = messageIdsRef.current;
     if (!el || ids.length === 0) return;
+    isProgrammaticScrollRef.current = true;
     el.scrollTop = el.scrollHeight;
     setActive(ids[ids.length - 1]);
   }, [scrollRef, setActive]);
@@ -137,6 +139,13 @@ export function useActiveScrollTracker({
     const nearTop = isNearTop();
     isAtTopRef.current = nearTop;
     isAtBottomRef.current = nearBottom;
+
+    if (isProgrammaticScrollRef.current) {
+      isProgrammaticScrollRef.current = false;
+      lastScrollTopRef.current = scrollRef.current?.scrollTop ?? 0;
+      syncToolbarState();
+      return;
+    }
 
     const el = scrollRef.current;
     if (el) {
@@ -183,6 +192,7 @@ export function useActiveScrollTracker({
       if (!el || attempts >= MAX_ATTEMPTS) return;
 
       attempts++;
+      isProgrammaticScrollRef.current = true;
       el.scrollTop = el.scrollHeight;
       setActive(messageIds[messageIds.length - 1]);
 
@@ -208,43 +218,43 @@ export function useActiveScrollTracker({
 
   useEffect(() => {
     if (historyLoadVersion === undefined || historyLoadVersion === 0) return;
-    userScrolledUpRef.current = false;
     didInitRef.current = false;
     prevCountRef.current = messageIds.length;
-
-    const el = scrollRef.current;
-    if (!el || messageIds.length === 0) return;
 
     if (messageIds.length > 0) {
       setActive(messageIds[messageIds.length - 1]);
     }
 
-    let attempts = 0;
-    const MAX_ATTEMPTS = 10;
-    let rafId: number;
+    if (!userScrolledUpRef.current) {
+      let attempts = 0;
+      const MAX_ATTEMPTS = 10;
+      let rafId: number;
 
-    const tryScroll = () => {
-      if (!el || attempts >= MAX_ATTEMPTS) return;
-      attempts++;
+      const tryScroll = () => {
+        const el = scrollRef.current;
+        if (!el || attempts >= MAX_ATTEMPTS) return;
+        attempts++;
 
-      if (el.scrollHeight <= el.clientHeight && attempts < MAX_ATTEMPTS) {
-        rafId = requestAnimationFrame(tryScroll);
-        return;
-      }
+        if (el.scrollHeight <= el.clientHeight && attempts < MAX_ATTEMPTS) {
+          rafId = requestAnimationFrame(tryScroll);
+          return;
+        }
 
-      el.scrollTop = el.scrollHeight;
+        isProgrammaticScrollRef.current = true;
+        el.scrollTop = el.scrollHeight;
 
-      const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
-      if (!isAtBottom && attempts < MAX_ATTEMPTS) {
-        rafId = requestAnimationFrame(tryScroll);
-      }
-    };
+        const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+        if (!isAtBottom && attempts < MAX_ATTEMPTS) {
+          rafId = requestAnimationFrame(tryScroll);
+        }
+      };
 
-    rafId = requestAnimationFrame(tryScroll);
+      rafId = requestAnimationFrame(tryScroll);
 
-    return () => {
-      if (rafId) cancelAnimationFrame(rafId);
-    };
+      return () => {
+        if (rafId) cancelAnimationFrame(rafId);
+      };
+    }
   }, [historyLoadVersion, scrollRef, virtualizer, messageIds, setActive]);
 
   const scrollToEdge = useCallback(
