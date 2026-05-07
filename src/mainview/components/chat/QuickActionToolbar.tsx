@@ -69,6 +69,8 @@ interface FileBreadcrumb {
   label: string;
 }
 
+import { useAttachmentStore } from "../../stores/use-attachment-store";
+
 export function QuickActionToolbar() {
   const { t } = useTranslation("chat");
   const breakpoint = useLayoutStore((s) => s.breakpoint);
@@ -87,6 +89,9 @@ export function QuickActionToolbar() {
   const inputText = useChatStore((s) => s.inputText);
   const setInputText = useChatStore((s) => s.setInputText);
   const panelRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const addFiles = useAttachmentStore((s) => s.addFiles);
 
   const query = useMemo(() => {
     if (!popupMode) return "";
@@ -405,6 +410,15 @@ export function QuickActionToolbar() {
     setSlashCategory("commands");
   }, [inputText, setInputText]);
 
+  const handleFileSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if (files && files.length > 0) addFiles(Array.from(files));
+      e.target.value = "";
+    },
+    [addFiles],
+  );
+
   const handleListKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === "ArrowDown") {
@@ -458,13 +472,17 @@ export function QuickActionToolbar() {
     <div className="relative px-3 pt-1">
       <div className="flex items-center gap-1 min-h-[40px]">
         <div className="flex items-center gap-0.5">
+          <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileSelect} />
           <button
+            onClick={() => fileInputRef.current?.click()}
             className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
             title={t("quickAction.attachment")}
           >
             <Paperclip className="w-4 h-4" />
           </button>
+          <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFileSelect} />
           <button
+            onClick={() => imageInputRef.current?.click()}
             className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
             title={t("quickAction.image")}
           >

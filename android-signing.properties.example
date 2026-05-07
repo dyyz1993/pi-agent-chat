@@ -1,0 +1,6 @@
+# Android 签名配置（CI 环境使用）
+# 实际值通过 GitHub Secrets 注入
+storeFile=release.keystore
+storePassword=${KEYSTORE_PASSWORD}
+keyAlias=pi-agent-chat
+keyPassword=${KEY_PASSWORD}

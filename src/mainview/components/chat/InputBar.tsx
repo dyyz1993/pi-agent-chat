@@ -23,6 +23,7 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
   const [internalValue, setInternalValue] = useState(value);
   const [expanded, setExpanded] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const isComposing = useRef(false);
 
   const { saveToHistory, navigatePrev, navigateNext, clearHistory, resetIndex, hasPrev, hasNext } =
     useInputHistory(sessionId);
@@ -41,7 +42,7 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === "Enter" && !e.shiftKey) {
+      if (e.key === "Enter" && !e.shiftKey && !isComposing.current) {
         e.preventDefault();
         if (!disabled && currentValue.trim()) {
           saveToHistory(currentValue.trim());
@@ -112,6 +113,9 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
           value={currentValue}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
+          onCompositionStart={() => { isComposing.current = true; }}
+          onCompositionEnd={() => { isComposing.current = false; }}
+          enterKeyHint="send"
           disabled={disabled}
           rows={1}
           placeholder={t("inputPlaceholder")}

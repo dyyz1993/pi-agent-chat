@@ -1,0 +1,51 @@
+default_platform(:android)
+
+platform :android do
+  desc "运行 Android 截图测试"
+  lane :screenshots do
+    gradle(task: "assembleDebug assembleAndroidTest")
+  end
+
+  desc "构建 Android Debug APK"
+  lane :build_debug do
+    gradle(task: "assembleDebug")
+  end
+
+  desc "构建 Android Release APK"
+  lane :build_release do
+    gradle(
+      task: "assembleRelease",
+      properties: {
+        "android.injected.signing.store.file" => ENV["KEYSTORE_PATH"],
+        "android.injected.signing.store.password" => ENV["KEYSTORE_PASSWORD"],
+        "android.injected.signing.key.alias" => ENV["KEY_ALIAS"],
+        "android.injected.signing.key.password" => ENV["KEY_PASSWORD"],
+      }
+    )
+  end
+
+  desc "上传到 Google Play 内部测试轨道"
+  lane :deploy_internal do
+    build_release
+    upload_to_play_store(
+      track: 'internal',
+      aab: "android/app/build/outputs/bundle/release/app-release.aab",
+    )
+  end
+end
+
+platform :ios do
+  desc "构建 iOS"
+  lane :build do
+    build_ios_app(
+      workspace: "ios/App/App.xcworkspace",
+      scheme: "App",
+      export_method: "ad-hoc",
+    )
+  end
+
+  desc "iOS 截图"
+  lane :screenshots do
+    capture_screenshots
+  end
+end

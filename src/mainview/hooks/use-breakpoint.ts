@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useSidebarStore, type Breakpoint } from "../stores/use-sidebar-store";
 
 function getBreakpoint(width: number): Breakpoint {
-  if (width < 768) return "mobile";
+  if (width < 640) return "mobile";
   if (width < 1024) return "tablet";
   return "desktop";
 }

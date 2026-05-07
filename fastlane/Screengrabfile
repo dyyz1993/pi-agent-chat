@@ -1,0 +1,21 @@
+# Android 截图测试配置
+package_name "com.piagent.chat"
+use_tests_in_packages ["com.piagent.chat.screenshots"]
+
+# 目标设备
+devices [
+  "Pixel 8",
+  "Pixel 7a",
+]
+
+# 语言和区域
+locales [
+  "en-US",
+  "zh-CN",
+]
+
+# 输出目录
+output_directory "fastlane/metadata/android"
+
+# 截图清理
+clear_previous_screenshots true

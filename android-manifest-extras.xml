@@ -1,0 +1,30 @@
+<!-- 这段内容需要在 cap add android 后合并到 android/app/src/main/AndroidManifest.xml -->
+
+<!-- 1. 多窗口/PiP 支持 -->
+<activity
+    android:resizeableActivity="true"
+    android:supportsPictureInPicture="true"
+    android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize">
+    <layout
+        android:defaultHeight="500dp"
+        android:defaultWidth="360dp"
+        android:gravity="top|end"
+        android:minHeight="250dp"
+        android:minWidth="250dp" />
+</activity>
+
+<!-- 2. 深度链接 intent-filter -->
+<intent-filter android:autoVerify="true">
+    <action android:name="android.intent.action.VIEW" />
+    <category android:name="android.intent.category.DEFAULT" />
+    <category android:name="android.intent.category.BROWSABLE" />
+    <data android:scheme="piagentchat" />
+</intent-filter>
+
+<!-- 3. 推送通知权限 -->
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+<uses-permission android:name="android.permission.RECORD_AUDIO" />
+<uses-permission android:name="android.permission.CAMERA" />
+
+<!-- 4. PiP 权限 -->
+<uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
