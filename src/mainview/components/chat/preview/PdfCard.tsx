@@ -5,6 +5,7 @@ import { FileText, X, RefreshCw, Maximize2, Copy, Check, ExternalLink } from "lu
 import type { PreviewDetails } from "./types";
 import { getFileHttpUrl } from "./types";
 import { useClipboard } from "./use-clipboard";
+import { NativeWebView } from "../../../lib/platform/components/NativeWebView";
 
 export const PdfCard = memo(function PdfCard({ details }: { details: PreviewDetails }) {
   const { t } = useTranslation("chat");
@@ -104,7 +105,7 @@ export const PdfCard = memo(function PdfCard({ details }: { details: PreviewDeta
     return createPortal(
       <div className="fixed inset-0 z-[200] bg-white dark:bg-black flex flex-col">
         {header}
-        <iframe
+        <NativeWebView
           key={iframeKey}
           src={httpUrl}
           className="flex-1 w-full border-0"
@@ -118,7 +119,7 @@ export const PdfCard = memo(function PdfCard({ details }: { details: PreviewDeta
   return (
     <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700/40 bg-white dark:bg-gray-900/60">
       {header}
-      <iframe
+      <NativeWebView
         key={iframeKey}
         src={httpUrl}
         className="w-full border-0"

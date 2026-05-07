@@ -37,6 +37,7 @@ import { MarkdownExpandOverlay } from "./MarkdownExpandOverlay";
 import { MermaidFullscreen } from "./mermaid";
 import { AttachmentButtons, AttachmentBar } from "./FileAttachment";
 import { useAttachmentStore } from "../../stores/use-attachment-store";
+import { VoiceButton } from "./VoiceButton";
 import type { ChatMessage } from "../../types";
 
 const EMPTY_MSGS: never[] = [];
@@ -281,6 +282,10 @@ export function ChatPanel() {
     await sendSteer();
   };
 
+  const handleVoiceInput = useCallback((text: string) => {
+    setInputText(inputText ? `${inputText} ${text}` : text);
+  }, [inputText, setInputText]);
+
   useEffect(() => {
     sessionInitRef.current = true;
     let attempts = 0;
@@ -512,6 +517,13 @@ export function ChatPanel() {
                   >
                     {isStreaming ? <Clock className="w-4 h-4" /> : <ArrowUp className="w-4 h-4" />}
                   </button>
+                  {isMobileOrTablet && (
+                    <VoiceButton
+                      onTranscript={handleVoiceInput}
+                      disabled={!sessionReady}
+                      className="p-2.5"
+                    />
+                  )}
                 </div>
               </>
             )}

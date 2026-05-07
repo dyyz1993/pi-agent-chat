@@ -2,6 +2,8 @@ import { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHand
 import { X, Maximize2, Minimize2, ChevronUp, ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useInputHistory } from "../../hooks/use-input-history";
+import { platformBridge } from "../../lib/platform/bridge";
+import { useAttachmentStore } from "../../stores/use-attachment-store";
 
 export interface InputBarHandle {
   send: () => void;
@@ -86,6 +88,27 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
     if (onSend) onSend();
   }, [currentValue, saveToHistory, onSend]);
 
+  const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith("image/")) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) {
+          const result = await platformBridge.file.pasteFromClipboard();
+          if (result) {
+            useAttachmentStore.getState().addFiles([new File([result.blob], result.name, { type: result.blob.type })]);
+          } else {
+            useAttachmentStore.getState().addFiles([file]);
+          }
+        }
+        break;
+      }
+    }
+  }, []);
+
   useImperativeHandle(ref, () => ({ send }), [send]);
 
   const maxHeight = expanded ? undefined : 120;
@@ -113,6 +136,7 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
           value={currentValue}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           onCompositionStart={() => { isComposing.current = true; }}
           onCompositionEnd={() => { isComposing.current = false; }}
           enterKeyHint="send"

@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import type { PreviewDetails } from "./types";
 import { getFileHttpUrl } from "./types";
 import { useClipboard } from "./use-clipboard";
+import { NativeWebView } from "../../../lib/platform/components/NativeWebView";
 
 export const UrlCard = memo(function UrlCard({ details }: { details: PreviewDetails }) {
   const { t } = useTranslation("chat");
@@ -110,7 +111,7 @@ export const UrlCard = memo(function UrlCard({ details }: { details: PreviewDeta
     return createPortal(
       <div className="fixed inset-0 z-[200] bg-white dark:bg-black flex flex-col">
         {header}
-        <iframe
+        <NativeWebView
           src={src}
           className="flex-1 w-full border-0"
           sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
@@ -124,7 +125,7 @@ export const UrlCard = memo(function UrlCard({ details }: { details: PreviewDeta
   return (
     <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700/40 bg-white dark:bg-gray-900/60">
       {header}
-      <iframe
+      <NativeWebView
         src={src}
         className="w-full border-0"
         style={{ minHeight: 300, maxHeight: 600 }}

@@ -5,6 +5,7 @@ import type { FilePreview } from "../../types";
 import { formatSize } from "../../utils/file-utils";
 import { VirtualizedCodeView } from "./VirtualizedCodeView";
 import { apiClient } from "../../lib/api-client";
+import { NativeWebView } from "../../lib/platform/components/NativeWebView";
 
 interface FilePreviewOverlayProps {
   preview: FilePreview;
@@ -111,7 +112,7 @@ export function FilePreviewOverlay({ preview, loading, onClose }: FilePreviewOve
 
     if (isHtml && !htmlSourceMode && fsUrl) {
       return (
-        <iframe
+        <NativeWebView
           src={fsUrl}
           className="flex-1 w-full h-full border-0 bg-white"
           title={preview.name}
