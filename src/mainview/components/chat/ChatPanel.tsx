@@ -181,22 +181,29 @@ export function ChatPanel() {
   const setNavId = useTurnStore((s) => s.setNavId);
   const clickScrollRef = useRef(false);
 
-  const { handleScroll, scrollToEdge, isAtTop, isAtBottom, autoScrollEnabled, toggleAutoScroll } =
-    useActiveScrollTracker({
-      scrollRef: messagesScrollRef,
-      virtualizer: activeVirtualizer,
-      messageIds,
-      sessionId: isViewingSubagent ? activeSubId : (activeSessionId ?? undefined),
-      setActive: useCallback(
-        (id: string | null) => {
-          setActive(id);
-          if (id && !clickScrollRef.current) setNavId(id);
-        },
-        [setActive, setNavId],
-      ),
-      streamVersion,
-      historyLoadVersion,
-    });
+  const {
+    handleScroll,
+    scrollToEdge,
+    isAtTop,
+    isAtBottom,
+    autoScrollEnabled,
+    toggleAutoScroll,
+    markProgrammatic,
+  } = useActiveScrollTracker({
+    scrollRef: messagesScrollRef,
+    virtualizer: activeVirtualizer,
+    messageIds,
+    sessionId: isViewingSubagent ? activeSubId : (activeSessionId ?? undefined),
+    setActive: useCallback(
+      (id: string | null) => {
+        setActive(id);
+        if (id && !clickScrollRef.current) setNavId(id);
+      },
+      [setActive, setNavId],
+    ),
+    streamVersion,
+    historyLoadVersion,
+  });
 
   const handleScrollToEdge = useCallback(
     (edge: "top" | "bottom") => {
@@ -215,6 +222,7 @@ export function ChatPanel() {
   const handleNavDotClick = useCallback(
     (navId: string) => {
       clickScrollRef.current = true;
+      markProgrammatic();
       const isSubDot = /-[0-9]+$/.test(navId);
       const lastDashIdx = navId.lastIndexOf("-");
       const msgId = isSubDot ? navId.slice(0, lastDashIdx) : navId;

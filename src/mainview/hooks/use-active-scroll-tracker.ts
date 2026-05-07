@@ -155,7 +155,7 @@ export function useActiveScrollTracker({
       if (delta < -3 && autoScrollEnabledRef.current) {
         autoScrollEnabledRef.current = false;
         userScrolledUpRef.current = true;
-      } else if (nearBottom && !autoScrollEnabledRef.current) {
+      } else if (nearBottom && !autoScrollEnabledRef.current && delta > 5) {
         autoScrollEnabledRef.current = true;
         userScrolledUpRef.current = false;
       }
@@ -190,6 +190,7 @@ export function useActiveScrollTracker({
     const tryScroll = () => {
       const el = scrollRef.current;
       if (!el || attempts >= MAX_ATTEMPTS) return;
+      if (userScrolledUpRef.current) return;
 
       attempts++;
       isProgrammaticScrollRef.current = true;
@@ -218,7 +219,9 @@ export function useActiveScrollTracker({
 
   useEffect(() => {
     if (historyLoadVersion === undefined || historyLoadVersion === 0) return;
-    didInitRef.current = false;
+    if (!userScrolledUpRef.current) {
+      didInitRef.current = false;
+    }
     prevCountRef.current = messageIds.length;
 
     if (messageIds.length > 0) {
@@ -301,6 +304,10 @@ export function useActiveScrollTracker({
     syncToolbarState();
   }, [doScrollToBottom, syncToolbarState]);
 
+  const markProgrammatic = useCallback(() => {
+    isProgrammaticScrollRef.current = true;
+  }, []);
+
   return {
     handleScroll,
     scrollToBottom: doScrollToBottom,
@@ -310,5 +317,6 @@ export function useActiveScrollTracker({
     isAtBottom: toolbarState.isAtBottom,
     autoScrollEnabled: toolbarState.autoScrollEnabled,
     toggleAutoScroll,
+    markProgrammatic,
   };
 }
