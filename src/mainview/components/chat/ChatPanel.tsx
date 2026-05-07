@@ -180,12 +180,6 @@ export function ChatPanel() {
 
   const setNavId = useTurnStore((s) => s.setNavId);
   const clickScrollRef = useRef(false);
-  const sessionInitRef = useRef(false);
-
-  const latestMsgIdsRef = useRef(messageIds);
-  latestMsgIdsRef.current = messageIds;
-  const latestVizRef = useRef(activeVirtualizer);
-  latestVizRef.current = activeVirtualizer;
 
   const { handleScroll, scrollToEdge, isAtTop, isAtBottom, autoScrollEnabled, toggleAutoScroll } =
     useActiveScrollTracker({
@@ -196,7 +190,7 @@ export function ChatPanel() {
       setActive: useCallback(
         (id: string | null) => {
           setActive(id);
-          if (id && !clickScrollRef.current && !sessionInitRef.current) setNavId(id);
+          if (id && !clickScrollRef.current) setNavId(id);
         },
         [setActive, setNavId],
       ),
@@ -280,50 +274,6 @@ export function ChatPanel() {
     if (!inputText.trim() || !isStreaming) return;
     await sendSteer();
   };
-
-  useEffect(() => {
-    sessionInitRef.current = true;
-    let attempts = 0;
-    let done = false;
-    const timer = setInterval(() => {
-      if (done) return;
-      attempts++;
-      const ids = latestMsgIdsRef.current;
-      if (ids.length === 0) {
-        if (attempts > 20) {
-          done = true;
-          clearInterval(timer);
-          setTimeout(() => {
-            sessionInitRef.current = false;
-          }, 200);
-        }
-        return;
-      }
-      if (attempts > 20) {
-        done = true;
-        clearInterval(timer);
-        setTimeout(() => {
-          sessionInitRef.current = false;
-        }, 200);
-        return;
-      }
-      const lastIdx = ids.length - 1;
-      latestVizRef.current.scrollToIndex(lastIdx, { align: "end" });
-      setNavId(ids[lastIdx]);
-      const el = messagesScrollRef.current;
-      if (el && Math.abs(el.scrollHeight - el.scrollTop - el.clientHeight) < 50) {
-        done = true;
-        clearInterval(timer);
-        setTimeout(() => {
-          sessionInitRef.current = false;
-        }, 300);
-      }
-    }, 80);
-    return () => {
-      clearInterval(timer);
-      sessionInitRef.current = false;
-    };
-  }, [activeSessionId, activeSubId]);
 
   useEffect(() => {
     if (!activeSessionId || !isAtTop || !hasMoreMessages || isLoadingMore || isViewingSubagent)

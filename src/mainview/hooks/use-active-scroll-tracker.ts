@@ -33,7 +33,6 @@ export function useActiveScrollTracker({
   const prevSessionRef = useRef(sessionId);
   const lastScrollTopRef = useRef(0);
   const scrollDirRef = useRef<"up" | "down">("down");
-  const handleScrollLastTopRef = useRef(0);
 
   const isAtTopRef = useRef(true);
   const isAtBottomRef = useRef(true);
@@ -88,7 +87,6 @@ export function useActiveScrollTracker({
       if (Math.abs(delta) > 2) {
         scrollDirRef.current = delta > 0 ? "down" : "up";
       }
-      lastScrollTopRef.current = el.scrollTop;
     }
 
     const idx = scrollDirRef.current === "down" ? range.startIndex : range.endIndex;
@@ -142,8 +140,8 @@ export function useActiveScrollTracker({
 
     const el = scrollRef.current;
     if (el) {
-      const delta = el.scrollTop - handleScrollLastTopRef.current;
-      handleScrollLastTopRef.current = el.scrollTop;
+      const delta = el.scrollTop - lastScrollTopRef.current;
+      lastScrollTopRef.current = el.scrollTop;
 
       if (delta < -3 && autoScrollEnabledRef.current) {
         autoScrollEnabledRef.current = false;
@@ -167,7 +165,7 @@ export function useActiveScrollTracker({
       isAtTopRef.current = false;
       isAtBottomRef.current = true;
       autoScrollEnabledRef.current = true;
-      handleScrollLastTopRef.current = 0;
+      lastScrollTopRef.current = 0;
       syncToolbarState();
     }
   }, [sessionId, syncToolbarState]);
@@ -176,44 +174,30 @@ export function useActiveScrollTracker({
     if (didInitRef.current || messageIds.length === 0) return;
     didInitRef.current = true;
 
-    const scrollToBottomWhenReady = (attempt = 0) => {
-      if (attempt > 30) return;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 5;
+    let rafId: number;
 
+    const tryScroll = () => {
       const el = scrollRef.current;
-      if (!el) {
-        requestAnimationFrame(() => scrollToBottomWhenReady(attempt + 1));
-        return;
-      }
+      if (!el || attempts >= MAX_ATTEMPTS) return;
 
-      const totalSize = virtualizer.getTotalSize();
-      const clientH = el.clientHeight;
-
-      if (totalSize <= clientH || clientH === 0) {
-        requestAnimationFrame(() => scrollToBottomWhenReady(attempt + 1));
-        return;
-      }
-
-      const prevScrollHeight = el.scrollHeight;
-      el.scrollTop = prevScrollHeight;
+      attempts++;
+      el.scrollTop = el.scrollHeight;
       setActive(messageIds[messageIds.length - 1]);
 
-      requestAnimationFrame(() => {
-        const afterScrollHeight = el.scrollHeight;
-        if (Math.abs(afterScrollHeight - prevScrollHeight) > 5) {
-          el.scrollTop = afterScrollHeight;
-        }
-      });
+      const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+      if (!isAtBottom && attempts < MAX_ATTEMPTS) {
+        rafId = requestAnimationFrame(tryScroll);
+      }
     };
 
-    requestAnimationFrame(() => scrollToBottomWhenReady(0));
-  }, [messageIds, scrollRef, virtualizer, setActive]);
+    rafId = requestAnimationFrame(tryScroll);
 
-  useEffect(() => {
-    if (messageIds.length > prevCountRef.current && !userScrolledUpRef.current) {
-      requestAnimationFrame(() => doScrollToBottom());
-    }
-    prevCountRef.current = messageIds.length;
-  }, [messageIds, doScrollToBottom]);
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId);
+    };
+  }, [messageIds, scrollRef, setActive]);
 
   useEffect(() => {
     if (streamVersion === 0 || streamVersion === prevStreamRef.current) return;
@@ -228,51 +212,39 @@ export function useActiveScrollTracker({
     didInitRef.current = false;
     prevCountRef.current = messageIds.length;
 
-    const scrollEl = scrollRef.current;
-    if (!scrollEl || messageIds.length === 0) return;
+    const el = scrollRef.current;
+    if (!el || messageIds.length === 0) return;
 
     if (messageIds.length > 0) {
       setActive(messageIds[messageIds.length - 1]);
     }
 
-    let rafId: number;
     let attempts = 0;
-    const MAX_ATTEMPTS = 30;
+    const MAX_ATTEMPTS = 10;
+    let rafId: number;
 
     const tryScroll = () => {
+      if (!el || attempts >= MAX_ATTEMPTS) return;
       attempts++;
-      const el = scrollRef.current;
-      if (!el) {
+
+      if (el.scrollHeight <= el.clientHeight && attempts < MAX_ATTEMPTS) {
         rafId = requestAnimationFrame(tryScroll);
         return;
       }
 
-      const totalSize = virtualizer.getTotalSize();
-      if (totalSize > el.clientHeight && el.clientHeight > 0) {
-        el.scrollTop = el.scrollHeight;
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            const finalEl = scrollRef.current;
-            if (
-              finalEl &&
-              Math.abs(finalEl.scrollTop + finalEl.clientHeight - finalEl.scrollHeight) > 3
-            ) {
-              finalEl.scrollTop = finalEl.scrollHeight;
-            }
-          });
-        });
-        return;
-      }
+      el.scrollTop = el.scrollHeight;
 
-      if (attempts < MAX_ATTEMPTS) {
+      const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+      if (!isAtBottom && attempts < MAX_ATTEMPTS) {
         rafId = requestAnimationFrame(tryScroll);
-      } else {
-        el.scrollTop = el.scrollHeight;
       }
     };
 
     rafId = requestAnimationFrame(tryScroll);
-    return () => cancelAnimationFrame(rafId);
+
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId);
+    };
   }, [historyLoadVersion, scrollRef, virtualizer, messageIds, setActive]);
 
   const scrollToEdge = useCallback(

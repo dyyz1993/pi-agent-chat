@@ -1,4 +1,4 @@
-import { useMemo, useCallback, useRef, useEffect } from "react";
+import { useMemo } from "react";
 import type { Virtualizer } from "@tanstack/react-virtual";
 import { Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -73,30 +73,6 @@ export function MessageListView({
 }: MessageListViewProps) {
   const { t } = useTranslation("chat");
   const cardMeta = useMemo(() => buildCardMeta(messages, t), [messages, t]);
-  const prevScrollHeightRef = useRef(0);
-  const scrollElRef = useRef<HTMLDivElement | null>(null);
-
-  const handleScrollRef = useCallback((el: HTMLDivElement | null) => {
-    scrollElRef.current = el;
-  }, []);
-
-  useEffect(() => {
-    const el = scrollElRef.current;
-    if (!el || !virtualizer) return;
-    prevScrollHeightRef.current = el.scrollHeight;
-  }, [messages, virtualizer]);
-
-  useEffect(() => {
-    const el = scrollElRef.current;
-    if (!el || !virtualizer) return;
-    const prevHeight = prevScrollHeightRef.current;
-    const newHeight = el.scrollHeight;
-    if (newHeight > prevHeight) {
-      const diff = newHeight - prevHeight;
-      el.scrollTop = el.scrollTop + diff;
-    }
-    prevScrollHeightRef.current = newHeight;
-  }, [messages.length, virtualizer]);
 
   if (messages.length === 0 && scrollRef) {
     return (
@@ -117,7 +93,6 @@ export function MessageListView({
     return (
       <div
         ref={(el) => {
-          handleScrollRef(el);
           if (scrollRef) (scrollRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
         }}
         className="h-full overflow-y-auto overflow-x-hidden overscroll-y-contain"
