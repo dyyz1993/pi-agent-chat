@@ -81,3 +81,17 @@ declare module '@capacitor/app' {
     addListener(eventName: string, listener: (event: any) => void): Promise<PluginListenerHandle>;
   };
 }
+
+declare module '@capacitor/haptics' {
+  export const HapticsNotificationType: {
+    Light: string;
+    Warning: string;
+    Error: string;
+  };
+  export const Haptics: {
+    notification(options: { type: string }): void;
+    selectionStart(): void;
+    selectionChanged(): void;
+    selectionEnd(): void;
+  };
+}

@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { Mic, MicOff } from 'lucide-react';
 import { platformBridge } from '../../lib/platform/bridge';
+import { haptic } from '../../lib/haptic';
 
 interface VoiceButtonProps {
   onTranscript: (text: string) => void;
@@ -38,6 +39,7 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({
         language: 'auto',
         translateTo: 'zh',
       });
+      haptic.medium();
       setIsListening(true);
     } catch (err) {
       console.warn('[VoiceButton] 语音识别启动失败:', err);

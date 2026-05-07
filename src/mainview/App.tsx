@@ -16,6 +16,8 @@ import { LoginPage } from "./components/LoginPage";
 import { notificationGateway } from "./lib/notification-gateway";
 import { pushChannel } from "./lib/channels/push-channel";
 import { parseDeepLink, setupDeepLinkListener, executeDeepLinkRecovery } from "./lib/deep-link-handler";
+import { useEdgeSwipe } from "./hooks/use-edge-swipe";
+import { offlineQueue } from "./lib/offline-queue";
 
 function App() {
   const { t } = useTranslation("common");
@@ -23,7 +25,11 @@ function App() {
   const ready = useAppStore((s) => s.ready);
   const initializeConnection = useAppStore((s) => s.initializeConnection);
   const addLog = useAppStore((s) => s.addLog);
+  const connectionStatus = useAppStore((s) => s.connectionStatus);
   const listRootDir = useExplorerStore((s) => s.listRootDir);
+
+  // 边缘滑动手势
+  useEdgeSwipe();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [projectLoading, setProjectLoading] = useState(false);
   const restoredFlag = useAppStore((s) => s.restored);
@@ -185,6 +191,24 @@ function App() {
       addLog(`Push channel registration failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   }, [ready, addLog]);
+
+  // 连接恢复后 flush 离线队列
+  useEffect(() => {
+    if (connectionStatus !== "connected" || !offlineQueue.hasPending()) return;
+    offlineQueue.flush(async (msg) => {
+      try {
+        await apiClient.call("agent.send", {
+          sessionId: msg.sessionId,
+          content: msg.content,
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    }).then((sent) => {
+      if (sent > 0) addLog(`离线队列已发送 ${sent} 条消息`);
+    });
+  }, [connectionStatus, addLog]);
 
   useEffect(() => {
     if (!ready || restoredFlag) return;

@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useInputHistory } from "../../hooks/use-input-history";
 import { platformBridge } from "../../lib/platform/bridge";
 import { useAttachmentStore } from "../../stores/use-attachment-store";
+import { haptic } from "../../lib/haptic";
 
 export interface InputBarHandle {
   send: () => void;
@@ -48,6 +49,7 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
         e.preventDefault();
         if (!disabled && currentValue.trim()) {
           saveToHistory(currentValue.trim());
+          haptic.light();
           if (onSend) onSend();
         }
       }

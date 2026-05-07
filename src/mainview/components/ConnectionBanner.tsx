@@ -1,9 +1,19 @@
+import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "../stores/use-app-store";
+import { haptic } from "../lib/haptic";
 
 export function ConnectionBanner() {
   const { t } = useTranslation("chat");
   const connectionStatus = useAppStore((s) => s.connectionStatus);
+  const prevStatusRef = useRef(connectionStatus);
+
+  useEffect(() => {
+    if (prevStatusRef.current !== "disconnected" && connectionStatus === "disconnected") {
+      haptic.heavy();
+    }
+    prevStatusRef.current = connectionStatus;
+  }, [connectionStatus]);
 
   if (connectionStatus === "connected") return null;
 
