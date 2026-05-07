@@ -37,7 +37,7 @@ function CardShell({ block, children }: { block: UIBlock; children: React.ReactN
       className={`overflow-hidden rounded ${BG_MAP[block.status] ?? ""}`}
       data-ui-request-id={block.id}
     >
-      <div className="px-3 py-1.5 pl-2 flex items-center gap-2 text-xs">
+      <div className="px-3 py-1.5 flex items-center gap-2 text-xs">
         <Icon className={`w-3.5 h-3.5 shrink-0 ${color}`} />
         <span className={`font-medium ${color}`}>{block.title ?? label}</span>
         {isPending && (
@@ -50,7 +50,7 @@ function CardShell({ block, children }: { block: UIBlock; children: React.ReactN
         {isDismissed && <XCircle className="w-3 h-3 text-gray-500 shrink-0 ml-auto" />}
       </div>
       {block.message && (
-        <div className="px-3 pb-1 text-[11px] text-gray-600 dark:text-gray-400 leading-relaxed">
+        <div className="px-3 pb-2 text-[11px] text-gray-600 dark:text-gray-400 leading-relaxed">
           {block.message}
         </div>
       )}
@@ -468,7 +468,7 @@ export const RespondUICard = memo(function RespondUICard({ block }: { block: UIB
       className="overflow-hidden rounded bg-orange-50 dark:bg-orange-950/6 border-l-2 border-orange-400/30 dark:border-orange-500/30"
       data-ui-request-id={block.id}
     >
-      <div className="px-3 py-1.5 pl-2 flex items-center gap-2 text-xs">
+      <div className="px-3 py-1.5 flex items-center gap-2 text-xs">
         <Icon className={`w-3.5 h-3.5 shrink-0 ${color}`} />
         <span className={`font-medium ${color}`}>
           {block.title ?? t("uiCard.asyncResponseInjection")}

@@ -41,7 +41,7 @@ export const PreviewRenderer = memo(function PreviewRenderer({
           <Eye
             className={`w-3.5 h-3.5 shrink-0 ${isError ? "text-red-500 dark:text-red-400" : "text-cyan-500 dark:text-cyan-400"}`}
           />
-          <span className="min-w-0 text-gray-800 dark:text-gray-300 font-mono text-[11px] truncate">
+          <span className="min-w-0 text-gray-800 dark:text-gray-300 font-mono truncate">
             {filePath || block.args}
           </span>
           {isRunning && (

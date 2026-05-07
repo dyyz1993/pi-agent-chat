@@ -139,7 +139,7 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
       )}
       {isUser ? (
         <div
-          className={`relative my-1 mr-2 px-3 py-2 text-[13px] leading-relaxed whitespace-pre-wrap break-words text-gray-800 dark:text-gray-100 bg-blue-500/[0.06] rounded-r-lg border-l-[3px] border-l-blue-500/60 ${styleMemo.bg} min-w-0`}
+          className={`relative my-0.5 mr-2 px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap break-words text-gray-800 dark:text-gray-100 bg-blue-500/[0.06] rounded-r-lg border-l-[3px] border-l-blue-500/60 ${styleMemo.bg} min-w-0`}
         >
           <div className="absolute -top-0.5 right-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-10">
             <CopyButton text={fullTextForCopy} size="xs" />
@@ -225,7 +225,7 @@ export const TextContentCard = memo(function TextContentCard({
   return (
     <div className="my-0.5 overflow-hidden" data-block-id={blockId}>
       <div
-        className={`flex items-center gap-2 px-2 pl-1 py-0.5 text-[11px] ${!isStreaming ? "cursor-pointer hover:bg-gray-200/30 dark:hover:bg-gray-800/30" : ""}`}
+        className={`flex items-center gap-2 px-3 py-1 text-[11px] ${!isStreaming ? "cursor-pointer hover:bg-gray-200/30 dark:hover:bg-gray-800/30" : ""}`}
         onClick={() => !isStreaming && setIsOpen(!isOpen)}
       >
         <Type className="w-3 h-3 text-gray-500 shrink-0" />
@@ -247,11 +247,11 @@ export const TextContentCard = memo(function TextContentCard({
       </div>
 
       {isOpen ? (
-        <div className="prose dark:prose-invert prose-sm max-w-none overflow-auto max-h-[60vh] prose-p:my-1 prose-pre:bg-transparent">
+        <div className="prose dark:prose-invert prose-sm max-w-none prose-p:my-1 prose-pre:bg-transparent">
           {isStreaming ? <span>{text}</span> : <CachedReactMarkdown>{text}</CachedReactMarkdown>}
         </div>
       ) : hasMore ? (
-        <div className="py-0.5 text-[11px] text-gray-400 dark:text-gray-500 truncate">
+        <div className="py-1 px-3 text-[11px] text-gray-400 dark:text-gray-500 truncate">
           {firstLine.length > 120 ? firstLine.slice(0, 120) + "..." : firstLine}
         </div>
       ) : null}
@@ -284,9 +284,9 @@ export const ThinkingCard = memo(function ThinkingCard({
   const hasMore = thinking.includes("\n") || thinking.length > 80;
 
   return (
-    <div className="my-1 overflow-hidden" data-block-id={blockId}>
+    <div className="my-0.5 overflow-hidden" data-block-id={blockId}>
       <div
-        className={`px-2 pl-1 py-0.5 text-[11px] flex items-center gap-2 ${!isStreaming ? "cursor-pointer hover:bg-gray-200/30 dark:hover:bg-gray-800/30" : ""}`}
+        className={`px-3 py-1 text-[11px] flex items-center gap-2 ${!isStreaming ? "cursor-pointer hover:bg-gray-200/30 dark:hover:bg-gray-800/30" : ""}`}
         onClick={() => !isStreaming && setIsOpen(!isOpen)}
       >
         <Brain className="w-3 h-3 text-purple-400/60 shrink-0" />
@@ -307,7 +307,7 @@ export const ThinkingCard = memo(function ThinkingCard({
       </div>
 
       {isOpen ? (
-        <div className="px-2 pl-1 pb-1.5 text-[11px] text-gray-500 dark:text-gray-400 whitespace-pre-wrap leading-relaxed">
+        <div className="px-3 pb-2 text-[11px] text-gray-500 dark:text-gray-400 whitespace-pre-wrap leading-relaxed">
           {thinking || (
             <span className="text-gray-400 dark:text-gray-600 italic">
               {t("thinkingPlaceholder")}
@@ -315,7 +315,7 @@ export const ThinkingCard = memo(function ThinkingCard({
           )}
         </div>
       ) : hasMore ? (
-        <div className="py-0.5 text-[11px] text-gray-400 dark:text-gray-500 truncate">
+        <div className="py-1 px-3 text-[11px] text-gray-400 dark:text-gray-500 truncate">
           {firstLine.length > 100 ? firstLine.slice(0, 100) + "..." : firstLine}
         </div>
       ) : null}
@@ -349,7 +349,7 @@ export const LspDiagnosticsCard = memo(function LspDiagnosticsCard({ data }: { d
   const { t } = useTranslation("chat");
   if (!data || typeof data !== "object") {
     return (
-      <div className="my-1 overflow-hidden bg-yellow-950/5">
+      <div className="my-0.5 overflow-hidden bg-yellow-950/5">
         <div className="px-4 py-1 text-[11px] font-medium text-yellow-400 flex items-center gap-1.5">
           <AlertTriangle className="w-3 h-3 shrink-0" />
           <span>{t("lspDiagnostics")}</span>
@@ -373,7 +373,7 @@ export const LspDiagnosticsCard = memo(function LspDiagnosticsCard({ data }: { d
   };
 
   return (
-    <div className="my-1 border border-yellow-700/30 rounded-lg overflow-hidden bg-yellow-50/50 dark:bg-yellow-900/10">
+    <div className="my-0.5 border border-yellow-700/30 rounded-lg overflow-hidden bg-yellow-50/50 dark:bg-yellow-900/10">
       <div className="px-3 py-1.5 text-xs font-medium text-yellow-400 flex items-center gap-1.5">
         <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
         <span>{t("lspDiagnostics")}</span>
@@ -439,7 +439,7 @@ export const MemoryCard = memo(function MemoryCard({
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
-        className={`w-full px-2 py-0.5 flex items-center gap-1.5 text-[11px] ${config.color} hover:bg-gray-200/15 dark:hover:bg-gray-800/15 rounded cursor-pointer select-none`}
+        className={`w-full px-3 py-1 flex items-center gap-1.5 text-[11px] ${config.color} hover:bg-gray-200/15 dark:hover:bg-gray-800/15 rounded cursor-pointer select-none`}
         aria-expanded={expanded}
         aria-label={`${config.label}${summary ? `: ${summary}` : ""}`}
       >
@@ -745,7 +745,7 @@ const CompactionSummaryCard = memo(function CompactionSummaryCard({
 
   return (
     <div data-block-id={blockId} className="my-0.5">
-      <div className="px-3 py-1.5 text-[13px] text-gray-700 dark:text-gray-300 leading-relaxed">
+      <div className="px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
         {isLong ? (
           <>
             <div className="flex items-start gap-1.5">
@@ -817,7 +817,7 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({
         return (
           <div
             data-block-id={blockId}
-            className="my-0.5 group relative pr-10 text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words overflow-auto max-h-[60vh]"
+            className="my-0.5 group relative px-3 pr-10 text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words"
           >
             <div className="absolute top-2 right-2 z-10 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
               <CopyButton text={block.text} size="xs" />
@@ -830,7 +830,7 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({
       return (
         <div
           data-block-id={blockId}
-          className="my-0.5 group relative pr-10 prose dark:prose-invert prose-sm max-w-none overflow-auto max-h-[60vh] prose-p:my-1 prose-pre:bg-transparent"
+          className="my-0.5 group relative px-3 pr-10 prose dark:prose-invert prose-sm max-w-none prose-p:my-1 prose-pre:bg-transparent"
         >
           <div className="absolute top-2 right-2 z-10 flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
             {shouldShowExpand && (
@@ -979,7 +979,7 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
 
   return (
     <div ref={cardRef} className={`overflow-hidden ${bgOnly}`} data-block-id={blockId}>
-      <div className="px-3 py-1 pl-2 flex items-center gap-2 text-xs">
+      <div className="px-3 py-1 flex items-center gap-2 text-xs">
         <button
           onClick={handleToggleCollapse}
           className="p-0.5 text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 transition-colors shrink-0"
@@ -1003,13 +1003,13 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
       </div>
 
       {collapsed ? (
-        <div className="px-3 pl-2 pb-1 text-[11px] text-gray-400 dark:text-gray-500 truncate">
+        <div className="px-3 pb-2 text-[11px] text-gray-400 dark:text-gray-500 truncate">
           {block.output ? block.output.split("\n")[0].slice(0, 100) : t("waitingOutput")}
         </div>
       ) : (
         <>
           <div
-            className="px-3 pl-2 py-1 text-[11px] text-gray-400 dark:text-gray-500 cursor-pointer hover:text-gray-600 dark:hover:text-gray-400 select-none flex items-center gap-1.5"
+            className="px-3 py-1 text-[11px] text-gray-400 dark:text-gray-500 cursor-pointer hover:text-gray-600 dark:hover:text-gray-400 select-none flex items-center gap-1.5"
             onClick={() => setInputOpen(!inputOpen)}
           >
             <svg
@@ -1033,14 +1033,14 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
           </div>
           {inputOpen && block.args && (
             <div className="px-3 pb-2 pt-0.5">
-              <pre className="text-[11px] text-yellow-300/60 overflow-x-auto whitespace-pre-wrap font-mono max-h-40 overflow-y-auto leading-relaxed pl-2">
+              <pre className="text-[11px] text-yellow-300/60 overflow-x-auto whitespace-pre-wrap font-mono max-h-40 overflow-y-auto leading-relaxed">
                 {tryFormatAsYaml(block.args)}
               </pre>
             </div>
           )}
 
           <div
-            className="px-3 pl-2 py-1 text-[11px] text-gray-400 dark:text-gray-500 cursor-pointer hover:text-gray-600 dark:hover:text-gray-400 select-none flex items-center gap-1.5"
+            className="px-3 py-1 text-[11px] text-gray-400 dark:text-gray-500 cursor-pointer hover:text-gray-600 dark:hover:text-gray-400 select-none flex items-center gap-1.5"
             onClick={() => setOutputOpen(!outputOpen)}
           >
             <svg
@@ -1070,7 +1070,7 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
               {uiBlock && uiBlock.status === "pending" ? (
                 <UIInteractionCard block={uiBlock} />
               ) : block.output ? (
-                <pre className="text-[11px] text-gray-700 dark:text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-36 overflow-y-auto pl-2">
+                <pre className="text-[11px] text-gray-700 dark:text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-36 overflow-y-auto">
                   {block.output}
                 </pre>
               ) : isRunning ? (

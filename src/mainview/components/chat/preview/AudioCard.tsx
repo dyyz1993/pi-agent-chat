@@ -15,7 +15,7 @@ export const AudioCard = memo(function AudioCard({ details }: { details: Preview
         meta={details.size ? formatFileSize(details.size) : undefined}
         absolutePath={details.absolutePath}
       />
-      <div className="px-4 py-3">
+      <div className="px-3 py-2">
         {httpUrl ? (
           <audio src={httpUrl} controls className="w-full h-8" preload="metadata">
             Your browser does not support audio playback.

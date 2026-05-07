@@ -33,6 +33,7 @@ export function useActiveScrollTracker({
   const prevSessionRef = useRef(sessionId);
   const lastScrollTopRef = useRef(0);
   const scrollDirRef = useRef<"up" | "down">("down");
+  const handleScrollLastTopRef = useRef(0);
 
   const isAtTopRef = useRef(true);
   const isAtBottomRef = useRef(true);
@@ -46,7 +47,7 @@ export function useActiveScrollTracker({
     autoScrollEnabled: true,
   });
 
-  const { hasIntent, markIntent } = useScrollIntent(scrollRef.current);
+  const { markIntent } = useScrollIntent(scrollRef.current);
 
   const syncToolbarState = useCallback(() => {
     setToolbarState((prev) => {
@@ -139,8 +140,12 @@ export function useActiveScrollTracker({
     isAtTopRef.current = nearTop;
     isAtBottomRef.current = nearBottom;
 
-    if (hasIntent()) {
-      if (!nearBottom && autoScrollEnabledRef.current) {
+    const el = scrollRef.current;
+    if (el) {
+      const delta = el.scrollTop - handleScrollLastTopRef.current;
+      handleScrollLastTopRef.current = el.scrollTop;
+
+      if (delta < -3 && autoScrollEnabledRef.current) {
         autoScrollEnabledRef.current = false;
         userScrolledUpRef.current = true;
       } else if (nearBottom && !autoScrollEnabledRef.current) {
@@ -150,7 +155,7 @@ export function useActiveScrollTracker({
     }
 
     syncToolbarState();
-  }, [updateActiveFromScroll, isNearBottom, isNearTop, syncToolbarState, hasIntent]);
+  }, [updateActiveFromScroll, isNearBottom, isNearTop, syncToolbarState, scrollRef]);
 
   useEffect(() => {
     if (prevSessionRef.current !== sessionId) {
@@ -162,6 +167,7 @@ export function useActiveScrollTracker({
       isAtTopRef.current = false;
       isAtBottomRef.current = true;
       autoScrollEnabledRef.current = true;
+      handleScrollLastTopRef.current = 0;
       syncToolbarState();
     }
   }, [sessionId, syncToolbarState]);

@@ -60,10 +60,7 @@ export const ReadFileCard = memo(function ReadFileCard({
         <FileText
           className={`w-3.5 h-3.5 shrink-0 ${isRunning ? "text-blue-500 dark:text-blue-400" : isError ? "text-red-500 dark:text-red-400" : "text-blue-500/70 dark:text-blue-400/60"}`}
         />
-        <span
-          className="min-w-0 text-gray-800 dark:text-gray-300 font-mono text-[11px]"
-          title={displayPath}
-        >
+        <span className="min-w-0 text-gray-800 dark:text-gray-300 font-mono" title={displayPath}>
           <span className="block truncate rtl" style={{ direction: "rtl", textAlign: "left" }}>
             <span style={{ direction: "ltr", display: "inline" }}>{displayPath}</span>
           </span>
@@ -115,11 +112,11 @@ export const ReadFileCard = memo(function ReadFileCard({
                 className="border-b last:border-b-0 border-indigo-200/20 dark:border-indigo-700/10 py-1 flex items-center gap-1.5"
               >
                 <span
-                  className={`text-[10px] font-medium shrink-0 ${rule.severity === "critical" ? "text-red-500 dark:text-red-400" : rule.severity === "high" ? "text-amber-600 dark:text-amber-400" : "text-indigo-700 dark:text-indigo-300"}`}
+                  className={`text-[11px] font-medium shrink-0 ${rule.severity === "critical" ? "text-red-500 dark:text-red-400" : rule.severity === "high" ? "text-amber-600 dark:text-amber-400" : "text-indigo-700 dark:text-indigo-300"}`}
                 >
                   {rule.title}
                 </span>
-                <span className="text-[10px] text-gray-400 dark:text-gray-600 font-mono">
+                <span className="text-[11px] text-gray-400 dark:text-gray-600 font-mono">
                   {rule.matchedGlob}
                 </span>
               </div>

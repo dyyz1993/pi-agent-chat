@@ -96,7 +96,7 @@ export const Header = memo(function Header({
 }) {
   const { t } = useTranslation("chat");
   return (
-    <div className="px-3 py-2 flex items-start gap-2.5">
+    <div className="px-3 py-1.5 flex items-start gap-2.5">
       <div
         className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 mt-0.5 ${
           isRunning
@@ -135,7 +135,7 @@ export const Header = memo(function Header({
             e.stopPropagation();
             onView();
           }}
-          className="shrink-0 flex items-center gap-1 px-2 py-1 rounded text-[10px] text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-500/10 transition-colors mt-1"
+          className="shrink-0 flex items-center gap-1 px-2 py-1 rounded text-[11px] text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-500/10 transition-colors mt-1"
         >
           <ExternalLink className="w-3 h-3" />
           {t("subagent.view")}
@@ -157,7 +157,7 @@ export const StatusChip = memo(function StatusChip({
   const { t } = useTranslation("chat");
   if (isRunning) {
     return (
-      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] bg-purple-100 dark:bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-300 dark:border-purple-500/20">
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] bg-purple-100 dark:bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-300 dark:border-purple-500/20">
         <span className="w-1 h-1 rounded-full bg-purple-600 dark:bg-purple-400 animate-pulse" />
         {t("subagent.running")}
       </span>
@@ -165,7 +165,7 @@ export const StatusChip = memo(function StatusChip({
   }
   if (isDone) {
     return (
-      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-100 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-500/20">
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] bg-emerald-100 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-500/20">
         <span className="w-1 h-1 rounded-full bg-emerald-600 dark:bg-emerald-400" />
         {t("subagent.completed")}
       </span>
@@ -173,7 +173,7 @@ export const StatusChip = memo(function StatusChip({
   }
   if (isError) {
     return (
-      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] bg-red-100 dark:bg-red-500/15 text-red-600 dark:text-red-400 border border-red-300 dark:border-red-500/20">
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] bg-red-100 dark:bg-red-500/15 text-red-600 dark:text-red-400 border border-red-300 dark:border-red-500/20">
         {t("subagent.error")}
       </span>
     );
@@ -219,7 +219,7 @@ export const OutputSection = memo(function OutputSection({
         </svg>
         <span>{isRunning ? t("subagent.liveOutput") : t("subagent.output")}</span>
         {isRunning && (
-          <span className="ml-auto text-purple-500/70 dark:text-purple-400/70 animate-pulse text-[10px]">
+          <span className="ml-auto text-purple-500/70 dark:text-purple-400/70 animate-pulse text-[11px]">
             {t("streaming")}
           </span>
         )}

@@ -33,7 +33,7 @@ function PanelCard({
 
     return (
       <div className="border border-gray-300/40 dark:border-gray-700/40 rounded-xl overflow-hidden bg-gray-50/50 dark:bg-gray-900/50">
-        <div className="flex items-center gap-1.5 px-4 py-2 border-b border-gray-300/50 dark:border-gray-700/50">
+        <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-gray-300/50 dark:border-gray-700/50">
           <span
             className={`text-[11px] font-medium ${req.method === "select" ? "text-sky-400" : "text-emerald-400"}`}
           >
@@ -41,9 +41,9 @@ function PanelCard({
           </span>
           <span className="text-[10px] text-gray-500 ml-auto">{req.title}</span>
         </div>
-        <div className="px-4 py-2">
+        <div className="px-3 py-2">
           {req.message && (
-            <p className="text-[12px] text-gray-300 mb-2 leading-relaxed">{req.message}</p>
+            <p className="text-[11px] text-gray-300 mb-2 leading-relaxed">{req.message}</p>
           )}
           <div className="space-y-0.5 mb-2">
             {options.map((opt, i) => {
@@ -125,13 +125,13 @@ function PanelCard({
   if (isConfirm) {
     return (
       <div className="border border-gray-300/40 dark:border-gray-700/40 rounded-xl overflow-hidden bg-gray-50/50 dark:bg-gray-900/50">
-        <div className="flex items-center gap-1.5 px-4 py-2.5 border-b border-gray-300/60 dark:border-gray-700/60">
+        <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-gray-300/60 dark:border-gray-700/60">
           <span className="text-[11px] font-medium text-emerald-400">{methodLabel.confirm}</span>
           <span className="text-[10px] text-gray-500 ml-auto">{req.title}</span>
         </div>
-        <div className="px-4 py-2">
+        <div className="px-3 py-2">
           {req.message && (
-            <p className="text-[12px] text-gray-700 dark:text-gray-300 mb-2.5 leading-relaxed">
+            <p className="text-[11px] text-gray-700 dark:text-gray-300 mb-2.5 leading-relaxed">
               {req.message}
             </p>
           )}
@@ -158,13 +158,13 @@ function PanelCard({
     const [value, setValue] = useState("");
     return (
       <div className="border border-gray-300/40 dark:border-gray-700/40 rounded-xl overflow-hidden bg-gray-50/50 dark:bg-gray-900/50">
-        <div className="flex items-center gap-1.5 px-4 py-2.5 border-b border-gray-300/60 dark:border-gray-700/60">
+        <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-gray-300/60 dark:border-gray-700/60">
           <span className="text-[11px] font-medium text-amber-400">{methodLabel.input}</span>
           <span className="text-[10px] text-gray-500 ml-auto">{req.title}</span>
         </div>
-        <div className="px-4 py-2">
+        <div className="px-3 py-2">
           {req.message && (
-            <p className="text-[12px] text-gray-700 dark:text-gray-300 mb-2.5 leading-relaxed">
+            <p className="text-[11px] text-gray-700 dark:text-gray-300 mb-2.5 leading-relaxed">
               {req.message}
             </p>
           )}
@@ -173,7 +173,7 @@ function PanelCard({
             value={value}
             onChange={(e) => setValue(e.target.value)}
             placeholder={req.placeholder ?? t("uiCard.pleaseInput")}
-            className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-2.5 py-1.5 text-[12px] text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-600 focus:outline-none focus:border-amber-500/50"
+            className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-2.5 py-1.5 text-[11px] text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-600 focus:outline-none focus:border-amber-500/50"
             onKeyDown={(e) => e.key === "Enter" && respondById(req.requestId, { value })}
           />
           <div className="flex gap-2 mt-2">
@@ -256,7 +256,7 @@ export function UIPendingCenter() {
             aria-modal="true"
             aria-label={t("uiPending.pendingRequestsTitle")}
           >
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-300/60 dark:border-gray-700/60">
+            <div className="flex items-center justify-between px-3 py-1.5 border-b border-gray-300/60 dark:border-gray-700/60">
               <div className="flex items-center gap-2">
                 <span className="text-[13px] font-medium text-gray-800 dark:text-gray-200">
                   {t("uiPending.pendingRequestsTitle")}
@@ -283,12 +283,12 @@ export function UIPendingCenter() {
               </div>
             </div>
 
-            <div className="overflow-y-auto max-h-[60vh] px-4 pb-4 pt-3 space-y-2.5">
+            <div className="px-3 pb-3 pt-2 space-y-2.5">
               {pending.map((req) => (
                 <PanelCard key={req.requestId} req={req} />
               ))}
               {pending.length === 0 && (
-                <div className="py-8 text-center text-[12px] text-gray-400 dark:text-gray-500">
+                <div className="py-8 text-center text-[11px] text-gray-400 dark:text-gray-500">
                   {t("uiPending.noPendingRequests")}
                 </div>
               )}

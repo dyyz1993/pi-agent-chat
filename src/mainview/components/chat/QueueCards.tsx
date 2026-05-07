@@ -13,7 +13,7 @@ export function QueueCards({ sessionId }: { sessionId: string }) {
   const total = queue.steering.length + queue.followUp.length;
 
   return (
-    <div className="px-4 py-2 flex-shrink-0">
+    <div className="px-3 py-1.5 flex-shrink-0">
       <div className="flex items-start gap-2 p-2.5 rounded-lg bg-gray-800/60 border border-gray-700/50">
         <div className="flex-1 min-w-0 space-y-1">
           {queue.steering.map((text, i) => (

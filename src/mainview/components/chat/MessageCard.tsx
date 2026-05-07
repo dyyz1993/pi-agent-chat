@@ -129,7 +129,7 @@ export const MessageCard = memo(function MessageCard({
 
   if (hasCustomContent && customBlock && MEMORY_CUSTOM_TYPES.has(customBlock.customType)) {
     return (
-      <div data-msg-card-id={message.id} className="relative w-full py-0.5">
+      <div data-msg-card-id={message.id} className="relative w-full py-1.5">
         <MessageBubble message={message} />
       </div>
     );
@@ -150,10 +150,10 @@ export const MessageCard = memo(function MessageCard({
     return (
       <div
         data-msg-card-id={message.id}
-        className={`group/msgcard relative w-full py-1 transition-colors overflow-hidden ${roleCfg.bgColor}`}
+        className={`group/msgcard relative w-full py-1.5 transition-colors overflow-hidden ${roleCfg.bgColor}`}
       >
         <div
-          className={`relative z-20 flex items-center gap-2 px-3 pl-2 h-5 select-none border-l-[3px] ${roleCfg.barColor}`}
+          className={`relative z-20 flex items-center gap-2 px-3 h-5 select-none border-l-[3px] ${roleCfg.barColor}`}
         >
           <span className={`flex items-center gap-1 text-[11px] font-medium ${roleCfg.color}`}>
             <Archive className="w-3 h-3" />
@@ -182,7 +182,7 @@ export const MessageCard = memo(function MessageCard({
         </div>
         {isCollapsed ? (
           <div
-            className={`relative z-20 border-l-[3px] ${roleCfg.barColor} px-4 py-1 text-xs text-gray-400 dark:text-gray-500 italic leading-relaxed`}
+            className={`relative z-20 border-l-[3px] ${roleCfg.barColor} px-3 py-1 text-xs text-gray-400 dark:text-gray-500 italic leading-relaxed`}
           >
             {firstLine}
           </div>
@@ -238,7 +238,7 @@ export const MessageCard = memo(function MessageCard({
       )}
       {/* Header: checkbox + label + timestamp */}
       <div
-        className={`relative z-20 flex items-center gap-2 px-3 pl-2 h-5 select-none border-l-[3px] ${isSelected ? "border-l-red-500" : barColor}`}
+        className={`relative z-20 flex items-center gap-2 px-3 h-5 select-none border-l-[3px] ${isSelected ? "border-l-red-500" : barColor}`}
       >
         {!isEntry && (
           <input
@@ -289,7 +289,7 @@ export const MessageCard = memo(function MessageCard({
       {/* Content */}
       {isCollapsed ? (
         <div
-          className={`relative z-20 border-l-[3px] ${isSelected ? "border-l-red-500" : barColor} px-4 py-1 text-xs text-gray-400 dark:text-gray-500 italic leading-relaxed`}
+          className={`relative z-20 border-l-[3px] ${isSelected ? "border-l-red-500" : barColor} px-3 py-1 text-xs text-gray-400 dark:text-gray-500 italic leading-relaxed`}
         >
           {message.content
             .filter((b) => b.type === "text")

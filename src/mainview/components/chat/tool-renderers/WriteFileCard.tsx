@@ -125,10 +125,7 @@ export const WriteFileCard = memo(function WriteFileCard({
         <Pencil
           className={`w-3.5 h-3.5 shrink-0 ${isRunning ? "text-green-500 dark:text-green-400" : isError ? "text-red-500 dark:text-red-400" : "text-green-500/70 dark:text-green-400/60"}`}
         />
-        <span
-          className="min-w-0 text-gray-800 dark:text-gray-300 font-mono text-[11px]"
-          title={displayPath}
-        >
+        <span className="min-w-0 text-gray-800 dark:text-gray-300 font-mono" title={displayPath}>
           <span className="block truncate rtl" style={{ direction: "rtl", textAlign: "left" }}>
             <span style={{ direction: "ltr", display: "inline" }}>{displayPath}</span>
           </span>
@@ -200,13 +197,13 @@ export const WriteFileCard = memo(function WriteFileCard({
                 key={f.filePath}
                 className="border-b last:border-b-0 border-yellow-300/20 dark:border-yellow-700/10 py-1"
               >
-                <div className="text-[10px] text-yellow-700 dark:text-yellow-300 font-medium flex items-center gap-1">
+                <div className="text-[11px] text-yellow-700 dark:text-yellow-300 font-medium flex items-center gap-1">
                   <FileText className="w-2.5 h-2.5 shrink-0" />
                   <span>{f.filePath}</span>
                   <span className="text-yellow-600 dark:text-yellow-500 ml-1">{f.summary}</span>
                 </div>
                 {f.issues.map((issue, i) => (
-                  <div key={i} className="text-[10px] text-gray-600 dark:text-gray-400 pl-4 pt-0.5">
+                  <div key={i} className="text-[11px] text-gray-600 dark:text-gray-400 pl-4 pt-0.5">
                     <span
                       className={
                         issue.severity === 1
