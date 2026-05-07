@@ -176,7 +176,7 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
                 <span className="absolute left-0 top-1 bottom-1 w-0.5 bg-indigo-400 rounded-full" />
               )}
               <span className={`w-2 h-2 rounded-full ${dotClass} flex-shrink-0`} />
-              <span className="min-w-[60px]">{tab.name}</span>
+              <span className="min-w-[60px] whitespace-nowrap">{tab.name}</span>
               <span
                 data-testid={`tab-close-${index}`}
                 onClick={(e) => handleCloseClick(e, tab.id)}
