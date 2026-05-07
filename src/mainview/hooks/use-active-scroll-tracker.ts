@@ -14,7 +14,7 @@ interface UseActiveScrollTrackerOptions {
 
 const BOTTOM_THRESHOLD_PX = 80;
 const TOP_THRESHOLD_PX = 80;
-const ACTIVE_THROTTLE_MS = 50;
+const ACTIVE_THROTTLE_MS = 200;
 
 export function useActiveScrollTracker({
   scrollRef,
@@ -49,14 +49,20 @@ export function useActiveScrollTracker({
 
   const { markIntent } = useScrollIntent(scrollRef.current);
 
+  const syncScheduledRef = useRef(false);
   const syncToolbarState = useCallback(() => {
-    setToolbarState((prev) => {
-      const top = isAtTopRef.current;
-      const bottom = isAtBottomRef.current;
-      const auto = autoScrollEnabledRef.current;
-      if (prev.isAtTop === top && prev.isAtBottom === bottom && prev.autoScrollEnabled === auto)
-        return prev;
-      return { isAtTop: top, isAtBottom: bottom, autoScrollEnabled: auto };
+    if (syncScheduledRef.current) return;
+    syncScheduledRef.current = true;
+    requestAnimationFrame(() => {
+      syncScheduledRef.current = false;
+      setToolbarState((prev) => {
+        const top = isAtTopRef.current;
+        const bottom = isAtBottomRef.current;
+        const auto = autoScrollEnabledRef.current;
+        if (prev.isAtTop === top && prev.isAtBottom === bottom && prev.autoScrollEnabled === auto)
+          return prev;
+        return { isAtTop: top, isAtBottom: bottom, autoScrollEnabled: auto };
+      });
     });
   }, []);
 

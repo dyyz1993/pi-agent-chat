@@ -141,13 +141,18 @@ export function ChatPanel() {
   const streamVersion = useChatStore((s) => s.streamContentVersion);
   const historyLoadVersion = useChatStore((s) => s.historyLoadVersion);
 
+  const mainMessagesRef = useRef(mainMessages);
+  mainMessagesRef.current = mainMessages;
+  const subMessagesRef = useRef(subMessages);
+  subMessagesRef.current = subMessages;
+
   const estimateMainSize = useCallback(
-    (index: number) => estimateMessageSize(mainMessages[index]),
-    [mainMessages],
+    (index: number) => estimateMessageSize(mainMessagesRef.current[index]),
+    [],
   );
   const estimateSubSize = useCallback(
-    (index: number) => estimateMessageSize(subMessages[index]),
-    [subMessages],
+    (index: number) => estimateMessageSize(subMessagesRef.current[index]),
+    [],
   );
 
   const mainVirtualizer = useVirtualizer({
@@ -155,7 +160,7 @@ export function ChatPanel() {
     getScrollElement: () => messagesScrollRef.current,
     estimateSize: estimateMainSize,
     overscan: isMobileOrTablet ? 2 : 5,
-    measureElement: (el) => el.getBoundingClientRect().height,
+    measureElement: (el) => (el as HTMLElement).offsetHeight,
   });
 
   const subVirtualizer = useVirtualizer({
@@ -163,7 +168,7 @@ export function ChatPanel() {
     getScrollElement: () => messagesScrollRef.current,
     estimateSize: estimateSubSize,
     overscan: isMobileOrTablet ? 2 : 5,
-    measureElement: (el) => el.getBoundingClientRect().height,
+    measureElement: (el) => (el as HTMLElement).offsetHeight,
   });
 
   const activeVirtualizer = isViewingSubagent ? subVirtualizer : mainVirtualizer;

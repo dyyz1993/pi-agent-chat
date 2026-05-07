@@ -227,7 +227,7 @@ const NavSubDot = memo(function NavSubDot({
   );
 });
 
-export function SideNav({
+export const SideNav = memo(function SideNav({
   messages,
   onNavDotClick,
 }: {
@@ -253,18 +253,28 @@ export function SideNav({
 
   const navItems = useMemo(() => buildNavItems(messages, t), [messages, t]);
 
+  const isNavClickRef = useRef(false);
+
   const handleDotClick = useCallback(
     (id: string) => {
+      isNavClickRef.current = true;
       setNavId(id);
       onNavDotClick(id);
+      requestAnimationFrame(() => {
+        isNavClickRef.current = false;
+      });
     },
     [onNavDotClick, setNavId],
   );
 
   const handleSubDotClick = useCallback(
     (blockId: string) => {
+      isNavClickRef.current = true;
       setNavId(blockId);
       onNavDotClick(blockId);
+      requestAnimationFrame(() => {
+        isNavClickRef.current = false;
+      });
     },
     [onNavDotClick, setNavId],
   );
@@ -299,12 +309,13 @@ export function SideNav({
     count: navItems.length,
     getScrollElement: () => scrollContainerRef.current,
     estimateSize: getItemHeight,
-    overscan: 20,
-    measureElement: (el) => el.getBoundingClientRect().height,
+    overscan: 5,
+    measureElement: (el) => (el as HTMLElement).offsetHeight,
   });
 
   useEffect(() => {
     if (!selectedNavId || !scrollContainerRef.current) return;
+    if (!isNavClickRef.current) return;
     const idx = navItems.findIndex((n) => n.id === selectedNavId);
     if (idx >= 0) {
       virtualizer.scrollToIndex(idx, { align: "auto" });
@@ -374,4 +385,4 @@ export function SideNav({
       )}
     </div>
   );
-}
+});

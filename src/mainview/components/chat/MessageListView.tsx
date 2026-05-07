@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, memo } from "react";
 import type { Virtualizer } from "@tanstack/react-virtual";
 import { Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -63,7 +63,7 @@ interface MessageListViewProps {
   hasMoreMessages?: boolean;
 }
 
-export function MessageListView({
+export const MessageListView = memo(function MessageListView({
   messages,
   scrollRef,
   onScroll,
@@ -172,4 +172,4 @@ export function MessageListView({
       </div>
     </div>
   );
-}
+});
