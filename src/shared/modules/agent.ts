@@ -85,6 +85,28 @@ export interface AgentMethods {
     params: { sessionId: string; sessionPath?: string };
     result: { messages: AgentMessageForUI[]; customEntries: CustomEntryForUI[] };
   };
+  "agent.getMessagesPage": {
+    params: {
+      sessionId: string;
+      sessionPath?: string;
+      /** 游标：返回此 ID 之前的消息。不传则从最新消息开始 */
+      beforeId?: string;
+      /** 返回此 ID 之后的消息（用于向前翻页） */
+      afterId?: string;
+      /** 每页数量，默认 50 */
+      limit?: number;
+      /** 是否返回轻量版（省略 toolExecution 的 args/output/details） */
+      lightweight?: boolean;
+    };
+    result: {
+      messages: AgentMessageForUI[];
+      customEntries: CustomEntryForUI[];
+      /** 是否还有更老的消息 */
+      hasMore: boolean;
+      /** 消息总数 */
+      totalCount: number;
+    };
+  };
   "agent.steer": {
     params: { sessionId: string; content: string };
     result: { ok: boolean };

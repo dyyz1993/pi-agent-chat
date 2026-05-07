@@ -401,11 +401,54 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     try {
       const { apiClient } = await import("../lib/api-client");
-      const result = await apiClient.call("agent.getFullMessages", {
-        sessionId: sid,
-        sessionPath: options?.sessionPath,
-      });
-      log.info("RPC returned", { sessionId: sid, force: !!options?.force });
+
+      // 优先使用分页 API，失败则回退到 getFullMessages
+      let messages: Array<Record<string, unknown>>;
+      let hasMore: boolean;
+      let totalCount: number;
+      let customEntries: CustomEntryForUI[] | undefined;
+
+      try {
+        const pageResult = await apiClient.call("agent.getMessagesPage", {
+          sessionId: sid,
+          sessionPath: options?.sessionPath,
+          limit: PAGE_SIZE,
+        });
+        const typed = pageResult as unknown as {
+          messages: Array<Record<string, unknown>>;
+          customEntries: CustomEntryForUI[];
+          hasMore: boolean;
+          totalCount: number;
+        };
+        messages = typed.messages;
+        hasMore = typed.hasMore;
+        totalCount = typed.totalCount;
+        customEntries = typed.customEntries;
+        log.info("getMessagesPage returned", {
+          sessionId: sid,
+          count: messages.length,
+          hasMore,
+          totalCount,
+        });
+      } catch (pageErr) {
+        log.warn("getMessagesPage failed, falling back to getFullMessages", {
+          sessionId: sid,
+          err: pageErr instanceof Error ? pageErr.message : String(pageErr),
+        });
+        const fallbackResult = await apiClient.call("agent.getFullMessages", {
+          sessionId: sid,
+          sessionPath: options?.sessionPath,
+        });
+        const fallbackTyped = fallbackResult as unknown as {
+          messages: Array<Record<string, unknown>>;
+          customEntries: CustomEntryForUI[];
+        };
+        messages = fallbackTyped.messages;
+        customEntries = fallbackTyped.customEntries;
+        totalCount = messages.length;
+        hasMore = messages.length > PAGE_SIZE;
+        if (hasMore) messages = messages.slice(-PAGE_SIZE);
+      }
 
       if (!options?.force) {
         const current = get().messagesBySession[sid] || [];
@@ -425,7 +468,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const toolCallNameMap: Record<string, string> = {};
       const rawMessages: Array<{ raw: Record<string, unknown>; id?: string }> = [];
 
-      const messages = (result as unknown as { messages: Array<Record<string, unknown>> }).messages;
       if (!Array.isArray(messages)) {
         log.warn("GUARD-4: messages is not array", { sessionId: sid, type: typeof messages });
         return;
@@ -467,12 +509,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       normalizeToolBlocks(msgs);
 
-      const customEntries = (result as unknown as { customEntries: CustomEntryForUI[] })
-        .customEntries;
-      if (Array.isArray(customEntries) && customEntries.length > 0) {
+      const finalCustomEntries = customEntries;
+      if (Array.isArray(finalCustomEntries) && finalCustomEntries.length > 0) {
         const memoryStore = useMemoryStore.getState();
 
-        for (const entry of customEntries) {
+        for (const entry of finalCustomEntries) {
           if (!ALL_MEMORY_TYPE_KEYS.has(entry.customType)) continue;
 
           memoryStore.addEvent(sid, {
@@ -504,17 +545,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
         });
       }
 
-      const hasMore = msgs.length > PAGE_SIZE;
-      const displayMsgs = hasMore ? msgs.slice(-PAGE_SIZE) : msgs;
-
       log.info("SET messages", {
         sessionId: sid,
-        total: msgs.length,
-        displayed: displayMsgs.length,
+        total: totalCount,
+        displayed: msgs.length,
         hasMore,
       });
       set((s) => ({
-        messagesBySession: { ...s.messagesBySession, [sid]: displayMsgs },
+        messagesBySession: { ...s.messagesBySession, [sid]: msgs },
         historyLoadVersion: s.historyLoadVersion + 1,
         hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: hasMore },
       }));
@@ -550,64 +588,134 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return;
     }
 
+    const currentMsgs = get().messagesBySession[sid] || [];
+    const currentFirstId = currentMsgs[0]?.id;
+    if (!currentFirstId) {
+      set((s) => ({
+        hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: false },
+      }));
+      return;
+    }
+
     set((s) => ({
       isLoadingMoreBySession: { ...s.isLoadingMoreBySession, [sid]: true },
     }));
 
     try {
-      const result = await apiClient.call("agent.getFullMessages", { sessionId: sid });
-      const messages = (result as unknown as { messages: Array<Record<string, unknown>> }).messages;
-      if (!Array.isArray(messages)) return;
+      // 优先使用分页 API，失败则回退到 getFullMessages
+      let olderMsgs: ChatMessage[] | null = null;
+      let newHasMore = false;
 
-      const toolCallNameMap: Record<string, string> = {};
-      const rawMessages: Array<{ raw: Record<string, unknown>; id?: string }> = [];
+      try {
+        const pageResult = await apiClient.call("agent.getMessagesPage", {
+          sessionId: sid,
+          beforeId: currentFirstId,
+          limit: PAGE_SIZE,
+        });
+        const typed = pageResult as unknown as {
+          messages: Array<Record<string, unknown>>;
+          hasMore: boolean;
+          totalCount: number;
+        };
+        log.info("getMessagesPage (loadMore) returned", {
+          sessionId: sid,
+          count: typed.messages.length,
+          hasMore: typed.hasMore,
+          totalCount: typed.totalCount,
+        });
 
-      for (const msg of messages) {
-        rawMessages.push({ raw: msg, id: msg.id as string | undefined });
-        const role = msg.role as string;
-        if (role === "assistant") {
-          const content = msg.content as Array<Record<string, unknown>> | undefined;
-          if (Array.isArray(content)) {
-            for (const block of content) {
-              if (block.type === "toolCall" && block.id && block.name) {
-                toolCallNameMap[block.id as string] = block.name as string;
+        const toolCallNameMap: Record<string, string> = {};
+        const rawMessages: Array<{ raw: Record<string, unknown>; id?: string }> = [];
+
+        for (const msg of typed.messages) {
+          rawMessages.push({ raw: msg, id: msg.id as string | undefined });
+          const role = msg.role as string;
+          if (role === "assistant") {
+            const content = msg.content as Array<Record<string, unknown>> | undefined;
+            if (Array.isArray(content)) {
+              for (const block of content) {
+                if (block.type === "toolCall" && block.id && block.name) {
+                  toolCallNameMap[block.id as string] = block.name as string;
+                }
               }
             }
           }
-        }
-        if (role === "toolResult" && msg.toolCallId && msg.name) {
-          const tcId = msg.toolCallId as string;
-          if (!toolCallNameMap[tcId]) {
-            toolCallNameMap[tcId] = msg.name as string;
+          if (role === "toolResult" && msg.toolCallId && msg.name) {
+            const tcId = msg.toolCallId as string;
+            if (!toolCallNameMap[tcId]) {
+              toolCallNameMap[tcId] = msg.name as string;
+            }
           }
         }
+
+        olderMsgs = [];
+        for (const { raw, id } of rawMessages) {
+          const msg = messageToChatMessage(raw as unknown as Message, id, toolCallNameMap);
+          if (msg) olderMsgs.push(msg);
+        }
+        normalizeToolBlocks(olderMsgs);
+        newHasMore = typed.hasMore;
+      } catch (pageErr) {
+        log.warn("getMessagesPage (loadMore) failed, falling back to getFullMessages", {
+          sessionId: sid,
+          err: pageErr instanceof Error ? pageErr.message : String(pageErr),
+        });
+
+        const result = await apiClient.call("agent.getFullMessages", { sessionId: sid });
+        const messages = (result as unknown as { messages: Array<Record<string, unknown>> })
+          .messages;
+        if (!Array.isArray(messages)) return;
+
+        const toolCallNameMap: Record<string, string> = {};
+        const rawMessages: Array<{ raw: Record<string, unknown>; id?: string }> = [];
+
+        for (const msg of messages) {
+          rawMessages.push({ raw: msg, id: msg.id as string | undefined });
+          const role = msg.role as string;
+          if (role === "assistant") {
+            const content = msg.content as Array<Record<string, unknown>> | undefined;
+            if (Array.isArray(content)) {
+              for (const block of content) {
+                if (block.type === "toolCall" && block.id && block.name) {
+                  toolCallNameMap[block.id as string] = block.name as string;
+                }
+              }
+            }
+          }
+          if (role === "toolResult" && msg.toolCallId && msg.name) {
+            const tcId = msg.toolCallId as string;
+            if (!toolCallNameMap[tcId]) {
+              toolCallNameMap[tcId] = msg.name as string;
+            }
+          }
+        }
+
+        const allMsgs: ChatMessage[] = [];
+        for (const { raw, id } of rawMessages) {
+          const msg = messageToChatMessage(raw as unknown as Message, id, toolCallNameMap);
+          if (msg) allMsgs.push(msg);
+        }
+        normalizeToolBlocks(allMsgs);
+
+        const currentFirstIdx = allMsgs.findIndex((m) => m.id === currentFirstId);
+        if (currentFirstIdx <= 0) {
+          set((s) => ({
+            hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: false },
+          }));
+          return;
+        }
+
+        olderMsgs = allMsgs.slice(0, currentFirstIdx);
+        newHasMore = currentFirstIdx > PAGE_SIZE;
       }
 
-      const allMsgs: ChatMessage[] = [];
-      for (const { raw, id } of rawMessages) {
-        const msg = messageToChatMessage(raw as unknown as Message, id, toolCallNameMap);
-        if (msg) allMsgs.push(msg);
-      }
-      normalizeToolBlocks(allMsgs);
-
-      const currentMsgs = get().messagesBySession[sid] || [];
-      const currentFirstId = currentMsgs[0]?.id;
-      if (!currentFirstId) {
+      if (!olderMsgs || olderMsgs.length === 0) {
         set((s) => ({
           hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: false },
         }));
         return;
       }
 
-      const currentFirstIdx = allMsgs.findIndex((m) => m.id === currentFirstId);
-      if (currentFirstIdx <= 0) {
-        set((s) => ({
-          hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: false },
-        }));
-        return;
-      }
-
-      const olderMsgs = allMsgs.slice(0, currentFirstIdx);
       const prepended = [...olderMsgs, ...currentMsgs];
       log.info("LOAD MORE messages", {
         sessionId: sid,
@@ -619,7 +727,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         messagesBySession: { ...s.messagesBySession, [sid]: prepended },
         hasMoreMessagesBySession: {
           ...s.hasMoreMessagesBySession,
-          [sid]: currentFirstIdx > PAGE_SIZE,
+          [sid]: newHasMore,
         },
       }));
     } catch (err) {

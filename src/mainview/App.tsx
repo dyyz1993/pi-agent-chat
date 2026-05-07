@@ -13,6 +13,9 @@ import { DiagnosticPanel } from "./components/debug/DiagnosticPanel";
 import { useDiagnosticStore } from "./stores/use-diagnostic-store";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { LoginPage } from "./components/LoginPage";
+import { notificationGateway } from "./lib/notification-gateway";
+import { pushChannel } from "./lib/channels/push-channel";
+import { parseDeepLink, setupDeepLinkListener, executeDeepLinkRecovery } from "./lib/deep-link-handler";
 
 function App() {
   const { t } = useTranslation("common");
@@ -31,6 +34,8 @@ function App() {
   const [hasToken, setHasToken] = useState(() => !!resolveAuthToken());
   const [loginError, setLoginError] = useState<string | null>(null);
   const loginTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const deepLinkHandledRef = useRef(false);
+  const pushRegisteredRef = useRef(false);
   const handleDiagnosticToggle = useCallback((e: KeyboardEvent) => {
     if (e.ctrlKey && e.shiftKey && e.key === "D") {
       e.preventDefault();
@@ -87,6 +92,99 @@ function App() {
       cancelled = true;
     };
   }, [initializeConnection, hasToken]);
+
+  useEffect(() => {
+    if (!hasToken) return;
+    if (deepLinkHandledRef.current) return;
+
+    const unsubscribe = setupDeepLinkListener((url) => {
+      try {
+        const data = parseDeepLink(url);
+        if (!data || data.action === "home") return;
+        if (deepLinkHandledRef.current) return;
+        deepLinkHandledRef.current = true;
+
+        addLog(`Deep link received: ${url}`);
+
+        const waitReady = () =>
+          new Promise<void>((resolve) => {
+            if (useAppStore.getState().ready) return resolve();
+            const unsub = useAppStore.subscribe((s) => {
+              if (s.ready) {
+                unsub();
+                resolve();
+              }
+            });
+          });
+
+        executeDeepLinkRecovery(data, {
+          isConnected: () => apiClient.isConnected(),
+          waitForConnection: waitReady,
+          openProject: async (projectId: string) => {
+            await apiClient.call("project.open", { path: projectId });
+          },
+          addProjectTab: (projectId: string) => {
+            const name = projectId.split("/").filter(Boolean).pop() ?? projectId;
+            const tabId = `proj-${projectId.replace(/\//g, "-")}`;
+            useSessionStore.getState().addProjectTab({ id: tabId, name, path: projectId });
+          },
+          restoreSession: async (sessionId: string) => {
+            try {
+              const lookup = await apiClient.call("project.findSessionById", { sessionId });
+              const info = lookup.session as {
+                sessionPath: string;
+                projectPath: string;
+                name: string;
+              } | null;
+              if (!info) return;
+              await apiClient.call("agent.start", {
+                sessionId,
+                projectPath: info.projectPath,
+                sessionPath: info.sessionPath,
+              });
+              useSessionStore.getState().setActiveSession(sessionId, true);
+              useChatStore.getState().loadSessionMessages(sessionId, {
+                force: true,
+                sessionPath: info.sessionPath,
+              });
+            } catch (err) {
+              addLog(`Deep link restore session failed: ${err instanceof Error ? err.message : String(err)}`);
+            }
+          },
+          listRecentSessions: async (projectId: string) => {
+            const sessions = await useSessionStore.getState().loadSessionsForProject(projectId);
+            return sessions.map((s) => ({ id: s.sessionId }));
+          },
+          createNewSession: async (_projectId: string) => {
+            await useSessionStore.getState().createNewSession();
+            const sid = useSessionStore.getState().activeSessionId;
+            if (!sid) throw new Error("Failed to create session");
+            return sid;
+          },
+          scrollToMessage: () => {},
+          getCurrentProjectId: () => useSessionStore.getState().activeProjectId ?? undefined,
+          getCurrentSessionId: () => useSessionStore.getState().activeSessionId ?? undefined,
+        }).catch((err) => {
+          addLog(`Deep link recovery failed: ${err instanceof Error ? err.message : String(err)}`);
+        });
+      } catch (err) {
+        addLog(`Deep link parse failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    });
+
+    return unsubscribe;
+  }, [hasToken, addLog]);
+
+  useEffect(() => {
+    if (!ready || pushRegisteredRef.current) return;
+    pushRegisteredRef.current = true;
+    try {
+      notificationGateway.registerChannel(pushChannel);
+      addLog("Push channel registered");
+    } catch (err) {
+      addLog(`Push channel registration failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }, [ready, addLog]);
 
   useEffect(() => {
     if (!ready || restoredFlag) return;

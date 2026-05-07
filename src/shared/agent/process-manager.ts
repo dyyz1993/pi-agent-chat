@@ -820,6 +820,80 @@ export class AgentProcessManager {
     return { messages, customEntries };
   }
 
+  async getMessagesPage(
+    sessionId: string,
+    sessionPath: string | undefined,
+    options: { beforeId?: string; afterId?: string; limit: number; lightweight: boolean },
+  ): Promise<{
+    messages: unknown[];
+    customEntries: Array<{ id: string; customType: string; data: unknown; timestamp: number }>;
+    hasMore: boolean;
+    totalCount: number;
+  }> {
+    // 复用 getFullMessages 获取全部消息，后续可优化为真正的流式分页
+    const fullResult = await this.getFullMessages(sessionId, sessionPath);
+    const allMessages = fullResult.messages;
+    const totalCount = allMessages.length;
+
+    let sliced: unknown[];
+    let hasMore: boolean;
+
+    if (options.beforeId) {
+      // 返回 beforeId 之前的 limit 条消息
+      const idx = allMessages.findIndex(
+        (m) => (m as Record<string, unknown>).id === options.beforeId,
+      );
+      if (idx <= 0) {
+        return { messages: [], customEntries: [], hasMore: false, totalCount };
+      }
+      const start = Math.max(0, idx - options.limit);
+      sliced = allMessages.slice(start, idx);
+      hasMore = start > 0;
+    } else if (options.afterId) {
+      // 返回 afterId 之后的 limit 条消息
+      const idx = allMessages.findIndex(
+        (m) => (m as Record<string, unknown>).id === options.afterId,
+      );
+      if (idx < 0 || idx >= allMessages.length - 1) {
+        return { messages: [], customEntries: [], hasMore: false, totalCount };
+      }
+      const end = Math.min(allMessages.length, idx + 1 + options.limit);
+      sliced = allMessages.slice(idx + 1, end);
+      hasMore = end < allMessages.length;
+    } else {
+      // 无 cursor：返回最新的 limit 条
+      const start = Math.max(0, totalCount - options.limit);
+      sliced = allMessages.slice(start);
+      hasMore = start > 0;
+    }
+
+    // 轻量化处理：省略 toolExecution 的大字段
+    if (options.lightweight) {
+      sliced = sliced.map((msg) => {
+        const m = msg as Record<string, unknown>;
+        if (!Array.isArray(m.content)) return msg;
+        return {
+          ...m,
+          content: (m.content as Array<Record<string, unknown>>).map((block) => {
+            if (block.type === "toolExecution") {
+              const { args: _, output: __, details: ___, ...rest } = block;
+              return rest;
+            }
+            return block;
+          }),
+        };
+      });
+    }
+
+    // customEntries 第一版全部返回，后续可独立分页
+    return {
+      messages: sliced,
+      customEntries: fullResult.customEntries,
+      hasMore,
+      totalCount,
+    };
+  }
+
   async getAvailableModels(sessionId: string): Promise<unknown> {
     const managed = this.clients.get(sessionId);
     if (!managed) return [];

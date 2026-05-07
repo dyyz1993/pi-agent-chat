@@ -108,6 +108,17 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     } as R<"agent.getFullMessages">;
   });
 
+  r("agent.getMessagesPage", async (params) => {
+    const { sessionId, sessionPath, beforeId, afterId, limit = 50, lightweight = false } = params;
+    const result = await m.getMessagesPage(sessionId, sessionPath, {
+      beforeId,
+      afterId,
+      limit,
+      lightweight,
+    });
+    return result as R<"agent.getMessagesPage">;
+  });
+
   r("agent.steer", async (params) => {
     const ok = m.steer(params.sessionId, params.content);
     return { ok };
