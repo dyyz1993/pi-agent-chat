@@ -74,21 +74,17 @@ jobs:
           path: dist/
 
       - uses: actions/setup-java@v4
+        id: setup-java
         with:
           java-version: ${{ env.JAVA_VERSION }}
           distribution: ${{ env.JAVA_DISTRIBUTION }}
 
       - uses: android-actions/setup-android@v3
 
-      - name: Cache Gradle
-        uses: actions/cache@v4
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
         with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-            android/.gradle
-          key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle*', 'android/**/gradle-wrapper.properties') }}
-          restore-keys: gradle-${{ runner.os }}-
+          cache-read-only: false
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -107,19 +103,10 @@ jobs:
             echo "Placeholder - run cap:add:android locally first" > android/app/build/outputs/apk/debug/README.txt
           fi
 
-      - name: Pre-download Gradle with retry
-        working-directory: android
-        run: |
-          chmod +x gradlew
-          for i in 1 2 3; do
-            echo "Attempt $i to download Gradle..."
-            ./gradlew --version && break
-            echo "Attempt $i failed, retrying in 10s..."
-            sleep 10
-          done
-
       - name: Build Android
         working-directory: android
+        env:
+          JAVA_HOME: ${{ steps.setup-java.outputs.path }}
         run: |
           if [ -f "gradlew" ]; then
             chmod +x gradlew
