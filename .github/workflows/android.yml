@@ -149,10 +149,15 @@ jobs:
 
       - run: bun install
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: dist/
+
       - run: bunx playwright install --with-deps chromium
 
       - name: Run screenshot tests
-        run: bunx playwright test --config playwright.screenshot.config.ts
+        run: bunx playwright test --config playwright.screenshot.config.ts --project=mobile-chrome
         env:
           CI: true
 
