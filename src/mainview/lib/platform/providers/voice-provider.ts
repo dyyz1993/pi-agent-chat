@@ -1,36 +1,64 @@
-import { isNative } from '../index';
-import type { IVoiceProvider } from './types';
+import { isNative } from "../index";
+import type { IVoiceProvider } from "./types";
 
 type PartialCallback = (text: string) => void;
 type FinalCallback = (text: string, translation?: string) => void;
+
+interface SpeechRecognitionEvent {
+  resultIndex: number;
+  results: SpeechRecognitionResultList;
+}
+
+interface SpeechRecognitionErrorEvent {
+  error: string;
+}
+
+interface SpeechRecognitionInstance {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+
+interface WindowWithSR extends Window {
+  SpeechRecognition?: new () => SpeechRecognitionInstance;
+  webkitSpeechRecognition?: new () => SpeechRecognitionInstance;
+}
+
+function getSpeechRecognitionCtor(): (new () => SpeechRecognitionInstance) | null {
+  if (typeof window === "undefined") return null;
+  const w = window as unknown as WindowWithSR;
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+}
 
 /**
  * Web 降级实现 — 使用 Web Speech API (SpeechRecognition + SpeechSynthesis)
  */
 class WebVoiceProvider implements IVoiceProvider {
-  private recognition: any = null;
+  private recognition: SpeechRecognitionInstance | null = null;
   private synth: SpeechSynthesis | null = null;
   private _onPartial: PartialCallback | null = null;
   private _onFinal: FinalCallback | null = null;
 
   isSupported(): boolean {
-    return typeof window !== 'undefined' && !!(
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-    );
+    return getSpeechRecognitionCtor() !== null;
   }
 
   async startRecognition(options?: { language?: string; translateTo?: string }): Promise<void> {
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) throw new Error('语音识别在当前浏览器中不可用');
+    const SR = getSpeechRecognitionCtor();
+    if (!SR) throw new Error("语音识别在当前浏览器中不可用");
 
     this.recognition = new SR();
     this.recognition.continuous = true;
     this.recognition.interimResults = true;
-    this.recognition.lang = options?.language || 'zh-CN';
+    this.recognition.lang = options?.language ?? "zh-CN";
 
-    this.recognition.onresult = (event: any) => {
-      let interim = '';
-      let final = '';
+    this.recognition.onresult = (event: SpeechRecognitionEvent) => {
+      let interim = "";
+      let final = "";
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript;
         if (event.results[i].isFinal) {
@@ -43,8 +71,8 @@ class WebVoiceProvider implements IVoiceProvider {
       if (final && this._onFinal) this._onFinal(final);
     };
 
-    this.recognition.onerror = (event: any) => {
-      console.warn('[VoiceProvider] recognition error:', event.error);
+    this.recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      console.warn("[VoiceProvider] recognition error:", event.error);
     };
 
     this.recognition.start();
@@ -58,13 +86,20 @@ class WebVoiceProvider implements IVoiceProvider {
   }
 
   async speak(text: string, options?: { voice?: string; language?: string }): Promise<void> {
-    if (!this.synth) this.synth = window.speechSynthesis;
-    this.synth!.cancel();
+    if (typeof speechSynthesis === "undefined") {
+      console.warn("[voice-provider] SpeechSynthesis API not available");
+      return;
+    }
+
+    if (!this.synth) this.synth = window.speechSynthesis ?? null;
+    if (!this.synth) return;
+
+    if (typeof this.synth.cancel === "function") this.synth.cancel();
 
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = options?.language || 'zh-CN';
+    utterance.lang = options?.language ?? "zh-CN";
     if (options?.voice) {
-      const voices = this.synth!.getVoices();
+      const voices = this.synth.getVoices();
       const match = voices.find((v) => v.name === options.voice);
       if (match) utterance.voice = match;
     }
@@ -72,12 +107,15 @@ class WebVoiceProvider implements IVoiceProvider {
     return new Promise((resolve) => {
       utterance.onend = () => resolve();
       utterance.onerror = () => resolve();
-      this.synth!.speak(utterance);
+      this.synth?.speak(utterance);
+      resolve(undefined);
     });
   }
 
   async stopSpeaking(): Promise<void> {
-    if (this.synth) this.synth.cancel();
+    if (this.synth && typeof this.synth.cancel === "function") {
+      this.synth.cancel();
+    }
   }
 
   onPartialResult(callback: (text: string) => void): void {

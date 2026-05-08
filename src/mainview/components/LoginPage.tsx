@@ -188,6 +188,16 @@ export function LoginPage({ onLogin, loginError, onClearError }: LoginPageProps)
           <p className="text-xs text-gray-400 dark:text-gray-500 text-center mt-5">
             Token 将保存在浏览器本地存储中
           </p>
+
+          <button
+            onClick={() => {
+              localStorage.setItem("show-native-demo", "true");
+              window.location.reload();
+            }}
+            className="mt-3 w-full py-2 text-sm text-gray-400 hover:text-white border border-gray-700 rounded-lg hover:border-gray-500 transition-colors"
+          >
+            🧪 Native Bridge Demo
+          </button>
         </div>
       </div>
     </div>

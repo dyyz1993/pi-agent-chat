@@ -13,6 +13,7 @@ import { DiagnosticPanel } from "./components/debug/DiagnosticPanel";
 import { useDiagnosticStore } from "./stores/use-diagnostic-store";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { LoginPage } from "./components/LoginPage";
+import { NativeDemo } from "./components/NativeDemo";
 import { notificationGateway } from "./lib/notification-gateway";
 import { pushChannel } from "./lib/channels/push-channel";
 import {
@@ -24,6 +25,9 @@ import { useEdgeSwipe } from "./hooks/use-edge-swipe";
 import { offlineQueue } from "./lib/offline-queue";
 
 function App() {
+  const isDemoMode =
+    typeof window !== "undefined" && localStorage.getItem("show-native-demo") === "true";
+
   const { t } = useTranslation("common");
   const log = createLogger("chat");
   const ready = useAppStore((s) => s.ready);
@@ -388,6 +392,14 @@ function App() {
 
     setProjectLoading(false);
   };
+
+  if (isDemoMode) {
+    return (
+      <ErrorBoundary>
+        <NativeDemo />
+      </ErrorBoundary>
+    );
+  }
 
   if (!hasToken) {
     return (

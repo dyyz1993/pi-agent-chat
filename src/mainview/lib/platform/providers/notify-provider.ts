@@ -1,30 +1,52 @@
-import { isNative } from '../index';
-import type { INotifyProvider } from './types';
+import { isNative } from "../index";
+import type { INotifyProvider } from "./types";
+
+type NotifyData = Record<string, unknown>;
 
 /**
  * Web 降级实现 — 使用浏览器 Notification API
  */
 class WebNotifyProvider implements INotifyProvider {
   async requestPermission(): Promise<boolean> {
-    if (typeof Notification === 'undefined') return false;
+    if (typeof Notification === "undefined") return false;
     const result = await Notification.requestPermission();
-    return result === 'granted';
+    return result === "granted";
   }
 
-  async getPermissionStatus(): Promise<'granted' | 'denied' | 'prompt'> {
-    if (typeof Notification === 'undefined') return 'denied';
+  async getPermissionStatus(): Promise<"granted" | "denied" | "prompt"> {
+    if (typeof Notification === "undefined") return "denied";
     const p = Notification.permission as string;
-    if (p === 'granted' || p === 'denied' || p === 'prompt') return p;
-    return 'denied';
+    if (p === "granted" || p === "denied" || p === "prompt") return p;
+    return "denied";
   }
 
   async sendLocalNotification(options: {
     title: string;
     body: string;
-    data?: Record<string, any>;
+    data?: NotifyData;
   }): Promise<void> {
+    if (typeof Notification === "undefined") {
+      console.warn("[notify-provider] Notification API not available in this environment");
+      try {
+        const { LocalNotifications } = await import("@capacitor/local-notifications");
+        await LocalNotifications.schedule({
+          notifications: [
+            {
+              title: options.title,
+              body: options.body,
+              id: Date.now(),
+              extra: options.data,
+            },
+          ],
+        });
+      } catch {
+        console.warn("[notify-provider] LocalNotifications also not available");
+      }
+      return;
+    }
+
     const permission = await this.getPermissionStatus();
-    if (permission !== 'granted') return;
+    if (permission !== "granted") return;
 
     const n = new Notification(options.title, {
       body: options.body,
@@ -36,7 +58,7 @@ class WebNotifyProvider implements INotifyProvider {
       n.close();
       if (options.data) {
         window.dispatchEvent(
-          new CustomEvent('platform:notification-click', { detail: options.data }),
+          new CustomEvent("platform:notification-click", { detail: options.data }),
         );
       }
     };
@@ -49,17 +71,17 @@ class WebNotifyProvider implements INotifyProvider {
 class NativeNotifyProvider extends WebNotifyProvider {
   override async requestPermission(): Promise<boolean> {
     try {
-      const { PushNotifications } = await import('@capacitor/push-notifications');
+      const { PushNotifications } = await import("@capacitor/push-notifications");
       const result = await PushNotifications.requestPermissions();
-      return result.receive === 'granted';
+      return result.receive === "granted";
     } catch {
       return super.requestPermission();
     }
   }
 
-  override async getPermissionStatus(): Promise<'granted' | 'denied' | 'prompt'> {
+  override async getPermissionStatus(): Promise<"granted" | "denied" | "prompt"> {
     try {
-      const { PushNotifications } = await import('@capacitor/push-notifications');
+      const { PushNotifications } = await import("@capacitor/push-notifications");
       const result = await PushNotifications.checkPermissions();
       return result.receive;
     } catch {
@@ -70,10 +92,10 @@ class NativeNotifyProvider extends WebNotifyProvider {
   override async sendLocalNotification(options: {
     title: string;
     body: string;
-    data?: Record<string, any>;
+    data?: NotifyData;
   }): Promise<void> {
     try {
-      const { LocalNotifications } = await import('@capacitor/local-notifications');
+      const { LocalNotifications } = await import("@capacitor/local-notifications");
       await LocalNotifications.schedule({
         notifications: [
           {
@@ -91,13 +113,13 @@ class NativeNotifyProvider extends WebNotifyProvider {
 
   async registerPushToken(): Promise<string | null> {
     try {
-      const { PushNotifications } = await import('@capacitor/push-notifications');
+      const { PushNotifications } = await import("@capacitor/push-notifications");
       await PushNotifications.register();
       return new Promise((resolve) => {
-        PushNotifications.addListener('registration', (token: { value: string }) => {
+        PushNotifications.addListener("registration", (token: { value: string }) => {
           resolve(token.value);
         });
-        PushNotifications.addListener('registrationError', () => {
+        PushNotifications.addListener("registrationError", () => {
           resolve(null);
         });
       });
@@ -106,17 +128,17 @@ class NativeNotifyProvider extends WebNotifyProvider {
     }
   }
 
-  onNotificationClick(callback: (data: Record<string, any>) => void): () => void {
+  onNotificationClick(callback: (data: NotifyData) => void): () => void {
     let removed = false;
     let cleanup: (() => void) | null = null;
 
-    import('@capacitor/push-notifications')
+    import("@capacitor/push-notifications")
       .then(({ PushNotifications }) => {
         if (removed) return;
         return PushNotifications.addListener(
-          'pushNotificationActionPerformed',
-          (event: { notification: { data?: Record<string, any> } }) => {
-            callback(event.notification.data || {});
+          "pushNotificationActionPerformed",
+          (event: { notification: { data?: NotifyData } }) => {
+            callback(event.notification.data ?? {});
           },
         ).then((handle) => {
           if (removed) {
@@ -129,8 +151,8 @@ class NativeNotifyProvider extends WebNotifyProvider {
       .catch(() => {
         // Capacitor 不可用，降级为 CustomEvent
         const handler = (e: Event) => callback((e as CustomEvent).detail);
-        window.addEventListener('platform:notification-click', handler);
-        cleanup = () => window.removeEventListener('platform:notification-click', handler);
+        window.addEventListener("platform:notification-click", handler);
+        cleanup = () => window.removeEventListener("platform:notification-click", handler);
       });
 
     return () => {

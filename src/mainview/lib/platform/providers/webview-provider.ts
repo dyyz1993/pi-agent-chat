@@ -1,17 +1,19 @@
-import { isNative } from '../index';
-import type { IWebViewProvider, WebViewHandle } from './types';
+import { isNative } from "../index";
+import type { IWebViewProvider, WebViewHandle } from "./types";
 
 /**
  * Web 降级实现 — 使用 <iframe>
  */
 class WebWebViewProvider implements IWebViewProvider {
   render(options: { src: string; sandbox?: string; className?: string }): WebViewHandle {
-    const iframe = document.createElement('iframe');
+    const iframe = document.createElement("iframe");
     iframe.src = options.src;
-    iframe.style.border = 'none';
-    iframe.style.width = '100%';
-    iframe.style.height = '100%';
-    if (options.sandbox) iframe.sandbox.add(options.sandbox);
+    iframe.style.border = "none";
+    iframe.style.width = "100%";
+    iframe.style.height = "100%";
+    if (options.sandbox && typeof options.sandbox === "string") {
+      iframe.setAttribute("sandbox", options.sandbox);
+    }
     if (options.className) iframe.className = options.className;
 
     return {
@@ -25,7 +27,7 @@ class WebWebViewProvider implements IWebViewProvider {
   }
 
   async openInNewWindow(options: { src: string; title?: string }): Promise<void> {
-    window.open(options.src, '_blank', 'noopener,noreferrer');
+    window.open(options.src, "_blank", "noopener,noreferrer");
   }
 }
 
@@ -36,7 +38,7 @@ class WebWebViewProvider implements IWebViewProvider {
 class NativeWebViewProvider extends WebWebViewProvider {
   override async openInNewWindow(options: { src: string; title?: string }): Promise<void> {
     try {
-      const { Browser } = await import('@capacitor/browser');
+      const { Browser } = await import("@capacitor/browser");
       await Browser.open({ url: options.src });
     } catch {
       await super.openInNewWindow(options);
@@ -44,8 +46,8 @@ class NativeWebViewProvider extends WebWebViewProvider {
   }
 
   enableRemoteDebug(): void {
-    if (typeof window !== 'undefined') {
-      console.log('[PlatformBridge] WebView remote debug enabled');
+    if (typeof window !== "undefined") {
+      console.warn("[PlatformBridge] WebView remote debug enabled");
       // Android 可通过 chrome://inspect 调试
     }
   }
