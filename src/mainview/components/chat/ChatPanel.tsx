@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, lazy, Suspense } from "react";
 import {
   ArrowUp,
   PanelLeft,
@@ -34,11 +34,14 @@ import { QuickActionToolbar } from "./QuickActionToolbar";
 import { ScrollToolbar } from "./ScrollToolbar";
 import { QueueCards } from "./QueueCards";
 import { MarkdownExpandOverlay } from "./MarkdownExpandOverlay";
-import { MermaidFullscreen } from "./mermaid";
 import { AttachmentButtons, AttachmentBar } from "./FileAttachment";
 import { useAttachmentStore } from "../../stores/use-attachment-store";
 import { VoiceButton } from "./VoiceButton";
 import type { ChatMessage } from "../../types";
+
+const MermaidFullscreen = lazy(() =>
+  import("./mermaid").then((m) => ({ default: m.MermaidFullscreen })),
+);
 
 const EMPTY_MSGS: never[] = [];
 
@@ -282,9 +285,12 @@ export function ChatPanel() {
     await sendSteer();
   };
 
-  const handleVoiceInput = useCallback((text: string) => {
-    setInputText(inputText ? `${inputText} ${text}` : text);
-  }, [inputText, setInputText]);
+  const handleVoiceInput = useCallback(
+    (text: string) => {
+      setInputText(inputText ? `${inputText} ${text}` : text);
+    },
+    [inputText, setInputText],
+  );
 
   useEffect(() => {
     sessionInitRef.current = true;
@@ -352,7 +358,9 @@ export function ChatPanel() {
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative bg-white dark:bg-gray-950">
       <MarkdownExpandOverlay />
-      <MermaidFullscreen />
+      <Suspense fallback={null}>
+        <MermaidFullscreen />
+      </Suspense>
       <div className="flex items-center gap-4 px-4 py-1.5 bg-gray-50/80 dark:bg-gray-900/80 border-b border-gray-200 dark:border-gray-800 text-[11px] text-gray-400 dark:text-gray-500 flex-shrink-0">
         <SessionToggleIcon />
         {isViewingSubagent && (

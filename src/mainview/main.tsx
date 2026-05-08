@@ -8,6 +8,9 @@ import "./lib/channels/in-app-channel";
 import "./lib/channels/pwa-channel";
 import "./stores/use-theme-store";
 
+import { SplashScreen } from "@capacitor/splash-screen";
+SplashScreen.hide({ fadeOutDuration: 0 }).catch(() => {});
+
 if (typeof globalThis.crypto !== "undefined" && !globalThis.crypto.randomUUID) {
   Object.defineProperty(globalThis.crypto, "randomUUID", {
     value: () =>

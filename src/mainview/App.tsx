@@ -15,7 +15,11 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { LoginPage } from "./components/LoginPage";
 import { notificationGateway } from "./lib/notification-gateway";
 import { pushChannel } from "./lib/channels/push-channel";
-import { parseDeepLink, setupDeepLinkListener, executeDeepLinkRecovery } from "./lib/deep-link-handler";
+import {
+  parseDeepLink,
+  setupDeepLinkListener,
+  executeDeepLinkRecovery,
+} from "./lib/deep-link-handler";
 import { useEdgeSwipe } from "./hooks/use-edge-swipe";
 import { offlineQueue } from "./lib/offline-queue";
 
@@ -26,6 +30,7 @@ function App() {
   const initializeConnection = useAppStore((s) => s.initializeConnection);
   const addLog = useAppStore((s) => s.addLog);
   const connectionStatus = useAppStore((s) => s.connectionStatus);
+  const connectionFailed = useAppStore((s) => s.connectionFailed);
   const listRootDir = useExplorerStore((s) => s.listRootDir);
 
   // 边缘滑动手势
@@ -154,7 +159,9 @@ function App() {
                 sessionPath: info.sessionPath,
               });
             } catch (err) {
-              addLog(`Deep link restore session failed: ${err instanceof Error ? err.message : String(err)}`);
+              addLog(
+                `Deep link restore session failed: ${err instanceof Error ? err.message : String(err)}`,
+              );
             }
           },
           listRecentSessions: async (projectId: string) => {
@@ -188,26 +195,30 @@ function App() {
       notificationGateway.registerChannel(pushChannel);
       addLog("Push channel registered");
     } catch (err) {
-      addLog(`Push channel registration failed: ${err instanceof Error ? err.message : String(err)}`);
+      addLog(
+        `Push channel registration failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }, [ready, addLog]);
 
   // 连接恢复后 flush 离线队列
   useEffect(() => {
     if (connectionStatus !== "connected" || !offlineQueue.hasPending()) return;
-    offlineQueue.flush(async (msg) => {
-      try {
-        await apiClient.call("agent.send", {
-          sessionId: msg.sessionId,
-          content: msg.content,
-        });
-        return true;
-      } catch {
-        return false;
-      }
-    }).then((sent) => {
-      if (sent > 0) addLog(`离线队列已发送 ${sent} 条消息`);
-    });
+    offlineQueue
+      .flush(async (msg) => {
+        try {
+          await apiClient.call("agent.send", {
+            sessionId: msg.sessionId,
+            content: msg.content,
+          });
+          return true;
+        } catch {
+          return false;
+        }
+      })
+      .then((sent) => {
+        if (sent > 0) addLog(`离线队列已发送 ${sent} 条消息`);
+      });
   }, [connectionStatus, addLog]);
 
   useEffect(() => {
@@ -385,6 +396,21 @@ function App() {
           onLogin={handleLogin}
           loginError={loginError}
           onClearError={() => setLoginError(null)}
+        />
+      </ErrorBoundary>
+    );
+  }
+
+  if (connectionFailed) {
+    return (
+      <ErrorBoundary>
+        <LoginPage
+          onLogin={handleLogin}
+          loginError="连接服务器失败，请检查服务器地址和 Token"
+          onClearError={() => {
+            useAppStore.setState({ connectionFailed: false });
+            setLoginError(null);
+          }}
         />
       </ErrorBoundary>
     );

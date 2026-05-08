@@ -209,15 +209,33 @@ class APIClientImpl {
       return `ws://localhost:3100/ws?token=${token}`;
     }
 
-    const customUrl =
-      new URLSearchParams(window.location.search).get("ws") ??
-      localStorage.getItem("rpc-websocket-url");
+    const urlParam = new URLSearchParams(window.location.search).get("ws");
+    const customUrl = urlParam ?? localStorage.getItem("rpc-websocket-url");
+
     if (customUrl) {
-      return customUrl.includes("token=") ? customUrl : `${customUrl}?token=${token}`;
+      if (customUrl.includes("://")) {
+        return customUrl.includes("token=") ? customUrl : `${customUrl}?token=${token}`;
+      }
+      return customUrl.includes("token=")
+        ? `ws://${customUrl}`
+        : `ws://${customUrl}?token=${token}`;
     }
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    return `${protocol}//${window.location.host}/ws?token=${token}`;
+    const host = window.location.host;
+
+    if (
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host.startsWith("localhost:") ||
+      host.startsWith("127.0.0.1:")
+    ) {
+      throw new Error(
+        `[pi-agent] No server URL configured. Please set server address via Deep Link (piagentchat://server/<host>:<port>?token=<token>) or LoginPage.`,
+      );
+    }
+
+    return `${protocol}//${host}/ws?token=${token}`;
   }
 
   /**

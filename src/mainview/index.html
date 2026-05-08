@@ -52,11 +52,26 @@
         navigator.serviceWorker.register('/sw.js').catch(() => {});
       });
     }
+    try { Capacitor?.Plugins?.SplashScreen?.hide?.({ fadeOutDuration: 0 }); } catch(e) {}
+    window.onerror = function(msg, url, line, col, err) {
+      var d = document.createElement('div');
+      d.style.cssText = 'position:fixed;top:0;left:0;right:0;background:red;color:white;padding:10px;font-size:14px;z-index:99999;word-break:break-all;';
+      d.textContent = 'ERR: ' + msg + ' | ' + url + ':' + line + ':' + col;
+      document.body ? document.body.appendChild(d) : document.addEventListener('DOMContentLoaded', function() { document.body.appendChild(d); });
+    };
   </script>
 </head>
 
-<body>
+<body style="background:#2d1b69;margin:0;">
   <div id="root"></div>
+  <script>
+    window.onerror = function(msg, url, line, col, err) {
+      var d = document.createElement('div');
+      d.style.cssText = 'position:fixed;top:0;left:0;right:0;background:red;color:white;padding:10px;font-size:14px;z-index:99999;word-break:break-all;';
+      d.textContent = 'ERR: ' + msg + ' | ' + url + ':' + line + ':' + col;
+      document.body ? document.body.appendChild(d) : document.addEventListener('DOMContentLoaded', function() { document.body.appendChild(d); });
+    };
+  </script>
   <script type="module" src="./main.tsx"></script>
 </body>
 

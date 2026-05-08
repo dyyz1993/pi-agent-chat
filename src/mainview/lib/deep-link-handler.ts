@@ -1,5 +1,8 @@
+import { createLogger } from "../../shared/lib/logger";
 import { platformBridge } from "./platform/bridge";
 import type { DeepLinkData } from "./platform/providers/types";
+
+const log = createLogger("deep-link");
 
 export function parseDeepLink(url: string): DeepLinkData | null {
   try {
@@ -10,6 +13,23 @@ export function parseDeepLink(url: string): DeepLinkData | null {
 
       if (parts.length === 0) {
         return { action: "home" };
+      }
+
+      if (parts[0] === "server" && parts[1]) {
+        const serverHost = decodeURIComponent(parts[1]);
+        const token = parsed.searchParams.get("token");
+        const [host, portStr] = serverHost.split(":");
+        const port = parseInt(portStr ?? "3100", 10);
+
+        if (!host || !port || isNaN(port)) {
+          console.warn("[deep-link-handler] Invalid server config:", serverHost);
+          return null;
+        }
+
+        return {
+          action: "open_project",
+          serverConfig: { host, port, token: token ?? undefined },
+        };
       }
 
       if (parts[0] === "project" && parts[1]) {
@@ -53,7 +73,7 @@ export function parseDeepLink(url: string): DeepLinkData | null {
         return {
           action: sessionId ? "open_session" : "open_project",
           projectId,
-          sessionId: sessionId || undefined,
+          sessionId: sessionId ?? undefined,
         };
       }
     }
@@ -81,22 +101,43 @@ export async function executeDeepLinkRecovery(
   data: DeepLinkData,
   ctx: DeepLinkContext,
 ): Promise<void> {
-  console.log("[deep-link-handler] 执行深链恢复:", data);
+  log.info("执行深链恢复:", { data });
 
   if (!ctx.isConnected()) {
-    console.log("[deep-link-handler] 等待 WebSocket 连接...");
+    log.info("等待 WebSocket 连接");
     await ctx.waitForConnection();
   }
 
   switch (data.action) {
     case "home":
-      console.log("[deep-link-handler] 打开首页");
+      log.debug("打开首页");
       break;
 
     case "open_project": {
+      if (data.serverConfig) {
+        const { host, port, token } = data.serverConfig;
+        const wsUrl = `ws://${host}:${port}/ws`;
+        const httpUrl = `http://${host}:${port}`;
+
+        localStorage.setItem("rpc-websocket-url", wsUrl);
+        localStorage.setItem("rpc-server-http-url", httpUrl);
+
+        if (token) {
+          localStorage.setItem("rpc-auth-token", token);
+        }
+
+        if (ctx.isConnected()) {
+          log.info("Reconnecting to new server");
+        } else {
+          log.info("Waiting for connection to new server");
+        }
+
+        break;
+      }
+
       const { projectId } = data;
       if (!projectId) break;
-      console.log("[deep-link-handler] 打开项目:", projectId);
+      log.info("打开项目:", { projectId });
 
       await ctx.openProject(projectId);
       ctx.addProjectTab(projectId);
@@ -120,7 +161,7 @@ export async function executeDeepLinkRecovery(
     case "open_session": {
       const { projectId, sessionId } = data;
       if (!projectId || !sessionId) break;
-      console.log("[deep-link-handler] 打开会话:", projectId, sessionId);
+      log.info("打开会话:", { projectId, sessionId });
 
       await ctx.openProject(projectId);
       ctx.addProjectTab(projectId);
@@ -128,7 +169,7 @@ export async function executeDeepLinkRecovery(
 
       if (data.messageId) {
         setTimeout(() => {
-          ctx.scrollToMessage(data.messageId!);
+          if (data.messageId) ctx.scrollToMessage(data.messageId);
         }, 1000);
       }
       break;
@@ -136,14 +177,12 @@ export async function executeDeepLinkRecovery(
   }
 }
 
-export function setupDeepLinkListener(
-  onDeepLink: (url: string) => void,
-): () => void {
+export function setupDeepLinkListener(onDeepLink: (url: string) => void): () => void {
   const unsubscribe = platformBridge.deeplink.onDeepLink(onDeepLink);
 
   platformBridge.deeplink.getInitialUrl().then((url) => {
     if (url) {
-      console.log("[deep-link-handler] 冷启动深链:", url);
+      log.info("冷启动深链:", { url });
       onDeepLink(url);
     }
   });

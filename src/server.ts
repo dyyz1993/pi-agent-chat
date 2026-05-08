@@ -31,8 +31,10 @@ httpServer.on(
   }),
 );
 
-httpServer.listen(config.port, () => {
+const HOST = process.env.HOST ?? "0.0.0.0";
+httpServer.listen(config.port, HOST, () => {
   log.info(`HTTP + WebSocket server running on http://localhost:${config.port}`);
+  log.info(`Server listening on ${HOST}:${config.port} (accessible via local IP)`);
   log.info(`WebSocket: ws://localhost:${config.port}/ws?token=${config.authToken}`);
   log.info(
     "Available RPC methods: system.ping, system.hello, system.echo, file.listDir, timer.start, timer.stop",

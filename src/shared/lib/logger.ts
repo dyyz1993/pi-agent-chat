@@ -14,7 +14,8 @@ export type LogModule =
   | "config"
   | "snapshot"
   | "subagent"
-  | "linked-projects";
+  | "linked-projects"
+  | "deep-link";
 type LogLevel = "debug" | "info" | "warn" | "error";
 
 interface LogEntry {

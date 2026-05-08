@@ -21,6 +21,7 @@ interface AppState {
   subscriptionId: string | null;
   timerRunning: boolean;
   connectionStatus: "connected" | "disconnected";
+  connectionFailed: boolean;
 
   initializeConnection: () => void;
   addLog: (msg: string) => void;
@@ -42,6 +43,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   subscriptionId: null,
   timerRunning: false,
   connectionStatus: "connected",
+  connectionFailed: false,
 
   initializeConnection: () => {
     const MAX_RETRIES = 5;
@@ -53,6 +55,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         set({
           mode: transport === "ipc" ? "desktop" : "web",
           ready: true,
+          connectionFailed: false,
         });
         get().addLog(
           `${transport === "ipc" ? "Desktop" : "Web"} mode - ${transport.toUpperCase()}`,
@@ -62,6 +65,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         if (retries < MAX_RETRIES) {
           setTimeout(init, 1000);
         } else {
+          set({ connectionFailed: true });
           get().addLog(`Failed to connect after ${MAX_RETRIES} retries`);
         }
       }

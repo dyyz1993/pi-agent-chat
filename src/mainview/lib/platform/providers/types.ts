@@ -51,17 +51,17 @@ export interface INotifyProvider {
   /** 请求通知权限 */
   requestPermission(): Promise<boolean>;
   /** 获取当前权限状态 */
-  getPermissionStatus(): Promise<'granted' | 'denied' | 'prompt'>;
+  getPermissionStatus(): Promise<"granted" | "denied" | "prompt">;
   /** 发送本地通知 */
   sendLocalNotification(options: {
     title: string;
     body: string;
-    data?: Record<string, any>;
+    data?: Record<string, unknown>;
   }): Promise<void>;
   /** 注册推送 token（App 专有） */
   registerPushToken?(): Promise<string | null>;
   /** 通知点击事件监听 */
-  onNotificationClick?(callback: (data: Record<string, any>) => void): () => void;
+  onNotificationClick?(callback: (data: Record<string, unknown>) => void): () => void;
 }
 
 // ─── WebView 能力 ────────────────────────────────────────
@@ -124,8 +124,13 @@ export interface IDeepLinkProvider {
 }
 
 export interface DeepLinkData {
-  action: 'home' | 'open_project' | 'open_session';
+  action: "home" | "open_project" | "open_session";
   projectId?: string;
   sessionId?: string;
   messageId?: string;
+  serverConfig?: {
+    host: string;
+    port: number;
+    token?: string;
+  };
 }
