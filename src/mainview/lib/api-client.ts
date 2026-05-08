@@ -230,9 +230,7 @@ class APIClientImpl {
       host.startsWith("localhost:") ||
       host.startsWith("127.0.0.1:")
     ) {
-      throw new Error(
-        `[pi-agent] No server URL configured. Please set server address via Deep Link (piagentchat://server/<host>:<port>?token=<token>) or LoginPage.`,
-      );
+      return `${protocol}//localhost:3100/ws?token=${token}`;
     }
 
     return `${protocol}//${host}/ws?token=${token}`;
