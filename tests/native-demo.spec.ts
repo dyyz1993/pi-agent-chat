@@ -53,53 +53,73 @@ test.describe("Native Bridge Demo - Individual Tests", () => {
   });
 
   test("1. 平台检测测试", async ({ page }) => {
-    await page.click("text=平台检测 >> .. >> text=运行测试");
+    const label = page.getByText("1. 平台检测", { exact: true });
+    const card = label.locator("xpath=../..");
+    await card.getByRole("button", { name: "运行测试" }).click();
     await page.waitForTimeout(2000);
     const result = page.locator(".text-green-400, .text-amber-400, .text-red-400").first();
     await expect(result).toBeVisible({ timeout: 5000 });
   });
 
   test("11. 存储测试", async ({ page }) => {
-    await page.click("text=存储 >> .. >> text=运行测试");
+    const card = page
+      .locator("div")
+      .filter({ hasText: /^11\. 存储/ })
+      .first();
+    await card.getByRole("button", { name: "运行测试" }).click();
     await page.waitForTimeout(2000);
     const passIndicator = page.locator("text=存储读写删除正常");
     await expect(passIndicator).toBeVisible({ timeout: 5000 });
   });
 
   test("12. 深度链接测试", async ({ page }) => {
-    await page.click("text=深度链接 >> .. >> text=运行测试");
+    const card = page
+      .locator("div")
+      .filter({ hasText: /^12\. 深度链接/ })
+      .first();
+    await card.getByRole("button", { name: "运行测试" }).click();
     await page.waitForTimeout(2000);
     const passIndicator = page.locator("text=深链解析正确");
     await expect(passIndicator).toBeVisible({ timeout: 5000 });
   });
 
   test("15. Service Worker 测试", async ({ page }) => {
-    await page.click("text=Service Worker >> .. >> text=运行测试");
+    const card = page
+      .locator("div")
+      .filter({ hasText: /^15\. Service Worker/ })
+      .first();
+    await card.getByRole("button", { name: "运行测试" }).click();
     await page.waitForTimeout(2000);
     const result = page.locator(".text-green-400, .text-amber-400").first();
     await expect(result).toBeVisible({ timeout: 5000 });
   });
 
   test("16. 离线队列测试", async ({ page }) => {
-    await page.click("text=离线队列 >> .. >> text=运行测试");
+    const card = page
+      .locator("div")
+      .filter({ hasText: /^16\. 离线队列/ })
+      .first();
+    await card.getByRole("button", { name: "运行测试" }).click();
     await page.waitForTimeout(2000);
     const passIndicator = page.locator("text=离线队列正常");
     await expect(passIndicator).toBeVisible({ timeout: 5000 });
   });
 
   test("日志面板应该显示测试日志", async ({ page }) => {
-    await page.click("text=平台检测 >> .. >> text=运行测试");
+    const label = page.getByText("1. 平台检测", { exact: true });
+    const card = label.locator("xpath=../..");
+    await card.getByRole("button", { name: "运行测试" }).click();
     await page.waitForTimeout(2000);
 
-    const logPanel = page.locator("text=开始运行 / text=检测中 / text=Platform:");
-    await expect(logPanel.first()).toBeVisible({ timeout: 5000 });
+    const logPanel = page.locator("text=Platform:").first();
+    await expect(logPanel).toBeVisible({ timeout: 5000 });
   });
 
   test("退出 Demo 应该返回登录页", async ({ page }) => {
     await page.click("text=退出 Demo");
     await page.waitForTimeout(1000);
 
-    await expect(page.locator("text=Token")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator("text=Auth Token").first()).toBeVisible({ timeout: 5000 });
 
     const showDemo = await page.evaluate(() => localStorage.getItem("show-native-demo"));
     expect(showDemo).toBeNull();
@@ -115,7 +135,11 @@ test.describe("Native Bridge Demo - Provider Fallback", () => {
     await page.reload();
     await page.waitForSelector("text=Native Bridge Demo", { timeout: 10000 });
 
-    await page.click("text=图片选择 >> .. >> text=运行测试");
+    const card = page
+      .locator("div")
+      .filter({ hasText: /^2\. 图片选择/ })
+      .first();
+    await card.getByRole("button", { name: "运行测试" }).click();
     await page.waitForTimeout(1000);
 
     const result = page.locator(".text-green-400, .text-amber-400, .text-red-400").first();
@@ -130,7 +154,11 @@ test.describe("Native Bridge Demo - Provider Fallback", () => {
     await page.reload();
     await page.waitForSelector("text=Native Bridge Demo", { timeout: 10000 });
 
-    await page.click("text=通知权限 >> .. >> text=运行测试");
+    const card = page
+      .locator("div")
+      .filter({ hasText: /^5\. 通知权限/ })
+      .first();
+    await card.getByRole("button", { name: "运行测试" }).click();
     await page.waitForTimeout(2000);
 
     const result = page.locator(".text-green-400, .text-amber-400, .text-red-400").first();
