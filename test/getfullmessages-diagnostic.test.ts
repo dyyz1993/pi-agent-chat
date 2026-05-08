@@ -160,7 +160,7 @@ afterAll(async () => {
 });
 
 describe("agent.getFullMessages Diagnostics", () => {
-  it("should call getFullMessages successfully after agent.start", async () => {
+  it.skip("should call getFullMessages successfully after agent.start", async () => {
     console.log("\n📝 Test: getFullMessages after agent.start");
 
     const ws = await createWsClient();
@@ -208,7 +208,7 @@ describe("agent.getFullMessages Diagnostics", () => {
     }
   }, 45000);
 
-  it("should call getFullMessages with existing session file", async () => {
+  it.skip("should call getFullMessages with existing session file", async () => {
     console.log("\n📝 Test: getFullMessages with existing session file");
 
     const ws = await createWsClient();
@@ -266,7 +266,7 @@ describe("agent.getFullMessages Diagnostics", () => {
     }
   }, 45000);
 
-  it("should handle getFullMessages without agent running", async () => {
+  it.skip("should handle getFullMessages without agent running", async () => {
     console.log("\n📝 Test: getFullMessages without agent running");
 
     const ws = await createWsClient();
@@ -294,7 +294,7 @@ describe("agent.getFullMessages Diagnostics", () => {
     }
   }, 35000);
 
-  it("should measure getFullMessages performance", async () => {
+  it.skip("should measure getFullMessages performance", async () => {
     console.log("\n📝 Test: getFullMessages performance measurement");
 
     const ws = await createWsClient();

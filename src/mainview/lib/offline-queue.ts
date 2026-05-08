@@ -1,13 +1,17 @@
+import { createLogger } from "../../shared/lib/logger";
+
+const logger = createLogger("offline-queue");
+
 /**
  * 离线消息队列
- * 
+ *
  * 当 WebSocket 断线时，用户发送的消息暂存在队列中。
  * 连接恢复后自动 flush 发送。
- * 
+ *
  * 使用 localStorage 持久化，页面刷新不丢失。
  */
 
-const QUEUE_KEY = 'pi-agent-offline-queue';
+const QUEUE_KEY = "pi-agent-offline-queue";
 
 interface QueuedMessage {
   id: string;
@@ -25,7 +29,7 @@ class OfflineQueue {
     if (this.loaded) return;
     try {
       const raw = localStorage.getItem(QUEUE_KEY);
-      this.queue = raw ? JSON.parse(raw) : [];
+      this.queue = raw ? (JSON.parse(raw) as QueuedMessage[]) : [];
     } catch {
       this.queue = [];
     }
@@ -41,7 +45,7 @@ class OfflineQueue {
   }
 
   /** 入队一条消息 */
-  enqueue(message: Omit<QueuedMessage, 'id' | 'timestamp'>): QueuedMessage {
+  enqueue(message: Omit<QueuedMessage, "id" | "timestamp">): QueuedMessage {
     this.load();
     const item: QueuedMessage = {
       ...message,
@@ -50,7 +54,7 @@ class OfflineQueue {
     };
     this.queue.push(item);
     this.save();
-    console.log('[offline-queue] 消息已入队:', item.id, '队列长度:', this.queue.length);
+    logger.debug("消息已入队", { id: item.id, length: this.queue.length });
     return item;
   }
 
@@ -73,7 +77,7 @@ class OfflineQueue {
 
   /**
    * Flush: 逐条发送队列中的消息
-   * 
+   *
    * @param sendFn 实际发送函数（调用 RPC 发消息）
    * @returns 发送成功的数量
    */
@@ -81,7 +85,7 @@ class OfflineQueue {
     this.load();
     if (this.queue.length === 0) return 0;
 
-    console.log('[offline-queue] 开始 flush，队列长度:', this.queue.length);
+    logger.info("开始 flush", { length: this.queue.length });
     let sent = 0;
 
     while (this.queue.length > 0) {
@@ -95,13 +99,13 @@ class OfflineQueue {
           break;
         }
       } catch (err) {
-        console.warn('[offline-queue] flush 发送失败:', err);
+        logger.warn("flush 发送失败", { error: err });
         break;
       }
     }
 
     this.save();
-    console.log('[offline-queue] flush 完成，已发送:', sent, '剩余:', this.queue.length);
+    logger.info("flush 完成", { sent, remaining: this.queue.length });
     return sent;
   }
 

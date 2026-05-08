@@ -11,6 +11,7 @@ export default tseslint.config(
       'node_modules/**',
       'build/**',
       'dist/**',
+      'android/**',
       'eslint-plugin-rpc/**',
       'postcss.config.js',
       'tailwind.config.js',
@@ -76,6 +77,23 @@ export default tseslint.config(
     files: ['src/shared/lib/logger.ts'],
     rules: {
       'no-console': 'off',
+    },
+  },
+  {
+    files: ['src/mainview/public/sw.js'],
+    languageOptions: {
+      globals: {
+        self: 'readonly',
+        caches: 'readonly',
+        fetch: 'readonly',
+        URL: 'readonly',
+        Response: 'readonly',
+        Promise: 'readonly',
+        console: 'readonly',
+        setTimeout: 'readonly',
+        Event: 'readonly',
+        ProgressEvent: 'readonly',
+      },
     },
   },
   eslintConfigPrettier,

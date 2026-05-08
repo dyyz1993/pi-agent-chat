@@ -116,8 +116,8 @@ class NativeNotifyProvider extends WebNotifyProvider {
       const { PushNotifications } = await import("@capacitor/push-notifications");
       await PushNotifications.register();
       return new Promise((resolve) => {
-        PushNotifications.addListener("registration", (token: { value: string }) => {
-          resolve(token.value);
+        PushNotifications.addListener("registration", (token: unknown) => {
+          resolve((token as { value: string }).value);
         });
         PushNotifications.addListener("registrationError", () => {
           resolve(null);
@@ -137,8 +137,9 @@ class NativeNotifyProvider extends WebNotifyProvider {
         if (removed) return;
         return PushNotifications.addListener(
           "pushNotificationActionPerformed",
-          (event: { notification: { data?: NotifyData } }) => {
-            callback(event.notification.data ?? {});
+          (event: unknown) => {
+            const data = (event as { notification: { data?: NotifyData } }).notification.data ?? {};
+            callback(data);
           },
         ).then((handle) => {
           if (removed) {

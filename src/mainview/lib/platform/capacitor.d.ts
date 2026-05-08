@@ -4,7 +4,7 @@
  * Web 版本不安装 Capacitor，这些声明让 TypeScript 不报错。
  * 实际运行时通过 dynamic import() 加载，加载失败会 catch 降级。
  */
-declare module '@capacitor/camera' {
+declare module "@capacitor/camera" {
   export const Camera: {
     getPhoto(options: {
       quality?: number;
@@ -16,14 +16,14 @@ declare module '@capacitor/camera' {
   export const CameraSource: { Prompt: string; Camera: string; Photos: string };
 }
 
-declare module '@capacitor/push-notifications' {
+declare module "@capacitor/push-notifications" {
   interface PushNotificationActionPerformed {
-    notification: { data?: Record<string, any> };
+    notification: { data?: Record<string, unknown> };
   }
   interface PushNotificationToken {
     value: string;
   }
-  type PermissionStatus = 'granted' | 'denied' | 'prompt';
+  type PermissionStatus = "granted" | "denied" | "prompt";
   interface PushNotificationsPermissionResult {
     receive: PermissionStatus;
   }
@@ -39,25 +39,25 @@ declare module '@capacitor/push-notifications' {
     register(): Promise<void>;
     addListener(
       eventName: string,
-      listener: (event: any) => void,
+      listener: (event: unknown) => void,
     ): Promise<PluginListenerHandle>;
   };
 }
 
-declare module '@capacitor/local-notifications' {
+declare module "@capacitor/local-notifications" {
   export const LocalNotifications: {
     schedule(options: {
       notifications: Array<{
         title: string;
         body: string;
         id: number;
-        extra?: Record<string, any>;
+        extra?: Record<string, unknown>;
       }>;
     }): Promise<void>;
   };
 }
 
-declare module '@capacitor/preferences' {
+declare module "@capacitor/preferences" {
   export const Preferences: {
     get(options: { key: string }): Promise<{ value: string | null }>;
     set(options: { key: string; value: string }): Promise<void>;
@@ -66,23 +66,26 @@ declare module '@capacitor/preferences' {
   };
 }
 
-declare module '@capacitor/browser' {
+declare module "@capacitor/browser" {
   export const Browser: {
     open(options: { url: string }): Promise<void>;
   };
 }
 
-declare module '@capacitor/app' {
+declare module "@capacitor/app" {
   interface PluginListenerHandle {
     remove(): Promise<void>;
   }
   export const App: {
     getLaunchUrl(): Promise<{ url: string } | null>;
-    addListener(eventName: string, listener: (event: any) => void): Promise<PluginListenerHandle>;
+    addListener(
+      eventName: string,
+      listener: (event: unknown) => void,
+    ): Promise<PluginListenerHandle>;
   };
 }
 
-declare module '@capacitor/haptics' {
+declare module "@capacitor/haptics" {
   export const HapticsNotificationType: {
     Light: string;
     Warning: string;

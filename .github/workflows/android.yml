@@ -141,10 +141,7 @@ jobs:
       - run: bunx playwright install --with-deps chromium
 
       - name: Run screenshot tests
-        run: |
-          bun run hmr &
-          npx wait-on http://localhost:5173 --timeout 30000
-          bunx playwright test --config playwright.screenshot.config.ts || true
+        run: bunx playwright test --config playwright.screenshot.config.ts
         env:
           CI: true
 
@@ -190,10 +187,7 @@ jobs:
       - run: bunx playwright install --with-deps chromium
 
       - name: Run Native Demo tests
-        run: |
-          bun run hmr &
-          npx wait-on http://localhost:5173 --timeout 30000
-          bunx playwright test tests/native-demo.spec.ts --reporter=html
+        run: bunx playwright test tests/native-demo.spec.ts --reporter=html
         env:
           CI: true
 

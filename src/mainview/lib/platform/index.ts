@@ -8,7 +8,15 @@
  * - 渐进增强：原生能力不可用时自动降级为 Web 实现
  */
 
-export type Platform = 'web' | 'android' | 'ios' | 'desktop';
+export type Platform = "web" | "android" | "ios" | "desktop";
+
+type ExtendedWindow = Window & {
+  __electrobunBunBridge?: unknown;
+  Capacitor?: {
+    isNativePlatform?: () => boolean;
+    getPlatform?: () => "ios" | "android" | "web";
+  };
+};
 
 let _platform: Platform | null = null;
 
@@ -23,41 +31,41 @@ let _platform: Platform | null = null;
 export function getPlatform(): Platform {
   if (_platform) return _platform;
 
-  if (typeof window !== 'undefined') {
+  if (typeof window !== "undefined") {
     // Electrobun 桌面端
-    if ((window as any).__electrobunBunBridge) {
-      _platform = 'desktop';
+    if ((window as ExtendedWindow).__electrobunBunBridge) {
+      _platform = "desktop";
       return _platform;
     }
 
     // Capacitor 原生 App
-    const cap = (window as any).Capacitor;
+    const cap = (window as ExtendedWindow).Capacitor;
     if (cap?.isNativePlatform?.()) {
-      const raw = cap.getPlatform();
-      _platform = raw === 'ios' ? 'ios' : 'android';
+      const raw = cap.getPlatform?.();
+      _platform = raw === "ios" ? "ios" : "android";
       return _platform;
     }
   }
 
   // 纯 Web 浏览器
-  _platform = 'web';
+  _platform = "web";
   return _platform;
 }
 
 /** 当前是否为原生平台（Android / iOS） */
 export function isNative(): boolean {
   const p = getPlatform();
-  return p === 'android' || p === 'ios';
+  return p === "android" || p === "ios";
 }
 
 /** 当前是否为桌面端（Electrobun） */
 export function isDesktop(): boolean {
-  return getPlatform() === 'desktop';
+  return getPlatform() === "desktop";
 }
 
 /** 当前是否为纯 Web 浏览器 */
 export function isWeb(): boolean {
-  return getPlatform() === 'web';
+  return getPlatform() === "web";
 }
 
-export { platformBridge } from './bridge';
+export { platformBridge } from "./bridge";

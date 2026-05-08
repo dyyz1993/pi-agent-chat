@@ -123,27 +123,37 @@ describe("chat pagination", () => {
   it("initial load should request only recent N messages", async () => {
     const allMessages = makeRpcResult(120);
     (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
-      messages: allMessages.messages,
+      messages: allMessages.messages.slice(-PAGE_SIZE),
       customEntries: [],
+      hasMore: true,
+      totalCount: 120,
     });
 
     await useChatStore.getState().loadSessionMessages("test-session");
 
     const msgs = useChatStore.getState().messagesBySession["test-session"];
     expect(msgs).toBeDefined();
-    expect(msgs.length).toBeLessThanOrEqual(120);
+    expect(msgs.length).toBeLessThanOrEqual(PAGE_SIZE);
     expect(apiClient.call).toHaveBeenCalledWith(
-      "agent.getFullMessages",
-      expect.objectContaining({ sessionId: "test-session" }),
+      "agent.getMessagesPage",
+      expect.objectContaining({ sessionId: "test-session", limit: PAGE_SIZE }),
     );
   });
 
   it("loadMoreMessages should prepend older messages", async () => {
     const allMessages = makeRpcResult(100);
-    (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
-      messages: allMessages.messages,
-      customEntries: [],
-    });
+    (apiClient.call as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({
+        messages: allMessages.messages.slice(-PAGE_SIZE),
+        customEntries: [],
+        hasMore: true,
+        totalCount: 100,
+      })
+      .mockResolvedValueOnce({
+        messages: allMessages.messages.slice(0, PAGE_SIZE),
+        hasMore: false,
+        totalCount: 100,
+      });
 
     await useChatStore.getState().loadSessionMessages("test-session");
 
@@ -165,6 +175,8 @@ describe("chat pagination", () => {
     (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
       messages: allMessages.messages,
       customEntries: [],
+      hasMore: false,
+      totalCount: 30,
     });
 
     await useChatStore.getState().loadSessionMessages("test-session");
@@ -186,6 +198,8 @@ describe("chat pagination", () => {
     (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
       messages: allMessages.messages,
       customEntries: [],
+      hasMore: false,
+      totalCount: 30,
     });
 
     await useChatStore.getState().loadSessionMessages("test-session");
@@ -207,8 +221,10 @@ describe("chat pagination", () => {
   it("should track hasMoreMessages based on initial load result", async () => {
     const manyMessages = makeRpcResult(200);
     (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
-      messages: manyMessages.messages,
+      messages: manyMessages.messages.slice(-PAGE_SIZE),
       customEntries: [],
+      hasMore: true,
+      totalCount: 200,
     });
 
     await useChatStore.getState().loadSessionMessages("test-session");
@@ -220,9 +236,11 @@ describe("chat pagination", () => {
 
   it("isLoadingMore should be true during loadMoreMessages and false after", async () => {
     const manyMessages = makeRpcResult(200);
-    (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
-      messages: manyMessages.messages,
+    (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      messages: manyMessages.messages.slice(-PAGE_SIZE),
       customEntries: [],
+      hasMore: true,
+      totalCount: 200,
     });
 
     await useChatStore.getState().loadSessionMessages("test-session");
@@ -231,7 +249,12 @@ describe("chat pagination", () => {
     (apiClient.call as ReturnType<typeof vi.fn>).mockImplementation(
       () =>
         new Promise((r) => {
-          resolveLoadMore = () => r({ messages: manyMessages.messages, customEntries: [] });
+          resolveLoadMore = () =>
+            r({
+              messages: manyMessages.messages.slice(0, PAGE_SIZE),
+              hasMore: true,
+              totalCount: 200,
+            });
         }),
     );
 

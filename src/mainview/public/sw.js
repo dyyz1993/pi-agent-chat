@@ -1,6 +1,6 @@
 /**
  * Service Worker — 离线缓存策略
- * 
+ *
  * 策略：
  * - App Shell（HTML/JS/CSS）: Cache First
  * - API 请求: Network First
@@ -72,7 +72,7 @@ self.addEventListener('fetch', (event) => {
 async function cacheFirst(request) {
   const cached = await caches.match(request);
   if (cached) return cached;
-  
+
   try {
     const response = await fetch(request);
     if (response.ok) {
@@ -80,7 +80,7 @@ async function cacheFirst(request) {
       cache.put(request, response.clone());
     }
     return response;
-  } catch (e) {
+  } catch {
     return new Response('Offline', { status: 503 });
   }
 }
@@ -93,7 +93,7 @@ async function networkFirst(request) {
       cache.put(request, response.clone());
     }
     return response;
-  } catch (e) {
+  } catch {
     const cached = await caches.match(request);
     if (cached) return cached;
     return new Response('Offline', { status: 503 });
