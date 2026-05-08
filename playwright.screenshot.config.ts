@@ -1,41 +1,42 @@
-import { defineConfig, devices } from '@playwright/test';
+import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
-  testDir: './tests/screenshots',
+  testDir: "./tests/screenshots",
+  testMatch: "**/*.spec.ts",
   fullyParallel: true,
   retries: 0,
-  reporter: 'html',
+  reporter: "html",
   use: {
-    baseURL: 'http://localhost:5173',
-    trace: 'on-first-retry',
-    screenshot: 'on',
+    baseURL: "http://localhost:5173",
+    trace: "on-first-retry",
+    screenshot: "on",
     viewport: { width: 393, height: 852 },
   },
   projects: [
     {
-      name: 'mobile-chrome',
+      name: "mobile-chrome",
       use: {
-        ...devices['Pixel 8'],
-        screenshot: 'on',
+        ...devices["Pixel 8"],
+        screenshot: "on",
       },
     },
     {
-      name: 'mobile-safari',
+      name: "mobile-safari",
       use: {
-        ...devices['iPhone 15 Pro'],
-        screenshot: 'on',
+        ...devices["iPhone 15 Pro"],
+        screenshot: "on",
       },
     },
     {
-      name: 'tablet',
+      name: "tablet",
       use: {
-        ...devices['iPad Pro'],
-        screenshot: 'on',
+        ...devices["iPad Pro"],
+        screenshot: "on",
       },
     },
   ],
   webServer: {
-    command: 'bun run hmr',
+    command: "bun run hmr",
     port: 5173,
     reuseExistingServer: true,
   },
