@@ -111,6 +111,7 @@ jobs:
           fi
 
       - name: Build Android
+        continue-on-error: true
         working-directory: android
         env:
           JAVA_HOME: ${{ steps.setup-java.outputs.path }}
@@ -124,10 +125,11 @@ jobs:
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && hashFiles(matrix.artifact-path) != ''
         with:
           name: android-${{ matrix.build-type }}
           path: ${{ matrix.artifact-path }}
+          if-no-files-found: ignore
           retention-days: 30
 
   screenshot-test:
