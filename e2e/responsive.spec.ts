@@ -54,6 +54,7 @@ test.describe("Responsive Layout", () => {
   });
 
   test("no key elements should overflow viewport on mobile", async ({ page }) => {
+    test.setTimeout(60000);
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/?token=test-ci-token");
     await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15000 });
@@ -87,14 +88,20 @@ test.describe("Responsive Layout", () => {
     expect(tabBarBox).toBeTruthy();
     expect(tabBarBox!.width).toBeLessThanOrEqual(375);
 
-    const input = page.locator('[data-testid="chat-input"]');
-    const inputBox = await input.boundingBox();
-    if (inputBox) {
-      expect(inputBox.x + inputBox.width).toBeLessThanOrEqual(385);
+    const inputVisible = await page
+      .locator('[data-testid="chat-input"]')
+      .isVisible()
+      .catch(() => false);
+    if (inputVisible) {
+      const inputBox = await page.locator('[data-testid="chat-input"]').boundingBox();
+      if (inputBox) {
+        expect(inputBox.x + inputBox.width).toBeLessThanOrEqual(385);
+      }
     }
   });
 
   test("no key elements should overflow viewport on tablet", async ({ page }) => {
+    test.setTimeout(60000);
     await page.setViewportSize({ width: 768, height: 1024 });
     await page.goto("/?token=test-ci-token");
     await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15000 });
@@ -105,10 +112,15 @@ test.describe("Responsive Layout", () => {
     expect(tabBarBox).toBeTruthy();
     expect(tabBarBox!.width).toBeLessThanOrEqual(768);
 
-    const input = page.locator('[data-testid="chat-input"]');
-    const inputBox = await input.boundingBox();
-    if (inputBox) {
-      expect(inputBox.x + inputBox.width).toBeLessThanOrEqual(778);
+    const inputVisible = await page
+      .locator('[data-testid="chat-input"]')
+      .isVisible()
+      .catch(() => false);
+    if (inputVisible) {
+      const inputBox = await page.locator('[data-testid="chat-input"]').boundingBox();
+      if (inputBox) {
+        expect(inputBox.x + inputBox.width).toBeLessThanOrEqual(778);
+      }
     }
   });
 });

@@ -107,6 +107,17 @@ jobs:
             echo "Placeholder - run cap:add:android locally first" > android/app/build/outputs/apk/debug/README.txt
           fi
 
+      - name: Pre-download Gradle with retry
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          for i in 1 2 3; do
+            echo "Attempt $i to download Gradle..."
+            ./gradlew --version && break
+            echo "Attempt $i failed, retrying in 10s..."
+            sleep 10
+          done
+
       - name: Build Android
         working-directory: android
         run: |
