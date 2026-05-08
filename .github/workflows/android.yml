@@ -81,6 +81,13 @@ jobs:
 
       - uses: android-actions/setup-android@v3
 
+      - name: Cache Gradle distribution
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle/wrapper/dists
+          key: gradle-dists-${{ hashFiles('android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-dists-
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
