@@ -200,6 +200,21 @@ export interface AgentMethods {
     params: { sessionId: string };
     result: { tools: Array<{ name: string; label: string; description: string }> };
   };
+  "agent.getMcpServers": {
+    params: { sessionId: string };
+    result: {
+      servers: Array<{
+        name: string;
+        status: "connecting" | "connected" | "error" | "disconnected";
+        error?: string;
+        tools: Array<{
+          originalName: string;
+          fullName: string;
+          description: string;
+        }>;
+      }>;
+    };
+  };
   "agent.getContextUsage": {
     params: { sessionId: string };
     result: { tokens: number | null; contextWindow: number; percent: number | null };
@@ -334,7 +349,14 @@ export type AgentEvent =
       delayMs: number;
       errorMessage: string;
     }
-  | { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string };
+  | { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string }
+  | {
+      type: "mcp_connection_change";
+      name: string;
+      status: "connecting" | "connected" | "error" | "disconnected";
+      error?: string;
+      tools: Array<{ originalName: string; fullName: string; description: string }>;
+    };
 
 export type { AssistantMessage, AssistantMessageEvent, TextContent };
 

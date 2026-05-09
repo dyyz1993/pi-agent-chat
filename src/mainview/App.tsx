@@ -188,12 +188,6 @@ function App() {
             addLog(
               `Restored ${savedTabs.length} tabs from server config (${sessions.length} sessions)`,
             );
-            if (sessions.length > 0) {
-              const sid = sessions[0].sessionId;
-              useSessionStore.getState().setActiveSession(sid);
-            } else {
-              await useSessionStore.getState().createNewSession();
-            }
           }
           if (!cancelled) setRestoring(false);
           return;

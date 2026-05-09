@@ -1,0 +1,11 @@
+{
+  "mcp": {
+    "servers": {
+      "knowledge-base": {
+        "type": "local",
+        "command": ["npx", "@dyyz1993/kb-mcp", "--stdio"],
+        "disabled": false
+      }
+    }
+  }
+}

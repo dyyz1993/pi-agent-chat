@@ -219,6 +219,10 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     return m.getTools(params.sessionId) as Promise<R<"agent.getTools">>;
   });
 
+  r("agent.getMcpServers", async (params) => {
+    return m.getMcpServers(params.sessionId) as Promise<R<"agent.getMcpServers">>;
+  });
+
   r("agent.getContextUsage", async (params) => {
     return m.getContextUsage(params.sessionId) as Promise<R<"agent.getContextUsage">>;
   });

@@ -70,5 +70,10 @@
   "disableModelInvocation": "禁用模型自动调用",
   "skillDisabled": "已禁用",
   "pluginTools": "({{count}} tools)",
-  "pluginCommands": "({{count}} cmds)"
+  "pluginCommands": "({{count}} cmds)",
+  "loading": "加载中...",
+  "enableMcp": "启用",
+  "disableMcp": "禁用",
+  "mcpToolCount": "({{count}} tools)",
+  "noMcpTools": "无工具"
 }

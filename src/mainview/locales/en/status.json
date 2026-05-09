@@ -70,5 +70,10 @@
   "disableModelInvocation": "Disable model auto-invocation",
   "skillDisabled": "Disabled",
   "pluginTools": "({{count}} tools)",
-  "pluginCommands": "({{count}} cmds)"
+  "pluginCommands": "({{count}} cmds)",
+  "loading": "Loading...",
+  "enableMcp": "Enable",
+  "disableMcp": "Disable",
+  "mcpToolCount": "({{count}} tools)",
+  "noMcpTools": "No tools"
 }

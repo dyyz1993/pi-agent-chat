@@ -1,7 +1,7 @@
 import { useMemo, memo } from "react";
-import type { Virtualizer } from "@tanstack/react-virtual";
 import { Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { Virtualizer, type VirtualizerHandle } from "virtua";
 import { MessageCard } from "./MessageCard";
 import type { ChatMessage } from "../../types";
 import { ALL_MEMORY_TYPE_KEYS } from "./memory-config";
@@ -57,8 +57,9 @@ function buildCardMeta(
 interface MessageListViewProps {
   messages: ChatMessage[];
   scrollRef?: React.RefObject<HTMLDivElement | null>;
+  vlistRef?: React.RefObject<VirtualizerHandle> | React.Ref<VirtualizerHandle>;
   onScroll?: () => void;
-  virtualizer?: Virtualizer<HTMLDivElement, Element>;
+  onScrollEnd?: () => void;
   isLoadingMore?: boolean;
   hasMoreMessages?: boolean;
 }
@@ -66,8 +67,9 @@ interface MessageListViewProps {
 export const MessageListView = memo(function MessageListView({
   messages,
   scrollRef,
+  vlistRef,
   onScroll,
-  virtualizer,
+  onScrollEnd,
   isLoadingMore,
   hasMoreMessages,
 }: MessageListViewProps) {
@@ -80,7 +82,6 @@ export const MessageListView = memo(function MessageListView({
         ref={scrollRef as React.Ref<HTMLDivElement>}
         className="h-full overflow-y-auto overflow-x-hidden overscroll-y-contain"
         style={{ overflowAnchor: "none" }}
-        onScroll={onScroll}
       >
         <div className="flex flex-col items-center justify-center h-full text-gray-600 text-sm gap-2">
           <p>{t("startConversation")}</p>
@@ -89,64 +90,15 @@ export const MessageListView = memo(function MessageListView({
     );
   }
 
-  if (virtualizer) {
-    return (
-      <div
-        ref={(el) => {
-          if (scrollRef) (scrollRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
-        }}
-        className="h-full overflow-y-auto overflow-x-hidden overscroll-y-contain"
-        style={{ overflowAnchor: "none" }}
-        onScroll={onScroll}
-      >
-        {(isLoadingMore ?? hasMoreMessages) && (
-          <div className="flex items-center justify-center py-2">
-            {isLoadingMore ? (
-              <Loader2 className="w-4 h-4 text-gray-500 animate-spin" />
-            ) : hasMoreMessages ? (
-              <span className="text-[10px] text-gray-600">{t("scrollUpToLoadMore")}</span>
-            ) : null}
-          </div>
-        )}
-        <div style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}>
-          {virtualizer.getVirtualItems().map((vr) => {
-            const msg = messages[vr.index];
-            const meta = cardMeta.get(msg.id);
-            return (
-              <div
-                key={msg.id}
-                data-index={vr.index}
-                data-msg-id={msg.id}
-                ref={virtualizer.measureElement}
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  width: "100%",
-                  transform: `translateY(${vr.start}px)`,
-                }}
-              >
-                <MessageCard
-                  message={msg}
-                  cardLabel={meta?.cardLabel}
-                  prevBarColor={meta?.prevBarColor}
-                />
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div
       ref={scrollRef as React.Ref<HTMLDivElement>}
-      className="flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain"
+      className="h-full overflow-y-auto overflow-x-hidden overscroll-y-contain"
       style={{
         scrollbarWidth: "thin",
         scrollbarColor: "transparent transparent",
         overflowAnchor: "none",
+        willChange: "scroll-position",
       }}
       onMouseEnter={(e) => {
         (e.currentTarget as HTMLElement).style.scrollbarColor =
@@ -155,21 +107,36 @@ export const MessageListView = memo(function MessageListView({
       onMouseLeave={(e) => {
         (e.currentTarget as HTMLElement).style.scrollbarColor = "transparent transparent";
       }}
-      onScroll={onScroll}
     >
-      <div className="py-0.5 pl-2 pr-3">
+      {(isLoadingMore ?? hasMoreMessages) && (
+        <div className="flex items-center justify-center py-2">
+          {isLoadingMore ? (
+            <Loader2 className="w-4 h-4 text-gray-500 animate-spin" />
+          ) : hasMoreMessages ? (
+            <span className="text-[10px] text-gray-600">{t("scrollUpToLoadMore")}</span>
+          ) : null}
+        </div>
+      )}
+      <Virtualizer
+        ref={vlistRef}
+        scrollRef={scrollRef as React.RefObject<HTMLDivElement | null>}
+        bufferSize={800}
+        onScroll={() => onScroll?.()}
+        onScrollEnd={() => onScrollEnd?.()}
+      >
         {messages.map((msg) => {
           const meta = cardMeta.get(msg.id);
           return (
-            <MessageCard
-              key={msg.id}
-              message={msg}
-              cardLabel={meta?.cardLabel}
-              prevBarColor={meta?.prevBarColor}
-            />
+            <div key={msg.id} data-msg-id={msg.id} className="py-0.5 pl-2 pr-3">
+              <MessageCard
+                message={msg}
+                cardLabel={meta?.cardLabel}
+                prevBarColor={meta?.prevBarColor}
+              />
+            </div>
           );
         })}
-      </div>
+      </Virtualizer>
     </div>
   );
 });

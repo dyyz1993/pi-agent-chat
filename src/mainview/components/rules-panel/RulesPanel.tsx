@@ -127,7 +127,7 @@ function RuleCard({
         onClick={onToggle}
         className="w-full text-left px-2.5 py-1.5 hover:bg-gray-200/30 dark:hover:bg-gray-800/20 transition-colors"
       >
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 min-w-0">
           {isInjected ? (
             <CheckCircle2 className="w-2.5 h-2.5 text-green-400 shrink-0" />
           ) : onTriggered ? (
@@ -135,24 +135,30 @@ function RuleCard({
           ) : (
             <Clock className="w-2.5 h-2.5 text-gray-400 dark:text-gray-600 shrink-0" />
           )}
-          <span className="text-[11px] text-gray-800 dark:text-gray-200 truncate flex-1">
+          <span className="text-[11px] text-gray-800 dark:text-gray-200 truncate flex-1 min-w-0">
             {rule.title}
           </span>
-          <span className={`text-[9px] px-1 py-0.5 rounded ${sev.cls}`}>{t(sev.key)}</span>
+          <span className={`text-[9px] px-1 py-0.5 rounded shrink-0 ${sev.cls}`}>{t(sev.key)}</span>
         </div>
-        <div className="flex items-center gap-2 mt-0.5">
-          <span className="text-[9px] text-gray-500 dark:text-gray-600">{rule.name}</span>
-          <span className="text-[9px] text-gray-300 dark:text-gray-700">|</span>
-          <span className="text-[9px] text-gray-500 dark:text-gray-600">
-            {t(SCOPE_KEYS[rule.scope] || rule.scope)}
+        <div className="grid grid-cols-[auto_auto_1fr] items-center gap-x-1.5 gap-y-0 mt-0.5">
+          <span className="text-[9px] text-gray-500 dark:text-gray-600 truncate col-start-1">
+            {rule.name}
           </span>
-          {rule.isUnconditional ? (
-            <span className="text-[9px] text-green-500/70">{t("alwaysActive")}</span>
-          ) : (
-            <span className="text-[9px] text-gray-500 dark:text-gray-600 truncate">
-              {rule.globs.join(", ")}
-            </span>
-          )}
+          <span className="text-[9px] text-gray-300 dark:text-gray-700 col-start-2">|</span>
+          <span className="text-[9px] text-gray-500 dark:text-gray-600 truncate col-start-3 min-w-0">
+            {t(SCOPE_KEYS[rule.scope] || rule.scope)}
+            {!rule.isUnconditional && rule.globs.length > 0 && (
+              <>
+                <span className="text-gray-300 dark:text-gray-700 mx-1">·</span>
+                <code className="text-[9px] text-indigo-400/70 truncate">
+                  {rule.globs.join(", ")}
+                </code>
+              </>
+            )}
+            {rule.isUnconditional && (
+              <span className="text-[9px] text-green-500/70 ml-1">{t("alwaysActive")}</span>
+            )}
+          </span>
         </div>
       </button>
 
@@ -235,19 +241,23 @@ function LifecycleEntryCard({ entry }: { entry: LifecycleEntry }) {
       {entry.details?.scannedDirs && entry.details.scannedDirs.length > 0 && (
         <div className="pl-5 space-y-0.5">
           {entry.details.scannedDirs.map((d) => (
-            <div key={d.dir} className="flex items-center gap-1 text-gray-500 dark:text-gray-600">
-              <FolderOpen className="w-2 h-2 shrink-0" />
-              <span className="truncate">{d.dir}</span>
-              <span className="text-gray-400 dark:text-gray-700">({d.fileCount})</span>
+            <div key={d.dir} className="space-y-0.5">
+              <div className="flex items-center gap-1 text-gray-500 dark:text-gray-600 min-w-0">
+                <FolderOpen className="w-2 h-2 shrink-0" />
+                <span className="truncate min-w-0">{d.dir}</span>
+                <span className="text-gray-400 dark:text-gray-700 shrink-0">({d.fileCount})</span>
+              </div>
               {d.ruleNames.length > 0 && (
-                <span className="text-indigo-400/70 truncate">{d.ruleNames.join(", ")}</span>
+                <div className="pl-3 text-[9px] text-indigo-400/70 truncate">
+                  {d.ruleNames.join(", ")}
+                </div>
               )}
             </div>
           ))}
         </div>
       )}
       {entry.details?.configSource && (
-        <div className="pl-5 text-gray-500 dark:text-gray-600 truncate">
+        <div className="pl-5 text-gray-500 dark:text-gray-600 truncate min-w-0">
           config: {entry.details.configSource}
         </div>
       )}

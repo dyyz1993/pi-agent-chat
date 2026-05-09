@@ -9,10 +9,22 @@ export interface DisplaySettings {
   showTimeline: boolean;
 }
 
+export interface RetryConfig {
+  enabled: boolean;
+  maxRetries: number;
+  baseDelayMs: number;
+  maxDelayMs: number;
+}
+
 interface SettingsActions {
   toggle: (key: keyof DisplaySettings) => void;
   setAll: (settings: Partial<DisplaySettings>) => void;
   reset: () => void;
+}
+
+interface RetryActions {
+  setRetryConfig: (config: Partial<RetryConfig>) => void;
+  resetRetryConfig: () => void;
 }
 
 const DEFAULTS: DisplaySettings = {
@@ -21,6 +33,13 @@ const DEFAULTS: DisplaySettings = {
   showThinking: true,
   collapseThinking: true,
   showTimeline: true,
+};
+
+export const RETRY_DEFAULTS: RetryConfig = {
+  enabled: true,
+  maxRetries: 20,
+  baseDelayMs: 5000,
+  maxDelayMs: 600000,
 };
 
 export const useSettingsStore = create<DisplaySettings & SettingsActions>()(
@@ -36,3 +55,9 @@ export const useSettingsStore = create<DisplaySettings & SettingsActions>()(
     },
   ),
 );
+
+export const useRetryConfigStore = create<RetryConfig & RetryActions>()((set) => ({
+  ...RETRY_DEFAULTS,
+  setRetryConfig: (config) => set(config),
+  resetRetryConfig: () => set(RETRY_DEFAULTS),
+}));

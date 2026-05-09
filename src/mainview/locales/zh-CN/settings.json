@@ -12,5 +12,16 @@
   "collapseThinkingDesc": "思考完成后自动折叠思考块",
   "showTimeline": "显示时间线",
   "showTimelineDesc": "在消息区域展示活动时间线",
-  "reset": "恢复默认设置"
+  "reset": "恢复默认设置",
+  "retryTitle": "自动重试",
+  "retryEnabled": "启用自动重试",
+  "retryEnabledDesc": "模型 API 调用失败时自动重试（限流、超时、5xx 错误）",
+  "retryMaxRetries": "最大重试次数",
+  "retryMaxRetriesDesc": "失败后的最大重试次数",
+  "retryBaseDelay": "基础延迟",
+  "retryBaseDelayDesc": "首次重试前的等待时间",
+  "retryMaxDelay": "最大延迟",
+  "retryMaxDelayDesc": "指数退避延迟的上限",
+  "retryPreview": "退避时间表（指数递增）",
+  "retryTotal": "总时长"
 }

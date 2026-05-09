@@ -6,6 +6,7 @@ export type LogModule =
   | "chat-store"
   | "event-handler"
   | "session"
+  | "session-perf"
   | "file"
   | "timer"
   | "git"
@@ -14,7 +15,8 @@ export type LogModule =
   | "config"
   | "snapshot"
   | "subagent"
-  | "linked-projects";
+  | "linked-projects"
+  | "mcp";
 type LogLevel = "debug" | "info" | "warn" | "error";
 
 interface LogEntry {

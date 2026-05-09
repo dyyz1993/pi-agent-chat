@@ -26,6 +26,20 @@ export interface SkillInfo {
   scope: SkillScope;
 }
 
+export interface MCPToolInfo {
+  name: string;
+  description: string;
+}
+
+export interface MCPServerInfo {
+  name: string;
+  status: "connecting" | "connected" | "error" | "disconnected";
+  error?: string;
+  toolCount: number;
+  tools: MCPToolInfo[];
+  scope: "global" | "project";
+}
+
 export function derivePluginScope(filePath: string): PluginScope {
   const home = typeof process !== "undefined" && process.env?.HOME ? process.env.HOME : "";
   if (!home) return "project";
@@ -56,36 +70,39 @@ interface StatusState {
   yoloEnabled: boolean;
   planMode: boolean;
   shellActive: boolean;
-  mcpTools: Array<{ name: string; status: "ready" | "error" | "loading" }>;
+  mcpServers: MCPServerInfo[];
   lspStatus: "connected" | "disconnected" | "connecting";
   plugins: PluginInfo[];
   skills: SkillInfo[];
   expandedSkill: string | null;
   expandedPlugin: string | null;
+  expandedMcpServer: string | null;
   collapsedSections: Set<StatusSection>;
 
   toggleYolo: () => void;
   togglePlan: () => void;
   toggleSection: (section: StatusSection) => void;
-  setMcpTools: (tools: StatusState["mcpTools"]) => void;
+  setMcpServers: (servers: StatusState["mcpServers"]) => void;
   setLspStatus: (status: StatusState["lspStatus"]) => void;
   setPlugins: (plugins: StatusState["plugins"]) => void;
   setSkills: (skills: StatusState["skills"]) => void;
   toggleSkillExpanded: (name: string) => void;
   toggleSkillEnabled: (name: string) => void;
   togglePluginExpanded: (path: string) => void;
+  toggleMcpExpanded: (name: string) => void;
 }
 
 export const useStatusStore = create<StatusState>((set) => ({
   yoloEnabled: false,
   planMode: true,
   shellActive: false,
-  mcpTools: [],
+  mcpServers: [],
   lspStatus: "disconnected",
   plugins: [],
   skills: [],
   expandedSkill: null,
   expandedPlugin: null,
+  expandedMcpServer: null,
   collapsedSections: new Set(),
 
   toggleYolo: () => set((s) => ({ yoloEnabled: !s.yoloEnabled })),
@@ -97,7 +114,7 @@ export const useStatusStore = create<StatusState>((set) => ({
       else next.add(section);
       return { collapsedSections: next };
     }),
-  setMcpTools: (tools) => set({ mcpTools: tools }),
+  setMcpServers: (servers) => set({ mcpServers: servers }),
   setLspStatus: (status) => set({ lspStatus: status }),
   setPlugins: (plugins) => set({ plugins }),
   setSkills: (skills) => set({ skills }),
@@ -119,4 +136,6 @@ export const useStatusStore = create<StatusState>((set) => ({
     }),
   togglePluginExpanded: (path) =>
     set((s) => ({ expandedPlugin: s.expandedPlugin === path ? null : path })),
+  toggleMcpExpanded: (name) =>
+    set((s) => ({ expandedMcpServer: s.expandedMcpServer === name ? null : name })),
 }));

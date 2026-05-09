@@ -1,13 +1,13 @@
 import { useRef, useCallback, useEffect, useState } from "react";
-import type { Virtualizer } from "@tanstack/react-virtual";
+import type { VirtualizerHandle } from "virtua";
 import { useScrollIntent } from "./use-scroll-intent";
 
 interface UseActiveScrollTrackerOptions {
   scrollRef: React.RefObject<HTMLDivElement | null>;
-  virtualizer: Virtualizer<HTMLDivElement, Element>;
+  vlistRef: React.RefObject<VirtualizerHandle | null>;
   messageIds: string[];
   sessionId: string | undefined;
-  setActive: (id: string | null, anchor?: "top" | "bottom") => void;
+  setActive: (id: string | null) => void;
   streamVersion: number;
   historyLoadVersion?: number;
 }
@@ -18,7 +18,7 @@ const ACTIVE_THROTTLE_MS = 200;
 
 export function useActiveScrollTracker({
   scrollRef,
-  virtualizer,
+  vlistRef,
   messageIds,
   sessionId,
   setActive,
@@ -29,11 +29,10 @@ export function useActiveScrollTracker({
   const prevCountRef = useRef(0);
   const prevStreamRef = useRef(0);
   const lastActiveTimeRef = useRef(0);
+  const lastActiveIdRef = useRef<string | null>(null);
   const didInitRef = useRef(false);
   const prevSessionRef = useRef(sessionId);
   const lastScrollTopRef = useRef(0);
-  const scrollDirRef = useRef<"up" | "down">("down");
-  const isProgrammaticScrollRef = useRef(false);
 
   const isAtTopRef = useRef(true);
   const isAtBottomRef = useRef(true);
@@ -67,16 +66,22 @@ export function useActiveScrollTracker({
   }, []);
 
   const isNearBottom = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return true;
-    return el.scrollHeight - el.scrollTop - el.clientHeight < BOTTOM_THRESHOLD_PX;
-  }, [scrollRef]);
+    const handle = vlistRef.current;
+    if (!handle) return true;
+    return handle.scrollSize - handle.scrollOffset - handle.viewportSize < BOTTOM_THRESHOLD_PX;
+  }, [vlistRef]);
 
   const isNearTop = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return true;
-    return el.scrollTop < TOP_THRESHOLD_PX;
-  }, [scrollRef]);
+    const handle = vlistRef.current;
+    if (!handle) return true;
+    return handle.scrollOffset < TOP_THRESHOLD_PX;
+  }, [vlistRef]);
+
+  const findVisibleIndex = useCallback((): number => {
+    const handle = vlistRef.current;
+    if (!handle) return -1;
+    return handle.findItemIndex(handle.scrollOffset + 1);
+  }, [vlistRef]);
 
   const updateActiveFromScroll = useCallback(() => {
     const now = Date.now();
@@ -85,58 +90,42 @@ export function useActiveScrollTracker({
 
     const ids = messageIdsRef.current;
     if (ids.length === 0) return;
-    const range = virtualizer.range;
-    if (!range) return;
 
-    const el = scrollRef.current;
-    if (el) {
-      const delta = el.scrollTop - lastScrollTopRef.current;
-      if (Math.abs(delta) > 2) {
-        scrollDirRef.current = delta > 0 ? "down" : "up";
+    const idx = findVisibleIndex();
+    if (idx >= 0 && idx < ids.length) {
+      const id = ids[idx];
+      if (id !== lastActiveIdRef.current) {
+        lastActiveIdRef.current = id;
+        setActive(id);
       }
     }
-
-    const idx = scrollDirRef.current === "down" ? range.startIndex : range.endIndex;
-    if (idx >= 0 && idx < ids.length) {
-      setActive(ids[idx], scrollDirRef.current === "down" ? "top" : "bottom");
-    }
-  }, [virtualizer, setActive, scrollRef]);
+  }, [findVisibleIndex, setActive]);
 
   const doScrollToBottom = useCallback(() => {
-    const el = scrollRef.current;
+    const handle = vlistRef.current;
     const ids = messageIdsRef.current;
-    if (!el || ids.length === 0) return;
-    isProgrammaticScrollRef.current = true;
-    el.scrollTop = el.scrollHeight;
+    if (!handle || ids.length === 0) return;
+    if (userScrolledUpRef.current) return;
+    handle.scrollToIndex(ids.length - 1, { align: "end" });
     setActive(ids[ids.length - 1]);
-  }, [scrollRef, setActive]);
+  }, [vlistRef, setActive]);
 
   const scrollToMessage = useCallback(
     (msgId: string) => {
+      const handle = vlistRef.current;
       const ids = messageIdsRef.current;
+      if (!handle) return;
       const index = ids.indexOf(msgId);
       if (index === -1) return;
 
-      const el = scrollRef.current;
-      if (!el) return;
-
       setActive(msgId);
-
-      const target = el.querySelector<HTMLElement>(`[data-msg-id="${msgId}"]`);
-      if (target) {
-        const elRect = el.getBoundingClientRect();
-        const targetRect = target.getBoundingClientRect();
-        const offset = targetRect.top - elRect.top + el.scrollTop - 8;
-        el.scrollTo({ top: offset, behavior: "smooth" });
-      } else {
-        virtualizer.scrollToIndex(index, { align: "start", behavior: "smooth" });
-      }
+      handle.scrollToIndex(index, { smooth: true });
 
       if (msgId === ids[ids.length - 1]) {
         userScrolledUpRef.current = false;
       }
     },
-    [scrollRef, virtualizer, setActive],
+    [vlistRef, setActive],
   );
 
   const handleScroll = useCallback(() => {
@@ -146,17 +135,10 @@ export function useActiveScrollTracker({
     isAtTopRef.current = nearTop;
     isAtBottomRef.current = nearBottom;
 
-    if (isProgrammaticScrollRef.current) {
-      isProgrammaticScrollRef.current = false;
-      lastScrollTopRef.current = scrollRef.current?.scrollTop ?? 0;
-      syncToolbarState();
-      return;
-    }
-
-    const el = scrollRef.current;
-    if (el) {
-      const delta = el.scrollTop - lastScrollTopRef.current;
-      lastScrollTopRef.current = el.scrollTop;
+    const handle = vlistRef.current;
+    if (handle) {
+      const delta = handle.scrollOffset - lastScrollTopRef.current;
+      lastScrollTopRef.current = handle.scrollOffset;
 
       if (delta < -3 && autoScrollEnabledRef.current) {
         autoScrollEnabledRef.current = false;
@@ -168,7 +150,62 @@ export function useActiveScrollTracker({
     }
 
     syncToolbarState();
-  }, [updateActiveFromScroll, isNearBottom, isNearTop, syncToolbarState, scrollRef]);
+  }, [updateActiveFromScroll, isNearBottom, isNearTop, syncToolbarState, vlistRef]);
+
+  const handleScrollEnd = useCallback(() => {
+    const nearBottom = isNearBottom();
+    if (nearBottom) {
+      userScrolledUpRef.current = false;
+      autoScrollEnabledRef.current = true;
+    }
+    syncToolbarState();
+  }, [isNearBottom, syncToolbarState]);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    let scrollTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const onNativeScroll = () => {
+      const handle = vlistRef.current;
+      if (!handle) return;
+
+      const nearBottom =
+        handle.scrollSize - handle.scrollOffset - handle.viewportSize < BOTTOM_THRESHOLD_PX;
+      const nearTop = handle.scrollOffset < TOP_THRESHOLD_PX;
+      isAtTopRef.current = nearTop;
+      isAtBottomRef.current = nearBottom;
+
+      const delta = handle.scrollOffset - lastScrollTopRef.current;
+      lastScrollTopRef.current = handle.scrollOffset;
+      if (delta < -3 && autoScrollEnabledRef.current) {
+        autoScrollEnabledRef.current = false;
+        userScrolledUpRef.current = true;
+      } else if (nearBottom && !autoScrollEnabledRef.current && delta > 5) {
+        autoScrollEnabledRef.current = true;
+        userScrolledUpRef.current = false;
+      }
+
+      updateActiveFromScroll();
+      syncToolbarState();
+
+      if (scrollTimer) clearTimeout(scrollTimer);
+      scrollTimer = setTimeout(() => {
+        if (nearBottom) {
+          userScrolledUpRef.current = false;
+          autoScrollEnabledRef.current = true;
+        }
+        syncToolbarState();
+      }, 150);
+    };
+
+    el.addEventListener("scroll", onNativeScroll, { passive: true });
+    return () => {
+      el.removeEventListener("scroll", onNativeScroll);
+      if (scrollTimer) clearTimeout(scrollTimer);
+    };
+  }, [scrollRef, vlistRef, updateActiveFromScroll, syncToolbarState]);
 
   useEffect(() => {
     if (prevSessionRef.current !== sessionId) {
@@ -181,6 +218,7 @@ export function useActiveScrollTracker({
       isAtBottomRef.current = true;
       autoScrollEnabledRef.current = true;
       lastScrollTopRef.current = 0;
+      lastActiveIdRef.current = null;
       syncToolbarState();
     }
   }, [sessionId, syncToolbarState]);
@@ -194,16 +232,15 @@ export function useActiveScrollTracker({
     let rafId: number;
 
     const tryScroll = () => {
-      const el = scrollRef.current;
-      if (!el || attempts >= MAX_ATTEMPTS) return;
+      const handle = vlistRef.current;
+      if (!handle || attempts >= MAX_ATTEMPTS) return;
       if (userScrolledUpRef.current) return;
 
       attempts++;
-      isProgrammaticScrollRef.current = true;
-      el.scrollTop = el.scrollHeight;
+      handle.scrollToIndex(messageIds.length - 1, { align: "end" });
       setActive(messageIds[messageIds.length - 1]);
 
-      const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+      const isAtBottom = handle.scrollSize - handle.scrollOffset - handle.viewportSize < 50;
       if (!isAtBottom && attempts < MAX_ATTEMPTS) {
         rafId = requestAnimationFrame(tryScroll);
       }
@@ -214,7 +251,7 @@ export function useActiveScrollTracker({
     return () => {
       if (rafId) cancelAnimationFrame(rafId);
     };
-  }, [messageIds, scrollRef, setActive]);
+  }, [messageIds, vlistRef, setActive]);
 
   useEffect(() => {
     if (streamVersion === 0 || streamVersion === prevStreamRef.current) return;
@@ -240,19 +277,18 @@ export function useActiveScrollTracker({
       let rafId: number;
 
       const tryScroll = () => {
-        const el = scrollRef.current;
-        if (!el || attempts >= MAX_ATTEMPTS) return;
+        const handle = vlistRef.current;
+        if (!handle || attempts >= MAX_ATTEMPTS) return;
         attempts++;
 
-        if (el.scrollHeight <= el.clientHeight && attempts < MAX_ATTEMPTS) {
+        if (handle.scrollSize <= handle.viewportSize && attempts < MAX_ATTEMPTS) {
           rafId = requestAnimationFrame(tryScroll);
           return;
         }
 
-        isProgrammaticScrollRef.current = true;
-        el.scrollTop = el.scrollHeight;
+        handle.scrollToIndex(messageIds.length - 1, { align: "end" });
 
-        const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+        const isAtBottom = handle.scrollSize - handle.scrollOffset - handle.viewportSize < 50;
         if (!isAtBottom && attempts < MAX_ATTEMPTS) {
           rafId = requestAnimationFrame(tryScroll);
         }
@@ -264,28 +300,30 @@ export function useActiveScrollTracker({
         if (rafId) cancelAnimationFrame(rafId);
       };
     }
-  }, [historyLoadVersion, scrollRef, virtualizer, messageIds, setActive]);
+  }, [historyLoadVersion, vlistRef, messageIds, setActive]);
 
   const scrollToEdge = useCallback(
     (edge: "top" | "bottom") => {
-      const el = scrollRef.current;
-      if (!el) return;
+      const handle = vlistRef.current;
+      if (!handle) return;
       const ids = messageIdsRef.current;
       if (ids.length === 0) return;
 
       if (edge === "top") {
-        el.scrollTop = 0;
+        handle.scrollToIndex(0);
       } else {
-        el.scrollTop = el.scrollHeight;
+        handle.scrollToIndex(ids.length - 1, { align: "end" });
       }
 
-      const nearTop = edge === "top" || el.scrollTop < TOP_THRESHOLD_PX;
-      const nearBottom =
-        edge === "bottom" || el.scrollHeight - el.scrollTop - el.clientHeight < BOTTOM_THRESHOLD_PX;
-      isAtTopRef.current = nearTop;
-      isAtBottomRef.current = nearBottom;
-      userScrolledUpRef.current = !nearBottom;
-      syncToolbarState();
+      requestAnimationFrame(() => {
+        const nearTop = handle.scrollOffset < TOP_THRESHOLD_PX;
+        const nearBottom =
+          handle.scrollSize - handle.scrollOffset - handle.viewportSize < BOTTOM_THRESHOLD_PX;
+        isAtTopRef.current = edge === "top" || nearTop;
+        isAtBottomRef.current = edge === "bottom" || nearBottom;
+        userScrolledUpRef.current = !(edge === "bottom" || nearBottom);
+        syncToolbarState();
+      });
 
       if (edge === "top") {
         setActive(ids[0]);
@@ -295,7 +333,7 @@ export function useActiveScrollTracker({
 
       markIntent();
     },
-    [scrollRef, setActive, syncToolbarState, markIntent],
+    [vlistRef, setActive, syncToolbarState, markIntent],
   );
 
   const toggleAutoScroll = useCallback(() => {
@@ -310,12 +348,15 @@ export function useActiveScrollTracker({
     syncToolbarState();
   }, [doScrollToBottom, syncToolbarState]);
 
-  const markProgrammatic = useCallback(() => {
-    isProgrammaticScrollRef.current = true;
-  }, []);
+  const suspendAutoScroll = useCallback(() => {
+    userScrolledUpRef.current = true;
+    autoScrollEnabledRef.current = false;
+    syncToolbarState();
+  }, [syncToolbarState]);
 
   return {
     handleScroll,
+    handleScrollEnd,
     scrollToBottom: doScrollToBottom,
     scrollToEdge,
     scrollToMessage,
@@ -323,6 +364,6 @@ export function useActiveScrollTracker({
     isAtBottom: toolbarState.isAtBottom,
     autoScrollEnabled: toolbarState.autoScrollEnabled,
     toggleAutoScroll,
-    markProgrammatic,
+    suspendAutoScroll,
   };
 }

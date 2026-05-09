@@ -15,6 +15,9 @@ import { useChatNavStore } from "./use-chat-nav-store";
 import { handleAgentEvent, toolCallNameMap } from "./agent-event-handler";
 import { notificationGateway } from "../lib/notification-gateway";
 import { useAppStore } from "./use-app-store";
+import { createLogger } from "../../shared/lib/logger";
+
+const perfLog = createLogger("session-perf");
 
 export interface SubscriptionMaps {
   agentSubscriptions: Record<string, string>;
@@ -44,6 +47,9 @@ export function setupSubscriptions(
   id: string,
   session: SessionMeta,
 ): void {
+  const t0 = performance.now();
+  perfLog.info("[setupSubs] begin", { sessionId: id });
+
   const {
     agentSubscriptions,
     subagentSubscriptions,
@@ -448,6 +454,11 @@ export function setupSubscriptions(
         useAppStore.getState().addLog(`[sub] ${String(err)}`);
       });
   }
+
+  perfLog.info("[setupSubs] all subscribe calls dispatched (async callbacks pending)", {
+    sessionId: id,
+    dispatchMs: Math.round(performance.now() - t0),
+  });
 }
 
 export function cleanupSession(state: SubscriptionMaps, sessionId: string): void {

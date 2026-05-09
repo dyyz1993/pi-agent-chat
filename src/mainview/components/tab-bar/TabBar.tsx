@@ -1,5 +1,5 @@
 import { Plus, X, Settings } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSessionStore } from "../../stores/use-session-store";
 import { SettingsPanel } from "../settings/SettingsPanel";
@@ -17,7 +17,8 @@ function resolveDotClass(
   return "bg-green-400";
 }
 
-const LONG_PRESS_MS = 300;
+const LONG_PRESS_MS = 800;
+const MOVE_THRESHOLD = 5;
 
 export function TabBar({ onAddProject }: { onAddProject: () => void }) {
   const { t } = useTranslation("sidebar");
@@ -32,90 +33,132 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
 
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const [pressingIndex, setPressingIndex] = useState<number | null>(null);
+  const dragIndexRef = useRef<number | null>(null);
+  const dropIndexRef = useRef<number | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isDragging = useRef(false);
+  const didDrag = useRef(false);
   const pressStartPos = useRef({ x: 0, y: 0 });
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const dragCleanup = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    return () => {
+      dragCleanup.current?.();
+    };
+  }, []);
 
   const cancelLongPress = useCallback(() => {
     if (longPressTimer.current) {
       clearTimeout(longPressTimer.current);
       longPressTimer.current = null;
     }
+    setPressingIndex(null);
   }, []);
 
-  const handlePointerDown = useCallback((e: React.PointerEvent, index: number) => {
-    if (e.button !== 0) return;
-    pressStartPos.current = { x: e.clientX, y: e.clientY };
-    isDragging.current = false;
-
-    longPressTimer.current = setTimeout(() => {
+  const startDragListeners = useCallback(
+    (index: number) => {
       isDragging.current = true;
+      didDrag.current = true;
+      dragIndexRef.current = index;
+      dropIndexRef.current = index;
       setDragIndex(index);
       setDropIndex(index);
-      (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    }, LONG_PRESS_MS);
-  }, []);
+      setPressingIndex(null);
+
+      const onMove = (ev: PointerEvent) => {
+        const di = dragIndexRef.current;
+        if (di === null) return;
+        let newDropIndex = di;
+        for (let i = 0; i < tabRefs.current.length; i++) {
+          const el = tabRefs.current[i];
+          if (!el) continue;
+          const rect = el.getBoundingClientRect();
+          const midX = rect.left + rect.width / 2;
+          if (ev.clientX >= midX) {
+            newDropIndex = i;
+          }
+        }
+        if (newDropIndex !== dropIndexRef.current) {
+          dropIndexRef.current = newDropIndex;
+          setDropIndex(newDropIndex);
+        }
+      };
+
+      const cleanup = () => {
+        const di = dragIndexRef.current;
+        const dpi = dropIndexRef.current;
+        if (di !== null && dpi !== null && di !== dpi) {
+          reorderProjectTabs(di, dpi);
+        }
+        isDragging.current = false;
+        dragIndexRef.current = null;
+        dropIndexRef.current = null;
+        setDragIndex(null);
+        setDropIndex(null);
+        document.removeEventListener("pointermove", onMove);
+        document.removeEventListener("pointerup", onUp);
+        document.removeEventListener("pointercancel", onCancel);
+        dragCleanup.current = null;
+      };
+
+      const onUp = () => cleanup();
+      const onCancel = () => {
+        didDrag.current = false;
+        cleanup();
+      };
+
+      document.addEventListener("pointermove", onMove);
+      document.addEventListener("pointerup", onUp);
+      document.addEventListener("pointercancel", onCancel);
+      dragCleanup.current = cleanup;
+    },
+    [reorderProjectTabs],
+  );
+
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent, index: number) => {
+      if (e.button !== 0) return;
+      pressStartPos.current = { x: e.clientX, y: e.clientY };
+      isDragging.current = false;
+      didDrag.current = false;
+      setPressingIndex(index);
+
+      longPressTimer.current = setTimeout(() => {
+        startDragListeners(index);
+      }, LONG_PRESS_MS);
+    },
+    [startDragListeners],
+  );
 
   const handlePointerMove = useCallback(
     (e: React.PointerEvent) => {
-      if (!isDragging.current || dragIndex === null) return;
-
-      const containerRect = (e.currentTarget as HTMLElement).parentElement?.getBoundingClientRect();
-      if (!containerRect) return;
-
-      let newDropIndex = dragIndex;
-      for (let i = 0; i < tabRefs.current.length; i++) {
-        const el = tabRefs.current[i];
-        if (!el) continue;
-        const rect = el.getBoundingClientRect();
-        const midX = rect.left + rect.width / 2;
-        if (e.clientX >= midX) {
-          newDropIndex = i;
+      if (isDragging.current) return;
+      if (longPressTimer.current) {
+        const dx = e.clientX - pressStartPos.current.x;
+        const dy = e.clientY - pressStartPos.current.y;
+        if (Math.abs(dx) > MOVE_THRESHOLD || Math.abs(dy) > MOVE_THRESHOLD) {
+          cancelLongPress();
         }
       }
-
-      if (newDropIndex !== dropIndex) {
-        setDropIndex(newDropIndex);
-      }
     },
-    [dragIndex, dropIndex],
+    [cancelLongPress],
   );
 
-  const handlePointerUp = useCallback(
-    (e: React.PointerEvent, _index: number) => {
-      cancelLongPress();
-
-      if (
-        isDragging.current &&
-        dragIndex !== null &&
-        dropIndex !== null &&
-        dragIndex !== dropIndex
-      ) {
-        reorderProjectTabs(dragIndex, dropIndex);
-      }
-
-      isDragging.current = false;
-      setDragIndex(null);
-      setDropIndex(null);
-      try {
-        (e.target as HTMLElement).releasePointerCapture(e.pointerId);
-      } catch {
-        /* pointer capture may already be released */
-      }
-    },
-    [cancelLongPress, dragIndex, dropIndex, reorderProjectTabs],
-  );
+  const handlePointerUp = useCallback(() => {
+    cancelLongPress();
+  }, [cancelLongPress]);
 
   const handlePointerCancel = useCallback(() => {
     cancelLongPress();
-    isDragging.current = false;
-    setDragIndex(null);
-    setDropIndex(null);
   }, [cancelLongPress]);
 
   const handleTabClick = (tabId: string) => {
-    if (isDragging.current) return;
+    if (didDrag.current) {
+      didDrag.current = false;
+      return;
+    }
     if (activeProjectId === tabId) return;
     setActiveProject(tabId);
   };
@@ -135,13 +178,17 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
         height: "calc(2.25rem + env(safe-area-inset-top))",
       }}
     >
-      {/* Left: scrollable tabs */}
-      <div className="flex-1 flex items-center gap-0.5 px-1 overflow-x-auto min-w-0">
+      <div
+        className={`flex-1 flex items-center gap-0.5 px-1 min-w-0 ${
+          dragIndex !== null ? "overflow-x-hidden" : "overflow-x-auto"
+        }`}
+      >
         {projectTabs.map((tab, index) => {
           const sessions = sessionsByProject[tab.path] || [];
           const dotClass = resolveDotClass(sessions, sessionStatusMap);
           const isActive = activeProjectId === tab.id;
           const isDragSource = dragIndex === index;
+          const isPressing = pressingIndex === index;
           const showLeftIndicator = dropIndex === index && dragIndex !== null && dragIndex > index;
           const showRightIndicator =
             dropIndex === index &&
@@ -163,14 +210,18 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
               onClick={() => handleTabClick(tab.id)}
               onPointerDown={(e) => handlePointerDown(e, index)}
               onPointerMove={handlePointerMove}
-              onPointerUp={(e) => handlePointerUp(e, index)}
+              onPointerUp={handlePointerUp}
               onPointerCancel={handlePointerCancel}
-              className={`group flex items-center gap-1.5 px-3 py-1 text-xs rounded-t transition-colors relative cursor-pointer select-none shrink-0 ${
+              onContextMenu={(e) => e.preventDefault()}
+              className={`group flex items-center gap-1.5 px-3 py-1 text-xs rounded-t transition-all duration-150 relative cursor-pointer select-none shrink-0 ${
                 isActive
                   ? "bg-white dark:bg-gray-950 text-gray-900 dark:text-white border-t-2 border-t-indigo-500"
                   : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-800/50"
-              } ${isDragSource ? "opacity-40 scale-95" : ""}`}
-              style={{ touchAction: "none" }}
+              } ${isPressing ? "scale-[0.97] opacity-90" : ""} ${
+                isDragSource
+                  ? "scale-105 shadow-lg ring-2 ring-indigo-400/50 bg-indigo-50 dark:bg-indigo-950/50 z-10"
+                  : ""
+              }`}
             >
               {showLeftIndicator && (
                 <span className="absolute left-0 top-1 bottom-1 w-0.5 bg-indigo-400 rounded-full" />
@@ -181,6 +232,7 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
                 data-testid={`tab-close-${index}`}
                 onClick={(e) => handleCloseClick(e, tab.id)}
                 onMouseDown={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
                 className="opacity-100 md:opacity-0 md:group-hover:opacity-100 p-0.5 rounded hover:bg-gray-300 dark:hover:bg-gray-700 transition-all pointer-events-auto"
               >
                 <X className="w-3 h-3" />
@@ -193,9 +245,9 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
         })}
       </div>
 
-      {/* Right: fixed action buttons */}
       <div className="flex items-center gap-0.5 px-2 shrink-0 border-l border-gray-200 dark:border-gray-700 h-full">
         <button
+          data-testid="settings-open-btn"
           onClick={() => setSettingsOpen(true)}
           className="p-1 rounded text-gray-500 hover:text-gray-800 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors cursor-pointer"
           title={t("settings")}

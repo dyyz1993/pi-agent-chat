@@ -15,6 +15,7 @@ import { createLogger } from "../lib/logger";
 import { config } from "../../server-config";
 
 const log = createLogger("agent");
+const perfLog = createLogger("session-perf");
 
 const {
   subagent,
@@ -86,10 +87,13 @@ async function createRpcClient(
   cliPath: string,
   cwd: string,
   sessionPath: string | undefined,
-): Promise<RpcClientInstance> {
-  const mod = (await import("@dyyz1993/pi-coding-agent")) as {
+): Promise<{ client: RpcClientInstance; timings: { dynamicImport: number; construct: number } }> {
+  const t0 = performance.now();
+
+  const mod = (await import("@dyyz1993/pi-coding-agent")) as unknown as {
     RpcClient: new (options?: Record<string, unknown>) => RpcClientAPI;
   };
+  const t1 = performance.now();
 
   if (!existsSync(cwd)) {
     mkdirSync(cwd, { recursive: true });
@@ -105,8 +109,12 @@ async function createRpcClient(
     cwd,
     args,
   });
+  const t2 = performance.now();
 
-  return client;
+  const timings = { dynamicImport: Math.round(t1 - t0), construct: Math.round(t2 - t1) };
+  perfLog.info("[createRpcClient] done", timings);
+
+  return { client, timings };
 }
 
 export class AgentProcessManager {
@@ -183,12 +191,25 @@ export class AgentProcessManager {
     projectPath: string,
     sessionPath: string,
   ): Promise<{ agentId: string; status: "started" | "already_running" }> {
+    const tStart = performance.now();
+
     const existing = this.clients.get(sessionId);
     if (existing) {
+      perfLog.info("[start] already_running (cached hit)", {
+        sessionId,
+        totalMs: Math.round(performance.now() - tStart),
+      });
       return { agentId: sessionId, status: "already_running" };
     }
 
-    const client = await createRpcClient(config.piCliPath, projectPath, sessionPath);
+    perfLog.info("[start] begin (new process)", { sessionId, projectPath });
+
+    const { client, timings: createTimings } = await createRpcClient(
+      config.piCliPath,
+      projectPath,
+      sessionPath,
+    );
+    const tAfterCreate = performance.now();
 
     log.info("Spawning pi via RpcClient", { cwd: projectPath, sessionPath });
 
@@ -205,7 +226,7 @@ export class AgentProcessManager {
     };
     const unsubscribe = client.onEvent(bridge);
 
-    for (const name of [
+    const channelNames = [
       "bash",
       "todo",
       "subagent",
@@ -213,7 +234,8 @@ export class AgentProcessManager {
       "rules-engine",
       "memory",
       "coordinator",
-    ] as const) {
+    ] as const;
+    for (const name of channelNames) {
       client.channel(name).onReceive((data: unknown) => {
         if (name === "coordinator") {
           this.handleCoordinatorCall(sessionId, data);
@@ -226,6 +248,21 @@ export class AgentProcessManager {
     this.clients.set(sessionId, { client, info, unsubscribe });
 
     await client.start();
+    const tAfterProcessStart = performance.now();
+
+    const totalMs = Math.round(tAfterProcessStart - tStart);
+    const createRpcMs = Math.round(tAfterCreate - tStart);
+    const processStartMs = Math.round(tAfterProcessStart - tAfterCreate);
+
+    perfLog.info("[start] completed", {
+      sessionId,
+      totalMs,
+      dynamicImportMs: createTimings.dynamicImport,
+      constructMs: createTimings.construct,
+      createRpcTotalMs: createRpcMs,
+      processStartMs,
+      channelsRegistered: channelNames.length,
+    });
 
     log.info("RpcClient started", { sessionId });
     this.sessionPaths.set(sessionId, sessionPath);
@@ -233,12 +270,18 @@ export class AgentProcessManager {
   }
 
   async replayHoldEvents(sessionId: string): Promise<{ replayed: number }> {
+    const t0 = performance.now();
     const managed = this.clients.get(sessionId);
-    if (!managed) return { replayed: 0 };
+    if (!managed) {
+      perfLog.info("[replayHoldEvents] no client", { sessionId, totalMs: 0 });
+      return { replayed: 0 };
+    }
     const events = managed.info.holdEvents;
     for (const evt of events) {
       await this.emitAgentEvent(sessionId, evt as SanitizedEvent);
     }
+    const totalMs = Math.round(performance.now() - t0);
+    perfLog.info("[replayHoldEvents] done", { sessionId, replayed: events.length, totalMs });
     return { replayed: events.length };
   }
 
@@ -669,6 +712,7 @@ export class AgentProcessManager {
     messages: unknown[];
     customEntries: Array<{ id: string; customType: string; data: unknown; timestamp: number }>;
   }> {
+    const t0 = performance.now();
     const managed = this.clients.get(sessionId);
 
     let messages: unknown[] = [];
@@ -816,6 +860,14 @@ export class AgentProcessManager {
         });
       }
     }
+
+    const totalMs = Math.round(performance.now() - t0);
+    perfLog.info("[getFullMessages] done", {
+      sessionId,
+      messageCount: messages.length,
+      customEntryCount: customEntries.length,
+      totalMs,
+    });
 
     return { messages, customEntries };
   }
@@ -1017,6 +1069,27 @@ export class AgentProcessManager {
       });
       return { tools: [] };
     });
+  }
+
+  async getMcpServers(sessionId: string): Promise<unknown> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return { servers: [] };
+    try {
+      const client = managed.client as unknown as {
+        send: (cmd: Record<string, unknown>) => Promise<unknown>;
+      };
+      const response = (await client.send.call(managed.client, {
+        type: "get_mcp_servers",
+      })) as Record<string, unknown>;
+      const data = (response?.data ?? response) as Record<string, unknown>;
+      return { servers: data?.servers ?? [] };
+    } catch (err) {
+      log.warn("getMcpServers error", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return { servers: [] };
+    }
   }
 
   async getContextUsage(sessionId: string): Promise<unknown> {
@@ -1412,8 +1485,6 @@ export class AgentProcessManager {
         );
       }
     }
-
-    await this.broadcastEvent("lsp.event", { sessionId, event: data }, { sessionId });
   }
 
   private async handleRulesChannelData(

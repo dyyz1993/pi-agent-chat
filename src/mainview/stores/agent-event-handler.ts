@@ -6,6 +6,7 @@ import { apiClient } from "../lib/api-client";
 import { useChatStore } from "./use-chat-store";
 import { useSessionStore } from "./use-session-store";
 import { useMemoryStore } from "./use-memory-store";
+import { useStatusStore, type MCPServerInfo } from "./use-status-store";
 import { useRetryStore } from "./use-retry-store";
 import { useUIDialogStore } from "./use-ui-dialog-store";
 import { notificationGateway } from "../lib/notification-gateway";
@@ -439,12 +440,15 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       );
 
       if (event.type === "tool_execution_start") {
-        const args = event.args;
+        const rawArgs: unknown = event.args;
         const argsStr =
-          args && typeof args === "object" && "command" in args && typeof args.command === "string"
-            ? args.command
-            : args
-              ? JSON.stringify(args, null, 2)
+          rawArgs &&
+          typeof rawArgs === "object" &&
+          "command" in rawArgs &&
+          typeof (rawArgs as Record<string, unknown>).command === "string"
+            ? String((rawArgs as Record<string, unknown>).command)
+            : rawArgs
+              ? JSON.stringify(rawArgs, null, 2)
               : "";
         if (targetIdx >= 0) {
           blocks[targetIdx] = {
@@ -591,6 +595,38 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         [sessionId]: { steering: event.steering, followUp: event.followUp },
       },
     }));
+    return;
+  }
+
+  if (event.type === "mcp_connection_change") {
+    const { name, status, error, tools } = event as {
+      type: "mcp_connection_change";
+      name: string;
+      status: "connecting" | "connected" | "error" | "disconnected";
+      error?: string;
+      tools?: Array<{ originalName: string; fullName: string; description: string }>;
+    };
+    useStatusStore.setState((s) => {
+      const existing = s.mcpServers.find((srv) => srv.name === name);
+      const updated: MCPServerInfo = {
+        name,
+        status,
+        error,
+        toolCount: tools?.length ?? existing?.toolCount ?? 0,
+        tools:
+          tools?.map((t) => ({ name: t.originalName, description: t.description })) ??
+          existing?.tools ??
+          [],
+        scope: existing?.scope ?? "global",
+      };
+      const idx = s.mcpServers.findIndex((srv) => srv.name === name);
+      if (idx >= 0) {
+        const servers = [...s.mcpServers];
+        servers[idx] = updated;
+        return { mcpServers: servers };
+      }
+      return { mcpServers: [...s.mcpServers, updated] };
+    });
     return;
   }
 }

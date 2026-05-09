@@ -11,6 +11,7 @@ import type { CustomEntryForUI } from "../../shared/modules/agent";
 import { createLogger } from "../../shared/lib/logger";
 
 const log = createLogger("chat-store");
+const perfLog = createLogger("session-perf");
 
 export function normalizeToolBlocks(msgs: ChatMessage[]): void {
   const toolCallById = new Map<
@@ -370,8 +371,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
     sessionId: string,
     options?: { force?: boolean; sessionPath?: string },
   ) => {
+    const t0 = performance.now();
     const sid = sessionId;
     if (!sid) return;
+
+    perfLog.info("[loadMessages] begin", { sessionId: sid, force: !!options?.force });
 
     if (get().loadingSessions.has(sid)) {
       log.warn("GUARD-1: already loading, skip", { sessionId: sid });
@@ -405,7 +409,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
         sessionId: sid,
         sessionPath: options?.sessionPath,
       });
-      log.info("RPC returned", { sessionId: sid, force: !!options?.force });
+      perfLog.info("[loadMessages] RPC returned", {
+        sessionId: sid,
+        force: !!options?.force,
+        rpcMs: Math.round(performance.now() - t0),
+      });
 
       if (!options?.force) {
         const current = get().messagesBySession[sid] || [];
@@ -513,6 +521,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
         displayed: displayMsgs.length,
         hasMore,
       });
+
+      perfLog.info("[loadMessages] done", {
+        sessionId: sid,
+        total: msgs.length,
+        displayed: displayMsgs.length,
+        totalMs: Math.round(performance.now() - t0),
+      });
+
       set((s) => ({
         messagesBySession: { ...s.messagesBySession, [sid]: displayMsgs },
         historyLoadVersion: s.historyLoadVersion + 1,

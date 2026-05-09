@@ -13,7 +13,6 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useVirtualizer } from "@tanstack/react-virtual";
 import { useChatStore } from "../../stores/use-chat-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { NotificationCenter } from "./NotificationCenter";
@@ -25,6 +24,7 @@ import { useChatNavStore } from "../../stores/use-chat-nav-store";
 import { useTurnStore } from "../../stores/use-turn-store";
 import { apiClient } from "../../lib/api-client";
 import { useActiveScrollTracker } from "../../hooks/use-active-scroll-tracker";
+import type { VirtualizerHandle } from "virtua";
 import { SideNav } from "./SideNav";
 import { InputBar, type InputBarHandle } from "./InputBar";
 import { TokenStatusBar } from "./TokenStatusBar";
@@ -40,27 +40,6 @@ import { useAttachmentStore } from "../../stores/use-attachment-store";
 import type { ChatMessage } from "../../types";
 
 const EMPTY_MSGS: never[] = [];
-
-function estimateMessageSize(msg: ChatMessage): number {
-  if (msg.role === "user") return 60;
-  let h = 48;
-  for (const block of msg.content) {
-    switch (block.type) {
-      case "text":
-        h += Math.min(200, Math.max(40, (block.text.length / 80) * 22));
-        break;
-      case "thinking":
-        h += 80;
-        break;
-      case "toolExecution":
-        h += block.status === "running" ? 180 : 120;
-        break;
-      default:
-        h += 60;
-    }
-  }
-  return h;
-}
 
 export function ChatPanel() {
   const { t } = useTranslation("chat");
@@ -129,6 +108,7 @@ export function ChatPanel() {
   const setInputText = useChatStore((s) => s.setInputText);
   const setActive = useChatNavStore((s) => s.setActive);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
+  const vlistRef = useRef<VirtualizerHandle>(null);
   const inputBarRef = useRef<InputBarHandle>(null);
   const messageIds = useMemo(() => messages.map((m) => m.id), [messages]);
   const isStreaming =
@@ -141,38 +121,6 @@ export function ChatPanel() {
   const streamVersion = useChatStore((s) => s.streamContentVersion);
   const historyLoadVersion = useChatStore((s) => s.historyLoadVersion);
 
-  const mainMessagesRef = useRef(mainMessages);
-  mainMessagesRef.current = mainMessages;
-  const subMessagesRef = useRef(subMessages);
-  subMessagesRef.current = subMessages;
-
-  const estimateMainSize = useCallback(
-    (index: number) => estimateMessageSize(mainMessagesRef.current[index]),
-    [],
-  );
-  const estimateSubSize = useCallback(
-    (index: number) => estimateMessageSize(subMessagesRef.current[index]),
-    [],
-  );
-
-  const mainVirtualizer = useVirtualizer({
-    count: mainMessages.length,
-    getScrollElement: () => messagesScrollRef.current,
-    estimateSize: estimateMainSize,
-    overscan: isMobileOrTablet ? 2 : 5,
-    measureElement: (el) => (el as HTMLElement).offsetHeight,
-  });
-
-  const subVirtualizer = useVirtualizer({
-    count: subMessages.length,
-    getScrollElement: () => messagesScrollRef.current,
-    estimateSize: estimateSubSize,
-    overscan: isMobileOrTablet ? 2 : 5,
-    measureElement: (el) => (el as HTMLElement).offsetHeight,
-  });
-
-  const activeVirtualizer = isViewingSubagent ? subVirtualizer : mainVirtualizer;
-
   const handleAbort = useCallback(async () => {
     if (!activeSessionId) return;
     if (activeSubId) return;
@@ -184,25 +132,41 @@ export function ChatPanel() {
   }, [activeSessionId, activeSubId]);
 
   const setNavId = useTurnStore((s) => s.setNavId);
-  const clickScrollRef = useRef(false);
+  const lastSetNavIdRef = useRef<string | null>(null);
+  const navScrollingRef = useRef(false);
+  const navScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    lastSetNavIdRef.current = null;
+    navScrollingRef.current = false;
+    if (navScrollTimerRef.current) {
+      clearTimeout(navScrollTimerRef.current);
+      navScrollTimerRef.current = null;
+    }
+  }, [activeSessionId, activeSubId]);
 
   const {
     handleScroll,
+    handleScrollEnd,
     scrollToEdge,
     isAtTop,
     isAtBottom,
     autoScrollEnabled,
     toggleAutoScroll,
-    markProgrammatic,
+    suspendAutoScroll,
   } = useActiveScrollTracker({
     scrollRef: messagesScrollRef,
-    virtualizer: activeVirtualizer,
+    vlistRef,
     messageIds,
     sessionId: isViewingSubagent ? activeSubId : (activeSessionId ?? undefined),
     setActive: useCallback(
       (id: string | null) => {
         setActive(id);
-        if (id && !clickScrollRef.current) setNavId(id);
+        if (navScrollingRef.current) return;
+        if (id && id !== lastSetNavIdRef.current) {
+          lastSetNavIdRef.current = id;
+          setNavId(id);
+        }
       },
       [setActive, setNavId],
     ),
@@ -210,48 +174,58 @@ export function ChatPanel() {
     historyLoadVersion,
   });
 
+  const wrappedHandleScrollEnd = useCallback(() => {
+    navScrollingRef.current = false;
+    if (navScrollTimerRef.current) {
+      clearTimeout(navScrollTimerRef.current);
+      navScrollTimerRef.current = null;
+    }
+    handleScrollEnd();
+  }, [handleScrollEnd]);
+
   const handleScrollToEdge = useCallback(
     (edge: "top" | "bottom") => {
       if (messageIds.length === 0) return;
       const id = edge === "top" ? messageIds[0] : messageIds[messageIds.length - 1];
       setNavId(id);
-      clickScrollRef.current = true;
+      if (edge === "top") suspendAutoScroll();
       scrollToEdge(edge);
-      setTimeout(() => {
-        clickScrollRef.current = false;
-      }, 500);
     },
-    [messageIds, setNavId, scrollToEdge],
+    [messageIds, setNavId, scrollToEdge, suspendAutoScroll],
   );
 
   const handleNavDotClick = useCallback(
     (navId: string) => {
-      clickScrollRef.current = true;
-      markProgrammatic();
-      const isSubDot = /-[0-9]+$/.test(navId);
-      const lastDashIdx = navId.lastIndexOf("-");
-      const msgId = isSubDot ? navId.slice(0, lastDashIdx) : navId;
-      const idx = mainMessages.findIndex((m) => m.id === msgId);
-      const viz = idx >= 0 ? mainVirtualizer : subVirtualizer;
-      const vIdx = idx >= 0 ? idx : subMessages.findIndex((m) => m.id === msgId);
-      if (vIdx < 0) {
-        clickScrollRef.current = false;
+      suspendAutoScroll();
+      navScrollingRef.current = true;
+      if (navScrollTimerRef.current) clearTimeout(navScrollTimerRef.current);
+      navScrollTimerRef.current = setTimeout(() => {
+        navScrollingRef.current = false;
+        navScrollTimerRef.current = null;
+      }, 800);
+
+      let index = messageIds.indexOf(navId);
+      if (index !== -1) {
+        lastSetNavIdRef.current = navId;
+        vlistRef.current?.scrollToIndex(index, { smooth: true });
         return;
       }
-      viz.scrollToIndex(vIdx, { align: "start" });
-      if (isSubDot) {
+
+      const lastDashIdx = navId.lastIndexOf("-");
+      if (lastDashIdx < 0) return;
+      const msgId = navId.slice(0, lastDashIdx);
+      index = messageIds.indexOf(msgId);
+      if (index === -1) return;
+      lastSetNavIdRef.current = msgId;
+      vlistRef.current?.scrollToIndex(index, { smooth: true });
+      requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            const blockEl = messagesScrollRef.current?.querySelector(`[data-block-id="${navId}"]`);
-            if (blockEl) blockEl.scrollIntoView({ block: "start", behavior: "instant" });
-          });
+          const blockEl = messagesScrollRef.current?.querySelector(`[data-block-id="${navId}"]`);
+          if (blockEl) blockEl.scrollIntoView({ block: "start", behavior: "instant" });
         });
-      }
-      setTimeout(() => {
-        clickScrollRef.current = false;
-      }, 400);
+      });
     },
-    [mainMessages, subMessages, mainVirtualizer, subVirtualizer],
+    [messageIds, suspendAutoScroll],
   );
 
   const handleSend = async () => {
@@ -369,15 +343,17 @@ export function ChatPanel() {
             <MessageListView
               messages={messages}
               scrollRef={messagesScrollRef}
+              vlistRef={vlistRef}
               onScroll={handleScroll}
-              virtualizer={subVirtualizer}
+              onScrollEnd={wrappedHandleScrollEnd}
             />
           ) : (
             <MessageListView
               messages={mainMessages}
               scrollRef={messagesScrollRef}
+              vlistRef={vlistRef}
               onScroll={handleScroll}
-              virtualizer={mainVirtualizer}
+              onScrollEnd={wrappedHandleScrollEnd}
               isLoadingMore={isLoadingMore}
               hasMoreMessages={hasMoreMessages}
             />

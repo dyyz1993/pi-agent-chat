@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
-import { useStatusStore } from "../../stores/use-status-store";
+import { useStatusStore, type MCPServerInfo } from "../../stores/use-status-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useSubagentStore } from "../../stores/use-subagent-store";
 import { useLspStore } from "../../stores/use-lsp-store";
@@ -72,7 +72,6 @@ function PluginCopyButton({ plugin }: { plugin: PluginInfo }) {
 export function StatusPanel() {
   const { t } = useTranslation("status");
   const yoloEnabled = useStatusStore((s) => s.yoloEnabled);
-  const mcpTools = useStatusStore((s) => s.mcpTools);
   const plugins = useStatusStore((s) => s.plugins);
   const skills = useStatusStore((s) => s.skills);
   const expandedSkill = useStatusStore((s) => s.expandedSkill);
@@ -188,22 +187,7 @@ export function StatusPanel() {
                     ) : (
                       <span>{t("idle")}</span>
                     ))}
-                  {id === "mcp" && (
-                    <div className="space-y-0.5">
-                      {mcpTools.length === 0 ? (
-                        <span>{t("notConnected")}</span>
-                      ) : (
-                        mcpTools.map((mcpTool) => (
-                          <div key={mcpTool.name} className="flex items-center gap-1">
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full ${mcpTool.status === "ready" ? "bg-green-400" : mcpTool.status === "error" ? "bg-red-400" : "bg-yellow-400 animate-pulse"}`}
-                            />
-                            <span>{mcpTool.name}</span>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  )}
+                  {id === "mcp" && <MCPToolsSection />}
                   {id === "lsp" && (
                     <div className="space-y-1">
                       {!lspData || lspData.startupComplete ? (
@@ -515,5 +499,125 @@ export function StatusPanel() {
         />
       )}
     </>
+  );
+}
+
+function MCPToolsSection() {
+  const { t } = useTranslation("status");
+  const mcpServers = useStatusStore((s) => s.mcpServers);
+  const expandedMcpServer = useStatusStore((s) => s.expandedMcpServer);
+  const toggleMcpExpanded = useStatusStore((s) => s.toggleMcpExpanded);
+
+  if (mcpServers.length === 0) {
+    return (
+      <div className="space-y-0.5">
+        <span>{t("notConnected")}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-0.5">
+      {mcpServers.map((srv) => {
+        const isExpanded = expandedMcpServer === srv.name;
+        const statusDot =
+          srv.status === "connected"
+            ? "bg-green-400"
+            : srv.status === "error"
+              ? "bg-red-400"
+              : srv.status === "connecting"
+                ? "bg-yellow-400 animate-pulse"
+                : "bg-gray-400 dark:bg-gray-600";
+        return (
+          <div key={srv.name}>
+            <div
+              className="flex items-center gap-1 py-0.5 px-1 rounded hover:bg-gray-200/50 dark:hover:bg-gray-800/40 transition-colors cursor-pointer group"
+              onClick={() => toggleMcpExpanded(srv.name)}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDot}`} />
+              <span className="shrink-0">
+                {isExpanded ? (
+                  <ChevronDown className="w-3 h-3 text-gray-500" />
+                ) : (
+                  <ChevronRight className="w-3 h-3 text-gray-500" />
+                )}
+              </span>
+              <span className="truncate flex-1 text-gray-700 dark:text-gray-300">{srv.name}</span>
+              {srv.toolCount > 0 && (
+                <span className="text-gray-400 dark:text-gray-600">
+                  {t("mcpToolCount", { count: srv.toolCount })}
+                </span>
+              )}
+              <span
+                className={`text-[9px] px-1 py-px rounded shrink-0 ${srv.scope === "project" ? "bg-cyan-500/15 text-cyan-400" : "bg-purple-500/15 text-purple-400"}`}
+              >
+                {srv.scope === "project" ? t("project") : t("global")}
+              </span>
+            </div>
+            {isExpanded && (
+              <div className="ml-4 pl-2 border-l border-gray-200 dark:border-gray-800 space-y-1 pt-1 text-[10px]">
+                {srv.error && <div className="text-red-400/80 break-all">{srv.error}</div>}
+                {srv.tools.length === 0 ? (
+                  <div className="text-gray-400 dark:text-gray-600">{t("noMcpTools")}</div>
+                ) : (
+                  <>
+                    <div>
+                      <span className="text-gray-400 dark:text-gray-600 block mb-0.5">
+                        {t("toolsLabel")}
+                      </span>
+                      <div className="space-y-px">
+                        {srv.tools.map((tool) => (
+                          <div
+                            key={tool.name}
+                            className="text-gray-500 dark:text-gray-400 pl-2 font-mono truncate"
+                            title={tool.description || undefined}
+                          >
+                            {tool.name}
+                            {tool.description && (
+                              <span className="text-gray-400 dark:text-gray-600 font-sans ml-1">
+                                — {tool.description}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <MCPCopyButton server={srv} />
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function MCPCopyButton({ server }: { server: MCPServerInfo }) {
+  const { t } = useTranslation("status");
+  const [copied, setCopied] = useState(false);
+  const handleCopy = useCallback(() => {
+    const lines = [
+      `${t("nameLabel")} ${server.name}`,
+      `${t("locationLabel")} ${server.scope === "project" ? t("project") : t("global")}`,
+      `${t("toolsFieldLabel", { count: server.toolCount })} ${server.tools.map((t) => t.name).join(", ") || t("none")}`,
+    ];
+    copyToClipboard(lines.join("\n")).then((ok) => {
+      if (ok) {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }
+    });
+  }, [server, t]);
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="flex items-center gap-1 text-gray-500 hover:text-gray-300 transition-colors mt-0.5"
+    >
+      {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+      <span>{copied ? t("copied") : t("copyInfo")}</span>
+    </button>
   );
 }

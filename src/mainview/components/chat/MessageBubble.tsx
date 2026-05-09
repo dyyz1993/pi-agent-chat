@@ -25,6 +25,7 @@ import { tryFormatAsYaml } from "../../../shared/lib/json-to-yaml";
 import { useExpandStore } from "../../stores/use-expand-store";
 import { useSettingsStore } from "../../stores/use-settings-store";
 import { useUIBlockMap } from "../../stores/use-ui-dialog-store";
+import { useLayoutStore } from "../../layouts/use-layout-store";
 import { ENTRY_TYPE_KEYS, getMemoryConfig, getMemorySummary } from "./memory-config";
 import { formatTokenCount } from "../../utils/turn-utils";
 
@@ -1097,56 +1098,44 @@ export const MessageMetaFooter = memo(function MessageMetaFooter({
 
   if (!hasMeta) return null;
 
+  const isMobile = useLayoutStore((s) => s.breakpoint) === "mobile";
+
   return (
-    <div className="mt-1.5 pt-1.5 pl-2 pb-0.5 border-t border-gray-200/20 dark:border-gray-800/20 space-y-1">
-      {(model ?? provider) && (
-        <div className="text-[10px] text-gray-400 dark:text-gray-600">
+    <div className="mt-1.5 pt-1.5 pl-2 pb-0.5 border-t border-gray-200/20 dark:border-gray-800/20">
+      <div className="flex items-center justify-between gap-2 text-[10px] text-gray-400 dark:text-gray-600">
+        <span className="flex items-center gap-1.5 shrink-0">
           {provider && (
             <span>
               {t("agent")}: {provider}
             </span>
           )}
           {model && (
-            <>
-              {provider && "  "}
-              <span>
-                {t("model")}: {model}
-              </span>
-            </>
-          )}
-        </div>
-      )}
-      {tokenUsage && (
-        <div className="flex items-center justify-between text-[10px] text-gray-400 dark:text-gray-600">
-          <span className="flex items-center gap-2">
-            {(tokenUsage.cacheRead ?? 0) > 0 && (
-              <span>
-                {t("tokenCacheRead")} {formatTokenCount(tokenUsage.cacheRead ?? 0)}
-              </span>
-            )}
-            {(tokenUsage.cacheWrite ?? 0) > 0 && (
-              <span>
-                {t("tokenCacheWrite")} {formatTokenCount(tokenUsage.cacheWrite ?? 0)}
-              </span>
-            )}
-            {(tokenUsage.reasoning ?? 0) > 0 && (
-              <span>
-                {t("tokenReasoning")} {tokenUsage.reasoning}
-              </span>
-            )}
-          </span>
-          <span className="flex items-center gap-1 font-mono">
             <span>
-              {t("tokenInput")} {formatTokenCount(tokenUsage.input)}
+              {provider ? "· " : ""}
+              {model}
             </span>
-            <span className="text-gray-400 dark:text-gray-800">→</span>
+          )}
+        </span>
+        {tokenUsage && (
+          <span className="flex items-center gap-1 font-mono truncate">
+            {!isMobile && (tokenUsage.cacheRead ?? 0) > 0 && (
+              <span className="hidden sm:inline">
+                {formatTokenCount(tokenUsage.cacheRead ?? 0)}↓
+              </span>
+            )}
+            {!isMobile && (tokenUsage.cacheWrite ?? 0) > 0 && (
+              <span className="hidden sm:inline">
+                {formatTokenCount(tokenUsage.cacheWrite ?? 0)}↑
+              </span>
+            )}
+            {!isMobile && (tokenUsage.reasoning ?? 0) > 0 && (
+              <span className="hidden sm:inline">R{tokenUsage.reasoning}</span>
+            )}
             <span>
-              {t("tokenOutput")} {formatTokenCount(tokenUsage.output)}
+              {formatTokenCount(tokenUsage.input)}→{formatTokenCount(tokenUsage.output)}
             </span>
             <span className="text-gray-400 dark:text-gray-800">·</span>
-            <span>
-              {t("tokenTotal")} {formatTokenCount(tokenUsage.input + tokenUsage.output)}
-            </span>
+            <span>{formatTokenCount(tokenUsage.input + tokenUsage.output)}</span>
             {tokenUsage.cost != null && (
               <>
                 <span className="text-gray-400 dark:text-gray-800">·</span>
@@ -1154,8 +1143,8 @@ export const MessageMetaFooter = memo(function MessageMetaFooter({
               </>
             )}
           </span>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 });

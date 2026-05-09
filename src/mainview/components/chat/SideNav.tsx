@@ -1,5 +1,5 @@
 import { useMemo, useCallback, useEffect, useRef, memo } from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { VList, type VListHandle } from "virtua";
 import {
   User,
   Bot,
@@ -253,28 +253,20 @@ export const SideNav = memo(function SideNav({
 
   const navItems = useMemo(() => buildNavItems(messages, t), [messages, t]);
 
-  const isNavClickRef = useRef(false);
+  const sidenavVlistRef = useRef<VListHandle>(null);
 
   const handleDotClick = useCallback(
     (id: string) => {
-      isNavClickRef.current = true;
       setNavId(id);
       onNavDotClick(id);
-      requestAnimationFrame(() => {
-        isNavClickRef.current = false;
-      });
     },
     [onNavDotClick, setNavId],
   );
 
   const handleSubDotClick = useCallback(
     (blockId: string) => {
-      isNavClickRef.current = true;
       setNavId(blockId);
       onNavDotClick(blockId);
-      requestAnimationFrame(() => {
-        isNavClickRef.current = false;
-      });
     },
     [onNavDotClick, setNavId],
   );
@@ -294,89 +286,56 @@ export const SideNav = memo(function SideNav({
     [toggleItemSelect],
   );
 
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-
-  const getItemHeight = useCallback(
-    (index: number) => {
-      const item = navItems[index];
-      if (!item) return 44;
-      return item.subs.length > 0 ? 32 + item.subs.length * 30 : 44;
-    },
-    [navItems],
-  );
-
-  const virtualizer = useVirtualizer({
-    count: navItems.length,
-    getScrollElement: () => scrollContainerRef.current,
-    estimateSize: getItemHeight,
-    overscan: 5,
-    measureElement: (el) => (el as HTMLElement).offsetHeight,
-  });
-
   useEffect(() => {
-    if (!selectedNavId || !scrollContainerRef.current) return;
-    if (!isNavClickRef.current) return;
-    const idx = navItems.findIndex((n) => n.id === selectedNavId);
-    if (idx >= 0) {
-      virtualizer.scrollToIndex(idx, { align: "auto" });
+    if (!selectedNavId) return;
+    let idx = navItems.findIndex((n) => n.id === selectedNavId);
+    if (idx < 0) {
+      idx = navItems.findIndex((n) => n.subs.some((s) => s.blockId === selectedNavId));
     }
-  }, [selectedNavId, navItems, virtualizer]);
+    if (idx < 0) return;
+    const timer = setTimeout(() => {
+      sidenavVlistRef.current?.scrollToIndex(idx, { align: "nearest" });
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [selectedNavId, navItems]);
 
   return (
     <div className="h-full min-h-0 flex flex-col bg-gray-50/30 dark:bg-gray-900/30 border-l border-gray-200/30 dark:border-gray-800/30">
-      <div
-        ref={scrollContainerRef}
-        className="flex-1 min-h-0 overflow-y-auto sidenav-scroll"
-        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+      <VList
+        ref={sidenavVlistRef}
+        style={{ flex: 1, minHeight: 0, scrollbarWidth: "none", msOverflowStyle: "none" }}
       >
-        <div style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}>
-          {virtualizer.getVirtualItems().map((vr) => {
-            const { id, icon: Icon, color, subs } = navItems[vr.index];
-            return (
-              <div
-                key={id}
-                data-nav-id={id}
-                ref={virtualizer.measureElement}
-                data-index={vr.index}
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  width: "100%",
-                  transform: `translateY(${vr.start}px)`,
-                }}
-              >
-                <div className="flex flex-col items-center w-full">
-                  <NavDot
-                    Icon={Icon}
-                    color={color}
-                    isClicked={selectedNavId === id}
-                    isMultiSelected={selectedItems.has(id)}
-                    onClick={() => handleDotClick(id)}
-                    onContextMenu={(e) => handleContextMenu(e, id)}
-                    onDoubleClick={() => handleDoubleClick(id)}
-                  />
-                  {subs.length > 0 && (
-                    <div className="flex flex-col items-center ml-1 mt-0.5 space-y-0.5">
-                      {subs.map((sub) => (
-                        <NavSubDot
-                          key={sub.blockId}
-                          Icon={sub.icon}
-                          color={sub.color}
-                          label={sub.label}
-                          blockId={sub.blockId}
-                          isActive={selectedNavId === sub.blockId}
-                          onClick={() => handleSubDotClick(sub.blockId)}
-                        />
-                      ))}
-                    </div>
-                  )}
+        {navItems.map(({ id, icon: Icon, color, subs }) => (
+          <div key={id} data-nav-id={id}>
+            <div className="flex flex-col items-center w-full">
+              <NavDot
+                Icon={Icon}
+                color={color}
+                isClicked={selectedNavId === id}
+                isMultiSelected={selectedItems.has(id)}
+                onClick={() => handleDotClick(id)}
+                onContextMenu={(e) => handleContextMenu(e, id)}
+                onDoubleClick={() => handleDoubleClick(id)}
+              />
+              {subs.length > 0 && (
+                <div className="flex flex-col items-center ml-1 mt-0.5 space-y-0.5">
+                  {subs.map((sub) => (
+                    <NavSubDot
+                      key={sub.blockId}
+                      Icon={sub.icon}
+                      color={sub.color}
+                      label={sub.label}
+                      blockId={sub.blockId}
+                      isActive={selectedNavId === sub.blockId}
+                      onClick={() => handleSubDotClick(sub.blockId)}
+                    />
+                  ))}
                 </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </VList>
 
       {selectedItems.size > 0 && (
         <div className="px-1 py-1 text-[10px] text-red-400 text-center border-t border-red-500/20 bg-red-950/20">

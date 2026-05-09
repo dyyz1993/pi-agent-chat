@@ -50,6 +50,7 @@ export const ScrollToolbar = memo(function ScrollToolbar({
           )}
           {!isAtBottom && (
             <button
+              data-testid="scroll-to-bottom-btn"
               onClick={onScrollToBottom}
               className="w-9 h-9 rounded-full border border-gray-400/30 dark:border-gray-500/30 text-gray-400 dark:text-gray-500 hover:text-indigo-300 hover:border-indigo-400/40 flex items-center justify-center transition-colors"
               title={t("scroll.scrollToBottom")}

@@ -12,5 +12,16 @@
   "collapseThinkingDesc": "Auto-collapse thinking blocks once streaming completes",
   "showTimeline": "Show Timeline",
   "showTimelineDesc": "Display activity timeline in the message area",
-  "reset": "Reset to Defaults"
+  "reset": "Reset to Defaults",
+  "retryTitle": "Auto Retry",
+  "retryEnabled": "Enable Auto Retry",
+  "retryEnabledDesc": "Automatically retry on model API errors (rate limit, timeout, 5xx)",
+  "retryMaxRetries": "Max Retries",
+  "retryMaxRetriesDesc": "Maximum number of retry attempts on failure",
+  "retryBaseDelay": "Base Delay",
+  "retryBaseDelayDesc": "Initial wait time before the first retry",
+  "retryMaxDelay": "Max Delay",
+  "retryMaxDelayDesc": "Upper limit for exponential backoff delay",
+  "retryPreview": "Backoff schedule (exponential)",
+  "retryTotal": "Total"
 }
