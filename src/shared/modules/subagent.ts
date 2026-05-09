@@ -1,3 +1,6 @@
+import type { CompactionResult } from "./agent";
+import type { Message } from "@dyyz1993/pi-ai";
+
 export interface SubagentSessionInfo {
   toolCallId?: string;
   sessionId: string;
@@ -41,7 +44,7 @@ export interface SubagentEventPayload {
 export type SubagentStreamEvent =
   | { type: "subagent_start"; description: string; instruction: string }
   | { type: "agent_start" }
-  | { type: "agent_end"; messages: unknown[] }
+  | { type: "agent_end"; messages: Message[] }
   | { type: "message_start"; message: Record<string, unknown> }
   | { type: "message_update"; message: Record<string, unknown> }
   | { type: "message_end"; message: Record<string, unknown> }
@@ -56,16 +59,16 @@ export type SubagentStreamEvent =
       toolCallId: string;
       toolName: string;
       args: Record<string, unknown>;
-      partialResult: unknown;
+      partialResult: string;
     }
   | {
       type: "tool_execution_end";
       toolCallId: string;
       toolName: string;
-      result: unknown;
+      result: string;
       isError: boolean;
     }
   | { type: "compaction_start"; reason: string }
-  | { type: "compaction_end"; reason: string; result: unknown; aborted: boolean }
+  | { type: "compaction_end"; reason: string; result: CompactionResult; aborted: boolean }
   | { type: "queue_update"; steering: string[]; followUp: string[] }
-  | { type: string; [key: string]: unknown };
+  | { type: string; data?: Record<string, unknown> };

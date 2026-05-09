@@ -1,13 +1,11 @@
 import type { RPCServer } from "@dyyz1993/rpc-core";
-import type { RPCMethods, HandlerOptions } from "../rpc-schema";
+import type { HandlerOptions, R } from "../rpc-schema";
+import { createRegister } from "../rpc-schema";
 import { AgentProcessManager } from "../agent/process-manager";
 import { createLogger } from "../lib/logger";
 import { listDisabledSkills, setDisabledSkill } from "../lib/project-config";
 
 const log = createLogger("agent");
-
-type P<K extends keyof RPCMethods> = RPCMethods[K] extends { params: infer P } ? P : never;
-type R<K extends keyof RPCMethods> = RPCMethods[K] extends { result: infer R } ? R : never;
 
 let manager: AgentProcessManager | null = null;
 
@@ -37,12 +35,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     log.info("Updated server on AgentProcessManager", { servers: manager.serverCount() });
   }
 
-  const r = <K extends keyof RPCMethods & string>(
-    method: K,
-    handler: (params: P<K>) => Promise<R<K>>,
-  ) => {
-    server.register(method, handler as (params: unknown) => Promise<unknown>);
-  };
+  const r = createRegister(server);
 
   const m = getManager();
 

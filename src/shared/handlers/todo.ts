@@ -1,19 +1,12 @@
 import type { RPCServer } from "@dyyz1993/rpc-core";
-import type { RPCMethods, HandlerOptions } from "../rpc-schema";
+import type { HandlerOptions } from "../rpc-schema";
+import { createRegister } from "../rpc-schema";
 import type { TodoItem } from "../modules/todo";
 import { readFile } from "fs/promises";
 import { existsSync } from "fs";
 
-type P<K extends keyof RPCMethods> = RPCMethods[K] extends { params: infer P } ? P : never;
-type R<K extends keyof RPCMethods> = RPCMethods[K] extends { result: infer R } ? R : never;
-
 export function register(server: RPCServer, _options: HandlerOptions): void {
-  const r = <K extends keyof RPCMethods & string>(
-    method: K,
-    handler: (params: P<K>) => Promise<R<K>>,
-  ) => {
-    server.register(method, handler as (params: unknown) => Promise<unknown>);
-  };
+  const r = createRegister(server);
 
   r("todo.list", async (params) => {
     const { sessionPath } = params;

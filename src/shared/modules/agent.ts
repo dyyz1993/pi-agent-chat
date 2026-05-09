@@ -301,7 +301,7 @@ export interface AgentEventPayload {
 export interface ChannelDataEvent {
   type: "channel_data";
   name: string;
-  data: unknown;
+  data: Record<string, unknown>;
 }
 
 export interface ExtensionUIRequestEvent {
@@ -333,10 +333,15 @@ export interface ExtensionUIRequestEvent {
   text?: string;
 }
 
+export interface CompactionResult {
+  tokensAfter?: number;
+  tokensBefore?: number;
+}
+
 export type AgentEvent =
   | UpstreamAgentEvent
   | { type: "compaction_start"; reason: string }
-  | { type: "compaction_end"; reason: string; result: unknown; aborted: boolean }
+  | { type: "compaction_end"; reason: string; result: CompactionResult; aborted: boolean }
   | { type: "queue_update"; steering: string[]; followUp: string[] }
   | ExtensionUIRequestEvent
   | ChannelDataEvent
@@ -367,5 +372,5 @@ export interface AgentProcessInfo {
   projectPath: string;
   sessionPath: string;
   status: "idle" | "streaming";
-  holdEvents: unknown[];
+  holdEvents: AgentEvent[];
 }

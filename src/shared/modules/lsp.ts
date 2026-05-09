@@ -24,7 +24,7 @@ export interface LspChannelEvent {
     | "language_activated";
   timestamp: number;
   servers?: LspServerStatus[];
-  diagnostics?: unknown;
+  diagnostics?: Record<string, unknown[]>;
   filePath?: string;
   mode?: string;
   error?: string;

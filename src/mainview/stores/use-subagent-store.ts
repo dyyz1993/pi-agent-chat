@@ -118,8 +118,8 @@ export const useSubagentStore = create<SubagentState>()((set, get) => ({
       }
       const msgs: ChatMessage[] = [];
       for (const entry of result.entries) {
-        const data = entry.data as Record<string, unknown>;
-        const raw = data?.message;
+        const entryData = entry.data;
+        const raw = entryData.message;
         if (!raw) continue;
         const msg = messageToChatMessage(raw as Message, entry.id);
         if (msg) msgs.push(msg);
@@ -412,10 +412,11 @@ export function handleSubagentEvent(subId: string, event: SubagentEvent, parentS
     type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
     const toolCallId = event.toolCallId;
     const toolName = event.toolName;
-    const args = event.type === "tool_execution_end" ? undefined : event.args;
+    const args =
+      event.type === "tool_execution_end" ? undefined : (event.args as Record<string, unknown>);
     const argsStr = args
-      ? typeof args === "object" && typeof args.command === "string"
-        ? args.command
+      ? typeof (args as Record<string, unknown>).command === "string"
+        ? ((args as Record<string, unknown>).command as string)
         : JSON.stringify(args, null, 2)
       : "";
 

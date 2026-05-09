@@ -1,20 +1,13 @@
 import type { RPCServer } from "@dyyz1993/rpc-core";
-import type { RPCMethods, HandlerOptions } from "../rpc-schema";
+import type { HandlerOptions } from "../rpc-schema";
+import { createRegister } from "../rpc-schema";
 import { readFile } from "fs/promises";
 import { existsSync } from "fs";
 import { getProcessManager } from "./agent";
 import type { LspDiagnosticsMode, LspServerStatus } from "../modules/lsp";
 
-type P<K extends keyof RPCMethods> = RPCMethods[K] extends { params: infer P } ? P : never;
-type R<K extends keyof RPCMethods> = RPCMethods[K] extends { result: infer R } ? R : never;
-
 export function register(server: RPCServer, _options: HandlerOptions): void {
-  const r = <K extends keyof RPCMethods & string>(
-    method: K,
-    handler: (params: P<K>) => Promise<R<K>>,
-  ) => {
-    server.register(method, handler as (params: unknown) => Promise<unknown>);
-  };
+  const r = createRegister(server);
 
   r("lsp.status", async (params) => {
     const pm = getProcessManager();

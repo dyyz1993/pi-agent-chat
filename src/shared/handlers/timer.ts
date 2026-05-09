@@ -1,16 +1,9 @@
 import type { RPCServer } from "@dyyz1993/rpc-core";
-import type { MethodParams, MethodResult } from "@dyyz1993/rpc-core";
-import type { RPCMethods, HandlerOptions } from "../rpc-schema";
-
-type RegisterFn = <K extends keyof RPCMethods & string>(
-  method: K,
-  handler: (params: MethodParams<RPCMethods, K>) => Promise<MethodResult<RPCMethods, K>>,
-) => void;
+import type { HandlerOptions } from "../rpc-schema";
+import { createRegister } from "../rpc-schema";
 
 export function register(server: RPCServer, _options: HandlerOptions): void {
-  const r: RegisterFn = (method, handler) => {
-    server.register(method, handler as (params: unknown) => Promise<unknown>);
-  };
+  const r = createRegister(server);
 
   let timerId: ReturnType<typeof setInterval> | null = null;
 

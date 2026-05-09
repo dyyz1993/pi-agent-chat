@@ -59,8 +59,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
   if (event.type === "compaction_end") {
     log.info("compaction_end → force reload", { sessionId });
-    const result = event.result as { tokensAfter?: number; tokensBefore?: number } | undefined;
-    const tokensAfter = result?.tokensAfter;
+    const tokensAfter = event.result?.tokensAfter;
     storeGet().updateSessionContext(sessionId, { tokens: tokensAfter ?? null });
     storeGet().updateSessionStatus(sessionId, "idle");
     useChatStore.getState().loadSessionMessages(sessionId, { force: true });
@@ -148,9 +147,9 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
           : "unknown";
 
       const data: Record<string, unknown> =
-        "details" in msgObj
+        "details" in msgObj && typeof msgObj.details === "object" && msgObj.details !== null
           ? (msgObj.details as Record<string, unknown>)
-          : "data" in msgObj
+          : "data" in msgObj && typeof msgObj.data === "object" && msgObj.data !== null
             ? (msgObj.data as Record<string, unknown>)
             : {};
 
@@ -367,15 +366,10 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     apiClient
       .call("agent.getContextUsage", { sessionId })
       .then((cu) => {
-        const r = cu as {
-          tokens: number | null;
-          contextWindow: number;
-          percent: number | null;
-        } | null;
-        if (r && r.tokens != null) {
+        if (cu && cu.tokens != null) {
           storeGet().updateSessionContext(sessionId, {
-            tokens: r.tokens,
-            ...(r.contextWindow > 0 ? { contextWindow: r.contextWindow } : {}),
+            tokens: cu.tokens,
+            ...(cu.contextWindow > 0 ? { contextWindow: cu.contextWindow } : {}),
           });
         }
       })
@@ -441,15 +435,15 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
       if (event.type === "tool_execution_start") {
         const rawArgs: unknown = event.args;
-        const argsStr =
-          rawArgs &&
-          typeof rawArgs === "object" &&
-          "command" in rawArgs &&
-          typeof (rawArgs as Record<string, unknown>).command === "string"
-            ? String((rawArgs as Record<string, unknown>).command)
-            : rawArgs
-              ? JSON.stringify(rawArgs, null, 2)
-              : "";
+        let argsStr = "";
+        if (rawArgs && typeof rawArgs === "object" && rawArgs !== null) {
+          const obj = rawArgs as Record<string, unknown>;
+          if ("command" in obj && typeof obj.command === "string") {
+            argsStr = obj.command;
+          } else {
+            argsStr = JSON.stringify(rawArgs, null, 2);
+          }
+        }
         if (targetIdx >= 0) {
           blocks[targetIdx] = {
             type: "toolExecution",

@@ -1,5 +1,6 @@
 import type { RPCServer } from "@dyyz1993/rpc-core";
-import type { RPCMethods, HandlerOptions } from "../rpc-schema";
+import type { HandlerOptions } from "../rpc-schema";
+import { createRegister } from "../rpc-schema";
 import type { SessionEntry } from "../modules/session";
 import { readFile, writeFile, mkdir, unlink } from "fs/promises";
 import { existsSync, createReadStream } from "fs";
@@ -12,9 +13,6 @@ import { createLogger } from "../lib/logger";
 
 const log = createLogger("session");
 
-type P<K extends keyof RPCMethods> = RPCMethods[K] extends { params: infer P } ? P : never;
-type R<K extends keyof RPCMethods> = RPCMethods[K] extends { result: infer R } ? R : never;
-
 const SESSIONS_DIR = join(homedir(), ".pi", "agent", "sessions");
 
 function encodeCwd(cwd: string): string {
@@ -22,12 +20,7 @@ function encodeCwd(cwd: string): string {
 }
 
 export function register(server: RPCServer, _options: HandlerOptions): void {
-  const r = <K extends keyof RPCMethods & string>(
-    method: K,
-    handler: (params: P<K>) => Promise<R<K>>,
-  ) => {
-    server.register(method, handler as (params: unknown) => Promise<unknown>);
-  };
+  const r = createRegister(server);
 
   r("session.getEntries", async (params) => {
     const { sessionPath } = params;

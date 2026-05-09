@@ -1,7 +1,7 @@
 import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { Dirent } from "fs";
-import type { MethodParams, MethodResult } from "@dyyz1993/rpc-core";
-import type { RPCMethods, HandlerOptions } from "../rpc-schema";
+import type { HandlerOptions } from "../rpc-schema";
+import { createRegister } from "../rpc-schema";
 import { readdir, stat, writeFile, readFile, mkdir, rename, rm, cp } from "fs/promises";
 import { existsSync, watch } from "fs";
 import { join, dirname, resolve } from "path";
@@ -144,15 +144,8 @@ function sortEntries(entries: Dirent[]): Dirent[] {
   });
 }
 
-type RegisterFn = <K extends keyof RPCMethods & string>(
-  method: K,
-  handler: (params: MethodParams<RPCMethods, K>) => Promise<MethodResult<RPCMethods, K>>,
-) => void;
-
 export function register(server: RPCServer, _options: HandlerOptions): void {
-  const r: RegisterFn = (method, handler) => {
-    server.register(method, handler as (params: unknown) => Promise<unknown>);
-  };
+  const r = createRegister(server);
 
   r("file.findProjectRoot", async () => {
     let dir = process.cwd();

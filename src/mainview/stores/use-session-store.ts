@@ -388,7 +388,7 @@ export const useSessionStore = create<SessionState>()(
                           .then((r) => {
                             perfLog.info("[switch] step-5 replayHoldEvents done", {
                               sessionId: id,
-                              replayed: (r as Record<string, unknown>).replayed,
+                              replayed: r.replayed,
                               ms: Math.round(performance.now() - tReplay),
                             });
                           })
@@ -711,12 +711,7 @@ export const useSessionStore = create<SessionState>()(
         if (existing?.tokens != null && existing.tokens > 0) return;
         apiClient
           .call("agent.getContextUsage", { sessionId })
-          .then((cu) => {
-            const r = cu as {
-              tokens: number | null;
-              contextWindow: number;
-              percent: number | null;
-            } | null;
+          .then((r) => {
             if (r && r.tokens != null) {
               get().updateSessionContext(sessionId, {
                 tokens: r.tokens,
@@ -775,17 +770,12 @@ export const useSessionStore = create<SessionState>()(
             const fetchContextUsage = (attempt = 0): void => {
               apiClient
                 .call("agent.getContextUsage", { sessionId })
-                .then((cu) => {
+                .then((r) => {
                   perfLog.info("[fetchInit] step-b getContextUsage", {
                     sessionId,
                     attempt,
                     ms: Math.round(performance.now() - tCu),
                   });
-                  const r = cu as {
-                    tokens: number | null;
-                    contextWindow: number;
-                    percent: number | null;
-                  } | null;
                   if (!r) {
                     if (attempt < 2) setTimeout(() => fetchContextUsage(attempt + 1), 1500);
                     return;
@@ -907,13 +897,7 @@ export const useSessionStore = create<SessionState>()(
                   sessionId,
                   ms: Math.round(performance.now() - tMcp),
                 });
-                const raw = (res as Record<string, unknown>) ?? {};
-                const rawServers = (Array.isArray(raw.servers) ? raw.servers : []) as Array<{
-                  name: string;
-                  status: "connecting" | "connected" | "error" | "disconnected";
-                  error?: string;
-                  tools: Array<{ originalName: string; fullName: string; description: string }>;
-                }>;
+                const rawServers = res.servers ?? [];
                 const servers: MCPServerInfo[] = rawServers.map((s) => ({
                   name: s.name,
                   status: s.status,

@@ -69,3 +69,18 @@ export function asRegister(
 export function asCleanup(fn: (server: RPCServer) => void): HandlerCleanup {
   return fn as HandlerCleanup;
 }
+
+export type P<K extends keyof RPCMethods> = RPCMethods[K] extends { params: infer P } ? P : never;
+
+export type R<K extends keyof RPCMethods> = RPCMethods[K] extends { result: infer R } ? R : never;
+
+export function createRegister(rpcSrv: {
+  register: (method: string, handler: (params: unknown) => Promise<unknown>) => void;
+}) {
+  return <K extends keyof RPCMethods & string>(
+    method: K,
+    handler: (params: P<K>) => Promise<R<K>>,
+  ) => {
+    rpcSrv.register(method, handler as (params: unknown) => Promise<unknown>);
+  };
+}

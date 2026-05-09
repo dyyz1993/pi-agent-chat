@@ -1,14 +1,12 @@
 import type { RPCServer } from "@dyyz1993/rpc-core";
-import type { RPCMethods, HandlerOptions } from "../rpc-schema";
+import type { HandlerOptions, R } from "../rpc-schema";
+import { createRegister } from "../rpc-schema";
 import type { MemoryFile } from "../modules/memory";
 import { readdir, readFile, stat } from "fs/promises";
 import { existsSync } from "fs";
 import { join, resolve } from "path";
 import { homedir } from "os";
 import { getProcessManager } from "./agent";
-
-type P<K extends keyof RPCMethods> = RPCMethods[K] extends { params: infer P } ? P : never;
-type R<K extends keyof RPCMethods> = RPCMethods[K] extends { result: infer R } ? R : never;
 
 function encodeCwd(cwd: string): string {
   return "--" + cwd.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-") + "--";
@@ -33,12 +31,7 @@ function parseFrontmatter(content: string): { frontmatter: Record<string, string
 }
 
 export function register(server: RPCServer, _options: HandlerOptions): void {
-  const r = <K extends keyof RPCMethods & string>(
-    method: K,
-    handler: (params: P<K>) => Promise<R<K>>,
-  ) => {
-    server.register(method, handler as (params: unknown) => Promise<unknown>);
-  };
+  const r = createRegister(server);
 
   async function fallbackListFiles(projectPath: string): Promise<R<"memory.listFiles">> {
     const agentDir = join(homedir(), ".pi", "agent");

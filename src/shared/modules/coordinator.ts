@@ -1,3 +1,5 @@
+import type { AgentEvent } from "./agent";
+
 export type CoordinatorSessionStatus = "idle" | "streaming" | "stopped" | "completed";
 
 export interface CoordinatorContextUsage {
@@ -119,6 +121,6 @@ export interface CoordinatorEvents {
   "coordinator.session_event": {
     parentSessionId: string;
     childSessionId: string;
-    event: unknown;
+    event: AgentEvent;
   };
 }

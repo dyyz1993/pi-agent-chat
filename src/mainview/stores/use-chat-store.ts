@@ -7,7 +7,7 @@ import { useSessionStore } from "./use-session-store";
 import { useMemoryStore } from "./use-memory-store";
 import { ALL_MEMORY_TYPE_KEYS } from "../components/chat/memory-config";
 import { messageToChatMessage } from "../lib/message-mapper";
-import type { CustomEntryForUI } from "../../shared/modules/agent";
+import type { AgentMessageForUI } from "../../shared/modules/agent";
 import { createLogger } from "../../shared/lib/logger";
 
 const log = createLogger("chat-store");
@@ -431,33 +431,26 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
 
       const toolCallNameMap: Record<string, string> = {};
-      const rawMessages: Array<{ raw: Record<string, unknown>; id?: string }> = [];
 
-      const messages = (result as unknown as { messages: Array<Record<string, unknown>> }).messages;
+      const messages = result.messages;
       if (!Array.isArray(messages)) {
         log.warn("GUARD-4: messages is not array", { sessionId: sid, type: typeof messages });
         return;
       }
       log.info("Raw messages count", { sessionId: sid, count: messages.length });
 
+      const rawMessages: Array<{ raw: AgentMessageForUI; id?: string }> = [];
       for (const msg of messages) {
-        rawMessages.push({ raw: msg, id: msg.id as string | undefined });
-
-        const role = msg.role as string;
+        rawMessages.push({ raw: msg, id: msg.id });
+        const role = msg.role;
         if (role === "assistant") {
-          const content = msg.content as Array<Record<string, unknown>> | undefined;
+          const content = msg.content;
           if (Array.isArray(content)) {
             for (const block of content) {
               if (block.type === "toolCall" && block.id && block.name) {
-                toolCallNameMap[block.id as string] = block.name as string;
+                toolCallNameMap[block.id] = block.name;
               }
             }
-          }
-        }
-        if (role === "toolResult" && msg.toolCallId && msg.name) {
-          const tcId = msg.toolCallId as string;
-          if (!toolCallNameMap[tcId]) {
-            toolCallNameMap[tcId] = msg.name as string;
           }
         }
       }
@@ -475,8 +468,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       normalizeToolBlocks(msgs);
 
-      const customEntries = (result as unknown as { customEntries: CustomEntryForUI[] })
-        .customEntries;
+      const customEntries = result.customEntries;
       if (Array.isArray(customEntries) && customEntries.length > 0) {
         const memoryStore = useMemoryStore.getState();
 
@@ -491,10 +483,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
           });
 
           if (entry.customType === "memory_prefetch_result" && entry.data) {
-            const payload = entry.data as { summary?: string; snippet?: string };
+            const payload = entry.data as Record<string, unknown>;
             memoryStore.addInjected(sid, {
-              summary: payload.summary ?? "",
-              snippet: payload.snippet ?? "",
+              summary: (payload.summary as string) ?? "",
+              snippet: (payload.snippet as string) ?? "",
             });
           }
 
@@ -572,29 +564,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     try {
       const result = await apiClient.call("agent.getFullMessages", { sessionId: sid });
-      const messages = (result as unknown as { messages: Array<Record<string, unknown>> }).messages;
+      const messages = result.messages;
       if (!Array.isArray(messages)) return;
 
       const toolCallNameMap: Record<string, string> = {};
-      const rawMessages: Array<{ raw: Record<string, unknown>; id?: string }> = [];
+      const rawMessages: Array<{ raw: AgentMessageForUI; id?: string }> = [];
 
       for (const msg of messages) {
-        rawMessages.push({ raw: msg, id: msg.id as string | undefined });
-        const role = msg.role as string;
+        rawMessages.push({ raw: msg, id: msg.id });
+        const role = msg.role;
         if (role === "assistant") {
-          const content = msg.content as Array<Record<string, unknown>> | undefined;
+          const content = msg.content;
           if (Array.isArray(content)) {
             for (const block of content) {
               if (block.type === "toolCall" && block.id && block.name) {
-                toolCallNameMap[block.id as string] = block.name as string;
+                toolCallNameMap[block.id] = block.name;
               }
             }
-          }
-        }
-        if (role === "toolResult" && msg.toolCallId && msg.name) {
-          const tcId = msg.toolCallId as string;
-          if (!toolCallNameMap[tcId]) {
-            toolCallNameMap[tcId] = msg.name as string;
           }
         }
       }

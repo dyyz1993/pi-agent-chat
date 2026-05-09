@@ -1,5 +1,6 @@
 import type { RPCServer } from "@dyyz1993/rpc-core";
-import type { RPCMethods, HandlerOptions } from "../rpc-schema";
+import type { HandlerOptions, R } from "../rpc-schema";
+import { createRegister } from "../rpc-schema";
 import { readFile, writeFile } from "fs/promises";
 import { existsSync } from "fs";
 import { join } from "path";
@@ -7,9 +8,6 @@ import { getProcessManager } from "./agent";
 import { createLogger } from "../lib/logger";
 
 const log = createLogger("snapshot");
-
-type P<K extends keyof RPCMethods> = RPCMethods[K] extends { params: infer P } ? P : never;
-type R<K extends keyof RPCMethods> = RPCMethods[K] extends { result: infer R } ? R : never;
 
 interface SnapshotMeta {
   id: string;
@@ -45,12 +43,7 @@ function resolveSessionDir(sessionId: string): string | null {
 }
 
 export function register(server: RPCServer, _options: HandlerOptions): void {
-  const r = <K extends keyof RPCMethods & string>(
-    method: K,
-    handler: (params: P<K>) => Promise<R<K>>,
-  ) => {
-    server.register(method, handler as (params: unknown) => Promise<unknown>);
-  };
+  const r = createRegister(server);
 
   r("snapshot.list", async (params) => {
     const manager = getProcessManager();

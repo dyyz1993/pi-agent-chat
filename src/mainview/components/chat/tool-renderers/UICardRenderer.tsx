@@ -386,7 +386,7 @@ export const EditorCard = memo(function EditorCard({ block }: { block: UIBlock }
     block.status === "responded" && block.response ? (block.response.value as string) : null;
   const wasDismissed =
     block.status === "dismissed" ||
-    (block.response && (block.response as Record<string, unknown>).cancelled);
+    (block.response && "cancelled" in block.response && block.response.cancelled === true);
 
   return (
     <CardShell block={block}>

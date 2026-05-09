@@ -157,13 +157,9 @@ export const useLspStore = create<LspState>()((set, get) => ({
           fileTypes: s.fileTypes,
           state: getServerState(s) as LspServerStatus["state"],
           reason: s.status?.reason ?? s.reason ?? "",
-          transport: (s.status as Record<string, unknown>)?.transport as string | undefined,
-          activeCommand: (s.status as Record<string, unknown>)?.activeCommand as
-            | string[]
-            | undefined,
-          configuredCommand: (s.status as Record<string, unknown>)?.configuredCommand as
-            | string[]
-            | undefined,
+          transport: s.status?.transport,
+          activeCommand: s.status?.activeCommand,
+          configuredCommand: s.status?.configuredCommand,
         }));
         const hasReady = servers.some((s) => s.state === "ready");
         const hasError = servers.some((s) => s.state === "error");
