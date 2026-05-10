@@ -1,84 +1,83 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, mock } from "bun:test";
 
-vi.mock("zustand/middleware", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("zustand/middleware")>();
-  return {
-    ...actual,
-    persist: (fn: unknown) => fn,
-  };
-});
+import * as actualMiddleware from "zustand/middleware";
 
-vi.mock("../src/mainview/lib/api-client", () => ({
+mock.module("zustand/middleware", () => ({
+  ...actualMiddleware,
+  persist: (fn: unknown) => fn,
+}));
+
+mock.module("../src/mainview/lib/api-client", () => ({
   apiClient: {
-    call: vi.fn().mockResolvedValue({}),
-    onReconnect: vi.fn(),
+    call: mock().mockResolvedValue({}),
+    onReconnect: mock(),
   },
 }));
 
-vi.mock("../src/mainview/stores/use-rpc-debug-store", () => ({
+mock.module("../src/mainview/stores/use-rpc-debug-store", () => ({
   useRpcDebugStore: {
-    getState: vi.fn(() => ({ addEntry: vi.fn() })),
+    getState: mock(() => ({ addEntry: mock() })),
   },
 }));
 
-vi.mock("../src/mainview/stores/use-chat-store", () => ({
+mock.module("../src/mainview/stores/use-chat-store", () => ({
   useChatStore: {
-    getState: vi.fn(() => ({
-      loadSessionMessages: vi.fn().mockResolvedValue(undefined),
-      clearSessionMessages: vi.fn(),
+    getState: mock(() => ({
+      loadSessionMessages: mock().mockResolvedValue(undefined),
+      clearSessionMessages: mock(),
       messagesBySession: {},
     })),
-    setState: vi.fn(),
+    setState: mock(),
   },
 }));
 
-vi.mock("../src/mainview/stores/use-app-store", () => ({
+mock.module("../src/mainview/stores/use-app-store", () => ({
   useAppStore: {
-    getState: vi.fn(() => ({ addLog: vi.fn() })),
+    getState: mock(() => ({ addLog: mock() })),
   },
 }));
 
-vi.mock("../src/mainview/stores/use-explorer-store", () => ({
+mock.module("../src/mainview/stores/use-explorer-store", () => ({
   useExplorerStore: {
-    getState: vi.fn(() => ({ setCurrentPath: vi.fn(), listRootDir: vi.fn() })),
+    getState: mock(() => ({ setCurrentPath: mock(), listRootDir: mock() })),
   },
 }));
 
-vi.mock("../src/mainview/stores/use-status-store", () => ({
+mock.module("../src/mainview/stores/use-status-store", () => ({
   useStatusStore: {
-    getState: vi.fn(() => ({ setPlugins: vi.fn(), setSkills: vi.fn() })),
+    getState: mock(() => ({ setPlugins: mock(), setSkills: mock() })),
   },
-  deriveSkillScope: vi.fn(() => "project"),
-  derivePluginScope: vi.fn(() => "project"),
+  deriveSkillScope: mock(() => "project"),
+  derivePluginScope: mock(() => "project"),
 }));
 
-vi.mock("../src/mainview/stores/use-turn-store", () => ({
+mock.module("../src/mainview/stores/use-turn-store", () => ({
   useTurnStore: {
-    getState: vi.fn(() => ({ clearSessionUI: vi.fn() })),
+    getState: mock(() => ({ clearSessionUI: mock() })),
   },
 }));
 
-vi.mock("../src/mainview/stores/use-chat-nav-store", () => ({
+mock.module("../src/mainview/stores/use-chat-nav-store", () => ({
   useChatNavStore: {
-    getState: vi.fn(() => ({ clearSessionUI: vi.fn() })),
+    getState: mock(() => ({ clearSessionUI: mock() })),
   },
 }));
 
-vi.mock("../src/mainview/stores/session-subscriptions", () => ({
-  setupSubscriptions: vi.fn(),
-  cleanupSession: vi.fn(),
-  cleanupSessionData: vi.fn(),
+mock.module("../src/mainview/stores/session-subscriptions", () => ({
+  setupSubscriptions: mock(),
+  cleanupSession: mock(),
+  cleanupSessionData: mock(),
   clearSubscriptionState: (s: Record<string, unknown>) => {
     delete (s as Record<string, unknown>).agentSubscriptions;
     return {};
   },
-  syncTabsToBackend: vi.fn(),
+  syncTabsToBackend: mock(),
 }));
 
 import { useSessionStore } from "../src/mainview/stores/use-session-store";
 import { apiClient } from "../src/mainview/lib/api-client";
 
-const mockedCall = vi.mocked(apiClient.call);
+const mockedCall = apiClient.call as ReturnType<typeof mock>;
 
 const SID = "sess-ctx-1";
 
@@ -90,7 +89,7 @@ const AGENT_STATE = {
 };
 
 function setupMock(contextUsageHandler: () => Promise<unknown>) {
-  mockedCall.mockImplementation((method: string) => {
+  (mockedCall as ReturnType<typeof mock>).mockImplementation((method: string) => {
     if (method === "agent.getState") return Promise.resolve(AGENT_STATE);
     if (method === "agent.getAvailableModels") return Promise.resolve([]);
     if (method === "agent.getExtensions") return Promise.resolve([]);
@@ -103,12 +102,13 @@ function setupMock(contextUsageHandler: () => Promise<unknown>) {
 }
 
 function getContextUsageCalls() {
-  return mockedCall.mock.calls.filter((c) => (c as string[])[0] === "agent.getContextUsage");
+  return (mockedCall as ReturnType<typeof mock>).mock.calls.filter(
+    (c: unknown[]) => (c as string[])[0] === "agent.getContextUsage",
+  );
 }
 
 beforeEach(() => {
-  vi.useFakeTimers();
-  vi.clearAllMocks();
+  mock.clearAllMocks();
   useSessionStore.setState({
     sessionsByProject: {},
     activeSessionId: null,
@@ -137,20 +137,16 @@ beforeEach(() => {
   });
 });
 
-afterEach(() => {
-  vi.useRealTimers();
-});
-
 describe("fetchInitialState context usage retry", () => {
   it("calls agent.getContextUsage (not getSessionStats)", async () => {
     setupMock(() => Promise.resolve({ tokens: 5000, contextWindow: 200000, percent: 0.025 }));
 
     useSessionStore.getState().fetchInitialState(SID);
-    await vi.runOnlyPendingTimersAsync();
+    await new Promise((r) => setTimeout(r, 500));
 
     expect(getContextUsageCalls().length).toBeGreaterThanOrEqual(1);
-    const sessionStatsCalls = mockedCall.mock.calls.filter(
-      (c) => (c as string[])[0] === "agent.getSessionStats",
+    const sessionStatsCalls = (mockedCall as ReturnType<typeof mock>).mock.calls.filter(
+      (c: unknown[]) => (c as string[])[0] === "agent.getSessionStats",
     );
     expect(sessionStatsCalls).toHaveLength(0);
   });
@@ -159,7 +155,7 @@ describe("fetchInitialState context usage retry", () => {
     setupMock(() => Promise.resolve({ tokens: 5000, contextWindow: 200000, percent: 0.025 }));
 
     useSessionStore.getState().fetchInitialState(SID);
-    await vi.runOnlyPendingTimersAsync();
+    await new Promise((r) => setTimeout(r, 500));
 
     const ctx = useSessionStore.getState().sessionContextMap[SID];
     expect(ctx).toBeDefined();
@@ -177,7 +173,7 @@ describe("fetchInitialState context usage retry", () => {
     });
 
     useSessionStore.getState().fetchInitialState(SID);
-    await vi.runOnlyPendingTimersAsync();
+    await new Promise((r) => setTimeout(r, 2000));
 
     const ctx = useSessionStore.getState().sessionContextMap[SID];
     expect(ctx).toBeDefined();
@@ -185,14 +181,11 @@ describe("fetchInitialState context usage retry", () => {
     expect(getContextUsageCalls()).toHaveLength(2);
   });
 
-  it("stops retrying after 3 attempts all return null", async () => {
+  it("stops retrying after 3 attempts all return null", { timeout: 10000 }, async () => {
     setupMock(() => Promise.resolve(null));
 
     useSessionStore.getState().fetchInitialState(SID);
-
-    await vi.runOnlyPendingTimersAsync();
-    await vi.runOnlyPendingTimersAsync();
-    await vi.runOnlyPendingTimersAsync();
+    await new Promise((r) => setTimeout(r, 6000));
 
     expect(getContextUsageCalls()).toHaveLength(3);
 
@@ -209,7 +202,7 @@ describe("fetchInitialState context usage retry", () => {
     });
 
     useSessionStore.getState().fetchInitialState(SID);
-    await vi.runOnlyPendingTimersAsync();
+    await new Promise((r) => setTimeout(r, 2000));
 
     const ctx = useSessionStore.getState().sessionContextMap[SID];
     expect(ctx).toBeDefined();
@@ -227,7 +220,7 @@ describe("fetchInitialState context usage retry", () => {
     });
 
     useSessionStore.getState().fetchInitialState(SID);
-    await vi.runOnlyPendingTimersAsync();
+    await new Promise((r) => setTimeout(r, 2000));
 
     const ctx = useSessionStore.getState().sessionContextMap[SID];
     expect(ctx).toBeDefined();
@@ -240,7 +233,7 @@ describe("fetchInitialState context usage retry", () => {
     setupMock(() => Promise.resolve({ tokens: 10000, contextWindow: 128000, percent: 0.078 }));
 
     useSessionStore.getState().fetchInitialState(SID);
-    await vi.runOnlyPendingTimersAsync();
+    await new Promise((r) => setTimeout(r, 500));
 
     const ctx = useSessionStore.getState().sessionContextMap[SID];
     expect(ctx).toBeDefined();

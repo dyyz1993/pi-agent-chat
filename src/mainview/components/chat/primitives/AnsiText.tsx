@@ -4,22 +4,22 @@ const ESC = "\u001B";
 const ANSI_REGEX = new RegExp(`${ESC}\\[([0-9;]*)m`, "g");
 
 const COLOR_MAP: Record<string, string> = {
-  "30": "text-gray-800",
+  "30": "text-gray-800 dark:text-gray-200",
   "31": "text-red-400",
   "32": "text-green-400",
   "33": "text-yellow-400",
   "34": "text-blue-400",
   "35": "text-purple-400",
   "36": "text-cyan-400",
-  "37": "text-gray-200",
-  "90": "text-gray-500",
-  "91": "text-red-300",
-  "92": "text-green-300",
-  "93": "text-yellow-300",
-  "94": "text-blue-300",
-  "95": "text-purple-300",
-  "96": "text-cyan-300",
-  "97": "text-gray-100",
+  "37": "text-gray-200 dark:text-gray-400",
+  "90": "text-gray-500 dark:text-gray-500",
+  "91": "text-red-300 dark:text-red-400",
+  "92": "text-green-300 dark:text-green-400",
+  "93": "text-yellow-300 dark:text-yellow-400",
+  "94": "text-blue-300 dark:text-blue-400",
+  "95": "text-purple-300 dark:text-purple-400",
+  "96": "text-cyan-300 dark:text-cyan-400",
+  "97": "text-gray-100 dark:text-gray-300",
 };
 
 interface AnsiSpan {

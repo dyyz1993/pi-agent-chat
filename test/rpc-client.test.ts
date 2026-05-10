@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { spawn, type ChildProcess } from "child_process";
 import WebSocket from "ws";
 import { randomUUID } from "crypto";
-import { tmpdir } from "os";
-import { join } from "path";
-import { mkdir, rm } from "fs/promises";
+import {
+  startTestServer,
+  stopTestServer,
+  type TestServerResult,
+} from "./helpers/integration-server";
 
 const TEST_PORT = 3199;
 const AUTH_TOKEN = "pi-agent-chat-chat-token";
@@ -64,22 +65,18 @@ function sendRPC(
           ws.off("message", handler);
           resolve(msg);
         }
-      } catch { /* ignore non-JSON */ }
+      } catch {
+        /* ignore non-JSON */
+      }
     };
     ws.on("message", handler);
     ws.send(JSON.stringify({ type: "request", id, method, params }));
   });
 }
 
-function subscribe(
-  ws: WebSocket,
-  eventType: string,
-  filter: Record<string, unknown>,
-): string {
+function subscribe(ws: WebSocket, eventType: string, filter: Record<string, unknown>): string {
   const id = randomUUID();
-  ws.send(
-    JSON.stringify({ type: "subscribe", id, eventType, filter }),
-  );
+  ws.send(JSON.stringify({ type: "subscribe", id, eventType, filter }));
   return id;
 }
 
@@ -97,27 +94,22 @@ function waitForEvent(
     const handler = (data: Buffer) => {
       try {
         const msg = JSON.parse(data.toString()) as RPCMessage;
-        if (
-          msg.type === "event" &&
-          msg.eventType === eventName &&
-          msg.payload
-        ) {
+        if (msg.type === "event" && msg.eventType === eventName && msg.payload) {
           if (!predicate || predicate(msg)) {
             clearTimeout(timeout);
             ws.off("message", handler);
             resolve(msg);
           }
         }
-      } catch { /* ignore non-JSON */ }
+      } catch {
+        /* ignore non-JSON */
+      }
     };
     ws.on("message", handler);
   });
 }
 
-function collectEvents(
-  ws: WebSocket,
-  eventName: string,
-): RPCMessage[] {
+function collectEvents(ws: WebSocket, eventName: string): RPCMessage[] {
   const events: RPCMessage[] = [];
   const handler = (data: Buffer) => {
     try {
@@ -125,7 +117,9 @@ function collectEvents(
       if (msg.type === "event" && msg.eventType === eventName) {
         events.push(msg);
       }
-    } catch { /* ignore non-JSON */ }
+    } catch {
+      /* ignore non-JSON */
+    }
   };
   ws.on("message", handler);
   return events;
@@ -142,7 +136,11 @@ async function createSession(
 
 async function safeStop(ws: WebSocket | undefined, sessionId: string | undefined) {
   if (!ws || ws.readyState !== WebSocket.OPEN || !sessionId) return;
-  try { await sendRPC(ws, "agent.stop", { sessionId }); } catch { /* cleanup */ }
+  try {
+    await sendRPC(ws, "agent.stop", { sessionId });
+  } catch {
+    /* cleanup */
+  }
 }
 
 async function safeClose(ws: WebSocket | undefined) {
@@ -153,63 +151,18 @@ async function safeClose(ws: WebSocket | undefined) {
 
 const describe_ = describe;
 
-let serverProc: ChildProcess | null = null;
-let tmpSessionDir: string;
+let server: TestServerResult;
 
 beforeAll(async () => {
-  tmpSessionDir = join(tmpdir(), `pi-test-sessions-${Date.now()}`);
-  await mkdir(tmpSessionDir, { recursive: true });
-
-  const env: Record<string, string> = {
-    ...process.env as Record<string, string>,
-    PORT: String(TEST_PORT),
-    AUTH_TOKEN,
-    LOG_DIR: join(tmpSessionDir, "logs"),
-  };
-
-  serverProc = spawn("bun", ["src/server.ts"], {
-    cwd: PROJECT_PATH,
-    env,
-    stdio: ["pipe", "pipe", "pipe"],
+  server = await startTestServer({
+    port: TEST_PORT,
+    authToken: AUTH_TOKEN,
+    projectPath: PROJECT_PATH,
   });
-
-  await new Promise<void>((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      reject(new Error("Server startup timeout"));
-    }, 15000);
-
-    const check = () => {
-      const ws = new WebSocket(WS_URL);
-      ws.on("open", () => {
-        clearTimeout(timeout);
-        ws.close();
-        resolve();
-      });
-      ws.on("error", () => {
-        setTimeout(check, 500);
-      });
-    };
-    setTimeout(check, 2000);
-  });
-}, 20000);
+}, 40000);
 
 afterAll(async () => {
-  if (serverProc) {
-    serverProc.kill("SIGTERM");
-    await new Promise<void>((resolve) => {
-      if (!serverProc) { resolve(); return; }
-      const timeout = setTimeout(() => {
-        serverProc?.kill("SIGKILL");
-        resolve();
-      }, 5000);
-      serverProc.on("exit", () => {
-        clearTimeout(timeout);
-        resolve();
-      });
-    });
-    serverProc = null;
-  }
-  await rm(tmpSessionDir, { recursive: true, force: true }).catch(() => {});
+  await stopTestServer(server);
 });
 
 function extractTextFromMessageUpdate(event: Record<string, unknown>): string {
@@ -369,7 +322,8 @@ describe_("RpcClient Integration Tests", () => {
     });
 
     it("should send long prompt and detect streaming", async () => {
-      const longPrompt = "Count from 1 to 50, one number per line. For each number, write a short sentence about why that number is interesting.";
+      const longPrompt =
+        "Count from 1 to 50, one number per line. For each number, write a short sentence about why that number is interesting.";
 
       const sendResp = await sendRPC(ws!, "agent.send", {
         sessionId: sessionId!,
@@ -391,7 +345,9 @@ describe_("RpcClient Integration Tests", () => {
               }
             }
           }
-        } catch { /* ignore non-JSON */ }
+        } catch {
+          /* ignore non-JSON */
+        }
       };
       ws!.on("message", streamHandler);
 
@@ -447,7 +403,9 @@ describe_("RpcClient Integration Tests", () => {
             if (msg.type === "event" && msg.eventType === "agent.event") {
               replayEvents.push(msg);
             }
-          } catch { /* ignore non-JSON */ }
+          } catch {
+            /* ignore non-JSON */
+          }
         };
         ws2.on("message", replayHandler);
 
@@ -534,10 +492,7 @@ describe_("RpcClient Integration Tests", () => {
           const payload = evt.payload as Record<string, unknown>;
           const event = payload.event as Record<string, unknown>;
           if (event?.type === "message_end") sawMessageEnd = true;
-          if (
-            event?.type === "tool_execution_start" ||
-            event?.type === "tool_call"
-          )
+          if (event?.type === "tool_execution_start" || event?.type === "tool_call")
             sawToolStart = true;
         }
       }
@@ -570,7 +525,9 @@ describe_("RpcClient Integration Tests", () => {
             if (msg.type === "event" && msg.eventType === "agent.event") {
               replayEvents.push(msg);
             }
-          } catch { /* ignore non-JSON */ }
+          } catch {
+            /* ignore non-JSON */
+          }
         };
         ws2.on("message", replayHandler);
 
@@ -649,9 +606,7 @@ describe_("RpcClient Integration Tests", () => {
       };
       expect(result.messages.length).toBeGreaterThanOrEqual(2);
 
-      const userMsg = result.messages.find(
-        (m) => (m as Record<string, unknown>).role === "user",
-      );
+      const userMsg = result.messages.find((m) => (m as Record<string, unknown>).role === "user");
       expect(userMsg).toBeDefined();
       expect(userMsg).toHaveProperty("content");
       expect(Array.isArray(userMsg!.content)).toBe(true);

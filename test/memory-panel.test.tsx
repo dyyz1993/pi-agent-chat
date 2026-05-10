@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, mock } from "bun:test";
 import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
 
 const zhMemory: Record<string, string> = {
@@ -30,7 +30,28 @@ const zhMemory: Record<string, string> = {
   bookmarkFailed: "收藏失败",
 };
 
-vi.mock("react-i18next", () => ({
+const sessionState = {
+  activeSessionId: null as string | null,
+  sessionsByProject: {} as Record<string, unknown[]>,
+  projectTabs: [] as Array<{
+    id: string;
+    name: string;
+    path: string;
+    active?: boolean;
+    connected?: boolean;
+  }>,
+  activeProjectId: null as string | null,
+};
+
+function getSessionState() {
+  return sessionState;
+}
+
+function setSessionState(p: Partial<typeof sessionState>) {
+  Object.assign(sessionState, p);
+}
+
+mock.module("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string, opts?: Record<string, unknown>) => {
       let val = zhMemory[key] ?? key;
@@ -42,37 +63,18 @@ vi.mock("react-i18next", () => ({
       return val;
     },
   }),
-  initReactI18next: { type: "3rdParty", init: vi.fn() },
+  initReactI18next: { type: "3rdParty", init: mock() },
 }));
 
-const { getSessionState, setSessionState } = vi.hoisted(() => {
-  const state = {
-    activeSessionId: null as string | null,
-    sessionsByProject: {} as Record<string, unknown[]>,
-    projectTabs: [] as Array<{
-      id: string;
-      name: string;
-      path: string;
-      active?: boolean;
-      connected?: boolean;
-    }>,
-    activeProjectId: null as string | null,
-  };
-  return {
-    getSessionState: () => state,
-    setSessionState: (p: Partial<typeof state>) => Object.assign(state, p),
-  };
-});
-
-vi.mock("../src/mainview/lib/api-client", () => ({
-  apiClient: { call: vi.fn() },
+mock.module("../src/mainview/lib/api-client", () => ({
+  apiClient: { call: mock() },
 }));
 
-vi.mock("../src/mainview/stores/use-rpc-debug-store", () => ({
-  useRpcDebugStore: { getState: vi.fn(() => ({ addEntry: vi.fn() })) },
+mock.module("../src/mainview/stores/use-rpc-debug-store", () => ({
+  useRpcDebugStore: { getState: mock(() => ({ addEntry: mock() })) },
 }));
 
-vi.mock("../src/mainview/stores/use-session-store", () => {
+mock.module("../src/mainview/stores/use-session-store", () => {
   function useSessionStore(selector: (s: ReturnType<typeof getSessionState>) => unknown) {
     return selector(getSessionState());
   }
@@ -85,10 +87,10 @@ import { useMemoryStore } from "../src/mainview/stores/use-memory-store";
 import { apiClient } from "../src/mainview/lib/api-client";
 import { MemoryPanel } from "../src/mainview/components/memory-panel/MemoryPanel";
 
-const mockApiCall = vi.mocked(apiClient.call);
+const mockApiCall = apiClient.call as ReturnType<typeof mock>;
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  mock.clearAllMocks();
 
   useMemoryStore.setState({
     eventsBySession: {},

@@ -50,10 +50,10 @@ export const ReadFileCard = memo(function ReadFileCard({
       data-block-id={blockId}
       className={`border-x-0 border-t border-b overflow-hidden ${
         isRunning
-          ? "border-blue-500/25 bg-blue-50 dark:bg-blue-950/10"
+          ? "border-blue-500/25 bg-blue-50 dark:bg-blue-950/20"
           : isError
-            ? "border-red-500/15 bg-red-50 dark:bg-red-950/8"
-            : "border-gray-200 dark:border-gray-700/30 bg-gray-50 dark:bg-gray-800/15"
+            ? "border-red-500/15 bg-red-50 dark:bg-red-950/15"
+            : "border-gray-200 dark:border-gray-700/30 bg-gray-50 dark:bg-gray-800/25"
       }`}
     >
       <div className="px-3 py-1.5 flex items-center gap-2 text-xs">
@@ -76,7 +76,7 @@ export const ReadFileCard = memo(function ReadFileCard({
         <summary className="sr-only">{t("expand")}</summary>
         <div className="px-3 pb-2">
           {block.output ? (
-            <pre className="text-[11px] text-gray-800 dark:text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-36 overflow-y-auto bg-gray-100 dark:bg-black/20 rounded px-2 py-1.5">
+            <pre className="text-[11px] text-gray-800 dark:text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-36 overflow-y-auto bg-gray-100 dark:bg-gray-900/40 rounded px-2 py-1.5">
               {block.output}
             </pre>
           ) : isRunning ? (

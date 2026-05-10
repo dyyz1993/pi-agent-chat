@@ -958,11 +958,11 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
 
   let bgOnly: string;
   if (isRunning) {
-    bgOnly = "bg-blue-950/8";
+    bgOnly = "bg-blue-950/15 dark:bg-blue-950/15";
   } else if (isError) {
-    bgOnly = "bg-red-950/5";
+    bgOnly = "bg-red-950/10 dark:bg-red-950/10";
   } else {
-    bgOnly = "bg-amber-950/[0.04]";
+    bgOnly = "bg-amber-950/[0.06] dark:bg-gray-800/20";
   }
 
   const fullExecutionText = useMemo(() => {
@@ -1071,7 +1071,7 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
               {uiBlock && uiBlock.status === "pending" ? (
                 <UIInteractionCard block={uiBlock} />
               ) : block.output ? (
-                <pre className="text-[11px] text-gray-700 dark:text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-36 overflow-y-auto">
+                <pre className="text-[11px] text-gray-700 dark:text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-36 overflow-y-auto bg-gray-50 dark:bg-gray-900/30 rounded px-2 py-1.5">
                   {block.output}
                 </pre>
               ) : isRunning ? (

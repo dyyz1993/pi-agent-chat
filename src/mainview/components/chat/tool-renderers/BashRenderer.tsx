@@ -92,23 +92,23 @@ export const BashExecutionCard = memo(function BashExecutionCard({
   let statusLabel: React.ReactNode = null;
 
   if (isBackground) {
-    borderBg = "border-yellow-500/30 bg-yellow-50 dark:bg-yellow-950/10";
+    borderBg = "border-yellow-500/30 bg-yellow-50 dark:bg-yellow-950/20";
     statusLabel = (
       <span className="text-yellow-600 dark:text-yellow-400 text-[10px]">
         {t("bash.backgroundRunning")}
       </span>
     );
   } else if (isTerminated) {
-    borderBg = "border-red-500/20 bg-red-50 dark:bg-red-950/10";
+    borderBg = "border-red-500/20 bg-red-50 dark:bg-red-950/15";
     statusLabel = (
       <span className="text-red-500 dark:text-red-400 text-[10px]">{t("common:cancelled")}</span>
     );
   } else if (isRunning) {
-    borderBg = "border-blue-500/30 bg-blue-50 dark:bg-blue-950/15";
+    borderBg = "border-blue-500/30 bg-blue-50 dark:bg-blue-950/20";
   } else if (isError) {
-    borderBg = "border-red-500/20 bg-red-50 dark:bg-red-950/10";
+    borderBg = "border-red-500/20 bg-red-50 dark:bg-red-950/15";
   } else {
-    borderBg = "border-gray-200 dark:border-gray-700/40 bg-gray-50 dark:bg-gray-800/20";
+    borderBg = "border-gray-200 dark:border-gray-700/40 bg-gray-50 dark:bg-gray-800/25";
   }
 
   return (

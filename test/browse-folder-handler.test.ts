@@ -1,10 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, mock } from "bun:test";
 
-const { mockOpenFolder } = vi.hoisted(() => ({
-  mockOpenFolder: vi.fn<(opts: { startingFolder?: string }) => Promise<string[]>>(),
-}));
+const mockOpenFolder = mock<(opts: { startingFolder?: string }) => Promise<string[]>>();
 
-vi.mock("../src/shared/lib/native-dialog", () => ({
+mock.module("../src/shared/lib/native-dialog", () => ({
   openFolder: mockOpenFolder,
 }));
 
@@ -14,7 +12,7 @@ import type { HandlerOptions } from "../src/shared/rpc-schema";
 function createMockServer() {
   const handlers = new Map<string, (params: unknown) => Promise<unknown>>();
   return {
-    register: vi.fn((method: string, handler: (params: unknown) => Promise<unknown>) => {
+    register: mock((method: string, handler: (params: unknown) => Promise<unknown>) => {
       handlers.set(method, handler);
     }),
     handlers,
@@ -26,7 +24,7 @@ describe("project.browseFolder", () => {
   let browseFolder: (params: unknown) => Promise<unknown>;
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    mock.clearAllMocks();
     mockOpenFolder.mockReset();
   });
 

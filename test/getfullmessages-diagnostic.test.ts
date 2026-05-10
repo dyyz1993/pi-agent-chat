@@ -1,26 +1,18 @@
-/**
- * Test to diagnose agent.getFullMessages timeout issue
- *
- * This test verifies:
- * 1. WebSocket connection to server
- * 2. Session creation
- * 3. Agent startup
- * 4. getFullMessages call performance and correctness
- */
-
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { spawn, type ChildProcess } from "child_process";
 import WebSocket from "ws";
 import { randomUUID } from "crypto";
-import { tmpdir } from "os";
-import { join } from "path";
-import { mkdir, rm, readFile } from "fs/promises";
+import { readFile } from "fs/promises";
+import {
+  startTestServer,
+  stopTestServer,
+  type TestServerResult,
+} from "./helpers/integration-server";
 
 const TEST_PORT = 3198;
 const AUTH_TOKEN = "pi-agent-chat-diag-token";
 const WS_URL = `ws://localhost:${TEST_PORT}/ws?token=${AUTH_TOKEN}`;
 const PROJECT_PATH = process.cwd();
-const RPC_TIMEOUT = 35000; // 35s - slightly more than default 30s
+const RPC_TIMEOUT = 35000;
 
 interface RPCMessage {
   id: string;
@@ -96,67 +88,18 @@ async function createSession(
   return resp.result as { sessionId: string; sessionPath: string };
 }
 
-let serverProc: ChildProcess | null = null;
-let tmpSessionDir: string;
+let server: TestServerResult;
 
 beforeAll(async () => {
-  tmpSessionDir = join(tmpdir(), `pi-test-getfullmessages-${Date.now()}`);
-  await mkdir(tmpSessionDir, { recursive: true });
-
-  const env: Record<string, string> = {
-    ...(process.env as Record<string, string>),
-    PORT: String(TEST_PORT),
-    AUTH_TOKEN,
-    LOG_DIR: join(tmpSessionDir, "logs"),
-  };
-
-  console.log("\n🚀 Starting diagnostic server...");
-  serverProc = spawn("bun", ["src/server.ts"], {
-    cwd: PROJECT_PATH,
-    env,
-    stdio: ["pipe", "pipe", "pipe"],
+  server = await startTestServer({
+    port: TEST_PORT,
+    authToken: AUTH_TOKEN,
+    projectPath: PROJECT_PATH,
   });
-
-  // Wait for server to be ready
-  await new Promise<void>((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error("Server startup timeout")), 15000);
-    const check = () => {
-      const ws = new WebSocket(WS_URL);
-      ws.on("open", () => {
-        clearTimeout(timeout);
-        ws.close();
-        console.log(`✅ Server ready on ${WS_URL}`);
-        resolve();
-      });
-      ws.on("error", () => {
-        setTimeout(check, 500);
-      });
-    };
-    setTimeout(check, 2000);
-  });
-}, 20000);
+}, 40000);
 
 afterAll(async () => {
-  if (serverProc) {
-    console.log("\n🛑 Stopping server...");
-    serverProc.kill("SIGTERM");
-    await new Promise<void>((resolve) => {
-      if (!serverProc) {
-        resolve();
-        return;
-      }
-      const timeout = setTimeout(() => {
-        serverProc?.kill("SIGKILL");
-        resolve();
-      }, 5000);
-      serverProc.on("exit", () => {
-        clearTimeout(timeout);
-        resolve();
-      });
-    });
-    serverProc = null;
-  }
-  await rm(tmpSessionDir, { recursive: true, force: true }).catch(() => {});
+  await stopTestServer(server);
 });
 
 describe("agent.getFullMessages Diagnostics", () => {
