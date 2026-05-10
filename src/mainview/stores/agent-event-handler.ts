@@ -612,6 +612,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
           existing?.tools ??
           [],
         scope: existing?.scope ?? "global",
+        disabled: existing?.disabled,
       };
       const idx = s.mcpServers.findIndex((srv) => srv.name === name);
       if (idx >= 0) {

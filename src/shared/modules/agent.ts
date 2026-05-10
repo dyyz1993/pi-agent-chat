@@ -212,8 +212,18 @@ export interface AgentMethods {
           fullName: string;
           description: string;
         }>;
+        scope: "global" | "project";
+        disabled?: boolean;
       }>;
     };
+  };
+  "agent.toggleMcpServer": {
+    params: { sessionId: string; name: string; enabled: boolean };
+    result: { success: boolean; error?: string };
+  };
+  "agent.restartMcpServer": {
+    params: { sessionId: string; name: string };
+    result: { success: boolean; error?: string };
   };
   "agent.getContextUsage": {
     params: { sessionId: string };

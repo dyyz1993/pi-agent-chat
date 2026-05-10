@@ -38,6 +38,7 @@ export interface MCPServerInfo {
   toolCount: number;
   tools: MCPToolInfo[];
   scope: "global" | "project";
+  disabled?: boolean;
 }
 
 export function derivePluginScope(filePath: string): PluginScope {
@@ -90,6 +91,8 @@ interface StatusState {
   toggleSkillEnabled: (name: string) => void;
   togglePluginExpanded: (path: string) => void;
   toggleMcpExpanded: (name: string) => void;
+  toggleMcpServer: (sessionId: string, name: string, enabled: boolean) => void;
+  restartMcpServer: (sessionId: string, name: string) => void;
 }
 
 export const useStatusStore = create<StatusState>((set) => ({
@@ -138,4 +141,25 @@ export const useStatusStore = create<StatusState>((set) => ({
     set((s) => ({ expandedPlugin: s.expandedPlugin === path ? null : path })),
   toggleMcpExpanded: (name) =>
     set((s) => ({ expandedMcpServer: s.expandedMcpServer === name ? null : name })),
+  toggleMcpServer: (sessionId, name, enabled) => {
+    apiClient
+      .call("agent.toggleMcpServer", { sessionId, name, enabled })
+      .then((res) => {
+        if (res.success) {
+          set((s) => ({
+            mcpServers: s.mcpServers.map((srv) =>
+              srv.name === name ? { ...srv, disabled: !enabled } : srv,
+            ),
+          }));
+        }
+      })
+      .catch((err) => {
+        console.warn("[status] toggleMcpServer failed:", err);
+      });
+  },
+  restartMcpServer: (sessionId, name) => {
+    apiClient.call("agent.restartMcpServer", { sessionId, name }).catch((err) => {
+      console.warn("[status] restartMcpServer failed:", err);
+    });
+  },
 }));

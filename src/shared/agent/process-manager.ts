@@ -1124,6 +1124,8 @@ export class AgentProcessManager {
       status: string;
       error?: string;
       tools: Array<{ originalName: string; fullName: string; description: string }>;
+      scope: "global" | "project";
+      disabled?: boolean;
     }>;
   }> {
     const managed = this.clients.get(sessionId);
@@ -1141,14 +1143,79 @@ export class AgentProcessManager {
         status: string;
         error?: string;
         tools: Array<{ originalName: string; fullName: string; description: string }>;
+        scope?: "global" | "project";
+        disabled?: boolean;
       }>;
-      return { servers };
+      return {
+        servers: servers.map((s) => ({
+          ...s,
+          scope: s.scope ?? "global",
+        })),
+      };
     } catch (err) {
       log.warn("getMcpServers error", {
         sessionId,
         err: err instanceof Error ? err.message : String(err),
       });
       return { servers: [] };
+    }
+  }
+
+  async toggleMcpServer(
+    sessionId: string,
+    name: string,
+    enabled: boolean,
+  ): Promise<{ success: boolean; error?: string }> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return { success: false, error: "Client not found" };
+    try {
+      const client = managed.client as unknown as {
+        send: (cmd: Record<string, unknown>) => Promise<unknown>;
+      };
+      const response = (await client.send.call(managed.client, {
+        type: "toggle_mcp_server",
+        name,
+        enabled,
+      })) as Record<string, unknown>;
+      const data = (response?.data ?? response) as Record<string, unknown>;
+      return {
+        success: Boolean(data?.success ?? true),
+        error: data?.error as string | undefined,
+      };
+    } catch (err) {
+      log.warn("toggleMcpServer error", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  async restartMcpServer(
+    sessionId: string,
+    name: string,
+  ): Promise<{ success: boolean; error?: string }> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return { success: false, error: "Client not found" };
+    try {
+      const client = managed.client as unknown as {
+        send: (cmd: Record<string, unknown>) => Promise<unknown>;
+      };
+      const response = (await client.send.call(managed.client, {
+        type: "restart_mcp_server",
+        name,
+      })) as Record<string, unknown>;
+      const data = (response?.data ?? response) as Record<string, unknown>;
+      return {
+        success: Boolean(data?.success ?? true),
+        error: data?.error as string | undefined,
+      };
+    } catch (err) {
+      log.warn("restartMcpServer error", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
     }
   }
 

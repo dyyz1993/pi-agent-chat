@@ -17,6 +17,7 @@ import {
   Trash2,
   Copy,
   Check,
+  RotateCw,
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
@@ -507,6 +508,10 @@ function MCPToolsSection() {
   const mcpServers = useStatusStore((s) => s.mcpServers);
   const expandedMcpServer = useStatusStore((s) => s.expandedMcpServer);
   const toggleMcpExpanded = useStatusStore((s) => s.toggleMcpExpanded);
+  const toggleMcpServer = useStatusStore((s) => s.toggleMcpServer);
+  const restartMcpServer = useStatusStore((s) => s.restartMcpServer);
+  const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const [restarting, setRestarting] = useState<string | null>(null);
 
   if (mcpServers.length === 0) {
     return (
@@ -520,8 +525,10 @@ function MCPToolsSection() {
     <div className="space-y-0.5">
       {mcpServers.map((srv) => {
         const isExpanded = expandedMcpServer === srv.name;
-        const statusDot =
-          srv.status === "connected"
+        const isDisabled = srv.disabled === true;
+        const statusDot = isDisabled
+          ? "bg-gray-400 dark:bg-gray-600"
+          : srv.status === "connected"
             ? "bg-green-400"
             : srv.status === "error"
               ? "bg-red-400"
@@ -529,7 +536,7 @@ function MCPToolsSection() {
                 ? "bg-yellow-400 animate-pulse"
                 : "bg-gray-400 dark:bg-gray-600";
         return (
-          <div key={srv.name}>
+          <div key={srv.name} className={isDisabled ? "opacity-50" : ""}>
             <div
               className="flex items-center gap-1 py-0.5 px-1 rounded hover:bg-gray-200/50 dark:hover:bg-gray-800/40 transition-colors cursor-pointer group"
               onClick={() => toggleMcpExpanded(srv.name)}
@@ -553,6 +560,35 @@ function MCPToolsSection() {
               >
                 {srv.scope === "project" ? t("project") : t("global")}
               </span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (activeSessionId) {
+                    toggleMcpServer(activeSessionId, srv.name, !!isDisabled);
+                  }
+                }}
+                className={`w-6 h-3 rounded-full shrink-0 transition-colors relative ${isDisabled ? "bg-gray-600" : "bg-green-500"}`}
+                title={isDisabled ? t("enableMcpServer") : t("disableMcpServer")}
+              >
+                <span
+                  className={`absolute top-0.5 w-2 h-2 rounded-full bg-white transition-transform ${isDisabled ? "left-0.5" : "left-3.5"}`}
+                />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (activeSessionId && !isDisabled && srv.status === "connected") {
+                    setRestarting(srv.name);
+                    restartMcpServer(activeSessionId, srv.name);
+                    setTimeout(() => setRestarting(null), 2000);
+                  }
+                }}
+                disabled={isDisabled || srv.status !== "connected"}
+                className={`opacity-0 group-hover:opacity-100 p-0.5 rounded transition-opacity shrink-0 ${isDisabled || srv.status !== "connected" ? "text-gray-600 cursor-not-allowed" : "text-gray-400 hover:text-gray-300 hover:bg-gray-300/50 dark:hover:bg-gray-700/50 cursor-pointer"}`}
+                title={t("restartMcpServer")}
+              >
+                <RotateCw className={`w-3 h-3 ${restarting === srv.name ? "animate-spin" : ""}`} />
+              </button>
             </div>
             {isExpanded && (
               <div className="ml-4 pl-2 border-l border-gray-200 dark:border-gray-800 space-y-1 pt-1 text-[10px]">

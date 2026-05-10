@@ -907,7 +907,8 @@ export const useSessionStore = create<SessionState>()(
                     name: t.originalName,
                     description: t.description,
                   })),
-                  scope: "global" as const,
+                  scope: (s.scope as "global" | "project") ?? "global",
+                  disabled: s.disabled,
                 }));
                 log.info("[MCP] getMcpServers", {
                   sessionId,
