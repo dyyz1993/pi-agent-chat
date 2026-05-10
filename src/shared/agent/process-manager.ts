@@ -15,6 +15,8 @@ import type { BashChannelEvent } from "../modules/bash";
 import type { LspChannelEvent } from "../modules/lsp";
 import type { RulesChannelEvent } from "../modules/rules";
 import type { RpcClientAPI, TreeEntry } from "@dyyz1993/pi-coding-agent";
+
+type McpServerInfo = Awaited<ReturnType<RpcClientAPI["getMcpServers"]>>[number];
 import type { CoordinatorMethodCall, CoordinatorChannelEvent } from "../modules/coordinator";
 import { createLogger } from "../lib/logger";
 import { config } from "../../server-config";
@@ -1118,40 +1120,12 @@ export class AgentProcessManager {
     }
   }
 
-  async getMcpServers(sessionId: string): Promise<{
-    servers: Array<{
-      name: string;
-      status: string;
-      error?: string;
-      tools: Array<{ originalName: string; fullName: string; description: string }>;
-      scope: "global" | "project";
-      disabled?: boolean;
-    }>;
-  }> {
+  async getMcpServers(sessionId: string): Promise<{ servers: McpServerInfo[] }> {
     const managed = this.clients.get(sessionId);
     if (!managed) return { servers: [] };
     try {
-      const client = managed.client as unknown as {
-        send: (cmd: Record<string, unknown>) => Promise<unknown>;
-      };
-      const response = (await client.send.call(managed.client, {
-        type: "get_mcp_servers",
-      })) as Record<string, unknown>;
-      const data = (response?.data ?? response) as Record<string, unknown>;
-      const servers = (data?.servers ?? []) as Array<{
-        name: string;
-        status: string;
-        error?: string;
-        tools: Array<{ originalName: string; fullName: string; description: string }>;
-        scope?: "global" | "project";
-        disabled?: boolean;
-      }>;
-      return {
-        servers: servers.map((s) => ({
-          ...s,
-          scope: s.scope ?? "global",
-        })),
-      };
+      const servers = await managed.client.getMcpServers();
+      return { servers: Array.isArray(servers) ? servers : [] };
     } catch (err) {
       log.warn("getMcpServers error", {
         sessionId,
@@ -1169,25 +1143,12 @@ export class AgentProcessManager {
     const managed = this.clients.get(sessionId);
     if (!managed) return { success: false, error: "Client not found" };
     try {
-      const client = managed.client as unknown as {
-        send: (cmd: Record<string, unknown>) => Promise<unknown>;
-      };
-      const response = (await client.send.call(managed.client, {
-        type: "toggle_mcp_server",
-        name,
-        enabled,
-      })) as Record<string, unknown>;
-      const data = (response?.data ?? response) as Record<string, unknown>;
-      return {
-        success: Boolean(data?.success ?? true),
-        error: data?.error as string | undefined,
-      };
+      await managed.client.toggleMcpServer(name, enabled);
+      return { success: true };
     } catch (err) {
-      log.warn("toggleMcpServer error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return { success: false, error: err instanceof Error ? err.message : String(err) };
+      const msg = err instanceof Error ? err.message : String(err);
+      log.warn("toggleMcpServer error", { sessionId, err: msg });
+      return { success: false, error: msg };
     }
   }
 
@@ -1198,24 +1159,12 @@ export class AgentProcessManager {
     const managed = this.clients.get(sessionId);
     if (!managed) return { success: false, error: "Client not found" };
     try {
-      const client = managed.client as unknown as {
-        send: (cmd: Record<string, unknown>) => Promise<unknown>;
-      };
-      const response = (await client.send.call(managed.client, {
-        type: "restart_mcp_server",
-        name,
-      })) as Record<string, unknown>;
-      const data = (response?.data ?? response) as Record<string, unknown>;
-      return {
-        success: Boolean(data?.success ?? true),
-        error: data?.error as string | undefined,
-      };
+      await managed.client.restartMcpServer(name);
+      return { success: true };
     } catch (err) {
-      log.warn("restartMcpServer error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return { success: false, error: err instanceof Error ? err.message : String(err) };
+      const msg = err instanceof Error ? err.message : String(err);
+      log.warn("restartMcpServer error", { sessionId, err: msg });
+      return { success: false, error: msg };
     }
   }
 
