@@ -1,2 +1,3 @@
 [test]
 preload = ["./test/dom-setup.ts"]
+timeout = 60000

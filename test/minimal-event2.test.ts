@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, mock } from "bun:test";
 import type { ContentBlock } from "../src/mainview/types";
+import { create } from "zustand";
 
 mock.module("../src/mainview/lib/api-client", () => ({
   apiClient: {
@@ -47,8 +48,7 @@ mock.module("../src/mainview/stores/use-status-store", () => ({
   },
 }));
 
-mock.module("../src/mainview/stores/use-session-store", async () => {
-  const { create } = await import("zustand");
+mock.module("../src/mainview/stores/use-session-store", () => {
   type SessionStatus = "idle" | "streaming" | "compacting" | "permission" | "retrying";
   interface MockSessionState {
     sessionsByProject: Record<string, unknown[]>;
@@ -109,8 +109,7 @@ mock.module("../src/mainview/stores/use-session-store", async () => {
   return { useSessionStore };
 });
 
-mock.module("../src/mainview/stores/use-chat-store", async () => {
-  const { create } = await import("zustand");
+mock.module("../src/mainview/stores/use-chat-store", () => {
   interface ChatMessage {
     id: string;
     role: string;

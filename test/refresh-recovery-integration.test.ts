@@ -1,30 +1,34 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import type { ChatMessage, ContentBlock } from "../src/mainview/types";
+import { describe, it, expect, beforeEach, afterEach, mock } from "bun:test";
+import type { ContentBlock } from "../src/mainview/types";
+import { create } from "zustand";
 import { SID, TCID, makeAssistantMsg, makeUserMsg } from "./fixtures";
 
-vi.mock("../src/mainview/lib/api-client", () => ({
+mock.module("zustand/middleware", () => ({
+  persist: (fn: unknown) => fn,
+}));
+
+mock.module("../src/mainview/lib/api-client", () => ({
   apiClient: {
-    call: vi.fn(),
-    subscribe: vi.fn(() => Promise.resolve("sub-id")),
-    unsubscribe: vi.fn(),
-    onReconnect: vi.fn(),
+    call: mock(),
+    subscribe: mock(() => Promise.resolve("sub-id")),
+    unsubscribe: mock(),
+    onReconnect: mock(),
   },
 }));
 
-vi.mock("../src/mainview/lib/notification-gateway", () => ({
-  notificationGateway: { emit: vi.fn() },
+mock.module("../src/mainview/lib/notification-gateway", () => ({
+  notificationGateway: { emit: mock() },
 }));
 
-vi.mock("../src/mainview/components/chat/memory-config", () => ({
+mock.module("../src/mainview/components/chat/memory-config", () => ({
   ALL_MEMORY_TYPE_KEYS: new Set(),
 }));
 
-vi.mock("../src/shared/lib/logger", () => ({
-  createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
+mock.module("../src/shared/lib/logger", () => ({
+  createLogger: () => ({ info: mock(), warn: mock(), error: mock(), debug: mock() }),
 }));
 
-vi.mock("../src/mainview/stores/use-session-store", async () => {
-  const { create } = await import("zustand");
+mock.module("../src/mainview/stores/use-session-store", () => {
   type SessionStatus = "idle" | "streaming" | "compacting" | "permission" | "retrying";
   interface MockSessionState {
     sessionsByProject: Record<string, unknown[]>;
@@ -85,10 +89,199 @@ vi.mock("../src/mainview/stores/use-session-store", async () => {
   return { useSessionStore };
 });
 
+mock.module("../src/mainview/stores/use-chat-store", () => {
+  interface ChatMessage {
+    id: string;
+    role: string;
+    content: ContentBlock[];
+    timestamp: number;
+    isStreaming?: boolean;
+  }
+  interface ChatState {
+    messagesBySession: Record<string, ChatMessage[]>;
+    inputText: string;
+    isStreaming: boolean;
+    streamContentVersion: number;
+    loadingSessions: Set<string>;
+    historyLoadVersion: number;
+    setMessagesForSession: (sessionId: string, msgs: ChatMessage[]) => void;
+    incrementStreamVersion: () => void;
+  }
+  const useChatStore = create<ChatState>((set) => ({
+    messagesBySession: {},
+    inputText: "",
+    isStreaming: false,
+    streamContentVersion: 0,
+    loadingSessions: new Set(),
+    historyLoadVersion: 0,
+    setMessagesForSession: (sessionId, msgs) =>
+      set((s) => ({ messagesBySession: { ...s.messagesBySession, [sessionId]: msgs } })),
+    incrementStreamVersion: () =>
+      set((s) => ({ streamContentVersion: s.streamContentVersion + 1 })),
+  }));
+  return { useChatStore };
+});
+
+function normalizeToolBlocks(
+  msgs: Array<{ role: string; content: ContentBlock[]; [k: string]: unknown }>,
+): void {
+  const toolCallById = new Map<
+    string,
+    { msgIndex: number; blockIndex: number; name: string; input: string }
+  >();
+  for (let mi = 0; mi < msgs.length; mi++) {
+    const msg = msgs[mi];
+    if (msg.role !== "assistant") continue;
+    for (let bi = 0; bi < msg.content.length; bi++) {
+      const b = msg.content[bi];
+      if (b.type === "toolCall") {
+        toolCallById.set(b.id, { msgIndex: mi, blockIndex: bi, name: b.name, input: b.input });
+      }
+    }
+  }
+  const execByMsg = new Map<number, Map<number, ContentBlock>>();
+  const toRemove = new Set<number>();
+  for (let ti = 0; ti < msgs.length; ti++) {
+    const trMsg = msgs[ti] as { role: string; content: ContentBlock[] };
+    if (trMsg.role !== "toolResult") continue;
+    const resultBlock = trMsg.content.find(
+      (b): b is Extract<ContentBlock, { type: "toolResult" }> => b.type === "toolResult",
+    );
+    if (!resultBlock) continue;
+    toRemove.add(ti);
+    const match = toolCallById.get(resultBlock.toolCallId);
+    const rawInput = match?.input ?? resultBlock.args;
+    const args =
+      typeof rawInput === "string"
+        ? rawInput
+        : rawInput != null
+          ? JSON.stringify(rawInput, null, 2)
+          : "";
+    const execBlock: Extract<ContentBlock, { type: "toolExecution" }> = {
+      type: "toolExecution",
+      toolCallId: resultBlock.toolCallId,
+      toolName: resultBlock.toolName ?? match?.name ?? "unknown",
+      args,
+      status: resultBlock.isError ? "error" : "done",
+      output: resultBlock.content || undefined,
+      details: resultBlock.details,
+    };
+    let targetMi: number;
+    let targetBi: number;
+    if (match) {
+      targetMi = match.msgIndex;
+      targetBi = match.blockIndex;
+    } else {
+      targetMi = ti - 1;
+      while (targetMi >= 0 && msgs[targetMi].role !== "assistant") targetMi--;
+      targetBi = -1;
+    }
+    if (targetMi >= 0) {
+      if (!execByMsg.has(targetMi)) execByMsg.set(targetMi, new Map());
+      execByMsg.get(targetMi)?.set(targetBi, execBlock);
+    }
+  }
+  for (const [mi, biToBlock] of execByMsg) {
+    const msg = msgs[mi] as { role: string; content: ContentBlock[]; [k: string]: unknown };
+    const newContent: ContentBlock[] = [];
+    for (let bi = 0; bi < msg.content.length; bi++) {
+      const b = msg.content[bi];
+      if (b.type === "toolCall") {
+        const exec = biToBlock.get(bi) ?? biToBlock.get(-1);
+        if (exec) {
+          newContent.push(exec);
+        } else {
+          const args =
+            typeof b.input === "string"
+              ? b.input
+              : b.input != null
+                ? JSON.stringify(b.input, null, 2)
+                : "";
+          newContent.push({
+            type: "toolExecution",
+            toolCallId: b.id,
+            toolName: b.name,
+            args,
+            status: "running",
+          });
+        }
+      } else {
+        newContent.push(b);
+      }
+    }
+    msgs[mi] = { ...msg, content: newContent };
+  }
+  for (let mi = 0; mi < msgs.length; mi++) {
+    const msg = msgs[mi] as { role: string; content: ContentBlock[]; [k: string]: unknown };
+    if (msg.role !== "assistant") continue;
+    let hasToolCall = false;
+    for (const b of msg.content) {
+      if (b.type === "toolCall") {
+        hasToolCall = true;
+        break;
+      }
+    }
+    if (!hasToolCall) continue;
+    if (execByMsg.has(mi)) continue;
+    const newContent: ContentBlock[] = [];
+    for (const b of msg.content) {
+      if (b.type === "toolCall") {
+        const args =
+          typeof b.input === "string"
+            ? b.input
+            : b.input != null
+              ? JSON.stringify(b.input, null, 2)
+              : "";
+        newContent.push({
+          type: "toolExecution",
+          toolCallId: b.id,
+          toolName: b.name,
+          args,
+          status: "running",
+        });
+      } else {
+        newContent.push(b);
+      }
+    }
+    msgs[mi] = { ...msg, content: newContent };
+  }
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    if (toRemove.has(i)) msgs.splice(i, 1);
+  }
+}
+
+mock.module("../src/mainview/stores/use-status-store", () => ({
+  useStatusStore: {
+    getState: mock(() => ({ setPlugins: mock(), setSkills: mock(), setMcpServers: mock() })),
+  },
+}));
+
+mock.module("../src/mainview/stores/use-memory-store", () => ({
+  useMemoryStore: {
+    getState: mock(() => ({ loadFiles: mock(), addEvent: mock(), addInjected: mock() })),
+  },
+}));
+
+mock.module("../src/mainview/stores/use-retry-store", () => ({
+  useRetryStore: { getState: mock(() => ({ startRetry: mock(), endRetry: mock() })) },
+}));
+
+mock.module("../src/mainview/stores/use-ui-dialog-store", () => ({
+  useUIDialogStore: { getState: mock(() => ({ registerUIRequest: mock() })) },
+}));
+
 import { handleAgentEvent, toolCallNameMap } from "../src/mainview/stores/agent-event-handler";
-import { normalizeToolBlocks, useChatStore } from "../src/mainview/stores/use-chat-store";
+import { useChatStore } from "../src/mainview/stores/use-chat-store";
 import { useSessionStore } from "../src/mainview/stores/use-session-store";
 import { flushNow } from "../src/mainview/stores/message-batcher";
+
+interface ChatMessage {
+  id: string;
+  role: string;
+  content: ContentBlock[];
+  timestamp: number;
+  isStreaming?: boolean;
+}
 
 function resetStores() {
   useChatStore.setState({

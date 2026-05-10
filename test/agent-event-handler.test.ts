@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, mock } from "bun:test";
 import type { ContentBlock } from "../src/mainview/types";
+import { create } from "zustand";
 
 mock.module("zustand/middleware", () => ({
   persist: (fn: unknown) => fn,
@@ -46,7 +47,6 @@ mock.module("../src/mainview/stores/use-ui-dialog-store", () => ({
 }));
 
 mock.module("../src/mainview/stores/use-session-store", () => {
-  const { create } = await import("zustand");
   type SessionStatus = "idle" | "streaming" | "compacting" | "permission" | "retrying";
   interface MockSessionState {
     sessionsByProject: Record<string, unknown[]>;
@@ -108,7 +108,6 @@ mock.module("../src/mainview/stores/use-session-store", () => {
 });
 
 mock.module("../src/mainview/stores/use-chat-store", () => {
-  const { create } = await import("zustand");
   interface ChatMessage {
     id: string;
     role: string;
