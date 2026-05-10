@@ -67,6 +67,9 @@ export type ContentBlock =
       status: ToolExecutionStatus;
       output?: string;
       details?: unknown;
+      timeout?: number;
+      startedAt?: number;
+      description?: string;
     }
   | { type: "custom"; customType: string; data: unknown }
   | { type: "compactionSummary"; summary: string; tokensBefore?: number }

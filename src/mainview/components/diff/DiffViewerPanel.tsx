@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { X, Columns2, Rows3 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import ReactDiffViewer, { DiffMethod } from "react-diff-viewer-continued";
 import { useGitStore } from "../../stores/use-git-store";
 import { useThemeStore } from "../../stores/use-theme-store";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 
 /* Module-level constant: avoids re-creating the styles object on every render */
-const DIFF_STYLES = {
+export const DIFF_STYLES = {
   variables: {
     light: {
       diffViewerBackground: "var(--diff-bg)",
@@ -46,6 +47,7 @@ const DIFF_STYLES = {
 } as const;
 
 export function DiffViewerPanel() {
+  const { t } = useTranslation("sidebar");
   const currentDiff = useGitStore((s) => s.currentDiff);
   const loadingDiff = useGitStore((s) => s.loadingDiff);
   const clearDiff = useGitStore((s) => s.clearDiff);
@@ -75,20 +77,23 @@ export function DiffViewerPanel() {
           <button
             onClick={() => setSplitView(false)}
             className={`p-1 rounded transition-colors ${!splitView ? "bg-gray-400 dark:bg-gray-600 text-white" : "text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-white"}`}
-            title="Line by line"
+            title={t("diffLineByLine")}
+            aria-label={t("diffLineByLine")}
           >
             <Rows3 className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={() => setSplitView(true)}
             className={`p-1 rounded transition-colors ${splitView ? "bg-gray-400 dark:bg-gray-600 text-white" : "text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-white"}`}
-            title="Side by side"
+            title={t("diffSideBySide")}
+            aria-label={t("diffSideBySide")}
           >
             <Columns2 className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={clearDiff}
-            className="ml-1 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-white transition-colors"
+            className="p-2 rounded text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+            aria-label={t("closeDiff")}
           >
             <X className="w-4 h-4" />
           </button>
@@ -99,7 +104,7 @@ export function DiffViewerPanel() {
       <div className="flex-1 overflow-auto">
         {loadingDiff ? (
           <div className="flex items-center justify-center h-full text-gray-400 dark:text-gray-500">
-            Loading diff...
+            {t("loadingDiff")}
           </div>
         ) : currentDiff ? (
           <ReactDiffViewer
@@ -108,8 +113,8 @@ export function DiffViewerPanel() {
             splitView={effectiveSplitView}
             compareMethod={DiffMethod.LINES}
             useDarkTheme={isDark}
-            leftTitle="Before"
-            rightTitle="After"
+            leftTitle={t("diffBefore")}
+            rightTitle={t("diffAfter")}
             styles={DIFF_STYLES}
           />
         ) : null}

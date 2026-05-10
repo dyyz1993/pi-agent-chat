@@ -436,12 +436,20 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       if (event.type === "tool_execution_start") {
         const rawArgs: unknown = event.args;
         let argsStr = "";
+        let timeout: number | undefined;
+        let description: string | undefined;
         if (rawArgs && typeof rawArgs === "object" && rawArgs !== null) {
           const obj = rawArgs as Record<string, unknown>;
           if ("command" in obj && typeof obj.command === "string") {
             argsStr = obj.command;
           } else {
             argsStr = JSON.stringify(rawArgs, null, 2);
+          }
+          if ("timeout" in obj && typeof obj.timeout === "number") {
+            timeout = obj.timeout;
+          }
+          if ("description" in obj && typeof obj.description === "string") {
+            description = obj.description;
           }
         }
         if (targetIdx >= 0) {
@@ -451,6 +459,9 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
             toolName,
             args: argsStr,
             status: "running",
+            timeout,
+            startedAt: event.timestamp ?? Date.now(),
+            description,
           };
         } else {
           blocks.push({
@@ -459,6 +470,9 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
             toolName,
             args: argsStr,
             status: "running",
+            timeout,
+            startedAt: event.timestamp ?? Date.now(),
+            description,
           });
         }
       } else if (event.type === "tool_execution_update") {

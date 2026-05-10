@@ -419,6 +419,10 @@ export function handleSubagentEvent(subId: string, event: SubagentEvent, parentS
         ? ((args as Record<string, unknown>).command as string)
         : JSON.stringify(args, null, 2)
       : "";
+    const description =
+      args && typeof (args as Record<string, unknown>).description === "string"
+        ? ((args as Record<string, unknown>).description as string)
+        : undefined;
 
     batchMessageUpdate(subId, () => {
       const freshMessages = useSubagentStore.getState().messagesBySubsession[subId] || [];
@@ -437,6 +441,7 @@ export function handleSubagentEvent(subId: string, event: SubagentEvent, parentS
           toolName,
           args: argsStr,
           status: "running",
+          description,
         });
       } else if (event.type === "tool_execution_update") {
         let output = "";

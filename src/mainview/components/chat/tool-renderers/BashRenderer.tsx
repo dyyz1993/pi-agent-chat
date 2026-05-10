@@ -57,9 +57,10 @@ export const BashExecutionCard = memo(function BashExecutionCard({
   const [elapsed, setElapsed] = useState(0);
   const [showLogViewer, setShowLogViewer] = useState(false);
   const [outputOpen, setOutputOpen] = useState(true);
-  const startedAt = useRef(Date.now());
+  const startedAt = useRef(block.startedAt ?? Date.now());
 
   const bashDetails = block.details as BashDetails | undefined;
+  const timeout = block.timeout;
   const storeStatus = bashProcess?.status;
   const isBackground = !!bashDetails?.background || storeStatus === "background";
   const isTerminated = !!bashDetails?.terminated || storeStatus === "terminated";
@@ -74,11 +75,11 @@ export const BashExecutionCard = memo(function BashExecutionCard({
 
   useEffect(() => {
     if (!isRunning) return;
-    startedAt.current = Date.now();
-    setElapsed(0);
+    if (block.startedAt) startedAt.current = block.startedAt;
+    setElapsed(Date.now() - startedAt.current);
     const id = setInterval(() => setElapsed(Date.now() - startedAt.current), 1000);
     return () => clearInterval(id);
-  }, [isRunning]);
+  }, [isRunning, block.startedAt]);
 
   const showBackground = elapsed > 5000 && isRunning;
 
@@ -118,23 +119,45 @@ export const BashExecutionCard = memo(function BashExecutionCard({
     >
       <div className="px-3 py-1.5 flex items-center gap-2 text-xs">
         <span
-          className={`font-medium ${isBackground ? "text-yellow-600 dark:text-yellow-400" : isTerminated ? "text-red-500 dark:text-red-400" : isRunning ? "text-blue-500 dark:text-blue-400" : isError ? "text-red-500 dark:text-red-400" : "text-gray-800 dark:text-gray-300"}`}
+          className={`font-medium shrink-0 ${isBackground ? "text-yellow-600 dark:text-yellow-400" : isTerminated ? "text-red-500 dark:text-red-400" : isRunning ? "text-blue-500 dark:text-blue-400" : isError ? "text-red-500 dark:text-red-400" : "text-gray-800 dark:text-gray-300"}`}
         >
           {block.toolName}
         </span>
+        {block.description ? (
+          <span className="flex-1 min-w-0 text-gray-600 dark:text-gray-400 truncate text-[11px]">
+            {block.description}
+          </span>
+        ) : (
+          <span className="flex-1" />
+        )}
         {isRunning && !statusLabel && (
-          <span className="text-blue-500 dark:text-blue-400 animate-pulse text-[10px]">
-            {t("running")}
+          <span className="shrink-0 flex items-center gap-1 text-[10px] text-gray-400 dark:text-gray-500 tabular-nums">
+            {formatDuration(elapsed)}
+            {timeout != null &&
+              timeout > 0 &&
+              timeout <= 86400 &&
+              (() => {
+                const remainingMs = timeout * 1000 - elapsed;
+                const remaining = Math.max(0, remainingMs);
+                const pct = (elapsed / (timeout * 1000)) * 100;
+                return (
+                  <span
+                    className={pct > 80 ? "text-red-500" : "text-amber-500 dark:text-amber-400"}
+                  >
+                    / {formatDuration(remaining)}
+                  </span>
+                );
+              })()}
           </span>
         )}
         {statusLabel}
         {bashDetails?.background && (
-          <span className="text-[10px] text-gray-400 dark:text-gray-500">
+          <span className="text-[10px] text-gray-400 dark:text-gray-500 shrink-0">
             PID: {bashDetails.background.pid}
           </span>
         )}
         {(bashDetails?.background ?? (storeStatus === "background" && bashProcess)) && (
-          <span className="text-[10px] text-gray-400 dark:text-gray-500">
+          <span className="text-[10px] text-gray-400 dark:text-gray-500 tabular-nums shrink-0">
             {formatDuration(
               bashDetails?.background?.durationMs ??
                 Date.now() - (bashProcess?.startedAt ?? Date.now()),
@@ -142,7 +165,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
           </span>
         )}
         {(bashDetails?.terminated ?? (storeStatus === "terminated" && bashProcess)) && (
-          <span className="text-[10px] text-gray-400 dark:text-gray-500">
+          <span className="text-[10px] text-gray-400 dark:text-gray-500 tabular-nums shrink-0">
             {formatDuration(
               bashDetails?.terminated?.durationMs ??
                 (bashProcess?.endedAt ?? Date.now()) - (bashProcess?.startedAt ?? Date.now()),

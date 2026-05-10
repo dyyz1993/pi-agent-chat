@@ -20,6 +20,7 @@ import { useSessionStore } from "../../stores/use-session-store";
 import { SubagentExecutionCard } from "./tool-renderers/SubagentRenderer";
 import { UIInteractionCard } from "./tool-renderers/UICardRenderer";
 import { getToolRenderer } from "./tool-renderers";
+import { BlockErrorBoundary } from "./tool-renderers/BlockErrorBoundary";
 import { getCustomTypeIcon } from "./tool-icon-map";
 import { tryFormatAsYaml } from "../../../shared/lib/json-to-yaml";
 import { useExpandStore } from "../../stores/use-expand-store";
@@ -178,14 +179,16 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
             const borderColor = getBlockBorderColor(block, role);
             return (
               <div key={i} className={`border-l-[3px] ${borderColor}`}>
-                <ContentBlockRenderer
-                  block={block}
-                  isStreaming={message.isStreaming}
-                  msgId={message.id}
-                  blockIndex={i}
-                  isEntry={isEntryMsg}
-                  uiBlockMap={uiBlockMap}
-                />
+                <BlockErrorBoundary blockId={`${message.id}-${i}`}>
+                  <ContentBlockRenderer
+                    block={block}
+                    isStreaming={message.isStreaming}
+                    msgId={message.id}
+                    blockIndex={i}
+                    isEntry={isEntryMsg}
+                    uiBlockMap={uiBlockMap}
+                  />
+                </BlockErrorBoundary>
               </div>
             );
           })}

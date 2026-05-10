@@ -45,12 +45,18 @@ export function normalizeToolBlocks(msgs: ChatMessage[]): void {
 
     const match = toolCallById.get(resultBlock.toolCallId);
     const rawInput = match?.input ?? resultBlock.args;
-    const args =
-      typeof rawInput === "string"
-        ? rawInput
-        : rawInput != null
-          ? JSON.stringify(rawInput, null, 2)
-          : "";
+    let args: string;
+    let description: string | undefined;
+    if (typeof rawInput === "string") {
+      args = rawInput;
+    } else if (rawInput != null) {
+      args = JSON.stringify(rawInput, null, 2);
+      if (typeof (rawInput as Record<string, unknown>).description === "string") {
+        description = (rawInput as Record<string, unknown>).description as string;
+      }
+    } else {
+      args = "";
+    }
 
     const execBlock: Extract<ContentBlock, { type: "toolExecution" }> = {
       type: "toolExecution",
@@ -60,6 +66,7 @@ export function normalizeToolBlocks(msgs: ChatMessage[]): void {
       status: resultBlock.isError ? "error" : "done",
       output: resultBlock.content || undefined,
       details: resultBlock.details,
+      description,
     };
 
     let targetMi: number;
@@ -89,18 +96,26 @@ export function normalizeToolBlocks(msgs: ChatMessage[]): void {
         if (exec) {
           newContent.push(exec);
         } else {
-          const args =
-            typeof b.input === "string"
-              ? b.input
-              : b.input != null
-                ? JSON.stringify(b.input, null, 2)
-                : "";
+          const rawInput = b.input;
+          let args: string;
+          let description: string | undefined;
+          if (typeof rawInput === "string") {
+            args = rawInput;
+          } else if (rawInput != null) {
+            args = JSON.stringify(rawInput, null, 2);
+            if (typeof (rawInput as Record<string, unknown>).description === "string") {
+              description = (rawInput as Record<string, unknown>).description as string;
+            }
+          } else {
+            args = "";
+          }
           newContent.push({
             type: "toolExecution",
             toolCallId: b.id,
             toolName: b.name,
             args,
             status: "running",
+            description,
           });
         }
       } else {
