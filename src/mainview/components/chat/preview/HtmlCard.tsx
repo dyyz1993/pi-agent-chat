@@ -81,17 +81,22 @@ export const HtmlCard = memo(function HtmlCard({ details }: { details: PreviewDe
       {fullscreen && (
         <button
           onClick={() => setFullscreen(false)}
-          className="p-0.5 rounded text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-gray-700/50 transition-colors ml-1"
+          className="p-2 rounded text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-gray-700/50 transition-colors ml-1"
           title={t("closeEscTitle")}
         >
-          <X className="w-3.5 h-3.5" />
+          <X className="w-4 h-4" />
         </button>
       )}
     </div>
   );
 
   const header = (
-    <div className="px-3 py-1.5 flex items-center gap-2 text-xs border-b border-gray-200 dark:border-gray-700/30">
+    <div
+      className="px-3 py-1.5 flex items-center gap-2 text-xs border-b border-gray-200 dark:border-gray-700/30"
+      style={
+        fullscreen ? { paddingTop: "calc(0.375rem + env(safe-area-inset-top, 0px))" } : undefined
+      }
+    >
       <Code className="w-3.5 h-3.5 text-orange-500 dark:text-orange-400 shrink-0" />
       <span className="text-gray-800 dark:text-gray-300 truncate min-w-0">
         {details.title ?? details.source}

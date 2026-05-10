@@ -124,6 +124,7 @@ interface SessionState {
   restoreContextFromHistory: (sessionId: string) => void;
   fetchInitialState: (sessionId: string) => void;
   fetchModelState: (sessionId: string) => void;
+  refreshSessionResources: (sessionId: string) => void;
   setCurrentModel: (provider: string, modelId: string) => void;
   setThinkingLevel: (level: string) => void;
   cleanupActiveSession: (sessionId: string) => void;
@@ -980,6 +981,20 @@ export const useSessionStore = create<SessionState>()(
 
       setCurrentModel: (provider, modelId) => set({ currentModel: { provider, id: modelId } }),
       setThinkingLevel: (level) => set({ currentThinkingLevel: level }),
+
+      refreshSessionResources: (sessionId) => {
+        apiClient
+          .call("agent.reload", { sessionId })
+          .then(() => {
+            get().fetchInitialState(sessionId);
+          })
+          .catch((err) => {
+            log.warn("agent.reload failed", {
+              sessionId,
+              err: err instanceof Error ? err.message : String(err),
+            });
+          });
+      },
 
       cleanupActiveSession: (sessionId) => {
         cleanupSession(get(), sessionId);

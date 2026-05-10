@@ -78,7 +78,7 @@ export function FilePreviewOverlay({ preview, loading, onClose }: FilePreviewOve
       return (
         <div className="flex items-center justify-center h-full text-gray-400 text-sm">
           <div className="w-5 h-5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin mr-2" />
-          Loading...
+          {t("loading")}
         </div>
       );
     }
@@ -159,7 +159,7 @@ export function FilePreviewOverlay({ preview, loading, onClose }: FilePreviewOve
           )}
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-800 dark:hover:text-white p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+            className="p-2 rounded text-gray-500 hover:text-gray-800 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
           >
             <X className="w-4 h-4" />
           </button>

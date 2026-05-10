@@ -77,6 +77,7 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
             disabled={isCreating}
             className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed relative"
             title={t("newSession")}
+            aria-label={t("newSession")}
           >
             <Plus className="w-3.5 h-3.5" />
             {isCreating && (
@@ -92,6 +93,7 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
             }}
             className={`p-1 rounded transition-colors max-sm:hidden ${isPinned ? "text-indigo-400" : "text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400"}`}
             title={isPinned ? t("unpinPanel") : t("pinPanel")}
+            aria-label={isPinned ? t("unpinPanel") : t("pinPanel")}
           >
             <Pin className="w-3.5 h-3.5" fill={isPinned ? "currentColor" : "none"} />
           </button>
@@ -103,6 +105,7 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
               }}
               className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
               title={t("closePanel")}
+              aria-label={t("closePanel")}
             >
               <PanelLeft className="w-3.5 h-3.5" />
             </button>
@@ -114,6 +117,7 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
               }}
               className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors max-sm:hidden"
               title={t("collapseSidebar")}
+              aria-label={t("collapseSidebar")}
             >
               <PanelLeftClose className="w-3.5 h-3.5" />
             </button>

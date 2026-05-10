@@ -1,12 +1,13 @@
 import { Pin, PinOff } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useSidebarStore } from "../../stores/use-sidebar-store";
+import { useLayoutStore } from "../../layouts/use-layout-store";
 
 export function PinButton() {
   const { t } = useTranslation("sidebar");
   const isPinned = useSidebarStore((s) => s.isPinned);
   const setPinned = useSidebarStore((s) => s.setPinned);
-  const isMobile = useSidebarStore((s) => s.breakpoint) === "mobile";
+  const isMobile = useLayoutStore((s) => s.breakpoint) === "mobile";
 
   if (isMobile) return null;
 

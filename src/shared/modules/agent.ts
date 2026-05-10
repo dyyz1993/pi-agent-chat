@@ -225,6 +225,10 @@ export interface AgentMethods {
     params: { sessionId: string; name: string };
     result: { success: boolean; error?: string };
   };
+  "agent.reload": {
+    params: { sessionId: string };
+    result: void;
+  };
   "agent.getContextUsage": {
     params: { sessionId: string };
     result: { tokens: number | null; contextWindow: number; percent: number | null };

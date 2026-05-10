@@ -84,6 +84,7 @@
   "loadingDiff": "加载差异...",
   "diffBefore": "修改前",
   "diffAfter": "修改后",
+  "closeDiff": "关闭",
   "memoryLabels": {
     "searchMemory": "搜索记忆",
     "foundMemory": "找到相关记忆",

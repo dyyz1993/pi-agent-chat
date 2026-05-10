@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { useFocusTrap } from "../../hooks/use-focus-trap";
 
 interface ConfirmDialogProps {
@@ -9,6 +10,7 @@ interface ConfirmDialogProps {
 }
 
 export function ConfirmDialog({ title, message, onConfirm, onCancel }: ConfirmDialogProps) {
+  const { t } = useTranslation("common");
   const dialogRef = useRef<HTMLDivElement>(null);
   useFocusTrap(dialogRef, { onEscape: onCancel });
 
@@ -33,13 +35,13 @@ export function ConfirmDialog({ title, message, onConfirm, onCancel }: ConfirmDi
             className="px-3 py-1.5 text-xs bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded transition-colors text-gray-800 dark:text-gray-200"
             onClick={onCancel}
           >
-            Cancel
+            {t("cancel")}
           </button>
           <button
             className="px-3 py-1.5 text-xs bg-red-600 hover:bg-red-700 rounded transition-colors text-white"
             onClick={onConfirm}
           >
-            Delete
+            {t("delete")}
           </button>
         </div>
       </div>

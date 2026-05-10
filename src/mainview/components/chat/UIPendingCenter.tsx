@@ -43,7 +43,9 @@ function PanelCard({
         </div>
         <div className="px-3 py-2">
           {req.message && (
-            <p className="text-[11px] text-gray-300 mb-2 leading-relaxed">{req.message}</p>
+            <p className="text-[11px] text-gray-700 dark:text-gray-300 mb-2 leading-relaxed">
+              {req.message}
+            </p>
           )}
           <div className="space-y-0.5 mb-2">
             {options.map((opt, i) => {
@@ -64,7 +66,7 @@ function PanelCard({
                   }
                   className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left transition-colors ${
                     checked
-                      ? "bg-sky-600/15 text-sky-300"
+                      ? "bg-sky-600/15 text-sky-700 dark:text-sky-300"
                       : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400"
                   }`}
                 >

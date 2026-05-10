@@ -13,5 +13,6 @@
   "explorer": "Explorer",
   "enterPathRefresh": "Enter path and click refresh",
   "confirmDeleteMessage": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone.",
-  "contextMenu": "Context menu"
+  "contextMenu": "Context menu",
+  "loading": "Loading..."
 }

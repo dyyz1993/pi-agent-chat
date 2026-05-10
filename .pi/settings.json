@@ -3,7 +3,8 @@
     "servers": {
       "knowledge-base": {
         "command": "npx",
-        "args": ["-y", "@dyyz1993/kb-mcp", "--stdio"]
+        "args": ["-y", "@dyyz1993/kb-mcp", "--stdio"],
+        "disabled": false
       }
     }
   }

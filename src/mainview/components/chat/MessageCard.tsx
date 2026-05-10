@@ -105,6 +105,10 @@ export const MessageCard = memo(function MessageCard({
     ),
   );
 
+  const handleToggleCollapse = useCallback(() => {
+    toggleCollapse(message.id);
+  }, [message.id, toggleCollapse]);
+
   const isUser = message.role === "user";
   const isAssistant = message.role === "assistant";
   const isCompaction = message.role === "compactionSummary";
@@ -223,10 +227,6 @@ export const MessageCard = memo(function MessageCard({
     barColor = roleCfg.barColor;
     bgColor = roleCfg.bgColor;
   }
-
-  const handleToggleCollapse = useCallback(() => {
-    toggleCollapse(message.id);
-  }, [message.id, toggleCollapse]);
 
   return (
     <div

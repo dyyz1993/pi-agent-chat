@@ -106,9 +106,33 @@ export function StatusPanel() {
     { id: "skills", label: t("skills"), icon: BookOpen },
   ];
 
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(() => {
+    if (!activeSessionId || refreshing) return;
+    setRefreshing(true);
+    useSessionStore.getState().refreshSessionResources(activeSessionId);
+    setTimeout(() => setRefreshing(false), 1500);
+  }, [activeSessionId, refreshing]);
+
   return (
     <>
       <div className="py-1">
+        <div className="flex items-center justify-between px-2.5 py-1 border-b border-gray-200 dark:border-gray-800/50">
+          <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+            {t("status")}
+          </span>
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing || !activeSessionId}
+            className="p-0.5 rounded hover:bg-gray-200/50 dark:hover:bg-gray-800/30 transition-colors disabled:opacity-30"
+            title={t("refreshResources")}
+          >
+            <RotateCw
+              className={`w-3 h-3 text-gray-400 dark:text-gray-500 ${refreshing ? "animate-spin" : ""}`}
+            />
+          </button>
+        </div>
         {SECTIONS.map(({ id, label, icon: Icon }) => {
           const collapsed = collapsedSections.has(id);
           return (

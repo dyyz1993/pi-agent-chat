@@ -1103,6 +1103,12 @@ export class AgentProcessManager {
     }
   }
 
+  async reload(sessionId: string): Promise<void> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return;
+    await managed.client.reload();
+  }
+
   async getTools(
     sessionId: string,
   ): Promise<{ tools: Array<{ name: string; label: string; description: string }> }> {

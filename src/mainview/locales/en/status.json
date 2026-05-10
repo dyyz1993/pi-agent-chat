@@ -75,5 +75,7 @@
   "enableMcp": "Enable",
   "disableMcp": "Disable",
   "mcpToolCount": "({{count}} tools)",
-  "noMcpTools": "No tools"
+  "noMcpTools": "No tools",
+  "status": "Status",
+  "refreshResources": "Refresh resources (Skills, MCP, Plugins)"
 }

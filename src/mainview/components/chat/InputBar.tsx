@@ -121,8 +121,8 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
             minHeight: expanded ? "200px" : "80px",
           }}
         />
-        <div className="flex shrink-0 py-1.5 pr-1.5 gap-1">
-          <div className="flex flex-col justify-between">
+        <div className="flex shrink-0 py-1.5 pr-1.5 gap-1.5">
+          <div className="flex flex-col">
             <button
               onClick={handleClear}
               className={`w-7 h-7 md:w-5 md:h-5 rounded border flex items-center justify-center transition-colors ${hasContent ? "border-gray-400 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:border-gray-400" : "border-gray-300/50 dark:border-gray-700/50 text-gray-400 dark:text-gray-700 pointer-events-none"}`}
@@ -133,7 +133,7 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
             </button>
           </div>
           <div
-            className={`flex flex-col shrink ${expanded ? "gap-0.5 justify-start" : "justify-between"}`}
+            className={`flex flex-col shrink ${expanded ? "gap-0.5 justify-start" : "gap-0.5 justify-start"}`}
           >
             <button
               onClick={toggleExpand}

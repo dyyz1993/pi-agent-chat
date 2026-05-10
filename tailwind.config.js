@@ -10,6 +10,12 @@ export default {
 					950: "#0a0c10",
 				},
 			},
+			spacing: {
+				"safe-top": "var(--safe-area-top)",
+				"safe-bottom": "var(--safe-area-bottom)",
+				"safe-left": "var(--safe-area-left)",
+				"safe-right": "var(--safe-area-right)",
+			},
 			keyframes: {
 				"slide-in-left": {
 					from: { transform: "translateX(-100%)", opacity: "0" },

@@ -326,7 +326,10 @@ function LogViewer({
         className="bg-white dark:bg-gray-900 border-t sm:border border-gray-200 dark:border-gray-700 sm:rounded-lg w-full sm:max-w-4xl flex flex-col h-full sm:h-[70vh] sm:max-h-[85vh]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-200 dark:border-gray-700 shrink-0">
+        <div
+          className="flex items-center justify-between px-4 py-2.5 border-b border-gray-200 dark:border-gray-700 shrink-0"
+          style={{ paddingTop: "calc(0.625rem + env(safe-area-inset-top, 0px))" }}
+        >
           <div className="flex items-center gap-2 min-w-0">
             <Terminal className="w-3.5 h-3.5 text-gray-500 shrink-0" />
             <span className="text-xs text-gray-700 dark:text-gray-300 font-mono truncate">
@@ -338,9 +341,10 @@ function LogViewer({
           </div>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-800 dark:hover:text-white text-sm leading-none shrink-0"
+            className="p-2 rounded-md text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors shrink-0"
+            aria-label={t("close")}
           >
-            ✕
+            <X className="w-4 h-4" />
           </button>
         </div>
 

@@ -84,6 +84,7 @@
   "loadingDiff": "Loading diff...",
   "diffBefore": "Before",
   "diffAfter": "After",
+  "closeDiff": "Close",
   "memoryLabels": {
     "searchMemory": "Search Memory",
     "foundMemory": "Found memories",

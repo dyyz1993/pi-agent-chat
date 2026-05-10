@@ -13,5 +13,6 @@
   "explorer": "Explorer",
   "enterPathRefresh": "输入路径并点击刷新",
   "confirmDeleteMessage": "确定删除 \"{{name}}\" 吗？此操作不可撤销。",
-  "contextMenu": "上下文菜单"
+  "contextMenu": "上下文菜单",
+  "loading": "加载中..."
 }

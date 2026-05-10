@@ -14,16 +14,22 @@ export function QueueCards({ sessionId }: { sessionId: string }) {
 
   return (
     <div className="px-3 py-1.5 flex-shrink-0">
-      <div className="flex items-start gap-2 p-2.5 rounded-lg bg-gray-800/60 border border-gray-700/50">
+      <div className="flex items-start gap-2 p-2.5 rounded-lg bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700/50">
         <div className="flex-1 min-w-0 space-y-1">
           {queue.steering.map((text, i) => (
-            <div key={`s-${i}`} className="flex items-center gap-1.5 text-xs text-amber-400/90">
+            <div
+              key={`s-${i}`}
+              className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400/90"
+            >
               <Zap className="w-3 h-3 shrink-0" />
               <span className="truncate">{text}</span>
             </div>
           ))}
           {queue.followUp.map((text, i) => (
-            <div key={`f-${i}`} className="flex items-center gap-1.5 text-xs text-blue-400/90">
+            <div
+              key={`f-${i}`}
+              className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400/90"
+            >
               <Clock className="w-3 h-3 shrink-0" />
               <span className="truncate">{text}</span>
             </div>
@@ -31,8 +37,9 @@ export function QueueCards({ sessionId }: { sessionId: string }) {
         </div>
         <button
           onClick={clearQueue}
-          className="shrink-0 p-1 rounded hover:bg-gray-700/60 text-gray-500 hover:text-gray-300 transition-colors"
+          className="shrink-0 p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700/60 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
           title={t("revokeQueuedMessages", { count: total })}
+          aria-label={t("revokeQueuedMessages", { count: total })}
         >
           <X className="w-3.5 h-3.5" />
         </button>

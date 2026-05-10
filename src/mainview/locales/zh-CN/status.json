@@ -75,5 +75,7 @@
   "enableMcp": "启用",
   "disableMcp": "禁用",
   "mcpToolCount": "({{count}} tools)",
-  "noMcpTools": "无工具"
+  "noMcpTools": "无工具",
+  "status": "状态",
+  "refreshResources": "刷新资源（技能、MCP、插件）"
 }

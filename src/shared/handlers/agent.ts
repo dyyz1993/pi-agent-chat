@@ -198,6 +198,10 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     return m.getSkills(params.sessionId) as Promise<R<"agent.getSkills">>;
   });
 
+  r("agent.reload", async (params) => {
+    return m.reload(params.sessionId) as Promise<R<"agent.reload">>;
+  });
+
   r("agent.getDisabledSkills", async () => {
     const disabledSkills = await listDisabledSkills();
     return { disabledSkills };

@@ -228,15 +228,16 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
               )}
               <span className={`w-2 h-2 rounded-full ${dotClass} flex-shrink-0`} />
               <span className="min-w-[60px] whitespace-nowrap">{tab.name}</span>
-              <span
+              <button
                 data-testid={`tab-close-${index}`}
                 onClick={(e) => handleCloseClick(e, tab.id)}
                 onMouseDown={(e) => e.stopPropagation()}
                 onPointerDown={(e) => e.stopPropagation()}
-                className="opacity-100 md:opacity-0 md:group-hover:opacity-100 p-0.5 rounded hover:bg-gray-300 dark:hover:bg-gray-700 transition-all pointer-events-auto"
+                className="opacity-100 md:opacity-0 md:group-hover:opacity-100 p-1 rounded hover:bg-gray-300 dark:hover:bg-gray-700 transition-all pointer-events-auto"
+                aria-label="Close tab"
               >
                 <X className="w-3 h-3" />
-              </span>
+              </button>
               {(showRightIndicator || isLastDropTarget) && (
                 <span className="absolute right-0 top-1 bottom-1 w-0.5 bg-indigo-400 rounded-full" />
               )}
@@ -251,6 +252,7 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
           onClick={() => setSettingsOpen(true)}
           className="p-1 rounded text-gray-500 hover:text-gray-800 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors cursor-pointer"
           title={t("settings")}
+          aria-label={t("settings")}
         >
           <Settings className="w-4 h-4" />
         </button>
@@ -258,6 +260,7 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
           onClick={onAddProject}
           className="p-1 rounded text-gray-500 hover:text-gray-800 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors cursor-pointer"
           title={t("addProject")}
+          aria-label={t("addProject")}
         >
           <Plus className="w-4 h-4" />
         </button>
