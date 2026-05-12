@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync } from "fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync } from "fs";
 import { createReadStream } from "fs";
 import * as path from "path";
 import * as readline from "readline";
@@ -24,39 +24,65 @@ import { config } from "../../server-config";
 const log = createLogger("agent");
 const perfLog = createLogger("session-perf");
 
-const {
-  subagent,
-  todo,
-  bash,
-  lsp,
-  preview,
-  autoMemory,
-  autoSessionTitle,
-  rules,
-  fileSnapshot,
-  askTools,
-  messageBridge,
-  coordinator,
-} = config.piExtensionPaths;
-const EXTENSION_ARGS = [
-  "--no-extensions",
-  ...[
-    subagent,
-    todo,
-    bash,
-    lsp,
-    preview,
-    autoMemory,
-    autoSessionTitle,
-    rules,
-    fileSnapshot,
-    askTools,
-    messageBridge,
-    coordinator,
-  ]
-    .filter((p): p is string => !!p)
-    .flatMap((p) => ["--extension", p]),
-];
+/**
+ * Scan the global extensions directory (~/.pi/agent/extensions/) and
+ * return `--extension <path>` args for each discovered entry.
+ *
+ * Layout: each subdirectory with an index.ts/js, or each .ts/.js file,
+ * is treated as an extension. Symlinks are resolved.
+ */
+function discoverExtensionArgs(): string[] {
+  const extDir = config.piExtensionsDir;
+  if (!existsSync(extDir)) {
+    log.warn("Global extensions directory not found", { extDir });
+    return [];
+  }
+
+  const extensionPaths: string[] = [];
+  try {
+    for (const entry of readdirSync(extDir, { withFileTypes: true })) {
+      if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
+
+      let isDir = entry.isDirectory();
+      let isFile = entry.isFile();
+      if (entry.isSymbolicLink()) {
+        try {
+          const stats = statSync(path.join(extDir, entry.name));
+          isDir = stats.isDirectory();
+          isFile = stats.isFile();
+        } catch {
+          continue;
+        }
+      }
+
+      const fullPath = path.join(extDir, entry.name);
+      if (isDir) {
+        const indexTs = path.join(fullPath, "index.ts");
+        const indexJs = path.join(fullPath, "index.js");
+        if (existsSync(indexTs)) {
+          extensionPaths.push(indexTs);
+        } else if (existsSync(indexJs)) {
+          extensionPaths.push(indexJs);
+        }
+      } else if (isFile && (entry.name.endsWith(".ts") || entry.name.endsWith(".js"))) {
+        extensionPaths.push(fullPath);
+      }
+    }
+  } catch (err: unknown) {
+    log.warn("Failed to scan extensions directory", {
+      extDir,
+      err: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  log.info("Discovered extensions", { extDir, count: extensionPaths.length });
+  for (const p of extensionPaths) {
+    log.info("  → extension:", { path: p });
+  }
+  return extensionPaths.flatMap((p) => ["--extension", p]);
+}
+
+const EXTENSION_ARGS = ["--no-extensions", ...discoverExtensionArgs()];
 
 type SanitizedMessageUpdate = Extract<AgentEvent, { type: "message_update" }> & {
   assistantMessageEvent: Omit<AssistantMessageEvent, "partial">;
@@ -86,9 +112,14 @@ interface ManagedClient {
   client: RpcClientInstance;
   info: AgentProcessInfo;
   unsubscribe: () => void;
+  /** Mutable reference — updated on switchSession to reroute events */
+  _activeSessionId: string;
 }
 
 import type { AgentProcessInfo } from "../modules/agent";
+
+let cachedModule: { RpcClient: new (options?: Record<string, unknown>) => RpcClientAPI } | null =
+  null;
 
 async function createRpcClient(
   cliPath: string,
@@ -97,9 +128,11 @@ async function createRpcClient(
 ): Promise<{ client: RpcClientInstance; timings: { dynamicImport: number; construct: number } }> {
   const t0 = performance.now();
 
-  const mod = (await import("@dyyz1993/pi-coding-agent")) as unknown as {
-    RpcClient: new (options?: Record<string, unknown>) => RpcClientAPI;
-  };
+  if (!cachedModule) {
+    cachedModule = (await import("@dyyz1993/pi-coding-agent")) as unknown as {
+      RpcClient: new (options?: Record<string, unknown>) => RpcClientAPI;
+    };
+  }
   const t1 = performance.now();
 
   if (!existsSync(cwd)) {
@@ -111,7 +144,7 @@ async function createRpcClient(
     args.push("--session", sessionPath);
   }
 
-  const client = new mod.RpcClient({
+  const client = new cachedModule.RpcClient({
     cliPath,
     cwd,
     args,
@@ -126,6 +159,8 @@ async function createRpcClient(
 
 export class AgentProcessManager {
   private clients = new Map<string, ManagedClient>();
+  /** CWD-based process pool: projectPath → the ManagedClient running for that project */
+  private processByCwd = new Map<string, ManagedClient>();
   private servers = new Set<RPCServer>();
   private sessionPaths = new Map<string, string>();
   private leafIds = new Map<string, string | null>();
@@ -197,7 +232,7 @@ export class AgentProcessManager {
     sessionId: string,
     projectPath: string,
     sessionPath: string,
-  ): Promise<{ agentId: string; status: "started" | "already_running" }> {
+  ): Promise<{ agentId: string; status: "started" | "already_running" | "switched" }> {
     const tStart = performance.now();
 
     const existing = this.clients.get(sessionId);
@@ -207,6 +242,74 @@ export class AgentProcessManager {
         totalMs: Math.round(performance.now() - tStart),
       });
       return { agentId: sessionId, status: "already_running" };
+    }
+
+    // ── Process pool: reuse existing process for same cwd ──
+    const pooled = this.processByCwd.get(projectPath);
+    if (pooled) {
+      const oldSessionId = pooled._activeSessionId;
+      const tSwitch = performance.now();
+      try {
+        perfLog.info("[start] reusing pooled process", {
+          sessionId,
+          projectPath,
+          oldSessionId,
+        });
+        // Race switchSession with a 15-second timeout.
+        // If the child process is busy (e.g. getFullMessages), don't queue behind it.
+        const result = await Promise.race([
+          pooled.client.switchSession(sessionPath),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("switchSession timed out after 15s")), 15000),
+          ),
+        ]);
+        if (!result.cancelled) {
+          // Update mappings
+          this.clients.delete(oldSessionId);
+          pooled._activeSessionId = sessionId;
+          pooled.info = {
+            sessionId,
+            projectPath,
+            sessionPath,
+            status: "idle",
+            holdEvents: [],
+          };
+          this.clients.set(sessionId, pooled);
+          this.sessionPaths.set(sessionId, sessionPath);
+          perfLog.info("[start] switchSession done", {
+            sessionId,
+            oldSessionId,
+            totalMs: Math.round(performance.now() - tSwitch),
+          });
+          return { agentId: sessionId, status: "switched" };
+        }
+        // If cancelled by an extension, fall through to create new process
+        perfLog.info("[start] switchSession cancelled by extension, creating new process");
+      } catch (err: unknown) {
+        const switchMs = Math.round(performance.now() - tSwitch);
+        // switchSession failed or timed out — kill the pooled process (it may be stuck)
+        // and fall through to create a fresh one.
+        perfLog.info("[start] switchSession failed, killing pooled process", {
+          sessionId,
+          oldSessionId,
+          switchMs,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        // Remove from process pool so we don't try to reuse a stuck process
+        this.processByCwd.delete(projectPath);
+        // Kill the old process entries but don't call full stop() to avoid cascading
+        this.clients.delete(oldSessionId);
+        try {
+          pooled.unsubscribe();
+        } catch {
+          /* ignore */
+        }
+        try {
+          await pooled.client.stop();
+        } catch {
+          /* ignore */
+        }
+      }
     }
 
     perfLog.info("[start] begin (new process)", { sessionId, projectPath });
@@ -228,10 +331,17 @@ export class AgentProcessManager {
       holdEvents: [],
     };
 
-    const bridge = (event: unknown): void => {
-      this.handleEvent(sessionId, event as AgentEvent);
+    const managed: ManagedClient = {
+      client,
+      info,
+      unsubscribe: () => {},
+      _activeSessionId: sessionId,
     };
-    const unsubscribe = client.onEvent(bridge);
+
+    const bridge = (event: unknown): void => {
+      this.handleEvent(managed._activeSessionId, event as AgentEvent);
+    };
+    managed.unsubscribe = client.onEvent(bridge);
 
     const channelNames = [
       "bash",
@@ -245,16 +355,32 @@ export class AgentProcessManager {
     for (const name of channelNames) {
       client.channel(name).onReceive((data: unknown) => {
         if (name === "coordinator") {
-          this.handleCoordinatorCall(sessionId, data);
+          this.handleCoordinatorCall(managed._activeSessionId, data);
           return;
         }
-        this.handleEvent(sessionId, { type: "channel_data", name, data } as ChannelDataEvent);
+        this.handleEvent(managed._activeSessionId, {
+          type: "channel_data",
+          name,
+          data,
+        } as ChannelDataEvent);
       });
     }
 
-    this.clients.set(sessionId, { client, info, unsubscribe });
+    this.clients.set(sessionId, managed);
 
-    await client.start();
+    try {
+      await client.start();
+    } catch (startErr: unknown) {
+      this.clients.delete(sessionId);
+      const msg = startErr instanceof Error ? startErr.message : String(startErr);
+      log.error("[start] RpcClient.start failed", {
+        sessionId,
+        projectPath,
+        error: msg,
+        createRpcMs: Math.round(performance.now() - tAfterCreate),
+      });
+      throw new Error(`Agent startup failed for ${projectPath}: ${msg}`);
+    }
     const tAfterProcessStart = performance.now();
 
     const totalMs = Math.round(tAfterProcessStart - tStart);
@@ -273,6 +399,7 @@ export class AgentProcessManager {
 
     log.info("RpcClient started", { sessionId });
     this.sessionPaths.set(sessionId, sessionPath);
+    this.processByCwd.set(projectPath, managed);
     return { agentId: sessionId, status: "started" };
   }
 
@@ -393,6 +520,11 @@ export class AgentProcessManager {
       log.warn("stop error", { sessionId, err: err instanceof Error ? err.message : String(err) });
     });
     this.clients.delete(sessionId);
+    // Clean up process pool if this was the pooled process for its cwd
+    const cwd = managed.info.projectPath;
+    if (this.processByCwd.get(cwd) === managed) {
+      this.processByCwd.delete(cwd);
+    }
     this.sessionPaths.delete(sessionId);
     this.lastLspState.delete(sessionId);
     this.leafIds.delete(sessionId);
@@ -725,11 +857,38 @@ export class AgentProcessManager {
     let messages: unknown[] = [];
     let resolvedSessionPath = sessionPath ?? "";
     let activePathIds: Set<string> | null = null;
+    const customEntries: Array<{
+      id: string;
+      customType: string;
+      data: unknown;
+      timestamp: number;
+    }> = [];
 
     if (managed) {
       resolvedSessionPath = managed.info.sessionPath;
       try {
-        const result = await managed.client.getFullMessages();
+        const result = (await managed.client.getFullMessages()) as {
+          messages: unknown[];
+          hasMore: boolean;
+          totalCount: number;
+          nextCursor: string | null;
+          tree?: {
+            entries: Array<{ id: string; parentId: string | null; type: string; label?: string }>;
+            leafId: string | null;
+          };
+          customEntries?: Array<{
+            id: string;
+            customType: string;
+            data: unknown;
+            timestamp: number;
+          }>;
+          compactionEntries?: Array<{
+            id: string;
+            summary: string;
+            tokensBefore: number | undefined;
+            timestamp: number;
+          }>;
+        };
         log.info("getFullMessages SDK result", {
           count: result?.messages?.length ?? 0,
           hasMore: result?.hasMore,
@@ -737,6 +896,67 @@ export class AgentProcessManager {
         });
         if (result?.messages) {
           messages = result.messages;
+        }
+        if (result?.tree) {
+          const treeEntries = result.tree.entries;
+          const leafId = result.tree.leafId;
+          if (Array.isArray(treeEntries) && leafId) {
+            const byId = new Map<
+              string,
+              { id: string; parentId: string | null; type: string; label?: string }
+            >();
+            for (const e of treeEntries) byId.set(e.id, e);
+            activePathIds = new Set<string>();
+            let curId: string | null | undefined = leafId;
+            while (curId) {
+              activePathIds.add(curId);
+              const node = byId.get(curId);
+              curId =
+                node && typeof node.parentId === "string" && node.parentId
+                  ? node.parentId
+                  : undefined;
+            }
+            // Filter messages by active path: message entries in tree correspond 1:1 with messages array
+            const messageTreeEntries = treeEntries.filter((e) => e.type === "message");
+            if (activePathIds.size > 0 && messageTreeEntries.length > 0) {
+              const filtered: unknown[] = [];
+              for (let i = 0; i < messageTreeEntries.length && i < messages.length; i++) {
+                if (activePathIds.has(messageTreeEntries[i].id)) {
+                  filtered.push(messages[i]);
+                }
+              }
+              log.info("getMessages filtered by tree path", {
+                before: messages.length,
+                after: filtered.length,
+                treeMsgEntries: messageTreeEntries.length,
+                activePathSize: activePathIds.size,
+              });
+              messages = filtered;
+            }
+          }
+        }
+        if (Array.isArray(result?.customEntries)) {
+          for (const ce of result.customEntries) {
+            if (activePathIds && !activePathIds.has(ce.id)) continue;
+            customEntries.push({
+              id: ce.id,
+              customType: ce.customType ?? "unknown",
+              data: ce.data,
+              timestamp: ce.timestamp,
+            });
+          }
+        }
+        if (Array.isArray(result?.compactionEntries)) {
+          for (const comp of result.compactionEntries) {
+            if (activePathIds && !activePathIds.has(comp.id)) continue;
+            messages.push({
+              id: comp.id,
+              role: "compactionSummary",
+              summary: comp.summary ?? "",
+              tokensBefore: comp.tokensBefore,
+              timestamp: comp.timestamp,
+            });
+          }
         }
       } catch (err: unknown) {
         log.error("getFullMessages SDK failed, falling back to getMessages", {
@@ -751,33 +971,6 @@ export class AgentProcessManager {
             err: err instanceof Error ? err.message : String(err),
           });
         }
-      }
-      try {
-        const treeResult = await managed.client.getTreeWithLeaf();
-        const entries = treeResult.entries;
-        const leafId = treeResult.leafId;
-        if (Array.isArray(entries) && leafId) {
-          const byId = new Map<
-            string,
-            { id: string; parentId: string | null; type: string; label?: string }
-          >();
-          for (const e of entries) byId.set(e.id, e);
-          activePathIds = new Set<string>();
-          let curId: string | null | undefined = leafId;
-          while (curId) {
-            activePathIds.add(curId);
-            const node = byId.get(curId);
-            curId =
-              node && typeof node.parentId === "string" && node.parentId
-                ? node.parentId
-                : undefined;
-          }
-        }
-      } catch (err: unknown) {
-        log.warn("getTreeWithLeaf failed in getFullMessages", {
-          sessionId,
-          err: err instanceof Error ? err.message : String(err),
-        });
       }
     } else {
       resolvedSessionPath = this.resolveSessionPath(sessionId) ?? sessionPath ?? "";
@@ -802,13 +995,7 @@ export class AgentProcessManager {
       }
     }
 
-    const customEntries: Array<{
-      id: string;
-      customType: string;
-      data: unknown;
-      timestamp: number;
-    }> = [];
-    if (resolvedSessionPath && existsSync(resolvedSessionPath)) {
+    if (!managed && resolvedSessionPath && existsSync(resolvedSessionPath)) {
       try {
         const rl = readline.createInterface({
           input: createReadStream(resolvedSessionPath, { encoding: "utf-8" }),
@@ -845,7 +1032,7 @@ export class AgentProcessManager {
                 tokensBefore: parsed.tokensBefore,
                 timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
               });
-            } else if (!managed && parsed.type === "message" && parsed.message) {
+            } else if (parsed.type === "message" && parsed.message) {
               if (
                 activePathIds &&
                 typeof parsed.id === "string" &&
@@ -1188,6 +1375,39 @@ export class AgentProcessManager {
     });
   }
 
+  async getTierModels(sessionId: string): Promise<{ models: Record<string, string> }> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return { models: {} };
+    const response = await (
+      managed.client as unknown as { send: (cmd: unknown) => Promise<unknown> }
+    )
+      .send({ type: "get_tier_models" })
+      .catch((err: unknown) => {
+        log.warn("getTierModels error", {
+          sessionId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+        return null;
+      });
+    if (!response) return { models: {} };
+    const data = (response as { data?: { models: Record<string, string> } }).data;
+    return { models: data?.models ?? {} };
+  }
+
+  async setTierModels(sessionId: string, models: Record<string, string>): Promise<{ ok: boolean }> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return { ok: false };
+    await (managed.client as unknown as { send: (cmd: unknown) => Promise<unknown> })
+      .send({ type: "set_tier_models", models })
+      .catch((err: unknown) => {
+        log.warn("setTierModels error", {
+          sessionId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      });
+    return { ok: true };
+  }
+
   async getSettings(sessionId: string, scope?: string): Promise<Record<string, unknown>> {
     const managed = this.clients.get(sessionId);
     if (!managed) return {};
@@ -1289,10 +1509,18 @@ export class AgentProcessManager {
   ): Promise<{ cancelled: boolean }> {
     const managed = this.clients.get(sessionId);
     if (managed) {
-      return managed.client.navigateTree(targetId, options);
+      const result = await managed.client.navigateTree(targetId, options);
+      if (!result.cancelled) {
+        this.leafIds.set(sessionId, targetId);
+        log.info("navigateTree updated leafId", { sessionId, targetId });
+      }
+      return result;
     }
-    this.leafIds.set(sessionId, targetId === "null" || targetId === null ? null : targetId);
-    return { cancelled: false };
+    log.warn("navigateTree: no managed client, rollback will not take effect", {
+      sessionId,
+      targetId,
+    });
+    return { cancelled: true };
   }
 
   async previewRollback(
@@ -1306,12 +1534,58 @@ export class AgentProcessManager {
     return { restored: [], deleted: [] };
   }
 
+  async getModifiedFiles(
+    sessionId: string,
+    fromEntryId?: string,
+    toEntryId?: string,
+  ): Promise<
+    Array<{
+      path: string;
+      status: "added" | "modified" | "deleted";
+      turnIndex: number;
+      entryId: string;
+    }>
+  > {
+    const managed = this.clients.get(sessionId);
+    if (managed) {
+      return managed.client.getModifiedFiles({ fromEntryId, toEntryId });
+    }
+    return [];
+  }
+
+  async getBatchDiffs(
+    sessionId: string,
+    fromEntryId?: string,
+    toEntryId?: string,
+  ): Promise<{
+    files: Array<{
+      path: string;
+      status: "added" | "modified" | "deleted";
+      diff: {
+        path: string;
+        oldContent: string | null;
+        newContent: string | null;
+        unifiedDiff: string;
+      } | null;
+    }>;
+    summary: { totalFiles: number; added: number; modified: number; deleted: number };
+  }> {
+    const managed = this.clients.get(sessionId);
+    if (managed) {
+      return managed.client.getBatchDiffs({ fromEntryId, toEntryId });
+    }
+    return { files: [], summary: { totalFiles: 0, added: 0, modified: 0, deleted: 0 } };
+  }
+
   async getTree(sessionId: string): Promise<{ entries: TreeEntry[]; leafId?: string | null }> {
     const managed = this.clients.get(sessionId);
     if (managed) {
       try {
-        const entries = await managed.client.getTree();
-        return { entries: Array.isArray(entries) ? entries : [] };
+        const result = await managed.client.getTree();
+        return {
+          entries: Array.isArray(result.entries) ? (result.entries as TreeEntry[]) : [],
+          leafId: result.leafId,
+        };
       } catch (err: unknown) {
         log.warn("getTree SDK failed, falling back to JSONL", {
           sessionId,
@@ -1705,7 +1979,7 @@ export class AgentProcessManager {
   private async handleCoordinatorDelegate(
     parentSessionId: string,
     msg: Extract<CoordinatorMethodCall, { __call: "session_delegate" }>,
-  ): Promise<{ sessionId: string; status: "started" | "already_running" }> {
+  ): Promise<{ sessionId: string; status: "started" | "already_running" | "switched" }> {
     const { task } = msg;
     const parent = this.clients.get(parentSessionId);
     if (!parent) throw new Error("Parent session not found");
@@ -1887,7 +2161,7 @@ export class AgentProcessManager {
   private async handleCoordinatorDelegateFork(
     parentSessionId: string,
     msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_fork" }>,
-  ): Promise<{ sessionId: string; status: "started" | "already_running" }> {
+  ): Promise<{ sessionId: string; status: "started" | "already_running" | "switched" }> {
     const { task } = msg;
     const base = this.clients.get(parentSessionId);
     if (!base) throw new Error("Base session not found");

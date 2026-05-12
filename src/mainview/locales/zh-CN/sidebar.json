@@ -126,5 +126,8 @@
   "picker.sessionCount": "{{count}} 个会话",
   "picker.timeAgo.minutes": "{{count}} 分钟前",
   "picker.timeAgo.hours": "{{count}} 小时前",
-  "picker.timeAgo.days": "{{count}} 天前"
+  "picker.timeAgo.days": "{{count}} 天前",
+  "picker.backToRecents": "返回最近",
+  "picker.manualPathPlaceholder": "输入路径直接打开...",
+  "picker.openPath": "打开"
 }

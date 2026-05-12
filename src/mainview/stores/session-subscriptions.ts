@@ -64,6 +64,10 @@ export function setupSubscriptions(
   const storeGet = () => useSessionStore.getState();
 
   if (!agentSubscriptions[id]) {
+    set((s) => ({
+      agentSubscriptions: { ...s.agentSubscriptions, [id]: "__pending__" },
+    }));
+
     apiClient
       .subscribe("agent.event", (payload) => {
         if (payload.sessionId !== id) return;
@@ -75,11 +79,19 @@ export function setupSubscriptions(
         }));
       })
       .catch((err) => {
+        set((s) => {
+          const { [id]: _, ...rest } = s.agentSubscriptions;
+          return { agentSubscriptions: rest };
+        });
         useAppStore.getState().addLog(`[sub] ${String(err)}`);
       });
   }
 
   if (!subagentSubscriptions[id]) {
+    set((s) => ({
+      subagentSubscriptions: { ...s.subagentSubscriptions, [id]: "__pending__" },
+    }));
+
     apiClient
       .subscribe(
         "subagent.event",
@@ -133,11 +145,19 @@ export function setupSubscriptions(
         }));
       })
       .catch((err) => {
+        set((s) => {
+          const { [id]: _, ...rest } = s.subagentSubscriptions;
+          return { subagentSubscriptions: rest };
+        });
         useAppStore.getState().addLog(`[sub] ${String(err)}`);
       });
   }
 
   if (!todoSubscriptions[id]) {
+    set((s) => ({
+      todoSubscriptions: { ...s.todoSubscriptions, [id]: "__pending__" },
+    }));
+
     apiClient
       .subscribe(
         "todo.event",
@@ -163,11 +183,19 @@ export function setupSubscriptions(
           });
       })
       .catch((err) => {
+        set((s) => {
+          const { [id]: _, ...rest } = s.todoSubscriptions;
+          return { todoSubscriptions: rest };
+        });
         useAppStore.getState().addLog(`[sub] ${String(err)}`);
       });
   }
 
   if (!bashSubscriptions[id]) {
+    set((s) => ({
+      bashSubscriptions: { ...s.bashSubscriptions, [id]: "__pending__" },
+    }));
+
     apiClient
       .subscribe(
         "bash.event",
@@ -189,11 +217,19 @@ export function setupSubscriptions(
           });
       })
       .catch((err) => {
+        set((s) => {
+          const { [id]: _, ...rest } = s.bashSubscriptions;
+          return { bashSubscriptions: rest };
+        });
         useAppStore.getState().addLog(`[sub] ${String(err)}`);
       });
   }
 
   if (!lspSubscriptions[id]) {
+    set((s) => ({
+      lspSubscriptions: { ...s.lspSubscriptions, [id]: "__pending__" },
+    }));
+
     apiClient
       .subscribe(
         "lsp.event",
@@ -215,11 +251,19 @@ export function setupSubscriptions(
           });
       })
       .catch((err) => {
+        set((s) => {
+          const { [id]: _, ...rest } = s.lspSubscriptions;
+          return { lspSubscriptions: rest };
+        });
         useAppStore.getState().addLog(`[sub] ${String(err)}`);
       });
   }
 
   if (!rulesSubscriptions[id]) {
+    set((s) => ({
+      rulesSubscriptions: { ...s.rulesSubscriptions, [id]: "__pending__" },
+    }));
+
     apiClient
       .subscribe(
         "rules.event",
@@ -259,11 +303,19 @@ export function setupSubscriptions(
         }
       })
       .catch((err) => {
+        set((s) => {
+          const { [id]: _, ...rest } = s.rulesSubscriptions;
+          return { rulesSubscriptions: rest };
+        });
         useAppStore.getState().addLog(`[sub] ${String(err)}`);
       });
   }
 
   if (!notifySubscriptions[id]) {
+    set((s) => ({
+      notifySubscriptions: { ...s.notifySubscriptions, [id]: "__pending__" },
+    }));
+
     apiClient
       .subscribe(
         "agent.notify",
@@ -290,11 +342,19 @@ export function setupSubscriptions(
         }));
       })
       .catch((err) => {
+        set((s) => {
+          const { [id]: _, ...rest } = s.notifySubscriptions;
+          return { notifySubscriptions: rest };
+        });
         useAppStore.getState().addLog(`[sub] ${String(err)}`);
       });
   }
 
   if (!memorySubscriptions[id] || memorySubscriptions[id].length === 0) {
+    set((s) => ({
+      memorySubscriptions: { ...s.memorySubscriptions, [id]: ["__pending__"] },
+    }));
+
     const projectTab = useSessionStore
       .getState()
       .projectTabs.find((t) => t.id === useSessionStore.getState().activeProjectId);
@@ -309,6 +369,12 @@ export function setupSubscriptions(
           }));
         })
         .catch((err) => {
+          if (memorySubIds.length === 0) {
+            set((s) => {
+              const { [id]: _, ...rest } = s.memorySubscriptions;
+              return { memorySubscriptions: rest };
+            });
+          }
           useAppStore.getState().addLog(`[sub] ${String(err)}`);
         });
     }
@@ -424,24 +490,29 @@ export function setupSubscriptions(
   }
 
   if (!coordinatorSubscriptions[id]) {
+    set((s) => ({
+      coordinatorSubscriptions: { ...s.coordinatorSubscriptions, [id]: "__pending__" },
+    }));
+
     apiClient
       .subscribe(
         "coordinator.session_created",
         (payload: { parentSessionId: string; session: SessionMeta }) => {
           if (payload.parentSessionId !== id) return;
 
-          const s = useSessionStore.getState();
-          const projectPath = payload.session.projectPath;
-          const sessions = s.sessionsByProject[projectPath] || [];
-
-          if (!sessions.find((sess) => sess.sessionId === payload.session.sessionId)) {
-            useSessionStore.setState({
+          useSessionStore.setState((s) => {
+            const projectPath = payload.session.projectPath;
+            const sessions = s.sessionsByProject[projectPath] || [];
+            if (sessions.find((sess) => sess.sessionId === payload.session.sessionId)) {
+              return {};
+            }
+            return {
               sessionsByProject: {
                 ...s.sessionsByProject,
                 [projectPath]: [payload.session, ...sessions],
               },
-            });
-          }
+            };
+          });
         },
         { parentSessionId: id },
       )
@@ -451,6 +522,10 @@ export function setupSubscriptions(
         }));
       })
       .catch((err) => {
+        set((s) => {
+          const { [id]: _, ...rest } = s.coordinatorSubscriptions;
+          return { coordinatorSubscriptions: rest };
+        });
         useAppStore.getState().addLog(`[sub] ${String(err)}`);
       });
   }

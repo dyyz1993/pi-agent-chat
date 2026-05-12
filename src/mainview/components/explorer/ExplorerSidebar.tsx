@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Folder, RefreshCw, File, FolderPlus, Pencil, Trash2, Copy } from "lucide-react";
 import type { TreeNode, EditingNode } from "../../types";
 import type { DropEntry } from "../../utils/drop-handler";
@@ -17,7 +17,7 @@ interface ExplorerSidebarProps {
   onRefresh: () => void;
   onToggle: (path: string) => void;
   onOpenFile: (node: TreeNode) => void;
-  onCreateFile: (dirPath: string, name: string) => Promise<void>;
+  onCreateFile: (dirPath: string, name: string) => Promise<string | null>;
   onCreateDir: (dirPath: string, name: string) => Promise<void>;
   onRenameNode: (oldPath: string, newName: string) => Promise<void>;
   onDeleteNode: (path: string) => Promise<void>;
@@ -53,6 +53,7 @@ export function ExplorerSidebar({
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [copyToast, setCopyToast] = useState<string | null>(null);
 
   const handleContextMenu = useCallback((e: React.MouseEvent, node: TreeNode | null) => {
     e.preventDefault();
@@ -91,6 +92,12 @@ export function ExplorerSidebar({
     },
     [onImportFiles, currentPath],
   );
+
+  useEffect(() => {
+    if (!copyToast) return;
+    const timer = setTimeout(() => setCopyToast(null), 2000);
+    return () => clearTimeout(timer);
+  }, [copyToast]);
 
   const buildMenuItems = useCallback((): MenuItem[] => {
     if (!contextMenu) return [];
@@ -149,19 +156,23 @@ export function ExplorerSidebar({
       {
         label: "Copy Path",
         icon: <Copy className="w-3 h-3" />,
-        onClick: () => copyToClipboard(node.path),
+        onClick: () => {
+          copyToClipboard(node.path).then((ok) => {
+            if (ok) setCopyToast(node.path);
+          });
+        },
       },
     );
     return items;
   }, [contextMenu, currentPath, onRefresh, onStartEditing]);
 
   const handleSubmitEdit = useCallback(
-    (value: string) => {
+    async (value: string) => {
       if (!editingNode) return;
       if (editingNode.type === "rename") {
         onRenameNode(editingNode.path, value);
       } else if (editingNode.type === "newFile") {
-        onCreateFile(editingNode.path, value);
+        await onCreateFile(editingNode.path, value);
       } else if (editingNode.type === "newDir") {
         onCreateDir(editingNode.path, value);
       }
@@ -241,6 +252,16 @@ export function ExplorerSidebar({
           items={buildMenuItems()}
           onClose={() => setContextMenu(null)}
         />
+      )}
+
+      {copyToast && (
+        <div
+          className="absolute bottom-3 left-3 right-3 z-40 animate-in fade-in slide-in-from-bottom-2 duration-200 bg-gray-800 dark:bg-gray-700 text-white text-xs px-3 py-2 rounded-lg shadow-lg flex items-center gap-2"
+          role="status"
+        >
+          <Copy className="w-3 h-3 text-emerald-400 shrink-0" />
+          <span className="truncate">{copyToast}</span>
+        </div>
       )}
 
       {pendingDelete && (

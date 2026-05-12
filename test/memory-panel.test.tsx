@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, mock } from "bun:test";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
 
 const zhMemory: Record<string, string> = {
@@ -51,7 +51,7 @@ function setSessionState(p: Partial<typeof sessionState>) {
   Object.assign(sessionState, p);
 }
 
-mock.module("react-i18next", () => ({
+vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string, opts?: Record<string, unknown>) => {
       let val = zhMemory[key] ?? key;
@@ -63,18 +63,18 @@ mock.module("react-i18next", () => ({
       return val;
     },
   }),
-  initReactI18next: { type: "3rdParty", init: mock() },
+  initReactI18next: { type: "3rdParty", init: vi.fn() },
 }));
 
-mock.module("../src/mainview/lib/api-client", () => ({
-  apiClient: { call: mock() },
+vi.mock("../src/mainview/lib/api-client", () => ({
+  apiClient: { call: vi.fn() },
 }));
 
-mock.module("../src/mainview/stores/use-rpc-debug-store", () => ({
-  useRpcDebugStore: { getState: mock(() => ({ addEntry: mock() })) },
+vi.mock("../src/mainview/stores/use-rpc-debug-store", () => ({
+  useRpcDebugStore: { getState: vi.fn(() => ({ addEntry: vi.fn() })) },
 }));
 
-mock.module("../src/mainview/stores/use-session-store", () => {
+vi.mock("../src/mainview/stores/use-session-store", () => {
   function useSessionStore(selector: (s: ReturnType<typeof getSessionState>) => unknown) {
     return selector(getSessionState());
   }
@@ -87,10 +87,10 @@ import { useMemoryStore } from "../src/mainview/stores/use-memory-store";
 import { apiClient } from "../src/mainview/lib/api-client";
 import { MemoryPanel } from "../src/mainview/components/memory-panel/MemoryPanel";
 
-const mockApiCall = apiClient.call as ReturnType<typeof mock>;
+const mockApiCall = apiClient.call as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
-  mock.clearAllMocks();
+  vi.clearAllMocks();
 
   useMemoryStore.setState({
     eventsBySession: {},

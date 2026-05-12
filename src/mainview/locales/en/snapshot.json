@@ -7,7 +7,9 @@
   "snapshots": "Snapshots ({{count}})",
   "refresh": "Refresh",
   "noActiveSession": "No active session",
+  "noActiveSessionHint": "Select a session to view snapshots",
   "noSnapshotsYet": "No snapshots yet",
+  "noSnapshotsHint": "Snapshots are created automatically after agent tool executions",
   "cancelRollback": "Cancel rollback",
   "rollbackToSnapshot": "Rollback to this snapshot"
 }

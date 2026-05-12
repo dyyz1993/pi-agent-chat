@@ -25,7 +25,7 @@ export const ENTRY_TYPES: Record<string, MemoryTypeConfig> = {
   memory_prefetch_result: {
     icon: SearchCheck,
     color: "text-blue-400",
-    label: "找到相关记忆",
+    label: "记忆搜索",
   },
   memory_extract: {
     icon: Save,
@@ -119,6 +119,8 @@ export function getMemorySummary(customType: string, data: unknown): string | nu
       return q ? `「${q.length > 40 ? q.slice(0, 40) + "…" : q}」(${n} 个文件)` : null;
     }
     case "memory_prefetch_result": {
+      const prefetchQuery = typeof d._prefetchQuery === "string" ? d._prefetchQuery : "";
+
       const summary = typeof d.summary === "string" ? d.summary : "";
       const bytes = typeof d.injectedBytes === "number" ? d.injectedBytes : 0;
       const layer = typeof d.layer === "string" ? d.layer : "";
@@ -127,43 +129,47 @@ export function getMemorySummary(customType: string, data: unknown): string | nu
       const durationMs = typeof d.durationMs === "number" ? d.durationMs : 0;
       const availableFiles = typeof d.availableFiles === "number" ? d.availableFiles : 0;
       const isNoResult = summary === "No relevant memories" || (bytes === 0 && files.length === 0);
+
+      let resultPart: string;
       if (isNoResult) {
-        if (layer === "not_triggered") {
-          return "未触发搜索（默认跳过）";
+        if (layer === "not_triggered") resultPart = "未触发搜索（默认跳过）";
+        else if (layer === "skip") resultPart = `规则命中，跳过搜索`;
+        else if (layer === "error") resultPart = `搜索出错`;
+        else {
+          const parts: string[] = [];
+          if (availableFiles > 0) parts.push(`${availableFiles}个文件`);
+          if (durationMs > 0) parts.push(`${durationMs}ms`);
+          resultPart = `无匹配结果${parts.length > 0 ? ` (${parts.join(" · ")})` : ""}`;
         }
-        if (layer === "skip") {
-          return `规则命中，跳过搜索 · 复用缓存`;
-        }
-        if (layer === "error") {
-          return `搜索出错`;
-        }
-        const parts: string[] = [];
-        if (availableFiles > 0) parts.push(`${availableFiles}个文件`);
-        if (durationMs > 0) parts.push(`${durationMs}ms`);
-        const detail = parts.length > 0 ? ` (${parts.join(" · ")})` : "";
-        return `无匹配结果${detail}`;
-      }
-      const sizeLabel = bytes > 0 ? `${Math.round(bytes / 1024)}KB` : "";
-      const fileCountLabel =
-        availableFiles > 0
-          ? `${availableFiles}个文件`
-          : files.length > 0
-            ? `${files.length}个文件`
-            : "";
-      const durationLabel = durationMs > 0 ? `${durationMs}ms` : "";
-      const layerLabel =
-        layer === "llm"
-          ? isForce
-            ? "强制触发"
-            : "关键词触发"
-          : layer === "skip"
-            ? "规则"
-            : layer === "not_triggered"
-              ? "未触发"
+      } else {
+        const sizeLabel = bytes > 0 ? `${Math.round(bytes / 1024)}KB` : "";
+        const fileCountLabel =
+          availableFiles > 0
+            ? `${availableFiles}个文件`
+            : files.length > 0
+              ? `${files.length}个文件`
               : "";
-      const parts = [layerLabel, sizeLabel, fileCountLabel, durationLabel].filter(Boolean);
-      const detail = parts.length > 0 ? ` · ${parts.join(" · ")}` : "";
-      return `已注入记忆${detail}`;
+        const durationLabel = durationMs > 0 ? `${durationMs}ms` : "";
+        const layerLabel =
+          layer === "llm"
+            ? isForce
+              ? "强制触发"
+              : "关键词触发"
+            : layer === "skip"
+              ? "规则"
+              : layer === "not_triggered"
+                ? "未触发"
+                : "";
+        const parts = [layerLabel, sizeLabel, fileCountLabel, durationLabel].filter(Boolean);
+        resultPart = parts.length > 0 ? `已注入记忆 · ${parts.join(" · ")}` : "已注入记忆";
+      }
+
+      if (prefetchQuery) {
+        const q = prefetchQuery.length > 30 ? prefetchQuery.slice(0, 30) + "…" : prefetchQuery;
+        return `「${q}」→ ${resultPart}`;
+      }
+
+      return resultPart;
     }
     case "memory_extract": {
       const created = Array.isArray(d.created)

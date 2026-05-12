@@ -26,6 +26,64 @@ import { ConfirmDialog } from "../explorer/ConfirmDialog";
 
 const EMPTY: never[] = [];
 
+export function groupSessions(
+  rawSessions: SessionMeta[],
+  searchQuery: string,
+): { rootSessions: SessionMeta[]; childMap: Record<string, SessionMeta[]> } {
+  const seen = new Set<string>();
+  const deduped = rawSessions.filter((sess) => {
+    if (seen.has(sess.sessionId)) return false;
+    seen.add(sess.sessionId);
+    return true;
+  });
+
+  const children: Record<string, SessionMeta[]> = {};
+  const roots: SessionMeta[] = [];
+  const q = searchQuery.trim().toLowerCase();
+
+  for (const sess of deduped) {
+    if (sess.parentSessionPath) {
+      if (!children[sess.parentSessionPath]) children[sess.parentSessionPath] = [];
+      children[sess.parentSessionPath].push(sess);
+    } else {
+      roots.push(sess);
+    }
+  }
+
+  const sortPinnedFirst = (s: SessionMeta[]) =>
+    [...s].sort((a, b) => {
+      if ((a.pinned ? 1 : 0) !== (b.pinned ? 1 : 0)) return a.pinned ? -1 : 1;
+      return b.updatedAt - a.updatedAt;
+    });
+
+  if (q) {
+    const filter = (s: SessionMeta[]) =>
+      s.filter(
+        (sess) =>
+          sess.name?.toLowerCase().includes(q) ||
+          sess.firstMessage?.toLowerCase().includes(q) ||
+          sess.sessionId.toLowerCase().includes(q),
+      );
+    const filteredRoots = sortPinnedFirst(filter(roots));
+    const filteredChildren: Record<string, SessionMeta[]> = {};
+    for (const [parentPath, kids] of Object.entries(children)) {
+      const filtered = filter(kids);
+      if (filtered.length > 0) filteredChildren[parentPath] = filtered;
+      else {
+        const parentMatch = roots.find(
+          (r) =>
+            r.sessionPath === parentPath &&
+            (r.name?.toLowerCase().includes(q) || r.firstMessage?.toLowerCase().includes(q)),
+        );
+        if (parentMatch) filteredChildren[parentPath] = filtered;
+      }
+    }
+    return { rootSessions: filteredRoots, childMap: filteredChildren };
+  }
+
+  return { rootSessions: sortPinnedFirst(roots), childMap: children };
+}
+
 interface SessionSidebarProps {
   hideOuterHeader?: boolean;
 }
@@ -122,53 +180,10 @@ function SessionList({
     }
   }, [subsessionsByParent, activeSessionId, rawSessions, onExpandSession]);
 
-  const { rootSessions, childMap } = useMemo(() => {
-    const children: Record<string, SessionMeta[]> = {};
-    const roots: SessionMeta[] = [];
-    const q = searchQuery.trim().toLowerCase();
-
-    for (const sess of rawSessions) {
-      if (sess.parentSessionPath) {
-        if (!children[sess.parentSessionPath]) children[sess.parentSessionPath] = [];
-        children[sess.parentSessionPath].push(sess);
-      } else {
-        roots.push(sess);
-      }
-    }
-
-    const sortPinnedFirst = (s: SessionMeta[]) =>
-      [...s].sort((a, b) => {
-        if ((a.pinned ? 1 : 0) !== (b.pinned ? 1 : 0)) return a.pinned ? -1 : 1;
-        return b.updatedAt - a.updatedAt;
-      });
-
-    if (q) {
-      const filter = (s: SessionMeta[]) =>
-        s.filter(
-          (sess) =>
-            sess.name?.toLowerCase().includes(q) ||
-            sess.firstMessage?.toLowerCase().includes(q) ||
-            sess.sessionId.toLowerCase().includes(q),
-        );
-      const filteredRoots = sortPinnedFirst(filter(roots));
-      const filteredChildren: Record<string, SessionMeta[]> = {};
-      for (const [parentPath, kids] of Object.entries(children)) {
-        const filtered = filter(kids);
-        if (filtered.length > 0) filteredChildren[parentPath] = filtered;
-        else {
-          const parentMatch = roots.find(
-            (r) =>
-              r.sessionPath === parentPath &&
-              (r.name?.toLowerCase().includes(q) || r.firstMessage?.toLowerCase().includes(q)),
-          );
-          if (parentMatch) filteredChildren[parentPath] = filtered;
-        }
-      }
-      return { rootSessions: filteredRoots, childMap: filteredChildren };
-    }
-
-    return { rootSessions: sortPinnedFirst(roots), childMap: children };
-  }, [rawSessions, searchQuery]);
+  const { rootSessions, childMap } = useMemo(
+    () => groupSessions(rawSessions, searchQuery),
+    [rawSessions, searchQuery],
+  );
 
   if (loading) {
     return (
@@ -188,7 +203,7 @@ function SessionList({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto overscroll-contain px-1 space-y-1">
+    <div className="flex-1 overflow-y-auto overscroll-contain px-2 py-0.5 divide-y divide-gray-800/50">
       {rootSessions.map((sess) => (
         <SessionItem
           key={sess.sessionId}
@@ -232,8 +247,8 @@ function StatusBadge({ sessionId }: { sessionId: string }) {
     );
   }
   return (
-    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
-      <span className="w-1 h-1 rounded-full bg-emerald-400" />
+    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-400/80 border border-emerald-500/15">
+      <span className="w-1 h-1 rounded-full bg-emerald-500/60" />
       {t("idle")}
     </span>
   );
@@ -390,18 +405,26 @@ function SessionItem({
   const displayName = session.name || session.firstMessage || t("sidebar:emptySession");
 
   return (
-    <div>
+    <div className="py-1 first:pt-0.5 last:pb-0.5">
       <div
         data-testid={`session-item-${session.sessionId}`}
-        className={`group w-full text-left px-2.5 py-2 rounded text-[11px] transition-colors cursor-pointer ${
+        className={`group w-full text-left px-2.5 py-2 rounded-lg text-[11px] transition-all duration-150 cursor-pointer ${
           isActive
-            ? "bg-indigo-600/20 text-indigo-700 dark:text-indigo-200"
-            : "text-gray-500 dark:text-gray-400 hover:bg-gray-100/60 dark:hover:bg-gray-800/60 hover:text-gray-800 dark:hover:text-gray-200"
-        } ${isActive ? "border-l-2 border-indigo-500 -ml-[2px] pl-[calc(0.625rem+2px)]" : ""}`}
+            ? "bg-gradient-to-r from-indigo-500/15 to-indigo-500/5 text-indigo-100 shadow-sm shadow-indigo-500/5 border border-indigo-500/20"
+            : "text-gray-500 dark:text-gray-400 hover:bg-white/[0.04] dark:hover:bg-gray-800/50 hover:text-gray-200 dark:hover:text-gray-200 border border-transparent hover:border-gray-700/30 dark:hover:border-gray-700/30"
+        } ${isActive ? "ring-1 ring-indigo-500/20" : ""}`}
         onClick={handleClick}
       >
-        <div className="flex items-center justify-center gap-1.5">
-          <User className="w-4 h-4 shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-400" />
+        <div className="flex items-center gap-1.5">
+          <div
+            className={`flex items-center justify-center w-5 h-5 rounded-md shrink-0 transition-colors ${
+              isActive
+                ? "bg-indigo-500/20 text-indigo-300"
+                : "bg-gray-800/60 text-gray-500 group-hover:bg-gray-700/60 dark:group-hover:text-gray-400"
+            }`}
+          >
+            <User className="w-3 h-3" />
+          </div>
           {isEditing ? (
             <div
               className="flex items-center gap-1 flex-1 min-w-0"
@@ -433,7 +456,9 @@ function SessionItem({
           ) : (
             <>
               {session.pinned && <Pin className="w-3 h-3 shrink-0 text-indigo-400" />}
-              <span className="truncate font-medium leading-tight flex-1 min-w-0">
+              <span
+                className={`truncate font-medium leading-tight flex-1 min-w-0 ${isActive ? "text-indigo-50" : ""}`}
+              >
                 {displayName}
               </span>
             </>
@@ -441,7 +466,7 @@ function SessionItem({
         </div>
 
         {!isEditing && (
-          <div className="flex items-center justify-center gap-1.5 mt-1">
+          <div className="flex items-center gap-1.5 mt-1.5">
             {hasExpandableChildren && (
               <button
                 onClick={(e) => {
@@ -462,28 +487,28 @@ function SessionItem({
             <div className="ml-auto flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
               <button
                 onClick={handleTogglePin}
-                className={`p-1 rounded hover:bg-gray-700 ${session.pinned ? "text-indigo-400" : "text-gray-500 hover:text-gray-300"}`}
+                className={`p-1 rounded-md hover:bg-gray-700/60 transition-colors ${session.pinned ? "text-indigo-400" : "text-gray-600 hover:text-gray-300"}`}
                 title={session.pinned ? t("sidebar:unpin") : t("sidebar:pin")}
               >
                 {session.pinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
               </button>
               <button
                 onClick={handleCopyId}
-                className="p-1 rounded hover:bg-gray-700 text-gray-500 hover:text-gray-300"
+                className="p-1 rounded-md hover:bg-gray-700/60 text-gray-600 hover:text-gray-300 transition-colors"
                 title={t("sidebar:copyId")}
               >
                 <Copy className="w-3 h-3" />
               </button>
               <button
                 onClick={handleStartRename}
-                className="p-1 rounded hover:bg-gray-700 text-gray-500 hover:text-gray-300"
+                className="p-1 rounded-md hover:bg-gray-700/60 text-gray-600 hover:text-gray-300 transition-colors"
                 title={t("common:rename")}
               >
                 <Pencil className="w-3 h-3" />
               </button>
               <button
                 onClick={handleDelete}
-                className="p-1 rounded hover:bg-red-900/50 text-gray-500 hover:text-red-400"
+                className="p-1 rounded-md hover:bg-red-900/40 text-gray-600 hover:text-red-400 transition-colors"
                 title={t("common:delete")}
               >
                 <Trash2 className="w-3 h-3" />
@@ -494,7 +519,7 @@ function SessionItem({
       </div>
 
       {isExpanded && hasExpandableChildren && (
-        <div className="ml-4 pl-2 border-l border-gray-800 mt-1 space-y-1">
+        <div className="ml-4 pl-3 border-l border-gray-800/60 mt-0.5 space-y-0">
           {loadingSubs && (
             <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] text-gray-600">
               <Loader2 className="w-3 h-3 animate-spin" />
@@ -623,72 +648,86 @@ function SubagentItem({
   const displayName = sub.description || sub.instruction.slice(0, 80);
 
   return (
-    <div
-      className={`group w-full text-left px-2.5 py-2 rounded text-[11px] cursor-pointer transition-colors ${
-        isActive
-          ? "bg-purple-600/20 text-purple-200"
-          : "text-gray-500 hover:bg-gray-800/60 hover:text-gray-300"
-      }`}
-      onClick={handleClick}
-    >
-      <div className="flex items-center justify-center gap-1.5">
-        <Bot className="w-4 h-4 shrink-0 text-purple-500/70 group-hover:text-purple-400" />
-        {isEditing ? (
+    <div className="py-1 first:pt-0.5 last:pb-0.5">
+      <div
+        className={`group w-full text-left px-2.5 py-2 rounded-lg text-[11px] cursor-pointer transition-all duration-150 ${
+          isActive
+            ? "bg-gradient-to-r from-purple-500/15 to-purple-500/5 text-purple-100 shadow-sm shadow-purple-500/5 border border-purple-500/20 ring-1 ring-purple-500/20"
+            : "text-gray-500 hover:bg-white/[0.04] dark:hover:bg-gray-800/50 hover:text-gray-300 border border-transparent hover:border-gray-700/30 dark:hover:border-gray-700/30"
+        }`}
+        onClick={handleClick}
+      >
+        <div className="flex items-center gap-1.5">
           <div
-            className="flex items-center gap-1 flex-1 min-w-0"
-            onClick={(e) => e.stopPropagation()}
+            className={`flex items-center justify-center w-5 h-5 rounded-md shrink-0 transition-colors ${
+              isActive
+                ? "bg-purple-500/20 text-purple-300"
+                : "bg-gray-800/60 text-purple-500/70 group-hover:text-purple-400"
+            }`}
           >
-            <input
-              ref={inputRef}
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleConfirmRename();
-                if (e.key === "Escape") handleCancelRename();
-              }}
-              className="flex-1 bg-gray-800 border border-purple-500/50 rounded px-1.5 py-0.5 text-[11px] text-gray-200 outline-none"
-            />
-            <button
-              onClick={handleConfirmRename}
-              className="p-0.5 rounded hover:bg-gray-700 text-emerald-400"
+            <Bot className="w-3 h-3" />
+          </div>
+          {isEditing ? (
+            <div
+              className="flex items-center gap-1 flex-1 min-w-0"
+              onClick={(e) => e.stopPropagation()}
             >
-              <Check className="w-3 h-3" />
+              <input
+                ref={inputRef}
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleConfirmRename();
+                  if (e.key === "Escape") handleCancelRename();
+                }}
+                className="flex-1 bg-gray-800 border border-purple-500/50 rounded px-1.5 py-0.5 text-[11px] text-gray-200 outline-none"
+              />
+              <button
+                onClick={handleConfirmRename}
+                className="p-0.5 rounded hover:bg-gray-700 text-emerald-400"
+              >
+                <Check className="w-3 h-3" />
+              </button>
+              <button
+                onClick={handleCancelRename}
+                className="p-0.5 rounded hover:bg-gray-700 text-gray-500"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ) : (
+            <span
+              className={`truncate leading-tight flex-1 min-w-0 ${isActive ? "text-purple-50 font-medium" : ""}`}
+            >
+              {displayName}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 mt-1.5">
+          <SubagentStatusBadge sub={sub} />
+          <div className="ml-auto flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+            <button
+              onClick={handleCopyId}
+              className="p-1 rounded-md hover:bg-gray-700/60 text-gray-600 hover:text-gray-300 transition-colors"
+              title={t("sidebar:copyId")}
+            >
+              <Copy className="w-3 h-3" />
             </button>
             <button
-              onClick={handleCancelRename}
-              className="p-0.5 rounded hover:bg-gray-700 text-gray-500"
+              onClick={handleStartRename}
+              className="p-1 rounded-md hover:bg-gray-700/60 text-gray-600 hover:text-gray-300 transition-colors"
+              title={t("common:rename")}
             >
-              <X className="w-3 h-3" />
+              <Pencil className="w-3 h-3" />
+            </button>
+            <button
+              onClick={handleDelete}
+              className="p-1 rounded-md hover:bg-red-900/40 text-gray-600 hover:text-red-400 transition-colors"
+              title={t("common:delete")}
+            >
+              <Trash2 className="w-3 h-3" />
             </button>
           </div>
-        ) : (
-          <span className="truncate leading-tight flex-1 min-w-0">{displayName}</span>
-        )}
-      </div>
-      <div className="flex items-center justify-center gap-1.5 mt-1">
-        <SubagentStatusBadge sub={sub} />
-        <div className="ml-auto flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-          <button
-            onClick={handleCopyId}
-            className="p-1 rounded hover:bg-gray-700 text-gray-500 hover:text-gray-300"
-            title={t("sidebar:copyId")}
-          >
-            <Copy className="w-3 h-3" />
-          </button>
-          <button
-            onClick={handleStartRename}
-            className="p-1 rounded hover:bg-gray-700 text-gray-500 hover:text-gray-300"
-            title={t("common:rename")}
-          >
-            <Pencil className="w-3 h-3" />
-          </button>
-          <button
-            onClick={handleDelete}
-            className="p-1 rounded hover:bg-red-900/50 text-gray-500 hover:text-red-400"
-            title={t("common:delete")}
-          >
-            <Trash2 className="w-3 h-3" />
-          </button>
         </div>
       </div>
 

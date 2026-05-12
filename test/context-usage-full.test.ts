@@ -1,51 +1,49 @@
-import { describe, it, expect, beforeEach, mock } from "bun:test";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 
-mock.module("../src/mainview/lib/api-client", () => ({
+vi.mock("../src/mainview/lib/api-client", () => ({
   apiClient: {
-    call: mock(),
-    subscribe: mock(() => Promise.resolve("sub-id")),
-    unsubscribe: mock(),
-    onReconnect: mock(),
+    call: vi.fn(),
+    subscribe: vi.fn(() => Promise.resolve("sub-id")),
+    unsubscribe: vi.fn(),
+    onReconnect: vi.fn(),
   },
 }));
 
-mock.module("../src/mainview/lib/notification-gateway", () => ({
-  notificationGateway: { emit: mock() },
+vi.mock("../src/mainview/lib/notification-gateway", () => ({
+  notificationGateway: { emit: vi.fn() },
 }));
 
-mock.module("../src/mainview/components/chat/memory-config", () => ({
+vi.mock("../src/mainview/components/chat/memory-config", () => ({
   ALL_MEMORY_TYPE_KEYS: new Set(),
 }));
 
-mock.module("../src/shared/lib/logger", () => ({
-  createLogger: () => ({ info: mock(), warn: mock(), error: mock(), debug: mock() }),
+vi.mock("../src/shared/lib/logger", () => ({
+  createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
 }));
 
-mock.module("../src/mainview/lib/message-mapper", () => ({
-  messageToChatMessage: mock(),
-  extractTokenUsage: mock(() => null),
+vi.mock("../src/mainview/lib/message-mapper", () => ({
+  messageToChatMessage: vi.fn(),
+  extractTokenUsage: vi.fn(() => null),
 }));
 
-mock.module("../src/mainview/stores/message-batcher", () => ({
+vi.mock("../src/mainview/stores/message-batcher", () => ({
   batchMessageUpdate: (_sessionId: string, apply: () => void) => apply(),
-  flushNow: mock(),
+  flushNow: vi.fn(),
 }));
 
-mock.module("../src/mainview/stores/use-memory-store", () => ({
+vi.mock("../src/mainview/stores/use-memory-store", () => ({
   useMemoryStore: {
-    getState: mock(() => ({ loadFiles: mock(), addEvent: mock(), addInjected: mock() })),
+    getState: vi.fn(() => ({ loadFiles: vi.fn(), addEvent: vi.fn(), addInjected: vi.fn() })),
   },
 }));
 
-mock.module("../src/mainview/stores/use-retry-store", () => ({
-  useRetryStore: { getState: mock(() => ({ startRetry: mock(), endRetry: mock() })) },
+vi.mock("../src/mainview/stores/use-retry-store", () => ({
+  useRetryStore: { getState: vi.fn(() => ({ startRetry: vi.fn(), endRetry: vi.fn() })) },
 }));
 
-mock.module("../src/mainview/stores/use-ui-dialog-store", () => ({
-  useUIDialogStore: { getState: mock(() => ({ registerUIRequest: mock() })) },
+vi.mock("../src/mainview/stores/use-ui-dialog-store", () => ({
+  useUIDialogStore: { getState: vi.fn(() => ({ registerUIRequest: vi.fn() })) },
 }));
-
-import { create } from "zustand";
 
 type SessionStatus = "idle" | "streaming" | "compacting" | "permission" | "retrying";
 
@@ -71,7 +69,9 @@ interface MockSessionState {
   restoreContextFromHistory: (sessionId: string) => void;
 }
 
-const mockSessionStore = create<MockSessionState>(() => ({
+import { create } from "zustand";
+
+const store = create<MockSessionState>(() => ({
   sessionsByProject: {},
   activeSessionId: null,
   projectTabs: [],
@@ -89,12 +89,12 @@ const mockSessionStore = create<MockSessionState>(() => ({
   projectStartError: {},
   _projectVersion: 0,
   updateSessionStatus: (sessionId, status) => {
-    mockSessionStore.setState((s) => ({
+    store.setState((s) => ({
       sessionStatusMap: { ...s.sessionStatusMap, [sessionId]: status },
     }));
   },
   updateSessionContext: (sessionId, usage) => {
-    mockSessionStore.setState((s) => ({
+    store.setState((s) => ({
       sessionContextMap: {
         ...s.sessionContextMap,
         [sessionId]: {
@@ -107,7 +107,9 @@ const mockSessionStore = create<MockSessionState>(() => ({
   restoreContextFromHistory: () => {},
 }));
 
-mock.module("../src/mainview/stores/use-session-store", () => ({
+const mockSessionStore = store;
+
+vi.mock("../src/mainview/stores/use-session-store", () => ({
   useSessionStore: mockSessionStore,
 }));
 
@@ -118,7 +120,7 @@ import { apiClient } from "../src/mainview/lib/api-client";
 
 const SID = "test-session-ctx";
 
-const mockedCall = apiClient.call as ReturnType<typeof mock>;
+const mockedCall = apiClient.call as ReturnType<typeof vi.fn>;
 
 async function flushPromises() {
   await new Promise((r) => setTimeout(r, 0));
@@ -159,7 +161,7 @@ function fireMessageEnd(usage?: { input: number; output: number }) {
 }
 
 beforeEach(() => {
-  mock.clearAllMocks();
+  vi.clearAllMocks();
   useChatStore.setState({
     messagesBySession: {},
     inputText: "",
@@ -173,7 +175,7 @@ beforeEach(() => {
     sessionContextMap: {},
     sessionsByProject: {},
   });
-  (mockedCall as ReturnType<typeof mock>).mockReset();
+  (mockedCall as ReturnType<typeof vi.fn>).mockReset();
 });
 
 describe("context usage tracking", () => {
@@ -184,7 +186,10 @@ describe("context usage tracking", () => {
 
     it("message_end with null tokens from RPC keeps tokens null", async () => {
       setupStreamingAssistant();
-      (mockedCall as ReturnType<typeof mock>).mockResolvedValue({ tokens: null, contextWindow: 0 });
+      (mockedCall as ReturnType<typeof vi.fn>).mockResolvedValue({
+        tokens: null,
+        contextWindow: 0,
+      });
       fireMessageEnd();
       await flushPromises();
 
@@ -194,7 +199,7 @@ describe("context usage tracking", () => {
 
     it("message_end with null response keeps context empty", async () => {
       setupStreamingAssistant();
-      (mockedCall as ReturnType<typeof mock>).mockResolvedValue(null);
+      (mockedCall as ReturnType<typeof vi.fn>).mockResolvedValue(null);
       fireMessageEnd();
       await flushPromises();
 
@@ -205,7 +210,7 @@ describe("context usage tracking", () => {
   describe("2. After message_end — tokens update from RPC", () => {
     it("sets tokens from agent.getContextUsage RPC response", async () => {
       setupStreamingAssistant();
-      (mockedCall as ReturnType<typeof mock>).mockResolvedValue({
+      (mockedCall as ReturnType<typeof vi.fn>).mockResolvedValue({
         tokens: 5000,
         contextWindow: 200000,
       });
@@ -220,7 +225,10 @@ describe("context usage tracking", () => {
 
     it("sets tokens even when contextWindow is 0", async () => {
       setupStreamingAssistant();
-      (mockedCall as ReturnType<typeof mock>).mockResolvedValue({ tokens: 5000, contextWindow: 0 });
+      (mockedCall as ReturnType<typeof vi.fn>).mockResolvedValue({
+        tokens: 5000,
+        contextWindow: 0,
+      });
       fireMessageEnd();
       await flushPromises();
 
@@ -274,7 +282,7 @@ describe("context usage tracking", () => {
         sessionContextMap: { [SID]: { tokens: 8000, contextWindow: 200000 } },
       });
       setupStreamingAssistant();
-      (mockedCall as ReturnType<typeof mock>).mockResolvedValue({
+      (mockedCall as ReturnType<typeof vi.fn>).mockResolvedValue({
         tokens: null,
         contextWindow: 200000,
       });
@@ -289,7 +297,7 @@ describe("context usage tracking", () => {
         sessionContextMap: { [SID]: { tokens: 8000, contextWindow: 200000 } },
       });
       setupStreamingAssistant();
-      (mockedCall as ReturnType<typeof mock>).mockResolvedValue(null);
+      (mockedCall as ReturnType<typeof vi.fn>).mockResolvedValue(null);
       fireMessageEnd();
       await flushPromises();
 
@@ -304,7 +312,7 @@ describe("context usage tracking", () => {
       expect(getContextMap()).toBeUndefined();
 
       setupStreamingAssistant();
-      (mockedCall as ReturnType<typeof mock>).mockResolvedValue({
+      (mockedCall as ReturnType<typeof vi.fn>).mockResolvedValue({
         tokens: 15000,
         contextWindow: 200000,
       });
@@ -322,7 +330,7 @@ describe("context usage tracking", () => {
       expect(getContextMap()!.tokens).toBe(5000);
 
       setupStreamingAssistant();
-      (mockedCall as ReturnType<typeof mock>).mockResolvedValue({
+      (mockedCall as ReturnType<typeof vi.fn>).mockResolvedValue({
         tokens: 8000,
         contextWindow: 200000,
       });
@@ -340,7 +348,7 @@ describe("context usage tracking", () => {
         sessionContextMap: { [SID]: { tokens: 5000, contextWindow: 200000 } },
       });
       setupStreamingAssistant();
-      (mockedCall as ReturnType<typeof mock>).mockResolvedValue({
+      (mockedCall as ReturnType<typeof vi.fn>).mockResolvedValue({
         tokens: 5000,
         contextWindow: 128000,
       });
@@ -357,7 +365,10 @@ describe("context usage tracking", () => {
         sessionContextMap: { [SID]: { tokens: 5000, contextWindow: 200000 } },
       });
       setupStreamingAssistant();
-      (mockedCall as ReturnType<typeof mock>).mockResolvedValue({ tokens: 6000, contextWindow: 0 });
+      (mockedCall as ReturnType<typeof vi.fn>).mockResolvedValue({
+        tokens: 6000,
+        contextWindow: 0,
+      });
       fireMessageEnd();
       await flushPromises();
 
@@ -370,7 +381,7 @@ describe("context usage tracking", () => {
   describe("7. RPC error does not break the flow", () => {
     it("message still finalized when RPC rejects", async () => {
       setupStreamingAssistant();
-      (mockedCall as ReturnType<typeof mock>).mockRejectedValue(new Error("RPC failed"));
+      (mockedCall as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("RPC failed"));
       fireMessageEnd();
       await flushPromises();
 
@@ -384,7 +395,7 @@ describe("context usage tracking", () => {
         sessionContextMap: { [SID]: { tokens: 8000, contextWindow: 200000 } },
       });
       setupStreamingAssistant();
-      (mockedCall as ReturnType<typeof mock>).mockRejectedValue(new Error("RPC failed"));
+      (mockedCall as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("RPC failed"));
       fireMessageEnd();
       await flushPromises();
 
@@ -394,7 +405,7 @@ describe("context usage tracking", () => {
 
     it("tokens stay null on RPC reject with no prior value", async () => {
       setupStreamingAssistant();
-      (mockedCall as ReturnType<typeof mock>).mockRejectedValue(new Error("RPC failed"));
+      (mockedCall as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("RPC failed"));
       fireMessageEnd();
       await flushPromises();
 

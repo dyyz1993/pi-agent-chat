@@ -1,4 +1,4 @@
-import { useEffect, useCallback, type RefObject } from "react";
+import { useEffect, useCallback, useRef, type RefObject } from "react";
 
 function getFocusableElements(container: HTMLElement): HTMLElement[] {
   const selector = [
@@ -18,6 +18,7 @@ export function useFocusTrap(
   containerRef: RefObject<HTMLElement | null>,
   options?: { onEscape?: () => void },
 ) {
+  const initialFocusDoneRef = useRef(false);
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       const container = containerRef.current;
@@ -57,9 +58,12 @@ export function useFocusTrap(
 
     document.addEventListener("keydown", handleKeyDown);
 
-    const focusable = getFocusableElements(container);
-    if (focusable.length > 0) {
-      requestAnimationFrame(() => focusable[0].focus());
+    if (!initialFocusDoneRef.current) {
+      initialFocusDoneRef.current = true;
+      const focusable = getFocusableElements(container);
+      if (focusable.length > 0) {
+        requestAnimationFrame(() => focusable[0].focus());
+      }
     }
 
     return () => {

@@ -40,7 +40,7 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
   const isDragging = useRef(false);
   const didDrag = useRef(false);
   const pressStartPos = useRef({ x: 0, y: 0 });
-  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const tabRefs = useRef<(HTMLDivElement | null)[]>([]);
   const dragCleanup = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -202,12 +202,21 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
             index === projectTabs.length - 1;
 
           return (
-            <button
+            <div
               key={tab.id}
               ref={(el) => {
                 tabRefs.current[index] = el;
               }}
+              role="tab"
+              tabIndex={0}
+              aria-selected={isActive}
               onClick={() => handleTabClick(tab.id)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  handleTabClick(tab.id);
+                }
+              }}
               onPointerDown={(e) => handlePointerDown(e, index)}
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
@@ -241,7 +250,7 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
               {(showRightIndicator || isLastDropTarget) && (
                 <span className="absolute right-0 top-1 bottom-1 w-0.5 bg-indigo-400 rounded-full" />
               )}
-            </button>
+            </div>
           );
         })}
       </div>

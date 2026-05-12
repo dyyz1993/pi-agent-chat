@@ -14,6 +14,11 @@ import type { TimelineTurn as TTurn, TimelineItem } from "../../../types";
 import { getItemId } from "../../../lib/turn-aggregator";
 import { useChatNavStore } from "../../../stores/use-chat-nav-store";
 import { useClipboard } from "../preview/use-clipboard";
+import { useRollbackStore } from "../../../stores/use-rollback-store";
+import type { ModifiedFile } from "../../../stores/use-rollback-store";
+import { useSessionStore } from "../../../stores/use-session-store";
+import { useChatStore } from "../../../stores/use-chat-store";
+import { apiClient } from "../../../lib/api-client";
 
 interface TimelineTurnProps {
   turn: TTurn;
@@ -49,6 +54,145 @@ export const TimelineTurn = memo(function TimelineTurn({
 
   const toggleCollapse = () => useChatNavStore.getState().toggleTurnCollapse(turn.id);
   const toggleSelectAll = () => useChatNavStore.getState().toggleTurnSelect(turn.id, allItemIds);
+
+  const handleRollback = useCallback(
+    async (mode: "message" | "withFiles") => {
+      const sessionId = useSessionStore.getState().activeSessionId;
+      if (!sessionId) return;
+      try {
+        const result = await apiClient.call("agent.getTree", { sessionId });
+        const entries: Array<{
+          id: string;
+          parentId: string | null;
+          type: string;
+          label?: string;
+        }> = result.entries ?? result ?? [];
+        if (!Array.isArray(entries) || entries.length === 0) return;
+
+        const byId = new Map(entries.map((e) => [e.id, e]));
+
+        const findAncestorMessage = (start: {
+          id: string;
+          parentId: string | null;
+          type: string;
+          label?: string;
+        }): { id: string; parentId: string | null; type: string; label?: string } | null => {
+          let cur = start;
+          while (cur.parentId) {
+            const parent = byId.get(cur.parentId);
+            if (!parent) return null;
+            if (parent.type === "message") return parent;
+            cur = parent;
+          }
+          return null;
+        };
+
+        let targetId: string | null = null;
+
+        const assistantEntries = entries.filter(
+          (e) => e.type === "message" && e.label === "assistant",
+        );
+
+        if (turn.assistantMessageId && assistantEntries.length > 0) {
+          const entry = assistantEntries[assistantEntries.length - 1];
+          const userMsg = findAncestorMessage(entry);
+          if (userMsg && userMsg.label === "user") {
+            const grandParent = findAncestorMessage(userMsg);
+            if (grandParent) {
+              targetId = grandParent.parentId ?? null;
+            }
+          }
+        }
+
+        if (!targetId) return;
+
+        if (mode === "withFiles") {
+          const msgs = useChatStore.getState().messagesBySession[sessionId] ?? [];
+          // 用 targetId 切片：从 targetId 对应消息到当前消息
+          const targetIdx = targetId ? msgs.findIndex((m) => m.entryId === targetId) : -1;
+          const assistantId = turn.assistantMessageId;
+          const currentIdx = msgs.findIndex((m) => m.id === assistantId);
+          const fromIdx = targetIdx >= 0 ? targetIdx + 1 : 0;
+          const toIdx = currentIdx >= 0 ? currentIdx + 1 : msgs.length;
+          const slice = msgs.slice(fromIdx, toIdx);
+          const files: ModifiedFile[] = [];
+          const seen = new Set<string>();
+          for (const msg of slice.length > 0 ? slice : msgs) {
+            for (const block of msg.content) {
+              if (block.type !== "toolExecution") continue;
+              const tb = block as Extract<typeof block, { type: "toolExecution" }>;
+              if (
+                tb.toolName !== "Edit" &&
+                tb.toolName !== "edit" &&
+                tb.toolName !== "Write" &&
+                tb.toolName !== "write"
+              )
+                continue;
+              try {
+                const args: unknown = JSON.parse(tb.args || "{}");
+                const fp =
+                  typeof args === "object" && args !== null && "path" in args
+                    ? ((args as Record<string, unknown>).path as string | undefined)
+                    : undefined;
+                if (fp && !seen.has(fp)) {
+                  seen.add(fp);
+                  let details = "";
+                  if (typeof args === "object" && args !== null) {
+                    const r = args as Record<string, unknown>;
+                    if (tb.toolName.toLowerCase() === "write") {
+                      const content = r.content as string | undefined;
+                      if (content)
+                        details = `创建文件，内容:\n${content.slice(0, 500)}${content.length > 500 ? "\n...(截断)" : ""}`;
+                    } else {
+                      const oldContent = r.oldContent as string | undefined;
+                      const newContent = r.newContent as string | undefined;
+                      if (oldContent !== undefined && newContent !== undefined) {
+                        details = `修改前:\n${oldContent.slice(0, 300)}${oldContent.length > 300 ? "\n...(截断)" : ""}\n\n修改后:\n${newContent.slice(0, 300)}${newContent.length > 300 ? "\n...(截断)" : ""}`;
+                      }
+                    }
+                  }
+                  files.push({
+                    path: fp,
+                    status: tb.toolName.toLowerCase() === "write" ? "added" : "modified",
+                    turnIndex: files.length,
+                    entryId: "",
+                    details: details || undefined,
+                  });
+                }
+              } catch {
+                /* skip */
+              }
+            }
+          }
+          const summary = {
+            totalFiles: files.length,
+            added: files.filter((f) => f.status === "added").length,
+            modified: files.filter((f) => f.status === "modified").length,
+            deleted: files.filter((f) => f.status === "deleted").length,
+          };
+          useRollbackStore
+            .getState()
+            .openRollback(
+              { targetId, mode: "withFiles" },
+              { restored: [], deleted: [], files, summary },
+            );
+        } else {
+          useRollbackStore.getState().openRollback(
+            { targetId, mode: "message" },
+            {
+              restored: [],
+              deleted: [],
+              files: [],
+              summary: { totalFiles: 0, added: 0, modified: 0, deleted: 0 },
+            },
+          );
+        }
+      } catch {
+        // Silent
+      }
+    },
+    [turn.assistantMessageId],
+  );
 
   return (
     <div id={`turn-${turn.id}`} data-turn-id={turn.id} className="relative group/turn">
@@ -135,13 +279,13 @@ export const TimelineTurn = memo(function TimelineTurn({
             <TurnActionButton
               icon={<RotateCcw size={12} />}
               label={t("chat:rollbackCode")}
-              onClick={() => useChatNavStore.getState().openRollbackOverlay("code")}
+              onClick={() => handleRollback("withFiles")}
               variant="warning"
             />
             <TurnActionButton
               icon={<MessageSquare size={12} />}
               label={t("chat:rollbackChat")}
-              onClick={() => useChatNavStore.getState().openRollbackOverlay("chat")}
+              onClick={() => handleRollback("message")}
               variant="info"
             />
           </div>
@@ -310,15 +454,18 @@ function TurnActionButton({
   onClick,
   variant = "default",
   active = false,
+  disabled = false,
 }: {
   icon: React.ReactNode;
   label: string;
   onClick: () => void;
   variant?: "default" | "warning" | "info";
   active?: boolean;
+  disabled?: boolean;
 }) {
-  const colorClass =
-    variant === "warning"
+  const colorClass = disabled
+    ? "text-gray-300 dark:text-gray-700 cursor-not-allowed"
+    : variant === "warning"
       ? "text-yellow-400/70 hover:text-yellow-400 hover:bg-yellow-400/10"
       : variant === "info"
         ? "text-blue-400/70 hover:text-blue-400 hover:bg-blue-400/10"
@@ -330,10 +477,11 @@ function TurnActionButton({
     <button
       onClick={(e) => {
         e.stopPropagation();
-        onClick();
+        if (!disabled) onClick();
       }}
       className={`p-1 rounded transition-colors ${colorClass} ${activeClass}`}
       title={label}
+      disabled={disabled}
     >
       {icon}
     </button>

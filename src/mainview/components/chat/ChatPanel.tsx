@@ -35,6 +35,7 @@ import { ScrollToolbar } from "./ScrollToolbar";
 import { QueueCards } from "./QueueCards";
 import { MarkdownExpandOverlay } from "./MarkdownExpandOverlay";
 import { MermaidFullscreen } from "./mermaid";
+import { RollbackOverlay } from "./RollbackOverlay";
 import { AttachmentButtons, AttachmentBar } from "./FileAttachment";
 import { useAttachmentStore } from "../../stores/use-attachment-store";
 import type { ChatMessage } from "../../types";
@@ -285,6 +286,7 @@ export function ChatPanel() {
     <div className="flex-1 flex flex-col overflow-hidden relative bg-white dark:bg-gray-950">
       <MarkdownExpandOverlay />
       <MermaidFullscreen />
+      <RollbackOverlay />
       <div className="flex items-center gap-4 px-4 py-1.5 bg-gray-50/80 dark:bg-gray-900/80 border-b border-gray-200 dark:border-gray-800 text-[11px] text-gray-400 dark:text-gray-500 flex-shrink-0">
         <SessionToggleIcon />
         {isViewingSubagent && (

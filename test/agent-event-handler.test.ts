@@ -1,52 +1,52 @@
-import { describe, it, expect, beforeEach, mock } from "bun:test";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import type { ContentBlock } from "../src/mainview/types";
 import { create } from "zustand";
 
-mock.module("zustand/middleware", () => ({
+vi.mock("zustand/middleware", () => ({
   persist: (fn: unknown) => fn,
 }));
 
-mock.module("../src/mainview/lib/api-client", () => ({
+vi.mock("../src/mainview/lib/api-client", () => ({
   apiClient: {
-    call: mock(),
-    subscribe: mock(() => Promise.resolve("sub-id")),
-    unsubscribe: mock(),
-    onReconnect: mock(),
+    call: vi.fn(),
+    subscribe: vi.fn(() => Promise.resolve("sub-id")),
+    unsubscribe: vi.fn(),
+    onReconnect: vi.fn(),
   },
 }));
 
-mock.module("../src/mainview/lib/notification-gateway", () => ({
-  notificationGateway: { emit: mock() },
+vi.mock("../src/mainview/lib/notification-gateway", () => ({
+  notificationGateway: { emit: vi.fn() },
 }));
 
-mock.module("../src/mainview/components/chat/memory-config", () => ({
+vi.mock("../src/mainview/components/chat/memory-config", () => ({
   ALL_MEMORY_TYPE_KEYS: new Set(),
 }));
 
-mock.module("../src/shared/lib/logger", () => ({
-  createLogger: () => ({ info: mock(), warn: mock(), error: mock(), debug: mock() }),
+vi.mock("../src/shared/lib/logger", () => ({
+  createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
 }));
 
-mock.module("../src/mainview/lib/message-mapper", () => ({
-  messageToChatMessage: mock(),
-  extractTokenUsage: mock(() => null),
+vi.mock("../src/mainview/lib/message-mapper", () => ({
+  messageToChatMessage: vi.fn(),
+  extractTokenUsage: vi.fn(() => null),
 }));
 
-mock.module("../src/mainview/stores/use-memory-store", () => ({
+vi.mock("../src/mainview/stores/use-memory-store", () => ({
   useMemoryStore: {
-    getState: mock(() => ({ loadFiles: mock(), addEvent: mock(), addInjected: mock() })),
+    getState: vi.fn(() => ({ loadFiles: vi.fn(), addEvent: vi.fn(), addInjected: vi.fn() })),
   },
 }));
 
-mock.module("../src/mainview/stores/use-retry-store", () => ({
-  useRetryStore: { getState: mock(() => ({ startRetry: mock(), endRetry: mock() })) },
+vi.mock("../src/mainview/stores/use-retry-store", () => ({
+  useRetryStore: { getState: vi.fn(() => ({ startRetry: vi.fn(), endRetry: vi.fn() })) },
 }));
 
-mock.module("../src/mainview/stores/use-ui-dialog-store", () => ({
-  useUIDialogStore: { getState: mock(() => ({ registerUIRequest: mock() })) },
+vi.mock("../src/mainview/stores/use-ui-dialog-store", () => ({
+  useUIDialogStore: { getState: vi.fn(() => ({ registerUIRequest: vi.fn() })) },
 }));
 
-mock.module("../src/mainview/stores/use-session-store", () => {
+vi.mock("../src/mainview/stores/use-session-store", () => {
   type SessionStatus = "idle" | "streaming" | "compacting" | "permission" | "retrying";
   interface MockSessionState {
     sessionsByProject: Record<string, unknown[]>;
@@ -107,7 +107,7 @@ mock.module("../src/mainview/stores/use-session-store", () => {
   return { useSessionStore };
 });
 
-mock.module("../src/mainview/stores/use-chat-store", () => {
+vi.mock("../src/mainview/stores/use-chat-store", () => {
   interface ChatMessage {
     id: string;
     role: string;
@@ -140,9 +140,9 @@ mock.module("../src/mainview/stores/use-chat-store", () => {
   return { useChatStore };
 });
 
-mock.module("../src/mainview/stores/use-status-store", () => ({
+vi.mock("../src/mainview/stores/use-status-store", () => ({
   useStatusStore: {
-    getState: mock(() => ({ setPlugins: mock(), setSkills: mock(), setMcpServers: mock() })),
+    getState: vi.fn(() => ({ setPlugins: vi.fn(), setSkills: vi.fn(), setMcpServers: vi.fn() })),
   },
 }));
 

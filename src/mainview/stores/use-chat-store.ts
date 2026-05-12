@@ -487,7 +487,56 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (Array.isArray(customEntries) && customEntries.length > 0) {
         const memoryStore = useMemoryStore.getState();
 
+        const resultMap = new Map<string, (typeof customEntries)[0]>();
+        const prefetchIds = new Set<string>();
+
         for (const entry of customEntries) {
+          if (entry.customType === "memory_prefetch") {
+            prefetchIds.add(entry.id);
+          }
+          if (entry.customType === "memory_prefetch_result") {
+            resultMap.set(entry.id, entry);
+          }
+        }
+
+        const mergedResultIds = new Set<string>();
+
+        for (const entry of customEntries) {
+          if (entry.customType !== "memory_prefetch") continue;
+
+          let bestResult: (typeof customEntries)[0] | undefined;
+          for (const [, rentry] of resultMap) {
+            if (rentry.timestamp >= entry.timestamp && !mergedResultIds.has(rentry.id)) {
+              if (!bestResult || rentry.timestamp < bestResult.timestamp) {
+                bestResult = rentry;
+              }
+            }
+          }
+
+          if (bestResult) {
+            mergedResultIds.add(bestResult.id);
+            const prefData = entry.data as Record<string, unknown> | undefined;
+            const resData = bestResult.data as Record<string, unknown> | undefined;
+            bestResult.data = {
+              ...(resData ?? {}),
+              _prefetchQuery: typeof prefData?.query === "string" ? prefData.query : "",
+              _prefetchAvailableFiles:
+                typeof prefData?.availableFiles === "number" ? prefData.availableFiles : 0,
+            } as unknown;
+          }
+        }
+
+        for (const entry of customEntries) {
+          if (entry.customType === "memory_prefetch") {
+            const hasLaterMergedResult = Array.from(resultMap.values()).some(
+              (r) =>
+                r.customType === "memory_prefetch_result" &&
+                mergedResultIds.has(r.id) &&
+                r.timestamp >= entry.timestamp,
+            );
+            if (hasLaterMergedResult) continue;
+          }
+
           if (!ALL_MEMORY_TYPE_KEYS.has(entry.customType)) continue;
 
           memoryStore.addEvent(sid, {

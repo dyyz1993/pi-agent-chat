@@ -402,7 +402,7 @@ describe("snapshot.unrevert", () => {
   });
 });
 
-describe("snapshot.navigate_tree", () => {
+describe("snapshot.navigateTree", () => {
   it("returns empty entries for nonexistent snapshot", async () => {
     const sessionDir = join(tempDir, "session-12");
     await mkdir(sessionDir, { recursive: true });
@@ -465,7 +465,7 @@ describe("snapshot.navigate_tree", () => {
   });
 });
 
-describe("snapshot.get_tree", () => {
+describe("snapshot.getTree", () => {
   it("returns null for nonexistent snapshot", async () => {
     const sessionDir = join(tempDir, "session-15");
     await mkdir(sessionDir, { recursive: true });

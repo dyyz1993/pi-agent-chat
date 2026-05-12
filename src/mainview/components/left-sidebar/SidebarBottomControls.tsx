@@ -9,12 +9,20 @@ import {
   FolderTree,
   GitBranch,
   Plus,
+  Zap,
+  Target,
+  Settings2,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useGitStore } from "../../stores/use-git-store";
+import { useTierStore, TIER_KEYS } from "../../stores/use-tier-store";
+import type { TierKey } from "../../stores/use-tier-store";
 import { apiClient } from "../../lib/api-client";
+import { createLogger } from "../../../shared/lib/logger";
 import { ThemeMenu } from "../theme/ThemeMenu";
+
+const log = createLogger("chat");
 
 interface ModelInfo {
   provider: string;
@@ -85,6 +93,16 @@ export function SidebarBottomControls() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [switching, setSwitching] = useState(false);
 
+  const currentTier = useTierStore((s) => s.currentTier);
+  const switchToTier = useTierStore((s) => s.switchToTier);
+  const fetchTierConfig = useTierStore((s) => s.fetchTierConfig);
+  const tierModels = useTierStore((s) => s.tierModels);
+  const [switchingTier, setSwitchingTier] = useState(false);
+  const [tierConfigOpen, setTierConfigOpen] = useState(false);
+  const [tierConfigModels, setTierConfigModels] = useState<Record<string, string>>({});
+  const [tierConfigSaving, setTierConfigSaving] = useState(false);
+  const tierConfigRef = useRef<HTMLDivElement>(null);
+
   const sessionsByProject = useSessionStore((s) => s.sessionsByProject);
   const projectTabs = useSessionStore((s) => s.projectTabs);
   const activeProjectId = useSessionStore((s) => s.activeProjectId);
@@ -107,7 +125,8 @@ export function SidebarBottomControls() {
     if (sessionFetchedRef.current === activeSessionId) return;
     sessionFetchedRef.current = activeSessionId;
     fetchModelState(activeSessionId);
-  }, [activeSessionId, fetchModelState]);
+    fetchTierConfig(activeSessionId);
+  }, [activeSessionId, fetchModelState, fetchTierConfig]);
 
   const currentTab = projectTabs.find((t) => t.id === activeProjectId);
   const activeTabPath = currentTab?.path ?? "";
@@ -141,25 +160,28 @@ export function SidebarBottomControls() {
   const workspacePath = currentWorkspace?.path ?? "";
 
   useEffect(() => {
-    if (activeTabPath && worktrees.length === 0) {
+    if (activeTabPath) {
       fetchWorktrees(activeTabPath);
     }
-  }, [activeTabPath, worktrees.length, fetchWorktrees]);
+  }, [activeTabPath, fetchWorktrees]);
 
   useEffect(() => {
-    if (!modelOpen && !thinkingOpen && !workspaceOpen) return;
+    if (!modelOpen && !thinkingOpen && !workspaceOpen && !tierConfigOpen) return;
     const handleClick = (e: MouseEvent) => {
       if (modelRef.current && !modelRef.current.contains(e.target as Node)) setModelOpen(false);
       if (thinkingRef.current && !thinkingRef.current.contains(e.target as Node))
         setThinkingOpen(false);
       if (workspaceRef.current && !workspaceRef.current.contains(e.target as Node))
         setWorkspaceOpen(false);
+      if (tierConfigRef.current && !tierConfigRef.current.contains(e.target as Node))
+        setTierConfigOpen(false);
     };
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setModelOpen(false);
         setThinkingOpen(false);
         setWorkspaceOpen(false);
+        setTierConfigOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClick);
@@ -168,7 +190,7 @@ export function SidebarBottomControls() {
       document.removeEventListener("mousedown", handleClick);
       document.removeEventListener("keydown", handleKey);
     };
-  }, [modelOpen, thinkingOpen, workspaceOpen]);
+  }, [modelOpen, thinkingOpen, workspaceOpen, tierConfigOpen]);
 
   useEffect(() => {
     if (modelOpen) {
@@ -220,6 +242,39 @@ export function SidebarBottomControls() {
     setCreating(false);
   }, [newBranch, activeTabPath, sourceBranch, creating, addWorktreeAction, addProjectTab]);
 
+  const handleSwitchTier = useCallback(
+    async (tier: TierKey) => {
+      if (!activeSessionId || switchingTier) return;
+      setSwitchingTier(true);
+      await switchToTier(tier, activeSessionId);
+      setSwitchingTier(false);
+    },
+    [activeSessionId, switchingTier, switchToTier],
+  );
+
+  const handleOpenTierConfig = useCallback(async () => {
+    if (!activeSessionId) return;
+    setTierConfigModels({ ...tierModels });
+    setTierConfigOpen(true);
+  }, [activeSessionId, tierModels]);
+
+  const handleSaveTierConfig = useCallback(async () => {
+    if (!activeSessionId) return;
+    setTierConfigSaving(true);
+    try {
+      await apiClient.call("agent.setTierModels", {
+        sessionId: activeSessionId,
+        models: tierConfigModels,
+      });
+      setTierConfigOpen(false);
+      await fetchTierConfig(activeSessionId);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.warn("save tier config failed", { error: msg });
+    }
+    setTierConfigSaving(false);
+  }, [activeSessionId, tierConfigModels, fetchTierConfig]);
+
   const handleSelectModel = useCallback(
     async (model: ModelInfo) => {
       if (!activeSessionId || switching) return;
@@ -235,6 +290,7 @@ export function SidebarBottomControls() {
           modelId: model.id,
         });
         setCurrentModel(model.provider, model.id);
+        useTierStore.getState().syncTierFromModel(model.provider, model.id);
       } catch (err) {
         console.warn("[SidebarControls] setModel failed:", err);
       }
@@ -479,6 +535,127 @@ export function SidebarBottomControls() {
               ) : (
                 displayModels.map((m) => renderModelItem(m))
               )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="relative flex items-center gap-1 px-2 py-0.5">
+        {TIER_KEYS.map((tier: TierKey) => {
+          const isActive = currentTier === tier;
+          const icons: Record<TierKey, React.ComponentType<{ className?: string }>> = {
+            fast: Zap,
+            pro: Target,
+            max: Brain,
+          };
+          const labels: Record<TierKey, string> = {
+            fast: t("tierFast"),
+            pro: t("tierPro"),
+            max: t("tierMax"),
+          };
+          const Icon = icons[tier];
+
+          return (
+            <button
+              key={tier}
+              onClick={() => {
+                if (!switchingTier && activeSessionId) {
+                  handleSwitchTier(tier);
+                }
+              }}
+              disabled={switchingTier || !activeSessionId}
+              className={`
+                flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[11px] transition-all duration-150 flex-1 justify-center
+                ${
+                  isActive
+                    ? "bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 font-medium ring-1 ring-indigo-500/30"
+                    : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                }
+                disabled:opacity-50 disabled:cursor-not-allowed
+              `}
+              title={labels[tier]}
+            >
+              <Icon className="w-2.5 h-2.5 shrink-0" />
+              <span>{labels[tier]}</span>
+            </button>
+          );
+        })}
+        <button
+          onClick={handleOpenTierConfig}
+          disabled={!activeSessionId}
+          className="p-0.5 rounded text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-40 shrink-0"
+          title={t("tierConfigTitle", "Configure tier models")}
+          aria-label={t("tierConfigTitle", "Configure tier models")}
+        >
+          <Settings2 className="w-3 h-3" />
+        </button>
+
+        {tierConfigOpen && (
+          <div
+            ref={tierConfigRef}
+            className="absolute bottom-full left-0 right-0 mb-1 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md shadow-xl p-3 space-y-2"
+          >
+            <div className="text-xs font-medium text-gray-800 dark:text-gray-200">
+              {t("tierConfigTitle", "Configure tier models")}
+            </div>
+            {TIER_KEYS.map((tier) => {
+              const labels: Record<TierKey, string> = {
+                fast: t("tierFast"),
+                pro: t("tierPro"),
+                max: t("tierMax"),
+              };
+              const icons: Record<TierKey, React.ComponentType<{ className?: string }>> = {
+                fast: Zap,
+                pro: Target,
+                max: Brain,
+              };
+              const Icon = icons[tier];
+              return (
+                <div key={tier} className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 w-14 shrink-0">
+                    <Icon className="w-3 h-3 text-gray-400 dark:text-gray-500" />
+                    <span className="text-[11px] text-gray-600 dark:text-gray-300">
+                      {labels[tier]}
+                    </span>
+                  </div>
+                  <select
+                    value={tierConfigModels[tier] ?? ""}
+                    onChange={(e) => {
+                      setTierConfigModels((prev) => ({ ...prev, [tier]: e.target.value }));
+                    }}
+                    className="flex-1 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded px-1.5 py-1 text-[11px] text-gray-700 dark:text-gray-300 outline-none min-w-0"
+                  >
+                    <option value="">
+                      {currentModel
+                        ? t("tierConfigDefault", "默认 ({{model}})", {
+                            model:
+                              currentModel.name ?? `${currentModel.provider}/${currentModel.id}`,
+                          })
+                        : t("tierConfigDefaultPlain", "-- 默认 --")}
+                    </option>
+                    {availableModels.map((m) => (
+                      <option key={`${m.provider}/${m.id}`} value={`${m.provider}/${m.id}`}>
+                        {m.name ?? `${m.provider}/${m.id}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              );
+            })}
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                onClick={() => setTierConfigOpen(false)}
+                className="px-2 py-1 rounded text-[11px] text-gray-400 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                {t("cancel", { ns: "common" })}
+              </button>
+              <button
+                onClick={handleSaveTierConfig}
+                disabled={tierConfigSaving}
+                className="px-2 py-1 rounded text-[11px] bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-40"
+              >
+                {tierConfigSaving ? t("saving", "Saving...") : t("save", "Save")}
+              </button>
             </div>
           </div>
         )}

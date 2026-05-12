@@ -15,12 +15,26 @@ const LONG_LINE_THRESHOLD = 5000;
 export function VirtualizedCodeView({ code, filename }: VirtualizedCodeViewProps) {
   const parentRef = useRef<HTMLDivElement>(null);
   const language = getLanguage(filename);
-  const lines = useMemo(() => code.split("\n"), [code]);
+
+  const formattedCode = useMemo(() => {
+    const ext = filename.split(".").pop()?.toLowerCase() ?? "";
+    if (ext === "json" || ext === "jsonc") {
+      try {
+        const parsed = JSON.parse(code) as unknown;
+        return JSON.stringify(parsed, null, 2);
+      } catch {
+        return code;
+      }
+    }
+    return code;
+  }, [code, filename]);
+
+  const lines = useMemo(() => formattedCode.split("\n"), [formattedCode]);
   const resolvedTheme = useThemeStore((s) => s.resolvedTheme);
   const prismTheme = resolvedTheme === "dark" ? themes.nightOwl : themes.nightOwlLight;
 
-  const avgLineLength = code.length / Math.max(lines.length, 1);
-  const NO_HIGHLIGHT_EXTS = new Set(["json", "lock", "map", "log", "csv"]);
+  const avgLineLength = formattedCode.length / Math.max(lines.length, 1);
+  const NO_HIGHLIGHT_EXTS = new Set(["lock", "map", "log", "csv"]);
   const ext = filename.split(".").pop()?.toLowerCase() ?? "";
   const forcePlainText = !language || avgLineLength > 500 || NO_HIGHLIGHT_EXTS.has(ext);
 

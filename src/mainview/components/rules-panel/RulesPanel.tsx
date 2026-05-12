@@ -314,8 +314,14 @@ export function RulesPanel() {
 
       <div className="flex-1 overflow-y-auto">
         {rules.length === 0 ? (
-          <div className="flex items-center justify-center py-8 text-gray-400 dark:text-gray-600 text-[11px]">
-            {t("noRulesLoaded")}
+          <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+            <Shield className="w-8 h-8 text-gray-300 dark:text-gray-600 mb-3" />
+            <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+              {t("noRulesLoaded")}
+            </p>
+            <p className="text-[10px] text-gray-400 dark:text-gray-600 mt-1 max-w-[200px] leading-relaxed">
+              {t("noRulesHint")}
+            </p>
           </div>
         ) : (
           <>

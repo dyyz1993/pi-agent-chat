@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { Camera, RotateCcw, RefreshCw, File } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Camera, RotateCcw, RefreshCw, File, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useSnapshotStore } from "../../stores/use-snapshot-store";
 import { useSessionStore } from "../../stores/use-session-store";
@@ -12,6 +12,7 @@ export function SnapshotPanel() {
   const fetchSnapshots = useSnapshotStore((s) => s.fetchSnapshots);
   const rollback = useSnapshotStore((s) => s.rollback);
   const unrevert = useSnapshotStore((s) => s.unrevert);
+  const [rollingBackId, setRollingBackId] = useState<string | null>(null);
 
   const sessionId = activeSessionId ?? "";
   const snapshots = sessionId ? (snapshotsBySession[sessionId] ?? []) : [];
@@ -61,14 +62,26 @@ export function SnapshotPanel() {
 
       <div className="flex-1 overflow-y-auto">
         {!sessionId && (
-          <div className="px-3 py-6 text-center text-xs text-gray-400 dark:text-gray-600">
-            {t("noActiveSession")}
+          <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+            <Camera className="w-8 h-8 text-gray-300 dark:text-gray-600 mb-3" />
+            <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+              {t("noActiveSession")}
+            </p>
+            <p className="text-[10px] text-gray-400 dark:text-gray-600 mt-1 max-w-[200px] leading-relaxed">
+              {t("noActiveSessionHint")}
+            </p>
           </div>
         )}
 
         {sessionId && snapshots.length === 0 && !loading && (
-          <div className="px-3 py-6 text-center text-xs text-gray-400 dark:text-gray-600">
-            {t("noSnapshotsYet")}
+          <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+            <Camera className="w-8 h-8 text-gray-300 dark:text-gray-600 mb-3" />
+            <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+              {t("noSnapshotsYet")}
+            </p>
+            <p className="text-[10px] text-gray-400 dark:text-gray-600 mt-1 max-w-[200px] leading-relaxed">
+              {t("noSnapshotsHint")}
+            </p>
           </div>
         )}
 
@@ -104,19 +117,43 @@ export function SnapshotPanel() {
               <div className="flex items-center gap-1 shrink-0">
                 {snap.rolledBack ? (
                   <button
-                    onClick={() => unrevert(sessionId, snap.id)}
-                    className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-amber-400 hover:text-amber-300 transition-colors"
+                    onClick={async () => {
+                      setRollingBackId(snap.id);
+                      try {
+                        await unrevert(sessionId, snap.id);
+                      } finally {
+                        setRollingBackId(null);
+                      }
+                    }}
+                    disabled={rollingBackId !== null}
+                    className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-amber-400 hover:text-amber-300 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                     title={t("cancelRollback")}
                   >
-                    <RefreshCw className="w-3 h-3" />
+                    {rollingBackId === snap.id ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-3 h-3" />
+                    )}
                   </button>
                 ) : (
                   <button
-                    onClick={() => rollback(sessionId, snap.id)}
-                    className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+                    onClick={async () => {
+                      setRollingBackId(snap.id);
+                      try {
+                        await rollback(sessionId, snap.id);
+                      } finally {
+                        setRollingBackId(null);
+                      }
+                    }}
+                    disabled={rollingBackId !== null}
+                    className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                     title={t("rollbackToSnapshot")}
                   >
-                    <RotateCcw className="w-3 h-3" />
+                    {rollingBackId === snap.id ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <RotateCcw className="w-3 h-3" />
+                    )}
                   </button>
                 )}
               </div>

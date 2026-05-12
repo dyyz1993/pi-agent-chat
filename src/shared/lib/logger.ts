@@ -16,7 +16,8 @@ export type LogModule =
   | "snapshot"
   | "subagent"
   | "linked-projects"
-  | "mcp";
+  | "mcp"
+  | "tier";
 type LogLevel = "debug" | "info" | "warn" | "error";
 
 interface LogEntry {

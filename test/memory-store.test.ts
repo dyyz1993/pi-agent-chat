@@ -1,31 +1,31 @@
-import { describe, it, expect, beforeEach, mock } from "bun:test";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 
-mock.module("../src/mainview/lib/api-client", () => ({
+vi.mock("../src/mainview/lib/api-client", () => ({
   apiClient: {
-    call: mock(),
-    onReconnect: mock(),
+    call: vi.fn(),
+    onReconnect: vi.fn(),
   },
 }));
 
-mock.module("../src/mainview/stores/use-rpc-debug-store", () => ({
+vi.mock("../src/mainview/stores/use-rpc-debug-store", () => ({
   useRpcDebugStore: {
-    getState: mock(() => ({ addEntry: mock() })),
+    getState: vi.fn(() => ({ addEntry: vi.fn() })),
   },
 }));
 
-mock.module("../src/mainview/stores/use-session-store", () => ({
+vi.mock("../src/mainview/stores/use-session-store", () => ({
   useSessionStore: {
-    getState: mock(() => ({ activeSessionId: "test-session" })),
+    getState: vi.fn(() => ({ activeSessionId: "test-session" })),
   },
 }));
 
 import { useMemoryStore } from "../src/mainview/stores/use-memory-store";
 import { apiClient } from "../src/mainview/lib/api-client";
 
-const mockedCall = apiClient.call as ReturnType<typeof mock>;
+const mockedCall = apiClient.call as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
-  mock.clearAllMocks();
+  vi.clearAllMocks();
   const { setState } = useMemoryStore;
   setState({
     eventsBySession: {},

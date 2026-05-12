@@ -1,15 +1,15 @@
-import { describe, it, expect, beforeEach, mock } from "bun:test";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 
-mock.module("../src/mainview/lib/api-client", () => ({
+vi.mock("../src/mainview/lib/api-client", () => ({
   apiClient: {
-    call: mock().mockResolvedValue({}),
-    onReconnect: mock(),
+    call: vi.fn().mockResolvedValue({}),
+    onReconnect: vi.fn(),
   },
 }));
 
-mock.module("../src/mainview/stores/use-rpc-debug-store", () => ({
+vi.mock("../src/mainview/stores/use-rpc-debug-store", () => ({
   useRpcDebugStore: {
-    getState: mock(() => ({ addEntry: mock() })),
+    getState: vi.fn(() => ({ addEntry: vi.fn() })),
   },
 }));
 
@@ -20,10 +20,10 @@ import {
 } from "../src/mainview/stores/use-status-store";
 import { apiClient } from "../src/mainview/lib/api-client";
 
-const mockedCall = apiClient.call as ReturnType<typeof mock>;
+const mockedCall = apiClient.call as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
-  mock.clearAllMocks();
+  vi.clearAllMocks();
   useStatusStore.setState({
     yoloEnabled: false,
     planMode: true,

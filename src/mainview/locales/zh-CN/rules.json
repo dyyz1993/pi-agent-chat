@@ -20,6 +20,7 @@
   "rulesEngine": "Rules Engine",
   "totalRules": "{{count}} 条规则",
   "noRulesLoaded": "暂无规则加载",
+  "noRulesHint": "规则文件将自动从项目目录中加载",
   "loadingSource": "加载来源",
   "alwaysActiveSection": "始终活跃",
   "conditionalRules": "条件规则",

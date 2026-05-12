@@ -134,7 +134,6 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
       id={`msg-${message.id}`}
       data-msg-id={message.id}
       className="group relative w-full min-w-0"
-      style={{ maxWidth: 900 }}
     >
       {isSelected && (
         <div className="absolute inset-0 rounded-lg bg-indigo-500/[0.06] pointer-events-none" />
@@ -448,7 +447,7 @@ export const MemoryCard = memo(function MemoryCard({
         aria-label={`${config.label}${summary ? `: ${summary}` : ""}`}
       >
         <Icon className="w-3 h-3 shrink-0" />
-        <span className="font-medium">{config.label}</span>
+        <span className="font-medium whitespace-nowrap">{config.label}</span>
         {summary && <span className="text-gray-400 dark:text-gray-500 truncate">{summary}</span>}
         <span className="ml-auto text-gray-400 dark:text-gray-600">
           {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}

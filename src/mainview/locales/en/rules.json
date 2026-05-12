@@ -20,6 +20,7 @@
   "rulesEngine": "Rules Engine",
   "totalRules": "{{count}} rules",
   "noRulesLoaded": "No rules loaded",
+  "noRulesHint": "Rule files will be automatically loaded from project directories",
   "loadingSource": "Loading Source",
   "alwaysActiveSection": "Always Active",
   "conditionalRules": "Conditional Rules",

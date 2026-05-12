@@ -19,6 +19,12 @@ const log = createLogger("event-handler");
 
 export const toolCallNameMap: Record<string, string> = {};
 
+const pendingPrefetchMap = new Map<
+  string,
+  { agentEvent: AgentEvent; timer: ReturnType<typeof setTimeout> }
+>();
+const PREFETCH_FALLBACK_MS = 5000;
+
 export function buildTokenUsage(usage: Usage): { tokenUsage?: TokenUsage } {
   const result = extractTokenUsage(usage);
   return result ? { tokenUsage: result } : {};
@@ -568,6 +574,64 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     }
 
     if (event.display === false) return;
+
+    if (event.customType === "memory_prefetch") {
+      const existing = pendingPrefetchMap.get(sessionId);
+      if (existing) clearTimeout(existing.timer);
+
+      const timer = setTimeout(() => {
+        pendingPrefetchMap.delete(sessionId);
+        const chat = useChatStore.getState();
+        const msgs = chat.messagesBySession[sessionId] || [];
+        chat.setMessagesForSession(sessionId, [
+          ...msgs,
+          {
+            id: event.id || `custom-${Date.now()}-fallback`,
+            role: "custom" as const,
+            content: [{ type: "custom" as const, customType: "memory_prefetch", data: event.data }],
+            timestamp: Date.now(),
+          },
+        ]);
+      }, PREFETCH_FALLBACK_MS);
+
+      pendingPrefetchMap.set(sessionId, { agentEvent: event, timer });
+      return;
+    }
+
+    if (event.customType === "memory_prefetch_result") {
+      const pending = pendingPrefetchMap.get(sessionId);
+      let resultData: unknown = event.data;
+
+      if (pending) {
+        clearTimeout(pending.timer);
+        pendingPrefetchMap.delete(sessionId);
+
+        const prefetchData = (
+          pending.agentEvent.type === "custom_entry" ? pending.agentEvent.data : undefined
+        ) as Record<string, unknown> | undefined;
+        resultData = {
+          ...(typeof event.data === "object" && event.data !== null
+            ? (event.data as Record<string, unknown>)
+            : {}),
+          _prefetchQuery: typeof prefetchData?.query === "string" ? prefetchData.query : "",
+          _prefetchAvailableFiles:
+            typeof prefetchData?.availableFiles === "number" ? prefetchData.availableFiles : 0,
+        };
+      }
+
+      const chat = useChatStore.getState();
+      const existingMsgs = chat.messagesBySession[sessionId] || [];
+      chat.setMessagesForSession(sessionId, [
+        ...existingMsgs,
+        {
+          id: event.id || `custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          role: "custom",
+          content: [{ type: "custom", customType: "memory_prefetch_result", data: resultData }],
+          timestamp: Date.now(),
+        },
+      ]);
+      return;
+    }
 
     const chat = useChatStore.getState();
     const existing = chat.messagesBySession[sessionId] || [];

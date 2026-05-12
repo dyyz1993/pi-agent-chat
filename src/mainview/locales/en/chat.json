@@ -89,6 +89,7 @@
   "fork": "Fork",
   "rollbackCode": "Rollback code",
   "rollbackChat": "Rollback chat",
+  "rollbackComingSoon": "{{label}} (coming soon)",
   "copyText": "Copy text",
   "emptyTurn": "(empty)",
   "connectionDisconnected": "Connection lost, reconnecting...",
@@ -248,6 +249,7 @@
   "messageCard.rollbackMessage": "Rollback message",
   "messageCard.rollbackMessageAndCode": "Rollback message & code",
   "messageCard.previewFailed": "Preview failed: {{error}}",
+  "messageCard.rollbackFirstMessage": "This is the first message, cannot roll back further",
 
   "fileAttachment.addAttachment": "Add attachment",
   "fileAttachment.addImage": "Add image",
@@ -267,5 +269,16 @@
   "scrollUpToLoadMore": "↑ Scroll up to load more",
   "sideNav.memory": "Memory",
   "messageCard.cancel": "Cancel",
-  "markdownOverlay.closeEsc": "Close (Esc)"
+  "markdownOverlay.closeEsc": "Close (Esc)",
+  "tierFast": "Fast",
+  "tierPro": "Pro",
+  "tierMax": "Think",
+
+  "rollbackOverlay.title": "Rollback Confirmation",
+  "rollbackOverlay.titleWithFiles": "Rollback Message & Code",
+  "rollbackOverlay.messageModeDesc": "This will remove the current turn's messages. Are you sure you want to continue?",
+  "rollbackOverlay.withFilesModeDesc": "This will restore the following files to their previous state:",
+  "rollbackOverlay.confirm": "Confirm Rollback",
+  "rollbackOverlay.cancel": "Cancel",
+  "rollbackOverlay.noFiles": "No file changes in this turn"
 }

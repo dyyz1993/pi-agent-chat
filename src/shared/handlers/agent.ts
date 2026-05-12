@@ -64,7 +64,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     return { ok };
   });
 
-  r("agent.status", async (params) => {
+  r("agent.getStatus", async (params) => {
     return m.getStatus(params.sessionId);
   });
 
@@ -232,6 +232,14 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     return m.getContextUsage(params.sessionId) as Promise<R<"agent.getContextUsage">>;
   });
 
+  r("agent.getTierModels", async (params) => {
+    return m.getTierModels(params.sessionId) as Promise<R<"agent.getTierModels">>;
+  });
+
+  r("agent.setTierModels", async (params) => {
+    return m.setTierModels(params.sessionId, params.models) as Promise<R<"agent.setTierModels">>;
+  });
+
   r("agent.getSettings", async (params) => {
     return m.getSettings(params.sessionId, params.scope) as Promise<R<"agent.getSettings">>;
   });
@@ -263,15 +271,37 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("agent.navigateTree", async (params) => {
+    log.info("navigateTree called", {
+      sessionId: params.sessionId,
+      targetId: params.targetId,
+      skipFiles: params.skipFiles,
+      summarize: params.summarize,
+    });
     return m.navigateTree(params.sessionId, params.targetId, {
       summarize: params.summarize,
       skipFiles: params.skipFiles,
     }) as Promise<R<"agent.navigateTree">>;
   });
 
-  r("agent.rollbackPreview", async (params) => {
+  r("agent.previewRollback", async (params) => {
+    log.info("previewRollback called", {
+      sessionId: params.sessionId,
+      targetId: params.targetId,
+    });
     return m.previewRollback(params.sessionId, params.targetId) as Promise<
-      R<"agent.rollbackPreview">
+      R<"agent.previewRollback">
+    >;
+  });
+
+  r("agent.getModifiedFiles", async (params) => {
+    return m.getModifiedFiles(params.sessionId, params.fromEntryId, params.toEntryId) as Promise<
+      R<"agent.getModifiedFiles">
+    >;
+  });
+
+  r("agent.getBatchDiffs", async (params) => {
+    return m.getBatchDiffs(params.sessionId, params.fromEntryId, params.toEntryId) as Promise<
+      R<"agent.getBatchDiffs">
     >;
   });
 

@@ -1,5 +1,5 @@
-import { FileText, X, Code, Eye } from "lucide-react";
-import { useEffect, useState } from "react";
+import { FileText, X, Code, Eye, Save } from "lucide-react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import type { FilePreview } from "../../types";
 import { formatSize } from "../../utils/file-utils";
@@ -10,6 +10,7 @@ interface FilePreviewOverlayProps {
   preview: FilePreview;
   loading: boolean;
   onClose: () => void;
+  onSave?: (content: string) => void;
 }
 
 function isSvgFile(filename: string): boolean {
@@ -39,11 +40,18 @@ function canUseFsRoute(): boolean {
   return apiClient.getTransport() === "websocket";
 }
 
-export function FilePreviewOverlay({ preview, loading, onClose }: FilePreviewOverlayProps) {
+export function FilePreviewOverlay({ preview, loading, onClose, onSave }: FilePreviewOverlayProps) {
   const { t } = useTranslation("explorer");
   const [svgContent, setSvgContent] = useState<string | null>(null);
   const [svgLoading, setSvgLoading] = useState(false);
   const [htmlSourceMode, setHtmlSourceMode] = useState(false);
+  const [editContent, setEditContent] = useState(preview.content ?? "");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Sync content when preview changes (e.g., new file opened)
+  useEffect(() => {
+    setEditContent(preview.content ?? "");
+  }, [preview.path, preview.content]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -53,9 +61,32 @@ export function FilePreviewOverlay({ preview, loading, onClose }: FilePreviewOve
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
+  // Auto-focus textarea when editable
+  useEffect(() => {
+    if (preview.editable && textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  }, [preview.editable]);
+
   const isSvg = isSvgFile(preview.name);
   const isHtml = isHtmlFile(preview.name) && canUseFsRoute();
   const fsUrl = isHtml ? getFsUrl(preview.path) : "";
+
+  const handleSave = useCallback(() => {
+    if (onSave) {
+      onSave(editContent);
+    }
+  }, [editContent, onSave]);
+
+  const handleEditorKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        handleSave();
+      }
+    },
+    [handleSave],
+  );
 
   useEffect(() => {
     if (isSvg && preview.imageUrl && !svgContent) {
@@ -120,7 +151,20 @@ export function FilePreviewOverlay({ preview, loading, onClose }: FilePreviewOve
       );
     }
 
-    if (preview.content) {
+    if (preview.isText && preview.editable) {
+      return (
+        <textarea
+          ref={textareaRef}
+          value={editContent}
+          onChange={(e) => setEditContent(e.target.value)}
+          onKeyDown={handleEditorKeyDown}
+          className="flex-1 w-full h-full text-xs font-mono bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white border-0 outline-none resize-none p-4"
+          spellCheck={false}
+        />
+      );
+    }
+
+    if (preview.content && !preview.editable) {
       return <VirtualizedCodeView code={preview.content} filename={preview.name} />;
     }
 
@@ -155,6 +199,16 @@ export function FilePreviewOverlay({ preview, loading, onClose }: FilePreviewOve
             >
               {htmlSourceMode ? <Eye className="w-3.5 h-3.5" /> : <Code className="w-3.5 h-3.5" />}
               <span>{htmlSourceMode ? t("preview") : t("source")}</span>
+            </button>
+          )}
+          {preview.editable && (
+            <button
+              onClick={handleSave}
+              className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-indigo-600 hover:bg-indigo-700 text-white transition-colors"
+              title="Save (Ctrl+Enter)"
+            >
+              <Save className="w-3.5 h-3.5" />
+              <span>Save</span>
             </button>
           )}
           <button

@@ -124,7 +124,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
   sessionPanel: readPanel(SESSION_PANEL_KEY, "pinned"),
   statusPanel: readPanel(STATUS_PANEL_KEY, "pinned"),
 
-  sessionWidth: clampSession(readNum(SESSION_WIDTH_KEY, 240)),
+  sessionWidth: clampSession(readNum(SESSION_WIDTH_KEY, 200)),
   statusWidth: clampStatus(readNum(STATUS_WIDTH_KEY, 300)),
   activePanelTab: "status",
   sessionCollapsed: readBool(SESSION_COLLAPSED_KEY, false),

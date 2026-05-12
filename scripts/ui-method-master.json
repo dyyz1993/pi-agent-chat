@@ -1,0 +1,899 @@
+{
+  "version": "1.0",
+  "created": "2026-05-12T19:30:00Z",
+  "total_methods": 130,
+  "max_iterations": 100,
+  "app_url": "http://localhost:5173?token=demo-test-token",
+  "screenshot_dir": "scripts/ui-screenshots",
+  "gallery_html": "test-report/ui-gallery.html",
+  "categories": {
+    "extensions": {
+      "label": "Extension Tools & Channels",
+      "methods": [
+        {
+          "id": "E01",
+          "ext": "ask-tools",
+          "name": "ask-confirm",
+          "type": "tool",
+          "trigger": "Agent sends ask-confirm tool call → UI shows confirm dialog (OK/Cancel)",
+          "ui_element": "UIDialogStore confirm dialog",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "E02",
+          "ext": "ask-tools",
+          "name": "ask-select",
+          "type": "tool",
+          "trigger": "Agent sends ask-select tool → UI shows radio/checkbox selector",
+          "ui_element": "UIDialogStore select dialog",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "E03",
+          "ext": "ask-tools",
+          "name": "ask-input",
+          "type": "tool",
+          "trigger": "Agent sends ask-input tool → UI shows text input field",
+          "ui_element": "UIDialogStore input dialog",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "E04",
+          "ext": "ask-tools",
+          "name": "ask-editor",
+          "type": "tool",
+          "trigger": "Agent sends ask-editor tool → UI shows code editor",
+          "ui_element": "UIDialogStore editor dialog",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "E05",
+          "ext": "ask-tools",
+          "name": "ask-notify",
+          "type": "tool",
+          "trigger": "Agent sends ask-notify tool → UI shows toast notification",
+          "ui_element": "Toast notification",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "E06",
+          "ext": "auto-memory",
+          "name": "create_bookmark",
+          "type": "tool",
+          "trigger": "Agent invokes create_bookmark → memory panel updates",
+          "ui_element": "MemoryPanel bookmark entry",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "E07",
+          "ext": "auto-memory",
+          "channel": "memory",
+          "name": "memory.list",
+          "type": "channel",
+          "trigger": "Frontend calls memory.listFiles → MemoryPanel lists files",
+          "ui_element": "MemoryPanel file list",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "E08",
+          "ext": "auto-memory",
+          "channel": "memory",
+          "name": "memory.userRemember",
+          "type": "channel",
+          "trigger": "User clicks 'Remember' on selected messages",
+          "ui_element": "MemoryPanel remember button + result",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "E09",
+          "ext": "bash-ext",
+          "name": "bash",
+          "type": "tool",
+          "trigger": "Agent executes bash command → BashPanel shows streaming output",
+          "ui_element": "BashPanel process card with output",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "E10",
+          "ext": "bash-ext",
+          "name": "get_background_process",
+          "type": "tool",
+          "trigger": "Agent queries background process status",
+          "ui_element": "BashPanel background process card",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "E11",
+          "ext": "bash-ext",
+          "channel": "bash",
+          "name": "list",
+          "type": "channel",
+          "trigger": "Frontend calls bash.list → BashPanel header refreshes list",
+          "ui_element": "BashPanel process list header",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "E12",
+          "ext": "bash-ext",
+          "channel": "bash",
+          "name": "kill",
+          "type": "channel",
+          "trigger": "Click Kill button on process card → process terminated",
+          "ui_element": "BashPanel kill button + terminated state",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "E13",
+          "ext": "bash-ext",
+          "channel": "bash",
+          "name": "background",
+          "type": "channel",
+          "trigger": "Click Background button on running process",
+          "ui_element": "BashPanel background button + card state change",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "E14",
+          "ext": "bash-ext",
+          "channel": "bash",
+          "name": "subscribe_output",
+          "type": "channel",
+          "trigger": "Open LogViewer for background process → tail output",
+          "ui_element": "LogViewer fullscreen overlay",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "E15",
+          "ext": "bash-ext",
+          "channel": "bash",
+          "name": "remove",
+          "type": "channel",
+          "trigger": "Click Remove on ended process → card removed from list",
+          "ui_element": "BashPanel remove button",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "E16",
+          "ext": "coordinator",
+          "name": "session_delegate",
+          "type": "tool",
+          "trigger": "Agent delegates task to sub-session → SubagentStore updates",
+          "ui_element": "SubagentPanel new subagent entry",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "E17",
+          "ext": "coordinator",
+          "name": "session_delegate_send",
+          "type": "tool",
+          "trigger": "Agent sends follow-up to delegated session",
+          "ui_element": "SubagentPanel message in sub-session",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "E18",
+          "ext": "coordinator",
+          "name": "session_delegate_status",
+          "type": "tool",
+          "trigger": "Agent checks delegated task status",
+          "ui_element": "SubagentPanel status indicator",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "E19",
+          "ext": "coordinator",
+          "name": "session_delegate_stop",
+          "type": "tool",
+          "trigger": "Agent stops delegated task",
+          "ui_element": "SubagentPanel stopped state",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "E20",
+          "ext": "coordinator",
+          "name": "session_delegate_fork",
+          "type": "tool",
+          "trigger": "Agent forks session for new task",
+          "ui_element": "SessionSidebar forked child session",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "E21",
+          "ext": "preview",
+          "name": "preview",
+          "type": "tool",
+          "trigger": "Agent previews resource → UrlCard/HtmlCard/PdfCard/ImageCard renders",
+          "ui_element": "Chat message preview card",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "E22",
+          "ext": "rules-engine",
+          "name": "rules_list",
+          "type": "tool",
+          "trigger": "Agent lists all discovered rules",
+          "ui_element": "RulesPanel rules list",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "E23",
+          "ext": "rules-engine",
+          "name": "rules_match",
+          "type": "tool",
+          "trigger": "Agent checks which rules match a file path",
+          "ui_element": "RulesPanel matched rules section",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "E24",
+          "ext": "rules-engine",
+          "name": "rules_reload",
+          "type": "tool",
+          "trigger": "Agent forces rule reload from disk",
+          "ui_element": "RulesPanel reloaded indicator",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "E25",
+          "ext": "rules-engine",
+          "name": "rules_show",
+          "type": "tool",
+          "trigger": "Agent inspects specific rule content",
+          "ui_element": "RulesPanel expanded rule detail",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "E26",
+          "ext": "subagent",
+          "name": "subagent",
+          "type": "tool",
+          "trigger": "Agent delegates to specialized subagent (single/parallel/chain mode)",
+          "ui_element": "SubagentPanel task execution view",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "E27",
+          "ext": "todo-ext",
+          "name": "todo",
+          "type": "tool",
+          "trigger": "Agent manages todo list (add/toggle/remove/list/clear)",
+          "ui_element": "StatusPanel Plan section todos widget",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "E28",
+          "ext": "lsp",
+          "name": "lsp",
+          "type": "tool",
+          "trigger": "Agent runs LSP action (diagnostics/definition/references/hover/symbols/rename/status/reload/full_check)",
+          "ui_element": "StatusPanel LSP diagnostics card or LspDiagnosticsCard in chat",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "E29",
+          "ext": "lsp",
+          "name": "lsp_health",
+          "type": "tool",
+          "trigger": "Agent quick-checks LSP health",
+          "ui_element": "LSP health notification or status update",
+          "status": "pending",
+          "screenshot": null
+        }
+      ]
+    },
+    "rpc_handlers": {
+      "label": "Project RPC Methods (UI-triggerable subset)",
+      "methods": [
+        {
+          "id": "R01",
+          "handler": "system",
+          "name": "system.ping",
+          "trigger": "Connection test ping → returns pong+timestamp",
+          "ui_element": "Connection status indicator",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "R02",
+          "handler": "git",
+          "name": "git.status",
+          "trigger": "Git Panel loads → shows branch, changed/staged/untracked files",
+          "ui_element": "GitPanel full status view",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "R03",
+          "handler": "git",
+          "name": "git.diff",
+          "trigger": "Click file in Git Panel → DiffViewer opens with +/- highlighting",
+          "ui_element": "DiffViewerPanel unified/split diff view",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "R04",
+          "handler": "git",
+          "name": "git.log",
+          "trigger": "Git Panel commits section expands → shows commit history",
+          "ui_element": "GitPanel commit history list",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "R05",
+          "handler": "git",
+          "name": "git.branches",
+          "trigger": "Click branch selector → dropdown shows local+remote branches",
+          "ui_element": "GitBranchSelector dropdown",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "R06",
+          "handler": "git",
+          "name": "git.checkout",
+          "trigger": "Select branch from dropdown → checkout executes",
+          "ui_element": "GitBranchSelector after switch",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "R07",
+          "handler": "git",
+          "name": "git.add / git.reset",
+          "trigger": "Stage/Unstage file buttons → file moves between sections",
+          "ui_element": "GitPanel stage/unstage transition",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "R08",
+          "handler": "git",
+          "name": "git.commit",
+          "trigger": "Type commit message + Commit → staged files clear",
+          "ui_element": "GitCommitInput + post-commit state",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "R09",
+          "handler": "git",
+          "name": "git.push / git.pull",
+          "trigger": "Push/Pull buttons in Git header",
+          "ui_element": "GitPanel push/pull buttons area",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "R10",
+          "handler": "git",
+          "name": "git.worktreeList / worktreeAdd",
+          "trigger": "Worktree section in sidebar → workspace selector",
+          "ui_element": "SidebarBottomControls workspace dropdown",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "R11",
+          "handler": "file",
+          "name": "file.listDir",
+          "trigger": "Explorer tree loads → shows project files",
+          "ui_element": "ExplorerSidebar file tree",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "R12",
+          "handler": "file",
+          "name": "file.readFile",
+          "trigger": "Click file in explorer → FilePreviewOverlay opens",
+          "ui_element": "FilePreviewOverlay code view",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "R13",
+          "handler": "file",
+          "name": "file.createFile / createDir",
+          "trigger": "Context menu New File/New Folder → inline input appears",
+          "ui_element": "Explorer InlineInput for new file/folder",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "R14",
+          "handler": "file",
+          "name": "file.rename",
+          "trigger": "Context menu Rename → inline rename input",
+          "ui_element": "Explorer rename inline input",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "R15",
+          "handler": "file",
+          "name": "file.delete",
+          "trigger": "Context menu Delete → ConfirmDialog appears",
+          "ui_element": "ConfirmDialog delete confirmation",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "R16",
+          "handler": "project",
+          "name": "project.open / listRecent",
+          "trigger": "ProjectPickerDialog opens → shows recent projects",
+          "ui_element": "ProjectPickerDialog recent projects tab",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "R17",
+          "handler": "project",
+          "name": "project.browseFolder / listDirectory",
+          "trigger": "ProjectPicker browse mode → directory navigation",
+          "ui_element": "ProjectPickerDialog browse mode with breadcrumbs",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "R18",
+          "handler": "project",
+          "name": "project.toggleFavoriteFolder",
+          "trigger": "Toggle folder favorite in ProjectPicker",
+          "ui_element": "ProjectPickerDialog favorites star toggle",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "R19",
+          "handler": "session",
+          "name": "session.create / rename / delete / pin",
+          "trigger": "New session / rename / delete / pin operations in SessionSidebar",
+          "ui_element": "SessionSidebar CRUD operations",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "R20",
+          "handler": "agent",
+          "name": "agent.send (chat message)",
+          "trigger": "Type message + Send → agent starts responding",
+          "ui_element": "ChatPanel streaming response",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "R21",
+          "handler": "agent",
+          "name": "agent.stop / abort",
+          "trigger": "Stop/Abort button during agent execution",
+          "ui_element": "ChatPanel stop button state",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "R22",
+          "handler": "agent",
+          "name": "agent.getAvailableModels / setModel",
+          "trigger": "Model selector dropdown → switch model",
+          "ui_element": "SidebarBottomControls model dropdown",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "R23",
+          "handler": "agent",
+          "name": "agent.setThinkingLevel",
+          "trigger": "Thinking level dropdown → select level",
+          "ui_element": "SidebarBottomControls thinking dropdown",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "R24",
+          "handler": "agent",
+          "name": "agent.getTierModels / setTierModels",
+          "trigger": "Tier switcher (Fast/Pro/Max) + config popup",
+          "ui_element": "SidebarBottomControls tier switcher + config",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "R25",
+          "handler": "agent",
+          "name": "agent.compact",
+          "trigger": "Compact conversation context",
+          "ui_element": "CompactionSummaryCard in chat",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "R26",
+          "handler": "agent",
+          "name": "agent.fork / clone / navigateTree",
+          "trigger": "Fork/clone session or time-travel navigation",
+          "ui_element": "RollbackOverlay or SessionSidebar forked session",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "R27",
+          "handler": "agent",
+          "name": "agent.getMcpServers / toggleMcpServer",
+          "trigger": "MCP server list + enable/disable toggle",
+          "ui_element": "StatusPanel MCP section server cards",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "R28",
+          "handler": "agent",
+          "name": "agent.getExtensions / getSkills",
+          "trigger": "Extensions list + Skills list in StatusPanel",
+          "ui_element": "StatusPanel plugins + skills sections",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "R29",
+          "handler": "agent",
+          "name": "agent.getSettings / setSettings",
+          "trigger": "Settings modal open → toggle settings",
+          "ui_element": "SettingsPanel modal with toggles",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "R30",
+          "handler": "agent",
+          "name": "agent.setAutoRetry / abortRetry",
+          "trigger": "Retry settings toggle + abort retry button",
+          "ui_element": "SettingsPanel retry config section",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "R31",
+          "handler": "snapshot",
+          "name": "snapshot.list / get / rollback",
+          "trigger": "SnapshotPanel list + detail + rollback",
+          "ui_element": "SnapshotPanel cards + rollback confirmation",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "R32",
+          "handler": "memory",
+          "name": "memory.listFiles / readFile / remember",
+          "trigger": "MemoryPanel list files + read file + create bookmark",
+          "ui_element": "MemoryPanel all sections",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "R33",
+          "handler": "rules",
+          "name": "rules.requestSnapshot",
+          "trigger": "RulesPanel request snapshot from channel",
+          "ui_element": "RulesPanel loaded snapshot data",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "R34",
+          "handler": "lsp",
+          "name": "lsp.status / setMode",
+          "trigger": "LSP status display + mode switch buttons",
+          "ui_element": "StatusPanel LSP section + mode buttons",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "R35",
+          "handler": "subagent",
+          "name": "subagent.listBySession / rename / delete",
+          "trigger": "Subagent management: list/rename/delete",
+          "ui_element": "SubagentPanel CRUD operations",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "R36",
+          "handler": "timer",
+          "name": "timer.start / stop",
+          "trigger": "Timer tick subscription start/stop",
+          "ui_element": "DiagnosticPanel timer counter",
+          "status": "pending",
+          "screenshot": null
+        }
+      ]
+    },
+    "ui_actions": {
+      "label": "Pure UI Interactions (no RPC needed)",
+      "methods": [
+        {
+          "id": "U01",
+          "area": "ActivityBar",
+          "name": "Toggle Explorer panel",
+          "trigger": "Click activity-explorer icon → left sidebar shows/hides explorer",
+          "ui_element": "ActivityBar explorer icon active state",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "U02",
+          "area": "ActivityBar",
+          "name": "Toggle Git panel",
+          "trigger": "Click activity-git icon → right sidebar shows/hides git",
+          "ui_element": "ActivityBar git icon active state",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "U03",
+          "area": "TabBar",
+          "name": "Switch project tab",
+          "trigger": "Click different project tab → sessions reload",
+          "ui_element": "TabBar tab switching animation",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "U04",
+          "area": "TabBar",
+          "name": "Close tab + Add new tab",
+          "trigger": "Close tab button + (+) add project button",
+          "ui_element": "TabBar close/add interactions",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "U05",
+          "area": "TabBar",
+          "name": "Open Settings",
+          "trigger": "Click settings gear icon → SettingsPanel modal",
+          "ui_element": "SettingsPanel modal overlay",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "U06",
+          "area": "LeftSidebar",
+          "name": "Create new session",
+          "trigger": "Click (+) new session button",
+          "ui_element": "SessionSidebar new session created",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "U07",
+          "area": "LeftSidebar",
+          "name": "Search sessions",
+          "trigger": "Type in session search input → filters list",
+          "ui_element": "SessionSidebar search filtering",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "U08",
+          "area": "LeftSidebar",
+          "name": "Pin/Rename/Delete session",
+          "trigger": "Session item hover actions: pin/rename/delete",
+          "ui_element": "SessionSidebar item actions menu",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "U09",
+          "area": "ChatInput",
+          "name": "QuickActionToolbar (@ popup)",
+          "trigger": "Mobile: click @ button → agents/files/memory tabs",
+          "ui_element": "QuickActionToolbar @ mention popup",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "U10",
+          "area": "ChatInput",
+          "name": "QuickActionToolbar (/ popup)",
+          "trigger": "Mobile: click / button → commands/skills tabs",
+          "ui_element": "QuickActionToolbar / command popup",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "U11",
+          "area": "ChatInput",
+          "name": "Attachment (file + image)",
+          "trigger": "Click paperclip/image → OS file picker opens",
+          "ui_element": "InputBar attachment buttons + FileAttachment preview",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "U12",
+          "area": "ChatPanel",
+          "name": "Scroll toolbar (auto-scroll/top/bottom)",
+          "trigger": "Scroll toolbar buttons during message stream",
+          "ui_element": "ScrollToolbar play/pause/up/down buttons",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "U13",
+          "area": "SideNav",
+          "name": "Message navigation dots",
+          "trigger": "Click nav dot → scroll to message; right-click multi-select",
+          "ui_element": "SideNav dots + MessageSelectionBar",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "U14",
+          "area": "MessageBubble",
+          "name": "Copy/Expand/Collapse actions",
+          "trigger": "Hover message bubble → copy/expand/collapse buttons appear",
+          "ui_element": "MessageBubble hover actions toolbar",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "U15",
+          "area": "MessageBubble",
+          "name": "Tool execution card expand/collapse",
+          "trigger": "Click tool card header → expand/collapse details",
+          "ui_element": "ToolExecutionBlock expanded/collapsed states",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "U16",
+          "area": "RightSidebar",
+          "name": "Switch panel tabs (icon bar + wide mode)",
+          "trigger": "Click right sidebar tabs → git/files/status/rpc/memory/rules/snapshot",
+          "ui_element": "RightSidebar tab switching",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "U17",
+          "area": "StatusPanel",
+          "name": "YOLO Mode toggle",
+          "trigger": "Toggle YOLO auto-approve mode",
+          "ui_element": "StatusPanel yolo toggle switch",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "U18",
+          "area": "StatusPanel",
+          "name": "MCP server enable/disable/restart",
+          "trigger": "MCP server card actions: toggle/restart/copy info",
+          "ui_element": "StatusPanel MCP server card expanded",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "U19",
+          "area": "StatusPanel",
+          "name": "Plugin/Skill expand details + copy info",
+          "trigger": "Click plugin/skill item → expand details + copy button",
+          "ui_element": "StatusPanel plugin/skill expanded card",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "U20",
+          "area": "Explorer",
+          "name": "Context menu (blank + file + directory)",
+          "trigger": "Right-click blank/file/directory → show context menus",
+          "ui_element": "ContextMenu all variants (3 types)",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "U21",
+          "area": "Explorer",
+          "name": "Copy Path toast notification",
+          "trigger": "Right-click file → Copy Path → toast shows path",
+          "ui_element": "ExplorerSidebar copy path toast",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "U22",
+          "area": "Explorer",
+          "name": "Drag-drop import highlight",
+          "trigger": "Drag file over explorer → drop zone highlights",
+          "ui_element": "ExplorerSidebar drag-over highlight state",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "U23",
+          "area": "Theme",
+          "name": "Theme/Language menu toggle",
+          "trigger": "Click theme toggle → light/dark/system + zh-CN/en",
+          "ui_element": "ThemeMenu dropdown with options",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "U24",
+          "area": "Notification",
+          "name": "Notification center bell + panel",
+          "trigger": "Click bell icon → notification dropdown with items",
+          "ui_element": "NotificationCenter dropdown",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "U25",
+          "area": "Mobile",
+          "name": "Mobile sidebar overlay (open/close)",
+          "trigger": "Mobile viewport: toggle sidebar → 85% overlay + backdrop",
+          "ui_element": "LeftSidebar mobile overlay (fixed width)",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "U26",
+          "area": "Mobile",
+          "name": "Mobile Project Picker fullscreen",
+          "trigger": "Mobile viewport: open ProjectPicker → fullscreen with safe-area",
+          "ui_element": "ProjectPickerDialog mobile fullscreen",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "U27",
+          "area": "Mobile",
+          "name": "Mobile Tab close always visible",
+          "trigger": "Mobile viewport: tab close buttons visible without hover",
+          "ui_element": "TabBar mobile close buttons",
+          "status": "pending",
+          "screenshot": null
+        },
+        {
+          "id": "U28",
+          "area": "Mobile",
+          "name": "Mobile Diff viewer forced unified",
+          "trigger": "Mobile viewport: diff viewer shows unified mode only",
+          "ui_element": "DiffViewerPanel mobile unified mode",
+          "status": "pending",
+          "screenshot": null
+        }
+      ]
+    }
+  }
+}

@@ -77,5 +77,14 @@
   "mcpToolCount": "({{count}} tools)",
   "noMcpTools": "No tools",
   "status": "Status",
-  "refreshResources": "Refresh resources (Skills, MCP, Plugins)"
+  "refreshResources": "Refresh resources (Skills, MCP, Plugins)",
+  "tierFast": "Fast",
+  "tierPro": "Pro",
+  "tierMax": "Think",
+  "tierConfigTitle": "Configure tier models",
+  "saving": "Saving...",
+  "save": "Save",
+  "tierConfigDefault": "Default ({{model}})",
+  "tierConfigDefaultPlain": "-- Default --",
+  "tierUnavailable": "Model not configured"
 }

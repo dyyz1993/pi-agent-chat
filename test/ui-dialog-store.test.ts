@@ -1,25 +1,25 @@
-import { describe, it, expect, beforeEach, mock } from "bun:test";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 
-mock.module("../src/mainview/lib/api-client", () => ({
+vi.mock("../src/mainview/lib/api-client", () => ({
   apiClient: {
-    call: mock().mockResolvedValue({}),
-    onReconnect: mock(),
+    call: vi.fn().mockResolvedValue({}),
+    onReconnect: vi.fn(),
   },
 }));
 
-mock.module("../src/mainview/stores/use-rpc-debug-store", () => ({
+vi.mock("../src/mainview/stores/use-rpc-debug-store", () => ({
   useRpcDebugStore: {
-    getState: mock(() => ({ addEntry: mock() })),
+    getState: vi.fn(() => ({ addEntry: vi.fn() })),
   },
 }));
 
-mock.module("../src/mainview/stores/use-session-store", () => ({
+vi.mock("../src/mainview/stores/use-session-store", () => ({
   useSessionStore: {
-    getState: mock(() => ({
+    getState: vi.fn(() => ({
       sessionStatusMap: {},
-      updateSessionStatus: mock(),
+      updateSessionStatus: vi.fn(),
     })),
-    setState: mock(),
+    setState: vi.fn(),
   },
 }));
 
@@ -27,8 +27,8 @@ import { useUIDialogStore, toolNameToMethod } from "../src/mainview/stores/use-u
 import { apiClient } from "../src/mainview/lib/api-client";
 import { useSessionStore } from "../src/mainview/stores/use-session-store";
 
-const mockedCall = apiClient.call as ReturnType<typeof mock>;
-const mockedSessionGetState = useSessionStore.getState as ReturnType<typeof mock>;
+const mockedCall = apiClient.call as ReturnType<typeof vi.fn>;
+const mockedSessionGetState = useSessionStore.getState as ReturnType<typeof vi.fn>;
 
 interface MakeRequestOverrides {
   requestId?: string;
@@ -54,7 +54,7 @@ function makeRequest(overrides: MakeRequestOverrides = {}) {
 }
 
 beforeEach(() => {
-  mock.clearAllMocks();
+  vi.clearAllMocks();
   useUIDialogStore.setState({
     pending: [],
     requestStates: new Map(),
@@ -62,7 +62,7 @@ beforeEach(() => {
   });
   mockedSessionGetState.mockReturnValue({
     sessionStatusMap: {},
-    updateSessionStatus: mock(),
+    updateSessionStatus: vi.fn(),
   } as ReturnType<typeof useSessionStore.getState>);
 });
 
@@ -179,7 +179,7 @@ describe("setPanelOpen / togglePanel", () => {
 
 describe("checkPermissionClear", () => {
   it("updates session status from permission to streaming when no remaining requests", () => {
-    const mockUpdateStatus = mock();
+    const mockUpdateStatus = vi.fn();
     mockedSessionGetState.mockReturnValue({
       sessionStatusMap: { "sess-1": "permission" },
       updateSessionStatus: mockUpdateStatus,
@@ -194,7 +194,7 @@ describe("checkPermissionClear", () => {
   });
 
   it("does not update status when other pending requests remain for same session", () => {
-    const mockUpdateStatus = mock();
+    const mockUpdateStatus = vi.fn();
     mockedSessionGetState.mockReturnValue({
       sessionStatusMap: { "sess-1": "permission" },
       updateSessionStatus: mockUpdateStatus,

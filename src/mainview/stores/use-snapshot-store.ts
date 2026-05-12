@@ -100,7 +100,7 @@ export const useSnapshotStore = create<SnapshotState>()((set, get) => ({
   navigateTree: async (sessionId, snapshotId, path) => {
     set({ loading: true, error: null });
     try {
-      const result = await apiClient.call("snapshot.navigate_tree", {
+      const result = await apiClient.call("snapshot.navigateTree", {
         sessionId,
         snapshotId,
         path,
@@ -123,7 +123,7 @@ export const useSnapshotStore = create<SnapshotState>()((set, get) => ({
 
   getFileContent: async (sessionId, snapshotId, filePath) => {
     try {
-      const result = await apiClient.call("snapshot.get_tree", { sessionId, snapshotId, filePath });
+      const result = await apiClient.call("snapshot.getTree", { sessionId, snapshotId, filePath });
       set((s) => ({
         fileContentBySession: {
           ...s.fileContentBySession,

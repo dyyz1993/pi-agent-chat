@@ -2,9 +2,12 @@
  * Web server configuration — single source of truth.
  * Values are read from environment variables with sensible defaults.
  *
- * PI路径相关变量（PI_CLI_PATH, PI_EXT_*）必须通过环境变量或 .env 文件设置，
- * 无内置默认值。启动时若未设置会打印警告。
+ * PI_CLI_PATH — 必须通过环境变量或 .env 设置。
+ * 扩展路径从全局目录 ~/.pi/agent/extensions/ 自动发现，无需逐个配置。
  */
+
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 const MISSING_PI_VARS: string[] = [];
 
@@ -23,20 +26,8 @@ export const config = {
   maxUploadSize: parseInt(process.env.MAX_UPLOAD_SIZE ?? String(50 * 1024 * 1024)),
   logDir: process.env.LOG_DIR ?? "logs",
   piCliPath: requireEnv("PI_CLI_PATH"),
-  piExtensionPaths: {
-    subagent: requireEnv("PI_EXT_SUBAGENT"),
-    todo: requireEnv("PI_EXT_TODO"),
-    bash: requireEnv("PI_EXT_BASH"),
-    lsp: requireEnv("PI_EXT_LSP"),
-    preview: requireEnv("PI_EXT_PREVIEW"),
-    autoMemory: requireEnv("PI_EXT_AUTO_MEMORY"),
-    rules: requireEnv("PI_EXT_RULES"),
-    autoSessionTitle: requireEnv("PI_EXT_AUTO_SESSION_TITLE"),
-    fileSnapshot: requireEnv("PI_EXT_FILE_SNAPSHOT"),
-    askTools: requireEnv("PI_EXT_ASK_TOOLS"),
-    messageBridge: requireEnv("PI_EXT_MESSAGE_BRIDGE"),
-    coordinator: requireEnv("PI_EXT_COORDINATOR"),
-  },
+  /** 全局扩展目录，所有扩展通过软链集中管理于此 */
+  piExtensionsDir: join(homedir(), ".pi", "agent", "extensions"),
 } as const;
 
 if (MISSING_PI_VARS.length > 0) {

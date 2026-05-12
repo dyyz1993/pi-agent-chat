@@ -126,5 +126,8 @@
   "picker.sessionCount": "{{count}} sessions",
   "picker.timeAgo.minutes": "{{count}} min ago",
   "picker.timeAgo.hours": "{{count}}h ago",
-  "picker.timeAgo.days": "{{count}}d ago"
+  "picker.timeAgo.days": "{{count}}d ago",
+  "picker.backToRecents": "Back to Recents",
+  "picker.manualPathPlaceholder": "Enter path to open...",
+  "picker.openPath": "Open"
 }

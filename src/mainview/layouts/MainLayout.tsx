@@ -136,6 +136,15 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
   const filePreview = useExplorerStore((s) => s.filePreview);
   const loadingFile = useExplorerStore((s) => s.loadingFile);
   const closePreview = useExplorerStore((s) => s.closePreview);
+  const saveFileContent = useExplorerStore((s) => s.saveFileContent);
+  const handleSaveFile = useCallback(
+    (content: string) => {
+      if (filePreview?.path) {
+        saveFileContent(filePreview.path, content);
+      }
+    },
+    [saveFileContent, filePreview?.path],
+  );
   const currentDiff = useGitStore((s) => s.currentDiff);
 
   return (
@@ -159,7 +168,7 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
           !sessionCollapsed &&
           (!isMobile || sessionPanel === "visible") && (
             <LeftSidebar
-              width={isMobile ? Math.round(contentWidth * 0.85) : sessionWidth}
+              width={isMobile ? Math.min(320, Math.round(contentWidth * 0.8)) : sessionWidth}
               overlay={sessionPanel === "visible"}
             />
           )}
@@ -188,6 +197,7 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
                 preview={filePreview}
                 loading={loadingFile}
                 onClose={closePreview}
+                onSave={handleSaveFile}
               />
             </div>
           )}
@@ -213,7 +223,9 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
         {/* ---- COL 3: Right Sidebar ---- */}
         {statusPanel !== "hidden" && (!isMobile || statusPanel === "visible") && (
           <RightSidebar
-            width={isMobile ? Math.round(contentWidth * 0.85) : isTablet ? 48 : statusWidth}
+            width={
+              isMobile ? Math.min(320, Math.round(contentWidth * 0.8)) : isTablet ? 48 : statusWidth
+            }
             overlay={statusPanel === "visible"}
           />
         )}

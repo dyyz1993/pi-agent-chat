@@ -77,5 +77,14 @@
   "mcpToolCount": "({{count}} tools)",
   "noMcpTools": "无工具",
   "status": "状态",
-  "refreshResources": "刷新资源（技能、MCP、插件）"
+  "refreshResources": "刷新资源（技能、MCP、插件）",
+  "tierFast": "快",
+  "tierPro": "中",
+  "tierMax": "思考",
+  "tierConfigTitle": "配置 Tier 模型映射",
+  "saving": "保存中...",
+  "save": "保存",
+  "tierConfigDefault": "默认 ({{model}})",
+  "tierConfigDefaultPlain": "-- 默认 --",
+  "tierUnavailable": "模型未配置"
 }

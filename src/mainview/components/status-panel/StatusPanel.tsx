@@ -375,7 +375,7 @@ export function StatusPanel() {
                                   </span>
                                 )}
                                 <span
-                                  className={`text-[9px] px-1 py-px rounded shrink-0 ${p.scope === "global" ? "bg-purple-500/15 text-purple-400" : "bg-blue-500/15 text-blue-400"}`}
+                                  className={`text-[9px] px-1 py-px rounded shrink-0 max-w-[36px] truncate ${p.scope === "global" ? "bg-purple-500/15 text-purple-400" : "bg-blue-500/15 text-blue-400"}`}
                                 >
                                   {p.scope === "global" ? t("global") : t("project")}
                                 </span>
@@ -456,7 +456,7 @@ export function StatusPanel() {
                                   {sk.name}
                                 </span>
                                 <span
-                                  className={`text-[9px] px-1 py-px rounded ${sk.scope === "global" ? "bg-purple-500/15 text-purple-400" : "bg-blue-500/15 text-blue-400"}`}
+                                  className={`text-[9px] px-1 py-px rounded max-w-[36px] truncate ${sk.scope === "global" ? "bg-purple-500/15 text-purple-400" : "bg-blue-500/15 text-blue-400"}`}
                                 >
                                   {sk.scope === "global" ? t("global") : t("project")}
                                 </span>
@@ -580,7 +580,7 @@ function MCPToolsSection() {
                 </span>
               )}
               <span
-                className={`text-[9px] px-1 py-px rounded shrink-0 ${srv.scope === "project" ? "bg-cyan-500/15 text-cyan-400" : "bg-purple-500/15 text-purple-400"}`}
+                className={`text-[9px] px-1 py-px rounded shrink-0 max-w-[36px] truncate ${srv.scope === "project" ? "bg-cyan-500/15 text-cyan-400" : "bg-purple-500/15 text-purple-400"}`}
               >
                 {srv.scope === "project" ? t("project") : t("global")}
               </span>

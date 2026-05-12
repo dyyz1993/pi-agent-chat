@@ -27,7 +27,7 @@ interface SubagentState {
   subagentStatusMap: Record<string, SessionStatus>;
   subagentContextMap: Record<string, ContextUsage>;
 
-  loadSubsessions: (parentSessionPath: string) => Promise<SubagentSessionInfo[]>;
+  loadSubsessions: (parentSessionPath: string, force?: boolean) => Promise<SubagentSessionInfo[]>;
   setActiveSubsession: (parentSessionId: string, subId: string | null) => void;
   setSubMessages: (subId: string, msgs: ChatMessage[]) => void;
   loadSubHistory: (subSessionPath: string, subId: string) => Promise<void>;
@@ -68,9 +68,9 @@ export const useSubagentStore = create<SubagentState>()((set, get) => ({
     });
   },
 
-  loadSubsessions: async (parentSessionPath: string) => {
+  loadSubsessions: async (parentSessionPath: string, force = false) => {
     if (get().loadingByParent[parentSessionPath]) return [];
-    if (get().subsessionsByParent[parentSessionPath])
+    if (!force && get().subsessionsByParent[parentSessionPath])
       return get().subsessionsByParent[parentSessionPath];
     set((s) => ({ loadingByParent: { ...s.loadingByParent, [parentSessionPath]: true } }));
     try {

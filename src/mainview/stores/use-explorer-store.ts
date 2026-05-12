@@ -21,11 +21,12 @@ interface ExplorerState {
   setCurrentPath: (path: string) => void;
   listRootDir: () => Promise<void>;
   toggleNode: (nodePath: string) => Promise<void>;
-  openFile: (node: TreeNode) => Promise<void>;
+  openFile: (node: TreeNode, editable?: boolean) => Promise<void>;
   closePreview: () => void;
 
-  createFile: (dirPath: string, name: string) => Promise<void>;
+  createFile: (dirPath: string, name: string) => Promise<string | null>;
   createDir: (dirPath: string, name: string) => Promise<void>;
+  saveFileContent: (filePath: string, content: string) => Promise<void>;
   renameNode: (oldPath: string, newName: string) => Promise<void>;
   deleteNode: (path: string) => Promise<void>;
   refreshDir: (dirPath: string) => Promise<void>;
@@ -206,7 +207,7 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
     }
   },
 
-  openFile: async (node: TreeNode) => {
+  openFile: async (node: TreeNode, editable?: boolean) => {
     if (node.type === "directory") return;
     const addLog = useAppStore.getState().addLog;
     set({ selectedPath: node.path, loadingFile: true });
@@ -221,6 +222,7 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
       size: fileSize,
       isText: isTextFile(node.name),
       isImage: isImageFile(node.name),
+      editable,
     };
 
     try {
@@ -271,13 +273,42 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
   createFile: async (dirPath: string, name: string) => {
     const addLog = useAppStore.getState().addLog;
     try {
-      await apiClient.call("file.createFile", { dirPath, name });
+      const res = await apiClient.call("file.createFile", { dirPath, name });
       addLog(`Created file: ${name}`);
       set({ editingNode: null });
       await get().refreshDir(dirPath);
+      // Auto-open the new file in editable preview
+      const node = findNode(get().treeNodes, res.path);
+      if (node) {
+        await get().openFile(node, true);
+      }
+      return res.path;
     } catch (err) {
       addLog(`Error creating file: ${err instanceof Error ? err.message : String(err)}`);
       set({ editingNode: null });
+      return null;
+    }
+  },
+
+  saveFileContent: async (filePath: string, content: string) => {
+    const addLog = useAppStore.getState().addLog;
+    try {
+      await apiClient.call("file.writeFile", { path: filePath, content });
+      addLog(`Saved: ${filePath}`);
+      // Update the preview content and exit editable mode
+      const { filePreview } = get();
+      if (filePreview && filePreview.path === filePath) {
+        set({
+          filePreview: {
+            ...filePreview,
+            content,
+            editable: false,
+            totalLines: content.split("\n").length,
+          },
+        });
+      }
+    } catch (err) {
+      addLog(`Error saving file: ${err instanceof Error ? err.message : String(err)}`);
     }
   },
 

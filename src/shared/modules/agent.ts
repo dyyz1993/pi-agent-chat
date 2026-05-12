@@ -13,7 +13,7 @@ import type {
 export interface AgentMethods {
   "agent.start": {
     params: { sessionId: string; projectPath: string; sessionPath: string };
-    result: { agentId: string; status: "started" | "already_running" };
+    result: { agentId: string; status: "started" | "already_running" | "switched" };
   };
   "agent.replayHoldEvents": {
     params: { sessionId: string };
@@ -27,7 +27,7 @@ export interface AgentMethods {
     params: { sessionId: string };
     result: { ok: boolean };
   };
-  "agent.status": {
+  "agent.getStatus": {
     params: { sessionId: string };
     result: { status: "idle" | "streaming" | "stopped"; pid?: number };
   };
@@ -233,6 +233,14 @@ export interface AgentMethods {
     params: { sessionId: string };
     result: { tokens: number | null; contextWindow: number; percent: number | null };
   };
+  "agent.getTierModels": {
+    params: { sessionId: string };
+    result: { models: Record<string, string> };
+  };
+  "agent.setTierModels": {
+    params: { sessionId: string; models: Record<string, string> };
+    result: { ok: boolean };
+  };
   "agent.getSettings": {
     params: { sessionId: string; scope?: string };
     result: Record<string, unknown>;
@@ -261,9 +269,34 @@ export interface AgentMethods {
     params: { sessionId: string; targetId: string; summarize?: boolean; skipFiles?: boolean };
     result: { cancelled: boolean };
   };
-  "agent.rollbackPreview": {
+  "agent.previewRollback": {
     params: { sessionId: string; targetId: string };
     result: { restored: string[]; deleted: string[] };
+  };
+  "agent.getModifiedFiles": {
+    params: { sessionId: string; fromEntryId?: string; toEntryId?: string };
+    result: Array<{
+      path: string;
+      status: "added" | "modified" | "deleted";
+      turnIndex: number;
+      entryId: string;
+    }>;
+  };
+  "agent.getBatchDiffs": {
+    params: { sessionId: string; fromEntryId?: string; toEntryId?: string };
+    result: {
+      files: Array<{
+        path: string;
+        status: "added" | "modified" | "deleted";
+        diff: {
+          path: string;
+          oldContent: string | null;
+          newContent: string | null;
+          unifiedDiff: string;
+        } | null;
+      }>;
+      summary: { totalFiles: number; added: number; modified: number; deleted: number };
+    };
   };
   "agent.getTree": {
     params: { sessionId: string };

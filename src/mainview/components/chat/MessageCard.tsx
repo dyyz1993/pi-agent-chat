@@ -1,4 +1,4 @@
-import { memo, useCallback, useRef, useState } from "react";
+import { memo, useCallback, useRef } from "react";
 import {
   ChevronDown,
   User,
@@ -7,7 +7,6 @@ import {
   Undo2,
   GitBranch,
   Loader2,
-  FileWarning,
   Archive,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -15,9 +14,11 @@ import { useTurnStore, EMPTY_SET } from "../../stores/use-turn-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useChatStore } from "../../stores/use-chat-store";
 import { useNotificationStore } from "../../stores/use-notification-store";
+import { useRollbackStore } from "../../stores/use-rollback-store";
 
 const EMPTY_MSGS: never[] = [];
 import { apiClient } from "../../lib/api-client";
+import { createLogger } from "../../../shared/lib/logger";
 import type { SessionMeta } from "../../types";
 import type { TreeEntry } from "@dyyz1993/pi-coding-agent";
 import {
@@ -27,8 +28,92 @@ import {
   isLspCustomType,
   isLspVisibleInChat,
 } from "./MessageBubble";
-import type { ChatMessage } from "../../types";
+import type { ChatMessage, ContentBlock } from "../../types";
+import type { ModifiedFile } from "../../stores/use-rollback-store";
 import { getCustomTypeIcon } from "./tool-icon-map";
+
+const FILE_TOOLS = new Set(["edit", "write", "Edit", "Write"]);
+
+function extractFileChanges(messages: ChatMessage[]): ModifiedFile[] {
+  const seen = new Map<
+    string,
+    { status: ModifiedFile["status"]; details: string; addedLines: number; removedLines: number }
+  >();
+
+  for (const msg of messages) {
+    for (const block of msg.content) {
+      if (block.type !== "toolExecution") continue;
+      const tb = block as Extract<ContentBlock, { type: "toolExecution" }>;
+      if (!FILE_TOOLS.has(tb.toolName)) continue;
+      try {
+        const args: unknown = JSON.parse(tb.args || "{}");
+        const filePath =
+          typeof args === "object" && args !== null && "path" in args
+            ? ((args as Record<string, unknown>).path as string | undefined)
+            : undefined;
+        if (!filePath || typeof filePath !== "string") continue;
+        const status = tb.toolName.toLowerCase() === "write" ? "added" : "modified";
+        let details = "";
+        let addedLines = 0;
+        let removedLines = 0;
+        if (status === "added" && typeof args === "object" && args !== null) {
+          const content = (args as Record<string, unknown>).content as string | undefined;
+          if (content) {
+            const lines = content.split("\n");
+            addedLines = lines.length;
+            const shown = lines
+              .slice(0, 30)
+              .map((l) => `+ ${l}`)
+              .join("\n");
+            details =
+              lines.length > 30 ? `${shown}\n... (+${lines.length - 30} more lines)` : shown;
+          }
+        } else if (status === "modified" && typeof args === "object" && args !== null) {
+          const oldContent = (args as Record<string, unknown>).oldContent as string | undefined;
+          const newContent = (args as Record<string, unknown>).newContent as string | undefined;
+          if (oldContent !== undefined && newContent !== undefined) {
+            const oldLines = oldContent.split("\n");
+            const newLines = newContent.split("\n");
+            removedLines = oldLines.length;
+            addedLines = newLines.length;
+            const maxOld = oldLines
+              .slice(0, 20)
+              .map((l) => `- ${l}`)
+              .join("\n");
+            const maxNew = newLines
+              .slice(0, 20)
+              .map((l) => `+ ${l}`)
+              .join("\n");
+            const oldTrunc =
+              oldLines.length > 20 ? `\n... (${oldLines.length - 20} more lines)` : "";
+            const newTrunc =
+              newLines.length > 20 ? `\n... (${newLines.length - 20} more lines)` : "";
+            details = `${maxOld}${oldTrunc}\n---\n${maxNew}${newTrunc}`;
+          } else {
+            details = `参数: ${JSON.stringify(args).slice(0, 500)}`;
+          }
+        }
+        if (!seen.has(filePath)) {
+          seen.set(filePath, { status, details, addedLines, removedLines });
+        }
+      } catch {
+        // args not valid JSON, skip
+      }
+    }
+  }
+
+  return Array.from(seen.entries()).map(([path, data], idx) => ({
+    path,
+    status: data.status,
+    turnIndex: idx,
+    entryId: "",
+    details: data.details || undefined,
+    addedLines: data.addedLines || undefined,
+    removedLines: data.removedLines || undefined,
+  }));
+}
+
+const log = createLogger("chat");
 
 interface MessageCardProps {
   message: ChatMessage;
@@ -265,8 +350,8 @@ export const MessageCard = memo(function MessageCard({
         )}
 
         <div className="flex items-center gap-0.5 ml-auto shrink-0">
-          {(isAssistant || isUser) && !isEntry && !isCollapsed && (
-            <LazyHeaderActions message={message} isUserCard={isUser} />
+          {(isAssistant || isUser) && !isEntry && (
+            <HeaderActions message={message} isUserCard={isUser} />
           )}
           {(isAssistant || isUser || isEntry) && (
             <button
@@ -306,29 +391,6 @@ export const MessageCard = memo(function MessageCard({
   );
 });
 
-const LazyHeaderActions = memo(function LazyHeaderActions({
-  message,
-  isUserCard,
-}: {
-  message: ChatMessage;
-  isUserCard?: boolean;
-}) {
-  const [visible, setVisible] = useState(false);
-
-  if (!visible) {
-    return (
-      <span
-        className="inline-flex items-center opacity-0 group-hover/msgcard:opacity-100 transition-opacity"
-        onMouseEnter={() => setVisible(true)}
-      >
-        <span className="p-1 text-gray-500 dark:text-gray-700 cursor-pointer">···</span>
-      </span>
-    );
-  }
-
-  return <HeaderActions message={message} isUserCard={isUserCard} />;
-});
-
 const HeaderActions = memo(function HeaderActions({
   message,
   isUserCard,
@@ -343,34 +405,56 @@ const HeaderActions = memo(function HeaderActions({
   );
   const pushNotification = useNotificationStore((s) => s.push);
   const rollingBackRef = useRef(false);
-  const [confirmState, setConfirmState] = useState<{
-    mode: "message" | "withFiles";
-    targetId: string;
-    preview: { restored: string[]; deleted: string[] };
-  } | null>(null);
 
   const fetchTree = useCallback(async (): Promise<TreeEntry[] | null> => {
-    if (!sessionId) return null;
+    if (!sessionId) {
+      log.warn("fetchTree skipped: no sessionId");
+      return null;
+    }
     try {
       const tree = await apiClient.call("agent.getTree", { sessionId });
-      return tree.entries ?? [];
-    } catch {
-      /* tree fetch failed */ return null;
+      const entries = tree.entries ?? [];
+      log.info("fetchTree result", { sessionId, entryCount: entries.length });
+      return entries;
+    } catch (err) {
+      log.error("fetchTree failed", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return null;
     }
   }, [sessionId]);
 
   const resolveEntryId = useCallback(
     async (treeEntries?: TreeEntry[] | null): Promise<string | null> => {
-      if (message.entryId) return message.entryId;
+      if (message.entryId) {
+        log.info("resolveEntryId: using message.entryId", { entryId: message.entryId });
+        return message.entryId;
+      }
       const entries = treeEntries ?? (await fetchTree());
-      if (!entries || !sessionId) return null;
+      if (!entries || !sessionId) {
+        log.warn("resolveEntryId failed: no entries or sessionId", {
+          hasEntries: !!entries,
+          sessionId,
+        });
+        return null;
+      }
       if (isUserCard) {
         const allUserMsgs = messages.filter((m) => m.role === "user");
         const userMsgIdx = allUserMsgs.findIndex((m) => m.id === message.id);
         const userTreeEntries = entries.filter((e) => e.type === "message" && e.label === "user");
+        log.info("resolveEntryId: user card matching", {
+          userMsgIdx,
+          userMsgCount: allUserMsgs.length,
+          userTreeCount: userTreeEntries.length,
+        });
         if (userMsgIdx !== -1 && userMsgIdx < userTreeEntries.length) {
           return userTreeEntries[userMsgIdx].id;
         }
+        log.warn("resolveEntryId: user index out of range", {
+          userMsgIdx,
+          userTreeCount: userTreeEntries.length,
+        });
         return null;
       }
       const allAssistantMsgs = messages.filter((m) => m.role === "assistant");
@@ -378,9 +462,18 @@ const HeaderActions = memo(function HeaderActions({
       const assistantTreeEntries = entries.filter(
         (e) => e.type === "message" && e.label === "assistant",
       );
+      log.info("resolveEntryId: assistant card matching", {
+        assistantMsgIdx,
+        assistantMsgCount: allAssistantMsgs.length,
+        assistantTreeCount: assistantTreeEntries.length,
+      });
       if (assistantMsgIdx !== -1 && assistantMsgIdx < assistantTreeEntries.length) {
         return assistantTreeEntries[assistantMsgIdx].id;
       }
+      log.warn("resolveEntryId: assistant index out of range", {
+        assistantMsgIdx,
+        assistantTreeCount: assistantTreeEntries.length,
+      });
       return null;
     },
     [sessionId, message.id, message.entryId, messages, isUserCard, fetchTree],
@@ -388,27 +481,37 @@ const HeaderActions = memo(function HeaderActions({
 
   const findTurnBoundary = useCallback((entryId: string, entries: TreeEntry[]): string | null => {
     const byId = new Map(entries.map((e) => [e.id, e]));
-    let current = byId.get(entryId);
-    if (!current) return null;
-    let currentLabel = current.label;
-    if (currentLabel === "user") {
-      return current.parentId ?? null;
-    }
-    while (current) {
-      const parentId = current.parentId;
-      if (parentId == null) return null;
-      const parent = byId.get(parentId);
-      if (!parent) return parentId;
-      const parentLabel = parent.label;
-      if (currentLabel === "assistant" && parentLabel === "user") {
-        const grandParentId = parent.parentId;
-        if (grandParentId == null) return null;
-        const grandParent = byId.get(grandParentId);
-        return grandParent ? grandParentId : null;
+
+    const findAncestorMessage = (start: TreeEntry): TreeEntry | null => {
+      let cur = start;
+      while (cur.parentId) {
+        const parent = byId.get(cur.parentId);
+        if (!parent) return null;
+        if (parent.type === "message") return parent;
+        cur = parent;
       }
-      current = parent;
-      currentLabel = parentLabel;
+      return null;
+    };
+
+    const start = byId.get(entryId);
+    if (!start) return null;
+
+    const startMsg = start.type === "message" ? start : findAncestorMessage(start);
+    if (!startMsg) return null;
+
+    if (startMsg.label === "user") {
+      const gp = findAncestorMessage(startMsg);
+      return gp ? (gp.parentId ?? null) : (startMsg.parentId ?? null);
     }
+
+    if (startMsg.label === "assistant") {
+      const userMsg = findAncestorMessage(startMsg);
+      if (!userMsg || userMsg.label !== "user") return null;
+      const grandParent = findAncestorMessage(userMsg);
+      if (!grandParent) return null;
+      return grandParent.parentId ?? null;
+    }
+
     return null;
   }, []);
 
@@ -416,13 +519,33 @@ const HeaderActions = memo(function HeaderActions({
     targetId: string;
     tree: TreeEntry[];
   } | null> => {
-    if (!sessionId) return null;
+    if (!sessionId) {
+      log.warn("resolveRollbackTarget: no sessionId");
+      return null;
+    }
     const tree = await fetchTree();
-    if (!tree || tree.length === 0) return null;
+    if (!tree || tree.length === 0) {
+      log.warn("resolveRollbackTarget: tree is empty", { treeLength: tree?.length ?? 0 });
+      return null;
+    }
 
     const entryId = await resolveEntryId(tree);
-    if (!entryId) return null;
+    if (!entryId) {
+      log.warn("resolveRollbackTarget: resolveEntryId returned null", {
+        messageId: message.id,
+        isUserCard,
+        treeSize: tree.length,
+      });
+      return null;
+    }
     const targetId = findTurnBoundary(entryId, tree);
+    if (!targetId) {
+      log.warn("resolveRollbackTarget: findTurnBoundary returned null (first message?)", {
+        entryId,
+      });
+      return null;
+    }
+    log.info("resolveRollbackTarget: success", { entryId, targetId });
     return targetId ? { targetId, tree } : null;
   }, [sessionId, fetchTree, resolveEntryId, findTurnBoundary]);
 
@@ -467,113 +590,93 @@ const HeaderActions = memo(function HeaderActions({
     pushNotification({ message: t("messageCard.forked"), level: "info" });
   }, [sessionId, fetchTree, resolveEntryId, pushNotification]);
 
-  const executeRollback = useCallback(
-    async (mode: "message" | "withFiles") => {
-      try {
-        const result = await resolveRollbackTarget();
-        if (!sessionId || !result) {
-          pushNotification({ message: t("messageCard.rollbackFailed"), level: "error" });
-          return;
-        }
-        const textToRefill = isUserCard
-          ? message.content
-              .filter((b): b is { type: "text"; text: string } => b.type === "text")
-              .map((b) => b.text)
-              .join("")
-              .trim()
-          : null;
-        if (textToRefill) {
-          const currentInput = useChatStore.getState().inputText?.trim();
-          if (currentInput) {
-            try {
-              const HISTORY_KEY = "pi-input-history";
-              const raw = localStorage.getItem(`${HISTORY_KEY}:${sessionId}`);
-              const history: string[] = raw ? (JSON.parse(raw) as string[]) : [];
-              if (!history.includes(currentInput)) {
-                history.unshift(currentInput);
-                localStorage.setItem(
-                  `${HISTORY_KEY}:${sessionId}`,
-                  JSON.stringify(history.slice(0, 10)),
-                );
-              }
-            } catch {
-              /* localStorage unavailable, ignore */
-            }
-          }
-        }
-        const skipFiles = mode === "message";
-        await apiClient.call("agent.navigateTree", {
-          sessionId,
-          targetId: result.targetId,
-          summarize: false,
-          skipFiles,
-        });
-        await useChatStore.getState().loadSessionMessages(sessionId, { force: true });
-        if (textToRefill) {
-          useChatStore.getState().setInputText(textToRefill);
-        }
-        pushNotification({ message: t("messageCard.rollbackDone"), level: "info" });
-      } catch (err) {
-        pushNotification({
-          message: t("messageCard.rollbackFailedMsg", {
-            error: err instanceof Error ? err.message : "未知错误",
-          }),
-          level: "error",
-        });
-      }
-    },
-    [sessionId, resolveRollbackTarget, isUserCard, message, pushNotification],
-  );
-
   const requestRollback = useCallback(
     async (mode: "message" | "withFiles") => {
       if (rollingBackRef.current) return;
       rollingBackRef.current = true;
+      log.info("rollback requested", { sessionId, mode });
       try {
+        if (!sessionId) {
+          log.warn("rollback aborted: no active session");
+          return;
+        }
         const result = await resolveRollbackTarget();
-        if (!sessionId || !result) {
-          pushNotification({ message: t("messageCard.rollbackFailed"), level: "error" });
-          return;
-        }
-        if (mode === "message") {
-          await executeRollback("message");
-          return;
-        }
-        const preview = await apiClient
-          .call("agent.rollbackPreview", { sessionId, targetId: result.targetId })
-          .catch((err) => {
-            console.warn("[MessageCard] rollbackPreview failed:", err);
-            return { restored: [], deleted: [] };
+        if (!result) {
+          log.warn("rollback aborted: resolveRollbackTarget returned null", {
+            sessionId,
+            mode,
+            messageId: message.id,
+            hasEntryId: !!message.entryId,
+            messagesCount: messages.length,
           });
-        setConfirmState({ mode, targetId: result.targetId, preview });
+          pushNotification({
+            message: t("messageCard.rollbackFirstMessage"),
+            level: "info",
+          });
+          return;
+        }
+        const emptyPreview = {
+          restored: [] as string[],
+          deleted: [] as string[],
+          files: [] as never[],
+          summary: { totalFiles: 0, added: 0, modified: 0, deleted: 0 },
+        };
+        const preview =
+          mode === "withFiles"
+            ? (() => {
+                // 找到 targetId 对应的消息位置，从那里到当前消息
+                const targetIdx = result.targetId
+                  ? messages.findIndex((m) => m.entryId === result.targetId)
+                  : -1;
+                const currentIdx = messages.findIndex((m) => m.id === message.id);
+                // targetId 是回滚目标节点，它之后的消息到当前消息就是要被撤销的范围
+                const fromIdx = targetIdx >= 0 ? targetIdx + 1 : 0;
+                const toIdx = currentIdx >= 0 ? currentIdx + 1 : messages.length;
+                const slice = messages.slice(fromIdx, toIdx);
+                const fileOps = extractFileChanges(slice.length > 0 ? slice : messages);
+                log.info("extracted file changes", {
+                  fileCount: fileOps.length,
+                  fromIdx,
+                  toIdx,
+                  sliceLen: slice.length,
+                });
+                return {
+                  ...emptyPreview,
+                  files: fileOps,
+                  summary: {
+                    totalFiles: fileOps.length,
+                    added: fileOps.filter((f) => f.status === "added").length,
+                    modified: fileOps.filter((f) => f.status === "modified").length,
+                    deleted: 0,
+                  },
+                };
+              })()
+            : emptyPreview;
+        log.info("opening rollback overlay", {
+          sessionId,
+          mode,
+          targetId: result.targetId,
+          fileCount: preview.files.length,
+        });
+        useRollbackStore.getState().openRollback({ targetId: result.targetId, mode }, preview);
       } catch (err) {
-        pushNotification({
-          message: t("messageCard.previewFailed", {
-            error: err instanceof Error ? err.message : "未知错误",
-          }),
-          level: "error",
+        log.error("rollback request failed unexpectedly", {
+          err: err instanceof Error ? err.message : String(err),
         });
       } finally {
         rollingBackRef.current = false;
       }
     },
-    [sessionId, resolveRollbackTarget, executeRollback, pushNotification],
+    [
+      sessionId,
+      resolveRollbackTarget,
+      message.id,
+      message.entryId,
+      messages.length,
+      messages,
+      pushNotification,
+    ],
   );
-
-  const confirmRollback = useCallback(async () => {
-    if (rollingBackRef.current) return;
-    rollingBackRef.current = true;
-    setConfirmState(null);
-    try {
-      await executeRollback("withFiles");
-    } finally {
-      rollingBackRef.current = false;
-    }
-  }, [executeRollback]);
-
-  const cancelRollback = useCallback(() => {
-    setConfirmState(null);
-  }, []);
 
   return (
     <>
@@ -590,74 +693,6 @@ const HeaderActions = memo(function HeaderActions({
         onClick={() => requestRollback("withFiles")}
         disabled={rollingBackRef.current}
       />
-      {confirmState && (
-        <div className="absolute right-0 top-6 z-50 w-72 rounded-lg border border-amber-500/30 bg-gray-50 dark:bg-gray-900 px-3 py-2.5 shadow-xl">
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <FileWarning className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            <span className="text-[11px] font-medium text-amber-300">
-              {t("messageCard.rollbackPreview")}
-            </span>
-          </div>
-          {confirmState.preview.restored.length > 0 && (
-            <div className="mb-1">
-              <span className="text-[10px] text-emerald-400">{t("messageCard.restore")}</span>
-              <ul className="ml-2 mt-0.5 space-y-0.5 max-h-24 overflow-y-auto">
-                {confirmState.preview.restored.map((f) => (
-                  <li
-                    key={f}
-                    className="text-[10px] text-gray-700 dark:text-gray-300 truncate"
-                    title={f}
-                  >
-                    {f}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {confirmState.preview.deleted.length > 0 && (
-            <div className="mb-1.5">
-              <span className="text-[10px] text-red-400">{t("messageCard.deleteLabel")}</span>
-              <ul className="ml-2 mt-0.5 space-y-0.5 max-h-24 overflow-y-auto">
-                {confirmState.preview.deleted.map((f) => (
-                  <li
-                    key={f}
-                    className="text-[10px] text-gray-700 dark:text-gray-300 truncate"
-                    title={f}
-                  >
-                    {f}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {confirmState.preview.restored.length === 0 &&
-            confirmState.preview.deleted.length === 0 && (
-              <p className="text-[10px] text-gray-500 dark:text-gray-400 mb-1.5">
-                {t("messageCard.noFileChanges")}
-              </p>
-            )}
-          <div className="flex items-center justify-end gap-2">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                confirmRollback();
-              }}
-              className="rounded bg-amber-500/20 px-2 py-0.5 text-[11px] font-medium text-amber-400 hover:bg-amber-500/30 transition-colors"
-            >
-              {t("messageCard.confirmRollback")}
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                cancelRollback();
-              }}
-              className="rounded bg-gray-200 dark:bg-gray-700 px-2 py-0.5 text-[11px] font-medium text-gray-700 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-            >
-              {t("messageCard.cancel")}
-            </button>
-          </div>
-        </div>
-      )}
     </>
   );
 });

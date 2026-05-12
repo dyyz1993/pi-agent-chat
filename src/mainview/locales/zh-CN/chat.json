@@ -89,6 +89,7 @@
   "fork": "Fork",
   "rollbackCode": "回滚代码",
   "rollbackChat": "回滚聊天",
+  "rollbackComingSoon": "{{label}}（即将推出）",
   "copyText": "复制文本",
   "emptyTurn": "(empty)",
   "connectionDisconnected": "连接已断开，正在重连...",
@@ -248,6 +249,7 @@
   "messageCard.rollbackMessage": "回滚消息",
   "messageCard.rollbackMessageAndCode": "回滚消息+代码",
   "messageCard.previewFailed": "预览失败：{{error}}",
+  "messageCard.rollbackFirstMessage": "已是第一条消息，无法继续回滚",
 
   "fileAttachment.addAttachment": "添加附件",
   "fileAttachment.addImage": "添加图片",
@@ -267,5 +269,16 @@
   "scrollUpToLoadMore": "↑ 向上滚动加载更多",
   "sideNav.memory": "Memory",
   "messageCard.cancel": "取消",
-  "markdownOverlay.closeEsc": "关闭 (Esc)"
+  "markdownOverlay.closeEsc": "关闭 (Esc)",
+  "tierFast": "快",
+  "tierPro": "中",
+  "tierMax": "思考",
+
+  "rollbackOverlay.title": "回滚确认",
+  "rollbackOverlay.titleWithFiles": "回滚消息 + 代码",
+  "rollbackOverlay.messageModeDesc": "回滚将移除当前轮次的消息，确定继续吗？",
+  "rollbackOverlay.withFilesModeDesc": "回滚将恢复以下文件到之前的状态：",
+  "rollbackOverlay.confirm": "确认回滚",
+  "rollbackOverlay.cancel": "取消",
+  "rollbackOverlay.noFiles": "本轮无文件变更"
 }

@@ -1,0 +1,23 @@
+{
+  "version": "1.0",
+  "started_at": "2026-05-12T19:30:00Z",
+  "max_iterations": 10,
+  "current_iteration": 10,
+  "total_methods": 93,
+  "completed": 93,
+  "remaining": 0,
+  "failed": 1,
+  "skipped": 0,
+  "checkpoints": [
+    "batch1-git-explorer-status",
+    "batch2-sidebar-session-input",
+    "batch3-mobile-theme-keyboard",
+    "batch4-extensions-all-tools",
+    "batch5-rpc-remaining",
+    "batch6-project-picker-checkout",
+    "batch7-ask-tools-coordinator",
+    "ALL_METHODS_COVERED_93/93=100%"
+  ],
+  "last_run": "2026-05-12T21:00:00Z",
+  "summary": "93/93 方法全覆盖 (100%)。154 张独立截图 + 12 张软链 = 166 文件。E05 ask-notify 唯一 FAIL (toast 消失太快)。"
+}

@@ -397,7 +397,7 @@ export const EditorCard = memo(function EditorCard({ block }: { block: UIBlock }
             onChange={(e) => setValue(e.target.value)}
             placeholder={block.placeholder ?? t("uiCard.pleaseEdit")}
             rows={4}
-            className="w-full bg-white dark:bg-gray-800/60 border border-gray-300 dark:border-gray-700/50 rounded px-2 py-1 text-[11px] text-gray-800 dark:text-gray-200 font-mono placeholder:text-gray-400 dark:placeholder:text-gray-600 focus:outline-none focus:border-violet-500/50 resize-y"
+            className="w-full bg-gray-900/60 border border-gray-700/30 rounded px-2 py-1 text-[11px] text-gray-300 dark:text-gray-200 font-mono placeholder:text-gray-500 focus:outline-none focus:border-blue-500/50 resize-y"
           />
           <div className="flex gap-1.5">
             <button

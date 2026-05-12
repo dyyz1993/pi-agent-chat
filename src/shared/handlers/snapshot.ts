@@ -115,19 +115,32 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
         )) as { ok: boolean; restoredFiles: string[]; error?: string };
         if (result) return result as R<"snapshot.rollback">;
       } catch (err) {
-        log.warn("snapshot.rollback channel call failed", {
+        log.error("snapshot.rollback channel call failed", {
+          sessionId: params.sessionId,
+          snapshotId: params.snapshotId,
           err: err instanceof Error ? err.message : String(err),
         });
       }
     }
 
     const dir = resolveSessionDir(params.sessionId);
-    if (!dir || !existsSync(dir))
+    if (!dir || !existsSync(dir)) {
+      log.error("snapshot.rollback session dir not found", {
+        sessionId: params.sessionId,
+        snapshotId: params.snapshotId,
+      });
       return { ok: false, restoredFiles: [], error: "Session not found" };
+    }
 
     const snapshots = await readSnapshots(dir);
     const snapshot = snapshots.find((s) => s.id === params.snapshotId);
-    if (!snapshot) return { ok: false, restoredFiles: [], error: "Snapshot not found" };
+    if (!snapshot) {
+      log.error("snapshot.rollback snapshot not found", {
+        sessionId: params.sessionId,
+        snapshotId: params.snapshotId,
+      });
+      return { ok: false, restoredFiles: [], error: "Snapshot not found" };
+    }
 
     const restoredFiles = params.files
       ? snapshot.files.filter((f) => (params.files as string[]).includes(f))
@@ -137,6 +150,12 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       s.id === params.snapshotId ? { ...s, rolledBack: true } : s,
     );
     await writeSnapshots(dir, updated);
+
+    log.info("rollback completed", {
+      sessionId: params.sessionId,
+      snapshotId: params.snapshotId,
+      restoredFiles,
+    });
 
     return { ok: true, restoredFiles };
   });
@@ -156,18 +175,32 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
         )) as { ok: boolean; error?: string };
         if (result) return result as R<"snapshot.unrevert">;
       } catch (err) {
-        log.warn("snapshot.unrevert channel call failed", {
+        log.error("snapshot.unrevert channel call failed", {
+          sessionId: params.sessionId,
+          snapshotId: params.snapshotId,
           err: err instanceof Error ? err.message : String(err),
         });
       }
     }
 
     const dir = resolveSessionDir(params.sessionId);
-    if (!dir || !existsSync(dir)) return { ok: false, error: "Session not found" };
+    if (!dir || !existsSync(dir)) {
+      log.error("snapshot.unrevert session dir not found", {
+        sessionId: params.sessionId,
+        snapshotId: params.snapshotId,
+      });
+      return { ok: false, error: "Session not found" };
+    }
 
     const snapshots = await readSnapshots(dir);
     const snapshot = snapshots.find((s) => s.id === params.snapshotId);
-    if (!snapshot) return { ok: false, error: "Snapshot not found" };
+    if (!snapshot) {
+      log.error("snapshot.unrevert snapshot not found", {
+        sessionId: params.sessionId,
+        snapshotId: params.snapshotId,
+      });
+      return { ok: false, error: "Snapshot not found" };
+    }
     if (!snapshot.rolledBack) return { ok: false, error: "Snapshot is not rolled back" };
 
     const updated = snapshots.map((s) =>
@@ -175,10 +208,15 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     );
     await writeSnapshots(dir, updated);
 
+    log.info("unrevert completed", {
+      sessionId: params.sessionId,
+      snapshotId: params.snapshotId,
+    });
+
     return { ok: true };
   });
 
-  r("snapshot.navigate_tree", async (params) => {
+  r("snapshot.navigateTree", async (params) => {
     const manager = getProcessManager();
     if (manager && manager.hasSession(params.sessionId)) {
       try {
@@ -200,9 +238,9 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
           }>;
           currentPath: string;
         };
-        if (result) return result as R<"snapshot.navigate_tree">;
+        if (result) return result as R<"snapshot.navigateTree">;
       } catch (err) {
-        log.warn("snapshot.navigate_tree channel call failed", {
+        log.warn("snapshot.navigateTree channel call failed", {
           err: err instanceof Error ? err.message : String(err),
         });
       }
@@ -230,7 +268,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     return { entries, currentPath: params.path ?? "/" };
   });
 
-  r("snapshot.get_tree", async (params) => {
+  r("snapshot.getTree", async (params) => {
     const manager = getProcessManager();
     if (manager && manager.hasSession(params.sessionId)) {
       try {
@@ -244,9 +282,9 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
             filePath: params.filePath,
           },
         );
-        if (result !== undefined) return result as R<"snapshot.get_tree">;
+        if (result !== undefined) return result as R<"snapshot.getTree">;
       } catch (err) {
-        log.warn("snapshot.get_tree channel call failed", {
+        log.warn("snapshot.getTree channel call failed", {
           err: err instanceof Error ? err.message : String(err),
         });
       }

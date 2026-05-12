@@ -21,8 +21,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
 
-  const adjustedX = useRef(x);
-  const adjustedY = useRef(y);
+  const [pos, setPos] = useState({ x, y });
 
   useEffect(() => {
     const el = ref.current;
@@ -30,10 +29,9 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
     const rect = el.getBoundingClientRect();
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    if (rect.right > vw) adjustedX.current = Math.max(0, x - rect.width);
-    if (rect.bottom > vh) adjustedY.current = Math.max(0, y - rect.height);
-    el.style.left = `${adjustedX.current}px`;
-    el.style.top = `${adjustedY.current}px`;
+    const newX = rect.right > vw ? Math.max(4, x - rect.width) : x;
+    const newY = rect.bottom > vh ? Math.max(4, y - rect.height) : y;
+    setPos({ x: newX, y: newY });
   }, [x, y]);
 
   useEffect(() => {
@@ -97,7 +95,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
       role="menu"
       aria-label={t("contextMenu")}
       className="fixed z-50 min-w-[160px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md shadow-xl py-1"
-      style={{ left: adjustedX.current, top: adjustedY.current }}
+      style={{ left: pos.x, top: pos.y }}
     >
       {items.map((item, i) => (
         <div key={i}>

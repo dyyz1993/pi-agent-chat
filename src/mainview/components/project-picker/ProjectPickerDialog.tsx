@@ -51,6 +51,17 @@ function isCacheValid(ts: number) {
   return Date.now() - ts < CACHE_TTL;
 }
 
+function dedupeRecents(projects: RecentProject[]): RecentProject[] {
+  const map = new Map<string, RecentProject>();
+  for (const p of projects) {
+    const existing = map.get(p.path);
+    if (!existing || p.lastOpened > existing.lastOpened) {
+      map.set(p.path, p);
+    }
+  }
+  return Array.from(map.values());
+}
+
 function pathBasename(p: string): string {
   return p.replace(/\\/g, "/").split("/").pop() ?? p;
 }
@@ -109,7 +120,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
 
     if (!forceRefresh) {
       if (cachedRecents && isCacheValid(cachedRecents.ts)) {
-        setRecents(cachedRecents.data);
+        setRecents(dedupeRecents(cachedRecents.data));
       }
       if (cachedFavorites && isCacheValid(cachedFavorites.ts)) {
         setFavoriteFolders(cachedFavorites.data);
@@ -124,11 +135,12 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
     ])
       .then(([recentResult, favResult, pathsResult]) => {
         const projects = (recentResult.projects as RecentProject[]) || [];
+        const deduped = dedupeRecents(projects);
         const folders = (favResult.folders as FavoriteFolder[]) || [];
         const paths = (pathsResult.paths as { path: string; type: string }[]) || [];
-        setRecents(projects);
+        setRecents(deduped);
         setFavoriteFolders(folders);
-        writeCache(CACHE_KEY_RECENTS, projects);
+        writeCache(CACHE_KEY_RECENTS, deduped);
         writeCache(CACHE_KEY_FAVORITES, folders);
         const home = paths.find((p) => p.type === "home");
         if (home) homePathRef.current = home.path;

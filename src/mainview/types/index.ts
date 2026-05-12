@@ -21,6 +21,7 @@ export type FilePreview = {
   isText: boolean;
   isImage: boolean;
   totalLines?: number;
+  editable?: boolean;
 };
 
 export type ToolExecutionStatus = "running" | "done" | "error" | "background";

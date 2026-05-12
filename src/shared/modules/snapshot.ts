@@ -21,7 +21,7 @@ export interface SnapshotMethods {
     params: { sessionId: string; snapshotId: string };
     result: { ok: boolean; error?: string };
   };
-  "snapshot.navigate_tree": {
+  "snapshot.navigateTree": {
     params: { sessionId: string; snapshotId?: string; path?: string };
     result: {
       entries: Array<{
@@ -33,7 +33,7 @@ export interface SnapshotMethods {
       currentPath: string;
     };
   };
-  "snapshot.get_tree": {
+  "snapshot.getTree": {
     params: { sessionId: string; snapshotId: string; filePath: string };
     result: {
       path: string;
