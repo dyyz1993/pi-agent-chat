@@ -69,3 +69,21 @@ resume/
 # Debug / temporary scripts
 diagnose-ws.ts
 .env.backup
+
+# Screenshot outputs (binary, large)
+scripts/ui-screenshots/
+test-mobile-*.png
+test-report/
+
+# Temporary/generated files
+patches/
+*.cjs
+scripts/*.err
+scripts/monitor-state.json
+scripts/test-progress.json
+scripts/progress-monitor.sh
+scripts/track-progress.sh
+scripts/continue-expansion.sh
+
+# Tech report drafts (knowledge base preferred)
+*缓存原理*.md

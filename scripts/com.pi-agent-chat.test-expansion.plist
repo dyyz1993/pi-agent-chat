@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.pi-agent-chat.test-expansion</string>
+    
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/xuyingzhou/Project/temporary/pi-agent-chat/scripts/progress-monitor.sh</string>
+    </array>
+    
+    <key>WorkingDirectory</key>
+    <string>/Users/xuyingzhou/Project/temporary/pi-agent-chat</string>
+    
+    <key>StandardOutPath</key>
+    <string>/Users/xuyingzhou/Project/temporary/pi-agent-chat/scripts/monitor-cron.log</string>
+    
+    <key>StandardErrorPath</key>
+    <string>/Users/xuyingzhou/Project/temporary/pi-agent-chat/scripts/monitor-cron.err</string>
+    
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/Users/xuyingzhou/.nvm/versions/node/v25.2.1/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+    
+    <key>StartInterval</key>
+    <integer>1800</integer>
+    
+    <key>RunAtLoad</key>
+    <false/>
+    
+    <key>KeepAlive</key>
+    <false/>
+</dict>
+</plist>
