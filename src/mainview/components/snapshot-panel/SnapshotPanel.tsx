@@ -1,8 +1,34 @@
-import { useEffect, useState } from "react";
-import { Camera, RotateCcw, RefreshCw, File, Loader2 } from "lucide-react";
+import { memo, useEffect, useState, useCallback } from "react";
+import {
+  Camera,
+  RefreshCw,
+  FilePlus,
+  FileEdit,
+  FileX,
+  File,
+  ChevronDown,
+  ChevronRight,
+  RotateCcw,
+  Loader2,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useSnapshotStore } from "../../stores/use-snapshot-store";
 import { useSessionStore } from "../../stores/use-session-store";
+import { apiClient } from "../../lib/api-client";
+import { createLogger } from "../../../shared/lib/logger";
+
+const log = createLogger("snapshot");
+
+interface DiffFileItem {
+  path: string;
+  status: "added" | "modified" | "deleted";
+  diff: {
+    path: string;
+    oldContent: string | null;
+    newContent: string | null;
+    unifiedDiff: string;
+  } | null;
+}
 
 export function SnapshotPanel() {
   const { t } = useTranslation("snapshot");
@@ -13,6 +39,7 @@ export function SnapshotPanel() {
   const rollback = useSnapshotStore((s) => s.rollback);
   const unrevert = useSnapshotStore((s) => s.unrevert);
   const [rollingBackId, setRollingBackId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const sessionId = activeSessionId ?? "";
   const snapshots = sessionId ? (snapshotsBySession[sessionId] ?? []) : [];
@@ -23,25 +50,35 @@ export function SnapshotPanel() {
     }
   }, [sessionId, fetchSnapshots]);
 
-  function formatTime(ts: string): string {
-    return new Date(ts).toLocaleString("zh-CN", {
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  }
+  const toggleExpand = useCallback((snapId: string) => {
+    setExpandedId((prev) => (prev === snapId ? null : snapId));
+  }, []);
 
-  const fileCount = (snap: (typeof snapshots)[number]) => Object.keys(snap.files).length;
+  const handleRollback = useCallback(
+    async (snapId: string) => {
+      if (!sessionId) return;
+      setRollingBackId(snapId);
+      try {
+        await rollback(sessionId, snapId);
+      } finally {
+        setRollingBackId(null);
+      }
+    },
+    [sessionId, rollback],
+  );
 
-  const diffSummary = (snap: (typeof snapshots)[number]) => {
-    const { added, modified, deleted } = snap.diff;
-    const parts: string[] = [];
-    if (added.length) parts.push(`+${added.length}`);
-    if (modified.length) parts.push(`~${modified.length}`);
-    if (deleted.length) parts.push(`-${deleted.length}`);
-    return parts.join(" ");
-  };
+  const handleUnrevert = useCallback(
+    async (snapId: string) => {
+      if (!sessionId) return;
+      setRollingBackId(snapId);
+      try {
+        await unrevert(sessionId, snapId);
+      } finally {
+        setRollingBackId(null);
+      }
+    },
+    [sessionId, unrevert],
+  );
 
   return (
     <div className="flex flex-col h-full">
@@ -61,106 +98,320 @@ export function SnapshotPanel() {
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {!sessionId && (
-          <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-            <Camera className="w-8 h-8 text-gray-300 dark:text-gray-600 mb-3" />
-            <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
-              {t("noActiveSession")}
-            </p>
-            <p className="text-[10px] text-gray-400 dark:text-gray-600 mt-1 max-w-[200px] leading-relaxed">
-              {t("noActiveSessionHint")}
-            </p>
-          </div>
-        )}
+        {!sessionId && <EmptyState />}
 
-        {sessionId && snapshots.length === 0 && !loading && (
-          <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-            <Camera className="w-8 h-8 text-gray-300 dark:text-gray-600 mb-3" />
-            <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
-              {t("noSnapshotsYet")}
-            </p>
-            <p className="text-[10px] text-gray-400 dark:text-gray-600 mt-1 max-w-[200px] leading-relaxed">
-              {t("noSnapshotsHint")}
-            </p>
-          </div>
-        )}
+        {sessionId && snapshots.length === 0 && !loading && <NoDataState />}
 
-        {snapshots.map((snap) => (
-          <div
+        {snapshots.map((snap, idx) => (
+          <SnapshotCard
             key={snap.id}
-            className={`px-3 py-2 border-b border-gray-200/50 dark:border-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800/40 transition-colors ${
-              snap.rolledBack ? "opacity-60" : ""
-            }`}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  {snap.rolledBack ? (
-                    <RotateCcw className="w-3 h-3 text-amber-400 shrink-0" />
-                  ) : (
-                    <Camera className="w-3 h-3 text-indigo-400 shrink-0" />
-                  )}
-                  <span className="text-xs text-gray-700 dark:text-gray-300 truncate">
-                    Step #{snap.stepIndex}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 mt-0.5 text-[10px] text-gray-500 dark:text-gray-500">
-                  <span>{formatTime(snap.timestamp)}</span>
-                  <span className="flex items-center gap-0.5">
-                    <File className="w-2.5 h-2.5" />
-                    {fileCount(snap)}
-                  </span>
-                  <span>{diffSummary(snap)}</span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-1 shrink-0">
-                {snap.rolledBack ? (
-                  <button
-                    onClick={async () => {
-                      setRollingBackId(snap.id);
-                      try {
-                        await unrevert(sessionId, snap.id);
-                      } finally {
-                        setRollingBackId(null);
-                      }
-                    }}
-                    disabled={rollingBackId !== null}
-                    className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-amber-400 hover:text-amber-300 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                    title={t("cancelRollback")}
-                  >
-                    {rollingBackId === snap.id ? (
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                    ) : (
-                      <RefreshCw className="w-3 h-3" />
-                    )}
-                  </button>
-                ) : (
-                  <button
-                    onClick={async () => {
-                      setRollingBackId(snap.id);
-                      try {
-                        await rollback(sessionId, snap.id);
-                      } finally {
-                        setRollingBackId(null);
-                      }
-                    }}
-                    disabled={rollingBackId !== null}
-                    className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                    title={t("rollbackToSnapshot")}
-                  >
-                    {rollingBackId === snap.id ? (
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                    ) : (
-                      <RotateCcw className="w-3 h-3" />
-                    )}
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
+            snap={snap}
+            sessionId={sessionId}
+            isExpanded={expandedId === snap.id}
+            isRollingBack={rollingBackId === snap.id}
+            rollbackDisabled={rollingBackId !== null}
+            onToggleExpand={toggleExpand}
+            onRollback={handleRollback}
+            onUnrevert={handleUnrevert}
+            isLatest={idx === 0}
+          />
         ))}
       </div>
     </div>
   );
 }
+
+function EmptyState() {
+  const { t } = useTranslation("snapshot");
+  return (
+    <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+      <Camera className="w-8 h-8 text-gray-300 dark:text-gray-600 mb-3" />
+      <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">{t("noActiveSession")}</p>
+      <p className="text-[10px] text-gray-400 dark:text-gray-600 mt-1 max-w-[200px] leading-relaxed">
+        {t("noActiveSessionHint")}
+      </p>
+    </div>
+  );
+}
+
+function NoDataState() {
+  const { t } = useTranslation("snapshot");
+  return (
+    <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+      <Camera className="w-8 h-8 text-gray-300 dark:text-gray-600 mb-3" />
+      <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">{t("noSnapshotsYet")}</p>
+      <p className="text-[10px] text-gray-400 dark:text-gray-600 mt-1 max-w-[200px] leading-relaxed">
+        {t("noSnapshotsHint")}
+      </p>
+    </div>
+  );
+}
+
+interface SnapshotCardProps {
+  snap: {
+    id: string;
+    stepIndex: number;
+    timestamp: string;
+    diff: { added: string[]; modified: string[]; deleted: string[] };
+    files: Record<string, string>;
+    rolledBack: boolean;
+  };
+  sessionId: string;
+  isExpanded: boolean;
+  isRollingBack: boolean;
+  rollbackDisabled: boolean;
+  onToggleExpand: (id: string) => void;
+  onRollback: (id: string) => void;
+  onUnrevert: (id: string) => void;
+  isLatest: boolean;
+}
+
+const SnapshotCard = memo(function SnapshotCard({
+  snap,
+  sessionId,
+  isExpanded,
+  isRollingBack,
+  rollbackDisabled,
+  onToggleExpand,
+  onRollback,
+  onUnrevert,
+  isLatest,
+}: SnapshotCardProps) {
+  const { t } = useTranslation("snapshot");
+
+  const addedCount = snap.diff.added.length;
+  const modifiedCount = snap.diff.modified.length;
+  const deletedCount = snap.diff.deleted.length;
+  const totalCount = addedCount + modifiedCount + deletedCount;
+  const fileCount = Object.keys(snap.files).length;
+
+  const timeStr = new Date(snap.timestamp).toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  const diffParts: string[] = [];
+  if (addedCount) diffParts.push(`+${addedCount}`);
+  if (modifiedCount) diffParts.push(`~${modifiedCount}`);
+  if (deletedCount) diffParts.push(`-${deletedCount}`);
+  const diffStr = diffParts.join(" ");
+
+  return (
+    <div
+      className={`border-b border-gray-200/50 dark:border-gray-800/50 transition-colors ${
+        snap.rolledBack ? "opacity-60" : ""
+      }`}
+    >
+      <div className="px-3 py-2">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <button
+              type="button"
+              onClick={() => onToggleExpand(snap.id)}
+              className="flex items-center gap-1.5 text-left w-full"
+            >
+              <span className="text-gray-400 dark:text-gray-600 shrink-0">
+                {isExpanded ? (
+                  <ChevronDown className="w-3 h-3" />
+                ) : (
+                  <ChevronRight className="w-3 h-3" />
+                )}
+              </span>
+              {snap.rolledBack ? (
+                <RotateCcw className="w-3 h-3 text-amber-400 shrink-0" />
+              ) : (
+                <Camera className="w-3 h-3 text-indigo-400 shrink-0" />
+              )}
+              <span className="text-xs text-gray-700 dark:text-gray-300 font-medium">
+                Step #{snap.stepIndex}
+              </span>
+              {isLatest && !snap.rolledBack && (
+                <span className="text-[9px] bg-indigo-500/15 text-indigo-400 px-1 py-0.5 rounded font-medium">
+                  {t("latest")}
+                </span>
+              )}
+            </button>
+            <div className="flex items-center gap-2 mt-0.5 ml-6 text-[10px] text-gray-500 dark:text-gray-500">
+              <span>{timeStr}</span>
+              {fileCount > 0 && (
+                <span className="flex items-center gap-0.5">
+                  <File className="w-2.5 h-2.5" />
+                  {fileCount}
+                </span>
+              )}
+              {diffStr && (
+                <span className="flex items-center gap-1">
+                  {addedCount > 0 && <span className="text-green-400">+{addedCount}</span>}
+                  {modifiedCount > 0 && <span className="text-amber-400">~{modifiedCount}</span>}
+                  {deletedCount > 0 && <span className="text-red-400">-{deletedCount}</span>}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1 shrink-0">
+            {snap.rolledBack ? (
+              <ActionBtn
+                icon={RefreshCw}
+                title={t("cancelRollback")}
+                loading={isRollingBack}
+                disabled={rollbackDisabled}
+                onClick={() => onUnrevert(snap.id)}
+                className="text-amber-400 hover:text-amber-300"
+              />
+            ) : (
+              <ActionBtn
+                icon={RotateCcw}
+                title={t("rollbackToSnapshot")}
+                loading={isRollingBack}
+                disabled={rollbackDisabled}
+                onClick={() => onRollback(snap.id)}
+              />
+            )}
+          </div>
+        </div>
+      </div>
+
+      {isExpanded && totalCount > 0 && (
+        <ExpandedFileList
+          sessionId={sessionId}
+          added={snap.diff.added}
+          modified={snap.diff.modified}
+          deleted={snap.diff.deleted}
+        />
+      )}
+    </div>
+  );
+});
+
+interface ExpandedFileListProps {
+  sessionId: string;
+  added: string[];
+  modified: string[];
+  deleted: string[];
+}
+
+const ExpandedFileList = memo(function ExpandedFileList({
+  sessionId,
+  added,
+  modified,
+  deleted,
+}: ExpandedFileListProps) {
+  const { t } = useTranslation("snapshot");
+  const allFiles = [
+    ...added.map((f) => ({ path: f, status: "added" as const })),
+    ...modified.map((f) => ({ path: f, status: "modified" as const })),
+    ...deleted.map((f) => ({ path: f, status: "deleted" as const })),
+  ];
+
+  const [diffData, setDiffData] = useState<DiffFileItem[] | null>(null);
+  const [diffLoading, setDiffLoading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setDiffLoading(true);
+    apiClient
+      .call("agent.getBatchDiffs", { sessionId })
+      .then((result) => {
+        if (!cancelled && result?.files) {
+          setDiffData(result.files as DiffFileItem[]);
+        }
+      })
+      .catch((err) => {
+        log.warn("getBatchDiffs failed", { err: err instanceof Error ? err.message : String(err) });
+      })
+      .finally(() => {
+        if (!cancelled) setDiffLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId]);
+
+  const selectedDiff = diffData?.find((f) => f.path === selectedFile);
+
+  return (
+    <div className="border-t border-gray-200/30 dark:border-gray-800/30">
+      <div className="px-3 py-1 text-[10px] text-gray-400 dark:text-gray-500 font-medium">
+        {diffLoading ? t("snapshot") + "..." : `${allFiles.length} ${t("filesChanged")}`}
+      </div>
+
+      <div className="px-2 pb-2 space-y-px">
+        {allFiles.map((file) => {
+          const statusConfig = {
+            added: { Icon: FilePlus, color: "text-green-400" },
+            modified: { Icon: FileEdit, color: "text-amber-400" },
+            deleted: { Icon: FileX, color: "text-red-400" },
+          }[file.status];
+          const StatusIcon = statusConfig.Icon;
+          const isSelected = selectedFile === file.path;
+
+          return (
+            <button
+              key={file.path}
+              type="button"
+              onClick={() => setSelectedFile(isSelected ? null : file.path)}
+              className={`w-full flex items-center gap-1.5 px-1.5 py-0.5 rounded text-[11px] transition-colors text-left ${
+                isSelected
+                  ? "bg-indigo-500/10 text-indigo-300"
+                  : "text-gray-400 dark:text-gray-500 hover:bg-gray-200/30 dark:hover:bg-gray-800/30 hover:text-gray-300"
+              }`}
+            >
+              <StatusIcon className={`w-3 h-3 shrink-0 ${statusConfig.color}`} />
+              <span className="truncate" title={file.path}>
+                {file.path}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {selectedFile && selectedDiff?.diff?.unifiedDiff && (
+        <div className="border-t border-gray-200/30 dark:border-gray-800/30">
+          <div className="px-3 py-1 text-[10px] text-gray-400 dark:text-gray-500 font-medium flex items-center gap-1">
+            <FileEdit className="w-2.5 h-2.5" />
+            <span className="truncate">{selectedFile}</span>
+          </div>
+          <pre className="px-3 pb-2 text-[10px] text-gray-500 dark:text-gray-400 overflow-x-auto whitespace-pre-wrap font-mono max-h-48 overflow-y-auto leading-relaxed">
+            {selectedDiff.diff.unifiedDiff}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+});
+
+interface ActionBtnProps {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  loading?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+  className?: string;
+}
+
+const ActionBtn = memo(function ActionBtn({
+  icon: Icon,
+  title,
+  loading,
+  disabled,
+  onClick,
+  className,
+}: ActionBtnProps) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className={`p-1 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
+        className ??
+        "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+      }`}
+    >
+      {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Icon className="w-3 h-3" />}
+    </button>
+  );
+});
