@@ -45,55 +45,77 @@ vi.mock("../src/mainview/stores/use-ui-dialog-store", () => ({
   useUIDialogStore: { getState: vi.fn(() => ({ registerUIRequest: vi.fn() })) },
 }));
 
-type SessionStatus = "idle" | "streaming" | "compacting" | "permission" | "retrying";
+const { mockSessionStore } = vi.hoisted(() => {
+  type SessionStatus = "idle" | "streaming" | "compacting" | "permission" | "retrying";
 
-interface MockSessionState {
-  sessionsByProject: Record<string, unknown[]>;
-  activeSessionId: string | null;
-  projectTabs: unknown[];
-  activeProjectId: string | null;
-  loading: boolean;
-  agentSubscriptions: Record<string, string>;
-  sessionReady: Record<string, boolean>;
-  sessionContextMap: Record<string, { tokens: number | null; contextWindow: number }>;
-  sessionStatusMap: Record<string, SessionStatus>;
-  queueBySession: Record<string, { steering: string[]; followUp: string[] }>;
-  currentModel: unknown;
-  currentThinkingLevel: string;
-  availableModels: unknown[];
-  projectStartFailed: Record<string, boolean>;
-  projectStartError: Record<string, string>;
-  _projectVersion: number;
-  updateSessionStatus: (sessionId: string, status: SessionStatus) => void;
-  updateSessionContext: (sessionId: string, usage: Record<string, unknown>) => void;
-  restoreContextFromHistory: (sessionId: string) => void;
-}
+  interface MockSessionState {
+    sessionsByProject: Record<string, unknown[]>;
+    activeSessionId: string | null;
+    projectTabs: unknown[];
+    activeProjectId: string | null;
+    loading: boolean;
+    agentSubscriptions: Record<string, string>;
+    sessionReady: Record<string, boolean>;
+    sessionContextMap: Record<string, { tokens: number | null; contextWindow: number }>;
+    sessionStatusMap: Record<string, SessionStatus>;
+    queueBySession: Record<string, { steering: string[]; followUp: string[] }>;
+    currentModel: unknown;
+    currentThinkingLevel: string;
+    availableModels: unknown[];
+    projectStartFailed: Record<string, boolean>;
+    projectStartError: Record<string, string>;
+    _projectVersion: number;
+    updateSessionStatus: (sessionId: string, status: SessionStatus) => void;
+    updateSessionContext: (sessionId: string, usage: Record<string, unknown>) => void;
+    restoreContextFromHistory: (sessionId: string) => void;
+  }
 
-import { create } from "zustand";
+  let state: MockSessionState = {
+    sessionsByProject: {},
+    activeSessionId: null,
+    projectTabs: [],
+    activeProjectId: null,
+    loading: false,
+    agentSubscriptions: {},
+    sessionReady: {},
+    sessionContextMap: {},
+    sessionStatusMap: {},
+    queueBySession: {},
+    currentModel: null,
+    currentThinkingLevel: "medium",
+    availableModels: [],
+    projectStartFailed: {},
+    projectStartError: {},
+    _projectVersion: 0,
+    updateSessionStatus: () => {},
+    updateSessionContext: () => {},
+    restoreContextFromHistory: () => {},
+  };
 
-const store = create<MockSessionState>(() => ({
-  sessionsByProject: {},
-  activeSessionId: null,
-  projectTabs: [],
-  activeProjectId: null,
-  loading: false,
-  agentSubscriptions: {},
-  sessionReady: {},
-  sessionContextMap: {},
-  sessionStatusMap: {},
-  queueBySession: {},
-  currentModel: null,
-  currentThinkingLevel: "medium",
-  availableModels: [],
-  projectStartFailed: {},
-  projectStartError: {},
-  _projectVersion: 0,
-  updateSessionStatus: (sessionId, status) => {
+  const listeners = new Set<() => void>();
+
+  const store = {
+    getState: () => state,
+    setState: (
+      partial: Partial<MockSessionState> | ((prev: MockSessionState) => Partial<MockSessionState>),
+    ) => {
+      const update = typeof partial === "function" ? partial(state) : partial;
+      state = { ...state, ...update };
+      listeners.forEach((l) => l());
+    },
+    subscribe: (listener: () => void) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    getInitialState: () => state,
+  };
+
+  state.updateSessionStatus = (sessionId: string, status: SessionStatus) => {
     store.setState((s) => ({
       sessionStatusMap: { ...s.sessionStatusMap, [sessionId]: status },
     }));
-  },
-  updateSessionContext: (sessionId, usage) => {
+  };
+  state.updateSessionContext = (sessionId: string, usage: Record<string, unknown>) => {
     store.setState((s) => ({
       sessionContextMap: {
         ...s.sessionContextMap,
@@ -103,11 +125,10 @@ const store = create<MockSessionState>(() => ({
         },
       },
     }));
-  },
-  restoreContextFromHistory: () => {},
-}));
+  };
 
-const mockSessionStore = store;
+  return { mockSessionStore: store };
+});
 
 vi.mock("../src/mainview/stores/use-session-store", () => ({
   useSessionStore: mockSessionStore,
