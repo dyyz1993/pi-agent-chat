@@ -2,6 +2,7 @@ import type { ClassAttributes, HTMLAttributes, ReactNode } from "react";
 import { Highlight, themes } from "prism-react-renderer";
 import { MermaidBlock, isMermaidLang } from "./MermaidBlock";
 import { useThemeStore } from "../../../stores/use-theme-store";
+import { CopyButton } from "../CopyButton";
 
 interface HastNode {
   type: string;
@@ -27,6 +28,17 @@ type PreBlockProps = ClassAttributes<HTMLPreElement> &
     node?: HastNode;
   };
 
+function extractTextFromChildren(children: ReactNode): string {
+  if (typeof children === "string") return children;
+  if (Array.isArray(children)) return children.map(extractTextFromChildren).join("");
+  if (children && typeof children === "object" && "props" in children) {
+    return extractTextFromChildren(
+      (children as { props: { children?: ReactNode } }).props.children,
+    );
+  }
+  return "";
+}
+
 export function MermaidPreBlock({ children, node, ...rest }: PreBlockProps) {
   const resolvedTheme = useThemeStore((s) => s.resolvedTheme);
   const prismTheme = resolvedTheme === "dark" ? themes.nightOwl : themes.github;
@@ -48,7 +60,7 @@ export function MermaidPreBlock({ children, node, ...rest }: PreBlockProps) {
             {({ className, style, tokens, getLineProps, getTokenProps }) => (
               <div className="relative group">
                 <pre
-                  className={`${className} rounded-lg text-[13px] overflow-x-auto`}
+                  className={`${className} rounded-lg text-[13px] overflow-x-auto whitespace-pre`}
                   style={{ ...style, background: "var(--tw-colors-gray-900)" }}
                   {...rest}
                 >
@@ -57,7 +69,7 @@ export function MermaidPreBlock({ children, node, ...rest }: PreBlockProps) {
                       <span className="table-cell text-right pr-4 select-none text-gray-500/50 w-8 text-xs leading-6">
                         {i + 1}
                       </span>
-                      <span className="table-cell">
+                      <span className="table-cell whitespace-pre">
                         {line.map((token, key) => (
                           <span key={key} {...getTokenProps({ token })} />
                         ))}
@@ -65,6 +77,9 @@ export function MermaidPreBlock({ children, node, ...rest }: PreBlockProps) {
                     </div>
                   ))}
                 </pre>
+                <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 md:opacity-100 transition-opacity">
+                  <CopyButton text={code} size="xs" />
+                </div>
               </div>
             )}
           </Highlight>
@@ -73,5 +88,18 @@ export function MermaidPreBlock({ children, node, ...rest }: PreBlockProps) {
     }
   }
 
-  return <pre {...rest}>{children}</pre>;
+  const fallbackText = extractTextFromChildren(children);
+
+  return (
+    <div className="relative group">
+      <pre {...rest} className="overflow-x-auto whitespace-pre">
+        {children}
+      </pre>
+      {fallbackText && (
+        <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 md:opacity-100 transition-opacity">
+          <CopyButton text={fallbackText} size="xs" />
+        </div>
+      )}
+    </div>
+  );
 }
