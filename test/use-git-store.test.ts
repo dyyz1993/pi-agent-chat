@@ -21,6 +21,7 @@ describe("useGitStore", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useGitStore.setState({
+      isGitRepo: true,
       branch: "",
       ahead: 0,
       behind: 0,

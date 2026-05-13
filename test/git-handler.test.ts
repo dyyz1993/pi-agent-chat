@@ -17,6 +17,8 @@ const { mockFn } = vi.hoisted(() => {
 
 import { register } from "../src/shared/handlers/git";
 
+const REPO_PATH = process.cwd();
+
 function createMockServer() {
   const handlers = new Map<string, (params: unknown) => Promise<unknown>>();
   return {
@@ -34,7 +36,7 @@ describe("git handler", () => {
 
   beforeEach(() => {
     mockFn.mockImplementation((args) => {
-      if (args[0] === "rev-parse" && args[1] === "--show-toplevel") return "/repo";
+      if (args[0] === "rev-parse" && args[1] === "--show-toplevel") return REPO_PATH;
       return "";
     });
     server = createMockServer();
@@ -47,7 +49,7 @@ describe("git handler", () => {
   describe("git.status", () => {
     it("parses branch, staged, changed, untracked files", async () => {
       mockFn.mockImplementation((args) => {
-        if (args[0] === "rev-parse") return "/repo";
+        if (args[0] === "rev-parse") return REPO_PATH;
         if (args[0] === "status") {
           return [
             "## main...origin/main [ahead 2, behind 1]",
@@ -62,7 +64,7 @@ describe("git handler", () => {
       });
 
       const handler = server.handlers.get("git.status")!;
-      const result = (await handler({ repoPath: "/repo" })) as Record<string, unknown>;
+      const result = (await handler({ repoPath: REPO_PATH })) as Record<string, unknown>;
 
       expect(result.branch).toBe("main");
 
@@ -85,14 +87,14 @@ describe("git handler", () => {
 
     it("returns unknown branch when branch line is unparseable", async () => {
       mockFn.mockImplementation((args) => {
-        if (args[0] === "rev-parse") return "/repo";
+        if (args[0] === "rev-parse") return REPO_PATH;
         if (args[0] === "status") return "HEAD detached at abc1234\n";
         if (args[0] === "diff") return "";
         return "";
       });
 
       const handler = server.handlers.get("git.status")!;
-      const result = (await handler({ repoPath: "/repo" })) as Record<string, unknown>;
+      const result = (await handler({ repoPath: REPO_PATH })) as Record<string, unknown>;
       expect(result.ahead).toBe(0);
       expect(result.behind).toBe(0);
     });
@@ -101,7 +103,7 @@ describe("git handler", () => {
   describe("git.diff", () => {
     it("returns diff for unstaged file", async () => {
       mockFn.mockImplementation((args) => {
-        if (args[0] === "rev-parse") return "/repo";
+        if (args[0] === "rev-parse") return REPO_PATH;
         if (args[0] === "diff" && !args.includes("--cached")) return "diff content here";
         if (args[0] === "show") return "old content";
         return "";
@@ -109,7 +111,7 @@ describe("git handler", () => {
 
       const handler = server.handlers.get("git.diff")!;
       const result = (await handler({
-        repoPath: "/repo",
+        repoPath: REPO_PATH,
         filePath: "src/foo.ts",
         staged: false,
       })) as Record<string, unknown>;
@@ -120,7 +122,7 @@ describe("git handler", () => {
 
     it("returns diff for staged file", async () => {
       mockFn.mockImplementation((args) => {
-        if (args[0] === "rev-parse") return "/repo";
+        if (args[0] === "rev-parse") return REPO_PATH;
         if (args[0] === "diff" && args.includes("--cached")) return "staged diff";
         if (args[0] === "show") return "old content";
         return "";
@@ -128,7 +130,7 @@ describe("git handler", () => {
 
       const handler = server.handlers.get("git.diff")!;
       const result = (await handler({
-        repoPath: "/repo",
+        repoPath: REPO_PATH,
         filePath: "src/foo.ts",
         staged: true,
       })) as Record<string, unknown>;
@@ -140,7 +142,7 @@ describe("git handler", () => {
   describe("git.log", () => {
     it("parses commit log entries", async () => {
       mockFn.mockImplementation((args) => {
-        if (args[0] === "rev-parse") return "/repo";
+        if (args[0] === "rev-parse") return REPO_PATH;
         if (args[0] === "log") {
           return [
             "abcdef1234567890|abcdef1|feat: add feature|John|2024-01-01T00:00:00Z",
@@ -151,7 +153,7 @@ describe("git handler", () => {
       });
 
       const handler = server.handlers.get("git.log")!;
-      const result = (await handler({ repoPath: "/repo" })) as {
+      const result = (await handler({ repoPath: REPO_PATH })) as {
         commits: Array<Record<string, string>>;
       };
 
@@ -164,7 +166,7 @@ describe("git handler", () => {
 
     it("respects maxCount parameter", async () => {
       mockFn.mockImplementation((args) => {
-        if (args[0] === "rev-parse") return "/repo";
+        if (args[0] === "rev-parse") return REPO_PATH;
         if (args[0] === "log") {
           expect(args.find((a) => a.startsWith("--max-count="))).toBe("--max-count=10");
           return "";
@@ -173,14 +175,14 @@ describe("git handler", () => {
       });
 
       const handler = server.handlers.get("git.log")!;
-      await handler({ repoPath: "/repo", maxCount: 10 });
+      await handler({ repoPath: REPO_PATH, maxCount: 10 });
     });
   });
 
   describe("git.commitFiles", () => {
     it("parses files changed in a commit", async () => {
       mockFn.mockImplementation((args) => {
-        if (args[0] === "rev-parse") return "/repo";
+        if (args[0] === "rev-parse") return REPO_PATH;
         if (args[0] === "diff-tree") {
           return "M\tsrc/foo.ts\nA\tsrc/new.ts\nD\tsrc/old.ts";
         }
@@ -188,7 +190,7 @@ describe("git handler", () => {
       });
 
       const handler = server.handlers.get("git.commitFiles")!;
-      const result = (await handler({ repoPath: "/repo", hash: "abc123" })) as {
+      const result = (await handler({ repoPath: REPO_PATH, hash: "abc123" })) as {
         files: Array<Record<string, string>>;
       };
 
@@ -202,7 +204,7 @@ describe("git handler", () => {
   describe("git.branches", () => {
     it("parses branch list with current and remote markers", async () => {
       mockFn.mockImplementation((args) => {
-        if (args[0] === "rev-parse") return "/repo";
+        if (args[0] === "rev-parse") return REPO_PATH;
         if (args[0] === "branch") {
           return "* main\n  develop\n  remotes/origin/main";
         }
@@ -210,7 +212,7 @@ describe("git handler", () => {
       });
 
       const handler = server.handlers.get("git.branches")!;
-      const result = (await handler({ repoPath: "/repo" })) as {
+      const result = (await handler({ repoPath: REPO_PATH })) as {
         branches: Array<Record<string, unknown>>;
       };
 
@@ -224,7 +226,7 @@ describe("git handler", () => {
   describe("git.checkout", () => {
     it("returns ok true on success", async () => {
       const handler = server.handlers.get("git.checkout")!;
-      const result = (await handler({ repoPath: "/repo", branch: "develop" })) as Record<
+      const result = (await handler({ repoPath: REPO_PATH, branch: "develop" })) as Record<
         string,
         unknown
       >;
@@ -236,7 +238,7 @@ describe("git handler", () => {
     it("returns ok true on success", async () => {
       const handler = server.handlers.get("git.add")!;
       const result = (await handler({
-        repoPath: "/repo",
+        repoPath: REPO_PATH,
         paths: ["src/a.ts", "src/b.ts"],
       })) as Record<string, unknown>;
       expect(result).toEqual({ ok: true });
@@ -246,7 +248,7 @@ describe("git handler", () => {
   describe("git.reset", () => {
     it("returns ok true on success", async () => {
       const handler = server.handlers.get("git.reset")!;
-      const result = (await handler({ repoPath: "/repo", paths: ["src/a.ts"] })) as Record<
+      const result = (await handler({ repoPath: REPO_PATH, paths: ["src/a.ts"] })) as Record<
         string,
         unknown
       >;
@@ -257,7 +259,7 @@ describe("git handler", () => {
   describe("git.commit", () => {
     it("parses commit hash from output", async () => {
       mockFn.mockImplementation((args) => {
-        if (args[0] === "rev-parse" && args[1] === "--show-toplevel") return "/repo";
+        if (args[0] === "rev-parse" && args[1] === "--show-toplevel") return REPO_PATH;
         if (args[0] === "commit") return "[main abc1234] my commit message\n1 file changed";
         if (args[0] === "rev-parse" && args[1] === "abc1234")
           return "abcdef1234567890abcdef1234567890abcdef12";
@@ -265,10 +267,10 @@ describe("git handler", () => {
       });
 
       const handler = server.handlers.get("git.commit")!;
-      const result = (await handler({ repoPath: "/repo", message: "my commit message" })) as Record<
-        string,
-        string
-      >;
+      const result = (await handler({
+        repoPath: REPO_PATH,
+        message: "my commit message",
+      })) as Record<string, string>;
 
       expect(result.shortHash).toBe("abc1234");
       expect(result.hash.length).toBeGreaterThan(0);
@@ -278,7 +280,7 @@ describe("git handler", () => {
   describe("git.push", () => {
     it("returns ok true", async () => {
       const handler = server.handlers.get("git.push")!;
-      const result = await handler({ repoPath: "/repo" });
+      const result = await handler({ repoPath: REPO_PATH });
       expect(result).toEqual({ ok: true });
     });
   });
@@ -286,7 +288,7 @@ describe("git handler", () => {
   describe("git.pull", () => {
     it("returns ok true", async () => {
       const handler = server.handlers.get("git.pull")!;
-      const result = await handler({ repoPath: "/repo" });
+      const result = await handler({ repoPath: REPO_PATH });
       expect(result).toEqual({ ok: true });
     });
   });
@@ -294,7 +296,7 @@ describe("git handler", () => {
   describe("git.worktreeList", () => {
     it("parses porcelain worktree output", async () => {
       mockFn.mockImplementation((args) => {
-        if (args[0] === "rev-parse") return "/repo";
+        if (args[0] === "rev-parse") return REPO_PATH;
         if (args[0] === "worktree") {
           return [
             "worktree /repo",
@@ -309,7 +311,7 @@ describe("git handler", () => {
       });
 
       const handler = server.handlers.get("git.worktreeList")!;
-      const result = (await handler({ repoPath: "/repo" })) as {
+      const result = (await handler({ repoPath: REPO_PATH })) as {
         worktrees: Array<Record<string, unknown>>;
       };
 
@@ -330,7 +332,7 @@ describe("git handler", () => {
       });
 
       const handler = server.handlers.get("git.worktreeAdd")!;
-      const result = (await handler({ repoPath: "/projects/my-repo", branch: "feature-x" })) as {
+      const result = (await handler({ repoPath: REPO_PATH, branch: "feature-x" })) as {
         worktree: Record<string, unknown>;
       };
 
