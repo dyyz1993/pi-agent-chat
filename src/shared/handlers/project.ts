@@ -17,6 +17,8 @@ import {
   listFavoriteFolders,
   toggleProjectPin,
   toggleFavoriteFolder,
+  getModelFavorites,
+  toggleModelFavorite,
 } from "../lib/project-config";
 import {
   scanSessionsForProject,
@@ -165,5 +167,15 @@ export function register(server: RPCServer, options: HandlerOptions): void {
   r("project.getLinkedProjects", async (params) => {
     const projects = await getLinkedProjects(params.projectRoot);
     return { projects };
+  });
+
+  r("project.getModelFavorites", async () => {
+    const favorites = await getModelFavorites();
+    return { favorites };
+  });
+
+  r("project.toggleModelFavorite", async (params) => {
+    const result = await toggleModelFavorite(params.modelKey);
+    return result;
   });
 }

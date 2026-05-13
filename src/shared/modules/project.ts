@@ -89,6 +89,14 @@ export interface ProjectMethods {
     params: { projectRoot: string };
     result: { projects: LinkedProjectConfig[] };
   };
+  "project.getModelFavorites": {
+    params: {};
+    result: { favorites: string[] };
+  };
+  "project.toggleModelFavorite": {
+    params: { modelKey: string };
+    result: { added: boolean; favorites: string[] };
+  };
 }
 
 export interface RecentProject {

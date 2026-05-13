@@ -43,22 +43,6 @@ const THINKING_LEVEL_KEYS = [
 
 type ThinkingLevel = (typeof THINKING_LEVEL_VALUES)[number];
 
-const FAVORITES_KEY = "pi-agent-model-favorites";
-
-function loadFavorites(): Set<string> {
-  try {
-    const raw = localStorage.getItem(FAVORITES_KEY);
-    if (!raw) return new Set();
-    return new Set(JSON.parse(raw) as string[]);
-  } catch {
-    return new Set();
-  }
-}
-
-function saveFavorites(favs: Set<string>) {
-  localStorage.setItem(FAVORITES_KEY, JSON.stringify([...favs]));
-}
-
 function modelKey(m: ModelInfo): string {
   return `${m.provider}/${m.id}`;
 }
@@ -87,11 +71,18 @@ export function SidebarBottomControls() {
   const [thinkingOpen, setThinkingOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
-  const [favorites, setFavorites] = useState<Set<string>>(() => loadFavorites());
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const modelRef = useRef<HTMLDivElement>(null);
   const thinkingRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [switching, setSwitching] = useState(false);
+
+  useEffect(() => {
+    apiClient
+      .call("project.getModelFavorites", {})
+      .then((res) => setFavorites(new Set(res.favorites)))
+      .catch(() => setFavorites(new Set()));
+  }, []);
 
   const currentTier = useTierStore((s) => s.currentTier);
   const switchToTier = useTierStore((s) => s.switchToTier);
@@ -203,16 +194,10 @@ export function SidebarBottomControls() {
   }, [modelOpen]);
 
   const toggleFavorite = useCallback((key: string) => {
-    setFavorites((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) {
-        next.delete(key);
-      } else {
-        next.add(key);
-      }
-      saveFavorites(next);
-      return next;
-    });
+    apiClient
+      .call("project.toggleModelFavorite", { modelKey: key })
+      .then((res) => setFavorites(new Set(res.favorites)))
+      .catch(() => {});
   }, []);
 
   const handleSwitchWorkspace = useCallback((wt: { path: string }) => {

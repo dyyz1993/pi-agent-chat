@@ -33,6 +33,8 @@ interface ProjectConfig {
   pinnedSessionIds: string[];
   favoriteFolders: FavoriteFolder[];
   disabledSkills: string[];
+  /** app-level model favorites (global) */
+  modelFavorites: string[];
 }
 
 async function load(): Promise<ProjectConfig> {
@@ -47,6 +49,7 @@ async function load(): Promise<ProjectConfig> {
         pinnedSessionIds: [],
         favoriteFolders: [],
         disabledSkills: [],
+        modelFavorites: [],
       };
     }
     const raw = await readFile(CONFIG_PATH, "utf-8");
@@ -60,6 +63,7 @@ async function load(): Promise<ProjectConfig> {
       pinnedSessionIds: parsed.pinnedSessionIds ?? [],
       favoriteFolders: parsed.favoriteFolders ?? [],
       disabledSkills: parsed.disabledSkills ?? [],
+      modelFavorites: parsed.modelFavorites ?? [],
     };
   } catch {
     return {
@@ -71,6 +75,7 @@ async function load(): Promise<ProjectConfig> {
       pinnedSessionIds: [],
       favoriteFolders: [],
       disabledSkills: [],
+      modelFavorites: [],
     };
   }
 }
@@ -290,4 +295,25 @@ export async function setDisabledSkill(skillName: string, disabled: boolean): Pr
   }
   await save(config);
   return config.disabledSkills;
+}
+
+export async function getModelFavorites(): Promise<string[]> {
+  const config = await load();
+  return config.modelFavorites;
+}
+
+export async function toggleModelFavorite(
+  modelKey: string,
+): Promise<{ added: boolean; favorites: string[] }> {
+  const config = await load();
+  const list = config.modelFavorites;
+  const idx = list.indexOf(modelKey);
+  if (idx >= 0) {
+    list.splice(idx, 1);
+    await save(config);
+    return { added: false, favorites: list };
+  }
+  list.push(modelKey);
+  await save(config);
+  return { added: true, favorites: list };
 }
