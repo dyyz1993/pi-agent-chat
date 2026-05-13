@@ -327,6 +327,7 @@ interface GitPanelProps {
 }
 
 export function GitPanel({ hideOuterShell }: GitPanelProps) {
+  const isGitRepo = useGitStore((s) => s.isGitRepo);
   const branch = useGitStore((s) => s.branch);
   const ahead = useGitStore((s) => s.ahead);
   const behind = useGitStore((s) => s.behind);
@@ -375,7 +376,7 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
   const branchBtnRef = useRef<HTMLButtonElement>(null);
 
   const refresh = useCallback(() => {
-    if (!currentPath) return;
+    if (!currentPath || !useGitStore.getState().isGitRepo) return;
     fetchStatus(currentPath);
     fetchWorktrees(currentPath);
     fetchBranches(currentPath);
@@ -515,6 +516,40 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
   const selectedFilePath = currentDiff?.filePath ?? null;
 
   const pinButton = <PinButton />;
+
+  if (!isGitRepo) {
+    const notGitContent = (
+      <>
+        <div className="px-2 py-1.5 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5 border-b border-gray-200 dark:border-gray-700">
+          <GitBranch className="w-3.5 h-3.5 shrink-0 text-gray-400 dark:text-gray-500" />
+          <span className="font-medium text-gray-900 dark:text-white">Git</span>
+          <span className="ml-auto">{pinButton}</span>
+        </div>
+        <div className="flex-1 flex flex-col items-center justify-center px-4 py-8 text-center">
+          <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-3">
+            <FileQuestion className="w-5 h-5 text-gray-400 dark:text-gray-500" />
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mb-1">
+            Not a Git repository
+          </p>
+          <p className="text-[10px] text-gray-400 dark:text-gray-600 leading-relaxed">
+            Initialize a Git repository to enable version control features.
+          </p>
+        </div>
+      </>
+    );
+    if (hideOuterShell) {
+      return <div className="flex flex-col flex-1 overflow-hidden">{notGitContent}</div>;
+    }
+    return (
+      <div
+        data-testid="git-panel"
+        className="w-60 bg-gray-50 dark:bg-gray-850 flex flex-col flex-shrink-0 overflow-hidden"
+      >
+        {notGitContent}
+      </div>
+    );
+  }
 
   const panelContent = (
     <>

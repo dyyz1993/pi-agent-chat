@@ -30,6 +30,7 @@ export interface GitWorktree {
 }
 
 interface GitState {
+  isGitRepo: boolean;
   branch: string;
   ahead: number;
   behind: number;
@@ -48,6 +49,7 @@ interface GitState {
   worktrees: GitWorktree[];
   loadingAction: string | null;
 
+  checkGitRepo: (repoPath: string) => Promise<boolean>;
   fetchStatus: (repoPath: string) => Promise<void>;
   fetchDiff: (repoPath: string, filePath: string, staged?: boolean) => Promise<void>;
   fetchLog: (repoPath: string) => Promise<void>;
@@ -67,6 +69,7 @@ interface GitState {
 }
 
 export const useGitStore = create<GitState>((set, get) => ({
+  isGitRepo: false,
   branch: "",
   ahead: 0,
   behind: 0,
@@ -85,11 +88,26 @@ export const useGitStore = create<GitState>((set, get) => ({
   worktrees: [],
   loadingAction: null,
 
+  checkGitRepo: async (repoPath) => {
+    try {
+      const res = await apiClient.call("git.checkRepo", { repoPath });
+      set({ isGitRepo: res.isGitRepo });
+      return res.isGitRepo;
+    } catch {
+      set({ isGitRepo: false });
+      return false;
+    }
+  },
+
   refresh: async (repoPath) => {
     await get().fetchStatus(repoPath);
   },
 
   fetchStatus: async (repoPath) => {
+    if (!get().isGitRepo) {
+      set({ branch: "", ahead: 0, behind: 0, staged: [], changed: [], untracked: [] });
+      return;
+    }
     const addLog = useAppStore.getState().addLog;
     try {
       const res = await apiClient.call("git.status", { repoPath });
@@ -115,6 +133,7 @@ export const useGitStore = create<GitState>((set, get) => ({
   },
 
   fetchDiff: async (repoPath, filePath, staged) => {
+    if (!get().isGitRepo) return;
     const addLog = useAppStore.getState().addLog;
     addLog(`Git diff: ${filePath}`);
     set({ loadingDiff: true });
@@ -129,6 +148,10 @@ export const useGitStore = create<GitState>((set, get) => ({
   },
 
   fetchLog: async (repoPath) => {
+    if (!get().isGitRepo) {
+      set({ commits: [], loadingCommits: false });
+      return;
+    }
     set({ loadingCommits: true });
     try {
       const res = await apiClient.call("git.log", { repoPath, maxCount: 50 });
@@ -188,6 +211,10 @@ export const useGitStore = create<GitState>((set, get) => ({
   },
 
   fetchBranches: async (repoPath) => {
+    if (!get().isGitRepo) {
+      set({ branches: [], loadingBranches: false });
+      return;
+    }
     set({ loadingBranches: true });
     try {
       const res = await apiClient.call("git.branches", { repoPath });
@@ -200,6 +227,7 @@ export const useGitStore = create<GitState>((set, get) => ({
   },
 
   checkout: async (repoPath, branch) => {
+    if (!get().isGitRepo) return;
     const addLog = useAppStore.getState().addLog;
     set({ loadingAction: "checkout" });
     try {
@@ -214,6 +242,7 @@ export const useGitStore = create<GitState>((set, get) => ({
   },
 
   stageFiles: async (repoPath, paths) => {
+    if (!get().isGitRepo) return;
     const addLog = useAppStore.getState().addLog;
     set({ loadingAction: "stage" });
     try {
@@ -228,6 +257,7 @@ export const useGitStore = create<GitState>((set, get) => ({
   },
 
   unstageFiles: async (repoPath, paths) => {
+    if (!get().isGitRepo) return;
     const addLog = useAppStore.getState().addLog;
     set({ loadingAction: "unstage" });
     try {
@@ -242,6 +272,7 @@ export const useGitStore = create<GitState>((set, get) => ({
   },
 
   commit: async (repoPath, message) => {
+    if (!get().isGitRepo) return;
     const addLog = useAppStore.getState().addLog;
     set({ loadingAction: "commit" });
     try {
@@ -256,6 +287,7 @@ export const useGitStore = create<GitState>((set, get) => ({
   },
 
   push: async (repoPath) => {
+    if (!get().isGitRepo) return;
     const addLog = useAppStore.getState().addLog;
     set({ loadingAction: "push" });
     try {
@@ -270,6 +302,7 @@ export const useGitStore = create<GitState>((set, get) => ({
   },
 
   pull: async (repoPath) => {
+    if (!get().isGitRepo) return;
     const addLog = useAppStore.getState().addLog;
     set({ loadingAction: "pull" });
     try {
@@ -284,6 +317,10 @@ export const useGitStore = create<GitState>((set, get) => ({
   },
 
   fetchWorktrees: async (repoPath) => {
+    if (!get().isGitRepo) {
+      set({ worktrees: [] });
+      return;
+    }
     try {
       const res = await apiClient.call("git.worktreeList", { repoPath });
       set({ worktrees: res.worktrees });
@@ -294,6 +331,7 @@ export const useGitStore = create<GitState>((set, get) => ({
   },
 
   addWorktree: async (repoPath, branch, sourceBranch) => {
+    if (!get().isGitRepo) throw new Error("Not a git repository");
     const addLog = useAppStore.getState().addLog;
     try {
       const res = await apiClient.call("git.worktreeAdd", { repoPath, branch, sourceBranch });

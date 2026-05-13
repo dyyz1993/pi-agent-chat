@@ -2,6 +2,10 @@
  * Git 模块 — 版本控制操作
  */
 export interface GitMethods {
+  "git.checkRepo": {
+    params: { repoPath: string };
+    result: { isGitRepo: boolean };
+  };
   "git.status": {
     params: { repoPath: string };
     result: {

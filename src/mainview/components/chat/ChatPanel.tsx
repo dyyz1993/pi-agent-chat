@@ -230,6 +230,7 @@ export function ChatPanel() {
   );
 
   const handleSend = async () => {
+    if (!sessionReady) return;
     if (!inputText.trim() && useAttachmentStore.getState().attachments.length === 0) return;
 
     const attachmentStore = useAttachmentStore.getState();
@@ -412,6 +413,7 @@ export function ChatPanel() {
                   onChange={setInputText}
                   onSend={handleSend}
                   sessionId={activeSessionId ?? ""}
+                  disabled={!sessionReady}
                 />
 
                 <div className="flex flex-col gap-1.5 shrink-0 justify-between py-1">

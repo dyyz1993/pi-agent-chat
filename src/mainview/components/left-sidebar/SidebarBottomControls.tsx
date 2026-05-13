@@ -109,6 +109,7 @@ export function SidebarBottomControls() {
   const addProjectTab = useSessionStore((s) => s.addProjectTab);
 
   const worktrees = useGitStore((s) => s.worktrees);
+  const isGitRepo = useGitStore((s) => s.isGitRepo);
   const fetchWorktrees = useGitStore((s) => s.fetchWorktrees);
   const addWorktreeAction = useGitStore((s) => s.addWorktree);
 
@@ -160,10 +161,10 @@ export function SidebarBottomControls() {
   const workspacePath = currentWorkspace?.path ?? "";
 
   useEffect(() => {
-    if (activeTabPath) {
+    if (activeTabPath && isGitRepo) {
       fetchWorktrees(activeTabPath);
     }
-  }, [activeTabPath, fetchWorktrees]);
+  }, [activeTabPath, fetchWorktrees, isGitRepo]);
 
   useEffect(() => {
     if (!modelOpen && !thinkingOpen && !workspaceOpen && !tierConfigOpen) return;
@@ -352,29 +353,41 @@ export function SidebarBottomControls() {
   return (
     <div className="shrink-0 border-t border-gray-200/80 dark:border-gray-800/80 px-3 py-2 space-y-1.5">
       <div className="relative" ref={workspaceRef}>
-        <button
-          onClick={() => {
-            setWorkspaceOpen(!workspaceOpen);
-            setModelOpen(false);
-            setThinkingOpen(false);
-          }}
-          disabled={!activeSessionId}
-          className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-100/60 dark:hover:bg-gray-800/60 hover:text-gray-700 dark:hover:text-gray-300 transition-colors disabled:opacity-40"
-          aria-expanded={workspaceOpen}
-          aria-label={t("workspaceSelect")}
-        >
-          <FolderTree className="w-3 h-3 shrink-0 text-gray-400 dark:text-gray-500" />
-          <div className="flex flex-col min-w-0 flex-1 text-left">
-            <span className="truncate">{workspaceName}</span>
-            <span className="text-[10px] text-gray-400 dark:text-gray-600 truncate">
-              {workspacePath}
-            </span>
+        {!isGitRepo ? (
+          <div className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-gray-400 dark:text-gray-600">
+            <FolderTree className="w-3 h-3 shrink-0" />
+            <div className="flex flex-col min-w-0 flex-1 text-left">
+              <span className="truncate">{t("notGitRepo")}</span>
+              <span className="text-[10px] text-gray-400 dark:text-gray-600 truncate">
+                {activeTabPath.split("/").pop()}
+              </span>
+            </div>
           </div>
-          <ChevronDown
-            className={`w-3 h-3 shrink-0 transition-transform ${workspaceOpen ? "rotate-180" : ""}`}
-          />
-        </button>
-        {workspaceOpen && (
+        ) : (
+          <button
+            onClick={() => {
+              setWorkspaceOpen(!workspaceOpen);
+              setModelOpen(false);
+              setThinkingOpen(false);
+            }}
+            disabled={!activeSessionId}
+            className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-100/60 dark:hover:bg-gray-800/60 hover:text-gray-700 dark:hover:text-gray-300 transition-colors disabled:opacity-40"
+            aria-expanded={workspaceOpen}
+            aria-label={t("workspaceSelect")}
+          >
+            <FolderTree className="w-3 h-3 shrink-0 text-gray-400 dark:text-gray-500" />
+            <div className="flex flex-col min-w-0 flex-1 text-left">
+              <span className="truncate">{workspaceName}</span>
+              <span className="text-[10px] text-gray-400 dark:text-gray-600 truncate">
+                {workspacePath}
+              </span>
+            </div>
+            <ChevronDown
+              className={`w-3 h-3 shrink-0 transition-transform ${workspaceOpen ? "rotate-180" : ""}`}
+            />
+          </button>
+        )}
+        {isGitRepo && workspaceOpen && (
           <div className="absolute bottom-full left-0 right-0 mb-1 z-50 max-h-64 overflow-hidden bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md shadow-xl flex flex-col">
             <div className="overflow-y-auto flex-1 py-1">
               {worktrees.map((wt) => {

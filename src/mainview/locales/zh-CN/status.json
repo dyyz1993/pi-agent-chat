@@ -86,5 +86,6 @@
   "save": "保存",
   "tierConfigDefault": "默认 ({{model}})",
   "tierConfigDefaultPlain": "-- 默认 --",
-  "tierUnavailable": "模型未配置"
+  "tierUnavailable": "模型未配置",
+  "notGitRepo": "非 Git 仓库"
 }

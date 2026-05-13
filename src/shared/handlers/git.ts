@@ -1,8 +1,22 @@
 import { dirname, basename, join } from "node:path";
+import { existsSync } from "node:fs";
 import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { HandlerOptions } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
 import type { GitFileChange } from "../modules/git";
+
+const EMPTY_STATUS = {
+  staged: [] as GitFileChange[],
+  changed: [] as GitFileChange[],
+  untracked: [] as string[],
+  branch: "",
+  ahead: 0,
+  behind: 0,
+};
+
+function hasGitDir(cwd: string): boolean {
+  return existsSync(join(cwd, ".git"));
+}
 
 function execGit(args: string[], cwd: string, allowNonZero = false): string {
   const proc = Bun.spawnSync(["git", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
@@ -88,7 +102,12 @@ function getNumStats(
 export function register(server: RPCServer, _options: HandlerOptions): void {
   const r = createRegister(server);
 
+  r("git.checkRepo", async (params) => {
+    return { isGitRepo: hasGitDir(params.repoPath) };
+  });
+
   r("git.status", async (params) => {
+    if (!hasGitDir(params.repoPath)) return { ...EMPTY_STATUS };
     const repoRoot = getRepoRoot(params.repoPath);
     const output = execGit(["status", "--porcelain=v1", "--branch"], repoRoot);
     const lines = output.split("\n");
@@ -129,6 +148,8 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("git.diff", async (params) => {
+    if (!hasGitDir(params.repoPath))
+      return { filePath: params.filePath, diff: "", oldContent: "", newContent: "" };
     const repoRoot = getRepoRoot(params.repoPath);
     let diff = "";
     if (params.staged) {
@@ -164,6 +185,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("git.log", async (params) => {
+    if (!hasGitDir(params.repoPath)) return { commits: [] };
     const repoRoot = getRepoRoot(params.repoPath);
     const count = params.maxCount ?? 50;
     const output = execGit(
@@ -183,6 +205,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("git.commitFiles", async (params) => {
+    if (!hasGitDir(params.repoPath)) return { files: [] };
     const repoRoot = getRepoRoot(params.repoPath);
     const output = execGit(
       ["diff-tree", "--no-commit-id", "--name-status", "-r", params.hash],
@@ -211,6 +234,8 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("git.commitFileDiff", async (params) => {
+    if (!hasGitDir(params.repoPath))
+      return { filePath: params.filePath, diff: "", oldContent: "", newContent: "" };
     const repoRoot = getRepoRoot(params.repoPath);
     const { hash, filePath } = params;
 
@@ -237,6 +262,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("git.branches", async (params) => {
+    if (!hasGitDir(params.repoPath)) return { branches: [] };
     const repoRoot = getRepoRoot(params.repoPath);
     const output = execGit(["branch", "-a", "--no-color"], repoRoot);
     const branches = output
@@ -252,24 +278,28 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("git.checkout", async (params) => {
+    if (!hasGitDir(params.repoPath)) return { ok: false };
     const repoRoot = getRepoRoot(params.repoPath);
     execGit(["checkout", params.branch], repoRoot);
     return { ok: true };
   });
 
   r("git.add", async (params) => {
+    if (!hasGitDir(params.repoPath)) return { ok: false };
     const repoRoot = getRepoRoot(params.repoPath);
     execGit(["add", ...params.paths], repoRoot);
     return { ok: true };
   });
 
   r("git.reset", async (params) => {
+    if (!hasGitDir(params.repoPath)) return { ok: false };
     const repoRoot = getRepoRoot(params.repoPath);
     execGit(["reset", "HEAD", "--", ...params.paths], repoRoot);
     return { ok: true };
   });
 
   r("git.commit", async (params) => {
+    if (!hasGitDir(params.repoPath)) return { hash: "", shortHash: "" };
     const repoRoot = getRepoRoot(params.repoPath);
     const output = execGit(["commit", "-m", params.message], repoRoot);
     // Extract hash from output like "[main abc1234] message"
@@ -283,18 +313,21 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("git.push", async (params) => {
+    if (!hasGitDir(params.repoPath)) return { ok: false };
     const repoRoot = getRepoRoot(params.repoPath);
     execGit(["push"], repoRoot);
     return { ok: true };
   });
 
   r("git.pull", async (params) => {
+    if (!hasGitDir(params.repoPath)) return { ok: false };
     const repoRoot = getRepoRoot(params.repoPath);
     execGit(["pull"], repoRoot);
     return { ok: true };
   });
 
   r("git.worktreeList", async (params) => {
+    if (!hasGitDir(params.repoPath)) return { worktrees: [] };
     const repoRoot = getRepoRoot(params.repoPath);
     const output = execGit(["worktree", "list", "--porcelain"], repoRoot);
     const worktrees: { path: string; branch: string; isMain: boolean }[] = [];
@@ -331,6 +364,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("git.worktreeAdd", async (params) => {
+    if (!hasGitDir(params.repoPath)) throw new Error("Not a git repository");
     const repoRoot = getRepoRoot(params.repoPath);
     const repoDir = dirname(repoRoot);
     const newDir = join(repoDir, `${basename(repoRoot)}-${params.branch}`);

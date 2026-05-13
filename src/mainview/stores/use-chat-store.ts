@@ -249,41 +249,32 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     set({ inputText: "" });
 
-    const userMsg: ChatMessage = {
-      id: `user_${Date.now()}`,
-      role: "user",
-      content: [{ type: "text", text }],
-      timestamp: Date.now(),
-      _local: true,
-    };
-    set((s) => {
-      const existing = s.messagesBySession[sessionId] || [];
-      return {
-        messagesBySession: {
-          ...s.messagesBySession,
-          [sessionId]: [...existing, userMsg],
-        },
-      };
-    });
-
     try {
-      set({ isStreaming: true });
-
       const sessionReady = useSessionStore.getState().sessionReady[sessionId];
       if (!sessionReady) {
-        await new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error("Session startup timed out")), 15000);
-          const check = () => {
-            if (useSessionStore.getState().sessionReady[sessionId]) {
-              clearTimeout(timeout);
-              resolve();
-            } else {
-              setTimeout(check, 100);
-            }
-          };
-          setTimeout(check, 100);
-        });
+        useAppStore.getState().addLog("Session not ready, cannot send");
+        set({ inputText: text });
+        return;
       }
+
+      const userMsg: ChatMessage = {
+        id: `user_${Date.now()}`,
+        role: "user",
+        content: [{ type: "text", text }],
+        timestamp: Date.now(),
+        _local: true,
+      };
+      set((s) => {
+        const existing = s.messagesBySession[sessionId] || [];
+        return {
+          messagesBySession: {
+            ...s.messagesBySession,
+            [sessionId]: [...existing, userMsg],
+          },
+        };
+      });
+
+      set({ isStreaming: true });
 
       await apiClient.call("agent.send", { sessionId, content: text });
       set({ isStreaming: false });
