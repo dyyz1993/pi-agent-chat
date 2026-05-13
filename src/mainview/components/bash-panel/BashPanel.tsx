@@ -173,10 +173,12 @@ function LogViewer({
   const loadingRef = useRef(false);
   const initTag = useRef(0);
   const subIdRef = useRef<string | null>(null);
-  const autoScrollRef = useRef(autoScroll);
+  const autoScrollRef = useRef(true);
+  const isProgrammaticScrollRef = useRef(false);
   const overlayRef = useRef<HTMLDivElement>(null);
   useFocusTrap(overlayRef, { onEscape: onClose });
 
+  // Sync state → ref for use in callbacks/effects
   autoScrollRef.current = autoScroll;
 
   useEffect(() => {
@@ -195,18 +197,33 @@ function LogViewer({
   });
 
   const scrollToBottom = useCallback(() => {
+    if (lines.length === 0) return;
+    isProgrammaticScrollRef.current = true;
     virtualizer.scrollToIndex(lines.length - 1, { align: "end" });
   }, [virtualizer, lines.length]);
 
+  // --- Auto-scroll on new lines ---
+  // Uses autoScrollRef (not state) to avoid stale closure issues,
+  // and isProgrammaticScrollRef to prevent the scroll event from
+  // incorrectly disabling autoScroll.
+  const prevLinesLengthRef = useRef(0);
   useEffect(() => {
-    if (autoScroll && lines.length > 0) scrollToBottom();
-  }, [lines, autoScroll, scrollToBottom]);
+    if (lines.length === 0) return;
+    if (lines.length === prevLinesLengthRef.current) return;
+    prevLinesLengthRef.current = lines.length;
 
+    if (!autoScrollRef.current) return;
+    scrollToBottom();
+  }, [lines, scrollToBottom]);
+
+  // --- Initialization: subscribe, load, watch ---
   useEffect(() => {
     const tag = ++initTag.current;
     mountedRef.current = true;
     offsetRef.current = 0;
     loadingRef.current = false;
+    autoScrollRef.current = true;
+    setAutoScroll(true);
     setLoading(true);
     setLines([]);
     setTotalLines(0);
@@ -273,30 +290,58 @@ function LogViewer({
     };
   }, [logPath]);
 
-  async function handleScroll() {
+  // --- Scroll handler with programmatic scroll guard ---
+  const handleScroll = useCallback(() => {
+    // If this scroll was triggered programmatically (scrollToBottom),
+    // skip all flag changes to avoid incorrectly disabling autoScroll.
+    if (isProgrammaticScrollRef.current) {
+      isProgrammaticScrollRef.current = false;
+      return;
+    }
+
     const el = scrollRef.current;
     if (!el) return;
+
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-    setAutoScroll(nearBottom);
+
+    // User scrolled up → disable auto-scroll
+    if (!nearBottom) {
+      if (autoScrollRef.current) {
+        autoScrollRef.current = false;
+        setAutoScroll(false);
+      }
+    } else {
+      // User scrolled back to bottom → re-enable auto-scroll
+      if (!autoScrollRef.current) {
+        autoScrollRef.current = true;
+        setAutoScroll(true);
+      }
+    }
+
+    // Load more when near bottom and more pages available
     if (nearBottom && hasMore && !loadingRef.current) {
       loadingRef.current = true;
-      try {
-        const tag = initTag.current;
-        const result = (await apiClient.call("bash.readLog", {
-          logPath,
-          offset: offsetRef.current,
-          limit: 500,
-        })) as { lines: string[]; totalLines: number; hasMore: boolean };
-        if (!mountedRef.current || initTag.current !== tag) return;
-        setLines((prev) => [...prev, ...result.lines]);
-        setTotalLines(result.totalLines);
-        setHasMore(result.hasMore);
-        offsetRef.current += result.lines.length;
-      } catch (err) {
-        console.warn("[BashPanel] loadMore failed:", err);
-      } finally {
-        if (mountedRef.current) loadingRef.current = false;
-      }
+      loadMoreLines();
+    }
+  }, [hasMore]);
+
+  async function loadMoreLines() {
+    try {
+      const tag = initTag.current;
+      const result = (await apiClient.call("bash.readLog", {
+        logPath,
+        offset: offsetRef.current,
+        limit: 500,
+      })) as { lines: string[]; totalLines: number; hasMore: boolean };
+      if (!mountedRef.current || initTag.current !== tag) return;
+      setLines((prev) => [...prev, ...result.lines]);
+      setTotalLines(result.totalLines);
+      setHasMore(result.hasMore);
+      offsetRef.current += result.lines.length;
+    } catch (err) {
+      console.warn("[BashPanel] loadMore failed:", err);
+    } finally {
+      if (mountedRef.current) loadingRef.current = false;
     }
   }
 
@@ -314,6 +359,13 @@ function LogViewer({
     setStdinInput("");
   }
 
+  function jumpToBottom() {
+    autoScrollRef.current = true;
+    setAutoScroll(true);
+    isProgrammaticScrollRef.current = true;
+    scrollToBottom();
+  }
+
   const virtualItems = virtualizer.getVirtualItems();
 
   return (
@@ -326,6 +378,7 @@ function LogViewer({
         className="bg-white dark:bg-gray-900 border-t sm:border border-gray-200 dark:border-gray-700 sm:rounded-lg w-full sm:max-w-4xl flex flex-col h-full sm:h-[70vh] sm:max-h-[85vh]"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Header */}
         <div
           className="flex items-center justify-between px-4 py-2.5 border-b border-gray-200 dark:border-gray-700 shrink-0"
           style={{ paddingTop: "calc(0.625rem + env(safe-area-inset-top, 0px))" }}
@@ -348,48 +401,59 @@ function LogViewer({
           </button>
         </div>
 
-        <div
-          ref={scrollRef}
-          onScroll={handleScroll}
-          className="flex-1 overflow-auto p-3 sm:p-4 min-h-0"
-        >
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
-              <span className="ml-2 text-[11px] text-gray-500">{t("loadingDots")}</span>
-            </div>
-          ) : lines.length === 0 ? (
-            <div className="text-[11px] text-gray-400 dark:text-gray-600 italic">
-              {t("noOutput")}
-            </div>
-          ) : (
-            <div
-              style={{
-                height: virtualizer.getTotalSize(),
-                width: "100%",
-                position: "relative",
-              }}
+        {/* Scrollable log area */}
+        <div className="flex-1 min-h-0 relative">
+          <div ref={scrollRef} onScroll={handleScroll} className="h-full overflow-auto p-3 sm:p-4">
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
+                <span className="ml-2 text-[11px] text-gray-500">{t("loadingDots")}</span>
+              </div>
+            ) : lines.length === 0 ? (
+              <div className="text-[11px] text-gray-400 dark:text-gray-600 italic">
+                {t("noOutput")}
+              </div>
+            ) : (
+              <div
+                style={{
+                  height: virtualizer.getTotalSize(),
+                  width: "100%",
+                  position: "relative",
+                }}
+              >
+                {virtualItems.map((virtualRow) => {
+                  const line = lines[virtualRow.index];
+                  return (
+                    <pre
+                      key={virtualRow.index}
+                      data-index={virtualRow.index}
+                      ref={virtualizer.measureElement}
+                      className="text-[11px] text-gray-700 dark:text-gray-300 font-mono whitespace-pre-wrap break-all leading-relaxed absolute top-0 left-0 w-full"
+                      style={{
+                        transform: `translateY(${virtualRow.start}px)`,
+                      }}
+                    >
+                      {line}
+                    </pre>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Floating "scroll to bottom" button — appears when auto-scroll is paused */}
+          {!autoScroll && !loading && lines.length > 0 && (
+            <button
+              onClick={jumpToBottom}
+              className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-600 text-white text-[10px] font-medium shadow-lg hover:bg-blue-500 transition-all z-10"
             >
-              {virtualItems.map((virtualRow) => {
-                const line = lines[virtualRow.index];
-                return (
-                  <pre
-                    key={virtualRow.index}
-                    data-index={virtualRow.index}
-                    ref={virtualizer.measureElement}
-                    className="text-[11px] text-gray-700 dark:text-gray-300 font-mono whitespace-pre-wrap break-all leading-relaxed absolute top-0 left-0 w-full"
-                    style={{
-                      transform: `translateY(${virtualRow.start}px)`,
-                    }}
-                  >
-                    {line}
-                  </pre>
-                );
-              })}
-            </div>
+              <ArrowDownToLine className="w-3 h-3" />
+              <span>{t("scrollToBottom")}</span>
+            </button>
           )}
         </div>
 
+        {/* Bottom bar: line count + stdin input */}
         <div
           className="flex items-center gap-2 px-3 sm:px-4 py-2 border-t border-gray-200 dark:border-gray-700 shrink-0"
           style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
@@ -397,15 +461,19 @@ function LogViewer({
           <span className="text-[9px] text-gray-400 dark:text-gray-600 shrink-0">
             {lines.length}/{totalLines}
           </span>
+
+          {/* Auto-scroll indicator */}
           <button
-            onClick={() => {
-              setAutoScroll(true);
-              scrollToBottom();
-            }}
-            className="text-[9px] text-gray-500 hover:text-gray-700 dark:hover:text-gray-400 transition-colors shrink-0"
+            onClick={jumpToBottom}
+            className={`text-[9px] shrink-0 transition-colors ${
+              autoScroll
+                ? "text-blue-500 dark:text-blue-400"
+                : "text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400"
+            }`}
           >
             {t("scrollToBottom")}
           </button>
+
           <div className="flex-1 flex items-center gap-1.5 ml-2">
             <input
               ref={inputRef}
