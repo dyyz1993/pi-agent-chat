@@ -98,25 +98,48 @@ export function SnapshotPanel() {
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {!sessionId && <EmptyState />}
+        {loading && <SkeletonState />}
 
-        {sessionId && snapshots.length === 0 && !loading && <NoDataState />}
+        {!loading && !sessionId && <EmptyState />}
 
-        {snapshots.map((snap, idx) => (
-          <SnapshotCard
-            key={snap.id}
-            snap={snap}
-            sessionId={sessionId}
-            isExpanded={expandedId === snap.id}
-            isRollingBack={rollingBackId === snap.id}
-            rollbackDisabled={rollingBackId !== null}
-            onToggleExpand={toggleExpand}
-            onRollback={handleRollback}
-            onUnrevert={handleUnrevert}
-            isLatest={idx === 0}
-          />
-        ))}
+        {!loading && sessionId && snapshots.length === 0 && <NoDataState />}
+
+        {!loading &&
+          snapshots.map((snap, idx) => (
+            <SnapshotCard
+              key={snap.id}
+              snap={snap}
+              sessionId={sessionId}
+              isExpanded={expandedId === snap.id}
+              isRollingBack={rollingBackId === snap.id}
+              rollbackDisabled={rollingBackId !== null}
+              onToggleExpand={toggleExpand}
+              onRollback={handleRollback}
+              onUnrevert={handleUnrevert}
+              isLatest={idx === 0}
+            />
+          ))}
       </div>
+    </div>
+  );
+}
+
+function SkeletonState() {
+  return (
+    <div className="px-3 py-4 space-y-3 animate-pulse">
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="flex items-start gap-2">
+          <div className="w-3 h-3 rounded bg-gray-300 dark:bg-gray-700 shrink-0 mt-0.5" />
+          <div className="flex-1 space-y-1.5">
+            <div className="h-3 bg-gray-300 dark:bg-gray-700 rounded w-1/3" />
+            <div className="h-2.5 bg-gray-200 dark:bg-gray-800 rounded w-2/3" />
+            <div className="flex gap-2">
+              <div className="h-2 bg-gray-200 dark:bg-gray-800 rounded w-12" />
+              <div className="h-2 bg-gray-200 dark:bg-gray-800 rounded w-16" />
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

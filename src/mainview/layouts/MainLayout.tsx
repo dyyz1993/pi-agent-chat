@@ -223,10 +223,16 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
         )}
 
         {/* ---- COL 3: Right Sidebar ---- */}
-        {statusPanel !== "hidden" && (!isMobile || statusPanel === "visible") && (
+        {statusPanel !== "hidden" && (
           <RightSidebar
             width={
-              isMobile ? Math.min(320, Math.round(contentWidth * 0.8)) : isTablet ? 48 : statusWidth
+              isMobile
+                ? statusPanel === "visible"
+                  ? Math.min(320, Math.round(contentWidth * 0.8))
+                  : 48
+                : isTablet
+                  ? 48
+                  : statusWidth
             }
             overlay={statusPanel === "visible"}
           />

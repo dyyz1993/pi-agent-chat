@@ -148,6 +148,7 @@ async function createRpcClient(
     cliPath,
     cwd,
     args,
+    env: { ...process.env, NODE_OPTIONS: "--max-old-space-size=8192" },
   });
   const t2 = performance.now();
 
@@ -2248,6 +2249,12 @@ export class AgentProcessManager {
   getProjectPath(sessionId: string): string | undefined {
     const managed = this.clients.get(sessionId);
     return managed?.info?.projectPath;
+  }
+
+  getSessionPath(sessionId: string): string {
+    const managed = this.clients.get(sessionId);
+    if (managed) return managed.info.sessionPath;
+    return this.sessionPaths.get(sessionId) ?? "";
   }
 
   getCachedLspState(

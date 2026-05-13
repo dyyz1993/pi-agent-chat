@@ -149,9 +149,33 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
           </div>
           {message.content
             .filter((b) => b.type === "text")
-            .map((b, i) => (
-              <span key={i}>{(b as Extract<ContentBlock, { type: "text" }>).text}</span>
-            ))}
+            .map((b, i) => {
+              const text = (b as Extract<ContentBlock, { type: "text" }>).text;
+              const urlRegex = /(https?:\/\/[^\s<|」》)>]+)/g;
+              const parts = text.split(urlRegex);
+              if (parts.length === 1) {
+                return <span key={i}>{text}</span>;
+              }
+              return (
+                <span key={i}>
+                  {parts.map((part, j) =>
+                    urlRegex.test(part) ? (
+                      <a
+                        key={j}
+                        href={part}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-400 hover:underline break-all"
+                      >
+                        {part}
+                      </a>
+                    ) : (
+                      part
+                    ),
+                  )}
+                </span>
+              );
+            })}
         </div>
       ) : (
         <div

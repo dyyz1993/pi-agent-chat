@@ -1,7 +1,8 @@
-import { Trash2, ArrowUpRight, ArrowDownLeft, Copy, Check } from "lucide-react";
+import { Trash2, ArrowUpRight, ArrowDownLeft, Copy, Check, Wifi, WifiOff } from "lucide-react";
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useRpcDebugStore, type RpcLogEntry } from "../../stores/use-rpc-debug-store";
+import { useAppStore } from "../../stores/use-app-store";
 import { useClipboard } from "../chat/preview/use-clipboard";
 
 const DIR_ICONS = {
@@ -64,13 +65,25 @@ export function RpcPanel() {
   const { t } = useTranslation("debug");
   const entries = useRpcDebugStore((s) => s.entries);
   const clear = useRpcDebugStore((s) => s.clear);
+  const connectionStatus = useAppStore((s) => s.connectionStatus);
+  const isConnected = connectionStatus === "connected";
 
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-gray-200 dark:border-gray-800 shrink-0">
-        <span className="text-[11px] font-medium text-gray-700 dark:text-gray-300">
-          {t("rpcEvents")}
-        </span>
+        <div className="flex items-center gap-1.5">
+          {isConnected ? (
+            <Wifi className="w-3 h-3 text-green-400" />
+          ) : (
+            <WifiOff className="w-3 h-3 text-red-400" />
+          )}
+          <span className="text-[11px] font-medium text-gray-700 dark:text-gray-300">
+            {t("rpcEvents")}
+          </span>
+          <span className={`text-[9px] ${isConnected ? "text-green-400" : "text-red-400"}`}>
+            {isConnected ? t("connected") : t("disconnected")}
+          </span>
+        </div>
         <div className="flex items-center gap-1">
           <span className="text-[10px] text-gray-400 dark:text-gray-600">{entries.length}</span>
           <button

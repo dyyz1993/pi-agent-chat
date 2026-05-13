@@ -323,7 +323,7 @@ export function DiagnosticPanel() {
   return (
     <div
       ref={panelRef}
-      className="fixed top-10 right-2 w-[420px] max-h-[85vh] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-2xl z-50 flex flex-col overflow-hidden"
+      className="fixed top-10 right-2 w-[420px] max-sm:right-1 max-sm:w-[calc(100vw-16px)] max-h-[85vh] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-2xl z-50 flex flex-col overflow-hidden"
     >
       <div className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-850 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
         <div className="flex items-center gap-1.5 text-xs font-medium text-indigo-400">
