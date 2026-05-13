@@ -1,0 +1,22 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  // pi-agent-chat 智能体配置
+  // 默认主模型：GLM-5.1 | UI 相关子智能体：GLM-5.1
+
+  "agent": {
+    // === UI 相关子智能体 ===
+    "ui-tester": {
+      // "model": "zhipuai-coding-plan/glm-5.1"
+    },
+    "ui-debugger": {
+      // "model": "zhipuai-coding-plan/glm-5.1"
+    }
+  },
+
+  // 外部目录访问权限：无条件允许访问 pi-momo-fork
+  "permission": {
+    "external_directory": {
+      "/Users/xuyingzhou/Project/temporary/pi-momo-fork/**": "allow"
+    }
+  }
+}
