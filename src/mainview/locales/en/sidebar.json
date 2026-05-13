@@ -120,6 +120,7 @@
   "picker.favoritedDirsHint": "Click to select, arrow to browse",
   "picker.noFavoritesHint": "Favorite directories while browsing",
   "picker.favorites": "Favorites",
+  "picker.browse": "Browse",
   "picker.recents": "Recent",
   "picker.recentFolders": "Recent Folders",
   "picker.foldersAvailable": "{{count}} folders available",

@@ -120,6 +120,7 @@
   "picker.favoritedDirsHint": "点击选择项目，箭头浏览子目录",
   "picker.noFavoritesHint": "浏览文件夹时可收藏常用目录",
   "picker.favorites": "收藏",
+  "picker.browse": "浏览",
   "picker.recents": "最近",
   "picker.recentFolders": "最近的文件夹",
   "picker.foldersAvailable": "{{count}} 个文件夹可用",

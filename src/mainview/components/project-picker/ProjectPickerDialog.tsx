@@ -87,7 +87,7 @@ function splitPath(p: string): { label: string; path: string }[] {
 export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDialogProps) {
   const { t } = useTranslation("sidebar");
   const [searchQuery, setSearchQuery] = useState("");
-  const [mobileTab, setMobileTab] = useState<"favorites" | "recents">("recents");
+  const [mobileTab, setMobileTab] = useState<"recents" | "favorites" | "browse">("recents");
 
   function timeAgo(ts: number): string {
     const diff = Date.now() - ts;
@@ -619,44 +619,68 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
           </button>
         </div>
 
-        <div className="px-3 py-2.5 shrink-0">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
-            <input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={t("picker.searchProject")}
-              className="w-full pl-9 pr-4 py-2.5 bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700/50 rounded-xl text-sm text-gray-900 dark:text-gray-200 placeholder:text-gray-500 outline-none focus:border-indigo-500/50"
-            />
-          </div>
+        <div className="flex bg-gray-100 dark:bg-gray-800/50 mx-3 mt-3 rounded-lg p-0.5 shrink-0">
+          <button
+            onClick={() => setMobileTab("recents")}
+            className={`flex-1 py-2 text-xs font-medium rounded-md transition-colors ${
+              mobileTab === "recents"
+                ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
+                : "text-gray-500 dark:text-gray-400"
+            }`}
+          >
+            {t("picker.recents")}
+          </button>
+          <button
+            onClick={() => setMobileTab("favorites")}
+            className={`flex-1 py-2 text-xs font-medium rounded-md transition-colors ${
+              mobileTab === "favorites"
+                ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
+                : "text-gray-500 dark:text-gray-400"
+            }`}
+          >
+            {t("picker.favorites")}
+          </button>
+          <button
+            onClick={() => {
+              setMobileTab("browse");
+              if (leftView !== "browse") navigateTo(homePathRef.current || "/");
+            }}
+            className={`flex-1 py-2 text-xs font-medium rounded-md transition-colors ${
+              mobileTab === "browse"
+                ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
+                : "text-gray-500 dark:text-gray-400"
+            }`}
+          >
+            {t("picker.browse")}
+          </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-3 pb-4 flex flex-col">
-          <div className="flex bg-gray-100 dark:bg-gray-800/50 rounded-lg p-0.5 mb-3 shrink-0">
-            <button
-              onClick={() => setMobileTab("recents")}
-              className={`flex-1 py-2 text-xs font-medium rounded-md transition-colors ${
-                mobileTab === "recents"
-                  ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
-                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-              }`}
-            >
-              {t("picker.recents")}
-            </button>
-            <button
-              onClick={() => setMobileTab("favorites")}
-              className={`flex-1 py-2 text-xs font-medium rounded-md transition-colors ${
-                mobileTab === "favorites"
-                  ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
-                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-              }`}
-            >
-              {t("picker.favorites")}
-            </button>
-          </div>
+        <div className="flex-1 overflow-y-auto px-3 pb-4 pt-2 flex flex-col min-h-0">
+          {mobileTab === "recents" && (
+            <div className="flex-1 flex flex-col">
+              <div className="relative py-2 shrink-0">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
+                <input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={t("picker.searchProject")}
+                  className="w-full pl-9 pr-4 py-2.5 bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700/50 rounded-xl text-sm text-gray-900 dark:text-gray-200 placeholder:text-gray-500 outline-none focus:border-indigo-500/50"
+                />
+              </div>
+              {renderProjectList(sortedRecents, true)}
+              {!loading && sortedRecents.length === 0 && (
+                <div className="flex flex-col items-center justify-center h-40 text-gray-600 gap-2">
+                  <FolderOpen className="w-10 h-10 opacity-30" />
+                  <span className="text-sm">
+                    {searchQuery ? t("picker.noMatchingProjects") : t("picker.noRecentProjects")}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
 
           {mobileTab === "favorites" && (
-            <div className="flex-1">
+            <div className="flex-1 flex flex-col">
               {favoriteFolders.length > 0 ? (
                 <div className="space-y-0.5">
                   {favoriteFolders.map((folder) => (
@@ -677,36 +701,128 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
                         </div>
                         <div className="text-[11px] text-gray-500 truncate">{folder.path}</div>
                       </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMobileTab("browse");
+                          navigateTo(folder.path);
+                        }}
+                        className="p-2 rounded-lg active:bg-gray-200 dark:active:bg-gray-700/50 text-gray-500 active:text-blue-500 shrink-0"
+                        title={t("picker.browseDir")}
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={(e) => handleToggleFavoriteFolder(e, folder.path)}
+                        className="p-2 rounded-lg active:bg-gray-200 dark:active:bg-gray-700/50 text-gray-500 active:text-red-400 shrink-0"
+                        title={t("picker.unfavorite")}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center h-40 text-gray-600 gap-2">
+                <div className="flex flex-col items-center justify-center flex-1 text-gray-600 gap-2">
                   <Star className="w-10 h-10 opacity-30" />
                   <span className="text-sm">{t("picker.noFavoritesHint")}</span>
                 </div>
               )}
-              <button
-                onClick={() => navigateTo(homePathRef.current || "/")}
-                className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 rounded-xl text-sm text-indigo-600 dark:text-indigo-300 transition-colors"
-              >
-                <Home className="w-4 h-4" />
-                {t("picker.browseOtherDirs")}
-              </button>
             </div>
           )}
 
-          {mobileTab === "recents" && (
-            <div className="flex-1">
-              {renderProjectList(sortedRecents, true)}
-              {!loading && sortedRecents.length === 0 && (
-                <div className="flex flex-col items-center justify-center h-40 text-gray-600 gap-2">
-                  <FolderOpen className="w-10 h-10 opacity-30" />
-                  <span className="text-sm">
-                    {searchQuery ? t("picker.noMatchingProjects") : t("picker.noRecentProjects")}
-                  </span>
+          {mobileTab === "browse" && (
+            <div className="flex-1 flex flex-col min-h-0">
+              {renderBreadcrumb()}
+              <div className="px-1 py-2 shrink-0">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-500" />
+                  <input
+                    value={browserSearchQuery}
+                    onChange={(e) => setBrowserSearchQuery(e.target.value)}
+                    placeholder={t("picker.searchCurrentDir")}
+                    className="w-full pl-7 pr-3 py-2 bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700/50 rounded-xl text-sm text-gray-900 dark:text-gray-200 placeholder:text-gray-500 outline-none focus:border-indigo-500/50"
+                  />
                 </div>
-              )}
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                {browsingLoading ? (
+                  <div className="flex items-center justify-center py-10 text-gray-500 text-sm gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    {t("picker.loadingFolders")}
+                  </div>
+                ) : (
+                  (() => {
+                    const dirs = directoryEntries.filter((e) => e.isDirectory);
+                    if (dirs.length === 0) {
+                      return (
+                        <div className="flex flex-col items-center justify-center py-10 text-gray-600 gap-2">
+                          <Folder className="w-8 h-8 opacity-30" />
+                          <span className="text-xs">
+                            {browserSearchQuery
+                              ? t("picker.noMatchingFolders")
+                              : t("picker.emptyDirectory")}
+                          </span>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="space-y-0.5">
+                        {dirs.map((entry) => (
+                          <div
+                            key={entry.path}
+                            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl active:bg-gray-200 dark:active:bg-gray-800/80 cursor-pointer"
+                            onClick={() => navigateTo(entry.path)}
+                          >
+                            <Folder className="w-5 h-5 text-blue-500 dark:text-blue-400/70 shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium text-gray-900 dark:text-gray-200 truncate">
+                                {entry.name}
+                              </div>
+                            </div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSelectFolder(entry.path);
+                              }}
+                              className="p-2 rounded-lg active:bg-gray-200 dark:active:bg-gray-700/50 text-gray-500 active:text-indigo-500 shrink-0"
+                              title={t("picker.selectFolderAsProject")}
+                            >
+                              <FolderOpen className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={(e) => handleToggleFavoriteFolder(e, entry.path)}
+                              className={`p-2 rounded-lg active:bg-gray-200 dark:active:bg-gray-700/50 shrink-0 ${
+                                isFav(entry.path)
+                                  ? "text-amber-500 dark:text-amber-400"
+                                  : "text-gray-500 active:text-amber-500"
+                              }`}
+                              title={
+                                isFav(entry.path) ? t("picker.unfavorite") : t("picker.favoriteDir")
+                              }
+                            >
+                              <Star
+                                className="w-4 h-4"
+                                fill={isFav(entry.path) ? "currentColor" : "none"}
+                              />
+                            </button>
+                            <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()
+                )}
+              </div>
+              <div className="shrink-0 pt-2">
+                <button
+                  onClick={handleSelectCurrentFolder}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 active:bg-indigo-700 rounded-xl text-sm font-medium text-white transition-colors"
+                >
+                  <FolderOpen className="w-4 h-4" />
+                  {t("picker.selectCurrentFolder")}
+                </button>
+              </div>
             </div>
           )}
         </div>
