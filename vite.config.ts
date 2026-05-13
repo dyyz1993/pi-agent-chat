@@ -63,6 +63,10 @@ export default defineConfig({
         ws: true,
         changeOrigin: true,
       },
+      "/__proxy__/": {
+        target: "http://localhost:3100",
+        changeOrigin: true,
+      },
     },
   },
 });

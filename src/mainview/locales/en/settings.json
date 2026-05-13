@@ -23,5 +23,12 @@
   "retryMaxDelay": "Max Delay",
   "retryMaxDelayDesc": "Upper limit for exponential backoff delay",
   "retryPreview": "Backoff schedule (exponential)",
-  "retryTotal": "Total"
+  "retryTotal": "Total",
+  "proxyTitle": "Local Proxy",
+  "proxyEnabled": "Enable Proxy",
+  "proxyEnabledDesc": "Convert localhost / LAN addresses to public HTTPS URLs (used when previewing images, HTML, etc.)",
+  "proxyApiUrl": "Proxy API URL",
+  "proxyApiUrlDesc": "Proxy registration API address (from .env PROXY_API_URL, can be overridden temporarily)",
+  "proxyApiUrlPlaceholder": "http://host:port/__api__/register",
+  "proxyApiUrlReset": "Reset to server config"
 }

@@ -23,5 +23,12 @@
   "retryMaxDelay": "最大延迟",
   "retryMaxDelayDesc": "指数退避延迟的上限",
   "retryPreview": "退避时间表（指数递增）",
-  "retryTotal": "总时长"
+  "retryTotal": "总时长",
+  "proxyTitle": "本地代理",
+  "proxyEnabled": "启用代理",
+  "proxyEnabledDesc": "将 localhost / 局域网地址转为公网可访问的 HTTPS 地址（预览图片、HTML 等资源时使用）",
+  "proxyApiUrl": "代理服务地址",
+  "proxyApiUrlDesc": "代理注册 API 地址（由 .env 的 PROXY_API_URL 提供，可临时覆盖）",
+  "proxyApiUrlPlaceholder": "http://host:port/__api__/register",
+  "proxyApiUrlReset": "恢复为服务端配置"
 }

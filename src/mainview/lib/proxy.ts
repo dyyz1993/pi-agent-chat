@@ -39,7 +39,7 @@ export async function initProxyFromServer(): Promise<void> {
     const res = await fetch(`${base}/api/proxy-config`);
     if (!res.ok) return;
     const data = (await res.json()) as { proxyApiUrl: string | null };
-    proxyApiUrl = data.proxyApiUrl || null;
+    proxyApiUrl = data.proxyApiUrl ?? null;
   } catch {
     // 拉取失败，代理不启用
   }
@@ -53,6 +53,21 @@ export function isProxyEnabled(): boolean {
 /** 获取当前代理 API 地址 */
 export function getProxyApiUrl(): string | null {
   return proxyApiUrl;
+}
+
+/**
+ * 运行时开启代理（设置面板调用）
+ *
+ * @param apiUrl 代理注册 API 地址，如 "http://192.168.0.29:9080/__api__/register"
+ */
+export function enableProxy(apiUrl: string): void {
+  proxyApiUrl = apiUrl;
+}
+
+/** 运行时关闭代理（设置面板调用） */
+export function disableProxy(): void {
+  proxyApiUrl = null;
+  cache.clear();
 }
 
 // ---- URL 转换 ----
@@ -121,6 +136,26 @@ export async function proxyUrl(originalUrl: string): Promise<string> {
 export async function warmupProxyCache(hosts: string[]): Promise<void> {
   if (!proxyApiUrl) return;
   await Promise.allSettled(hosts.map((h) => proxyUrl(`http://${h}/`)));
+}
+
+/**
+ * 构造端口代理网关 URL — 用于 iframe 等场景
+ *
+ * 前端零异步：纯字符串拼接，将目标地址拼在 /__proxy__/ 后面
+ * Server 端收到后自动注册并 307 重定向到公网地址
+ *
+ * @returns 拼接后的代理网关 URL，或 null（代理未启用或目标不是 HTTP）
+ */
+export function buildProxyGatewayUrl(targetUrl: string): string | null {
+  if (!proxyApiUrl) return null;
+  try {
+    const parsed = new URL(targetUrl);
+    if (parsed.protocol !== "http:") return null;
+    const base = `${window.location.protocol}//${window.location.host}`;
+    return `${base}/__proxy__/${parsed.host}${parsed.pathname}`;
+  } catch {
+    return null;
+  }
 }
 
 // ---- 内部实现 ----

@@ -9,6 +9,7 @@ import { existsSync } from "fs";
 import { extname, basename, dirname, resolve } from "path";
 import { createLogger } from "../shared/lib/logger";
 import { listRecentProjects, restoreOpenTabs } from "../shared/lib/project-config";
+import { createProxyRegistrar } from "./proxy-register";
 
 const log = createLogger("gateway");
 
@@ -94,6 +95,7 @@ export interface HttpRouteDeps {
     readonly authToken: string;
     readonly maxUploadSize: number;
     readonly proxyApiUrl: string;
+    readonly proxyPublicDomain: string;
   };
   getWebSocketClientCount: () => number;
 }
@@ -102,6 +104,11 @@ export function createHttpHandler(
   deps: HttpRouteDeps,
 ): (req: IncomingMessage, res: ServerResponse) => void {
   const { config: cfg, getWebSocketClientCount } = deps;
+
+  const proxyRegistrar =
+    cfg.proxyApiUrl && cfg.proxyPublicDomain
+      ? createProxyRegistrar(cfg.proxyApiUrl, cfg.proxyPublicDomain)
+      : null;
 
   return async (req, res) => {
     // CORS
@@ -131,6 +138,53 @@ export function createHttpHandler(
     if (url.pathname === "/api/proxy-config") {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ proxyApiUrl: cfg.proxyApiUrl || null }));
+      return;
+    }
+
+    // 端口代理重定向（不需要鉴权，iframe 直接访问）
+    if (url.pathname.startsWith("/__proxy__/")) {
+      if (!proxyRegistrar) {
+        res.writeHead(502, { "Content-Type": "text/plain" }).end("Proxy not configured");
+        return;
+      }
+
+      const targetPath = url.pathname.slice("/__proxy__/".length);
+      if (!targetPath) {
+        res.writeHead(400, { "Content-Type": "text/plain" }).end("Missing target");
+        return;
+      }
+
+      // targetPath format: "localhost:8080" or "localhost:8080/some/path" or "192.168.0.10:3000/path"
+      const slashIdx = targetPath.indexOf("/");
+      const hostPort = slashIdx >= 0 ? targetPath.slice(0, slashIdx) : targetPath;
+      const remainder = slashIdx >= 0 ? targetPath.slice(slashIdx) : "/";
+
+      const colonIdx = hostPort.lastIndexOf(":");
+      if (colonIdx < 0) {
+        res.writeHead(400, { "Content-Type": "text/plain" }).end("Invalid target format");
+        return;
+      }
+
+      const host = hostPort.slice(0, colonIdx);
+      const port = parseInt(hostPort.slice(colonIdx + 1), 10);
+      if (!host || isNaN(port) || port <= 0 || port > 65535) {
+        res.writeHead(400, { "Content-Type": "text/plain" }).end("Invalid host or port");
+        return;
+      }
+
+      try {
+        const publicUrl = await proxyRegistrar.register(host, port);
+        if (!publicUrl) {
+          res.writeHead(502, { "Content-Type": "text/plain" }).end("Failed to register proxy");
+          return;
+        }
+        const redirectUrl = `${publicUrl}${remainder}`;
+        log.info("Proxy redirect", { host, port, redirectUrl });
+        res.writeHead(307, { Location: redirectUrl }).end();
+      } catch (err) {
+        log.warn("Proxy register error", { host, port, error: String(err) });
+        res.writeHead(502, { "Content-Type": "text/plain" }).end("Proxy registration failed");
+      }
       return;
     }
 

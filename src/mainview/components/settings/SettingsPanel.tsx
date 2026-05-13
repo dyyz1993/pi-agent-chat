@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useState } from "react";
 import { X, RotateCcw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
@@ -9,6 +9,13 @@ import {
 } from "../../stores/use-settings-store";
 import { apiClient } from "../../lib/api-client";
 import { useSessionStore } from "../../stores/use-session-store";
+import {
+  isProxyEnabled,
+  getProxyApiUrl,
+  enableProxy,
+  disableProxy,
+  warmupProxyCache,
+} from "../../lib/proxy";
 
 interface SettingsPanelProps {
   onClose: () => void;
@@ -65,6 +72,66 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const resetRetryConfig = useRetryConfigStore((s) => s.resetRetryConfig);
 
   const sessionId = useSessionStore((s) => s.activeSessionId);
+
+  // ---- 代理设置 ----
+  const [proxyEnabled, setProxyEnabled] = useState(isProxyEnabled());
+  const [proxyUrlInput, setProxyUrlInput] = useState(getProxyApiUrl() ?? "");
+  // 记录服务端原始值，用于"恢复"
+  const [serverProxyUrl] = useState(() => {
+    // 从后端 /api/proxy-config 获取（已在启动时缓存）
+    return getProxyApiUrl() ?? "";
+  });
+
+  const toggleProxy = useCallback(() => {
+    if (proxyEnabled) {
+      disableProxy();
+      setProxyEnabled(false);
+    } else {
+      const url = proxyUrlInput.trim();
+      if (!url) return;
+      enableProxy(url);
+      setProxyEnabled(true);
+      // 预热：注册服务自身地址
+      const baseUrl = apiClient.getBaseUrl();
+      if (baseUrl) {
+        const host = new URL(baseUrl).host;
+        warmupProxyCache([host]);
+      }
+    }
+  }, [proxyEnabled, proxyUrlInput]);
+
+  const applyProxyUrl = useCallback(() => {
+    const url = proxyUrlInput.trim();
+    if (!url) {
+      disableProxy();
+      setProxyEnabled(false);
+      return;
+    }
+    enableProxy(url);
+    setProxyEnabled(true);
+    const baseUrl = apiClient.getBaseUrl();
+    if (baseUrl) {
+      const host = new URL(baseUrl).host;
+      warmupProxyCache([host]);
+    }
+  }, [proxyUrlInput]);
+
+  const resetProxyUrl = useCallback(() => {
+    if (serverProxyUrl) {
+      setProxyUrlInput(serverProxyUrl);
+      enableProxy(serverProxyUrl);
+      setProxyEnabled(true);
+      const baseUrl = apiClient.getBaseUrl();
+      if (baseUrl) {
+        const host = new URL(baseUrl).host;
+        warmupProxyCache([host]);
+      }
+    } else {
+      setProxyUrlInput("");
+      disableProxy();
+      setProxyEnabled(false);
+    }
+  }, [serverProxyUrl]);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -193,6 +260,54 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
           />
 
           <BackoffPreview config={retryConfig} />
+
+          <div className="border-t border-gray-200/60 dark:border-gray-800/60 my-2" />
+
+          <SectionHeader>{t("proxyTitle")}</SectionHeader>
+
+          <label className="flex items-start gap-3 py-2 px-1 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/40 cursor-pointer transition-colors">
+            <div className="flex-1 min-w-0">
+              <div className="text-[13px] text-gray-800 dark:text-gray-200 font-medium">
+                {t("proxyEnabled")}
+              </div>
+              <div className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">
+                {t("proxyEnabledDesc")}
+              </div>
+            </div>
+            <ToggleSwitch checked={proxyEnabled} onChange={toggleProxy} />
+          </label>
+
+          <div className="py-2 px-1 space-y-1.5">
+            <div className="text-[13px] text-gray-800 dark:text-gray-200 font-medium">
+              {t("proxyApiUrl")}
+            </div>
+            <div className="text-[11px] text-gray-400 dark:text-gray-500">
+              {t("proxyApiUrlDesc")}
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={proxyUrlInput}
+                onChange={(e) => setProxyUrlInput(e.target.value)}
+                placeholder={t("proxyApiUrlPlaceholder")}
+                className="flex-1 h-7 px-2 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-[12px] text-gray-700 dark:text-gray-300 placeholder:text-gray-400 dark:placeholder:text-gray-600 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+              <button
+                onClick={applyProxyUrl}
+                className="h-7 px-2.5 rounded-md text-[11px] bg-indigo-600 text-white hover:bg-indigo-500 transition-colors shrink-0"
+              >
+                Apply
+              </button>
+            </div>
+            {serverProxyUrl && proxyUrlInput !== serverProxyUrl && (
+              <button
+                onClick={resetProxyUrl}
+                className="text-[11px] text-indigo-500 hover:text-indigo-400 underline underline-offset-2 transition-colors"
+              >
+                {t("proxyApiUrlReset")}
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200/80 dark:border-gray-800/80 bg-gray-50/50 dark:bg-gray-800/30">

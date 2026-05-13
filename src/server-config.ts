@@ -30,6 +30,8 @@ export const config = {
   piExtensionsDir: join(homedir(), ".pi", "agent", "extensions"),
   /** 本地代理注册 API 地址（如 shanbox），不配置则不启用代理 */
   proxyApiUrl: process.env.PROXY_API_URL ?? "",
+  /** 代理服务的公网域名（如 shanbox.19930810.xyz:8443），用于构造公网 URL */
+  proxyPublicDomain: process.env.PROXY_PUBLIC_DOMAIN ?? "",
 } as const;
 
 if (MISSING_PI_VARS.length > 0) {

@@ -17,7 +17,8 @@ export type LogModule =
   | "subagent"
   | "linked-projects"
   | "mcp"
-  | "tier";
+  | "tier"
+  | "proxy-register";
 type LogLevel = "debug" | "info" | "warn" | "error";
 
 interface LogEntry {
