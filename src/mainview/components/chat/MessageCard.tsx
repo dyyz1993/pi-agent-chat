@@ -15,9 +15,11 @@ import { useSessionStore } from "../../stores/use-session-store";
 import { useChatStore } from "../../stores/use-chat-store";
 import { useNotificationStore } from "../../stores/use-notification-store";
 import { useRollbackStore } from "../../stores/use-rollback-store";
+import { useTierStore } from "../../stores/use-tier-store";
 
 const EMPTY_MSGS: never[] = [];
 import { apiClient } from "../../lib/api-client";
+import { insertAfterPinned } from "../../stores/use-session-store";
 import { createLogger } from "../../../shared/lib/logger";
 import type { SessionMeta } from "../../types";
 import type { TreeEntry } from "@dyyz1993/pi-coding-agent";
@@ -573,10 +575,17 @@ const HeaderActions = memo(function HeaderActions({
     const activeTab = state.projectTabs.find((t: { id: string }) => t.id === state.activeProjectId);
     if (!activeTab) return;
 
+    // Fetch original session name for the "fork:" prefix
+    const allSessions = state.sessionsByProject[activeTab.path] ?? [];
+    const originalSession = allSessions.find((s) => s.sessionId === sessionId);
+    const originalName = originalSession
+      ? originalSession.name || originalSession.firstMessage || ""
+      : "";
+
     const now = Date.now();
     const forkedSession: SessionMeta = {
       sessionId: result.newSessionId,
-      name: "",
+      name: originalName ? `fork: ${originalName}` : "",
       sessionPath: result.newSessionFile,
       projectPath: activeTab.path,
       parentSessionPath: null,
@@ -590,12 +599,22 @@ const HeaderActions = memo(function HeaderActions({
     useSessionStore.setState((s) => ({
       sessionsByProject: {
         ...s.sessionsByProject,
-        [activeTab.path]: [forkedSession, ...(s.sessionsByProject[activeTab.path] || [])],
+        [activeTab.path]: insertAfterPinned(
+          s.sessionsByProject[activeTab.path] || [],
+          forkedSession,
+        ),
       },
     }));
 
     state.setActiveSession(result.newSessionId);
     useChatStore.getState().loadSessionMessages(result.newSessionId, { force: true });
+
+    // Inherit current tier config
+    const currentTier = useTierStore.getState().currentTier;
+    if (currentTier) {
+      useTierStore.getState().switchToTier(currentTier, result.newSessionId);
+    }
+
     pushNotification({ message: t("messageCard.forked"), level: "info" });
   }, [sessionId, fetchTree, resolveEntryId, pushNotification]);
 

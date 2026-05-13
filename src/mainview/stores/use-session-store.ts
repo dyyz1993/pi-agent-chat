@@ -69,6 +69,19 @@ export interface ModelInfo {
   name?: string;
 }
 
+/**
+ * Insert a new session after the last pinned session.
+ * Ensures new/forked sessions don't appear above pinned ones.
+ */
+export function insertAfterPinned(sessions: SessionMeta[], newSession: SessionMeta): SessionMeta[] {
+  const lastPinnedIdx = sessions.reduce((maxIdx, sess, idx) => (sess.pinned ? idx : maxIdx), -1);
+  return [
+    ...sessions.slice(0, lastPinnedIdx + 1),
+    newSession,
+    ...sessions.slice(lastPinnedIdx + 1),
+  ];
+}
+
 interface SessionState {
   sessionsByProject: Record<string, SessionMeta[]>;
   activeSessionId: string | null;
@@ -572,7 +585,7 @@ export const useSessionStore = create<SessionState>()(
             return {
               sessionsByProject: {
                 ...s.sessionsByProject,
-                [tab.path]: [newSession, ...existing],
+                [tab.path]: insertAfterPinned(existing, newSession),
               },
             };
           });

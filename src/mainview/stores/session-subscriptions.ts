@@ -3,7 +3,7 @@ import type { BashChannelEvent } from "../../shared/modules/bash";
 import type { LspChannelEvent } from "../../shared/modules/lsp";
 import type { RulesChannelEvent } from "../../shared/modules/rules";
 import { apiClient } from "../lib/api-client";
-import { useSessionStore } from "./use-session-store";
+import { useSessionStore, insertAfterPinned } from "./use-session-store";
 import { useChatStore } from "./use-chat-store";
 import { useSubagentStore, handleSubagentEvent } from "./use-subagent-store";
 import { useBashStore, handleBashEvent } from "./use-bash-store";
@@ -509,7 +509,7 @@ export function setupSubscriptions(
             return {
               sessionsByProject: {
                 ...s.sessionsByProject,
-                [projectPath]: [payload.session, ...sessions],
+                [projectPath]: insertAfterPinned(sessions, payload.session),
               },
             };
           });

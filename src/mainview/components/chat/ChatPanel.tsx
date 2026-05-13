@@ -11,6 +11,7 @@ import {
   Loader2,
   RefreshCw,
   AlertTriangle,
+  GitBranch,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useChatStore } from "../../stores/use-chat-store";
@@ -38,7 +39,10 @@ import { MermaidFullscreen } from "./mermaid";
 import { RollbackOverlay } from "./RollbackOverlay";
 import { AttachmentButtons, AttachmentBar } from "./FileAttachment";
 import { useAttachmentStore } from "../../stores/use-attachment-store";
-import type { ChatMessage } from "../../types";
+import { useNotificationStore } from "../../stores/use-notification-store";
+import { useTierStore } from "../../stores/use-tier-store";
+import { insertAfterPinned } from "../../stores/use-session-store";
+import type { ChatMessage, SessionMeta } from "../../types";
 
 const EMPTY_MSGS: never[] = [];
 
@@ -131,6 +135,87 @@ export function ChatPanel() {
       /* ignore */
     }
   }, [activeSessionId, activeSubId]);
+
+  const handleSubagentFork = useCallback(async () => {
+    const parentSessionId = useSessionStore.getState().activeSessionId;
+    if (!parentSessionId) return;
+
+    try {
+      const treeResult = await apiClient.call("agent.getTree", {
+        sessionId: parentSessionId,
+      });
+      const entries = treeResult.entries ?? [];
+      if (entries.length === 0) return;
+      const lastEntry = entries[entries.length - 1];
+
+      const result = await apiClient
+        .call("agent.fork", {
+          sessionId: parentSessionId,
+          entryId: lastEntry.id,
+          position: "at",
+        })
+        .catch((err) => {
+          console.warn("[ChatPanel] fork failed:", err);
+          return undefined;
+        });
+
+      if (!result || result.cancelled || !result.newSessionId || !result.newSessionFile) return;
+
+      const state = useSessionStore.getState();
+      const activeTab = state.projectTabs.find((t) => t.id === state.activeProjectId);
+      if (!activeTab) return;
+
+      // Fetch original session name for the "fork:" prefix
+      const allSessions = state.sessionsByProject[activeTab.path] ?? [];
+      const originalSession = allSessions.find((s) => s.sessionId === parentSessionId);
+      const originalName = originalSession
+        ? originalSession.name || originalSession.firstMessage || ""
+        : "";
+
+      const now = Date.now();
+      const forkedSession: SessionMeta = {
+        sessionId: result.newSessionId,
+        name: originalName ? `fork: ${originalName}` : "",
+        sessionPath: result.newSessionFile,
+        projectPath: activeTab.path,
+        parentSessionPath: null,
+        messageCount: 0,
+        firstMessage: "",
+        createdAt: now,
+        updatedAt: now,
+        status: "idle",
+      };
+
+      useSessionStore.setState((s) => ({
+        sessionsByProject: {
+          ...s.sessionsByProject,
+          [activeTab.path]: insertAfterPinned(
+            s.sessionsByProject[activeTab.path] || [],
+            forkedSession,
+          ),
+        },
+      }));
+
+      useSessionStore.getState().setActiveSession(result.newSessionId);
+      useChatStore.getState().loadSessionMessages(result.newSessionId, {
+        force: true,
+      });
+
+      // Inherit current tier config
+      const currentTier = useTierStore.getState().currentTier;
+      if (currentTier) {
+        useTierStore.getState().switchToTier(currentTier, result.newSessionId);
+      }
+
+      const pushNotification = useNotificationStore.getState().push;
+      pushNotification({
+        message: t("messageCard.forked"),
+        level: "info",
+      });
+    } catch (err) {
+      console.warn("[ChatPanel] subagent fork error:", err);
+    }
+  }, [t]);
 
   const setNavId = useTurnStore((s) => s.setNavId);
   const lastSetNavIdRef = useRef<string | null>(null);
@@ -465,8 +550,20 @@ export function ChatPanel() {
           </>
         )}
         {isViewingSubagent && (
-          <div className="flex-1 text-center text-[11px] text-gray-400 dark:text-gray-600 py-2">
-            {t("subagentReadonly")}
+          <div className="flex-1 flex items-center justify-center gap-3 py-2">
+            <span className="text-[11px] text-gray-400 dark:text-gray-600">
+              {t("subagentReadonly")}
+            </span>
+            <button
+              onClick={handleSubagentFork}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium
+                bg-indigo-500/15 text-indigo-400 hover:bg-indigo-500/25 hover:text-indigo-300
+                border border-indigo-500/20 transition-colors"
+              title={t("fork")}
+            >
+              <GitBranch className="w-3 h-3" />
+              {t("fork")}
+            </button>
           </div>
         )}
       </div>
