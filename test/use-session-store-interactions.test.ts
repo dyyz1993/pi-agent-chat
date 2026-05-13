@@ -233,7 +233,7 @@ describe("deleteSession flow", () => {
     );
   });
 
-  it("switches activeSessionId to null when deleting the active session", () => {
+  it("switches activeSessionId to next session when deleting the active session", () => {
     const s1 = makeSession({ sessionId: "active-one" });
     const s2 = makeSession({ sessionId: "other" });
     useSessionStore.setState({
@@ -245,7 +245,7 @@ describe("deleteSession flow", () => {
 
     useSessionStore.getState().deleteSession("active-one");
 
-    expect(useSessionStore.getState().activeSessionId).toBeNull();
+    expect(useSessionStore.getState().activeSessionId).toBe("other");
     expect(useSessionStore.getState().sessionsByProject["/project-a"]).toHaveLength(1);
   });
 });

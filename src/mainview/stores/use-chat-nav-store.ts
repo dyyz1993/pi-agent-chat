@@ -90,6 +90,7 @@ export const useChatNavStore = create<ChatNavState>((set, get) => ({
   toggleTurnSelect: (turnId, allItemIds) => {
     const sessionId = useSessionStore.getState().activeSessionId;
     if (!sessionId) return;
+    if (allItemIds.length === 0) return;
     set((s) => {
       const prevItems = s.selectedItemsBySession[sessionId] ?? EMPTY_SET;
       const prevTurns = s.selectedTurnsBySession[sessionId] ?? EMPTY_SET;
@@ -164,8 +165,12 @@ export const useChatNavStore = create<ChatNavState>((set, get) => ({
     const sessionId = useSessionStore.getState().activeSessionId;
     if (!sessionId) return;
     set((s) => {
-      const prev = s.collapsedTurnsBySession[sessionId] ?? EMPTY_SET;
-      const next = new Set(prev);
+      const prev = s.collapsedTurnsBySession[sessionId];
+      if (prev === "all") {
+        return {};
+      }
+      const prevSet = prev ?? EMPTY_SET;
+      const next = new Set(prevSet);
       if (next.has(turnId)) next.delete(turnId);
       else next.add(turnId);
       return {

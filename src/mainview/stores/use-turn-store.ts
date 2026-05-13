@@ -44,7 +44,7 @@ export const useTurnStore = create<MessageState>((set) => ({
   selectMessageRange: (fromIndex, toIndex, messageIds) => {
     const sessionId = useSessionStore.getState().activeSessionId;
     if (!sessionId) return;
-    const start = Math.min(fromIndex, toIndex);
+    const start = Math.max(0, Math.min(fromIndex, toIndex));
     const end = Math.max(fromIndex, toIndex);
     const rangeIds = new Set<string>();
     for (let i = start; i <= end && i < messageIds.length; i++) {

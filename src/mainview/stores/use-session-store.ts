@@ -17,6 +17,7 @@ import {
 import { useTurnStore } from "./use-turn-store";
 import { useChatNavStore } from "./use-chat-nav-store";
 import { useRetryStore } from "./use-retry-store";
+import { useSubagentStore } from "./use-subagent-store";
 import {
   setupSubscriptions,
   cleanupSession,
@@ -225,9 +226,12 @@ export const useSessionStore = create<SessionState>()(
         explorer.listRootDir();
 
         const gitStore = useGitStore.getState();
-        gitStore.fetchWorktrees(tab.path);
-        gitStore.fetchStatus(tab.path);
-        gitStore.fetchBranches(tab.path);
+        gitStore.checkGitRepo(tab.path).then((isGit) => {
+          if (!isGit || version !== get()._projectVersion) return;
+          gitStore.fetchWorktrees(tab.path);
+          gitStore.fetchStatus(tab.path);
+          gitStore.fetchBranches(tab.path);
+        });
 
         get()
           .loadSessionsForProject(tab.path)
@@ -616,6 +620,9 @@ export const useSessionStore = create<SessionState>()(
       },
 
       renameSession: (sessionId, newName) => {
+        const trimmed = newName.trim();
+        if (!trimmed) return;
+
         let sessionPath = "";
         set((s) => {
           const updated: Record<string, SessionMeta[]> = {};
@@ -623,7 +630,7 @@ export const useSessionStore = create<SessionState>()(
             updated[path] = sessions.map((sess) => {
               if (sess.sessionId === sessionId) {
                 sessionPath = sess.sessionPath;
-                return { ...sess, name: newName };
+                return { ...sess, name: trimmed };
               }
               return sess;
             });
@@ -631,11 +638,13 @@ export const useSessionStore = create<SessionState>()(
           return { sessionsByProject: updated };
         });
         if (sessionPath) {
-          apiClient.call("session.rename", { sessionId, sessionPath, newName }).catch((err) => {
-            log.warn("session.rename failed", {
-              err: err instanceof Error ? err.message : String(err),
+          apiClient
+            .call("session.rename", { sessionId, sessionPath, newName: trimmed })
+            .catch((err) => {
+              log.warn("session.rename failed", {
+                err: err instanceof Error ? err.message : String(err),
+              });
             });
-          });
         }
       },
 
@@ -659,15 +668,49 @@ export const useSessionStore = create<SessionState>()(
           if (filtered.length !== sessions.length) deletedPath = path;
           updated[path] = filtered;
         }
+
+        let nextActiveId = activeSessionId;
+        if (activeSessionId === sessionId) {
+          const remaining = deletedPath ? updated[deletedPath] : [];
+          nextActiveId = remaining.length > 0 ? remaining[0].sessionId : null;
+        }
+
         set({
           sessionsByProject: updated,
-          activeSessionId: activeSessionId === sessionId ? null : activeSessionId,
+          activeSessionId: nextActiveId,
         });
         if (deletedPath) {
           useChatStore.getState().clearSessionMessages(sessionId);
         }
         useTurnStore.getState().clearSessionUI(sessionId);
         useChatNavStore.getState().clearSessionUI(sessionId);
+
+        if (deletedSessionPath) {
+          const subState = useSubagentStore.getState();
+          const subs = subState.subsessionsByParent[deletedSessionPath];
+          if (subs) {
+            const newSubsByParent = { ...subState.subsessionsByParent };
+            delete newSubsByParent[deletedSessionPath];
+            const newMessages = { ...subState.messagesBySubsession };
+            const newStatus = { ...subState.subagentStatusMap };
+            const newContext = { ...subState.subagentContextMap };
+            for (const sub of subs) {
+              delete newMessages[sub.sessionId];
+              delete newStatus[sub.sessionId];
+              delete newContext[sub.sessionId];
+            }
+            useSubagentStore.setState({
+              subsessionsByParent: newSubsByParent,
+              messagesBySubsession: newMessages,
+              subagentStatusMap: newStatus,
+              subagentContextMap: newContext,
+              activeSubsessionId: subs.some((s) => s.sessionId === subState.activeSubsessionId)
+                ? null
+                : subState.activeSubsessionId,
+            });
+          }
+        }
+
         if (deletedSessionPath) {
           apiClient
             .call("session.delete", { sessionId, sessionPath: deletedSessionPath })

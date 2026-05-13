@@ -80,21 +80,36 @@ export function normalizeToolBlocks(msgs: ChatMessage[]): void {
       targetBi = -1;
     }
 
-    if (targetMi >= 0) {
-      if (!execByMsg.has(targetMi)) execByMsg.set(targetMi, new Map());
-      execByMsg.get(targetMi)?.set(targetBi, execBlock);
+    if (targetMi < 0) {
+      const syntheticMsg: ChatMessage = {
+        id: `synthetic-${trMsg.id}`,
+        role: "assistant",
+        content: [execBlock],
+        timestamp: trMsg.timestamp,
+      };
+      msgs[ti] = syntheticMsg;
+      toRemove.delete(ti);
+      continue;
     }
+
+    if (!execByMsg.has(targetMi)) execByMsg.set(targetMi, new Map());
+    execByMsg.get(targetMi)?.set(targetBi, execBlock);
   }
 
   for (const [mi, biToBlock] of execByMsg) {
     const msg = msgs[mi];
     const newContent: ContentBlock[] = [];
+    const orphanBlocks = biToBlock.get(-1);
+    let orphanUsed = false;
     for (let bi = 0; bi < msg.content.length; bi++) {
       const b = msg.content[bi];
       if (b.type === "toolCall") {
-        const exec = biToBlock.get(bi) ?? biToBlock.get(-1);
+        const exec = biToBlock.get(bi);
         if (exec) {
           newContent.push(exec);
+        } else if (orphanBlocks && !orphanUsed) {
+          newContent.push(orphanBlocks);
+          orphanUsed = true;
         } else {
           const rawInput = b.input;
           let args: string;
@@ -121,6 +136,9 @@ export function normalizeToolBlocks(msgs: ChatMessage[]): void {
       } else {
         newContent.push(b);
       }
+    }
+    if (orphanBlocks && !orphanUsed) {
+      newContent.push(orphanBlocks);
     }
     msgs[mi] = { ...msg, content: newContent };
   }
