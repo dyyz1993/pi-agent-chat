@@ -65,6 +65,8 @@ tmp/
 resume/
 *简历*
 许映洲-简历.md
+essay-*.md
+space_exploration_essay.md
 
 # Debug / temporary scripts
 diagnose-ws.ts
@@ -74,6 +76,9 @@ diagnose-ws.ts
 scripts/ui-screenshots/
 test-mobile-*.png
 test-report/
+test-screenshots/
+screenshots/
+preview-test/
 
 # Temporary/generated files
 patches/
