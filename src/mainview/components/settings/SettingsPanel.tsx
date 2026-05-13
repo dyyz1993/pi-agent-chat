@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useState } from "react";
-import { X, RotateCcw } from "lucide-react";
+import { X, RotateCcw, Zap, Target, Brain } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
   useSettingsStore,
@@ -9,13 +9,8 @@ import {
 } from "../../stores/use-settings-store";
 import { apiClient } from "../../lib/api-client";
 import { useSessionStore } from "../../stores/use-session-store";
-import {
-  isProxyEnabled,
-  getProxyApiUrl,
-  enableProxy,
-  disableProxy,
-  warmupProxyCache,
-} from "../../lib/proxy";
+import { useTierStore, TIER_KEYS, type TierKey } from "../../stores/use-tier-store";
+import { isProxyEnabled, enableProxy, disableProxy, warmupProxyCache } from "../../lib/proxy";
 
 interface SettingsPanelProps {
   onClose: () => void;
@@ -72,66 +67,71 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const resetRetryConfig = useRetryConfigStore((s) => s.resetRetryConfig);
 
   const sessionId = useSessionStore((s) => s.activeSessionId);
+  const availableModels = useSessionStore((s) => s.availableModels);
+  const fetchModelState = useSessionStore((s) => s.fetchModelState);
+
+  // ---- Tier 模型配置 ----
+  const tierModels = useTierStore((s) => s.tierModels);
+  const fetchTierConfig = useTierStore((s) => s.fetchTierConfig);
+  const [localTierModels, setLocalTierModels] = useState<Record<string, string>>({});
+  const [tierSaving, setTierSaving] = useState(false);
+
+  const TIER_ICONS: Record<TierKey, React.ComponentType<{ className?: string }>> = {
+    fast: Zap,
+    pro: Target,
+    max: Brain,
+  };
+
+  const TIER_LABELS: Record<TierKey, string> = {
+    fast: t("tierFast"),
+    pro: t("tierPro"),
+    max: t("tierMax"),
+  };
+
+  // 打开面板时同步 tier 配置到本地
+  useEffect(() => {
+    if (!sessionId) return;
+    fetchTierConfig(sessionId);
+    fetchModelState(sessionId);
+  }, [sessionId, fetchTierConfig, fetchModelState]);
+
+  // 将 store 中的 tierModels 同步到本地编辑状态
+  useEffect(() => {
+    setLocalTierModels({ ...tierModels });
+  }, [tierModels]);
+
+  const handleSaveTierConfig = useCallback(async () => {
+    if (!sessionId) return;
+    setTierSaving(true);
+    try {
+      await apiClient.call("agent.setTierModels", {
+        sessionId,
+        models: localTierModels,
+      });
+      await fetchTierConfig(sessionId);
+    } catch (err) {
+      console.warn("[Settings] save tier config failed:", err);
+    }
+    setTierSaving(false);
+  }, [sessionId, localTierModels, fetchTierConfig]);
 
   // ---- 代理设置 ----
-  const [proxyEnabled, setProxyEnabled] = useState(isProxyEnabled());
-  const [proxyUrlInput, setProxyUrlInput] = useState(getProxyApiUrl() ?? "");
-  // 记录服务端原始值，用于"恢复"
-  const [serverProxyUrl] = useState(() => {
-    // 从后端 /api/proxy-config 获取（已在启动时缓存）
-    return getProxyApiUrl() ?? "";
-  });
+  const [proxyLocalEnabled, setProxyLocalEnabled] = useState(isProxyEnabled());
 
   const toggleProxy = useCallback(() => {
-    if (proxyEnabled) {
+    if (proxyLocalEnabled) {
       disableProxy();
-      setProxyEnabled(false);
+      setProxyLocalEnabled(false);
     } else {
-      const url = proxyUrlInput.trim();
-      if (!url) return;
-      enableProxy(url);
-      setProxyEnabled(true);
-      // 预热：注册服务自身地址
+      enableProxy();
       const baseUrl = apiClient.getBaseUrl();
       if (baseUrl) {
         const host = new URL(baseUrl).host;
         warmupProxyCache([host]);
       }
+      setProxyLocalEnabled(true);
     }
-  }, [proxyEnabled, proxyUrlInput]);
-
-  const applyProxyUrl = useCallback(() => {
-    const url = proxyUrlInput.trim();
-    if (!url) {
-      disableProxy();
-      setProxyEnabled(false);
-      return;
-    }
-    enableProxy(url);
-    setProxyEnabled(true);
-    const baseUrl = apiClient.getBaseUrl();
-    if (baseUrl) {
-      const host = new URL(baseUrl).host;
-      warmupProxyCache([host]);
-    }
-  }, [proxyUrlInput]);
-
-  const resetProxyUrl = useCallback(() => {
-    if (serverProxyUrl) {
-      setProxyUrlInput(serverProxyUrl);
-      enableProxy(serverProxyUrl);
-      setProxyEnabled(true);
-      const baseUrl = apiClient.getBaseUrl();
-      if (baseUrl) {
-        const host = new URL(baseUrl).host;
-        warmupProxyCache([host]);
-      }
-    } else {
-      setProxyUrlInput("");
-      disableProxy();
-      setProxyEnabled(false);
-    }
-  }, [serverProxyUrl]);
+  }, [proxyLocalEnabled]);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -263,6 +263,48 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
 
           <div className="border-t border-gray-200/60 dark:border-gray-800/60 my-2" />
 
+          <SectionHeader>{t("tierConfigTitle", "Tier 模型配置")}</SectionHeader>
+
+          {TIER_KEYS.map((tier) => {
+            const Icon = TIER_ICONS[tier];
+            return (
+              <div key={tier} className="flex items-center gap-3 py-2 px-1">
+                <div className="flex items-center gap-1 w-16 shrink-0">
+                  <Icon className="w-3 h-3 text-gray-400 dark:text-gray-500" />
+                  <span className="text-[13px] text-gray-600 dark:text-gray-300">
+                    {TIER_LABELS[tier]}
+                  </span>
+                </div>
+                <select
+                  value={localTierModels[tier] ?? ""}
+                  onChange={(e) => {
+                    setLocalTierModels((prev) => ({ ...prev, [tier]: e.target.value }));
+                  }}
+                  className="flex-1 h-7 px-2 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-[12px] text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                >
+                  <option value="">{t("tierConfigDefault", "默认")}</option>
+                  {availableModels.map((m) => (
+                    <option key={`${m.provider}/${m.id}`} value={`${m.provider}/${m.id}`}>
+                      {m.name ?? `${m.provider}/${m.id}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            );
+          })}
+
+          <div className="flex justify-end">
+            <button
+              onClick={handleSaveTierConfig}
+              disabled={tierSaving}
+              className="px-4 py-1.5 rounded-md text-xs bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-40 transition-colors"
+            >
+              {tierSaving ? t("saving", "Saving...") : t("saveTier", "保存")}
+            </button>
+          </div>
+
+          <div className="border-t border-gray-200/60 dark:border-gray-800/60 my-2" />
+
           <SectionHeader>{t("proxyTitle")}</SectionHeader>
 
           <label className="flex items-start gap-3 py-2 px-1 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/40 cursor-pointer transition-colors">
@@ -274,40 +316,8 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                 {t("proxyEnabledDesc")}
               </div>
             </div>
-            <ToggleSwitch checked={proxyEnabled} onChange={toggleProxy} />
+            <ToggleSwitch checked={proxyLocalEnabled} onChange={toggleProxy} />
           </label>
-
-          <div className="py-2 px-1 space-y-1.5">
-            <div className="text-[13px] text-gray-800 dark:text-gray-200 font-medium">
-              {t("proxyApiUrl")}
-            </div>
-            <div className="text-[11px] text-gray-400 dark:text-gray-500">
-              {t("proxyApiUrlDesc")}
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={proxyUrlInput}
-                onChange={(e) => setProxyUrlInput(e.target.value)}
-                placeholder={t("proxyApiUrlPlaceholder")}
-                className="flex-1 h-7 px-2 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-[12px] text-gray-700 dark:text-gray-300 placeholder:text-gray-400 dark:placeholder:text-gray-600 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              />
-              <button
-                onClick={applyProxyUrl}
-                className="h-7 px-2.5 rounded-md text-[11px] bg-indigo-600 text-white hover:bg-indigo-500 transition-colors shrink-0"
-              >
-                Apply
-              </button>
-            </div>
-            {serverProxyUrl && proxyUrlInput !== serverProxyUrl && (
-              <button
-                onClick={resetProxyUrl}
-                className="text-[11px] text-indigo-500 hover:text-indigo-400 underline underline-offset-2 transition-colors"
-              >
-                {t("proxyApiUrlReset")}
-              </button>
-            )}
-          </div>
         </div>
 
         <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200/80 dark:border-gray-800/80 bg-gray-50/50 dark:bg-gray-800/30">
