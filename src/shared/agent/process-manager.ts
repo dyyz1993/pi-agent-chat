@@ -1826,7 +1826,29 @@ export class AgentProcessManager {
     const data = channelMsg.data as unknown as LspChannelEvent | undefined;
     if (!data) return;
 
-    log.info("LSP channel data", { sessionId, event: data.event });
+    // Enhanced LSP logging for diagnostics review
+    const lspLogData: Record<string, unknown> = {
+      sessionId,
+      event: data.event,
+    };
+    if (data.serverName) lspLogData.serverName = data.serverName;
+    if (data.totalServers != null) lspLogData.totalServers = data.totalServers;
+    if (data.servers?.length) lspLogData.serverCount = data.servers.length;
+    if (data.mode) lspLogData.mode = data.mode;
+    if (data.languages?.length) lspLogData.languages = data.languages;
+    if (data.filePath) lspLogData.filePath = data.filePath;
+    if (data.diagnostics)
+      lspLogData.diagnosticsCount = Array.isArray(data.diagnostics)
+        ? data.diagnostics.length
+        : Object.keys(data.diagnostics).length;
+    if (data.error) lspLogData.error = data.error;
+    // Derive aggregate state for startup/status events
+    if (data.servers?.length) {
+      const anyReady = data.servers.some((s: { state?: string }) => s.state === "ready");
+      const anyError = data.servers.some((s: { state?: string }) => s.state === "error");
+      lspLogData.aggregateState = anyReady ? "ready" : anyError ? "error" : "starting";
+    }
+    log.info("LSP channel data", lspLogData);
 
     if (data.event === "startup_complete" || data.event === "status_changed") {
       const servers = (data.servers ?? []) as Array<{
