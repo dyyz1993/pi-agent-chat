@@ -28,6 +28,7 @@ import { useSettingsStore } from "../../stores/use-settings-store";
 import { useUIBlockMap } from "../../stores/use-ui-dialog-store";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import { ENTRY_TYPE_KEYS, getMemoryConfig, getMemorySummary } from "./memory-config";
+import { SnapshotBadge } from "./snapshot/SnapshotBadge";
 import { formatTokenCount } from "../../utils/turn-utils";
 
 export function getBlockBorderColor(block: ContentBlock, role: "user" | "assistant"): string {
@@ -56,6 +57,7 @@ export function getBlockBorderColor(block: ContentBlock, role: "user" | "assista
       if (ct.startsWith("memory_extract")) return "border-l-green-400/40";
       if (ct === "memory_created") return "border-l-teal-400/40";
       if (ct === "memory_failed") return "border-l-red-400/40";
+      if (ct === "step_snapshot") return "border-l-indigo-400/40";
       return roleDefault;
     }
     case "compactionSummary":
@@ -922,6 +924,9 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({
       }
       if (MEMORY_HIDDEN_IN_CHAT.has(block.customType)) {
         return null;
+      }
+      if (block.customType === "step_snapshot") {
+        return <SnapshotBadge data={block.data} blockId={blockId} />;
       }
       if (!MEMORY_CUSTOM_TYPES.has(block.customType)) {
         return null;

@@ -21,7 +21,7 @@ export const toolCallNameMap: Record<string, string> = {};
 
 const pendingPrefetchMap = new Map<
   string,
-  { agentEvent: AgentEvent; timer: ReturnType<typeof setTimeout> }
+  Map<string, { agentEvent: AgentEvent; timer: ReturnType<typeof setTimeout> }>
 >();
 const PREFETCH_FALLBACK_MS = 5000;
 
@@ -553,7 +553,23 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
   }
 
   if (event.type === "custom_entry") {
-    if (!ALL_MEMORY_TYPE_KEYS.has(event.customType)) return;
+    const SNAPSHOT_TYPE = "step_snapshot";
+    const isSnapshot = event.customType === SNAPSHOT_TYPE;
+    if (!ALL_MEMORY_TYPE_KEYS.has(event.customType) && !isSnapshot) return;
+
+    if (isSnapshot) {
+      if (event.display === false) return;
+      const chat = useChatStore.getState();
+      const existing = chat.messagesBySession[sessionId] || [];
+      const customMsg: ChatMessage = {
+        id: event.id || `snapshot-${Date.now()}`,
+        role: "custom",
+        content: [{ type: "custom", customType: SNAPSHOT_TYPE, data: event.data }],
+        timestamp: Date.now(),
+      };
+      chat.setMessagesForSession(sessionId, [...existing, customMsg]);
+      return;
+    }
 
     const memoryStore = useMemoryStore.getState();
     memoryStore.addEvent(sessionId, {
@@ -576,17 +592,21 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     if (event.display === false) return;
 
     if (event.customType === "memory_prefetch") {
-      const existing = pendingPrefetchMap.get(sessionId);
-      if (existing) clearTimeout(existing.timer);
+      const eventId = event.id || `prefetch-${Date.now()}`;
+      if (!pendingPrefetchMap.has(sessionId)) {
+        pendingPrefetchMap.set(sessionId, new Map());
+      }
+      const sessionMap = pendingPrefetchMap.get(sessionId)!;
 
       const timer = setTimeout(() => {
-        pendingPrefetchMap.delete(sessionId);
+        sessionMap.delete(eventId);
+        if (sessionMap.size === 0) pendingPrefetchMap.delete(sessionId);
         const chat = useChatStore.getState();
         const msgs = chat.messagesBySession[sessionId] || [];
         chat.setMessagesForSession(sessionId, [
           ...msgs,
           {
-            id: event.id || `custom-${Date.now()}-fallback`,
+            id: eventId,
             role: "custom" as const,
             content: [{ type: "custom" as const, customType: "memory_prefetch", data: event.data }],
             timestamp: Date.now(),
@@ -594,20 +614,23 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         ]);
       }, PREFETCH_FALLBACK_MS);
 
-      pendingPrefetchMap.set(sessionId, { agentEvent: event, timer });
+      sessionMap.set(eventId, { agentEvent: event, timer });
       return;
     }
 
     if (event.customType === "memory_prefetch_result") {
-      const pending = pendingPrefetchMap.get(sessionId);
+      const sessionMap = pendingPrefetchMap.get(sessionId);
       let resultData: unknown = event.data;
 
-      if (pending) {
-        clearTimeout(pending.timer);
-        pendingPrefetchMap.delete(sessionId);
+      if (sessionMap && sessionMap.size > 0) {
+        const entry = sessionMap.entries().next().value!;
+        const [firstKey, firstPending] = entry;
+        clearTimeout(firstPending.timer);
+        sessionMap.delete(firstKey);
+        if (sessionMap.size === 0) pendingPrefetchMap.delete(sessionId);
 
         const prefetchData = (
-          pending.agentEvent.type === "custom_entry" ? pending.agentEvent.data : undefined
+          firstPending.agentEvent.type === "custom_entry" ? firstPending.agentEvent.data : undefined
         ) as Record<string, unknown> | undefined;
         resultData = {
           ...(typeof event.data === "object" && event.data !== null

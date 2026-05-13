@@ -1,16 +1,18 @@
-import { FileText, X, Code, Eye, Save } from "lucide-react";
+import { FileText, X, Code, Eye, Save, Pencil } from "lucide-react";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import type { FilePreview } from "../../types";
 import { formatSize } from "../../utils/file-utils";
 import { VirtualizedCodeView } from "./VirtualizedCodeView";
 import { apiClient } from "../../lib/api-client";
+import { proxyUrlSync } from "../../lib/proxy";
 
 interface FilePreviewOverlayProps {
   preview: FilePreview;
   loading: boolean;
   onClose: () => void;
   onSave?: (content: string) => void;
+  onToggleEdit?: (editable: boolean) => void;
 }
 
 function isSvgFile(filename: string): boolean {
@@ -33,14 +35,22 @@ function isHtmlFile(filename: string): boolean {
 
 function getFsUrl(filePath: string): string {
   const token = apiClient.getAuthToken();
-  return `/fs${filePath}?token=${token}`;
+  const baseUrl = apiClient.getBaseUrl();
+  const raw = baseUrl ? `${baseUrl}/fs${filePath}?token=${token}` : `/fs${filePath}?token=${token}`;
+  return proxyUrlSync(raw);
 }
 
 function canUseFsRoute(): boolean {
   return apiClient.getTransport() === "websocket";
 }
 
-export function FilePreviewOverlay({ preview, loading, onClose, onSave }: FilePreviewOverlayProps) {
+export function FilePreviewOverlay({
+  preview,
+  loading,
+  onClose,
+  onSave,
+  onToggleEdit,
+}: FilePreviewOverlayProps) {
   const { t } = useTranslation("explorer");
   const [svgContent, setSvgContent] = useState<string | null>(null);
   const [svgLoading, setSvgLoading] = useState(false);
@@ -199,6 +209,16 @@ export function FilePreviewOverlay({ preview, loading, onClose, onSave }: FilePr
             >
               {htmlSourceMode ? <Eye className="w-3.5 h-3.5" /> : <Code className="w-3.5 h-3.5" />}
               <span>{htmlSourceMode ? t("preview") : t("source")}</span>
+            </button>
+          )}
+          {preview.isText && !preview.editable && onToggleEdit && (
+            <button
+              onClick={() => onToggleEdit(true)}
+              className="flex items-center gap-1 px-2 py-1 rounded text-xs text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors"
+              title="Edit"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              <span>Edit</span>
             </button>
           )}
           {preview.editable && (

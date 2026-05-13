@@ -89,7 +89,12 @@ function verifyToken(req: IncomingMessage, authToken: string): boolean {
 }
 
 export interface HttpRouteDeps {
-  config: { readonly port: number; readonly authToken: string; readonly maxUploadSize: number };
+  config: {
+    readonly port: number;
+    readonly authToken: string;
+    readonly maxUploadSize: number;
+    readonly proxyApiUrl: string;
+  };
   getWebSocketClientCount: () => number;
 }
 
@@ -119,6 +124,13 @@ export function createHttpHandler(
     if (url.pathname === "/health") {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ status: "ok", clients: getWebSocketClientCount() }));
+      return;
+    }
+
+    // 代理配置（不需要鉴权，前端启动时读取）
+    if (url.pathname === "/api/proxy-config") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ proxyApiUrl: cfg.proxyApiUrl || null }));
       return;
     }
 

@@ -96,6 +96,7 @@ describe("loadFiles", () => {
     });
 
     await useMemoryStore.getState().loadFiles("/project", "sess-1");
+    await new Promise((r) => setTimeout(r, 150));
 
     const state = useMemoryStore.getState();
     expect(state.filesBySession["sess-1"]).toEqual(files);
@@ -107,6 +108,7 @@ describe("loadFiles", () => {
     mockedCall.mockRejectedValueOnce(new Error("RPC fail"));
 
     await useMemoryStore.getState().loadFiles("/project", "sess-1");
+    await new Promise((r) => setTimeout(r, 150));
 
     const state = useMemoryStore.getState();
     expect(state.filesBySession["sess-1"]).toBeUndefined();
@@ -200,6 +202,7 @@ describe("multiple sessions coexist independently", () => {
       entrypointContent: null,
     });
     await useMemoryStore.getState().loadFiles("/project-a", "sess-a");
+    await new Promise((r) => setTimeout(r, 150));
 
     useMemoryStore
       .getState()
@@ -218,6 +221,7 @@ describe("multiple sessions coexist independently", () => {
       entrypointContent: "entrypoint-b",
     });
     await useMemoryStore.getState().loadFiles("/project-b", "sess-b");
+    await new Promise((r) => setTimeout(r, 150));
 
     const state = useMemoryStore.getState();
     expect(state.eventsBySession["sess-a"]).toHaveLength(1);
@@ -242,6 +246,7 @@ describe("loadFiles edge cases", () => {
   it("loadFiles with empty result", async () => {
     mockedCall.mockResolvedValueOnce({ files: [], entrypointContent: null });
     await useMemoryStore.getState().loadFiles("/project", "sess-1");
+    await new Promise((r) => setTimeout(r, 150));
 
     const state = useMemoryStore.getState();
     expect(state.filesBySession["sess-1"]).toEqual([]);
@@ -254,6 +259,7 @@ describe("loadFiles edge cases", () => {
       entrypointContent: "# Memory Index\n\nSome content here",
     });
     await useMemoryStore.getState().loadFiles("/project", "sess-1");
+    await new Promise((r) => setTimeout(r, 150));
 
     const state = useMemoryStore.getState();
     expect(state.entrypointBySession["sess-1"]).toBe("# Memory Index\n\nSome content here");

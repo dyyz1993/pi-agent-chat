@@ -50,15 +50,34 @@ describe("useMemoryStore", () => {
     expect(events[0].customType).toBe("type-a");
   });
 
-  it("addEvent deduplicates by customType+timestamp", () => {
+  it("addEvent: different events with same customType+timestamp should BOTH be kept", () => {
     useMemoryStore.getState().addEvent(SID, {
-      id: "e1",
+      id: "event-alpha",
+      customType: "memory_prefetch_result",
+      data: { summary: "第一次搜索结果", injectedBytes: 1024 },
+      timestamp: 1000,
+    });
+    useMemoryStore.getState().addEvent(SID, {
+      id: "event-beta",
+      customType: "memory_prefetch_result",
+      data: { summary: "第二次搜索结果", injectedBytes: 2048 },
+      timestamp: 1000,
+    });
+    const events = useMemoryStore.getState().eventsBySession[SID];
+    expect(events).toHaveLength(2);
+    expect(events[0].id).toBe("event-alpha");
+    expect(events[1].id).toBe("event-beta");
+  });
+
+  it("addEvent deduplicates by event id (same id = duplicate)", () => {
+    useMemoryStore.getState().addEvent(SID, {
+      id: "same-id",
       customType: "type-a",
       data: {},
       timestamp: 1000,
     });
     useMemoryStore.getState().addEvent(SID, {
-      id: "e2",
+      id: "same-id",
       customType: "type-a",
       data: { other: true },
       timestamp: 1000,
@@ -73,6 +92,7 @@ describe("useMemoryStore", () => {
     mockCall.mockResolvedValue({ files, entrypointContent: "entry" });
 
     await useMemoryStore.getState().loadFiles("/project", SID);
+    await new Promise((r) => setTimeout(r, 150));
 
     expect(useMemoryStore.getState().filesBySession[SID]).toEqual(files);
     expect(useMemoryStore.getState().entrypointBySession[SID]).toBe("entry");
@@ -80,7 +100,9 @@ describe("useMemoryStore", () => {
 
   it("loadFiles failure does not crash", async () => {
     mockCall.mockRejectedValue(new Error("fail"));
-    await expect(useMemoryStore.getState().loadFiles("/project", SID)).resolves.toBeUndefined();
+    await useMemoryStore.getState().loadFiles("/project", SID);
+    await new Promise((r) => setTimeout(r, 150));
+    expect(useMemoryStore.getState().filesBySession[SID]).toBeUndefined();
   });
 
   it("addInjected adds to injectedBySession", () => {
@@ -108,6 +130,18 @@ describe("useMemoryStore", () => {
     expect(useMemoryStore.getState().collapsedSections.has("operations")).toBe(true);
     useMemoryStore.getState().toggleSection("operations");
     expect(useMemoryStore.getState().collapsedSections.has("operations")).toBe(false);
+  });
+
+  it("loadFiles debounces: rapid calls only trigger one RPC", async () => {
+    mockCall.mockResolvedValue({ files: [], entrypointContent: null });
+
+    useMemoryStore.getState().loadFiles("/project", SID);
+    useMemoryStore.getState().loadFiles("/project", SID);
+    useMemoryStore.getState().loadFiles("/project", SID);
+
+    await new Promise((r) => setTimeout(r, 500));
+
+    expect(mockCall).toHaveBeenCalledTimes(1);
   });
 
   it("clearSession removes all session data", () => {

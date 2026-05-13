@@ -41,6 +41,8 @@ interface MemoryState {
   setBookmarkCreating: (sessionId: string, creating: boolean) => void;
 }
 
+const loadFilesTimers: Record<string, ReturnType<typeof setTimeout>> = {};
+
 export const useMemoryStore = create<MemoryState>()((set) => ({
   eventsBySession: {},
   filesBySession: {},
@@ -53,8 +55,7 @@ export const useMemoryStore = create<MemoryState>()((set) => ({
   addEvent: (sessionId, event) => {
     set((s) => {
       const existing = s.eventsBySession[sessionId] || [];
-      const dedupeKey = `${event.customType}::${event.timestamp}`;
-      const isDuplicate = existing.some((e) => `${e.customType}::${e.timestamp}` === dedupeKey);
+      const isDuplicate = existing.some((e) => e.id === event.id);
       if (isDuplicate) return s;
       return {
         eventsBySession: {
@@ -66,24 +67,34 @@ export const useMemoryStore = create<MemoryState>()((set) => ({
   },
 
   loadFiles: async (projectPath, sessionId) => {
-    try {
-      const result = (await apiClient.call("memory.listFiles", { projectPath })) as {
-        files: MemoryFile[];
-        entrypointContent: string | null;
-      };
-      set((s) => ({
-        filesBySession: {
-          ...s.filesBySession,
-          [sessionId]: result.files,
-        },
-        entrypointBySession: {
-          ...s.entrypointBySession,
-          [sessionId]: result.entrypointContent,
-        },
-      }));
-    } catch (err) {
-      console.warn("[memory-store] loadEntrypoint failed:", err);
+    const key = `${sessionId}::${projectPath}`;
+    if (loadFilesTimers[key]) {
+      clearTimeout(loadFilesTimers[key]);
     }
+    return new Promise<void>((resolve) => {
+      loadFilesTimers[key] = setTimeout(async () => {
+        delete loadFilesTimers[key];
+        try {
+          const result = (await apiClient.call("memory.listFiles", { projectPath })) as {
+            files: MemoryFile[];
+            entrypointContent: string | null;
+          };
+          set((s) => ({
+            filesBySession: {
+              ...s.filesBySession,
+              [sessionId]: result.files,
+            },
+            entrypointBySession: {
+              ...s.entrypointBySession,
+              [sessionId]: result.entrypointContent,
+            },
+          }));
+        } catch (err) {
+          console.warn("[memory-store] loadFiles failed:", err);
+        }
+        resolve();
+      }, 100);
+    });
   },
 
   addInjected: (sessionId, injected) => {

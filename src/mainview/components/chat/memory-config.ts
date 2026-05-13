@@ -185,7 +185,7 @@ export function getMemorySummary(customType: string, data: unknown): string | nu
       const parts: string[] = [];
       if (created > 0) parts.push(`新建 ${created} 条`);
       if (updated > 0) parts.push(`更新 ${updated} 条`);
-      return parts.length > 0 ? parts.join("，") : null;
+      return parts.length > 0 ? parts.join("，") : "提取完成（无变更）";
     }
     case "memory_extract_result": {
       if (typeof d.summary === "string" && d.summary) return d.summary;
@@ -196,7 +196,7 @@ export function getMemorySummary(customType: string, data: unknown): string | nu
       if (typeof d.merges === "number") parts.push(`合并 ${d.merges}`);
       if (typeof d.deletions === "number") parts.push(`删除 ${d.deletions}`);
       if (typeof d.updates === "number") parts.push(`更新 ${d.updates}`);
-      return parts.length > 0 ? parts.join("，") : null;
+      return parts.length > 0 ? parts.join("，") : "整理完成（无变更）";
     }
     case "memory_dream_result": {
       if (typeof d.summary === "string" && d.summary) return d.summary;

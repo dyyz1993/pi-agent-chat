@@ -1,4 +1,5 @@
 import { apiClient } from "../../../lib/api-client";
+import { proxyUrlSync } from "../../../lib/proxy";
 
 export type ResourceType =
   | "image"
@@ -22,11 +23,11 @@ export interface PreviewDetails {
 }
 
 export function getFileHttpUrl(absolutePath: string): string {
-  if (/^https?:\/\//i.test(absolutePath)) return absolutePath;
+  if (/^https?:\/\//i.test(absolutePath)) return proxyUrlSync(absolutePath);
   const baseUrl = apiClient.getBaseUrl();
   const token = apiClient.getAuthToken();
   if (!baseUrl) return `file://${absolutePath}`;
-  return `${baseUrl}/file/${encodeURIComponent(absolutePath)}?token=${token}`;
+  return proxyUrlSync(`${baseUrl}/file/${encodeURIComponent(absolutePath)}?token=${token}`);
 }
 
 export function formatFileSize(bytes: number): string {

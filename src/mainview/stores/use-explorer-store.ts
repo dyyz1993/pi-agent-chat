@@ -6,6 +6,7 @@ import { isTextFile, isImageFile, formatSize } from "../utils/file-utils";
 import { MAX_PREVIEW_SIZE } from "../utils/constants";
 import { useAppStore } from "./use-app-store";
 import { uploadEntriesWeb, importFilesDesktop, type DropEntry } from "../utils/drop-handler";
+import { proxyUrlSync } from "../lib/proxy";
 
 interface ExplorerState {
   treeNodes: TreeNode[];
@@ -27,6 +28,7 @@ interface ExplorerState {
   createFile: (dirPath: string, name: string) => Promise<string | null>;
   createDir: (dirPath: string, name: string) => Promise<void>;
   saveFileContent: (filePath: string, content: string) => Promise<void>;
+  setFileEditable: (editable: boolean) => void;
   renameNode: (oldPath: string, newName: string) => Promise<void>;
   deleteNode: (path: string) => Promise<void>;
   refreshDir: (dirPath: string) => Promise<void>;
@@ -55,7 +57,7 @@ function getFileUrl(filePath: string): string {
   if (mode === "desktop") return `file://${filePath}`;
   const baseUrl = apiClient.getBaseUrl();
   const token = apiClient.getAuthToken();
-  return `${baseUrl}/file/${encodeURIComponent(filePath)}?token=${token}`;
+  return proxyUrlSync(`${baseUrl}/file/${encodeURIComponent(filePath)}?token=${token}`);
 }
 
 function findNode(nodes: TreeNode[], path: string): TreeNode | null {
@@ -295,20 +297,25 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
     try {
       await apiClient.call("file.writeFile", { path: filePath, content });
       addLog(`Saved: ${filePath}`);
-      // Update the preview content and exit editable mode
       const { filePreview } = get();
       if (filePreview && filePreview.path === filePath) {
         set({
           filePreview: {
             ...filePreview,
             content,
-            editable: false,
             totalLines: content.split("\n").length,
           },
         });
       }
     } catch (err) {
       addLog(`Error saving file: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  },
+
+  setFileEditable: (editable: boolean) => {
+    const { filePreview } = get();
+    if (filePreview) {
+      set({ filePreview: { ...filePreview, editable } });
     }
   },
 

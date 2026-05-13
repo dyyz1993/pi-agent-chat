@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { Folder, RefreshCw, File, FolderPlus, Pencil, Trash2, Copy } from "lucide-react";
+import { Folder, RefreshCw, File, FolderPlus, Pencil, Trash2, Copy, Plus } from "lucide-react";
 import type { TreeNode, EditingNode } from "../../types";
 import type { DropEntry } from "../../utils/drop-handler";
 import { readDropItems } from "../../utils/drop-handler";
@@ -131,12 +131,18 @@ export function ExplorerSidebar({
         {
           label: "New File",
           icon: <File className="w-3 h-3" />,
-          onClick: () => onStartEditing(node.path, "newFile"),
+          onClick: () => {
+            if (!node.expanded) onToggle(node.path);
+            onStartEditing(node.path, "newFile");
+          },
         },
         {
           label: "New Folder",
           icon: <FolderPlus className="w-3 h-3" />,
-          onClick: () => onStartEditing(node.path, "newDir"),
+          onClick: () => {
+            if (!node.expanded) onToggle(node.path);
+            onStartEditing(node.path, "newDir");
+          },
         },
       );
     }
@@ -164,7 +170,7 @@ export function ExplorerSidebar({
       },
     );
     return items;
-  }, [contextMenu, currentPath, onRefresh, onStartEditing]);
+  }, [contextMenu, currentPath, onRefresh, onStartEditing, onToggle]);
 
   const handleSubmitEdit = useCallback(
     async (value: string) => {
@@ -192,13 +198,22 @@ export function ExplorerSidebar({
         <Folder className="w-3.5 h-3.5" />
         Explorer
       </div>
-      <button
-        onClick={onRefresh}
-        className="p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-        title="Refresh"
-      >
-        <RefreshCw className="w-3.5 h-3.5" />
-      </button>
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => onStartEditing(currentPath, "newFile")}
+          className="p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+          title="New File"
+        >
+          <Plus className="w-3.5 h-3.5" />
+        </button>
+        <button
+          onClick={onRefresh}
+          className="p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+          title="Refresh"
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+        </button>
+      </div>
     </div>
   );
 

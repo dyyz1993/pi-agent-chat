@@ -137,6 +137,7 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
   const loadingFile = useExplorerStore((s) => s.loadingFile);
   const closePreview = useExplorerStore((s) => s.closePreview);
   const saveFileContent = useExplorerStore((s) => s.saveFileContent);
+  const setFileEditable = useExplorerStore((s) => s.setFileEditable);
   const handleSaveFile = useCallback(
     (content: string) => {
       if (filePreview?.path) {
@@ -198,6 +199,7 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
                 loading={loadingFile}
                 onClose={closePreview}
                 onSave={handleSaveFile}
+                onToggleEdit={setFileEditable}
               />
             </div>
           )}

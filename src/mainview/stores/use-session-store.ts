@@ -16,6 +16,7 @@ import {
 } from "./use-status-store";
 import { useTurnStore } from "./use-turn-store";
 import { useChatNavStore } from "./use-chat-nav-store";
+import { useRetryStore } from "./use-retry-store";
 import {
   setupSubscriptions,
   cleanupSession,
@@ -500,6 +501,11 @@ export const useSessionStore = create<SessionState>()(
         if (activeSessionId) {
           delete newAgentSubs[activeSessionId];
           delete newSubagentSubs[activeSessionId];
+        }
+
+        // 清理重试状态，避免手动重试时通知卡住
+        if (activeSessionId) {
+          useRetryStore.getState().endRetry(activeSessionId);
         }
 
         set((s) => ({

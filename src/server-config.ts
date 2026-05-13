@@ -28,6 +28,8 @@ export const config = {
   piCliPath: requireEnv("PI_CLI_PATH"),
   /** 全局扩展目录，所有扩展通过软链集中管理于此 */
   piExtensionsDir: join(homedir(), ".pi", "agent", "extensions"),
+  /** 本地代理注册 API 地址（如 shanbox），不配置则不启用代理 */
+  proxyApiUrl: process.env.PROXY_API_URL ?? "",
 } as const;
 
 if (MISSING_PI_VARS.length > 0) {

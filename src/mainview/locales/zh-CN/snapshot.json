@@ -11,5 +11,9 @@
   "noSnapshotsYet": "暂无快照",
   "noSnapshotsHint": "Agent 执行工具调用后将自动创建快照",
   "cancelRollback": "取消回滚",
-  "rollbackToSnapshot": "回滚到此快照"
+  "rollbackToSnapshot": "回滚到此快照",
+  "fileChanges": "文件变更",
+  "latest": "最新",
+  "filesChanged": "个文件变更",
+  "snapshot": "快照"
 }

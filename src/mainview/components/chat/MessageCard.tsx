@@ -210,13 +210,22 @@ export const MessageCard = memo(function MessageCard({
       if (b.type !== "custom") return false;
       if (MEMORY_HIDDEN_IN_CHAT.has(b.customType)) return true;
       if (isLspCustomType(b.customType) && !isLspVisibleInChat(b.customType)) return true;
-      if (!MEMORY_CUSTOM_TYPES.has(b.customType) && !isLspCustomType(b.customType)) return true;
+      if (
+        !MEMORY_CUSTOM_TYPES.has(b.customType) &&
+        !isLspCustomType(b.customType) &&
+        b.customType !== "step_snapshot"
+      )
+        return true;
       return false;
     });
     if (allHidden) return null;
   }
 
-  if (hasCustomContent && customBlock && MEMORY_CUSTOM_TYPES.has(customBlock.customType)) {
+  if (
+    hasCustomContent &&
+    customBlock &&
+    (MEMORY_CUSTOM_TYPES.has(customBlock.customType) || customBlock.customType === "step_snapshot")
+  ) {
     return (
       <div data-msg-card-id={message.id} className="relative w-full py-1.5">
         <MessageBubble message={message} />
