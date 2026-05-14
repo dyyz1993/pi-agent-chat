@@ -91,5 +91,20 @@
   "agentSelect": "选择智能体",
   "agentBuild": "Build",
   "agentExplore": "Explore",
-  "agentPlan": "Plan"
+  "agentPlan": "Plan",
+  "supervisor": "Supervisor",
+  "supervisor.description": "会话监控与自动续执行",
+  "supervisor.enabled": "已启用",
+  "supervisor.disabled": "已禁用",
+  "supervisor.state.idle": "空闲",
+  "supervisor.state.checking": "检查中",
+  "supervisor.state.paused": "已暂停",
+  "supervisor.state.continuing": "续执行中",
+  "supervisor.state.disabled": "已禁用",
+  "supervisor.continueCount": "续执行次数",
+  "supervisor.activeGuards": "活跃 Guards",
+  "supervisor.taskReport": "任务报告",
+  "supervisor.forceContinue": "强制续执行",
+  "supervisor.pause": "暂停",
+  "supervisor.cancelPause": "取消暂停"
 }

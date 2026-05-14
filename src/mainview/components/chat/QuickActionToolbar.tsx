@@ -15,6 +15,7 @@ import {
   X,
   Brain,
   BookOpen,
+  Shield,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useLayoutStore } from "../../layouts/use-layout-store";
@@ -23,6 +24,7 @@ import { useSessionStore } from "../../stores/use-session-store";
 import { apiClient } from "../../lib/api-client";
 import { useExplorerStore } from "../../stores/use-explorer-store";
 import { useMemoryStore } from "../../stores/use-memory-store";
+import { useSupervisorStore } from "../../stores/use-supervisor-store";
 import type { TreeNode } from "../../types";
 
 type PopupMode = "at" | "slash" | null;
@@ -87,6 +89,11 @@ export function QuickActionToolbar() {
   const inputText = useChatStore((s) => s.inputText);
   const setInputText = useChatStore((s) => s.setInputText);
   const panelRef = useRef<HTMLDivElement>(null);
+  const showStatus = useLayoutStore((s) => s.showStatus);
+  const setActivePanelTab = useLayoutStore((s) => s.setActivePanelTab);
+  const supervisorStatus = useSupervisorStore(
+    (s) => (activeSessionId ? s.bySession[activeSessionId]?.status : null) ?? null,
+  );
 
   const query = useMemo(() => {
     if (!popupMode) return "";
@@ -500,6 +507,24 @@ export function QuickActionToolbar() {
               <Slash className="w-3.5 h-3.5" />
               <span>/</span>
             </div>
+          </button>
+          <button
+            onClick={() => {
+              setActivePanelTab("status");
+              showStatus();
+            }}
+            className={`p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${
+              !supervisorStatus?.enabled
+                ? "text-gray-400 dark:text-gray-500"
+                : supervisorStatus.state === "paused"
+                  ? "text-amber-500"
+                  : supervisorStatus.state === "checking" || supervisorStatus.state === "continuing"
+                    ? "text-blue-500 animate-pulse"
+                    : "text-green-500"
+            }`}
+            title="Supervisor"
+          >
+            <Shield className="w-4 h-4" />
           </button>
         </div>
       </div>

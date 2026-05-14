@@ -352,6 +352,7 @@ export class AgentProcessManager {
       "rules-engine",
       "memory",
       "coordinator",
+      "supervisor",
     ] as const;
     for (const name of channelNames) {
       client.channel(name).onReceive((data: unknown) => {
@@ -1764,6 +1765,10 @@ export class AgentProcessManager {
         this.handleMemoryChannelData(sessionId, ch);
         return;
       }
+      if (ch.name === "supervisor") {
+        this.handleSupervisorChannelData(sessionId, ch);
+        return;
+      }
       if (ch.name === "coordinator") {
         log.warn(
           "coordinator channel_data reached handleEvent — should have been intercepted in start()",
@@ -1907,6 +1912,18 @@ export class AgentProcessManager {
     log.info("Bash channel data", { sessionId, type: data.type, toolCallId: data.toolCallId });
 
     await this.broadcastEvent("bash.event", { sessionId, event: data }, { sessionId });
+  }
+
+  private async handleSupervisorChannelData(
+    sessionId: string,
+    channelMsg: ChannelDataEvent,
+  ): Promise<void> {
+    const data = channelMsg.data as Record<string, unknown> | undefined;
+    if (!data) return;
+
+    log.info("Supervisor channel data", { sessionId, type: data.type });
+
+    await this.broadcastEvent("supervisor.event", { sessionId, event: data }, { sessionId });
   }
 
   private async handleLspChannelData(

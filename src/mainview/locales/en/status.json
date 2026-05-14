@@ -91,5 +91,20 @@
   "agentSelect": "Select Agent",
   "agentBuild": "Build",
   "agentExplore": "Explore",
-  "agentPlan": "Plan"
+  "agentPlan": "Plan",
+  "supervisor": "Supervisor",
+  "supervisor.description": "Session monitoring and auto-continue",
+  "supervisor.enabled": "Enabled",
+  "supervisor.disabled": "Disabled",
+  "supervisor.state.idle": "Idle",
+  "supervisor.state.checking": "Checking",
+  "supervisor.state.paused": "Paused",
+  "supervisor.state.continuing": "Continuing",
+  "supervisor.state.disabled": "Disabled",
+  "supervisor.continueCount": "Continue Count",
+  "supervisor.activeGuards": "Active Guards",
+  "supervisor.taskReport": "Task Report",
+  "supervisor.forceContinue": "Force Continue",
+  "supervisor.pause": "Pause",
+  "supervisor.cancelPause": "Cancel Pause"
 }

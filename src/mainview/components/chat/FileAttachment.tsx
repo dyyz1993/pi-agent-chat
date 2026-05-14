@@ -1,8 +1,11 @@
 import { useRef, useCallback } from "react";
-import { Paperclip, ImageIcon, X, Loader2, AlertCircle } from "lucide-react";
+import { Paperclip, ImageIcon, X, Loader2, AlertCircle, Shield } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAttachmentStore, type AttachmentFile } from "../../stores/use-attachment-store";
 import { formatFileSize } from "../chat/preview/types";
+import { useSupervisorStore } from "../../stores/use-supervisor-store";
+import { useSessionStore } from "../../stores/use-session-store";
+import { useLayoutStore } from "../../layouts/use-layout-store";
 
 function AttachmentPreview({ att, onRemove }: { att: AttachmentFile; onRemove: () => void }) {
   const isImage = att.type.startsWith("image/");
@@ -59,6 +62,12 @@ export function AttachmentButtons() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const addFiles = useAttachmentStore((s) => s.addFiles);
+  const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const supervisorStatus = useSupervisorStore(
+    (s) => (activeSessionId ? s.bySession[activeSessionId]?.status : null) ?? null,
+  );
+  const showStatus = useLayoutStore((s) => s.showStatus);
+  const setActivePanelTab = useLayoutStore((s) => s.setActivePanelTab);
 
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -81,6 +90,30 @@ export function AttachmentButtons() {
     },
     [addFiles],
   );
+
+  const handleSupervisorClick = useCallback(() => {
+    setActivePanelTab("status");
+    showStatus();
+  }, [setActivePanelTab, showStatus]);
+
+  const shieldColor = !supervisorStatus?.enabled
+    ? "text-gray-400 dark:text-gray-500"
+    : supervisorStatus.state === "idle" || supervisorStatus.state === "checking"
+      ? "text-green-500"
+      : supervisorStatus.state === "paused"
+        ? "text-amber-500"
+        : supervisorStatus.state === "continuing"
+          ? "text-blue-500"
+          : "text-gray-400 dark:text-gray-500";
+
+  const isPulsing =
+    supervisorStatus?.enabled === true &&
+    (supervisorStatus.state === "checking" || supervisorStatus.state === "continuing");
+
+  const pendingSeconds =
+    supervisorStatus?.pendingPause && supervisorStatus.pendingPause.scheduledAt
+      ? Math.max(0, Math.round((supervisorStatus.pendingPause.scheduledAt - Date.now()) / 1000))
+      : null;
 
   return (
     <div className="flex flex-col gap-1 shrink-0 justify-between py-1">
@@ -113,6 +146,19 @@ export function AttachmentButtons() {
         title={t("fileAttachment.addImage")}
       >
         <ImageIcon className="w-4 h-4" />
+      </button>
+
+      <button
+        onClick={handleSupervisorClick}
+        className={`relative p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${shieldColor}`}
+        title="Supervisor"
+      >
+        <Shield className={`w-4 h-4 ${isPulsing ? "animate-pulse" : ""}`} />
+        {pendingSeconds !== null && pendingSeconds < 60 && pendingSeconds > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] flex items-center justify-center rounded-full bg-amber-500 text-white text-[8px] font-bold leading-none px-0.5">
+            {pendingSeconds}
+          </span>
+        )}
       </button>
     </div>
   );

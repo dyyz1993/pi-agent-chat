@@ -1,7 +1,15 @@
 import { create } from "zustand";
 import { apiClient } from "../lib/api-client";
 
-export type StatusSection = "yolo" | "plan" | "shell" | "mcp" | "lsp" | "plugins" | "skills";
+export type StatusSection =
+  | "yolo"
+  | "plan"
+  | "shell"
+  | "mcp"
+  | "lsp"
+  | "plugins"
+  | "skills"
+  | "supervisor";
 
 export type PluginScope = "global" | "project";
 

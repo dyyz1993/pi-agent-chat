@@ -14,6 +14,7 @@ import type { MemoryMethods, MemoryEvents } from "./modules/memory";
 import type { RulesMethods, RulesEvents } from "./modules/rules";
 import type { SnapshotMethods } from "./modules/snapshot";
 import type { CoordinatorEvents } from "./modules/coordinator";
+import type { SupervisorMethods, SupervisorEvents } from "./modules/supervisor";
 
 export interface RPCMethods
   extends
@@ -31,7 +32,8 @@ export interface RPCMethods
     LspMethods,
     MemoryMethods,
     RulesMethods,
-    SnapshotMethods {}
+    SnapshotMethods,
+    SupervisorMethods {}
 
 export interface RPCEvents
   extends
@@ -44,7 +46,8 @@ export interface RPCEvents
     RulesEvents,
     MemoryEvents,
     FileEvents,
-    CoordinatorEvents {}
+    CoordinatorEvents,
+    SupervisorEvents {}
 
 export interface HandlerOptions {
   platform: "desktop" | "web";

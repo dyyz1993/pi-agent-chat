@@ -18,6 +18,9 @@ import {
   Copy,
   Check,
   RotateCw,
+  Shield,
+  Play,
+  Pause,
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
@@ -26,6 +29,7 @@ import { useSessionStore } from "../../stores/use-session-store";
 import { useSubagentStore } from "../../stores/use-subagent-store";
 import { useLspStore } from "../../stores/use-lsp-store";
 import { useBashStore } from "../../stores/use-bash-store";
+import { useSupervisorStore } from "../../stores/use-supervisor-store";
 import { BashProcessCard, LogViewer } from "../bash-panel/BashPanel";
 import type { LspDiagnosticsMode } from "../../../shared/modules/lsp";
 import type { StatusSection } from "../../stores/use-status-store";
@@ -92,6 +96,10 @@ export function StatusPanel() {
   const toggleSkillEnabled = useStatusStore((s) => s.toggleSkillEnabled);
   const expandedPlugin = useStatusStore((s) => s.expandedPlugin);
   const togglePluginExpanded = useStatusStore((s) => s.togglePluginExpanded);
+  const supervisorStatus = useSupervisorStore(
+    (s) => (activeSessionId ? s.bySession[activeSessionId] : null) ?? null,
+  );
+  const supervisorActions = useSupervisorStore((s) => s);
 
   const backgroundProcesses = allProcesses?.filter((p) => backgroundedIds.has(p.toolCallId)) ?? [];
   const hasProcesses = backgroundProcesses.length > 0;
@@ -104,6 +112,7 @@ export function StatusPanel() {
     { id: "lsp", label: t("lsp"), icon: Network },
     { id: "plugins", label: t("plugins"), icon: Puzzle },
     { id: "skills", label: t("skills"), icon: BookOpen },
+    { id: "supervisor", label: t("supervisor"), icon: Shield },
   ];
 
   const [refreshing, setRefreshing] = useState(false);
@@ -510,6 +519,18 @@ export function StatusPanel() {
                       )}
                     </div>
                   )}
+                  {id === "supervisor" && (
+                    <SupervisorSectionContent
+                      status={supervisorStatus?.status ?? null}
+                      taskReports={supervisorStatus?.taskReports ?? []}
+                      sessionId={activeSessionId}
+                      enable={supervisorActions.enable}
+                      disable={supervisorActions.disable}
+                      forceContinue={supervisorActions.forceContinue}
+                      requestPause={supervisorActions.requestPause}
+                      cancelPause={supervisorActions.cancelPause}
+                    />
+                  )}
                 </div>
               )}
             </div>
@@ -679,5 +700,150 @@ function MCPCopyButton({ server }: { server: MCPServerInfo }) {
       {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
       <span>{copied ? t("copied") : t("copyInfo")}</span>
     </button>
+  );
+}
+
+interface SupervisorSectionContentProps {
+  status: import("../../../shared/modules/supervisor").SupervisorStatus | null;
+  taskReports: import("../../../shared/modules/supervisor").TaskReport[];
+  sessionId: string | null;
+  enable: (sessionId: string) => Promise<void>;
+  disable: (sessionId: string) => Promise<void>;
+  forceContinue: (sessionId: string, reason?: string) => Promise<void>;
+  requestPause: (sessionId: string, delayMs?: number, reason?: string) => Promise<void>;
+  cancelPause: (sessionId: string) => Promise<void>;
+}
+
+const STATE_STYLES: Record<string, string> = {
+  idle: "bg-green-500/20 text-green-400",
+  checking: "bg-blue-500/20 text-blue-400",
+  paused: "bg-amber-500/20 text-amber-400",
+  continuing: "bg-blue-500/20 text-blue-400",
+  disabled: "bg-gray-500/20 text-gray-400",
+};
+
+function SupervisorSectionContent({
+  status,
+  taskReports,
+  sessionId,
+  enable,
+  disable,
+  forceContinue,
+  requestPause,
+  cancelPause,
+}: SupervisorSectionContentProps) {
+  const { t } = useTranslation("status");
+
+  if (!status) {
+    return <span className="text-gray-400">{t("supervisor.state.disabled")}</span>;
+  }
+
+  const stateLabel = t(`supervisor.state.${status.state}`) ?? status.state;
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-1.5">
+        <span
+          className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${STATE_STYLES[status.state] ?? "bg-gray-500/20 text-gray-400"}`}
+        >
+          {stateLabel}
+        </span>
+        <span className={`text-[9px] ${status.enabled ? "text-green-400" : "text-gray-500"}`}>
+          {status.enabled ? t("supervisor.enabled") : t("supervisor.disabled")}
+        </span>
+      </div>
+
+      <div className="text-gray-500">
+        {t("supervisor.continueCount")}: {status.continueCount}/{status.maxContinueCount}
+      </div>
+
+      {status.activeGuards.length > 0 && (
+        <div>
+          <span className="text-gray-400 dark:text-gray-600 block mb-0.5">
+            {t("supervisor.activeGuards")}
+          </span>
+          <div className="flex flex-wrap gap-1">
+            {status.activeGuards.map((g) => (
+              <span key={g} className="px-1 py-px rounded text-[9px] bg-cyan-500/15 text-cyan-400">
+                {g}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {taskReports.length > 0 && (
+        <div>
+          <span className="text-gray-400 dark:text-gray-600 block mb-0.5">
+            {t("supervisor.taskReport")}
+          </span>
+          <div className="space-y-0.5">
+            {taskReports.map((tr) => (
+              <div key={tr.guardName} className="flex items-center gap-1">
+                <span
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                    tr.status === "completed"
+                      ? "bg-green-400"
+                      : tr.status === "error"
+                        ? "bg-red-400"
+                        : tr.status === "incomplete"
+                          ? "bg-amber-400"
+                          : "bg-gray-500"
+                  }`}
+                />
+                <span className="truncate text-gray-500">{tr.guardName}</span>
+                <span className="text-[9px] text-gray-400 shrink-0">{tr.status}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {sessionId && (
+        <div className="flex flex-wrap gap-1 pt-0.5">
+          <button
+            onClick={() => (status.enabled ? disable(sessionId) : enable(sessionId))}
+            className={`px-1.5 py-0.5 rounded text-[9px] ${status.enabled ? "bg-red-500/20 text-red-400" : "bg-green-500/20 text-green-400"}`}
+          >
+            {status.enabled ? t("supervisor.disabled") : t("supervisor.enabled")}
+          </button>
+          {status.enabled && (
+            <>
+              <button
+                onClick={() => forceContinue(sessionId)}
+                className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] bg-blue-500/20 text-blue-400"
+              >
+                <Play className="w-2.5 h-2.5" />
+                {t("supervisor.forceContinue")}
+              </button>
+              {status.pendingPause ? (
+                <button
+                  onClick={() => cancelPause(sessionId)}
+                  className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] bg-amber-500/20 text-amber-400"
+                >
+                  {t("supervisor.cancelPause")}
+                </button>
+              ) : (
+                <button
+                  onClick={() => requestPause(sessionId, 5000)}
+                  className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] bg-amber-500/20 text-amber-400"
+                >
+                  <Pause className="w-2.5 h-2.5" />
+                  {t("supervisor.pause")}
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {status.pendingPause && (
+        <div className="text-[9px] text-amber-400/80">
+          {t("supervisor.pause")}:{" "}
+          {Math.ceil((status.pendingPause.scheduledAt - Date.now()) / 1000)}s
+          {status.pendingPause.reason ? ` — ${status.pendingPause.reason}` : ""}
+        </div>
+      )}
+    </div>
   );
 }
