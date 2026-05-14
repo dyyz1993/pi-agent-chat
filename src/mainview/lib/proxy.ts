@@ -21,6 +21,17 @@ let active = false;
 const cache = new Map<string, ProxyEntry>();
 const pendingReg = new Map<string, Promise<ProxyEntry | null>>();
 
+/** 判断是否为本地/LAN 地址，只有这类地址需要走代理 */
+export function isLocalAddress(host: string): boolean {
+  if (!host) return false;
+  const lower = host.toLowerCase();
+  if (lower === "localhost" || lower === "127.0.0.1" || lower === "::1") return true;
+  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+  if (/^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+  return false;
+}
+
 // ---- 公开 API ----
 
 /** 代理是否已启用 */
@@ -68,6 +79,7 @@ export function proxyUrlSync(originalUrl: string): string {
   try {
     const parsed = new URL(originalUrl);
     if (parsed.protocol === "file:" || parsed.protocol === "https:") return originalUrl;
+    if (parsed.protocol === "http:" && !isLocalAddress(parsed.hostname)) return originalUrl;
     const entry = cache.get(parsed.host);
     if (!entry) return originalUrl;
     return buildProxiedUrl(originalUrl, entry);
@@ -86,6 +98,7 @@ export async function proxyUrl(originalUrl: string): Promise<string> {
   try {
     const parsed = new URL(originalUrl);
     if (parsed.protocol === "file:" || parsed.protocol === "https:") return originalUrl;
+    if (parsed.protocol === "http:" && !isLocalAddress(parsed.hostname)) return originalUrl;
 
     const cached = cache.get(parsed.host);
     if (cached) return buildProxiedUrl(originalUrl, cached);

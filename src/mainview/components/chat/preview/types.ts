@@ -27,7 +27,7 @@ export function getFileHttpUrl(absolutePath: string): string {
   const baseUrl = apiClient.getBaseUrl();
   const token = apiClient.getAuthToken();
   if (!baseUrl) return `file://${absolutePath}`;
-  return proxyUrlSync(`${baseUrl}/file/${encodeURIComponent(absolutePath)}?token=${token}`);
+  return `${baseUrl}/file/${encodeURIComponent(absolutePath)}?token=${token}`;
 }
 
 export function formatFileSize(bytes: number): string {

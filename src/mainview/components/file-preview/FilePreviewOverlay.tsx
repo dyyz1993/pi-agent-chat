@@ -5,7 +5,6 @@ import type { FilePreview } from "../../types";
 import { formatSize } from "../../utils/file-utils";
 import { VirtualizedCodeView } from "./VirtualizedCodeView";
 import { apiClient } from "../../lib/api-client";
-import { proxyUrlSync } from "../../lib/proxy";
 
 interface FilePreviewOverlayProps {
   preview: FilePreview;
@@ -36,8 +35,7 @@ function isHtmlFile(filename: string): boolean {
 function getFsUrl(filePath: string): string {
   const token = apiClient.getAuthToken();
   const baseUrl = apiClient.getBaseUrl();
-  const raw = baseUrl ? `${baseUrl}/fs${filePath}?token=${token}` : `/fs${filePath}?token=${token}`;
-  return proxyUrlSync(raw);
+  return baseUrl ? `${baseUrl}/fs${filePath}?token=${token}` : `/fs${filePath}?token=${token}`;
 }
 
 function canUseFsRoute(): boolean {

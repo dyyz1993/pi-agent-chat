@@ -6,7 +6,6 @@ import { isTextFile, isImageFile, formatSize } from "../utils/file-utils";
 import { MAX_PREVIEW_SIZE } from "../utils/constants";
 import { useAppStore } from "./use-app-store";
 import { uploadEntriesWeb, importFilesDesktop, type DropEntry } from "../utils/drop-handler";
-import { proxyUrlSync } from "../lib/proxy";
 
 interface ExplorerState {
   treeNodes: TreeNode[];
@@ -15,6 +14,7 @@ interface ExplorerState {
   filePreview: FilePreview | null;
   loadingFile: boolean;
   editingNode: EditingNode | null;
+  _explorerVersion: number;
   _fileWatchSubId: string | null;
   _refreshDebounceTimer: ReturnType<typeof setTimeout> | null;
   _pendingRefreshDirs: Set<string>;
@@ -57,7 +57,7 @@ function getFileUrl(filePath: string): string {
   if (mode === "desktop") return `file://${filePath}`;
   const baseUrl = apiClient.getBaseUrl();
   const token = apiClient.getAuthToken();
-  return proxyUrlSync(`${baseUrl}/file/${encodeURIComponent(filePath)}?token=${token}`);
+  return `${baseUrl}/file/${encodeURIComponent(filePath)}?token=${token}`;
 }
 
 function findNode(nodes: TreeNode[], path: string): TreeNode | null {
@@ -163,21 +163,24 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
   filePreview: null,
   loadingFile: false,
   editingNode: null,
+  _explorerVersion: 0,
   _fileWatchSubId: null,
   _refreshDebounceTimer: null,
   _pendingRefreshDirs: new Set<string>(),
 
-  setCurrentPath: (path) => set({ currentPath: path }),
+  setCurrentPath: (path) =>
+    set({ currentPath: path, _explorerVersion: get()._explorerVersion + 1 }),
 
   listRootDir: async () => {
-    const { currentPath } = get();
+    const { currentPath, _explorerVersion } = get();
+    if (!currentPath) return;
     const addLog = useAppStore.getState().addLog;
     addLog(`ListDir: ${currentPath}`);
     try {
       const res = await apiClient.call("file.listDir", { path: currentPath });
+      if (_explorerVersion !== get()._explorerVersion) return;
       set({
         treeNodes: entriesToTreeNodes(res.entries),
-        currentPath: res.basePath,
       });
       addLog(`Found ${res.entries.length} items`);
       get().subscribeFileWatcher();
