@@ -120,7 +120,7 @@ interface SessionState {
   addProjectTab: (tab: ProjectTab) => void;
   removeProjectTab: (id: string) => void;
   reorderProjectTabs: (fromIndex: number, toIndex: number) => void;
-  setActiveProject: (id: string) => void;
+  setActiveProject: (id: string, options?: { skipAutoSession?: boolean }) => void;
   loadSessionsForProject: (projectPath: string) => Promise<SessionMeta[]>;
   setActiveSession: (id: string | null, force?: boolean) => void;
   retryActiveProject: () => void;
@@ -223,9 +223,10 @@ export const useSessionStore = create<SessionState>()(
         });
       },
 
-      setActiveProject: (id) => {
+      setActiveProject: (id, options?) => {
         const prevProjectId = get().activeProjectId;
         const prevSessionId = get().activeSessionId;
+        const skipAutoSession = options?.skipAutoSession ?? false;
 
         if (prevProjectId && prevProjectId !== id && prevSessionId) {
           cleanupSession(get(), prevSessionId);
@@ -252,22 +253,24 @@ export const useSessionStore = create<SessionState>()(
           gitStore.fetchBranches(tab.path);
         });
 
-        get()
-          .loadSessionsForProject(tab.path)
-          .then(async (sessions) => {
-            if (version !== get()._projectVersion) return;
+        if (!skipAutoSession) {
+          get()
+            .loadSessionsForProject(tab.path)
+            .then(async (sessions) => {
+              if (version !== get()._projectVersion) return;
 
-            set((s) => ({
-              projectStartFailed: { ...s.projectStartFailed, [id]: false },
-              projectStartError: { ...s.projectStartError, [id]: "" },
-            }));
+              set((s) => ({
+                projectStartFailed: { ...s.projectStartFailed, [id]: false },
+                projectStartError: { ...s.projectStartError, [id]: "" },
+              }));
 
-            if (sessions.length > 0) {
-              get().setActiveSession(sessions[0].sessionId);
-            } else {
-              await get().createNewSession();
-            }
-          });
+              if (sessions.length > 0) {
+                get().setActiveSession(sessions[0].sessionId);
+              } else {
+                await get().createNewSession();
+              }
+            });
+        }
       },
 
       loadSessionsForProject: async (projectPath) => {
@@ -1133,6 +1136,8 @@ export const useSessionStore = create<SessionState>()(
         }
 
         try {
+          get().setActiveProject(activeProjectId, { skipAutoSession: true });
+
           const sessions = await get().loadSessionsForProject(tab.path);
           const found = sessions?.find((s) => s.sessionId === activeSessionId);
           const targetId = found

@@ -2,7 +2,6 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { apiClient, resolveAuthToken } from "./lib/api-client";
 import { useAppStore } from "./stores/use-app-store";
-import { useExplorerStore } from "./stores/use-explorer-store";
 import { useSessionStore } from "./stores/use-session-store";
 import { setupProjectStatusSubscription } from "./stores/session-subscriptions";
 import { useChatStore } from "./stores/use-chat-store";
@@ -20,7 +19,6 @@ function App() {
   const ready = useAppStore((s) => s.ready);
   const initializeConnection = useAppStore((s) => s.initializeConnection);
   const addLog = useAppStore((s) => s.addLog);
-  const listRootDir = useExplorerStore((s) => s.listRootDir);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [projectLoading, setProjectLoading] = useState(false);
   const restoredFlag = useAppStore((s) => s.restored);
@@ -97,8 +95,6 @@ function App() {
 
     (async () => {
       try {
-        listRootDir();
-
         const urlParams = new URLSearchParams(window.location.search);
         const urlSessionId = urlParams.get("session");
 
@@ -126,7 +122,7 @@ function App() {
             const tabId = `proj-${projectPath.replace(/\//g, "-")}`;
 
             addProjectTab({ id: tabId, name: projectName, path: projectPath });
-            useSessionStore.getState().setActiveProject(tabId);
+            useSessionStore.getState().setActiveProject(tabId, { skipAutoSession: true });
 
             await loadSessionsForProject(projectPath);
 
@@ -180,7 +176,7 @@ function App() {
             savedActiveId && savedTabs.some((t) => t.id === savedActiveId)
               ? savedActiveId
               : savedTabs[0].id;
-          useSessionStore.getState().setActiveProject(targetId);
+          useSessionStore.getState().setActiveProject(targetId, { skipAutoSession: true });
 
           const tab = savedTabs.find((t) => t.id === targetId);
           if (tab) {
@@ -188,6 +184,11 @@ function App() {
             addLog(
               `Restored ${savedTabs.length} tabs from server config (${sessions.length} sessions)`,
             );
+            if (sessions.length > 0) {
+              useSessionStore.getState().setActiveSession(sessions[0].sessionId);
+            } else {
+              await useSessionStore.getState().createNewSession();
+            }
           }
           if (!cancelled) setRestoring(false);
           return;
@@ -205,6 +206,7 @@ function App() {
         const first = projects[0];
         const tabId = `proj-${first.path.replace(/\//g, "-")}`;
         addProjectTab({ id: tabId, name: first.name, path: first.path });
+        useSessionStore.getState().setActiveProject(tabId, { skipAutoSession: true });
 
         const sessions = await loadSessionsForProject(first.path);
         addLog(`Restored project: ${first.name} (${sessions.length} sessions)`);
@@ -225,7 +227,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [ready, addLog, listRootDir, addProjectTab, loadSessionsForProject, restoreFromPersisted]);
+  }, [ready, addLog, addProjectTab, loadSessionsForProject, restoreFromPersisted]);
 
   const handleSelectProject = async (path: string, name: string) => {
     setProjectLoading(true);

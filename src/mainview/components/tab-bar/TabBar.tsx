@@ -55,6 +55,14 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!activeProjectId) return;
+    const idx = projectTabs.findIndex((t) => t.id === activeProjectId);
+    if (idx < 0) return;
+    const el = tabRefs.current[idx];
+    el?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+  }, [activeProjectId, projectTabs]);
+
   const cancelLongPress = useCallback(() => {
     if (longPressTimer.current) {
       clearTimeout(longPressTimer.current);
