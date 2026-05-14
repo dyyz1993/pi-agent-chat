@@ -97,6 +97,7 @@ interface SessionState {
   notifySubscriptions: Record<string, string>;
   memorySubscriptions: Record<string, string[]>;
   coordinatorSubscriptions: Record<string, string>;
+  supervisorSubscriptions: Record<string, string>;
   sessionReady: Record<string, boolean>;
   todosBySession: Record<string, TodoItem[]>;
   sessionContextMap: Record<string, ContextUsage>;
@@ -160,6 +161,7 @@ export const useSessionStore = create<SessionState>()(
       notifySubscriptions: {},
       memorySubscriptions: {},
       coordinatorSubscriptions: {},
+      supervisorSubscriptions: {},
       sessionReady: {},
       todosBySession: {},
       sessionContextMap: {},

@@ -14,6 +14,7 @@ import { register as lsp } from "./lsp";
 import { register as memory } from "./memory";
 import { register as rules } from "./rules";
 import { register as snapshot } from "./snapshot";
+import { register as supervisor } from "./supervisor";
 import { unregister as agentCleanup } from "./agent";
 
 type RegisterFn = (server: RPCServer, options: HandlerOptions) => void;
@@ -34,6 +35,7 @@ export const handlerMap: Record<string, RegisterFn> = {
   memory,
   rules,
   snapshot,
+  supervisor,
 };
 
 export const cleanupMap: Record<string, CleanupFn> = {

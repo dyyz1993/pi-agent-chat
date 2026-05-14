@@ -29,6 +29,7 @@ export interface SubscriptionMaps {
   notifySubscriptions: Record<string, string>;
   memorySubscriptions: Record<string, string[]>;
   coordinatorSubscriptions: Record<string, string>;
+  supervisorSubscriptions: Record<string, string>;
 }
 
 export type TodoPriority = "high" | "medium" | "low";

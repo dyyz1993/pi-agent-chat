@@ -2,6 +2,7 @@ import { Plus, X, Settings } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSessionStore } from "../../stores/use-session-store";
+import { apiClient } from "../../lib/api-client";
 import { SettingsPanel } from "../settings/SettingsPanel";
 import type { SessionStatus } from "../../types";
 
@@ -23,6 +24,11 @@ const MOVE_THRESHOLD = 5;
 export function TabBar({ onAddProject }: { onAddProject: () => void }) {
   const { t } = useTranslation("sidebar");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [closeConfirmTab, setCloseConfirmTab] = useState<{
+    id: string;
+    name: string;
+    runningSessionIds: string[];
+  } | null>(null);
   const projectTabs = useSessionStore((s) => s.projectTabs);
   const activeProjectId = useSessionStore((s) => s.activeProjectId);
   const setActiveProject = useSessionStore((s) => s.setActiveProject);
@@ -163,10 +169,50 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
     setActiveProject(tabId);
   };
 
+  const getRunningSessionIds = useCallback(
+    (tabId: string) => {
+      const tab = projectTabs.find((t) => t.id === tabId);
+      if (!tab) return [];
+      const sessions = sessionsByProject[tab.path] || [];
+      return sessions
+        .filter((s) => {
+          const st = sessionStatusMap[s.sessionId];
+          return st === "streaming" || st === "compacting" || st === "retrying";
+        })
+        .map((s) => s.sessionId);
+    },
+    [projectTabs, sessionsByProject, sessionStatusMap],
+  );
+
   const handleCloseClick = (e: React.MouseEvent, tabId: string) => {
     e.stopPropagation();
     e.preventDefault();
-    removeProjectTab(tabId);
+    const tab = projectTabs.find((t) => t.id === tabId);
+    const runningIds = getRunningSessionIds(tabId);
+    setCloseConfirmTab({
+      id: tabId,
+      name: tab?.name ?? "",
+      runningSessionIds: runningIds,
+    });
+  };
+
+  const handleStopAndClose = async () => {
+    if (!closeConfirmTab) return;
+    for (const sid of closeConfirmTab.runningSessionIds) {
+      try {
+        await apiClient.call("agent.stop", { sessionId: sid });
+      } catch {
+        /* ignore */
+      }
+    }
+    removeProjectTab(closeConfirmTab.id);
+    setCloseConfirmTab(null);
+  };
+
+  const handleKeepRunning = () => {
+    if (!closeConfirmTab) return;
+    removeProjectTab(closeConfirmTab.id);
+    setCloseConfirmTab(null);
   };
 
   return (
@@ -276,6 +322,64 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
       </div>
 
       {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
+
+      {closeConfirmTab && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setCloseConfirmTab(null);
+          }}
+        >
+          <div
+            className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-2xl p-4 min-w-[300px] max-w-[400px]"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t("closeProjectTitle")}
+          >
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
+              {t("closeProjectTitle")}
+            </h3>
+            <p className="text-xs text-gray-700 dark:text-gray-300 mb-4">
+              {closeConfirmTab.runningSessionIds.length > 0
+                ? t("closeProjectRunningMessage", { name: closeConfirmTab.name })
+                : t("closeProjectIdleMessage", { name: closeConfirmTab.name })}
+            </p>
+            <div className="flex justify-end gap-2">
+              {closeConfirmTab.runningSessionIds.length > 0 ? (
+                <>
+                  <button
+                    className="px-3 py-1.5 text-xs bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded transition-colors text-gray-800 dark:text-gray-200"
+                    onClick={handleKeepRunning}
+                  >
+                    {t("closeProjectContinue")}
+                  </button>
+                  <button
+                    className="px-3 py-1.5 text-xs bg-red-600 hover:bg-red-700 rounded transition-colors text-white"
+                    onClick={handleStopAndClose}
+                  >
+                    {t("closeProjectStop")}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    className="px-3 py-1.5 text-xs bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded transition-colors text-gray-800 dark:text-gray-200"
+                    onClick={() => setCloseConfirmTab(null)}
+                  >
+                    {t("cancel", { ns: "common" })}
+                  </button>
+                  <button
+                    className="px-3 py-1.5 text-xs bg-red-600 hover:bg-red-700 rounded transition-colors text-white"
+                    onClick={handleKeepRunning}
+                  >
+                    {t("closeProjectClose")}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

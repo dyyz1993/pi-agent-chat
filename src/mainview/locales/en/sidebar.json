@@ -135,5 +135,11 @@
   "picker.newFolderName": "Folder name",
   "picker.createFolderError": "Failed to create folder",
   "picker.folderExists": "Folder already exists",
-  "currentAgent": "Current Agent"
+  "currentAgent": "Current Agent",
+  "closeProjectTitle": "Close Project",
+  "closeProjectRunningMessage": "\"{{name}}\" has running sessions. What would you like to do?",
+  "closeProjectIdleMessage": "Close project \"{{name}}\"?",
+  "closeProjectContinue": "Keep Running",
+  "closeProjectStop": "Stop",
+  "closeProjectClose": "Close"
 }
