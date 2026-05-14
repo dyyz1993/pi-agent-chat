@@ -96,7 +96,15 @@ function ActionSummary({ details }: { details: TodoDetails }) {
 
 function TodoList({ todos }: { todos: TodoItem[] }) {
   const active = todos.filter((t) => !t.deleted);
-  if (active.length === 0) {
+  // Deduplicate by text (backend may return duplicates from repeated add calls)
+  const seen = new Set<string>();
+  const unique = active.filter((t) => {
+    if (seen.has(t.text)) return false;
+    seen.add(t.text);
+    return true;
+  });
+
+  if (unique.length === 0) {
     return (
       <div className="text-[11px] text-gray-400 dark:text-gray-500 italic py-1">暂无待办事项</div>
     );
@@ -104,7 +112,7 @@ function TodoList({ todos }: { todos: TodoItem[] }) {
 
   return (
     <div className="space-y-0.5 py-0.5">
-      {active.map((todo) => (
+      {unique.map((todo) => (
         <div
           key={todo.id}
           className="flex items-center gap-2 py-0.5 px-1 rounded-sm hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-colors"
@@ -213,7 +221,11 @@ export const TodoExecRenderer = memo(function TodoExecRenderer({ block }: ToolRe
         <div className="border-t border-gray-200 dark:border-gray-700/30">
           {details ? (
             <div className="px-3 pb-2">
-              <TodoList todos={details.todos ?? []} />
+              {details.action === "add" || details.action === "add_batch" ? (
+                <TodoList todos={details.added ?? details.todos ?? []} />
+              ) : (
+                <TodoList todos={details.todos ?? []} />
+              )}
             </div>
           ) : block.output ? (
             <div className="px-3 pb-2 text-[11px] text-gray-500 dark:text-gray-400 font-mono whitespace-pre-wrap max-h-36 overflow-y-auto">

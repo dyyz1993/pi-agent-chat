@@ -154,8 +154,12 @@ export function SidebarBottomControls() {
         setThinkingOpen(false);
       if (workspaceRef.current && !workspaceRef.current.contains(e.target as Node))
         setWorkspaceOpen(false);
-      if (tierConfigRef.current && !tierConfigRef.current.contains(e.target as Node))
-        setTierConfigOpen(false);
+      if (tierConfigRef.current && !tierConfigRef.current.contains(e.target as Node)) {
+        const el = e.target as HTMLElement;
+        if (!el.closest?.("[data-model-picker-dropdown]")) {
+          setTierConfigOpen(false);
+        }
+      }
     };
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
