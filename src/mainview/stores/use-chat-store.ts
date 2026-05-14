@@ -665,36 +665,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
       normalizeToolBlocks(allMsgs);
 
-      const currentMsgs = get().messagesBySession[sid] || [];
-      const currentFirstId = currentMsgs[0]?.id;
-      if (!currentFirstId) {
-        set((s) => ({
-          hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: false },
-        }));
-        return;
-      }
-
-      const currentFirstIdx = allMsgs.findIndex((m) => m.id === currentFirstId);
-      if (currentFirstIdx <= 0) {
-        set((s) => ({
-          hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: false },
-        }));
-        return;
-      }
-
-      const olderMsgs = allMsgs.slice(0, currentFirstIdx);
-      const prepended = [...olderMsgs, ...currentMsgs];
-      log.info("LOAD MORE messages", {
+      log.info("LOAD ALL messages (fill gap)", {
         sessionId: sid,
-        older: olderMsgs.length,
-        total: prepended.length,
+        total: allMsgs.length,
       });
 
       set((s) => ({
-        messagesBySession: { ...s.messagesBySession, [sid]: prepended },
+        messagesBySession: { ...s.messagesBySession, [sid]: allMsgs },
         hasMoreMessagesBySession: {
           ...s.hasMoreMessagesBySession,
-          [sid]: currentFirstIdx > PAGE_SIZE,
+          [sid]: false,
         },
       }));
     } catch (err) {
