@@ -1409,6 +1409,95 @@ export class AgentProcessManager {
     return { ok: true };
   }
 
+  async getAgents(sessionId: string): Promise<{
+    agents: Array<{
+      name: string;
+      description?: string;
+      tier?: string;
+      tools?: string[];
+      permissionMode?: string;
+      source: string;
+      filePath: string;
+    }>;
+  }> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return { agents: [] };
+    try {
+      const response = await (
+        managed.client as unknown as { send: (cmd: unknown) => Promise<unknown> }
+      ).send({ type: "get_agents" });
+      const data = (
+        response as {
+          data?: {
+            agents: Array<{
+              name: string;
+              description?: string;
+              tier?: string;
+              tools?: string[];
+              permissionMode?: string;
+              source?: string;
+              filePath?: string;
+            }>;
+          };
+        }
+      ).data;
+      return {
+        agents: (data?.agents ?? []).map((a) => ({
+          ...a,
+          source: a.source ?? "builtin",
+          filePath: a.filePath ?? "",
+        })),
+      };
+    } catch (err: unknown) {
+      log.warn("getAgents error", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return { agents: [] };
+    }
+  }
+
+  async switchAgent(
+    sessionId: string,
+    agentName: string,
+  ): Promise<{
+    agentName: string;
+    tools: string[];
+    tier?: string;
+    thinkingLevel?: string;
+  }> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) throw new Error("No agent process for session");
+    const response = await (
+      managed.client as unknown as { send: (cmd: unknown) => Promise<unknown> }
+    ).send({ type: "switch_agent", agentName });
+    const data = (
+      response as {
+        data?: { agentName: string; tools: string[]; tier?: string; thinkingLevel?: string };
+      }
+    ).data;
+    if (!data) throw new Error("switch_agent returned no data");
+    return data;
+  }
+
+  async getCurrentAgent(sessionId: string): Promise<{ agentName: string | null }> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return { agentName: null };
+    try {
+      const response = await (
+        managed.client as unknown as { send: (cmd: unknown) => Promise<unknown> }
+      ).send({ type: "get_current_agent" });
+      const data = (response as { data?: { agentName: string | null } }).data;
+      return { agentName: data?.agentName ?? null };
+    } catch (err: unknown) {
+      log.warn("getCurrentAgent error", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return { agentName: null };
+    }
+  }
+
   async getSettings(sessionId: string, scope?: string): Promise<Record<string, unknown>> {
     const managed = this.clients.get(sessionId);
     if (!managed) return {};

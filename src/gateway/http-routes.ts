@@ -47,6 +47,8 @@ const ALLOWED_ROOTS = [
   resolve(process.env.HOME ?? "", ".claude", "rules"),
   resolve(process.env.HOME ?? "", ".config", "opencode", "rules"),
   resolve(process.env.HOME ?? "", ".opencode", "rules"),
+  resolve("/tmp"),
+  resolve("/private/tmp"),
 ];
 let cachedAllowedRoots: string[] | null = null;
 let rootsCacheTime = 0;
@@ -134,13 +136,6 @@ export function createHttpHandler(
       return;
     }
 
-    // 代理配置（不需要鉴权，前端启动时读取）
-    if (url.pathname === "/api/proxy-config") {
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ proxyApiUrl: cfg.proxyApiUrl || null }));
-      return;
-    }
-
     // 端口代理重定向（不需要鉴权，iframe 直接访问）
     if (url.pathname.startsWith("/__proxy__/")) {
       if (!proxyRegistrar) {
@@ -219,6 +214,55 @@ export function createHttpHandler(
         return;
       }
       await handleFileContent(url.pathname.slice(6), req, res);
+      return;
+    }
+
+    // 代理注册：前端通过此端点（same-origin）注册本地地址到公网代理
+    if (url.pathname === "/api/proxy-register" && req.method === "POST") {
+      if (!proxyRegistrar) {
+        res.writeHead(502, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Proxy not configured" }));
+        return;
+      }
+      const chunks: Buffer[] = [];
+      for await (const chunk of req as AsyncIterable<Buffer | string>)
+        chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+      const body = JSON.parse(Buffer.concat(chunks).toString()) as
+        | {
+            host?: string;
+            port?: number;
+          }
+        | { target?: string };
+      let host: string;
+      let port: number;
+      if ("target" in body && body.target) {
+        const parts = (body as { target: string }).target.split(":");
+        host = parts[0];
+        port = parseInt(parts[1] ?? "80", 10);
+      } else if ("host" in body && body.host && "port" in body && body.port) {
+        host = body.host;
+        port = body.port;
+      } else {
+        res.writeHead(400).end(JSON.stringify({ error: "Missing host/port or target" }));
+        return;
+      }
+      if (isNaN(port) || port <= 0 || port > 65535) {
+        res.writeHead(400).end(JSON.stringify({ error: "Invalid port" }));
+        return;
+      }
+      try {
+        const publicUrl = await proxyRegistrar.register(host, port);
+        if (!publicUrl) {
+          res.writeHead(502).end(JSON.stringify({ error: "Registration failed" }));
+          return;
+        }
+        log.info("Proxy registered via API", { host, port, publicUrl });
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ publicUrl }));
+      } catch (err) {
+        log.warn("Proxy register API error", { host, port, error: String(err) });
+        res.writeHead(502).end(JSON.stringify({ error: String(err) }));
+      }
       return;
     }
 

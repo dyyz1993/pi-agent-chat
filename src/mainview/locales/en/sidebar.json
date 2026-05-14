@@ -130,5 +130,10 @@
   "picker.timeAgo.days": "{{count}}d ago",
   "picker.backToRecents": "Back to Recents",
   "picker.manualPathPlaceholder": "Enter path to open...",
-  "picker.openPath": "Open"
+  "picker.openPath": "Open",
+  "picker.createFolder": "New Folder",
+  "picker.newFolderName": "Folder name",
+  "picker.createFolderError": "Failed to create folder",
+  "picker.folderExists": "Folder already exists",
+  "currentAgent": "Current Agent"
 }

@@ -11,6 +11,8 @@ import {
   Trash2,
   Pin,
   Loader2,
+  Plus,
+  FolderPlus,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { apiClient } from "../../lib/api-client";
@@ -106,6 +108,9 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
   const [favoriteFolders, setFavoriteFolders] = useState<FavoriteFolder[]>([]);
   const [browserSearchQuery, setBrowserSearchQuery] = useState("");
   const [browsingLoading, setBrowsingLoading] = useState(false);
+  const [showCreateFolder, setShowCreateFolder] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [creating, setCreating] = useState(false);
 
   const homePathRef = useRef<string>("");
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -161,6 +166,9 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
       setLeftView("default");
       setCurrentPath("");
       setDirectoryEntries([]);
+      setShowCreateFolder(false);
+      setNewFolderName("");
+      setCreating(false);
       if (refreshTimerRef.current) {
         clearTimeout(refreshTimerRef.current);
         refreshTimerRef.current = null;
@@ -224,6 +232,27 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
     onSelect(currentPath, name);
     onClose();
   }, [currentPath, onSelect, onClose]);
+
+  const handleCreateFolder = useCallback(async () => {
+    const name = newFolderName.trim().replace(/[/\\]/g, "");
+    if (!name || !currentPath) return;
+    setCreating(true);
+    try {
+      const result = await apiClient.call("project.createDirectory", {
+        parentPath: currentPath,
+        folderName: name,
+      });
+      if (result.ok) {
+        navigateTo(result.path as string);
+        setShowCreateFolder(false);
+        setNewFolderName("");
+      }
+    } catch {
+      /* error handled by empty catch */
+    } finally {
+      setCreating(false);
+    }
+  }, [newFolderName, currentPath, navigateTo]);
 
   const handleSelectFolder = useCallback(
     (path: string) => {
@@ -814,14 +843,59 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
                   })()
                 )}
               </div>
-              <div className="shrink-0 pt-2">
-                <button
-                  onClick={handleSelectCurrentFolder}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 active:bg-indigo-700 rounded-xl text-sm font-medium text-white transition-colors"
-                >
-                  <FolderOpen className="w-4 h-4" />
-                  {t("picker.selectCurrentFolder")}
-                </button>
+              <div className="shrink-0 pt-2 space-y-2">
+                {showCreateFolder && (
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={newFolderName}
+                      onChange={(e) => setNewFolderName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleCreateFolder();
+                        if (e.key === "Escape") {
+                          setShowCreateFolder(false);
+                          setNewFolderName("");
+                        }
+                      }}
+                      placeholder={t("picker.newFolderName")}
+                      autoFocus
+                      className="flex-1 px-3 py-2 bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700/50 rounded-xl text-sm text-gray-900 dark:text-gray-200 placeholder:text-gray-500 outline-none focus:border-indigo-500/50"
+                    />
+                    <button
+                      onClick={handleCreateFolder}
+                      disabled={!newFolderName.trim() || creating}
+                      className="p-2 rounded-xl bg-indigo-600 active:bg-indigo-700 text-white disabled:opacity-40 shrink-0"
+                    >
+                      {creating ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Plus className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setShowCreateFolder((v) => !v);
+                      setNewFolderName("");
+                    }}
+                    className={`flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors shrink-0 ${
+                      showCreateFolder
+                        ? "bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300"
+                        : "bg-gray-100 dark:bg-gray-800/60 text-gray-700 dark:text-gray-300 active:bg-gray-200 dark:active:bg-gray-700"
+                    }`}
+                  >
+                    <FolderPlus className="w-4 h-4" />
+                    {t("picker.createFolder")}
+                  </button>
+                  <button
+                    onClick={handleSelectCurrentFolder}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 active:bg-indigo-700 rounded-xl text-sm font-medium text-white transition-colors"
+                  >
+                    <FolderOpen className="w-4 h-4" />
+                    {t("picker.selectCurrentFolder")}
+                  </button>
+                </div>
               </div>
             </div>
           )}

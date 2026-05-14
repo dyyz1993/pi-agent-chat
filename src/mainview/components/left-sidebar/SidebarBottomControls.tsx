@@ -4,11 +4,13 @@ import {
   Check,
   Cpu,
   Brain,
-  Star,
-  Search,
+  Bot,
   FolderTree,
   GitBranch,
   Plus,
+  Wrench,
+  Search,
+  ClipboardList,
   Zap,
   Target,
   Settings2,
@@ -21,16 +23,11 @@ import type { TierKey } from "../../stores/use-tier-store";
 import { apiClient } from "../../lib/api-client";
 import { createLogger } from "../../../shared/lib/logger";
 import { ThemeMenu } from "../theme/ThemeMenu";
+import { ModelPickerButton } from "../model-picker/ModelPickerButton";
+import { CopyButton } from "../chat/CopyButton";
+import { useAgentStore, getSourceLabel, isGlobalAgent } from "../../stores/use-agent-store";
 
 const log = createLogger("chat");
-
-interface ModelInfo {
-  provider: string;
-  id: string;
-  name?: string;
-  contextWindow?: number;
-  reasoning?: boolean;
-}
 
 const THINKING_LEVEL_KEYS = [
   "thinkingOff",
@@ -42,10 +39,6 @@ const THINKING_LEVEL_KEYS = [
 ] as const;
 
 type ThinkingLevel = (typeof THINKING_LEVEL_VALUES)[number];
-
-function modelKey(m: ModelInfo): string {
-  return `${m.provider}/${m.id}`;
-}
 
 function formatModelName(modelId: string): string {
   return modelId
@@ -67,22 +60,9 @@ export function SidebarBottomControls() {
   const setThinkingLevel = useSessionStore((s) => s.setThinkingLevel);
   const fetchModelState = useSessionStore((s) => s.fetchModelState);
 
-  const [modelOpen, setModelOpen] = useState(false);
   const [thinkingOpen, setThinkingOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
-  const [favorites, setFavorites] = useState<Set<string>>(new Set());
-  const modelRef = useRef<HTMLDivElement>(null);
   const thinkingRef = useRef<HTMLDivElement>(null);
-  const searchInputRef = useRef<HTMLInputElement>(null);
   const [switching, setSwitching] = useState(false);
-
-  useEffect(() => {
-    apiClient
-      .call("project.getModelFavorites", {})
-      .then((res) => setFavorites(new Set(res.favorites)))
-      .catch(() => setFavorites(new Set()));
-  }, []);
 
   const currentTier = useTierStore((s) => s.currentTier);
   const switchToTier = useTierStore((s) => s.switchToTier);
@@ -93,6 +73,14 @@ export function SidebarBottomControls() {
   const [tierConfigModels, setTierConfigModels] = useState<Record<string, string>>({});
   const [tierConfigSaving, setTierConfigSaving] = useState(false);
   const tierConfigRef = useRef<HTMLDivElement>(null);
+
+  const currentAgent = useAgentStore((s) => s.currentAgent);
+  const agents = useAgentStore((s) => s.agents);
+  const agentSwitching = useAgentStore((s) => s.switching);
+  const switchAgent = useAgentStore((s) => s.switchAgent);
+  const fetchAgents = useAgentStore((s) => s.fetchAgents);
+  const [agentOpen, setAgentOpen] = useState(false);
+  const agentRef = useRef<HTMLDivElement>(null);
 
   const sessionsByProject = useSessionStore((s) => s.sessionsByProject);
   const projectTabs = useSessionStore((s) => s.projectTabs);
@@ -118,7 +106,8 @@ export function SidebarBottomControls() {
     sessionFetchedRef.current = activeSessionId;
     fetchModelState(activeSessionId);
     fetchTierConfig(activeSessionId);
-  }, [activeSessionId, fetchModelState, fetchTierConfig]);
+    fetchAgents(activeSessionId);
+  }, [activeSessionId, fetchModelState, fetchTierConfig, fetchAgents]);
 
   const currentTab = projectTabs.find((t) => t.id === activeProjectId);
   const activeTabPath = currentTab?.path ?? "";
@@ -158,9 +147,9 @@ export function SidebarBottomControls() {
   }, [activeTabPath, fetchWorktrees, isGitRepo]);
 
   useEffect(() => {
-    if (!modelOpen && !thinkingOpen && !workspaceOpen && !tierConfigOpen) return;
+    if (!agentOpen && !thinkingOpen && !workspaceOpen && !tierConfigOpen) return;
     const handleClick = (e: MouseEvent) => {
-      if (modelRef.current && !modelRef.current.contains(e.target as Node)) setModelOpen(false);
+      if (agentRef.current && !agentRef.current.contains(e.target as Node)) setAgentOpen(false);
       if (thinkingRef.current && !thinkingRef.current.contains(e.target as Node))
         setThinkingOpen(false);
       if (workspaceRef.current && !workspaceRef.current.contains(e.target as Node))
@@ -170,7 +159,7 @@ export function SidebarBottomControls() {
     };
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        setModelOpen(false);
+        setAgentOpen(false);
         setThinkingOpen(false);
         setWorkspaceOpen(false);
         setTierConfigOpen(false);
@@ -182,23 +171,7 @@ export function SidebarBottomControls() {
       document.removeEventListener("mousedown", handleClick);
       document.removeEventListener("keydown", handleKey);
     };
-  }, [modelOpen, thinkingOpen, workspaceOpen, tierConfigOpen]);
-
-  useEffect(() => {
-    if (modelOpen) {
-      setTimeout(() => searchInputRef.current?.focus(), 50);
-    } else {
-      setSearchQuery("");
-      setShowFavoritesOnly(false);
-    }
-  }, [modelOpen]);
-
-  const toggleFavorite = useCallback((key: string) => {
-    apiClient
-      .call("project.toggleModelFavorite", { modelKey: key })
-      .then((res) => setFavorites(new Set(res.favorites)))
-      .catch(() => {});
-  }, []);
+  }, [agentOpen, thinkingOpen, workspaceOpen, tierConfigOpen]);
 
   const handleSwitchWorkspace = useCallback((wt: { path: string }) => {
     const state = useSessionStore.getState();
@@ -262,26 +235,24 @@ export function SidebarBottomControls() {
   }, [activeSessionId, tierConfigModels, fetchTierConfig]);
 
   const handleSelectModel = useCallback(
-    async (model: ModelInfo) => {
+    async (key: string) => {
       if (!activeSessionId || switching) return;
-      if (currentModel?.id === model.id && currentModel?.provider === model.provider) {
-        setModelOpen(false);
-        return;
-      }
+      const [provider, ...rest] = key.split("/");
+      const modelId = rest.join("/");
+      if (currentModel?.id === modelId && currentModel?.provider === provider) return;
       setSwitching(true);
       try {
         await apiClient.call("agent.setModel", {
           sessionId: activeSessionId,
-          provider: model.provider,
-          modelId: model.id,
+          provider,
+          modelId,
         });
-        setCurrentModel(model.provider, model.id);
-        useTierStore.getState().syncTierFromModel(model.provider, model.id);
+        setCurrentModel(provider, modelId);
+        useTierStore.getState().syncTierFromModel(provider, modelId);
       } catch (err) {
         console.warn("[SidebarControls] setModel failed:", err);
       }
       setSwitching(false);
-      setModelOpen(false);
     },
     [activeSessionId, switching, currentModel, setCurrentModel],
   );
@@ -308,21 +279,6 @@ export function SidebarBottomControls() {
     [activeSessionId, switching, currentThinkingLevel, setThinkingLevel],
   );
 
-  let displayModels = availableModels;
-  if (searchQuery.trim()) {
-    const q = searchQuery.toLowerCase();
-    displayModels = displayModels.filter(
-      (m) =>
-        m.id.toLowerCase().includes(q) ||
-        (m.name?.toLowerCase().includes(q) ?? false) ||
-        formatModelName(m.id).toLowerCase().includes(q) ||
-        m.provider.toLowerCase().includes(q),
-    );
-  }
-  if (showFavoritesOnly) {
-    displayModels = displayModels.filter((m) => favorites.has(modelKey(m)));
-  }
-
   const modelDisplay = currentModel
     ? `${currentModel.provider}/${currentModel.name ?? formatModelName(currentModel.id)}`
     : t("notLoaded");
@@ -337,6 +293,105 @@ export function SidebarBottomControls() {
 
   return (
     <div className="shrink-0 border-t border-gray-200/80 dark:border-gray-800/80 px-3 py-2 space-y-1.5">
+      <div className="relative" ref={agentRef}>
+        <button
+          onClick={() => {
+            setAgentOpen(!agentOpen);
+            setThinkingOpen(false);
+            setWorkspaceOpen(false);
+            setTierConfigOpen(false);
+          }}
+          disabled={!activeSessionId || agentSwitching}
+          className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-100/60 dark:hover:bg-gray-800/60 hover:text-gray-700 dark:hover:text-gray-300 transition-colors disabled:opacity-40"
+          aria-expanded={agentOpen}
+          aria-label={t("agentSelect")}
+        >
+          <Bot className="w-3 h-3 shrink-0 text-gray-400 dark:text-gray-500" />
+          <span className="truncate flex-1 text-left">
+            {currentAgent === "build"
+              ? t("agentBuild")
+              : currentAgent === "explore"
+                ? t("agentExplore")
+                : currentAgent === "plan"
+                  ? t("agentPlan")
+                  : currentAgent}
+          </span>
+          <ChevronDown
+            className={`w-3 h-3 shrink-0 transition-transform ${agentOpen ? "rotate-180" : ""}`}
+          />
+        </button>
+        {agentOpen && (
+          <div className="absolute bottom-full left-0 right-0 mb-1 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md shadow-xl py-1">
+            <div className="overflow-y-auto max-h-[15rem]">
+              {agents.map((agent) => {
+                const isActive = currentAgent === agent.name;
+                const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
+                  build: Wrench,
+                  explore: Search,
+                  plan: ClipboardList,
+                };
+                const Icon = iconMap[agent.name] || Bot;
+                return (
+                  <button
+                    key={agent.name}
+                    className={`w-full text-left px-3 py-2 text-xs flex items-start gap-2 transition-colors ${
+                      isActive
+                        ? "bg-indigo-500/15 text-indigo-600 dark:text-indigo-300"
+                        : "text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    }`}
+                    onClick={async () => {
+                      if (activeSessionId && !agentSwitching && !isActive) {
+                        await switchAgent(agent.name, activeSessionId);
+                      }
+                      setAgentOpen(false);
+                    }}
+                  >
+                    {isActive ? (
+                      <Check className="w-3 h-3 shrink-0 text-indigo-400 mt-0.5" />
+                    ) : (
+                      <Icon className="w-3 h-3 shrink-0 text-gray-400 dark:text-gray-500 mt-0.5" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-medium truncate">{agent.name}</span>
+                        <span
+                          className={`text-[9px] px-1 py-0.5 rounded shrink-0 font-mono ${
+                            isGlobalAgent(agent.source)
+                              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                              : "bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                          }`}
+                          title={getSourceLabel(agent.source)}
+                        >
+                          {getSourceLabel(agent.source)}
+                        </span>
+                      </div>
+                      {agent.description && (
+                        <div className="text-gray-400 dark:text-gray-500 text-[10px] mt-0.5 truncate">
+                          {agent.description}
+                        </div>
+                      )}
+                      {agent.filePath && (
+                        <CopyButton
+                          text={agent.filePath}
+                          size="xs"
+                          className="text-[9px] text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 mt-0.5 w-fit"
+                          title={agent.filePath}
+                        />
+                      )}
+                    </div>
+                    {agent.tier && (
+                      <span className="text-[10px] text-gray-400 dark:text-gray-500 shrink-0 mt-0.5">
+                        {agent.tier}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="relative" ref={workspaceRef}>
         {!isGitRepo ? (
           <div className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-gray-400 dark:text-gray-600">
@@ -352,7 +407,6 @@ export function SidebarBottomControls() {
           <button
             onClick={() => {
               setWorkspaceOpen(!workspaceOpen);
-              setModelOpen(false);
               setThinkingOpen(false);
             }}
             disabled={!activeSessionId}
@@ -475,67 +529,36 @@ export function SidebarBottomControls() {
         )}
       </div>
 
-      <div className="relative" ref={modelRef}>
-        <button
-          onClick={() => {
-            setModelOpen(!modelOpen);
-            setThinkingOpen(false);
-            setWorkspaceOpen(false);
-          }}
+      <div>
+        <ModelPickerButton
+          models={availableModels}
+          value={currentModel ? `${currentModel.provider}/${currentModel.id}` : ""}
+          onChange={handleSelectModel}
           disabled={!activeSessionId}
-          className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-100/60 dark:hover:bg-gray-800/60 hover:text-gray-700 dark:hover:text-gray-300 transition-colors disabled:opacity-40"
-          aria-expanded={modelOpen}
-          aria-label={t("modelSelect")}
-        >
-          <Cpu className="w-3 h-3 shrink-0 text-gray-400 dark:text-gray-500" />
-          <span className="truncate flex-1 text-left">
-            {t("modelLabel", { model: modelDisplay })}
-          </span>
-          <ChevronDown
-            className={`w-3 h-3 shrink-0 transition-transform ${modelOpen ? "rotate-180" : ""}`}
-          />
-        </button>
-        {modelOpen && (
-          <div className="absolute bottom-full left-0 right-0 mb-1 z-50 max-h-64 overflow-hidden bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md shadow-xl flex flex-col">
-            <div className="px-2 py-1.5 border-b border-gray-200/60 dark:border-gray-700/60 shrink-0">
-              <div className="flex items-center gap-1.5 px-1.5 py-0.5 rounded bg-gray-100/60 dark:bg-gray-900/60 border border-gray-200/50 dark:border-gray-700/50">
-                <Search className="w-3 h-3 shrink-0 text-gray-400 dark:text-gray-500" />
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  placeholder={t("searchModels")}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="flex-1 bg-transparent text-[11px] text-gray-700 dark:text-gray-300 placeholder-gray-400 dark:placeholder-gray-600 outline-none min-w-0"
-                />
-                <button
-                  onClick={() => setShowFavoritesOnly((v) => !v)}
-                  className={`p-0.5 rounded transition-colors shrink-0 ${
-                    showFavoritesOnly
-                      ? "text-amber-400"
-                      : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
-                  }`}
-                  title={showFavoritesOnly ? t("showAll") : t("showFavoritesOnly")}
-                >
-                  <Star className={`w-3.5 h-3.5 ${showFavoritesOnly ? "fill-amber-400" : ""}`} />
-                </button>
-              </div>
-            </div>
-            <div className="overflow-y-auto flex-1 py-1">
-              {availableModels.length === 0 ? (
-                <div className="text-gray-400 dark:text-gray-500 text-xs text-center py-3">
-                  {t("noAvailableModels")}
-                </div>
-              ) : displayModels.length === 0 ? (
-                <div className="text-gray-400 dark:text-gray-500 text-xs text-center py-3">
-                  {showFavoritesOnly ? t("noFavoriteModels") : t("noResults", { ns: "common" })}
-                </div>
-              ) : (
-                displayModels.map((m) => renderModelItem(m))
-              )}
-            </div>
-          </div>
-        )}
+          onOpenChange={(open) => {
+            if (open) {
+              setThinkingOpen(false);
+              setWorkspaceOpen(false);
+              setTierConfigOpen(false);
+            }
+          }}
+          renderTrigger={({ open }) => (
+            <button
+              disabled={!activeSessionId}
+              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-100/60 dark:hover:bg-gray-800/60 hover:text-gray-700 dark:hover:text-gray-300 transition-colors disabled:opacity-40 ${open ? "bg-gray-100/60 dark:bg-gray-800/60" : ""}`}
+              aria-expanded={open}
+              aria-label={t("modelSelect")}
+            >
+              <Cpu className="w-3 h-3 shrink-0 text-gray-400 dark:text-gray-500" />
+              <span className="truncate flex-1 text-left">
+                {t("modelLabel", { model: modelDisplay })}
+              </span>
+              <ChevronDown
+                className={`w-3 h-3 shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+              />
+            </button>
+          )}
+        />
       </div>
 
       <div className="relative flex items-center gap-1 px-2 py-0.5">
@@ -616,27 +639,24 @@ export function SidebarBottomControls() {
                       {labels[tier]}
                     </span>
                   </div>
-                  <select
-                    value={tierConfigModels[tier] ?? ""}
-                    onChange={(e) => {
-                      setTierConfigModels((prev) => ({ ...prev, [tier]: e.target.value }));
-                    }}
-                    className="flex-1 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded px-1.5 py-1 text-[11px] text-gray-700 dark:text-gray-300 outline-none min-w-0"
-                  >
-                    <option value="">
-                      {currentModel
-                        ? t("tierConfigDefault", "默认 ({{model}})", {
-                            model:
-                              currentModel.name ?? `${currentModel.provider}/${currentModel.id}`,
-                          })
-                        : t("tierConfigDefaultPlain", "-- 默认 --")}
-                    </option>
-                    {availableModels.map((m) => (
-                      <option key={`${m.provider}/${m.id}`} value={`${m.provider}/${m.id}`}>
-                        {m.name ?? `${m.provider}/${m.id}`}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex-1 min-w-0">
+                    <ModelPickerButton
+                      models={availableModels}
+                      value={tierConfigModels[tier] ?? ""}
+                      onChange={(v) => {
+                        setTierConfigModels((prev) => ({ ...prev, [tier]: v }));
+                      }}
+                      placement="up"
+                      placeholder={
+                        currentModel
+                          ? t("tierConfigDefault", "默认 ({{model}})", {
+                              model:
+                                currentModel.name ?? `${currentModel.provider}/${currentModel.id}`,
+                            })
+                          : t("tierConfigDefaultPlain", "-- 默认 --")
+                      }
+                    />
+                  </div>
                 </div>
               );
             })}
@@ -663,7 +683,6 @@ export function SidebarBottomControls() {
         <button
           onClick={() => {
             setThinkingOpen(!thinkingOpen);
-            setModelOpen(false);
             setWorkspaceOpen(false);
           }}
           disabled={!activeSessionId}
@@ -712,52 +731,4 @@ export function SidebarBottomControls() {
       <ThemeMenu />
     </div>
   );
-
-  function renderModelItem(m: ModelInfo) {
-    const isActive = currentModel?.id === m.id && currentModel?.provider === m.provider;
-    const key = modelKey(m);
-    const isFav = favorites.has(key);
-    return (
-      <div
-        key={key}
-        className={`group flex items-center px-2 py-1.5 transition-colors ${
-          isActive
-            ? "bg-indigo-500/15 text-indigo-600 dark:text-indigo-300"
-            : "text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-        }`}
-      >
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            handleSelectModel(m);
-          }}
-          className="flex-1 flex items-center gap-2 min-w-0 text-left"
-        >
-          {isActive ? (
-            <Check className="w-3 h-3 shrink-0 text-indigo-400" />
-          ) : (
-            <span className="w-3 shrink-0" />
-          )}
-          <div className="flex flex-col min-w-0">
-            <span className="truncate text-xs">{m.name ?? formatModelName(m.id)}</span>
-            <span className="text-[10px] text-cyan-500/60 font-mono">
-              {m.provider} · {m.id}
-            </span>
-          </div>
-        </button>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            toggleFavorite(key);
-          }}
-          className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-gray-300/50 dark:hover:bg-gray-600/50 transition-all shrink-0"
-          title={isFav ? t("unfavorite") : t("favorite")}
-        >
-          <Star
-            className={`w-3 h-3 ${isFav ? "fill-amber-400 text-amber-400 opacity-100" : "text-gray-400 dark:text-gray-500"}`}
-          />
-        </button>
-      </div>
-    );
-  }
 }

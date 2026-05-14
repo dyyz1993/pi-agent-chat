@@ -101,15 +101,8 @@ class APIClientImpl {
         const httpProto = wsUrlObj.protocol === "wss:" ? "https:" : "http:";
         this._baseUrl = `${httpProto}//${wsUrlObj.host}`;
 
-        // 从后端拉取代理配置，然后预热缓存（注册服务自身地址）
-        import("./proxy").then(
-          async ({ initProxyFromServer, isProxyEnabled, warmupProxyCache }) => {
-            await initProxyFromServer();
-            if (isProxyEnabled()) {
-              warmupProxyCache([wsUrlObj.host]);
-            }
-          },
-        );
+        // 启动时自动检测代理：后端有 PROXY_API_URL → 开启，否则关闭
+        import("./proxy").then(({ tryEnable }) => tryEnable(wsUrlObj.host));
       }
     })();
 

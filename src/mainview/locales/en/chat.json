@@ -76,6 +76,8 @@
   "sourceFiles": "Source files ({{count}})",
   "availableFiles": "Available files: {{count}}",
   "searchDuration": "Search duration: {{duration}}ms",
+  "searchingMemory": "Searching memories…",
+  "usedModel": "Model used",
   "queryLabel": "Query:",
   "availableFilesLabel": "Available files:",
   "filesCount": "{{count}}",
@@ -280,5 +282,6 @@
   "rollbackOverlay.withFilesModeDesc": "This will restore the following files to their previous state:",
   "rollbackOverlay.confirm": "Confirm Rollback",
   "rollbackOverlay.cancel": "Cancel",
-  "rollbackOverlay.noFiles": "No file changes in this turn"
+  "rollbackOverlay.noFiles": "No file changes in this turn",
+  "sendDisabledNoModel": "Please select a model first"
 }

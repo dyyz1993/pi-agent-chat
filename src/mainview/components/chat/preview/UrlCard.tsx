@@ -3,8 +3,8 @@ import { createPortal } from "react-dom";
 import { Globe, X, RefreshCw, Maximize2, Copy, Check, ExternalLink } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { PreviewDetails } from "./types";
+import { getFileHttpUrl } from "./types";
 import { useClipboard } from "./use-clipboard";
-import { buildProxyGatewayUrl } from "../../../lib/proxy";
 
 export const UrlCard = memo(function UrlCard({ details }: { details: PreviewDetails }) {
   const { t } = useTranslation("chat");
@@ -12,7 +12,6 @@ export const UrlCard = memo(function UrlCard({ details }: { details: PreviewDeta
   const [fullscreen, setFullscreen] = useState(false);
   const src = details.absolutePath ?? details.source;
   const { copied, copy } = useClipboard();
-  const iframeSrc = buildProxyGatewayUrl(src) ?? src;
 
   useEffect(() => {
     if (!fullscreen) return;
@@ -44,7 +43,7 @@ export const UrlCard = memo(function UrlCard({ details }: { details: PreviewDeta
     );
   }
 
-  const displayUrl = iframeSrc;
+  const displayUrl = getFileHttpUrl(src);
 
   const headerButtons = (
     <div className="flex items-center gap-1 ml-auto shrink-0">
@@ -117,7 +116,7 @@ export const UrlCard = memo(function UrlCard({ details }: { details: PreviewDeta
       <div className="fixed inset-0 z-[200] bg-white dark:bg-black flex flex-col">
         {header}
         <iframe
-          src={iframeSrc}
+          src={displayUrl}
           className="flex-1 w-full border-0"
           sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
           title={details.title ?? src}
@@ -131,7 +130,7 @@ export const UrlCard = memo(function UrlCard({ details }: { details: PreviewDeta
     <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700/40 bg-white dark:bg-gray-900/60">
       {header}
       <iframe
-        src={iframeSrc}
+        src={displayUrl}
         className="w-full border-0"
         style={{ minHeight: 300, maxHeight: 600 }}
         sandbox="allow-scripts allow-same-origin allow-forms allow-popups"

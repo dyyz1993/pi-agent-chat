@@ -320,4 +320,16 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   r("agent.exportHtml", async (params) => {
     return m.exportHtml(params.sessionId, params.outputPath) as Promise<R<"agent.exportHtml">>;
   });
+
+  r("agent.getAgents", async (params) => {
+    return m.getAgents(params.sessionId) as Promise<R<"agent.getAgents">>;
+  });
+
+  r("agent.switchAgent", async (params) => {
+    return m.switchAgent(params.sessionId, params.agentName) as Promise<R<"agent.switchAgent">>;
+  });
+
+  r("agent.getCurrentAgent", async (params) => {
+    return m.getCurrentAgent(params.sessionId) as Promise<R<"agent.getCurrentAgent">>;
+  });
 }

@@ -1,0 +1,113 @@
+---
+description: "Store-First 全局状态管理规范：所有跨组件共享数据必须走 Zustand Store，禁止组件内独立 RPC 加载共享状态"
+globs:
+  - "src/mainview/components/**/*.tsx"
+  - "src/mainview/stores/**/*.ts"
+---
+
+# Store-First 全局状态管理规范
+
+## 核心原则
+
+**跨组件共享的数据，必须由 Zustand Store 管理，禁止组件内 `useState` + 独立 RPC 加载。**
+
+## 什么是"共享数据"
+
+以下任何一项成立即为共享数据，必须走 Store：
+
+| 特征 | 示例 |
+|------|------|
+| 多个组件需要读取同一份数据 | `modelFavorites`（主选择器、tier 配置、SettingsPanel 都用） |
+| 一个组件的写操作需要另一个组件即时感知 | `toggleModelFavorite` 后其他已打开的选择器立即更新 |
+| 数据具有全局/项目级生命周期（不随组件 mount/unmount 变化） | `availableModels`、`currentModel`、`agents` |
+| 同一个 RPC 在多个组件中被调用 | `project.getModelFavorites` 出现在多个组件中 |
+
+## 正确模式
+
+### Store 层
+
+```typescript
+// stores/use-xxx-store.ts
+interface XxxState {
+  // 数据
+  items: SomeType[];
+  // 加载 action
+  fetchItems: () => void;
+  // 修改 action
+  updateItem: (id: string, value: string) => void;
+}
+```
+
+### 组件层
+
+```tsx
+// 组件只从 store 读，不自己 RPC
+const items = useXxxStore((s) => s.items);
+const updateItem = useXxxStore((s) => s.updateItem);
+
+// ❌ 禁止
+const [items, setItems] = useState([]);
+useEffect(() => {
+  apiClient.call("xxx.getItems", {}).then(setItems);
+}, []);
+```
+
+## 反模式检查清单
+
+以下代码模式是违规信号，扫描时重点检测：
+
+### 违规 1：组件内独立 RPC 加载共享数据
+
+```tsx
+// ❌ 每个 ModelPickerButton 实例独立加载 favorites
+const [favorites, setFavorites] = useState<Set<string>>(new Set());
+useEffect(() => {
+  apiClient.call("project.getModelFavorites", {}).then(res => setFavorites(...));
+}, []);
+```
+
+### 违规 2：同一 RPC 在多个组件中重复调用
+
+```tsx
+// ❌ SidebarBottomControls.tsx 和 SettingsPanel.tsx 各自调用
+await apiClient.call("agent.setTierModels", { ... });
+```
+
+### 违规 3：组件内 useState 管理全局状态
+
+```tsx
+// ❌ agent 选择在 SidebarBottomControls 中 useState
+const [currentAgent, setCurrentAgent] = useState("build");
+```
+
+### 违规 4：action 回调不经过 store 直接 RPC
+
+```tsx
+// ❌ 直接 RPC，其他组件无法感知变化
+const toggleFavorite = (key: string) => {
+  apiClient.call("project.toggleModelFavorite", { modelKey: key })
+    .then(res => setFavorites(new Set(res.favorites)));
+};
+```
+
+## 当前已 Store 化的数据
+
+| 数据 | Store | 加载时机 |
+|------|-------|---------|
+| `availableModels` | `use-session-store` | `fetchModelState()` |
+| `currentModel` | `use-session-store` | `fetchModelState()` |
+| `currentThinkingLevel` | `use-session-store` | `fetchModelState()` |
+| `modelFavorites` | `use-session-store` | `fetchModelState()` 首次加载 |
+| `agents` / `currentAgent` | `use-agent-store` | `fetchAgents()` |
+| `tierModels` / `currentTier` | `use-tier-store` | `fetchTierConfig()` |
+| `settings` | `use-settings-store` | 持久化 |
+| `retryConfig` | `use-retry-store` | SettingsPanel 打开时 |
+| `worktrees` | `use-git-store` | tab 切换时 |
+
+## 新增共享数据的流程
+
+1. 在对应 store 中添加字段 + `fetch*` / `set*` / `toggle*` action
+2. 在适当的时机（session 初始化、组件 mount）调用 fetch action
+3. 组件通过 `useXxxStore((s) => s.xxx)` 读取
+4. 组件通过 store action 修改，不直接 RPC
+5. RPC 调用只出现在 store action 内部

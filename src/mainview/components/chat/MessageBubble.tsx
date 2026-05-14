@@ -10,6 +10,9 @@ import {
   XCircle,
   Type,
   Maximize2,
+  Zap,
+  Target,
+  Loader2,
 } from "lucide-react";
 import { CachedReactMarkdown } from "./CachedReactMarkdown";
 import { CopyButton } from "./CopyButton";
@@ -79,9 +82,13 @@ function getDefaultBorderColor(role: "user" | "assistant"): string {
 
 interface MessageBubbleProps {
   message: ChatMessage;
+  mergedResultData?: unknown;
 }
 
-export const MessageBubble = memo(function MessageBubble({ message }: MessageBubbleProps) {
+export const MessageBubble = memo(function MessageBubble({
+  message,
+  mergedResultData,
+}: MessageBubbleProps) {
   const isUser = message.role === "user";
   const sessionId = useSessionStore((s) => s.activeSessionId);
   const uiBlockMap = useUIBlockMap(message.content, sessionId ?? "");
@@ -212,6 +219,7 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
                     blockIndex={i}
                     isEntry={isEntryMsg}
                     uiBlockMap={uiBlockMap}
+                    mergedResultData={mergedResultData}
                   />
                 </BlockErrorBoundary>
               </div>
@@ -447,21 +455,114 @@ export const LspDiagnosticsCard = memo(function LspDiagnosticsCard({ data }: { d
   );
 });
 
+function getSearchingSummary(data: unknown): string | null {
+  const d = data as Record<string, unknown> | undefined;
+  if (!d) return "搜索中…";
+  const q = typeof d.query === "string" ? d.query : "";
+  if (!q) return "搜索中…";
+  return `「${q.length > 40 ? q.slice(0, 40) + "…" : q}」搜索中…`;
+}
+
+function extractTierInfo(data: unknown): { tier: string; model?: string } | null {
+  const d = data as Record<string, unknown> | undefined;
+  if (!d) return null;
+  const tier = typeof d.tier === "string" ? d.tier : undefined;
+  const model = typeof d.model === "string" ? d.model : undefined;
+  if (!tier && !model) return null;
+  return { tier: tier ?? "", model };
+}
+
+function TierBadge({ tier }: { tier: string }) {
+  if (!tier) return null;
+  const config: Record<
+    string,
+    { style: string; Icon: React.ComponentType<{ className?: string }> }
+  > = {
+    fast: {
+      style: "bg-amber-500/[0.12] text-amber-400 border-amber-500/25",
+      Icon: Zap,
+    },
+    pro: {
+      style: "bg-indigo-500/[0.12] text-indigo-400 border-indigo-500/25",
+      Icon: Target,
+    },
+    max: {
+      style: "bg-purple-500/[0.12] text-purple-400 border-purple-500/25",
+      Icon: Brain,
+    },
+  };
+  const cfg = config[tier];
+  if (!cfg) return null;
+  const { Icon } = cfg;
+
+  return (
+    <span
+      className={`ml-1 flex items-center gap-0.5 text-[10px] px-1.5 py-px rounded font-medium shrink-0 border ${cfg.style}`}
+    >
+      <Icon className="w-2.5 h-2.5" />
+      {tier}
+    </span>
+  );
+}
+
+function PrefetchSearchingDetail({ data }: { data: unknown }) {
+  const { t } = useTranslation("chat");
+  const d = data as Record<string, unknown> | undefined;
+  if (!d) return null;
+  const query = typeof d.query === "string" ? d.query : "";
+  const availableFiles = typeof d.availableFiles === "number" ? d.availableFiles : 0;
+
+  return (
+    <div className="px-3 pb-2 text-[11px] space-y-2">
+      <div className="flex items-center gap-1.5 text-blue-400">
+        <Loader2 className="w-3 h-3 animate-spin shrink-0" />
+        <span>{t("searchingMemory")}</span>
+      </div>
+      {query && (
+        <div className="flex gap-1.5">
+          <span className="text-gray-500 shrink-0">{t("searchQuery")}</span>
+          <span className="text-gray-300">「{query}」</span>
+        </div>
+      )}
+      {availableFiles > 0 && (
+        <div className="flex gap-1.5">
+          <span className="text-gray-500 shrink-0">{t("availableFilesLabel")}</span>
+          <span className="text-gray-300">{t("filesCount", { count: availableFiles })}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export const MemoryCard = memo(function MemoryCard({
   customType,
   data,
   blockId,
   isEntry: _isEntry,
+  mergedResultData,
 }: {
   customType: string;
   data: unknown;
   blockId: string;
   isEntry?: boolean;
+  mergedResultData?: unknown;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const config = getMemoryConfig(customType) ?? { label: customType, color: "text-gray-400" };
-  const Icon = getCustomTypeIcon(customType).icon;
-  const summary = getMemorySummary(customType, data);
+
+  const isMerged = customType === "memory_prefetch" && mergedResultData !== undefined;
+  const isSearching = customType === "memory_prefetch" && mergedResultData === undefined;
+
+  const displayType = isMerged ? "memory_prefetch_result" : customType;
+  const displayData = isMerged ? mergedResultData : data;
+
+  const config = getMemoryConfig(displayType) ?? { label: displayType, color: "text-gray-400" };
+  const Icon = getCustomTypeIcon(displayType).icon;
+
+  const summary = isSearching
+    ? getSearchingSummary(data)
+    : getMemorySummary(displayType, displayData);
+
+  const tierInfo = extractTierInfo(displayData);
 
   return (
     <div className="my-0.5" data-block-id={blockId}>
@@ -473,13 +574,21 @@ export const MemoryCard = memo(function MemoryCard({
         aria-label={`${config.label}${summary ? `: ${summary}` : ""}`}
       >
         <Icon className="w-3 h-3 shrink-0" />
-        <span className="font-medium whitespace-nowrap">{config.label}</span>
-        {summary && <span className="text-gray-400 dark:text-gray-500 truncate">{summary}</span>}
-        <span className="ml-auto text-gray-400 dark:text-gray-600">
+        <span className="flex-1 min-w-0 flex items-center gap-1.5">
+          <span className="font-medium whitespace-nowrap">{config.label}</span>
+          {summary && <span className="text-gray-400 dark:text-gray-500 truncate">{summary}</span>}
+        </span>
+        {tierInfo && <TierBadge tier={tierInfo.tier} />}
+        <span className="text-gray-400 dark:text-gray-600 shrink-0">
           {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
         </span>
       </button>
-      {expanded && <MemoryExpandedContent customType={customType} data={data} />}
+      {expanded &&
+        (isSearching ? (
+          <PrefetchSearchingDetail data={data} />
+        ) : (
+          <MemoryExpandedContent customType={displayType} data={displayData} />
+        ))}
     </div>
   );
 });
@@ -516,6 +625,8 @@ function PrefetchResultDetail({ data }: { data: unknown }) {
   const isForce = d.isForce === true;
   const availableFiles = typeof d.availableFiles === "number" ? d.availableFiles : 0;
   const query = typeof d.query === "string" ? d.query : "";
+  const tier = typeof d.tier === "string" ? d.tier : "";
+  const modelLabel = typeof d.model === "string" ? d.model : "";
 
   const skipHits = Array.isArray(rawSkipHits)
     ? (rawSkipHits as Array<Record<string, string>>).map((h) =>
@@ -718,6 +829,14 @@ function PrefetchResultDetail({ data }: { data: unknown }) {
                 {t("searchDuration", { duration: durationMs })}
               </div>
             )}
+            {tier && (
+              <div className="flex items-center gap-1.5">
+                <Zap className="w-3 h-3 shrink-0 text-amber-400/70" />
+                <span className="text-gray-500">{t("usedModel")}</span>
+                <span className="text-gray-300">{modelLabel || tier}</span>
+                {tier && modelLabel && <span className="text-gray-600">({tier})</span>}
+              </div>
+            )}
           </div>
         </div>
       </details>
@@ -814,6 +933,7 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({
   blockIndex,
   isEntry,
   uiBlockMap,
+  mergedResultData,
 }: {
   block: ContentBlock;
   isStreaming?: boolean;
@@ -821,6 +941,7 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({
   blockIndex: number;
   isEntry?: boolean;
   uiBlockMap: Map<string, UIInteractionBlock>;
+  mergedResultData?: unknown;
 }) {
   const blockId = `${msgId}-${blockIndex}`;
   const { t } = useTranslation("chat");
@@ -961,6 +1082,7 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({
           data={block.data}
           blockId={blockId}
           isEntry={isEntry}
+          mergedResultData={mergedResultData}
         />
       );
     case "compactionSummary":

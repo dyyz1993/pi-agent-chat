@@ -10,6 +10,7 @@ import {
 import { apiClient } from "../../lib/api-client";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useTierStore, TIER_KEYS, type TierKey } from "../../stores/use-tier-store";
+import { ModelPickerButton } from "../model-picker/ModelPickerButton";
 import { isProxyEnabled, enableProxy, disableProxy, warmupProxyCache } from "../../lib/proxy";
 
 interface SettingsPanelProps {
@@ -275,20 +276,16 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                     {TIER_LABELS[tier]}
                   </span>
                 </div>
-                <select
-                  value={localTierModels[tier] ?? ""}
-                  onChange={(e) => {
-                    setLocalTierModels((prev) => ({ ...prev, [tier]: e.target.value }));
-                  }}
-                  className="flex-1 h-7 px-2 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-[12px] text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
-                >
-                  <option value="">{t("tierConfigDefault", "默认")}</option>
-                  {availableModels.map((m) => (
-                    <option key={`${m.provider}/${m.id}`} value={`${m.provider}/${m.id}`}>
-                      {m.name ?? `${m.provider}/${m.id}`}
-                    </option>
-                  ))}
-                </select>
+                <div className="flex-1 min-w-0">
+                  <ModelPickerButton
+                    models={availableModels}
+                    value={localTierModels[tier] ?? ""}
+                    onChange={(v) => {
+                      setLocalTierModels((prev) => ({ ...prev, [tier]: v }));
+                    }}
+                    placeholder={t("tierConfigDefault", "默认")}
+                  />
+                </div>
               </div>
             );
           })}

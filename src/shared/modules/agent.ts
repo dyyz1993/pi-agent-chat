@@ -314,6 +314,33 @@ export interface AgentMethods {
     params: { sessionId: string; outputPath?: string };
     result: { path: string };
   };
+  "agent.getAgents": {
+    params: { sessionId: string };
+    result: {
+      agents: Array<{
+        name: string;
+        description?: string;
+        tier?: string;
+        tools?: string[];
+        permissionMode?: string;
+        source: string;
+        filePath: string;
+      }>;
+    };
+  };
+  "agent.switchAgent": {
+    params: { sessionId: string; agentName: string };
+    result: {
+      agentName: string;
+      tools: string[];
+      tier?: string;
+      thinkingLevel?: string;
+    };
+  };
+  "agent.getCurrentAgent": {
+    params: { sessionId: string };
+    result: { agentName: string | null };
+  };
 }
 
 export interface AgentMessageForUI {

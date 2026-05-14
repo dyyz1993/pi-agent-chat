@@ -143,7 +143,8 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
   if (event.type === "message_start") {
     const raw = event.message;
     const msgObj = typeof raw === "object" && raw !== null ? raw : null;
-    const role = msgObj && "role" in msgObj && typeof msgObj.role === "string" ? msgObj.role : "";
+    const role: string =
+      msgObj && "role" in msgObj && typeof msgObj.role === "string" ? msgObj.role : "";
 
     if (role === "custom") {
       if (!msgObj) return;

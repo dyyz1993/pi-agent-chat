@@ -121,6 +121,7 @@ interface MessageCardProps {
   message: ChatMessage;
   cardLabel?: string;
   prevBarColor?: string;
+  mergedResultData?: unknown;
 }
 
 const ROLE_CONFIG = {
@@ -169,6 +170,7 @@ export const MessageCard = memo(function MessageCard({
   message,
   cardLabel,
   prevBarColor,
+  mergedResultData,
 }: MessageCardProps) {
   const { t } = useTranslation("chat");
   const sessionId = useSessionStore((s) => s.activeSessionId);
@@ -230,7 +232,7 @@ export const MessageCard = memo(function MessageCard({
   ) {
     return (
       <div data-msg-card-id={message.id} className="relative w-full py-1.5">
-        <MessageBubble message={message} />
+        <MessageBubble message={message} mergedResultData={mergedResultData} />
       </div>
     );
   }
@@ -288,7 +290,7 @@ export const MessageCard = memo(function MessageCard({
           </div>
         ) : (
           <div className="relative z-20">
-            <MessageBubble message={message} />
+            <MessageBubble message={message} mergedResultData={mergedResultData} />
           </div>
         )}
       </div>
@@ -395,7 +397,7 @@ export const MessageCard = memo(function MessageCard({
         </div>
       ) : (
         <div className="relative z-20">
-          <MessageBubble message={message} />
+          <MessageBubble message={message} mergedResultData={mergedResultData} />
         </div>
       )}
     </div>

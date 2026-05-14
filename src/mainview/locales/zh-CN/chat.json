@@ -76,6 +76,8 @@
   "sourceFiles": "来源文件 ({{count}})",
   "availableFiles": "可用文件: {{count}} 个",
   "searchDuration": "搜索耗时: {{duration}}ms",
+  "searchingMemory": "正在搜索记忆…",
+  "usedModel": "使用模型",
   "queryLabel": "查询:",
   "availableFilesLabel": "可用文件:",
   "filesCount": "{{count}} 个",
@@ -280,5 +282,6 @@
   "rollbackOverlay.withFilesModeDesc": "回滚将恢复以下文件到之前的状态：",
   "rollbackOverlay.confirm": "确认回滚",
   "rollbackOverlay.cancel": "取消",
-  "rollbackOverlay.noFiles": "本轮无文件变更"
+  "rollbackOverlay.noFiles": "本轮无文件变更",
+  "sendDisabledNoModel": "请先选择模型"
 }

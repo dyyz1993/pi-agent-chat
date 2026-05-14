@@ -6,6 +6,46 @@ import { MessageCard } from "./MessageCard";
 import type { ChatMessage } from "../../types";
 import { ALL_MEMORY_TYPE_KEYS } from "./memory-config";
 
+interface ProcessedMessage {
+  msg: ChatMessage;
+  mergedResultData?: unknown;
+  hide?: boolean;
+}
+
+function buildProcessedMessages(messages: ChatMessage[]): ProcessedMessage[] {
+  const result: ProcessedMessage[] = [];
+  const hideIds = new Set<string>();
+
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i];
+    if (hideIds.has(msg.id)) continue;
+
+    const customBlock = msg.content.find(
+      (b): b is Extract<(typeof msg)["content"][number], { type: "custom" }> => b.type === "custom",
+    );
+    if (customBlock?.customType === "memory_prefetch") {
+      if (i + 1 < messages.length) {
+        const nextMsg = messages[i + 1];
+        const nextBlock = nextMsg.content.find(
+          (b): b is Extract<(typeof nextMsg)["content"][number], { type: "custom" }> =>
+            b.type === "custom",
+        );
+        if (nextBlock?.customType === "memory_prefetch_result") {
+          result.push({ msg, mergedResultData: nextBlock.data });
+          hideIds.add(nextMsg.id);
+          continue;
+        }
+      }
+      result.push({ msg });
+      continue;
+    }
+
+    result.push({ msg });
+  }
+
+  return result;
+}
+
 function getCardLabel(msg: ChatMessage, t: (key: string) => string): string | undefined {
   const hasCustom = msg.content.some((b) => b.type === "custom");
   if (hasCustom) {
@@ -75,6 +115,7 @@ export const MessageListView = memo(function MessageListView({
 }: MessageListViewProps) {
   const { t } = useTranslation("chat");
   const cardMeta = useMemo(() => buildCardMeta(messages, t), [messages, t]);
+  const processedMessages = useMemo(() => buildProcessedMessages(messages), [messages]);
 
   if (messages.length === 0 && scrollRef) {
     return (
@@ -124,14 +165,16 @@ export const MessageListView = memo(function MessageListView({
         onScroll={() => onScroll?.()}
         onScrollEnd={() => onScrollEnd?.()}
       >
-        {messages.map((msg) => {
-          const meta = cardMeta.get(msg.id);
+        {processedMessages.map((item) => {
+          if (item.hide) return <div key={item.msg.id} style={{ height: 0 }} />;
+          const meta = cardMeta.get(item.msg.id);
           return (
-            <div key={msg.id} data-msg-id={msg.id} className="py-0.5 pl-2 pr-3">
+            <div key={item.msg.id} data-msg-id={item.msg.id} className="py-0.5 pl-2 pr-3">
               <MessageCard
-                message={msg}
+                message={item.msg}
                 cardLabel={meta?.cardLabel}
                 prevBarColor={meta?.prevBarColor}
+                mergedResultData={item.mergedResultData}
               />
             </div>
           );

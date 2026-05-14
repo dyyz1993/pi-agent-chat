@@ -47,5 +47,54 @@
     "parentID": "ses_1f1b37d6bffeNjjz4l9Q8Gy9tW",
     "status": "running",
     "createdAt": 1778420914789
+  },
+  "bottom-agent-session": {
+    "id": "ses_1dcff7274ffeieIIo1Z9fq3M2W",
+    "name": "bottom-agent-session",
+    "parentID": "ses_1e2892155ffevobtCIUNfEzKwQ",
+    "status": "running",
+    "createdAt": 1778703699341
+  },
+  "bottom-rpc": {
+    "id": "ses_1dcff706bffevMblDevSNJRvcC",
+    "name": "bottom-rpc",
+    "parentID": "ses_1e2892155ffevobtCIUNfEzKwQ",
+    "status": "running",
+    "createdAt": 1778703699861
+  },
+  "bottom-permissions": {
+    "id": "ses_1dcff6d41ffedC4x1HbDOYcObd",
+    "name": "bottom-permissions",
+    "parentID": "ses_1e2892155ffevobtCIUNfEzKwQ",
+    "status": "running",
+    "createdAt": 1778703700673
+  },
+  "frontend-agent-store": {
+    "id": "ses_1dcff6b8affeTyDIfl8EfSduHj",
+    "name": "frontend-agent-store",
+    "parentID": "ses_1e2892155ffevobtCIUNfEzKwQ",
+    "status": "running",
+    "createdAt": 1778703701110
+  },
+  "bottom-rpc-v2": {
+    "id": "ses_1dcfad66affekWIxAn9wQG1Ixc",
+    "name": "bottom-rpc-v2",
+    "parentID": "ses_1e2892155ffevobtCIUNfEzKwQ",
+    "status": "running",
+    "createdAt": 1778704001432
+  },
+  "bottom-session-v2": {
+    "id": "ses_1dcfad4c5ffeC1QT2l2CRwETGg",
+    "name": "bottom-session-v2",
+    "parentID": "ses_1e2892155ffevobtCIUNfEzKwQ",
+    "status": "running",
+    "createdAt": 1778704001852
+  },
+  "bottom-perm-v2": {
+    "id": "ses_1dcfad281ffePfeY5fkNtVoqUR",
+    "name": "bottom-perm-v2",
+    "parentID": "ses_1e2892155ffevobtCIUNfEzKwQ",
+    "status": "running",
+    "createdAt": 1778704002431
   }
 }

@@ -580,7 +580,6 @@ export function cleanupSessionData(sessionId: string): void {
   useRulesStore.getState().clearSession(sessionId);
   useBashStore.getState().clearSession(sessionId);
   useLspStore.getState().clearSession(sessionId);
-  useSubagentStore.getState().setActiveSubsession(sessionId, null);
 }
 
 export function clearSubscriptionState(

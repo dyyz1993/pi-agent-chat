@@ -111,6 +111,7 @@ interface SessionState {
     contextWindow?: number;
     reasoning?: boolean;
   }>;
+  modelFavorites: Set<string>;
   projectStartFailed: Record<string, boolean>;
   projectStartError: Record<string, string>;
   _projectVersion: number;
@@ -137,6 +138,8 @@ interface SessionState {
   refreshSessionResources: (sessionId: string) => void;
   setCurrentModel: (provider: string, modelId: string) => void;
   setThinkingLevel: (level: string) => void;
+  fetchModelFavorites: () => void;
+  toggleModelFavorite: (modelKey: string) => void;
   cleanupActiveSession: (sessionId: string) => void;
 }
 
@@ -165,6 +168,7 @@ export const useSessionStore = create<SessionState>()(
       currentModel: null,
       currentThinkingLevel: "medium",
       availableModels: [],
+      modelFavorites: new Set<string>(),
       projectStartFailed: {},
       projectStartError: {},
       _projectVersion: 0,
@@ -1068,10 +1072,31 @@ export const useSessionStore = create<SessionState>()(
               err: err instanceof Error ? err.message : String(err),
             });
           });
+        if (get().modelFavorites.size === 0) {
+          get().fetchModelFavorites();
+        }
       },
 
       setCurrentModel: (provider, modelId) => set({ currentModel: { provider, id: modelId } }),
       setThinkingLevel: (level) => set({ currentThinkingLevel: level }),
+
+      fetchModelFavorites: () => {
+        apiClient
+          .call("project.getModelFavorites", {})
+          .then((res) => {
+            set({ modelFavorites: new Set((res as { favorites: string[] }).favorites) });
+          })
+          .catch(() => {});
+      },
+
+      toggleModelFavorite: (modelKey) => {
+        apiClient
+          .call("project.toggleModelFavorite", { modelKey })
+          .then((res) => {
+            set({ modelFavorites: new Set((res as { favorites: string[] }).favorites) });
+          })
+          .catch(() => {});
+      },
 
       refreshSessionResources: (sessionId) => {
         apiClient

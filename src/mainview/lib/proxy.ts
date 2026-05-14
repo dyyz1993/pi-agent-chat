@@ -1,93 +1,75 @@
 /**
- * 本地代理模块 — 把 localhost / LAN 地址转成公网可访问的 HTTPS 代理 URL
+ * 本地代理模块 — 把 localhost / LAN 地址转成公网可访问的 HTTPS URL
  *
- * 配置来源：后端 .env 的 PROXY_API_URL，通过 /api/proxy-config 接口暴露给前端
+ * 前端通过 same-origin 调后端端点 /api/proxy-register，由后端负责
+ * 调用外部代理服务（如 shanbox）进行注册和缓存。
  *
- * 代理服务 API（如 shanbox）：
- *   POST /__api__/register  { "address": "192.168.0.4:3000" }
- *   → { subdomain, key, url: "https://xxx.shanbox...:8443", ... }
- *
- * 前端使用：
- *   - proxyUrl(url)       异步，缓存未命中时会调代理 API 注册
- *   - proxyUrlSync(url)   同步，仅查缓存，未命中返回原始 URL
- *   - warmupProxyCache()  预热，启动时注册服务自身地址
+ * 生命周期：
+ *   1. 启动时调用 tryEnable() → 尝试注册本机地址
+ *      成功 → 代理开启，后续 URL 自动转换
+ *      失败（502）→ 代理关闭
+ *   2. 设置面板可手动开关
  */
 
 interface ProxyEntry {
-  url: string; // e.g. "https://dm9ekm.shanbox.19930810.xyz:8443"
-  key: string; // e.g. "spuw4kz3"
+  baseUrl: string; // e.g. "https://xxx.shanbox.19930810.xyz:8443"
 }
 
-// ---- 内部状态（仅内存，不持久化） ----
+// ---- 内部状态 ----
 
-let proxyApiUrl: string | null = null;
-const cache = new Map<string, ProxyEntry>(); // host → entry
-const pendingRegistrations = new Map<string, Promise<ProxyEntry | null>>(); // 去重
+let active = false;
+const cache = new Map<string, ProxyEntry>();
+const pendingReg = new Map<string, Promise<ProxyEntry | null>>();
 
-// ---- 初始化（从后端拉取） ----
-
-/**
- * 从后端 /api/proxy-config 接口读取代理配置
- *
- * 前端启动时调用一次即可，配置来源是 .env 的 PROXY_API_URL
- */
-export async function initProxyFromServer(): Promise<void> {
-  if (typeof window === "undefined") return;
-  try {
-    // 从当前页面地址推导后端地址
-    const base = `${window.location.protocol}//${window.location.host}`;
-    const res = await fetch(`${base}/api/proxy-config`);
-    if (!res.ok) return;
-    const data = (await res.json()) as { proxyApiUrl: string | null };
-    proxyApiUrl = data.proxyApiUrl ?? null;
-  } catch {
-    // 拉取失败，代理不启用
-  }
-}
+// ---- 公开 API ----
 
 /** 代理是否已启用 */
 export function isProxyEnabled(): boolean {
-  return !!proxyApiUrl;
+  return active;
 }
 
-/** 获取当前代理 API 地址 */
-export function getProxyApiUrl(): string | null {
-  return proxyApiUrl;
+/** 开启代理 */
+export function enableProxy(): void {
+  active = true;
 }
 
-/**
- * 运行时开启代理（设置面板调用）
- *
- * @param apiUrl 代理注册 API 地址，如 "http://192.168.0.29:9080/__api__/register"
- */
-export function enableProxy(apiUrl: string): void {
-  proxyApiUrl = apiUrl;
-}
-
-/** 运行时关闭代理（设置面板调用） */
+/** 关闭代理（清空缓存） */
 export function disableProxy(): void {
-  proxyApiUrl = null;
+  active = false;
   cache.clear();
 }
 
-// ---- URL 转换 ----
+/**
+ * 启动时自动检测：尝试注册本机地址
+ * - 后端配了 PROXY_API_URL → 注册成功 → 开启
+ * - 后端没配 → 502 → 自动关闭
+ *
+ * @param serverHost 服务端地址，如 "192.168.0.4:3100"
+ */
+export async function tryEnable(serverHost: string): Promise<void> {
+  active = true;
+  if (!serverHost) {
+    active = false;
+    return;
+  }
+  const result = await registerHost(serverHost);
+  if (!result) {
+    active = false;
+  }
+}
 
 /**
- * 同步版本 — 仅查缓存，未命中返回原始 URL
+ * 同步转换 — 仅查缓存，未命中返回原始 URL
  *
  * 适用场景：React render 函数等同步上下文
  */
 export function proxyUrlSync(originalUrl: string): string {
-  if (!proxyApiUrl) return originalUrl;
+  if (!active) return originalUrl;
   try {
     const parsed = new URL(originalUrl);
-    if (parsed.protocol === "https:") return originalUrl;
-    if (parsed.protocol === "file:") return originalUrl;
-
-    const cacheKey = parsed.host;
-    const entry = cache.get(cacheKey);
+    if (parsed.protocol === "file:" || parsed.protocol === "https:") return originalUrl;
+    const entry = cache.get(parsed.host);
     if (!entry) return originalUrl;
-
     return buildProxiedUrl(originalUrl, entry);
   } catch {
     return originalUrl;
@@ -95,33 +77,27 @@ export function proxyUrlSync(originalUrl: string): string {
 }
 
 /**
- * 异步版本 — 如果缓存未命中，会调用代理 API 注册
+ * 异步转换 — 缓存未命中时调后端注册
  *
- * 适用场景：store action、事件处理、useEffect 等异步上下文
+ * 适用场景：store action、useEffect 等
  */
 export async function proxyUrl(originalUrl: string): Promise<string> {
-  if (!proxyApiUrl) return originalUrl;
+  if (!active) return originalUrl;
   try {
     const parsed = new URL(originalUrl);
-    if (parsed.protocol === "https:") return originalUrl;
-    if (parsed.protocol === "file:") return originalUrl;
+    if (parsed.protocol === "file:" || parsed.protocol === "https:") return originalUrl;
 
-    const cacheKey = parsed.host;
-    const cached = cache.get(cacheKey);
+    const cached = cache.get(parsed.host);
     if (cached) return buildProxiedUrl(originalUrl, cached);
 
-    // 注册（去重：同一 host 同时只发一次请求）
-    let pending = pendingRegistrations.get(cacheKey);
-    if (!pending) {
-      pending = registerHost(cacheKey).finally(() => {
-        pendingRegistrations.delete(cacheKey);
-      });
-      pendingRegistrations.set(cacheKey, pending);
+    let p = pendingReg.get(parsed.host);
+    if (!p) {
+      p = registerHost(parsed.host).finally(() => pendingReg.delete(parsed.host));
+      pendingReg.set(parsed.host, p);
     }
 
-    const entry = await pending;
+    const entry = await p;
     if (!entry) return originalUrl;
-
     return buildProxiedUrl(originalUrl, entry);
   } catch {
     return originalUrl;
@@ -129,53 +105,32 @@ export async function proxyUrl(originalUrl: string): Promise<string> {
 }
 
 /**
- * 预热缓存 — 批量注册多个 host
- *
- * 适用场景：应用启动时注册服务自身地址
+ * 预热：注册一批 host，让后续 proxyUrlSync() 能命中缓存
  */
 export async function warmupProxyCache(hosts: string[]): Promise<void> {
-  if (!proxyApiUrl) return;
+  if (!active) return;
   await Promise.allSettled(hosts.map((h) => proxyUrl(`http://${h}/`)));
 }
 
-/**
- * 构造端口代理网关 URL — 用于 iframe 等场景
- *
- * 前端零异步：纯字符串拼接，将目标地址拼在 /__proxy__/ 后面
- * Server 端收到后自动注册并 307 重定向到公网地址
- *
- * @returns 拼接后的代理网关 URL，或 null（代理未启用或目标不是 HTTP）
- */
-export function buildProxyGatewayUrl(targetUrl: string): string | null {
-  if (!proxyApiUrl) return null;
-  try {
-    const parsed = new URL(targetUrl);
-    if (parsed.protocol !== "http:") return null;
-    const base = `${window.location.protocol}//${window.location.host}`;
-    return `${base}/__proxy__/${parsed.host}${parsed.pathname}`;
-  } catch {
-    return null;
-  }
-}
-
-// ---- 内部实现 ----
+// ---- 内部 ----
 
 async function registerHost(host: string): Promise<ProxyEntry | null> {
-  if (!proxyApiUrl) return null;
   try {
-    const res = await fetch(proxyApiUrl, {
+    const colonIdx = host.lastIndexOf(":");
+    const hostname = colonIdx >= 0 ? host.slice(0, colonIdx) : host;
+    const port = colonIdx >= 0 ? parseInt(host.slice(colonIdx + 1), 10) : 80;
+
+    const res = await fetch("/api/proxy-register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ address: host }),
+      body: JSON.stringify({ host: hostname, port }),
     });
     if (!res.ok) return null;
-    const data = (await res.json()) as {
-      url?: string;
-      key?: string;
-      subdomain?: string;
-    };
-    if (!data.url || !data.key) return null;
-    const entry: ProxyEntry = { url: data.url, key: data.key };
+
+    const data = (await res.json()) as { publicUrl?: string };
+    if (!data.publicUrl) return null;
+
+    const entry: ProxyEntry = { baseUrl: data.publicUrl.replace(/\/+$/, "") };
     cache.set(host, entry);
     return entry;
   } catch {
@@ -184,10 +139,9 @@ async function registerHost(host: string): Promise<ProxyEntry | null> {
 }
 
 function buildProxiedUrl(originalUrl: string, entry: ProxyEntry): string {
-  const proxyBase = new URL(entry.url);
+  const proxyParsed = new URL(entry.baseUrl);
   const result = new URL(originalUrl);
-  result.protocol = proxyBase.protocol;
-  result.host = proxyBase.host;
-  result.searchParams.set("key", entry.key);
+  result.protocol = proxyParsed.protocol;
+  result.host = proxyParsed.host;
   return result.toString();
 }

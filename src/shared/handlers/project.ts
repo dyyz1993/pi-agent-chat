@@ -19,6 +19,7 @@ import {
   toggleFavoriteFolder,
   getModelFavorites,
   toggleModelFavorite,
+  createDirectory,
 } from "../lib/project-config";
 import {
   scanSessionsForProject,
@@ -177,5 +178,9 @@ export function register(server: RPCServer, options: HandlerOptions): void {
   r("project.toggleModelFavorite", async (params) => {
     const result = await toggleModelFavorite(params.modelKey);
     return result;
+  });
+
+  r("project.createDirectory", async (params) => {
+    return createDirectory(params.parentPath, params.folderName);
   });
 }

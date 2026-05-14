@@ -70,6 +70,7 @@ export function ChatPanel() {
   const effectiveStatus = isViewingSubagent ? subStatus : parentStatus;
 
   const activeProjectId = useSessionStore((s) => s.activeProjectId);
+  const currentModel = useSessionStore((s) => s.currentModel);
   const projectFailed = useSessionStore(
     useCallback(
       (s) => !!activeProjectId && s.projectStartFailed[activeProjectId],
@@ -120,6 +121,7 @@ export function ChatPanel() {
     effectiveStatus === "streaming" ||
     effectiveStatus === "compacting" ||
     effectiveStatus === "retrying";
+  const hasNoModel = effectiveStatus === "idle" && !currentModel;
   const breakpoint = useLayoutStore((s) => s.breakpoint);
   const isMobileOrTablet = breakpoint === "mobile" || breakpoint === "tablet";
 
@@ -536,11 +538,24 @@ export function ChatPanel() {
                     disabled={
                       (!inputText.trim() &&
                         useAttachmentStore.getState().attachments.length === 0) ||
-                      !sessionReady
+                      !sessionReady ||
+                      hasNoModel
                     }
-                    className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${(inputText.trim() || useAttachmentStore.getState().attachments.length > 0) && sessionReady ? (isStreaming ? "bg-blue-600 text-white hover:bg-blue-700 shadow-sm shadow-blue-500/20" : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm shadow-indigo-500/20") : "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed"}`}
-                    title={isStreaming ? t("sendFollowUp") : t("send")}
-                    aria-label={isStreaming ? t("sendFollowUp") : t("send")}
+                    className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${(inputText.trim() || useAttachmentStore.getState().attachments.length > 0) && sessionReady && !hasNoModel ? (isStreaming ? "bg-blue-600 text-white hover:bg-blue-700 shadow-sm shadow-blue-500/20" : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm shadow-indigo-500/20") : "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed"}`}
+                    title={
+                      hasNoModel
+                        ? t("sendDisabledNoModel")
+                        : isStreaming
+                          ? t("sendFollowUp")
+                          : t("send")
+                    }
+                    aria-label={
+                      hasNoModel
+                        ? t("sendDisabledNoModel")
+                        : isStreaming
+                          ? t("sendFollowUp")
+                          : t("send")
+                    }
                   >
                     {isStreaming ? <Clock className="w-4 h-4" /> : <ArrowUp className="w-4 h-4" />}
                   </button>

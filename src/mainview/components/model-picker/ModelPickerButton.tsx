@@ -1,0 +1,243 @@
+import { useEffect, useRef, useState, useCallback } from "react";
+import { Search, Star, Check } from "lucide-react";
+import { useSessionStore } from "../../stores/use-session-store";
+
+interface ModelItem {
+  provider: string;
+  id: string;
+  name?: string;
+  contextWindow?: number;
+  reasoning?: boolean;
+}
+
+interface ModelPickerButtonProps {
+  models: ModelItem[];
+  value: string;
+  onChange: (value: string) => void;
+  placement?: "up" | "down";
+  placeholder?: string;
+  disabled?: boolean;
+  renderTrigger?: (props: { open: boolean }) => React.ReactNode;
+  onOpenChange?: (open: boolean) => void;
+}
+
+function modelKey(m: ModelItem): string {
+  return `${m.provider}/${m.id}`;
+}
+
+function formatModelName(modelId: string): string {
+  return modelId.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+export function ModelPickerButton({
+  models,
+  value,
+  onChange,
+  placement = "down",
+  placeholder = "--",
+  disabled = false,
+  renderTrigger,
+  onOpenChange,
+}: ModelPickerButtonProps) {
+  const [open, _setOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const favorites = useSessionStore((s) => s.modelFavorites);
+  const toggleFavorite = useSessionStore((s) => s.toggleModelFavorite);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const setOpen = useCallback(
+    (v: boolean | ((prev: boolean) => boolean)) => {
+      _setOpen((prev) => {
+        const next = typeof v === "function" ? v(prev) : v;
+        if (next !== prev) onOpenChange?.(next);
+        return next;
+      });
+    },
+    [onOpenChange],
+  );
+
+  // Focus search input when opened
+  useEffect(() => {
+    if (open && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [open]);
+
+  // Close on click outside
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  // Close on Escape
+  useEffect(() => {
+    if (!open) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [open]);
+
+  let displayModels = models;
+  if (searchQuery.trim()) {
+    const q = searchQuery.toLowerCase();
+    displayModels = displayModels.filter(
+      (m) =>
+        m.id.toLowerCase().includes(q) ||
+        (m.name?.toLowerCase().includes(q) ?? false) ||
+        formatModelName(m.id).toLowerCase().includes(q) ||
+        m.provider.toLowerCase().includes(q),
+    );
+  }
+  if (showFavoritesOnly) {
+    displayModels = displayModels.filter((m) => favorites.has(modelKey(m)));
+  }
+
+  const selectedModel = models.find((m) => modelKey(m) === value);
+  const displayName =
+    selectedModel?.name ?? (selectedModel ? formatModelName(selectedModel.id) : "");
+
+  return (
+    <div className="relative" ref={containerRef}>
+      {renderTrigger ? (
+        <div
+          onClick={() => !disabled && setOpen((o) => !o)}
+          className={disabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}
+        >
+          {renderTrigger({ open })}
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => !disabled && setOpen(!open)}
+          disabled={disabled}
+          className={`w-full flex items-center gap-1.5 h-7 px-2 rounded-md border text-[12px] transition-colors
+            ${disabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer hover:border-indigo-400"}
+            ${
+              open
+                ? "border-indigo-500 ring-1 ring-indigo-500/30"
+                : "border-gray-200 dark:border-gray-700"
+            }
+            bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300`}
+        >
+          <span className="truncate flex-1 text-left">{displayName || placeholder}</span>
+          <svg
+            className={`w-3 h-3 shrink-0 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
+      )}
+
+      {open && (
+        <div
+          className={`absolute ${placement === "up" ? "bottom-full mb-1" : "top-full mt-1"} left-0 right-0 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md shadow-xl flex flex-col`}
+          style={{ maxHeight: "280px" }}
+        >
+          {/* Search + Favorites filter */}
+          <div className="px-2 py-1.5 border-b border-gray-200/60 dark:border-gray-700/60 shrink-0">
+            <div className="flex items-center gap-1.5 px-1.5 py-0.5 rounded bg-gray-100/60 dark:bg-gray-900/60 border border-gray-200/50 dark:border-gray-700/50">
+              <Search className="w-3 h-3 shrink-0 text-gray-400 dark:text-gray-500" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                placeholder="搜索模型..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="flex-1 bg-transparent text-[11px] text-gray-700 dark:text-gray-300 placeholder-gray-400 dark:placeholder-gray-600 outline-none min-w-0"
+              />
+              <button
+                type="button"
+                onClick={() => setShowFavoritesOnly((v) => !v)}
+                className={`p-0.5 rounded transition-colors shrink-0 ${
+                  showFavoritesOnly
+                    ? "text-amber-400"
+                    : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+                }`}
+                title={showFavoritesOnly ? "显示全部" : "仅显示收藏"}
+              >
+                <Star className={`w-3.5 h-3.5 ${showFavoritesOnly ? "fill-amber-400" : ""}`} />
+              </button>
+            </div>
+          </div>
+
+          {/* Model list */}
+          <div className="overflow-y-auto flex-1 py-1">
+            {models.length === 0 ? (
+              <div className="text-gray-400 dark:text-gray-500 text-xs text-center py-3">
+                没有可用模型
+              </div>
+            ) : displayModels.length === 0 ? (
+              <div className="text-gray-400 dark:text-gray-500 text-xs text-center py-3">
+                {showFavoritesOnly ? "没有收藏的模型" : "无匹配结果"}
+              </div>
+            ) : (
+              displayModels.map((m) => {
+                const key = modelKey(m);
+                const isSelected = key === value;
+                const isFav = favorites.has(key);
+                return (
+                  <div
+                    key={key}
+                    className={`flex items-center px-2 py-1.5 transition-colors ${
+                      isSelected
+                        ? "bg-indigo-500/15 text-indigo-600 dark:text-indigo-300"
+                        : "text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onChange(key);
+                        setOpen(false);
+                      }}
+                      className="flex-1 flex items-center gap-2 min-w-0 text-left"
+                    >
+                      {isSelected ? (
+                        <Check className="w-3 h-3 shrink-0 text-indigo-400" />
+                      ) : (
+                        <span className="w-3 shrink-0" />
+                      )}
+                      <div className="flex flex-col min-w-0">
+                        <span className="truncate text-xs">{m.name ?? formatModelName(m.id)}</span>
+                        <span className="text-[10px] text-cyan-500/60 font-mono">
+                          {m.provider} · {m.id}
+                        </span>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleFavorite(key);
+                      }}
+                      className="p-0.5 rounded hover:bg-gray-300/50 dark:hover:bg-gray-600/50 transition-all shrink-0"
+                      title={isFav ? "取消收藏" : "收藏"}
+                    >
+                      <Star
+                        className={`w-3 h-3 ${isFav ? "fill-amber-400 text-amber-400" : "text-gray-400 dark:text-gray-500"}`}
+                      />
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

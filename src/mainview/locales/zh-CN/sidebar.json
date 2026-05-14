@@ -130,5 +130,10 @@
   "picker.timeAgo.days": "{{count}} 天前",
   "picker.backToRecents": "返回最近",
   "picker.manualPathPlaceholder": "输入路径直接打开...",
-  "picker.openPath": "打开"
+  "picker.openPath": "打开",
+  "picker.createFolder": "新建文件夹",
+  "picker.newFolderName": "文件夹名称",
+  "picker.createFolderError": "创建失败",
+  "picker.folderExists": "文件夹已存在",
+  "currentAgent": "当前智能体"
 }

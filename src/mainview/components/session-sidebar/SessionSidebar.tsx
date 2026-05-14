@@ -18,6 +18,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useSubagentStore } from "../../stores/use-subagent-store";
+import { useAgentStore } from "../../stores/use-agent-store";
 import { useGitStore } from "../../stores/use-git-store";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import type { SessionMeta, SubagentSessionInfo } from "../../types";
@@ -314,6 +315,7 @@ function SessionItem({
   const subsessions = useSubagentStore((s) => s.subsessionsByParent[session.sessionPath]);
   const loadingSubs = useSubagentStore((s) => s.loadingByParent[session.sessionPath]);
   const worktrees = useGitStore((s) => s.worktrees);
+  const currentAgentName = useAgentStore((s) => s.currentAgent);
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState(false);
@@ -410,16 +412,16 @@ function SessionItem({
         data-testid={`session-item-${session.sessionId}`}
         className={`group w-full text-left px-2.5 py-2 rounded-lg text-[11px] transition-all duration-150 cursor-pointer ${
           isActive
-            ? "bg-gradient-to-r from-indigo-500/15 to-indigo-500/5 text-indigo-100 shadow-sm shadow-indigo-500/5 border border-indigo-500/20"
+            ? "bg-[var(--color-accent)]/[0.15] text-[var(--color-accent-text)] shadow-sm shadow-[var(--color-accent)]/5 border border-[var(--color-accent)]/20"
             : "text-gray-500 dark:text-gray-400 hover:bg-white/[0.04] dark:hover:bg-gray-800/50 hover:text-gray-200 dark:hover:text-gray-200 border border-transparent hover:border-gray-700/30 dark:hover:border-gray-700/30"
-        } ${isActive ? "ring-1 ring-indigo-500/20" : ""}`}
+        } ${isActive ? "ring-1 ring-[var(--color-accent)]/20" : ""}`}
         onClick={handleClick}
       >
         <div className="flex items-center gap-1.5">
           <div
             className={`flex items-center justify-center w-5 h-5 rounded-md shrink-0 transition-colors ${
               isActive
-                ? "bg-indigo-500/20 text-indigo-300"
+                ? "bg-[var(--color-accent)]/20 text-[var(--color-accent-text)]"
                 : "bg-gray-800/60 text-gray-500 group-hover:bg-gray-700/60 dark:group-hover:text-gray-400"
             }`}
           >
@@ -457,10 +459,18 @@ function SessionItem({
             <>
               {session.pinned && <Pin className="w-3 h-3 shrink-0 text-indigo-400" />}
               <span
-                className={`truncate font-medium leading-tight flex-1 min-w-0 ${isActive ? "text-indigo-50" : ""}`}
+                className={`truncate font-medium leading-tight flex-1 min-w-0 ${isActive ? "text-[var(--color-accent-text)]" : ""}`}
               >
                 {displayName}
               </span>
+              {currentAgentName && (
+                <span
+                  className="text-[9px] px-1 py-0.5 rounded font-mono shrink-0 ml-1 bg-[var(--color-accent)]/10 text-[var(--color-accent-text)]"
+                  title={t("sidebar:currentAgent", "Current Agent")}
+                >
+                  {currentAgentName}
+                </span>
+              )}
             </>
           )}
         </div>
@@ -652,7 +662,7 @@ function SubagentItem({
       <div
         className={`group w-full text-left px-2.5 py-2 rounded-lg text-[11px] cursor-pointer transition-all duration-150 ${
           isActive
-            ? "bg-gradient-to-r from-purple-500/15 to-purple-500/5 text-purple-100 shadow-sm shadow-purple-500/5 border border-purple-500/20 ring-1 ring-purple-500/20"
+            ? "border-l-2 border-l-[var(--color-accent)]/40 bg-[var(--color-accent)]/[0.08] text-[var(--color-accent-text)]"
             : "text-gray-500 hover:bg-white/[0.04] dark:hover:bg-gray-800/50 hover:text-gray-300 border border-transparent hover:border-gray-700/30 dark:hover:border-gray-700/30"
         }`}
         onClick={handleClick}
@@ -661,8 +671,8 @@ function SubagentItem({
           <div
             className={`flex items-center justify-center w-5 h-5 rounded-md shrink-0 transition-colors ${
               isActive
-                ? "bg-purple-500/20 text-purple-300"
-                : "bg-gray-800/60 text-purple-500/70 group-hover:text-purple-400"
+                ? "bg-[var(--color-accent)]/20 text-[var(--color-accent-text)]"
+                : "bg-gray-800/60 text-gray-500 group-hover:text-gray-400"
             }`}
           >
             <Bot className="w-3 h-3" />
@@ -696,11 +706,21 @@ function SubagentItem({
               </button>
             </div>
           ) : (
-            <span
-              className={`truncate leading-tight flex-1 min-w-0 ${isActive ? "text-purple-50 font-medium" : ""}`}
-            >
-              {displayName}
-            </span>
+            <>
+              <span
+                className={`truncate leading-tight flex-1 min-w-0 ${isActive ? "text-[var(--color-accent-text)]" : ""}`}
+              >
+                {displayName}
+              </span>
+              {sub.agent && (
+                <span
+                  className="text-[9px] px-1 py-0.5 rounded font-mono shrink-0 ml-1 bg-[var(--color-accent)]/10 text-[var(--color-accent-text)]"
+                  title={sub.agent}
+                >
+                  {sub.agent}
+                </span>
+              )}
+            </>
           )}
         </div>
         <div className="flex items-center gap-1.5 mt-1.5">

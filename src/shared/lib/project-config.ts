@@ -80,12 +80,23 @@ async function load(): Promise<ProjectConfig> {
   }
 }
 
-async function save(config: ProjectConfig): Promise<void> {
-  const dir = dirname(CONFIG_PATH);
-  if (!existsSync(dir)) {
-    await mkdir(dir, { recursive: true });
-  }
-  await writeFile(CONFIG_PATH, JSON.stringify(config, null, 2), "utf-8");
+// Serial queue for load→modify→save operations to prevent concurrent write races
+let saveQueue: Promise<void> = Promise.resolve();
+
+async function loadAndSave<T>(patcher: (config: ProjectConfig) => T): Promise<T> {
+  await saveQueue.catch(() => {});
+  let result!: T;
+  saveQueue = (async () => {
+    const config = await load();
+    result = patcher(config);
+    const dir = dirname(CONFIG_PATH);
+    if (!existsSync(dir)) {
+      await mkdir(dir, { recursive: true });
+    }
+    await writeFile(CONFIG_PATH, JSON.stringify(config, null, 2), "utf-8");
+  })();
+  await saveQueue;
+  return result;
 }
 
 export async function listRecentProjects(): Promise<RecentProject[]> {
@@ -98,34 +109,32 @@ export async function addRecentProject(
   name: string,
   sessionCount: number,
 ): Promise<RecentProject> {
-  const config = await load();
-  const existing = config.recentProjects.find((p) => p.path === projectPath);
-
-  if (existing) {
-    existing.lastOpened = Date.now();
-    existing.sessionCount = sessionCount;
-  } else {
-    config.recentProjects.unshift({
-      path: projectPath,
-      name,
-      lastOpened: Date.now(),
-      pinned: false,
-      sessionCount,
-    });
-  }
-
-  config.activeProject = projectPath;
-  await save(config);
-  return existing ?? config.recentProjects[0];
+  return loadAndSave((config) => {
+    const existing = config.recentProjects.find((p) => p.path === projectPath);
+    if (existing) {
+      existing.lastOpened = Date.now();
+      existing.sessionCount = sessionCount;
+    } else {
+      config.recentProjects.unshift({
+        path: projectPath,
+        name,
+        lastOpened: Date.now(),
+        pinned: false,
+        sessionCount,
+      });
+    }
+    config.activeProject = projectPath;
+    return existing ?? config.recentProjects[0];
+  });
 }
 
 export async function removeRecentProject(projectPath: string): Promise<void> {
-  const config = await load();
-  config.recentProjects = config.recentProjects.filter((p) => p.path !== projectPath);
-  if (config.activeProject === projectPath) {
-    config.activeProject = config.recentProjects[0]?.path ?? null;
-  }
-  await save(config);
+  return loadAndSave((config) => {
+    config.recentProjects = config.recentProjects.filter((p) => p.path !== projectPath);
+    if (config.activeProject === projectPath) {
+      config.activeProject = config.recentProjects[0]?.path ?? null;
+    }
+  });
 }
 
 export async function getActiveProject(): Promise<string | null> {
@@ -145,31 +154,31 @@ export async function listConfiguredPaths(): Promise<ConfiguredPath[]> {
 }
 
 export async function addConfiguredPath(path: string, name?: string): Promise<void> {
-  const config = await load();
-  if (!config.configuredPaths.find((p) => p.path === path)) {
-    config.configuredPaths.push({
-      path,
-      name: name ?? basename(path),
-      type: "custom",
-    });
-    await save(config);
-  }
+  return loadAndSave((config) => {
+    if (!config.configuredPaths.find((p) => p.path === path)) {
+      config.configuredPaths.push({
+        path,
+        name: name ?? basename(path),
+        type: "custom",
+      });
+    }
+  });
 }
 
 export async function removeConfiguredPath(path: string): Promise<void> {
-  const config = await load();
-  config.configuredPaths = config.configuredPaths.filter((p) => p.path !== path);
-  await save(config);
+  return loadAndSave((config) => {
+    config.configuredPaths = config.configuredPaths.filter((p) => p.path !== path);
+  });
 }
 
 export async function syncOpenTabs(
   tabs: PersistedTab[],
   activeTabId: string | null,
 ): Promise<void> {
-  const config = await load();
-  config.openTabs = tabs;
-  config.activeTabId = activeTabId;
-  await save(config);
+  return loadAndSave((config) => {
+    config.openTabs = tabs;
+    config.activeTabId = activeTabId;
+  });
 }
 
 export async function restoreOpenTabs(): Promise<{
@@ -181,19 +190,19 @@ export async function restoreOpenTabs(): Promise<{
 }
 
 export async function pinSession(sessionId: string): Promise<string[]> {
-  const config = await load();
-  if (!config.pinnedSessionIds.includes(sessionId)) {
-    config.pinnedSessionIds.push(sessionId);
-    await save(config);
-  }
-  return config.pinnedSessionIds;
+  return loadAndSave((config) => {
+    if (!config.pinnedSessionIds.includes(sessionId)) {
+      config.pinnedSessionIds.push(sessionId);
+    }
+    return config.pinnedSessionIds;
+  });
 }
 
 export async function unpinSession(sessionId: string): Promise<string[]> {
-  const config = await load();
-  config.pinnedSessionIds = config.pinnedSessionIds.filter((id) => id !== sessionId);
-  await save(config);
-  return config.pinnedSessionIds;
+  return loadAndSave((config) => {
+    config.pinnedSessionIds = config.pinnedSessionIds.filter((id) => id !== sessionId);
+    return config.pinnedSessionIds;
+  });
 }
 
 export async function listPinnedSessionIds(): Promise<string[]> {
@@ -206,36 +215,29 @@ export async function listFavoriteFolders(): Promise<FavoriteFolder[]> {
   return config.favoriteFolders;
 }
 
-export async function addFavoriteFolder(folderPath: string): Promise<FavoriteFolder> {
-  const config = await load();
-  const existing = config.favoriteFolders.find((f) => f.path === folderPath);
-  if (existing) return existing;
-  const fav: FavoriteFolder = { path: folderPath, name: basename(folderPath), addedAt: Date.now() };
-  config.favoriteFolders.push(fav);
-  await save(config);
-  return fav;
-}
-
 export async function toggleFavoriteFolder(
   folderPath: string,
 ): Promise<{ added: boolean; favorites: FavoriteFolder[] }> {
-  const config = await load();
-  const idx = config.favoriteFolders.findIndex((f) => f.path === folderPath);
-  if (idx >= 0) {
-    config.favoriteFolders.splice(idx, 1);
-    await save(config);
-    return { added: false, favorites: config.favoriteFolders };
-  }
-  const fav: FavoriteFolder = { path: folderPath, name: basename(folderPath), addedAt: Date.now() };
-  config.favoriteFolders.push(fav);
-  await save(config);
-  return { added: true, favorites: config.favoriteFolders };
+  return loadAndSave((config) => {
+    const idx = config.favoriteFolders.findIndex((f) => f.path === folderPath);
+    if (idx >= 0) {
+      config.favoriteFolders.splice(idx, 1);
+      return { added: false, favorites: config.favoriteFolders };
+    }
+    const fav: FavoriteFolder = {
+      path: folderPath,
+      name: basename(folderPath),
+      addedAt: Date.now(),
+    };
+    config.favoriteFolders.push(fav);
+    return { added: true, favorites: config.favoriteFolders };
+  });
 }
 
 export async function removeFavoriteFolder(folderPath: string): Promise<void> {
-  const config = await load();
-  config.favoriteFolders = config.favoriteFolders.filter((f) => f.path !== folderPath);
-  await save(config);
+  return loadAndSave((config) => {
+    config.favoriteFolders = config.favoriteFolders.filter((f) => f.path !== folderPath);
+  });
 }
 
 export async function isFavoriteFolder(folderPath: string): Promise<boolean> {
@@ -243,15 +245,36 @@ export async function isFavoriteFolder(folderPath: string): Promise<boolean> {
   return config.favoriteFolders.some((f) => f.path === folderPath);
 }
 
-export async function toggleProjectPin(projectPath: string): Promise<boolean> {
-  const config = await load();
-  const project = config.recentProjects.find((p) => p.path === projectPath);
-  if (project) {
-    project.pinned = !project.pinned;
-    await save(config);
-    return project.pinned;
+export async function createDirectory(
+  parentPath: string,
+  folderName: string,
+): Promise<{ ok: boolean; path: string; error?: string }> {
+  const safeName = folderName.trim().replace(/[/\\]/g, "");
+  if (!safeName) {
+    return { ok: false, path: "", error: "Invalid folder name" };
   }
-  return false;
+  const fullPath = join(parentPath, safeName);
+  if (existsSync(fullPath)) {
+    return { ok: false, path: fullPath, error: "Folder already exists" };
+  }
+  try {
+    await mkdir(fullPath, { recursive: true });
+    return { ok: true, path: fullPath };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    return { ok: false, path: "", error: msg };
+  }
+}
+
+export async function toggleProjectPin(projectPath: string): Promise<boolean> {
+  return loadAndSave((config) => {
+    const project = config.recentProjects.find((p) => p.path === projectPath);
+    if (project) {
+      project.pinned = !project.pinned;
+      return project.pinned;
+    }
+    return false;
+  });
 }
 
 export async function listDirectory(
@@ -285,16 +308,16 @@ export async function listDisabledSkills(): Promise<string[]> {
 }
 
 export async function setDisabledSkill(skillName: string, disabled: boolean): Promise<string[]> {
-  const config = await load();
-  if (disabled) {
-    if (!config.disabledSkills.includes(skillName)) {
-      config.disabledSkills.push(skillName);
+  return loadAndSave((config) => {
+    if (disabled) {
+      if (!config.disabledSkills.includes(skillName)) {
+        config.disabledSkills.push(skillName);
+      }
+    } else {
+      config.disabledSkills = config.disabledSkills.filter((n) => n !== skillName);
     }
-  } else {
-    config.disabledSkills = config.disabledSkills.filter((n) => n !== skillName);
-  }
-  await save(config);
-  return config.disabledSkills;
+    return config.disabledSkills;
+  });
 }
 
 export async function getModelFavorites(): Promise<string[]> {
@@ -305,15 +328,14 @@ export async function getModelFavorites(): Promise<string[]> {
 export async function toggleModelFavorite(
   modelKey: string,
 ): Promise<{ added: boolean; favorites: string[] }> {
-  const config = await load();
-  const list = config.modelFavorites;
-  const idx = list.indexOf(modelKey);
-  if (idx >= 0) {
-    list.splice(idx, 1);
-    await save(config);
-    return { added: false, favorites: list };
-  }
-  list.push(modelKey);
-  await save(config);
-  return { added: true, favorites: list };
+  return loadAndSave((config) => {
+    const list = config.modelFavorites;
+    const idx = list.indexOf(modelKey);
+    if (idx >= 0) {
+      list.splice(idx, 1);
+      return { added: false, favorites: list };
+    }
+    list.push(modelKey);
+    return { added: true, favorites: list };
+  });
 }

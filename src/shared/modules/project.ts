@@ -73,6 +73,10 @@ export interface ProjectMethods {
     params: {};
     result: { folders: FavoriteFolder[] };
   };
+  "project.createDirectory": {
+    params: { parentPath: string; folderName: string };
+    result: { ok: boolean; path: string; error?: string };
+  };
   "project.toggleProjectPin": {
     params: { projectPath: string };
     result: { pinned: boolean };
