@@ -25,7 +25,7 @@ const BG_MAP: Record<string, string> = {
   notified: "bg-cyan-50 dark:bg-cyan-950/6 border-l-2 border-cyan-400/30 dark:border-cyan-500/30",
 };
 
-function CardShell({ block, children }: { block: UIBlock; children: React.ReactNode }) {
+export function CardShell({ block, children }: { block: UIBlock; children: React.ReactNode }) {
   const { t } = useTranslation("chat");
   const { icon: Icon, color, label } = getUIMethodIcon(block.method);
   const isPending = block.status === "pending";
