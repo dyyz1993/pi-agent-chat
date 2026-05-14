@@ -12,6 +12,7 @@ import { useRulesStore } from "./use-rules-store";
 import { useMemoryStore } from "./use-memory-store";
 import { useTurnStore } from "./use-turn-store";
 import { useChatNavStore } from "./use-chat-nav-store";
+import { useSupervisorStore } from "./use-supervisor-store";
 import { handleAgentEvent, toolCallNameMap } from "./agent-event-handler";
 import { notificationGateway } from "../lib/notification-gateway";
 import { useAppStore } from "./use-app-store";
@@ -61,6 +62,7 @@ export function setupSubscriptions(
     notifySubscriptions,
     memorySubscriptions,
     coordinatorSubscriptions,
+    supervisorSubscriptions,
   } = state;
   const storeGet = () => useSessionStore.getState();
 
@@ -490,6 +492,43 @@ export function setupSubscriptions(
     }
   }
 
+  if (!supervisorSubscriptions[id]) {
+    set((s) => ({
+      supervisorSubscriptions: { ...s.supervisorSubscriptions, [id]: "__pending__" },
+    }));
+
+    apiClient
+      .subscribe(
+        "supervisor.event",
+        (payload: {
+          sessionId: string;
+          event: import("../../shared/modules/supervisor").SupervisorChannelEvent;
+        }) => {
+          if (payload.sessionId !== id) return;
+          useSupervisorStore.getState().handleEvent(id, payload.event);
+        },
+        { sessionId: id },
+      )
+      .then((subId) => {
+        set((s) => ({
+          supervisorSubscriptions: { ...s.supervisorSubscriptions, [id]: subId },
+        }));
+        useSupervisorStore
+          .getState()
+          .fetchStatus(id)
+          .catch((err) => {
+            useAppStore.getState().addLog(`[sub] ${String(err)}`);
+          });
+      })
+      .catch((err) => {
+        set((s) => {
+          const { [id]: _, ...rest } = s.supervisorSubscriptions;
+          return { supervisorSubscriptions: rest };
+        });
+        useAppStore.getState().addLog(`[sub] ${String(err)}`);
+      });
+  }
+
   if (!coordinatorSubscriptions[id]) {
     set((s) => ({
       coordinatorSubscriptions: { ...s.coordinatorSubscriptions, [id]: "__pending__" },
@@ -547,6 +586,7 @@ export function cleanupSession(state: SubscriptionMaps, sessionId: string): void
     state.rulesSubscriptions,
     state.notifySubscriptions,
     state.coordinatorSubscriptions,
+    state.supervisorSubscriptions,
   ];
 
   for (const map of singleSubMaps) {
@@ -581,6 +621,7 @@ export function cleanupSessionData(sessionId: string): void {
   useRulesStore.getState().clearSession(sessionId);
   useBashStore.getState().clearSession(sessionId);
   useLspStore.getState().clearSession(sessionId);
+  useSupervisorStore.getState().clearSession(sessionId);
 }
 
 export function clearSubscriptionState(
@@ -596,6 +637,7 @@ export function clearSubscriptionState(
   const { [sessionId]: _g, ...restNotify } = state.notifySubscriptions;
   const { [sessionId]: _h, ...restMemory } = state.memorySubscriptions;
   const { [sessionId]: _j, ...restCoord } = state.coordinatorSubscriptions;
+  const { [sessionId]: _k, ...restSupervisor } = state.supervisorSubscriptions;
   const { [sessionId]: _i, ...restReady } = state.sessionReady;
   return {
     agentSubscriptions: restAgent,
@@ -607,6 +649,7 @@ export function clearSubscriptionState(
     notifySubscriptions: restNotify,
     memorySubscriptions: restMemory,
     coordinatorSubscriptions: restCoord,
+    supervisorSubscriptions: restSupervisor,
     sessionReady: restReady,
   };
 }
