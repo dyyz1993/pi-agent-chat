@@ -114,6 +114,7 @@ vi.mock("../src/mainview/stores/use-ui-dialog-store", () => {
         }),
       respondById: () => {},
       dismissById: () => {},
+      clearPendingBySession: () => {},
       setPanelOpen: (open: boolean) => set({ panelOpen: open }),
       togglePanel: () => set((s) => ({ panelOpen: !s.panelOpen })),
     }),

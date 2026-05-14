@@ -267,7 +267,9 @@ mock.module("../src/mainview/stores/use-retry-store", () => ({
 }));
 
 mock.module("../src/mainview/stores/use-ui-dialog-store", () => ({
-  useUIDialogStore: { getState: mock(() => ({ registerUIRequest: mock() })) },
+  useUIDialogStore: {
+    getState: mock(() => ({ registerUIRequest: mock(), clearPendingBySession: mock() })),
+  },
 }));
 
 import { handleAgentEvent, toolCallNameMap } from "../src/mainview/stores/agent-event-handler";

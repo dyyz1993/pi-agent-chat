@@ -165,6 +165,7 @@ vi.mock("../src/mainview/stores/use-ui-dialog-store", () => {
     registerUIRequest: (req: UIPendingRequest) => void;
     respondById: (requestId: string, response: Record<string, unknown>) => void;
     dismissById: (requestId: string) => void;
+    clearPendingBySession: (sessionId: string) => void;
     setPanelOpen: (open: boolean) => void;
     togglePanel: () => void;
   }
@@ -182,6 +183,7 @@ vi.mock("../src/mainview/stores/use-ui-dialog-store", () => {
     },
     respondById: () => {},
     dismissById: () => {},
+    clearPendingBySession: () => {},
     setPanelOpen: (open) => set({ panelOpen: open }),
     togglePanel: () => set((s) => ({ panelOpen: !s.panelOpen })),
   }));

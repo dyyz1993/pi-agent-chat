@@ -40,6 +40,12 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
   if (event.type === "agent_end") {
     storeGet().updateSessionStatus(sessionId, "idle");
+    useUIDialogStore.getState().clearPendingBySession(sessionId);
+    const currentQueue = storeGet().queueBySession;
+    if (currentQueue[sessionId]) {
+      const { [sessionId]: _removed, ...rest } = currentQueue;
+      useSessionStore.setState({ queueBySession: rest });
+    }
     const allSessions = storeGet().sessionsByProject;
     for (const sessList of Object.values(allSessions)) {
       const session = sessList.find((s) => s.sessionId === sessionId);

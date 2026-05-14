@@ -43,7 +43,12 @@ vi.mock("../src/mainview/stores/use-retry-store", () => ({
 }));
 
 vi.mock("../src/mainview/stores/use-ui-dialog-store", () => ({
-  useUIDialogStore: { getState: vi.fn(() => ({ registerUIRequest: vi.fn() })) },
+  useUIDialogStore: {
+    getState: vi.fn(() => ({
+      registerUIRequest: vi.fn(),
+      clearPendingBySession: vi.fn(),
+    })),
+  },
 }));
 
 vi.mock("../src/mainview/stores/use-session-store", () => {
@@ -149,6 +154,7 @@ vi.mock("../src/mainview/stores/use-status-store", () => ({
 import { handleAgentEvent, toolCallNameMap } from "../src/mainview/stores/agent-event-handler";
 import { useChatStore } from "../src/mainview/stores/use-chat-store";
 import { useSessionStore } from "../src/mainview/stores/use-session-store";
+import { useUIDialogStore } from "../src/mainview/stores/use-ui-dialog-store";
 import { flushNow } from "../src/mainview/stores/message-batcher";
 
 const SID = "test-session-1";
@@ -195,6 +201,7 @@ beforeEach(() => {
     sessionsByProject: {},
   });
   Object.keys(toolCallNameMap).forEach((k) => delete toolCallNameMap[k]);
+  (useUIDialogStore.getState as ReturnType<typeof vi.fn>).mockClear();
 });
 
 describe("agent_start / agent_end", () => {
@@ -485,5 +492,43 @@ describe("full streaming lifecycle", () => {
     const step3 = getToolExecBlock();
     expect(step3!.status).toBe("done");
     expect(step3!.output).toBe("ok\n");
+  });
+});
+
+describe("agent_end cleanup", () => {
+  it("calls clearPendingBySession on agent_end", () => {
+    useSessionStore.setState({ sessionsByProject: { "/tmp": [] } });
+    handleAgentEvent(SID, { type: "agent_end" } as Parameters<typeof handleAgentEvent>[1]);
+
+    const mockGetState = useUIDialogStore.getState as ReturnType<typeof vi.fn>;
+    expect(mockGetState).toHaveBeenCalled();
+    const returned = mockGetState.mock.results[mockGetState.mock.results.length - 1].value;
+    expect(returned.clearPendingBySession).toHaveBeenCalledWith(SID);
+  });
+
+  it("clears queueBySession for the ended session", () => {
+    useSessionStore.setState({
+      sessionsByProject: { "/tmp": [] },
+      queueBySession: {
+        [SID]: { steering: ["msg1"], followUp: ["msg2"] },
+        "other-session": { steering: [], followUp: [] },
+      },
+    });
+
+    handleAgentEvent(SID, { type: "agent_end" } as Parameters<typeof handleAgentEvent>[1]);
+
+    expect(useSessionStore.getState().queueBySession[SID]).toBeUndefined();
+    expect(useSessionStore.getState().queueBySession["other-session"]).toBeDefined();
+  });
+
+  it("does not modify queueBySession when session has no queue entry", () => {
+    useSessionStore.setState({
+      sessionsByProject: { "/tmp": [] },
+      queueBySession: { "other-session": { steering: [], followUp: [] } },
+    });
+
+    handleAgentEvent(SID, { type: "agent_end" } as Parameters<typeof handleAgentEvent>[1]);
+
+    expect(Object.keys(useSessionStore.getState().queueBySession)).toHaveLength(1);
   });
 });

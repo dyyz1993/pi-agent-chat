@@ -42,7 +42,9 @@ vi.mock("../src/mainview/stores/use-retry-store", () => ({
 }));
 
 vi.mock("../src/mainview/stores/use-ui-dialog-store", () => ({
-  useUIDialogStore: { getState: vi.fn(() => ({ registerUIRequest: vi.fn() })) },
+  useUIDialogStore: {
+    getState: vi.fn(() => ({ registerUIRequest: vi.fn(), clearPendingBySession: vi.fn() })),
+  },
 }));
 
 const { mockSessionStore } = vi.hoisted(() => {

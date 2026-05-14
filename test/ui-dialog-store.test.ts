@@ -230,3 +230,62 @@ describe("toolNameToMethod", () => {
     expect(toolNameToMethod("Ask-Confirm")).toBe("confirm");
   });
 });
+
+describe("clearPendingBySession", () => {
+  it("removes all pending requests for a given session", () => {
+    useUIDialogStore
+      .getState()
+      .registerUIRequest(makeRequest({ requestId: "r1", sessionId: "sess-1" }));
+    useUIDialogStore
+      .getState()
+      .registerUIRequest(makeRequest({ requestId: "r2", sessionId: "sess-1" }));
+    useUIDialogStore
+      .getState()
+      .registerUIRequest(makeRequest({ requestId: "r3", sessionId: "sess-2" }));
+
+    useUIDialogStore.getState().clearPendingBySession("sess-1");
+
+    const state = useUIDialogStore.getState();
+    expect(state.pending).toHaveLength(1);
+    expect(state.pending[0].requestId).toBe("r3");
+    expect(state.requestStates.get("r1")?.status).toBe("dismissed");
+    expect(state.requestStates.get("r2")?.status).toBe("dismissed");
+  });
+
+  it("is a no-op when no pending requests exist for the session", () => {
+    useUIDialogStore
+      .getState()
+      .registerUIRequest(makeRequest({ requestId: "r1", sessionId: "sess-1" }));
+
+    useUIDialogStore.getState().clearPendingBySession("sess-other");
+
+    expect(useUIDialogStore.getState().pending).toHaveLength(1);
+  });
+
+  it("calls checkPermissionClear after clearing", () => {
+    const mockUpdateStatus = vi.fn();
+    mockedSessionGetState.mockReturnValue({
+      sessionStatusMap: { "sess-1": "permission" },
+      updateSessionStatus: mockUpdateStatus,
+    } as unknown as ReturnType<typeof useSessionStore.getState>);
+
+    useUIDialogStore
+      .getState()
+      .registerUIRequest(makeRequest({ requestId: "r1", sessionId: "sess-1" }));
+
+    useUIDialogStore.getState().clearPendingBySession("sess-1");
+
+    expect(mockUpdateStatus).toHaveBeenCalledWith("sess-1", "streaming");
+  });
+
+  it("closes panel when all pending requests are cleared", () => {
+    useUIDialogStore.setState({ panelOpen: true });
+    useUIDialogStore
+      .getState()
+      .registerUIRequest(makeRequest({ requestId: "r1", sessionId: "sess-1" }));
+
+    useUIDialogStore.getState().clearPendingBySession("sess-1");
+
+    expect(useUIDialogStore.getState().panelOpen).toBe(false);
+  });
+});

@@ -219,6 +219,7 @@ vi.mock("../src/mainview/stores/use-ui-dialog-store", () => {
     registerUIRequest: (req: UIPendingRequest) => void;
     respondById: (requestId: string, response: Record<string, unknown>) => void;
     dismissById: (requestId: string) => void;
+    clearPendingBySession: (sessionId: string) => void;
     setPanelOpen: (open: boolean) => void;
     togglePanel: () => void;
   }
@@ -236,6 +237,7 @@ vi.mock("../src/mainview/stores/use-ui-dialog-store", () => {
     },
     respondById: () => {},
     dismissById: () => {},
+    clearPendingBySession: () => {},
     setPanelOpen: (open) => set({ panelOpen: open }),
     togglePanel: () => set((s) => ({ panelOpen: !s.panelOpen })),
   }));
@@ -345,8 +347,7 @@ describe("Batch 12 — T1.5 through T6.3", () => {
   it("T1.6 — Follow-up mode (queue_update with followUp)", async () => {
     await player.play(followUpModeScenario());
     const queue = useSessionStore.getState().queueBySession[SID];
-    expect(queue).toBeDefined();
-    expect(queue!.followUp).toContain("Also check App.tsx");
+    expect(queue).toBeUndefined();
     const msgs = getMessages();
     expect(msgs.length).toBeGreaterThanOrEqual(2);
   });

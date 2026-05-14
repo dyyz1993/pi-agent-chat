@@ -72,6 +72,7 @@ interface UIDialogState {
   registerUIRequest: (req: UIPendingRequest) => void;
   respondById: (requestId: string, response: Record<string, unknown>) => void;
   dismissById: (requestId: string) => void;
+  clearPendingBySession: (sessionId: string) => void;
   setPanelOpen: (open: boolean) => void;
   togglePanel: () => void;
 }
@@ -151,6 +152,28 @@ export const useUIDialogStore = create<UIDialogState>((set, get) => ({
       panelOpen: s.pending.length <= 1 ? false : s.panelOpen,
     }));
     checkPermissionClear(state.request.sessionId);
+  },
+
+  clearPendingBySession: (sessionId: string) => {
+    const { pending, requestStates } = get();
+    const toRemove = pending.filter((r) => r.sessionId === sessionId);
+    if (toRemove.length === 0) return;
+
+    const removeIds = new Set(toRemove.map((r) => r.requestId));
+    const newStates = new Map(requestStates);
+    for (const id of removeIds) {
+      const state = newStates.get(id);
+      if (state) {
+        newStates.set(id, { ...state, status: "dismissed", response: { cancelled: true } });
+      }
+    }
+
+    set((s) => ({
+      pending: s.pending.filter((r) => r.requestId !== sessionId && !removeIds.has(r.requestId)),
+      requestStates: newStates,
+      panelOpen: s.pending.every((r) => removeIds.has(r.requestId)) ? false : s.panelOpen,
+    }));
+    checkPermissionClear(sessionId);
   },
 
   setPanelOpen: (open: boolean) => set({ panelOpen: open }),
