@@ -81,22 +81,38 @@ async function load(): Promise<ProjectConfig> {
 }
 
 // Serial queue for load→modify→save operations to prevent concurrent write races
+// Key invariant: each call creates a "gate" promise immediately (for the NEXT caller to wait on),
+// THEN waits for the PREVIOUS gate, so concurrent calls properly serialize.
 let saveQueue: Promise<void> = Promise.resolve();
 
 async function loadAndSave<T>(patcher: (config: ProjectConfig) => T): Promise<T> {
-  await saveQueue.catch(() => {});
-  let result!: T;
-  saveQueue = (async () => {
+  // 1. Capture the current gate (the previous operation's completion promise)
+  const prevGate = saveQueue;
+
+  // 2. Immediately create a new gate for the NEXT caller and set it
+  //    This is atomic — no concurrent caller can slip past this point.
+  let openGate!: () => void;
+  saveQueue = new Promise<void>((resolve) => {
+    openGate = resolve;
+  });
+
+  // 3. Now wait for the PREVIOUS operation to finish (might resolve immediately if none pending)
+  await prevGate.catch(() => {});
+
+  // 4. Do the actual work
+  try {
     const config = await load();
-    result = patcher(config);
+    const result = patcher(config);
     const dir = dirname(CONFIG_PATH);
     if (!existsSync(dir)) {
       await mkdir(dir, { recursive: true });
     }
     await writeFile(CONFIG_PATH, JSON.stringify(config, null, 2), "utf-8");
-  })();
-  await saveQueue;
-  return result;
+    return result;
+  } finally {
+    // 5. Open the gate so the NEXT caller can proceed
+    openGate();
+  }
 }
 
 export async function listRecentProjects(): Promise<RecentProject[]> {
