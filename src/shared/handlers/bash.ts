@@ -1,7 +1,7 @@
 import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { HandlerOptions } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
-import type { BashChannelCommand, BashProcess } from "../modules/bash";
+import type { BashChannelCommand } from "../modules/bash";
 import { getProcessManager } from "./agent";
 import { statSync } from "node:fs";
 import { createReadStream } from "node:fs";
@@ -17,37 +17,10 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     }
   ).subscriptions;
 
-  const killedToolCalls = new Set<string>();
-
-  r("bash.list", async (params) => {
-    const { sessionId } = params as { sessionId?: string };
-    if (!sessionId) return { processes: [] };
-
-    const pm = getProcessManager();
-    if (!pm) return { processes: [] };
-
-    try {
-      const result = (await pm.callChannel(sessionId, "bash", "list", {})) as {
-        processes?: BashProcess[];
-      };
-      return { processes: result?.processes ?? [] };
-    } catch {
-      return { processes: [] };
-    }
-  });
-
   r("bash.command", async (params) => {
     const { sessionId, action, toolCallId, data } = params as {
       sessionId: string;
     } & BashChannelCommand & { sessionId: string };
-
-    if (action === "kill" && toolCallId) {
-      const dedupeKey = `${sessionId}:${toolCallId}`;
-      if (killedToolCalls.has(dedupeKey)) {
-        return { ok: true };
-      }
-      killedToolCalls.add(dedupeKey);
-    }
 
     const pm = getProcessManager();
     if (!pm) throw new Error("No process manager available");

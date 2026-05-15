@@ -162,6 +162,12 @@ export const BashExecutionCard = memo(function BashExecutionCard({
               bashDetails?.background?.durationMs ??
                 Date.now() - (bashProcess?.startedAt ?? Date.now()),
             )}
+            {timeout != null && timeout > 0 && timeout <= 86400 && (
+              <span className="text-gray-300 dark:text-gray-600">
+                {" "}
+                / {formatDuration(timeout * 1000)}
+              </span>
+            )}
           </span>
         )}
         {(bashDetails?.terminated ?? (storeStatus === "terminated" && bashProcess)) && (
@@ -170,8 +176,36 @@ export const BashExecutionCard = memo(function BashExecutionCard({
               bashDetails?.terminated?.durationMs ??
                 (bashProcess?.endedAt ?? Date.now()) - (bashProcess?.startedAt ?? Date.now()),
             )}
+            {timeout != null && timeout > 0 && timeout <= 86400 && (
+              <span className="text-gray-300 dark:text-gray-600">
+                {" "}
+                / {formatDuration(timeout * 1000)}
+              </span>
+            )}
           </span>
         )}
+        {!isRunning &&
+          !isBackground &&
+          !isTerminated &&
+          !isError &&
+          timeout != null &&
+          timeout > 0 &&
+          timeout <= 86400 &&
+          (() => {
+            const durationMs =
+              bashProcess?.endedAt && bashProcess?.startedAt
+                ? bashProcess.endedAt - bashProcess.startedAt
+                : 0;
+            return (
+              <span className="text-[10px] text-gray-400 dark:text-gray-500 tabular-nums shrink-0">
+                {formatDuration(durationMs)}
+                <span className="text-gray-300 dark:text-gray-600">
+                  {" "}
+                  / {formatDuration(timeout * 1000)}
+                </span>
+              </span>
+            );
+          })()}
       </div>
 
       <details className="group">
