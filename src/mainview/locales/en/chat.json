@@ -203,7 +203,9 @@
   "readFile.readingProgress": "Reading...",
   "readFile.rulesLoaded": "Rules Loaded",
   "readFile.rulesAlreadyLoaded": "Rules Already Loaded",
+  "readFile.rulesReloaded": "Rules Reloaded",
   "readFile.alreadyLoaded": "loaded",
+  "readFile.reloaded": "reloaded",
 
   "notification.title": "Notifications",
   "notification.unread": "{{count}} unread",

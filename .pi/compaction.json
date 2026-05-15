@@ -1,0 +1,23 @@
+{
+  "microcompact": {
+    "enabled": true,
+    "maxAgeMs": 600000,
+    "clearableTools": ["read", "bash", "grep", "find", "glob", "webFetch", "preview"]
+  },
+  "sessionMemory": {
+    "enabled": true,
+    "memoryDir": ".pi/memory",
+    "minContentLength": 50
+  },
+  "reactive": {
+    "enabled": true,
+    "warnPercent": 50,
+    "forceCompactPercent": 70
+  },
+  "contextFold": {
+    "enabled": true,
+    "maxAgeMs": 900000,
+    "keepRecentCount": 10,
+    "maxSummaryLength": 300
+  }
+}

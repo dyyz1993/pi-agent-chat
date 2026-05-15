@@ -203,7 +203,9 @@
   "readFile.readingProgress": "读取中...",
   "readFile.rulesLoaded": "Rules Loaded",
   "readFile.rulesAlreadyLoaded": "规则已加载",
+  "readFile.rulesReloaded": "规则已重载",
   "readFile.alreadyLoaded": "已加载",
+  "readFile.reloaded": "已重载",
 
   "notification.title": "通知",
   "notification.unread": "{{count}} 条未读",

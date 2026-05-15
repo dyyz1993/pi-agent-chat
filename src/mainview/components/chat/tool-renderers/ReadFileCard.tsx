@@ -1,15 +1,19 @@
 import { memo } from "react";
-import { FileText, Zap, CheckCircle2 } from "lucide-react";
+import { FileText, Zap, CheckCircle2, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { ContentBlock } from "../../../types";
 
 type Block = Extract<ContentBlock, { type: "toolExecution" }>;
+
+type RuleMatchStatus = "loaded" | "already_loaded" | "reloaded";
 
 interface MatchedRuleDetail {
   name: string;
   title: string;
   severity: string;
   matchedGlob: string;
+  status?: RuleMatchStatus;
+  /** @deprecated Use status instead */
   alreadyLoaded?: boolean;
 }
 
@@ -22,6 +26,12 @@ function isRulesMatchedData(d: unknown): d is RulesMatchedData {
   if (!d || typeof d !== "object") return false;
   const obj = d as Record<string, unknown>;
   return Array.isArray(obj.rulesMatched);
+}
+
+/** Resolve status from new status field or legacy alreadyLoaded boolean */
+function getRuleStatus(rule: MatchedRuleDetail): RuleMatchStatus {
+  if (rule.status) return rule.status;
+  return rule.alreadyLoaded ? "already_loaded" : "loaded";
 }
 
 export const ReadFileCard = memo(function ReadFileCard({
@@ -45,6 +55,12 @@ export const ReadFileCard = memo(function ReadFileCard({
 
   const displayPath = filePath || block.args?.slice(0, 80) || "";
   const rulesData = isRulesMatchedData(block.details) ? block.details : null;
+
+  // Compute overall status across all rules
+  const ruleStatuses = rulesData?.rulesMatched?.map(getRuleStatus) ?? [];
+  const allAlreadyLoaded =
+    ruleStatuses.length > 0 && ruleStatuses.every((s) => s === "already_loaded");
+  const anyReloaded = ruleStatuses.some((s) => s === "reloaded");
 
   return (
     <div
@@ -100,10 +116,15 @@ export const ReadFileCard = memo(function ReadFileCard({
             >
               <path d="M4.5 3l3 3-3 3" />
             </svg>
-            {rulesData.rulesMatched.every((r) => r.alreadyLoaded) ? (
+            {allAlreadyLoaded ? (
               <>
                 <CheckCircle2 className="w-3 h-3 shrink-0" />
                 <span>{t("readFile.rulesAlreadyLoaded", "Rules already loaded")}</span>
+              </>
+            ) : anyReloaded ? (
+              <>
+                <RefreshCw className="w-3 h-3 shrink-0" />
+                <span>{t("readFile.rulesReloaded", "Rules reloaded")}</span>
               </>
             ) : (
               <>
@@ -116,31 +137,41 @@ export const ReadFileCard = memo(function ReadFileCard({
             </span>
           </summary>
           <div className="px-3 pb-2">
-            {rulesData.rulesMatched.map((rule) => (
-              <div
-                key={rule.name}
-                className="border-b last:border-b-0 border-indigo-200/20 dark:border-indigo-700/10 py-1 flex items-center gap-1.5"
-              >
-                {rule.alreadyLoaded ? (
-                  <CheckCircle2 className="w-3 h-3 shrink-0 text-gray-400 dark:text-gray-500" />
-                ) : (
-                  <Zap className="w-3 h-3 shrink-0 text-indigo-500 dark:text-indigo-400" />
-                )}
-                <span
-                  className={`text-[11px] font-medium shrink-0 ${rule.severity === "critical" ? "text-red-500 dark:text-red-400" : rule.severity === "high" ? "text-amber-600 dark:text-amber-400" : rule.alreadyLoaded ? "text-gray-500 dark:text-gray-400" : "text-indigo-700 dark:text-indigo-300"}`}
+            {rulesData.rulesMatched.map((rule) => {
+              const status = getRuleStatus(rule);
+              return (
+                <div
+                  key={rule.name}
+                  className="border-b last:border-b-0 border-indigo-200/20 dark:border-indigo-700/10 py-1 flex items-center gap-1.5"
                 >
-                  {rule.title}
-                </span>
-                <span className="text-[11px] text-gray-400 dark:text-gray-600 font-mono">
-                  {rule.matchedGlob}
-                </span>
-                {rule.alreadyLoaded && (
-                  <span className="text-[10px] text-gray-400 dark:text-gray-600 italic ml-auto">
-                    {t("readFile.alreadyLoaded", "loaded")}
+                  {status === "already_loaded" ? (
+                    <CheckCircle2 className="w-3 h-3 shrink-0 text-gray-400 dark:text-gray-500" />
+                  ) : status === "reloaded" ? (
+                    <RefreshCw className="w-3 h-3 shrink-0 text-amber-500 dark:text-amber-400" />
+                  ) : (
+                    <Zap className="w-3 h-3 shrink-0 text-indigo-500 dark:text-indigo-400" />
+                  )}
+                  <span
+                    className={`text-[11px] font-medium shrink-0 ${rule.severity === "critical" ? "text-red-500 dark:text-red-400" : rule.severity === "high" ? "text-amber-600 dark:text-amber-400" : status === "already_loaded" ? "text-gray-500 dark:text-gray-400" : "text-indigo-700 dark:text-indigo-300"}`}
+                  >
+                    {rule.title}
                   </span>
-                )}
-              </div>
-            ))}
+                  <span className="text-[11px] text-gray-400 dark:text-gray-600 font-mono">
+                    {rule.matchedGlob}
+                  </span>
+                  {status === "already_loaded" && (
+                    <span className="text-[10px] text-gray-400 dark:text-gray-600 italic ml-auto">
+                      {t("readFile.alreadyLoaded", "loaded")}
+                    </span>
+                  )}
+                  {status === "reloaded" && (
+                    <span className="text-[10px] text-amber-500 dark:text-amber-400 ml-auto">
+                      {t("readFile.reloaded", "reloaded")}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </details>
       )}

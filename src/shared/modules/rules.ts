@@ -21,6 +21,9 @@ export type RulesChannelEvent =
       toolCallId: string;
       severity: "info" | "warning";
       timestamp: number;
+      status?: RuleMatchStatus;
+      /** @deprecated Use status instead */
+      alreadyLoaded?: boolean;
     }
   | { type: "injected"; ruleNames: string[]; systemPromptLength: number }
   | { type: "reloaded"; rules: RuleDetail[]; loadedAt: number }
@@ -38,12 +41,21 @@ export interface RuleDetail {
   description?: string;
 }
 
+export type RuleMatchStatus = "loaded" | "already_loaded" | "reloaded";
+
 export interface MatchedRuleDetail {
   name: string;
   title: string;
   severity: RuleSeverity;
   matchedGlob: string;
-  /** True when this rule was already injected for the same file in a previous tool call */
+  /**
+   * Match status:
+   * - "loaded": first time injected for this file
+   * - "already_loaded": previously injected and still in context (skipped)
+   * - "reloaded": previously injected but was invalidated (context removed), now re-injected
+   */
+  status?: RuleMatchStatus;
+  /** @deprecated Use status instead */
   alreadyLoaded?: boolean;
 }
 
