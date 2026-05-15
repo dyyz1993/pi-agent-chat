@@ -53,7 +53,19 @@ export function groupSessions(
 
   const sortPinnedFirst = (s: SessionMeta[]) =>
     [...s].sort((a, b) => {
-      if ((a.pinned ? 1 : 0) !== (b.pinned ? 1 : 0)) return a.pinned ? -1 : 1;
+      const getPriority = (sess: SessionMeta): number => {
+        const isRunning =
+          sess.status === "running" ||
+          sess.sessionStatus === "streaming" ||
+          sess.sessionStatus === "compacting" ||
+          sess.sessionStatus === "retrying";
+        if (isRunning) return 0;
+        if (sess.pinned) return 1;
+        return 2;
+      };
+      const priorityA = getPriority(a);
+      const priorityB = getPriority(b);
+      if (priorityA !== priorityB) return priorityA - priorityB;
       return b.updatedAt - a.updatedAt;
     });
 
