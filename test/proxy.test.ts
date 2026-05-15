@@ -1,23 +1,62 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock fetch before importing the module
 const mockFetch = vi.fn();
 globalThis.fetch = mockFetch;
 
 import {
+  isLocalAddress,
   isProxyEnabled,
   enableProxy,
   disableProxy,
   tryEnable,
   proxyUrlSync,
-  proxyUrl,
-  warmupProxyCache,
 } from "../src/mainview/lib/proxy";
 
 describe("proxy module", () => {
   beforeEach(() => {
     disableProxy();
     mockFetch.mockReset();
+  });
+
+  describe("isLocalAddress", () => {
+    it("detects localhost", () => {
+      expect(isLocalAddress("localhost")).toBe(true);
+    });
+
+    it("detects 127.0.0.1", () => {
+      expect(isLocalAddress("127.0.0.1")).toBe(true);
+    });
+
+    it("detects ::1", () => {
+      expect(isLocalAddress("::1")).toBe(true);
+    });
+
+    it("detects 192.168.x.x", () => {
+      expect(isLocalAddress("192.168.0.4")).toBe(true);
+      expect(isLocalAddress("192.168.1.255")).toBe(true);
+    });
+
+    it("detects 10.x.x.x", () => {
+      expect(isLocalAddress("10.0.0.1")).toBe(true);
+    });
+
+    it("detects 172.16-31.x.x", () => {
+      expect(isLocalAddress("172.16.0.1")).toBe(true);
+      expect(isLocalAddress("172.31.255.255")).toBe(true);
+    });
+
+    it("rejects 172.32.x.x (not private)", () => {
+      expect(isLocalAddress("172.32.0.1")).toBe(false);
+    });
+
+    it("rejects public IPs", () => {
+      expect(isLocalAddress("8.8.8.8")).toBe(false);
+      expect(isLocalAddress("1.2.3.4")).toBe(false);
+    });
+
+    it("rejects empty", () => {
+      expect(isLocalAddress("")).toBe(false);
+    });
   });
 
   describe("isProxyEnabled / enableProxy / disableProxy", () => {
@@ -30,15 +69,8 @@ describe("proxy module", () => {
       expect(isProxyEnabled()).toBe(true);
     });
 
-    it("disableProxy deactivates proxy and clears cache", async () => {
+    it("disableProxy deactivates proxy", () => {
       enableProxy();
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ publicUrl: "https://abc.shanbox.xyz:8443" }),
-      });
-      await proxyUrl("http://192.168.0.4:3100/test");
-      expect(isProxyEnabled()).toBe(true);
-
       disableProxy();
       expect(isProxyEnabled()).toBe(false);
     });
@@ -46,133 +78,60 @@ describe("proxy module", () => {
 
   describe("proxyUrlSync", () => {
     it("returns original URL when proxy disabled", () => {
-      const url = "http://192.168.0.4:3100/api/health";
-      expect(proxyUrlSync(url)).toBe(url);
+      expect(proxyUrlSync("http://192.168.0.4:3100/api")).toBe("http://192.168.0.4:3100/api");
     });
 
     it("returns original URL for https URLs", () => {
       enableProxy();
-      const url = "https://example.com/path";
-      expect(proxyUrlSync(url)).toBe(url);
+      expect(proxyUrlSync("https://example.com/path")).toBe("https://example.com/path");
     });
 
     it("returns original URL for file:// URLs", () => {
       enableProxy();
-      const url = "file:///Users/test/file.txt";
-      expect(proxyUrlSync(url)).toBe(url);
+      expect(proxyUrlSync("file:///Users/test/file.txt")).toBe("file:///Users/test/file.txt");
     });
 
-    it("returns original URL when host not in cache", () => {
+    it("returns original URL for public http URLs", () => {
       enableProxy();
-      const url = "http://192.168.0.4:3100/api/health";
-      expect(proxyUrlSync(url)).toBe(url);
+      expect(proxyUrlSync("http://example.com/path")).toBe("http://example.com/path");
     });
 
-    it("transforms URL when host is in cache", async () => {
+    it("converts localhost http URL to /__proxy__/ path", () => {
       enableProxy();
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ publicUrl: "https://abc.shanbox.xyz:8443" }),
-      });
-      // First, populate cache via async proxyUrl
-      await proxyUrl("http://192.168.0.4:3100/test");
-
-      // Now sync should work
-      const result = proxyUrlSync("http://192.168.0.4:3100/api/health");
-      expect(result).toBe("https://abc.shanbox.xyz:8443/api/health");
-    });
-
-    it("returns original URL for invalid URLs", () => {
-      enableProxy();
-      expect(proxyUrlSync("not-a-url")).toBe("not-a-url");
-    });
-  });
-
-  describe("proxyUrl (async)", () => {
-    it("returns original URL when proxy disabled", async () => {
-      const url = "http://192.168.0.4:3100/test";
-      const result = await proxyUrl(url);
-      expect(result).toBe(url);
-    });
-
-    it("returns original URL for https URLs", async () => {
-      enableProxy();
-      const url = "https://example.com/path";
-      const result = await proxyUrl(url);
-      expect(result).toBe(url);
-    });
-
-    it("registers host and returns proxied URL", async () => {
-      enableProxy();
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ publicUrl: "https://abc123.shanbox.xyz:8443" }),
-      });
-
-      const result = await proxyUrl("http://192.168.0.4:3100/api/test?q=1");
-      expect(result).toBe("https://abc123.shanbox.xyz:8443/api/test?q=1");
-      expect(mockFetch).toHaveBeenCalledWith(
-        "/api/proxy-register",
-        expect.objectContaining({
-          method: "POST",
-          body: JSON.stringify({ host: "192.168.0.4", port: 3100 }),
-        }),
+      expect(proxyUrlSync("http://localhost:8080/index.html")).toBe(
+        "/__proxy__/localhost:8080/index.html",
       );
     });
 
-    it("caches result for subsequent calls", async () => {
+    it("converts 127.0.0.1 http URL to /__proxy__/ path", () => {
       enableProxy();
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ publicUrl: "https://abc.shanbox.xyz:8443" }),
-      });
-
-      await proxyUrl("http://192.168.0.4:3100/first");
-      const result = await proxyUrl("http://192.168.0.4:3100/second");
-
-      // fetch should only be called once (second hits cache)
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      expect(result).toBe("https://abc.shanbox.xyz:8443/second");
+      expect(proxyUrlSync("http://127.0.0.1:3000/api/test")).toBe(
+        "/__proxy__/127.0.0.1:3000/api/test",
+      );
     });
 
-    it("returns original URL when registration fails", async () => {
+    it("converts LAN IP http URL to /__proxy__/ path", () => {
       enableProxy();
-      mockFetch.mockResolvedValueOnce({ ok: false, status: 502 });
-
-      const url = "http://192.168.0.4:3100/test";
-      const result = await proxyUrl(url);
-      expect(result).toBe(url);
+      expect(proxyUrlSync("http://192.168.0.4:3100/health")).toBe(
+        "/__proxy__/192.168.0.4:3100/health",
+      );
     });
 
-    it("returns original URL when fetch throws", async () => {
+    it("preserves query string", () => {
       enableProxy();
-      mockFetch.mockRejectedValueOnce(new Error("Network error"));
-
-      const url = "http://192.168.0.4:3100/test";
-      const result = await proxyUrl(url);
-      expect(result).toBe(url);
+      expect(proxyUrlSync("http://localhost:8080/page?q=1&r=2")).toBe(
+        "/__proxy__/localhost:8080/page?q=1&r=2",
+      );
     });
 
-    it("deduplicates concurrent registrations", async () => {
+    it("preserves path without trailing slash", () => {
       enableProxy();
-      let resolveRegistration: (v: unknown) => void;
-      const registrationPromise = new Promise((resolve) => {
-        resolveRegistration = resolve;
-      });
-      mockFetch.mockReturnValueOnce({
-        ok: true,
-        json: () => registrationPromise.then(() => ({ publicUrl: "https://abc.shanbox.xyz:8443" })),
-      });
+      expect(proxyUrlSync("http://192.168.1.100:9000")).toBe("/__proxy__/192.168.1.100:9000/");
+    });
 
-      const p1 = proxyUrl("http://192.168.0.4:3100/a");
-      const p2 = proxyUrl("http://192.168.0.4:3100/b");
-
-      resolveRegistration!(undefined);
-
-      const [r1, r2] = await Promise.all([p1, p2]);
-      expect(r1).toBe("https://abc.shanbox.xyz:8443/a");
-      expect(r2).toBe("https://abc.shanbox.xyz:8443/b");
-      expect(mockFetch).toHaveBeenCalledTimes(1);
+    it("returns original URL for invalid input", () => {
+      enableProxy();
+      expect(proxyUrlSync("not-a-url")).toBe("not-a-url");
     });
   });
 
@@ -199,28 +158,12 @@ describe("proxy module", () => {
       expect(isProxyEnabled()).toBe(false);
       expect(mockFetch).not.toHaveBeenCalled();
     });
-  });
 
-  describe("warmupProxyCache", () => {
-    it("does nothing when proxy disabled", async () => {
-      await warmupProxyCache(["192.168.0.4:3100"]);
-      expect(mockFetch).not.toHaveBeenCalled();
-    });
+    it("disables proxy on network error", async () => {
+      mockFetch.mockRejectedValueOnce(new Error("Network error"));
 
-    it("registers all hosts when enabled", async () => {
-      enableProxy();
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ publicUrl: "https://a1.shanbox.xyz:8443" }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ publicUrl: "https://b2.shanbox.xyz:8443" }),
-        });
-
-      await warmupProxyCache(["192.168.0.4:3100", "192.168.0.5:8080"]);
-      expect(mockFetch).toHaveBeenCalledTimes(2);
+      await tryEnable("192.168.0.4:3100");
+      expect(isProxyEnabled()).toBe(false);
     });
   });
 });

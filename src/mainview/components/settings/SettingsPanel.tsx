@@ -11,7 +11,7 @@ import { apiClient } from "../../lib/api-client";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useTierStore, TIER_KEYS, type TierKey } from "../../stores/use-tier-store";
 import { ModelPickerButton } from "../model-picker/ModelPickerButton";
-import { isProxyEnabled, enableProxy, disableProxy, warmupProxyCache } from "../../lib/proxy";
+import { isProxyEnabled, enableProxy, disableProxy } from "../../lib/proxy";
 
 interface SettingsPanelProps {
   onClose: () => void;
@@ -125,11 +125,6 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
       setProxyLocalEnabled(false);
     } else {
       enableProxy();
-      const baseUrl = apiClient.getBaseUrl();
-      if (baseUrl) {
-        const host = new URL(baseUrl).host;
-        warmupProxyCache([host]);
-      }
       setProxyLocalEnabled(true);
     }
   }, [proxyLocalEnabled]);

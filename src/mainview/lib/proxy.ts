@@ -1,25 +1,22 @@
 /**
- * 本地代理模块 — 把 localhost / LAN 地址转成公网可访问的 HTTPS URL
+ * 本地代理模块 — 把 localhost / LAN 地址转成 /__proxy__/ 路径
  *
- * 前端通过 same-origin 调后端端点 /api/proxy-register，由后端负责
- * 调用外部代理服务（如 shanbox）进行注册和缓存。
+ * 前端只做一件事：识别本地地址，把 URL 改写成 /__proxy__/host:port/path。
+ * 实际的注册和 302 重定向由后端 /__proxy__/ 端点处理。
  *
- * 生命周期：
- *   1. 启动时调用 tryEnable() → 尝试注册本机地址
- *      成功 → 代理开启，后续 URL 自动转换
- *      失败（502）→ 代理关闭
- *   2. 设置面板可手动开关
+ * 流程：
+ *   1. preview 发现 http://localhost:8080/index.html
+ *   2. proxyUrlSync() → /__proxy__/localhost:8080/index.html
+ *   3. 浏览器请求 /__proxy__/localhost:8080/index.html（同源）
+ *   4. 后端探测可达性 → 注册 shanbox → 302 到 https://xxx.shanbox:8443/index.html
+ *   5. 浏览器跟随 302，从 shanbox 加载内容
  */
-
-interface ProxyEntry {
-  baseUrl: string; // e.g. "https://xxx.shanbox.19930810.xyz:8443"
-}
 
 // ---- 内部状态 ----
 
 let active = false;
-const cache = new Map<string, ProxyEntry>();
-const pendingReg = new Map<string, Promise<ProxyEntry | null>>();
+
+// ---- 公开 API ----
 
 /** 判断是否为本地/LAN 地址，只有这类地址需要走代理 */
 export function isLocalAddress(host: string): boolean {
@@ -32,8 +29,6 @@ export function isLocalAddress(host: string): boolean {
   return false;
 }
 
-// ---- 公开 API ----
-
 /** 代理是否已启用 */
 export function isProxyEnabled(): boolean {
   return active;
@@ -44,18 +39,15 @@ export function enableProxy(): void {
   active = true;
 }
 
-/** 关闭代理（清空缓存） */
+/** 关闭代理 */
 export function disableProxy(): void {
   active = false;
-  cache.clear();
 }
 
 /**
- * 启动时自动检测：尝试注册本机地址
+ * 启动时检测：向后端发一个注册请求来验证代理是否可用
  * - 后端配了 PROXY_API_URL → 注册成功 → 开启
  * - 后端没配 → 502 → 自动关闭
- *
- * @param serverHost 服务端地址，如 "192.168.0.4:3100"
  */
 export async function tryEnable(serverHost: string): Promise<void> {
   active = true;
@@ -63,98 +55,38 @@ export async function tryEnable(serverHost: string): Promise<void> {
     active = false;
     return;
   }
-  const result = await registerHost(serverHost);
-  if (!result) {
-    active = false;
-  }
-}
-
-/**
- * 同步转换 — 仅查缓存，未命中返回原始 URL
- *
- * 适用场景：React render 函数等同步上下文
- */
-export function proxyUrlSync(originalUrl: string): string {
-  if (!active) return originalUrl;
   try {
-    const parsed = new URL(originalUrl);
-    if (parsed.protocol === "file:" || parsed.protocol === "https:") return originalUrl;
-    if (parsed.protocol === "http:" && !isLocalAddress(parsed.hostname)) return originalUrl;
-    const entry = cache.get(parsed.host);
-    if (!entry) return originalUrl;
-    return buildProxiedUrl(originalUrl, entry);
-  } catch {
-    return originalUrl;
-  }
-}
-
-/**
- * 异步转换 — 缓存未命中时调后端注册
- *
- * 适用场景：store action、useEffect 等
- */
-export async function proxyUrl(originalUrl: string): Promise<string> {
-  if (!active) return originalUrl;
-  try {
-    const parsed = new URL(originalUrl);
-    if (parsed.protocol === "file:" || parsed.protocol === "https:") return originalUrl;
-    if (parsed.protocol === "http:" && !isLocalAddress(parsed.hostname)) return originalUrl;
-
-    const cached = cache.get(parsed.host);
-    if (cached) return buildProxiedUrl(originalUrl, cached);
-
-    let p = pendingReg.get(parsed.host);
-    if (!p) {
-      p = registerHost(parsed.host).finally(() => pendingReg.delete(parsed.host));
-      pendingReg.set(parsed.host, p);
-    }
-
-    const entry = await p;
-    if (!entry) return originalUrl;
-    return buildProxiedUrl(originalUrl, entry);
-  } catch {
-    return originalUrl;
-  }
-}
-
-/**
- * 预热：注册一批 host，让后续 proxyUrlSync() 能命中缓存
- */
-export async function warmupProxyCache(hosts: string[]): Promise<void> {
-  if (!active) return;
-  await Promise.allSettled(hosts.map((h) => proxyUrl(`http://${h}/`)));
-}
-
-// ---- 内部 ----
-
-async function registerHost(host: string): Promise<ProxyEntry | null> {
-  try {
-    const colonIdx = host.lastIndexOf(":");
-    const hostname = colonIdx >= 0 ? host.slice(0, colonIdx) : host;
-    const port = colonIdx >= 0 ? parseInt(host.slice(colonIdx + 1), 10) : 80;
+    const colonIdx = serverHost.lastIndexOf(":");
+    const hostname = colonIdx >= 0 ? serverHost.slice(0, colonIdx) : serverHost;
+    const port = colonIdx >= 0 ? parseInt(serverHost.slice(colonIdx + 1), 10) : 3100;
 
     const res = await fetch("/api/proxy-register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ host: hostname, port }),
     });
-    if (!res.ok) return null;
-
-    const data = (await res.json()) as { publicUrl?: string };
-    if (!data.publicUrl) return null;
-
-    const entry: ProxyEntry = { baseUrl: data.publicUrl.replace(/\/+$/, "") };
-    cache.set(host, entry);
-    return entry;
+    if (!res.ok) {
+      active = false;
+    }
   } catch {
-    return null;
+    active = false;
   }
 }
 
-function buildProxiedUrl(originalUrl: string, entry: ProxyEntry): string {
-  const proxyParsed = new URL(entry.baseUrl);
-  const result = new URL(originalUrl);
-  result.protocol = proxyParsed.protocol;
-  result.host = proxyParsed.host;
-  return result.toString();
+/**
+ * 同步转换 — 把本地 http URL 改写为 /__proxy__/ 路径
+ *
+ * 只有本地/LAN 的 http 地址才会被改写，其他地址原样返回。
+ * 浏览器请求 /__proxy__/ 路径时，后端会注册 shanbox 并 302 重定向。
+ */
+export function proxyUrlSync(originalUrl: string): string {
+  if (!active) return originalUrl;
+  try {
+    const parsed = new URL(originalUrl);
+    if (parsed.protocol !== "http:") return originalUrl;
+    if (!isLocalAddress(parsed.hostname)) return originalUrl;
+    return `/__proxy__/${parsed.host}${parsed.pathname}${parsed.search}`;
+  } catch {
+    return originalUrl;
+  }
 }

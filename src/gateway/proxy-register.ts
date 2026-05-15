@@ -1,6 +1,7 @@
 import { createLogger } from "../shared/lib/logger";
 import { randomBytes } from "node:crypto";
 import { networkInterfaces } from "node:os";
+import { createConnection } from "node:net";
 
 const log = createLogger("proxy-register");
 
@@ -14,6 +15,24 @@ function generateSubdomain(): string {
 
 function isLocalhost(host: string): boolean {
   return host === "localhost" || host === "127.0.0.1" || host === "::1";
+}
+
+function checkReachable(host: string, port: number, timeoutMs = 2000): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = createConnection({ host, port }, () => {
+      socket.destroy();
+      resolve(true);
+    });
+    socket.setTimeout(timeoutMs);
+    socket.on("timeout", () => {
+      socket.destroy();
+      resolve(false);
+    });
+    socket.on("error", () => {
+      socket.destroy();
+      resolve(false);
+    });
+  });
 }
 
 /** 获取本机局域网 IP（优先 192.168.x.x） */
@@ -47,13 +66,24 @@ export function createProxyRegistrar(
       policy: "public",
     };
 
+    let reachHost = targetHost;
     if (isLocalhost(targetHost)) {
-      // localhost → 用本机局域网 IP，否则 shanbox 访问不到
       if (lanIp) {
         body.host = lanIp;
+        reachHost = lanIp;
       }
     } else {
       body.host = targetHost;
+    }
+
+    const reachable = await checkReachable(reachHost, targetPort);
+    if (!reachable) {
+      log.warn("Target not reachable on LAN, skip register", {
+        targetHost,
+        targetPort,
+        reachHost,
+      });
+      return null;
     }
 
     try {
