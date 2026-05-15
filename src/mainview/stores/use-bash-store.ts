@@ -62,7 +62,27 @@ export const useBashStore = create<BashState>()((set, get) => ({
 
   loadHistory: async (sessionId: string) => {
     try {
-      await apiClient.call("bash.list", { sessionId });
+      const result = (await apiClient.call("bash.list", { sessionId })) as {
+        processes?: BashProcess[];
+      };
+      const processes = result?.processes;
+      if (processes && processes.length > 0) {
+        const bgIds = new Set(get().backgroundedIds);
+        for (const p of processes) {
+          if (
+            p.status === "background" ||
+            p.status === "done" ||
+            p.status === "error" ||
+            p.status === "terminated"
+          ) {
+            bgIds.add(p.toolCallId);
+          }
+        }
+        set((s) => ({
+          processesBySession: { ...s.processesBySession, [sessionId]: processes },
+          backgroundedIds: bgIds,
+        }));
+      }
     } catch (err) {
       console.warn("[bash] loadHistory failed:", err);
     }
