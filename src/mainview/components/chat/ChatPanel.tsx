@@ -132,7 +132,7 @@ export function ChatPanel() {
     if (!activeSessionId) return;
     if (activeSubId) return;
     try {
-      await apiClient.call("agent.stop", { sessionId: activeSessionId });
+      await apiClient.call("agent.abort", { sessionId: activeSessionId });
     } catch {
       /* ignore */
     }
