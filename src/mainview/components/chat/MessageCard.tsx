@@ -630,6 +630,7 @@ const HeaderActions = memo(function HeaderActions({
           log.warn("rollback aborted: no active session");
           return;
         }
+
         const result = await resolveRollbackTarget();
         if (!result) {
           log.warn("rollback aborted: resolveRollbackTarget returned null", {
@@ -701,7 +702,7 @@ const HeaderActions = memo(function HeaderActions({
       sessionId,
       resolveRollbackTarget,
       message.id,
-      message.entryId,
+      message.role,
       messages.length,
       messages,
       pushNotification,

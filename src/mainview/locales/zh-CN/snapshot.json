@@ -15,5 +15,13 @@
   "fileChanges": "文件变更",
   "latest": "最新",
   "filesChanged": "个文件变更",
-  "snapshot": "快照"
+  "snapshot": "快照",
+  "confirmRollback": "确定要回滚到此快照吗？当前快照之后的文件变更将丢失。",
+  "confirmUnrevert": "确定要取消回滚吗？",
+  "rollbackSuccess": "回滚成功",
+  "rollbackFailed": "回滚失败：{{error}}",
+  "rollbackFailedGeneric": "回滚失败，请重试",
+  "unrevertSuccess": "取消回滚成功",
+  "unrevertFailed": "取消回滚失败：{{error}}",
+  "unrevertFailedGeneric": "取消回滚失败，请重试"
 }

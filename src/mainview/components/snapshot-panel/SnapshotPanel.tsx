@@ -14,6 +14,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { useSnapshotStore } from "../../stores/use-snapshot-store";
 import { useSessionStore } from "../../stores/use-session-store";
+import { useNotificationStore } from "../../stores/use-notification-store";
 import { apiClient } from "../../lib/api-client";
 import { createLogger } from "../../../shared/lib/logger";
 
@@ -34,10 +35,11 @@ export function SnapshotPanel() {
   const { t } = useTranslation("snapshot");
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const snapshotsBySession = useSnapshotStore((s) => s.snapshotsBySession);
-  const loading = useSnapshotStore((s) => s.loading);
+  const loading = useSnapshotStore((s) => s.loadingBySession[sessionId] ?? false);
   const fetchSnapshots = useSnapshotStore((s) => s.fetchSnapshots);
   const rollback = useSnapshotStore((s) => s.rollback);
   const unrevert = useSnapshotStore((s) => s.unrevert);
+  const pushNotification = useNotificationStore((s) => s.push);
   const [rollingBackId, setRollingBackId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -57,27 +59,67 @@ export function SnapshotPanel() {
   const handleRollback = useCallback(
     async (snapId: string) => {
       if (!sessionId) return;
+      if (!window.confirm(t("confirmRollback"))) {
+        return;
+      }
       setRollingBackId(snapId);
       try {
-        await rollback(sessionId, snapId);
+        const result = await rollback(sessionId, snapId);
+        if (result.ok) {
+          pushNotification({ message: t("rollbackSuccess"), level: "info" });
+        } else {
+          pushNotification({
+            message: result.error
+              ? t("rollbackFailed", { error: result.error })
+              : t("rollbackFailedGeneric"),
+            level: "error",
+          });
+          log.warn("rollback returned not-ok", { sessionId, snapId, error: result.error });
+        }
+      } catch (err) {
+        pushNotification({
+          message: t("rollbackFailedGeneric"),
+          level: "error",
+        });
+        log.error("rollback threw", { err: err instanceof Error ? err.message : String(err) });
       } finally {
         setRollingBackId(null);
       }
     },
-    [sessionId, rollback],
+    [sessionId, rollback, pushNotification, t],
   );
 
   const handleUnrevert = useCallback(
     async (snapId: string) => {
       if (!sessionId) return;
+      if (!window.confirm(t("confirmUnrevert"))) {
+        return;
+      }
       setRollingBackId(snapId);
       try {
-        await unrevert(sessionId, snapId);
+        const result = await unrevert(sessionId, snapId);
+        if (result.ok) {
+          pushNotification({ message: t("unrevertSuccess"), level: "info" });
+        } else {
+          pushNotification({
+            message: result.error
+              ? t("unrevertFailed", { error: result.error })
+              : t("unrevertFailedGeneric"),
+            level: "error",
+          });
+          log.warn("unrevert returned not-ok", { sessionId, snapId, error: result.error });
+        }
+      } catch (err) {
+        pushNotification({
+          message: t("unrevertFailedGeneric"),
+          level: "error",
+        });
+        log.error("unrevert threw", { err: err instanceof Error ? err.message : String(err) });
       } finally {
         setRollingBackId(null);
       }
     },
-    [sessionId, unrevert],
+    [sessionId, unrevert, pushNotification, t],
   );
 
   return (

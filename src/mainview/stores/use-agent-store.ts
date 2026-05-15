@@ -18,14 +18,15 @@ interface AgentInfo {
 }
 
 interface AgentState {
-  currentAgent: string;
+  currentAgentBySession: Record<string, string>;
   agents: AgentInfo[];
-  switching: boolean;
+  switchingBySession: Record<string, boolean>;
   loaded: boolean;
-  setCurrentAgent: (name: string) => void;
+  setAgentForSession: (sessionId: string, name: string) => void;
   setAgents: (agents: AgentInfo[]) => void;
   fetchAgents: (sessionId: string) => Promise<void>;
   switchAgent: (agentName: string, sessionId: string) => Promise<void>;
+  getCurrentAgentForSession: (sessionId: string) => string;
 }
 
 export type { AgentInfo, AgentSource };
@@ -48,12 +49,15 @@ export const isGlobalAgent = (source: AgentSource): boolean =>
   source === "builtin" || source === "user";
 
 export const useAgentStore = create<AgentState>()((set, get) => ({
-  currentAgent: "build",
+  currentAgentBySession: {},
   agents: [],
-  switching: false,
+  switchingBySession: {},
   loaded: false,
 
-  setCurrentAgent: (name) => set({ currentAgent: name }),
+  setAgentForSession: (sessionId, name) =>
+    set((state) => ({
+      currentAgentBySession: { ...state.currentAgentBySession, [sessionId]: name },
+    })),
   setAgents: (agents) => set({ agents, loaded: true }),
 
   fetchAgents: async (sessionId) => {
@@ -83,10 +87,17 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
       const currentResult = (await apiClient.call("agent.getCurrentAgent", { sessionId })) as {
         agentName: string | null;
       };
-      if (currentResult.agentName) {
-        set({ currentAgent: currentResult.agentName });
+      const agentName = currentResult.agentName;
+      if (agentName && typeof agentName === "string") {
+        set((state) => ({
+          currentAgentBySession: { ...state.currentAgentBySession, [sessionId]: agentName },
+        }));
       }
-      log.info("fetched agents", { count: agents.length, current: currentResult.agentName });
+      log.info("fetched agents", {
+        count: agents.length,
+        session: sessionId,
+        current: currentResult.agentName,
+      });
     } catch (err) {
       log.warn("failed to fetch agents", {
         error: err instanceof Error ? err.message : String(err),
@@ -115,13 +126,20 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
           filePath: "",
         },
       ];
-      set({ agents: defaultAgents, loaded: true, currentAgent: "build" });
+      set((state) => ({
+        agents: defaultAgents,
+        loaded: true,
+        currentAgentBySession: { ...state.currentAgentBySession, [sessionId]: "build" },
+      }));
     }
   },
 
   switchAgent: async (agentName, sessionId) => {
-    const prev = get().currentAgent;
-    set({ switching: true, currentAgent: agentName });
+    const prev = get().currentAgentBySession[sessionId] ?? "build";
+    set((state) => ({
+      switchingBySession: { ...state.switchingBySession, [sessionId]: true },
+      currentAgentBySession: { ...state.currentAgentBySession, [sessionId]: agentName },
+    }));
     try {
       const result = (await apiClient.call("agent.switchAgent", {
         sessionId,
@@ -132,7 +150,12 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
         tier?: string;
         thinkingLevel?: string;
       };
-      log.info("switched agent", { from: prev, to: result.agentName, tools: result.tools?.length });
+      log.info("switched agent", {
+        from: prev,
+        to: result.agentName,
+        session: sessionId,
+        tools: result.tools?.length,
+      });
 
       if (result.tier) {
         const { useTierStore } = await import("./use-tier-store");
@@ -144,11 +167,18 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     } catch (err) {
       log.warn("agent switch failed, reverting", {
         agentName,
+        session: sessionId,
         error: err instanceof Error ? err.message : String(err),
       });
-      set({ currentAgent: prev });
+      set((state) => ({
+        currentAgentBySession: { ...state.currentAgentBySession, [sessionId]: prev },
+      }));
     } finally {
-      set({ switching: false });
+      set((state) => ({
+        switchingBySession: { ...state.switchingBySession, [sessionId]: false },
+      }));
     }
   },
+
+  getCurrentAgentForSession: (sessionId) => get().currentAgentBySession[sessionId] ?? "build",
 }));

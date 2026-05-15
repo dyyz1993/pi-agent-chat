@@ -1,4 +1,12 @@
-import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync } from "fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  statSync,
+  readFileSync,
+  writeFileSync,
+} from "fs";
 import { createReadStream } from "fs";
 import * as path from "path";
 import * as readline from "readline";
@@ -23,6 +31,30 @@ import { config } from "../../server-config";
 
 const log = createLogger("agent");
 const perfLog = createLogger("session-perf");
+
+/**
+ * Strip parentSession from a JSONL session file's header entry.
+ * Prevents forked sessions from being identified as subagent children on refresh.
+ */
+function stripParentSessionFromHeader(filePath: string): void {
+  try {
+    const content = readFileSync(filePath, "utf-8");
+    const newlineIdx = content.indexOf("\n");
+    if (newlineIdx < 0) return;
+    const firstLine = content.slice(0, newlineIdx);
+    const rest = content.slice(newlineIdx + 1);
+    const header = JSON.parse(firstLine) as Record<string, unknown>;
+    if ("parentSession" in header) {
+      delete header.parentSession;
+      writeFileSync(filePath, JSON.stringify(header) + "\n" + rest, "utf-8");
+    }
+  } catch (err) {
+    log.warn("stripParentSessionFromHeader failed", {
+      filePath,
+      err: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
 
 /**
  * Scan the global extensions directory (~/.pi/agent/extensions/) and
@@ -128,11 +160,9 @@ async function createRpcClient(
 ): Promise<{ client: RpcClientInstance; timings: { dynamicImport: number; construct: number } }> {
   const t0 = performance.now();
 
-  if (!cachedModule) {
-    cachedModule = (await import("@dyyz1993/pi-coding-agent")) as unknown as {
-      RpcClient: new (options?: Record<string, unknown>) => RpcClientAPI;
-    };
-  }
+  cachedModule ??= (await import("@dyyz1993/pi-coding-agent")) as unknown as {
+    RpcClient: new (options?: Record<string, unknown>) => RpcClientAPI;
+  };
   const t1 = performance.now();
 
   if (!existsSync(cwd)) {
@@ -164,6 +194,9 @@ export class AgentProcessManager {
   private processByCwd = new Map<string, ManagedClient>();
   private servers = new Set<RPCServer>();
   private sessionPaths = new Map<string, string>();
+  /** Persistent projectPath per session — NOT cleaned on stop(), only on service restart.
+      Allows restarting an inactive session when receiving delegate messages. */
+  private sessionProjectPaths = new Map<string, string>();
   private leafIds = new Map<string, string | null>();
   private lastLspState = new Map<
     string,
@@ -277,6 +310,7 @@ export class AgentProcessManager {
           };
           this.clients.set(sessionId, pooled);
           this.sessionPaths.set(sessionId, sessionPath);
+          this.sessionProjectPaths.set(sessionId, projectPath);
           perfLog.info("[start] switchSession done", {
             sessionId,
             oldSessionId,
@@ -401,6 +435,7 @@ export class AgentProcessManager {
 
     log.info("RpcClient started", { sessionId });
     this.sessionPaths.set(sessionId, sessionPath);
+    this.sessionProjectPaths.set(sessionId, projectPath);
     this.processByCwd.set(projectPath, managed);
     return { agentId: sessionId, status: "started" };
   }
@@ -527,7 +562,10 @@ export class AgentProcessManager {
     if (this.processByCwd.get(cwd) === managed) {
       this.processByCwd.delete(cwd);
     }
-    this.sessionPaths.delete(sessionId);
+    // Note: sessionPaths and sessionProjectPaths are NOT cleared here.
+    // They persist for session restart support (coordinator delegate_send).
+    // The file path remains valid even after stop; session is re-activated
+    // on demand like clicking on a session in the UI.
     this.lastLspState.delete(sessionId);
     this.leafIds.delete(sessionId);
     return true;
@@ -539,14 +577,21 @@ export class AgentProcessManager {
     return { status: managed.info.status };
   }
 
-  private async readJsonlEntries(
-    sessionPath: string,
-  ): Promise<Array<{ id: string; parentId: string | null; type: string; customType?: string }>> {
+  private async readJsonlEntries(sessionPath: string): Promise<
+    Array<{
+      id: string;
+      parentId: string | null;
+      type: string;
+      customType?: string;
+      label?: string;
+    }>
+  > {
     const entries: Array<{
       id: string;
       parentId: string | null;
       type: string;
       customType?: string;
+      label?: string;
     }> = [];
     if (!sessionPath || !existsSync(sessionPath)) return entries;
     try {
@@ -559,11 +604,23 @@ export class AgentProcessManager {
         try {
           const parsed = JSON.parse(line) as Record<string, unknown>;
           if (parsed.id && parsed.type) {
+            let label: string | undefined;
+            if (
+              parsed.type === "message" &&
+              parsed.message &&
+              typeof parsed.message === "object" &&
+              parsed.message !== null
+            ) {
+              label = (parsed.message as Record<string, unknown>).role as string | undefined;
+            } else if (parsed.customType) {
+              label = parsed.customType as string;
+            }
             entries.push({
               id: parsed.id as string,
               parentId: (parsed.parentId as string | null | undefined) ?? null,
               type: parsed.type as string,
               customType: parsed.customType as string | undefined,
+              label,
             });
           }
         } catch (err: unknown) {
@@ -1590,6 +1647,10 @@ export class AgentProcessManager {
     if (!result.cancelled) {
       this.stop(sessionId);
     }
+    // Strip parentSession from forked session so it's treated as independent on refresh
+    if (result.newSessionFile && !result.cancelled) {
+      stripParentSessionFromHeader(result.newSessionFile);
+    }
     return result;
   }
 
@@ -1692,10 +1753,27 @@ export class AgentProcessManager {
         id: e.id,
         parentId: e.parentId,
         type: e.type,
-        label: e.type === "message" ? undefined : e.customType,
+        label: e.label,
       })),
       leafId: this.leafIds.get(sessionId) ?? null,
     };
+  }
+
+  async restoreFilesFromSnapshot(
+    sessionId: string,
+    snapshotTreeHash: string,
+    files?: string[],
+  ): Promise<string[]> {
+    const managed = this.clients.get(sessionId);
+    if (!managed) throw new Error("Client not found");
+
+    const result = (await managed.client
+      .channel("file-snapshot")
+      .call("snapshot.restoreByHash", { snapshotTreeHash, files })) as {
+      restored: string[];
+    } | null;
+
+    return result?.restored ?? [];
   }
 
   async clone(sessionId: string): Promise<{ cancelled: boolean }> {
@@ -2098,7 +2176,23 @@ export class AgentProcessManager {
     }
 
     if (invokeId) {
-      const managed = this.clients.get(sessionId);
+      let managed = this.clients.get(sessionId);
+      // The session may have been evicted from clients during an async handler
+      // (e.g. delegate_send restarts the target, switching the pooled process).
+      // Fall back to processByCwd via sessionProjectPaths to find the channel.
+      if (!managed) {
+        const projectPath = this.sessionProjectPaths.get(sessionId) ?? "";
+        if (projectPath) {
+          managed = this.processByCwd.get(projectPath);
+          if (managed) {
+            log.info("handleCoordinatorCall: routed response via processByCwd fallback", {
+              sessionId,
+              projectPath,
+              activeSession: managed._activeSessionId,
+            });
+          }
+        }
+      }
       if (managed) {
         managed.client.channel("coordinator").send({ ...(result as object), invokeId });
       }
@@ -2191,9 +2285,33 @@ export class AgentProcessManager {
   ): Promise<{ delivered: boolean; targetStatus: "active" | "started" | "not_found" }> {
     const { targetSessionId, message } = msg;
 
-    const target = this.clients.get(targetSessionId);
+    let target = this.clients.get(targetSessionId);
+
+    // Not active — attempt restart, like clicking a session in the UI.
+    // Session truly "not found" only if the file was physically deleted.
     if (!target) {
-      return { delivered: false, targetStatus: "not_found" };
+      const sessionPath = this.sessionPaths.get(targetSessionId) ?? "";
+      const projectPath = this.sessionProjectPaths.get(targetSessionId) ?? "";
+      if (sessionPath && projectPath && existsSync(sessionPath)) {
+        try {
+          const result = await this.start(targetSessionId, projectPath, sessionPath);
+          target = this.clients.get(targetSessionId);
+          if (target) {
+            log.info("handleCoordinatorDelegateSend: restarted inactive session", {
+              targetSessionId,
+              status: result.status,
+            });
+          }
+        } catch (err: unknown) {
+          log.warn("handleCoordinatorDelegateSend: failed to restart session", {
+            targetSessionId,
+            err: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+      if (!target) {
+        return { delivered: false, targetStatus: "not_found" };
+      }
     }
 
     const count = (this.delegateReplyCount.get(targetSessionId) ?? 0) + 1;
@@ -2305,6 +2423,9 @@ export class AgentProcessManager {
     if (existsSync(sessionPath)) {
       copyFileSync(sessionPath, forkedPath);
     }
+
+    // Strip parentSession so the forked session is independent (not a child)
+    stripParentSessionFromHeader(forkedPath);
 
     const result = await this.start(forkedSessionId, projectPath, forkedPath);
 

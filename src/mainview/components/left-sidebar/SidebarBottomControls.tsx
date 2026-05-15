@@ -74,9 +74,13 @@ export function SidebarBottomControls() {
   const [tierConfigSaving, setTierConfigSaving] = useState(false);
   const tierConfigRef = useRef<HTMLDivElement>(null);
 
-  const currentAgent = useAgentStore((s) => s.currentAgent);
+  const currentAgent = useAgentStore((s) =>
+    activeSessionId ? (s.currentAgentBySession[activeSessionId] ?? "build") : "build",
+  );
   const agents = useAgentStore((s) => s.agents);
-  const agentSwitching = useAgentStore((s) => s.switching);
+  const agentSwitching = useAgentStore((s) =>
+    activeSessionId ? (s.switchingBySession[activeSessionId] ?? false) : false,
+  );
   const switchAgent = useAgentStore((s) => s.switchAgent);
   const fetchAgents = useAgentStore((s) => s.fetchAgents);
   const [agentOpen, setAgentOpen] = useState(false);

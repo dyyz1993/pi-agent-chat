@@ -15,5 +15,13 @@
   "fileChanges": "File Changes",
   "latest": "Latest",
   "filesChanged": "files changed",
-  "snapshot": "Snapshot"
+  "snapshot": "Snapshot",
+  "confirmRollback": "Rollback to this snapshot? File changes after this snapshot will be lost.",
+  "confirmUnrevert": "Cancel this rollback?",
+  "rollbackSuccess": "Rollback successful",
+  "rollbackFailed": "Rollback failed: {{error}}",
+  "rollbackFailedGeneric": "Rollback failed, please retry",
+  "unrevertSuccess": "Rollback cancelled successfully",
+  "unrevertFailed": "Cancel rollback failed: {{error}}",
+  "unrevertFailedGeneric": "Cancel rollback failed, please retry"
 }

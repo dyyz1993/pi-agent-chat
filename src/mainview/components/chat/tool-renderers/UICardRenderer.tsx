@@ -18,11 +18,11 @@ import { useUIDialogStore } from "../../../stores/use-ui-dialog-store";
 type UIBlock = UIInteractionBlock;
 
 const BG_MAP: Record<string, string> = {
-  pending: "bg-amber-50 dark:bg-amber-950/8 border border-amber-400/30 dark:border-amber-500/30",
+  pending: "border border-amber-400/30 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-600/8",
   responded:
-    "bg-emerald-50 dark:bg-emerald-950/6 border-l-2 border-emerald-400/30 dark:border-emerald-500/30",
-  dismissed: "bg-gray-50 dark:bg-gray-950/5 border-l-2 border-gray-300 dark:border-gray-600/30",
-  notified: "bg-cyan-50 dark:bg-cyan-950/6 border-l-2 border-cyan-400/30 dark:border-cyan-500/30",
+    "border-l-2 border-emerald-400/30 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-600/6",
+  dismissed: "border-l-2 border-gray-300/60 dark:border-gray-600/30 bg-gray-50 dark:bg-gray-800/40",
+  notified: "border-l-2 border-blue-400/30 dark:border-blue-500/30 bg-blue-50 dark:bg-blue-600/6",
 };
 
 export function CardShell({ block, children }: { block: UIBlock; children: React.ReactNode }) {
@@ -397,7 +397,7 @@ export const EditorCard = memo(function EditorCard({ block }: { block: UIBlock }
             onChange={(e) => setValue(e.target.value)}
             placeholder={block.placeholder ?? t("uiCard.pleaseEdit")}
             rows={4}
-            className="w-full bg-gray-900/60 border border-gray-700/30 rounded px-2 py-1 text-[11px] text-gray-300 dark:text-gray-200 font-mono placeholder:text-gray-500 focus:outline-none focus:border-blue-500/50 resize-y"
+            className="w-full bg-gray-100 dark:bg-gray-800/60 border border-gray-300 dark:border-gray-700/30 rounded px-2 py-1 text-[11px] text-gray-800 dark:text-gray-200 font-mono placeholder:text-gray-400 dark:placeholder:text-gray-600 focus:outline-none focus:border-blue-500/50 resize-y"
           />
           <div className="flex gap-1.5">
             <button

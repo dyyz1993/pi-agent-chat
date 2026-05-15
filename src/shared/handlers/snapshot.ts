@@ -10,6 +10,24 @@ import type { SnapshotInfo } from "../../mainview/types";
 
 const log = createLogger("snapshot");
 
+const CHANNEL_TIMEOUT_MS = 5_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`channel call timed out (${ms}ms)`)), ms);
+    promise.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
+}
+
 interface StepSnapshotEntry {
   type: "custom";
   customType: "step-snapshot";
@@ -124,14 +142,14 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   r("snapshot.list", async (params) => {
     const manager = getProcessManager();
 
-    // If session is live, try channel first
+    // If session is live, try channel first (with timeout to prevent hanging)
     if (manager && manager.hasSession(params.sessionId)) {
       try {
-        const result = await manager.callChannel(
-          params.sessionId,
-          "file-snapshot",
-          "snapshot.list",
-          { sessionId: params.sessionId },
+        const result = await withTimeout(
+          manager.callChannel(params.sessionId, "file-snapshot", "snapshot.list", {
+            sessionId: params.sessionId,
+          }),
+          CHANNEL_TIMEOUT_MS,
         );
         if (Array.isArray(result)) return result as unknown as R<"snapshot.list">;
       } catch (err) {
@@ -160,11 +178,12 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const manager = getProcessManager();
     if (manager && manager.hasSession(params.sessionId)) {
       try {
-        const result = await manager.callChannel(
-          params.sessionId,
-          "file-snapshot",
-          "snapshot.get",
-          { sessionId: params.sessionId, snapshotId: params.snapshotId },
+        const result = await withTimeout(
+          manager.callChannel(params.sessionId, "file-snapshot", "snapshot.get", {
+            sessionId: params.sessionId,
+            snapshotId: params.snapshotId,
+          }),
+          CHANNEL_TIMEOUT_MS,
         );
         if (result) return result as unknown as R<"snapshot.get">;
       } catch (err) {
@@ -190,32 +209,54 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       return { ok: false, restoredFiles: [], error: "Session not found" };
     }
 
-    // Try channel first (full restore via FileSnapshotManager)
+    // Try channel first (full restore via FileSnapshotManager, with timeout)
     try {
-      const result = (await manager.callChannel(
-        params.sessionId,
-        "file-snapshot",
-        "snapshot.rollback",
-        {
+      const result = (await withTimeout(
+        manager.callChannel(params.sessionId, "file-snapshot", "snapshot.rollback", {
           sessionId: params.sessionId,
           snapshotId: params.snapshotId,
           files: params.files,
-        },
+        }),
+        CHANNEL_TIMEOUT_MS,
       )) as { ok: boolean; restoredFiles: string[]; error?: string } | null;
       if (result) return result as R<"snapshot.rollback">;
     } catch (err) {
-      log.warn("snapshot.rollback channel failed, using navigateTree fallback", {
+      log.warn("snapshot.rollback channel failed, using JSONL file-restore fallback", {
         err: err instanceof Error ? err.message : String(err),
       });
     }
 
-    // Fallback: use navigateTree to restore files
-    // The file-snapshot extension listens on session_tree events and restores files
+    // Fallback: restore files by reading snapshot tree hash from JSONL and
+    // using the process manager's file restore capability.
+    // IMPORTANT: Do NOT use navigateTree() here — it changes the session tree leaf
+    // which truncates conversation history. We only want to restore files on disk.
     try {
-      await manager.navigateTree(params.sessionId, params.snapshotId, { skipFiles: false });
-      return { ok: true, restoredFiles: [] };
+      const sessionPath = await getSessionPath(params.sessionId);
+      if (!sessionPath) {
+        return { ok: false, restoredFiles: [], error: "Session path not found" };
+      }
+
+      const snapshots = await readStepSnapshots(sessionPath);
+      const targetSnap = snapshots.find((s) => s.id === params.snapshotId);
+      if (!targetSnap) {
+        return { ok: false, restoredFiles: [], error: "Snapshot not found" };
+      }
+
+      const restoredFiles = await manager.restoreFilesFromSnapshot(
+        params.sessionId,
+        targetSnap.data.snapshotTreeHash,
+        params.files,
+      );
+
+      log.info("snapshot.rollback JSONL fallback restored files", {
+        sessionId: params.sessionId,
+        snapshotId: params.snapshotId,
+        restoredCount: restoredFiles.length,
+      });
+
+      return { ok: true, restoredFiles };
     } catch (err) {
-      log.error("snapshot.rollback navigateTree fallback failed", {
+      log.error("snapshot.rollback JSONL fallback failed", {
         sessionId: params.sessionId,
         snapshotId: params.snapshotId,
         err: err instanceof Error ? err.message : String(err),
@@ -234,16 +275,14 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       return { ok: false, error: "Session not found" };
     }
 
-    // Try channel first
+    // Try channel first (with timeout)
     try {
-      const result = (await manager.callChannel(
-        params.sessionId,
-        "file-snapshot",
-        "snapshot.unrevert",
-        {
+      const result = (await withTimeout(
+        manager.callChannel(params.sessionId, "file-snapshot", "snapshot.unrevert", {
           sessionId: params.sessionId,
           snapshotId: params.snapshotId,
-        },
+        }),
+        CHANNEL_TIMEOUT_MS,
       )) as { ok: boolean; error?: string } | null;
       if (result) return result as R<"snapshot.unrevert">;
     } catch (err) {
@@ -252,7 +291,8 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       });
     }
 
-    // Fallback: find the unrevert-point entry and navigate back
+    // Fallback: find the unrevert-point entry and restore files back to pre-rollback state.
+    // IMPORTANT: Do NOT use navigateTree() — same reason as rollback, it truncates conversation.
     const sessionPath = await getSessionPath(params.sessionId);
     if (!sessionPath) return { ok: false, error: "Session path not found" };
 
@@ -262,14 +302,25 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       return { ok: false, error: "Unrevert point not found" };
     }
 
-    // The unrevert-point contains preRollbackTreeHash, but we need a target leaf ID
-    // to navigate back. Since we can't directly use tree hash, we use the entry's parentId
-    // as a proxy — navigate to the entry just before the rollback happened.
+    if (!point.data.preRollbackTreeHash) {
+      return { ok: false, error: "No pre-rollback tree hash available" };
+    }
+
     try {
-      await manager.navigateTree(params.sessionId, point.parentId, { skipFiles: false });
+      const restoredFiles = await manager.restoreFilesFromSnapshot(
+        params.sessionId,
+        point.data.preRollbackTreeHash,
+      );
+
+      log.info("snapshot.unrevert JSONL fallback restored files", {
+        sessionId: params.sessionId,
+        snapshotId: params.snapshotId,
+        restoredCount: restoredFiles.length,
+      });
+
       return { ok: true };
     } catch (err) {
-      log.error("snapshot.unrevert navigateTree fallback failed", {
+      log.error("snapshot.unrevert JSONL fallback failed", {
         sessionId: params.sessionId,
         snapshotId: params.snapshotId,
         err: err instanceof Error ? err.message : String(err),

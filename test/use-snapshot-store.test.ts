@@ -34,7 +34,7 @@ describe("useSnapshotStore", () => {
       treeEntriesBySession: {},
       currentTreePath: {},
       fileContentBySession: {},
-      loading: false,
+      loadingBySession: {},
       error: null,
     });
   });
@@ -42,7 +42,7 @@ describe("useSnapshotStore", () => {
   it("has correct initial state", () => {
     const s = useSnapshotStore.getState();
     expect(s.snapshotsBySession).toEqual({});
-    expect(s.loading).toBe(false);
+    expect(s.loadingBySession).toEqual({});
     expect(s.error).toBeNull();
   });
 
@@ -51,14 +51,14 @@ describe("useSnapshotStore", () => {
     mockCall.mockResolvedValueOnce(snaps);
     await useSnapshotStore.getState().fetchSnapshots(SID);
     expect(useSnapshotStore.getState().snapshotsBySession[SID]).toEqual(snaps);
-    expect(useSnapshotStore.getState().loading).toBe(false);
+    expect(useSnapshotStore.getState().loadingBySession[SID]).toBe(false);
   });
 
   it("fetchSnapshots failure sets error", async () => {
     mockCall.mockRejectedValueOnce(new Error("list fail"));
     await useSnapshotStore.getState().fetchSnapshots(SID);
     expect(useSnapshotStore.getState().error).toBe("list fail");
-    expect(useSnapshotStore.getState().loading).toBe(false);
+    expect(useSnapshotStore.getState().loadingBySession[SID]).toBe(false);
   });
 
   it("getSnapshot success returns snapshot", async () => {
@@ -107,7 +107,7 @@ describe("useSnapshotStore", () => {
     const s = useSnapshotStore.getState();
     expect(s.treeEntriesBySession[SID]).toEqual(entries);
     expect(s.currentTreePath[SID]).toBe("src");
-    expect(s.loading).toBe(false);
+    expect(s.loadingBySession[SID]).toBe(false);
   });
 
   it("getFileContent success sets fileContentBySession", async () => {

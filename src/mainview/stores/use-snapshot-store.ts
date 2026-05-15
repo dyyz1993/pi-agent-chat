@@ -20,7 +20,7 @@ interface SnapshotState {
   treeEntriesBySession: Record<string, SnapshotTreeEntry[]>;
   currentTreePath: Record<string, string>;
   fileContentBySession: Record<string, SnapshotFileContent | null>;
-  loading: boolean;
+  loadingBySession: Record<string, boolean>;
   error: string | null;
 
   fetchSnapshots: (sessionId: string) => Promise<void>;
@@ -41,11 +41,14 @@ export const useSnapshotStore = create<SnapshotState>()((set, get) => ({
   treeEntriesBySession: {},
   currentTreePath: {},
   fileContentBySession: {},
-  loading: false,
+  loadingBySession: {},
   error: null,
 
   fetchSnapshots: async (sessionId) => {
-    set({ loading: true, error: null });
+    set((s) => ({
+      loadingBySession: { ...s.loadingBySession, [sessionId]: true },
+      error: null,
+    }));
     try {
       const snapshots = await apiClient.call("snapshot.list", { sessionId });
       set((s) => ({
@@ -53,10 +56,13 @@ export const useSnapshotStore = create<SnapshotState>()((set, get) => ({
           ...s.snapshotsBySession,
           [sessionId]: snapshots,
         },
-        loading: false,
+        loadingBySession: { ...s.loadingBySession, [sessionId]: false },
       }));
     } catch (err) {
-      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      set((s) => ({
+        loadingBySession: { ...s.loadingBySession, [sessionId]: false },
+        error: err instanceof Error ? err.message : String(err),
+      }));
     }
   },
 
@@ -98,7 +104,10 @@ export const useSnapshotStore = create<SnapshotState>()((set, get) => ({
   },
 
   navigateTree: async (sessionId, snapshotId, path) => {
-    set({ loading: true, error: null });
+    set((s) => ({
+      loadingBySession: { ...s.loadingBySession, [sessionId]: true },
+      error: null,
+    }));
     try {
       const result = await apiClient.call("snapshot.navigateTree", {
         sessionId,
@@ -114,10 +123,13 @@ export const useSnapshotStore = create<SnapshotState>()((set, get) => ({
           ...s.currentTreePath,
           [sessionId]: result.currentPath,
         },
-        loading: false,
+        loadingBySession: { ...s.loadingBySession, [sessionId]: false },
       }));
     } catch (err) {
-      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+      set((s) => ({
+        loadingBySession: { ...s.loadingBySession, [sessionId]: false },
+        error: err instanceof Error ? err.message : String(err),
+      }));
     }
   },
 
@@ -141,11 +153,13 @@ export const useSnapshotStore = create<SnapshotState>()((set, get) => ({
       const { [sessionId]: _tree, ...restTree } = s.treeEntriesBySession;
       const { [sessionId]: _path, ...restPaths } = s.currentTreePath;
       const { [sessionId]: _file, ...restFiles } = s.fileContentBySession;
+      const { [sessionId]: _loading, ...restLoading } = s.loadingBySession;
       return {
         snapshotsBySession: restSnapshots,
         treeEntriesBySession: restTree,
         currentTreePath: restPaths,
         fileContentBySession: restFiles,
+        loadingBySession: restLoading,
       };
     });
   },

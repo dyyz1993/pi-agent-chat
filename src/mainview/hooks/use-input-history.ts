@@ -27,6 +27,15 @@ function writeHistory(sessionId: string, items: string[]) {
   }
 }
 
+export function saveToInputHistory(sessionId: string, text: string): void {
+  const trimmed = text.trim();
+  if (!trimmed) return;
+  const h = readHistory(sessionId);
+  const filtered = h.filter((item) => item !== trimmed);
+  const updated = [trimmed, ...filtered].slice(0, MAX_ITEMS);
+  writeHistory(sessionId, updated);
+}
+
 export function useInputHistory(sessionId: string) {
   const historyRef = useRef<string[]>(readHistory(sessionId));
   const indexRef = useRef(-1);

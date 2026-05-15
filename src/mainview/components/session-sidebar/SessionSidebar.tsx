@@ -327,7 +327,7 @@ function SessionItem({
   const subsessions = useSubagentStore((s) => s.subsessionsByParent[session.sessionPath]);
   const loadingSubs = useSubagentStore((s) => s.loadingByParent[session.sessionPath]);
   const worktrees = useGitStore((s) => s.worktrees);
-  const currentAgentName = useAgentStore((s) => s.currentAgent);
+  const currentAgentName = useAgentStore((s) => s.currentAgentBySession[session.sessionId] ?? "");
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState(false);
