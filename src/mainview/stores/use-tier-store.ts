@@ -21,7 +21,7 @@ interface TierState {
 export { TIER_KEYS };
 export type { TierKey };
 
-export const useTierStore = create<TierState>()((set) => ({
+export const useTierStore = create<TierState>()((set, get) => ({
   currentTier: null,
   switching: false,
   tierModels: {},
@@ -29,20 +29,17 @@ export const useTierStore = create<TierState>()((set) => ({
   setCurrentTier: (tier) => set({ currentTier: tier }),
 
   syncTierFromModel: (provider, modelId) => {
-    const modelFullName = `${provider}/${modelId}`;
-    const lower = modelFullName.toLowerCase();
-    if (lower.includes("haiku") || lower.includes("flash") || lower.includes("mini")) {
-      set({ currentTier: "fast" });
-    } else if (
-      lower.includes("opus") ||
-      lower.includes("max") ||
-      lower.includes("thinking") ||
-      lower.includes("pro-")
-    ) {
-      set({ currentTier: "max" });
-    } else {
-      set({ currentTier: "pro" });
+    const fullName = `${provider}/${modelId}`;
+    const models = get().tierModels;
+    // Match against actual tier config values first
+    for (const tier of TIER_KEYS) {
+      if (models[tier] && models[tier] === fullName) {
+        set({ currentTier: tier });
+        return;
+      }
     }
+    // No tier config match — clear selection
+    set({ currentTier: null });
   },
 
   fetchTierConfig: async (sessionId) => {
@@ -76,7 +73,6 @@ export const useTierStore = create<TierState>()((set) => ({
         tier,
         error: err instanceof Error ? err.message : String(err),
       });
-      set({ currentTier: tier });
     } finally {
       set({ switching: false });
     }

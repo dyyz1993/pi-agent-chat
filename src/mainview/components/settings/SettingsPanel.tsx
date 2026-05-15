@@ -12,6 +12,9 @@ import { useSessionStore } from "../../stores/use-session-store";
 import { useTierStore, TIER_KEYS, type TierKey } from "../../stores/use-tier-store";
 import { ModelPickerButton } from "../model-picker/ModelPickerButton";
 import { isProxyEnabled, enableProxy, disableProxy } from "../../lib/proxy";
+import { createLogger } from "../../../shared/lib/logger";
+
+const log = createLogger("settings");
 
 interface SettingsPanelProps {
   onClose: () => void;
@@ -110,8 +113,19 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
         models: localTierModels,
       });
       await fetchTierConfig(sessionId);
+      // If the currently active tier exists, re-apply it to switch to the new model
+      const {
+        currentTier: activeTier,
+        tierModels: updatedModels,
+        switchToTier,
+      } = useTierStore.getState();
+      if (activeTier && updatedModels[activeTier]) {
+        await switchToTier(activeTier, sessionId);
+      }
     } catch (err) {
-      console.warn("[Settings] save tier config failed:", err);
+      log.warn("save tier config failed", {
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
     setTierSaving(false);
   }, [sessionId, localTierModels, fetchTierConfig]);

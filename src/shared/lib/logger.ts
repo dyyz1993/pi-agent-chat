@@ -18,6 +18,7 @@ export type LogModule =
   | "linked-projects"
   | "mcp"
   | "tier"
+  | "settings"
   | "proxy-register"
   | "supervisor";
 type LogLevel = "debug" | "info" | "warn" | "error";

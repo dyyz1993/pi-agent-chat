@@ -231,12 +231,17 @@ export function SidebarBottomControls() {
       });
       setTierConfigOpen(false);
       await fetchTierConfig(activeSessionId);
+      // If the currently active tier exists, re-apply it to switch to the new model
+      const { currentTier: activeTier, tierModels: updatedModels } = useTierStore.getState();
+      if (activeTier && updatedModels[activeTier]) {
+        await switchToTier(activeTier, activeSessionId);
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       log.warn("save tier config failed", { error: msg });
     }
     setTierConfigSaving(false);
-  }, [activeSessionId, tierConfigModels, fetchTierConfig]);
+  }, [activeSessionId, tierConfigModels, fetchTierConfig, switchToTier]);
 
   const handleSelectModel = useCallback(
     async (key: string) => {
