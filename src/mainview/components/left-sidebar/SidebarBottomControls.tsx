@@ -548,6 +548,7 @@ export function SidebarBottomControls() {
           value={currentModel ? `${currentModel.provider}/${currentModel.id}` : ""}
           onChange={handleSelectModel}
           disabled={!activeSessionId}
+          placement="up"
           onOpenChange={(open) => {
             if (open) {
               setThinkingOpen(false);
