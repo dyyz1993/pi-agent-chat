@@ -183,6 +183,27 @@ export function createHttpHandler(
       return;
     }
 
+    // 端口可达性检测（无需鉴权，前端 preview 前调用）
+    if (url.pathname === "/api/proxy-check" && req.method === "POST") {
+      const chunks: Buffer[] = [];
+      for await (const chunk of req as AsyncIterable<Buffer | string>)
+        chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+      const body = JSON.parse(Buffer.concat(chunks).toString()) as {
+        host?: string;
+        port?: number;
+      };
+      if (!body.host || !body.port || isNaN(body.port)) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ reachable: false, reason: "Missing host or port" }));
+        return;
+      }
+      const { checkReachable } = await import("./proxy-register");
+      const reachable = await checkReachable(body.host, body.port);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ reachable }));
+      return;
+    }
+
     // 代理注册：前端通过此端点（same-origin）注册本地地址到公网代理（无需鉴权）
     if (url.pathname === "/api/proxy-register" && req.method === "POST") {
       if (!proxyRegistrar) {

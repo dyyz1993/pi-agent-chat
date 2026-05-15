@@ -17,7 +17,7 @@ function isLocalhost(host: string): boolean {
   return host === "localhost" || host === "127.0.0.1" || host === "::1";
 }
 
-function checkReachable(host: string, port: number, timeoutMs = 2000): Promise<boolean> {
+export function checkReachable(host: string, port: number, timeoutMs = 2000): Promise<boolean> {
   return new Promise((resolve) => {
     const socket = createConnection({ host, port }, () => {
       socket.destroy();

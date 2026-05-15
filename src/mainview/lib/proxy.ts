@@ -6,10 +6,11 @@
  *
  * 流程：
  *   1. preview 发现 http://localhost:8080/index.html
- *   2. proxyUrlSync() → /__proxy__/localhost:8080/index.html
- *   3. 浏览器请求 /__proxy__/localhost:8080/index.html（同源）
- *   4. 后端探测可达性 → 注册 shanbox → 302 到 https://xxx.shanbox:8443/index.html
- *   5. 浏览器跟随 302，从 shanbox 加载内容
+ *   2. checkProxyUrl() 探测可达性 → 不可达则直接返回错误
+ *   3. proxyUrlSync() → /__proxy__/localhost:8080/index.html
+ *   4. 浏览器请求 /__proxy__/localhost:8080/index.html（同源）
+ *   5. 后端注册 shanbox → 302 到 https://xxx.shanbox:8443/index.html
+ *   6. 浏览器跟随 302，从 shanbox 加载内容
  */
 
 // ---- 内部状态 ----
@@ -88,5 +89,49 @@ export function proxyUrlSync(originalUrl: string): string {
     return `/__proxy__/${parsed.host}${parsed.pathname}${parsed.search}`;
   } catch {
     return originalUrl;
+  }
+}
+
+export interface ProxyCheckResult {
+  url: string;
+  error?: string;
+}
+
+/**
+ * 异步前置检测 + 转换 — preview 渲染前调用
+ *
+ * 1. 非本地地址 → 原样返回
+ * 2. 本地地址 → 调后端 /api/proxy-check 探测 TCP 可达性
+ *    - 可达 → 返回 /__proxy__/ 路径
+ *    - 不可达 → 返回错误信息（服务只监听 127.0.0.1）
+ */
+export async function checkProxyUrl(originalUrl: string): Promise<ProxyCheckResult> {
+  if (!active) return { url: originalUrl };
+  try {
+    const parsed = new URL(originalUrl);
+    if (parsed.protocol !== "http:") return { url: originalUrl };
+    if (!isLocalAddress(parsed.hostname)) return { url: originalUrl };
+
+    const colonIdx = parsed.host.lastIndexOf(":");
+    const host = colonIdx >= 0 ? parsed.host.slice(0, colonIdx) : parsed.host;
+    const port = colonIdx >= 0 ? parseInt(parsed.host.slice(colonIdx + 1), 10) : 80;
+
+    const res = await fetch("/api/proxy-check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ host, port }),
+    });
+    const data = (await res.json()) as { reachable?: boolean };
+
+    if (!data.reachable) {
+      return {
+        url: originalUrl,
+        error: `${parsed.host} 服务未在局域网开放，可能只监听 127.0.0.1`,
+      };
+    }
+
+    return { url: `/__proxy__/${parsed.host}${parsed.pathname}${parsed.search}` };
+  } catch {
+    return { url: originalUrl };
   }
 }

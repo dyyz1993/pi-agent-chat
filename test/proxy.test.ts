@@ -10,6 +10,7 @@ import {
   disableProxy,
   tryEnable,
   proxyUrlSync,
+  checkProxyUrl,
 } from "../src/mainview/lib/proxy";
 
 describe("proxy module", () => {
@@ -132,6 +133,62 @@ describe("proxy module", () => {
     it("returns original URL for invalid input", () => {
       enableProxy();
       expect(proxyUrlSync("not-a-url")).toBe("not-a-url");
+    });
+  });
+
+  describe("checkProxyUrl", () => {
+    it("returns original URL when proxy disabled", async () => {
+      const result = await checkProxyUrl("http://localhost:8080/test");
+      expect(result.url).toBe("http://localhost:8080/test");
+      expect(result.error).toBeUndefined();
+    });
+
+    it("returns original URL for non-local addresses", async () => {
+      enableProxy();
+      const result = await checkProxyUrl("https://example.com/path");
+      expect(result.url).toBe("https://example.com/path");
+      expect(result.error).toBeUndefined();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it("returns /__proxy__/ path when target is reachable", async () => {
+      enableProxy();
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ reachable: true }),
+      });
+
+      const result = await checkProxyUrl("http://localhost:8080/index.html");
+      expect(result.url).toBe("/__proxy__/localhost:8080/index.html");
+      expect(result.error).toBeUndefined();
+      expect(mockFetch).toHaveBeenCalledWith(
+        "/api/proxy-check",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ host: "localhost", port: 8080 }),
+        }),
+      );
+    });
+
+    it("returns error when target is not reachable", async () => {
+      enableProxy();
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ reachable: false }),
+      });
+
+      const result = await checkProxyUrl("http://localhost:8080/index.html");
+      expect(result.url).toBe("http://localhost:8080/index.html");
+      expect(result.error).toContain("127.0.0.1");
+    });
+
+    it("returns original URL on network error", async () => {
+      enableProxy();
+      mockFetch.mockRejectedValueOnce(new Error("Network error"));
+
+      const result = await checkProxyUrl("http://localhost:8080/test");
+      expect(result.url).toBe("http://localhost:8080/test");
+      expect(result.error).toBeUndefined();
     });
   });
 
