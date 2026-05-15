@@ -86,7 +86,7 @@ export function proxyUrlSync(originalUrl: string): string {
     const parsed = new URL(originalUrl);
     if (parsed.protocol !== "http:") return originalUrl;
     if (!isLocalAddress(parsed.hostname)) return originalUrl;
-    return `/__proxy__/${parsed.host}${parsed.pathname}${parsed.search}`;
+    return `/__proxy__/${parsed.host}${parsed.pathname}${parsed.search}${parsed.hash}`;
   } catch {
     return originalUrl;
   }
@@ -130,7 +130,7 @@ export async function checkProxyUrl(originalUrl: string): Promise<ProxyCheckResu
       };
     }
 
-    return { url: `/__proxy__/${parsed.host}${parsed.pathname}${parsed.search}` };
+    return { url: `/__proxy__/${parsed.host}${parsed.pathname}${parsed.search}${parsed.hash}` };
   } catch {
     return { url: originalUrl };
   }

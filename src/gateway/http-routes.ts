@@ -173,9 +173,11 @@ export function createHttpHandler(
           res.writeHead(502, { "Content-Type": "text/plain" }).end("Failed to register proxy");
           return;
         }
-        const redirectUrl = `${publicUrl}${remainder}${url.search || ""}`;
-        log.info("Proxy redirect", { host, port, redirectUrl });
-        res.writeHead(307, { Location: redirectUrl }).end();
+        const redirect = new URL(publicUrl);
+        redirect.pathname = remainder;
+        if (url.search) redirect.search = url.search;
+        log.info("Proxy redirect", { host, port, redirectUrl: redirect.toString() });
+        res.writeHead(307, { Location: redirect.toString() }).end();
       } catch (err) {
         log.warn("Proxy register error", { host, port, error: String(err) });
         res.writeHead(502, { "Content-Type": "text/plain" }).end("Proxy registration failed");

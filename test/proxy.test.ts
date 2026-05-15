@@ -125,6 +125,20 @@ describe("proxy module", () => {
       );
     });
 
+    it("preserves hash fragment", () => {
+      enableProxy();
+      expect(proxyUrlSync("http://localhost:8080/page#section")).toBe(
+        "/__proxy__/localhost:8080/page#section",
+      );
+    });
+
+    it("preserves query + hash together", () => {
+      enableProxy();
+      expect(proxyUrlSync("http://localhost:8080/page?q=1&r=2#section")).toBe(
+        "/__proxy__/localhost:8080/page?q=1&r=2#section",
+      );
+    });
+
     it("preserves path without trailing slash", () => {
       enableProxy();
       expect(proxyUrlSync("http://192.168.1.100:9000")).toBe("/__proxy__/192.168.1.100:9000/");
