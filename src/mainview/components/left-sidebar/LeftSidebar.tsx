@@ -26,7 +26,7 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
 
   return (
     <div
-      className={`flex flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 overflow-x-hidden z-20 ${
+      className={`flex flex-col bg-white dark:bg-gray-900 border-r border-gray-300 dark:border-gray-800 overflow-x-hidden z-20 ${
         overlay
           ? "animate-slide-in-left shadow-xl shadow-black/10 dark:shadow-black/30 will-change-transform"
           : ""
@@ -34,7 +34,7 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
       style={overlay ? { position: "absolute", left: 0, top: 0, bottom: 0, width } : { width }}
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200/80 dark:border-gray-800/80 shrink-0">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-gray-800/80 shrink-0">
         <div className="flex items-center gap-1.5">
           <span className="text-xs font-semibold text-gray-800 dark:text-gray-200 tracking-wide">
             {t("sessions")}

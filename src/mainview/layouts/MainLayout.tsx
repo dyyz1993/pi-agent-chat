@@ -149,7 +149,7 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
   const currentDiff = useGitStore((s) => s.currentDiff);
 
   return (
-    <div className="h-screen bg-white text-gray-900 dark:bg-gray-950 dark:text-white flex flex-col overflow-hidden">
+    <div className="h-screen bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-white flex flex-col overflow-hidden">
       <ConnectionBanner />
       {/* === ROW 1: Top Tab Bar === */}
       <TabBar onAddProject={onAddProject} />

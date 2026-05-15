@@ -87,7 +87,7 @@ textarea {
 }
 
 html {
-  background-color: white;
+  background-color: #f9fafb;
   overscroll-behavior-y: none;
 }
 
@@ -96,7 +96,7 @@ html.dark {
 }
 
 body {
-  background-color: white;
+  background-color: #f9fafb;
 }
 
 html.dark body {

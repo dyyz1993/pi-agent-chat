@@ -113,7 +113,7 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
     return (
       <div
         data-testid="right-sidebar"
-        className="flex flex-col items-center bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 overflow-hidden z-20 pt-1"
+        className="flex flex-col items-center bg-white dark:bg-gray-900 border-l border-gray-300 dark:border-gray-800 overflow-hidden z-20 pt-1"
         style={{ width }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -144,13 +144,13 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
   return (
     <div
       data-testid="right-sidebar"
-      className={`flex flex-col bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 overflow-hidden z-20 ${
+      className={`flex flex-col bg-gray-50 dark:bg-gray-900 border-l border-gray-300 dark:border-gray-800 overflow-hidden z-20 ${
         overlay ? "animate-slide-in-right shadow-xl shadow-black/10 dark:shadow-black/30" : ""
       }`}
       style={overlay ? { position: "absolute", right: 0, top: 0, bottom: 0, width } : { width }}
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="flex items-center border-b border-gray-200 dark:border-gray-800 shrink-0">
+      <div className="flex items-center border-b border-gray-300 dark:border-gray-800 shrink-0">
         {overlay && (
           <button
             onClick={(e) => {
