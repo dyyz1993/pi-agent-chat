@@ -43,6 +43,8 @@ export interface MatchedRuleDetail {
   title: string;
   severity: RuleSeverity;
   matchedGlob: string;
+  /** True when this rule was already injected for the same file in a previous tool call */
+  alreadyLoaded?: boolean;
 }
 
 export interface MatchRecord {

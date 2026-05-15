@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { FileText, Zap } from "lucide-react";
+import { FileText, Zap, CheckCircle2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { ContentBlock } from "../../../types";
 
@@ -10,6 +10,7 @@ interface MatchedRuleDetail {
   title: string;
   severity: string;
   matchedGlob: string;
+  alreadyLoaded?: boolean;
 }
 
 interface RulesMatchedData {
@@ -99,8 +100,17 @@ export const ReadFileCard = memo(function ReadFileCard({
             >
               <path d="M4.5 3l3 3-3 3" />
             </svg>
-            <Zap className="w-3 h-3 shrink-0" />
-            <span>{t("readFile.rulesLoaded")}</span>
+            {rulesData.rulesMatched.every((r) => r.alreadyLoaded) ? (
+              <>
+                <CheckCircle2 className="w-3 h-3 shrink-0" />
+                <span>{t("readFile.rulesAlreadyLoaded", "Rules already loaded")}</span>
+              </>
+            ) : (
+              <>
+                <Zap className="w-3 h-3 shrink-0" />
+                <span>{t("readFile.rulesLoaded")}</span>
+              </>
+            )}
             <span className="text-indigo-500 dark:text-indigo-600 ml-1">
               {rulesData.rulesMatched.length} rule{rulesData.rulesMatched.length !== 1 ? "s" : ""}
             </span>
@@ -111,14 +121,24 @@ export const ReadFileCard = memo(function ReadFileCard({
                 key={rule.name}
                 className="border-b last:border-b-0 border-indigo-200/20 dark:border-indigo-700/10 py-1 flex items-center gap-1.5"
               >
+                {rule.alreadyLoaded ? (
+                  <CheckCircle2 className="w-3 h-3 shrink-0 text-gray-400 dark:text-gray-500" />
+                ) : (
+                  <Zap className="w-3 h-3 shrink-0 text-indigo-500 dark:text-indigo-400" />
+                )}
                 <span
-                  className={`text-[11px] font-medium shrink-0 ${rule.severity === "critical" ? "text-red-500 dark:text-red-400" : rule.severity === "high" ? "text-amber-600 dark:text-amber-400" : "text-indigo-700 dark:text-indigo-300"}`}
+                  className={`text-[11px] font-medium shrink-0 ${rule.severity === "critical" ? "text-red-500 dark:text-red-400" : rule.severity === "high" ? "text-amber-600 dark:text-amber-400" : rule.alreadyLoaded ? "text-gray-500 dark:text-gray-400" : "text-indigo-700 dark:text-indigo-300"}`}
                 >
                   {rule.title}
                 </span>
                 <span className="text-[11px] text-gray-400 dark:text-gray-600 font-mono">
                   {rule.matchedGlob}
                 </span>
+                {rule.alreadyLoaded && (
+                  <span className="text-[10px] text-gray-400 dark:text-gray-600 italic ml-auto">
+                    {t("readFile.alreadyLoaded", "loaded")}
+                  </span>
+                )}
               </div>
             ))}
           </div>
