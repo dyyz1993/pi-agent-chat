@@ -1,5 +1,5 @@
 ---
-description: "pi-agent-chat 专属全栈开发智能体：自动判断需求是否涉及底层仓库(pi-mono-fork)，优先验证 RPC/底层能力后再处理 UI"
+description: "pi-agent-chat 专属全栈开发智能体：自动判断需求是否涉及底层仓库(pi-momo-fork)，优先验证 RPC/底层能力后再处理 UI"
 mode: primary
 color: "#7C3AED"
 temperature: 0.3
@@ -22,7 +22,7 @@ permission:
 - **技术栈**：React 18 + TypeScript + Vite + Tailwind CSS + Zustand
 - **运行平台**：macOS (Electrobun) / Web / Mobile 浏览器
 - **核心代码**：`src/mainview/` 下的组件、stores、hooks、lib
-- **依赖的底层包**（来自 pi-mono-fork）：
+- **依赖的底层包**（来自 pi-momo-fork）：
   - `@dyyz1993/pi-coding-agent` — 核心 Agent 逻辑 + RPC API
   - `@dyyz1993/pi-agent-core` — Agent 核心框架
   - `@dyyz1993/pi-ai` — AI 模型接入层
@@ -192,7 +192,7 @@ grep "extension" logs/$(date +%Y-%m-%d).log
 
 收到任何开发任务时，**首先判断**该需求属于哪一层：
 
-| 判断维度                 | 当前项目 (UI 层) | 底层仓库 (pi-mono-fork) |
+| 判断维度                 | 当前项目 (UI 层) | 底层仓库 (pi-momo-fork) |
 | ------------------------ | ---------------- | ----------------------- |
 | 界面展示、交互逻辑       | ✅               | ❌                      |
 | Zustand Store 状态管理   | ✅               | ❌                      |
@@ -218,7 +218,7 @@ grep "extension" logs/$(date +%Y-%m-%d).log
 1. **检索知识库**：使用 `knowledge-base_kb_search` / `knowledge-base_kb_search_semantic` 搜索相关功能的已有记录
 2. **检查 RPC Client API**：
    - 查看 `src/shared/agent/process-manager.ts` 中的 RpcClient 使用方式
-   - 查看底层仓库 `../pi-mono-fork/packages/coding-agent/` 中的 RPC 定义
+   - 查看底层仓库 `../pi-momo-fork/packages/coding-agent/` 中的 RPC 定义
 3. **验证依赖版本**：检查 `package.json` 中的 `@dyyz1993/*` 包版本是否包含所需功能
 
 ```
@@ -232,14 +232,14 @@ grep "extension" logs/$(date +%Y-%m-%d).log
 
 当判断需要修改底层仓库时：
 
-1. **向用户说明**：明确告知哪些改动需要在 pi-mono-fork 中进行
+1. **向用户说明**：明确告知哪些改动需要在 pi-momo-fork 中进行
 2. **列出修改清单**：
    - 需要改哪些包（coding-agent / agent / ai ...）
    - 需要新增/修改哪些 RPC 方法或类型
    - 预估影响范围
 3. **等待用户确认**后再进行底层修改
 4. **底层修改完成后**：
-   - 在 pi-mono-fork 中运行测试确保无破坏
+   - 在 pi-momo-fork 中运行测试确保无破坏
    - 发版（npm publish 或本地 link）
    - 回到当前项目更新依赖版本
    - 验证 RPC Client 调用正常
