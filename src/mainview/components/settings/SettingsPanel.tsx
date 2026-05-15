@@ -293,6 +293,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                       setLocalTierModels((prev) => ({ ...prev, [tier]: v }));
                     }}
                     placeholder={t("tierConfigDefault", "默认")}
+                    placement="up"
                   />
                 </div>
               </div>
