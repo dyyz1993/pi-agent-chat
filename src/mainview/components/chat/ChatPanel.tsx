@@ -340,15 +340,15 @@ export function ChatPanel() {
     }
 
     if (isStreaming) {
-      await sendFollowUp();
+      await sendSteer();
     } else {
       await sendMessage();
     }
   };
 
-  const handleSteer = async () => {
+  const handleFollowUp = async () => {
     if (!inputText.trim() || !isStreaming) return;
-    await sendSteer();
+    await sendFollowUp();
   };
 
   useEffect(() => {
@@ -375,7 +375,7 @@ export function ChatPanel() {
       <MarkdownExpandOverlay />
       <MermaidFullscreen />
       <RollbackOverlay />
-      <div className="flex items-center gap-4 px-4 py-1.5 bg-gray-50/80 dark:bg-gray-900/80 border-b border-gray-200 dark:border-gray-800 text-[11px] text-gray-400 dark:text-gray-500 flex-shrink-0">
+      <div className="flex items-center gap-4 px-4 py-1.5 bg-gray-100/80 dark:bg-gray-900/80 border-b border-gray-300 dark:border-gray-800 text-[11px] text-gray-500 dark:text-gray-500 flex-shrink-0">
         <SessionToggleIcon />
         {isViewingSubagent && (
           <button
@@ -477,7 +477,7 @@ export function ChatPanel() {
       {activeSessionId && !isViewingSubagent && <QueueCards sessionId={activeSessionId} />}
 
       <div
-        className="px-3 pt-2 pb-1.5 flex-shrink-0 flex items-stretch gap-1.5 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800"
+        className="px-3 pt-2 pb-1.5 flex-shrink-0 flex items-stretch gap-1.5 bg-gray-100 dark:bg-gray-900 border-t border-gray-300 dark:border-gray-800"
         style={{ paddingBottom: "calc(0.375rem + env(safe-area-inset-bottom))" }}
       >
         {!isViewingSubagent && (
@@ -506,12 +506,12 @@ export function ChatPanel() {
                 <div className="flex flex-col gap-1.5 shrink-0 justify-between py-1">
                   {isStreaming && inputText.trim() ? (
                     <button
-                      onClick={handleSteer}
-                      className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-amber-600 text-white hover:bg-amber-700 shadow-sm shadow-amber-500/20"
-                      title={t("steer")}
-                      aria-label={t("steer")}
+                      onClick={handleFollowUp}
+                      className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-blue-600 text-white hover:bg-blue-700 shadow-sm shadow-blue-500/20"
+                      title={t("sendFollowUp")}
+                      aria-label={t("sendFollowUp")}
                     >
-                      <Zap className="w-4 h-4" />
+                      <Clock className="w-4 h-4" />
                     </button>
                   ) : isStreaming ? (
                     <button
@@ -541,23 +541,15 @@ export function ChatPanel() {
                       !sessionReady ||
                       hasNoModel
                     }
-                    className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${(inputText.trim() || useAttachmentStore.getState().attachments.length > 0) && sessionReady && !hasNoModel ? (isStreaming ? "bg-blue-600 text-white hover:bg-blue-700 shadow-sm shadow-blue-500/20" : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm shadow-indigo-500/20") : "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed"}`}
+                    className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${(inputText.trim() || useAttachmentStore.getState().attachments.length > 0) && sessionReady && !hasNoModel ? (isStreaming ? "bg-amber-600 text-white hover:bg-amber-700 shadow-sm shadow-amber-500/20" : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm shadow-indigo-500/20") : "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed"}`}
                     title={
-                      hasNoModel
-                        ? t("sendDisabledNoModel")
-                        : isStreaming
-                          ? t("sendFollowUp")
-                          : t("send")
+                      hasNoModel ? t("sendDisabledNoModel") : isStreaming ? t("steer") : t("send")
                     }
                     aria-label={
-                      hasNoModel
-                        ? t("sendDisabledNoModel")
-                        : isStreaming
-                          ? t("sendFollowUp")
-                          : t("send")
+                      hasNoModel ? t("sendDisabledNoModel") : isStreaming ? t("steer") : t("send")
                     }
                   >
-                    {isStreaming ? <Clock className="w-4 h-4" /> : <ArrowUp className="w-4 h-4" />}
+                    {isStreaming ? <Zap className="w-4 h-4" /> : <ArrowUp className="w-4 h-4" />}
                   </button>
                 </div>
               </>

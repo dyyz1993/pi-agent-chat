@@ -294,22 +294,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (!sessionId) return;
     set({ inputText: "" });
 
-    const userMsg: ChatMessage = {
-      id: `user_steer_${Date.now()}`,
-      role: "user",
-      content: [{ type: "text", text }],
-      timestamp: Date.now(),
-    };
-    set((s) => {
-      const existing = s.messagesBySession[sessionId] || [];
-      return {
-        messagesBySession: {
-          ...s.messagesBySession,
-          [sessionId]: [...existing, userMsg],
-        },
-      };
-    });
-
     try {
       await apiClient.call("agent.steer", { sessionId, content: text });
     } catch (err) {
@@ -326,22 +310,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const sessionId = useSessionStore.getState().activeSessionId;
     if (!sessionId) return;
     set({ inputText: "" });
-
-    const userMsg: ChatMessage = {
-      id: `user_followup_${Date.now()}`,
-      role: "user",
-      content: [{ type: "text", text }],
-      timestamp: Date.now(),
-    };
-    set((s) => {
-      const existing = s.messagesBySession[sessionId] || [];
-      return {
-        messagesBySession: {
-          ...s.messagesBySession,
-          [sessionId]: [...existing, userMsg],
-        },
-      };
-    });
 
     try {
       await apiClient.call("agent.followUp", { sessionId, content: text });

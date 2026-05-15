@@ -6,7 +6,7 @@
   "retry": "重试",
   "steer": "插入消息 (Steer)",
   "stop": "停止",
-  "sendFollowUp": "排队发送 (Follow-up)",
+  "sendFollowUp": "排队等候 (Follow-up)",
   "send": "发送",
   "subagentReadonly": "子代理会话为只读模式",
   "closeSessionPanel": "关闭会话面板",
