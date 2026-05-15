@@ -22,9 +22,24 @@ import type { TodoChannelEvent } from "../modules/todo";
 import type { BashChannelEvent } from "../modules/bash";
 import type { LspChannelEvent } from "../modules/lsp";
 import type { RulesChannelEvent } from "../modules/rules";
-import type { RpcClientAPI, TreeEntry } from "@dyyz1993/pi-coding-agent";
+import type { RpcClientAPI, TreeEntry, ChannelTypeRegistry } from "@dyyz1993/pi-coding-agent";
 
 type McpServerInfo = Awaited<ReturnType<RpcClientAPI["getMcpServers"]>>[number];
+
+type ChannelMethodKeys<CN extends keyof ChannelTypeRegistry> = keyof NonNullable<
+  ChannelTypeRegistry[CN]["methods"]
+> &
+  string;
+
+type ChannelMethodParams<
+  CN extends keyof ChannelTypeRegistry,
+  MN extends ChannelMethodKeys<CN>,
+> = NonNullable<ChannelTypeRegistry[CN]["methods"]>[MN] extends { params: infer P } ? P : unknown;
+
+type ChannelMethodReturn<
+  CN extends keyof ChannelTypeRegistry,
+  MN extends ChannelMethodKeys<CN>,
+> = NonNullable<ChannelTypeRegistry[CN]["methods"]>[MN] extends { return: infer R } ? R : unknown;
 import type { CoordinatorMethodCall, CoordinatorChannelEvent } from "../modules/coordinator";
 import { createLogger } from "../lib/logger";
 import { config } from "../../server-config";
@@ -1800,6 +1815,20 @@ export class AgentProcessManager {
     const ch = managed.client.channel(channelName);
     ch.send(data);
   }
+
+  callChannel<CN extends keyof ChannelTypeRegistry, MN extends ChannelMethodKeys<CN>>(
+    sessionId: string,
+    channelName: CN,
+    method: MN,
+    params: ChannelMethodParams<CN, MN>,
+  ): Promise<ChannelMethodReturn<CN, MN>>;
+
+  callChannel(
+    sessionId: string,
+    channelName: string,
+    method: string,
+    params: Record<string, unknown>,
+  ): Promise<unknown>;
 
   async callChannel(
     sessionId: string,

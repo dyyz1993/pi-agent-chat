@@ -17,9 +17,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
         maxContinueCount: 0,
         activeGuards: [],
       };
-    return pm.callChannel(sessionId, "supervisor", "getStatus", {}) as Promise<
-      import("../modules/supervisor").SupervisorStatus
-    >;
+    return pm.callChannel(sessionId, "supervisor", "getStatus", {});
   });
 
   r("supervisor.requestPause", async (params) => {
@@ -30,51 +28,42 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     };
     const pm = getProcessManager();
     if (!pm) return { scheduled: false };
-    return pm.callChannel(sessionId, "supervisor", "requestPause", { delayMs, reason }) as Promise<{
-      scheduled: boolean;
-      scheduledAt?: number;
-    }>;
+    return pm.callChannel(sessionId, "supervisor", "requestPause", { delayMs, reason });
   });
 
   r("supervisor.cancelPause", async (params) => {
     const { sessionId } = params as { sessionId: string };
     const pm = getProcessManager();
     if (!pm) return { cancelled: false };
-    return pm.callChannel(sessionId, "supervisor", "cancelPause", {}) as Promise<{
-      cancelled: boolean;
-    }>;
+    return pm.callChannel(sessionId, "supervisor", "cancelPause", {});
   });
 
   r("supervisor.forceContinue", async (params) => {
     const { sessionId, reason } = params as { sessionId: string; reason?: string };
     const pm = getProcessManager();
     if (!pm) return { triggered: false };
-    return pm.callChannel(sessionId, "supervisor", "forceContinue", { reason }) as Promise<{
-      triggered: boolean;
-    }>;
+    return pm.callChannel(sessionId, "supervisor", "forceContinue", { reason });
   });
 
   r("supervisor.disable", async (params) => {
     const { sessionId } = params as { sessionId: string };
     const pm = getProcessManager();
     if (!pm) return { disabled: false };
-    return pm.callChannel(sessionId, "supervisor", "disable", {}) as Promise<{ disabled: boolean }>;
+    return pm.callChannel(sessionId, "supervisor", "disable", {});
   });
 
   r("supervisor.enable", async (params) => {
     const { sessionId } = params as { sessionId: string };
     const pm = getProcessManager();
     if (!pm) return { enabled: false };
-    return pm.callChannel(sessionId, "supervisor", "enable", {}) as Promise<{ enabled: boolean }>;
+    return pm.callChannel(sessionId, "supervisor", "enable", {});
   });
 
   r("supervisor.getTaskReport", async (params) => {
     const { sessionId } = params as { sessionId: string };
     const pm = getProcessManager();
     if (!pm) return { tasks: [] };
-    return pm.callChannel(sessionId, "supervisor", "getTaskReport", {}) as Promise<{
-      tasks: import("../modules/supervisor").TaskReport[];
-    }>;
+    return pm.callChannel(sessionId, "supervisor", "getTaskReport", {});
   });
 
   r("supervisor.checkToolStatus", async (params) => {
@@ -90,6 +79,6 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       toolName,
       channelName,
       method,
-    }) as Promise<{ reachable: boolean; status?: string; error?: string }>;
+    });
   });
 }
