@@ -149,14 +149,12 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
       const currentResult = (await apiClient.call("agent.getCurrentAgent", { sessionId })) as {
         agentName: string | null;
       };
-      const agentName = currentResult.agentName;
-      if (agentName && typeof agentName === "string") {
-        set((state) => ({
-          currentAgentBySession: { ...state.currentAgentBySession, [sessionId]: agentName },
-        }));
-        get().fetchAgentDetail(sessionId);
-        get().fetchAllTools(sessionId);
-      }
+      const agentName = currentResult.agentName ?? "build";
+      set((state) => ({
+        currentAgentBySession: { ...state.currentAgentBySession, [sessionId]: agentName },
+      }));
+      get().fetchAgentDetail(sessionId);
+      get().fetchAllTools(sessionId);
       log.info("fetched agents", {
         count: agents.length,
         session: sessionId,

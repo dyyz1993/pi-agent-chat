@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -367,13 +367,20 @@ export function AgentPanel() {
   const allTools = sessionId ? allToolsBySession[sessionId] : [];
   const currentAgentName = sessionId ? currentAgentBySession[sessionId] : undefined;
 
-  // Auto-load detail when panel opens
+  // Auto-load detail when agent changes or panel first renders
   const handleRefresh = useCallback(() => {
     if (sessionId) {
       fetchAgentDetail(sessionId);
       fetchAllTools(sessionId);
     }
   }, [sessionId, fetchAgentDetail, fetchAllTools]);
+
+  useEffect(() => {
+    if (sessionId && currentAgentName) {
+      fetchAgentDetail(sessionId);
+      fetchAllTools(sessionId);
+    }
+  }, [sessionId, currentAgentName, fetchAgentDetail, fetchAllTools]);
 
   if (!sessionId) {
     return (
