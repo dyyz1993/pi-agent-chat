@@ -32,6 +32,8 @@ import { TokenStatusBar } from "./TokenStatusBar";
 import { MessageListView } from "./MessageListView";
 import { MessageSelectionBar } from "./MessageSelectionBar";
 import { QuickActionToolbar } from "./QuickActionToolbar";
+import { CommandPopup } from "./CommandPopup";
+import { useCommandPopup } from "../../hooks/use-command-popup";
 import { ScrollToolbar } from "./ScrollToolbar";
 import { QueueCards } from "./QueueCards";
 import { MarkdownExpandOverlay } from "./MarkdownExpandOverlay";
@@ -124,6 +126,7 @@ export function ChatPanel() {
   const hasNoModel = effectiveStatus === "idle" && !currentModel;
   const breakpoint = useLayoutStore((s) => s.breakpoint);
   const isMobileOrTablet = breakpoint === "mobile" || breakpoint === "tablet";
+  const commandPopup = useCommandPopup();
 
   const streamVersion = useChatStore((s) => s.streamContentVersion);
   const historyLoadVersion = useChatStore((s) => s.historyLoadVersion);
@@ -477,7 +480,7 @@ export function ChatPanel() {
       {activeSessionId && !isViewingSubagent && <QueueCards sessionId={activeSessionId} />}
 
       <div
-        className="px-3 pt-2 pb-1.5 flex-shrink-0 flex items-stretch gap-1.5 bg-gray-100 dark:bg-gray-900 border-t border-gray-300 dark:border-gray-800"
+        className="px-3 pt-2 pb-1.5 flex-shrink-0 flex items-stretch gap-1.5 bg-gray-100 dark:bg-gray-900 border-t border-gray-300 dark:border-gray-800 relative"
         style={{ paddingBottom: "calc(0.375rem + env(safe-area-inset-bottom))" }}
       >
         {!isViewingSubagent && (
@@ -501,6 +504,12 @@ export function ChatPanel() {
                   onSend={handleSend}
                   sessionId={activeSessionId ?? ""}
                   disabled={!sessionReady}
+                  onTriggerPopup={!isMobileOrTablet ? commandPopup.openPopup : undefined}
+                  popupOpen={!isMobileOrTablet && !!commandPopup.popupMode}
+                  onPopupConfirm={commandPopup.confirmSelection}
+                  onPopupCancel={commandPopup.closePopup}
+                  onPopupArrowUp={commandPopup.navigateUp}
+                  onPopupArrowDown={commandPopup.navigateDown}
                 />
 
                 <div className="flex flex-col gap-1.5 shrink-0 justify-between py-1">
@@ -572,6 +581,23 @@ export function ChatPanel() {
               {t("fork")}
             </button>
           </div>
+        )}
+        {!isMobileOrTablet && !isViewingSubagent && (
+          <CommandPopup
+            popupMode={commandPopup.popupMode}
+            atTab={commandPopup.atTab}
+            items={commandPopup.items}
+            loading={commandPopup.loading}
+            activeIndex={commandPopup.activeIndex}
+            query={commandPopup.query}
+            fileBreadcrumbs={commandPopup.fileBreadcrumbs}
+            onSetAtTab={commandPopup.setAtTab}
+            onSelect={commandPopup.handleSelect}
+            onClose={commandPopup.closePopup}
+            onBreadcrumb={commandPopup.handleBreadcrumb}
+            onListKeyDown={commandPopup.handleListKeyDown}
+            onSetActiveIndex={commandPopup.setActiveIndex}
+          />
         )}
       </div>
     </div>

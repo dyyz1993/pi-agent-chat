@@ -225,6 +225,7 @@
   "quickAction.skills": "Skills",
   "quickAction.rootDir": "Root",
   "quickAction.noMatchResults": "No matching results",
+  "quickAction.searchPlaceholder": "Search commands & skills...",
 
   "tokenStatus.working": "Working",
   "tokenStatus.needHelp": "Need help",

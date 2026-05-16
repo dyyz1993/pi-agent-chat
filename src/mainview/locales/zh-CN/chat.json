@@ -225,6 +225,7 @@
   "quickAction.skills": "技能",
   "quickAction.rootDir": "根目录",
   "quickAction.noMatchResults": "没有匹配结果",
+  "quickAction.searchPlaceholder": "搜索命令和技能...",
 
   "tokenStatus.working": "工作中",
   "tokenStatus.needHelp": "需要协助",

@@ -13,10 +13,28 @@ interface InputBarProps {
   onSend?: () => void;
   disabled?: boolean;
   sessionId?: string;
+  onTriggerPopup?: (mode: "at" | "slash") => void;
+  popupOpen?: boolean;
+  onPopupConfirm?: () => void;
+  onPopupCancel?: () => void;
+  onPopupArrowUp?: () => void;
+  onPopupArrowDown?: () => void;
 }
 
 export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function InputBar(
-  { value = "", onChange, onSend, disabled, sessionId = "" },
+  {
+    value = "",
+    onChange,
+    onSend,
+    disabled,
+    sessionId = "",
+    onTriggerPopup,
+    popupOpen,
+    onPopupConfirm,
+    onPopupCancel,
+    onPopupArrowUp,
+    onPopupArrowDown,
+  },
   ref,
 ) {
   const { t } = useTranslation("chat");
@@ -29,18 +47,30 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
 
   const currentValue = onChange ? value : internalValue;
 
-  const handleChange = useCallback(
-    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      const v = e.target.value;
-      if (onChange) onChange(v);
-      else setInternalValue(v);
-      resetIndex();
-    },
-    [onChange, resetIndex],
-  );
-
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      if (popupOpen) {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          onPopupConfirm?.();
+          return;
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          onPopupCancel?.();
+          return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          onPopupArrowUp?.();
+          return;
+        }
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          onPopupArrowDown?.();
+          return;
+        }
+      }
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         if (!disabled && currentValue.trim()) {
@@ -49,7 +79,46 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
         }
       }
     },
-    [disabled, onSend, currentValue, saveToHistory],
+    [
+      disabled,
+      onSend,
+      currentValue,
+      saveToHistory,
+      popupOpen,
+      onPopupConfirm,
+      onPopupCancel,
+      onPopupArrowUp,
+      onPopupArrowDown,
+    ],
+  );
+
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      const prev = currentValue;
+      const next = e.target.value;
+      if (onChange) onChange(next);
+      else setInternalValue(next);
+      resetIndex();
+
+      const isSingleCharAdded = prev.length === next.length - 1;
+      if (isSingleCharAdded) {
+        const added = next[next.length - 1];
+
+        if (popupOpen && added === " ") {
+          onPopupCancel?.();
+          return;
+        }
+
+        if (onTriggerPopup && (added === "@" || added === "/")) {
+          const insertPos = next.length - 1;
+          const canTrigger = insertPos === 0 || next[insertPos - 1] === " ";
+          if (canTrigger) {
+            onTriggerPopup(added === "@" ? "at" : "slash");
+          }
+        }
+      }
+    },
+    [onChange, resetIndex, onTriggerPopup, currentValue, popupOpen, onPopupCancel],
   );
 
   const handleClear = useCallback(() => {
