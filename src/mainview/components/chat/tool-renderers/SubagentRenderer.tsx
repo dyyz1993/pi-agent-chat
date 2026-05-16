@@ -53,12 +53,12 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
   return (
     <div
       data-block-id={blockId}
-      className={`rounded-none overflow-hidden border-x-0 border-t border-b cursor-pointer transition-colors ${
+      className={`cursor-pointer transition-colors ${
         isRunning
-          ? "border-purple-500/30 bg-purple-50 dark:bg-purple-950/15"
+          ? "bg-purple-500/5 dark:bg-purple-400/5"
           : isError
-            ? "border-red-500/20 bg-red-50 dark:bg-red-950/10"
-            : "border-purple-300/20 dark:border-purple-700/20 bg-purple-50/50 dark:bg-purple-950/8 hover:bg-purple-50 dark:hover:bg-purple-950/15"
+            ? "bg-red-500/5 dark:bg-red-400/5"
+            : "hover:bg-gray-200/40 dark:hover:bg-gray-800/40"
       }`}
       onClick={handleViewSubagent}
     >
@@ -101,10 +101,10 @@ export const Header = memo(function Header({
       <div
         className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 mt-0.5 ${
           isRunning
-            ? "bg-purple-100 dark:bg-purple-500/20 border border-purple-300 dark:border-purple-500/30"
+            ? "bg-purple-500/10 dark:bg-purple-400/10"
             : isError
-              ? "bg-red-100 dark:bg-red-500/15 border border-red-300 dark:border-red-500/20"
-              : "bg-purple-100/60 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/15"
+              ? "bg-red-500/10 dark:bg-red-400/10"
+              : "bg-purple-500/5 dark:bg-purple-400/5"
         }`}
       >
         {(() => {
@@ -163,7 +163,7 @@ export const StatusChip = memo(function StatusChip({
   const { t } = useTranslation("chat");
   if (isRunning) {
     return (
-      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] bg-purple-100 dark:bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-300 dark:border-purple-500/20">
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] bg-purple-500/10 dark:bg-purple-400/15 text-purple-600 dark:text-purple-400">
         <span className="w-1 h-1 rounded-full bg-purple-600 dark:bg-purple-400 animate-pulse" />
         {t("subagent.running")}
       </span>
@@ -171,7 +171,7 @@ export const StatusChip = memo(function StatusChip({
   }
   if (isDone) {
     return (
-      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] bg-emerald-100 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-500/20">
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] bg-emerald-500/10 dark:bg-emerald-400/15 text-emerald-600 dark:text-emerald-400">
         <span className="w-1 h-1 rounded-full bg-emerald-600 dark:bg-emerald-400" />
         {t("subagent.completed")}
       </span>
@@ -179,7 +179,7 @@ export const StatusChip = memo(function StatusChip({
   }
   if (isError) {
     return (
-      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] bg-red-100 dark:bg-red-500/15 text-red-600 dark:text-red-400 border border-red-300 dark:border-red-500/20">
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] bg-red-500/10 dark:bg-red-400/15 text-red-600 dark:text-red-400">
         {t("subagent.error")}
       </span>
     );
@@ -194,7 +194,7 @@ export const RunningInstruction = memo(function RunningInstruction({
 }) {
   const { t } = useTranslation("chat");
   return (
-    <div className="px-3 pb-2 pt-1 border-t border-purple-300/20 dark:border-purple-500/10">
+    <div className="px-3 pb-2 pt-1">
       <div className="flex items-center gap-1.5 text-[11px] text-purple-500/70 dark:text-purple-400/60">
         <ArrowRight className="w-3 h-3 animate-pulse" />
         <span className="truncate">{instruction.slice(0, 200) || t("subagent.executing")}</span>
@@ -212,7 +212,7 @@ export const OutputSection = memo(function OutputSection({
 }) {
   const { t } = useTranslation("chat");
   return (
-    <details className="group border-t border-purple-300/20 dark:border-purple-500/10">
+    <details className="group">
       <summary className="px-3 py-1 text-[11px] text-gray-400 dark:text-gray-500 cursor-pointer hover:text-gray-600 dark:hover:text-gray-400 select-none flex items-center gap-1.5">
         <svg
           className="w-3 h-3 transition-transform group-open:rotate-90 shrink-0"
