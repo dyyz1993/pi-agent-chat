@@ -15,6 +15,7 @@ import {
   Lock,
   Unlock,
   Info,
+  RefreshCw,
 } from "lucide-react";
 import { useAgentStore, type AgentDetail, type AgentToolInfo } from "../../stores/use-agent-store";
 import { useSessionStore } from "../../stores/use-session-store";
@@ -358,9 +359,11 @@ export function AgentPanel() {
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const agentDetailBySession = useAgentStore((s) => s.agentDetailBySession);
   const allToolsBySession = useAgentStore((s) => s.allToolsBySession);
+  const liveSystemPromptBySession = useAgentStore((s) => s.liveSystemPromptBySession);
   const loadingDetail = useAgentStore((s) => s.loadingDetail);
   const fetchAgentDetail = useAgentStore((s) => s.fetchAgentDetail);
   const fetchAllTools = useAgentStore((s) => s.fetchAllTools);
+  const fetchSystemPrompt = useAgentStore((s) => s.fetchSystemPrompt);
   const currentAgentBySession = useAgentStore((s) => s.currentAgentBySession);
 
   const sessionId = activeSessionId ?? "";
@@ -470,6 +473,23 @@ export function AgentPanel() {
           <PromptViewer agent={agent} />
         </Section>
       )}
+
+      <Section title="Live System Prompt" icon={Eye} defaultOpen={false}>
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => fetchSystemPrompt(sessionId)}
+              className="flex items-center gap-1 text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
+            >
+              <RefreshCw className="w-3 h-3" />
+              <span>Refresh</span>
+            </button>
+          </div>
+          <pre className="text-xs text-[var(--color-text-secondary)] whitespace-pre-wrap break-words bg-[var(--color-bg-elevated)] rounded p-2 font-mono leading-relaxed max-h-[300px] overflow-y-auto">
+            {liveSystemPromptBySession[sessionId] || "Click refresh to load"}
+          </pre>
+        </div>
+      </Section>
 
       {agent.variables && Object.keys(agent.variables).length > 0 && (
         <Section title="Variables" icon={Cpu} defaultOpen={false}>

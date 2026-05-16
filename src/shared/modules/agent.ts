@@ -381,6 +381,10 @@ export interface AgentMethods {
       }>;
     };
   };
+  "agent.getSystemPrompt": {
+    params: { sessionId: string };
+    result: { systemPrompt: string; appendSystemPrompt?: string[] };
+  };
 }
 
 export interface AgentMessageForUI {

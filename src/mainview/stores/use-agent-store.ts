@@ -77,6 +77,7 @@ interface AgentState {
   loaded: boolean;
   agentDetailBySession: Record<string, AgentDetail>;
   allToolsBySession: Record<string, AgentToolInfo[]>;
+  liveSystemPromptBySession: Record<string, string>;
   loadingDetail: boolean;
   setAgentForSession: (sessionId: string, name: string) => void;
   setAgents: (agents: AgentInfo[]) => void;
@@ -85,6 +86,7 @@ interface AgentState {
   getCurrentAgentForSession: (sessionId: string) => string;
   fetchAgentDetail: (sessionId: string) => Promise<void>;
   fetchAllTools: (sessionId: string) => Promise<void>;
+  fetchSystemPrompt: (sessionId: string) => Promise<void>;
   clearAgentDetail: (sessionId: string) => void;
 }
 
@@ -113,6 +115,7 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
   switchingBySession: {},
   agentDetailBySession: {},
   allToolsBySession: {},
+  liveSystemPromptBySession: {},
   loadingDetail: false,
   loaded: false,
 
@@ -255,6 +258,7 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
           [sessionId]: result.agent as AgentDetail,
         },
       }));
+      get().fetchSystemPrompt(sessionId);
     } catch {
       // silently fail - detail is optional
     } finally {
@@ -269,6 +273,20 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
         allToolsBySession: {
           ...state.allToolsBySession,
           [sessionId]: result.tools as AgentToolInfo[],
+        },
+      }));
+    } catch {
+      // silently fail
+    }
+  },
+
+  fetchSystemPrompt: async (sessionId) => {
+    try {
+      const result = await apiClient.call("agent.getSystemPrompt", { sessionId });
+      set((state) => ({
+        liveSystemPromptBySession: {
+          ...state.liveSystemPromptBySession,
+          [sessionId]: (result as { systemPrompt: string }).systemPrompt,
         },
       }));
     } catch {

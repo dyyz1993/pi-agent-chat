@@ -1591,6 +1591,16 @@ export class AgentProcessManager {
     ).getAllTools();
   }
 
+  async getSystemPrompt(sessionId: string) {
+    const managed = this.clients.get(sessionId);
+    if (!managed) throw new Error(`No client for session ${sessionId}`);
+    return (
+      managed.client as unknown as {
+        getSystemPrompt: () => Promise<unknown>;
+      }
+    ).getSystemPrompt();
+  }
+
   async getSettings(sessionId: string, scope?: string): Promise<Record<string, unknown>> {
     const managed = this.clients.get(sessionId);
     if (!managed) return {};
