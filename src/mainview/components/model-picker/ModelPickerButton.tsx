@@ -54,6 +54,12 @@ export function ModelPickerButton({
     (v: boolean | ((prev: boolean) => boolean)) => {
       _setOpen((prev) => {
         const next = typeof v === "function" ? v(prev) : v;
+        if (next && !prev) {
+          setSearchQuery("");
+          if (useSessionStore.getState().modelFavorites.size > 0) {
+            setShowFavoritesOnly(true);
+          }
+        }
         if (next !== prev) onOpenChange?.(next);
         return next;
       });
@@ -66,10 +72,12 @@ export function ModelPickerButton({
     if (!open || !triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
     const dropdownMaxH = 280;
+    const minDropdownWidth = 280;
+    const dropdownWidth = Math.max(rect.width, minDropdownWidth);
     const style: React.CSSProperties = {
       position: "fixed",
-      left: rect.left,
-      width: rect.width,
+      left: Math.max(4, Math.min(rect.left, window.innerWidth - dropdownWidth - 4)),
+      width: dropdownWidth,
       maxHeight: dropdownMaxH,
       zIndex: 9999,
     };

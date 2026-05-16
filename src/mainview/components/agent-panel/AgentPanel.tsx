@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useAgentStore, type AgentDetail, type AgentToolInfo } from "../../stores/use-agent-store";
 import { useSessionStore } from "../../stores/use-session-store";
+import { useLayoutStore } from "../../layouts/use-layout-store";
 import { copyToClipboard } from "../../utils/clipboard";
 
 // ---------------------------------------------------------------------------
@@ -341,15 +342,20 @@ export function AgentPanel() {
     if (sessionId) {
       fetchAgentDetail(sessionId);
       fetchAllTools(sessionId);
+      fetchSystemPrompt(sessionId);
     }
-  }, [sessionId, fetchAgentDetail, fetchAllTools]);
+  }, [sessionId, fetchAgentDetail, fetchAllTools, fetchSystemPrompt]);
 
+  const activePanelTab = useLayoutStore((s) => s.activePanelTab);
+
+  // Auto-load when tab becomes active
   useEffect(() => {
-    if (sessionId && currentAgentName) {
+    if (activePanelTab === "agent" && sessionId && currentAgentName) {
       fetchAgentDetail(sessionId);
       fetchAllTools(sessionId);
+      fetchSystemPrompt(sessionId);
     }
-  }, [sessionId, currentAgentName, fetchAgentDetail, fetchAllTools]);
+  }, [activePanelTab, sessionId, currentAgentName]);
 
   if (!sessionId) {
     return (
