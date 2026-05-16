@@ -42,7 +42,7 @@
   "dependencies": {
     "@dyyz1993/pi-agent-core": "^0.74.34",
     "@dyyz1993/pi-ai": "^0.74.34",
-    "@dyyz1993/pi-coding-agent": "^0.74.36",
+    "@dyyz1993/pi-coding-agent": "0.74.43",
     "@dyyz1993/pi-tui": "^0.74.8",
     "@dyyz1993/rpc-core": "^1.3.0",
     "@tanstack/react-virtual": "^3.13.24",
