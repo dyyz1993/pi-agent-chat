@@ -7,7 +7,6 @@ import {
   Shield,
   FileText,
   Cpu,
-  Globe,
   Eye,
   EyeOff,
   Copy,
@@ -16,6 +15,9 @@ import {
   Unlock,
   Info,
   RefreshCw,
+  Settings2,
+  Variable,
+  Sparkles,
 } from "lucide-react";
 import { useAgentStore, type AgentDetail, type AgentToolInfo } from "../../stores/use-agent-store";
 import { useSessionStore } from "../../stores/use-session-store";
@@ -33,6 +35,14 @@ const AGENT_COLORS: Record<string, { bg: string; text: string; dot: string }> = 
   purple: { bg: "bg-purple-500/15", text: "text-purple-400", dot: "bg-purple-400" },
   orange: { bg: "bg-orange-500/15", text: "text-orange-400", dot: "bg-orange-400" },
 };
+
+function fieldValue(value: unknown): string {
+  if (value === undefined || value === null) return "\u2014";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (Array.isArray(value)) return value.length > 0 ? value.join(", ") : "\u2014";
+  if (typeof value === "string") return value.trim() || "\u2014";
+  return String(value);
+}
 
 function getSourceLabel(source: string): string {
   const map: Record<string, string> = {
@@ -54,6 +64,21 @@ function getModeLabel(mode?: string): string {
     all: "All",
   };
   return map[mode] ?? mode;
+}
+
+function FieldRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <span className="text-[var(--color-text-secondary)] min-w-[80px]">{label}:</span>
+      <span
+        className={`text-[var(--color-text-primary)] ${mono ? "font-mono" : ""} ${
+          value === "\u2014" ? "opacity-50" : ""
+        }`}
+      >
+        {value}
+      </span>
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -92,53 +117,6 @@ function Section({
 }
 
 // ---------------------------------------------------------------------------
-// Info Card
-// ---------------------------------------------------------------------------
-
-function AgentInfoCard({ agent }: { agent: AgentDetail }) {
-  const colorStyle = AGENT_COLORS[agent.color ?? ""] ?? {
-    bg: "bg-[var(--color-bg-elevated)]",
-    text: "text-[var(--color-text-primary)]",
-    dot: "bg-[var(--color-text-secondary)]",
-  };
-
-  return (
-    <div className={`rounded-lg p-3 ${colorStyle.bg} space-y-2`}>
-      <div className="flex items-center gap-2">
-        <span className={`w-2.5 h-2.5 rounded-full ${colorStyle.dot}`} />
-        <span className={`text-base font-semibold ${colorStyle.text}`}>{agent.name}</span>
-        <span className="ml-auto text-xs text-[var(--color-text-secondary)] bg-[var(--color-bg-primary)] rounded px-1.5 py-0.5">
-          {getSourceLabel(agent.source)}
-        </span>
-      </div>
-      {agent.description && (
-        <p className="text-xs text-[var(--color-text-secondary)]">{agent.description}</p>
-      )}
-      <div className="flex flex-wrap gap-1.5 text-xs">
-        <span className="bg-[var(--color-bg-primary)] rounded px-1.5 py-0.5 text-[var(--color-text-secondary)]">
-          {getModeLabel(agent.mode)}
-        </span>
-        {agent.tier && (
-          <span className="bg-[var(--color-bg-primary)] rounded px-1.5 py-0.5 text-[var(--color-text-secondary)]">
-            Tier: {agent.tier}
-          </span>
-        )}
-        {agent.thinkingLevel && (
-          <span className="bg-[var(--color-bg-primary)] rounded px-1.5 py-0.5 text-[var(--color-text-secondary)]">
-            Think: {agent.thinkingLevel}
-          </span>
-        )}
-      </div>
-      {agent.filePath && (
-        <div className="text-xs text-[var(--color-text-secondary)] truncate" title={agent.filePath}>
-          📄 {agent.filePath}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Tool List
 // ---------------------------------------------------------------------------
 
@@ -148,92 +126,50 @@ function ToolList({ agent, allTools }: { agent: AgentDetail; allTools: AgentTool
   const tools = allTools ?? [];
 
   return (
-    <div className="space-y-1">
-      {tools.map((tool) => {
-        const isAllowed = allowedSet.size === 0 || allowedSet.has(tool.name);
-        const isDisallowed = disallowedSet.has(tool.name);
-        return (
-          <div
-            key={tool.name}
-            className={`flex items-center gap-2 text-xs px-2 py-1.5 rounded ${
-              isDisallowed
-                ? "bg-red-500/10 text-red-400"
-                : isAllowed
-                  ? "text-[var(--color-text-primary)]"
-                  : "text-[var(--color-text-secondary)] opacity-50"
-            }`}
-          >
-            {isDisallowed ? (
-              <Lock className="w-3 h-3 flex-shrink-0" />
-            ) : isAllowed ? (
-              <Unlock className="w-3 h-3 flex-shrink-0 text-green-400" />
-            ) : (
-              <Lock className="w-3 h-3 flex-shrink-0 opacity-30" />
-            )}
-            <span className="font-mono">{tool.name}</span>
-            {tool.description && (
-              <span className="text-[var(--color-text-secondary)] truncate ml-auto max-w-[60%]">
-                {tool.description}
-              </span>
-            )}
-          </div>
-        );
-      })}
-      {allTools.length === 0 && (
-        <div className="text-xs text-[var(--color-text-secondary)] italic">No tools loaded</div>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Permission Info
-// ---------------------------------------------------------------------------
-
-function PermissionInfo({ agent }: { agent: AgentDetail }) {
-  const modeLabels: Record<string, string> = {
-    auto: "Auto (default)",
-    acceptEdits: "Accept Edits",
-    plan: "Plan (read-only)",
-    dontAsk: "Don't Ask",
-    "always-allow": "Always Allow",
-    "always-deny": "Always Deny",
-  };
-
-  return (
-    <div className="space-y-2 text-xs">
-      {agent.permissionMode && (
-        <div className="flex items-center gap-2">
-          <Shield className="w-3.5 h-3.5 text-amber-400" />
-          <span className="text-[var(--color-text-secondary)]">Mode:</span>
-          <span className="text-[var(--color-text-primary)] font-medium">
-            {modeLabels[agent.permissionMode] ?? agent.permissionMode}
-          </span>
-        </div>
-      )}
-      {agent.tools && agent.tools.length > 0 && (
-        <div className="flex items-start gap-2">
-          <Unlock className="w-3.5 h-3.5 text-green-400 mt-0.5" />
-          <span className="text-[var(--color-text-secondary)]">Allowed:</span>
-          <span className="text-[var(--color-text-primary)] font-mono">
-            {agent.tools.join(", ")}
-          </span>
-        </div>
-      )}
-      {agent.disallowedTools && agent.disallowedTools.length > 0 && (
-        <div className="flex items-start gap-2">
-          <Lock className="w-3.5 h-3.5 text-red-400 mt-0.5" />
-          <span className="text-[var(--color-text-secondary)]">Blocked:</span>
-          <span className="text-[var(--color-text-primary)] font-mono">
-            {agent.disallowedTools.join(", ")}
-          </span>
-        </div>
-      )}
-      {!agent.permissionMode && !agent.tools?.length && !agent.disallowedTools?.length && (
-        <div className="text-[var(--color-text-secondary)] italic">
-          No restrictions (full access)
-        </div>
-      )}
+    <div className="space-y-2">
+      <div className="space-y-1">
+        {tools.map((tool) => {
+          const isAllowed = allowedSet.size === 0 || allowedSet.has(tool.name);
+          const isDisallowed = disallowedSet.has(tool.name);
+          return (
+            <div
+              key={tool.name}
+              className={`flex items-center gap-2 text-xs px-2 py-1.5 rounded ${
+                isDisallowed
+                  ? "bg-red-500/10 text-red-400"
+                  : isAllowed
+                    ? "text-[var(--color-text-primary)]"
+                    : "text-[var(--color-text-secondary)] opacity-50"
+              }`}
+            >
+              {isDisallowed ? (
+                <Lock className="w-3 h-3 flex-shrink-0" />
+              ) : isAllowed ? (
+                <Unlock className="w-3 h-3 flex-shrink-0 text-green-400" />
+              ) : (
+                <Lock className="w-3 h-3 flex-shrink-0 opacity-30" />
+              )}
+              <span className="font-mono">{tool.name}</span>
+              {tool.description && (
+                <span className="text-[var(--color-text-secondary)] truncate ml-auto max-w-[60%]">
+                  {tool.description}
+                </span>
+              )}
+            </div>
+          );
+        })}
+        {allTools.length === 0 && (
+          <div className="text-xs text-[var(--color-text-secondary)] italic">No tools loaded</div>
+        )}
+      </div>
+      <div className="pt-1 border-t border-[var(--color-border-primary)] space-y-1">
+        <FieldRow
+          label="Allowed filter"
+          value={agent.tools && agent.tools.length > 0 ? agent.tools.join(", ") : "\u5168\u90e8"}
+          mono
+        />
+        <FieldRow label="Blocked" value={fieldValue(agent.disallowedTools)} mono />
+      </div>
     </div>
   );
 }
@@ -245,9 +181,7 @@ function PermissionInfo({ agent }: { agent: AgentDetail }) {
 function HooksList({ agent }: { agent: AgentDetail }) {
   const hooks = agent.hooks;
   if (!hooks || Object.keys(hooks).length === 0) {
-    return (
-      <div className="text-xs text-[var(--color-text-secondary)] italic">No hooks configured</div>
-    );
+    return <div className="text-xs text-[var(--color-text-secondary)] opacity-50">{"\u2014"}</div>;
   }
 
   return (
@@ -290,9 +224,7 @@ function PromptViewer({ agent }: { agent: AgentDetail }) {
   }, [agent.systemPrompt]);
 
   if (!agent.systemPrompt) {
-    return (
-      <div className="text-xs text-[var(--color-text-secondary)] italic">No custom prompt</div>
-    );
+    return <div className="text-xs text-[var(--color-text-secondary)] opacity-50">{"\u2014"}</div>;
   }
 
   const preview = agent.systemPrompt.slice(0, 120);
@@ -331,12 +263,14 @@ function PromptViewer({ agent }: { agent: AgentDetail }) {
 }
 
 // ---------------------------------------------------------------------------
-// Agent Variables
+// Variables Section
 // ---------------------------------------------------------------------------
 
 function VariablesSection({ agent }: { agent: AgentDetail }) {
   const vars = agent.variables;
-  if (!vars || Object.keys(vars).length === 0) return null;
+  if (!vars || Object.keys(vars).length === 0) {
+    return <div className="text-xs text-[var(--color-text-secondary)] opacity-50">{"\u2014"}</div>;
+  }
 
   return (
     <div className="space-y-1">
@@ -347,6 +281,38 @@ function VariablesSection({ agent }: { agent: AgentDetail }) {
           <span className="text-[var(--color-text-primary)] truncate">{value}</span>
         </div>
       ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Initial Prompt Viewer
+// ---------------------------------------------------------------------------
+
+function InitialPromptViewer({ value }: { value: string | undefined }) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (!value) {
+    return <span className="text-xs text-[var(--color-text-primary)] opacity-50">{"\u2014"}</span>;
+  }
+
+  if (value.length <= 80) {
+    return <span className="text-xs text-[var(--color-text-primary)] font-mono">{value}</span>;
+  }
+
+  return (
+    <div className="space-y-1">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="text-xs text-[var(--color-accent)] hover:underline"
+      >
+        {expanded ? "Collapse" : `${value.length} chars \u2014 Expand`}
+      </button>
+      {expanded && (
+        <pre className="text-xs text-[var(--color-text-primary)] bg-[var(--color-bg-elevated)] rounded p-2 font-mono whitespace-pre-wrap max-h-[200px] overflow-y-auto">
+          {value}
+        </pre>
+      )}
     </div>
   );
 }
@@ -371,7 +337,6 @@ export function AgentPanel() {
   const allTools = sessionId ? (allToolsBySession[sessionId] ?? []) : [];
   const currentAgentName = sessionId ? currentAgentBySession[sessionId] : undefined;
 
-  // Auto-load detail when agent changes or panel first renders
   const handleRefresh = useCallback(() => {
     if (sessionId) {
       fetchAgentDetail(sessionId);
@@ -432,6 +397,8 @@ export function AgentPanel() {
     );
   }
 
+  const colorStyle = AGENT_COLORS[agent.color ?? ""] ?? null;
+
   return (
     <div className="h-full overflow-y-auto">
       {/* Header */}
@@ -448,32 +415,163 @@ export function AgentPanel() {
         </button>
       </div>
 
-      {/* Info Card */}
-      <div className="p-3">
-        <AgentInfoCard agent={agent} />
-      </div>
+      {/* Section 1: Basic Info */}
+      <Section title="Basic Info" icon={Info}>
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-[var(--color-text-secondary)] min-w-[80px]">Name:</span>
+            <span
+              className={`text-base font-semibold ${colorStyle ? colorStyle.text : "text-[var(--color-text-primary)]"}`}
+            >
+              {colorStyle && (
+                <span
+                  className={`inline-block w-2.5 h-2.5 rounded-full ${colorStyle.dot} mr-1.5`}
+                />
+              )}
+              {agent.name}
+            </span>
+          </div>
+          <div className="flex items-start gap-2 text-xs">
+            <span className="text-[var(--color-text-secondary)] min-w-[80px]">Description:</span>
+            <span className="text-[var(--color-text-primary)]">
+              {fieldValue(agent.description)}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-[var(--color-text-secondary)] min-w-[80px]">Source:</span>
+            <span className="text-xs bg-[var(--color-bg-elevated)] text-[var(--color-text-secondary)] rounded px-1.5 py-0.5">
+              {getSourceLabel(agent.source)}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-[var(--color-text-secondary)] min-w-[80px]">File path:</span>
+            {agent.filePath ? (
+              <span
+                className="text-[var(--color-text-primary)] font-mono text-[11px] truncate"
+                title={agent.filePath}
+              >
+                {agent.filePath}
+              </span>
+            ) : (
+              <span className="text-[var(--color-text-primary)] opacity-50">{"\u2014"}</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-[var(--color-text-secondary)] min-w-[80px]">Mode:</span>
+            <span className="text-xs bg-[var(--color-bg-elevated)] text-[var(--color-text-secondary)] rounded px-1.5 py-0.5">
+              {getModeLabel(agent.mode)}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-[var(--color-text-secondary)] min-w-[80px]">Color:</span>
+            {agent.color ? (
+              <span className="flex items-center gap-1.5 text-[var(--color-text-primary)]">
+                <span
+                  className={`w-2.5 h-2.5 rounded-full ${colorStyle?.dot ?? "bg-[var(--color-text-secondary)]"}`}
+                />
+                {agent.color}
+              </span>
+            ) : (
+              <span className="text-[var(--color-text-primary)] opacity-50">{"\u2014"}</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-[var(--color-text-secondary)] min-w-[80px]">Hidden:</span>
+            <span
+              className={`text-[var(--color-text-primary)] ${agent.hidden === undefined ? "opacity-50" : ""}`}
+            >
+              {fieldValue(agent.hidden)}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-[var(--color-text-secondary)] min-w-[80px]">Background:</span>
+            <span
+              className={`text-[var(--color-text-primary)] ${agent.background === undefined ? "opacity-50" : ""}`}
+            >
+              {fieldValue(agent.background)}
+            </span>
+          </div>
+        </div>
+      </Section>
 
-      {/* Sections */}
+      {/* Section 2: Model */}
+      <Section title="Model" icon={Cpu}>
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-[var(--color-text-secondary)] min-w-[80px]">Tier:</span>
+            {agent.tier ? (
+              <span className="text-xs bg-[var(--color-bg-elevated)] text-[var(--color-text-secondary)] rounded px-1.5 py-0.5">
+                {agent.tier}
+              </span>
+            ) : (
+              <span className="text-[var(--color-text-primary)] opacity-50">{"\u2014"}</span>
+            )}
+          </div>
+          <FieldRow label="Thinking" value={fieldValue(agent.thinkingLevel)} />
+          <FieldRow label="Model" value={fieldValue(agent.model)} mono />
+          <FieldRow label="Effort" value={fieldValue(agent.effort)} />
+        </div>
+      </Section>
+
+      {/* Section 3: Tools */}
       <Section title="Tools" icon={Wrench}>
         <ToolList agent={agent} allTools={allTools} />
       </Section>
 
+      {/* Section 4: Permissions */}
       <Section title="Permissions" icon={Shield}>
         <PermissionInfo agent={agent} />
       </Section>
 
-      {agent.hooks && Object.keys(agent.hooks).length > 0 && (
-        <Section title="Hooks" icon={FileText} defaultOpen={false}>
-          <HooksList agent={agent} />
+      {/* Section 5: Hooks */}
+      <Section title="Hooks" icon={FileText} defaultOpen={false}>
+        <HooksList agent={agent} />
+      </Section>
+
+      {/* Section 6: System Prompt */}
+      <Section title="System Prompt" icon={FileText} defaultOpen={false}>
+        <PromptViewer agent={agent} />
+      </Section>
+
+      {/* Section 7: Variables */}
+      {agent.variables && Object.keys(agent.variables).length > 0 && (
+        <Section title="Variables" icon={Variable} defaultOpen={false}>
+          <VariablesSection agent={agent} />
         </Section>
       )}
 
-      {agent.systemPrompt && (
-        <Section title="System Prompt" icon={FileText} defaultOpen={false}>
-          <PromptViewer agent={agent} />
-        </Section>
-      )}
+      {/* Section 8: Skills */}
+      <Section title="Skills" icon={Sparkles} defaultOpen={false}>
+        {agent.skills && agent.skills.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {agent.skills.map((skill) => (
+              <span
+                key={skill}
+                className="text-xs bg-[var(--color-bg-elevated)] text-[var(--color-text-primary)] rounded px-2 py-0.5"
+              >
+                {skill}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <div className="text-xs text-[var(--color-text-secondary)] opacity-50">{"\u2014"}</div>
+        )}
+      </Section>
 
+      {/* Section 9: Other Config */}
+      <Section title="Other Config" icon={Settings2} defaultOpen={false}>
+        <div className="space-y-1.5">
+          <FieldRow label="Max turns" value={fieldValue(agent.maxTurns)} />
+          <FieldRow label="Memory" value={fieldValue(agent.memory)} />
+          <FieldRow label="Isolation" value={fieldValue(agent.isolation)} />
+          <div className="flex items-start gap-2 text-xs">
+            <span className="text-[var(--color-text-secondary)] min-w-[80px]">Initial prompt:</span>
+            <InitialPromptViewer value={agent.initialPrompt} />
+          </div>
+        </div>
+      </Section>
+
+      {/* Section 10: Live System Prompt */}
       <Section title="Live System Prompt" icon={Eye} defaultOpen={false}>
         <div className="space-y-1.5">
           <div className="flex items-center gap-1.5">
@@ -490,88 +588,40 @@ export function AgentPanel() {
           </pre>
         </div>
       </Section>
+    </div>
+  );
+}
 
-      {agent.variables && Object.keys(agent.variables).length > 0 && (
-        <Section title="Variables" icon={Cpu} defaultOpen={false}>
-          <VariablesSection agent={agent} />
-        </Section>
-      )}
+// ---------------------------------------------------------------------------
+// Permission Info (inline helper, used by Section 4)
+// ---------------------------------------------------------------------------
 
-      {/* Skills */}
-      {agent.skills && agent.skills.length > 0 && (
-        <Section title="Skills" icon={Globe}>
-          <div className="flex flex-wrap gap-1.5">
-            {agent.skills.map((skill) => (
-              <span
-                key={skill}
-                className="text-xs bg-[var(--color-bg-elevated)] text-[var(--color-text-primary)] rounded px-2 py-0.5"
-              >
-                {skill}
-              </span>
-            ))}
-          </div>
-        </Section>
-      )}
+function PermissionInfo({ agent }: { agent: AgentDetail }) {
+  const modeLabels: Record<string, string> = {
+    auto: "Auto (default)",
+    acceptEdits: "Accept Edits",
+    plan: "Plan (read-only)",
+    dontAsk: "Don't Ask",
+    "always-allow": "Always Allow",
+    "always-deny": "Always Deny",
+  };
 
-      {/* Extra config */}
-      <Section title="Advanced" icon={Info} defaultOpen={false}>
-        <div className="space-y-1 text-xs">
-          {agent.model && (
-            <div className="flex items-center gap-2">
-              <span className="text-[var(--color-text-secondary)]">Model:</span>
-              <span className="text-[var(--color-text-primary)] font-mono">{agent.model}</span>
-            </div>
-          )}
-          {agent.maxTurns != null && (
-            <div className="flex items-center gap-2">
-              <span className="text-[var(--color-text-secondary)]">Max Turns:</span>
-              <span className="text-[var(--color-text-primary)]">{agent.maxTurns}</span>
-            </div>
-          )}
-          {agent.effort && (
-            <div className="flex items-center gap-2">
-              <span className="text-[var(--color-text-secondary)]">Effort:</span>
-              <span className="text-[var(--color-text-primary)]">{agent.effort}</span>
-            </div>
-          )}
-          {agent.memory && (
-            <div className="flex items-center gap-2">
-              <span className="text-[var(--color-text-secondary)]">Memory:</span>
-              <span className="text-[var(--color-text-primary)]">{agent.memory}</span>
-            </div>
-          )}
-          {agent.isolation && (
-            <div className="flex items-center gap-2">
-              <span className="text-[var(--color-text-secondary)]">Isolation:</span>
-              <span className="text-[var(--color-text-primary)]">{agent.isolation}</span>
-            </div>
-          )}
-          {agent.background != null && (
-            <div className="flex items-center gap-2">
-              <span className="text-[var(--color-text-secondary)]">Background:</span>
-              <span className="text-[var(--color-text-primary)]">
-                {agent.background ? "Yes" : "No"}
-              </span>
-            </div>
-          )}
-          {agent.hidden != null && (
-            <div className="flex items-center gap-2">
-              <span className="text-[var(--color-text-secondary)]">Hidden:</span>
-              <span className="text-[var(--color-text-primary)]">
-                {agent.hidden ? "Yes" : "No"}
-              </span>
-            </div>
-          )}
-          {agent.initialPrompt && (
-            <div className="mt-1.5">
-              <span className="text-[var(--color-text-secondary)]">Initial Prompt:</span>
-              <pre className="mt-1 text-[var(--color-text-primary)] bg-[var(--color-bg-elevated)] rounded p-2 font-mono text-xs whitespace-pre-wrap">
-                {agent.initialPrompt}
-              </pre>
-            </div>
-          )}
-        </div>
-      </Section>
+  return (
+    <div className="space-y-1">
+      <FieldRow
+        label="Mode"
+        value={
+          agent.permissionMode
+            ? (modeLabels[agent.permissionMode] ?? agent.permissionMode)
+            : "\u2014"
+        }
+      />
+      <FieldRow
+        label="Allowed"
+        value={agent.tools && agent.tools.length > 0 ? agent.tools.join(", ") : "\u5168\u90e8"}
+        mono
+      />
+      <FieldRow label="Blocked" value={fieldValue(agent.disallowedTools)} mono />
     </div>
   );
 }
