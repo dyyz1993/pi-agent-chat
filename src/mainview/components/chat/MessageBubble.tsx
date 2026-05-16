@@ -1,5 +1,7 @@
 import { useCallback, useEffect, memo, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Highlight, themes } from "prism-react-renderer";
+import { useThemeStore } from "../../stores/use-theme-store";
 import {
   Brain,
   AlertTriangle,
@@ -245,6 +247,102 @@ export const MessageBubble = memo(function MessageBubble({
   );
 });
 
+function StreamingMarkdown({ text }: { text: string }) {
+  const resolvedTheme = useThemeStore((s) => s.resolvedTheme);
+  const prismTheme = resolvedTheme === "dark" ? themes.nightOwl : themes.nightOwlLight;
+
+  const parts = useMemo(() => {
+    const segments: Array<{
+      type: "text" | "code";
+      content: string;
+      language?: string;
+    }> = [];
+    const lines = text.split("\n");
+    let i = 0;
+    let inCode = false;
+    let codeLang = "";
+    const currentCode: string[] = [];
+
+    while (i < lines.length) {
+      const line = lines[i];
+      const fenceMatch = line.match(/^```(\w*)/);
+
+      if (fenceMatch && !inCode) {
+        inCode = true;
+        codeLang = fenceMatch[1] || "text";
+        currentCode.length = 0;
+        i++;
+      } else if (fenceMatch && inCode) {
+        // Closing fence → complete code block
+        segments.push({
+          type: "code",
+          content: currentCode.join("\n"),
+          language: codeLang,
+        });
+        inCode = false;
+        codeLang = "";
+        currentCode.length = 0;
+        i++;
+      } else if (inCode) {
+        currentCode.push(line);
+        i++;
+      } else {
+        segments.push({ type: "text", content: line });
+        i++;
+      }
+    }
+
+    // Trailing unclosed code block → render as plain text
+    if (inCode && currentCode.length > 0) {
+      segments.push({ type: "text", content: currentCode.join("\n") });
+    }
+
+    return segments;
+  }, [text]);
+
+  if (parts.length === 0) return null;
+
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (part.type === "text") {
+          return (
+            <span key={i}>
+              {part.content}
+              {i < parts.length - 1 ? "\n" : ""}
+            </span>
+          );
+        }
+        return (
+          <Highlight
+            key={i}
+            theme={prismTheme}
+            code={part.content.trimEnd()}
+            language={part.language || "text"}
+          >
+            {({ tokens, getLineProps, getTokenProps }) => (
+              <pre className="text-[11px] leading-relaxed font-mono p-2 my-1 overflow-x-auto bg-gray-100 dark:bg-gray-900/60 rounded whitespace-pre">
+                {tokens.map((line, j) => (
+                  <div key={j} {...getLineProps({ line })}>
+                    <span className="inline-block w-5 text-right mr-2 select-none text-gray-400 dark:text-gray-600 text-[10px]">
+                      {j + 1}
+                    </span>
+                    <span>
+                      {line.map((token, k) => (
+                        <span key={k} {...getTokenProps({ token })} />
+                      ))}
+                    </span>
+                  </div>
+                ))}
+              </pre>
+            )}
+          </Highlight>
+        );
+      })}
+    </>
+  );
+}
+
 export const TextContentCard = memo(function TextContentCard({
   text,
   isStreaming,
@@ -285,7 +383,11 @@ export const TextContentCard = memo(function TextContentCard({
 
       {isOpen ? (
         <div className="prose dark:prose-invert prose-sm max-w-none prose-p:my-1 prose-pre:bg-transparent">
-          {isStreaming ? <span>{text}</span> : <CachedReactMarkdown>{text}</CachedReactMarkdown>}
+          {isStreaming ? (
+            <StreamingMarkdown text={text} />
+          ) : (
+            <CachedReactMarkdown>{text}</CachedReactMarkdown>
+          )}
         </div>
       ) : hasMore ? (
         <div className="py-1 px-3 text-[11px] text-gray-400 dark:text-gray-500 truncate">
@@ -327,7 +429,7 @@ export const ThinkingCard = memo(function ThinkingCard({
         onClick={() => !isStreaming && setIsOpen(!isOpen)}
       >
         <Brain className="w-3 h-3 text-purple-400/60 shrink-0" />
-        <span className="text-purple-300/70 font-medium max-sm:hidden">{t("thinkingLabel")}</span>
+        <span className="text-purple-300/70 font-medium">{t("thinkingLabel")}</span>
         {isStreaming && <span className="text-purple-400/50 animate-pulse text-[10px]">...</span>}
         {!isStreaming && (
           <div className="ml-auto flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
@@ -1254,48 +1356,49 @@ export const MessageMetaFooter = memo(function MessageMetaFooter({
 }: {
   message: ChatMessage;
 }) {
-  const { tokenUsage } = message;
+  const { tokenUsage, model, provider } = message;
+  const isMobile = useLayoutStore((s) => s.breakpoint) === "mobile";
 
   if (!tokenUsage) return null;
 
-  const isMobile = useLayoutStore((s) => s.breakpoint) === "mobile";
-
-  const hasReasoning = !isMobile && (tokenUsage.reasoning ?? 0) > 0;
-  const hasCacheRead = !isMobile && (tokenUsage.cacheRead ?? 0) > 0;
-  const hasCacheWrite = !isMobile && (tokenUsage.cacheWrite ?? 0) > 0;
-  const hasCost = tokenUsage.cost != null && tokenUsage.cost > 0;
+  const fixedCost = tokenUsage.cost != null ? tokenUsage.cost : 0;
 
   return (
     <div className="mt-1.5 pt-1.5 pl-2 pb-0.5 border-t border-gray-200/20 dark:border-gray-800/20">
       <div className="flex flex-wrap items-center gap-1 text-[10px]">
+        {(provider ?? model) && (
+          <Tag
+            label="model"
+            value={model ? (provider ? `${provider}/${model}` : model) : (provider ?? "?")}
+            color="text-blue-400 dark:text-blue-500"
+          />
+        )}
         <Tag label="in" value={formatTokenCount(tokenUsage.input)} />
         <Tag label="out" value={formatTokenCount(tokenUsage.output)} />
-        {hasReasoning && (
+        {!isMobile && (
           <Tag
             label="R"
-            value={formatTokenCount(tokenUsage.reasoning!)}
+            value={formatTokenCount(tokenUsage.reasoning ?? 0)}
             color="text-purple-400 dark:text-purple-500"
           />
         )}
-        {hasCacheRead && (
+        {!isMobile && (
           <Tag
-            label="cache↓"
-            value={formatTokenCount(tokenUsage.cacheRead!)}
+            label="↓"
+            value={formatTokenCount(tokenUsage.cacheRead ?? 0)}
             color="text-emerald-400 dark:text-emerald-500"
           />
         )}
-        {hasCacheWrite && (
+        {!isMobile && (
           <Tag
-            label="cache↑"
-            value={formatTokenCount(tokenUsage.cacheWrite!)}
+            label="↑"
+            value={formatTokenCount(tokenUsage.cacheWrite ?? 0)}
             color="text-teal-400 dark:text-teal-500"
           />
         )}
-        {hasCost && (
-          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-mono">
-            ${tokenUsage.cost!.toFixed(2)}
-          </span>
-        )}
+        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-mono">
+          ${fixedCost.toFixed(2)}
+        </span>
       </div>
     </div>
   );
