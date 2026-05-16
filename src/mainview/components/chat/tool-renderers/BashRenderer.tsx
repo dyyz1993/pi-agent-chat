@@ -1,12 +1,14 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { ArrowDownToLine, X, Eye } from "lucide-react";
+import { ArrowDownToLine, X, Eye, ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { Highlight, themes } from "prism-react-renderer";
 import type { ContentBlock } from "../../../types";
 import { useSessionStore } from "../../../stores/use-session-store";
 import { useBashStore } from "../../../stores/use-bash-store";
 import { tryFormatAsYaml } from "../../../../shared/lib/json-to-yaml";
 import { apiClient } from "../../../lib/api-client";
+import { useThemeStore } from "../../../stores/use-theme-store";
 import { AnsiText } from "../primitives/AnsiText";
 import { LogViewer } from "../../bash-panel/BashPanel";
 
@@ -39,6 +41,71 @@ function formatDuration(ms: number): string {
   return `${m}m${s % 60}s`;
 }
 
+/** Max characters to pass to prism for highlighting (prevents perf issues) */
+const HIGHLIGHT_MAX_LEN = 50_000;
+
+function detectOutputLanguage(text: string): string | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+
+  // JSON detection
+  const firstChar = trimmed[0];
+  if (firstChar === "{" || firstChar === "[") {
+    try {
+      JSON.parse(trimmed);
+      return "json";
+    } catch {
+      /* not valid JSON */
+    }
+  }
+
+  // YAML detection — heuristic: check if multiple lines match key: value
+  const lines = trimmed.split("\n").filter((l) => l.trim());
+  const yamlLines = lines.filter((l) => /^\s*[\w-.]+\s*:/.test(l));
+  if (yamlLines.length >= 2 && yamlLines.length >= lines.length * 0.3) {
+    return "yaml";
+  }
+
+  return null;
+}
+
+function OutputHighlighter({ content, isRunning }: { content: string; isRunning: boolean }) {
+  const resolvedTheme = useThemeStore((s) => s.resolvedTheme);
+  const prismTheme = resolvedTheme === "dark" ? themes.nightOwl : themes.nightOwlLight;
+
+  // During streaming: use fast AnsiText (no prism overhead)
+  if (isRunning || content.length > HIGHLIGHT_MAX_LEN) {
+    return <AnsiText content={content} className="text-[11px] leading-relaxed" />;
+  }
+
+  // After completion: try to detect and highlight structured data
+  const language = detectOutputLanguage(content);
+  if (!language) {
+    return <AnsiText content={content} className="text-[11px] leading-relaxed" />;
+  }
+
+  return (
+    <Highlight theme={prismTheme} code={content.trimEnd()} language={language}>
+      {({ tokens, getLineProps, getTokenProps }) => (
+        <pre className="text-[11px] leading-relaxed font-mono p-0 m-0">
+          {tokens.map((line, i) => (
+            <div key={i} {...getLineProps({ line })} className="table-row">
+              <span className="table-cell text-right pr-2 select-none text-gray-400 dark:text-gray-600 w-6 text-[10px]">
+                {i + 1}
+              </span>
+              <span className="table-cell whitespace-pre">
+                {line.map((token, key) => (
+                  <span key={key} {...getTokenProps({ token })} />
+                ))}
+              </span>
+            </div>
+          ))}
+        </pre>
+      )}
+    </Highlight>
+  );
+}
+
 export const BashExecutionCard = memo(function BashExecutionCard({
   block,
   blockId,
@@ -57,7 +124,9 @@ export const BashExecutionCard = memo(function BashExecutionCard({
   const [elapsed, setElapsed] = useState(0);
   const [showLogViewer, setShowLogViewer] = useState(false);
   const [outputOpen, setOutputOpen] = useState(true);
+  const [autoScroll, setAutoScroll] = useState(true);
   const startedAt = useRef(block.startedAt ?? Date.now());
+  const outputScrollRef = useRef<HTMLDivElement>(null);
 
   const bashDetails = block.details as BashDetails | undefined;
   const timeout = block.timeout;
@@ -82,6 +151,24 @@ export const BashExecutionCard = memo(function BashExecutionCard({
   }, [isRunning, block.startedAt]);
 
   const showBackground = elapsed > 5000 && isRunning;
+
+  const handleScroll = useCallback(() => {
+    const el = outputScrollRef.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    setAutoScroll(atBottom);
+  }, []);
+
+  // Auto-scroll when new output arrives (only if user hasn't scrolled up)
+  useEffect(() => {
+    if (!autoScroll || !isRunning) return;
+    const el = outputScrollRef.current;
+    if (el) {
+      requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight;
+      });
+    }
+  }, [block.output, autoScroll, isRunning]);
 
   async function sendAction(action: "kill" | "background") {
     const sid = useSessionStore.getState().activeSessionId;
@@ -252,17 +339,29 @@ export const BashExecutionCard = memo(function BashExecutionCard({
             </span>
           )}
         </summary>
-        <div className="px-3 pb-2">
+        <div className="px-3 pb-2 relative">
           {block.output ? (
-            <AnsiText
-              content={block.output}
-              className="text-[11px] overflow-x-auto leading-relaxed max-h-36 overflow-y-auto"
-            />
+            <div ref={outputScrollRef} onScroll={handleScroll} className="overflow-y-auto max-h-36">
+              <OutputHighlighter content={block.output} isRunning={isRunning} />
+            </div>
           ) : isRunning ? (
             <div className="text-[11px] text-gray-400 dark:text-gray-600 italic py-1">
               {t("waiting")}
             </div>
           ) : null}
+          {isRunning && !autoScroll && (
+            <button
+              onClick={() => {
+                setAutoScroll(true);
+                const el = outputScrollRef.current;
+                if (el) el.scrollTop = el.scrollHeight;
+              }}
+              className="absolute bottom-1 right-3 flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-gray-200/80 dark:bg-gray-700/80 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors shadow-sm"
+              title={t("scroll.scrollToBottom")}
+            >
+              <ChevronDown className="w-3 h-3" />
+            </button>
+          )}
         </div>
       </details>
 
