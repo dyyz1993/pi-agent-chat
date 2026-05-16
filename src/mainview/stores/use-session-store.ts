@@ -24,6 +24,7 @@ import {
   cleanupSessionData,
   clearSubscriptionState,
   syncTabsToBackend,
+  requestRulesSnapshot,
 } from "./session-subscriptions";
 import type { TodoItem } from "./session-subscriptions";
 
@@ -411,6 +412,9 @@ export const useSessionStore = create<SessionState>()(
                   });
                   log.info("agent.start result", { status: result.status, sessionId: id });
                   set((s) => ({ sessionReady: { ...s.sessionReady, [id]: true } }));
+
+                  // Request rules snapshot after session is confirmed started
+                  requestRulesSnapshot(id);
 
                   perfLog.info("[switch] step-4 fetchInitialState begin", { sessionId: id });
                   get().fetchInitialState(id);
@@ -1238,6 +1242,8 @@ apiClient.onReconnect(() => {
         useSessionStore.setState((s) => ({
           sessionReady: { ...s.sessionReady, [activeSessionId]: true },
         }));
+        // Request rules snapshot after session is confirmed started
+        requestRulesSnapshot(activeSessionId);
         storeGet().fetchInitialState(activeSessionId);
         if (result.status === "already_running") {
           apiClient.call("agent.replayHoldEvents", { sessionId: activeSessionId }).catch((err) => {

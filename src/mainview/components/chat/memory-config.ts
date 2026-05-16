@@ -6,6 +6,7 @@ import {
   XCircle,
   Loader,
   Bookmark,
+  ThumbsDown,
   type LucideIcon,
 } from "lucide-react";
 
@@ -59,6 +60,11 @@ export const LEGACY_ENTRY_TYPES: Record<string, MemoryTypeConfig> = {
     icon: XCircle,
     color: "text-red-400",
     label: "收藏失败",
+  },
+  memory_irrelevant_marked: {
+    icon: ThumbsDown,
+    color: "text-orange-400",
+    label: "已标记不相关",
   },
 };
 
@@ -155,11 +161,13 @@ export function getMemorySummary(customType: string, data: unknown): string | nu
             ? isForce
               ? "强制触发"
               : "关键词触发"
-            : layer === "skip"
-              ? "规则"
-              : layer === "not_triggered"
-                ? "未触发"
-                : "";
+            : layer === "auto"
+              ? "全量注入"
+              : layer === "skip"
+                ? "规则"
+                : layer === "not_triggered"
+                  ? "未触发"
+                  : "";
         const parts = [layerLabel, sizeLabel, fileCountLabel, durationLabel].filter(Boolean);
         resultPart = parts.length > 0 ? `已注入记忆 · ${parts.join(" · ")}` : "已注入记忆";
       }
@@ -172,16 +180,21 @@ export function getMemorySummary(customType: string, data: unknown): string | nu
       return resultPart;
     }
     case "memory_extract": {
-      const created = Array.isArray(d.created)
-        ? (d.created as string[]).length
-        : typeof d.created === "number"
-          ? d.created
-          : 0;
-      const updated = Array.isArray(d.updated)
-        ? (d.updated as string[]).length
-        : typeof d.updated === "number"
-          ? d.updated
-          : 0;
+      type FileEntry = { filename: string; name: string; description: string };
+      const isEnriched = (arr: unknown[]): arr is FileEntry[] =>
+        arr.length > 0 &&
+        typeof (arr[0] as Record<string, unknown>)?.filename === "string" &&
+        typeof (arr[0] as Record<string, unknown>)?.name === "string";
+      const createdArr = Array.isArray(d.created) ? (d.created as unknown[]) : [];
+      const updatedArr = Array.isArray(d.updated) ? (d.updated as unknown[]) : [];
+      if (isEnriched(createdArr) || isEnriched(updatedArr)) {
+        const parts: string[] = [];
+        for (const f of createdArr as FileEntry[]) parts.push(`新建「${(f as FileEntry).name}」`);
+        for (const f of updatedArr as FileEntry[]) parts.push(`更新「${(f as FileEntry).name}」`);
+        return parts.length > 0 ? parts.join("，") : "提取完成（无变更）";
+      }
+      const created = createdArr.length || (typeof d.created === "number" ? d.created : 0);
+      const updated = updatedArr.length || (typeof d.updated === "number" ? d.updated : 0);
       const parts: string[] = [];
       if (created > 0) parts.push(`新建 ${created} 条`);
       if (updated > 0) parts.push(`更新 ${updated} 条`);
@@ -213,6 +226,10 @@ export function getMemorySummary(customType: string, data: unknown): string | nu
       if (typeof d.reason === "string" && d.reason) return d.reason as string;
       if (typeof d.error === "string" && d.error) return d.error as string;
       return null;
+    }
+    case "memory_irrelevant_marked": {
+      const files = Array.isArray(d.selectedFiles) ? (d.selectedFiles as string[]).length : 0;
+      return `已标记 ${files} 个文件为不相关`;
     }
     case "bookmark_creating":
       return null;

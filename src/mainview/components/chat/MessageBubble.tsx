@@ -15,6 +15,7 @@ import {
   Zap,
   Target,
   Loader2,
+  ThumbsDown,
 } from "lucide-react";
 import { CachedReactMarkdown } from "./CachedReactMarkdown";
 import { CopyButton } from "./CopyButton";
@@ -32,6 +33,7 @@ import { useExpandStore } from "../../stores/use-expand-store";
 import { useSettingsStore } from "../../stores/use-settings-store";
 import { useUIBlockMap } from "../../stores/use-ui-dialog-store";
 import { ENTRY_TYPE_KEYS, getMemoryConfig, getMemorySummary } from "./memory-config";
+import { useMemoryStore } from "../../stores/use-memory-store";
 import { SnapshotBadge } from "./snapshot/SnapshotBadge";
 import { formatTokenCount } from "../../utils/turn-utils";
 
@@ -658,6 +660,7 @@ export const MemoryCard = memo(function MemoryCard({
   mergedResultData?: unknown;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const { t } = useTranslation("chat");
 
   const isMerged = customType === "memory_prefetch" && mergedResultData !== undefined;
   const isSearching = customType === "memory_prefetch" && mergedResultData === undefined;
@@ -674,6 +677,32 @@ export const MemoryCard = memo(function MemoryCard({
 
   const tierInfo = extractTierInfo(displayData);
 
+  const sessionId = useSessionStore.getState().activeSessionId;
+  const prefetchSelectedFiles = Array.isArray(
+    (displayData as Record<string, unknown>)?.selectedFiles,
+  )
+    ? ((displayData as Record<string, unknown>).selectedFiles as string[])
+    : [];
+  const isMarked = sessionId
+    ? useMemoryStore.getState().isIrrelevantMarked(sessionId, blockId)
+    : false;
+  const canMarkIrrelevant =
+    displayType === "memory_prefetch_result" && prefetchSelectedFiles.length > 0;
+
+  const handleMarkIrrelevant = useCallback(() => {
+    if (!sessionId || isMarked) return;
+    const d = displayData as Record<string, unknown> | undefined;
+    const query =
+      typeof d?._prefetchQuery === "string"
+        ? d._prefetchQuery
+        : typeof d?.query === "string"
+          ? d.query
+          : "";
+    const selectedFiles = Array.isArray(d?.selectedFiles) ? (d.selectedFiles as string[]) : [];
+    if (!query || selectedFiles.length === 0) return;
+    useMemoryStore.getState().markIrrelevant(sessionId, blockId, query, selectedFiles);
+  }, [sessionId, blockId, displayData, isMarked]);
+
   return (
     <div className="my-0.5" data-block-id={blockId}>
       <button
@@ -689,6 +718,34 @@ export const MemoryCard = memo(function MemoryCard({
           {summary && <span className="text-gray-400 dark:text-gray-500 truncate">{summary}</span>}
         </span>
         {tierInfo && <TierBadge tier={tierInfo.tier} />}
+        {canMarkIrrelevant && !isMarked && (
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleMarkIrrelevant();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.stopPropagation();
+                handleMarkIrrelevant();
+              }
+            }}
+            className="shrink-0 flex items-center rounded hover:bg-orange-400/20 text-gray-400 hover:text-orange-400 transition-colors cursor-pointer"
+            title={t("markIrrelevant")}
+          >
+            <ThumbsDown className="w-3 h-3" />
+          </span>
+        )}
+        {isMarked && (
+          <span
+            className="shrink-0 flex items-center text-orange-400/70"
+            title={t("alreadyMarkedIrrelevant")}
+          >
+            <ThumbsDown className="w-3 h-3" />
+          </span>
+        )}
         <span className="text-gray-400 dark:text-gray-600 shrink-0">
           {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
         </span>
@@ -697,18 +754,33 @@ export const MemoryCard = memo(function MemoryCard({
         (isSearching ? (
           <PrefetchSearchingDetail data={data} />
         ) : (
-          <MemoryExpandedContent customType={displayType} data={displayData} />
+          <MemoryExpandedContent
+            customType={displayType}
+            data={displayData}
+            isMarkedIrrelevant={isMarked}
+          />
         ))}
     </div>
   );
 });
 
-function MemoryExpandedContent({ customType, data }: { customType: string; data: unknown }) {
+function MemoryExpandedContent({
+  customType,
+  data,
+  isMarkedIrrelevant,
+}: {
+  customType: string;
+  data: unknown;
+  isMarkedIrrelevant?: boolean;
+}) {
   if (customType === "memory_prefetch_result") {
-    return <PrefetchResultDetail data={data} />;
+    return <PrefetchResultDetail data={data} isMarkedIrrelevant={isMarkedIrrelevant} />;
   }
   if (customType === "memory_prefetch") {
     return <PrefetchStartDetail data={data} />;
+  }
+  if (customType === "memory_extract") {
+    return <ExtractDetail data={data} />;
   }
   const dataStr = typeof data === "string" ? data : data ? JSON.stringify(data, null, 2) : "";
   if (!dataStr) return null;
@@ -719,7 +791,77 @@ function MemoryExpandedContent({ customType, data }: { customType: string; data:
   );
 }
 
-function PrefetchResultDetail({ data }: { data: unknown }) {
+function ExtractDetail({ data }: { data: unknown }) {
+  type FileEntry = { filename: string; name: string; description: string };
+  const d = data as { created?: unknown[]; updated?: unknown[]; status?: string } | undefined;
+  const created = (d?.created ?? []) as unknown[];
+  const updated = (d?.updated ?? []) as unknown[];
+  const isEnriched = (arr: unknown[]): arr is FileEntry[] =>
+    arr.length > 0 &&
+    typeof (arr[0] as Record<string, unknown>)?.filename === "string" &&
+    typeof (arr[0] as Record<string, unknown>)?.name === "string";
+
+  if (!isEnriched(created) && !isEnriched(updated)) {
+    const dataStr = data ? JSON.stringify(data, null, 2) : "";
+    if (!dataStr) return null;
+    return (
+      <pre className="px-3 pb-1 text-[11px] text-gray-400 dark:text-gray-500 overflow-x-auto whitespace-pre-wrap max-h-40 overflow-y-auto">
+        {dataStr.length > 500 ? dataStr.slice(0, 500) + "…" : dataStr}
+      </pre>
+    );
+  }
+
+  return (
+    <div className="px-3 pb-1.5 flex flex-col gap-1">
+      {(created as FileEntry[]).length > 0 && (
+        <div>
+          <div className="text-[10px] font-medium text-green-400/80 mb-0.5">新建</div>
+          {(created as FileEntry[]).map((f, i) => (
+            <div
+              key={i}
+              className="text-[11px] text-gray-500 dark:text-gray-400 flex gap-1 items-start"
+            >
+              <FileText className="w-3 h-3 mt-0.5 shrink-0 text-green-400/60" />
+              <span className="min-w-0">
+                <span className="font-medium text-gray-300">{f.name}</span>
+                {f.description && (
+                  <span className="text-gray-500 dark:text-gray-500"> — {f.description}</span>
+                )}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      {(updated as FileEntry[]).length > 0 && (
+        <div>
+          <div className="text-[10px] font-medium text-amber-400/80 mb-0.5">更新</div>
+          {(updated as FileEntry[]).map((f, i) => (
+            <div
+              key={i}
+              className="text-[11px] text-gray-500 dark:text-gray-400 flex gap-1 items-start"
+            >
+              <FileText className="w-3 h-3 mt-0.5 shrink-0 text-amber-400/60" />
+              <span className="min-w-0">
+                <span className="font-medium text-gray-300">{f.name}</span>
+                {f.description && (
+                  <span className="text-gray-500 dark:text-gray-500"> — {f.description}</span>
+                )}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PrefetchResultDetail({
+  data,
+  isMarkedIrrelevant,
+}: {
+  data: unknown;
+  isMarkedIrrelevant?: boolean;
+}) {
   const { t } = useTranslation("chat");
   const d = data as Record<string, unknown> | undefined;
   if (!d) return null;
@@ -950,6 +1092,13 @@ function PrefetchResultDetail({ data }: { data: unknown }) {
           </div>
         </div>
       </details>
+
+      {isMarkedIrrelevant && (
+        <div className="flex items-center gap-1.5 text-[10px] text-orange-400/80 py-1 px-1">
+          <ThumbsDown className="w-3 h-3 shrink-0" />
+          <span>{t("markedIrrelevantHint")}</span>
+        </div>
+      )}
     </div>
   );
 }

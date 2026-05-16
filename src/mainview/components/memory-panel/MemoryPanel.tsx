@@ -144,6 +144,38 @@ export function MemoryPanel() {
   const last10Events = [...events].reverse().slice(0, 10);
 
   function getEventDetail(customType: string, data: unknown): React.ReactNode {
+    if (customType === "memory_extract") {
+      type FileEntry = { filename: string; name: string; description: string };
+      const d = data as { created?: unknown[]; updated?: unknown[] } | undefined;
+      const all: FileEntry[] = [];
+      for (const arr of [d?.created ?? [], d?.updated ?? []]) {
+        for (const item of arr) {
+          const entry = item as Record<string, unknown>;
+          if (typeof entry.filename === "string" && typeof entry.name === "string") {
+            all.push({
+              filename: entry.filename,
+              name: entry.name,
+              description: (entry.description as string) ?? "",
+            });
+          }
+        }
+      }
+      if (all.length === 0) return null;
+      return (
+        <div className="flex flex-col gap-0.5 mt-0.5">
+          {all.map((f, i) => (
+            <span
+              key={i}
+              className="text-[9px] text-green-400/70 truncate max-w-[160px]"
+              title={f.description || f.filename}
+            >
+              {f.name}
+              {f.description ? `: ${f.description.slice(0, 40)}` : ""}
+            </span>
+          ))}
+        </div>
+      );
+    }
     if (customType === "memory_updated") {
       const d = data as { files?: Array<{ filename: string }> } | undefined;
       const fileList = d?.files ?? [];
@@ -157,6 +189,15 @@ export function MemoryPanel() {
       const d = data as { durationMs?: number } | undefined;
       return d?.durationMs != null ? (
         <span className="text-[9px] text-gray-500">{d.durationMs}ms</span>
+      ) : null;
+    }
+    if (customType === "memory_irrelevant_marked") {
+      const d = data as { selectedFiles?: string[] } | undefined;
+      const files = d?.selectedFiles ?? [];
+      return files.length > 0 ? (
+        <span className="text-[9px] text-orange-400/70 truncate max-w-[120px]">
+          {files.map((f) => f.split("/").pop() ?? f).join(", ")}
+        </span>
       ) : null;
     }
     return null;
@@ -191,6 +232,7 @@ export function MemoryPanel() {
       memory_failed: t("bookmarkFailed"),
       memory_updated: t("bookmarkComplete"),
       memory_update_failed: t("bookmarkUpdateFailed"),
+      memory_irrelevant_marked: t("markedIrrelevant"),
     };
 
     if (customType === "memory_prefetch_result") {
@@ -201,6 +243,11 @@ export function MemoryPanel() {
       return t("memoryMatch");
     }
     if (customType === "memory_prefetch") {
+      const summary = getMemorySummary(customType, data);
+      if (summary) return summary;
+      return panelLabels[customType] ?? customType;
+    }
+    if (customType === "memory_extract") {
       const summary = getMemorySummary(customType, data);
       if (summary) return summary;
       return panelLabels[customType] ?? customType;
