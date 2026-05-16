@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { getMemorySummary } from "../src/mainview/components/chat/memory-config";
+import { ThumbsDown } from "lucide-react";
+import {
+  getMemorySummary,
+  LEGACY_ENTRY_TYPES,
+  ALL_MEMORY_TYPE_KEYS,
+  ENTRY_TYPE_KEYS,
+} from "../src/mainview/components/chat/memory-config";
 
 describe("getMemorySummary - memory_extract", () => {
   it("returns non-null when created=0 and updated=0 (zero counts)", () => {
@@ -24,6 +30,41 @@ describe("getMemorySummary - memory_extract", () => {
     expect(getMemorySummary("memory_extract", { created: 1, updated: 2 })).toBe(
       "新建 1 条，更新 2 条",
     );
+  });
+
+  it("returns enriched summary with file names for created entries", () => {
+    const result = getMemorySummary("memory_extract", {
+      created: [{ filename: "test.md", name: "Testing Policy", description: "Use real DBs" }],
+      updated: [],
+    });
+    expect(result).toBe("新建「Testing Policy」");
+  });
+
+  it("returns enriched summary with file names for both created and updated", () => {
+    const result = getMemorySummary("memory_extract", {
+      created: [{ filename: "a.md", name: "Alpha", description: "desc a" }],
+      updated: [{ filename: "b.md", name: "Beta", description: "desc b" }],
+    });
+    expect(result).toBe("新建「Alpha」，更新「Beta」");
+  });
+
+  it("returns enriched summary with multiple files", () => {
+    const result = getMemorySummary("memory_extract", {
+      created: [
+        { filename: "a.md", name: "Alpha", description: "desc a" },
+        { filename: "b.md", name: "Beta", description: "desc b" },
+      ],
+      updated: [{ filename: "c.md", name: "Gamma", description: "desc c" }],
+    });
+    expect(result).toBe("新建「Alpha」，新建「Beta」，更新「Gamma」");
+  });
+
+  it("returns enriched summary even when mixed with empty arrays", () => {
+    const result = getMemorySummary("memory_extract", {
+      created: [],
+      updated: [{ filename: "c.md", name: "Config", description: "project settings" }],
+    });
+    expect(result).toBe("更新「Config」");
   });
 });
 
@@ -84,5 +125,53 @@ describe("getMemorySummary - regression for other types", () => {
 
   it("memory_update_failed with reason returns reason", () => {
     expect(getMemorySummary("memory_update_failed", { reason: "disk full" })).toBe("disk full");
+  });
+});
+
+describe("memory_irrelevant_marked - config registration", () => {
+  it("LEGACY_ENTRY_TYPES has memory_irrelevant_marked with correct icon, color, label", () => {
+    const entry = LEGACY_ENTRY_TYPES["memory_irrelevant_marked"];
+    expect(entry).toBeDefined();
+    expect(entry.icon).toBe(ThumbsDown);
+    expect(entry.color).toBe("text-orange-400");
+    expect(entry.label).toBe("已标记不相关");
+  });
+
+  it("ALL_MEMORY_TYPE_KEYS includes memory_irrelevant_marked", () => {
+    expect(ALL_MEMORY_TYPE_KEYS.has("memory_irrelevant_marked")).toBe(true);
+  });
+
+  it("ENTRY_TYPE_KEYS includes memory_irrelevant_marked (it is a LEGACY type)", () => {
+    expect(ENTRY_TYPE_KEYS.has("memory_irrelevant_marked")).toBe(true);
+  });
+});
+
+describe("getMemorySummary - memory_irrelevant_marked", () => {
+  it("returns correct summary for single file", () => {
+    expect(getMemorySummary("memory_irrelevant_marked", { selectedFiles: ["a.md"] })).toBe(
+      "已标记 1 个文件为不相关",
+    );
+  });
+
+  it("returns correct count for multiple files", () => {
+    expect(
+      getMemorySummary("memory_irrelevant_marked", {
+        selectedFiles: ["a.md", "b.md", "c.md"],
+      }),
+    ).toBe("已标记 3 个文件为不相关");
+  });
+
+  it("returns 0 count when data has no selectedFiles", () => {
+    expect(getMemorySummary("memory_irrelevant_marked", {})).toBe("已标记 0 个文件为不相关");
+  });
+
+  it("returns 0 count when selectedFiles is empty array", () => {
+    expect(getMemorySummary("memory_irrelevant_marked", { selectedFiles: [] })).toBe(
+      "已标记 0 个文件为不相关",
+    );
+  });
+
+  it("returns 0 count when data is null", () => {
+    expect(getMemorySummary("memory_irrelevant_marked", null)).toBeNull();
   });
 });
