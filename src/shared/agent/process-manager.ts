@@ -1571,6 +1571,26 @@ export class AgentProcessManager {
     }
   }
 
+  async getAgentDetail(sessionId: string, agentName: string) {
+    const managed = this.clients.get(sessionId);
+    if (!managed) throw new Error("Client not found");
+    return (
+      managed.client as unknown as {
+        getAgentDetail: (name: string) => Promise<unknown>;
+      }
+    ).getAgentDetail(agentName);
+  }
+
+  async getAllTools(sessionId: string) {
+    const managed = this.clients.get(sessionId);
+    if (!managed) throw new Error("Client not found");
+    return (
+      managed.client as unknown as {
+        getAllTools: () => Promise<unknown>;
+      }
+    ).getAllTools();
+  }
+
   async getSettings(sessionId: string, scope?: string): Promise<Record<string, unknown>> {
     const managed = this.clients.get(sessionId);
     if (!managed) return {};

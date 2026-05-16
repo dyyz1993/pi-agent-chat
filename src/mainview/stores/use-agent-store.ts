@@ -17,19 +17,78 @@ interface AgentInfo {
   filePath: string;
 }
 
+interface ToolSourceInfo {
+  type?: string;
+  extension?: string;
+  plugin?: string;
+}
+
+interface AgentToolInfo {
+  name: string;
+  description?: string;
+  sourceInfo?: ToolSourceInfo;
+}
+
+interface AgentHookCommand {
+  type: "command";
+  command: string;
+  if?: string;
+  async?: boolean;
+}
+
+interface AgentHookPrompt {
+  type: "prompt";
+  prompt: string;
+  if?: string;
+}
+
+type AgentHook = AgentHookCommand | AgentHookPrompt;
+
+interface AgentDetail {
+  name: string;
+  description: string;
+  tools?: string[];
+  disallowedTools?: string[];
+  model?: string;
+  systemPrompt: string;
+  source: string;
+  filePath: string;
+  permissionMode?: string;
+  maxTurns?: number;
+  effort?: string;
+  color?: string;
+  background?: boolean;
+  memory?: string;
+  isolation?: string;
+  initialPrompt?: string;
+  skills?: string[];
+  hooks?: Record<string, AgentHook[]>;
+  variables?: Record<string, string>;
+  tier?: string;
+  thinkingLevel?: string;
+  mode?: string;
+  hidden?: boolean;
+}
+
 interface AgentState {
   currentAgentBySession: Record<string, string>;
   agents: AgentInfo[];
   switchingBySession: Record<string, boolean>;
   loaded: boolean;
+  agentDetailBySession: Record<string, AgentDetail>;
+  allToolsBySession: Record<string, AgentToolInfo[]>;
+  loadingDetail: boolean;
   setAgentForSession: (sessionId: string, name: string) => void;
   setAgents: (agents: AgentInfo[]) => void;
   fetchAgents: (sessionId: string) => Promise<void>;
   switchAgent: (agentName: string, sessionId: string) => Promise<void>;
   getCurrentAgentForSession: (sessionId: string) => string;
+  fetchAgentDetail: (sessionId: string) => Promise<void>;
+  fetchAllTools: (sessionId: string) => Promise<void>;
+  clearAgentDetail: (sessionId: string) => void;
 }
 
-export type { AgentInfo, AgentSource };
+export type { AgentInfo, AgentSource, AgentDetail, AgentToolInfo, AgentHook };
 
 export const AGENT_ICONS: Record<string, string> = {
   build: "🔧",
@@ -52,6 +111,9 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
   currentAgentBySession: {},
   agents: [],
   switchingBySession: {},
+  agentDetailBySession: {},
+  allToolsBySession: {},
+  loadingDetail: false,
   loaded: false,
 
   setAgentForSession: (sessionId, name) =>
@@ -92,6 +154,8 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
         set((state) => ({
           currentAgentBySession: { ...state.currentAgentBySession, [sessionId]: agentName },
         }));
+        get().fetchAgentDetail(sessionId);
+        get().fetchAllTools(sessionId);
       }
       log.info("fetched agents", {
         count: agents.length,
@@ -164,6 +228,7 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
       if (result.thinkingLevel) {
         useSessionStore.getState().setThinkingLevel(result.thinkingLevel);
       }
+      get().fetchAgentDetail(sessionId);
     } catch (err) {
       log.warn("agent switch failed, reverting", {
         agentName,
@@ -178,6 +243,46 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
         switchingBySession: { ...state.switchingBySession, [sessionId]: false },
       }));
     }
+  },
+
+  fetchAgentDetail: async (sessionId) => {
+    set({ loadingDetail: true });
+    try {
+      const agentName = get().getCurrentAgentForSession(sessionId);
+      if (!agentName) return;
+      const result = await apiClient.call("agent.getAgentDetail", { sessionId, agentName });
+      set((state) => ({
+        agentDetailBySession: {
+          ...state.agentDetailBySession,
+          [sessionId]: result.agent as AgentDetail,
+        },
+      }));
+    } catch {
+      // silently fail - detail is optional
+    } finally {
+      set({ loadingDetail: false });
+    }
+  },
+
+  fetchAllTools: async (sessionId) => {
+    try {
+      const result = await apiClient.call("agent.getAllTools", { sessionId });
+      set((state) => ({
+        allToolsBySession: {
+          ...state.allToolsBySession,
+          [sessionId]: result.tools as AgentToolInfo[],
+        },
+      }));
+    } catch {
+      // silently fail
+    }
+  },
+
+  clearAgentDetail: (sessionId) => {
+    set((state) => {
+      const { [sessionId]: _, ...rest } = state.agentDetailBySession;
+      return { agentDetailBySession: rest };
+    });
   },
 
   getCurrentAgentForSession: (sessionId) => get().currentAgentBySession[sessionId] ?? "build",

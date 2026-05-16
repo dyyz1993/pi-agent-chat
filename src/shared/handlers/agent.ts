@@ -332,4 +332,14 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   r("agent.getCurrentAgent", async (params) => {
     return m.getCurrentAgent(params.sessionId) as Promise<R<"agent.getCurrentAgent">>;
   });
+
+  r("agent.getAgentDetail", async (params) => {
+    return m.getAgentDetail(params.sessionId, params.agentName) as Promise<
+      R<"agent.getAgentDetail">
+    >;
+  });
+
+  r("agent.getAllTools", async (params) => {
+    return m.getAllTools(params.sessionId) as Promise<R<"agent.getAllTools">>;
+  });
 }

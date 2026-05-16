@@ -341,6 +341,46 @@ export interface AgentMethods {
     params: { sessionId: string };
     result: { agentName: string | null };
   };
+  "agent.getAgentDetail": {
+    params: { sessionId: string; agentName: string };
+    result: {
+      agent: {
+        name: string;
+        description: string;
+        tools?: string[];
+        disallowedTools?: string[];
+        model?: string;
+        systemPrompt: string;
+        source: string;
+        filePath: string;
+        permissionMode?: string;
+        maxTurns?: number;
+        effort?: string;
+        color?: string;
+        background?: boolean;
+        memory?: string;
+        isolation?: string;
+        initialPrompt?: string;
+        skills?: string[];
+        hooks?: Record<string, unknown>;
+        variables?: Record<string, string>;
+        tier?: string;
+        thinkingLevel?: string;
+        mode?: string;
+        hidden?: boolean;
+      };
+    };
+  };
+  "agent.getAllTools": {
+    params: { sessionId: string };
+    result: {
+      tools: Array<{
+        name: string;
+        description?: string;
+        sourceInfo?: unknown;
+      }>;
+    };
+  };
 }
 
 export interface AgentMessageForUI {

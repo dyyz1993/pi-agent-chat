@@ -8,6 +8,7 @@ import {
   Brain,
   Shield,
   Camera,
+  Bot,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useLayoutStore } from "../../layouts/use-layout-store";
@@ -19,6 +20,7 @@ import { RpcPanel } from "../rpc-panel/RpcPanel";
 import { MemoryPanel } from "../memory-panel/MemoryPanel";
 import { RulesPanel } from "../rules-panel/RulesPanel";
 import { SnapshotPanel } from "../snapshot-panel/SnapshotPanel";
+import { AgentPanel } from "../agent-panel/AgentPanel";
 import { useExplorerStore } from "../../stores/use-explorer-store";
 import { useEffect } from "react";
 
@@ -26,6 +28,7 @@ const TAB_ICONS: Record<PanelTabId, React.ComponentType<{ className?: string }>>
   git: GitBranch,
   files: FolderTree,
   status: Activity,
+  agent: Bot,
   rpc: Terminal,
   memory: Brain,
   rules: Shield,
@@ -94,6 +97,8 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
         );
       case "status":
         return <StatusPanel />;
+      case "agent":
+        return <AgentPanel />;
       case "rpc":
         return <RpcPanel />;
       case "memory":
