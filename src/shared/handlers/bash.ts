@@ -1,7 +1,7 @@
 import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { HandlerOptions } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
-import type { BashChannelCommand, BashProcess } from "../modules/bash";
+import type { BashChannelCommand } from "../modules/bash";
 import { getProcessManager } from "./agent";
 import { statSync } from "node:fs";
 import { createReadStream } from "node:fs";
@@ -25,9 +25,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     if (!pm) return { processes: [] };
 
     try {
-      const result = (await pm.callChannel(sessionId, "bash", "list", {})) as {
-        processes?: BashProcess[];
-      };
+      const result = await pm.callChannel(sessionId, "bash", "list", {});
       return { processes: result?.processes ?? [] };
     } catch {
       return { processes: [] };

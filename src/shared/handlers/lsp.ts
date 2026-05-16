@@ -44,31 +44,17 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
       if (pm.hasSession(params.sessionId)) {
         try {
-          const result = (await pm.callChannel(params.sessionId, "lsp", "getStatus", {})) as {
-            state?: string;
-            servers?: Array<{
-              name?: string;
-              fileTypes?: string[];
-              state?: string;
-              reason?: string;
-              serverId?: string;
-              root?: string;
-            }>;
-            brokenServers?: string[];
-            mode?: string;
-          };
-          const servers: LspServerStatus[] = (result?.servers ?? []).map((s) => ({
-            name: s.name ?? s.serverId ?? "unknown",
-            fileTypes: s.fileTypes,
-            state: (s.state ?? "inactive") as LspServerStatus["state"],
-            reason: s.reason ?? "",
-          }));
-          const state = (result?.state ?? "inactive") as
-            | "inactive"
-            | "starting"
-            | "ready"
-            | "error";
-          return { state, servers, mode: (result?.mode ?? "agent_end") as LspDiagnosticsMode };
+          const result = await pm.callChannel(params.sessionId, "lsp", "getStatus", {});
+          const servers: LspServerStatus[] = result.servers.map(
+            (s: { name: string; fileTypes?: string[]; state: string; reason: string }) => ({
+              name: s.name,
+              fileTypes: s.fileTypes,
+              state: s.state as LspServerStatus["state"],
+              reason: s.reason,
+            }),
+          );
+          const state = result.state as "inactive" | "starting" | "ready" | "error";
+          return { state, servers, mode: result.mode as LspDiagnosticsMode };
         } catch {
           // agent process alive but LSP channel not ready yet
         }
@@ -130,7 +116,6 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const { sessionId, mode } = params as { sessionId: string; mode: LspDiagnosticsMode };
     const pm = getProcessManager();
     if (!pm) throw new Error("No process manager available");
-    const result = await pm.callChannel(sessionId, "lsp", "lsp.setMode", { mode });
-    return result as { ok: boolean; mode: typeof mode };
+    return pm.callChannel(sessionId, "lsp", "lsp.setMode", { mode });
   });
 }
