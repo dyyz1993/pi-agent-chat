@@ -297,8 +297,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       }
       const usedExecs = new Set<string>();
 
-      const textBlocks: ContentBlock[] = [];
-      const otherBlocks: ContentBlock[] = [];
+      const orderedBlocks: ContentBlock[] = [];
 
       for (const block of incoming) {
         if (block.type === "toolCall" && block.id) {
@@ -310,7 +309,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
                 : block.arguments != null
                   ? JSON.stringify(block.arguments, null, 2)
                   : "";
-            otherBlocks.push({ ...exec, args: newArgs || exec.args });
+            orderedBlocks.push({ ...exec, args: newArgs || exec.args });
             usedExecs.add(block.id);
           } else {
             const args =
@@ -320,7 +319,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
                   ? JSON.stringify(block.arguments, null, 2)
                   : "";
             const toolName = block.name;
-            otherBlocks.push({
+            orderedBlocks.push({
               type: "toolExecution",
               toolCallId: block.id,
               toolName,
@@ -330,23 +329,19 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
             usedExecs.add(block.id);
           }
         } else if (block.type === "text") {
-          textBlocks.push(block);
+          orderedBlocks.push(block);
         } else if (block.type === "thinking") {
-          otherBlocks.push(block);
+          orderedBlocks.push(block);
         }
       }
 
-      for (const exec of preservedToolExecs) {
-        if (!usedExecs.has(exec.toolCallId)) {
-          otherBlocks.push(exec);
-        }
-      }
+      const preservedBlocks = preservedToolExecs.filter((exec) => !usedExecs.has(exec.toolCallId));
 
       chat.setMessagesForSession(sessionId, [
         ...currentMsgs.slice(0, -1),
         {
           ...currentLast,
-          content: [...otherBlocks, ...textBlocks],
+          content: [...preservedBlocks, ...orderedBlocks],
           ...buildTokenUsage(message.usage),
           ...(message.stopReason ? { stopReason: message.stopReason } : {}),
         },

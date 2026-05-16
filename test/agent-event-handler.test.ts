@@ -532,3 +532,181 @@ describe("agent_end cleanup", () => {
     expect(Object.keys(useSessionStore.getState().queueBySession)).toHaveLength(1);
   });
 });
+
+describe("message_update content block ordering", () => {
+  it("preserves incoming order: text before toolCall", () => {
+    setMessages([
+      {
+        id: "msg-1",
+        role: "assistant",
+        content: [],
+        timestamp: Date.now(),
+        isStreaming: true,
+      },
+    ]);
+
+    handleAgentEvent(SID, {
+      type: "message_update",
+      message: {
+        role: "assistant",
+        content: [
+          { type: "text", text: "Let me check the file." },
+          { type: "toolCall", id: TCID, name: "bash", arguments: { command: "cat foo" } },
+        ],
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+    flushNow();
+
+    const msg = getLastAssistant();
+    expect(msg).not.toBeNull();
+    const types = msg!.content.map((b) => b.type);
+    expect(types).toEqual(["text", "toolExecution"]);
+  });
+
+  it("preserves incoming order: toolCall before text", () => {
+    setMessages([
+      {
+        id: "msg-1",
+        role: "assistant",
+        content: [],
+        timestamp: Date.now(),
+        isStreaming: true,
+      },
+    ]);
+
+    handleAgentEvent(SID, {
+      type: "message_update",
+      message: {
+        role: "assistant",
+        content: [
+          { type: "toolCall", id: TCID, name: "bash", arguments: { command: "ls" } },
+          { type: "text", text: "Here are the files." },
+        ],
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+    flushNow();
+
+    const msg = getLastAssistant();
+    expect(msg).not.toBeNull();
+    const types = msg!.content.map((b) => b.type);
+    expect(types).toEqual(["toolExecution", "text"]);
+  });
+
+  it("preserves interleaved order: text-tool-text", () => {
+    setMessages([
+      {
+        id: "msg-1",
+        role: "assistant",
+        content: [],
+        timestamp: Date.now(),
+        isStreaming: true,
+      },
+    ]);
+
+    handleAgentEvent(SID, {
+      type: "message_update",
+      message: {
+        role: "assistant",
+        content: [
+          { type: "text", text: "First, let me read the file." },
+          { type: "toolCall", id: "tc-1", name: "read", arguments: { path: "/a" } },
+          { type: "text", text: "Now I see the contents." },
+        ],
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+    flushNow();
+
+    const msg = getLastAssistant();
+    expect(msg).not.toBeNull();
+    const types = msg!.content.map((b) => b.type);
+    expect(types).toEqual(["text", "toolExecution", "text"]);
+  });
+
+  it("places preserved toolExecs before incoming blocks", () => {
+    setMessages([
+      {
+        id: "msg-1",
+        role: "assistant",
+        content: [
+          {
+            type: "toolExecution",
+            toolCallId: "tc-prev",
+            toolName: "bash",
+            args: "echo done",
+            status: "done",
+            output: "done\n",
+          },
+        ],
+        timestamp: Date.now(),
+        isStreaming: true,
+      },
+    ]);
+
+    handleAgentEvent(SID, {
+      type: "message_update",
+      message: {
+        role: "assistant",
+        content: [
+          { type: "text", text: "Based on the result..." },
+          { type: "toolCall", id: "tc-new", name: "read", arguments: { path: "/b" } },
+        ],
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+    flushNow();
+
+    const msg = getLastAssistant();
+    expect(msg).not.toBeNull();
+    const blocks = msg!.content;
+    expect(blocks[0].type).toBe("toolExecution");
+    expect((blocks[0] as Extract<ContentBlock, { type: "toolExecution" }>).toolCallId).toBe(
+      "tc-prev",
+    );
+    expect(blocks[1].type).toBe("text");
+    expect(blocks[2].type).toBe("toolExecution");
+    expect((blocks[2] as Extract<ContentBlock, { type: "toolExecution" }>).toolCallId).toBe(
+      "tc-new",
+    );
+  });
+
+  it("merges incoming toolCall with existing toolExecution preserving position", () => {
+    setMessages([
+      {
+        id: "msg-1",
+        role: "assistant",
+        content: [
+          {
+            type: "toolExecution",
+            toolCallId: TCID,
+            toolName: "bash",
+            args: "",
+            status: "running",
+          },
+        ],
+        timestamp: Date.now(),
+        isStreaming: true,
+      },
+    ]);
+
+    handleAgentEvent(SID, {
+      type: "message_update",
+      message: {
+        role: "assistant",
+        content: [
+          { type: "text", text: "Running command..." },
+          { type: "toolCall", id: TCID, name: "bash", arguments: { command: "ls" } },
+        ],
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+    flushNow();
+
+    const msg = getLastAssistant();
+    expect(msg).not.toBeNull();
+    const types = msg!.content.map((b) => b.type);
+    expect(types).toEqual(["text", "toolExecution"]);
+    const exec = msg!.content.find(
+      (b): b is Extract<ContentBlock, { type: "toolExecution" }> =>
+        b.type === "toolExecution" && b.toolCallId === TCID,
+    );
+    expect(exec!.args).toBe(JSON.stringify({ command: "ls" }, null, 2));
+  });
+});
