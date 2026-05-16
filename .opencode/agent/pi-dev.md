@@ -120,7 +120,7 @@ permission:
 
 ```
 第 1 层：npm 依赖（package.json）
-  @dyyz1993/pi-coding-agent: ^0.74.14   ← npm registry 版本
+  @dyyz1993/pi-coding-agent: ^0.74.28   ← npm registry 版本（注意：会频繁更新，以 package.json 为准）
   @dyyz1993/pi-agent-core:    ^0.74.12
   @dyyz1993/pi-ai:            ^0.74.8
 
@@ -266,16 +266,16 @@ src/
     main.tsx                   # 入口
     layouts/
       MainLayout.tsx           # 三栏布局：TabBar + LeftSidebar | ChatPanel | RightSidebar
-    stores/                    # 29 个 Zustand Store
+    stores/                    # 32 个 Zustand Store
     hooks/                     # 5 个自定义 Hook
-    components/                # 20+ 组件目录
+    components/                # 20+ 组件目录（含 model-picker）
     lib/                       # API 客户端、i18n、通知网关
     locales/                   # i18n 翻译（zh-CN / en，12 个 namespace）
     types/                     # TypeScript 类型定义
   shared/
     agent/
       process-manager.ts       # Agent 进程管理（2020 行，核心）
-    handlers/                  # RPC Handler（session, agent, file, bash, memory, rules, subagent...）
+    handlers/                  # RPC Handler（16 个，见下方完整列表）
     lib/
       logger.ts                # 日志系统（20 个模块）
       logger.node.ts           # 文件日志 sink
@@ -286,7 +286,7 @@ src/
   bun/index.ts                 # Electrobun 桌面模式入口
 ```
 
-### Zustand Store 全景（29 个）
+### Zustand Store 全景（32 个）
 
 按功能分组，快速定位 Store：
 
@@ -309,6 +309,7 @@ src/
 | `useExplorerStore` | `use-explorer-store.ts` (422行) | 文件树：浏览、CRUD、Watcher |
 | `useGitStore` | `use-git-store.ts` (307行) | Git 集成：分支、暂存、diff、worktree |
 | `useSubagentStore` | `use-subagent-store.ts` (513行) | 子智能体会话管理 + 消息流 |
+| `useAgentStore` | `use-agent-store.ts` | Agent 列表、当前 Agent 选择（Store-First 规范） |
 | `useLspStore` | `use-lsp-store.ts` | LSP 服务器状态 |
 | `useMemoryStore` | `use-memory-store.ts` | Agent 记忆系统 |
 | `useRulesStore` | `use-rules-store.ts` | Agent 规则生命周期 |
@@ -318,6 +319,8 @@ src/
 | `useTierStore` | `use-tier-store.ts` | 模型层级切换(fast/pro/max) |
 | `useSettingsStore` | `use-settings-store.ts` | 显示设置（工具调用、思考、时间线） |
 | `useUIDialogStore` | `use-ui-dialog-store.ts` | Agent 交互式 UI 请求（确认/输入/选择对话框） |
+| `useScreenshotStore` | `use-screenshot-store.ts` | 截图功能状态管理 |
+| `useSupervisorStore` | `use-supervisor-store.ts` | Agent 监督/管理 |
 
 **调试**
 | Store | 文件 | 管理内容 |
@@ -372,6 +375,7 @@ src/
 | `diff/`            | Diff 查看器                                                                                                            |
 | `file-preview/`    | 全屏文件预览                                                                                                           |
 | `project-picker/`  | 项目选择对话框                                                                                                         |
+| `model-picker/`    | 模型选择器 UI                                                                                                          |
 | `settings/`        | 设置模态框                                                                                                             |
 | `rpc-panel/`       | RPC 调试面板                                                                                                           |
 | `debug/`           | 调试/诊断面板                                                                                                          |
@@ -439,6 +443,29 @@ Channel 事件（独立订阅）：
 - Coordinator 支持：session_delegate, delegate_send, delegate_status, delegate_list, delegate_stop, delegate_fork
 
 **消息标准化**：`normalizeToolBlocks()` 将 AI SDK 的 toolCall + toolResult 合并为统一的 toolExecution 块
+
+### RPC Handler 完整列表（16 个）
+
+`src/shared/handlers/` 目录下的 Handler 文件，每个对应一个 RPC 命名空间：
+
+| Handler      | 文件            | 管理的 RPC 命名空间                          |
+| ------------ | --------------- | -------------------------------------------- |
+| `session`    | `session.ts`    | 会话生命周期：创建、切换、列表、删除、重命名 |
+| `agent`      | `agent.ts`      | Agent 通信：send、stop、模型切换、tier       |
+| `file`       | `file.ts`       | 文件操作：读取、写入、搜索                   |
+| `bash`       | `bash.ts`       | Bash 进程管理：执行、输出流                  |
+| `git`        | `git.ts`        | Git 操作：状态、分支、diff、worktree         |
+| `memory`     | `memory.ts`     | Agent 记忆：读写、列表                       |
+| `rules`      | `rules.ts`      | 规则管理：列表、启用/禁用                    |
+| `subagent`   | `subagent.ts`   | 子智能体：创建、消息、状态                   |
+| `supervisor` | `supervisor.ts` | Agent 监督：管理 Agent 实例                  |
+| `snapshot`   | `snapshot.ts`   | 文件快照：创建、恢复、列表                   |
+| `lsp`        | `lsp.ts`        | LSP 服务：状态、诊断                         |
+| `todo`       | `todo.ts`       | Todo 管理：列表、更新                        |
+| `project`    | `project.ts`    | 项目配置：MCP 服务器、模型收藏               |
+| `system`     | `system.ts`     | 系统信息：版本、环境                         |
+| `timer`      | `timer.ts`      | 定时器：tick 订阅                            |
+| `index`      | `index.ts`      | 入口：`registerAllHandlers()` 编排           |
 
 ## 调试 & 排查工具箱
 
@@ -524,16 +551,23 @@ log.info("message sent", { sessionId, content });
 
 ### 开发命令
 
-| 命令                | 用途                                    |
-| ------------------- | --------------------------------------- |
-| `bun run dev:web`   | Web 开发模式（HMR + 后端，需要 `.env`） |
-| `bun run dev`       | 桌面开发模式（Electrobun --watch）      |
-| `bun run hmr`       | 仅 Vite HMR（端口 5173）                |
-| `bun run build`     | 生产构建 → `dist/`                      |
-| `bun run lint`      | ESLint 检查                             |
-| `bun run lint:full` | ESLint + Prettier 完整检查              |
-| `bun run test`      | 单元测试（Bun）                         |
-| `bun run format`    | Prettier 格式化                         |
+| 命令                   | 用途                                    |
+| ---------------------- | --------------------------------------- |
+| `bun run dev:web`      | Web 开发模式（HMR + 后端，需要 `.env`） |
+| `bun run dev`          | 桌面开发模式（Electrobun --watch）      |
+| `bun run dev:hmr`      | HMR + 后端并行（另一种 Web 开发模式）   |
+| `bun run hmr`          | 仅 Vite HMR（端口 5173）                |
+| `bun run build`        | 生产构建 → `dist/`                      |
+| `bun run build:canary` | Canary 构建 + Electrobun 打包           |
+| `bun run lint`         | ESLint 检查                             |
+| `bun run lint:fix`     | ESLint 自动修复                         |
+| `bun run lint:full`    | ESLint + Prettier 完整检查              |
+| `bun run format`       | Prettier 格式化                         |
+| `bun run format:check` | Prettier 检查（不写入）                 |
+| `bun run test`         | 单元测试（Bun）                         |
+| `bun run test:watch`   | 单元测试监听模式                        |
+| `bun run prepare`      | Husky Git hooks 安装                    |
+| `bun run postinstall`  | patch-package 补丁应用                  |
 
 ### 环境变量（`.env`）
 
@@ -549,7 +583,7 @@ log.info("message sent", { sessionId, content });
 
 - Root：`src/mainview/`
 - 7 个 vendor chunk：react, markdown, highlight, diff, virtual, icons, state
-- Dev proxy：`/health`, `/info`, `/file`, `/fs`, `/api`, `/ws` → `localhost:3100`
+- Dev proxy：`/health`, `/info`, `/file`, `/fs`, `/api`, `/ws`, `/__proxy__/` → `localhost:3100`
 
 ## 测试体系
 
@@ -557,7 +591,7 @@ log.info("message sent", { sessionId, content });
 
 - **Bun**：`bun test --isolate`，配置 `bunfig.toml`，preload `test/dom-setup.ts`
 - **Vitest**：`vitest.config.ts`，environment `happy-dom`，setup `test/setup.ts`
-- 测试文件：`test/` 目录下 40 个文件
+- 测试文件：`test/` 目录下 100+ 个文件（持续增长，以实际为准）
 - 模式：Store 直接测状态变化、Handler mock apiClient 隔离测试、组件用 `@testing-library/react`
 - 工厂：`test/fixtures.ts` 提供 `makeToolExecBlock`, `makeAssistantMsg`, `makeUserMsg` 等
 
@@ -574,7 +608,7 @@ log.info("message sent", { sessionId, content });
 - 自动启动：后端（port 3100）+ Vite（port 5173）
 - 认证：`?token=test-ci-token`
 - 就绪信号：`[data-testid="tab-bar"]`（15s 超时）
-- 14 个 spec 文件：smoke, theme, sidebar, session, tab-bar, scroll, modal, responsive, mobile, tablet, activity-bar, z-index, settings
+- 17 个 spec 文件：smoke, theme, sidebar, session, tab-bar, scroll, modal, responsive, mobile-interactions, mobile-smoke, tablet-interactions, activity-bar, z-index, settings-retry, rollback, rollback-debug, app
 - 响应式测试：`page.setViewportSize()` 模拟 375x812 / 768x1024 / 1440x900
 
 ## UI 自动化测试（ui-tester 子智能体）
@@ -735,8 +769,258 @@ Task(subagent_type: "ui-tester", prompt: "...")
 ## 工作原则
 
 1. **先验证后实现** — 不确定的底层能力先验证，不盲目假设
-2. **小步提交** — 完成一个逻辑点就提交，不大而全
+2. **小步提交** — 完成一个逻辑点就提交，不大而全（详见 Git 工作流）
 3. **跨仓库感知** — 始终清楚当前改动在哪一层，影响范围多大
 4. **知识沉淀** — 解决了非平凡问题后，主动写入知识库供后续复用
 5. **最小改动** — 优先复用现有组件和工具函数，不过度设计
 6. **知识库优先** — 遇到问题先查 KB，避免重复踩坑
+7. **及时提交** — 每完成一个有意义的改动就 commit，不要攒一大堆才提交
+
+## Git 工作流约定
+
+### 核心原则：及时提交
+
+**完成一个逻辑点就提交，绝不攒一堆才 commit。** 每次提交应该是一个原子操作：能独立编译、不破坏现有功能、有明确的单一目的。
+
+### Commit Message 规范
+
+格式：`<type>(<scope>): <subject>`
+
+```
+feat(chat): add model picker dropdown in input bar
+fix(session): fix session switch losing subscription state
+refactor(stores): extract agent store from session store
+test(e2e): add rollback spec for session recovery
+docs(agent): update store list and handler docs
+chore(deps): bump pi-coding-agent to 0.74.28
+```
+
+**类型前缀**：
+
+| type       | 用途                   |
+| ---------- | ---------------------- |
+| `feat`     | 新功能                 |
+| `fix`      | Bug 修复               |
+| `refactor` | 重构（不改行为）       |
+| `test`     | 测试相关               |
+| `docs`     | 文档                   |
+| `chore`    | 构建、依赖、工具       |
+| `style`    | 格式调整（不影响逻辑） |
+
+**scope**：影响的模块名（如 `chat`, `session`, `store`, `sidebar`, `e2e` 等）
+
+### 何时应该提交
+
+| 场景                                   | 是否提交                           |
+| -------------------------------------- | ---------------------------------- |
+| 完成一个新的组件/Store/Hook            | ✅ 立即提交                        |
+| 修复了一个 bug                         | ✅ 立即提交                        |
+| 重构了一段代码且测试通过               | ✅ 立即提交                        |
+| 新增/修改了测试                        | ✅ 立即提交                        |
+| 修改了配置文件（有意义的变化）         | ✅ 立即提交                        |
+| 改了一半还没编译通过                   | ❌ 不要提交                        |
+| 只是格式化或移动文件（无功能变化）     | 看情况，可以攒到下一个功能提交一起 |
+| 自动生成的文件（dist/、node_modules/） | ❌ 不要提交                        |
+
+### 分支策略
+
+```
+main        ← 稳定分支，保护
+feature/*   ← 功能分支，从 main 创建
+fix/*       ← 修复分支，从 main 创建
+```
+
+**禁止操作**：
+
+- ❌ `git push --force`（特别是 main 分支）
+- ❌ `git reset --hard`
+- ❌ 提交 `.env`、密钥、token 等敏感文件
+- ❌ 提交 `node_modules/`、`dist/`、`logs/`
+
+### 提交前检查
+
+每次提交前自动执行（Husky pre-commit hook）：
+
+1. `eslint .` — 代码规范检查
+2. `prettier --check` — 格式检查
+3. 确认没有遗留的 `console.log`（用 `createLogger` 替代）
+4. 确认没有 `any` 类型
+
+### 典型工作流示例
+
+```
+# 1. 从 main 创建功能分支
+git checkout -b feature/model-picker
+
+# 2. 开发 → 小步提交
+# 完成 Store 定义
+git add src/mainview/stores/use-agent-store.ts
+git commit -m "feat(store): add agent store with fetch and select actions"
+
+# 完成组件开发
+git add src/mainview/components/model-picker/
+git commit -m "feat(chat): add model picker dropdown component"
+
+# 完成测试
+git add test/
+git commit -m "test(model-picker): add unit tests for model selection"
+
+# 3. 合并回 main
+git checkout main
+git merge feature/model-picker
+```
+
+## i18n 国际化指南
+
+### 翻译文件结构
+
+```
+src/mainview/locales/
+  zh-CN/              # 中文翻译
+    chat.json         # 聊天相关
+    common.json       # 通用文本（按钮、标签）
+    debug.json        # 调试面板
+    explorer.json     # 文件浏览器
+    git.json          # Git 面板
+    memory.json       # 记忆面板
+    rules.json        # 规则面板
+    settings.json     # 设置面板
+    sidebar.json      # 侧边栏
+    snapshot.json     # 快照面板
+    status.json       # 状态面板
+    theme.json        # 主题相关
+  en/                 # 英文翻译（同结构）
+```
+
+### 在组件中使用
+
+```typescript
+import { useTranslation } from "@/mainview/lib/i18n";
+
+function MyComponent() {
+  const { t } = useTranslation("chat");
+  return <span>{t("sendMessage")}</span>;
+}
+```
+
+### 新增翻译 key 的流程
+
+1. 在 `zh-CN/<namespace>.json` 中添加中文 key
+2. **同步**在 `en/<namespace>.json` 中添加英文 key
+3. 组件中通过 `useTranslation("<namespace>")` 使用
+4. 两个语言文件**必须同步更新**，不要只改一边
+
+### 选择 namespace
+
+| namespace  | 适用场景               |
+| ---------- | ---------------------- |
+| `chat`     | 聊天区域、消息、输入框 |
+| `common`   | 通用按钮、标签、提示   |
+| `sidebar`  | 会话列表、侧边栏       |
+| `settings` | 设置面板               |
+| `status`   | Agent 状态面板         |
+| `debug`    | 调试/诊断面板          |
+| `explorer` | 文件浏览器             |
+| `git`      | Git 相关 UI            |
+| `memory`   | 记忆面板               |
+| `rules`    | 规则面板               |
+| `snapshot` | 快照面板               |
+| `theme`    | 主题切换               |
+
+## 关键架构规范交叉引用
+
+以下规范在项目规则文件中有详细定义，开发时**必须遵守**：
+
+### Store-First 状态管理（`store-first-state-management.mdc`）
+
+**核心原则**：跨组件共享的数据，必须由 Zustand Store 管理，禁止组件内 `useState` + 独立 RPC 加载。
+
+判断标准：
+
+| 特征                                   | 示例                                           |
+| -------------------------------------- | ---------------------------------------------- |
+| 多个组件需要读取同一份数据             | `modelFavorites`（选择器、SettingsPanel 都用） |
+| 一个组件的写操作需要另一个组件即时感知 | `toggleModelFavorite` 后其他选择器立即更新     |
+| 数据具有全局/项目级生命周期            | `availableModels`、`agents`                    |
+| 同一个 RPC 在多个组件中被调用          | `project.getModelFavorites` 出现在多处         |
+
+**新增共享数据的流程**：
+
+1. 在对应 store 中添加字段 + `fetch*` / `set*` / `toggle*` action
+2. 在适当的时机调用 fetch action
+3. 组件通过 `useXxxStore((s) => s.xxx)` 读取
+4. RPC 调用只出现在 store action 内部
+
+### Timeline 组件扩展（`timeline-extension.md`）
+
+四种扩展场景，各有对应的文件修改清单：
+
+1. **新增 Activity 类型** → `activity/builtins.ts` 注册 + 事件处理器接入
+2. **新增工具图标** → `activity/tool-icon-map.ts` 添加映射
+3. **新增 ContentBlock 类型** → `types/index.ts` 添加变体 + `blocks/` 新建渲染器 + `blocks/index.ts` 注册
+4. **新增工具渲染器** → `tool-renderers/` 新建 + `registry.ts` 注册 + `tool-icon-map.ts` 图标
+
+### 剪贴板统一规范（`clipboard.md`）
+
+三个统一入口，禁止直接调用 `navigator.clipboard.writeText()`：
+
+| 场景                    | 使用                         |
+| ----------------------- | ---------------------------- |
+| 独立复制按钮            | `CopyButton` 组件            |
+| 需要 copied 状态反馈    | `useClipboard` hook          |
+| 非 React 环境或简单复制 | `copyToClipboard()` 工具函数 |
+
+## 场景速查 SOP
+
+常见开发场景的快速指引：
+
+| 场景               | 涉及文件                                                              | 注意事项                                    |
+| ------------------ | --------------------------------------------------------------------- | ------------------------------------------- |
+| 新增 RPC 方法      | `shared/handlers/*.ts` + RPC schema + `apiClient`                     | **需改底层仓库**，按第三步流程              |
+| 新增 Store         | `stores/use-xxx-store.ts` + 可能注册到 `session-subscriptions.ts`     | Store-First 规范，禁止组件内 useState + RPC |
+| 新增 UI 组件       | `components/<name>/` + 可能需 i18n 翻译                               | Safe Area 规则（fixed inset-0 组件）        |
+| 新增工具渲染器     | `tool-renderers/XxxRenderer.tsx` + `registry.ts` + `tool-icon-map.ts` | 参考 `timeline-extension.md`                |
+| 新增 Activity 类型 | `activity/builtins.ts` + 事件处理器                                   | 参考 `timeline-extension.md`                |
+| 新增 ContentBlock  | `types/index.ts` + `blocks/XxxBlock.tsx` + `blocks/index.ts`          | 参考 `timeline-extension.md`                |
+| 新增 i18n key      | `locales/zh-CN/*.json` + `locales/en/*.json`                          | **两个语言同步更新**                        |
+| 新增 E2E 测试      | `e2e/*.spec.ts` + `playwright.config.ts`                              | workers:3, headless:true, 认证 token        |
+| 修改响应式布局     | 组件文件 + 可能涉及 `use-breakpoint.ts`                               | 用 ui-tester 子智能体验证多尺寸             |
+| 修改 CSS 主题      | `index.css` CSS 变量 + 可能 Tailwind config                           | 用 `var(--color-*)` 不硬编码颜色            |
+| 底层仓库版本升级   | `package.json` + `bun install` + 扩展软链检查                         | 按版本同步流程操作                          |
+
+### 子智能体协作指南
+
+当任务复杂或需要并行处理时，使用 `session_spawn` 创建子智能体：
+
+**适用场景**：
+
+- 需要同时修改多个不相关文件
+- 需要并行探索代码库和实现功能
+- 需要 UI 自动化测试验证
+
+**常用子智能体类型**：
+
+| 子智能体    | 触发方式                           | 适用场景                       |
+| ----------- | ---------------------------------- | ------------------------------ |
+| `explore`   | `Task(subagent_type: "explore")`   | 代码搜索、文件查找、架构理解   |
+| `ui-tester` | `Task(subagent_type: "ui-tester")` | 截图验证、交互测试、响应式验证 |
+| `general`   | `Task(subagent_type: "general")`   | 通用多步任务、并行文件修改     |
+| `docs`      | `Task(subagent_type: "docs")`      | 文档编写                       |
+
+**使用模式**：
+
+```
+# 并行探索（不依赖彼此结果时）
+Task 1: 探索 RPC 定义
+Task 2: 探索现有 Store 模式
+Task 3: 探索组件实现
+
+# 串行实现（有依赖关系时）
+Step 1: 定义类型 → Step 2: 实现 Store → Step 3: 实现组件
+```
+
+**注意事项**：
+
+- 子智能体有独立的上下文，需要提供足够详细的 prompt
+- 子智能体返回的结果不直接展示给用户，需要主任务汇总
+- 并行任务之间不应有文件冲突（不要让两个子智能体同时修改同一个文件）
