@@ -280,30 +280,6 @@ export function setupSubscriptions(
         set((s) => ({
           rulesSubscriptions: { ...s.rulesSubscriptions, [id]: subId },
         }));
-        const store = useRulesStore.getState();
-        const sessionState = store.bySession[id];
-        if (!sessionState || sessionState.totalRules === 0) {
-          apiClient
-            .call("rules.requestSnapshot", { sessionId: id })
-            .then((result) => {
-              if (result.totalRules === 0) return;
-              useRulesStore.getState().handleRulesEvent(id, {
-                type: "snapshot",
-                rules: result.rules,
-                totalRules: result.totalRules,
-                unconditionalCount: result.unconditionalCount,
-                conditionalCount: result.conditionalCount,
-                injectedRuleNames: [],
-                matchHistory: [],
-                lifecycleLog: [],
-                loadedAt: Date.now(),
-                cacheTTL: 0,
-              });
-            })
-            .catch((err) => {
-              useAppStore.getState().addLog(`[sub] ${String(err)}`);
-            });
-        }
       })
       .catch((err) => {
         set((s) => {
@@ -692,5 +668,37 @@ export function setupProjectStatusSubscription(): void {
     })
     .catch((err) => {
       useAppStore.getState().addLog(`[sub] ${String(err)}`);
+    });
+}
+
+/**
+ * Request rules snapshot for a session that has already been started.
+ * Should be called AFTER agent.start resolves to avoid the race condition
+ * where requestSnapshot fires before the process is registered.
+ */
+export function requestRulesSnapshot(sessionId: string): void {
+  const store = useRulesStore.getState();
+  const sessionState = store.bySession[sessionId];
+  if (sessionState && sessionState.totalRules > 0) return;
+
+  apiClient
+    .call("rules.requestSnapshot", { sessionId })
+    .then((result) => {
+      if (result.totalRules === 0) return;
+      useRulesStore.getState().handleRulesEvent(sessionId, {
+        type: "snapshot",
+        rules: result.rules,
+        totalRules: result.totalRules,
+        unconditionalCount: result.unconditionalCount,
+        conditionalCount: result.conditionalCount,
+        injectedRuleNames: [],
+        matchHistory: [],
+        lifecycleLog: [],
+        loadedAt: Date.now(),
+        cacheTTL: 0,
+      });
+    })
+    .catch((err) => {
+      useAppStore.getState().addLog(`[rules-snapshot] ${String(err)}`);
     });
 }

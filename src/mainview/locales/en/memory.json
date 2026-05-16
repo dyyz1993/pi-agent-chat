@@ -35,5 +35,7 @@
   "autoExtract": "Auto-extracted after conversation",
   "memoryIndex": "MEMORY.md Index",
   "recentOperations": "Recent Operations",
-  "noOperations": "No operations"
+  "noOperations": "No operations",
+  "markedIrrelevant": "Marked Irrelevant",
+  "markedIrrelevantDesc": "System will learn from this to improve future searches"
 }

@@ -597,6 +597,14 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       }
     }
 
+    if (event.customType === "memory_irrelevant_marked") {
+      const data = event.data as { selectedFiles?: string[]; query?: string } | undefined;
+      if (data && Array.isArray(data.selectedFiles) && data.selectedFiles.length > 0) {
+        const eventId = event.id ?? `irrelevant-${Date.now()}`;
+        memoryStore.addIrrelevantMark(sessionId, eventId);
+      }
+    }
+
     if (event.display === false) return;
 
     if (event.customType === "memory_prefetch") {

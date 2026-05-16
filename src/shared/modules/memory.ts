@@ -20,6 +20,10 @@ export interface MemoryMethods {
     params: { projectPath: string; sessionId: string; messageIds: string[]; content: string };
     result: { ok: boolean };
   };
+  "memory.markIrrelevant": {
+    params: { sessionId: string; query: string; selectedFiles: string[] };
+    result: { ok: boolean };
+  };
 }
 
 export interface MemoryEventData {
@@ -39,4 +43,5 @@ export interface MemoryEvents {
   "memory.memory_extract_result": MemoryEventData;
   "memory.memory_dream": MemoryEventData;
   "memory.memory_dream_result": MemoryEventData;
+  "memory.memory_irrelevant_marked": MemoryEventData;
 }

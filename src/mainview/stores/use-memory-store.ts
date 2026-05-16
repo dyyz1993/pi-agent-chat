@@ -31,6 +31,7 @@ interface MemoryState {
   expandedFileBySession: Record<string, string | null>;
   collapsedSections: Set<string>;
   bookmarkCreatingBySession: Record<string, boolean>;
+  irrelevantMarkedBySession: Record<string, Set<string>>;
 
   addEvent: (sessionId: string, event: MemoryEvent) => void;
   loadFiles: (projectPath: string, sessionId: string) => Promise<void>;
@@ -39,11 +40,19 @@ interface MemoryState {
   toggleSection: (section: string) => void;
   clearSession: (sessionId: string) => void;
   setBookmarkCreating: (sessionId: string, creating: boolean) => void;
+  markIrrelevant: (
+    sessionId: string,
+    blockId: string,
+    query: string,
+    selectedFiles: string[],
+  ) => Promise<void>;
+  isIrrelevantMarked: (sessionId: string, blockId: string) => boolean;
+  addIrrelevantMark: (sessionId: string, blockId: string) => void;
 }
 
 const loadFilesTimers: Record<string, ReturnType<typeof setTimeout>> = {};
 
-export const useMemoryStore = create<MemoryState>()((set) => ({
+export const useMemoryStore = create<MemoryState>()((set, get) => ({
   eventsBySession: {},
   filesBySession: {},
   entrypointBySession: {},
@@ -51,6 +60,7 @@ export const useMemoryStore = create<MemoryState>()((set) => ({
   expandedFileBySession: {},
   collapsedSections: new Set(["operations"]),
   bookmarkCreatingBySession: {},
+  irrelevantMarkedBySession: {},
 
   addEvent: (sessionId, event) => {
     set((s) => {
@@ -137,12 +147,14 @@ export const useMemoryStore = create<MemoryState>()((set) => ({
       const { [sessionId]: _i, ...restInjected } = s.injectedBySession;
       const { [sessionId]: _p, ...restEntrypoint } = s.entrypointBySession;
       const { [sessionId]: _b, ...restBookmark } = s.bookmarkCreatingBySession;
+      const { [sessionId]: _m, ...restIrrelevant } = s.irrelevantMarkedBySession;
       return {
         eventsBySession: restEvents,
         filesBySession: restFiles,
         injectedBySession: restInjected,
         entrypointBySession: restEntrypoint,
         bookmarkCreatingBySession: restBookmark,
+        irrelevantMarkedBySession: restIrrelevant,
       };
     });
   },
@@ -151,5 +163,38 @@ export const useMemoryStore = create<MemoryState>()((set) => ({
     set((s) => ({
       bookmarkCreatingBySession: { ...s.bookmarkCreatingBySession, [sessionId]: creating },
     }));
+  },
+
+  addIrrelevantMark: (sessionId, blockId) => {
+    set((s) => {
+      const existing = s.irrelevantMarkedBySession[sessionId] || new Set<string>();
+      if (existing.has(blockId)) return s;
+      const next = new Set(existing);
+      next.add(blockId);
+      return {
+        irrelevantMarkedBySession: {
+          ...s.irrelevantMarkedBySession,
+          [sessionId]: next,
+        },
+      };
+    });
+  },
+
+  isIrrelevantMarked: (sessionId, blockId) => {
+    const marked = get().irrelevantMarkedBySession[sessionId];
+    return marked?.has(blockId) ?? false;
+  },
+
+  markIrrelevant: async (sessionId, blockId, query, selectedFiles) => {
+    try {
+      await apiClient.call("memory.markIrrelevant", {
+        sessionId,
+        query,
+        selectedFiles,
+      });
+      get().addIrrelevantMark(sessionId, blockId);
+    } catch (err) {
+      console.warn("[memory-store] markIrrelevant failed:", err);
+    }
   },
 }));

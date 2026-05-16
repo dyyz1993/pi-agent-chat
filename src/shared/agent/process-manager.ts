@@ -2166,6 +2166,12 @@ export class AgentProcessManager {
         { sessionId, reason: data.reason, timestamp: Date.now() },
         { sessionId },
       );
+    } else if (eventType === "memory_irrelevant_marked") {
+      await this.broadcastEvent(
+        "memory.memory_irrelevant_marked",
+        { sessionId, ...data, timestamp: Date.now() },
+        { sessionId },
+      );
     } else if (
       eventType === "memory_prefetch" ||
       eventType === "memory_extract" ||

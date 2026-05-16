@@ -35,5 +35,7 @@
   "autoExtract": "对话后将自动提取",
   "memoryIndex": "MEMORY.md 索引",
   "recentOperations": "最近操作",
-  "noOperations": "暂无操作记录"
+  "noOperations": "暂无操作记录",
+  "markedIrrelevant": "已标记不相关",
+  "markedIrrelevantDesc": "系统会从中学习，优化后续搜索"
 }

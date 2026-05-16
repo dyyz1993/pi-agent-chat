@@ -135,4 +135,16 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
     return { ok: true };
   });
+
+  r("memory.markIrrelevant", async (params) => {
+    const manager = getProcessManager();
+    if (manager && manager.hasSession(params.sessionId)) {
+      await manager.callChannel(params.sessionId, "memory", "memory.markIrrelevant", {
+        query: params.query,
+        selectedFiles: params.selectedFiles,
+      });
+    }
+
+    return { ok: true };
+  });
 }
