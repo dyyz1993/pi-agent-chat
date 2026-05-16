@@ -31,7 +31,6 @@ import { tryFormatAsYaml } from "../../../shared/lib/json-to-yaml";
 import { useExpandStore } from "../../stores/use-expand-store";
 import { useSettingsStore } from "../../stores/use-settings-store";
 import { useUIBlockMap } from "../../stores/use-ui-dialog-store";
-import { useLayoutStore } from "../../layouts/use-layout-store";
 import { ENTRY_TYPE_KEYS, getMemoryConfig, getMemorySummary } from "./memory-config";
 import { SnapshotBadge } from "./snapshot/SnapshotBadge";
 import { formatTokenCount } from "../../utils/turn-utils";
@@ -421,18 +420,31 @@ export const ThinkingCard = memo(function ThinkingCard({
 
   const firstLine = thinking.split("\n")[0] || t("thinkingPlaceholder");
   const hasMore = thinking.includes("\n") || thinking.length > 80;
+  const collapsedText = firstLine.length > 100 ? firstLine.slice(0, 100) + "..." : firstLine;
 
   return (
     <div className="my-0.5 overflow-hidden" data-block-id={blockId}>
+      {/* Header row — when collapsed, shows icon + truncated text + buttons all on one line */}
       <div
         className={`px-3 py-1 text-[11px] flex items-center gap-2 ${!isStreaming ? "cursor-pointer hover:bg-gray-200/30 dark:hover:bg-gray-800/30" : ""}`}
         onClick={() => !isStreaming && setIsOpen(!isOpen)}
       >
         <Brain className="w-3 h-3 text-purple-400/60 shrink-0" />
-        <span className="text-purple-300/70 font-medium">{t("thinkingLabel")}</span>
+        {isOpen ? (
+          <span className="text-purple-300/70 font-medium">{t("thinkingLabel")}</span>
+        ) : hasMore ? (
+          <span className="text-gray-400 dark:text-gray-500 truncate flex-1 min-w-0">
+            {collapsedText}
+          </span>
+        ) : (
+          <span className="text-purple-300/70 font-medium">{t("thinkingLabel")}</span>
+        )}
         {isStreaming && <span className="text-purple-400/50 animate-pulse text-[10px]">...</span>}
         {!isStreaming && (
-          <div className="ml-auto flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="ml-auto flex items-center gap-0.5 shrink-0"
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
               onClick={() => setIsOpen(!isOpen)}
               title={isOpen ? t("collapse") : t("expand")}
@@ -445,7 +457,7 @@ export const ThinkingCard = memo(function ThinkingCard({
         )}
       </div>
 
-      {isOpen ? (
+      {isOpen && (
         <div className="px-3 pb-2 text-[11px] text-gray-500 dark:text-gray-400 whitespace-pre-wrap leading-relaxed">
           {thinking || (
             <span className="text-gray-400 dark:text-gray-600 italic">
@@ -453,11 +465,7 @@ export const ThinkingCard = memo(function ThinkingCard({
             </span>
           )}
         </div>
-      ) : hasMore ? (
-        <div className="py-1 px-3 text-[11px] text-gray-400 dark:text-gray-500 truncate">
-          {firstLine.length > 100 ? firstLine.slice(0, 100) + "..." : firstLine}
-        </div>
-      ) : null}
+      )}
     </div>
   );
 });
@@ -1356,49 +1364,41 @@ export const MessageMetaFooter = memo(function MessageMetaFooter({
 }: {
   message: ChatMessage;
 }) {
+  const { t } = useTranslation("chat");
   const { tokenUsage, model, provider } = message;
-  const isMobile = useLayoutStore((s) => s.breakpoint) === "mobile";
 
   if (!tokenUsage) return null;
 
-  const fixedCost = tokenUsage.cost != null ? tokenUsage.cost : 0;
+  const modelLabel = provider && model ? `${provider}/${model}` : (model ?? provider ?? "");
 
   return (
     <div className="mt-1.5 pt-1.5 pl-2 pb-0.5 border-t border-gray-200/20 dark:border-gray-800/20">
-      <div className="flex flex-wrap items-center gap-1 text-[10px]">
-        {(provider ?? model) && (
+      <div className="flex items-center gap-1 text-[10px] flex-nowrap overflow-x-auto">
+        <span className="inline-flex items-center gap-1 shrink-0">
+          <Tag label={t("tokenInput")} value={formatTokenCount(tokenUsage.input)} />
+          <Tag label={t("tokenOutput")} value={formatTokenCount(tokenUsage.output)} />
           <Tag
-            label="model"
-            value={model ? (provider ? `${provider}/${model}` : model) : (provider ?? "?")}
-            color="text-blue-400 dark:text-blue-500"
-          />
-        )}
-        <Tag label="in" value={formatTokenCount(tokenUsage.input)} />
-        <Tag label="out" value={formatTokenCount(tokenUsage.output)} />
-        {!isMobile && (
-          <Tag
-            label="R"
+            label={t("tokenReasoning")}
             value={formatTokenCount(tokenUsage.reasoning ?? 0)}
             color="text-purple-400 dark:text-purple-500"
           />
-        )}
-        {!isMobile && (
           <Tag
-            label="↓"
+            label={t("tokenCacheRead")}
             value={formatTokenCount(tokenUsage.cacheRead ?? 0)}
             color="text-emerald-400 dark:text-emerald-500"
           />
-        )}
-        {!isMobile && (
           <Tag
-            label="↑"
+            label={t("tokenCacheWrite")}
             value={formatTokenCount(tokenUsage.cacheWrite ?? 0)}
             color="text-teal-400 dark:text-teal-500"
           />
-        )}
-        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-mono">
-          ${fixedCost.toFixed(2)}
+          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-mono">
+            ${(tokenUsage.cost ?? 0).toFixed(5)}
+          </span>
         </span>
+        {modelLabel && (
+          <span className="text-gray-400 dark:text-gray-500 shrink-0">{modelLabel}</span>
+        )}
       </div>
     </div>
   );

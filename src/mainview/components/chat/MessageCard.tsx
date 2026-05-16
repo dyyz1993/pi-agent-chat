@@ -297,7 +297,11 @@ export const MessageCard = memo(function MessageCard({
     );
   }
 
-  let label = cardLabel ?? (isUser ? t("messageCard.you") : t("messageCard.assistant"));
+  let label =
+    cardLabel ??
+    (isUser
+      ? t("messageCard.you")
+      : (message.model ?? message.provider ?? t("messageCard.assistant")));
   let IconComp;
   let labelColor: string;
   let barColor: string;
@@ -351,14 +355,7 @@ export const MessageCard = memo(function MessageCard({
         {isEntry && MEMORY_CUSTOM_TYPES.has(customBlock?.customType ?? "") ? null : (
           <span className={`flex items-center gap-1 text-[11px] font-medium ${labelColor}`}>
             <IconComp className="w-3 h-3" />
-            {label}
-          </span>
-        )}
-
-        {!isUser && !isEntry && (message.provider ?? message.model) && (
-          <span className="text-[10px] text-gray-400 dark:text-gray-600 opacity-0 group-hover/msgcard:opacity-100 transition-opacity">
-            {message.provider}
-            {message.model ? ` · ${message.model}` : ""}
+            <span>{label}</span>
           </span>
         )}
 

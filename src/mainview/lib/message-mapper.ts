@@ -23,9 +23,9 @@ function extractTokenUsage(usage: Usage | undefined): TokenUsage | undefined {
   return {
     input,
     output,
-    cacheRead: cacheRead || undefined,
-    cacheWrite: cacheWrite || undefined,
-    cost: cost || undefined,
+    cacheRead,
+    cacheWrite,
+    cost: cost ?? 0,
   };
 }
 
