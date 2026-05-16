@@ -44,16 +44,19 @@ function formatDuration(ms: number): string {
 /** Max characters to pass to prism for highlighting (prevents perf issues) */
 const HIGHLIGHT_MAX_LEN = 50_000;
 
-function detectOutputLanguage(text: string): string | null {
+function detectOutputLanguage(text: string): {
+  language: string | null;
+  formatted: string;
+} {
   const trimmed = text.trim();
-  if (!trimmed) return null;
+  if (!trimmed) return { language: null, formatted: text };
 
-  // JSON detection
+  // JSON detection + formatting
   const firstChar = trimmed[0];
   if (firstChar === "{" || firstChar === "[") {
     try {
-      JSON.parse(trimmed);
-      return "json";
+      const parsed = JSON.parse(trimmed);
+      return { language: "json", formatted: JSON.stringify(parsed, null, 2) };
     } catch {
       /* not valid JSON */
     }
@@ -63,10 +66,10 @@ function detectOutputLanguage(text: string): string | null {
   const lines = trimmed.split("\n").filter((l) => l.trim());
   const yamlLines = lines.filter((l) => /^\s*[\w-.]+\s*:/.test(l));
   if (yamlLines.length >= 2 && yamlLines.length >= lines.length * 0.3) {
-    return "yaml";
+    return { language: "yaml", formatted: text };
   }
 
-  return null;
+  return { language: null, formatted: text };
 }
 
 function OutputHighlighter({ content, isRunning }: { content: string; isRunning: boolean }) {
@@ -79,13 +82,13 @@ function OutputHighlighter({ content, isRunning }: { content: string; isRunning:
   }
 
   // After completion: try to detect and highlight structured data
-  const language = detectOutputLanguage(content);
+  const { language, formatted } = detectOutputLanguage(content);
   if (!language) {
     return <AnsiText content={content} className="text-[11px] leading-relaxed" />;
   }
 
   return (
-    <Highlight theme={prismTheme} code={content.trimEnd()} language={language}>
+    <Highlight theme={prismTheme} code={formatted.trimEnd()} language={language}>
       {({ tokens, getLineProps, getTokenProps }) => (
         <pre className="text-[11px] leading-relaxed font-mono p-0 m-0">
           {tokens.map((line, i) => (

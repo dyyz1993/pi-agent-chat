@@ -232,7 +232,7 @@ export const MessageBubble = memo(function MessageBubble({
               <span className="inline-block w-1.5 h-4 bg-indigo-400 animate-pulse ml-3 align-text-bottom" />
             </div>
           )}
-          {(message.tokenUsage ?? message.model) && (
+          {message.tokenUsage && (
             <div
               className={`border-l-[3px] ${getDefaultBorderColor(message.role as "user" | "assistant")}`}
             >
@@ -327,7 +327,7 @@ export const ThinkingCard = memo(function ThinkingCard({
         onClick={() => !isStreaming && setIsOpen(!isOpen)}
       >
         <Brain className="w-3 h-3 text-purple-400/60 shrink-0" />
-        <span className="text-purple-300/70 font-medium">{t("thinkingLabel")}</span>
+        <span className="text-purple-300/70 font-medium max-sm:hidden">{t("thinkingLabel")}</span>
         {isStreaming && <span className="text-purple-400/50 animate-pulse text-[10px]">...</span>}
         {!isStreaming && (
           <div className="ml-auto flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
@@ -1240,61 +1240,60 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
   );
 });
 
+function Tag({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-gray-500/8 dark:bg-gray-500/10 font-mono">
+      <span className={`text-gray-400 dark:text-gray-500 ${color ?? ""}`}>{label}</span>
+      <span className="text-gray-300 dark:text-gray-400">{value}</span>
+    </span>
+  );
+}
+
 export const MessageMetaFooter = memo(function MessageMetaFooter({
   message,
 }: {
   message: ChatMessage;
 }) {
-  const { t } = useTranslation("chat");
-  const { tokenUsage, model, provider } = message;
-  const hasMeta = model ?? provider ?? tokenUsage;
+  const { tokenUsage } = message;
 
-  if (!hasMeta) return null;
+  if (!tokenUsage) return null;
 
   const isMobile = useLayoutStore((s) => s.breakpoint) === "mobile";
 
+  const hasReasoning = !isMobile && (tokenUsage.reasoning ?? 0) > 0;
+  const hasCacheRead = !isMobile && (tokenUsage.cacheRead ?? 0) > 0;
+  const hasCacheWrite = !isMobile && (tokenUsage.cacheWrite ?? 0) > 0;
+  const hasCost = tokenUsage.cost != null && tokenUsage.cost > 0;
+
   return (
     <div className="mt-1.5 pt-1.5 pl-2 pb-0.5 border-t border-gray-200/20 dark:border-gray-800/20">
-      <div className="flex items-center justify-between gap-2 text-[10px] text-gray-400 dark:text-gray-600">
-        <span className="flex items-center gap-1.5 shrink-0">
-          {provider && (
-            <span>
-              {t("agent")}: {provider}
-            </span>
-          )}
-          {model && (
-            <span>
-              {provider ? "· " : ""}
-              {model}
-            </span>
-          )}
-        </span>
-        {tokenUsage && (
-          <span className="flex items-center gap-1 font-mono truncate">
-            {!isMobile && (tokenUsage.cacheRead ?? 0) > 0 && (
-              <span className="hidden sm:inline">
-                {formatTokenCount(tokenUsage.cacheRead ?? 0)}↓
-              </span>
-            )}
-            {!isMobile && (tokenUsage.cacheWrite ?? 0) > 0 && (
-              <span className="hidden sm:inline">
-                {formatTokenCount(tokenUsage.cacheWrite ?? 0)}↑
-              </span>
-            )}
-            {!isMobile && (tokenUsage.reasoning ?? 0) > 0 && (
-              <span className="hidden sm:inline">R{tokenUsage.reasoning}</span>
-            )}
-            <span>
-              {formatTokenCount(tokenUsage.input)}→{formatTokenCount(tokenUsage.output)}
-            </span>
-            <span className="text-gray-400 dark:text-gray-800">·</span>
-            <span>{formatTokenCount(tokenUsage.input + tokenUsage.output)}</span>
-            {tokenUsage.cost != null && (
-              <>
-                <span className="text-gray-400 dark:text-gray-800">·</span>
-                <span>${tokenUsage.cost.toFixed(2)}</span>
-              </>
-            )}
+      <div className="flex flex-wrap items-center gap-1 text-[10px]">
+        <Tag label="in" value={formatTokenCount(tokenUsage.input)} />
+        <Tag label="out" value={formatTokenCount(tokenUsage.output)} />
+        {hasReasoning && (
+          <Tag
+            label="R"
+            value={formatTokenCount(tokenUsage.reasoning!)}
+            color="text-purple-400 dark:text-purple-500"
+          />
+        )}
+        {hasCacheRead && (
+          <Tag
+            label="cache↓"
+            value={formatTokenCount(tokenUsage.cacheRead!)}
+            color="text-emerald-400 dark:text-emerald-500"
+          />
+        )}
+        {hasCacheWrite && (
+          <Tag
+            label="cache↑"
+            value={formatTokenCount(tokenUsage.cacheWrite!)}
+            color="text-teal-400 dark:text-teal-500"
+          />
+        )}
+        {hasCost && (
+          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-mono">
+            ${tokenUsage.cost!.toFixed(2)}
           </span>
         )}
       </div>
