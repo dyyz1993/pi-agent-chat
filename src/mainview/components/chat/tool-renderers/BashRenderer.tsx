@@ -38,7 +38,10 @@ function formatDuration(ms: number): string {
   const s = Math.floor(ms / 1000);
   if (s < 60) return `${s}s`;
   const m = Math.floor(s / 60);
-  return `${m}m${s % 60}s`;
+  if (m < 60) return `${m}m${s % 60}s`;
+  const h = Math.floor(m / 60);
+  const remM = m % 60;
+  return remM > 0 ? `${h}h${remM}m` : `${h}h`;
 }
 
 /** Max characters to pass to prism for highlighting (prevents perf issues) */
