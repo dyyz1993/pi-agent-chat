@@ -144,10 +144,11 @@ function AgentInfoCard({ agent }: { agent: AgentDetail }) {
 function ToolList({ agent, allTools }: { agent: AgentDetail; allTools: AgentToolInfo[] }) {
   const allowedSet = new Set(agent.tools ?? []);
   const disallowedSet = new Set(agent.disallowedTools ?? []);
+  const tools = allTools ?? [];
 
   return (
     <div className="space-y-1">
-      {allTools.map((tool) => {
+      {tools.map((tool) => {
         const isAllowed = allowedSet.size === 0 || allowedSet.has(tool.name);
         const isDisallowed = disallowedSet.has(tool.name);
         return (
@@ -364,7 +365,7 @@ export function AgentPanel() {
 
   const sessionId = activeSessionId ?? "";
   const agent = sessionId ? agentDetailBySession[sessionId] : undefined;
-  const allTools = sessionId ? allToolsBySession[sessionId] : [];
+  const allTools = sessionId ? (allToolsBySession[sessionId] ?? []) : [];
   const currentAgentName = sessionId ? currentAgentBySession[sessionId] : undefined;
 
   // Auto-load detail when agent changes or panel first renders
