@@ -933,7 +933,10 @@ export const useSessionStore = create<SessionState>()(
               sessionId,
               ms: Math.round(performance.now() - t0),
             });
-            const exts = (Array.isArray(res) ? res : []) as ExtensionEntry[];
+            const rawExts = Array.isArray(res)
+              ? res
+              : ((res as { extensions?: ExtensionEntry[] })?.extensions ?? []);
+            const exts = rawExts as ExtensionEntry[];
             if (exts.length === 0) return;
             const plugins = exts.map((e: ExtensionEntry) => {
               const parts = e.path.split("/");

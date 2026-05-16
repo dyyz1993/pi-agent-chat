@@ -35,7 +35,6 @@ export function SnapshotPanel() {
   const { t } = useTranslation("snapshot");
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const snapshotsBySession = useSnapshotStore((s) => s.snapshotsBySession);
-  const loading = useSnapshotStore((s) => s.loadingBySession[sessionId] ?? false);
   const fetchSnapshots = useSnapshotStore((s) => s.fetchSnapshots);
   const rollback = useSnapshotStore((s) => s.rollback);
   const unrevert = useSnapshotStore((s) => s.unrevert);
@@ -44,6 +43,7 @@ export function SnapshotPanel() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const sessionId = activeSessionId ?? "";
+  const loading = useSnapshotStore((s) => s.loadingBySession[sessionId] ?? false);
   const snapshots = sessionId ? (snapshotsBySession[sessionId] ?? []) : [];
 
   useEffect(() => {

@@ -304,7 +304,13 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         if (block.type === "toolCall" && block.id) {
           const exec = execByCallId.get(block.id);
           if (exec) {
-            otherBlocks.push(exec);
+            const newArgs =
+              typeof block.arguments === "string"
+                ? block.arguments
+                : block.arguments != null
+                  ? JSON.stringify(block.arguments, null, 2)
+                  : "";
+            otherBlocks.push({ ...exec, args: newArgs || exec.args });
             usedExecs.add(block.id);
           } else {
             const args =
