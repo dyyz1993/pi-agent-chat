@@ -1,6 +1,7 @@
 import { memo } from "react";
-import { ListTodo, CheckSquare, Square, TriangleAlert, Zap, Activity } from "lucide-react";
+import { CheckSquare, Square, TriangleAlert, Zap, Activity } from "lucide-react";
 import type { ToolRendererProps } from "./registry";
+import { getToolIcon } from "../tool-icon-map";
 
 interface TodoItem {
   id: number;
@@ -176,15 +177,20 @@ export const TodoExecRenderer = memo(function TodoExecRenderer({ block }: ToolRe
     >
       {/* Header */}
       <div className="px-3 py-1.5 flex items-center gap-2 text-xs">
-        <ListTodo
-          className={`w-3.5 h-3.5 shrink-0 ${
-            isRunning
-              ? "text-blue-500 dark:text-blue-400"
-              : isError
-                ? "text-red-500 dark:text-red-400"
-                : "text-amber-500/70 dark:text-amber-400/60"
-          }`}
-        />
+        {(() => {
+          const { icon: TodoIcon } = getToolIcon("todo");
+          return (
+            <TodoIcon
+              className={`w-3.5 h-3.5 shrink-0 ${
+                isRunning
+                  ? "text-blue-500 dark:text-blue-400"
+                  : isError
+                    ? "text-red-500 dark:text-red-400"
+                    : "text-amber-500/70 dark:text-amber-400/60"
+              }`}
+            />
+          );
+        })()}
         <span
           className={`font-medium shrink-0 ${
             isRunning

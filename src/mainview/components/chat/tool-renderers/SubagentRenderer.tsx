@@ -1,7 +1,8 @@
 import { useCallback, memo } from "react";
-import { Bot, ArrowRight, ExternalLink } from "lucide-react";
+import { ArrowRight, ExternalLink } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { ContentBlock, SubagentSessionInfo } from "../../../types";
+import { getToolIcon } from "../tool-icon-map";
 import { useSubagentStore } from "../../../stores/use-subagent-store";
 import { useSessionStore } from "../../../stores/use-session-store";
 
@@ -106,15 +107,20 @@ export const Header = memo(function Header({
               : "bg-purple-100/60 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/15"
         }`}
       >
-        <Bot
-          className={`w-3.5 h-3.5 ${
-            isRunning
-              ? "text-purple-600 dark:text-purple-400"
-              : isError
-                ? "text-red-500 dark:text-red-400"
-                : "text-purple-500 dark:text-purple-400/70"
-          }`}
-        />
+        {(() => {
+          const { icon: BotIcon } = getToolIcon("subagent");
+          return (
+            <BotIcon
+              className={`w-3.5 h-3.5 ${
+                isRunning
+                  ? "text-purple-600 dark:text-purple-400"
+                  : isError
+                    ? "text-red-500 dark:text-red-400"
+                    : "text-purple-500 dark:text-purple-400/70"
+              }`}
+            />
+          );
+        })()}
       </div>
 
       <div className="flex-1 min-w-0">

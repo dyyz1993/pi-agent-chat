@@ -3,13 +3,13 @@ import {
   ChevronRight,
   ChevronDown,
   CheckCircle,
-  FileCode,
   AlertCircle,
   AlertTriangle,
   Info,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { ContentBlock } from "../../../types";
+import { getToolIcon } from "../tool-icon-map";
 import { CopyButton } from "../CopyButton";
 
 interface LspDiagnostic {
@@ -120,7 +120,10 @@ export const LspExecutionCard = memo(function LspExecutionCard({ block }: LspExe
           {collapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
         </button>
 
-        <FileCode className="w-3 h-3 shrink-0 text-cyan-400" />
+        {(() => {
+          const { icon: LspIcon } = getToolIcon("lsp_exec");
+          return <LspIcon className="w-3 h-3 shrink-0 text-cyan-400" />;
+        })()}
 
         <span className="font-medium text-cyan-300/90">
           lsp

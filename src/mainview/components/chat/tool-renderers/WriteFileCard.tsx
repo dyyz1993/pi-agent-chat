@@ -1,7 +1,8 @@
 import { memo, useCallback, useMemo, useState, useEffect, useRef } from "react";
-import { Pencil, AlertTriangle, FileText, Maximize2, Columns2, Rows3 } from "lucide-react";
+import { AlertTriangle, FileText, Maximize2, Columns2, Rows3 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { ContentBlock } from "../../../types";
+import { getToolIcon } from "../tool-icon-map";
 import { CachedReactMarkdown } from "../CachedReactMarkdown";
 import { useExpandStore } from "../../../stores/use-expand-store";
 import { CopyButton } from "../CopyButton";
@@ -195,9 +196,15 @@ export const WriteFileCard = memo(function WriteFileCard({
       }`}
     >
       <div className="px-3 py-1.5 flex items-center gap-2 text-xs">
-        <Pencil
-          className={`w-3.5 h-3.5 shrink-0 ${isRunning ? "text-green-500 dark:text-green-400" : isError ? "text-red-500 dark:text-red-400" : "text-green-500/70 dark:text-green-400/60"}`}
-        />
+        {(() => {
+          const toolKey = isEditTool(block) ? "edit" : "write";
+          const { icon: WriteIcon } = getToolIcon(toolKey);
+          return (
+            <WriteIcon
+              className={`w-3.5 h-3.5 shrink-0 ${isRunning ? "text-green-500 dark:text-green-400" : isError ? "text-red-500 dark:text-red-400" : "text-green-500/70 dark:text-green-400/60"}`}
+            />
+          );
+        })()}
         <span className="min-w-0 text-gray-800 dark:text-gray-300 font-mono" title={displayPath}>
           <span className="block truncate rtl" style={{ direction: "rtl", textAlign: "left" }}>
             <span style={{ direction: "ltr", display: "inline" }}>{displayPath}</span>

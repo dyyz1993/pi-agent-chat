@@ -1,5 +1,6 @@
 import { memo } from "react";
-import { FileText, Zap, CheckCircle2, RefreshCw } from "lucide-react";
+import { Zap, CheckCircle2, RefreshCw } from "lucide-react";
+import { getToolIcon } from "../tool-icon-map";
 import { useTranslation } from "react-i18next";
 import type { ContentBlock } from "../../../types";
 
@@ -74,9 +75,14 @@ export const ReadFileCard = memo(function ReadFileCard({
       }`}
     >
       <div className="px-3 py-1.5 flex items-center gap-2 text-xs">
-        <FileText
-          className={`w-3.5 h-3.5 shrink-0 ${isRunning ? "text-blue-500 dark:text-blue-400" : isError ? "text-red-500 dark:text-red-400" : "text-blue-500/70 dark:text-blue-400/60"}`}
-        />
+        {(() => {
+          const { icon: ReadIcon } = getToolIcon("read");
+          return (
+            <ReadIcon
+              className={`w-3.5 h-3.5 shrink-0 ${isRunning ? "text-blue-500 dark:text-blue-400" : isError ? "text-red-500 dark:text-red-400" : "text-blue-500/70 dark:text-blue-400/60"}`}
+            />
+          );
+        })()}
         <span className="min-w-0 text-gray-800 dark:text-gray-300 font-mono" title={displayPath}>
           <span className="block truncate rtl" style={{ direction: "rtl", textAlign: "left" }}>
             <span style={{ direction: "ltr", display: "inline" }}>{displayPath}</span>

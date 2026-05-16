@@ -1,6 +1,6 @@
 import { memo } from "react";
-import { Eye } from "lucide-react";
 import type { ContentBlock } from "../../../types";
+import { getToolIcon } from "../tool-icon-map";
 import { PreviewCard, type PreviewDetails } from "../preview";
 
 type Block = Extract<ContentBlock, { type: "toolExecution" }>;
@@ -38,9 +38,14 @@ export const PreviewRenderer = memo(function PreviewRenderer({
         }`}
       >
         <div className="px-3 py-1.5 flex items-center gap-2 text-xs">
-          <Eye
-            className={`w-3.5 h-3.5 shrink-0 ${isError ? "text-red-500 dark:text-red-400" : "text-cyan-500 dark:text-cyan-400"}`}
-          />
+          {(() => {
+            const { icon: PreviewIcon } = getToolIcon("preview");
+            return (
+              <PreviewIcon
+                className={`w-3.5 h-3.5 shrink-0 ${isError ? "text-red-500 dark:text-red-400" : "text-cyan-500 dark:text-cyan-400"}`}
+              />
+            );
+          })()}
           <span className="min-w-0 text-gray-800 dark:text-gray-300 font-mono truncate">
             {filePath || block.args}
           </span>

@@ -26,6 +26,8 @@ import {
   FileCode2,
   Bell,
   Zap,
+  ListTodo,
+  FileCode,
   type LucideIcon,
 } from "lucide-react";
 import { ALL_MEMORY_TYPES } from "./memory-config";
@@ -56,6 +58,8 @@ const TOOL_ICON_MAP: Record<string, ToolIconEntry> = {
   mcp: { icon: Cpu, color: "text-violet-400", label: "MCP" },
   lsp: { icon: Network, color: "text-blue-400", label: "LSP" },
   lsp_health: { icon: Network, color: "text-blue-400", label: "LSP Health" },
+  lsp_exec: { icon: FileCode, color: "text-cyan-400", label: "LSP Exec" },
+  todo: { icon: ListTodo, color: "text-amber-400", label: "Todo" },
   preview: { icon: Eye, color: "text-emerald-400", label: "Preview" },
   ui_confirm: { icon: CircleCheckBig, color: "text-emerald-400", label: "确认" },
   ui_select: { icon: ListChecks, color: "text-sky-400", label: "选择" },
