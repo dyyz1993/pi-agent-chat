@@ -104,10 +104,18 @@ export const useSupervisorStore = create<SupervisorState>()((set) => ({
       })) as { enabled: boolean };
       if (result.enabled) {
         set((s) => ({
-          bySession: updateSession(s.bySession, sessionId, (session) => {
-            if (!session.status) return session;
-            return { ...session, status: { ...session.status, enabled: true, state: "idle" } };
-          }),
+          bySession: updateSession(s.bySession, sessionId, (session) => ({
+            ...session,
+            status: session.status
+              ? { ...session.status, enabled: true, state: "idle" as const }
+              : {
+                  enabled: true,
+                  state: "idle" as const,
+                  continueCount: 0,
+                  maxContinueCount: 0,
+                  activeGuards: [],
+                },
+          })),
         }));
       }
     } catch (err) {
@@ -125,10 +133,18 @@ export const useSupervisorStore = create<SupervisorState>()((set) => ({
       })) as { disabled: boolean };
       if (result.disabled) {
         set((s) => ({
-          bySession: updateSession(s.bySession, sessionId, (session) => {
-            if (!session.status) return session;
-            return { ...session, status: { ...session.status, enabled: false, state: "disabled" } };
-          }),
+          bySession: updateSession(s.bySession, sessionId, (session) => ({
+            ...session,
+            status: session.status
+              ? { ...session.status, enabled: false, state: "disabled" as const }
+              : {
+                  enabled: false,
+                  state: "disabled" as const,
+                  continueCount: 0,
+                  maxContinueCount: 0,
+                  activeGuards: [],
+                },
+          })),
         }));
       }
     } catch (err) {

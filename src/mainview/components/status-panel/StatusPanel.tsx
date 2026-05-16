@@ -733,9 +733,31 @@ function SupervisorSectionContent({
   cancelPause,
 }: SupervisorSectionContentProps) {
   const { t } = useTranslation("status");
+  const [loading, setLoading] = useState(false);
+
+  const handleEnable = useCallback(
+    (sid: string) => {
+      setLoading(true);
+      enable(sid).finally(() => setLoading(false));
+    },
+    [enable],
+  );
 
   if (!status) {
-    return <span className="text-gray-400">{t("supervisor.state.disabled")}</span>;
+    return (
+      <div className="flex items-center gap-2">
+        <span className="text-gray-400">{t("supervisor.state.disabled")}</span>
+        {sessionId && (
+          <button
+            onClick={() => handleEnable(sessionId)}
+            disabled={loading}
+            className="px-1.5 py-0.5 rounded text-[9px] bg-green-500/20 text-green-400 disabled:opacity-50"
+          >
+            {loading ? "..." : t("supervisor.enabled")}
+          </button>
+        )}
+      </div>
+    );
   }
 
   const stateLabel = t(`supervisor.state.${status.state}`) ?? status.state;
