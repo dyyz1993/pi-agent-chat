@@ -158,17 +158,17 @@ html.dark body {
   --color-info: #3b82f6;
 
   /* Semantic status colors - RGB components for Tailwind opacity support */
-  --color-status-success: 22 163 74;
+  --color-status-success: 21 128 61;
   --color-status-error: 220 38 38;
-  --color-status-warning: 217 119 6;
+  --color-status-warning: 180 83 9;
   --color-status-info: 37 99 235;
 
   /* Semantic category colors - RGB components */
   --color-semantic-agent: 124 58 237;
-  --color-semantic-tool: 8 145 178;
-  --color-semantic-memory: 13 148 136;
+  --color-semantic-tool: 14 116 144;
+  --color-semantic-memory: 15 118 110;
   --color-semantic-accent: 79 70 229;
-  --color-semantic-notify: 234 88 12;
+  --color-semantic-notify: 194 65 12;
 
   --safe-area-top: env(safe-area-inset-top, 0px);
   --safe-area-bottom: env(safe-area-inset-bottom, 0px);
