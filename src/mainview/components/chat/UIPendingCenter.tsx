@@ -66,7 +66,7 @@ function PanelCard({
                   }
                   className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left transition-colors ${
                     checked
-                      ? "bg-sky-600/15 text-sky-700 dark:text-sky-300"
+                      ? "bg-sky-100 dark:bg-sky-600/15 text-sky-700 dark:text-sky-300"
                       : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400"
                   }`}
                 >
@@ -108,7 +108,7 @@ function PanelCard({
                   respondById(req.requestId, { value: customValue.trim() });
               }}
               disabled={checkedSet.size === 0 && !customValue.trim()}
-              className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-md bg-amber-600/20 text-amber-400 hover:bg-amber-600/30 disabled:opacity-40 disabled:cursor-not-allowed text-[11px] transition-colors"
+              className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-md bg-amber-100 dark:bg-amber-600/20 text-amber-600 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-600/30 disabled:opacity-40 disabled:cursor-not-allowed text-[11px] transition-colors"
             >
               <Send className="w-3 h-3" /> {t("uiPending.confirm")}
             </button>
@@ -140,13 +140,13 @@ function PanelCard({
           <div className="flex gap-2">
             <button
               onClick={() => respondById(req.requestId, { confirmed: true })}
-              className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 text-[11px] transition-colors"
+              className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md bg-emerald-100 dark:bg-emerald-600/20 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-600/30 text-[11px] transition-colors"
             >
               {t("uiPending.confirm")}
             </button>
             <button
               onClick={() => dismissById(req.requestId)}
-              className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md bg-red-600/15 text-red-400 hover:bg-red-600/25 text-[11px] transition-colors"
+              className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md bg-red-100 dark:bg-red-600/15 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-600/25 text-[11px] transition-colors"
             >
               {t("common:cancel")}
             </button>
@@ -182,7 +182,7 @@ function PanelCard({
             <button
               onClick={() => respondById(req.requestId, { value })}
               disabled={!value.trim()}
-              className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-md bg-amber-600/20 text-amber-400 hover:bg-amber-600/30 disabled:opacity-40 disabled:cursor-not-allowed text-[11px] transition-colors"
+              className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-md bg-amber-100 dark:bg-amber-600/20 text-amber-600 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-600/30 disabled:opacity-40 disabled:cursor-not-allowed text-[11px] transition-colors"
             >
               <Send className="w-3 h-3" /> {t("uiPending.confirm")}
             </button>

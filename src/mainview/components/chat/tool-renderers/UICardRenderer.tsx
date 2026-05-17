@@ -18,11 +18,11 @@ import { useUIDialogStore } from "../../../stores/use-ui-dialog-store";
 type UIBlock = UIInteractionBlock;
 
 const BG_MAP: Record<string, string> = {
-  pending: "border border-amber-400/30 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-600/8",
+  pending: "border border-amber-400/30 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-900/25",
   responded:
-    "border-l-2 border-emerald-400/30 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-600/6",
-  dismissed: "border-l-2 border-gray-300/60 dark:border-gray-600/30 bg-gray-50 dark:bg-gray-800/40",
-  notified: "border-l-2 border-blue-400/30 dark:border-blue-500/30 bg-blue-50 dark:bg-blue-600/6",
+    "border-l-2 border-emerald-400/30 dark:border-emerald-500/40 bg-emerald-50 dark:bg-emerald-900/20",
+  dismissed: "border-l-2 border-gray-300/60 dark:border-gray-600/30 bg-gray-50 dark:bg-gray-800/50",
+  notified: "border-l-2 border-blue-400/30 dark:border-blue-500/40 bg-blue-50 dark:bg-blue-900/20",
 };
 
 export function CardShell({ block, children }: { block: UIBlock; children: React.ReactNode }) {
@@ -465,7 +465,7 @@ export const RespondUICard = memo(function RespondUICard({ block }: { block: UIB
 
   return (
     <div
-      className="overflow-hidden rounded bg-orange-50 dark:bg-orange-950/6 border-l-2 border-orange-400/30 dark:border-orange-500/30"
+      className="overflow-hidden rounded bg-orange-50 dark:bg-orange-900/20 border-l-2 border-orange-400/30 dark:border-orange-500/40"
       data-ui-request-id={block.id}
     >
       <div className="px-3 py-1.5 flex items-center gap-2 text-xs">
