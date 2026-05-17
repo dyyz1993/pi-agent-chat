@@ -3,7 +3,7 @@ import { VList, type VListHandle } from "virtua";
 import {
   User,
   Bot,
-  FileText,
+  Type,
   AlertTriangle,
   Terminal,
   ScanSearch,
@@ -18,6 +18,7 @@ import { useTurnStore, EMPTY_SET } from "../../stores/use-turn-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { getToolIcon, getPreviewResourceIcon, getCustomTypeIcon } from "./tool-icon-map";
 import { ALL_MEMORY_TYPE_KEYS } from "./memory-config";
+import { useSettingsStore } from "../../stores/use-settings-store";
 
 type SubItem = {
   icon: LucideIcon;
@@ -93,7 +94,7 @@ function buildNavItems(messages: ChatMessage[], t: (key: string) => string): Nav
       const blockId = `${msg.id}-${bi}`;
 
       if (b.type === "text") {
-        subs.push({ icon: FileText, color: "text-gray-400", label: t("sideNav.text"), blockId });
+        subs.push({ icon: Type, color: "text-gray-400", label: t("sideNav.text"), blockId });
       } else if (b.type === "toolExecution" && !seenTools.has(b.toolName)) {
         seenTools.add(b.toolName);
         let ti = getToolIcon(b.toolName);
@@ -259,6 +260,20 @@ export const SideNav = memo(function SideNav({
 
   const navItems = useMemo(() => buildNavItems(messages, t), [messages, t]);
 
+  const showToolCalls = useSettingsStore((s) => s.showToolCalls);
+  const showThinking = useSettingsStore((s) => s.showThinking);
+
+  const filteredNavItems = useMemo(() => {
+    if (showToolCalls && showThinking) return navItems;
+    return navItems.map((item) => ({
+      ...item,
+      subs: item.subs.filter((sub) => {
+        if (!showToolCalls && sub.label !== t("sideNav.text")) return false;
+        return true;
+      }),
+    }));
+  }, [navItems, showToolCalls, showThinking, t]);
+
   const sidenavVlistRef = useRef<VListHandle>(null);
 
   const handleDotClick = useCallback(
@@ -294,16 +309,16 @@ export const SideNav = memo(function SideNav({
 
   useEffect(() => {
     if (!selectedNavId) return;
-    let idx = navItems.findIndex((n) => n.id === selectedNavId);
+    let idx = filteredNavItems.findIndex((n) => n.id === selectedNavId);
     if (idx < 0) {
-      idx = navItems.findIndex((n) => n.subs.some((s) => s.blockId === selectedNavId));
+      idx = filteredNavItems.findIndex((n) => n.subs.some((s) => s.blockId === selectedNavId));
     }
     if (idx < 0) return;
     const timer = setTimeout(() => {
       sidenavVlistRef.current?.scrollToIndex(idx, { align: "nearest" });
     }, 120);
     return () => clearTimeout(timer);
-  }, [selectedNavId, navItems]);
+  }, [selectedNavId, filteredNavItems]);
 
   return (
     <div className="h-full min-h-0 flex flex-col bg-gray-50/30 dark:bg-gray-900/30 border-l border-gray-200/30 dark:border-gray-800/30">
@@ -311,7 +326,7 @@ export const SideNav = memo(function SideNav({
         ref={sidenavVlistRef}
         style={{ flex: 1, minHeight: 0, scrollbarWidth: "none", msOverflowStyle: "none" }}
       >
-        {navItems.map(({ id, icon: Icon, color, subs }) => (
+        {filteredNavItems.map(({ id, icon: Icon, color, subs }) => (
           <div key={id} data-nav-id={id}>
             <div className="flex flex-col items-center w-full">
               <NavDot
