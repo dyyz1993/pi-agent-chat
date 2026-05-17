@@ -253,9 +253,18 @@ export const BashExecutionCard = memo(function BashExecutionCard({
           {block.toolName}
         </span>
         {(() => {
-          const summary =
-            block.description ||
-            (block.args ? block.args.split("\n")[0]?.trim().slice(0, 120) : undefined);
+          let summary = block.description;
+          if (!summary && block.args) {
+            try {
+              const parsed = JSON.parse(block.args);
+              if (parsed && typeof parsed === "object" && typeof parsed.command === "string") {
+                summary = parsed.command.slice(0, 120);
+              }
+            } catch {
+              /* not JSON, use raw */
+            }
+            if (!summary) summary = block.args.split("\n")[0]?.trim().slice(0, 120);
+          }
           return summary ? (
             <span className="flex-1 min-w-0 text-gray-600 dark:text-gray-400 truncate text-[11px]">
               {summary}
