@@ -1367,6 +1367,16 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
   const [outputOpen, setOutputOpen] = useState(true);
   const [collapsed, setCollapsed] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
+  const collapseToolCards = useSettingsStore((s) => s.collapseToolCards);
+  const wasRunningRef = useRef(isRunning);
+  useEffect(() => {
+    if (isRunning) {
+      setCollapsed(false);
+    } else if (wasRunningRef.current && collapseToolCards) {
+      setCollapsed(true);
+    }
+    wasRunningRef.current = isRunning;
+  }, [isRunning, collapseToolCards]);
 
   let bgOnly: string;
   if (isRunning) {

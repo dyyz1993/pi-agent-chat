@@ -1,7 +1,8 @@
-import { memo } from "react";
+import { memo, useState, useEffect, useRef } from "react";
 import { CheckSquare, Square, TriangleAlert, Zap, Activity } from "lucide-react";
 import type { ToolRendererProps } from "./registry";
 import { getToolIcon } from "../tool-icon-map";
+import { useSettingsStore } from "../../../stores/use-settings-store";
 
 interface TodoItem {
   id: number;
@@ -149,6 +150,19 @@ function TodoList({ todos }: { todos: TodoItem[] }) {
 export const TodoExecRenderer = memo(function TodoExecRenderer({ block }: ToolRendererProps) {
   const isRunning = block.status === "running";
   const isError = block.status === "error";
+  const collapseToolCards = useSettingsStore((s) => s.collapseToolCards);
+
+  const [collapsed, setCollapsed] = useState(false);
+  const wasRunningRef = useRef(isRunning);
+
+  useEffect(() => {
+    if (isRunning) {
+      setCollapsed(false);
+    } else if (wasRunningRef.current && collapseToolCards) {
+      setCollapsed(true);
+    }
+    wasRunningRef.current = isRunning;
+  }, [isRunning, collapseToolCards]);
 
   let borderBg: string;
   if (isRunning) {
@@ -176,7 +190,23 @@ export const TodoExecRenderer = memo(function TodoExecRenderer({ block }: ToolRe
       className={`rounded-none overflow-hidden border-x-0 border-t border-b ${borderBg}`}
     >
       {/* Header */}
-      <div className="px-3 py-1.5 flex items-center gap-2 text-xs">
+      <div
+        className="px-3 py-1.5 flex items-center gap-2 text-xs cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800/40 transition-colors select-none"
+        onClick={() => !isRunning && setCollapsed((c) => !c)}
+        role={isRunning ? undefined : "button"}
+        aria-expanded={isRunning ? undefined : !collapsed}
+      >
+        {!isRunning && (
+          <svg
+            className={`w-3 h-3 transition-transform shrink-0 ${collapsed ? "" : "rotate-90"}`}
+            viewBox="0 0 12 12"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+          >
+            <path d="M4.5 3l3 3-3 3" />
+          </svg>
+        )}
         {(() => {
           const { icon: TodoIcon } = getToolIcon("todo");
           return (
@@ -218,8 +248,8 @@ export const TodoExecRenderer = memo(function TodoExecRenderer({ block }: ToolRe
         {!isRunning && details && <ActionSummary details={details} />}
       </div>
 
-      {/* Content - 始终展示当前任务列表 */}
-      {isRunning ? (
+      {/* Content */}
+      {collapsed ? null : isRunning ? (
         <div className="px-3 pb-2">
           <div className="text-[11px] text-gray-400 dark:text-gray-600 italic py-1">执行中...</div>
         </div>

@@ -1,10 +1,11 @@
-import { useCallback, memo } from "react";
+import { useCallback, memo, useState, useEffect, useRef } from "react";
 import { ArrowRight, ExternalLink } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { ContentBlock, SubagentSessionInfo } from "../../../types";
 import { getToolIcon } from "../tool-icon-map";
 import { useSubagentStore } from "../../../stores/use-subagent-store";
 import { useSessionStore } from "../../../stores/use-session-store";
+import { useSettingsStore } from "../../../stores/use-settings-store";
 
 type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
 
@@ -19,6 +20,19 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
   const isRunning = block.status === "running";
   const isError = block.status === "error";
   const isDone = block.status === "done";
+  const collapseToolCards = useSettingsStore((s) => s.collapseToolCards);
+
+  const [collapsed, setCollapsed] = useState(false);
+  const wasRunningRef = useRef(isRunning);
+
+  useEffect(() => {
+    if (isRunning) {
+      setCollapsed(false);
+    } else if (wasRunningRef.current && collapseToolCards) {
+      setCollapsed(true);
+    }
+    wasRunningRef.current = isRunning;
+  }, [isRunning, collapseToolCards]);
 
   let description = "";
   let instruction = "";
@@ -69,11 +83,12 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
         displayTitle={displayTitle}
         matchedSub={matchedSub}
         onView={handleViewSubagent}
+        collapsed={collapsed}
       />
 
-      {isRunning && <RunningInstruction instruction={instruction} />}
+      {!collapsed && isRunning && <RunningInstruction instruction={instruction} />}
 
-      {(block.output ?? (!isRunning && block.args)) && (
+      {!collapsed && (block.output ?? (!isRunning && block.args)) && (
         <OutputSection block={block} isRunning={isRunning} />
       )}
     </div>
@@ -87,6 +102,7 @@ export const Header = memo(function Header({
   displayTitle,
   matchedSub,
   onView,
+  collapsed,
 }: {
   isRunning: boolean;
   isError: boolean;
@@ -94,6 +110,7 @@ export const Header = memo(function Header({
   displayTitle: string;
   matchedSub: SubagentSessionInfo | null;
   onView: () => void;
+  collapsed?: boolean;
 }) {
   const { t } = useTranslation("chat");
   return (
@@ -129,6 +146,17 @@ export const Header = memo(function Header({
             SubAgent
           </span>
           <StatusChip isRunning={isRunning} isDone={isDone} isError={isError} />
+          {!isRunning && collapsed && (
+            <svg
+              className="w-3 h-3 text-gray-400 dark:text-gray-500 shrink-0"
+              viewBox="0 0 12 12"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            >
+              <path d="M4.5 3l3 3-3 3" />
+            </svg>
+          )}
         </div>
         <p className="text-[11px] text-gray-600 dark:text-gray-400 leading-relaxed line-clamp-2">
           {displayTitle}
