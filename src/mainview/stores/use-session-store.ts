@@ -289,11 +289,18 @@ export const useSessionStore = create<SessionState>()(
           let sessions = result.sessions as SessionMeta[];
 
           const seen = new Set<string>();
+          const seenPaths = new Set<string>();
           sessions = sessions.filter((s) => {
             if (seen.has(s.sessionId)) return false;
+            if (seenPaths.has(s.sessionPath)) return false;
             seen.add(s.sessionId);
+            seenPaths.add(s.sessionPath);
             return true;
           });
+
+          const existing = get().sessionsByProject[projectPath] || [];
+          const existingPaths = new Set(existing.map((s) => s.sessionPath));
+          sessions = sessions.filter((s) => !existingPaths.has(s.sessionPath));
 
           const blankSessions = sessions.filter((s) => s.messageCount === 0 && !s.firstMessage);
           if (blankSessions.length > 1) {
@@ -842,6 +849,8 @@ export const useSessionStore = create<SessionState>()(
             const mcpPromise = apiClient.call("agent.getMcpServers", { sessionId });
             const queuePromise = apiClient.call("agent.getQueue", { sessionId });
             const agentChangePromise = apiClient.call("agent.getLatestAgentChange", { sessionId });
+            const agentsPromise = apiClient.call("agent.getAgents", { sessionId });
+            const currentAgentPromise = apiClient.call("agent.getCurrentAgent", { sessionId });
 
             statePromise
               .then((rawResult) => {
@@ -1036,6 +1045,60 @@ export const useSessionStore = create<SessionState>()(
                   );
               });
 
+            agentsPromise
+              .then((agentsResult: unknown) => {
+                perfLog.info("[fetchInit] getAgents done", {
+                  sessionId,
+                  ms: Math.round(performance.now() - t0),
+                });
+                const raw = agentsResult as {
+                  agents?: Array<{
+                    name: string;
+                    description?: string;
+                    tier?: string;
+                    tools?: string[];
+                    permissionMode?: string;
+                    source?: string;
+                    filePath?: string;
+                  }>;
+                };
+                const agentList = (raw.agents ?? []).map((a) => ({
+                  name: a.name,
+                  description: a.description,
+                  tier: a.tier,
+                  tools: a.tools,
+                  permissionMode: a.permissionMode,
+                  source: (a.source ?? "builtin") as "builtin" | "user" | "project",
+                  filePath: a.filePath ?? "",
+                }));
+                useAgentStore.getState().setAgents(agentList);
+              })
+              .catch((err: unknown) => {
+                log.warn("agent.getAgents failed", {
+                  sessionId,
+                  err: err instanceof Error ? err.message : String(err),
+                });
+              });
+
+            currentAgentPromise
+              .then((currentResult: unknown) => {
+                perfLog.info("[fetchInit] getCurrentAgent done", {
+                  sessionId,
+                  ms: Math.round(performance.now() - t0),
+                });
+                const agentResult = currentResult as { agentName: string | null };
+                const agentName = agentResult.agentName ?? "build";
+                useAgentStore.getState().setCurrentAgent(sessionId, agentName);
+              })
+              .catch((err: unknown) => {
+                log.warn("agent.getCurrentAgent failed", {
+                  sessionId,
+                  err: err instanceof Error ? err.message : String(err),
+                });
+              });
+
+            // Agent change restoration runs AFTER agents + currentAgent are set
+            // so it can override the current agent with the persisted one
             agentChangePromise
               .then((result: unknown) => {
                 perfLog.info("[fetchInit] getLatestAgentChange done", {
@@ -1065,6 +1128,10 @@ export const useSessionStore = create<SessionState>()(
                       err: err instanceof Error ? err.message : String(err),
                     });
                   });
+                } else {
+                  // No persisted agent change — load detail for the current agent
+                  useAgentStore.getState().fetchAgentDetail(sessionId);
+                  useAgentStore.getState().fetchAllTools(sessionId);
                 }
               })
               .catch((err: unknown) => {

@@ -81,6 +81,7 @@ interface AgentState {
   loadingDetail: boolean;
   setAgentForSession: (sessionId: string, name: string) => void;
   setAgents: (agents: AgentInfo[]) => void;
+  setCurrentAgent: (sessionId: string, agentName: string) => void;
   fetchAgents: (sessionId: string) => Promise<void>;
   switchAgent: (agentName: string, sessionId: string) => Promise<void>;
   getCurrentAgentForSession: (sessionId: string) => string;
@@ -124,6 +125,10 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
       currentAgentBySession: { ...state.currentAgentBySession, [sessionId]: name },
     })),
   setAgents: (agents) => set({ agents, loaded: true }),
+  setCurrentAgent: (sessionId, agentName) =>
+    set((state) => ({
+      currentAgentBySession: { ...state.currentAgentBySession, [sessionId]: agentName },
+    })),
 
   fetchAgents: async (sessionId) => {
     try {

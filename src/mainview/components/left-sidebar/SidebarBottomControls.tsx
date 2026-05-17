@@ -88,7 +88,6 @@ export function SidebarBottomControls() {
     activeSessionId ? (s.switchingBySession[activeSessionId] ?? false) : false,
   );
   const switchAgent = useAgentStore((s) => s.switchAgent);
-  const fetchAgents = useAgentStore((s) => s.fetchAgents);
   const [agentOpen, setAgentOpen] = useState(false);
   const agentRef = useRef<HTMLDivElement>(null);
 
@@ -116,8 +115,7 @@ export function SidebarBottomControls() {
     sessionFetchedRef.current = activeSessionId;
     fetchModelState(activeSessionId);
     fetchTierConfig(activeSessionId);
-    fetchAgents(activeSessionId);
-  }, [activeSessionId, fetchModelState, fetchTierConfig, fetchAgents]);
+  }, [activeSessionId, fetchModelState, fetchTierConfig]);
 
   const currentTab = projectTabs.find((t) => t.id === activeProjectId);
   const activeTabPath = currentTab?.path ?? "";
