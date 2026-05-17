@@ -129,7 +129,7 @@ export function CommandPopup({
                   onClick={() => onSetAtTab(tab.key)}
                   className={`px-2.5 py-0.5 rounded text-xs transition-colors whitespace-nowrap ${
                     atTab === tab.key
-                      ? "bg-indigo-600/30 text-indigo-300"
+                      ? "bg-semantic-accent/30 text-semantic-accent"
                       : "text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
                   }`}
                 >
@@ -177,7 +177,7 @@ export function CommandPopup({
                 className={`${
                   i === fileBreadcrumbs.length - 1
                     ? "text-gray-700 dark:text-gray-300"
-                    : "text-indigo-400 hover:text-indigo-300"
+                    : "text-semantic-accent hover:text-semantic-accent"
                 }`}
               >
                 {bc.label}

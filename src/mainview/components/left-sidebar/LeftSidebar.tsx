@@ -132,7 +132,7 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
       <SidebarBottomControls />
 
       {showSuccessToast && (
-        <div className="fixed bottom-16 left-4 z-50 bg-green-600/90 text-white px-4 py-2 rounded-md shadow-lg animate-slide-in-left">
+        <div className="fixed bottom-16 left-4 z-50 bg-status-success/90 text-white px-4 py-2 rounded-md shadow-lg animate-slide-in-left">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-white" />
             <span className="text-sm">{t("sessionCreated")}</span>
@@ -141,7 +141,7 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
       )}
 
       {showErrorToast && (
-        <div className="fixed bottom-16 left-4 z-50 bg-red-600/90 text-white px-4 py-2 rounded-md shadow-lg animate-slide-in-left max-w-md">
+        <div className="fixed bottom-16 left-4 z-50 bg-status-error/90 text-white px-4 py-2 rounded-md shadow-lg animate-slide-in-left max-w-md">
           <div className="flex items-start gap-2">
             <div className="w-2 h-2 rounded-full bg-white mt-0.5 shrink-0" />
             <span className="text-sm">{t("createFailed", { error: showErrorToast })}</span>

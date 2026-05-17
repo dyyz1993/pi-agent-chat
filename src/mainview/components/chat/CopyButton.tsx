@@ -37,7 +37,7 @@ export const CopyButton = memo(function CopyButton({
       className={`${containerSize} rounded hover:bg-gray-200/60 dark:hover:bg-gray-700/60 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors ${className}`}
     >
       {copied ? (
-        <Check className={`${sizeClasses} text-green-400`} />
+        <Check className={`${sizeClasses} text-status-success`} />
       ) : (
         <Copy className={`${sizeClasses}`} />
       )}

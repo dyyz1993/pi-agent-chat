@@ -307,11 +307,11 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
               onContextMenu={(e) => e.preventDefault()}
               className={`group flex items-center gap-1.5 px-3 py-1 text-xs rounded-t transition-all duration-150 relative cursor-pointer select-none shrink-0 ${
                 isActive
-                  ? "bg-white dark:bg-gray-950 text-gray-900 dark:text-white border-t-2 border-t-indigo-500"
+                  ? "bg-white dark:bg-gray-950 text-gray-900 dark:text-white border-t-2 border-t-semantic-accent"
                   : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-800/50"
               } ${isPressing ? "scale-[0.97] opacity-90" : ""} ${
                 isDragSource
-                  ? "scale-105 shadow-lg ring-2 ring-semantic-accent/50 bg-indigo-50 dark:bg-indigo-950/50 z-10"
+                  ? "scale-105 shadow-lg ring-2 ring-semantic-accent/50 bg-semantic-accent/10 dark:bg-semantic-accent/5 z-10"
                   : ""
               }`}
             >
@@ -391,7 +391,7 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
                     {t("closeProjectContinue")}
                   </button>
                   <button
-                    className="px-3 py-1.5 text-xs bg-red-600 hover:bg-red-700 rounded transition-colors text-white"
+                    className="px-3 py-1.5 text-xs bg-status-error hover:bg-status-error/80 rounded transition-colors text-white"
                     onClick={handleStopAndClose}
                   >
                     {t("closeProjectStop")}
@@ -406,7 +406,7 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
                     {t("cancel", { ns: "common" })}
                   </button>
                   <button
-                    className="px-3 py-1.5 text-xs bg-red-600 hover:bg-red-700 rounded transition-colors text-white"
+                    className="px-3 py-1.5 text-xs bg-status-error hover:bg-status-error/80 rounded transition-colors text-white"
                     onClick={handleKeepRunning}
                   >
                     {t("closeProjectClose")}

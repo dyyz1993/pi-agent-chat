@@ -176,7 +176,7 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
 
   return (
     <div
-      className="flex-1 rounded-lg border border-gray-300/50 dark:border-gray-700/50 focus-within:border-indigo-500/50 bg-gray-100/50 dark:bg-gray-800/50 overflow-hidden transition-colors"
+      className="flex-1 rounded-lg border border-gray-300/50 dark:border-gray-700/50 focus-within:border-semantic-accent/50 bg-gray-100/50 dark:bg-gray-800/50 overflow-hidden transition-colors"
       style={{ minHeight: expanded ? "200px" : "80px" }}
     >
       <div className="relative h-full flex">

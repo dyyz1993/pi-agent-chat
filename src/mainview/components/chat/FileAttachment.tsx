@@ -16,7 +16,9 @@ function AttachmentPreview({ att, onRemove }: { att: AttachmentFile; onRemove: (
         <Loader2 className="w-3 h-3 text-semantic-accent animate-spin shrink-0" />
       )}
       {att.status === "error" && <AlertCircle className="w-3 h-3 text-status-error shrink-0" />}
-      {att.status === "done" && <div className="w-3 h-3 rounded-full bg-green-500/80 shrink-0" />}
+      {att.status === "done" && (
+        <div className="w-3 h-3 rounded-full bg-status-success/80 shrink-0" />
+      )}
       {att.status === "pending" && <div className="w-3 h-3 rounded-full bg-gray-600 shrink-0" />}
 
       {isImage && att.preview ? (
@@ -99,11 +101,11 @@ export function AttachmentButtons() {
   const shieldColor = !supervisorStatus?.enabled
     ? "text-gray-400 dark:text-gray-500"
     : supervisorStatus.state === "idle" || supervisorStatus.state === "checking"
-      ? "text-green-500"
+      ? "text-status-success"
       : supervisorStatus.state === "paused"
-        ? "text-amber-500"
+        ? "text-status-warning"
         : supervisorStatus.state === "continuing"
-          ? "text-blue-500"
+          ? "text-status-info"
           : "text-gray-400 dark:text-gray-500";
 
   const isPulsing =
@@ -155,7 +157,7 @@ export function AttachmentButtons() {
       >
         <Shield className={`w-4 h-4 ${isPulsing ? "animate-pulse" : ""}`} />
         {pendingSeconds !== null && pendingSeconds < 60 && pendingSeconds > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] flex items-center justify-center rounded-full bg-amber-500 text-white text-[8px] font-bold leading-none px-0.5">
+          <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] flex items-center justify-center rounded-full bg-status-warning text-white text-[8px] font-bold leading-none px-0.5">
             {pendingSeconds}
           </span>
         )}

@@ -200,7 +200,7 @@ export function FilePreviewOverlay({
               onClick={() => setHtmlSourceMode((v) => !v)}
               className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors ${
                 htmlSourceMode
-                  ? "text-semantic-accent bg-indigo-500/10 hover:bg-indigo-500/20"
+                  ? "text-semantic-accent bg-semantic-accent/10 hover:bg-semantic-accent/20"
                   : "text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-700/50"
               }`}
               title={htmlSourceMode ? t("switchPreview") : t("switchSource")}
@@ -222,7 +222,7 @@ export function FilePreviewOverlay({
           {preview.editable && (
             <button
               onClick={handleSave}
-              className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-indigo-600 hover:bg-indigo-700 text-white transition-colors"
+              className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-semantic-accent hover:bg-semantic-accent/80 text-white transition-colors"
               title="Save (Ctrl+Enter)"
             >
               <Save className="w-3.5 h-3.5" />

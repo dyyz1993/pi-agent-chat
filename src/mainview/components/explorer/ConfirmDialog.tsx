@@ -38,7 +38,7 @@ export function ConfirmDialog({ title, message, onConfirm, onCancel }: ConfirmDi
             {t("cancel")}
           </button>
           <button
-            className="px-3 py-1.5 text-xs bg-red-600 hover:bg-red-700 rounded transition-colors text-white"
+            className="px-3 py-1.5 text-xs bg-status-error hover:bg-status-error/80 rounded transition-colors text-white"
             onClick={onConfirm}
           >
             {t("delete")}

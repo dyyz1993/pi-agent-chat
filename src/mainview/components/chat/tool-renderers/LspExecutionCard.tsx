@@ -108,9 +108,9 @@ export const LspExecutionCard = memo(function LspExecutionCard({ block }: LspExe
   const copyText = `[lsp] ${parsed.action}\n${block.output ?? ""}`;
 
   let bgClass: string;
-  if (isRunning) bgClass = "bg-blue-950/15 dark:bg-blue-950/15";
-  else if (isError) bgClass = "bg-red-950/10 dark:bg-red-950/10";
-  else bgClass = "bg-amber-950/[0.06] dark:bg-gray-800/20";
+  if (isRunning) bgClass = "bg-status-info/10 dark:bg-status-info/10";
+  else if (isError) bgClass = "bg-status-error/5 dark:bg-status-error/5";
+  else bgClass = "bg-status-warning/[0.05] dark:bg-gray-800/20";
 
   return (
     <div className={`overflow-hidden ${bgClass}`}>
@@ -121,7 +121,7 @@ export const LspExecutionCard = memo(function LspExecutionCard({ block }: LspExe
         aria-expanded={!collapsed}
       >
         {collapsed && isRunning && (
-          <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+          <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-status-info animate-pulse" />
         )}
 
         {(() => {
@@ -147,7 +147,7 @@ export const LspExecutionCard = memo(function LspExecutionCard({ block }: LspExe
         {isRunning && <span className="text-status-info animate-pulse text-[10px]">running</span>}
 
         {!isRunning && !isError && (
-          <CheckCircle className="w-3.5 h-3.5 text-green-500 shrink-0 ml-auto" />
+          <CheckCircle className="w-3.5 h-3.5 text-status-success shrink-0 ml-auto" />
         )}
         {isError && <span className="w-3.5 h-3.5 shrink-0 ml-auto text-status-error">✕</span>}
 

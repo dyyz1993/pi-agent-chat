@@ -237,7 +237,7 @@ function StatusBadge({ sessionId }: { sessionId: string }) {
 
   if (status === "streaming" || status === "compacting") {
     return (
-      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/15 text-status-warning border border-amber-500/20">
+      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-warning/15 text-status-warning border border-status-warning/20">
         <span className="w-1 h-1 rounded-full bg-status-warning animate-pulse" />
         {t("working")}
       </span>
@@ -245,7 +245,7 @@ function StatusBadge({ sessionId }: { sessionId: string }) {
   }
   if (status === "permission") {
     return (
-      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-red-500/15 text-status-error border border-red-500/20">
+      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-error/15 text-status-error border border-status-error/20">
         <span className="w-1 h-1 rounded-full bg-status-error" />
         {t("needHelp")}
       </span>
@@ -253,15 +253,15 @@ function StatusBadge({ sessionId }: { sessionId: string }) {
   }
   if (status === "retrying") {
     return (
-      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-red-500/15 text-status-error border border-red-500/20">
+      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-error/15 text-status-error border border-status-error/20">
         <span className="w-1 h-1 rounded-full bg-status-error animate-pulse" />
         {t("retrying")}
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-status-success/80 border border-emerald-500/15">
-      <span className="w-1 h-1 rounded-full bg-emerald-500/60" />
+    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-success/10 text-status-success/80 border border-status-success/15">
+      <span className="w-1 h-1 rounded-full bg-status-success/60" />
       {t("idle")}
     </span>
   );
@@ -274,7 +274,7 @@ function WorkspaceBadge({
 }) {
   const name = workspace.isMain ? workspace.path.split("/").pop() : workspace.branch;
   return (
-    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-cyan-500/15 text-semantic-tool border border-cyan-500/20">
+    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-semantic-tool/15 text-semantic-tool border border-semantic-tool/20">
       {!workspace.isMain && <GitBranch className="w-2.5 h-2.5" />}
       {name}
     </span>
@@ -285,7 +285,7 @@ function SubagentStatusBadge({ sub }: { sub: SubagentSessionInfo }) {
   const { t } = useTranslation("common");
   if (sub.exitCode === 0) {
     return (
-      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/15 text-status-success border border-emerald-500/20">
+      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-success/15 text-status-success border border-status-success/20">
         <span className="w-1 h-1 rounded-full bg-status-success" />
         {t("idle")}
       </span>
@@ -293,13 +293,13 @@ function SubagentStatusBadge({ sub }: { sub: SubagentSessionInfo }) {
   }
   if (sub.error || (sub.exitCode !== undefined && sub.exitCode !== 0)) {
     return (
-      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-red-500/15 text-status-error border border-red-500/20">
+      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-error/15 text-status-error border border-status-error/20">
         {t("error")}
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/15 text-status-warning border border-amber-500/20">
+    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-warning/15 text-status-warning border border-status-warning/20">
       <span className="w-1 h-1 rounded-full bg-status-warning animate-pulse" />
       {t("running")}
     </span>
@@ -452,7 +452,7 @@ function SessionItem({
                   if (e.key === "Enter") handleConfirmRename();
                   if (e.key === "Escape") handleCancelRename();
                 }}
-                className="flex-1 bg-white dark:bg-gray-800 border border-indigo-500/50 rounded px-1.5 py-0.5 text-[11px] text-gray-800 dark:text-gray-200 outline-none"
+                className="flex-1 bg-white dark:bg-gray-800 border border-semantic-accent/50 rounded px-1.5 py-0.5 text-[11px] text-gray-800 dark:text-gray-200 outline-none"
               />
               <button
                 onClick={handleConfirmRename}
@@ -530,7 +530,7 @@ function SessionItem({
               </button>
               <button
                 onClick={handleDelete}
-                className="p-1 rounded-md hover:bg-red-900/40 text-gray-600 hover:text-status-error transition-colors"
+                className="p-1 rounded-md hover:bg-status-error/40 text-gray-600 hover:text-status-error transition-colors"
                 title={t("common:delete")}
               >
                 <Trash2 className="w-3 h-3" />
@@ -761,7 +761,7 @@ function SubagentItem({
             </button>
             <button
               onClick={handleDelete}
-              className="p-1 rounded-md hover:bg-red-900/40 text-gray-600 hover:text-status-error transition-colors"
+              className="p-1 rounded-md hover:bg-status-error/40 text-gray-600 hover:text-status-error transition-colors"
               title={t("common:delete")}
             >
               <Trash2 className="w-3 h-3" />

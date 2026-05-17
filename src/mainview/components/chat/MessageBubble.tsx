@@ -38,7 +38,7 @@ import { SnapshotBadge } from "./snapshot/SnapshotBadge";
 import { formatTokenCount } from "../../utils/turn-utils";
 
 export function getBlockBorderColor(block: ContentBlock, role: "user" | "assistant"): string {
-  const roleDefault = role === "user" ? "border-l-blue-500/60" : "border-l-emerald-500/50";
+  const roleDefault = role === "user" ? "border-l-status-info/60" : "border-l-status-success/50";
 
   switch (block.type) {
     case "thinking":
@@ -80,7 +80,7 @@ export function getBlockBorderColor(block: ContentBlock, role: "user" | "assista
 }
 
 function getDefaultBorderColor(role: "user" | "assistant"): string {
-  return role === "user" ? "border-l-blue-500/60" : "border-l-emerald-500/50";
+  return role === "user" ? "border-l-status-info/60" : "border-l-status-success/50";
 }
 
 interface MessageBubbleProps {
@@ -114,7 +114,7 @@ export const MessageBubble = memo(function MessageBubble({
     if (isSelected) {
       bg = "bg-semantic-accent/[0.06]";
     } else if (isActive) {
-      bg = "bg-blue-500/[0.04]";
+      bg = "bg-status-info/[0.04]";
     }
     return { bg, isUser };
   }, [isSelected, isActive, isUser]);
@@ -152,7 +152,7 @@ export const MessageBubble = memo(function MessageBubble({
       )}
       {isUser ? (
         <div
-          className={`relative my-0.5 mr-2 px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap break-words text-gray-800 dark:text-gray-100 bg-blue-500/[0.06] rounded-r-lg border-l-[3px] border-l-blue-500/60 ${styleMemo.bg} min-w-0`}
+          className={`relative my-0.5 mr-2 px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap break-words text-gray-800 dark:text-gray-100 bg-status-info/[0.06] rounded-r-lg border-l-[3px] border-l-status-info/60 ${styleMemo.bg} min-w-0`}
         >
           <div className="absolute -top-0.5 right-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-10">
             <CopyButton text={fullTextForCopy} size="xs" />
@@ -504,7 +504,7 @@ export const LspDiagnosticsCard = memo(function LspDiagnosticsCard({ data }: { d
   const { t } = useTranslation("chat");
   if (!data || typeof data !== "object") {
     return (
-      <div className="my-0.5 overflow-hidden bg-yellow-950/5">
+      <div className="my-0.5 overflow-hidden bg-status-warning/5">
         <div className="px-4 py-1 text-[11px] font-medium text-status-warning flex items-center gap-1.5">
           <AlertTriangle className="w-3 h-3 shrink-0" />
           <span>{t("lspDiagnostics")}</span>
@@ -528,21 +528,21 @@ export const LspDiagnosticsCard = memo(function LspDiagnosticsCard({ data }: { d
   };
 
   return (
-    <div className="my-0.5 border border-yellow-700/30 rounded-lg overflow-hidden bg-yellow-50/50 dark:bg-yellow-900/10">
+    <div className="my-0.5 border border-status-warning/30 rounded-lg overflow-hidden bg-status-warning/50 dark:bg-status-warning/10">
       <div className="px-3 py-1.5 text-xs font-medium text-status-warning flex items-center gap-1.5">
         <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
         <span>{t("lspDiagnostics")}</span>
       </div>
-      <div className="border-t border-yellow-700/20">
+      <div className="border-t border-status-warning/20">
         {details.files?.map((f) => (
           <div
             key={f.filePath}
-            className="px-3 py-1.5 border-b last:border-b-0 border-yellow-700/10"
+            className="px-3 py-1.5 border-b last:border-b-0 border-status-warning/10"
           >
             <div className="text-[11px] text-status-warning font-medium flex items-center gap-1">
               <FileText className="w-3 h-3 shrink-0" />
               <span>{f.filePath}</span>
-              <span className="text-yellow-500 ml-1">{f.summary}</span>
+              <span className="text-status-warning ml-1">{f.summary}</span>
             </div>
             {f.issues.map((issue, i) => (
               <div key={i} className="text-[10px] text-gray-500 dark:text-gray-400 pl-4 pt-0.5">
@@ -597,15 +597,15 @@ function TierBadge({ tier }: { tier: string }) {
     { style: string; Icon: React.ComponentType<{ className?: string }> }
   > = {
     fast: {
-      style: "bg-amber-500/[0.12] text-status-warning border-amber-500/25",
+      style: "bg-status-warning/[0.12] text-status-warning border-status-warning/25",
       Icon: Zap,
     },
     pro: {
-      style: "bg-indigo-500/[0.12] text-semantic-accent border-indigo-500/25",
+      style: "bg-semantic-accent/[0.12] text-semantic-accent border-semantic-accent/25",
       Icon: Target,
     },
     max: {
-      style: "bg-purple-500/[0.12] text-semantic-agent border-purple-500/25",
+      style: "bg-semantic-agent/[0.12] text-semantic-agent border-semantic-agent/25",
       Icon: Brain,
     },
   };
@@ -982,7 +982,7 @@ function PrefetchResultDetail({
             {layer === "not_triggered" && (
               <div className="text-gray-400 dark:text-gray-500">{t("notTriggered")}</div>
             )}
-            {layer === "skip" && <div className="text-yellow-500/80">{t("skipLayer")}</div>}
+            {layer === "skip" && <div className="text-status-warning/80">{t("skipLayer")}</div>}
             {layer === "llm" && isForce && (
               <div className="text-status-error/80">{t("forceTrigger")}</div>
             )}
@@ -1005,10 +1005,10 @@ function PrefetchResultDetail({
 
           {skipHits.length > 0 && (
             <div className="space-y-0.5">
-              <div className="text-yellow-600/80">{t("skipRuleHit")}</div>
+              <div className="text-status-warning/80">{t("skipRuleHit")}</div>
               {skipHits.map((h, i) => (
                 <div key={i} className="pl-2 flex items-center gap-1.5">
-                  <span className="text-yellow-500/60">•</span>
+                  <span className="text-status-warning/60">•</span>
                   <span className="text-gray-700 dark:text-gray-300 font-mono">
                     「{h.pattern}」
                   </span>
@@ -1022,7 +1022,7 @@ function PrefetchResultDetail({
 
           {guardHits.length > 0 && (
             <div className="space-y-0.5">
-              <div className="text-green-600/80">{t("guardRuleHit")}</div>
+              <div className="text-status-success/80">{t("guardRuleHit")}</div>
               {guardHits.map((h, i) => (
                 <div key={i} className="pl-2 flex items-center gap-1.5">
                   <span className="text-status-success/60">•</span>
@@ -1039,7 +1039,7 @@ function PrefetchResultDetail({
 
           {triggerHits.length > 0 && (
             <div className="space-y-0.5">
-              <div className="text-cyan-600/80">{t("triggerKeywords")}</div>
+              <div className="text-semantic-tool/80">{t("triggerKeywords")}</div>
               {triggerHits.map((h, i) => (
                 <div key={i} className="pl-2 flex items-center gap-1.5">
                   <span className="text-semantic-tool/60">•</span>
@@ -1384,11 +1384,11 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
 
   let bgOnly: string;
   if (isRunning) {
-    bgOnly = "bg-blue-950/15 dark:bg-blue-950/15";
+    bgOnly = "bg-status-info/15 dark:bg-status-info/15";
   } else if (isError) {
-    bgOnly = "bg-red-950/10 dark:bg-red-950/10";
+    bgOnly = "bg-status-error/10 dark:bg-status-error/10";
   } else {
-    bgOnly = "bg-amber-950/[0.06] dark:bg-gray-800/20";
+    bgOnly = "bg-status-warning/[0.06] dark:bg-gray-800/20";
   }
 
   const fullExecutionText = useMemo(() => {
@@ -1426,11 +1426,11 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
           {block.toolName}
         </span>
         {collapsed && isRunning && (
-          <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+          <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-status-info animate-pulse" />
         )}
         {isRunning && <span className="text-status-info animate-pulse text-[10px]">running</span>}
         {!isRunning && !isError && (
-          <CheckCircle className="w-3.5 h-3.5 text-green-500 shrink-0 ml-auto" />
+          <CheckCircle className="w-3.5 h-3.5 text-status-success shrink-0 ml-auto" />
         )}
         {isError && <XCircle className="w-3.5 h-3.5 text-status-error shrink-0 ml-auto" />}
         <CopyButton text={fullExecutionText} size="xs" title={t("copyAllExecution")} />
@@ -1564,7 +1564,7 @@ export const MessageMetaFooter = memo(function MessageMetaFooter({
             value={formatTokenCount(tokenUsage.cacheWrite ?? 0)}
             color="text-semantic-memory dark:text-semantic-memory"
           />
-          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-500/10 text-status-warning font-mono">
+          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-status-warning/10 text-status-warning font-mono">
             ${(tokenUsage.cost ?? 0).toFixed(5)}
           </span>
         </span>

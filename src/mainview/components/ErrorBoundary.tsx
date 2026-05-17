@@ -45,7 +45,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           </div>
           <button
             onClick={this.handleRetry}
-            className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-sm rounded-lg transition-colors"
+            className="px-4 py-2 bg-semantic-accent hover:bg-semantic-accent/80 text-white text-sm rounded-lg transition-colors"
           >
             {i18n.t("common:retry")}
           </button>
@@ -57,7 +57,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
               {this.state.detailsOpen ? "▼" : "▶"} {i18n.t("common:errorDetail")}
             </button>
             {this.state.detailsOpen && this.state.error && (
-              <pre className="mt-2 text-left text-xs text-red-500 dark:text-red-400 bg-gray-100 dark:bg-[#111827] rounded-lg p-3 overflow-auto max-h-40 whitespace-pre-wrap break-all">
+              <pre className="mt-2 text-left text-xs text-status-error dark:text-status-error bg-gray-100 dark:bg-[#111827] rounded-lg p-3 overflow-auto max-h-40 whitespace-pre-wrap break-all">
                 {this.state.error.message}
                 {this.state.error.stack && (
                   <>

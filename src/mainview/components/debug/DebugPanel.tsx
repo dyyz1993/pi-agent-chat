@@ -38,7 +38,7 @@ export function DebugPanel() {
           </select>
           <button
             onClick={() => callRPC("")}
-            className="px-3 py-1 text-xs bg-indigo-600 hover:bg-indigo-700 rounded transition-colors flex items-center gap-1"
+            className="px-3 py-1 text-xs bg-semantic-accent hover:bg-semantic-accent rounded transition-colors flex items-center gap-1"
           >
             <Play className="w-3 h-3" />
             Call
@@ -64,7 +64,7 @@ export function DebugPanel() {
             )}
             Subscriptions
             {timerRunning && (
-              <span className="ml-1 px-1.5 py-0.5 bg-green-600/30 text-status-success rounded text-[10px]">
+              <span className="ml-1 px-1.5 py-0.5 bg-status-success/30 text-status-success rounded text-[10px]">
                 LIVE
               </span>
             )}
@@ -74,14 +74,14 @@ export function DebugPanel() {
             {!subscriptionId ? (
               <button
                 onClick={handleSubscribe}
-                className="px-2 py-0.5 text-xs bg-green-600 hover:bg-green-700 rounded transition-colors"
+                className="px-2 py-0.5 text-xs bg-status-success hover:bg-status-success rounded transition-colors"
               >
                 Subscribe
               </button>
             ) : (
               <button
                 onClick={handleUnsubscribe}
-                className="px-2 py-0.5 text-xs bg-red-600 hover:bg-red-700 rounded transition-colors"
+                className="px-2 py-0.5 text-xs bg-status-error hover:bg-status-error rounded transition-colors"
               >
                 Unsubscribe
               </button>

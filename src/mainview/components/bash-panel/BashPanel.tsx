@@ -448,7 +448,7 @@ function LogViewer({
           {!autoScroll && !loading && lines.length > 0 && (
             <button
               onClick={jumpToBottom}
-              className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-600 text-white text-[10px] font-medium shadow-lg hover:bg-blue-500 transition-all z-10"
+              className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-status-info text-white text-[10px] font-medium shadow-lg hover:bg-status-info/80 transition-all z-10"
             >
               <ArrowDownToLine className="w-3 h-3" />
               <span>{t("scrollToBottom")}</span>

@@ -8,15 +8,25 @@
  *       这些 token 通过 CSS 变量自动适配 light/dark 主题。
  *
  * 替换映射：
- *   green-400/300, emerald-400  → status-success
- *   red-400/300                 → status-error
- *   amber-400/300, yellow-400/300 → status-warning
- *   blue-400/300, sky-400       → status-info
- *   purple-400/300              → semantic-agent
- *   cyan-400/300                → semantic-tool
- *   teal-400/300                → semantic-memory
- *   indigo-400/300              → semantic-accent
- *   orange-400/300              → semantic-notify
+ *   green/emerald    → status-success
+ *   red              → status-error
+ *   amber/yellow     → status-warning
+ *   blue/sky         → status-info
+ *   purple           → semantic-agent
+ *   cyan             → semantic-tool
+ *   teal             → semantic-memory
+ *   indigo           → semantic-accent
+ *   orange           → semantic-notify
+ *
+ * 覆盖范围：
+ *   - 所有色阶（100-900），不限于暗色优化的 300/400
+ *   - text / bg / border / ring / fill / stroke 前缀
+ *   - hover: / active: / focus: 等变体前缀
+ *   - JSX className 属性 + clsx/cn() 调用 + 对象属性值中的字符串字面量
+ *
+ * 豁免：
+ *   - 已有 dark: 配对的类（token 自动适配，无需配对）
+ *   - AnsiText.tsx 终端颜色码映射表
  */
 
 const COLOR_TO_TOKEN = {
@@ -36,8 +46,6 @@ const COLOR_TO_TOKEN = {
 
 const SEMANTIC_COLORS = Object.keys(COLOR_TO_TOKEN);
 
-const DARK_OPTIMIZED_SHADES = ["300", "400"];
-
 const COLOR_CLASS_RE =
   /(?:text|bg|border|ring|outline|decoration|shadow|from|via|to|fill|stroke)-([a-z]+)-(\d+)(?:\/([\d.]+))?/;
 
@@ -47,6 +55,7 @@ function parseClasses(classNameStr) {
 }
 
 function extractColorToken(cls) {
+  COLOR_CLASS_RE.lastIndex = 0;
   const match = COLOR_CLASS_RE.exec(cls);
   if (!match) return null;
   return { color: match[1], shade: match[2], opacity: match[3], full: cls };
@@ -54,6 +63,41 @@ function extractColorToken(cls) {
 
 function isDarkPrefixed(cls) {
   return cls.startsWith("dark:");
+}
+
+function hasDarkPair(classes, baseColor) {
+  return classes.some((cls) => {
+    if (!cls.startsWith("dark:")) return false;
+    const stripped = cls.slice(5);
+    const token = extractColorToken(stripped);
+    return token && token.color === baseColor;
+  });
+}
+
+function reportViolation(context, node, cls) {
+  const token = extractColorToken(cls);
+  if (!token || !SEMANTIC_COLORS.includes(token.color)) return;
+
+  const semanticToken = COLOR_TO_TOKEN[token.color];
+  if (!semanticToken) return;
+
+  const prefixMatch = cls.match(
+    /^(hover:|active:|focus:|prose-a:|group-hover:)*(text|bg|border|ring|fill|stroke)/,
+  );
+  const prefixStr = prefixMatch ? prefixMatch[0] : "";
+  const cleanPrefix = prefixStr.replace(/-$/, "");
+  const opacityStr = token.opacity ? `/${token.opacity}` : "";
+
+  context.report({
+    node,
+    messageId: "useSemanticToken",
+    data: {
+      class: cls,
+      prefix: cleanPrefix ? `${cleanPrefix}-` : "",
+      token: semanticToken,
+      opacity: opacityStr,
+    },
+  });
 }
 
 module.exports = {
@@ -79,6 +123,9 @@ module.exports = {
     const filename = context.getFilename();
     if (!/\.[jt]sx?$/.test(filename)) return {};
 
+    // Skip AnsiText.tsx — terminal ANSI codes are intentionally raw colors
+    if (filename.includes("AnsiText")) return {};
+
     function checkClassString(classNode, rawValue) {
       const classes = parseClasses(rawValue);
       if (classes.length === 0) return;
@@ -89,36 +136,11 @@ module.exports = {
         const token = extractColorToken(cls);
         if (!token) continue;
         if (!SEMANTIC_COLORS.includes(token.color)) continue;
-        if (!DARK_OPTIMIZED_SHADES.includes(token.shade)) continue;
 
-        const semanticToken = COLOR_TO_TOKEN[token.color];
-        if (!semanticToken) continue;
+        // 检查是否有同色的 dark: 变体（已有配对则跳过）
+        if (hasDarkPair(classes, token.color)) continue;
 
-        const hasDarkPair = classes.some((c) => {
-          if (!c.startsWith("dark:")) return false;
-          const darkCls = c.slice(5);
-          const darkToken = extractColorToken(darkCls);
-          return darkToken && darkToken.color === token.color;
-        });
-
-        if (hasDarkPair) continue;
-
-        const prefix = cls.match(
-          /^(hover:|active:|focus:|prose-a:|group-hover:)*(text|bg|border|ring|fill|stroke)/,
-        );
-        const prefixStr = prefix ? prefix[0] : "text-";
-        const opacityStr = token.opacity ? `/${token.opacity}` : "";
-
-        context.report({
-          node: classNode,
-          messageId: "useSemanticToken",
-          data: {
-            class: cls,
-            prefix: prefixStr + "-".includes(prefixStr.slice(-1)) ? "" : prefixStr.replace(/-$/, "-"),
-            token: semanticToken,
-            opacity: opacityStr,
-          },
-        });
+        reportViolation(context, classNode, cls);
       }
     }
 
@@ -127,6 +149,27 @@ module.exports = {
         const trimmed = quasi.value.raw.trim();
         if (trimmed) {
           checkClassString(quasi, trimmed);
+        }
+      }
+    }
+
+    /** 检查对象属性值中的颜色字符串字面量 */
+    function checkObjectPropertyValues(node) {
+      if (node.type !== "ObjectExpression") return;
+      for (const prop of node.properties) {
+        if (
+          prop.type !== "Property" ||
+          !prop.value ||
+          prop.value.type !== "Literal"
+        )
+          continue;
+        const val = String(prop.value.value);
+        if (!val) continue;
+        for (const cls of parseClasses(val)) {
+          if (isDarkPrefixed(cls)) continue;
+          const token = extractColorToken(cls);
+          if (!token || !SEMANTIC_COLORS.includes(token.color)) continue;
+          reportViolation(context, prop.value, cls);
         }
       }
     }
@@ -163,25 +206,37 @@ module.exports = {
             ["clsx", "cn", "classnames"].includes(callee.property.name));
 
         if (isClsx) {
-          if (
-            arg.type === "Literal" ||
-            arg.type === "StringLiteral"
-          ) {
+          if (arg.type === "Literal" || arg.type === "StringLiteral") {
             checkClassString(arg, arg.value);
           } else if (arg.type === "TemplateLiteral") {
             checkTemplateLiteral(arg);
           } else if (arg.type === "ArrayExpression") {
             for (const el of arg.elements) {
-              if (
-                el?.type === "Literal" ||
-                el?.type === "StringLiteral"
-              ) {
+              if (el?.type === "Literal" || el?.type === "StringLiteral") {
                 checkClassString(el, el.value);
               } else if (el?.type === "TemplateLiteral") {
                 checkTemplateLiteral(el);
+              } else if (el?.type === "ObjectExpression") {
+                checkObjectPropertyValues(el);
               }
             }
+          } else if (arg.type === "ObjectExpression") {
+            checkObjectPropertyValues(arg);
           }
+        }
+      },
+
+      /** 检测变量声明中的对象属性值 */
+      VariableDeclarator(node) {
+        if (node.init?.type === "ObjectExpression") {
+          checkObjectPropertyValues(node.init);
+        }
+      },
+
+      /** 检测赋值表达式右侧的对象 */
+      AssignmentExpression(node) {
+        if (node.right?.type === "ObjectExpression") {
+          checkObjectPropertyValues(node.right);
         }
       },
     };

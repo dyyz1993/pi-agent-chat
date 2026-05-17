@@ -39,34 +39,34 @@ export type ToolIconEntry = {
 };
 
 const TOOL_ICON_MAP: Record<string, ToolIconEntry> = {
-  subagent: { icon: Bot, color: "text-purple-400", label: "SubAgent" },
-  read: { icon: Eye, color: "text-blue-400", label: "Read" },
-  edit: { icon: Pencil, color: "text-green-400", label: "Edit" },
-  write: { icon: Pencil, color: "text-green-400", label: "Write" },
-  search: { icon: Search, color: "text-yellow-400", label: "Search" },
-  grep: { icon: Search, color: "text-yellow-400", label: "Grep" },
-  glob: { icon: Search, color: "text-yellow-400", label: "Glob" },
-  code: { icon: Code, color: "text-purple-400", label: "Code" },
-  terminal: { icon: Terminal, color: "text-cyan-400", label: "Terminal" },
-  bash: { icon: Terminal, color: "text-cyan-400", label: "Bash" },
+  subagent: { icon: Bot, color: "text-semantic-agent", label: "SubAgent" },
+  read: { icon: Eye, color: "text-status-info", label: "Read" },
+  edit: { icon: Pencil, color: "text-status-success", label: "Edit" },
+  write: { icon: Pencil, color: "text-status-success", label: "Write" },
+  search: { icon: Search, color: "text-status-warning", label: "Search" },
+  grep: { icon: Search, color: "text-status-warning", label: "Grep" },
+  glob: { icon: Search, color: "text-status-warning", label: "Glob" },
+  code: { icon: Code, color: "text-semantic-agent", label: "Code" },
+  terminal: { icon: Terminal, color: "text-semantic-tool", label: "Terminal" },
+  bash: { icon: Terminal, color: "text-semantic-tool", label: "Bash" },
   image: { icon: ImageIcon, color: "text-pink-400", label: "Image" },
-  folder: { icon: FolderOpen, color: "text-amber-400", label: "Folder" },
-  git: { icon: GitBranch, color: "text-orange-400", label: "Git" },
-  web: { icon: Globe, color: "text-sky-400", label: "Web" },
-  fetch: { icon: Globe, color: "text-sky-400", label: "Fetch" },
-  db: { icon: Database, color: "text-teal-400", label: "Database" },
-  mcp: { icon: Cpu, color: "text-violet-400", label: "MCP" },
-  lsp: { icon: Network, color: "text-blue-400", label: "LSP" },
-  lsp_health: { icon: Network, color: "text-blue-400", label: "LSP Health" },
-  lsp_exec: { icon: FileCode, color: "text-cyan-400", label: "LSP Exec" },
-  todo: { icon: ListTodo, color: "text-amber-400", label: "Todo" },
-  preview: { icon: Eye, color: "text-emerald-400", label: "Preview" },
-  ui_confirm: { icon: CircleCheckBig, color: "text-emerald-400", label: "确认" },
-  ui_select: { icon: ListChecks, color: "text-sky-400", label: "选择" },
-  ui_input: { icon: TextCursorInput, color: "text-amber-400", label: "输入" },
-  ui_editor: { icon: FileCode2, color: "text-violet-400", label: "编辑" },
-  ui_notify: { icon: Bell, color: "text-cyan-400", label: "通知" },
-  ui_respond: { icon: Zap, color: "text-orange-400", label: "响应注入" },
+  folder: { icon: FolderOpen, color: "text-status-warning", label: "Folder" },
+  git: { icon: GitBranch, color: "text-semantic-notify", label: "Git" },
+  web: { icon: Globe, color: "text-status-info", label: "Web" },
+  fetch: { icon: Globe, color: "text-status-info", label: "Fetch" },
+  db: { icon: Database, color: "text-semantic-memory", label: "Database" },
+  mcp: { icon: Cpu, color: "text-semantic-agent", label: "MCP" },
+  lsp: { icon: Network, color: "text-status-info", label: "LSP" },
+  lsp_health: { icon: Network, color: "text-status-info", label: "LSP Health" },
+  lsp_exec: { icon: FileCode, color: "text-semantic-tool", label: "LSP Exec" },
+  todo: { icon: ListTodo, color: "text-status-warning", label: "Todo" },
+  preview: { icon: Eye, color: "text-status-success", label: "Preview" },
+  ui_confirm: { icon: CircleCheckBig, color: "text-status-success", label: "确认" },
+  ui_select: { icon: ListChecks, color: "text-status-info", label: "选择" },
+  ui_input: { icon: TextCursorInput, color: "text-status-warning", label: "输入" },
+  ui_editor: { icon: FileCode2, color: "text-semantic-agent", label: "编辑" },
+  ui_notify: { icon: Bell, color: "text-semantic-tool", label: "通知" },
+  ui_respond: { icon: Zap, color: "text-semantic-notify", label: "响应注入" },
 };
 
 const DEFAULT_ENTRY: ToolIconEntry = {
@@ -77,12 +77,12 @@ const DEFAULT_ENTRY: ToolIconEntry = {
 
 const PREVIEW_TYPE_ICON_MAP: Record<string, ToolIconEntry> = {
   image: { icon: ImageIcon, color: "text-pink-400", label: "Image" },
-  url: { icon: Globe, color: "text-sky-400", label: "URL" },
-  html: { icon: Code, color: "text-orange-400", label: "HTML" },
-  pdf: { icon: FileText, color: "text-red-400", label: "PDF" },
-  video: { icon: Video, color: "text-purple-400", label: "Video" },
-  audio: { icon: Music, color: "text-cyan-400", label: "Audio" },
-  markdown: { icon: File, color: "text-amber-400", label: "Markdown" },
+  url: { icon: Globe, color: "text-status-info", label: "URL" },
+  html: { icon: Code, color: "text-semantic-notify", label: "HTML" },
+  pdf: { icon: FileText, color: "text-status-error", label: "PDF" },
+  video: { icon: Video, color: "text-semantic-agent", label: "Video" },
+  audio: { icon: Music, color: "text-semantic-tool", label: "Audio" },
+  markdown: { icon: File, color: "text-status-warning", label: "Markdown" },
   text: { icon: FileText, color: "text-gray-400", label: "Text" },
 };
 
@@ -96,13 +96,13 @@ export function getPreviewResourceIcon(resourceType: string): ToolIconEntry {
 
 const USER_ENTRY: ToolIconEntry = {
   icon: User,
-  color: "text-indigo-400",
+  color: "text-semantic-accent",
   label: "User",
 };
 
 const ASSISTANT_ENTRY: ToolIconEntry = {
   icon: Bot,
-  color: "text-green-400",
+  color: "text-status-success",
   label: "Assistant",
 };
 
@@ -121,18 +121,18 @@ const CUSTOM_TYPE_ICON_MAP: Record<string, ToolIconEntry> = {
       { icon: cfg.icon, color: cfg.color, label: cfg.label },
     ]),
   ),
-  lsp_diagnostics: { icon: Network, color: "text-yellow-400", label: "LSP Diagnostics" },
-  bash_background_exit: { icon: Terminal, color: "text-cyan-400", label: "Background Exit" },
+  lsp_diagnostics: { icon: Network, color: "text-status-warning", label: "LSP Diagnostics" },
+  bash_background_exit: { icon: Terminal, color: "text-semantic-tool", label: "Background Exit" },
   step_snapshot: { icon: Activity, color: "text-gray-400", label: "Step Snapshot" },
 };
 
 const UI_METHOD_ICON_MAP: Record<string, ToolIconEntry> = {
-  confirm: { icon: CircleCheckBig, color: "text-emerald-400", label: "确认" },
-  select: { icon: ListChecks, color: "text-sky-400", label: "选择" },
-  input: { icon: TextCursorInput, color: "text-amber-400", label: "输入" },
-  editor: { icon: FileCode2, color: "text-violet-400", label: "编辑" },
-  notify: { icon: Bell, color: "text-cyan-400", label: "通知" },
-  respondUI: { icon: Zap, color: "text-orange-400", label: "响应注入" },
+  confirm: { icon: CircleCheckBig, color: "text-status-success", label: "确认" },
+  select: { icon: ListChecks, color: "text-status-info", label: "选择" },
+  input: { icon: TextCursorInput, color: "text-status-warning", label: "输入" },
+  editor: { icon: FileCode2, color: "text-semantic-agent", label: "编辑" },
+  notify: { icon: Bell, color: "text-semantic-tool", label: "通知" },
+  respondUI: { icon: Zap, color: "text-semantic-notify", label: "响应注入" },
 };
 
 export function getUIMethodIcon(method: string): ToolIconEntry {
@@ -141,7 +141,7 @@ export function getUIMethodIcon(method: string): ToolIconEntry {
 
 const CUSTOM_TYPE_DEFAULT: ToolIconEntry = {
   icon: Brain,
-  color: "text-purple-400",
+  color: "text-semantic-agent",
   label: "Custom",
 };
 

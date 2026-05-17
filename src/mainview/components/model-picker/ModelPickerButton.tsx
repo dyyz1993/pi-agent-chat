@@ -171,7 +171,7 @@ export function ModelPickerButton({
               ${disabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer hover:border-semantic-accent"}
               ${
                 open
-                  ? "border-indigo-500 ring-1 ring-indigo-500/30"
+                  ? "border-semantic-accent ring-1 ring-semantic-accent/30"
                   : "border-gray-200 dark:border-gray-700"
               }
               bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300`}
@@ -247,7 +247,7 @@ export function ModelPickerButton({
                       key={key}
                       className={`flex items-center px-2 py-1.5 transition-colors ${
                         isSelected
-                          ? "bg-indigo-500/15 text-semantic-accent"
+                          ? "bg-semantic-accent/15 text-semantic-accent"
                           : "text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
                       }`}
                     >
@@ -268,7 +268,7 @@ export function ModelPickerButton({
                           <span className="truncate text-xs">
                             {m.name ?? formatModelName(m.id)}
                           </span>
-                          <span className="text-[10px] text-cyan-500/60 font-mono">
+                          <span className="text-[10px] text-semantic-tool/60 font-mono">
                             {m.provider} · {m.id}
                           </span>
                         </div>

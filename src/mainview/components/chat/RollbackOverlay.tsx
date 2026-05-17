@@ -27,23 +27,26 @@ const STATUS_CONFIG: Record<
   added: {
     icon: FilePlus,
     label: "A",
-    colorClass: "text-green-600 dark:text-green-400",
-    bgClass: "hover:bg-green-50 dark:hover:bg-green-950/30",
-    badgeClass: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
+    colorClass: "text-status-success",
+    bgClass: "hover:bg-status-success/10 dark:hover:bg-status-success/20",
+    badgeClass:
+      "bg-status-success/15 text-status-success/80 dark:bg-status-success/20 dark:text-status-success",
   },
   modified: {
     icon: FileEdit,
     label: "M",
-    colorClass: "text-amber-600 dark:text-amber-400",
-    bgClass: "hover:bg-amber-50 dark:hover:bg-amber-950/30",
-    badgeClass: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
+    colorClass: "text-status-warning",
+    bgClass: "hover:bg-status-warning/10 dark:hover:bg-status-warning/20",
+    badgeClass:
+      "bg-status-warning/15 text-status-warning/80 dark:bg-status-warning/20 dark:text-status-warning",
   },
   deleted: {
     icon: FileMinus,
     label: "D",
-    colorClass: "text-red-500 dark:text-red-400",
-    bgClass: "hover:bg-red-50 dark:hover:bg-red-950/30",
-    badgeClass: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
+    colorClass: "text-status-error",
+    bgClass: "hover:bg-status-error/10 dark:hover:bg-status-error/20",
+    badgeClass:
+      "bg-status-error/15 text-status-error/80 dark:bg-status-error/20 dark:text-status-error",
   },
 };
 
@@ -95,10 +98,10 @@ const FileItem = memo(function FileItem({
         {(addedLines !== undefined || removedLines !== undefined) && (
           <span className="shrink-0 flex items-center gap-1 text-[10px] font-mono">
             {removedLines !== undefined && removedLines > 0 && (
-              <span className="text-red-500 dark:text-red-400">-{removedLines}</span>
+              <span className="text-status-error">-{removedLines}</span>
             )}
             {addedLines !== undefined && addedLines > 0 && (
-              <span className="text-green-600 dark:text-green-400">+{addedLines}</span>
+              <span className="text-status-success">+{addedLines}</span>
             )}
           </span>
         )}
@@ -119,10 +122,10 @@ const FileItem = memo(function FileItem({
                 {(addedLines !== undefined || removedLines !== undefined) && (
                   <span className="shrink-0 flex items-center gap-1 text-[10px] font-mono">
                     {removedLines !== undefined && removedLines > 0 && (
-                      <span className="text-red-500 dark:text-red-400">-{removedLines}</span>
+                      <span className="text-status-error">-{removedLines}</span>
                     )}
                     {addedLines !== undefined && addedLines > 0 && (
-                      <span className="text-green-600 dark:text-green-400">+{addedLines}</span>
+                      <span className="text-status-success">+{addedLines}</span>
                     )}
                   </span>
                 )}
@@ -134,7 +137,7 @@ const FileItem = memo(function FileItem({
                       return (
                         <div
                           key={i}
-                          className="bg-green-100/60 dark:bg-green-900/30 text-green-800 dark:text-green-300"
+                          className="bg-status-success/15 dark:bg-status-success/20 text-status-success/80 dark:text-status-success"
                         >
                           {line}
                         </div>
@@ -144,7 +147,7 @@ const FileItem = memo(function FileItem({
                       return (
                         <div
                           key={i}
-                          className="bg-red-100/60 dark:bg-red-900/30 text-red-800 dark:text-red-300"
+                          className="bg-status-error/15 dark:bg-status-error/20 text-status-error/80 dark:text-status-error"
                         >
                           {line}
                         </div>
@@ -304,7 +307,7 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
           paddingTop: "calc(0.5rem + env(safe-area-inset-top, 0px))",
         }}
       >
-        <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+        <AlertTriangle className="w-4 h-4 text-status-warning shrink-0" />
         <span className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate flex-1 min-w-0">
           {isWithFiles ? t("rollbackOverlay.titleWithFiles") : t("rollbackOverlay.title")}
         </span>
@@ -370,7 +373,7 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
               type="button"
               onClick={confirmRollback}
               disabled={loading}
-              className="px-4 py-2 text-sm rounded-lg bg-red-600 hover:bg-red-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-4 py-2 text-sm rounded-lg bg-status-error hover:bg-status-error/80 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {loading && (
                 <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />

@@ -421,7 +421,7 @@ export function ChatPanel() {
                 )}
                 <button
                   onClick={retryActiveProject}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs hover:bg-indigo-700 transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-semantic-accent text-white text-xs hover:bg-semantic-accent transition-colors"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
                   {t("retry")}
@@ -521,7 +521,7 @@ export function ChatPanel() {
                   {isStreaming && inputText.trim() ? (
                     <button
                       onClick={handleFollowUp}
-                      className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-blue-600 text-white hover:bg-blue-700 shadow-sm shadow-blue-500/20"
+                      className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-status-info text-white hover:bg-status-info shadow-sm shadow-status-info/20"
                       title={t("sendFollowUp")}
                       aria-label={t("sendFollowUp")}
                     >
@@ -531,7 +531,7 @@ export function ChatPanel() {
                     <button
                       onClick={handleAbort}
                       disabled={!isStreaming}
-                      className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-red-600 text-white hover:bg-red-700"
+                      className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-status-error text-white hover:bg-status-error"
                       title={t("stop")}
                       aria-label={t("stop")}
                     >
@@ -540,7 +540,7 @@ export function ChatPanel() {
                   ) : (
                     <button
                       disabled
-                      className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-red-900/30 text-red-500/50 cursor-not-allowed"
+                      className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-status-error/30 text-status-error/50 cursor-not-allowed"
                       title={t("stop")}
                       aria-label={t("stop")}
                     >
@@ -555,7 +555,7 @@ export function ChatPanel() {
                       !sessionReady ||
                       hasNoModel
                     }
-                    className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${(inputText.trim() || useAttachmentStore.getState().attachments.length > 0) && sessionReady && !hasNoModel ? (isStreaming ? "bg-amber-600 text-white hover:bg-amber-700 shadow-sm shadow-amber-500/20" : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm shadow-indigo-500/20") : "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed"}`}
+                    className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${(inputText.trim() || useAttachmentStore.getState().attachments.length > 0) && sessionReady && !hasNoModel ? (isStreaming ? "bg-status-warning text-white hover:bg-status-warning shadow-sm shadow-status-warning/20" : "bg-semantic-accent text-white hover:bg-semantic-accent shadow-sm shadow-semantic-accent/20") : "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed"}`}
                     title={
                       hasNoModel ? t("sendDisabledNoModel") : isStreaming ? t("steer") : t("send")
                     }
@@ -578,8 +578,8 @@ export function ChatPanel() {
             <button
               onClick={handleSubagentFork}
               className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium
-                bg-indigo-500/15 text-semantic-accent hover:bg-indigo-500/25 hover:text-semantic-accent
-                border border-indigo-500/20 transition-colors"
+                bg-semantic-accent/15 text-semantic-accent hover:bg-semantic-accent/25 hover:text-semantic-accent
+                border border-semantic-accent/20 transition-colors"
               title={t("fork")}
             >
               <GitBranch className="w-3 h-3" />

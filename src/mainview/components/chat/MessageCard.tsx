@@ -127,36 +127,36 @@ interface MessageCardProps {
 const ROLE_CONFIG = {
   user: {
     icon: User,
-    color: "text-blue-400/80",
-    barColor: "border-l-blue-500/60",
-    bgColor: "bg-blue-500/[0.03]",
-    altBarColor: "border-l-blue-400/45",
-    altBgColor: "bg-blue-400/[0.02]",
+    color: "text-status-info/80",
+    barColor: "border-l-status-info/60",
+    bgColor: "bg-status-info/[0.03]",
+    altBarColor: "border-l-status-info/45",
+    altBgColor: "bg-status-info/[0.02]",
   },
   assistant: {
     icon: Bot,
-    color: "text-emerald-400/70",
-    barColor: "border-l-emerald-500/50",
-    bgColor: "bg-emerald-500/[0.03]",
-    altBarColor: "border-l-emerald-400/35",
-    altBgColor: "bg-emerald-400/[0.02]",
+    color: "text-status-success/70",
+    barColor: "border-l-status-success/50",
+    bgColor: "bg-status-success/[0.03]",
+    altBarColor: "border-l-status-success/35",
+    altBgColor: "bg-status-success/[0.02]",
   },
   compactionSummary: {
     icon: Archive,
-    color: "text-cyan-400/70",
-    barColor: "border-l-cyan-500/50",
-    bgColor: "bg-cyan-500/[0.03]",
-    altBarColor: "border-l-cyan-400/35",
-    altBgColor: "bg-cyan-400/[0.02]",
+    color: "text-semantic-tool/70",
+    barColor: "border-l-semantic-tool/50",
+    bgColor: "bg-semantic-tool/[0.03]",
+    altBarColor: "border-l-semantic-tool/35",
+    altBgColor: "bg-semantic-tool/[0.02]",
   },
 };
 
 const ENTRY_DEFAULT = {
-  barColor: "border-l-yellow-500/50",
-  labelColor: "text-yellow-400/70",
-  bgColor: "bg-yellow-500/[0.04]",
-  altBarColor: "border-l-yellow-400/35",
-  altBgColor: "bg-yellow-400/[0.02]",
+  barColor: "border-l-status-warning/50",
+  labelColor: "text-status-warning/70",
+  bgColor: "bg-status-warning/[0.04]",
+  altBarColor: "border-l-status-warning/35",
+  altBgColor: "bg-status-warning/[0.02]",
 };
 
 function formatTime(ts: number): string {
@@ -333,14 +333,14 @@ export const MessageCard = memo(function MessageCard({
   return (
     <div
       data-msg-card-id={message.id}
-      className={`group/msgcard relative w-full py-1.5 transition-colors overflow-hidden ${isSelected ? "bg-red-500/[0.06]" : bgColor}`}
+      className={`group/msgcard relative w-full py-1.5 transition-colors overflow-hidden ${isSelected ? "bg-status-error/[0.06]" : bgColor}`}
     >
       {isSelected && (
-        <div className="absolute inset-0 bg-red-500/15 pointer-events-none z-10 rounded-sm" />
+        <div className="absolute inset-0 bg-status-error/15 pointer-events-none z-10 rounded-sm" />
       )}
       {/* Header: checkbox + label + timestamp */}
       <div
-        className={`relative z-20 flex items-center gap-2 px-3 h-5 select-none border-l-[3px] ${isSelected ? "border-l-red-500" : barColor}`}
+        className={`relative z-20 flex items-center gap-2 px-3 h-5 select-none border-l-[3px] ${isSelected ? "border-l-status-error" : barColor}`}
       >
         {!isEntry && (
           <input
@@ -348,7 +348,7 @@ export const MessageCard = memo(function MessageCard({
             checked={isSelected}
             onChange={() => toggleMessageSelection(message.id)}
             onClick={(e) => e.stopPropagation()}
-            className="w-3 h-3 rounded border border-gray-400 dark:border-gray-600 accent-emerald-500 shrink-0 cursor-pointer"
+            className="w-3 h-3 rounded border border-gray-400 dark:border-gray-600 accent-status-success shrink-0 cursor-pointer"
           />
         )}
 
@@ -384,7 +384,7 @@ export const MessageCard = memo(function MessageCard({
       {/* Content */}
       {isCollapsed ? (
         <div
-          className={`relative z-20 border-l-[3px] ${isSelected ? "border-l-red-500" : barColor} px-3 py-1 text-xs text-gray-400 dark:text-gray-500 italic leading-relaxed`}
+          className={`relative z-20 border-l-[3px] ${isSelected ? "border-l-status-error" : barColor} px-3 py-1 text-xs text-gray-400 dark:text-gray-500 italic leading-relaxed`}
         >
           {message.content
             .filter((b) => b.type === "text")

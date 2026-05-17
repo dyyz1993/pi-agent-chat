@@ -135,7 +135,7 @@ const FileItem = memo(function FileItem({
     <div
       className={`group flex items-center gap-1.5 px-2 py-0.5 text-xs rounded cursor-pointer transition-colors ${
         isSelected
-          ? "bg-indigo-600/30 text-white"
+          ? "bg-semantic-accent/30 text-white"
           : "hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
       }`}
       onClick={() => onClick(path, isStaged)}
@@ -193,7 +193,7 @@ const UntrackedItem = memo(function UntrackedItem({
     <div
       className={`group flex items-center gap-1.5 px-2 py-0.5 text-xs rounded cursor-pointer transition-colors ${
         isSelected
-          ? "bg-indigo-600/30 text-white"
+          ? "bg-semantic-accent/30 text-white"
           : "hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
       }`}
       onClick={() => onClick(path)}
@@ -237,7 +237,7 @@ const CommitFileItem = memo(function CommitFileItem({
     <div
       className={`flex items-center gap-1.5 pl-7 pr-2 py-0.5 text-xs rounded cursor-pointer transition-colors ${
         isSelected
-          ? "bg-indigo-600/30 text-white"
+          ? "bg-semantic-accent/30 text-white"
           : "hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
       }`}
       onClick={onClick}
@@ -571,7 +571,7 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
 
         <span className="ml-auto flex items-center gap-1">
           {totalChanges > 0 && (
-            <span className="bg-indigo-600 text-white px-1.5 py-0.5 rounded-full text-[10px] leading-none">
+            <span className="bg-semantic-accent text-white px-1.5 py-0.5 rounded-full text-[10px] leading-none">
               {totalChanges}
             </span>
           )}

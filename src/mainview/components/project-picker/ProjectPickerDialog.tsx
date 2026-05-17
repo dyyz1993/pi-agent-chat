@@ -407,7 +407,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
         </button>
         <button
           onClick={(e) => handleRemoveRecent(e, proj.path)}
-          className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-600/20 text-gray-600 hover:text-status-error transition-all shrink-0"
+          className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-status-error/20 text-gray-600 hover:text-status-error transition-all shrink-0"
         >
           <Trash2 className="w-3 h-3" />
         </button>
@@ -434,7 +434,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
                 onClick={() => navigateTo(seg.path)}
                 className={`text-xs truncate max-w-[120px] px-1.5 py-0.5 rounded transition-colors ${
                   i === segments.length - 1
-                    ? "text-semantic-accent font-medium bg-indigo-500/10"
+                    ? "text-semantic-accent font-medium bg-semantic-accent/10"
                     : "text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700/50"
                 }`}
               >
@@ -488,7 +488,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
         </div>
         <button
           onClick={() => handleSelectFolder(entry.path)}
-          className="p-1 rounded hover:bg-indigo-500/20 text-gray-600 hover:text-semantic-accent opacity-0 group-hover:opacity-100 transition-all shrink-0"
+          className="p-1 rounded hover:bg-semantic-accent/20 text-gray-600 hover:text-semantic-accent opacity-0 group-hover:opacity-100 transition-all shrink-0"
           title={t("picker.selectFolderAsProject")}
         >
           <FolderOpen className="w-3.5 h-3.5" />
@@ -551,7 +551,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
         </button>
         <button
           onClick={(e) => handleToggleFavoriteFolder(e, folder.path)}
-          className="p-1 rounded hover:bg-red-600/20 text-gray-600 hover:text-status-error opacity-0 group-hover:opacity-100 transition-all shrink-0"
+          className="p-1 rounded hover:bg-status-error/20 text-gray-600 hover:text-status-error opacity-0 group-hover:opacity-100 transition-all shrink-0"
           title={t("picker.unfavorite")}
         >
           <Trash2 className="w-3 h-3" />
@@ -579,7 +579,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
       <div className="shrink-0 px-4 py-2.5 border-t border-gray-200 dark:border-gray-800">
         <button
           onClick={() => navigateTo(homePathRef.current || "/")}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 rounded-lg text-xs text-semantic-accent transition-colors"
+          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-semantic-accent/20 hover:bg-semantic-accent/30 border border-semantic-accent/30 rounded-lg text-xs text-semantic-accent transition-colors"
         >
           <Home className="w-3.5 h-3.5" />
           {t("picker.browseOtherDirs")}
@@ -598,7 +598,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
             value={browserSearchQuery}
             onChange={(e) => setBrowserSearchQuery(e.target.value)}
             placeholder={t("picker.searchCurrentDir")}
-            className="w-full pl-7 pr-3 py-1.5 bg-gray-100 dark:bg-gray-800/50 border border-gray-300 dark:border-gray-700/50 rounded-md text-[11px] text-gray-700 dark:text-gray-300 placeholder:text-gray-600 outline-none focus:border-indigo-500/50"
+            className="w-full pl-7 pr-3 py-1.5 bg-gray-100 dark:bg-gray-800/50 border border-gray-300 dark:border-gray-700/50 rounded-md text-[11px] text-gray-700 dark:text-gray-300 placeholder:text-gray-600 outline-none focus:border-semantic-accent/50"
           />
         </div>
       </div>
@@ -606,7 +606,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
       <div className="shrink-0 px-4 py-2.5 border-t border-gray-200 dark:border-gray-800">
         <button
           onClick={handleSelectCurrentFolder}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-xs font-medium text-white transition-colors"
+          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-semantic-accent hover:bg-semantic-accent rounded-lg text-xs font-medium text-white transition-colors"
         >
           <FolderOpen className="w-3.5 h-3.5" />
           {t("picker.selectCurrentFolder")}
@@ -693,7 +693,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder={t("picker.searchProject")}
-                  className="w-full pl-9 pr-4 py-2.5 bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700/50 rounded-xl text-sm text-gray-900 dark:text-gray-200 placeholder:text-gray-500 outline-none focus:border-indigo-500/50"
+                  className="w-full pl-9 pr-4 py-2.5 bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700/50 rounded-xl text-sm text-gray-900 dark:text-gray-200 placeholder:text-gray-500 outline-none focus:border-semantic-accent/50"
                 />
               </div>
               {renderProjectList(sortedRecents, true)}
@@ -770,7 +770,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
                     value={browserSearchQuery}
                     onChange={(e) => setBrowserSearchQuery(e.target.value)}
                     placeholder={t("picker.searchCurrentDir")}
-                    className="w-full pl-7 pr-3 py-2 bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700/50 rounded-xl text-sm text-gray-900 dark:text-gray-200 placeholder:text-gray-500 outline-none focus:border-indigo-500/50"
+                    className="w-full pl-7 pr-3 py-2 bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700/50 rounded-xl text-sm text-gray-900 dark:text-gray-200 placeholder:text-gray-500 outline-none focus:border-semantic-accent/50"
                   />
                 </div>
               </div>
@@ -858,12 +858,12 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
                       }}
                       placeholder={t("picker.newFolderName")}
                       autoFocus
-                      className="flex-1 px-3 py-2 bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700/50 rounded-xl text-sm text-gray-900 dark:text-gray-200 placeholder:text-gray-500 outline-none focus:border-indigo-500/50"
+                      className="flex-1 px-3 py-2 bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700/50 rounded-xl text-sm text-gray-900 dark:text-gray-200 placeholder:text-gray-500 outline-none focus:border-semantic-accent/50"
                     />
                     <button
                       onClick={handleCreateFolder}
                       disabled={!newFolderName.trim() || creating}
-                      className="p-2 rounded-xl bg-indigo-600 active:bg-indigo-700 text-white disabled:opacity-40 shrink-0"
+                      className="p-2 rounded-xl bg-semantic-accent active:bg-semantic-accent text-white disabled:opacity-40 shrink-0"
                     >
                       {creating ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -890,7 +890,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
                   </button>
                   <button
                     onClick={handleSelectCurrentFolder}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 active:bg-indigo-700 rounded-xl text-sm font-medium text-white transition-colors"
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-semantic-accent active:bg-semantic-accent rounded-xl text-sm font-medium text-white transition-colors"
                   >
                     <FolderOpen className="w-4 h-4" />
                     {t("picker.selectCurrentFolder")}
@@ -946,7 +946,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder={t("picker.searchPlaceholder")}
-                    className="pl-7 pr-3 py-1 w-36 bg-gray-100 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700/50 rounded-md text-[11px] text-gray-700 dark:text-gray-300 placeholder:text-gray-400 dark:placeholder:text-gray-600 outline-none focus:border-indigo-500/50"
+                    className="pl-7 pr-3 py-1 w-36 bg-gray-100 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700/50 rounded-md text-[11px] text-gray-700 dark:text-gray-300 placeholder:text-gray-400 dark:placeholder:text-gray-600 outline-none focus:border-semantic-accent/50"
                   />
                 </div>
               </div>

@@ -166,7 +166,7 @@ export function StatusPanel() {
                   {id === "yolo" && (
                     <button
                       onClick={toggleYolo}
-                      className={`px-2 py-0.5 rounded text-[10px] ${yoloEnabled ? "bg-yellow-600/30 text-status-warning" : "bg-gray-200 dark:bg-gray-800 text-gray-500"}`}
+                      className={`px-2 py-0.5 rounded text-[10px] ${yoloEnabled ? "bg-status-warning/30 text-status-warning" : "bg-gray-200 dark:bg-gray-800 text-gray-500"}`}
                     >
                       {yoloEnabled ? t("enabled") : t("disabled")}
                     </button>
@@ -250,7 +250,7 @@ export function StatusPanel() {
                               {lspData.activeLanguages.map((lang) => (
                                 <span
                                   key={lang}
-                                  className="px-1 py-px rounded text-[9px] bg-cyan-500/15 text-semantic-tool"
+                                  className="px-1 py-px rounded text-[9px] bg-semantic-tool/15 text-semantic-tool"
                                 >
                                   {lang}
                                 </span>
@@ -320,7 +320,7 @@ export function StatusPanel() {
                                 if (activeSessionId && !activeSubId)
                                   useLspStore.getState().setMode(activeSessionId, m);
                               }}
-                              className={`px-1.5 py-0.5 rounded text-[9px] ${lspData?.mode === m ? "bg-blue-600/30 text-status-info" : "bg-gray-200 dark:bg-gray-800 text-gray-500 hover:bg-gray-300/50 dark:hover:bg-gray-700/50"}`}
+                              className={`px-1.5 py-0.5 rounded text-[9px] ${lspData?.mode === m ? "bg-status-info/30 text-status-info" : "bg-gray-200 dark:bg-gray-800 text-gray-500 hover:bg-gray-300/50 dark:hover:bg-gray-700/50"}`}
                             >
                               {m === "agent_end"
                                 ? t("lspOnEnd")
@@ -384,7 +384,7 @@ export function StatusPanel() {
                                   </span>
                                 )}
                                 <span
-                                  className={`text-[9px] px-1 py-px rounded shrink-0 max-w-[36px] truncate ${p.scope === "global" ? "bg-purple-500/15 text-semantic-agent" : "bg-blue-500/15 text-status-info"}`}
+                                  className={`text-[9px] px-1 py-px rounded shrink-0 max-w-[36px] truncate ${p.scope === "global" ? "bg-semantic-agent/15 text-semantic-agent" : "bg-status-info/15 text-status-info"}`}
                                 >
                                   {p.scope === "global" ? t("global") : t("project")}
                                 </span>
@@ -465,7 +465,7 @@ export function StatusPanel() {
                                   {sk.name}
                                 </span>
                                 <span
-                                  className={`text-[9px] px-1 py-px rounded max-w-[36px] truncate ${sk.scope === "global" ? "bg-purple-500/15 text-semantic-agent" : "bg-blue-500/15 text-status-info"}`}
+                                  className={`text-[9px] px-1 py-px rounded max-w-[36px] truncate ${sk.scope === "global" ? "bg-semantic-agent/15 text-semantic-agent" : "bg-status-info/15 text-status-info"}`}
                                 >
                                   {sk.scope === "global" ? t("global") : t("project")}
                                 </span>
@@ -603,7 +603,7 @@ function MCPToolsSection() {
                 </span>
               )}
               <span
-                className={`text-[9px] px-1 py-px rounded shrink-0 max-w-[36px] truncate ${srv.scope === "project" ? "bg-cyan-500/15 text-semantic-tool" : "bg-purple-500/15 text-semantic-agent"}`}
+                className={`text-[9px] px-1 py-px rounded shrink-0 max-w-[36px] truncate ${srv.scope === "project" ? "bg-semantic-tool/15 text-semantic-tool" : "bg-semantic-agent/15 text-semantic-agent"}`}
               >
                 {srv.scope === "project" ? t("project") : t("global")}
               </span>
@@ -614,7 +614,7 @@ function MCPToolsSection() {
                     toggleMcpServer(activeSessionId, srv.name, !!isDisabled);
                   }
                 }}
-                className={`w-6 h-3 rounded-full shrink-0 transition-colors relative ${isDisabled ? "bg-gray-600" : "bg-green-500"}`}
+                className={`w-6 h-3 rounded-full shrink-0 transition-colors relative ${isDisabled ? "bg-gray-600" : "bg-status-success"}`}
                 title={isDisabled ? t("enableMcpServer") : t("disableMcpServer")}
               >
                 <span
@@ -717,10 +717,10 @@ interface SupervisorSectionContentProps {
 }
 
 const STATE_STYLES: Record<string, string> = {
-  idle: "bg-green-500/20 text-status-success",
-  checking: "bg-blue-500/20 text-status-info",
-  paused: "bg-amber-500/20 text-status-warning",
-  continuing: "bg-blue-500/20 text-status-info",
+  idle: "bg-status-success/20 text-status-success",
+  checking: "bg-status-info/20 text-status-info",
+  paused: "bg-status-warning/20 text-status-warning",
+  continuing: "bg-status-info/20 text-status-info",
   disabled: "bg-gray-500/20 text-gray-400",
 };
 
@@ -753,7 +753,7 @@ function SupervisorSectionContent({
           <button
             onClick={() => handleEnable(sessionId)}
             disabled={loading}
-            className="px-1.5 py-0.5 rounded text-[9px] bg-green-500/20 text-status-success disabled:opacity-50"
+            className="px-1.5 py-0.5 rounded text-[9px] bg-status-success/20 text-status-success disabled:opacity-50"
           >
             {loading ? "..." : t("supervisor.enabled")}
           </button>
@@ -790,7 +790,7 @@ function SupervisorSectionContent({
             {status.activeGuards.map((g) => (
               <span
                 key={g}
-                className="px-1 py-px rounded text-[9px] bg-cyan-500/15 text-semantic-tool"
+                className="px-1 py-px rounded text-[9px] bg-semantic-tool/15 text-semantic-tool"
               >
                 {g}
               </span>
@@ -830,7 +830,7 @@ function SupervisorSectionContent({
         <div className="flex flex-wrap gap-1 pt-0.5">
           <button
             onClick={() => (status.enabled ? disable(sessionId) : enable(sessionId))}
-            className={`px-1.5 py-0.5 rounded text-[9px] ${status.enabled ? "bg-red-500/20 text-status-error" : "bg-green-500/20 text-status-success"}`}
+            className={`px-1.5 py-0.5 rounded text-[9px] ${status.enabled ? "bg-status-error/20 text-status-error" : "bg-status-success/20 text-status-success"}`}
           >
             {status.enabled ? t("supervisor.disabled") : t("supervisor.enabled")}
           </button>
@@ -838,7 +838,7 @@ function SupervisorSectionContent({
             <>
               <button
                 onClick={() => forceContinue(sessionId)}
-                className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] bg-blue-500/20 text-status-info"
+                className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] bg-status-info/20 text-status-info"
               >
                 <Play className="w-2.5 h-2.5" />
                 {t("supervisor.forceContinue")}
@@ -846,14 +846,14 @@ function SupervisorSectionContent({
               {status.pendingPause ? (
                 <button
                   onClick={() => cancelPause(sessionId)}
-                  className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] bg-amber-500/20 text-status-warning"
+                  className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] bg-status-warning/20 text-status-warning"
                 >
                   {t("supervisor.cancelPause")}
                 </button>
               ) : (
                 <button
                   onClick={() => requestPause(sessionId, 5000)}
-                  className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] bg-amber-500/20 text-status-warning"
+                  className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] bg-status-warning/20 text-status-warning"
                 >
                   <Pause className="w-2.5 h-2.5" />
                   {t("supervisor.pause")}

@@ -100,21 +100,21 @@ export const MessageSelectionBar = memo(function MessageSelectionBar({
       <div className="w-px h-3.5 bg-gray-300 dark:bg-gray-700" />
       <button
         onClick={handleSummarize}
-        className="flex items-center justify-center w-7 h-7 rounded-full text-semantic-agent hover:text-semantic-agent hover:bg-purple-500/15 transition-colors"
+        className="flex items-center justify-center w-7 h-7 rounded-full text-semantic-agent hover:text-semantic-agent hover:bg-semantic-agent/15 transition-colors"
         title={t("summarizeSelected")}
       >
         <Sparkles className="w-3.5 h-3.5" />
       </button>
       <button
         onClick={handleRemember}
-        className="flex items-center justify-center w-7 h-7 rounded-full text-semantic-memory hover:text-semantic-memory hover:bg-teal-500/15 transition-colors"
+        className="flex items-center justify-center w-7 h-7 rounded-full text-semantic-memory hover:text-semantic-memory hover:bg-semantic-memory/15 transition-colors"
         title={t("saveAsMemory")}
       >
         <Brain className="w-3.5 h-3.5" />
       </button>
       <button
         onClick={handleDelete}
-        className="flex items-center justify-center w-7 h-7 rounded-full text-gray-400 dark:text-gray-500 hover:text-status-error hover:bg-red-500/15 transition-colors"
+        className="flex items-center justify-center w-7 h-7 rounded-full text-gray-400 dark:text-gray-500 hover:text-status-error hover:bg-status-error/15 transition-colors"
         title={t("deleteSelected")}
       >
         <Trash2 className="w-3.5 h-3.5" />

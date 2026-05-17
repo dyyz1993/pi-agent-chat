@@ -11,11 +11,11 @@ function formatTokens(tokens: number | null | undefined): string {
 }
 
 const STATUS_CONFIGS = {
-  streaming: { strokeClass: "text-yellow-400", animClass: "animate-pulse" },
-  compacting: { strokeClass: "text-yellow-400", animClass: "animate-pulse" },
-  permission: { strokeClass: "text-red-400", animClass: "" },
-  retrying: { strokeClass: "text-red-400", animClass: "animate-pulse" },
-  idle: { strokeClass: "text-green-400", animClass: "" },
+  streaming: { strokeClass: "text-status-warning", animClass: "animate-pulse" },
+  compacting: { strokeClass: "text-status-warning", animClass: "animate-pulse" },
+  permission: { strokeClass: "text-status-error", animClass: "" },
+  retrying: { strokeClass: "text-status-error", animClass: "animate-pulse" },
+  idle: { strokeClass: "text-status-success", animClass: "" },
 } as const;
 
 function statusConfig(status: SessionStatus | undefined) {

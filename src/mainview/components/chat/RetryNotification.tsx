@@ -35,7 +35,7 @@ export function RetryNotification() {
 
   return (
     <div className="absolute top-12 right-3 z-40 animate-in slide-in-from-top-2 fade-in duration-300">
-      <div className="flex items-start gap-2.5 px-3 py-2.5 rounded-lg bg-red-950/90 border border-red-500/40 shadow-lg shadow-red-900/20 backdrop-blur-sm max-w-xs">
+      <div className="flex items-start gap-2.5 px-3 py-2.5 rounded-lg bg-status-error/95 border border-status-error/40 shadow-lg backdrop-blur-sm max-w-xs">
         <RefreshCw
           className="w-4 h-4 text-status-error animate-spin shrink-0 mt-0.5"
           style={{ animationDuration: "2s" }}
@@ -52,7 +52,7 @@ export function RetryNotification() {
             {remaining > 0 && (
               <div className="flex items-center gap-1.5">
                 <span>{t("retryInSeconds", { seconds: remaining })}</span>
-                <div className="flex-1 h-1 bg-red-900/60 rounded-full overflow-hidden min-w-[40px]">
+                <div className="flex-1 h-1 bg-status-error/30 rounded-full overflow-hidden min-w-[40px]">
                   <div
                     className="h-full bg-status-error rounded-full transition-all duration-200"
                     style={{ width: `${progress * 100}%` }}

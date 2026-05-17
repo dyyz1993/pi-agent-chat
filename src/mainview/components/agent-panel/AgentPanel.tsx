@@ -29,12 +29,12 @@ import { copyToClipboard } from "../../utils/clipboard";
 // ---------------------------------------------------------------------------
 
 const AGENT_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
-  red: { bg: "bg-red-500/15", text: "text-red-400", dot: "bg-red-400" },
-  blue: { bg: "bg-blue-500/15", text: "text-blue-400", dot: "bg-blue-400" },
-  green: { bg: "bg-green-500/15", text: "text-green-400", dot: "bg-green-400" },
-  yellow: { bg: "bg-yellow-500/15", text: "text-yellow-400", dot: "bg-yellow-400" },
-  purple: { bg: "bg-purple-500/15", text: "text-purple-400", dot: "bg-purple-400" },
-  orange: { bg: "bg-orange-500/15", text: "text-orange-400", dot: "bg-orange-400" },
+  red: { bg: "bg-status-error/15", text: "text-status-error", dot: "bg-status-error" },
+  blue: { bg: "bg-status-info/15", text: "text-status-info", dot: "bg-status-info" },
+  green: { bg: "bg-status-success/15", text: "text-status-success", dot: "bg-status-success" },
+  yellow: { bg: "bg-status-warning/15", text: "text-status-warning", dot: "bg-status-warning" },
+  purple: { bg: "bg-semantic-agent/15", text: "text-semantic-agent", dot: "bg-semantic-agent" },
+  orange: { bg: "bg-semantic-notify/15", text: "text-semantic-notify", dot: "bg-semantic-notify" },
 };
 
 function fieldValue(value: unknown): string {
@@ -137,7 +137,7 @@ function ToolList({ agent, allTools }: { agent: AgentDetail; allTools: AgentTool
               key={tool.name}
               className={`flex items-center gap-2 text-xs px-2 py-1.5 rounded ${
                 isDisallowed
-                  ? "bg-red-500/10 text-red-400"
+                  ? "bg-status-error/10 text-status-error"
                   : isAllowed
                     ? "text-[var(--color-text-primary)]"
                     : "text-[var(--color-text-secondary)] opacity-50"

@@ -91,7 +91,7 @@ function PanelCard({
               value={customValue}
               onChange={(e) => setCustomValue(e.target.value)}
               placeholder={req.placeholder ?? t("uiCard.customAnswer")}
-              className="flex-1 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-2 py-1 text-[11px] text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-600 focus:outline-none focus:border-amber-500/50"
+              className="flex-1 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-2 py-1 text-[11px] text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-600 focus:outline-none focus:border-status-warning/50"
               onKeyDown={(e) =>
                 e.key === "Enter" &&
                 customValue.trim() &&
@@ -175,7 +175,7 @@ function PanelCard({
             value={value}
             onChange={(e) => setValue(e.target.value)}
             placeholder={req.placeholder ?? t("uiCard.pleaseInput")}
-            className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-2.5 py-1.5 text-[11px] text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-600 focus:outline-none focus:border-amber-500/50"
+            className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded px-2.5 py-1.5 text-[11px] text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-600 focus:outline-none focus:border-status-warning/50"
             onKeyDown={(e) => e.key === "Enter" && respondById(req.requestId, { value })}
           />
           <div className="flex gap-2 mt-2">
@@ -240,7 +240,7 @@ export function UIPendingCenter() {
       >
         <MessageCircleQuestion className="w-3.5 h-3.5" />
         {pending.length > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[10px] h-[10px] flex items-center justify-center bg-amber-500 rounded-full text-[7px] leading-none text-white font-bold px-[2px]">
+          <span className="absolute -top-0.5 -right-0.5 min-w-[10px] h-[10px] flex items-center justify-center bg-status-warning rounded-full text-[7px] leading-none text-white font-bold px-[2px]">
             {pending.length > 9 ? "9+" : pending.length}
           </span>
         )}
@@ -263,7 +263,7 @@ export function UIPendingCenter() {
                 <span className="text-[13px] font-medium text-gray-800 dark:text-gray-200">
                   {t("uiPending.pendingRequestsTitle")}
                 </span>
-                <span className="px-1.5 py-0.5 rounded-full bg-amber-500/15 text-status-warning text-[11px] font-medium tabular-nums">
+                <span className="px-1.5 py-0.5 rounded-full bg-status-warning/15 text-status-warning text-[11px] font-medium tabular-nums">
                   {pending.length}
                 </span>
               </div>

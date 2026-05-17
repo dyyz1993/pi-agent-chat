@@ -174,11 +174,11 @@ const NavDot = memo(function NavDot({
   let barCls = "absolute left-0 top-1 bottom-1 w-[3px] rounded-full transition-all opacity-0 ";
 
   if (isMultiSelected) {
-    cls += "bg-red-500/25 ";
+    cls += "bg-status-error/25 ";
     iconColor = "text-status-error";
-    barCls += "bg-red-500 opacity-100 ";
+    barCls += "bg-status-error opacity-100 ";
   } else if (isClicked) {
-    cls += "bg-indigo-500/30 shadow-[0_0_10px_rgba(99,102,241,0.3)] ";
+    cls += "bg-semantic-accent/25 shadow-[0_0_10px_rgba(99,102,241,0.3)] ";
     iconColor = "text-semantic-accent";
     barCls += "bg-semantic-accent opacity-100 ";
   } else {
@@ -219,7 +219,7 @@ const NavSubDot = memo(function NavSubDot({
   let barCls = "absolute left-0 top-1 bottom-1 w-[3px] rounded-full transition-all opacity-0 ";
 
   if (isActive) {
-    cls += "bg-indigo-500/25 shadow-[0_0_6px_rgba(99,102,241,0.25)] ";
+    cls += "bg-semantic-accent/25 shadow-[0_0_6px_rgba(99,102,241,0.25)] ";
     iconColor = "text-semantic-accent";
     barCls += "bg-semantic-accent opacity-100 ";
   } else {
@@ -359,7 +359,7 @@ export const SideNav = memo(function SideNav({
       </VList>
 
       {selectedItems.size > 0 && (
-        <div className="px-1 py-1 text-[10px] text-status-error text-center border-t border-red-500/20 bg-red-950/20">
+        <div className="px-1 py-1 text-[10px] text-status-error text-center border-t border-status-error/20 bg-status-error/5">
           {t("sideNav.selected", { count: selectedItems.size })}
         </div>
       )}

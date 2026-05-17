@@ -293,7 +293,7 @@ const SnapshotCard = memo(function SnapshotCard({
                 Step #{snap.stepIndex}
               </span>
               {isLatest && !snap.rolledBack && (
-                <span className="text-[9px] bg-indigo-500/15 text-semantic-accent px-1 py-0.5 rounded font-medium">
+                <span className="text-[9px] bg-semantic-accent/15 text-semantic-accent px-1 py-0.5 rounded font-medium">
                   {t("latest")}
                 </span>
               )}

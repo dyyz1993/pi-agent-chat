@@ -202,21 +202,17 @@ export const BashExecutionCard = memo(function BashExecutionCard({
   let statusLabel: React.ReactNode = null;
 
   if (isBackground) {
-    borderBg = "border-yellow-500/30 bg-yellow-50 dark:bg-yellow-950/20";
+    borderBg = "border-status-warning/30 bg-status-warning/10 dark:bg-status-warning/20";
     statusLabel = (
-      <span className="text-yellow-600 dark:text-yellow-400 text-[10px]">
-        {t("bash.backgroundRunning")}
-      </span>
+      <span className="text-status-warning text-[10px]">{t("bash.backgroundRunning")}</span>
     );
   } else if (isTerminated) {
-    borderBg = "border-red-500/20 bg-red-50 dark:bg-red-950/15";
-    statusLabel = (
-      <span className="text-red-500 dark:text-red-400 text-[10px]">{t("common:cancelled")}</span>
-    );
+    borderBg = "border-status-error/20 bg-status-error/10 dark:bg-status-error/15";
+    statusLabel = <span className="text-status-error text-[10px]">{t("common:cancelled")}</span>;
   } else if (isRunning) {
-    borderBg = "border-blue-500/30 bg-blue-50 dark:bg-blue-950/20";
+    borderBg = "border-status-info/30 bg-status-info/10 dark:bg-status-info/20";
   } else if (isError) {
-    borderBg = "border-red-500/20 bg-red-50 dark:bg-red-950/15";
+    borderBg = "border-status-error/20 bg-status-error/10 dark:bg-status-error/15";
   } else {
     borderBg = "border-gray-200 dark:border-gray-700/40 bg-gray-50 dark:bg-gray-800/25";
   }
@@ -233,10 +229,10 @@ export const BashExecutionCard = memo(function BashExecutionCard({
         aria-expanded={!collapsed}
       >
         {collapsed && isRunning && (
-          <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+          <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-status-info animate-pulse" />
         )}
         <span
-          className={`font-medium shrink-0 ${isBackground ? "text-yellow-600 dark:text-yellow-400" : isTerminated ? "text-red-500 dark:text-red-400" : isRunning ? "text-blue-500 dark:text-blue-400" : isError ? "text-red-500 dark:text-red-400" : "text-gray-800 dark:text-gray-300"}`}
+          className={`font-medium shrink-0 ${isBackground ? "text-status-warning" : isTerminated ? "text-status-error" : isRunning ? "text-status-info" : isError ? "text-status-error" : "text-gray-800 dark:text-gray-300"}`}
         >
           {block.toolName}
         </span>
@@ -272,9 +268,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
                 const remaining = Math.max(0, remainingMs);
                 const pct = (elapsed / (timeout * 1000)) * 100;
                 return (
-                  <span
-                    className={pct > 80 ? "text-red-500" : "text-amber-500 dark:text-amber-400"}
-                  >
+                  <span className={pct > 80 ? "text-status-error" : "text-status-warning"}>
                     / {formatDuration(remaining)}
                   </span>
                 );
@@ -356,7 +350,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
             </summary>
             <div className="px-3 pb-2">
               {block.args ? (
-                <pre className="text-[11px] text-yellow-600/70 dark:text-yellow-300/60 overflow-x-auto whitespace-pre-wrap font-mono max-h-40 overflow-y-auto leading-relaxed">
+                <pre className="text-[11px] text-status-warning/70 overflow-x-auto whitespace-pre-wrap font-mono max-h-40 overflow-y-auto leading-relaxed">
                   {tryFormatAsYaml(block.args)}
                 </pre>
               ) : null}
@@ -380,7 +374,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
               </svg>
               <span>{t("output")}</span>
               {isRunning && (
-                <span className="ml-auto text-blue-500/70 dark:text-blue-400/70 animate-pulse text-[10px]">
+                <span className="ml-auto text-status-info/70 animate-pulse text-[10px]">
                   {t("streaming")}
                 </span>
               )}
@@ -420,7 +414,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
               {showBackground && (
                 <button
                   onClick={() => sendAction("background")}
-                  className="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded border border-yellow-500/40 dark:border-yellow-600/40 text-[10px] text-yellow-600 dark:text-yellow-400 hover:bg-yellow-100 dark:hover:bg-yellow-600/15 transition-colors"
+                  className="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded border border-status-warning/40 dark:border-status-warning/40 text-[10px] text-status-warning hover:bg-status-warning/10 dark:hover:bg-status-warning/15 transition-colors"
                   title={t("bash.moveToBackground")}
                 >
                   <ArrowDownToLine className="w-3 h-3" />
@@ -430,7 +424,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
               {!showBackground && <div className="flex-1" />}
               <button
                 onClick={() => sendAction("kill")}
-                className="flex items-center justify-center gap-1 px-2 py-1 rounded border border-red-500/30 dark:border-red-600/30 text-[10px] text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-600/10 transition-colors"
+                className="flex items-center justify-center gap-1 px-2 py-1 rounded border border-status-error/30 dark:border-status-error/30 text-[10px] text-status-error hover:bg-status-error/10 dark:hover:bg-status-error/10 transition-colors"
                 title={t("bash.cancelExecution")}
               >
                 <X className="w-3 h-3" />
@@ -446,7 +440,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
           <div className="flex-1" />
           <button
             onClick={() => setShowLogViewer(true)}
-            className="flex items-center justify-center gap-1 px-2 py-1 rounded border border-cyan-500/40 dark:border-cyan-600/40 text-[10px] text-cyan-600 dark:text-cyan-400 hover:bg-cyan-50 dark:hover:bg-cyan-600/15 transition-colors"
+            className="flex items-center justify-center gap-1 px-2 py-1 rounded border border-semantic-tool/40 dark:border-semantic-tool/40 text-[10px] text-semantic-tool dark:text-semantic-tool hover:bg-semantic-tool/10 dark:hover:bg-semantic-tool/15 transition-colors"
             title={t("bash.viewOutput")}
           >
             <Eye className="w-3 h-3" />

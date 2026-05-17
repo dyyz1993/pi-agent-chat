@@ -140,7 +140,7 @@ export function QuickActionToolbar() {
             label: toolName,
             description: ext.path,
             icon: "bot",
-            accentColor: "text-purple-400",
+            accentColor: "text-semantic-agent",
             insertText: `@${toolName}`,
           });
         }
@@ -157,7 +157,7 @@ export function QuickActionToolbar() {
           label: skill.name,
           description: skill.description,
           icon: "sparkles",
-          accentColor: "text-cyan-400",
+          accentColor: "text-semantic-tool",
           insertText: `@${skill.name}`,
         });
       }
@@ -184,7 +184,7 @@ export function QuickActionToolbar() {
             label: e.name,
             description: e.path,
             icon: e.type === "directory" ? "folder" : "file",
-            accentColor: e.type === "directory" ? "text-amber-400" : "text-blue-400",
+            accentColor: e.type === "directory" ? "text-semantic-notify" : "text-status-info",
             insertText: e.type === "directory" ? "" : `@${e.path}`,
             isFolder: e.type === "directory",
             folderPath: e.path,
@@ -204,7 +204,7 @@ export function QuickActionToolbar() {
             label: n.name,
             description: n.path,
             icon: n.type === "directory" ? "folder" : "file",
-            accentColor: n.type === "directory" ? "text-amber-400" : "text-blue-400",
+            accentColor: n.type === "directory" ? "text-semantic-notify" : "text-status-info",
             insertText: n.type === "directory" ? "" : `@${n.path}`,
             isFolder: n.type === "directory",
             folderPath: n.path,
@@ -239,7 +239,7 @@ export function QuickActionToolbar() {
           label: f.filename,
           description: f.description ?? f.type ?? undefined,
           icon: f.type === "bookmark" ? "book" : "brain",
-          accentColor: "text-teal-400",
+          accentColor: "text-semantic-memory",
           insertText: `@memory:${f.filename}`,
         });
       }
@@ -266,7 +266,7 @@ export function QuickActionToolbar() {
           label: cmd.name,
           description: cmd.description,
           icon: cmd.source === "extension" ? "puzzle" : "filetext",
-          accentColor: "text-amber-400",
+          accentColor: "text-semantic-notify",
           insertText: `/${cmd.name}`,
         });
       }
@@ -293,7 +293,7 @@ export function QuickActionToolbar() {
           label: cmd.name,
           description: cmd.description,
           icon: "sparkles",
-          accentColor: "text-cyan-400",
+          accentColor: "text-semantic-tool",
           insertText: `/${cmd.name}`,
         });
       }
@@ -311,7 +311,7 @@ export function QuickActionToolbar() {
           label: skill.name,
           description: skill.description,
           icon: "sparkles",
-          accentColor: "text-cyan-400",
+          accentColor: "text-semantic-tool",
           insertText: `/${skill.name}`,
         });
       }
@@ -484,7 +484,7 @@ export function QuickActionToolbar() {
             onClick={handleOpenAt}
             className={`px-2 py-1 rounded-md text-xs font-medium transition-colors ${
               popupMode === "at"
-                ? "bg-indigo-600/30 text-indigo-300 border border-indigo-500/50"
+                ? "bg-semantic-accent/30 text-semantic-accent border border-semantic-accent/50"
                 : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 border border-transparent"
             }`}
             title={t("quickAction.atMention")}
@@ -498,7 +498,7 @@ export function QuickActionToolbar() {
             onClick={handleOpenSlash}
             className={`px-2 py-1 rounded-md text-xs font-medium transition-colors ${
               popupMode === "slash"
-                ? "bg-amber-600/30 text-amber-300 border border-amber-500/50"
+                ? "bg-semantic-notify/30 text-semantic-notify border border-semantic-notify/50"
                 : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 border border-transparent"
             }`}
             title={t("quickAction.commandsAndSkills")}
@@ -517,10 +517,10 @@ export function QuickActionToolbar() {
               !supervisorStatus?.enabled
                 ? "text-gray-400 dark:text-gray-500"
                 : supervisorStatus.state === "paused"
-                  ? "text-amber-500"
+                  ? "text-semantic-notify"
                   : supervisorStatus.state === "checking" || supervisorStatus.state === "continuing"
-                    ? "text-blue-500 animate-pulse"
-                    : "text-green-500"
+                    ? "text-status-info animate-pulse"
+                    : "text-status-success"
             }`}
             title="Supervisor"
           >
@@ -550,7 +550,7 @@ export function QuickActionToolbar() {
                       }}
                       className={`px-2 py-0.5 rounded text-[11px] transition-colors whitespace-nowrap ${
                         atTab === tab.key
-                          ? "bg-indigo-600/30 text-indigo-300"
+                          ? "bg-semantic-accent/30 text-semantic-accent"
                           : "text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
                       }`}
                     >
@@ -566,7 +566,7 @@ export function QuickActionToolbar() {
                       onClick={() => setSlashCategory(cat)}
                       className={`px-2 py-0.5 rounded text-[11px] transition-colors ${
                         slashCategory === cat
-                          ? "bg-amber-600/30 text-amber-300"
+                          ? "bg-semantic-notify/30 text-semantic-notify"
                           : "text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
                       }`}
                     >
@@ -599,7 +599,7 @@ export function QuickActionToolbar() {
                   <ChevronRight className="w-3 h-3 text-gray-400 dark:text-gray-600" />
                   <button
                     onClick={() => handleBreadcrumb(i)}
-                    className={`${i === fileBreadcrumbs.length - 1 ? "text-gray-700 dark:text-gray-300" : "text-indigo-400 hover:text-indigo-300"}`}
+                    className={`${i === fileBreadcrumbs.length - 1 ? "text-gray-700 dark:text-gray-300" : "text-semantic-accent hover:text-semantic-accent"}`}
                   >
                     {bc.label}
                   </button>

@@ -223,7 +223,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                   onClick={() => setViewMode(mode)}
                   className={`flex-1 py-1.5 text-[12px] font-medium transition-colors ${
                     chatViewMode === mode
-                      ? "bg-indigo-500 text-white"
+                      ? "bg-semantic-accent text-white"
                       : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/60"
                   }`}
                 >
@@ -333,7 +333,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             <button
               onClick={handleSaveTierConfig}
               disabled={tierSaving}
-              className="px-4 py-1.5 rounded-md text-xs bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-40 transition-colors"
+              className="px-4 py-1.5 rounded-md text-xs bg-semantic-accent text-white hover:bg-semantic-accent/80 disabled:opacity-40 transition-colors"
             >
               {tierSaving ? t("saving", "Saving...") : t("saveTier", "保存")}
             </button>
@@ -370,7 +370,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
           </button>
           <button
             onClick={onClose}
-            className="px-4 py-1.5 rounded-md text-xs bg-indigo-600 text-white hover:bg-indigo-500 transition-colors"
+            className="px-4 py-1.5 rounded-md text-xs bg-semantic-accent text-white hover:bg-semantic-accent/80 transition-colors"
           >
             {t("close")}
           </button>
@@ -420,7 +420,7 @@ function SelectRow<T extends number>({
       <select
         value={value}
         onChange={(e) => onChange(Number(e.target.value) as T)}
-        className="h-7 px-2 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-[12px] text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+        className="h-7 px-2 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-[12px] text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-semantic-accent cursor-pointer"
       >
         {options.map((opt) => (
           <option key={opt.value} value={opt.value}>
@@ -453,7 +453,7 @@ function BackoffPreview({
       <div className="flex items-center justify-between mb-1">
         <div className="text-[11px] text-gray-400 dark:text-gray-500">{t("retryPreview")}</div>
         <div
-          className={`text-[11px] font-medium ${totalMs >= 7200000 ? "text-green-500" : totalMs >= 3600000 ? "text-amber-500" : "text-gray-400 dark:text-gray-500"}`}
+          className={`text-[11px] font-medium ${totalMs >= 7200000 ? "text-status-success" : totalMs >= 3600000 ? "text-status-warning" : "text-gray-400 dark:text-gray-500"}`}
         >
           {t("retryTotal")}: {formatMs(totalMs)}
         </div>
@@ -478,7 +478,7 @@ function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: () =>
         onChange();
       }}
       className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-        checked ? "bg-indigo-500" : "bg-gray-300 dark:bg-gray-600"
+        checked ? "bg-semantic-accent" : "bg-gray-300 dark:bg-gray-600"
       }`}
     >
       <span

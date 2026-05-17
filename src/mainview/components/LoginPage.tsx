@@ -37,9 +37,9 @@ export function LoginPage({ onLogin, loginError, onClearError }: LoginPageProps)
       <div className="w-full max-w-sm mx-4">
         <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg dark:shadow-gray-900/50 border border-gray-200 dark:border-gray-800 p-8">
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 mb-4">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-semantic-accent/10 dark:bg-semantic-accent/5 mb-4">
               <svg
-                className="w-7 h-7 text-indigo-500"
+                className="w-7 h-7 text-semantic-accent"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -62,7 +62,7 @@ export function LoginPage({ onLogin, loginError, onClearError }: LoginPageProps)
 
           <form onSubmit={handleSubmit}>
             {loginError && (
-              <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm flex items-center gap-2">
+              <div className="mb-4 p-3 rounded-lg bg-status-error/10 dark:bg-status-error/20 border border-status-error/30 dark:border-status-error/30 text-status-error dark:text-status-error/80 text-sm flex items-center gap-2">
                 ⚠️ {loginError}
               </div>
             )}
@@ -80,7 +80,7 @@ export function LoginPage({ onLogin, loginError, onClearError }: LoginPageProps)
                   value={token}
                   onChange={(e) => setToken(e.target.value)}
                   placeholder="请输入 Token"
-                  className="flex-1 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
+                  className="flex-1 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-semantic-accent focus:border-transparent text-sm"
                   autoFocus
                 />
                 {token && (
@@ -99,7 +99,7 @@ export function LoginPage({ onLogin, loginError, onClearError }: LoginPageProps)
             <button
               type="submit"
               disabled={!token.trim()}
-              className="w-full py-2 px-4 rounded-lg bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors flex items-center justify-center gap-2"
+              className="w-full py-2 px-4 rounded-lg bg-semantic-accent hover:bg-semantic-accent/80 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors flex items-center justify-center gap-2"
             >
               {loginError ? "重试" : "连接"}
             </button>

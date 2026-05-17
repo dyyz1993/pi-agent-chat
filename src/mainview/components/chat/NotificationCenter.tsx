@@ -15,9 +15,9 @@ const LEVEL_ICON: Record<AppNotification["level"], typeof Info> = {
 };
 
 const LEVEL_COLOR: Record<AppNotification["level"], string> = {
-  info: "text-blue-400",
-  warning: "text-amber-400",
-  error: "text-red-400",
+  info: "text-status-info",
+  warning: "text-status-warning",
+  error: "text-status-error",
 };
 
 export function NotificationCenter() {
@@ -44,9 +44,9 @@ export function NotificationCenter() {
         const el = document.querySelector(`[data-ui-request-id="${n.requestId}"]`);
         if (el) {
           el.scrollIntoView({ behavior: "smooth", block: "center" });
-          el.classList.add("ring-1", "ring-amber-400/50");
+          el.classList.add("ring-1", "ring-status-warning/50");
           setTimeout(() => {
-            el.classList.remove("ring-1", "ring-amber-400/50");
+            el.classList.remove("ring-1", "ring-status-warning/50");
           }, 2000);
         }
       });
@@ -94,7 +94,7 @@ export function NotificationCenter() {
       >
         <Bell className="w-3.5 h-3.5" />
         {unread > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[10px] h-[10px] flex items-center justify-center bg-red-500 rounded-full text-[7px] leading-none text-white font-bold px-[2px]">
+          <span className="absolute -top-0.5 -right-0.5 min-w-[10px] h-[10px] flex items-center justify-center bg-status-error rounded-full text-[7px] leading-none text-white font-bold px-[2px]">
             {unread > 9 ? "9+" : unread}
           </span>
         )}
