@@ -20,7 +20,7 @@ export function MessageList({
       {/* Header */}
       <div className="px-3 py-2 border-b border-gray-800 flex items-center justify-between shrink-0">
         <span className="text-xs font-medium text-gray-300 flex items-center gap-1.5">
-          <MessageSquare className="w-3.5 h-3.5 text-indigo-400" />
+          <MessageSquare className="w-3.5 h-3.5 text-semantic-accent" />
           {t("sessionList")}
         </span>
         <button className="p-1 rounded hover:bg-gray-800 text-gray-500">

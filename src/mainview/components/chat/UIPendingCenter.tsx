@@ -35,7 +35,7 @@ function PanelCard({
       <div className="border border-gray-300/40 dark:border-gray-700/40 rounded-xl overflow-hidden bg-gray-50/50 dark:bg-gray-900/50">
         <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-gray-300/50 dark:border-gray-700/50">
           <span
-            className={`text-[11px] font-medium ${req.method === "select" ? "text-sky-400" : "text-emerald-400"}`}
+            className={`text-[11px] font-medium ${req.method === "select" ? "text-status-info" : "text-status-success"}`}
           >
             {methodLabel[req.method] ?? req.method}
           </span>
@@ -66,12 +66,12 @@ function PanelCard({
                   }
                   className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left transition-colors ${
                     checked
-                      ? "bg-sky-100 dark:bg-sky-600/15 text-sky-700 dark:text-sky-300"
+                      ? "bg-status-info/15 text-status-info"
                       : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400"
                   }`}
                 >
                   {checked ? (
-                    <CheckSquare className="w-3.5 h-3.5 shrink-0 text-sky-400" />
+                    <CheckSquare className="w-3.5 h-3.5 shrink-0 text-status-info" />
                   ) : (
                     <Square className="w-3.5 h-3.5 shrink-0 text-gray-400 dark:text-gray-600" />
                   )}
@@ -108,7 +108,7 @@ function PanelCard({
                   respondById(req.requestId, { value: customValue.trim() });
               }}
               disabled={checkedSet.size === 0 && !customValue.trim()}
-              className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-md bg-amber-100 dark:bg-amber-600/20 text-amber-600 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-600/30 disabled:opacity-40 disabled:cursor-not-allowed text-[11px] transition-colors"
+              className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-md bg-status-warning/20 text-status-warning hover:bg-status-warning/30 disabled:opacity-40 disabled:cursor-not-allowed text-[11px] transition-colors"
             >
               <Send className="w-3 h-3" /> {t("uiPending.confirm")}
             </button>
@@ -128,7 +128,7 @@ function PanelCard({
     return (
       <div className="border border-gray-300/40 dark:border-gray-700/40 rounded-xl overflow-hidden bg-gray-50/50 dark:bg-gray-900/50">
         <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-gray-300/60 dark:border-gray-700/60">
-          <span className="text-[11px] font-medium text-emerald-400">{methodLabel.confirm}</span>
+          <span className="text-[11px] font-medium text-status-success">{methodLabel.confirm}</span>
           <span className="text-[10px] text-gray-500 ml-auto">{req.title}</span>
         </div>
         <div className="px-3 py-2">
@@ -140,13 +140,13 @@ function PanelCard({
           <div className="flex gap-2">
             <button
               onClick={() => respondById(req.requestId, { confirmed: true })}
-              className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md bg-emerald-100 dark:bg-emerald-600/20 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-600/30 text-[11px] transition-colors"
+              className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md bg-status-success/20 text-status-success hover:bg-status-success/30 text-[11px] transition-colors"
             >
               {t("uiPending.confirm")}
             </button>
             <button
               onClick={() => dismissById(req.requestId)}
-              className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md bg-red-100 dark:bg-red-600/15 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-600/25 text-[11px] transition-colors"
+              className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md bg-status-error/15 text-status-error hover:bg-status-error/25 text-[11px] transition-colors"
             >
               {t("common:cancel")}
             </button>
@@ -161,7 +161,7 @@ function PanelCard({
     return (
       <div className="border border-gray-300/40 dark:border-gray-700/40 rounded-xl overflow-hidden bg-gray-50/50 dark:bg-gray-900/50">
         <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-gray-300/60 dark:border-gray-700/60">
-          <span className="text-[11px] font-medium text-amber-400">{methodLabel.input}</span>
+          <span className="text-[11px] font-medium text-status-warning">{methodLabel.input}</span>
           <span className="text-[10px] text-gray-500 ml-auto">{req.title}</span>
         </div>
         <div className="px-3 py-2">
@@ -182,7 +182,7 @@ function PanelCard({
             <button
               onClick={() => respondById(req.requestId, { value })}
               disabled={!value.trim()}
-              className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-md bg-amber-100 dark:bg-amber-600/20 text-amber-600 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-600/30 disabled:opacity-40 disabled:cursor-not-allowed text-[11px] transition-colors"
+              className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-md bg-status-warning/20 text-status-warning hover:bg-status-warning/30 disabled:opacity-40 disabled:cursor-not-allowed text-[11px] transition-colors"
             >
               <Send className="w-3 h-3" /> {t("uiPending.confirm")}
             </button>
@@ -235,7 +235,7 @@ export function UIPendingCenter() {
           e.stopPropagation();
           togglePanel();
         }}
-        className="p-1 rounded transition-colors text-amber-400 hover:text-amber-300 relative animate-pulse"
+        className="p-1 rounded transition-colors text-status-warning hover:text-status-warning relative animate-pulse"
         title={t("uiPending.pendingRequestsCount", { count: pending.length })}
       >
         <MessageCircleQuestion className="w-3.5 h-3.5" />
@@ -263,7 +263,7 @@ export function UIPendingCenter() {
                 <span className="text-[13px] font-medium text-gray-800 dark:text-gray-200">
                   {t("uiPending.pendingRequestsTitle")}
                 </span>
-                <span className="px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 text-[11px] font-medium tabular-nums">
+                <span className="px-1.5 py-0.5 rounded-full bg-amber-500/15 text-status-warning text-[11px] font-medium tabular-nums">
                   {pending.length}
                 </span>
               </div>

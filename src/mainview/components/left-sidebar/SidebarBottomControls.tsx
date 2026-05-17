@@ -349,7 +349,7 @@ export function SidebarBottomControls() {
                     key={agent.name}
                     className={`w-full text-left px-3 py-2 text-xs flex items-start gap-2 transition-colors ${
                       isActive
-                        ? "bg-indigo-500/15 text-indigo-600 dark:text-indigo-300"
+                        ? "bg-semantic-accent/15 text-semantic-accent dark:text-semantic-accent"
                         : "text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
                     }`}
                     onClick={async () => {
@@ -360,7 +360,7 @@ export function SidebarBottomControls() {
                     }}
                   >
                     {isActive ? (
-                      <Check className="w-3 h-3 shrink-0 text-indigo-400 mt-0.5" />
+                      <Check className="w-3 h-3 shrink-0 text-semantic-accent mt-0.5" />
                     ) : (
                       <Icon className="w-3 h-3 shrink-0 text-gray-400 dark:text-gray-500 mt-0.5" />
                     )}
@@ -370,8 +370,8 @@ export function SidebarBottomControls() {
                         <span
                           className={`text-[9px] px-1 py-0.5 rounded shrink-0 font-mono ${
                             isGlobalAgent(agent.source)
-                              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                              : "bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                              ? "bg-status-success/10 text-status-success"
+                              : "bg-status-info/10 text-status-info"
                           }`}
                           title={getSourceLabel(agent.source)}
                         >
@@ -450,13 +450,13 @@ export function SidebarBottomControls() {
                     key={wt.path}
                     className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors ${
                       isActive
-                        ? "bg-indigo-500/15 text-indigo-600 dark:text-indigo-300"
+                        ? "bg-semantic-accent/15 text-semantic-accent"
                         : "text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
                     }`}
                     onClick={() => handleSwitchWorkspace(wt)}
                   >
                     {isActive ? (
-                      <Check className="w-3 h-3 shrink-0 text-indigo-400" />
+                      <Check className="w-3 h-3 shrink-0 text-semantic-accent" />
                     ) : (
                       <span className="w-3 shrink-0" />
                     )}
@@ -466,14 +466,14 @@ export function SidebarBottomControls() {
                         {wt.path}
                       </span>
                     </div>
-                    {!wt.isMain && <GitBranch className="w-3 h-3 shrink-0 text-cyan-500/60" />}
+                    {!wt.isMain && <GitBranch className="w-3 h-3 shrink-0 text-semantic-tool/60" />}
                   </button>
                 );
               })}
             </div>
             <div className="border-t border-gray-200/60 dark:border-gray-700/60">
               <button
-                className="w-full text-left px-3 py-1.5 text-xs text-cyan-600 dark:text-cyan-400 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors"
+                className="w-full text-left px-3 py-1.5 text-xs text-semantic-tool hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors"
                 onClick={() => {
                   setShowCreateDialog(true);
                   setSourceBranch(currentWorkspace?.branch ?? "");
@@ -533,7 +533,7 @@ export function SidebarBottomControls() {
               <button
                 onClick={handleCreateWorktree}
                 disabled={!newBranch.trim() || creating}
-                className="px-2 py-1 rounded text-xs bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-40"
+                className="px-2 py-1 rounded text-xs bg-semantic-accent text-white hover:bg-semantic-accent disabled:opacity-40"
               >
                 {creating ? t("creating") : t("create")}
               </button>
@@ -603,7 +603,7 @@ export function SidebarBottomControls() {
                 flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[11px] transition-all duration-150 flex-1 justify-center
                 ${
                   isActive
-                    ? "bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 font-medium ring-1 ring-indigo-500/30"
+                    ? "bg-semantic-accent/15 text-semantic-accent font-medium ring-1 ring-semantic-accent/30"
                     : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
                 }
                 disabled:opacity-50 disabled:cursor-not-allowed
@@ -684,7 +684,7 @@ export function SidebarBottomControls() {
               <button
                 onClick={handleSaveTierConfig}
                 disabled={tierConfigSaving}
-                className="px-2 py-1 rounded text-[11px] bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-40"
+                className="px-2 py-1 rounded text-[11px] bg-semantic-accent text-white hover:bg-semantic-accent disabled:opacity-40"
               >
                 {tierConfigSaving ? t("saving", "Saving...") : t("save", "Save")}
               </button>
@@ -721,13 +721,13 @@ export function SidebarBottomControls() {
                   key={value}
                   className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors ${
                     isActive
-                      ? "bg-indigo-500/15 text-indigo-600 dark:text-indigo-300"
+                      ? "bg-semantic-accent/15 text-semantic-accent"
                       : "text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
                   }`}
                   onClick={() => handleSelectThinking(value)}
                 >
                   {isActive ? (
-                    <Check className="w-3 h-3 shrink-0 text-indigo-400" />
+                    <Check className="w-3 h-3 shrink-0 text-semantic-accent" />
                   ) : (
                     <span className="w-3 shrink-0" />
                   )}

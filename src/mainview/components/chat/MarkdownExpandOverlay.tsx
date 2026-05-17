@@ -74,7 +74,7 @@ export const MarkdownExpandOverlay = memo(function MarkdownExpandOverlay() {
         className="flex-1 overflow-y-auto overscroll-contain"
         style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       >
-        <div className="max-w-4xl mx-auto px-6 py-6 prose dark:prose-invert prose-sm max-w-none prose-p:my-2 prose-pre:bg-gray-100/80 dark:prose-pre:bg-gray-900/80 prose-pre:border prose-pre:border-gray-200 dark:prose-pre:border-gray-800 prose-code:text-emerald-700 dark:prose-code:text-emerald-300 prose-a:text-indigo-400">
+        <div className="max-w-4xl mx-auto px-6 py-6 prose dark:prose-invert prose-sm max-w-none prose-p:my-2 prose-pre:bg-gray-100/80 dark:prose-pre:bg-gray-900/80 prose-pre:border prose-pre:border-gray-200 dark:prose-pre:border-gray-800 prose-code:text-emerald-700 dark:prose-code:text-emerald-300 prose-a:text-semantic-accent">
           <CachedReactMarkdown>{expandedContent}</CachedReactMarkdown>
         </div>
       </div>

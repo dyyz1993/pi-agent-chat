@@ -157,6 +157,19 @@ html.dark body {
   --color-error: #ef4444;
   --color-info: #3b82f6;
 
+  /* Semantic status colors - RGB components for Tailwind opacity support */
+  --color-status-success: 22 163 74;
+  --color-status-error: 220 38 38;
+  --color-status-warning: 217 119 6;
+  --color-status-info: 37 99 235;
+
+  /* Semantic category colors - RGB components */
+  --color-semantic-agent: 124 58 237;
+  --color-semantic-tool: 8 145 178;
+  --color-semantic-memory: 13 148 136;
+  --color-semantic-accent: 79 70 229;
+  --color-semantic-notify: 234 88 12;
+
   --safe-area-top: env(safe-area-inset-top, 0px);
   --safe-area-bottom: env(safe-area-inset-bottom, 0px);
   --safe-area-left: env(safe-area-inset-left, 0px);
@@ -233,6 +246,19 @@ html.dark {
   --color-warning: #fbbf24;
   --color-error: #f87171;
   --color-info: #60a5fa;
+
+  /* Semantic status colors - RGB components for Tailwind opacity support */
+  --color-status-success: 74 222 128;
+  --color-status-error: 248 113 113;
+  --color-status-warning: 251 191 36;
+  --color-status-info: 96 165 250;
+
+  /* Semantic category colors - RGB components */
+  --color-semantic-agent: 192 132 252;
+  --color-semantic-tool: 34 211 238;
+  --color-semantic-memory: 45 212 191;
+  --color-semantic-accent: 129 140 248;
+  --color-semantic-notify: 251 146 60;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);

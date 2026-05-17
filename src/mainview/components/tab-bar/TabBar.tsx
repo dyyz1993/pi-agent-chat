@@ -12,10 +12,10 @@ function resolveDotClass(
 ): string {
   for (const s of sessions) {
     const st = statusMap[s.sessionId];
-    if (st === "permission" || st === "retrying") return "bg-red-400";
-    if (st === "streaming" || st === "compacting") return "bg-yellow-400 animate-pulse";
+    if (st === "permission" || st === "retrying") return "bg-status-error";
+    if (st === "streaming" || st === "compacting") return "bg-status-warning animate-pulse";
   }
-  return "bg-green-400";
+  return "bg-status-success";
 }
 
 const LONG_PRESS_MS = 800;
@@ -311,12 +311,12 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
                   : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-800/50"
               } ${isPressing ? "scale-[0.97] opacity-90" : ""} ${
                 isDragSource
-                  ? "scale-105 shadow-lg ring-2 ring-indigo-400/50 bg-indigo-50 dark:bg-indigo-950/50 z-10"
+                  ? "scale-105 shadow-lg ring-2 ring-semantic-accent/50 bg-indigo-50 dark:bg-indigo-950/50 z-10"
                   : ""
               }`}
             >
               {showLeftIndicator && (
-                <span className="absolute left-0 top-1 bottom-1 w-0.5 bg-indigo-400 rounded-full" />
+                <span className="absolute left-0 top-1 bottom-1 w-0.5 bg-semantic-accent rounded-full" />
               )}
               <span className={`w-2 h-2 rounded-full ${dotClass} flex-shrink-0`} />
               <span className="min-w-[60px] whitespace-nowrap">{tab.name}</span>
@@ -331,7 +331,7 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
                 <X className="w-3 h-3" />
               </button>
               {(showRightIndicator || isLastDropTarget) && (
-                <span className="absolute right-0 top-1 bottom-1 w-0.5 bg-indigo-400 rounded-full" />
+                <span className="absolute right-0 top-1 bottom-1 w-0.5 bg-semantic-accent rounded-full" />
               )}
             </div>
           );

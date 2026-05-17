@@ -367,8 +367,8 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
         <Folder
           className={
             mobile
-              ? "w-5 h-5 text-indigo-500 dark:text-indigo-400/70 shrink-0"
-              : "w-4 h-4 text-indigo-500 dark:text-indigo-400/70 shrink-0"
+              ? "w-5 h-5 text-semantic-accent/70 shrink-0"
+              : "w-4 h-4 text-semantic-accent/70 shrink-0"
           }
         />
         <div className="flex-1 min-w-0">
@@ -399,15 +399,15 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
           onClick={(e) => handleTogglePin(e, proj.path)}
           className={`p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700/50 transition-all shrink-0 ${
             proj.pinned
-              ? "text-amber-500 dark:text-amber-400 opacity-100"
-              : "opacity-0 group-hover:opacity-100 text-gray-600 hover:text-amber-500 dark:hover:text-amber-400"
+              ? "text-status-warning opacity-100"
+              : "opacity-0 group-hover:opacity-100 text-gray-600 hover:text-status-warning"
           }`}
         >
           <Pin className="w-3 h-3" fill={proj.pinned ? "currentColor" : "none"} />
         </button>
         <button
           onClick={(e) => handleRemoveRecent(e, proj.path)}
-          className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-600/20 text-gray-600 hover:text-red-400 transition-all shrink-0"
+          className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-600/20 text-gray-600 hover:text-status-error transition-all shrink-0"
         >
           <Trash2 className="w-3 h-3" />
         </button>
@@ -434,7 +434,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
                 onClick={() => navigateTo(seg.path)}
                 className={`text-xs truncate max-w-[120px] px-1.5 py-0.5 rounded transition-colors ${
                   i === segments.length - 1
-                    ? "text-indigo-600 dark:text-indigo-300 font-medium bg-indigo-500/10"
+                    ? "text-semantic-accent font-medium bg-indigo-500/10"
                     : "text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700/50"
                 }`}
               >
@@ -481,14 +481,14 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
           }}
           className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer"
         >
-          <Folder className="w-4 h-4 text-blue-500 dark:text-blue-400/70 shrink-0" />
+          <Folder className="w-4 h-4 text-status-info/70 shrink-0" />
           <span className="text-[12px] text-gray-800 dark:text-gray-200 truncate">
             {entry.name}
           </span>
         </div>
         <button
           onClick={() => handleSelectFolder(entry.path)}
-          className="p-1 rounded hover:bg-indigo-500/20 text-gray-600 hover:text-indigo-500 dark:hover:text-indigo-400 opacity-0 group-hover:opacity-100 transition-all shrink-0"
+          className="p-1 rounded hover:bg-indigo-500/20 text-gray-600 hover:text-semantic-accent opacity-0 group-hover:opacity-100 transition-all shrink-0"
           title={t("picker.selectFolderAsProject")}
         >
           <FolderOpen className="w-3.5 h-3.5" />
@@ -497,8 +497,8 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
           onClick={(e) => handleToggleFavoriteFolder(e, entry.path)}
           className={`p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700/50 transition-all shrink-0 ${
             isFav(entry.path)
-              ? "text-amber-500 dark:text-amber-400 opacity-100"
-              : "opacity-0 group-hover:opacity-100 text-gray-600 hover:text-amber-500 dark:hover:text-amber-400"
+              ? "text-status-warning opacity-100"
+              : "opacity-0 group-hover:opacity-100 text-gray-600 hover:text-status-warning"
           }`}
           title={isFav(entry.path) ? t("picker.unfavorite") : t("picker.favoriteDir")}
         >
@@ -532,7 +532,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
         }}
         className="w-full flex items-center gap-2.5 px-3 py-2 text-left group cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800/50 rounded-lg transition-colors"
       >
-        <Folder className="w-4 h-4 text-amber-500 dark:text-amber-400/70 shrink-0" />
+        <Folder className="w-4 h-4 text-status-warning/70 shrink-0" />
         <div className="flex-1 min-w-0">
           <span className="text-[12px] text-gray-800 dark:text-gray-200 truncate block">
             {folder.name}
@@ -544,14 +544,14 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
             e.stopPropagation();
             navigateTo(folder.path);
           }}
-          className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700/50 text-gray-600 hover:text-blue-500 dark:hover:text-blue-400 opacity-0 group-hover:opacity-100 transition-all shrink-0"
+          className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700/50 text-gray-600 hover:text-status-info opacity-0 group-hover:opacity-100 transition-all shrink-0"
           title={t("picker.browseDir")}
         >
           <ChevronRight className="w-3 h-3" />
         </button>
         <button
           onClick={(e) => handleToggleFavoriteFolder(e, folder.path)}
-          className="p-1 rounded hover:bg-red-600/20 text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all shrink-0"
+          className="p-1 rounded hover:bg-red-600/20 text-gray-600 hover:text-status-error opacity-0 group-hover:opacity-100 transition-all shrink-0"
           title={t("picker.unfavorite")}
         >
           <Trash2 className="w-3 h-3" />
@@ -564,7 +564,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
     <>
       <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800">
         <div className="flex items-center gap-1.5">
-          <Star className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
+          <Star className="w-3.5 h-3.5 text-status-warning" />
           <p className="text-xs font-medium text-gray-700 dark:text-gray-300">
             {t("picker.favoritedDirs")}
           </p>
@@ -579,7 +579,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
       <div className="shrink-0 px-4 py-2.5 border-t border-gray-200 dark:border-gray-800">
         <button
           onClick={() => navigateTo(homePathRef.current || "/")}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 rounded-lg text-xs text-indigo-600 dark:text-indigo-300 transition-colors"
+          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 rounded-lg text-xs text-semantic-accent transition-colors"
         >
           <Home className="w-3.5 h-3.5" />
           {t("picker.browseOtherDirs")}
@@ -723,7 +723,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
                       }}
                       className="w-full flex items-center gap-3 px-4 py-3 rounded-xl active:bg-gray-200 dark:active:bg-gray-800/80 cursor-pointer"
                     >
-                      <Folder className="w-5 h-5 text-amber-500 dark:text-amber-400/70 shrink-0" />
+                      <Folder className="w-5 h-5 text-status-warning/70 shrink-0" />
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium text-gray-900 dark:text-gray-200 truncate">
                           {folder.name}
@@ -736,14 +736,14 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
                           setMobileTab("browse");
                           navigateTo(folder.path);
                         }}
-                        className="p-2 rounded-lg active:bg-gray-200 dark:active:bg-gray-700/50 text-gray-500 active:text-blue-500 shrink-0"
+                        className="p-2 rounded-lg active:bg-gray-200 dark:active:bg-gray-700/50 text-gray-500 active:text-status-info shrink-0"
                         title={t("picker.browseDir")}
                       >
                         <ChevronRight className="w-4 h-4" />
                       </button>
                       <button
                         onClick={(e) => handleToggleFavoriteFolder(e, folder.path)}
-                        className="p-2 rounded-lg active:bg-gray-200 dark:active:bg-gray-700/50 text-gray-500 active:text-red-400 shrink-0"
+                        className="p-2 rounded-lg active:bg-gray-200 dark:active:bg-gray-700/50 text-gray-500 active:text-status-error shrink-0"
                         title={t("picker.unfavorite")}
                       >
                         <Trash2 className="w-4 h-4" />
@@ -803,7 +803,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
                             className="w-full flex items-center gap-3 px-4 py-3 rounded-xl active:bg-gray-200 dark:active:bg-gray-800/80 cursor-pointer"
                             onClick={() => navigateTo(entry.path)}
                           >
-                            <Folder className="w-5 h-5 text-blue-500 dark:text-blue-400/70 shrink-0" />
+                            <Folder className="w-5 h-5 text-status-info/70 shrink-0" />
                             <div className="flex-1 min-w-0">
                               <div className="text-sm font-medium text-gray-900 dark:text-gray-200 truncate">
                                 {entry.name}
@@ -814,7 +814,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
                                 e.stopPropagation();
                                 handleSelectFolder(entry.path);
                               }}
-                              className="p-2 rounded-lg active:bg-gray-200 dark:active:bg-gray-700/50 text-gray-500 active:text-indigo-500 shrink-0"
+                              className="p-2 rounded-lg active:bg-gray-200 dark:active:bg-gray-700/50 text-gray-500 active:text-semantic-accent shrink-0"
                               title={t("picker.selectFolderAsProject")}
                             >
                               <FolderOpen className="w-4 h-4" />
@@ -823,8 +823,8 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
                               onClick={(e) => handleToggleFavoriteFolder(e, entry.path)}
                               className={`p-2 rounded-lg active:bg-gray-200 dark:active:bg-gray-700/50 shrink-0 ${
                                 isFav(entry.path)
-                                  ? "text-amber-500 dark:text-amber-400"
-                                  : "text-gray-500 active:text-amber-500"
+                                  ? "text-status-warning"
+                                  : "text-gray-500 active:text-status-warning"
                               }`}
                               title={
                                 isFav(entry.path) ? t("picker.unfavorite") : t("picker.favoriteDir")

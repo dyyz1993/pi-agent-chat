@@ -2,6 +2,7 @@ import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import eslintConfigPrettier from 'eslint-config-prettier';
 import rpcPlugin from './eslint-plugin-rpc/index.js';
+import themePlugin from './eslint-plugin-theme/index.js';
 
 export default tseslint.config(
   js.configs.recommended,
@@ -12,6 +13,7 @@ export default tseslint.config(
       'build/**',
       'dist/**',
       'eslint-plugin-rpc/**',
+      'eslint-plugin-theme/**',
       'postcss.config.js',
       'tailwind.config.js',
       'scripts/**',
@@ -34,6 +36,7 @@ export default tseslint.config(
     },
     plugins: {
       rpc: rpcPlugin,
+      theme: themePlugin,
     },
     rules: {
       // TS 类型安全规则
@@ -70,6 +73,9 @@ export default tseslint.config(
       'rpc/require-typed-register': 'error',
       'rpc/require-api-client': 'error',
       'rpc/no-namespace-iterate': 'error',
+
+      // 主题/颜色约束规则
+      'theme/color-pairing': 'error',
     },
   },
   {

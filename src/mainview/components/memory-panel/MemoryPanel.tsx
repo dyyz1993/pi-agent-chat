@@ -9,10 +9,10 @@ import { ALL_MEMORY_TYPES, getMemorySummary } from "../chat/memory-config";
 import type { MemoryTypeConfig } from "../chat/memory-config";
 
 const TYPE_BADGES: Record<string, { labelKey: string; cls: string }> = {
-  project: { labelKey: "typeProject", cls: "bg-emerald-400/15 text-emerald-400" },
-  user: { labelKey: "typeUser", cls: "bg-indigo-400/15 text-indigo-400" },
-  feedback: { labelKey: "typeFeedback", cls: "bg-amber-400/15 text-amber-400" },
-  reference: { labelKey: "typeReference", cls: "bg-sky-400/15 text-sky-400" },
+  project: { labelKey: "typeProject", cls: "bg-status-success/15 text-status-success" },
+  user: { labelKey: "typeUser", cls: "bg-semantic-accent/15 text-semantic-accent" },
+  feedback: { labelKey: "typeFeedback", cls: "bg-status-warning/15 text-status-warning" },
+  reference: { labelKey: "typeReference", cls: "bg-status-info/15 text-status-info" },
 };
 
 const EVENT_FALLBACK: MemoryTypeConfig = { icon: Brain, label: "", color: "text-gray-400" };
@@ -166,7 +166,7 @@ export function MemoryPanel() {
           {all.map((f, i) => (
             <span
               key={i}
-              className="text-[9px] text-green-400/70 truncate max-w-[160px]"
+              className="text-[9px] text-status-success/70 truncate max-w-[160px]"
               title={f.description || f.filename}
             >
               {f.name}
@@ -195,7 +195,7 @@ export function MemoryPanel() {
       const d = data as { selectedFiles?: string[] } | undefined;
       const files = d?.selectedFiles ?? [];
       return files.length > 0 ? (
-        <span className="text-[9px] text-orange-400/70 truncate max-w-[120px]">
+        <span className="text-[9px] text-semantic-notify/70 truncate max-w-[120px]">
           {files.map((f) => f.split("/").pop() ?? f).join(", ")}
         </span>
       ) : null;
@@ -272,7 +272,7 @@ export function MemoryPanel() {
             collapsed={collapsedSections.has("injected")}
             onToggle={() => toggleSection("injected")}
             icon={Search}
-            iconCls="text-blue-400"
+            iconCls="text-status-info"
             label={t("thisInjection")}
             badge={injected.length}
           />
@@ -281,10 +281,12 @@ export function MemoryPanel() {
               {injected.map((item, i) => (
                 <div
                   key={i}
-                  className="flex items-start gap-1.5 px-1.5 py-1 rounded bg-blue-400/5 border border-blue-400/10"
+                  className="flex items-start gap-1.5 px-1.5 py-1 rounded bg-status-info/5 border border-status-info/10"
                 >
-                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 shrink-0" />
-                  <span className="text-[10px] text-blue-300/80 leading-tight">{item.summary}</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-status-info mt-1.5 shrink-0" />
+                  <span className="text-[10px] text-status-info/80 leading-tight">
+                    {item.summary}
+                  </span>
                 </div>
               ))}
             </div>
@@ -353,7 +355,7 @@ export function MemoryPanel() {
             collapsed={collapsedSections.has("entrypoint")}
             onToggle={() => toggleSection("entrypoint")}
             icon={FileText}
-            iconCls="text-yellow-400"
+            iconCls="text-status-warning"
             label={t("memoryIndex")}
           />
           {!collapsedSections.has("entrypoint") && (
@@ -392,7 +394,7 @@ export function MemoryPanel() {
                 return (
                   <div
                     key={event.id}
-                    className={`flex items-center gap-1.5 py-0.5 px-1 rounded transition-colors ${config.pulse ? "bg-teal-400/5" : "hover:bg-gray-200/50 dark:hover:bg-gray-800/40"}`}
+                    className={`flex items-center gap-1.5 py-0.5 px-1 rounded transition-colors ${config.pulse ? "bg-semantic-memory/5" : "hover:bg-gray-200/50 dark:hover:bg-gray-800/40"}`}
                   >
                     <Icon
                       className={`w-3 h-3 shrink-0 ${config.color} ${config.pulse ? "animate-spin" : ""}`}

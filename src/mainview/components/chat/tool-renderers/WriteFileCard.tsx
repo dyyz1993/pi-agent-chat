@@ -200,9 +200,9 @@ export const WriteFileCard = memo(function WriteFileCard({
       data-block-id={blockId}
       className={`border-x-0 border-t border-b overflow-hidden ${
         isRunning
-          ? "border-green-500/25 bg-green-50 dark:bg-green-950/20"
+          ? "border-status-success/25 bg-status-success/5"
           : isError
-            ? "border-red-500/15 bg-red-50 dark:bg-red-950/15"
+            ? "border-status-error/15 bg-status-error/5"
             : "border-gray-200 dark:border-gray-700/30 bg-gray-50 dark:bg-gray-800/25"
       }`}
     >
@@ -213,14 +213,14 @@ export const WriteFileCard = memo(function WriteFileCard({
         aria-expanded={!collapsed}
       >
         {collapsed && isRunning && (
-          <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+          <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-status-info animate-pulse" />
         )}
         {(() => {
           const toolKey = isEditTool(block) ? "edit" : "write";
           const { icon: WriteIcon } = getToolIcon(toolKey);
           return (
             <WriteIcon
-              className={`w-3.5 h-3.5 shrink-0 ${isRunning ? "text-green-500 dark:text-green-400" : isError ? "text-red-500 dark:text-red-400" : "text-green-500/70 dark:text-green-400/60"}`}
+              className={`w-3.5 h-3.5 shrink-0 ${isRunning ? "text-status-success" : isError ? "text-status-error" : "text-status-success/70"}`}
             />
           );
         })()}
@@ -242,7 +242,7 @@ export const WriteFileCard = memo(function WriteFileCard({
           </button>
         )}
         {isRunning && (
-          <span className="ml-auto text-[10px] text-green-500 dark:text-green-400 animate-pulse shrink-0">
+          <span className="ml-auto text-[10px] text-status-success animate-pulse shrink-0">
             {t("writeFile.writing")}
           </span>
         )}
@@ -286,10 +286,10 @@ export const WriteFileCard = memo(function WriteFileCard({
                 <div className="px-1">
                   {editArgs.edits.map((edit, i) => (
                     <div key={i} className="mb-1 last:mb-0">
-                      <div className="text-[10px] text-red-500/70 dark:text-red-400/60 font-mono bg-red-50 dark:bg-red-950/20 px-2 py-1 rounded-t">
+                      <div className="text-[10px] text-status-error/70 font-mono bg-status-error/5 px-2 py-1 rounded-t">
                         - {edit.oldText}
                       </div>
-                      <div className="text-[10px] text-green-500/70 dark:text-green-400/60 font-mono bg-green-50 dark:bg-green-950/20 px-2 py-1 rounded-b">
+                      <div className="text-[10px] text-status-success/70 font-mono bg-status-success/5 px-2 py-1 rounded-b">
                         + {edit.newText}
                       </div>
                     </div>
@@ -306,7 +306,7 @@ export const WriteFileCard = memo(function WriteFileCard({
               ref={scrollContainerRef}
               className="px-3 pb-2 max-h-40 overflow-y-auto bg-gray-100 dark:bg-gray-900/40 rounded-sm mx-2 mb-2"
             >
-              <div className="px-2 py-2 prose prose-sm prose-gray dark:prose-invert max-w-none overflow-auto prose-p:my-1 prose-pre:bg-gray-200 dark:prose-pre:bg-black/30 prose-pre:rounded prose-pre:px-2 prose-pre:py-1.5 prose-headings:text-gray-900 dark:prose-headings:text-gray-100 prose-a:text-indigo-500 dark:prose-a:text-indigo-400 prose-code:text-pink-600 dark:prose-code:text-pink-300 prose-code:before:content-[''] prose-code:after:content-[''] prose-code:bg-gray-200 dark:prose-code:bg-gray-800/60 prose-code:px-1 prose-code:rounded prose-code:text-[11px] prose-strong:text-gray-900 dark:prose-strong:text-gray-100 prose-blockquote:border-l-indigo-400/50 prose-blockquote:text-gray-600 dark:prose-blockquote:text-gray-300 prose-li:my-0.5 prose-ul:my-1 prose-ol:my-1">
+              <div className="px-2 py-2 prose prose-sm prose-gray dark:prose-invert max-w-none overflow-auto prose-p:my-1 prose-pre:bg-gray-200 dark:prose-pre:bg-black/30 prose-pre:rounded prose-pre:px-2 prose-pre:py-1.5 prose-headings:text-gray-900 dark:prose-headings:text-gray-100 prose-a:text-semantic-accent prose-code:text-pink-600 dark:prose-code:text-pink-300 prose-code:before:content-[''] prose-code:after:content-[''] prose-code:bg-gray-200 dark:prose-code:bg-gray-800/60 prose-code:px-1 prose-code:rounded prose-code:text-[11px] prose-strong:text-gray-900 dark:prose-strong:text-gray-100 prose-blockquote:border-l-semantic-accent/50 prose-blockquote:text-gray-600 dark:prose-blockquote:text-gray-300 prose-li:my-0.5 prose-ul:my-1 prose-ol:my-1">
                 <CachedReactMarkdown>{fileContent}</CachedReactMarkdown>
               </div>
             </div>
@@ -329,8 +329,8 @@ export const WriteFileCard = memo(function WriteFileCard({
           )}
 
           {lspDetails && lspDetails.files && lspDetails.files.length > 0 && (
-            <details className="group border-t border-yellow-400/30 dark:border-yellow-700/20">
-              <summary className="px-3 py-1 text-[11px] text-yellow-600 dark:text-yellow-400 cursor-pointer hover:text-yellow-500 dark:hover:text-yellow-300 select-none flex items-center gap-1.5">
+            <details className="group border-t border-status-warning/30">
+              <summary className="px-3 py-1 text-[11px] text-status-warning cursor-pointer hover:text-status-warning select-none flex items-center gap-1.5">
                 <svg
                   className="w-3 h-3 transition-transform group-open:rotate-90 shrink-0"
                   viewBox="0 0 12 12"
@@ -342,7 +342,7 @@ export const WriteFileCard = memo(function WriteFileCard({
                 </svg>
                 <AlertTriangle className="w-3 h-3 shrink-0" />
                 <span>{t("lspDiagnostics")}</span>
-                <span className="text-yellow-500 dark:text-yellow-600 ml-1">
+                <span className="text-status-warning/80 ml-1">
                   {lspDetails.files.reduce((acc, f) => acc + f.issues.length, 0)} issue
                   {lspDetails.files.reduce((acc, f) => acc + f.issues.length, 0) !== 1 ? "s" : ""}
                 </span>
@@ -351,12 +351,12 @@ export const WriteFileCard = memo(function WriteFileCard({
                 {lspDetails.files.map((f) => (
                   <div
                     key={f.filePath}
-                    className="border-b last:border-b-0 border-yellow-300/20 dark:border-yellow-700/10 py-1"
+                    className="border-b last:border-b-0 border-status-warning/20 py-1"
                   >
-                    <div className="text-[11px] text-yellow-700 dark:text-yellow-300 font-medium flex items-center gap-1">
+                    <div className="text-[11px] text-status-warning font-medium flex items-center gap-1">
                       <FileText className="w-2.5 h-2.5 shrink-0" />
                       <span>{f.filePath}</span>
-                      <span className="text-yellow-600 dark:text-yellow-500 ml-1">{f.summary}</span>
+                      <span className="text-status-warning/80 ml-1">{f.summary}</span>
                     </div>
                     {f.issues.map((issue, i) => (
                       <div
@@ -366,9 +366,9 @@ export const WriteFileCard = memo(function WriteFileCard({
                         <span
                           className={
                             issue.severity === 1
-                              ? "text-red-500 dark:text-red-400"
+                              ? "text-status-error"
                               : issue.severity === 2
-                                ? "text-yellow-600 dark:text-yellow-400"
+                                ? "text-status-warning"
                                 : "text-gray-400 dark:text-gray-500"
                           }
                         >

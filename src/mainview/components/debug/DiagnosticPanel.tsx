@@ -41,7 +41,7 @@ function HealthIndicator({
   if (diff === 0) return <span className="text-gray-500 text-[10px]">=</span>;
   const isGood = diff < 0;
   return (
-    <span className={`text-[10px] ${isGood ? "text-emerald-400" : "text-red-400"}`}>
+    <span className={`text-[10px] ${isGood ? "text-status-success" : "text-status-error"}`}>
       {diff > 0 ? "+" : ""}
       {diff} {label}
     </span>
@@ -66,12 +66,12 @@ function SubscriptionTable({
         <div className="flex items-center gap-2">
           <HealthIndicator current={totalNow} previous={totalPrev} label="subs" />
           <span
-            className={`text-xs font-mono ${totalPrev !== undefined && totalNow > totalPrev ? "text-red-400" : totalNow > 0 ? "text-amber-400" : "text-gray-500"}`}
+            className={`text-xs font-mono ${totalPrev !== undefined && totalNow > totalPrev ? "text-status-error" : totalNow > 0 ? "text-status-warning" : "text-gray-500"}`}
           >
             {totalNow} total
           </span>
           {uniqueSessions.size > 1 && (
-            <span className="text-[10px] text-red-400">({uniqueSessions.size} sessions!)</span>
+            <span className="text-[10px] text-status-error">({uniqueSessions.size} sessions!)</span>
           )}
         </div>
       </div>
@@ -191,7 +191,7 @@ function LeakDetector({ snap }: { snap: DiagnosticSnapshot }) {
 
   if (issues.length === 0) {
     return (
-      <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 bg-emerald-500/10 rounded px-2 py-1.5">
+      <div className="flex items-center gap-1.5 text-[11px] text-status-success bg-status-success/10 rounded px-2 py-1.5">
         <CheckCircle className="w-3 h-3" />
         No leaks detected
       </div>
@@ -205,8 +205,8 @@ function LeakDetector({ snap }: { snap: DiagnosticSnapshot }) {
           key={i}
           className={`flex items-start gap-1.5 text-[11px] rounded px-2 py-1 ${
             issue.severity === "error"
-              ? "text-red-400 bg-red-500/10"
-              : "text-amber-400 bg-amber-500/10"
+              ? "text-status-error bg-status-error/10"
+              : "text-status-warning bg-status-warning/10"
           }`}
         >
           <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
@@ -250,7 +250,7 @@ function TrendChart({ history }: { history: DiagnosticSnapshot[] }) {
         {subBars.map((v, i) => (
           <div
             key={i}
-            className={`flex-1 rounded-t-sm ${i === subBars.length - 1 ? "bg-indigo-400" : "bg-gray-600"}`}
+            className={`flex-1 rounded-t-sm ${i === subBars.length - 1 ? "bg-semantic-accent" : "bg-gray-600"}`}
             style={{ height: `${(v / maxSubs) * 100}%` }}
             title={`${v} subs`}
           />
@@ -259,7 +259,11 @@ function TrendChart({ history }: { history: DiagnosticSnapshot[] }) {
       <div className="flex justify-between text-[10px]">
         <span
           className={
-            subTrend > 0 ? "text-red-400" : subTrend < 0 ? "text-emerald-400" : "text-gray-500"
+            subTrend > 0
+              ? "text-status-error"
+              : subTrend < 0
+                ? "text-status-success"
+                : "text-gray-500"
           }
         >
           Subs: {totalSubsFirst} → {totalSubsLast} ({subTrend > 0 ? "+" : ""}
@@ -267,7 +271,11 @@ function TrendChart({ history }: { history: DiagnosticSnapshot[] }) {
         </span>
         <span
           className={
-            byteTrend > 0 ? "text-red-400" : byteTrend < 0 ? "text-emerald-400" : "text-gray-500"
+            byteTrend > 0
+              ? "text-status-error"
+              : byteTrend < 0
+                ? "text-status-success"
+                : "text-gray-500"
           }
         >
           Data: {formatBytes(totalBytesFirst)} → {formatBytes(totalBytesLast)} (
@@ -326,14 +334,14 @@ export function DiagnosticPanel() {
       className="fixed top-10 right-2 w-[420px] max-sm:right-1 max-sm:w-[calc(100vw-16px)] max-h-[85vh] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-2xl z-50 flex flex-col overflow-hidden"
     >
       <div className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-850 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-        <div className="flex items-center gap-1.5 text-xs font-medium text-indigo-400">
+        <div className="flex items-center gap-1.5 text-xs font-medium text-semantic-accent">
           <Activity className="w-3.5 h-3.5" />
           Session Diagnostic
         </div>
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => setAutoRefresh(!autoRefresh)}
-            className={`text-[10px] px-1.5 py-0.5 rounded ${autoRefresh ? "bg-emerald-600/30 text-emerald-400" : "bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400"}`}
+            className={`text-[10px] px-1.5 py-0.5 rounded ${autoRefresh ? "bg-status-success/30 text-status-success" : "bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400"}`}
           >
             {autoRefresh ? "AUTO" : "MANUAL"}
           </button>
@@ -404,7 +412,7 @@ export function DiagnosticPanel() {
                 </div>
                 <div className="h-1.5 bg-gray-200 dark:bg-gray-700 rounded mt-1">
                   <div
-                    className="h-full bg-indigo-500 rounded"
+                    className="h-full bg-semantic-accent rounded"
                     style={{ width: `${(snapshot.jsHeapUsed / snapshot.jsHeapTotal) * 100}%` }}
                   />
                 </div>

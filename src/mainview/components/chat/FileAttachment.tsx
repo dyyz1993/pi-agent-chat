@@ -13,9 +13,9 @@ function AttachmentPreview({ att, onRemove }: { att: AttachmentFile; onRemove: (
   return (
     <div className="group relative flex items-center gap-1.5 px-2 py-1 rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-300/50 dark:border-gray-700/50 max-w-[200px]">
       {att.status === "uploading" && (
-        <Loader2 className="w-3 h-3 text-indigo-400 animate-spin shrink-0" />
+        <Loader2 className="w-3 h-3 text-semantic-accent animate-spin shrink-0" />
       )}
-      {att.status === "error" && <AlertCircle className="w-3 h-3 text-red-400 shrink-0" />}
+      {att.status === "error" && <AlertCircle className="w-3 h-3 text-status-error shrink-0" />}
       {att.status === "done" && <div className="w-3 h-3 rounded-full bg-green-500/80 shrink-0" />}
       {att.status === "pending" && <div className="w-3 h-3 rounded-full bg-gray-600 shrink-0" />}
 

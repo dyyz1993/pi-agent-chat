@@ -42,37 +42,37 @@ export function getBlockBorderColor(block: ContentBlock, role: "user" | "assista
 
   switch (block.type) {
     case "thinking":
-      return "border-l-purple-400/50";
+      return "border-l-semantic-agent/50";
     case "toolCall":
-      return "border-l-amber-500/40";
+      return "border-l-status-warning/40";
     case "toolResult":
-      return block.isError ? "border-l-red-400/50" : "border-l-amber-500/40";
+      return block.isError ? "border-l-status-error/50" : "border-l-status-warning/40";
     case "toolExecution": {
       if (block.toolName.toLowerCase() === "subagent") {
-        return block.status === "error" ? "border-l-red-400/50" : "border-l-purple-400/50";
+        return block.status === "error" ? "border-l-status-error/50" : "border-l-semantic-agent/50";
       }
-      if (block.status === "running") return "border-l-blue-400/50";
-      if (block.status === "error") return "border-l-red-400/50";
-      return "border-l-amber-500/40";
+      if (block.status === "running") return "border-l-status-info/50";
+      if (block.status === "error") return "border-l-status-error/50";
+      return "border-l-status-warning/40";
     }
     case "custom": {
       const ct = block.customType;
-      if (LSP_CUSTOM_TYPES_SET.has(ct)) return "border-l-yellow-400/40";
-      if (ct.startsWith("memory_prefetch")) return "border-l-blue-400/40";
-      if (ct.startsWith("memory_dream")) return "border-l-purple-400/40";
-      if (ct.startsWith("memory_extract")) return "border-l-green-400/40";
-      if (ct === "memory_created") return "border-l-teal-400/40";
-      if (ct === "memory_failed") return "border-l-red-400/40";
-      if (ct === "step_snapshot") return "border-l-indigo-400/40";
+      if (LSP_CUSTOM_TYPES_SET.has(ct)) return "border-l-status-warning/40";
+      if (ct.startsWith("memory_prefetch")) return "border-l-status-info/40";
+      if (ct.startsWith("memory_dream")) return "border-l-semantic-agent/40";
+      if (ct.startsWith("memory_extract")) return "border-l-status-success/40";
+      if (ct === "memory_created") return "border-l-semantic-memory/40";
+      if (ct === "memory_failed") return "border-l-status-error/40";
+      if (ct === "step_snapshot") return "border-l-semantic-accent/40";
       return roleDefault;
     }
     case "compactionSummary":
-      return "border-l-cyan-500/40";
+      return "border-l-semantic-tool/40";
     case "uiInteraction": {
-      if (block.status === "pending") return "border-l-amber-400/50";
-      if (block.status === "responded") return "border-l-emerald-400/50";
+      if (block.status === "pending") return "border-l-status-warning/50";
+      if (block.status === "responded") return "border-l-status-success/50";
       if (block.status === "dismissed") return "border-l-gray-500/40";
-      return "border-l-cyan-400/40";
+      return "border-l-semantic-tool/40";
     }
     default:
       return roleDefault;
@@ -112,7 +112,7 @@ export const MessageBubble = memo(function MessageBubble({
   const styleMemo = useMemo(() => {
     let bg = "";
     if (isSelected) {
-      bg = "bg-indigo-500/[0.06]";
+      bg = "bg-semantic-accent/[0.06]";
     } else if (isActive) {
       bg = "bg-blue-500/[0.04]";
     }
@@ -148,7 +148,7 @@ export const MessageBubble = memo(function MessageBubble({
       className="group relative w-full min-w-0"
     >
       {isSelected && (
-        <div className="absolute inset-0 rounded-lg bg-indigo-500/[0.06] pointer-events-none" />
+        <div className="absolute inset-0 rounded-lg bg-semantic-accent/[0.06] pointer-events-none" />
       )}
       {isUser ? (
         <div
@@ -175,7 +175,7 @@ export const MessageBubble = memo(function MessageBubble({
                         href={part}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-blue-400 hover:underline break-all"
+                        className="text-status-info hover:underline break-all"
                       >
                         {part}
                       </a>
@@ -232,7 +232,7 @@ export const MessageBubble = memo(function MessageBubble({
             <div
               className={`border-l-[3px] ${getDefaultBorderColor(message.role as "user" | "assistant")}`}
             >
-              <span className="inline-block w-1.5 h-4 bg-indigo-400 animate-pulse ml-3 align-text-bottom" />
+              <span className="inline-block w-1.5 h-4 bg-semantic-accent animate-pulse ml-3 align-text-bottom" />
             </div>
           )}
           {message.tokenUsage &&
@@ -435,17 +435,19 @@ export const ThinkingCard = memo(function ThinkingCard({
         className={`px-3 py-1 text-[11px] flex items-center gap-2 ${!isStreaming ? "cursor-pointer hover:bg-gray-200/30 dark:hover:bg-gray-800/30" : ""}`}
         onClick={() => !isStreaming && setIsOpen(!isOpen)}
       >
-        <Brain className="w-3 h-3 text-purple-400/60 shrink-0" />
+        <Brain className="w-3 h-3 text-semantic-agent/60 shrink-0" />
         {isOpen ? (
-          <span className="text-purple-300/70 font-medium">{t("thinkingLabel")}</span>
+          <span className="text-semantic-agent/70 font-medium">{t("thinkingLabel")}</span>
         ) : hasMore ? (
           <span className="text-gray-400 dark:text-gray-500 truncate flex-1 min-w-0">
             {collapsedText}
           </span>
         ) : (
-          <span className="text-purple-300/70 font-medium">{t("thinkingLabel")}</span>
+          <span className="text-semantic-agent/70 font-medium">{t("thinkingLabel")}</span>
         )}
-        {isStreaming && <span className="text-purple-400/50 animate-pulse text-[10px]">...</span>}
+        {isStreaming && (
+          <span className="text-semantic-agent/50 animate-pulse text-[10px]">...</span>
+        )}
         {!isStreaming && (
           <div
             className="ml-auto flex items-center gap-0.5 shrink-0"
@@ -481,9 +483,9 @@ export const MEMORY_CUSTOM_TYPES = ENTRY_TYPE_KEYS;
 export const MEMORY_HIDDEN_IN_CHAT = new Set<string>([]);
 
 const LSP_CUSTOM_TYPES: Record<string, { label: string; color: string }> = {
-  lsp: { label: "LSP", color: "text-blue-400" },
-  lsp_notify: { label: "LSP Diagnostics", color: "text-yellow-400" },
-  lsp_diagnostics: { label: "LSP Diagnostics", color: "text-yellow-400" },
+  lsp: { label: "LSP", color: "text-status-info" },
+  lsp_notify: { label: "LSP Diagnostics", color: "text-status-warning" },
+  lsp_diagnostics: { label: "LSP Diagnostics", color: "text-status-warning" },
 };
 
 export const LSP_CUSTOM_TYPES_SET = new Set(Object.keys(LSP_CUSTOM_TYPES));
@@ -503,7 +505,7 @@ export const LspDiagnosticsCard = memo(function LspDiagnosticsCard({ data }: { d
   if (!data || typeof data !== "object") {
     return (
       <div className="my-0.5 overflow-hidden bg-yellow-950/5">
-        <div className="px-4 py-1 text-[11px] font-medium text-yellow-400 flex items-center gap-1.5">
+        <div className="px-4 py-1 text-[11px] font-medium text-status-warning flex items-center gap-1.5">
           <AlertTriangle className="w-3 h-3 shrink-0" />
           <span>{t("lspDiagnostics")}</span>
         </div>
@@ -527,7 +529,7 @@ export const LspDiagnosticsCard = memo(function LspDiagnosticsCard({ data }: { d
 
   return (
     <div className="my-0.5 border border-yellow-700/30 rounded-lg overflow-hidden bg-yellow-50/50 dark:bg-yellow-900/10">
-      <div className="px-3 py-1.5 text-xs font-medium text-yellow-400 flex items-center gap-1.5">
+      <div className="px-3 py-1.5 text-xs font-medium text-status-warning flex items-center gap-1.5">
         <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
         <span>{t("lspDiagnostics")}</span>
       </div>
@@ -537,7 +539,7 @@ export const LspDiagnosticsCard = memo(function LspDiagnosticsCard({ data }: { d
             key={f.filePath}
             className="px-3 py-1.5 border-b last:border-b-0 border-yellow-700/10"
           >
-            <div className="text-[11px] text-yellow-300 font-medium flex items-center gap-1">
+            <div className="text-[11px] text-status-warning font-medium flex items-center gap-1">
               <FileText className="w-3 h-3 shrink-0" />
               <span>{f.filePath}</span>
               <span className="text-yellow-500 ml-1">{f.summary}</span>
@@ -547,9 +549,9 @@ export const LspDiagnosticsCard = memo(function LspDiagnosticsCard({ data }: { d
                 <span
                   className={
                     issue.severity === 1
-                      ? "text-red-400"
+                      ? "text-status-error"
                       : issue.severity === 2
-                        ? "text-yellow-400"
+                        ? "text-status-warning"
                         : "text-gray-500"
                   }
                 >
@@ -595,15 +597,15 @@ function TierBadge({ tier }: { tier: string }) {
     { style: string; Icon: React.ComponentType<{ className?: string }> }
   > = {
     fast: {
-      style: "bg-amber-500/[0.12] text-amber-400 border-amber-500/25",
+      style: "bg-amber-500/[0.12] text-status-warning border-amber-500/25",
       Icon: Zap,
     },
     pro: {
-      style: "bg-indigo-500/[0.12] text-indigo-400 border-indigo-500/25",
+      style: "bg-indigo-500/[0.12] text-semantic-accent border-indigo-500/25",
       Icon: Target,
     },
     max: {
-      style: "bg-purple-500/[0.12] text-purple-400 border-purple-500/25",
+      style: "bg-purple-500/[0.12] text-semantic-agent border-purple-500/25",
       Icon: Brain,
     },
   };
@@ -630,7 +632,7 @@ function PrefetchSearchingDetail({ data }: { data: unknown }) {
 
   return (
     <div className="px-3 pb-2 text-[11px] space-y-2">
-      <div className="flex items-center gap-1.5 text-blue-400">
+      <div className="flex items-center gap-1.5 text-status-info">
         <Loader2 className="w-3 h-3 animate-spin shrink-0" />
         <span>{t("searchingMemory")}</span>
       </div>
@@ -736,7 +738,7 @@ export const MemoryCard = memo(function MemoryCard({
                 handleMarkIrrelevant();
               }
             }}
-            className="shrink-0 flex items-center rounded hover:bg-orange-400/20 text-gray-400 hover:text-orange-400 transition-colors cursor-pointer"
+            className="shrink-0 flex items-center rounded hover:bg-semantic-notify/20 text-gray-400 hover:text-semantic-notify transition-colors cursor-pointer"
             title={t("markIrrelevant")}
           >
             <ThumbsDown className="w-3 h-3" />
@@ -744,7 +746,7 @@ export const MemoryCard = memo(function MemoryCard({
         )}
         {isMarked && (
           <span
-            className="shrink-0 flex items-center text-orange-400/70"
+            className="shrink-0 flex items-center text-semantic-notify/70"
             title={t("alreadyMarkedIrrelevant")}
           >
             <ThumbsDown className="w-3 h-3" />
@@ -819,13 +821,13 @@ function ExtractDetail({ data }: { data: unknown }) {
     <div className="px-3 pb-1.5 flex flex-col gap-1">
       {(created as FileEntry[]).length > 0 && (
         <div>
-          <div className="text-[10px] font-medium text-green-400/80 mb-0.5">新建</div>
+          <div className="text-[10px] font-medium text-status-success/80 mb-0.5">新建</div>
           {(created as FileEntry[]).map((f, i) => (
             <div
               key={i}
               className="text-[11px] text-gray-500 dark:text-gray-400 flex gap-1 items-start"
             >
-              <FileText className="w-3 h-3 mt-0.5 shrink-0 text-green-400/60" />
+              <FileText className="w-3 h-3 mt-0.5 shrink-0 text-status-success/60" />
               <span className="min-w-0">
                 <span className="font-medium text-gray-300">{f.name}</span>
                 {f.description && (
@@ -838,13 +840,13 @@ function ExtractDetail({ data }: { data: unknown }) {
       )}
       {(updated as FileEntry[]).length > 0 && (
         <div>
-          <div className="text-[10px] font-medium text-amber-400/80 mb-0.5">更新</div>
+          <div className="text-[10px] font-medium text-status-warning/80 mb-0.5">更新</div>
           {(updated as FileEntry[]).map((f, i) => (
             <div
               key={i}
               className="text-[11px] text-gray-500 dark:text-gray-400 flex gap-1 items-start"
             >
-              <FileText className="w-3 h-3 mt-0.5 shrink-0 text-amber-400/60" />
+              <FileText className="w-3 h-3 mt-0.5 shrink-0 text-status-warning/60" />
               <span className="min-w-0">
                 <span className="font-medium text-gray-300">{f.name}</span>
                 {f.description && (
@@ -935,7 +937,7 @@ function PrefetchResultDetail({
       {snippet && (
         <div className="space-y-0.5">
           <div className="text-gray-500 dark:text-gray-400 flex items-center gap-1 font-medium">
-            <Brain className="w-3 h-3 text-blue-400/60 shrink-0" />
+            <Brain className="w-3 h-3 text-status-info/60 shrink-0" />
             <span>{t("relatedMemory")}</span>
             <span className="text-gray-400 dark:text-gray-500 ml-auto">
               {memoryCount}{" "}
@@ -982,15 +984,15 @@ function PrefetchResultDetail({
             )}
             {layer === "skip" && <div className="text-yellow-500/80">{t("skipLayer")}</div>}
             {layer === "llm" && isForce && (
-              <div className="text-red-400/80">{t("forceTrigger")}</div>
+              <div className="text-status-error/80">{t("forceTrigger")}</div>
             )}
             {layer === "llm" && !isForce && (
-              <div className="text-blue-400/80">{t("keywordTrigger")}</div>
+              <div className="text-status-info/80">{t("keywordTrigger")}</div>
             )}
             {layer === "none" && (
               <div className="text-gray-400 dark:text-gray-500">{t("noMemoryFiles")}</div>
             )}
-            {layer === "error" && <div className="text-red-400/80">{t("searchError")}</div>}
+            {layer === "error" && <div className="text-status-error/80">{t("searchError")}</div>}
             {layer !== "skip" &&
               layer !== "llm" &&
               layer !== "not_triggered" &&
@@ -1023,7 +1025,7 @@ function PrefetchResultDetail({
               <div className="text-green-600/80">{t("guardRuleHit")}</div>
               {guardHits.map((h, i) => (
                 <div key={i} className="pl-2 flex items-center gap-1.5">
-                  <span className="text-green-500/60">•</span>
+                  <span className="text-status-success/60">•</span>
                   <span className="text-gray-700 dark:text-gray-300 font-mono">
                     「{h.pattern}」
                   </span>
@@ -1040,7 +1042,7 @@ function PrefetchResultDetail({
               <div className="text-cyan-600/80">{t("triggerKeywords")}</div>
               {triggerHits.map((h, i) => (
                 <div key={i} className="pl-2 flex items-center gap-1.5">
-                  <span className="text-cyan-500/60">•</span>
+                  <span className="text-semantic-tool/60">•</span>
                   <span className="text-gray-700 dark:text-gray-300 font-mono">
                     「{h.pattern}」
                   </span>
@@ -1064,7 +1066,7 @@ function PrefetchResultDetail({
                     key={f}
                     className="flex items-center gap-1.5 pl-2 py-0.5 text-gray-400 dark:text-gray-500 truncate"
                   >
-                    <FileText className="w-2.5 h-2.5 text-blue-400/50 shrink-0" />
+                    <FileText className="w-2.5 h-2.5 text-status-info/50 shrink-0" />
                     <span className="truncate" title={f}>
                       {fileName}
                     </span>
@@ -1087,7 +1089,7 @@ function PrefetchResultDetail({
             )}
             {tier && (
               <div className="flex items-center gap-1.5">
-                <Zap className="w-3 h-3 shrink-0 text-amber-400/70" />
+                <Zap className="w-3 h-3 shrink-0 text-status-warning/70" />
                 <span className="text-gray-500">{t("usedModel")}</span>
                 <span className="text-gray-300">{modelLabel || tier}</span>
                 {tier && modelLabel && <span className="text-gray-600">({tier})</span>}
@@ -1098,7 +1100,7 @@ function PrefetchResultDetail({
       </details>
 
       {isMarkedIrrelevant && (
-        <div className="flex items-center gap-1.5 text-[10px] text-orange-400/80 py-1 px-1">
+        <div className="flex items-center gap-1.5 text-[10px] text-semantic-notify/80 py-1 px-1">
           <ThumbsDown className="w-3 h-3 shrink-0" />
           <span>{t("markedIrrelevantHint")}</span>
         </div>
@@ -1166,7 +1168,7 @@ const CompactionSummaryCard = memo(function CompactionSummaryCard({
               </span>
               <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="shrink-0 p-0.5 text-cyan-400/60 hover:text-cyan-300 transition-colors text-[11px] underline decoration-dotted underline-offset-2"
+                className="shrink-0 p-0.5 text-semantic-tool/60 hover:text-semantic-tool transition-colors text-[11px] underline decoration-dotted underline-offset-2"
                 aria-expanded={isOpen}
                 aria-label={isOpen ? t("collapseThinkingDetail") : t("expandThinkingDetail")}
               >
@@ -1174,7 +1176,7 @@ const CompactionSummaryCard = memo(function CompactionSummaryCard({
               </button>
             </div>
             {isOpen && (
-              <div className="mt-1.5 pl-0 border-l-2 border-cyan-500/20 prose dark:prose-invert prose-sm max-w-none prose-p:my-0.5 prose-headings:my-1">
+              <div className="mt-1.5 pl-0 border-l-2 border-semantic-tool/20 prose dark:prose-invert prose-sm max-w-none prose-p:my-0.5 prose-headings:my-1">
                 <CachedReactMarkdown>{summary}</CachedReactMarkdown>
               </div>
             )}
@@ -1254,7 +1256,7 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({
                     t("messageContentLineCount", { count: block.text.split("\n").length }),
                   )
                 }
-                className="p-1 rounded text-gray-400 dark:text-gray-600 hover:text-indigo-300 hover:bg-gray-200/60 dark:hover:bg-gray-800/60 transition-colors"
+                className="p-1 rounded text-gray-400 dark:text-gray-600 hover:text-semantic-accent hover:bg-gray-200/60 dark:hover:bg-gray-800/60 transition-colors"
                 title={t("expandFullText")}
               >
                 <Maximize2 className="w-3.5 h-3.5" />
@@ -1419,18 +1421,18 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
         }}
       >
         <span
-          className={`font-medium ${isRunning ? "text-blue-400" : isError ? "text-red-400" : "text-amber-300/80"}`}
+          className={`font-medium ${isRunning ? "text-status-info" : isError ? "text-status-error" : "text-status-warning/80"}`}
         >
           {block.toolName}
         </span>
         {collapsed && isRunning && (
           <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
         )}
-        {isRunning && <span className="text-blue-400 animate-pulse text-[10px]">running</span>}
+        {isRunning && <span className="text-status-info animate-pulse text-[10px]">running</span>}
         {!isRunning && !isError && (
           <CheckCircle className="w-3.5 h-3.5 text-green-500 shrink-0 ml-auto" />
         )}
-        {isError && <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0 ml-auto" />}
+        {isError && <XCircle className="w-3.5 h-3.5 text-status-error shrink-0 ml-auto" />}
         <CopyButton text={fullExecutionText} size="xs" title={t("copyAllExecution")} />
       </div>
 
@@ -1465,7 +1467,7 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
           </div>
           {inputOpen && block.args && (
             <div className="px-3 pb-2 pt-0.5">
-              <pre className="text-[11px] text-yellow-300/60 overflow-x-auto whitespace-pre-wrap font-mono max-h-40 overflow-y-auto leading-relaxed">
+              <pre className="text-[11px] text-status-warning/60 overflow-x-auto whitespace-pre-wrap font-mono max-h-40 overflow-y-auto leading-relaxed">
                 {tryFormatAsYaml(block.args)}
               </pre>
             </div>
@@ -1486,7 +1488,9 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
             </svg>
             <span>Output</span>
             {isRunning && (
-              <span className="ml-auto text-blue-400/70 animate-pulse text-[10px]">streaming</span>
+              <span className="ml-auto text-status-info/70 animate-pulse text-[10px]">
+                streaming
+              </span>
             )}
             {block.output && !isRunning && (
               <CopyButton
@@ -1548,19 +1552,19 @@ export const MessageMetaFooter = memo(function MessageMetaFooter({
           <Tag
             label={t("tokenReasoning")}
             value={formatTokenCount(tokenUsage.reasoning ?? 0)}
-            color="text-purple-400 dark:text-purple-500"
+            color="text-semantic-agent dark:text-semantic-agent"
           />
           <Tag
             label={t("tokenCacheRead")}
             value={formatTokenCount(tokenUsage.cacheRead ?? 0)}
-            color="text-emerald-400 dark:text-emerald-500"
+            color="text-status-success dark:text-status-success"
           />
           <Tag
             label={t("tokenCacheWrite")}
             value={formatTokenCount(tokenUsage.cacheWrite ?? 0)}
-            color="text-teal-400 dark:text-teal-500"
+            color="text-semantic-memory dark:text-semantic-memory"
           />
-          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-mono">
+          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-500/10 text-status-warning font-mono">
             ${(tokenUsage.cost ?? 0).toFixed(5)}
           </span>
         </span>

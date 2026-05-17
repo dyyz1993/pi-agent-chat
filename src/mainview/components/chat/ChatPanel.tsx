@@ -388,7 +388,7 @@ export function ChatPanel() {
         {isViewingSubagent && (
           <button
             onClick={handleBackToMain}
-            className="flex items-center gap-1 text-purple-600 dark:text-purple-400 hover:text-purple-500 dark:hover:text-purple-300 transition-colors"
+            className="flex items-center gap-1 text-semantic-agent hover:text-semantic-agent transition-colors"
           >
             <ArrowLeft className="w-3 h-3" />
             <Bot className="w-3 h-3" />
@@ -410,7 +410,7 @@ export function ChatPanel() {
           {projectFailed && !isViewingSubagent && !isLoading ? (
             <div className="h-full flex items-center justify-center">
               <div className="flex flex-col items-center gap-3 max-w-xs text-center">
-                <AlertTriangle className="w-8 h-8 text-amber-600 dark:text-amber-400" />
+                <AlertTriangle className="w-8 h-8 text-status-warning" />
                 <div className="text-sm text-gray-700 dark:text-gray-300">
                   {t("sessionStartFailed")}
                 </div>
@@ -578,7 +578,7 @@ export function ChatPanel() {
             <button
               onClick={handleSubagentFork}
               className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium
-                bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/25 hover:text-indigo-500 dark:hover:text-indigo-300
+                bg-indigo-500/15 text-semantic-accent hover:bg-indigo-500/25 hover:text-semantic-accent
                 border border-indigo-500/20 transition-colors"
               title={t("fork")}
             >
@@ -647,7 +647,7 @@ function SessionToggleIcon() {
           showSession();
         }
       }}
-      className={`p-1 rounded transition-colors ${isVisible ? "text-indigo-400 hover:text-indigo-300" : "text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300"}`}
+      className={`p-1 rounded transition-colors ${isVisible ? "text-semantic-accent hover:text-semantic-accent" : "text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300"}`}
       title={isVisible ? t("closeSessionPanel") : t("openSessionPanel")}
     >
       <PanelLeft className="w-3.5 h-3.5" />
@@ -676,7 +676,7 @@ function StatusToggleIcon() {
           showStatus();
         }
       }}
-      className={`p-1 rounded transition-colors ${isVisible ? "text-indigo-400 hover:text-indigo-300" : "text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300"}`}
+      className={`p-1 rounded transition-colors ${isVisible ? "text-semantic-accent hover:text-semantic-accent" : "text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300"}`}
       title={isVisible ? t("closeStatusPanel") : t("openStatusPanel")}
     >
       <PanelRight className="w-3.5 h-3.5" />

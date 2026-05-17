@@ -116,7 +116,7 @@ export function FilePreviewOverlay({
     if (loading || svgLoading) {
       return (
         <div className="flex items-center justify-center h-full text-gray-400 text-sm">
-          <div className="w-5 h-5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin mr-2" />
+          <div className="w-5 h-5 border-2 border-semantic-accent border-t-transparent rounded-full animate-spin mr-2" />
           {t("loading")}
         </div>
       );
@@ -200,7 +200,7 @@ export function FilePreviewOverlay({
               onClick={() => setHtmlSourceMode((v) => !v)}
               className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors ${
                 htmlSourceMode
-                  ? "text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20"
+                  ? "text-semantic-accent bg-indigo-500/10 hover:bg-indigo-500/20"
                   : "text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-700/50"
               }`}
               title={htmlSourceMode ? t("switchPreview") : t("switchSource")}

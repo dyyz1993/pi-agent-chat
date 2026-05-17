@@ -14,7 +14,7 @@ export const FallbackCard = memo(function FallbackCard({ details }: { details: P
       <CardHeader
         icon={
           hasError ? (
-            <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+            <AlertCircle className="w-3.5 h-3.5 text-status-error shrink-0" />
           ) : (
             <FileQuestion className="w-3.5 h-3.5 text-gray-400 shrink-0" />
           )
@@ -24,7 +24,7 @@ export const FallbackCard = memo(function FallbackCard({ details }: { details: P
       />
       <div className="px-3 py-3 text-xs space-y-1">
         {details.error ? (
-          <div className="text-red-500 dark:text-red-400">{details.error}</div>
+          <div className="text-status-error">{details.error}</div>
         ) : (
           <>
             <div className="text-gray-600 dark:text-gray-400">

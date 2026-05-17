@@ -9,6 +9,19 @@ export default {
 					850: "#1f2937",
 					950: "#0a0c10",
 				},
+				status: {
+					success: "rgb(var(--color-status-success) / <alpha-value>)",
+					error: "rgb(var(--color-status-error) / <alpha-value>)",
+					warning: "rgb(var(--color-status-warning) / <alpha-value>)",
+					info: "rgb(var(--color-status-info) / <alpha-value>)",
+				},
+				semantic: {
+					agent: "rgb(var(--color-semantic-agent) / <alpha-value>)",
+					tool: "rgb(var(--color-semantic-tool) / <alpha-value>)",
+					memory: "rgb(var(--color-semantic-memory) / <alpha-value>)",
+					accent: "rgb(var(--color-semantic-accent) / <alpha-value>)",
+					notify: "rgb(var(--color-semantic-notify) / <alpha-value>)",
+				},
 			},
 			spacing: {
 				"safe-top": "var(--safe-area-top)",

@@ -146,7 +146,7 @@ function ToolList({ agent, allTools }: { agent: AgentDetail; allTools: AgentTool
               {isDisallowed ? (
                 <Lock className="w-3 h-3 flex-shrink-0" />
               ) : isAllowed ? (
-                <Unlock className="w-3 h-3 flex-shrink-0 text-green-400" />
+                <Unlock className="w-3 h-3 flex-shrink-0 text-status-success" />
               ) : (
                 <Lock className="w-3 h-3 flex-shrink-0 opacity-30" />
               )}
@@ -238,7 +238,11 @@ function PromptViewer({ agent }: { agent: AgentDetail }) {
           onClick={handleCopy}
           className="flex items-center gap-1 text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
         >
-          {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+          {copied ? (
+            <Check className="w-3 h-3 text-status-success" />
+          ) : (
+            <Copy className="w-3 h-3" />
+          )}
           <span>{copied ? "Copied" : "Copy"}</span>
         </button>
         {isLong && (

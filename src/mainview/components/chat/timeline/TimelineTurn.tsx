@@ -197,17 +197,17 @@ export const TimelineTurn = memo(function TimelineTurn({
   return (
     <div id={`turn-${turn.id}`} data-turn-id={turn.id} className="relative group/turn">
       {/* ── Left Timeline Line & Dots ── */}
-      <div className="absolute left-[11px] top-6 bottom-0 w-px bg-gradient-to-b from-indigo-500/40 via-green-500/30 to-transparent" />
+      <div className="absolute left-[11px] top-6 bottom-0 w-px bg-gradient-to-b from-semantic-accent/40 via-status-success/30 to-transparent" />
 
       {/* ── Turn Header ── */}
       <div className="flex items-start gap-3 mb-1">
         {/* Dot column */}
         <div className="relative z-10 flex flex-col items-center w-[23px] shrink-0 pt-1">
           {/* User dot (blue) */}
-          <div className="w-[9px] h-[9px] rounded-full bg-blue-500 ring-2 ring-blue-500/20 shadow-sm shadow-blue-500/20" />
+          <div className="w-[9px] h-[9px] rounded-full bg-status-info ring-2 ring-status-info/20 shadow-sm shadow-status-info/20" />
           {/* Bot dot (green) - only if there's an assistant response */}
           {(turn.assistantMessageId ?? turn.items.length > 0) && (
-            <div className="mt-4 w-[7px] h-[7px] rounded-full bg-green-500 ring-2 ring-green-500/20 shadow-sm shadow-green-500/20" />
+            <div className="mt-4 w-[7px] h-[7px] rounded-full bg-status-success ring-2 ring-status-success/20 shadow-sm shadow-status-success/20" />
           )}
         </div>
 
@@ -247,7 +247,9 @@ export const TimelineTurn = memo(function TimelineTurn({
 
           {/* Streaming indicator */}
           {turn.isStreaming && (
-            <span className="text-[10px] text-blue-400 animate-pulse">{t("chat:streaming")}</span>
+            <span className="text-[10px] text-status-info animate-pulse">
+              {t("chat:streaming")}
+            </span>
           )}
 
           {/* Turn action buttons (visible on hover) */}
@@ -310,7 +312,7 @@ export const TimelineTurn = memo(function TimelineTurn({
           {/* User message (no checkbox) */}
           {turn.userText && (
             <div className="flex justify-end">
-              <div className="max-w-[80%] px-3 py-2 rounded-lg bg-indigo-600/90 text-white text-sm whitespace-pre-wrap break-words border border-indigo-500/30">
+              <div className="max-w-[80%] px-3 py-2 rounded-lg bg-semantic-accent/90 text-white text-sm whitespace-pre-wrap break-words border border-semantic-accent/30">
                 {turn.userText}
               </div>
             </div>
@@ -375,7 +377,7 @@ function TimelineItemRenderer({
         <div className="group/item relative">
           {showCheckbox && <ItemCheckbox checked={isSelected} onChange={handleToggle} />}
           <div className="px-3 py-2 rounded-lg bg-gray-100/60 dark:bg-gray-800/60 text-sm text-gray-700 dark:text-gray-300 font-mono">
-            <span className="text-indigo-400">{item.toolName}</span>
+            <span className="text-semantic-accent">{item.toolName}</span>
             {item.args && (
               <span className="text-gray-400 dark:text-gray-500 ml-1">
                 {item.args.slice(0, 80)}
@@ -389,7 +391,7 @@ function TimelineItemRenderer({
         <div className="group/item relative flex gap-2">
           {showCheckbox && <ItemCheckbox checked={isSelected} onChange={handleToggle} />}
           <div className="px-3 py-2 rounded-lg bg-gray-100/40 dark:bg-gray-800/40 text-sm text-gray-700 dark:text-gray-300">
-            <span className="text-cyan-400 font-medium">[{item.customType}]</span>
+            <span className="text-semantic-tool font-medium">[{item.customType}]</span>
           </div>
         </div>
       );
@@ -407,7 +409,7 @@ function ItemCheckbox({ checked, onChange }: { checked: boolean; onChange: () =>
       }}
       className={`absolute -left-[26px] top-2 w-4 h-4 rounded border flex items-center justify-center transition-all shrink-0 ${
         checked
-          ? "bg-indigo-500 border-indigo-400 text-white"
+          ? "bg-semantic-accent border-semantic-accent text-white"
           : "border-gray-400 dark:border-gray-600 hover:border-gray-400 bg-transparent"
       }`}
     >
@@ -424,7 +426,7 @@ function AssistantTextBlock({ text, isStreaming }: { text: string; isStreaming?:
     return (
       <div className="px-3 py-2 rounded-lg bg-gray-200/60 dark:bg-gray-700/60 text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words">
         {text}
-        <span className="inline-block w-1.5 h-4 bg-indigo-400 animate-pulse ml-0.5 align-text-bottom" />
+        <span className="inline-block w-1.5 h-4 bg-semantic-accent animate-pulse ml-0.5 align-text-bottom" />
       </div>
     );
   }
@@ -441,7 +443,7 @@ function AssistantTextBlock({ text, isStreaming }: { text: string; isStreaming?:
       >
         <Copy
           size={11}
-          className={copied ? "text-green-400" : "text-gray-400 dark:text-gray-500"}
+          className={copied ? "text-status-success" : "text-gray-400 dark:text-gray-500"}
         />
       </button>
     </div>
@@ -466,12 +468,12 @@ function TurnActionButton({
   const colorClass = disabled
     ? "text-gray-300 dark:text-gray-700 cursor-not-allowed"
     : variant === "warning"
-      ? "text-yellow-400/70 hover:text-yellow-400 hover:bg-yellow-400/10"
+      ? "text-status-warning/70 hover:text-status-warning hover:bg-status-warning/10"
       : variant === "info"
-        ? "text-blue-400/70 hover:text-blue-400 hover:bg-blue-400/10"
+        ? "text-status-info/70 hover:text-status-info hover:bg-status-info/10"
         : "text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800";
 
-  const activeClass = active ? "!bg-indigo-500/20 !text-indigo-400" : "";
+  const activeClass = active ? "!bg-semantic-accent/20 !text-semantic-accent" : "";
 
   return (
     <button

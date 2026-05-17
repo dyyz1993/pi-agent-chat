@@ -112,10 +112,10 @@ function RuleCard({
 }) {
   const { t } = useTranslation("rules");
   const severityConfig: Record<string, { key: string; cls: string }> = {
-    critical: { key: "severityCritical", cls: "text-red-400 bg-red-400/10" },
-    high: { key: "severityHigh", cls: "text-orange-400 bg-orange-400/10" },
-    medium: { key: "severityMedium", cls: "text-yellow-400 bg-yellow-400/10" },
-    low: { key: "severityLow", cls: "text-blue-400 bg-blue-400/10" },
+    critical: { key: "severityCritical", cls: "text-status-error bg-status-error/10" },
+    high: { key: "severityHigh", cls: "text-semantic-notify bg-semantic-notify/10" },
+    medium: { key: "severityMedium", cls: "text-status-warning bg-status-warning/10" },
+    low: { key: "severityLow", cls: "text-status-info bg-status-info/10" },
     hint: { key: "severityHint", cls: "text-gray-400 bg-gray-400/10" },
   };
   const sev = severityConfig[rule.severity] || severityConfig.medium;
@@ -129,9 +129,9 @@ function RuleCard({
       >
         <div className="flex items-center gap-1.5 min-w-0">
           {isInjected ? (
-            <CheckCircle2 className="w-2.5 h-2.5 text-green-400 shrink-0" />
+            <CheckCircle2 className="w-2.5 h-2.5 text-status-success shrink-0" />
           ) : onTriggered ? (
-            <Zap className="w-2.5 h-2.5 text-amber-400 shrink-0" />
+            <Zap className="w-2.5 h-2.5 text-status-warning shrink-0" />
           ) : (
             <Clock className="w-2.5 h-2.5 text-gray-400 dark:text-gray-600 shrink-0" />
           )}
@@ -150,13 +150,13 @@ function RuleCard({
             {!rule.isUnconditional && rule.globs.length > 0 && (
               <>
                 <span className="text-gray-300 dark:text-gray-700 mx-1">·</span>
-                <code className="text-[9px] text-indigo-400/70 truncate">
+                <code className="text-[9px] text-semantic-accent/70 truncate">
                   {rule.globs.join(", ")}
                 </code>
               </>
             )}
             {rule.isUnconditional && (
-              <span className="text-[9px] text-green-500/70 ml-1">{t("alwaysActive")}</span>
+              <span className="text-[9px] text-status-success/70 ml-1">{t("alwaysActive")}</span>
             )}
           </span>
         </div>
@@ -175,7 +175,7 @@ function RuleCard({
           {!rule.isUnconditional && rule.globs.length > 0 && (
             <div className="text-[10px] text-gray-500 dark:text-gray-600">
               {t("globPattern")}{" "}
-              <code className="text-[9px] text-indigo-400/70">{rule.globs.join(", ")}</code>
+              <code className="text-[9px] text-semantic-accent/70">{rule.globs.join(", ")}</code>
             </div>
           )}
           {loading && (
@@ -200,7 +200,7 @@ function MatchRecordCard({ record }: { record: MatchRecord }) {
   return (
     <div className="px-2.5 py-1 text-[10px] space-y-0.5">
       <div className="flex items-center gap-1.5">
-        <Zap className="w-2.5 h-2.5 text-amber-400 shrink-0" />
+        <Zap className="w-2.5 h-2.5 text-status-warning shrink-0" />
         <span className="text-gray-500">{new Date(record.timestamp).toLocaleTimeString()}</span>
         <span className="text-gray-300 dark:text-gray-700">|</span>
         <span className="text-gray-500 dark:text-gray-400 truncate">
@@ -212,7 +212,7 @@ function MatchRecordCard({ record }: { record: MatchRecord }) {
       {details.map((d) => (
         <div key={d.name} className="flex items-center gap-1 pl-5">
           <span className="text-gray-500 dark:text-gray-400 truncate">{d.title || d.name}</span>
-          <code className="text-[9px] text-indigo-400/70 truncate">{d.matchedGlob}</code>
+          <code className="text-[9px] text-semantic-accent/70 truncate">{d.matchedGlob}</code>
         </div>
       ))}
     </div>
@@ -248,7 +248,7 @@ function LifecycleEntryCard({ entry }: { entry: LifecycleEntry }) {
                 <span className="text-gray-400 dark:text-gray-700 shrink-0">({d.fileCount})</span>
               </div>
               {d.ruleNames.length > 0 && (
-                <div className="pl-3 text-[9px] text-indigo-400/70 truncate">
+                <div className="pl-3 text-[9px] text-semantic-accent/70 truncate">
                   {d.ruleNames.join(", ")}
                 </div>
               )}
@@ -303,7 +303,7 @@ export function RulesPanel() {
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-2 px-2.5 py-2 border-b border-gray-200 dark:border-gray-800 shrink-0">
-        <Shield className="w-3.5 h-3.5 text-indigo-400" />
+        <Shield className="w-3.5 h-3.5 text-semantic-accent" />
         <span className="text-[11px] font-medium text-gray-700 dark:text-gray-300">
           {t("rulesEngine")}
         </span>
@@ -331,7 +331,7 @@ export function RulesPanel() {
                   collapsed={!showSource}
                   onToggle={() => toggleSection("source")}
                   icon={FolderOpen}
-                  iconCls="text-indigo-400"
+                  iconCls="text-semantic-accent"
                   label={t("loadingSource")}
                   badge={lifecycleLog.length}
                 />
@@ -348,7 +348,7 @@ export function RulesPanel() {
               collapsed={!showUnconditional}
               onToggle={() => toggleSection("unconditional")}
               icon={CheckCircle2}
-              iconCls="text-green-400"
+              iconCls="text-status-success"
               label={t("alwaysActiveSection")}
               badge={unconditional.length}
             />
@@ -368,7 +368,7 @@ export function RulesPanel() {
               collapsed={!showConditional}
               onToggle={() => toggleSection("conditional")}
               icon={FileCode}
-              iconCls="text-amber-400"
+              iconCls="text-status-warning"
               label={t("conditionalRules")}
               badge={conditional.length}
             />
@@ -388,7 +388,7 @@ export function RulesPanel() {
               collapsed={!showHistory}
               onToggle={() => toggleSection("history")}
               icon={Zap}
-              iconCls="text-amber-400"
+              iconCls="text-status-warning"
               label={t("triggerHistory")}
               badge={matchHistory.length}
             />

@@ -71,11 +71,11 @@ function getSeverityIcon(severity?: number) {
 function getSeverityColor(severity?: number): string {
   switch (severity) {
     case 1:
-      return "text-red-400";
+      return "text-status-error";
     case 2:
-      return "text-yellow-400";
+      return "text-status-warning";
     case 3:
-      return "text-blue-400";
+      return "text-status-info";
     case 4:
       return "text-gray-400";
     default:
@@ -126,10 +126,10 @@ export const LspExecutionCard = memo(function LspExecutionCard({ block }: LspExe
 
         {(() => {
           const { icon: LspIcon } = getToolIcon("lsp_exec");
-          return <LspIcon className="w-3 h-3 shrink-0 text-cyan-400" />;
+          return <LspIcon className="w-3 h-3 shrink-0 text-semantic-tool" />;
         })()}
 
-        <span className="font-medium text-cyan-300/90">
+        <span className="font-medium text-semantic-tool/90">
           lsp
           {parsed.action && (
             <span className="text-gray-500 font-normal ml-1">· {parsed.action}</span>
@@ -138,18 +138,18 @@ export const LspExecutionCard = memo(function LspExecutionCard({ block }: LspExe
 
         {!isRunning && hasDiagnostics && !collapsed && (
           <span className="ml-1.5 text-[10px] flex items-center gap-1">
-            {errorCount > 0 && <span className="text-red-400">{errorCount}E</span>}
-            {warnCount > 0 && <span className="text-yellow-400">{warnCount}W</span>}
+            {errorCount > 0 && <span className="text-status-error">{errorCount}E</span>}
+            {warnCount > 0 && <span className="text-status-warning">{warnCount}W</span>}
             <span className="text-gray-500">{parsed.diagnostics.length} issues</span>
           </span>
         )}
 
-        {isRunning && <span className="text-blue-400 animate-pulse text-[10px]">running</span>}
+        {isRunning && <span className="text-status-info animate-pulse text-[10px]">running</span>}
 
         {!isRunning && !isError && (
           <CheckCircle className="w-3.5 h-3.5 text-green-500 shrink-0 ml-auto" />
         )}
-        {isError && <span className="w-3.5 h-3.5 shrink-0 ml-auto text-red-400">✕</span>}
+        {isError && <span className="w-3.5 h-3.5 shrink-0 ml-auto text-status-error">✕</span>}
 
         <CopyButton text={copyText} size="xs" title={t("copyAllExecution")} />
       </div>

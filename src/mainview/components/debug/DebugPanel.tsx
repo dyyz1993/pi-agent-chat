@@ -21,7 +21,7 @@ export function DebugPanel() {
       <div className="p-3 border-b border-gray-700">
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-xs font-semibold flex items-center gap-1.5">
-            <Send className="w-3.5 h-3.5 text-indigo-400" />
+            <Send className="w-3.5 h-3.5 text-semantic-accent" />
             RPC Calls
           </h2>
         </div>
@@ -46,7 +46,7 @@ export function DebugPanel() {
         </div>
         {!!result && (
           <div className="bg-gray-700 rounded p-2">
-            <pre className="text-green-400 text-[11px] overflow-x-auto whitespace-pre-wrap">
+            <pre className="text-status-success text-[11px] overflow-x-auto whitespace-pre-wrap">
               {JSON.stringify(result, null, 2)}
             </pre>
           </div>
@@ -58,13 +58,13 @@ export function DebugPanel() {
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-xs font-semibold flex items-center gap-1.5">
             {timerRunning ? (
-              <Square className="w-3.5 h-3.5 text-green-400 fill-green-400" />
+              <Square className="w-3.5 h-3.5 text-status-success fill-status-success" />
             ) : (
               <Play className="w-3.5 h-3.5 text-gray-400" />
             )}
             Subscriptions
             {timerRunning && (
-              <span className="ml-1 px-1.5 py-0.5 bg-green-600/30 text-green-400 rounded text-[10px]">
+              <span className="ml-1 px-1.5 py-0.5 bg-green-600/30 text-status-success rounded text-[10px]">
                 LIVE
               </span>
             )}
@@ -93,7 +93,7 @@ export function DebugPanel() {
             <div className="text-gray-500 text-center py-1">No events yet</div>
           ) : (
             tickEvents.map((ev, i) => (
-              <div key={i} className="text-cyan-400">
+              <div key={i} className="text-semantic-tool">
                 {ev}
               </div>
             ))
@@ -109,7 +109,10 @@ export function DebugPanel() {
         </h2>
         <div className="flex-1 bg-black rounded p-2 overflow-y-auto font-mono text-[11px]">
           {logs.map((log, i) => (
-            <div key={i} className={log.includes("Error") ? "text-red-400" : "text-green-400"}>
+            <div
+              key={i}
+              className={log.includes("Error") ? "text-status-error" : "text-status-success"}
+            >
               {log}
             </div>
           ))}

@@ -165,7 +165,7 @@ export function CommandPopup({
         <div className="flex items-center gap-1 px-3 py-1.5 border-b border-gray-200/40 dark:border-gray-800/40 text-xs overflow-x-auto">
           <button
             onClick={() => onBreadcrumb(-1)}
-            className="text-indigo-400 hover:text-indigo-300 shrink-0"
+            className="text-semantic-accent hover:text-semantic-accent shrink-0"
           >
             {t("quickAction.rootDir")}
           </button>

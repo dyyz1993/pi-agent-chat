@@ -168,7 +168,7 @@ export function ModelPickerButton({
             onClick={() => !disabled && setOpen(!open)}
             disabled={disabled}
             className={`w-full flex items-center gap-1.5 h-7 px-2 rounded-md border text-[12px] transition-colors
-              ${disabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer hover:border-indigo-400"}
+              ${disabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer hover:border-semantic-accent"}
               ${
                 open
                   ? "border-indigo-500 ring-1 ring-indigo-500/30"
@@ -215,12 +215,14 @@ export function ModelPickerButton({
                   onClick={() => setShowFavoritesOnly((v) => !v)}
                   className={`p-0.5 rounded transition-colors shrink-0 ${
                     showFavoritesOnly
-                      ? "text-amber-400"
+                      ? "text-status-warning"
                       : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                   }`}
                   title={showFavoritesOnly ? "显示全部" : "仅显示收藏"}
                 >
-                  <Star className={`w-3.5 h-3.5 ${showFavoritesOnly ? "fill-amber-400" : ""}`} />
+                  <Star
+                    className={`w-3.5 h-3.5 ${showFavoritesOnly ? "fill-status-warning" : ""}`}
+                  />
                 </button>
               </div>
             </div>
@@ -245,7 +247,7 @@ export function ModelPickerButton({
                       key={key}
                       className={`flex items-center px-2 py-1.5 transition-colors ${
                         isSelected
-                          ? "bg-indigo-500/15 text-indigo-600 dark:text-indigo-300"
+                          ? "bg-indigo-500/15 text-semantic-accent"
                           : "text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
                       }`}
                     >
@@ -258,7 +260,7 @@ export function ModelPickerButton({
                         className="flex-1 flex items-center gap-2 min-w-0 text-left"
                       >
                         {isSelected ? (
-                          <Check className="w-3 h-3 shrink-0 text-indigo-400" />
+                          <Check className="w-3 h-3 shrink-0 text-semantic-accent" />
                         ) : (
                           <span className="w-3 shrink-0" />
                         )}
@@ -281,7 +283,7 @@ export function ModelPickerButton({
                         title={isFav ? "取消收藏" : "收藏"}
                       >
                         <Star
-                          className={`w-3 h-3 ${isFav ? "fill-amber-400 text-amber-400" : "text-gray-400 dark:text-gray-500"}`}
+                          className={`w-3 h-3 ${isFav ? "fill-status-warning text-status-warning" : "text-gray-400 dark:text-gray-500"}`}
                         />
                       </button>
                     </div>

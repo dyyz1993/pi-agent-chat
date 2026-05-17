@@ -67,9 +67,9 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
       data-block-id={blockId}
       className={`cursor-pointer transition-colors ${
         isRunning
-          ? "bg-purple-500/5 dark:bg-purple-400/5"
+          ? "bg-semantic-agent/5"
           : isError
-            ? "bg-red-500/5 dark:bg-red-400/5"
+            ? "bg-status-error/5"
             : "hover:bg-gray-200/40 dark:hover:bg-gray-800/40"
       }`}
       onClick={() => setCollapsed((c) => !c)}
@@ -116,10 +116,10 @@ export const Header = memo(function Header({
       <div
         className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 mt-0.5 ${
           isRunning
-            ? "bg-purple-500/10 dark:bg-purple-400/10"
+            ? "bg-semantic-agent/10"
             : isError
-              ? "bg-red-500/10 dark:bg-red-400/10"
-              : "bg-purple-500/5 dark:bg-purple-400/5"
+              ? "bg-status-error/10"
+              : "bg-semantic-agent/5"
         }`}
       >
         {(() => {
@@ -128,10 +128,10 @@ export const Header = memo(function Header({
             <BotIcon
               className={`w-3.5 h-3.5 ${
                 isRunning
-                  ? "text-purple-600 dark:text-purple-400"
+                  ? "text-semantic-agent"
                   : isError
-                    ? "text-red-500 dark:text-red-400"
-                    : "text-purple-500 dark:text-purple-400/70"
+                    ? "text-status-error"
+                    : "text-semantic-agent/70"
               }`}
             />
           );
@@ -140,12 +140,10 @@ export const Header = memo(function Header({
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 mb-0.5">
-          <span className="text-[11px] font-medium text-purple-700 dark:text-purple-300">
-            SubAgent
-          </span>
+          <span className="text-[11px] font-medium text-semantic-agent">SubAgent</span>
           <StatusChip isRunning={isRunning} isDone={isDone} isError={isError} />
           {collapsed && isRunning && (
-            <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+            <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-status-info animate-pulse" />
           )}
         </div>
         <p className="text-[11px] text-gray-600 dark:text-gray-400 leading-relaxed line-clamp-2">
@@ -159,7 +157,7 @@ export const Header = memo(function Header({
             e.stopPropagation();
             onView();
           }}
-          className="shrink-0 flex items-center gap-1 px-2 py-1 rounded text-[11px] text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-500/10 transition-colors mt-1"
+          className="shrink-0 flex items-center gap-1 px-2 py-1 rounded text-[11px] text-semantic-agent hover:text-semantic-agent hover:bg-semantic-agent/10 transition-colors mt-1"
         >
           <ExternalLink className="w-3 h-3" />
           {t("subagent.view")}
@@ -181,23 +179,23 @@ export const StatusChip = memo(function StatusChip({
   const { t } = useTranslation("chat");
   if (isRunning) {
     return (
-      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] bg-purple-500/10 dark:bg-purple-400/15 text-purple-600 dark:text-purple-400">
-        <span className="w-1 h-1 rounded-full bg-purple-600 dark:bg-purple-400 animate-pulse" />
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] bg-semantic-agent/10 text-semantic-agent">
+        <span className="w-1 h-1 rounded-full bg-semantic-agent animate-pulse" />
         {t("subagent.running")}
       </span>
     );
   }
   if (isDone) {
     return (
-      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] bg-emerald-500/10 dark:bg-emerald-400/15 text-emerald-600 dark:text-emerald-400">
-        <span className="w-1 h-1 rounded-full bg-emerald-600 dark:bg-emerald-400" />
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] bg-status-success/10 text-status-success">
+        <span className="w-1 h-1 rounded-full bg-status-success" />
         {t("subagent.completed")}
       </span>
     );
   }
   if (isError) {
     return (
-      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] bg-red-500/10 dark:bg-red-400/15 text-red-600 dark:text-red-400">
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] bg-status-error/10 text-status-error">
         {t("subagent.error")}
       </span>
     );
@@ -213,7 +211,7 @@ export const RunningInstruction = memo(function RunningInstruction({
   const { t } = useTranslation("chat");
   return (
     <div className="px-3 pb-2 pt-1">
-      <div className="flex items-center gap-1.5 text-[11px] text-purple-500/70 dark:text-purple-400/60">
+      <div className="flex items-center gap-1.5 text-[11px] text-semantic-agent/70">
         <ArrowRight className="w-3 h-3 animate-pulse" />
         <span className="truncate">{instruction.slice(0, 200) || t("subagent.executing")}</span>
       </div>
@@ -243,7 +241,7 @@ export const OutputSection = memo(function OutputSection({
         </svg>
         <span>{isRunning ? t("subagent.liveOutput") : t("subagent.output")}</span>
         {isRunning && (
-          <span className="ml-auto text-purple-500/70 dark:text-purple-400/70 animate-pulse text-[11px]">
+          <span className="ml-auto text-semantic-agent/70 animate-pulse text-[11px]">
             {t("streaming")}
           </span>
         )}

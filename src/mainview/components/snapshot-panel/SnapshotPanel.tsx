@@ -285,15 +285,15 @@ const SnapshotCard = memo(function SnapshotCard({
                 )}
               </span>
               {snap.rolledBack ? (
-                <RotateCcw className="w-3 h-3 text-amber-400 shrink-0" />
+                <RotateCcw className="w-3 h-3 text-status-warning shrink-0" />
               ) : (
-                <Camera className="w-3 h-3 text-indigo-400 shrink-0" />
+                <Camera className="w-3 h-3 text-semantic-accent shrink-0" />
               )}
               <span className="text-xs text-gray-700 dark:text-gray-300 font-medium">
                 Step #{snap.stepIndex}
               </span>
               {isLatest && !snap.rolledBack && (
-                <span className="text-[9px] bg-indigo-500/15 text-indigo-400 px-1 py-0.5 rounded font-medium">
+                <span className="text-[9px] bg-indigo-500/15 text-semantic-accent px-1 py-0.5 rounded font-medium">
                   {t("latest")}
                 </span>
               )}
@@ -308,9 +308,11 @@ const SnapshotCard = memo(function SnapshotCard({
               )}
               {diffStr && (
                 <span className="flex items-center gap-1">
-                  {addedCount > 0 && <span className="text-green-400">+{addedCount}</span>}
-                  {modifiedCount > 0 && <span className="text-amber-400">~{modifiedCount}</span>}
-                  {deletedCount > 0 && <span className="text-red-400">-{deletedCount}</span>}
+                  {addedCount > 0 && <span className="text-status-success">+{addedCount}</span>}
+                  {modifiedCount > 0 && (
+                    <span className="text-status-warning">~{modifiedCount}</span>
+                  )}
+                  {deletedCount > 0 && <span className="text-status-error">-{deletedCount}</span>}
                 </span>
               )}
             </div>
@@ -324,7 +326,7 @@ const SnapshotCard = memo(function SnapshotCard({
                 loading={isRollingBack}
                 disabled={rollbackDisabled}
                 onClick={() => onUnrevert(snap.id)}
-                className="text-amber-400 hover:text-amber-300"
+                className="text-status-warning hover:text-status-warning"
               />
             ) : (
               <ActionBtn
@@ -407,9 +409,9 @@ const ExpandedFileList = memo(function ExpandedFileList({
       <div className="px-2 pb-2 space-y-px">
         {allFiles.map((file) => {
           const statusConfig = {
-            added: { Icon: FilePlus, color: "text-green-400" },
-            modified: { Icon: FileEdit, color: "text-amber-400" },
-            deleted: { Icon: FileX, color: "text-red-400" },
+            added: { Icon: FilePlus, color: "text-status-success" },
+            modified: { Icon: FileEdit, color: "text-status-warning" },
+            deleted: { Icon: FileX, color: "text-status-error" },
           }[file.status];
           const StatusIcon = statusConfig.Icon;
           const isSelected = selectedFile === file.path;
@@ -421,7 +423,7 @@ const ExpandedFileList = memo(function ExpandedFileList({
               onClick={() => setSelectedFile(isSelected ? null : file.path)}
               className={`w-full flex items-center gap-1.5 px-1.5 py-0.5 rounded text-[11px] transition-colors text-left ${
                 isSelected
-                  ? "bg-indigo-500/10 text-indigo-300"
+                  ? "bg-semantic-accent/10 text-semantic-accent"
                   : "text-gray-400 dark:text-gray-500 hover:bg-gray-200/30 dark:hover:bg-gray-800/30 hover:text-gray-300"
               }`}
             >

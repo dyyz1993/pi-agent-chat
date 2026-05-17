@@ -37,15 +37,15 @@ export function RetryNotification() {
     <div className="absolute top-12 right-3 z-40 animate-in slide-in-from-top-2 fade-in duration-300">
       <div className="flex items-start gap-2.5 px-3 py-2.5 rounded-lg bg-red-950/90 border border-red-500/40 shadow-lg shadow-red-900/20 backdrop-blur-sm max-w-xs">
         <RefreshCw
-          className="w-4 h-4 text-red-400 animate-spin shrink-0 mt-0.5"
+          className="w-4 h-4 text-status-error animate-spin shrink-0 mt-0.5"
           style={{ animationDuration: "2s" }}
         />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-0.5">
-            <AlertCircle className="w-3 h-3 text-red-400 shrink-0" />
-            <span className="text-[11px] font-semibold text-red-300">{t("autoRetrying")}</span>
+            <AlertCircle className="w-3 h-3 text-status-error shrink-0" />
+            <span className="text-[11px] font-semibold text-status-error">{t("autoRetrying")}</span>
           </div>
-          <div className="text-[10px] text-red-400/80 space-y-0.5">
+          <div className="text-[10px] text-status-error/80 space-y-0.5">
             <div>
               {t("attemptRetry", { current: retryInfo.attempt, max: retryInfo.maxAttempts })}
             </div>
@@ -54,14 +54,14 @@ export function RetryNotification() {
                 <span>{t("retryInSeconds", { seconds: remaining })}</span>
                 <div className="flex-1 h-1 bg-red-900/60 rounded-full overflow-hidden min-w-[40px]">
                   <div
-                    className="h-full bg-red-400 rounded-full transition-all duration-200"
+                    className="h-full bg-status-error rounded-full transition-all duration-200"
                     style={{ width: `${progress * 100}%` }}
                   />
                 </div>
               </div>
             )}
             {retryInfo.errorMessage && (
-              <div className="text-red-500/70 truncate" title={retryInfo.errorMessage}>
+              <div className="text-status-error/70 truncate" title={retryInfo.errorMessage}>
                 {retryInfo.errorMessage.length > 40
                   ? `${retryInfo.errorMessage.slice(0, 40)}...`
                   : retryInfo.errorMessage}

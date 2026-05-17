@@ -38,8 +38,8 @@ import { copyToClipboard } from "../../utils/clipboard";
 import type { PluginInfo } from "../../stores/use-status-store";
 
 const PRIORITY_STYLES: Record<TodoPriority, { dot: string; label: string }> = {
-  high: { dot: "bg-red-400", label: "H" },
-  medium: { dot: "bg-yellow-400", label: "M" },
+  high: { dot: "bg-status-error", label: "H" },
+  medium: { dot: "bg-status-warning", label: "M" },
   low: { dot: "bg-gray-500", label: "L" },
 };
 
@@ -68,7 +68,7 @@ function PluginCopyButton({ plugin }: { plugin: PluginInfo }) {
       onClick={handleCopy}
       className="flex items-center gap-1 text-gray-500 hover:text-gray-300 transition-colors mt-0.5"
     >
-      {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+      {copied ? <Check className="w-3 h-3 text-status-success" /> : <Copy className="w-3 h-3" />}
       <span>{copied ? t("copied") : t("copyInfo")}</span>
     </button>
   );
@@ -166,7 +166,7 @@ export function StatusPanel() {
                   {id === "yolo" && (
                     <button
                       onClick={toggleYolo}
-                      className={`px-2 py-0.5 rounded text-[10px] ${yoloEnabled ? "bg-yellow-600/30 text-yellow-400" : "bg-gray-200 dark:bg-gray-800 text-gray-500"}`}
+                      className={`px-2 py-0.5 rounded text-[10px] ${yoloEnabled ? "bg-yellow-600/30 text-status-warning" : "bg-gray-200 dark:bg-gray-800 text-gray-500"}`}
                     >
                       {yoloEnabled ? t("enabled") : t("disabled")}
                     </button>
@@ -181,9 +181,9 @@ export function StatusPanel() {
                               className={`flex items-center gap-1.5 py-0.5 px-1 rounded hover:bg-gray-200/50 dark:hover:bg-gray-800/40 transition-colors${todo.deleted ? " opacity-40" : ""}`}
                             >
                               {todo.deleted ? (
-                                <Trash2 className="w-3 h-3 shrink-0 text-red-400" />
+                                <Trash2 className="w-3 h-3 shrink-0 text-status-error" />
                               ) : todo.done ? (
-                                <CheckCircle2 className="w-3 h-3 shrink-0 text-emerald-400" />
+                                <CheckCircle2 className="w-3 h-3 shrink-0 text-status-success" />
                               ) : (
                                 <Circle className="w-3 h-3 shrink-0 text-gray-500" />
                               )}
@@ -195,7 +195,7 @@ export function StatusPanel() {
                                 </span>
                               )}
                               <span
-                                className={`${todo.deleted ? "text-red-400/60 line-through" : todo.done ? "text-gray-500 line-through" : "text-gray-700 dark:text-gray-300"} truncate`}
+                                className={`${todo.deleted ? "text-status-error/60 line-through" : todo.done ? "text-gray-500 line-through" : "text-gray-700 dark:text-gray-300"} truncate`}
                               >
                                 {todo.text}
                               </span>
@@ -228,7 +228,7 @@ export function StatusPanel() {
                         <div>
                           <div className="flex items-center gap-1">
                             <span
-                              className={`w-1.5 h-1.5 rounded-full ${lspData?.state === "ready" ? "bg-green-400" : lspData?.state === "error" ? "bg-red-400" : lspData?.state === "starting" ? "bg-yellow-400 animate-pulse" : "bg-gray-600"}`}
+                              className={`w-1.5 h-1.5 rounded-full ${lspData?.state === "ready" ? "bg-status-success" : lspData?.state === "error" ? "bg-status-error" : lspData?.state === "starting" ? "bg-status-warning animate-pulse" : "bg-gray-600"}`}
                             />
                             <span>
                               {!lspData
@@ -250,7 +250,7 @@ export function StatusPanel() {
                               {lspData.activeLanguages.map((lang) => (
                                 <span
                                   key={lang}
-                                  className="px-1 py-px rounded text-[9px] bg-cyan-500/15 text-cyan-400"
+                                  className="px-1 py-px rounded text-[9px] bg-cyan-500/15 text-semantic-tool"
                                 >
                                   {lang}
                                 </span>
@@ -274,10 +274,10 @@ export function StatusPanel() {
                             {lspData.startupLog.map((log, i) => (
                               <div key={`${log.name}-${i}`} className="flex items-center gap-1">
                                 <span
-                                  className={`w-1 h-1 rounded-full ${log.state === "ready" ? "bg-green-400" : log.state === "error" ? "bg-red-400" : "bg-yellow-400 animate-pulse"}`}
+                                  className={`w-1 h-1 rounded-full ${log.state === "ready" ? "bg-status-success" : log.state === "error" ? "bg-status-error" : "bg-status-warning animate-pulse"}`}
                                 />
                                 <span
-                                  className={`truncate ${log.state === "error" ? "text-red-400/80" : log.state === "ready" ? "text-green-400/80" : "text-gray-500"}`}
+                                  className={`truncate ${log.state === "error" ? "text-status-error/80" : log.state === "ready" ? "text-status-success/80" : "text-gray-500"}`}
                                 >
                                   {log.name}
                                   {log.fileTypes && log.fileTypes.length > 0 ? (
@@ -296,7 +296,7 @@ export function StatusPanel() {
                           {lspData.servers.map((srv, i) => (
                             <div key={`${srv.name}-${i}`} className="flex items-center gap-1">
                               <span
-                                className={`w-1 h-1 rounded-full ${srv.state === "ready" ? "bg-green-400" : srv.state === "error" ? "bg-red-400" : srv.state === "starting" ? "bg-yellow-400" : "bg-gray-600"}`}
+                                className={`w-1 h-1 rounded-full ${srv.state === "ready" ? "bg-status-success" : srv.state === "error" ? "bg-status-error" : srv.state === "starting" ? "bg-status-warning" : "bg-gray-600"}`}
                               />
                               <span className={`truncate text-gray-500`}>
                                 {srv.name}
@@ -320,7 +320,7 @@ export function StatusPanel() {
                                 if (activeSessionId && !activeSubId)
                                   useLspStore.getState().setMode(activeSessionId, m);
                               }}
-                              className={`px-1.5 py-0.5 rounded text-[9px] ${lspData?.mode === m ? "bg-blue-600/30 text-blue-400" : "bg-gray-200 dark:bg-gray-800 text-gray-500 hover:bg-gray-300/50 dark:hover:bg-gray-700/50"}`}
+                              className={`px-1.5 py-0.5 rounded text-[9px] ${lspData?.mode === m ? "bg-blue-600/30 text-status-info" : "bg-gray-200 dark:bg-gray-800 text-gray-500 hover:bg-gray-300/50 dark:hover:bg-gray-700/50"}`}
                             >
                               {m === "agent_end"
                                 ? t("lspOnEnd")
@@ -334,7 +334,7 @@ export function StatusPanel() {
                       {lspData?.lastDiagnostics && (
                         <div className="flex items-center gap-1 text-[9px] pt-0.5">
                           <AlertTriangle
-                            className={`w-2.5 h-2.5 ${lspData.lastDiagnostics.count > 0 ? "text-yellow-400" : "text-green-400"}`}
+                            className={`w-2.5 h-2.5 ${lspData.lastDiagnostics.count > 0 ? "text-status-warning" : "text-status-success"}`}
                           />
                           <span className="truncate">
                             {lspData.lastDiagnostics.filePath}:{" "}
@@ -361,7 +361,7 @@ export function StatusPanel() {
                                 onClick={() => togglePluginExpanded(p.path)}
                               >
                                 <span
-                                  className={`w-1.5 h-1.5 rounded-full ${p.enabled ? "bg-green-400" : "bg-gray-400 dark:bg-gray-600"}`}
+                                  className={`w-1.5 h-1.5 rounded-full ${p.enabled ? "bg-status-success" : "bg-gray-400 dark:bg-gray-600"}`}
                                 />
                                 <span className={`shrink-0 ${isExpanded ? "" : ""}`}>
                                   {isExpanded ? (
@@ -384,7 +384,7 @@ export function StatusPanel() {
                                   </span>
                                 )}
                                 <span
-                                  className={`text-[9px] px-1 py-px rounded shrink-0 max-w-[36px] truncate ${p.scope === "global" ? "bg-purple-500/15 text-purple-400" : "bg-blue-500/15 text-blue-400"}`}
+                                  className={`text-[9px] px-1 py-px rounded shrink-0 max-w-[36px] truncate ${p.scope === "global" ? "bg-purple-500/15 text-semantic-agent" : "bg-blue-500/15 text-status-info"}`}
                                 >
                                   {p.scope === "global" ? t("global") : t("project")}
                                 </span>
@@ -459,13 +459,13 @@ export function StatusPanel() {
                                 onClick={() => toggleSkillExpanded(sk.name)}
                               >
                                 <span
-                                  className={`w-1.5 h-1.5 rounded-full ${sk.enabled ? "bg-green-400" : "bg-gray-400 dark:bg-gray-600"}`}
+                                  className={`w-1.5 h-1.5 rounded-full ${sk.enabled ? "bg-status-success" : "bg-gray-400 dark:bg-gray-600"}`}
                                 />
                                 <span className="truncate flex-1 text-gray-700 dark:text-gray-300">
                                   {sk.name}
                                 </span>
                                 <span
-                                  className={`text-[9px] px-1 py-px rounded max-w-[36px] truncate ${sk.scope === "global" ? "bg-purple-500/15 text-purple-400" : "bg-blue-500/15 text-blue-400"}`}
+                                  className={`text-[9px] px-1 py-px rounded max-w-[36px] truncate ${sk.scope === "global" ? "bg-purple-500/15 text-semantic-agent" : "bg-blue-500/15 text-status-info"}`}
                                 >
                                   {sk.scope === "global" ? t("global") : t("project")}
                                 </span>
@@ -503,12 +503,14 @@ export function StatusPanel() {
                                       <span className="break-all">{sk.filePath}</span>
                                     </div>
                                     {sk.disableModelInvocation && (
-                                      <div className="text-amber-400/70">
+                                      <div className="text-status-warning/70">
                                         {t("disableModelInvocation")}
                                       </div>
                                     )}
                                     {!sk.enabled && (
-                                      <div className="text-red-400/70">{t("skillDisabled")}</div>
+                                      <div className="text-status-error/70">
+                                        {t("skillDisabled")}
+                                      </div>
                                     )}
                                   </div>
                                 </div>
@@ -574,11 +576,11 @@ function MCPToolsSection() {
         const statusDot = isDisabled
           ? "bg-gray-400 dark:bg-gray-600"
           : srv.status === "connected"
-            ? "bg-green-400"
+            ? "bg-status-success"
             : srv.status === "error"
-              ? "bg-red-400"
+              ? "bg-status-error"
               : srv.status === "connecting"
-                ? "bg-yellow-400 animate-pulse"
+                ? "bg-status-warning animate-pulse"
                 : "bg-gray-400 dark:bg-gray-600";
         return (
           <div key={srv.name} className={isDisabled ? "opacity-50" : ""}>
@@ -601,7 +603,7 @@ function MCPToolsSection() {
                 </span>
               )}
               <span
-                className={`text-[9px] px-1 py-px rounded shrink-0 max-w-[36px] truncate ${srv.scope === "project" ? "bg-cyan-500/15 text-cyan-400" : "bg-purple-500/15 text-purple-400"}`}
+                className={`text-[9px] px-1 py-px rounded shrink-0 max-w-[36px] truncate ${srv.scope === "project" ? "bg-cyan-500/15 text-semantic-tool" : "bg-purple-500/15 text-semantic-agent"}`}
               >
                 {srv.scope === "project" ? t("project") : t("global")}
               </span>
@@ -637,7 +639,7 @@ function MCPToolsSection() {
             </div>
             {isExpanded && (
               <div className="ml-4 pl-2 border-l border-gray-200 dark:border-gray-800 space-y-1 pt-1 text-[10px]">
-                {srv.error && <div className="text-red-400/80 break-all">{srv.error}</div>}
+                {srv.error && <div className="text-status-error/80 break-all">{srv.error}</div>}
                 {srv.tools.length === 0 ? (
                   <div className="text-gray-400 dark:text-gray-600">{t("noMcpTools")}</div>
                 ) : (
@@ -697,7 +699,7 @@ function MCPCopyButton({ server }: { server: MCPServerInfo }) {
       onClick={handleCopy}
       className="flex items-center gap-1 text-gray-500 hover:text-gray-300 transition-colors mt-0.5"
     >
-      {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+      {copied ? <Check className="w-3 h-3 text-status-success" /> : <Copy className="w-3 h-3" />}
       <span>{copied ? t("copied") : t("copyInfo")}</span>
     </button>
   );
@@ -715,10 +717,10 @@ interface SupervisorSectionContentProps {
 }
 
 const STATE_STYLES: Record<string, string> = {
-  idle: "bg-green-500/20 text-green-400",
-  checking: "bg-blue-500/20 text-blue-400",
-  paused: "bg-amber-500/20 text-amber-400",
-  continuing: "bg-blue-500/20 text-blue-400",
+  idle: "bg-green-500/20 text-status-success",
+  checking: "bg-blue-500/20 text-status-info",
+  paused: "bg-amber-500/20 text-status-warning",
+  continuing: "bg-blue-500/20 text-status-info",
   disabled: "bg-gray-500/20 text-gray-400",
 };
 
@@ -751,7 +753,7 @@ function SupervisorSectionContent({
           <button
             onClick={() => handleEnable(sessionId)}
             disabled={loading}
-            className="px-1.5 py-0.5 rounded text-[9px] bg-green-500/20 text-green-400 disabled:opacity-50"
+            className="px-1.5 py-0.5 rounded text-[9px] bg-green-500/20 text-status-success disabled:opacity-50"
           >
             {loading ? "..." : t("supervisor.enabled")}
           </button>
@@ -770,7 +772,7 @@ function SupervisorSectionContent({
         >
           {stateLabel}
         </span>
-        <span className={`text-[9px] ${status.enabled ? "text-green-400" : "text-gray-500"}`}>
+        <span className={`text-[9px] ${status.enabled ? "text-status-success" : "text-gray-500"}`}>
           {status.enabled ? t("supervisor.enabled") : t("supervisor.disabled")}
         </span>
       </div>
@@ -786,7 +788,10 @@ function SupervisorSectionContent({
           </span>
           <div className="flex flex-wrap gap-1">
             {status.activeGuards.map((g) => (
-              <span key={g} className="px-1 py-px rounded text-[9px] bg-cyan-500/15 text-cyan-400">
+              <span
+                key={g}
+                className="px-1 py-px rounded text-[9px] bg-cyan-500/15 text-semantic-tool"
+              >
                 {g}
               </span>
             ))}
@@ -805,11 +810,11 @@ function SupervisorSectionContent({
                 <span
                   className={`w-1.5 h-1.5 rounded-full shrink-0 ${
                     tr.status === "completed"
-                      ? "bg-green-400"
+                      ? "bg-status-success"
                       : tr.status === "error"
-                        ? "bg-red-400"
+                        ? "bg-status-error"
                         : tr.status === "incomplete"
-                          ? "bg-amber-400"
+                          ? "bg-status-warning"
                           : "bg-gray-500"
                   }`}
                 />
@@ -825,7 +830,7 @@ function SupervisorSectionContent({
         <div className="flex flex-wrap gap-1 pt-0.5">
           <button
             onClick={() => (status.enabled ? disable(sessionId) : enable(sessionId))}
-            className={`px-1.5 py-0.5 rounded text-[9px] ${status.enabled ? "bg-red-500/20 text-red-400" : "bg-green-500/20 text-green-400"}`}
+            className={`px-1.5 py-0.5 rounded text-[9px] ${status.enabled ? "bg-red-500/20 text-status-error" : "bg-green-500/20 text-status-success"}`}
           >
             {status.enabled ? t("supervisor.disabled") : t("supervisor.enabled")}
           </button>
@@ -833,7 +838,7 @@ function SupervisorSectionContent({
             <>
               <button
                 onClick={() => forceContinue(sessionId)}
-                className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] bg-blue-500/20 text-blue-400"
+                className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] bg-blue-500/20 text-status-info"
               >
                 <Play className="w-2.5 h-2.5" />
                 {t("supervisor.forceContinue")}
@@ -841,14 +846,14 @@ function SupervisorSectionContent({
               {status.pendingPause ? (
                 <button
                   onClick={() => cancelPause(sessionId)}
-                  className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] bg-amber-500/20 text-amber-400"
+                  className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] bg-amber-500/20 text-status-warning"
                 >
                   {t("supervisor.cancelPause")}
                 </button>
               ) : (
                 <button
                   onClick={() => requestPause(sessionId, 5000)}
-                  className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] bg-amber-500/20 text-amber-400"
+                  className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] bg-amber-500/20 text-status-warning"
                 >
                   <Pause className="w-2.5 h-2.5" />
                   {t("supervisor.pause")}
@@ -860,7 +865,7 @@ function SupervisorSectionContent({
       )}
 
       {status.pendingPause && (
-        <div className="text-[9px] text-amber-400/80">
+        <div className="text-[9px] text-status-warning/80">
           {t("supervisor.pause")}:{" "}
           {Math.ceil((status.pendingPause.scheduledAt - Date.now()) / 1000)}s
           {status.pendingPause.reason ? ` — ${status.pendingPause.reason}` : ""}

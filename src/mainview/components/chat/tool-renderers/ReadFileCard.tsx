@@ -79,9 +79,9 @@ export const ReadFileCard = memo(function ReadFileCard({
       data-block-id={blockId}
       className={`border-x-0 border-t border-b overflow-hidden ${
         isRunning
-          ? "border-blue-500/25 bg-blue-50 dark:bg-blue-950/20"
+          ? "border-status-info/25 bg-status-info/5"
           : isError
-            ? "border-red-500/15 bg-red-50 dark:bg-red-950/15"
+            ? "border-status-error/15 bg-status-error/5"
             : "border-gray-200 dark:border-gray-700/30 bg-gray-50 dark:bg-gray-800/25"
       }`}
     >
@@ -92,13 +92,13 @@ export const ReadFileCard = memo(function ReadFileCard({
         aria-expanded={!collapsed}
       >
         {collapsed && isRunning && (
-          <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+          <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-status-info animate-pulse" />
         )}
         {(() => {
           const { icon: ReadIcon } = getToolIcon("read");
           return (
             <ReadIcon
-              className={`w-3.5 h-3.5 shrink-0 ${isRunning ? "text-blue-500 dark:text-blue-400" : isError ? "text-red-500 dark:text-red-400" : "text-blue-500/70 dark:text-blue-400/60"}`}
+              className={`w-3.5 h-3.5 shrink-0 ${isRunning ? "text-status-info" : isError ? "text-status-error" : "text-status-info/70"}`}
             />
           );
         })()}
@@ -108,7 +108,7 @@ export const ReadFileCard = memo(function ReadFileCard({
           </span>
         </span>
         {isRunning && (
-          <span className="ml-auto text-[10px] text-blue-500 dark:text-blue-400 animate-pulse shrink-0">
+          <span className="ml-auto text-[10px] text-status-info animate-pulse shrink-0">
             {t("readFile.reading")}
           </span>
         )}
@@ -132,8 +132,8 @@ export const ReadFileCard = memo(function ReadFileCard({
           </details>
 
           {rulesData && rulesData.rulesMatched && rulesData.rulesMatched.length > 0 && (
-            <details className="group border-t border-indigo-300/30 dark:border-indigo-700/20">
-              <summary className="px-3 py-1 text-[11px] text-indigo-600 dark:text-indigo-400 cursor-pointer hover:text-indigo-500 dark:hover:text-indigo-300 select-none flex items-center gap-1.5">
+            <details className="group border-t border-semantic-accent/30">
+              <summary className="px-3 py-1 text-[11px] text-semantic-accent cursor-pointer hover:text-semantic-accent select-none flex items-center gap-1.5">
                 <svg
                   className="w-3 h-3 transition-transform group-open:rotate-90 shrink-0"
                   viewBox="0 0 12 12"
@@ -159,7 +159,7 @@ export const ReadFileCard = memo(function ReadFileCard({
                     <span>{t("readFile.rulesLoaded")}</span>
                   </>
                 )}
-                <span className="text-indigo-500 dark:text-indigo-600 ml-1">
+                <span className="text-semantic-accent/80 ml-1">
                   {rulesData.rulesMatched.length} rule
                   {rulesData.rulesMatched.length !== 1 ? "s" : ""}
                 </span>
@@ -170,17 +170,17 @@ export const ReadFileCard = memo(function ReadFileCard({
                   return (
                     <div
                       key={rule.name}
-                      className="border-b last:border-b-0 border-indigo-200/20 dark:border-indigo-700/10 py-1 flex items-center gap-1.5"
+                      className="border-b last:border-b-0 border-semantic-accent/20 py-1 flex items-center gap-1.5"
                     >
                       {status === "already_loaded" ? (
                         <CheckCircle2 className="w-3 h-3 shrink-0 text-gray-400 dark:text-gray-500" />
                       ) : status === "reloaded" ? (
-                        <RefreshCw className="w-3 h-3 shrink-0 text-amber-500 dark:text-amber-400" />
+                        <RefreshCw className="w-3 h-3 shrink-0 text-status-warning" />
                       ) : (
-                        <Zap className="w-3 h-3 shrink-0 text-indigo-500 dark:text-indigo-400" />
+                        <Zap className="w-3 h-3 shrink-0 text-semantic-accent" />
                       )}
                       <span
-                        className={`text-[11px] font-medium shrink-0 ${rule.severity === "critical" ? "text-red-500 dark:text-red-400" : rule.severity === "high" ? "text-amber-600 dark:text-amber-400" : status === "already_loaded" ? "text-gray-500 dark:text-gray-400" : "text-indigo-700 dark:text-indigo-300"}`}
+                        className={`text-[11px] font-medium shrink-0 ${rule.severity === "critical" ? "text-status-error" : rule.severity === "high" ? "text-status-warning" : status === "already_loaded" ? "text-gray-500 dark:text-gray-400" : "text-semantic-accent"}`}
                       >
                         {rule.title}
                       </span>
@@ -193,7 +193,7 @@ export const ReadFileCard = memo(function ReadFileCard({
                         </span>
                       )}
                       {status === "reloaded" && (
-                        <span className="text-[10px] text-amber-500 dark:text-amber-400 ml-auto">
+                        <span className="text-[10px] text-status-warning ml-auto">
                           {t("readFile.reloaded", "reloaded")}
                         </span>
                       )}

@@ -33,9 +33,9 @@ function isTodoDetails(d: unknown): d is TodoDetails {
 function getPriorityIcon(priority: string | undefined) {
   switch (priority) {
     case "high":
-      return <TriangleAlert className="w-3 h-3 shrink-0 text-red-500 dark:text-red-400" />;
+      return <TriangleAlert className="w-3 h-3 shrink-0 text-status-error" />;
     case "medium":
-      return <Zap className="w-3 h-3 shrink-0 text-amber-500 dark:text-amber-400" />;
+      return <Zap className="w-3 h-3 shrink-0 text-status-warning" />;
     case "low":
       return <Activity className="w-3 h-3 shrink-0 text-gray-400 dark:text-gray-500" />;
     default:
@@ -59,23 +59,17 @@ function ActionSummary({ details }: { details: TodoDetails }) {
         return <span className="text-gray-400 dark:text-gray-500">添加失败</span>;
       if (added.length === 1)
         return (
-          <span className="text-emerald-600 dark:text-emerald-400">
+          <span className="text-status-success">
             ✓ #{added[0].id}: {added[0].text}
           </span>
         );
-      return (
-        <span className="text-emerald-600 dark:text-emerald-400">✓ 添加 {added.length} 个任务</span>
-      );
+      return <span className="text-status-success">✓ 添加 {added.length} 个任务</span>;
     }
     case "toggle": {
       const todo = details.todos?.find((t) => t.id !== undefined);
       if (!todo) return <span className="text-gray-400 dark:text-gray-500">切换状态</span>;
       return (
-        <span
-          className={
-            todo.done ? "text-gray-400 dark:text-gray-500" : "text-blue-500 dark:text-blue-400"
-          }
-        >
+        <span className={todo.done ? "text-gray-400 dark:text-gray-500" : "text-status-info"}>
           {todo.done ? `☑ #${todo.id} 已完成` : `☐ #${todo.id} 未完成`}
         </span>
       );
@@ -164,9 +158,9 @@ export const TodoExecRenderer = memo(function TodoExecRenderer({ block }: ToolRe
 
   let borderBg: string;
   if (isRunning) {
-    borderBg = "border-blue-500/25 bg-blue-50 dark:bg-blue-950/20";
+    borderBg = "border-status-info/25 bg-status-info/5";
   } else if (isError) {
-    borderBg = "border-red-500/15 bg-red-50 dark:bg-red-950/15";
+    borderBg = "border-status-error/15 bg-status-error/5";
   } else {
     borderBg = "border-gray-200 dark:border-gray-700/30 bg-gray-50 dark:bg-gray-800/25";
   }
@@ -195,7 +189,7 @@ export const TodoExecRenderer = memo(function TodoExecRenderer({ block }: ToolRe
         aria-expanded={!collapsed}
       >
         {collapsed && isRunning && (
-          <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+          <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-status-info animate-pulse" />
         )}
         {(() => {
           const { icon: TodoIcon } = getToolIcon("todo");
@@ -203,10 +197,10 @@ export const TodoExecRenderer = memo(function TodoExecRenderer({ block }: ToolRe
             <TodoIcon
               className={`w-3.5 h-3.5 shrink-0 ${
                 isRunning
-                  ? "text-blue-500 dark:text-blue-400"
+                  ? "text-status-info"
                   : isError
-                    ? "text-red-500 dark:text-red-400"
-                    : "text-amber-500/70 dark:text-amber-400/60"
+                    ? "text-status-error"
+                    : "text-status-warning/70"
               }`}
             />
           );
@@ -214,9 +208,9 @@ export const TodoExecRenderer = memo(function TodoExecRenderer({ block }: ToolRe
         <span
           className={`font-medium shrink-0 ${
             isRunning
-              ? "text-blue-600 dark:text-blue-400"
+              ? "text-status-info"
               : isError
-                ? "text-red-500 dark:text-red-400"
+                ? "text-status-error"
                 : "text-gray-800 dark:text-gray-300"
           }`}
         >
@@ -230,9 +224,7 @@ export const TodoExecRenderer = memo(function TodoExecRenderer({ block }: ToolRe
         <span className="flex-1 min-w-0" />
 
         {isRunning && (
-          <span className="shrink-0 text-[10px] text-blue-500 dark:text-blue-400 animate-pulse">
-            执行中...
-          </span>
+          <span className="shrink-0 text-[10px] text-status-info animate-pulse">执行中...</span>
         )}
 
         {!isRunning && details && <ActionSummary details={details} />}

@@ -37,7 +37,13 @@ type NavItem = {
 function buildNavItems(messages: ChatMessage[], t: (key: string) => string): NavItem[] {
   return messages.map((msg) => {
     if (msg.role === "user") {
-      return { id: msg.id, role: "user" as const, icon: User, color: "text-indigo-400", subs: [] };
+      return {
+        id: msg.id,
+        role: "user" as const,
+        icon: User,
+        color: "text-semantic-accent",
+        subs: [],
+      };
     }
 
     if (msg.role === "custom") {
@@ -61,7 +67,7 @@ function buildNavItems(messages: ChatMessage[], t: (key: string) => string): Nav
         id: msg.id,
         role: "assistant" as const,
         icon: Archive,
-        color: "text-cyan-400",
+        color: "text-semantic-tool",
         subs: [],
       };
     }
@@ -74,7 +80,7 @@ function buildNavItems(messages: ChatMessage[], t: (key: string) => string): Nav
         id: msg.id,
         role: "assistant",
         icon: AlertTriangle,
-        color: "text-yellow-400",
+        color: "text-status-warning",
         subs: [],
       };
     }
@@ -104,17 +110,17 @@ function buildNavItems(messages: ChatMessage[], t: (key: string) => string): Nav
         subs.push({ icon: ti.icon, color: ti.color, label, blockId });
       } else if (b.type === "custom") {
         let icon: LucideIcon = Brain;
-        let color = "text-yellow-400";
+        let color = "text-status-warning";
         let label = b.customType;
         switch (b.customType) {
           case "bash_background_exit":
             icon = Terminal;
-            color = "text-cyan-400";
+            color = "text-semantic-tool";
             label = t("sideNav.backgroundProcess");
             break;
           case "lsp_diagnostics":
             icon = ScanSearch;
-            color = "text-yellow-400";
+            color = "text-status-warning";
             break;
           default:
             if (ALL_MEMORY_TYPE_KEYS.has(b.customType)) {
@@ -138,7 +144,7 @@ function buildNavItems(messages: ChatMessage[], t: (key: string) => string): Nav
       id: msg.id,
       role: "assistant",
       icon: Bot,
-      color: hasError ? "text-red-400" : "text-green-400",
+      color: hasError ? "text-status-error" : "text-status-success",
       subs,
     };
   });
@@ -168,12 +174,12 @@ const NavDot = memo(function NavDot({
 
   if (isMultiSelected) {
     cls += "bg-red-500/25 ";
-    iconColor = "text-red-400";
+    iconColor = "text-status-error";
     barCls += "bg-red-500 opacity-100 ";
   } else if (isClicked) {
     cls += "bg-indigo-500/30 shadow-[0_0_10px_rgba(99,102,241,0.3)] ";
-    iconColor = "text-indigo-300";
-    barCls += "bg-indigo-400 opacity-100 ";
+    iconColor = "text-semantic-accent";
+    barCls += "bg-semantic-accent opacity-100 ";
   } else {
     cls += "hover:bg-gray-200/60 dark:hover:bg-gray-800/60 ";
   }
@@ -213,8 +219,8 @@ const NavSubDot = memo(function NavSubDot({
 
   if (isActive) {
     cls += "bg-indigo-500/25 shadow-[0_0_6px_rgba(99,102,241,0.25)] ";
-    iconColor = "text-indigo-300";
-    barCls += "bg-indigo-400 opacity-100 ";
+    iconColor = "text-semantic-accent";
+    barCls += "bg-semantic-accent opacity-100 ";
   } else {
     cls += "hover:bg-gray-200/60 dark:hover:bg-gray-800/60 ";
   }
@@ -338,7 +344,7 @@ export const SideNav = memo(function SideNav({
       </VList>
 
       {selectedItems.size > 0 && (
-        <div className="px-1 py-1 text-[10px] text-red-400 text-center border-t border-red-500/20 bg-red-950/20">
+        <div className="px-1 py-1 text-[10px] text-status-error text-center border-t border-red-500/20 bg-red-950/20">
           {t("sideNav.selected", { count: selectedItems.size })}
         </div>
       )}

@@ -82,7 +82,7 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
             <Plus className="w-3.5 h-3.5" />
             {isCreating && (
               <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-gray-900/80 rounded">
-                <div className="w-2.5 h-2.5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+                <div className="w-2.5 h-2.5 border-2 border-semantic-accent border-t-transparent rounded-full animate-spin" />
               </div>
             )}
           </button>
@@ -91,7 +91,7 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
               e.stopPropagation();
               toggleSession();
             }}
-            className={`p-1 rounded transition-colors max-sm:hidden ${isPinned ? "text-indigo-400" : "text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400"}`}
+            className={`p-1 rounded transition-colors max-sm:hidden ${isPinned ? "text-semantic-accent" : "text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400"}`}
             title={isPinned ? t("unpinPanel") : t("pinPanel")}
             aria-label={isPinned ? t("unpinPanel") : t("pinPanel")}
           >

@@ -62,12 +62,12 @@ function BashProcessCard({
   const isEnded = p.status === "done" || p.status === "error" || p.status === "terminated";
 
   const statusColor = isBackground
-    ? "text-yellow-400"
+    ? "text-status-warning"
     : p.status === "done"
-      ? "text-green-400"
+      ? "text-status-success"
       : p.status === "error" || p.status === "terminated"
-        ? "text-red-400"
-        : "text-blue-400";
+        ? "text-status-error"
+        : "text-status-info";
 
   const statusText = isBackground
     ? t("backgroundRunning")
@@ -115,7 +115,7 @@ function BashProcessCard({
         {isActive && (
           <button
             onClick={() => sendAction("kill")}
-            className="flex items-center justify-center w-8 h-7 rounded border border-red-600/30 text-red-400 hover:bg-red-600/10 transition-colors shrink-0"
+            className="flex items-center justify-center w-8 h-7 rounded border border-status-error/30 text-status-error hover:bg-status-error/10 transition-colors shrink-0"
             title={isRunning ? t("cancelExecution") : t("terminateProcess")}
           >
             <X className="w-3.5 h-3.5" />
@@ -125,7 +125,7 @@ function BashProcessCard({
         {isRunning && !isBackground && elapsed > 5000 && (
           <button
             onClick={() => sendAction("background")}
-            className="flex items-center justify-center w-auto px-2 h-7 rounded border border-yellow-600/40 text-[10px] text-yellow-400 hover:bg-yellow-600/15 transition-colors shrink-0"
+            className="flex items-center justify-center w-auto px-2 h-7 rounded border border-status-warning/40 text-[10px] text-status-warning hover:bg-status-warning/15 transition-colors shrink-0"
             title={t("toBackground")}
           >
             <ArrowDownToLine className="w-3 h-3 mr-1" />
@@ -470,7 +470,7 @@ function LogViewer({
             onClick={jumpToBottom}
             className={`text-[9px] shrink-0 transition-colors ${
               autoScroll
-                ? "text-blue-500 dark:text-blue-400"
+                ? "text-status-info"
                 : "text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400"
             }`}
           >
@@ -491,7 +491,7 @@ function LogViewer({
             <button
               onClick={sendStdin}
               disabled={!stdinInput.trim()}
-              className="h-7 w-7 flex items-center justify-center rounded bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 disabled:opacity-30 disabled:hover:bg-blue-600/20 transition-colors shrink-0"
+              className="h-7 w-7 flex items-center justify-center rounded bg-status-info/20 text-status-info hover:bg-status-info/30 disabled:opacity-30 disabled:hover:bg-status-info/20 transition-colors shrink-0"
               title={t("sendTitle")}
             >
               <Send className="w-3.5 h-3.5" />

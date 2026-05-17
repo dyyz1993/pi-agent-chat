@@ -274,7 +274,7 @@ export function ExplorerSidebar({
           className="absolute bottom-3 left-3 right-3 z-40 animate-in fade-in slide-in-from-bottom-2 duration-200 bg-gray-800 dark:bg-gray-700 text-white text-xs px-3 py-2 rounded-lg shadow-lg flex items-center gap-2"
           role="status"
         >
-          <Copy className="w-3 h-3 text-emerald-400 shrink-0" />
+          <Copy className="w-3 h-3 text-status-success shrink-0" />
           <span className="truncate">{copyToast}</span>
         </div>
       )}

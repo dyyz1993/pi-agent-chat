@@ -31,11 +31,11 @@ import { PinButton } from "../sidebar/PinButton";
 function statusIcon(status: GitFileChange["status"]) {
   switch (status) {
     case "added":
-      return <Plus className="w-3 h-3 text-green-400" />;
+      return <Plus className="w-3 h-3 text-status-success" />;
     case "deleted":
-      return <Minus className="w-3 h-3 text-red-400" />;
+      return <Minus className="w-3 h-3 text-status-error" />;
     case "modified":
-      return <Pencil className="w-3 h-3 text-yellow-400" />;
+      return <Pencil className="w-3 h-3 text-status-warning" />;
     default:
       return <FileQuestion className="w-3 h-3 text-gray-400" />;
   }
@@ -59,15 +59,15 @@ function statusLabel(status: GitFileChange["status"]) {
 function statusColor(status: GitFileChange["status"]) {
   switch (status) {
     case "added":
-      return "text-green-400 bg-green-400/10";
+      return "text-status-success bg-status-success/10";
     case "deleted":
-      return "text-red-400 bg-red-400/10";
+      return "text-status-error bg-status-error/10";
     case "modified":
-      return "text-yellow-400 bg-yellow-400/10";
+      return "text-status-warning bg-status-warning/10";
     case "renamed":
-      return "text-blue-400 bg-blue-400/10";
+      return "text-status-info bg-status-info/10";
     case "copied":
-      return "text-cyan-400 bg-cyan-400/10";
+      return "text-semantic-tool bg-semantic-tool/10";
   }
 }
 
@@ -148,8 +148,8 @@ const FileItem = memo(function FileItem({
       <span className="truncate flex-1">{path.split("/").pop()}</span>
       {showStats && (
         <span className="flex items-center gap-0.5 text-[10px] font-mono shrink-0">
-          {(additions ?? 0) > 0 && <span className="text-green-400">+{additions}</span>}
-          {(deletions ?? 0) > 0 && <span className="text-red-400">-{deletions}</span>}
+          {(additions ?? 0) > 0 && <span className="text-status-success">+{additions}</span>}
+          {(deletions ?? 0) > 0 && <span className="text-status-error">-{deletions}</span>}
         </span>
       )}
       <span className={`px-1.5 rounded text-[10px] font-medium ${statusColor(status)}`}>
@@ -157,7 +157,9 @@ const FileItem = memo(function FileItem({
       </span>
       <button
         className={`opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-gray-300 dark:hover:bg-gray-600 ${
-          isStaged ? "text-orange-400 hover:text-orange-300" : "text-green-400 hover:text-green-300"
+          isStaged
+            ? "text-semantic-notify hover:text-semantic-notify"
+            : "text-status-success hover:text-status-success"
         }`}
         onClick={(e) => {
           e.stopPropagation();
@@ -204,7 +206,7 @@ const UntrackedItem = memo(function UntrackedItem({
       <span className="truncate flex-1">{path.split("/").pop()}</span>
       <span className="px-1.5 rounded text-[10px] font-medium text-gray-400 bg-gray-400/10">U</span>
       <button
-        className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded text-green-400 hover:text-green-300 hover:bg-gray-300 dark:hover:bg-gray-600"
+        className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded text-status-success hover:text-status-success hover:bg-gray-300 dark:hover:bg-gray-600"
         onClick={(e) => {
           e.stopPropagation();
           onStage(path);
@@ -289,7 +291,7 @@ const CommitItem = memo(function CommitItem({
         <div className="flex-1 min-w-0">
           <div className="text-gray-700 dark:text-gray-300 truncate">{commit.message}</div>
           <div className="text-gray-500 text-[10px] flex items-center gap-1.5 mt-0.5">
-            <span className="text-indigo-400 font-mono">{commit.shortHash}</span>
+            <span className="text-semantic-accent font-mono">{commit.shortHash}</span>
             <span>{commit.author}</span>
             <span>{relativeTime(commit.date)}</span>
           </div>
@@ -562,8 +564,8 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
           onClick={() => setShowBranches(!showBranches)}
         >
           <span className="font-medium text-gray-900 dark:text-white">{branch}</span>
-          {ahead > 0 && <span className="text-green-400">↑{ahead}</span>}
-          {behind > 0 && <span className="text-orange-400">↓{behind}</span>}
+          {ahead > 0 && <span className="text-status-success">↑{ahead}</span>}
+          {behind > 0 && <span className="text-semantic-notify">↓{behind}</span>}
           <BranchChevron className="w-3 h-3 text-gray-400 dark:text-gray-500" />
         </button>
 
@@ -615,7 +617,7 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
                 </span>
               )}
               <button
-                className="ml-auto text-orange-400 hover:text-orange-300 shrink-0"
+                className="ml-auto text-semantic-notify hover:text-semantic-notify shrink-0"
                 onClick={handleUnstageAll}
                 title="Unstage all"
               >
@@ -650,7 +652,7 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
                 </span>
               )}
               <button
-                className="ml-auto text-green-400 hover:text-green-300 shrink-0"
+                className="ml-auto text-status-success hover:text-status-success shrink-0"
                 onClick={handleStageAll}
                 title="Stage all"
               >
@@ -768,7 +770,9 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
             <div
               key={wt.path}
               className={`px-3 py-1.5 text-xs flex items-center gap-2 ${
-                wt.path === currentPath ? "text-indigo-400" : "text-gray-700 dark:text-gray-300"
+                wt.path === currentPath
+                  ? "text-semantic-accent"
+                  : "text-gray-700 dark:text-gray-300"
               }`}
             >
               <FolderTree className="w-3 h-3 shrink-0" />

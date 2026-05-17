@@ -12,9 +12,9 @@ const DIR_ICONS = {
 };
 
 const DIR_COLORS = {
-  call: "text-blue-400",
-  event: "text-green-400",
-  response: "text-purple-400",
+  call: "text-status-info",
+  event: "text-status-success",
+  response: "text-semantic-agent",
 };
 
 function RpcEntry({ entry }: { entry: RpcLogEntry }) {
@@ -48,7 +48,7 @@ function RpcEntry({ entry }: { entry: RpcLogEntry }) {
           title={t("copyPayload")}
         >
           {copied ? (
-            <Check className="w-2.5 h-2.5 text-green-400" />
+            <Check className="w-2.5 h-2.5 text-status-success" />
           ) : (
             <Copy className="w-2.5 h-2.5" />
           )}
@@ -73,14 +73,16 @@ export function RpcPanel() {
       <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-gray-200 dark:border-gray-800 shrink-0">
         <div className="flex items-center gap-1.5">
           {isConnected ? (
-            <Wifi className="w-3 h-3 text-green-400" />
+            <Wifi className="w-3 h-3 text-status-success" />
           ) : (
-            <WifiOff className="w-3 h-3 text-red-400" />
+            <WifiOff className="w-3 h-3 text-status-error" />
           )}
           <span className="text-[11px] font-medium text-gray-700 dark:text-gray-300">
             {t("rpcEvents")}
           </span>
-          <span className={`text-[9px] ${isConnected ? "text-green-400" : "text-red-400"}`}>
+          <span
+            className={`text-[9px] ${isConnected ? "text-status-success" : "text-status-error"}`}
+          >
             {isConnected ? t("connected") : t("disconnected")}
           </span>
         </div>

@@ -83,7 +83,7 @@ export const MessageSelectionBar = memo(function MessageSelectionBar({
 
   return (
     <div className="mx-auto w-fit flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100/90 dark:bg-gray-800/90 border border-gray-300/60 dark:border-gray-700/60 shadow-lg backdrop-blur-sm">
-      <span className="text-sm font-semibold text-indigo-400 tabular-nums leading-none min-w-[1.25rem] text-center">
+      <span className="text-sm font-semibold text-semantic-accent tabular-nums leading-none min-w-[1.25rem] text-center">
         {count}
       </span>
       {(input > 0 || output > 0) && (
@@ -92,7 +92,7 @@ export const MessageSelectionBar = memo(function MessageSelectionBar({
           <span className="text-[11px] text-gray-500 dark:text-gray-400 font-mono tabular-nums">
             {formatTokenCount(input)}
           </span>
-          <span className="text-[11px] text-emerald-400/70 font-mono tabular-nums">
+          <span className="text-[11px] text-status-success/70 font-mono tabular-nums">
             {formatTokenCount(output)}
           </span>
         </>
@@ -100,21 +100,21 @@ export const MessageSelectionBar = memo(function MessageSelectionBar({
       <div className="w-px h-3.5 bg-gray-300 dark:bg-gray-700" />
       <button
         onClick={handleSummarize}
-        className="flex items-center justify-center w-7 h-7 rounded-full text-purple-400 hover:text-purple-300 hover:bg-purple-500/15 transition-colors"
+        className="flex items-center justify-center w-7 h-7 rounded-full text-semantic-agent hover:text-semantic-agent hover:bg-purple-500/15 transition-colors"
         title={t("summarizeSelected")}
       >
         <Sparkles className="w-3.5 h-3.5" />
       </button>
       <button
         onClick={handleRemember}
-        className="flex items-center justify-center w-7 h-7 rounded-full text-teal-400 hover:text-teal-300 hover:bg-teal-500/15 transition-colors"
+        className="flex items-center justify-center w-7 h-7 rounded-full text-semantic-memory hover:text-semantic-memory hover:bg-teal-500/15 transition-colors"
         title={t("saveAsMemory")}
       >
         <Brain className="w-3.5 h-3.5" />
       </button>
       <button
         onClick={handleDelete}
-        className="flex items-center justify-center w-7 h-7 rounded-full text-gray-400 dark:text-gray-500 hover:text-red-400 hover:bg-red-500/15 transition-colors"
+        className="flex items-center justify-center w-7 h-7 rounded-full text-gray-400 dark:text-gray-500 hover:text-status-error hover:bg-red-500/15 transition-colors"
         title={t("deleteSelected")}
       >
         <Trash2 className="w-3.5 h-3.5" />
