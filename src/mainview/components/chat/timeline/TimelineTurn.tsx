@@ -71,40 +71,25 @@ export const TimelineTurn = memo(function TimelineTurn({
 
         const byId = new Map(entries.map((e) => [e.id, e]));
 
-        const findAncestorMessage = (start: {
-          id: string;
-          parentId: string | null;
-          type: string;
-          label?: string;
-        }): { id: string; parentId: string | null; type: string; label?: string } | null => {
-          let cur = start;
-          while (cur.parentId) {
-            const parent = byId.get(cur.parentId);
-            if (!parent) return null;
-            if (parent.type === "message") return parent;
-            cur = parent;
-          }
-          return null;
-        };
-
         let targetId: string | null = null;
 
-        const assistantEntries = entries.filter(
-          (e) => e.type === "message" && e.label === "assistant",
-        );
-
-        if (turn.assistantMessageId && assistantEntries.length > 0) {
-          const entry = assistantEntries[assistantEntries.length - 1];
-          const userMsg = findAncestorMessage(entry);
-          if (userMsg && userMsg.label === "user") {
-            const grandParent = findAncestorMessage(userMsg);
-            if (grandParent) {
-              targetId = grandParent.parentId ?? null;
-            }
+        if (turn.assistantMessageId) {
+          const entry = byId.get(turn.assistantMessageId);
+          if (entry) {
+            targetId = entry.id;
           }
         }
 
         if (!targetId) return;
+
+        const currentInput = useChatStore.getState().inputText;
+        if (currentInput.trim()) {
+          try {
+            localStorage.setItem(`pi-draft:${sessionId}`, currentInput);
+          } catch {
+            /* ignore */
+          }
+        }
 
         if (mode === "withFiles") {
           const msgs = useChatStore.getState().messagesBySession[sessionId] ?? [];

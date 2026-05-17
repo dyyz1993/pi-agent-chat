@@ -489,40 +489,8 @@ const HeaderActions = memo(function HeaderActions({
     [sessionId, message.id, message.entryId, messages, isUserCard, fetchTree],
   );
 
-  const findTurnBoundary = useCallback((entryId: string, entries: TreeEntry[]): string | null => {
-    const byId = new Map(entries.map((e) => [e.id, e]));
-
-    const findAncestorMessage = (start: TreeEntry): TreeEntry | null => {
-      let cur = start;
-      while (cur.parentId) {
-        const parent = byId.get(cur.parentId);
-        if (!parent) return null;
-        if (parent.type === "message") return parent;
-        cur = parent;
-      }
-      return null;
-    };
-
-    const start = byId.get(entryId);
-    if (!start) return null;
-
-    const startMsg = start.type === "message" ? start : findAncestorMessage(start);
-    if (!startMsg) return null;
-
-    if (startMsg.label === "user") {
-      const gp = findAncestorMessage(startMsg);
-      return gp ? (gp.parentId ?? null) : (startMsg.parentId ?? null);
-    }
-
-    if (startMsg.label === "assistant") {
-      const userMsg = findAncestorMessage(startMsg);
-      if (!userMsg || userMsg.label !== "user") return null;
-      const grandParent = findAncestorMessage(userMsg);
-      if (!grandParent) return null;
-      return grandParent.parentId ?? null;
-    }
-
-    return null;
+  const findTurnBoundary = useCallback((entryId: string, _entries: TreeEntry[]): string | null => {
+    return entryId;
   }, []);
 
   const resolveRollbackTarget = useCallback(async (): Promise<{
@@ -642,6 +610,26 @@ const HeaderActions = memo(function HeaderActions({
             level: "info",
           });
           return;
+        }
+        if (message.role === "user") {
+          const currentInput = useChatStore.getState().inputText;
+          if (currentInput.trim()) {
+            const sid = useSessionStore.getState().activeSessionId;
+            if (sid) {
+              try {
+                localStorage.setItem(`pi-draft:${sid}`, currentInput);
+              } catch {
+                /* ignore storage errors */
+              }
+            }
+          }
+          const userText = message.content
+            .filter((b): b is Extract<ContentBlock, { type: "text" }> => b.type === "text")
+            .map((b) => b.text)
+            .join("\n");
+          if (userText) {
+            useChatStore.getState().setInputText(userText);
+          }
         }
         const emptyPreview = {
           restored: [] as string[],
