@@ -145,6 +145,8 @@ interface SessionState {
   cleanupActiveSession: (sessionId: string) => void;
 }
 
+const _fetchInitPromiseMap = new Map<string, Promise<void>>();
+
 export const useSessionStore = create<SessionState>()(
   persist(
     (set, get) => ({
@@ -817,257 +819,292 @@ export const useSessionStore = create<SessionState>()(
       },
 
       fetchInitialState: (sessionId) => {
-        const t0 = performance.now();
-        perfLog.info("[fetchInit] begin (all-parallel)", { sessionId });
+        const existing = _fetchInitPromiseMap.get(sessionId);
+        if (existing) return existing;
 
-        const statePromise = apiClient.call("agent.getState", { sessionId });
-        const modelsPromise = apiClient.call("agent.getAvailableModels", { sessionId });
-        const contextPromise = apiClient.call("agent.getContextUsage", { sessionId });
-        const extensionsPromise = apiClient.call("agent.getExtensions", { sessionId });
-        const skillsPromise = apiClient.call("agent.getSkills", { sessionId });
-        const disabledSkillsPromise = apiClient.call("agent.getDisabledSkills", {});
-        const mcpPromise = apiClient.call("agent.getMcpServers", { sessionId });
-        const queuePromise = apiClient.call("agent.getQueue", { sessionId });
+        const promise = (async () => {
+          try {
+            const t0 = performance.now();
+            perfLog.info("[fetchInit] begin (all-parallel)", { sessionId });
 
-        statePromise
-          .then((rawResult) => {
-            perfLog.info("[fetchInit] getState done", {
-              sessionId,
-              ms: Math.round(performance.now() - t0),
-            });
-            const result = rawResult as AgentStateResult;
-            if (!result) return;
+            const statePromise = apiClient.call("agent.getState", { sessionId });
+            const modelsPromise = apiClient.call("agent.getAvailableModels", { sessionId });
+            const contextPromise = apiClient.call("agent.getContextUsage", { sessionId });
+            const extensionsPromise = apiClient.call("agent.getExtensions", { sessionId });
+            const skillsPromise = apiClient.call("agent.getSkills", { sessionId });
+            const disabledSkillsPromise = apiClient.call("agent.getDisabledSkills", {});
+            const mcpPromise = apiClient.call("agent.getMcpServers", { sessionId });
+            const queuePromise = apiClient.call("agent.getQueue", { sessionId });
+            const agentChangePromise = apiClient.call("agent.getLatestAgentChange", { sessionId });
 
-            const cw = result.model?.contextWindow ?? 0;
-            if (cw > 0) {
-              get().updateSessionContext(sessionId, { contextWindow: cw });
-            }
-            if (result.isStreaming) {
-              get().updateSessionStatus(sessionId, "streaming");
-            } else if (result.isCompacting) {
-              get().updateSessionStatus(sessionId, "compacting");
-            } else {
-              get().updateSessionStatus(sessionId, "idle");
-            }
+            statePromise
+              .then((rawResult) => {
+                perfLog.info("[fetchInit] getState done", {
+                  sessionId,
+                  ms: Math.round(performance.now() - t0),
+                });
+                const result = rawResult as AgentStateResult;
+                if (!result) return;
 
-            if (result.model) {
-              set({
-                currentModel: {
-                  provider: result.model.provider ?? "",
-                  id: result.model.id,
-                  name: result.model.name,
-                },
-                currentThinkingLevel: result.thinkingLevel ?? "medium",
+                const cw = result.model?.contextWindow ?? 0;
+                if (cw > 0) {
+                  get().updateSessionContext(sessionId, { contextWindow: cw });
+                }
+                if (result.isStreaming) {
+                  get().updateSessionStatus(sessionId, "streaming");
+                } else if (result.isCompacting) {
+                  get().updateSessionStatus(sessionId, "compacting");
+                } else {
+                  get().updateSessionStatus(sessionId, "idle");
+                }
+
+                if (result.model) {
+                  set({
+                    currentModel: {
+                      provider: result.model.provider ?? "",
+                      id: result.model.id,
+                      name: result.model.name,
+                    },
+                    currentThinkingLevel: result.thinkingLevel ?? "medium",
+                  });
+                }
+
+                useTierStore
+                  .getState()
+                  .syncTierFromModel(result.model?.provider ?? "", result.model?.id ?? "");
+              })
+              .catch((err) => {
+                log.warn("agent.getState failed", {
+                  sessionId,
+                  err: err instanceof Error ? err.message : String(err),
+                });
               });
-            }
 
-            useTierStore
-              .getState()
-              .syncTierFromModel(result.model?.provider ?? "", result.model?.id ?? "");
-          })
-          .catch((err) => {
-            log.warn("agent.getState failed", {
-              sessionId,
-              err: err instanceof Error ? err.message : String(err),
-            });
-          });
+            modelsPromise
+              .then((modelsResult) => {
+                if (Array.isArray(modelsResult)) {
+                  set({ availableModels: modelsResult });
+                }
+              })
+              .catch((err) => {
+                log.warn("agent.getAvailableModels failed", {
+                  sessionId,
+                  err: err instanceof Error ? err.message : String(err),
+                });
+              });
 
-        modelsPromise
-          .then((modelsResult) => {
-            if (Array.isArray(modelsResult)) {
-              set({ availableModels: modelsResult });
-            }
-          })
-          .catch((err) => {
-            log.warn("agent.getAvailableModels failed", {
-              sessionId,
-              err: err instanceof Error ? err.message : String(err),
-            });
-          });
+            const handleContextRetry = (_attempt: number): void => {
+              apiClient
+                .call("agent.getContextUsage", { sessionId })
+                .then((r) => {
+                  if (r && (r.contextWindow > 0 || r.tokens != null)) {
+                    const update: Partial<ContextUsage> = {};
+                    if (r.contextWindow > 0) update.contextWindow = r.contextWindow;
+                    if (r.tokens != null) update.tokens = r.tokens;
+                    get().updateSessionContext(sessionId, update);
+                  }
+                })
+                .catch(() => {});
+            };
 
-        const handleContextRetry = (_attempt: number): void => {
-          apiClient
-            .call("agent.getContextUsage", { sessionId })
-            .then((r) => {
-              if (r && (r.contextWindow > 0 || r.tokens != null)) {
+            contextPromise
+              .then((r) => {
+                perfLog.info("[fetchInit] getContextUsage", {
+                  sessionId,
+                  attempt: 0,
+                  ms: Math.round(performance.now() - t0),
+                });
+                if (!r) {
+                  setTimeout(() => handleContextRetry(1), 1500);
+                  return;
+                }
                 const update: Partial<ContextUsage> = {};
                 if (r.contextWindow > 0) update.contextWindow = r.contextWindow;
-                if (r.tokens != null) update.tokens = r.tokens;
-                get().updateSessionContext(sessionId, update);
-              }
-            })
-            .catch(() => {});
-        };
+                if (r.tokens != null) {
+                  update.tokens = r.tokens;
+                } else {
+                  setTimeout(() => handleContextRetry(1), 1500);
+                  return;
+                }
+                if (update.contextWindow || update.tokens != null) {
+                  get().updateSessionContext(sessionId, update);
+                }
+              })
+              .catch((err) => {
+                log.warn("agent.getContextUsage failed in fetchInitialState", {
+                  sessionId,
+                  attempt: 0,
+                  err: err instanceof Error ? err.message : String(err),
+                });
+                setTimeout(() => handleContextRetry(1), 1500);
+              });
 
-        contextPromise
-          .then((r) => {
-            perfLog.info("[fetchInit] getContextUsage", {
-              sessionId,
-              attempt: 0,
-              ms: Math.round(performance.now() - t0),
-            });
-            if (!r) {
-              setTimeout(() => handleContextRetry(1), 1500);
-              return;
-            }
-            const update: Partial<ContextUsage> = {};
-            if (r.contextWindow > 0) update.contextWindow = r.contextWindow;
-            if (r.tokens != null) {
-              update.tokens = r.tokens;
-            } else {
-              setTimeout(() => handleContextRetry(1), 1500);
-              return;
-            }
-            if (update.contextWindow || update.tokens != null) {
-              get().updateSessionContext(sessionId, update);
-            }
-          })
-          .catch((err) => {
-            log.warn("agent.getContextUsage failed in fetchInitialState", {
-              sessionId,
-              attempt: 0,
-              err: err instanceof Error ? err.message : String(err),
-            });
-            setTimeout(() => handleContextRetry(1), 1500);
-          });
+            extensionsPromise
+              .then((res) => {
+                perfLog.info("[fetchInit] getExtensions done", {
+                  sessionId,
+                  ms: Math.round(performance.now() - t0),
+                });
+                const rawExts = Array.isArray(res)
+                  ? res
+                  : ((res as { extensions?: ExtensionEntry[] })?.extensions ?? []);
+                const exts = rawExts as ExtensionEntry[];
+                if (exts.length === 0) return;
+                const plugins = exts.map((e: ExtensionEntry) => {
+                  const parts = e.path.split("/");
+                  const fileName = parts.pop()?.replace(/\.(ts|js|tsx|jsx)$/, "") ?? "unknown";
+                  const dirName = parts.pop() ?? fileName;
+                  const name = fileName === "index" ? dirName : fileName;
+                  return {
+                    name,
+                    path: e.path,
+                    enabled: true,
+                    toolNames: e.toolNames,
+                    commandNames: e.commandNames,
+                    scope: derivePluginScope(e.path),
+                  };
+                });
+                useStatusStore.getState().setPlugins(plugins);
+              })
+              .catch((err) => {
+                log.warn("agent.getExtensions failed", {
+                  sessionId,
+                  err: err instanceof Error ? err.message : String(err),
+                });
+              });
 
-        extensionsPromise
-          .then((res) => {
-            perfLog.info("[fetchInit] getExtensions done", {
-              sessionId,
-              ms: Math.round(performance.now() - t0),
-            });
-            const rawExts = Array.isArray(res)
-              ? res
-              : ((res as { extensions?: ExtensionEntry[] })?.extensions ?? []);
-            const exts = rawExts as ExtensionEntry[];
-            if (exts.length === 0) return;
-            const plugins = exts.map((e: ExtensionEntry) => {
-              const parts = e.path.split("/");
-              const fileName = parts.pop()?.replace(/\.(ts|js|tsx|jsx)$/, "") ?? "unknown";
-              const dirName = parts.pop() ?? fileName;
-              const name = fileName === "index" ? dirName : fileName;
-              return {
-                name,
-                path: e.path,
-                enabled: true,
-                toolNames: e.toolNames,
-                commandNames: e.commandNames,
-                scope: derivePluginScope(e.path),
-              };
-            });
-            useStatusStore.getState().setPlugins(plugins);
-          })
-          .catch((err) => {
-            log.warn("agent.getExtensions failed", {
-              sessionId,
-              err: err instanceof Error ? err.message : String(err),
-            });
-          });
+            Promise.all([skillsPromise, disabledSkillsPromise])
+              .then(([skillsRes, disabledRes]) => {
+                perfLog.info("[fetchInit] getSkills+getDisabledSkills done", {
+                  sessionId,
+                  ms: Math.round(performance.now() - t0),
+                });
+                const skillsArr = (
+                  Array.isArray(skillsRes)
+                    ? skillsRes
+                    : ((skillsRes as SkillsResponse)?.skills ?? [])
+                ) as SkillEntry[];
+                if (skillsArr.length === 0) {
+                  useAppStore
+                    .getState()
+                    .addLog(`[skills] non-array response, type=${typeof skillsRes}`);
+                  return;
+                }
+                const disabled = disabledRes as DisabledSkillsResponse;
+                const disabledSet = new Set(disabled?.disabledSkills ?? []);
+                useAppStore
+                  .getState()
+                  .addLog(
+                    `[skills] loaded ${skillsArr.length} items, ${disabledSet.size} disabled`,
+                  );
+                useStatusStore.getState().setSkills(
+                  skillsArr.map((s: SkillEntry) => {
+                    const fp: string = s.filePath;
+                    const scope: "global" | "project" =
+                      s.sourceInfo?.scope === "user" ? "global" : deriveSkillScope(fp);
+                    return {
+                      name: s.name,
+                      description: s.description,
+                      filePath: fp,
+                      baseDir: s.baseDir,
+                      disableModelInvocation: s.disableModelInvocation,
+                      enabled: !disabledSet.has(s.name),
+                      scope,
+                    };
+                  }),
+                );
+              })
+              .catch((err) => {
+                useAppStore
+                  .getState()
+                  .addLog(
+                    `[skills] call failed: ${err instanceof Error ? err.message : String(err)}`,
+                  );
+              });
 
-        Promise.all([skillsPromise, disabledSkillsPromise])
-          .then(([skillsRes, disabledRes]) => {
-            perfLog.info("[fetchInit] getSkills+getDisabledSkills done", {
-              sessionId,
-              ms: Math.round(performance.now() - t0),
-            });
-            const skillsArr = (
-              Array.isArray(skillsRes) ? skillsRes : ((skillsRes as SkillsResponse)?.skills ?? [])
-            ) as SkillEntry[];
-            if (skillsArr.length === 0) {
-              useAppStore
-                .getState()
-                .addLog(`[skills] non-array response, type=${typeof skillsRes}`);
-              return;
-            }
-            const disabled = disabledRes as DisabledSkillsResponse;
-            const disabledSet = new Set(disabled?.disabledSkills ?? []);
-            useAppStore
-              .getState()
-              .addLog(`[skills] loaded ${skillsArr.length} items, ${disabledSet.size} disabled`);
-            useStatusStore.getState().setSkills(
-              skillsArr.map((s: SkillEntry) => {
-                const fp: string = s.filePath;
-                const scope: "global" | "project" =
-                  s.sourceInfo?.scope === "user" ? "global" : deriveSkillScope(fp);
-                return {
+            // agentChangePromise: log timing only (restoration logic removed)
+            agentChangePromise
+              .then((result: unknown) => {
+                void result; // suppress unused warning
+                perfLog.info("[fetchInit] getLatestAgentChange done", {
+                  sessionId,
+                  ms: Math.round(performance.now() - t0),
+                });
+              })
+              .catch((err: unknown) => {
+                log.warn("agent.getLatestAgentChange failed", {
+                  sessionId,
+                  err: err instanceof Error ? err.message : String(err),
+                });
+              });
+
+            mcpPromise
+              .then((res) => {
+                perfLog.info("[fetchInit] getMcpServers done", {
+                  sessionId,
+                  ms: Math.round(performance.now() - t0),
+                });
+                const rawServers = res.servers ?? [];
+                const servers: MCPServerInfo[] = rawServers.map((s) => ({
                   name: s.name,
-                  description: s.description,
-                  filePath: fp,
-                  baseDir: s.baseDir,
-                  disableModelInvocation: s.disableModelInvocation,
-                  enabled: !disabledSet.has(s.name),
-                  scope,
-                };
-              }),
-            );
-          })
-          .catch((err) => {
-            useAppStore
-              .getState()
-              .addLog(`[skills] call failed: ${err instanceof Error ? err.message : String(err)}`);
-          });
+                  status: s.status,
+                  error: s.error,
+                  toolCount: s.tools.length,
+                  tools: s.tools.map((t) => ({
+                    name: t.originalName,
+                    description: t.description,
+                  })),
+                  scope: (s.scope as "global" | "project") ?? "global",
+                  disabled: s.disabled,
+                }));
+                log.info("[MCP] getMcpServers", {
+                  sessionId,
+                  count: servers.length,
+                  names: servers.map((s) => s.name),
+                });
+                useStatusStore.getState().setMcpServers(servers);
+              })
+              .catch((err) => {
+                log.warn("agent.getMcpServers failed", {
+                  sessionId,
+                  err: err instanceof Error ? err.message : String(err),
+                });
+              });
 
-        mcpPromise
-          .then((res) => {
-            perfLog.info("[fetchInit] getMcpServers done", {
-              sessionId,
-              ms: Math.round(performance.now() - t0),
-            });
-            const rawServers = res.servers ?? [];
-            const servers: MCPServerInfo[] = rawServers.map((s) => ({
-              name: s.name,
-              status: s.status,
-              error: s.error,
-              toolCount: s.tools.length,
-              tools: s.tools.map((t) => ({
-                name: t.originalName,
-                description: t.description,
-              })),
-              scope: (s.scope as "global" | "project") ?? "global",
-              disabled: s.disabled,
-            }));
-            log.info("[MCP] getMcpServers", {
-              sessionId,
-              count: servers.length,
-              names: servers.map((s) => s.name),
-            });
-            useStatusStore.getState().setMcpServers(servers);
-          })
-          .catch((err) => {
-            log.warn("agent.getMcpServers failed", {
-              sessionId,
-              err: err instanceof Error ? err.message : String(err),
-            });
-          });
+            queuePromise
+              .then((result) => {
+                perfLog.info("[fetchInit] getQueue done", {
+                  sessionId,
+                  ms: Math.round(performance.now() - t0),
+                });
+                perfLog.info("[fetchInit] ALL sub-calls dispatched", {
+                  sessionId,
+                  totalMs: Math.round(performance.now() - t0),
+                });
+                if (!result) return;
+                const { steering, followUp } = result;
+                if (steering.length > 0 || followUp.length > 0) {
+                  useSessionStore.setState((s) => ({
+                    queueBySession: {
+                      ...s.queueBySession,
+                      [sessionId]: { steering, followUp },
+                    },
+                  }));
+                }
+              })
+              .catch((err) => {
+                log.warn("agent.getQueue failed", {
+                  sessionId,
+                  err: err instanceof Error ? err.message : String(err),
+                });
+              });
+          } finally {
+            _fetchInitPromiseMap.delete(sessionId);
+          }
+        })();
 
-        queuePromise
-          .then((result) => {
-            perfLog.info("[fetchInit] getQueue done", {
-              sessionId,
-              ms: Math.round(performance.now() - t0),
-            });
-            perfLog.info("[fetchInit] ALL sub-calls dispatched", {
-              sessionId,
-              totalMs: Math.round(performance.now() - t0),
-            });
-            if (!result) return;
-            const { steering, followUp } = result;
-            if (steering.length > 0 || followUp.length > 0) {
-              useSessionStore.setState((s) => ({
-                queueBySession: {
-                  ...s.queueBySession,
-                  [sessionId]: { steering, followUp },
-                },
-              }));
-            }
-          })
-          .catch((err) => {
-            log.warn("agent.getQueue failed", {
-              sessionId,
-              err: err instanceof Error ? err.message : String(err),
-            });
-          });
+        _fetchInitPromiseMap.set(sessionId, promise);
+        return promise;
       },
 
       fetchModelState: (sessionId) => {

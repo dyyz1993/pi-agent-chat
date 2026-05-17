@@ -29,6 +29,7 @@ const TOGGLE_ITEMS: {
   { key: "showToolResults", labelKey: "showToolResults", descKey: "showToolResultsDesc" },
   { key: "showThinking", labelKey: "showThinking", descKey: "showThinkingDesc" },
   { key: "collapseThinking", labelKey: "collapseThinking", descKey: "collapseThinkingDesc" },
+  { key: "collapseToolCards", labelKey: "collapseToolCards", descKey: "collapseToolCardsDesc" },
   { key: "showTimeline", labelKey: "showTimeline", descKey: "showTimelineDesc" },
 ];
 
@@ -65,6 +66,8 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const settings = useSettingsStore();
   const toggle = useSettingsStore((s) => s.toggle);
   const reset = useSettingsStore((s) => s.reset);
+  const chatViewMode = useSettingsStore((s) => s.chatViewMode);
+  const setViewMode = useSettingsStore((s) => s.setViewMode);
 
   const retryConfig = useRetryConfigStore();
   const setRetryConfig = useRetryConfigStore((s) => s.setRetryConfig);
@@ -209,6 +212,32 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
         <div className="px-4 py-3 space-y-3 max-h-[60vh] overflow-y-auto">
           <SectionHeader>{t("chatDisplay")}</SectionHeader>
 
+          <div className="py-1">
+            <div className="text-[13px] text-gray-800 dark:text-gray-200 font-medium mb-1.5">
+              {t("chatViewMode")}
+            </div>
+            <div className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+              {(["developer", "clean"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => setViewMode(mode)}
+                  className={`flex-1 py-1.5 text-[12px] font-medium transition-colors ${
+                    chatViewMode === mode
+                      ? "bg-indigo-500 text-white"
+                      : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/60"
+                  }`}
+                >
+                  {t(`chatViewMode${mode.charAt(0).toUpperCase() + mode.slice(1)}` as const)}
+                </button>
+              ))}
+            </div>
+            <div className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">
+              {chatViewMode === "developer"
+                ? t("chatViewModeDeveloperDesc")
+                : t("chatViewModeCleanDesc")}
+            </div>
+          </div>
+
           {TOGGLE_ITEMS.map(({ key, labelKey, descKey }) => (
             <label
               key={key}
@@ -222,7 +251,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                   {t(descKey)}
                 </div>
               </div>
-              <ToggleSwitch checked={settings[key]} onChange={() => toggle(key)} />
+              <ToggleSwitch checked={settings[key] as boolean} onChange={() => toggle(key)} />
             </label>
           ))}
 

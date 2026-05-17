@@ -385,6 +385,21 @@ export interface AgentMethods {
     params: { sessionId: string };
     result: { systemPrompt: string; appendSystemPrompt?: string[] };
   };
+  "agent.getLatestAgentChange": {
+    params: { sessionId: string };
+    result: {
+      agentName: string;
+      agentConfig?: {
+        description?: string;
+        tools?: string[];
+        permissionMode?: string;
+        tier?: string;
+        thinkingLevel?: string;
+        model?: string;
+      };
+      timestamp: string;
+    } | null;
+  };
 }
 
 export interface AgentMessageForUI {

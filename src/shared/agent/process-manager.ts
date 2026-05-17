@@ -1601,6 +1601,16 @@ export class AgentProcessManager {
     ).getSystemPrompt();
   }
 
+  async getLatestAgentChange(sessionId: string) {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return null;
+    return (
+      managed.client as unknown as {
+        send: (cmd: unknown) => Promise<unknown>;
+      }
+    ).send({ type: "get_latest_agent_change", sessionId });
+  }
+
   async getSettings(sessionId: string, scope?: string): Promise<Record<string, unknown>> {
     const managed = this.clients.get(sessionId);
     if (!managed) return {};

@@ -1,11 +1,15 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+export type ChatViewMode = "developer" | "clean";
+
 export interface DisplaySettings {
+  chatViewMode: ChatViewMode;
   showToolCalls: boolean;
   showToolResults: boolean;
   showThinking: boolean;
   collapseThinking: boolean;
+  collapseToolCards: boolean;
   showTimeline: boolean;
 }
 
@@ -19,6 +23,7 @@ export interface RetryConfig {
 interface SettingsActions {
   toggle: (key: keyof DisplaySettings) => void;
   setAll: (settings: Partial<DisplaySettings>) => void;
+  setViewMode: (mode: ChatViewMode) => void;
   reset: () => void;
 }
 
@@ -28,11 +33,19 @@ interface RetryActions {
 }
 
 const DEFAULTS: DisplaySettings = {
+  chatViewMode: "developer",
   showToolCalls: true,
   showToolResults: true,
   showThinking: true,
   collapseThinking: true,
+  collapseToolCards: false,
   showTimeline: true,
+};
+
+const CLEAN_OVERRIDES: Partial<DisplaySettings> = {
+  showThinking: false,
+  collapseToolCards: true,
+  showTimeline: false,
 };
 
 export const RETRY_DEFAULTS: RetryConfig = {
@@ -48,6 +61,14 @@ export const useSettingsStore = create<DisplaySettings & SettingsActions>()(
       ...DEFAULTS,
       toggle: (key) => set((s) => ({ [key]: !s[key] })),
       setAll: (settings) => set(settings),
+      setViewMode: (mode) =>
+        set((s) => {
+          if (mode === s.chatViewMode) return s;
+          if (mode === "clean") {
+            return { chatViewMode: "clean", ...CLEAN_OVERRIDES };
+          }
+          return { chatViewMode: "developer" };
+        }),
       reset: () => set(DEFAULTS),
     }),
     {

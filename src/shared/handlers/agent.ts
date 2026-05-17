@@ -346,4 +346,8 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   r("agent.getSystemPrompt", async (params) => {
     return m.getSystemPrompt(params.sessionId) as Promise<R<"agent.getSystemPrompt">>;
   });
+
+  r("agent.getLatestAgentChange", async (params) => {
+    return m.getLatestAgentChange(params.sessionId) as Promise<R<"agent.getLatestAgentChange">>;
+  });
 }

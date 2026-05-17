@@ -6,6 +6,7 @@ import { Highlight, themes } from "prism-react-renderer";
 import type { ContentBlock } from "../../../types";
 import { useSessionStore } from "../../../stores/use-session-store";
 import { useBashStore } from "../../../stores/use-bash-store";
+import { useSettingsStore } from "../../../stores/use-settings-store";
 import { tryFormatAsYaml } from "../../../../shared/lib/json-to-yaml";
 import { apiClient } from "../../../lib/api-client";
 import { useThemeStore } from "../../../stores/use-theme-store";
@@ -121,6 +122,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
 }) {
   const sid = useSessionStore((s) => s.activeSessionId);
   const { t } = useTranslation("chat");
+  const collapseToolCards = useSettingsStore((s) => s.collapseToolCards);
   const bashProcess = useBashStore((s) => {
     const procs = s.processesBySession[sid ?? ""] || EMPTY_PROCS;
     return procs.find((p) => p.toolCallId === block.toolCallId);
@@ -141,6 +143,24 @@ export const BashExecutionCard = memo(function BashExecutionCard({
   const isTerminated = !!bashDetails?.terminated || storeStatus === "terminated";
   const isRunning = blockIsRunning && !isBackground && !isTerminated;
   const isError = blockIsError;
+
+  // -- collapse logic --
+  // collapsed=true: hide input/output, show title bar only
+  // Running: always expanded (user needs to see progress)
+  // Completed + collapseToolCards: auto-collapse
+  // User manually toggles via chevron button
+  const [collapsed, setCollapsed] = useState(false);
+  const wasRunningRef = useRef(isRunning);
+
+  // Force-expand while running; auto-collapse when running finishes + setting enabled
+  useEffect(() => {
+    if (isRunning) {
+      setCollapsed(false);
+    } else if (wasRunningRef.current && collapseToolCards) {
+      setCollapsed(true);
+    }
+    wasRunningRef.current = isRunning;
+  }, [isRunning, collapseToolCards]);
 
   useEffect(() => {
     if (isBackground) {
@@ -210,19 +230,40 @@ export const BashExecutionCard = memo(function BashExecutionCard({
       data-block-id={blockId}
       className={`rounded-none overflow-hidden border-x-0 border-t border-b ${borderBg}`}
     >
-      <div className="px-3 py-1.5 flex items-center gap-2 text-xs">
+      <div
+        className="px-3 py-1.5 flex items-center gap-2 text-xs cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800/40 transition-colors select-none"
+        onClick={() => !isRunning && setCollapsed((c) => !c)}
+        role={isRunning ? undefined : "button"}
+        aria-expanded={isRunning ? undefined : !collapsed}
+      >
+        {!isRunning && (
+          <svg
+            className={`w-3 h-3 transition-transform shrink-0 ${collapsed ? "" : "rotate-90"}`}
+            viewBox="0 0 12 12"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+          >
+            <path d="M4.5 3l3 3-3 3" />
+          </svg>
+        )}
         <span
           className={`font-medium shrink-0 ${isBackground ? "text-yellow-600 dark:text-yellow-400" : isTerminated ? "text-red-500 dark:text-red-400" : isRunning ? "text-blue-500 dark:text-blue-400" : isError ? "text-red-500 dark:text-red-400" : "text-gray-800 dark:text-gray-300"}`}
         >
           {block.toolName}
         </span>
-        {block.description ? (
-          <span className="flex-1 min-w-0 text-gray-600 dark:text-gray-400 truncate text-[11px]">
-            {block.description}
-          </span>
-        ) : (
-          <span className="flex-1" />
-        )}
+        {(() => {
+          const summary =
+            block.description ||
+            (block.args ? block.args.split("\n")[0]?.trim().slice(0, 120) : undefined);
+          return summary ? (
+            <span className="flex-1 min-w-0 text-gray-600 dark:text-gray-400 truncate text-[11px]">
+              {summary}
+            </span>
+          ) : (
+            <span className="flex-1" />
+          );
+        })()}
         {isRunning && !statusLabel && (
           <span className="shrink-0 flex items-center gap-1 text-[10px] text-gray-400 dark:text-gray-500 tabular-nums">
             {formatDuration(elapsed)}
@@ -301,98 +342,106 @@ export const BashExecutionCard = memo(function BashExecutionCard({
           })()}
       </div>
 
-      <details className="group">
-        <summary className="px-3 py-1 text-[11px] text-gray-400 dark:text-gray-500 cursor-pointer hover:text-gray-600 dark:hover:text-gray-400 select-none flex items-center gap-1.5 border-t border-gray-200 dark:border-gray-700/30">
-          <svg
-            className="w-3 h-3 transition-transform group-open:rotate-90 shrink-0"
-            viewBox="0 0 12 12"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-          >
-            <path d="M4.5 3l3 3-3 3" />
-          </svg>
-          <span>{t("input")}</span>
-        </summary>
-        <div className="px-3 pb-2">
-          {block.args ? (
-            <pre className="text-[11px] text-yellow-600/70 dark:text-yellow-300/60 overflow-x-auto whitespace-pre-wrap font-mono max-h-40 overflow-y-auto leading-relaxed">
-              {tryFormatAsYaml(block.args)}
-            </pre>
-          ) : null}
-        </div>
-      </details>
+      {collapsed ? null : (
+        <>
+          <details className="group">
+            <summary className="px-3 py-1 text-[11px] text-gray-400 dark:text-gray-500 cursor-pointer hover:text-gray-600 dark:hover:text-gray-400 select-none flex items-center gap-1.5 border-t border-gray-200 dark:border-gray-700/30">
+              <svg
+                className="w-3 h-3 transition-transform group-open:rotate-90 shrink-0"
+                viewBox="0 0 12 12"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+              >
+                <path d="M4.5 3l3 3-3 3" />
+              </svg>
+              <span>{t("input")}</span>
+            </summary>
+            <div className="px-3 pb-2">
+              {block.args ? (
+                <pre className="text-[11px] text-yellow-600/70 dark:text-yellow-300/60 overflow-x-auto whitespace-pre-wrap font-mono max-h-40 overflow-y-auto leading-relaxed">
+                  {tryFormatAsYaml(block.args)}
+                </pre>
+              ) : null}
+            </div>
+          </details>
 
-      <details
-        open={outputOpen}
-        onToggle={(e) => setOutputOpen(e.currentTarget.open)}
-        className="group"
-      >
-        <summary className="px-3 py-1 text-[11px] text-gray-400 dark:text-gray-500 cursor-pointer hover:text-gray-600 dark:hover:text-gray-400 select-none flex items-center gap-1.5 border-t border-gray-200 dark:border-gray-700/30">
-          <svg
-            className="w-3 h-3 transition-transform group-open:rotate-90 shrink-0"
-            viewBox="0 0 12 12"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
+          <details
+            open={outputOpen}
+            onToggle={(e) => setOutputOpen(e.currentTarget.open)}
+            className="group"
           >
-            <path d="M4.5 3l3 3-3 3" />
-          </svg>
-          <span>{t("output")}</span>
+            <summary className="px-3 py-1 text-[11px] text-gray-400 dark:text-gray-500 cursor-pointer hover:text-gray-600 dark:hover:text-gray-400 select-none flex items-center gap-1.5 border-t border-gray-200 dark:border-gray-700/30">
+              <svg
+                className="w-3 h-3 transition-transform group-open:rotate-90 shrink-0"
+                viewBox="0 0 12 12"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+              >
+                <path d="M4.5 3l3 3-3 3" />
+              </svg>
+              <span>{t("output")}</span>
+              {isRunning && (
+                <span className="ml-auto text-blue-500/70 dark:text-blue-400/70 animate-pulse text-[10px]">
+                  {t("streaming")}
+                </span>
+              )}
+            </summary>
+            <div className="px-3 pb-2 relative">
+              {block.output ? (
+                <div
+                  ref={outputScrollRef}
+                  onScroll={handleScroll}
+                  className="overflow-y-auto max-h-36"
+                >
+                  <OutputHighlighter content={block.output} isRunning={isRunning} />
+                </div>
+              ) : isRunning ? (
+                <div className="text-[11px] text-gray-400 dark:text-gray-600 italic py-1">
+                  {t("waiting")}
+                </div>
+              ) : null}
+              {isRunning && !autoScroll && (
+                <button
+                  onClick={() => {
+                    setAutoScroll(true);
+                    const el = outputScrollRef.current;
+                    if (el) el.scrollTop = el.scrollHeight;
+                  }}
+                  className="absolute bottom-1 right-3 flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-gray-200/80 dark:bg-gray-700/80 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors shadow-sm"
+                  title={t("scroll.scrollToBottom")}
+                >
+                  <ChevronDown className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          </details>
+
           {isRunning && (
-            <span className="ml-auto text-blue-500/70 dark:text-blue-400/70 animate-pulse text-[10px]">
-              {t("streaming")}
-            </span>
-          )}
-        </summary>
-        <div className="px-3 pb-2 relative">
-          {block.output ? (
-            <div ref={outputScrollRef} onScroll={handleScroll} className="overflow-y-auto max-h-36">
-              <OutputHighlighter content={block.output} isRunning={isRunning} />
+            <div className="flex items-center gap-1.5 px-3 py-1.5 border-t border-gray-200 dark:border-gray-700/30">
+              {showBackground && (
+                <button
+                  onClick={() => sendAction("background")}
+                  className="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded border border-yellow-500/40 dark:border-yellow-600/40 text-[10px] text-yellow-600 dark:text-yellow-400 hover:bg-yellow-100 dark:hover:bg-yellow-600/15 transition-colors"
+                  title={t("bash.moveToBackground")}
+                >
+                  <ArrowDownToLine className="w-3 h-3" />
+                  <span>{t("bash.background")}</span>
+                </button>
+              )}
+              {!showBackground && <div className="flex-1" />}
+              <button
+                onClick={() => sendAction("kill")}
+                className="flex items-center justify-center gap-1 px-2 py-1 rounded border border-red-500/30 dark:border-red-600/30 text-[10px] text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-600/10 transition-colors"
+                title={t("bash.cancelExecution")}
+              >
+                <X className="w-3 h-3" />
+                <span>{t("common:cancel")}</span>
+              </button>
             </div>
-          ) : isRunning ? (
-            <div className="text-[11px] text-gray-400 dark:text-gray-600 italic py-1">
-              {t("waiting")}
-            </div>
-          ) : null}
-          {isRunning && !autoScroll && (
-            <button
-              onClick={() => {
-                setAutoScroll(true);
-                const el = outputScrollRef.current;
-                if (el) el.scrollTop = el.scrollHeight;
-              }}
-              className="absolute bottom-1 right-3 flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-gray-200/80 dark:bg-gray-700/80 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors shadow-sm"
-              title={t("scroll.scrollToBottom")}
-            >
-              <ChevronDown className="w-3 h-3" />
-            </button>
           )}
-        </div>
-      </details>
-
-      {isRunning && (
-        <div className="flex items-center gap-1.5 px-3 py-1.5 border-t border-gray-200 dark:border-gray-700/30">
-          {showBackground && (
-            <button
-              onClick={() => sendAction("background")}
-              className="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded border border-yellow-500/40 dark:border-yellow-600/40 text-[10px] text-yellow-600 dark:text-yellow-400 hover:bg-yellow-100 dark:hover:bg-yellow-600/15 transition-colors"
-              title={t("bash.moveToBackground")}
-            >
-              <ArrowDownToLine className="w-3 h-3" />
-              <span>{t("bash.background")}</span>
-            </button>
-          )}
-          {!showBackground && <div className="flex-1" />}
-          <button
-            onClick={() => sendAction("kill")}
-            className="flex items-center justify-center gap-1 px-2 py-1 rounded border border-red-500/30 dark:border-red-600/30 text-[10px] text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-600/10 transition-colors"
-            title={t("bash.cancelExecution")}
-          >
-            <X className="w-3 h-3" />
-            <span>{t("common:cancel")}</span>
-          </button>
-        </div>
+        </>
       )}
 
       {isBackground && (
