@@ -146,17 +146,13 @@ export const BashExecutionCard = memo(function BashExecutionCard({
 
   // -- collapse logic --
   // collapsed=true: hide input/output, show title bar only
-  // Running: always expanded (user needs to see progress)
-  // Completed + collapseToolCards: auto-collapse
-  // User manually toggles via chevron button
+  // User can collapse even while running (shows loading dot)
+  // Auto-collapse when running finishes + setting enabled
   const [collapsed, setCollapsed] = useState(false);
   const wasRunningRef = useRef(isRunning);
 
-  // Force-expand while running; auto-collapse when running finishes + setting enabled
   useEffect(() => {
-    if (isRunning) {
-      setCollapsed(false);
-    } else if (wasRunningRef.current && collapseToolCards) {
+    if (wasRunningRef.current && !isRunning && collapseToolCards) {
       setCollapsed(true);
     }
     wasRunningRef.current = isRunning;
@@ -232,20 +228,12 @@ export const BashExecutionCard = memo(function BashExecutionCard({
     >
       <div
         className="px-3 py-1.5 flex items-center gap-2 text-xs cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800/40 transition-colors select-none"
-        onClick={() => !isRunning && setCollapsed((c) => !c)}
-        role={isRunning ? undefined : "button"}
-        aria-expanded={isRunning ? undefined : !collapsed}
+        onClick={() => setCollapsed((c) => !c)}
+        role="button"
+        aria-expanded={!collapsed}
       >
-        {!isRunning && (
-          <svg
-            className={`w-3 h-3 transition-transform shrink-0 ${collapsed ? "" : "rotate-90"}`}
-            viewBox="0 0 12 12"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-          >
-            <path d="M4.5 3l3 3-3 3" />
-          </svg>
+        {collapsed && isRunning && (
+          <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
         )}
         <span
           className={`font-medium shrink-0 ${isBackground ? "text-yellow-600 dark:text-yellow-400" : isTerminated ? "text-red-500 dark:text-red-400" : isRunning ? "text-blue-500 dark:text-blue-400" : isError ? "text-red-500 dark:text-red-400" : "text-gray-800 dark:text-gray-300"}`}

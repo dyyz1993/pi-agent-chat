@@ -51,9 +51,7 @@ export const ReadFileCard = memo(function ReadFileCard({
   const [collapsed, setCollapsed] = useState(false);
   const wasRunningRef = useRef(isRunning);
   useEffect(() => {
-    if (isRunning) {
-      setCollapsed(false);
-    } else if (wasRunningRef.current && collapseToolCards) {
+    if (wasRunningRef.current && !isRunning && collapseToolCards) {
       setCollapsed(true);
     }
     wasRunningRef.current = isRunning;
@@ -89,20 +87,12 @@ export const ReadFileCard = memo(function ReadFileCard({
     >
       <div
         className="px-3 py-1.5 flex items-center gap-2 text-xs cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800/40 transition-colors select-none"
-        onClick={() => !isRunning && setCollapsed((c) => !c)}
-        role={isRunning ? undefined : "button"}
-        aria-expanded={isRunning ? undefined : !collapsed}
+        onClick={() => setCollapsed((c) => !c)}
+        role="button"
+        aria-expanded={!collapsed}
       >
-        {!isRunning && (
-          <svg
-            className={`w-3 h-3 transition-transform shrink-0 ${collapsed ? "" : "rotate-90"}`}
-            viewBox="0 0 12 12"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-          >
-            <path d="M4.5 3l3 3-3 3" />
-          </svg>
+        {collapsed && isRunning && (
+          <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
         )}
         {(() => {
           const { icon: ReadIcon } = getToolIcon("read");

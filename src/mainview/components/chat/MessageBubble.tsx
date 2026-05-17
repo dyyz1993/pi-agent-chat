@@ -235,13 +235,17 @@ export const MessageBubble = memo(function MessageBubble({
               <span className="inline-block w-1.5 h-4 bg-indigo-400 animate-pulse ml-3 align-text-bottom" />
             </div>
           )}
-          {message.tokenUsage && (
-            <div
-              className={`border-l-[3px] ${getDefaultBorderColor(message.role as "user" | "assistant")}`}
-            >
-              <MessageMetaFooter message={message} />
-            </div>
-          )}
+          {message.tokenUsage &&
+            (() => {
+              const mode = useSettingsStore.getState().chatViewMode;
+              return mode !== "clean";
+            })() && (
+              <div
+                className={`border-l-[3px] ${getDefaultBorderColor(message.role as "user" | "assistant")}`}
+              >
+                <MessageMetaFooter message={message} />
+              </div>
+            )}
         </div>
       )}
     </div>
@@ -1370,9 +1374,7 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
   const collapseToolCards = useSettingsStore((s) => s.collapseToolCards);
   const wasRunningRef = useRef(isRunning);
   useEffect(() => {
-    if (isRunning) {
-      setCollapsed(false);
-    } else if (wasRunningRef.current && collapseToolCards) {
+    if (wasRunningRef.current && !isRunning && collapseToolCards) {
       setCollapsed(true);
     }
     wasRunningRef.current = isRunning;
@@ -1402,21 +1404,28 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
 
   return (
     <div ref={cardRef} className={`overflow-hidden ${bgOnly}`} data-block-id={blockId}>
-      <div className="px-3 py-1 flex items-center gap-2 text-xs">
-        <button
-          onClick={handleToggleCollapse}
-          className="p-0.5 text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 transition-colors shrink-0"
-          title={collapsed ? t("expandToolCard") : t("collapseToolCard")}
-          aria-expanded={!collapsed}
-          aria-label={collapsed ? t("expandToolCard") : t("collapseToolCard")}
-        >
-          {collapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-        </button>
+      <div
+        className="px-3 py-1 flex items-center gap-2 text-xs cursor-pointer hover:brightness-110 transition-all"
+        onClick={handleToggleCollapse}
+        role="button"
+        tabIndex={0}
+        aria-expanded={!collapsed}
+        aria-label={collapsed ? t("expandToolCard") : t("collapseToolCard")}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            handleToggleCollapse();
+          }
+        }}
+      >
         <span
           className={`font-medium ${isRunning ? "text-blue-400" : isError ? "text-red-400" : "text-amber-300/80"}`}
         >
           {block.toolName}
         </span>
+        {collapsed && isRunning && (
+          <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+        )}
         {isRunning && <span className="text-blue-400 animate-pulse text-[10px]">running</span>}
         {!isRunning && !isError && (
           <CheckCircle className="w-3.5 h-3.5 text-green-500 shrink-0 ml-auto" />

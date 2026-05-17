@@ -26,9 +26,7 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
   const wasRunningRef = useRef(isRunning);
 
   useEffect(() => {
-    if (isRunning) {
-      setCollapsed(false);
-    } else if (wasRunningRef.current && collapseToolCards) {
+    if (wasRunningRef.current && !isRunning && collapseToolCards) {
       setCollapsed(true);
     }
     wasRunningRef.current = isRunning;
@@ -74,7 +72,7 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
             ? "bg-red-500/5 dark:bg-red-400/5"
             : "hover:bg-gray-200/40 dark:hover:bg-gray-800/40"
       }`}
-      onClick={handleViewSubagent}
+      onClick={() => setCollapsed((c) => !c)}
     >
       <Header
         isRunning={isRunning}
@@ -146,16 +144,8 @@ export const Header = memo(function Header({
             SubAgent
           </span>
           <StatusChip isRunning={isRunning} isDone={isDone} isError={isError} />
-          {!isRunning && collapsed && (
-            <svg
-              className="w-3 h-3 text-gray-400 dark:text-gray-500 shrink-0"
-              viewBox="0 0 12 12"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-            >
-              <path d="M4.5 3l3 3-3 3" />
-            </svg>
+          {collapsed && isRunning && (
+            <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
           )}
         </div>
         <p className="text-[11px] text-gray-600 dark:text-gray-400 leading-relaxed line-clamp-2">
