@@ -25,7 +25,7 @@ function App() {
   const [restoring, setRestoring] = useState(!useAppStore.getState().restored);
   const addProjectTab = useSessionStore((s) => s.addProjectTab);
   const loadSessionsForProject = useSessionStore((s) => s.loadSessionsForProject);
-  const restoreFromPersisted = useSessionStore((s) => s.restoreFromPersisted);
+
   const [hasToken, setHasToken] = useState(() => !!resolveAuthToken());
   const [loginError, setLoginError] = useState<string | null>(null);
   const loginTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -151,14 +151,6 @@ function App() {
         }
 
         if (cancelled) return;
-        const restored = await restoreFromPersisted();
-        if (restored) {
-          addLog("Restored last session from cache");
-          if (!cancelled) setRestoring(false);
-          return;
-        }
-
-        if (cancelled) return;
         const tabResult = await apiClient.call("project.restoreTabs", {});
         const savedTabs = tabResult.tabs as Array<{ id: string; name: string; path: string }>;
         const savedActiveId = tabResult.activeTabId as string | null;
@@ -227,7 +219,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [ready, addLog, addProjectTab, loadSessionsForProject, restoreFromPersisted]);
+  }, [ready, addLog, addProjectTab, loadSessionsForProject]);
 
   const handleSelectProject = async (path: string, name: string) => {
     setProjectLoading(true);

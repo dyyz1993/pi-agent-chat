@@ -53,6 +53,12 @@ const THINKING_LEVEL_VALUES = ["off", "minimal", "low", "medium", "high", "xhigh
 export function SidebarBottomControls() {
   const { t } = useTranslation("status");
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const sessionReady = useSessionStore(
+    useCallback(
+      (s) => (activeSessionId ? !!s.sessionReady[activeSessionId] : false),
+      [activeSessionId],
+    ),
+  );
   const currentModel = useSessionStore((s) => s.currentModel);
   const currentThinkingLevel = useSessionStore((s) => s.currentThinkingLevel);
   const availableModels = useSessionStore((s) => s.availableModels);
@@ -211,12 +217,12 @@ export function SidebarBottomControls() {
 
   const handleSwitchTier = useCallback(
     async (tier: TierKey) => {
-      if (!activeSessionId || switchingTier) return;
+      if (!activeSessionId || !sessionReady || switchingTier) return;
       setSwitchingTier(true);
       await switchToTier(tier, activeSessionId);
       setSwitchingTier(false);
     },
-    [activeSessionId, switchingTier, switchToTier],
+    [activeSessionId, sessionReady, switchingTier, switchToTier],
   );
 
   const handleOpenTierConfig = useCallback(async () => {
@@ -314,7 +320,7 @@ export function SidebarBottomControls() {
             setWorkspaceOpen(false);
             setTierConfigOpen(false);
           }}
-          disabled={!activeSessionId || agentSwitching}
+          disabled={!activeSessionId || !sessionReady || agentSwitching}
           className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-100/60 dark:hover:bg-gray-800/60 hover:text-gray-700 dark:hover:text-gray-300 transition-colors disabled:opacity-40"
           aria-expanded={agentOpen}
           aria-label={t("agentSelect")}
@@ -353,7 +359,7 @@ export function SidebarBottomControls() {
                         : "text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
                     }`}
                     onClick={async () => {
-                      if (activeSessionId && !agentSwitching && !isActive) {
+                      if (activeSessionId && sessionReady && !agentSwitching && !isActive) {
                         await switchAgent(agent.name, activeSessionId);
                       }
                       setAgentOpen(false);
@@ -422,7 +428,7 @@ export function SidebarBottomControls() {
               setWorkspaceOpen(!workspaceOpen);
               setThinkingOpen(false);
             }}
-            disabled={!activeSessionId}
+            disabled={!activeSessionId || !sessionReady}
             className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-100/60 dark:hover:bg-gray-800/60 hover:text-gray-700 dark:hover:text-gray-300 transition-colors disabled:opacity-40"
             aria-expanded={workspaceOpen}
             aria-label={t("workspaceSelect")}
@@ -547,7 +553,7 @@ export function SidebarBottomControls() {
           models={availableModels}
           value={currentModel ? `${currentModel.provider}/${currentModel.id}` : ""}
           onChange={handleSelectModel}
-          disabled={!activeSessionId}
+          disabled={!activeSessionId || !sessionReady}
           placement="up"
           onOpenChange={(open) => {
             if (open) {
@@ -558,7 +564,7 @@ export function SidebarBottomControls() {
           }}
           renderTrigger={({ open }) => (
             <button
-              disabled={!activeSessionId}
+              disabled={!activeSessionId || !sessionReady}
               className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-100/60 dark:hover:bg-gray-800/60 hover:text-gray-700 dark:hover:text-gray-300 transition-colors disabled:opacity-40 ${open ? "bg-gray-100/60 dark:bg-gray-800/60" : ""}`}
               aria-expanded={open}
               aria-label={t("modelSelect")}
@@ -594,11 +600,11 @@ export function SidebarBottomControls() {
             <button
               key={tier}
               onClick={() => {
-                if (!switchingTier && activeSessionId) {
+                if (!switchingTier && activeSessionId && sessionReady) {
                   handleSwitchTier(tier);
                 }
               }}
-              disabled={switchingTier || !activeSessionId}
+              disabled={switchingTier || !activeSessionId || !sessionReady}
               className={`
                 flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[11px] transition-all duration-150 flex-1 justify-center
                 ${
@@ -617,7 +623,7 @@ export function SidebarBottomControls() {
         })}
         <button
           onClick={handleOpenTierConfig}
-          disabled={!activeSessionId}
+          disabled={!activeSessionId || !sessionReady}
           className="p-0.5 rounded text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-40 shrink-0"
           title={t("tierConfigTitle", "Configure tier models")}
           aria-label={t("tierConfigTitle", "Configure tier models")}
@@ -699,7 +705,7 @@ export function SidebarBottomControls() {
             setThinkingOpen(!thinkingOpen);
             setWorkspaceOpen(false);
           }}
-          disabled={!activeSessionId}
+          disabled={!activeSessionId || !sessionReady}
           className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-100/60 dark:hover:bg-gray-800/60 hover:text-gray-700 dark:hover:text-gray-300 transition-colors disabled:opacity-40"
           aria-expanded={thinkingOpen}
           aria-label={t("thinkingSelect")}

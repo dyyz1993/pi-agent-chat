@@ -1280,9 +1280,6 @@ export const useSessionStore = create<SessionState>()(
     {
       name: "pi-agent-session",
       partialize: (state) => ({
-        projectTabs: state.projectTabs,
-        activeProjectId: state.activeProjectId,
-        activeSessionId: state.activeSessionId,
         modelFavorites: [...state.modelFavorites],
       }),
       merge: (persisted, current) => {
