@@ -9,6 +9,7 @@
  *   - rpc/require-typed-register  : 入口文件必须导入 registerAllHandlers
  *   - rpc/require-api-client      : 前端必须通过 apiClient 调用 RPC
  *   - rpc/no-namespace-iterate    : 禁止 Object.values() 遍历 namespace import
+ *   - rpc/no-component-rpc-fetch  : 禁止 UI 组件直接调用 apiClient.call() 获取共享数据
  */
 "use strict";
 
@@ -19,6 +20,7 @@ const moduleFileNaming = require("./rules/module-file-naming");
 const requireTypedRegister = require("./rules/require-typed-register");
 const requireApiClient = require("./rules/require-api-client");
 const noNamespaceIterate = require("./rules/no-namespace-iterate");
+const noComponentRpcFetch = require("./rules/no-component-rpc-fetch");
 
 module.exports = {
   meta: {
@@ -33,6 +35,7 @@ module.exports = {
     "require-typed-register": requireTypedRegister,
     "require-api-client": requireApiClient,
     "no-namespace-iterate": noNamespaceIterate,
+    "no-component-rpc-fetch": noComponentRpcFetch,
   },
   configs: {
     recommended: {
@@ -45,6 +48,7 @@ module.exports = {
         "rpc/require-typed-register": "error",
         "rpc/require-api-client": "error",
         "rpc/no-namespace-iterate": "error",
+        "rpc/no-component-rpc-fetch": "warn",
       },
     },
   },

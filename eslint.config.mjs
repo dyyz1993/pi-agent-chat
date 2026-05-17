@@ -73,6 +73,7 @@ export default tseslint.config(
       'rpc/require-typed-register': 'error',
       'rpc/require-api-client': 'error',
       'rpc/no-namespace-iterate': 'error',
+      'rpc/no-component-rpc-fetch': 'warn',
 
       // 主题/颜色约束规则
       'theme/color-pairing': 'error',
