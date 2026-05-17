@@ -105,6 +105,7 @@ interface SessionState {
   sessionStatusMap: Record<string, SessionStatus>;
   queueBySession: Record<string, { steering: string[]; followUp: string[] }>;
   currentModel: ModelInfo | null;
+  modelManuallySet: boolean;
   currentThinkingLevel: string;
   availableModels: Array<{
     provider: string;
@@ -172,6 +173,7 @@ export const useSessionStore = create<SessionState>()(
       sessionStatusMap: {},
       queueBySession: {},
       currentModel: null,
+      modelManuallySet: false,
       currentThinkingLevel: "medium",
       availableModels: [],
       modelFavorites: new Set<string>(),
@@ -862,14 +864,22 @@ export const useSessionStore = create<SessionState>()(
                 }
 
                 if (result.model) {
+                  // Don't overwrite if user manually switched model via picker
+                  const manuallySet = get().modelManuallySet;
                   set({
                     currentModel: {
                       provider: result.model.provider ?? "",
                       id: result.model.id,
                       name: result.model.name,
                     },
-                    currentThinkingLevel: result.thinkingLevel ?? "medium",
+                    modelManuallySet: false,
                   });
+                  if (manuallySet) {
+                    log.info("skipped model overwrite (user manually switched)", {
+                      sessionId,
+                      manualModel: `${result.model.provider}/${result.model.id}`,
+                    });
+                  }
                 }
 
                 useTierStore
@@ -1129,7 +1139,8 @@ export const useSessionStore = create<SessionState>()(
         }
       },
 
-      setCurrentModel: (provider, modelId) => set({ currentModel: { provider, id: modelId } }),
+      setCurrentModel: (provider, modelId) =>
+        set({ currentModel: { provider, id: modelId }, modelManuallySet: true }),
       setThinkingLevel: (level) => set({ currentThinkingLevel: level }),
 
       fetchModelFavorites: () => {
