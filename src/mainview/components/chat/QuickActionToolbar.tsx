@@ -211,6 +211,8 @@ export function QuickActionToolbar() {
           });
         }
       }
+    } catch {
+      /* ignore */
     } finally {
       setLoading(false);
     }
