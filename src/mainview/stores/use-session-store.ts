@@ -143,6 +143,7 @@ interface SessionState {
   fetchModelFavorites: () => void;
   toggleModelFavorite: (modelKey: string) => void;
   cleanupActiveSession: (sessionId: string) => void;
+  fetchAllSessionStatuses: () => Promise<void>;
 }
 
 const _fetchInitPromiseMap = new Map<string, Promise<void>>();
@@ -269,6 +270,8 @@ export const useSessionStore = create<SessionState>()(
 
               if (sessions.length > 0) {
                 get().setActiveSession(sessions[0].sessionId);
+                // 拉取该项目的所有 session 状态
+                await get().fetchAllSessionStatuses();
               } else {
                 await get().createNewSession();
               }
@@ -1167,6 +1170,66 @@ export const useSessionStore = create<SessionState>()(
         set((s) => clearSubscriptionState(s, sessionId));
       },
 
+      fetchAllSessionStatuses: async () => {
+        const sessionsByProject = get().sessionsByProject;
+        const sessionStatusMap = get().sessionStatusMap;
+
+        const allSessions: Array<{ sessionId: string; projectPath: string }> = [];
+        for (const [projectPath, sessions] of Object.entries(sessionsByProject)) {
+          for (const session of sessions) {
+            if (!sessionStatusMap[session.sessionId]) {
+              allSessions.push({ sessionId: session.sessionId, projectPath });
+            }
+          }
+        }
+
+        if (allSessions.length === 0) {
+          log.info("fetchAllSessionStatuses: all sessions already have status");
+          return;
+        }
+
+        log.info("fetchAllSessionStatuses: fetching statuses", {
+          count: allSessions.length,
+        });
+
+        const promises = allSessions.map(({ sessionId }) =>
+          apiClient.call("agent.getState", { sessionId }).catch((err) => {
+            log.warn("agent.getState failed for session", {
+              sessionId,
+              err: err instanceof Error ? err.message : String(err),
+            });
+            return null;
+          }),
+        );
+
+        const results = await Promise.allSettled(promises);
+
+        let successCount = 0;
+        let failCount = 0;
+
+        results.forEach((result, index) => {
+          const sessionId = allSessions[index].sessionId;
+          if (result.status === "fulfilled" && result.value) {
+            const state = result.value as AgentStateResult;
+            let status: SessionStatus = "idle";
+            if (state.isStreaming === true) {
+              status = "streaming";
+            } else if (state.isCompacting === true) {
+              status = "compacting";
+            }
+            get().updateSessionStatus(sessionId, status);
+            successCount++;
+          } else {
+            failCount++;
+          }
+        });
+
+        log.info("fetchAllSessionStatuses: completed", {
+          success: successCount,
+          failed: failCount,
+        });
+      },
+
       restoreFromPersisted: async () => {
         const { activeProjectId, activeSessionId, projectTabs } = get();
         if (!activeProjectId || !activeSessionId || projectTabs.length === 0) {
@@ -1193,6 +1256,9 @@ export const useSessionStore = create<SessionState>()(
 
           set({ activeSessionId: null });
           get().setActiveSession(targetId);
+
+          // 恢复成功后，拉取所有 session 的状态
+          await get().fetchAllSessionStatuses();
 
           return true;
         } catch {

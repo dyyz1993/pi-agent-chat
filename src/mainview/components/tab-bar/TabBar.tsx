@@ -36,6 +36,8 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
   const reorderProjectTabs = useSessionStore((s) => s.reorderProjectTabs);
   const sessionsByProject = useSessionStore((s) => s.sessionsByProject);
   const sessionStatusMap = useSessionStore((s) => s.sessionStatusMap);
+  const loadSessionsForProject = useSessionStore((s) => s.loadSessionsForProject);
+  const fetchAllSessionStatuses = useSessionStore((s) => s.fetchAllSessionStatuses);
 
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
@@ -48,12 +50,39 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
   const pressStartPos = useRef({ x: 0, y: 0 });
   const tabRefs = useRef<(HTMLDivElement | null)[]>([]);
   const dragCleanup = useRef<(() => void) | null>(null);
+  const initializedRef = useRef(false);
 
   useEffect(() => {
     return () => {
       dragCleanup.current?.();
     };
   }, []);
+
+  // 初始化所有项目的 sessions 和状态
+  useEffect(() => {
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+
+    const initAllProjects = async () => {
+      const tabsToInit = projectTabs.filter((tab) => !sessionsByProject[tab.path]);
+
+      if (tabsToInit.length === 0) {
+        // 所有项目都已加载 sessions，只拉取状态
+        await fetchAllSessionStatuses();
+        return;
+      }
+
+      // 并行加载所有项目的 sessions
+      await Promise.all(tabsToInit.map((tab) => loadSessionsForProject(tab.path)));
+
+      // 拉取所有 session 状态
+      await fetchAllSessionStatuses();
+    };
+
+    initAllProjects().catch((err) => {
+      console.error("[TabBar] Failed to initialize projects:", err);
+    });
+  }, [projectTabs, sessionsByProject, loadSessionsForProject, fetchAllSessionStatuses]);
 
   useEffect(() => {
     if (!activeProjectId) return;
