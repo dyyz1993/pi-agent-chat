@@ -125,7 +125,7 @@ export function SplitPanel({
           {child}
           {i < children.length - 1 && (
             <div
-              className={`${isHorizontal ? "w-1 cursor-col-resize hover:bg-indigo-500/40" : "h-1 cursor-row-resize hover:bg-indigo-500/40"} bg-gray-700/30 shrink-0 transition-colors touch-none select-none`}
+              className={`${isHorizontal ? "w-1 cursor-col-resize hover:bg-semantic-accent/40" : "h-1 cursor-row-resize hover:bg-semantic-accent/40"} bg-gray-700/30 shrink-0 transition-colors touch-none select-none`}
               onMouseDown={startDrag(i)}
               onTouchStart={startDrag(i)}
             />

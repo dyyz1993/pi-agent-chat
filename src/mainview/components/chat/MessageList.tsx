@@ -57,13 +57,13 @@ function ConversationItem({
     <button
       onClick={onClick}
       className={`w-full text-left px-3 py-2 border-b border-gray-800/30 transition-colors group ${
-        isActive ? "bg-indigo-600/10" : "hover:bg-gray-800/30"
+        isActive ? "bg-semantic-accent/10" : "hover:bg-gray-800/30"
       }`}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <div
-            className={`text-[11px] font-medium truncate ${isActive ? "text-indigo-300" : "text-gray-300"}`}
+            className={`text-[11px] font-medium truncate ${isActive ? "text-semantic-accent" : "text-gray-300"}`}
           >
             {conv.title || t("newSession")}
           </div>
@@ -76,9 +76,9 @@ function ConversationItem({
           <span
             className={`text-[9px] px-1.5 py-0.5 rounded shrink-0 ${
               conv.status === "running"
-                ? "bg-green-600/20 text-green-400 animate-pulse"
+                ? "bg-status-success/20 text-status-success animate-pulse"
                 : conv.status === "error"
-                  ? "bg-red-600/20 text-red-400"
+                  ? "bg-status-error/20 text-status-error"
                   : "bg-gray-700 text-gray-500"
             }`}
           >

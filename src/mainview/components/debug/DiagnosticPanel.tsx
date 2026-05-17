@@ -83,7 +83,7 @@ function SubscriptionTable({
               <span className="w-16 text-gray-400 truncate">{cat.category}</span>
               <div className="flex-1 flex items-center gap-1">
                 <div
-                  className={`h-2 rounded-full ${cat.total > 0 ? "bg-amber-500/60" : "bg-gray-700"}`}
+                  className={`h-2 rounded-full ${cat.total > 0 ? "bg-status-warning/60" : "bg-gray-700"}`}
                   style={{ minWidth: 4, width: Math.max(4, cat.total * 16) }}
                 />
                 <span className="font-mono text-gray-300">{cat.total}</span>

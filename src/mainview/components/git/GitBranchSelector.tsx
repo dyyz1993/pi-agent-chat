@@ -58,7 +58,7 @@ export function GitBranchSelector({ onClose }: GitBranchSelectorProps) {
       key={b.name}
       className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors ${
         b.isCurrent
-          ? "text-indigo-400"
+          ? "text-semantic-accent"
           : "text-gray-800 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700"
       }`}
       onClick={() => handleCheckout(b)}
