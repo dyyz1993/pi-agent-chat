@@ -5,6 +5,7 @@ import { useInputHistory } from "../../hooks/use-input-history";
 
 export interface InputBarHandle {
   send: () => void;
+  blur: () => void;
 }
 
 interface InputBarProps {
@@ -154,7 +155,11 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
     if (onSend) onSend();
   }, [currentValue, saveToHistory, onSend]);
 
-  useImperativeHandle(ref, () => ({ send }), [send]);
+  const blur = useCallback(() => {
+    textareaRef.current?.blur();
+  }, []);
+
+  useImperativeHandle(ref, () => ({ send, blur }), [send, blur]);
 
   const maxHeight = expanded ? undefined : 120;
 

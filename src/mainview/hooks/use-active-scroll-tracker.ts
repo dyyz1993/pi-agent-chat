@@ -354,6 +354,13 @@ export function useActiveScrollTracker({
     syncToolbarState();
   }, [syncToolbarState]);
 
+  const resumeAutoScroll = useCallback(() => {
+    userScrolledUpRef.current = false;
+    autoScrollEnabledRef.current = true;
+    doScrollToBottom();
+    syncToolbarState();
+  }, [doScrollToBottom, syncToolbarState]);
+
   return {
     handleScroll,
     handleScrollEnd,
@@ -365,5 +372,6 @@ export function useActiveScrollTracker({
     autoScrollEnabled: toolbarState.autoScrollEnabled,
     toggleAutoScroll,
     suspendAutoScroll,
+    resumeAutoScroll,
   };
 }

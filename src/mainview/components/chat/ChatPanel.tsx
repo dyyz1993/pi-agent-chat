@@ -245,6 +245,7 @@ export function ChatPanel() {
     autoScrollEnabled,
     toggleAutoScroll,
     suspendAutoScroll,
+    resumeAutoScroll,
   } = useActiveScrollTracker({
     scrollRef: messagesScrollRef,
     vlistRef,
@@ -347,6 +348,10 @@ export function ChatPanel() {
     } else {
       await sendMessage();
     }
+    resumeAutoScroll();
+    if (isMobileOrTablet) {
+      inputBarRef.current?.blur();
+    }
   };
 
   const handleFollowUp = async () => {
@@ -383,7 +388,7 @@ export function ChatPanel() {
         {isViewingSubagent && (
           <button
             onClick={handleBackToMain}
-            className="flex items-center gap-1 text-purple-400 hover:text-purple-300 transition-colors"
+            className="flex items-center gap-1 text-purple-600 dark:text-purple-400 hover:text-purple-500 dark:hover:text-purple-300 transition-colors"
           >
             <ArrowLeft className="w-3 h-3" />
             <Bot className="w-3 h-3" />
@@ -405,7 +410,7 @@ export function ChatPanel() {
           {projectFailed && !isViewingSubagent && !isLoading ? (
             <div className="h-full flex items-center justify-center">
               <div className="flex flex-col items-center gap-3 max-w-xs text-center">
-                <AlertTriangle className="w-8 h-8 text-amber-400" />
+                <AlertTriangle className="w-8 h-8 text-amber-600 dark:text-amber-400" />
                 <div className="text-sm text-gray-700 dark:text-gray-300">
                   {t("sessionStartFailed")}
                 </div>
@@ -573,7 +578,7 @@ export function ChatPanel() {
             <button
               onClick={handleSubagentFork}
               className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium
-                bg-indigo-500/15 text-indigo-400 hover:bg-indigo-500/25 hover:text-indigo-300
+                bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/25 hover:text-indigo-500 dark:hover:text-indigo-300
                 border border-indigo-500/20 transition-colors"
               title={t("fork")}
             >
