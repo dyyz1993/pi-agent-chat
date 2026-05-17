@@ -522,6 +522,9 @@ export function setupSubscriptions(
             if (sessions.find((sess) => sess.sessionId === payload.session.sessionId)) {
               return {};
             }
+            if (sessions.find((sess) => sess.sessionPath === payload.session.sessionPath)) {
+              return {};
+            }
             return {
               sessionsByProject: {
                 ...s.sessionsByProject,
