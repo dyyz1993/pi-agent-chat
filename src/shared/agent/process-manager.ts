@@ -1604,11 +1604,27 @@ export class AgentProcessManager {
   async getLatestAgentChange(sessionId: string) {
     const managed = this.clients.get(sessionId);
     if (!managed) return null;
-    return (
-      managed.client as unknown as {
-        send: (cmd: unknown) => Promise<unknown>;
-      }
-    ).send({ type: "get_latest_agent_change", sessionId });
+    try {
+      const response = await (
+        managed.client as unknown as { send: (cmd: unknown) => Promise<unknown> }
+      ).send({ type: "get_latest_agent_change" });
+      const data = (
+        response as {
+          data?: {
+            agentName: string;
+            agentConfig?: Record<string, unknown>;
+            timestamp: string;
+          } | null;
+        }
+      ).data;
+      return data ?? null;
+    } catch (err: unknown) {
+      log.warn("getLatestAgentChange error", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return null;
+    }
   }
 
   async getSettings(sessionId: string, scope?: string): Promise<Record<string, unknown>> {

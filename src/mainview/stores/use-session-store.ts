@@ -18,6 +18,7 @@ import { useTurnStore } from "./use-turn-store";
 import { useChatNavStore } from "./use-chat-nav-store";
 import { useRetryStore } from "./use-retry-store";
 import { useSubagentStore } from "./use-subagent-store";
+import { useAgentStore } from "./use-agent-store";
 import {
   setupSubscriptions,
   cleanupSession,
@@ -1035,14 +1036,36 @@ export const useSessionStore = create<SessionState>()(
                   );
               });
 
-            // agentChangePromise: log timing only (restoration logic removed)
             agentChangePromise
               .then((result: unknown) => {
-                void result; // suppress unused warning
                 perfLog.info("[fetchInit] getLatestAgentChange done", {
                   sessionId,
                   ms: Math.round(performance.now() - t0),
                 });
+                if (
+                  result &&
+                  typeof result === "object" &&
+                  "agentName" in result &&
+                  typeof result.agentName === "string"
+                ) {
+                  const agentName = result.agentName;
+                  log.info("[fetchInit] restoring agent from latest change", {
+                    sessionId,
+                    agentName,
+                    timestamp:
+                      "timestamp" in result && typeof result.timestamp === "string"
+                        ? result.timestamp
+                        : undefined,
+                  });
+                  const { switchAgent } = useAgentStore.getState();
+                  void switchAgent(agentName, sessionId).catch((err: unknown) => {
+                    log.warn("[fetchInit] failed to restore agent", {
+                      sessionId,
+                      agentName,
+                      err: err instanceof Error ? err.message : String(err),
+                    });
+                  });
+                }
               })
               .catch((err: unknown) => {
                 log.warn("agent.getLatestAgentChange failed", {
