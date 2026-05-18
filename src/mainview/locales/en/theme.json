@@ -1,6 +1,9 @@
 {
   "light": "Light",
   "dark": "Dark",
+  "nord": "Nord",
+  "solarized": "Solarized",
+  "warmDark": "Warm Dark",
   "system": "System",
   "toggle": "Theme: {{theme}} (click to toggle)",
   "switchLabel": "Theme:",

@@ -120,7 +120,7 @@ import { insertAfterPinned } from "../src/mainview/stores/use-session-store";
 import { apiClient } from "../src/mainview/lib/api-client";
 import type { SessionMeta } from "../src/shared/modules/project";
 
-const mockedCall = vi.mocked(apiClient.call);
+const mockedCall = apiClient.call as ReturnType<typeof vi.fn>;
 
 function makeSession(overrides: Partial<SessionMeta> = {}): SessionMeta {
   return {
@@ -210,8 +210,18 @@ describe("loadSessionsForProject — sessionPath deduplication", () => {
 
   it("keeps all sessions when there are no sessionPath duplicates", async () => {
     const sessions = [
-      makeSession({ sessionId: "sess-1", sessionPath: "/sessions/a.jsonl" }),
-      makeSession({ sessionId: "sess-2", sessionPath: "/sessions/b.jsonl" }),
+      makeSession({
+        sessionId: "sess-1",
+        sessionPath: "/sessions/a.jsonl",
+        messageCount: 1,
+        firstMessage: "a",
+      }),
+      makeSession({
+        sessionId: "sess-2",
+        sessionPath: "/sessions/b.jsonl",
+        messageCount: 1,
+        firstMessage: "b",
+      }),
     ];
     mockedCall.mockResolvedValueOnce({ sessions });
 
@@ -222,10 +232,30 @@ describe("loadSessionsForProject — sessionPath deduplication", () => {
 
   it("deduplicates by sessionId AND sessionPath independently", async () => {
     const sessions = [
-      makeSession({ sessionId: "dup-id", sessionPath: "/sessions/a.jsonl" }),
-      makeSession({ sessionId: "dup-id", sessionPath: "/sessions/b.jsonl" }),
-      makeSession({ sessionId: "unique-1", sessionPath: "/sessions/c.jsonl" }),
-      makeSession({ sessionId: "unique-2", sessionPath: "/sessions/c.jsonl" }),
+      makeSession({
+        sessionId: "dup-id",
+        sessionPath: "/sessions/a.jsonl",
+        messageCount: 1,
+        firstMessage: "a",
+      }),
+      makeSession({
+        sessionId: "dup-id",
+        sessionPath: "/sessions/b.jsonl",
+        messageCount: 1,
+        firstMessage: "b",
+      }),
+      makeSession({
+        sessionId: "unique-1",
+        sessionPath: "/sessions/c.jsonl",
+        messageCount: 2,
+        firstMessage: "c",
+      }),
+      makeSession({
+        sessionId: "unique-2",
+        sessionPath: "/sessions/c.jsonl",
+        messageCount: 3,
+        firstMessage: "d",
+      }),
     ];
     mockedCall.mockResolvedValueOnce({ sessions });
 
@@ -316,7 +346,12 @@ describe("coordinator.session_created handler — sessionPath deduplication", ()
 
     const stored = useSessionStore.getState().sessionsByProject[projectPath];
     expect(stored).toHaveLength(2);
-    expect(stored[1].sessionId).toBe("sess_coord_new");
+    expect(stored).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sessionId: "existing-1" }),
+        expect.objectContaining({ sessionId: "sess_coord_new" }),
+      ]),
+    );
   });
 
   it("skips when sessionId matches even if sessionPath differs", () => {

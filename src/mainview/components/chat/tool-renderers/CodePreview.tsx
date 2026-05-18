@@ -1,7 +1,7 @@
 import { memo, useMemo } from "react";
 import { Highlight, themes } from "prism-react-renderer";
 import { getLanguage } from "../../../utils/file-utils";
-import { useThemeStore } from "../../../stores/use-theme-store";
+import { useThemeStore, isDarkGroup } from "../../../stores/use-theme-store";
 
 interface CodePreviewProps {
   code: string;
@@ -15,7 +15,7 @@ export const CodePreview = memo(function CodePreview({
   maxHeight = "200px",
 }: CodePreviewProps) {
   const resolvedTheme = useThemeStore((s) => s.resolvedTheme);
-  const prismTheme = resolvedTheme === "dark" ? themes.nightOwl : themes.nightOwlLight;
+  const prismTheme = isDarkGroup(resolvedTheme) ? themes.nightOwl : themes.nightOwlLight;
   const language = useMemo(() => getLanguage(filename), [filename]);
 
   if (!language) {

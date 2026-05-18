@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Maximize2, ZoomIn, ZoomOut } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useMermaidStore } from "../../../stores/use-mermaid-store";
-import { useThemeStore } from "../../../stores/use-theme-store";
+import { useThemeStore, isDarkGroup } from "../../../stores/use-theme-store";
 
 const MERMAID_LANGS = new Set([
   "mermaid",
@@ -90,7 +90,7 @@ export const MermaidBlock = memo(function MermaidBlock({ code, inline = true }: 
     setError(null);
     setSvg(null);
 
-    loadMermaid(resolvedTheme)
+    loadMermaid(isDarkGroup(resolvedTheme) ? "dark" : "light")
       .then((m) => m.render(id, code))
       .then((result) => {
         if (!cancelled) {

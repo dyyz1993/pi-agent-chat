@@ -1,6 +1,6 @@
 import { Moon, Sun, Monitor } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useThemeStore } from "../../stores/use-theme-store";
+import { useThemeStore, THEME_META } from "../../stores/use-theme-store";
 import type { Theme } from "../../stores/use-theme-store";
 
 export function ThemeToggle() {
@@ -9,8 +9,11 @@ export function ThemeToggle() {
   const setTheme = useThemeStore((s) => s.setTheme);
 
   const THEME_OPTIONS: { value: Theme; icon: typeof Moon; label: string }[] = [
-    { value: "light", icon: Sun, label: t("light") },
-    { value: "dark", icon: Moon, label: t("dark") },
+    { value: "light", icon: Sun, label: THEME_META.light.label },
+    { value: "dark", icon: Moon, label: THEME_META.dark.label },
+    { value: "nord", icon: Moon, label: THEME_META.nord.label },
+    { value: "solarized", icon: Sun, label: THEME_META.solarized.label },
+    { value: "warm-dark", icon: Moon, label: THEME_META["warm-dark"].label },
     { value: "system", icon: Monitor, label: t("system") },
   ];
 

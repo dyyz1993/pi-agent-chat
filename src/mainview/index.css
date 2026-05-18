@@ -221,7 +221,7 @@ html.dark body {
   --z-toast: 400;
 }
 
-html.dark {
+html[data-theme="dark"] {
   --color-bg-primary: #0a0c10;
   --color-bg-secondary: #111827;
   --color-bg-tertiary: #1f2937;
@@ -247,13 +247,11 @@ html.dark {
   --color-error: #f87171;
   --color-info: #60a5fa;
 
-  /* Semantic status colors - RGB components for Tailwind opacity support */
   --color-status-success: 74 222 128;
   --color-status-error: 248 113 113;
   --color-status-warning: 251 191 36;
   --color-status-info: 96 165 250;
 
-  /* Semantic category colors - RGB components */
   --color-semantic-agent: 192 132 252;
   --color-semantic-tool: 34 211 238;
   --color-semantic-memory: 45 212 191;
@@ -264,6 +262,142 @@ html.dark {
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+}
+
+html[data-theme="nord"] {
+  --color-bg-primary: #2e3440;
+  --color-bg-secondary: #3b4252;
+  --color-bg-tertiary: #434c5e;
+  --color-bg-elevated: #434c5e;
+  --color-bg-overlay: rgba(0, 0, 0, 0.6);
+
+  --color-text-primary: #eceff4;
+  --color-text-secondary: #d8dee9;
+  --color-text-tertiary: #81a1c1;
+  --color-text-inverse: #2e3440;
+
+  --color-border-primary: #434c5e;
+  --color-border-secondary: #4c566a;
+  --color-border-focus: #88c0d0;
+
+  --color-accent: #88c0d0;
+  --color-accent-hover: #81a1c1;
+  --color-accent-muted: rgba(136, 192, 208, 0.15);
+  --color-accent-text: #88c0d0;
+
+  --color-success: #a3be8c;
+  --color-warning: #ebcb8b;
+  --color-error: #bf616a;
+  --color-info: #81a1c1;
+
+  --color-status-success: 163 190 140;
+  --color-status-error: 191 97 106;
+  --color-status-warning: 235 203 139;
+  --color-status-info: 129 161 193;
+
+  --color-semantic-agent: 180 142 196;
+  --color-semantic-tool: 136 192 208;
+  --color-semantic-memory: 143 188 187;
+  --color-semantic-accent: 136 192 208;
+  --color-semantic-notify: 208 135 112;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+}
+
+html[data-theme="nord"] body {
+  background-color: #2e3440;
+}
+
+html[data-theme="solarized"] {
+  --color-bg-primary: #fdf6e3;
+  --color-bg-secondary: #eee8d5;
+  --color-bg-tertiary: #e0dac6;
+  --color-bg-elevated: #ffffff;
+  --color-bg-overlay: rgba(0, 0, 0, 0.4);
+
+  --color-text-primary: #073642;
+  --color-text-secondary: #586e75;
+  --color-text-tertiary: #839496;
+  --color-text-inverse: #fdf6e3;
+
+  --color-border-primary: #e0dac6;
+  --color-border-secondary: #d0c9b5;
+  --color-border-focus: #268bd2;
+
+  --color-accent: #268bd2;
+  --color-accent-hover: #2aa198;
+  --color-accent-muted: rgba(38, 139, 210, 0.15);
+  --color-accent-text: #268bd2;
+
+  --color-success: #859900;
+  --color-warning: #b58900;
+  --color-error: #dc322f;
+  --color-info: #268bd2;
+
+  --color-status-success: 133 153 0;
+  --color-status-error: 220 50 47;
+  --color-status-warning: 181 137 0;
+  --color-status-info: 38 139 210;
+
+  --color-semantic-agent: 108 113 196;
+  --color-semantic-tool: 42 161 152;
+  --color-semantic-memory: 42 161 152;
+  --color-semantic-accent: 38 139 210;
+  --color-semantic-notify: 203 75 22;
+}
+
+html[data-theme="solarized"] body {
+  background-color: #fdf6e3;
+}
+
+html[data-theme="warm-dark"] {
+  --color-bg-primary: #1a1614;
+  --color-bg-secondary: #252220;
+  --color-bg-tertiary: #302c28;
+  --color-bg-elevated: #302c28;
+  --color-bg-overlay: rgba(0, 0, 0, 0.6);
+
+  --color-text-primary: #e8e0d4;
+  --color-text-secondary: #a89888;
+  --color-text-tertiary: #706050;
+  --color-text-inverse: #1a1614;
+
+  --color-border-primary: #302c28;
+  --color-border-secondary: #3e3832;
+  --color-border-focus: #d4956a;
+
+  --color-accent: #d4956a;
+  --color-accent-hover: #c08050;
+  --color-accent-muted: rgba(212, 149, 106, 0.15);
+  --color-accent-text: #d4956a;
+
+  --color-success: #8cb369;
+  --color-warning: #f2cc8f;
+  --color-error: #e07a5f;
+  --color-info: #81b29a;
+
+  --color-status-success: 140 179 105;
+  --color-status-error: 224 122 95;
+  --color-status-warning: 242 204 143;
+  --color-status-info: 129 178 154;
+
+  --color-semantic-agent: 187 143 206;
+  --color-semantic-tool: 129 178 154;
+  --color-semantic-memory: 129 178 154;
+  --color-semantic-accent: 212 149 106;
+  --color-semantic-notify: 224 122 95;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+}
+
+html[data-theme="warm-dark"] body {
+  background-color: #1a1614;
 }
 
 :root {
@@ -280,7 +414,7 @@ html.dark {
   --diff-highlight-bg: theme("colors.gray.300");
 }
 
-html.dark {
+html[data-theme="dark"] {
   --diff-bg: theme("colors.gray.900");
   --diff-color: theme("colors.gray.200");
   --diff-added-bg: theme("colors.green.950");

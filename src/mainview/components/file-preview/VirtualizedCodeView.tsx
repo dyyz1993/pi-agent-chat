@@ -2,7 +2,7 @@ import { useRef, useMemo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Highlight, themes } from "prism-react-renderer";
 import { getLanguage } from "../../utils/file-utils";
-import { useThemeStore } from "../../stores/use-theme-store";
+import { useThemeStore, isDarkGroup } from "../../stores/use-theme-store";
 
 interface VirtualizedCodeViewProps {
   code: string;
@@ -31,7 +31,7 @@ export function VirtualizedCodeView({ code, filename }: VirtualizedCodeViewProps
 
   const lines = useMemo(() => formattedCode.split("\n"), [formattedCode]);
   const resolvedTheme = useThemeStore((s) => s.resolvedTheme);
-  const prismTheme = resolvedTheme === "dark" ? themes.nightOwl : themes.nightOwlLight;
+  const prismTheme = isDarkGroup(resolvedTheme) ? themes.nightOwl : themes.nightOwlLight;
 
   const avgLineLength = formattedCode.length / Math.max(lines.length, 1);
   const NO_HIGHLIGHT_EXTS = new Set(["lock", "map", "log", "csv"]);

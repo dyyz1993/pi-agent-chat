@@ -1,7 +1,7 @@
 import { useCallback, useEffect, memo, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Highlight, themes } from "prism-react-renderer";
-import { useThemeStore } from "../../stores/use-theme-store";
+import { useThemeStore, isDarkGroup } from "../../stores/use-theme-store";
 import {
   Brain,
   AlertTriangle,
@@ -254,7 +254,7 @@ export const MessageBubble = memo(function MessageBubble({
 
 function StreamingMarkdown({ text }: { text: string }) {
   const resolvedTheme = useThemeStore((s) => s.resolvedTheme);
-  const prismTheme = resolvedTheme === "dark" ? themes.nightOwl : themes.nightOwlLight;
+  const prismTheme = isDarkGroup(resolvedTheme) ? themes.nightOwl : themes.nightOwlLight;
 
   const parts = useMemo(() => {
     const segments: Array<{

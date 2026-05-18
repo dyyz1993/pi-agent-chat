@@ -1,6 +1,9 @@
 {
   "light": "亮色",
   "dark": "暗色",
+  "nord": "Nord",
+  "solarized": "Solarized",
+  "warmDark": "暖暗色",
   "system": "跟随系统",
   "toggle": "主题: {{theme}}（点击切换）",
   "switchLabel": "主题:",

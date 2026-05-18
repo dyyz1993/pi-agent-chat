@@ -1,6 +1,6 @@
 import { memo, useMemo } from "react";
 import ReactDiffViewer, { DiffMethod } from "react-diff-viewer-continued";
-import { useThemeStore } from "../../../stores/use-theme-store";
+import { useThemeStore, isDarkGroup } from "../../../stores/use-theme-store";
 import { useLayoutStore } from "../../../layouts/use-layout-store";
 
 interface InlineDiffViewerProps {
@@ -93,7 +93,7 @@ export const InlineDiffViewer = memo(function InlineDiffViewer({
   splitView = false,
 }: InlineDiffViewerProps) {
   const resolvedTheme = useThemeStore((s) => s.resolvedTheme);
-  const isDark = resolvedTheme === "dark";
+  const isDark = isDarkGroup(resolvedTheme);
   const breakpoint = useLayoutStore((s) => s.breakpoint);
   const isMobile = breakpoint === "mobile";
 

@@ -3,7 +3,7 @@ import { X, Columns2, Rows3 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import ReactDiffViewer, { DiffMethod } from "react-diff-viewer-continued";
 import { useGitStore } from "../../stores/use-git-store";
-import { useThemeStore } from "../../stores/use-theme-store";
+import { useThemeStore, isDarkGroup } from "../../stores/use-theme-store";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 
 /* Module-level constant: avoids re-creating the styles object on every render */
@@ -53,7 +53,7 @@ export function DiffViewerPanel() {
   const clearDiff = useGitStore((s) => s.clearDiff);
   const [splitView, setSplitView] = useState(false);
   const resolvedTheme = useThemeStore((s) => s.resolvedTheme);
-  const isDark = resolvedTheme === "dark";
+  const isDark = isDarkGroup(resolvedTheme);
   const breakpoint = useLayoutStore((s) => s.breakpoint);
   const isMobileOrTablet = breakpoint === "mobile" || breakpoint === "tablet";
   const effectiveSplitView = isMobileOrTablet ? false : splitView;

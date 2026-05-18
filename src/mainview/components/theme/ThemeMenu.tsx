@@ -1,8 +1,16 @@
 import { Moon, Sun, Monitor, Check, Languages } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { useThemeStore } from "../../stores/use-theme-store";
+import { useThemeStore, THEME_META } from "../../stores/use-theme-store";
 import type { Theme } from "../../stores/use-theme-store";
+
+const THEME_DOT_COLORS: Record<Exclude<Theme, "system">, string> = {
+  light: "bg-white border border-gray-300",
+  dark: "bg-gray-900",
+  nord: "bg-[#5e81ac]",
+  solarized: "bg-[#b58900]",
+  "warm-dark": "bg-[#d4956a]",
+};
 
 export function ThemeMenu() {
   const { t } = useTranslation("theme");
@@ -15,8 +23,11 @@ export function ThemeMenu() {
   const ref = useRef<HTMLDivElement>(null);
 
   const THEME_OPTIONS: { value: Theme; icon: typeof Moon; label: string }[] = [
-    { value: "light", icon: Sun, label: t("light") },
-    { value: "dark", icon: Moon, label: t("dark") },
+    { value: "light", icon: Sun, label: THEME_META.light.label },
+    { value: "dark", icon: Moon, label: THEME_META.dark.label },
+    { value: "nord", icon: Moon, label: THEME_META.nord.label },
+    { value: "solarized", icon: Sun, label: THEME_META.solarized.label },
+    { value: "warm-dark", icon: Moon, label: THEME_META["warm-dark"].label },
     { value: "system", icon: Monitor, label: t("system") },
   ];
 
@@ -69,6 +80,10 @@ export function ThemeMenu() {
           {THEME_OPTIONS.map((opt) => {
             const isActive = theme === opt.value;
             const OptIcon = opt.icon;
+            const dot =
+              opt.value !== "system"
+                ? THEME_DOT_COLORS[opt.value as Exclude<Theme, "system">]
+                : null;
             return (
               <button
                 key={opt.value}
@@ -89,6 +104,7 @@ export function ThemeMenu() {
                 )}
                 <OptIcon className="w-3 h-3 shrink-0" />
                 <span>{opt.label}</span>
+                {dot && <span className={`w-2 h-2 rounded-full shrink-0 ml-auto ${dot}`} />}
                 {opt.value === "system" && (
                   <span className="ml-auto text-[10px] text-gray-400 font-mono">
                     {resolvedTheme}

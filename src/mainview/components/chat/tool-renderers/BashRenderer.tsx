@@ -9,7 +9,7 @@ import { useBashStore } from "../../../stores/use-bash-store";
 import { useSettingsStore } from "../../../stores/use-settings-store";
 import { tryFormatAsYaml } from "../../../../shared/lib/json-to-yaml";
 import { apiClient } from "../../../lib/api-client";
-import { useThemeStore } from "../../../stores/use-theme-store";
+import { useThemeStore, isDarkGroup } from "../../../stores/use-theme-store";
 import { AnsiText } from "../primitives/AnsiText";
 import { LogViewer } from "../../bash-panel/BashPanel";
 
@@ -78,7 +78,7 @@ function detectOutputLanguage(text: string): {
 
 function OutputHighlighter({ content, isRunning }: { content: string; isRunning: boolean }) {
   const resolvedTheme = useThemeStore((s) => s.resolvedTheme);
-  const prismTheme = resolvedTheme === "dark" ? themes.nightOwl : themes.nightOwlLight;
+  const prismTheme = isDarkGroup(resolvedTheme) ? themes.nightOwl : themes.nightOwlLight;
 
   // During streaming: use fast AnsiText (no prism overhead)
   if (isRunning || content.length > HIGHLIGHT_MAX_LEN) {

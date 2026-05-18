@@ -1,7 +1,7 @@
 import type { ClassAttributes, HTMLAttributes, ReactNode } from "react";
 import { Highlight, themes } from "prism-react-renderer";
 import { MermaidBlock, isMermaidLang } from "./MermaidBlock";
-import { useThemeStore } from "../../../stores/use-theme-store";
+import { useThemeStore, isDarkGroup } from "../../../stores/use-theme-store";
 import { CopyButton } from "../CopyButton";
 
 interface HastNode {
@@ -41,7 +41,7 @@ function extractTextFromChildren(children: ReactNode): string {
 
 export function MermaidPreBlock({ children, node, ...rest }: PreBlockProps) {
   const resolvedTheme = useThemeStore((s) => s.resolvedTheme);
-  const prismTheme = resolvedTheme === "dark" ? themes.nightOwl : themes.github;
+  const prismTheme = isDarkGroup(resolvedTheme) ? themes.nightOwl : themes.github;
 
   if (node?.children) {
     const codeEl = node.children.find((c) => c.type === "element" && "tagName" in c);
