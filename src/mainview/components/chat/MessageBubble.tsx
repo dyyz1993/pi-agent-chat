@@ -1484,7 +1484,7 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
 
 function Tag({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
-    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-text-tertiary/8 dark:bg-text-tertiary/10 font-mono">
+    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-text-tertiary/10 font-mono">
       <span className={`text-text-tertiary ${color ?? ""}`}>{label}</span>
       <span className="text-text-secondary dark:text-text-tertiary">{value}</span>
     </span>

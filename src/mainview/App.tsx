@@ -259,10 +259,10 @@ function App() {
   if (!ready || restoring || projectLoading) {
     return (
       <ErrorBoundary>
-        <div className="h-screen flex items-center justify-center bg-white dark:bg-gray-950">
+        <div className="h-screen flex items-center justify-center bg-bg-primary">
           <div className="text-center">
             <div className="inline-block w-8 h-8 border-2 border-semantic-accent border-t-transparent rounded-full animate-spin mb-4" />
-            <div className="text-gray-500 dark:text-gray-400 text-sm">
+            <div className="text-text-secondary text-sm">
               {!ready
                 ? t("connectingRpc")
                 : projectLoading

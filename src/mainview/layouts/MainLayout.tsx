@@ -149,7 +149,7 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
   const currentDiff = useGitStore((s) => s.currentDiff);
 
   return (
-    <div className="h-screen bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-white flex flex-col overflow-hidden">
+    <div className="h-screen bg-bg-primary text-text-primary flex flex-col overflow-hidden">
       <ConnectionBanner />
       {/* === ROW 1: Top Tab Bar === */}
       <TabBar onAddProject={onAddProject} />
@@ -159,7 +159,7 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
         {/* ---- Mobile drawer backdrop ---- */}
         {isMobile && (sessionPanel === "visible" || statusPanel === "visible") && (
           <div
-            className="absolute inset-0 bg-black/50 z-10 animate-in fade-in duration-150"
+            className="absolute inset-0 bg-bg-overlay backdrop-blur-[1px] z-10 animate-in fade-in duration-150"
             onClick={handleChatAreaClick}
           />
         )}
@@ -182,7 +182,7 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
             onMouseDown={handleLeftResize}
             onTouchStart={handleLeftResize}
           >
-            <div className="resize-handle-indicator w-0.5 h-8 rounded-full bg-gray-700 transition-all duration-150 mx-auto mt-[50vh] -translate-y-1/2" />
+            <div className="resize-handle-indicator w-0.5 h-8 rounded-full bg-border-secondary/70 transition-all duration-150 mx-auto mt-[50vh] -translate-y-1/2" />
           </div>
         )}
 
@@ -218,7 +218,7 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
             onMouseDown={handleRightResize}
             onTouchStart={handleRightResize}
           >
-            <div className="resize-handle-indicator w-0.5 h-8 rounded-full bg-gray-700 transition-all duration-150 mx-auto mt-[50vh] -translate-y-1/2" />
+            <div className="resize-handle-indicator w-0.5 h-8 rounded-full bg-border-secondary/70 transition-all duration-150 mx-auto mt-[50vh] -translate-y-1/2" />
           </div>
         )}
 

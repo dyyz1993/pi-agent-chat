@@ -379,11 +379,11 @@ export function ChatPanel() {
   };
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden relative bg-bg-elevated dark:bg-surface-code">
+    <div className="flex-1 flex flex-col overflow-hidden relative bg-bg-elevated">
       <MarkdownExpandOverlay />
       <MermaidFullscreen />
       <RollbackOverlay />
-      <div className="flex items-center gap-4 px-4 py-1.5 bg-surface-dim/80 dark:bg-surface-code/80 border-b border-border-secondary text-[11px] text-text-tertiary flex-shrink-0">
+      <div className="flex items-center gap-4 px-4 py-1.5 bg-bg-secondary/90 border-b border-border-primary text-[11px] text-text-tertiary flex-shrink-0">
         <SessionToggleIcon />
         {isViewingSubagent && (
           <button
@@ -479,7 +479,7 @@ export function ChatPanel() {
       {activeSessionId && !isViewingSubagent && <QueueCards sessionId={activeSessionId} />}
 
       <div
-        className="px-3 pt-2 pb-1.5 flex-shrink-0 flex items-stretch gap-1.5 bg-surface-dim dark:bg-surface-code border-t border-border-secondary relative"
+        className="px-3 pt-2 pb-1.5 flex-shrink-0 flex items-stretch gap-1.5 bg-bg-secondary border-t border-border-primary relative"
         style={{ paddingBottom: "calc(0.375rem + env(safe-area-inset-bottom))" }}
       >
         {!isViewingSubagent && (
@@ -547,7 +547,7 @@ export function ChatPanel() {
                       !sessionReady ||
                       hasNoModel
                     }
-                    className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${(inputText.trim() || useAttachmentStore.getState().attachments.length > 0) && sessionReady && !hasNoModel ? (isStreaming ? "bg-status-warning text-white hover:bg-status-warning shadow-sm shadow-status-warning/20" : "bg-semantic-accent text-white hover:bg-semantic-accent shadow-sm shadow-semantic-accent/20") : "bg-surface-dim dark:bg-surface-code text-text-tertiary dark:text-text-secondary cursor-not-allowed"}`}
+                    className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${(inputText.trim() || useAttachmentStore.getState().attachments.length > 0) && sessionReady && !hasNoModel ? (isStreaming ? "bg-status-warning text-white hover:bg-status-warning shadow-sm shadow-status-warning/20" : "bg-semantic-accent text-white hover:bg-semantic-accent shadow-sm shadow-semantic-accent/20") : "bg-surface-dim text-text-tertiary cursor-not-allowed"}`}
                     title={
                       hasNoModel ? t("sendDisabledNoModel") : isStreaming ? t("steer") : t("send")
                     }
@@ -564,9 +564,7 @@ export function ChatPanel() {
         )}
         {isViewingSubagent && (
           <div className="flex-1 flex items-center justify-center gap-3 py-2">
-            <span className="text-[11px] text-text-tertiary dark:text-text-secondary">
-              {t("subagentReadonly")}
-            </span>
+            <span className="text-[11px] text-text-tertiary">{t("subagentReadonly")}</span>
             <button
               onClick={handleSubagentFork}
               className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium
@@ -617,7 +615,7 @@ function SessionToggleIcon() {
           e.stopPropagation();
           toggleSessionCollapse();
         }}
-        className="p-1 rounded transition-colors text-text-tertiary dark:text-text-secondary hover:text-text-primary dark:hover:text-text-secondary"
+        className="p-1 rounded transition-colors text-text-tertiary hover:text-text-primary hover:bg-surface-hover"
         title={t("openSessionPanel")}
       >
         <PanelLeft className="w-3.5 h-3.5" />
@@ -639,7 +637,7 @@ function SessionToggleIcon() {
           showSession();
         }
       }}
-      className={`p-1 rounded transition-colors ${isVisible ? "text-semantic-accent hover:text-semantic-accent" : "text-text-tertiary dark:text-text-secondary hover:text-text-primary dark:hover:text-text-secondary"}`}
+      className={`p-1 rounded transition-colors ${isVisible ? "text-semantic-accent hover:text-semantic-accent bg-semantic-accent/10" : "text-text-tertiary hover:text-text-primary hover:bg-surface-hover"}`}
       title={isVisible ? t("closeSessionPanel") : t("openSessionPanel")}
     >
       <PanelLeft className="w-3.5 h-3.5" />
@@ -668,7 +666,7 @@ function StatusToggleIcon() {
           showStatus();
         }
       }}
-      className={`p-1 rounded transition-colors ${isVisible ? "text-semantic-accent hover:text-semantic-accent" : "text-text-tertiary dark:text-text-secondary hover:text-text-primary dark:hover:text-text-secondary"}`}
+      className={`p-1 rounded transition-colors ${isVisible ? "text-semantic-accent hover:text-semantic-accent bg-semantic-accent/10" : "text-text-tertiary hover:text-text-primary hover:bg-surface-hover"}`}
       title={isVisible ? t("closeStatusPanel") : t("openStatusPanel")}
     >
       <PanelRight className="w-3.5 h-3.5" />

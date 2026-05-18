@@ -130,7 +130,7 @@ const ROLE_CONFIG = {
     color: "text-status-info/80",
     barColor: "border-l-status-info/60",
     bgColor: "bg-status-info/[0.03]",
-    altBarColor: "border-l-status-info/45",
+    altBarColor: "border-l-status-info/40",
     altBgColor: "bg-status-info/[0.02]",
   },
   assistant: {
@@ -138,7 +138,7 @@ const ROLE_CONFIG = {
     color: "text-status-success/70",
     barColor: "border-l-status-success/50",
     bgColor: "bg-status-success/[0.03]",
-    altBarColor: "border-l-status-success/35",
+    altBarColor: "border-l-status-success/30",
     altBgColor: "bg-status-success/[0.02]",
   },
   compactionSummary: {
@@ -146,7 +146,7 @@ const ROLE_CONFIG = {
     color: "text-semantic-tool/70",
     barColor: "border-l-semantic-tool/50",
     bgColor: "bg-semantic-tool/[0.03]",
-    altBarColor: "border-l-semantic-tool/35",
+    altBarColor: "border-l-semantic-tool/30",
     altBgColor: "bg-semantic-tool/[0.02]",
   },
 };
@@ -155,7 +155,7 @@ const ENTRY_DEFAULT = {
   barColor: "border-l-status-warning/50",
   labelColor: "text-status-warning/70",
   bgColor: "bg-status-warning/[0.04]",
-  altBarColor: "border-l-status-warning/35",
+  altBarColor: "border-l-status-warning/30",
   altBgColor: "bg-status-warning/[0.02]",
 };
 

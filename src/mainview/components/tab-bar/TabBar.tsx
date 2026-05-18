@@ -255,14 +255,14 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
   return (
     <div
       data-testid="tab-bar"
-      className="h-9 bg-surface-dim dark:bg-surface-code border-b border-border-secondary flex items-center flex-shrink-0"
+      className="h-9 bg-bg-secondary border-b border-border-primary flex items-center flex-shrink-0"
       style={{
         paddingTop: "env(safe-area-inset-top)",
         height: "calc(2.25rem + env(safe-area-inset-top))",
       }}
     >
       <div
-        className={`flex-1 flex items-center gap-0.5 px-1 min-w-0 ${
+        className={`flex-1 flex items-center gap-1 px-1.5 min-w-0 ${
           dragIndex !== null ? "overflow-x-hidden" : "overflow-x-auto"
         }`}
       >
@@ -305,10 +305,10 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
               onPointerUp={handlePointerUp}
               onPointerCancel={handlePointerCancel}
               onContextMenu={(e) => e.preventDefault()}
-              className={`group flex items-center gap-1.5 px-3 py-1 text-xs rounded-t transition-all duration-150 relative cursor-pointer select-none shrink-0 ${
+              className={`group flex items-center gap-1.5 px-3 py-1 text-[13px] rounded-md transition-all duration-150 relative cursor-pointer select-none shrink-0 ${
                 isActive
-                  ? "bg-bg-elevated dark:bg-surface-code text-text-primary border-t-2 border-t-semantic-accent"
-                  : "text-text-secondary dark:text-text-tertiary hover:text-text-primary dark:hover:text-text-primary hover:bg-surface-hover/50 dark:hover:bg-surface-dim/50"
+                  ? "bg-bg-elevated text-text-primary shadow-sm ring-1 ring-border-primary"
+                  : "text-text-secondary hover:text-text-primary hover:bg-surface-hover/60"
               } ${isPressing ? "scale-[0.97] opacity-90" : ""} ${
                 isDragSource
                   ? "scale-105 shadow-lg ring-2 ring-semantic-accent/50 bg-semantic-accent/10 dark:bg-semantic-accent/5 z-10"
@@ -325,7 +325,7 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
                 onClick={(e) => handleCloseClick(e, tab.id)}
                 onMouseDown={(e) => e.stopPropagation()}
                 onPointerDown={(e) => e.stopPropagation()}
-                className="opacity-100 md:opacity-0 md:group-hover:opacity-100 p-1 rounded hover:bg-surface-hover dark:hover:bg-surface-hover transition-all pointer-events-auto"
+                className="opacity-100 md:opacity-0 md:group-hover:opacity-100 p-1 rounded hover:bg-surface-hover transition-all pointer-events-auto"
                 aria-label="Close tab"
               >
                 <X className="w-3 h-3" />
@@ -338,11 +338,11 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
         })}
       </div>
 
-      <div className="flex items-center gap-0.5 px-2 shrink-0 border-l border-border-secondary h-full">
+      <div className="flex items-center gap-1 px-2 shrink-0 border-l border-border-primary h-full">
         <button
           data-testid="settings-open-btn"
           onClick={() => setSettingsOpen(true)}
-          className="p-1 rounded text-text-tertiary hover:text-text-primary dark:hover:text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-dim transition-colors cursor-pointer"
+          className="p-1.5 rounded-md text-text-tertiary hover:text-text-primary hover:bg-surface-hover transition-colors cursor-pointer"
           title={t("settings")}
           aria-label={t("settings")}
         >
@@ -350,7 +350,7 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
         </button>
         <button
           onClick={onAddProject}
-          className="p-1 rounded text-text-tertiary hover:text-text-primary dark:hover:text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-dim transition-colors cursor-pointer"
+          className="p-1.5 rounded-md text-text-tertiary hover:text-text-primary hover:bg-surface-hover transition-colors cursor-pointer"
           title={t("addProject")}
           aria-label={t("addProject")}
         >
@@ -362,13 +362,13 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
 
       {closeConfirmTab && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-bg-overlay backdrop-blur-sm"
           onClick={(e) => {
             if (e.target === e.currentTarget) setCloseConfirmTab(null);
           }}
         >
           <div
-            className="bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-lg shadow-2xl p-4 min-w-[300px] max-w-[400px]"
+            className="bg-bg-elevated border border-border-primary rounded-lg shadow-2xl p-4 min-w-[300px] max-w-[400px]"
             role="dialog"
             aria-modal="true"
             aria-label={t("closeProjectTitle")}
@@ -385,13 +385,13 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
               {closeConfirmTab.runningSessionIds.length > 0 ? (
                 <>
                   <button
-                    className="px-3 py-1.5 text-xs bg-surface-hover hover:bg-surface-hover dark:hover:bg-surface-hover rounded transition-colors text-text-primary"
+                    className="px-3 py-1.5 text-xs bg-surface-hover hover:bg-bg-tertiary rounded transition-colors text-text-primary"
                     onClick={handleKeepRunning}
                   >
                     {t("closeProjectContinue")}
                   </button>
                   <button
-                    className="px-3 py-1.5 text-xs bg-status-error hover:bg-status-error/80 rounded transition-colors text-white"
+                    className="px-3 py-1.5 text-xs bg-status-error hover:bg-status-error/80 rounded transition-colors text-text-inverse"
                     onClick={handleStopAndClose}
                   >
                     {t("closeProjectStop")}
@@ -400,13 +400,13 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
               ) : (
                 <>
                   <button
-                    className="px-3 py-1.5 text-xs bg-surface-hover hover:bg-surface-hover dark:hover:bg-surface-hover rounded transition-colors text-text-primary"
+                    className="px-3 py-1.5 text-xs bg-surface-hover hover:bg-bg-tertiary rounded transition-colors text-text-primary"
                     onClick={() => setCloseConfirmTab(null)}
                   >
                     {t("cancel", { ns: "common" })}
                   </button>
                   <button
-                    className="px-3 py-1.5 text-xs bg-status-error hover:bg-status-error/80 rounded transition-colors text-white"
+                    className="px-3 py-1.5 text-xs bg-status-error hover:bg-status-error/80 rounded transition-colors text-text-inverse"
                     onClick={handleKeepRunning}
                   >
                     {t("closeProjectClose")}

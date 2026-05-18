@@ -126,15 +126,15 @@ export function StatusPanel() {
 
   return (
     <>
-      <div className="py-1">
-        <div className="flex items-center justify-between px-2.5 py-1 border-b border-border-secondary dark:border-surface-code/50">
+      <div className="px-1.5 py-1.5 space-y-1">
+        <div className="flex items-center justify-between px-2 py-1">
           <span className="text-[10px] font-medium text-text-tertiary uppercase tracking-wider">
             {t("status")}
           </span>
           <button
             onClick={handleRefresh}
             disabled={refreshing || !activeSessionId}
-            className="p-0.5 rounded hover:bg-surface-hover/50 dark:hover:bg-surface-code/30 transition-colors disabled:opacity-30"
+            className="p-1 rounded-md hover:bg-surface-hover/60 transition-colors disabled:opacity-30"
             title={t("refreshResources")}
           >
             <RotateCw
@@ -145,13 +145,10 @@ export function StatusPanel() {
         {SECTIONS.map(({ id, label, icon: Icon }) => {
           const collapsed = collapsedSections.has(id);
           return (
-            <div
-              key={id}
-              className="border-b border-border-secondary dark:border-surface-code/50 last:border-b-0"
-            >
+            <div key={id} className="rounded-md overflow-hidden">
               <button
                 onClick={() => toggleSection(id)}
-                className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium text-text-secondary hover:bg-surface-hover/50 dark:hover:bg-surface-code/30 transition-colors"
+                className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium text-text-secondary hover:bg-surface-hover/60 transition-colors rounded-md"
               >
                 {collapsed ? (
                   <ChevronRight className="w-3 h-3 shrink-0" />
@@ -162,7 +159,7 @@ export function StatusPanel() {
                 <span>{label}</span>
               </button>
               {!collapsed && (
-                <div className="px-2.5 pb-1.5 text-[10px] text-text-tertiary">
+                <div className="px-2.5 pb-2 text-[10px] text-text-tertiary">
                   {id === "yolo" && (
                     <button
                       onClick={toggleYolo}
@@ -178,7 +175,7 @@ export function StatusPanel() {
                           {todos.map((todo) => (
                             <div
                               key={todo.id}
-                              className={`flex items-center gap-1.5 py-0.5 px-1 rounded bg-surface-hover/50 dark:hover:bg-surface-code/40 transition-colors${todo.deleted ? " opacity-40" : ""}`}
+                              className={`flex items-center gap-1.5 py-0.5 px-1 rounded bg-surface-hover/25 hover:bg-surface-hover/60 transition-colors${todo.deleted ? " opacity-40" : ""}`}
                             >
                               {todo.deleted ? (
                                 <Trash2 className="w-3 h-3 shrink-0 text-status-error" />
@@ -320,7 +317,7 @@ export function StatusPanel() {
                                 if (activeSessionId && !activeSubId)
                                   useLspStore.getState().setMode(activeSessionId, m);
                               }}
-                              className={`px-1.5 py-0.5 rounded text-[9px] ${lspData?.mode === m ? "bg-status-info/30 text-status-info" : "bg-surface-hover dark:bg-surface-code text-text-tertiary hover:bg-surface-hover/50 dark:hover:bg-surface-hover/50"}`}
+                              className={`px-1.5 py-0.5 rounded text-[9px] ${lspData?.mode === m ? "bg-status-info/30 text-status-info" : "bg-surface-hover/30 text-text-tertiary hover:bg-surface-hover/60"}`}
                             >
                               {m === "agent_end"
                                 ? t("lspOnEnd")
@@ -357,7 +354,7 @@ export function StatusPanel() {
                           return (
                             <div key={p.path}>
                               <div
-                                className="flex items-center gap-1 py-0.5 px-1 rounded bg-surface-hover/50 dark:hover:bg-surface-code/40 transition-colors cursor-pointer group"
+                                className="flex items-center gap-1 py-0.5 px-1 rounded bg-surface-hover/25 hover:bg-surface-hover/60 transition-colors cursor-pointer group"
                                 onClick={() => togglePluginExpanded(p.path)}
                               >
                                 <span
@@ -390,7 +387,7 @@ export function StatusPanel() {
                                 </span>
                               </div>
                               {isExpanded && (
-                                <div className="ml-4 pl-2 border-l border-border-secondary dark:border-surface-code space-y-1 pt-1 text-[10px]">
+                                <div className="ml-4 pl-2 border-l border-border-primary/70 space-y-1 pt-1 text-[10px]">
                                   <div className="text-text-tertiary break-all">
                                     <span className="text-text-tertiary">{t("pathLabel")}</span>{" "}
                                     {p.path}
@@ -453,7 +450,7 @@ export function StatusPanel() {
                           return (
                             <div key={sk.filePath}>
                               <div
-                                className="flex items-center gap-1 py-0.5 px-1 rounded bg-surface-hover/50 dark:hover:bg-surface-code/40 transition-colors cursor-pointer group"
+                                className="flex items-center gap-1 py-0.5 px-1 rounded bg-surface-hover/25 hover:bg-surface-hover/60 transition-colors cursor-pointer group"
                                 onClick={() => toggleSkillExpanded(sk.name)}
                               >
                                 <span
@@ -472,7 +469,7 @@ export function StatusPanel() {
                                     e.stopPropagation();
                                     toggleSkillEnabled(sk.name);
                                   }}
-                                  className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-surface-hover/50 dark:hover:bg-surface-hover/50 rounded transition-opacity"
+                                  className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-surface-hover/60 rounded transition-opacity"
                                   title={sk.enabled ? t("disableSkill") : t("enableSkill")}
                                 >
                                   {sk.enabled ? (
@@ -483,7 +480,7 @@ export function StatusPanel() {
                                 </button>
                               </div>
                               {isExpanded && (
-                                <div className="ml-4 pl-2 border-l border-border-secondary dark:border-surface-code space-y-1 pt-1 text-[10px]">
+                                <div className="ml-4 pl-2 border-l border-border-primary/70 space-y-1 pt-1 text-[10px]">
                                   <div className="text-text-tertiary break-all">
                                     {sk.description || t("noDescription")}
                                   </div>
@@ -579,7 +576,7 @@ function MCPToolsSection() {
         return (
           <div key={srv.name} className={isDisabled ? "opacity-50" : ""}>
             <div
-              className="flex items-center gap-1 py-0.5 px-1 rounded bg-surface-hover/50 dark:hover:bg-surface-code/40 transition-colors cursor-pointer group"
+              className="flex items-center gap-1 py-0.5 px-1 rounded bg-surface-hover/25 hover:bg-surface-hover/60 transition-colors cursor-pointer group"
               onClick={() => toggleMcpExpanded(srv.name)}
             >
               <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDot}`} />
@@ -625,14 +622,14 @@ function MCPToolsSection() {
                   }
                 }}
                 disabled={isDisabled || srv.status !== "connected"}
-                className={`opacity-0 group-hover:opacity-100 p-0.5 rounded transition-opacity shrink-0 ${isDisabled || srv.status !== "connected" ? "text-text-secondary cursor-not-allowed" : "text-text-tertiary hover:text-text-secondary hover:bg-surface-hover/50 dark:hover:bg-surface-hover/50 cursor-pointer"}`}
+                className={`opacity-0 group-hover:opacity-100 p-0.5 rounded transition-opacity shrink-0 ${isDisabled || srv.status !== "connected" ? "text-text-secondary cursor-not-allowed" : "text-text-tertiary hover:text-text-secondary hover:bg-surface-hover/60 cursor-pointer"}`}
                 title={t("restartMcpServer")}
               >
                 <RotateCw className={`w-3 h-3 ${restarting === srv.name ? "animate-spin" : ""}`} />
               </button>
             </div>
             {isExpanded && (
-              <div className="ml-4 pl-2 border-l border-border-secondary dark:border-surface-code space-y-1 pt-1 text-[10px]">
+              <div className="ml-4 pl-2 border-l border-border-primary/70 space-y-1 pt-1 text-[10px]">
                 {srv.error && <div className="text-status-error/80 break-all">{srv.error}</div>}
                 {srv.tools.length === 0 ? (
                   <div className="text-text-tertiary">{t("noMcpTools")}</div>

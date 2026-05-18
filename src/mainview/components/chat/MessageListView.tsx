@@ -143,7 +143,7 @@ export const MessageListView = memo(function MessageListView({
       }}
       onMouseEnter={(e) => {
         (e.currentTarget as HTMLElement).style.scrollbarColor =
-          "rgba(55, 65, 81, 0.12) transparent";
+          "color-mix(in srgb, var(--color-text-tertiary) 28%, transparent) transparent";
       }}
       onMouseLeave={(e) => {
         (e.currentTarget as HTMLElement).style.scrollbarColor = "transparent transparent";
