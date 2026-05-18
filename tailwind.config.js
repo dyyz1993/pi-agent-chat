@@ -5,27 +5,57 @@ export default {
 	theme: {
 		extend: {
 			colors: {
-				gray: {
-					850: "#1f2937",
-					950: "#0a0c10",
+				/* Design token colors — resolve to CSS vars that auto-adapt via theme */
+				bg: {
+					primary: "var(--color-bg-primary)",
+					secondary: "var(--color-bg-secondary)",
+					tertiary: "var(--color-bg-tertiary)",
+					elevated: "var(--color-bg-elevated)",
+					overlay: "var(--color-bg-overlay)",
 				},
+				text: {
+					primary: "var(--color-text-primary)",
+					secondary: "var(--color-text-secondary)",
+					tertiary: "var(--color-text-tertiary)",
+					inverse: "var(--color-text-inverse)",
+				},
+				border: {
+					primary: "var(--color-border-primary)",
+					secondary: "var(--color-border-secondary)",
+					focus: "var(--color-border-focus)",
+					accent: "var(--color-accent)",
+				},
+				accent: {
+					default: "var(--color-accent)",
+					hover: "var(--color-accent-hover)",
+					muted: "var(--color-accent-muted)",
+					text: "var(--color-accent-text)",
+				},
+				/* Semantic status colors (RGB format for opacity support) */
 				status: {
 					success: "rgb(var(--color-status-success) / <alpha-value>)",
 					error: "rgb(var(--color-status-error) / <alpha-value>)",
 					warning: "rgb(var(--color-status-warning) / <alpha-value>)",
 					info: "rgb(var(--color-status-info) / <alpha-value>)",
 				},
-					surface: {
-					code: "rgb(var(--surface-code) / <alpha-value>)",
-					hover: "rgb(var(--surface-hover) / <alpha-value>)",
-					dim: "rgb(var(--surface-dim) / <alpha-value>)",
-				},
+				/* Semantic category colors (RGB format for opacity support) */
 				semantic: {
 					agent: "rgb(var(--color-semantic-agent) / <alpha-value>)",
 					tool: "rgb(var(--color-semantic-tool) / <alpha-value>)",
 					memory: "rgb(var(--color-semantic-memory) / <alpha-value>)",
 					accent: "rgb(var(--color-semantic-accent) / <alpha-value>)",
 					notify: "rgb(var(--color-semantic-notify) / <alpha-value>)",
+				},
+				/* Surface colors (RGB format for opacity support) */
+				surface: {
+					code: "rgb(var(--surface-code) / <alpha-value>)",
+					hover: "rgb(var(--surface-hover) / <alpha-value>)",
+					dim: "rgb(var(--surface-dim) / <alpha-value>)",
+				},
+				/* Extended gray scale */
+				gray: {
+					850: "#1f2937",
+					950: "#0a0c10",
 				},
 			},
 			spacing: {

@@ -24,22 +24,18 @@ export const UrlCard = memo(function UrlCard({ details }: { details: PreviewDeta
 
   if (!showIframe) {
     return (
-      <div className="rounded-lg overflow-hidden border border-border-secondary dark:border-border-secondary/40 bg-bg-elevated dark:bg-surface-code/60">
-        <div className="px-3 py-1.5 flex items-center gap-2 text-xs border-b border-border-secondary dark:border-border-secondary/30">
-          <Globe className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400 shrink-0" />
-          <span className="text-text-primary dark:text-text-secondary truncate min-w-0">
-            {details.title ?? src}
-          </span>
+      <div className="rounded-lg overflow-hidden border border-border-secondary/40 bg-bg-elevated bg-surface-code/60">
+        <div className="px-3 py-1.5 flex items-center gap-2 text-xs border-b border-border-secondary/30">
+          <Globe className="w-3.5 h-3.5 text-status-info shrink-0" />
+          <span className="text-text-primary truncate min-w-0">{details.title ?? src}</span>
         </div>
         <button
           onClick={() => setShowIframe(true)}
-          className="w-full px-3 py-8 flex flex-col items-center gap-2 text-xs text-text-tertiary dark:text-text-tertiary hover:text-text-primary dark:hover:text-text-secondary hover:bg-surface-dim dark:hover:bg-surface-dim/40 transition-colors"
+          className="w-full px-3 py-8 flex flex-col items-center gap-2 text-xs text-text-tertiary hover:text-text-primary hover:bg-surface-dim transition-colors"
         >
-          <Globe className="w-6 h-6 text-blue-400/60 dark:text-blue-400/60" />
+          <Globe className="w-6 h-6 text-status-info/60" />
           <span>{t("clickToLoadPreview")}</span>
-          <span className="text-text-tertiary dark:text-text-secondary font-mono text-[10px]">
-            {src}
-          </span>
+          <span className="text-text-tertiary font-mono text-[10px]">{src}</span>
         </button>
       </div>
     );
