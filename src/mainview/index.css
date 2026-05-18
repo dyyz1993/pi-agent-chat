@@ -400,6 +400,145 @@ html[data-theme="warm-dark"] body {
   background-color: #1a1614;
 }
 
+/* Rosé Pine — warm pinkish dark, inspired by Rosé Pine */
+html[data-theme="rose"] {
+  --color-bg-primary: #191724;
+  --color-bg-secondary: #1f1d2e;
+  --color-bg-tertiary: #26233a;
+  --color-bg-elevated: #26233a;
+  --color-bg-overlay: rgba(0, 0, 0, 0.6);
+
+  --color-text-primary: #e0def4;
+  --color-text-secondary: #908caa;
+  --color-text-tertiary: #6e6a86;
+  --color-text-inverse: #191724;
+
+  --color-border-primary: #26233a;
+  --color-border-secondary: #403d52;
+  --color-border-focus: #c4a7e7;
+
+  --color-accent: #c4a7e7;
+  --color-accent-hover: #ebbcba;
+  --color-accent-muted: rgba(196, 167, 231, 0.15);
+  --color-accent-text: #c4a7e7;
+
+  --color-success: #9ccfd8;
+  --color-warning: #f6c177;
+  --color-error: #eb6f92;
+  --color-info: #9ccfd8;
+
+  --color-status-success: 156 207 216;
+  --color-status-error: 235 111 146;
+  --color-status-warning: 246 193 119;
+  --color-status-info: 156 207 216;
+
+  --color-semantic-agent: 196 167 231;
+  --color-semantic-tool: 156 207 216;
+  --color-semantic-memory: 49 116 143;
+  --color-semantic-accent: 196 167 231;
+  --color-semantic-notify: 235 111 146;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+}
+
+html[data-theme="rose"] body {
+  background-color: #191724;
+}
+
+/* Latte — warm creamy light, inspired by Catppuccin Latte */
+html[data-theme="latte"] {
+  --color-bg-primary: #eff1f5;
+  --color-bg-secondary: #e6e9ef;
+  --color-bg-tertiary: #ccd0da;
+  --color-bg-elevated: #ffffff;
+  --color-bg-overlay: rgba(0, 0, 0, 0.4);
+
+  --color-text-primary: #4c4f69;
+  --color-text-secondary: #5c5f77;
+  --color-text-tertiary: #8c8fa1;
+  --color-text-inverse: #eff1f5;
+
+  --color-border-primary: #ccd0da;
+  --color-border-secondary: #bcc0cc;
+  --color-border-focus: #7287fd;
+
+  --color-accent: #7287fd;
+  --color-accent-hover: #8839ef;
+  --color-accent-muted: rgba(114, 135, 253, 0.15);
+  --color-accent-text: #7287fd;
+
+  --color-success: #40a02b;
+  --color-warning: #df8e1d;
+  --color-error: #d20f39;
+  --color-info: #1e66f5;
+
+  --color-status-success: 64 160 43;
+  --color-status-error: 210 15 57;
+  --color-status-warning: 223 142 29;
+  --color-status-info: 30 102 245;
+
+  --color-semantic-agent: 136 57 239;
+  --color-semantic-tool: 23 146 153;
+  --color-semantic-memory: 23 146 153;
+  --color-semantic-accent: 114 135 253;
+  --color-semantic-notify: 253 126 20;
+}
+
+html[data-theme="latte"] body {
+  background-color: #eff1f5;
+}
+
+/* Sunset — warm amber/copper dark */
+html[data-theme="sunset"] {
+  --color-bg-primary: #1c1210;
+  --color-bg-secondary: #2a1e1a;
+  --color-bg-tertiary: #3a2c24;
+  --color-bg-elevated: #3a2c24;
+  --color-bg-overlay: rgba(0, 0, 0, 0.6);
+
+  --color-text-primary: #f5e6d3;
+  --color-text-secondary: #c4a882;
+  --color-text-tertiary: #8a6e50;
+  --color-text-inverse: #1c1210;
+
+  --color-border-primary: #3a2c24;
+  --color-border-secondary: #4d3c30;
+  --color-border-focus: #e8984a;
+
+  --color-accent: #e8984a;
+  --color-accent-hover: #d48040;
+  --color-accent-muted: rgba(232, 152, 74, 0.15);
+  --color-accent-text: #e8984a;
+
+  --color-success: #8cc269;
+  --color-warning: #f0c040;
+  --color-error: #e85d4a;
+  --color-info: #6ab0de;
+
+  --color-status-success: 140 194 105;
+  --color-status-error: 232 93 74;
+  --color-status-warning: 240 192 64;
+  --color-status-info: 106 176 222;
+
+  --color-semantic-agent: 200 140 180;
+  --color-semantic-tool: 106 176 222;
+  --color-semantic-memory: 106 176 222;
+  --color-semantic-accent: 232 152 74;
+  --color-semantic-notify: 232 93 74;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+}
+
+html[data-theme="sunset"] body {
+  background-color: #1c1210;
+}
+
 :root {
   --diff-bg: theme("colors.gray.100");
   --diff-color: theme("colors.gray.800");

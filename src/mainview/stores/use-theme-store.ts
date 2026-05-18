@@ -2,7 +2,16 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import i18n from "../lib/i18n";
 
-export type Theme = "light" | "dark" | "nord" | "solarized" | "warm-dark" | "system";
+export type Theme =
+  | "light"
+  | "dark"
+  | "nord"
+  | "solarized"
+  | "warm-dark"
+  | "rose"
+  | "latte"
+  | "sunset"
+  | "system";
 
 export const THEME_META: Record<
   Exclude<Theme, "system">,
@@ -13,6 +22,9 @@ export const THEME_META: Record<
   nord: { label: "Nord", group: "dark" },
   solarized: { label: "Solarized", group: "light" },
   "warm-dark": { label: "Warm Dark", group: "dark" },
+  rose: { label: "Rosé Pine", group: "dark" },
+  latte: { label: "Latte", group: "light" },
+  sunset: { label: "Sunset", group: "dark" },
 };
 
 export function isDarkGroup(resolved: Exclude<Theme, "system">): boolean {

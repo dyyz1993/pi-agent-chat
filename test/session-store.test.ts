@@ -79,16 +79,17 @@ import { useSessionStore } from "../src/mainview/stores/use-session-store";
 import { apiClient } from "../src/mainview/lib/api-client";
 import type { SessionMeta, ProjectTab } from "../src/mainview/types";
 
-const mockedCall = vi.mocked(apiClient.call);
+const mockedCall = apiClient.call as unknown as ReturnType<typeof vi.fn>;
 
 const TAB_A: ProjectTab = { id: "tab-a", name: "Project A", path: "/project-a" };
 const TAB_B: ProjectTab = { id: "tab-b", name: "Project B", path: "/project-b" };
 
 function makeSession(overrides: Partial<SessionMeta> = {}): SessionMeta {
+  const sid = overrides.sessionId ?? "sess-1";
   return {
-    sessionId: "sess-1",
+    sessionId: sid,
     name: "",
-    sessionPath: "/sessions/sess-1",
+    sessionPath: `/sessions/${sid}`,
     projectPath: "/project-a",
     parentSessionPath: null,
     messageCount: 0,

@@ -10,6 +10,9 @@ const THEME_DOT_COLORS: Record<Exclude<Theme, "system">, string> = {
   nord: "bg-[#5e81ac]",
   solarized: "bg-[#b58900]",
   "warm-dark": "bg-[#d4956a]",
+  rose: "bg-[#c4a7e7]",
+  latte: "bg-[#dd7878]",
+  sunset: "bg-[#e8984a]",
 };
 
 export function ThemeMenu() {
@@ -28,6 +31,9 @@ export function ThemeMenu() {
     { value: "nord", icon: Moon, label: THEME_META.nord.label },
     { value: "solarized", icon: Sun, label: THEME_META.solarized.label },
     { value: "warm-dark", icon: Moon, label: THEME_META["warm-dark"].label },
+    { value: "rose", icon: Moon, label: THEME_META.rose.label },
+    { value: "latte", icon: Sun, label: THEME_META.latte.label },
+    { value: "sunset", icon: Moon, label: THEME_META.sunset.label },
     { value: "system", icon: Monitor, label: t("system") },
   ];
 

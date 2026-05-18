@@ -14,6 +14,9 @@ export function ThemeToggle() {
     { value: "nord", icon: Moon, label: THEME_META.nord.label },
     { value: "solarized", icon: Sun, label: THEME_META.solarized.label },
     { value: "warm-dark", icon: Moon, label: THEME_META["warm-dark"].label },
+    { value: "rose", icon: Moon, label: THEME_META.rose.label },
+    { value: "latte", icon: Sun, label: THEME_META.latte.label },
+    { value: "sunset", icon: Moon, label: THEME_META.sunset.label },
     { value: "system", icon: Monitor, label: t("system") },
   ];
 
