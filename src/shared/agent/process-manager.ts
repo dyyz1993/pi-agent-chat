@@ -228,15 +228,40 @@ export class AgentProcessManager {
   private parentChildMap = new Map<string, Set<string>>();
   private delegateReplyCount = new Map<string, number>();
   private delegateCreatedAt = new Map<string, number>();
+  private syncDelegateResolvers = new Map<
+    string,
+    {
+      resolve: (result: {
+        sessionId: string;
+        status: string;
+        exitCode: number;
+        finalText: string;
+        error?: string;
+      }) => void;
+      timeout: ReturnType<typeof setTimeout>;
+      parentSessionId: string;
+    }
+  >();
+  private subagentSyncChildren = new Set<string>();
+  private syncDelegateLastText = new Map<string, string>();
 
   private async _drainPendingDelegates(): Promise<void> {
     while (this._pendingDelegateRequests.length > 0) {
       const { sessionId, msg, resolve } = this._pendingDelegateRequests.shift()!;
       try {
-        const delegateResult = await this.handleCoordinatorDelegate(
-          sessionId,
-          msg as Extract<CoordinatorMethodCall, { __call: "session_delegate" }>,
-        );
+        const call = msg as CoordinatorMethodCall;
+        let delegateResult: unknown;
+        if (call.__call === "session_delegate_sync") {
+          delegateResult = await this.handleCoordinatorDelegateSync(
+            sessionId,
+            call as Extract<CoordinatorMethodCall, { __call: "session_delegate_sync" }>,
+          );
+        } else {
+          delegateResult = await this.handleCoordinatorDelegate(
+            sessionId,
+            call as Extract<CoordinatorMethodCall, { __call: "session_delegate" }>,
+          );
+        }
         resolve(delegateResult);
       } catch (err: unknown) {
         resolve({ error: err instanceof Error ? err.message : String(err) });
@@ -612,6 +637,20 @@ export class AgentProcessManager {
 
     this.delegateReplyCount.delete(sessionId);
     this.delegateCreatedAt.delete(sessionId);
+
+    const syncResolver = this.syncDelegateResolvers.get(sessionId);
+    if (syncResolver) {
+      clearTimeout(syncResolver.timeout);
+      this.syncDelegateResolvers.delete(sessionId);
+      this.subagentSyncChildren.delete(sessionId);
+      this.syncDelegateLastText.delete(sessionId);
+      syncResolver.resolve({
+        sessionId,
+        status: "aborted",
+        exitCode: 1,
+        finalText: "(stopped)",
+      });
+    }
 
     managed.unsubscribe();
     managed.client.stop().catch((err: unknown) => {
@@ -2036,10 +2075,40 @@ export class AgentProcessManager {
       managed.info.status = "idle";
       managed.info.holdEvents = [];
       this.broadcastSessionStatus(sessionId, "idle");
+
+      const resolver = this.syncDelegateResolvers.get(sessionId);
+      if (resolver) {
+        clearTimeout(resolver.timeout);
+        this.syncDelegateResolvers.delete(sessionId);
+        this.subagentSyncChildren.delete(sessionId);
+        const finalText = this.syncDelegateLastText.get(sessionId) ?? "(completed)";
+        this.syncDelegateLastText.delete(sessionId);
+        resolver.resolve({
+          sessionId,
+          status: "completed",
+          exitCode: 0,
+          finalText: finalText || "(completed)",
+        });
+      }
     }
 
     if (event.type === "message_end") {
       managed.info.holdEvents = [];
+      if (this.subagentSyncChildren.has(sessionId)) {
+        const msgEvent = event as {
+          type: "message_end";
+          message: { content?: Array<{ type: string; text?: string }> };
+        };
+        const msg = msgEvent.message;
+        if (Array.isArray(msg?.content)) {
+          const text = msg.content
+            .filter((c) => c.type === "text")
+            .map((c) => c.text ?? "")
+            .join("")
+            .slice(0, 2000);
+          if (text) this.syncDelegateLastText.set(sessionId, text);
+        }
+      }
     }
 
     if (event.type === "message_update") {
@@ -2068,6 +2137,20 @@ export class AgentProcessManager {
           err: err instanceof Error ? err.message : String(err),
         });
       });
+
+      if (this.subagentSyncChildren.has(sessionId) && event.type !== "channel_data") {
+        const parentManaged = this.clients.get(parentId);
+        this.broadcastEvent(
+          "subagent.event",
+          {
+            parentSessionId: parentId,
+            parentSessionPath: parentManaged?.info.sessionPath ?? "",
+            subSessionId: sessionId,
+            event: sanitized,
+          },
+          { parentSessionId: parentId },
+        ).catch(() => {});
+      }
     }
 
     this.emitAgentEvent(sessionId, sanitized);
@@ -2316,6 +2399,18 @@ export class AgentProcessManager {
         case "session_delegate_send":
           result = await this.handleCoordinatorDelegateSend(msg);
           break;
+        case "session_delegate_sync":
+          if (this._startInProgress) {
+            log.info("[coordinator] session_delegate_sync queued (start in progress)", {
+              sessionId,
+            });
+            result = await new Promise<unknown>((resolve) => {
+              this._pendingDelegateRequests.push({ sessionId, msg, resolve });
+            });
+          } else {
+            result = await this.handleCoordinatorDelegateSync(sessionId, msg);
+          }
+          break;
         case "session_delegate_status":
           result = await this.handleCoordinatorDelegateStatus(msg);
           break;
@@ -2478,6 +2573,113 @@ export class AgentProcessManager {
     return { sessionId: newSessionId, status: result.status };
   }
 
+  private async handleCoordinatorDelegateSync(
+    parentSessionId: string,
+    msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_sync" }>,
+  ): Promise<{
+    sessionId: string;
+    status: string;
+    exitCode: number;
+    finalText: string;
+    error?: string;
+  }> {
+    const { task, title, agent, timeoutMs = 300000 } = msg;
+    const parent = this.clients.get(parentSessionId);
+    if (!parent) throw new Error("Parent session not found");
+
+    const projectPath = parent.info.projectPath;
+    const newSessionId = `sess_sub_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const sessionDir = path.dirname(parent.info.sessionPath);
+    const sessionPath = path.join(sessionDir, `${newSessionId}.jsonl`);
+
+    await this.start(newSessionId, projectPath, sessionPath);
+
+    this.delegateCreatedAt.set(newSessionId, Date.now());
+    this.delegateReplyCount.set(newSessionId, 0);
+
+    let children = this.parentChildMap.get(parentSessionId);
+    if (!children) {
+      children = new Set<string>();
+      this.parentChildMap.set(parentSessionId, children);
+    }
+    children.add(newSessionId);
+
+    const rawTitle = title ?? task.slice(0, 60);
+    const sessionTitle = `子代理: ${rawTitle}`;
+    await this.setSessionName(newSessionId, sessionTitle);
+
+    const delegatePrompt = [
+      `[系统提示] 你是一个子代理任务会话。`,
+      agent ? `**Agent 角色:** ${agent}` : "",
+      `**任务:** ${rawTitle}`,
+      ``,
+      `要求：`,
+      `1. 专注于完成委派给你的任务`,
+      `2. 执行完毕后，明确总结你的工作成果`,
+      `3. 如果遇到问题无法继续，说明原因`,
+      ``,
+      `---`,
+      ``,
+      task,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    this.subagentSyncChildren.add(newSessionId);
+
+    const syncPromise = new Promise<{
+      sessionId: string;
+      status: string;
+      exitCode: number;
+      finalText: string;
+      error?: string;
+    }>((resolve) => {
+      const timeout = setTimeout(() => {
+        this.syncDelegateResolvers.delete(newSessionId);
+        this.subagentSyncChildren.delete(newSessionId);
+        this.syncDelegateLastText.delete(newSessionId);
+        resolve({
+          sessionId: newSessionId,
+          status: "timeout",
+          exitCode: 1,
+          finalText: "(timed out)",
+        });
+      }, timeoutMs);
+
+      this.syncDelegateResolvers.set(newSessionId, {
+        resolve,
+        timeout,
+        parentSessionId,
+      });
+    });
+
+    this.send(newSessionId, delegatePrompt);
+
+    this.broadcastEvent(
+      "coordinator.session_created",
+      {
+        parentSessionId,
+        session: {
+          sessionId: newSessionId,
+          name: sessionTitle,
+          sessionPath,
+          projectPath,
+          parentSessionPath: parent.info.sessionPath,
+          messageCount: 0,
+          firstMessage: task,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          status: "running" as const,
+        },
+      },
+      { parentSessionId },
+    ).catch(() => {});
+
+    const syncResult = await syncPromise;
+
+    return syncResult;
+  }
+
   private async handleCoordinatorDelegateSend(
     msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_send" }>,
   ): Promise<{ delivered: boolean; targetStatus: "active" | "started" | "not_found" }> {
@@ -2535,7 +2737,9 @@ export class AgentProcessManager {
       `</delegate-reply>`,
     ].join("\n");
 
-    if (target.info.status === "streaming") {
+    if (msg.mode === "steer") {
+      this.steer(targetSessionId, wrappedMessage);
+    } else if (msg.mode === "followUp" || target.info.status === "streaming") {
       this.followUp(targetSessionId, wrappedMessage);
     } else {
       this.send(targetSessionId, wrappedMessage);

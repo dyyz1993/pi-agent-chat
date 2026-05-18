@@ -17,7 +17,7 @@ import { createLogger } from "../../shared/lib/logger";
 
 const log = createLogger("subagent");
 
-const subToolCallNameMap: Record<string, string> = {};
+const subToolCallNameMapBySubId: Record<string, Record<string, string>> = {};
 
 interface SubagentState {
   subsessionsByParent: Record<string, SubagentSessionInfo[]>;
@@ -214,6 +214,8 @@ export const useSubagentStore = create<SubagentState>()((set, get) => ({
     apiClient.call("subagent.delete", { parentSessionPath, subSessionId }).catch((err) => {
       log.warn("subagent.delete failed", { err: err instanceof Error ? err.message : String(err) });
     });
+
+    delete subToolCallNameMapBySubId[subSessionId];
   },
 }));
 
@@ -287,7 +289,11 @@ export function handleSubagentEvent(subId: string, event: SubagentEvent, parentS
 
   if (event.type === "message_start") {
     if (event.message) {
-      const msg = messageToChatMessage(event.message as Message, undefined, subToolCallNameMap);
+      const msg = messageToChatMessage(
+        event.message as Message,
+        undefined,
+        subToolCallNameMapBySubId[subId],
+      );
       if (msg) {
         store.setSubMessages(subId, [...existing, msg]);
       }
@@ -393,7 +399,11 @@ export function handleSubagentEvent(subId: string, event: SubagentEvent, parentS
     }
   } else if (event.type === "turn_end") {
     if (event.message) {
-      const msg = messageToChatMessage(event.message as Message, undefined, subToolCallNameMap);
+      const msg = messageToChatMessage(
+        event.message as Message,
+        undefined,
+        subToolCallNameMapBySubId[subId],
+      );
       if (msg) {
         store.setSubMessages(subId, [...existing, msg]);
       }
@@ -401,7 +411,8 @@ export function handleSubagentEvent(subId: string, event: SubagentEvent, parentS
   }
 
   if (event.type === "tool_execution_start") {
-    subToolCallNameMap[event.toolCallId] = event.toolName;
+    if (!subToolCallNameMapBySubId[subId]) subToolCallNameMapBySubId[subId] = {};
+    subToolCallNameMapBySubId[subId][event.toolCallId] = event.toolName;
   }
 
   if (
@@ -509,5 +520,11 @@ export function handleSubagentEvent(subId: string, event: SubagentEvent, parentS
       }
     }
     store.updateSubagentStatus(subId, "idle");
+  }
+}
+
+export function clearSubagentToolNames(subIds: string[]): void {
+  for (const id of subIds) {
+    delete subToolCallNameMapBySubId[id];
   }
 }

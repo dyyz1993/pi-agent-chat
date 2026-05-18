@@ -17,7 +17,7 @@ import {
 import { useTurnStore } from "./use-turn-store";
 import { useChatNavStore } from "./use-chat-nav-store";
 import { useRetryStore } from "./use-retry-store";
-import { useSubagentStore } from "./use-subagent-store";
+import { useSubagentStore, clearSubagentToolNames } from "./use-subagent-store";
 import { useAgentStore } from "./use-agent-store";
 import {
   setupSubscriptions,
@@ -763,6 +763,7 @@ export const useSessionStore = create<SessionState>()(
               delete newStatus[sub.sessionId];
               delete newContext[sub.sessionId];
             }
+            clearSubagentToolNames(subs.map((s) => s.sessionId));
             useSubagentStore.setState({
               subsessionsByParent: newSubsByParent,
               messagesBySubsession: newMessages,
