@@ -291,15 +291,15 @@ html[data-theme="nord"] {
   --color-info: #81a1c1;
 
   --color-status-success: 163 190 140;
-  --color-status-error: 191 97 106;
+  --color-status-error: 255 100 110;
   --color-status-warning: 235 203 139;
   --color-status-info: 129 161 193;
 
   --color-semantic-agent: 180 142 196;
   --color-semantic-tool: 136 192 208;
-  --color-semantic-memory: 143 188 187;
+  --color-semantic-memory: 100 190 180;
   --color-semantic-accent: 136 192 208;
-  --color-semantic-notify: 208 135 112;
+  --color-semantic-notify: 230 140 100;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
@@ -337,16 +337,16 @@ html[data-theme="solarized"] {
   --color-error: #dc322f;
   --color-info: #268bd2;
 
-  --color-status-success: 133 153 0;
-  --color-status-error: 220 50 47;
-  --color-status-warning: 181 137 0;
-  --color-status-info: 38 139 210;
+  --color-status-success: 20 110 5;
+  --color-status-error: 180 30 30;
+  --color-status-warning: 150 100 0;
+  --color-status-info: 20 100 180;
 
-  --color-semantic-agent: 108 113 196;
-  --color-semantic-tool: 42 161 152;
-  --color-semantic-memory: 42 161 152;
-  --color-semantic-accent: 38 139 210;
-  --color-semantic-notify: 203 75 22;
+  --color-semantic-agent: 80 60 170;
+  --color-semantic-tool: 0 110 105;
+  --color-semantic-memory: 0 110 105;
+  --color-semantic-accent: 20 100 180;
+  --color-semantic-notify: 180 60 5;
 }
 
 html[data-theme="solarized"] body {
@@ -434,7 +434,7 @@ html[data-theme="rose"] {
 
   --color-semantic-agent: 196 167 231;
   --color-semantic-tool: 156 207 216;
-  --color-semantic-memory: 49 116 143;
+  --color-semantic-memory: 100 190 180;
   --color-semantic-accent: 196 167 231;
   --color-semantic-notify: 235 111 146;
 
@@ -475,16 +475,16 @@ html[data-theme="latte"] {
   --color-error: #d20f39;
   --color-info: #1e66f5;
 
-  --color-status-success: 64 160 43;
-  --color-status-error: 210 15 57;
-  --color-status-warning: 223 142 29;
-  --color-status-info: 30 102 245;
+  --color-status-success: 35 120 25;
+  --color-status-error: 180 10 45;
+  --color-status-warning: 160 90 0;
+  --color-status-info: 20 80 200;
 
-  --color-semantic-agent: 136 57 239;
-  --color-semantic-tool: 23 146 153;
-  --color-semantic-memory: 23 146 153;
-  --color-semantic-accent: 114 135 253;
-  --color-semantic-notify: 253 126 20;
+  --color-semantic-agent: 100 40 200;
+  --color-semantic-tool: 10 120 120;
+  --color-semantic-memory: 10 120 120;
+  --color-semantic-accent: 60 80 220;
+  --color-semantic-notify: 170 60 0;
 }
 
 html[data-theme="latte"] body {

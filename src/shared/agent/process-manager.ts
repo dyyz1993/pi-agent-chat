@@ -2259,8 +2259,14 @@ export class AgentProcessManager {
           result = await this.handleCoordinatorDelegateFork(sessionId, msg);
           break;
         default:
-          log.warn("Unknown coordinator method", { sessionId, method });
-          return;
+          if (method === "session_delegate_clear_stopped") {
+            result = this.handleCoordinatorClearStopped(msg);
+          } else if (method === "session_delegate_remove") {
+            result = this.handleCoordinatorRemove(sessionId, msg);
+          } else {
+            log.warn("Unknown coordinator method", { sessionId, method });
+            return;
+          }
       }
     } catch (err: unknown) {
       result = { error: err instanceof Error ? err.message : String(err) };
@@ -2288,6 +2294,37 @@ export class AgentProcessManager {
         managed.client.channel("coordinator").send({ ...(result as object), invokeId });
       }
     }
+  }
+
+  private handleCoordinatorClearStopped(
+    msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_clear_stopped" }>,
+  ): { cleared: string[] } {
+    const targetSessionId = (msg as Record<string, unknown>).sessionId as string | undefined;
+    const cleared: string[] = [];
+    if (targetSessionId) {
+      this.delegateCreatedAt.delete(targetSessionId);
+      this.delegateReplyCount.delete(targetSessionId);
+      cleared.push(targetSessionId);
+    }
+    return { cleared };
+  }
+
+  private handleCoordinatorRemove(
+    parentSessionId: string,
+    msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_remove" }>,
+  ): { removed: boolean } {
+    const targetSessionId = (msg as Record<string, unknown>).targetSessionId as string | undefined;
+    if (!targetSessionId) return { removed: false };
+
+    const children = this.parentChildMap.get(parentSessionId);
+    if (children) {
+      children.delete(targetSessionId);
+      if (children.size === 0) this.parentChildMap.delete(parentSessionId);
+    }
+    this.delegateCreatedAt.delete(targetSessionId);
+    this.delegateReplyCount.delete(targetSessionId);
+    this.stop(targetSessionId);
+    return { removed: true };
   }
 
   private async handleCoordinatorDelegate(
@@ -2352,7 +2389,7 @@ export class AgentProcessManager {
           name: title,
           sessionPath,
           projectPath,
-          parentSessionPath: null,
+          parentSessionPath: parent.info.sessionPath,
           messageCount: 0,
           firstMessage: task,
           createdAt: Date.now(),
