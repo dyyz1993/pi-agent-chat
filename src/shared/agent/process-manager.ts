@@ -2656,24 +2656,26 @@ export class AgentProcessManager {
     this.send(newSessionId, delegatePrompt);
 
     this.broadcastEvent(
-      "coordinator.session_created",
+      "subagent.event",
       {
         parentSessionId,
-        session: {
-          sessionId: newSessionId,
-          name: sessionTitle,
-          sessionPath,
-          projectPath,
-          parentSessionPath: parent.info.sessionPath,
-          messageCount: 0,
-          firstMessage: task,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          status: "running" as const,
+        parentSessionPath: parent.info.sessionPath,
+        subSessionId: newSessionId,
+        event: {
+          type: "subagent_start",
+          toolCallId: "",
+          description: rawTitle,
+          instruction: task,
         },
       },
       { parentSessionId },
-    ).catch(() => {});
+    ).catch((err: unknown) => {
+      log.warn("broadcastEvent(subagent_start) error", {
+        parentSessionId,
+        newSessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    });
 
     const syncResult = await syncPromise;
 
