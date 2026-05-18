@@ -239,19 +239,19 @@ html.dark body {
 }
 
 html[data-theme="dark"] {
-  --color-bg-primary: #0a0c10;
-  --color-bg-secondary: #111827;
-  --color-bg-tertiary: #1f2937;
-  --color-bg-elevated: #283044;
+  --color-bg-primary: #080b12;
+  --color-bg-secondary: #0f1320;
+  --color-bg-tertiary: #181d2e;
+  --color-bg-elevated: #20263b;
   --color-bg-overlay: rgba(0, 0, 0, 0.6);
 
   --color-text-primary: #f9fafb;
   --color-text-secondary: #9ca3af;
   --color-text-tertiary: #6b7280;
-  --color-text-inverse: #111827;
+  --color-text-inverse: #0f1320;
 
-  --color-border-primary: #1f2937;
-  --color-border-secondary: #374151;
+  --color-border-primary: #181d2e;
+  --color-border-secondary: #1f263a;
   --color-border-focus: #818cf8;
 
   --color-accent: #818cf8;
@@ -280,7 +280,7 @@ html[data-theme="dark"] {
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
 
-  --diff-bg: #1a1f2e;
+  --diff-bg: #111624;
   --diff-color: #d1d5db;
   --diff-added-bg: #0a2e1a;
   --diff-added-color: #4ade80;
@@ -288,14 +288,14 @@ html[data-theme="dark"] {
   --diff-removed-color: #fca5a5;
   --diff-word-added-bg: #14532d;
   --diff-word-removed-bg: #7f1d1d;
-  --diff-gutter-bg: #1f2937;
+  --diff-gutter-bg: #181d2e;
   --diff-gutter-color: #6b7280;
-  --diff-highlight-bg: #374151;
+  --diff-highlight-bg: #1f263a;
 
   /* Component surface colors */
-  --surface-code: #151921;
-  --surface-hover: #1f2937;
-  --surface-dim: #111827;
+  --surface-code: #131828;
+  --surface-hover: #1a2033;
+  --surface-dim: #0f1320;
 }
 
 html[data-theme="nord"] {
