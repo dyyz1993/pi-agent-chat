@@ -235,10 +235,10 @@ html.dark body {
 
 html[data-theme="dark"] {
   /* One Dark inspired — blue-gray base with clear layer separation */
-  --color-bg-primary: #21252b;
-  --color-bg-secondary: #282c34;
-  --color-bg-tertiary: #2c323a;
-  --color-bg-elevated: #2d3139;
+  --color-bg-primary: #1a1d23;
+  --color-bg-secondary: #252932;
+  --color-bg-tertiary: #30353f;
+  --color-bg-elevated: #3e4455;
   --color-bg-overlay: rgba(0, 0, 0, 0.55);
 
   --color-text-primary: #abb2bf;
@@ -294,9 +294,9 @@ html[data-theme="dark"] {
 
 html[data-theme="nord"] {
   --color-bg-primary: #2e3440;
-  --color-bg-secondary: #3b4252;
+  --color-bg-secondary: #3d4659;
   --color-bg-tertiary: #434c5e;
-  --color-bg-elevated: #434c5e;
+  --color-bg-elevated: #56607a;
   --color-bg-overlay: rgba(0, 0, 0, 0.6);
 
   --color-text-primary: #eceff4;
@@ -412,9 +412,9 @@ html[data-theme="solarized"] body {
 
 html[data-theme="warm-dark"] {
   --color-bg-primary: #1a1614;
-  --color-bg-secondary: #252220;
-  --color-bg-tertiary: #302c28;
-  --color-bg-elevated: #302c28;
+  --color-bg-secondary: #28231a;
+  --color-bg-tertiary: #342e26;
+  --color-bg-elevated: #483e32;
   --color-bg-overlay: rgba(0, 0, 0, 0.6);
 
   --color-text-primary: #e8e0d4;
@@ -472,9 +472,9 @@ html[data-theme="warm-dark"] body {
 /* Rosé Pine — warm pinkish dark, inspired by Rosé Pine */
 html[data-theme="rose"] {
   --color-bg-primary: #191724;
-  --color-bg-secondary: #1f1d2e;
-  --color-bg-tertiary: #26233a;
-  --color-bg-elevated: #26233a;
+  --color-bg-secondary: #232233;
+  --color-bg-tertiary: #2d2a3f;
+  --color-bg-elevated: #3d3955;
   --color-bg-overlay: rgba(0, 0, 0, 0.6);
 
   --color-text-primary: #e0def4;
@@ -592,9 +592,9 @@ html[data-theme="latte"] body {
 /* Sunset — warm amber/copper dark */
 html[data-theme="sunset"] {
   --color-bg-primary: #1c1210;
-  --color-bg-secondary: #2a1e1a;
-  --color-bg-tertiary: #3a2c24;
-  --color-bg-elevated: #3a2c24;
+  --color-bg-secondary: #2d221a;
+  --color-bg-tertiary: #3a2c22;
+  --color-bg-elevated: #4e3c2c;
   --color-bg-overlay: rgba(0, 0, 0, 0.6);
 
   --color-text-primary: #f5e6d3;
