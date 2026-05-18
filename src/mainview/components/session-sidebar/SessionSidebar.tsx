@@ -680,14 +680,19 @@ function SubagentItem({
         onClick={handleClick}
       >
         <div className="flex items-center gap-1.5">
-          <div
-            className={`flex items-center justify-center w-5 h-5 rounded-md shrink-0 transition-colors ${
-              isActive
-                ? "bg-semantic-accent/20 text-accent-text"
-                : "bg-surface-hover/70 text-text-tertiary group-hover:bg-surface-hover group-hover:text-text-tertiary"
-            }`}
-          >
-            <Bot className="w-3 h-3" />
+          <div className="flex items-center gap-1 shrink-0">
+            <div
+              className={`flex items-center justify-center w-5 h-5 rounded-md transition-colors ${
+                isActive
+                  ? "bg-semantic-accent/20 text-accent-text"
+                  : "bg-surface-hover/70 text-text-tertiary group-hover:bg-surface-hover group-hover:text-text-tertiary"
+              }`}
+            >
+              <Bot className="w-3 h-3" />
+            </div>
+            <span className="text-[8px] font-medium leading-none px-1 py-0.5 rounded-sm bg-semantic-agent/10 text-text-tertiary select-none">
+              {t("subagent")}
+            </span>
           </div>
           {isEditing ? (
             <div
