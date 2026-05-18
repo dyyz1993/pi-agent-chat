@@ -1777,9 +1777,9 @@ export class AgentProcessManager {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) throw new Error("Client not found");
     const result = await managed.client.fork(entryId, options);
-    if (!result.cancelled) {
-      this.stop(sessionId);
-    }
+    // Don't stop the original session — the process pool's switchSession
+    // will handle the transition when the forked session is started.
+    // The original session remains on disk and can be re-activated later.
     // Strip parentSession from forked session so it's treated as independent on refresh
     if (result.newSessionFile && !result.cancelled) {
       stripParentSessionFromHeader(result.newSessionFile);
