@@ -48,7 +48,7 @@ export const ReadFileCard = memo(function ReadFileCard({
   const { t } = useTranslation("chat");
 
   const collapseToolCards = useSettingsStore((s) => s.collapseToolCards);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => !isRunning && collapseToolCards);
   const wasRunningRef = useRef(isRunning);
   useEffect(() => {
     if (wasRunningRef.current && !isRunning && collapseToolCards) {

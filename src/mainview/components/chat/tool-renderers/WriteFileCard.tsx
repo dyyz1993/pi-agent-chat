@@ -152,7 +152,7 @@ export const WriteFileCard = memo(function WriteFileCard({
   const [splitView, setSplitView] = useState(false);
 
   const collapseToolCards = useSettingsStore((s) => s.collapseToolCards);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => !isRunning && collapseToolCards);
   const wasRunningRef = useRef(isRunning);
   useEffect(() => {
     if (wasRunningRef.current && !isRunning && collapseToolCards) {

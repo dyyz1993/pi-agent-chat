@@ -1333,9 +1333,9 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
   const isError = block.status === "error";
   const [inputOpen, setInputOpen] = useState(false);
   const [outputOpen, setOutputOpen] = useState(true);
-  const [collapsed, setCollapsed] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const collapseToolCards = useSettingsStore((s) => s.collapseToolCards);
+  const [collapsed, setCollapsed] = useState(() => !isRunning && collapseToolCards);
   const wasRunningRef = useRef(isRunning);
   useEffect(() => {
     if (wasRunningRef.current && !isRunning && collapseToolCards) {

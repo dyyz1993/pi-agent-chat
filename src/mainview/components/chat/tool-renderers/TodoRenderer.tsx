@@ -141,7 +141,7 @@ export const TodoExecRenderer = memo(function TodoExecRenderer({ block }: ToolRe
   const isError = block.status === "error";
   const collapseToolCards = useSettingsStore((s) => s.collapseToolCards);
 
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => !isRunning && collapseToolCards);
   const wasRunningRef = useRef(isRunning);
 
   useEffect(() => {

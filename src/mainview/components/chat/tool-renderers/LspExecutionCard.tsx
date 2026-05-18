@@ -88,7 +88,7 @@ export const LspExecutionCard = memo(function LspExecutionCard({ block }: LspExe
   const collapseToolCards = useSettingsStore((s) => s.collapseToolCards);
   const isRunning = block.status === "running";
 
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => !isRunning && collapseToolCards);
   const wasRunningRef = useRef(isRunning);
 
   useEffect(() => {

@@ -22,7 +22,7 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
   const isDone = block.status === "done";
   const collapseToolCards = useSettingsStore((s) => s.collapseToolCards);
 
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => !isRunning && collapseToolCards);
   const wasRunningRef = useRef(isRunning);
 
   useEffect(() => {

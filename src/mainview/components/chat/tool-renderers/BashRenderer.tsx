@@ -148,7 +148,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
   // collapsed=true: hide input/output, show title bar only
   // User can collapse even while running (shows loading dot)
   // Auto-collapse when running finishes + setting enabled
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => !isRunning && collapseToolCards);
   const wasRunningRef = useRef(isRunning);
 
   useEffect(() => {
