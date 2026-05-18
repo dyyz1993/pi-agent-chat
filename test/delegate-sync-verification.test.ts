@@ -713,7 +713,7 @@ describe("session_delegate_sync — Full Flow Verification", () => {
 
         vi.advanceTimersByTime(300001);
 
-        const [r1, r2, r3] = await Promise.allSettled([p1, p2, p3]);
+        const [r1, r2] = await Promise.allSettled([p1, p2]);
 
         expect(r1.status).toBe("fulfilled");
         if (r1.status === "fulfilled") expect(r1.value.status).toBe("completed");
