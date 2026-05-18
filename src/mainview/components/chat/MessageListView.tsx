@@ -124,7 +124,7 @@ export const MessageListView = memo(function MessageListView({
         className="h-full overflow-y-auto overflow-x-hidden overscroll-y-contain"
         style={{ overflowAnchor: "none" }}
       >
-        <div className="flex flex-col items-center justify-center h-full text-gray-600 text-sm gap-2">
+        <div className="flex flex-col items-center justify-center h-full text-text-secondary text-sm gap-2">
           <p>{t("startConversation")}</p>
         </div>
       </div>
@@ -152,9 +152,9 @@ export const MessageListView = memo(function MessageListView({
       {(isLoadingMore ?? hasMoreMessages) && (
         <div className="flex items-center justify-center py-2">
           {isLoadingMore ? (
-            <Loader2 className="w-4 h-4 text-gray-500 animate-spin" />
+            <Loader2 className="w-4 h-4 text-text-tertiary animate-spin" />
           ) : hasMoreMessages ? (
-            <span className="text-[10px] text-gray-600">{t("scrollUpToLoadMore")}</span>
+            <span className="text-[10px] text-text-secondary">{t("scrollUpToLoadMore")}</span>
           ) : null}
         </div>
       )}

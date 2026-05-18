@@ -231,48 +231,49 @@ html.dark body {
   --diff-gutter-bg: #e5e7eb;
   --diff-gutter-color: #6b7280;
   --diff-highlight-bg: #d1d5db;
+
+  /* Component surface colors */
+  --surface-code: #f1f3f5;
+  --surface-hover: #f3f4f6;
+  --surface-dim: #f9fafb;
 }
 
 html[data-theme="dark"] {
-  /* One Dark inspired — blue-gray base with clear layer separation */
-  --color-bg-primary: #1a1d23;
-  --color-bg-secondary: #252932;
-  --color-bg-tertiary: #30353f;
-  --color-bg-elevated: #3e4455;
-  --color-bg-overlay: rgba(0, 0, 0, 0.55);
+  --color-bg-primary: #0a0c10;
+  --color-bg-secondary: #111827;
+  --color-bg-tertiary: #1f2937;
+  --color-bg-elevated: #283044;
+  --color-bg-overlay: rgba(0, 0, 0, 0.6);
 
-  --color-text-primary: #abb2bf;
-  --color-text-secondary: #7f848e;
-  --color-text-tertiary: #5c6370;
-  --color-text-inverse: #21252b;
+  --color-text-primary: #f9fafb;
+  --color-text-secondary: #9ca3af;
+  --color-text-tertiary: #6b7280;
+  --color-text-inverse: #111827;
 
-  --color-border-primary: #3e4451;
-  --color-border-secondary: #3e4451;
-  --color-border-focus: #61afef;
+  --color-border-primary: #1f2937;
+  --color-border-secondary: #374151;
+  --color-border-focus: #818cf8;
 
-  /* Soft cyan-blue accent (One Dark signature) */
-  --color-accent: #61afef;
-  --color-accent-hover: #528bff;
-  --color-accent-muted: rgba(97, 175, 239, 0.12);
-  --color-accent-text: #61afef;
+  --color-accent: #818cf8;
+  --color-accent-hover: #6366f1;
+  --color-accent-muted: rgba(129, 140, 248, 0.15);
+  --color-accent-text: #a5b4fc;
 
-  /* Muted semantic colors — less saturated than raw Tailwind */
-  --color-success: #98c379;
-  --color-warning: #e5c07b;
-  --color-error: #e06c75;
-  --color-info: #61afef;
+  --color-success: #4ade80;
+  --color-warning: #fbbf24;
+  --color-error: #f87171;
+  --color-info: #60a5fa;
 
-  --color-status-success: 152 195 121;
-  --color-status-error: 224 108 117;
-  --color-status-warning: 229 192 123;
-  --color-status-info: 97 175 239;
+  --color-status-success: 74 222 128;
+  --color-status-error: 248 113 113;
+  --color-status-warning: 251 191 36;
+  --color-status-info: 96 165 250;
 
-  /* Category colors — each distinct but harmonious */
-  --color-semantic-agent: 198 120 221;
-  --color-semantic-tool: 86 182 194;
-  --color-semantic-memory: 152 195 121;
-  --color-semantic-accent: 97 175 239;
-  --color-semantic-notify: 229 192 123;
+  --color-semantic-agent: 192 132 252;
+  --color-semantic-tool: 34 211 238;
+  --color-semantic-memory: 45 212 191;
+  --color-semantic-accent: 129 140 248;
+  --color-semantic-notify: 251 146 60;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
@@ -290,6 +291,11 @@ html[data-theme="dark"] {
   --diff-gutter-bg: #1f2937;
   --diff-gutter-color: #6b7280;
   --diff-highlight-bg: #374151;
+
+  /* Component surface colors */
+  --surface-code: #151921;
+  --surface-hover: #1f2937;
+  --surface-dim: #111827;
 }
 
 html[data-theme="nord"] {
@@ -345,6 +351,11 @@ html[data-theme="nord"] {
   --diff-gutter-bg: #434c5e;
   --diff-gutter-color: #81a1c1;
   --diff-highlight-bg: #4c566a;
+
+  /* Component surface colors */
+  --surface-code: #3b4252;
+  --surface-hover: #434c5e;
+  --surface-dim: #3d4455;
 }
 
 html[data-theme="nord"] body {
@@ -404,6 +415,11 @@ html[data-theme="solarized"] {
   --diff-gutter-bg: #e0dac6;
   --diff-gutter-color: #586e75;
   --diff-highlight-bg: #d0c9b5;
+
+  /* Component surface colors */
+  --surface-code: #e8e0ce;
+  --surface-hover: #ede4d1;
+  --surface-dim: #f0ead8;
 }
 
 html[data-theme="solarized"] body {
@@ -463,6 +479,11 @@ html[data-theme="warm-dark"] {
   --diff-gutter-bg: #302c28;
   --diff-gutter-color: #a89888;
   --diff-highlight-bg: #3e3832;
+
+  /* Component surface colors */
+  --surface-code: #333029;
+  --surface-hover: #3e3930;
+  --surface-dim: #2c2820;
 }
 
 html[data-theme="warm-dark"] body {
@@ -523,6 +544,11 @@ html[data-theme="rose"] {
   --diff-gutter-bg: #26233a;
   --diff-gutter-color: #908caa;
   --diff-highlight-bg: #403d52;
+
+  /* Component surface colors */
+  --surface-code: #2d2a3f;
+  --surface-hover: #37334d;
+  --surface-dim: #27253a;
 }
 
 html[data-theme="rose"] body {
@@ -583,6 +609,11 @@ html[data-theme="latte"] {
   --diff-gutter-bg: #ccd0da;
   --diff-gutter-color: #8c8fa1;
   --diff-highlight-bg: #bcc0cc;
+
+  /* Component surface colors */
+  --surface-code: #dde0e8;
+  --surface-hover: #e2e4ec;
+  --surface-dim: #e6e8ef;
 }
 
 html[data-theme="latte"] body {
@@ -643,6 +674,11 @@ html[data-theme="sunset"] {
   --diff-gutter-bg: #3a2c24;
   --diff-gutter-color: #c4a882;
   --diff-highlight-bg: #4d3c30;
+
+  /* Component surface colors */
+  --surface-code: #40342a;
+  --surface-hover: #4e3e30;
+  --surface-dim: #362c24;
 }
 
 html[data-theme="sunset"] body {

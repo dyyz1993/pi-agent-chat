@@ -11,7 +11,7 @@ function AttachmentPreview({ att, onRemove }: { att: AttachmentFile; onRemove: (
   const isImage = att.type.startsWith("image/");
 
   return (
-    <div className="group relative flex items-center gap-1.5 px-2 py-1 rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-300/50 dark:border-gray-700/50 max-w-[200px]">
+    <div className="group relative flex items-center gap-1.5 px-2 py-1 rounded-md bg-surface-dim dark:bg-surface-dim border border-border-secondary/50 dark:border-border-secondary/50 max-w-[200px]">
       {att.status === "uploading" && (
         <Loader2 className="w-3 h-3 text-semantic-accent animate-spin shrink-0" />
       )}
@@ -19,24 +19,28 @@ function AttachmentPreview({ att, onRemove }: { att: AttachmentFile; onRemove: (
       {att.status === "done" && (
         <div className="w-3 h-3 rounded-full bg-status-success/80 shrink-0" />
       )}
-      {att.status === "pending" && <div className="w-3 h-3 rounded-full bg-gray-600 shrink-0" />}
+      {att.status === "pending" && (
+        <div className="w-3 h-3 rounded-full bg-text-secondary shrink-0" />
+      )}
 
       {isImage && att.preview ? (
         <img src={att.preview} alt={att.name} className="w-6 h-6 rounded object-cover shrink-0" />
       ) : (
-        <Paperclip className="w-3 h-3 text-gray-400 shrink-0" />
+        <Paperclip className="w-3 h-3 text-text-tertiary shrink-0" />
       )}
 
       <div className="min-w-0 flex-1">
-        <div className="text-[10px] text-gray-700 dark:text-gray-300 truncate">{att.name}</div>
-        <div className="text-[9px] text-gray-400 dark:text-gray-500">
+        <div className="text-[10px] text-text-secondary dark:text-text-secondary truncate">
+          {att.name}
+        </div>
+        <div className="text-[9px] text-text-tertiary dark:text-text-tertiary">
           {formatFileSize(att.size)}
         </div>
       </div>
 
       <button
         onClick={onRemove}
-        className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-all shrink-0"
+        className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-surface-hover dark:hover:bg-surface-hover text-text-tertiary dark:text-text-tertiary hover:text-text-primary dark:hover:text-text-secondary transition-all shrink-0"
       >
         <X className="w-3 h-3" />
       </button>
@@ -99,14 +103,14 @@ export function AttachmentButtons() {
   }, [setActivePanelTab, showStatus]);
 
   const shieldColor = !supervisorStatus?.enabled
-    ? "text-gray-400 dark:text-gray-500"
+    ? "text-text-tertiary dark:text-text-tertiary"
     : supervisorStatus.state === "idle" || supervisorStatus.state === "checking"
       ? "text-status-success"
       : supervisorStatus.state === "paused"
         ? "text-status-warning"
         : supervisorStatus.state === "continuing"
           ? "text-status-info"
-          : "text-gray-400 dark:text-gray-500";
+          : "text-text-tertiary dark:text-text-tertiary";
 
   const isPulsing =
     supervisorStatus?.enabled === true &&
@@ -128,7 +132,7 @@ export function AttachmentButtons() {
       />
       <button
         onClick={() => fileInputRef.current?.click()}
-        className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+        className="p-1.5 rounded-md hover:bg-surface-hover dark:hover:bg-surface-dim text-text-tertiary dark:text-text-tertiary hover:text-text-primary dark:hover:text-text-secondary transition-colors"
         title={t("fileAttachment.addAttachment")}
       >
         <Paperclip className="w-4 h-4" />
@@ -144,7 +148,7 @@ export function AttachmentButtons() {
       />
       <button
         onClick={() => imageInputRef.current?.click()}
-        className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+        className="p-1.5 rounded-md hover:bg-surface-hover dark:hover:bg-surface-dim text-text-tertiary dark:text-text-tertiary hover:text-text-primary dark:hover:text-text-secondary transition-colors"
         title={t("fileAttachment.addImage")}
       >
         <ImageIcon className="w-4 h-4" />
@@ -152,7 +156,7 @@ export function AttachmentButtons() {
 
       <button
         onClick={handleSupervisorClick}
-        className={`relative p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${shieldColor}`}
+        className={`relative p-1.5 rounded-md hover:bg-surface-hover dark:hover:bg-surface-dim transition-colors ${shieldColor}`}
         title="Supervisor"
       >
         <Shield className={`w-4 h-4 ${isPulsing ? "animate-pulse" : ""}`} />

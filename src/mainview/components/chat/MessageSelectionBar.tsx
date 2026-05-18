@@ -1,9 +1,8 @@
 import { memo, useCallback } from "react";
-import { Trash2, Brain, Sparkles, X } from "lucide-react";
+import { Trash2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useTurnStore, EMPTY_SET } from "../../stores/use-turn-store";
 import { useSessionStore } from "../../stores/use-session-store";
-import { apiClient } from "../../lib/api-client";
 import type { ChatMessage, TokenUsage } from "../../types";
 import { formatTokenCount } from "../../utils/turn-utils";
 
@@ -31,42 +30,6 @@ export const MessageSelectionBar = memo(function MessageSelectionBar({
     if (onDeleteSelected) onDeleteSelected(Array.from(selectedIds));
   }, [onDeleteSelected, selectedIds]);
 
-  const handleSummarize = useCallback(() => {
-    void Array.from(selectedIds);
-  }, [selectedIds]);
-
-  const handleRemember = useCallback(() => {
-    const sessionId = useSessionStore.getState().activeSessionId;
-    const sessionStore = useSessionStore.getState();
-    const projectPath = (() => {
-      const tab = sessionStore.projectTabs.find((t) => t.id === sessionStore.activeProjectId);
-      return tab?.path ?? "";
-    })();
-    if (!sessionId || !projectPath) return;
-    const selectedMessages = messages.filter((m) => selectedIds.has(m.id));
-    const content = selectedMessages
-      .map((m) => {
-        const text = m.content
-          .filter((b) => b.type === "text")
-          .map((b) => b.text)
-          .join("\n");
-        return `[${m.role}]: ${text}`;
-      })
-      .join("\n\n");
-    const messageIds = Array.from(selectedIds);
-    apiClient
-      .call("memory.remember", {
-        projectPath,
-        sessionId,
-        messageIds,
-        content,
-      })
-      .catch((err) => {
-        console.warn("[MessageSelectionBar] memory.remember failed:", err);
-      });
-    clear();
-  }, [messages, selectedIds, clear]);
-
   const count = selectedIds.size;
   if (count === 0) return null;
 
@@ -82,14 +45,14 @@ export const MessageSelectionBar = memo(function MessageSelectionBar({
   }
 
   return (
-    <div className="mx-auto w-fit flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100/90 dark:bg-gray-800/90 border border-gray-300/60 dark:border-gray-700/60 shadow-lg backdrop-blur-sm">
+    <div className="mx-auto w-fit flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-dim/90 dark:bg-surface-dim/90 border border-border-secondary/60 dark:border-border-secondary/60 shadow-lg backdrop-blur-sm">
       <span className="text-sm font-semibold text-semantic-accent tabular-nums leading-none min-w-[1.25rem] text-center">
         {count}
       </span>
       {(input > 0 || output > 0) && (
         <>
-          <div className="w-px h-3.5 bg-gray-300 dark:bg-gray-700" />
-          <span className="text-[11px] text-gray-500 dark:text-gray-400 font-mono tabular-nums">
+          <div className="w-px h-3.5 bg-border-secondary dark:bg-border-secondary" />
+          <span className="text-[11px] text-text-tertiary dark:text-text-tertiary font-mono tabular-nums">
             {formatTokenCount(input)}
           </span>
           <span className="text-[11px] text-status-success/70 font-mono tabular-nums">
@@ -97,32 +60,18 @@ export const MessageSelectionBar = memo(function MessageSelectionBar({
           </span>
         </>
       )}
-      <div className="w-px h-3.5 bg-gray-300 dark:bg-gray-700" />
-      <button
-        onClick={handleSummarize}
-        className="flex items-center justify-center w-7 h-7 rounded-full text-semantic-agent hover:text-semantic-agent hover:bg-semantic-agent/15 transition-colors"
-        title={t("summarizeSelected")}
-      >
-        <Sparkles className="w-3.5 h-3.5" />
-      </button>
-      <button
-        onClick={handleRemember}
-        className="flex items-center justify-center w-7 h-7 rounded-full text-semantic-memory hover:text-semantic-memory hover:bg-semantic-memory/15 transition-colors"
-        title={t("saveAsMemory")}
-      >
-        <Brain className="w-3.5 h-3.5" />
-      </button>
+      <div className="w-px h-3.5 bg-border-secondary dark:bg-border-secondary" />
       <button
         onClick={handleDelete}
-        className="flex items-center justify-center w-7 h-7 rounded-full text-gray-400 dark:text-gray-500 hover:text-status-error hover:bg-status-error/15 transition-colors"
+        className="flex items-center justify-center w-7 h-7 rounded-full text-text-tertiary dark:text-text-tertiary hover:text-status-error hover:bg-status-error/15 transition-colors"
         title={t("deleteSelected")}
       >
         <Trash2 className="w-3.5 h-3.5" />
       </button>
-      <div className="w-px h-3.5 bg-gray-300 dark:bg-gray-700" />
+      <div className="w-px h-3.5 bg-border-secondary dark:bg-border-secondary" />
       <button
         onClick={clear}
-        className="flex items-center justify-center w-7 h-7 rounded-full text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors"
+        className="flex items-center justify-center w-7 h-7 rounded-full text-text-tertiary dark:text-text-tertiary hover:text-text-primary dark:hover:text-text-secondary hover:bg-surface-hover/60 dark:hover:bg-surface-hover/60 transition-colors"
         title={t("cancelSelection")}
       >
         <X className="w-3.5 h-3.5" />

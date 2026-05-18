@@ -71,7 +71,7 @@ const TOOL_ICON_MAP: Record<string, ToolIconEntry> = {
 
 const DEFAULT_ENTRY: ToolIconEntry = {
   icon: Wrench,
-  color: "text-gray-400",
+  color: "text-text-tertiary",
   label: "Tool",
 };
 
@@ -83,7 +83,7 @@ const PREVIEW_TYPE_ICON_MAP: Record<string, ToolIconEntry> = {
   video: { icon: Video, color: "text-semantic-agent", label: "Video" },
   audio: { icon: Music, color: "text-semantic-tool", label: "Audio" },
   markdown: { icon: File, color: "text-status-warning", label: "Markdown" },
-  text: { icon: FileText, color: "text-gray-400", label: "Text" },
+  text: { icon: FileText, color: "text-text-tertiary", label: "Text" },
 };
 
 export function getPreviewResourceIcon(resourceType: string): ToolIconEntry {
@@ -123,7 +123,7 @@ const CUSTOM_TYPE_ICON_MAP: Record<string, ToolIconEntry> = {
   ),
   lsp_diagnostics: { icon: Network, color: "text-status-warning", label: "LSP Diagnostics" },
   bash_background_exit: { icon: Terminal, color: "text-semantic-tool", label: "Background Exit" },
-  step_snapshot: { icon: Activity, color: "text-gray-400", label: "Step Snapshot" },
+  step_snapshot: { icon: Activity, color: "text-text-tertiary", label: "Step Snapshot" },
 };
 
 const UI_METHOD_ICON_MAP: Record<string, ToolIconEntry> = {

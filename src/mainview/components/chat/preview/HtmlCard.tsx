@@ -28,14 +28,14 @@ export const HtmlCard = memo(function HtmlCard({ details }: { details: PreviewDe
 
   if (!httpUrl) {
     return (
-      <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700/40 bg-white dark:bg-gray-900/60">
-        <div className="px-3 py-1.5 flex items-center gap-2 text-xs border-b border-gray-200 dark:border-gray-700/30">
+      <div className="rounded-lg overflow-hidden border border-border-secondary dark:border-border-secondary/40 bg-bg-elevated dark:bg-surface-code/60">
+        <div className="px-3 py-1.5 flex items-center gap-2 text-xs border-b border-border-secondary dark:border-border-secondary/30">
           <Code className="w-3.5 h-3.5 text-orange-500 dark:text-orange-400 shrink-0" />
-          <span className="text-gray-800 dark:text-gray-300 truncate min-w-0">
+          <span className="text-text-primary dark:text-text-secondary truncate min-w-0">
             {details.title ?? details.source}
           </span>
         </div>
-        <div className="px-3 py-4 text-xs text-gray-400 dark:text-gray-500 italic">
+        <div className="px-3 py-4 text-xs text-text-tertiary dark:text-text-tertiary italic">
           {t("noPathForPreview")}
         </div>
       </div>
@@ -46,7 +46,7 @@ export const HtmlCard = memo(function HtmlCard({ details }: { details: PreviewDe
     <div className="flex items-center gap-1 ml-auto shrink-0">
       <button
         onClick={handleRetry}
-        className="p-0.5 rounded text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors"
+        className="p-0.5 rounded text-text-tertiary hover:text-text-primary dark:text-text-tertiary dark:hover:text-text-secondary hover:bg-surface-hover/50 dark:hover:bg-surface-hover/50 transition-colors"
         title={t("reloadTitle")}
       >
         <RefreshCw className="w-3 h-3" />
@@ -54,7 +54,7 @@ export const HtmlCard = memo(function HtmlCard({ details }: { details: PreviewDe
       {!fullscreen && (
         <button
           onClick={() => setFullscreen(true)}
-          className="p-0.5 rounded text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors"
+          className="p-0.5 rounded text-text-tertiary hover:text-text-primary dark:text-text-tertiary dark:hover:text-text-secondary hover:bg-surface-hover/50 dark:hover:bg-surface-hover/50 transition-colors"
           title={t("fullscreenTitle")}
         >
           <Maximize2 className="w-3 h-3" />
@@ -62,7 +62,7 @@ export const HtmlCard = memo(function HtmlCard({ details }: { details: PreviewDe
       )}
       <button
         onClick={() => copy(httpUrl)}
-        className="p-0.5 rounded text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors"
+        className="p-0.5 rounded text-text-tertiary hover:text-text-primary dark:text-text-tertiary dark:hover:text-text-secondary hover:bg-surface-hover/50 dark:hover:bg-surface-hover/50 transition-colors"
         title={t("copyLinkTitle")}
       >
         {copied ? (
@@ -73,7 +73,7 @@ export const HtmlCard = memo(function HtmlCard({ details }: { details: PreviewDe
       </button>
       <button
         onClick={() => window.open(httpUrl, "_blank", "noopener,noreferrer")}
-        className="p-0.5 rounded text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors"
+        className="p-0.5 rounded text-text-tertiary hover:text-text-primary dark:text-text-tertiary dark:hover:text-text-secondary hover:bg-surface-hover/50 dark:hover:bg-surface-hover/50 transition-colors"
         title={t("openInNewWindowTitle")}
       >
         <ExternalLink className="w-3 h-3" />
@@ -81,7 +81,7 @@ export const HtmlCard = memo(function HtmlCard({ details }: { details: PreviewDe
       {fullscreen && (
         <button
           onClick={() => setFullscreen(false)}
-          className="p-2 rounded text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-gray-700/50 transition-colors ml-1"
+          className="p-2 rounded text-text-secondary hover:text-text-primary dark:text-text-tertiary dark:hover:text-text-primary hover:bg-surface-hover dark:hover:bg-surface-hover/50 transition-colors ml-1"
           title={t("closeEscTitle")}
         >
           <X className="w-4 h-4" />
@@ -92,13 +92,13 @@ export const HtmlCard = memo(function HtmlCard({ details }: { details: PreviewDe
 
   const header = (
     <div
-      className="px-3 py-1.5 flex items-center gap-2 text-xs border-b border-gray-200 dark:border-gray-700/30"
+      className="px-3 py-1.5 flex items-center gap-2 text-xs border-b border-border-secondary dark:border-border-secondary/30"
       style={
         fullscreen ? { paddingTop: "calc(0.375rem + env(safe-area-inset-top, 0px))" } : undefined
       }
     >
       <Code className="w-3.5 h-3.5 text-orange-500 dark:text-orange-400 shrink-0" />
-      <span className="text-gray-800 dark:text-gray-300 truncate min-w-0">
+      <span className="text-text-primary dark:text-text-secondary truncate min-w-0">
         {details.title ?? details.source}
       </span>
       {headerButtons}
@@ -107,7 +107,7 @@ export const HtmlCard = memo(function HtmlCard({ details }: { details: PreviewDe
 
   if (fullscreen) {
     return createPortal(
-      <div className="fixed inset-0 z-[200] bg-white dark:bg-black flex flex-col">
+      <div className="fixed inset-0 z-[200] bg-bg-elevated dark:bg-black flex flex-col">
         {header}
         <iframe
           key={iframeKey}
@@ -122,7 +122,7 @@ export const HtmlCard = memo(function HtmlCard({ details }: { details: PreviewDe
   }
 
   return (
-    <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700/40 bg-white dark:bg-gray-900/60">
+    <div className="rounded-lg overflow-hidden border border-border-secondary dark:border-border-secondary/40 bg-bg-elevated dark:bg-surface-code/60">
       {header}
       <iframe
         key={iframeKey}

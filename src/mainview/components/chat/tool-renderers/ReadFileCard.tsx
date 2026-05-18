@@ -82,11 +82,11 @@ export const ReadFileCard = memo(function ReadFileCard({
           ? "border-status-info/25 bg-status-info/5"
           : isError
             ? "border-status-error/15 bg-status-error/5"
-            : "border-gray-200 dark:border-gray-700/30 bg-gray-50 dark:bg-gray-800/25"
+            : "border-border-secondary/30 bg-surface-dim"
       }`}
     >
       <div
-        className="px-3 py-1.5 flex items-center gap-2 text-xs cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800/40 transition-colors select-none"
+        className="px-3 py-1.5 flex items-center gap-2 text-xs cursor-pointer hover:bg-surface-hover transition-colors select-none"
         onClick={() => setCollapsed((c) => !c)}
         role="button"
         aria-expanded={!collapsed}
@@ -102,7 +102,7 @@ export const ReadFileCard = memo(function ReadFileCard({
             />
           );
         })()}
-        <span className="min-w-0 text-gray-800 dark:text-gray-300 font-mono" title={displayPath}>
+        <span className="min-w-0 text-text-primary font-mono" title={displayPath}>
           <span className="block truncate rtl" style={{ direction: "rtl", textAlign: "left" }}>
             <span style={{ direction: "ltr", display: "inline" }}>{displayPath}</span>
           </span>
@@ -120,11 +120,11 @@ export const ReadFileCard = memo(function ReadFileCard({
             <summary className="sr-only">{t("expand")}</summary>
             <div className="px-3 pb-2">
               {block.output ? (
-                <pre className="text-[11px] text-gray-800 dark:text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-36 overflow-y-auto bg-gray-100 dark:bg-gray-900/40 rounded px-2 py-1.5">
+                <pre className="text-[11px] text-text-primary overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-36 overflow-y-auto bg-surface-code rounded px-2 py-1.5">
                   {block.output}
                 </pre>
               ) : isRunning ? (
-                <div className="text-[11px] text-gray-400 dark:text-gray-600 italic py-1">
+                <div className="text-[11px] text-text-tertiary italic py-1">
                   {t("readFile.readingProgress")}
                 </div>
               ) : null}
@@ -173,22 +173,22 @@ export const ReadFileCard = memo(function ReadFileCard({
                       className="border-b last:border-b-0 border-semantic-accent/20 py-1 flex items-center gap-1.5"
                     >
                       {status === "already_loaded" ? (
-                        <CheckCircle2 className="w-3 h-3 shrink-0 text-gray-400 dark:text-gray-500" />
+                        <CheckCircle2 className="w-3 h-3 shrink-0 text-text-tertiary" />
                       ) : status === "reloaded" ? (
                         <RefreshCw className="w-3 h-3 shrink-0 text-status-warning" />
                       ) : (
                         <Zap className="w-3 h-3 shrink-0 text-semantic-accent" />
                       )}
                       <span
-                        className={`text-[11px] font-medium shrink-0 ${rule.severity === "critical" ? "text-status-error" : rule.severity === "high" ? "text-status-warning" : status === "already_loaded" ? "text-gray-500 dark:text-gray-400" : "text-semantic-accent"}`}
+                        className={`text-[11px] font-medium shrink-0 ${rule.severity === "critical" ? "text-status-error" : rule.severity === "high" ? "text-status-warning" : status === "already_loaded" ? "text-text-tertiary" : "text-semantic-accent"}`}
                       >
                         {rule.title}
                       </span>
-                      <span className="text-[11px] text-gray-400 dark:text-gray-600 font-mono">
+                      <span className="text-[11px] text-text-tertiary font-mono">
                         {rule.matchedGlob}
                       </span>
                       {status === "already_loaded" && (
-                        <span className="text-[10px] text-gray-400 dark:text-gray-600 italic ml-auto">
+                        <span className="text-[10px] text-text-tertiary italic ml-auto">
                           {t("readFile.alreadyLoaded", "loaded")}
                         </span>
                       )}

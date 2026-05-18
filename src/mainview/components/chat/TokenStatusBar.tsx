@@ -70,7 +70,7 @@ const ContextRing = memo(function ContextRing({
         fill="none"
         stroke="currentColor"
         strokeWidth={stroke}
-        className="text-gray-300 dark:text-gray-700"
+        className="text-text-secondary"
       />
       <circle
         cx={size / 2}
@@ -127,10 +127,10 @@ export const TokenStatusBar = memo(function TokenStatusBar({ sessionId }: { sess
         contextLabel={t("tokenStatus.contextUsage", { percent: Math.round(percent * 100) })}
       />
       <span>{activeSubId ? t("tokenStatus.subagent") : t("tokenStatus.used")}</span>
-      <span className="text-gray-500 dark:text-gray-400 font-medium">{used}</span>
+      <span className="text-text-tertiary font-medium">{used}</span>
       {contextUsage?.contextWindow ? (
         <>
-          <span className="text-gray-300 dark:text-gray-700">/</span>
+          <span className="text-text-secondary">/</span>
           <span>
             {t("tokenStatus.available")} {available}
           </span>

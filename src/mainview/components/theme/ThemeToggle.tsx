@@ -33,7 +33,7 @@ export function ThemeToggle() {
     <button
       data-testid="theme-toggle"
       onClick={cycleTheme}
-      className="p-1 rounded hover:bg-gray-800 dark:hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition-colors"
+      className="p-1 rounded hover:bg-surface-hover text-text-tertiary hover:text-text-primary transition-colors"
       title={t("toggle", { theme: current.label })}
     >
       <Icon className="w-3.5 h-3.5" />

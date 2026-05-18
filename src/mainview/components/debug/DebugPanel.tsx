@@ -16,9 +16,9 @@ export function DebugPanel() {
   const handleUnsubscribe = useAppStore((s) => s.handleUnsubscribe);
 
   return (
-    <div className="w-72 bg-gray-850 border-l border-gray-700 flex flex-col flex-shrink-0 overflow-y-auto">
+    <div className="w-72 bg-surface-code border-l border-border-secondary flex flex-col flex-shrink-0 overflow-y-auto">
       {/* RPC Calls */}
-      <div className="p-3 border-b border-gray-700">
+      <div className="p-3 border-b border-border-secondary">
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-xs font-semibold flex items-center gap-1.5">
             <Send className="w-3.5 h-3.5 text-semantic-accent" />
@@ -29,7 +29,7 @@ export function DebugPanel() {
           <select
             value={method}
             onChange={(e) => setMethod(e.target.value as DemoMethod)}
-            className="flex-1 px-2 py-1 text-xs bg-gray-700 rounded text-white border border-gray-600"
+            className="flex-1 px-2 py-1 text-xs bg-surface-hover rounded text-text-primary border border-border-secondary"
           >
             <option value="system.ping">system.ping</option>
             <option value="system.hello">system.hello</option>
@@ -45,7 +45,7 @@ export function DebugPanel() {
           </button>
         </div>
         {!!result && (
-          <div className="bg-gray-700 rounded p-2">
+          <div className="bg-surface-hover rounded p-2">
             <pre className="text-status-success text-[11px] overflow-x-auto whitespace-pre-wrap">
               {JSON.stringify(result, null, 2)}
             </pre>
@@ -54,13 +54,13 @@ export function DebugPanel() {
       </div>
 
       {/* Subscriptions */}
-      <div className="p-3 border-b border-gray-700">
+      <div className="p-3 border-b border-border-secondary">
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-xs font-semibold flex items-center gap-1.5">
             {timerRunning ? (
               <Square className="w-3.5 h-3.5 text-status-success fill-status-success" />
             ) : (
-              <Play className="w-3.5 h-3.5 text-gray-400" />
+              <Play className="w-3.5 h-3.5 text-text-tertiary" />
             )}
             Subscriptions
             {timerRunning && (
@@ -70,7 +70,7 @@ export function DebugPanel() {
             )}
           </h2>
           <div className="flex gap-2 items-center">
-            <span className="text-[11px] text-gray-400">{tickCount} events</span>
+            <span className="text-[11px] text-text-tertiary">{tickCount} events</span>
             {!subscriptionId ? (
               <button
                 onClick={handleSubscribe}
@@ -88,9 +88,9 @@ export function DebugPanel() {
             )}
           </div>
         </div>
-        <div className="bg-gray-700 rounded p-2 max-h-32 overflow-y-auto font-mono text-[11px]">
+        <div className="bg-surface-hover rounded p-2 max-h-32 overflow-y-auto font-mono text-[11px]">
           {tickEvents.length === 0 ? (
-            <div className="text-gray-500 text-center py-1">No events yet</div>
+            <div className="text-text-tertiary text-center py-1">No events yet</div>
           ) : (
             tickEvents.map((ev, i) => (
               <div key={i} className="text-semantic-tool">
@@ -104,7 +104,7 @@ export function DebugPanel() {
       {/* Logs */}
       <div className="p-3 flex flex-col flex-1 min-h-0">
         <h2 className="text-xs font-semibold mb-2 flex-shrink-0 flex items-center gap-1.5">
-          <File className="w-3.5 h-3.5 text-gray-400" />
+          <File className="w-3.5 h-3.5 text-text-tertiary" />
           Logs
         </h2>
         <div className="flex-1 bg-black rounded p-2 overflow-y-auto font-mono text-[11px]">

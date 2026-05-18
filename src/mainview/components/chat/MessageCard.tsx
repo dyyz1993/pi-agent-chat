@@ -262,7 +262,7 @@ export const MessageCard = memo(function MessageCard({
             {t("contextCompaction")}
           </span>
           {compactionBlock?.tokensBefore != null && (
-            <span className="text-[10px] text-gray-400 dark:text-gray-600">
+            <span className="text-[10px] text-text-tertiary dark:text-text-secondary">
               {Math.round(compactionBlock.tokensBefore / 1000)}k tokens
             </span>
           )}
@@ -272,19 +272,21 @@ export const MessageCard = memo(function MessageCard({
                 e.stopPropagation();
                 toggleCollapse(message.id);
               }}
-              className="p-0.5 text-gray-600 hover:text-gray-300 transition-colors"
+              className="p-0.5 text-text-secondary hover:text-text-secondary transition-colors"
               title={isCollapsed ? t("expand") : t("collapse")}
             >
               <ChevronDown
                 className={`w-3 h-3 transition-transform ${isCollapsed ? "" : "-rotate-90"}`}
               />
             </button>
-            <span className="text-[10px] text-gray-400 dark:text-gray-600">{timeStr}</span>
+            <span className="text-[10px] text-text-tertiary dark:text-text-secondary">
+              {timeStr}
+            </span>
           </div>
         </div>
         {isCollapsed ? (
           <div
-            className={`relative z-20 border-l-[3px] ${roleCfg.barColor} px-3 py-1 text-xs text-gray-400 dark:text-gray-500 italic leading-relaxed`}
+            className={`relative z-20 border-l-[3px] ${roleCfg.barColor} px-3 py-1 text-xs text-text-tertiary dark:text-text-tertiary italic leading-relaxed`}
           >
             {firstLine}
           </div>
@@ -348,7 +350,7 @@ export const MessageCard = memo(function MessageCard({
             checked={isSelected}
             onChange={() => toggleMessageSelection(message.id)}
             onClick={(e) => e.stopPropagation()}
-            className="w-3 h-3 rounded border border-gray-400 dark:border-gray-600 accent-status-success shrink-0 cursor-pointer"
+            className="w-3 h-3 rounded border border-border-secondary dark:border-border-secondary accent-status-success shrink-0 cursor-pointer"
           />
         )}
 
@@ -369,22 +371,21 @@ export const MessageCard = memo(function MessageCard({
                 e.stopPropagation();
                 handleToggleCollapse();
               }}
-              className="p-0.5 text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
-              title={isCollapsed ? t("expand") : t("collapse")}
+              className="p-0.5 text-text-tertiary dark:text-text-secondary hover:text-text-primary dark:hover:text-text-secondary transition-colors"
             >
               <ChevronDown
                 className={`w-3 h-3 transition-transform ${isCollapsed ? "" : "-rotate-90"}`}
               />
             </button>
           )}
-          <span className="text-[10px] text-gray-400 dark:text-gray-600">{timeStr}</span>
+          <span className="text-[10px] text-text-tertiary dark:text-text-secondary">{timeStr}</span>
         </div>
       </div>
 
       {/* Content */}
       {isCollapsed ? (
         <div
-          className={`relative z-20 border-l-[3px] ${isSelected ? "border-l-status-error" : barColor} px-3 py-1 text-xs text-gray-400 dark:text-gray-500 italic leading-relaxed`}
+          className={`relative z-20 border-l-[3px] ${isSelected ? "border-l-status-error" : barColor} px-3 py-1 text-xs text-text-tertiary dark:text-text-tertiary italic leading-relaxed`}
         >
           {message.content
             .filter((b) => b.type === "text")
@@ -737,7 +738,7 @@ const ActionBtn = memo(function ActionBtn({
       }}
       title={title}
       disabled={disabled}
-      className={`p-1 rounded transition-colors ${disabled ? "text-gray-400 dark:text-gray-700 cursor-not-allowed" : active ? activeClassName : "text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50"}`}
+      className={`p-1 rounded transition-colors ${disabled ? "text-text-tertiary dark:text-text-secondary cursor-not-allowed" : active ? activeClassName : "text-text-tertiary dark:text-text-secondary hover:text-text-primary dark:hover:text-text-secondary hover:bg-surface-hover/50 dark:hover:bg-surface-hover/50"}`}
     >
       {disabled ? (
         <Loader2 className="w-3.5 h-3.5 animate-spin" />

@@ -27,7 +27,7 @@ export const CardActionBar = memo(function CardActionBar({
       {onRetry && (
         <button
           onClick={onRetry}
-          className="p-0.5 rounded text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors"
+          className="p-0.5 rounded text-text-tertiary hover:text-text-primary hover:bg-surface-hover transition-colors"
           title={t("reloadTitle")}
         >
           <RefreshCw className="w-3 h-3" />
@@ -36,7 +36,7 @@ export const CardActionBar = memo(function CardActionBar({
       {onExpand && (
         <button
           onClick={onExpand}
-          className="p-0.5 rounded text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors"
+          className="p-0.5 rounded text-text-tertiary hover:text-text-primary hover:bg-surface-hover transition-colors"
           title={t("fullscreenTitle")}
         >
           <Maximize2 className="w-3 h-3" />
@@ -44,7 +44,7 @@ export const CardActionBar = memo(function CardActionBar({
       )}
       <button
         onClick={() => copy(url)}
-        className="p-0.5 rounded text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors"
+        className="p-0.5 rounded text-text-tertiary hover:text-text-primary hover:bg-surface-hover transition-colors"
         title={t("copyLinkTitle")}
       >
         {copied ? (
@@ -55,7 +55,7 @@ export const CardActionBar = memo(function CardActionBar({
       </button>
       <button
         onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
-        className="p-0.5 rounded text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors"
+        className="p-0.5 rounded text-text-tertiary hover:text-text-primary hover:bg-surface-hover transition-colors"
         title={t("openInNewWindowTitle")}
       >
         <ExternalLink className="w-3 h-3" />
@@ -82,12 +82,10 @@ export const CardHeader = memo(function CardHeader({
   onExpand,
 }: CardHeaderProps) {
   return (
-    <div className="px-3 py-1.5 flex items-center gap-2 text-xs border-b border-gray-200 dark:border-gray-700/30">
+    <div className="px-3 py-1.5 flex items-center gap-2 text-xs border-b border-border-secondary">
       {icon}
-      <span className="text-gray-800 dark:text-gray-300 truncate min-w-0">{label}</span>
-      {meta && (
-        <span className="text-gray-400 dark:text-gray-500 shrink-0 text-[10px]">{meta}</span>
-      )}
+      <span className="text-text-primary truncate min-w-0">{label}</span>
+      {meta && <span className="text-text-tertiary shrink-0 text-[10px]">{meta}</span>}
       <CardActionBar absolutePath={absolutePath} onRetry={onRetry} onExpand={onExpand} />
     </div>
   );

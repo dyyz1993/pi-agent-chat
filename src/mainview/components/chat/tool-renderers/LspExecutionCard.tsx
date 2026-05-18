@@ -77,9 +77,9 @@ function getSeverityColor(severity?: number): string {
     case 3:
       return "text-status-info";
     case 4:
-      return "text-gray-400";
+      return "text-text-tertiary";
     default:
-      return "text-gray-400";
+      return "text-text-tertiary";
   }
 }
 
@@ -110,12 +110,12 @@ export const LspExecutionCard = memo(function LspExecutionCard({ block }: LspExe
   let bgClass: string;
   if (isRunning) bgClass = "bg-status-info/10 dark:bg-status-info/10";
   else if (isError) bgClass = "bg-status-error/5 dark:bg-status-error/5";
-  else bgClass = "bg-status-warning/[0.05] dark:bg-gray-800/20";
+  else bgClass = "bg-status-warning/[0.05] dark:bg-surface-dim/50";
 
   return (
     <div className={`overflow-hidden ${bgClass}`}>
       <div
-        className="px-3 py-1 flex items-center gap-2 text-xs cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800/40 transition-colors select-none"
+        className="px-3 py-1 flex items-center gap-2 text-xs cursor-pointer hover:bg-surface-hover transition-colors select-none"
         onClick={() => setCollapsed((c) => !c)}
         role="button"
         aria-expanded={!collapsed}
@@ -132,7 +132,7 @@ export const LspExecutionCard = memo(function LspExecutionCard({ block }: LspExe
         <span className="font-medium text-semantic-tool/90">
           lsp
           {parsed.action && (
-            <span className="text-gray-500 font-normal ml-1">· {parsed.action}</span>
+            <span className="text-text-tertiary font-normal ml-1">· {parsed.action}</span>
           )}
         </span>
 
@@ -140,7 +140,7 @@ export const LspExecutionCard = memo(function LspExecutionCard({ block }: LspExe
           <span className="ml-1.5 text-[10px] flex items-center gap-1">
             {errorCount > 0 && <span className="text-status-error">{errorCount}E</span>}
             {warnCount > 0 && <span className="text-status-warning">{warnCount}W</span>}
-            <span className="text-gray-500">{parsed.diagnostics.length} issues</span>
+            <span className="text-text-tertiary">{parsed.diagnostics.length} issues</span>
           </span>
         )}
 
@@ -155,7 +155,7 @@ export const LspExecutionCard = memo(function LspExecutionCard({ block }: LspExe
       </div>
 
       {collapsed ? (
-        <div className="px-3 pb-2 text-[11px] text-gray-400 dark:text-gray-500 truncate">
+        <div className="px-3 pb-2 text-[11px] text-text-tertiary truncate">
           {hasDiagnostics
             ? `${parsed.diagnostics.length} diagnostics (${errorCount} errors, ${warnCount} warnings)`
             : (block.output?.split("\n")[0].slice(0, 80) ?? t("waitingOutput"))}
@@ -183,17 +183,17 @@ export const LspExecutionCard = memo(function LspExecutionCard({ block }: LspExe
                           L{line}:{char}
                         </span>
                         {diag.source && (
-                          <span className="text-gray-500 text-[10px] shrink-0">
+                          <span className="text-text-tertiary text-[10px] shrink-0">
                             [{diag.source}]
                           </span>
                         )}
                         {diag.code != null && (
-                          <span className="text-gray-600 dark:text-gray-400 text-[10px] shrink-0">
+                          <span className="text-text-secondary text-[10px] shrink-0">
                             ({String(diag.code)})
                           </span>
                         )}
                       </div>
-                      <span className="text-[11px] text-gray-300 dark:text-gray-400 break-words">
+                      <span className="text-[11px] text-text-secondary break-words">
                         {diag.message}
                       </span>
                     </div>
@@ -202,9 +202,9 @@ export const LspExecutionCard = memo(function LspExecutionCard({ block }: LspExe
               })}
             </div>
           ) : isRunning ? (
-            <div className="px-3 py-1 text-[11px] text-gray-400 italic">{t("waiting")}</div>
+            <div className="px-3 py-1 text-[11px] text-text-tertiary italic">{t("waiting")}</div>
           ) : block.output ? (
-            <pre className="mx-3 mt-0.5 text-[11px] text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-36 overflow-y-auto rounded px-2 py-1.5 bg-black/20">
+            <pre className="mx-3 mt-0.5 text-[11px] text-text-secondary overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-36 overflow-y-auto rounded px-2 py-1.5 bg-black/20">
               {block.output}
             </pre>
           ) : null}

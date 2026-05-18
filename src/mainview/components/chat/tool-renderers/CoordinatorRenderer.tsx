@@ -107,7 +107,7 @@ export const DelegateCard = memo(function DelegateCard({
           ? "border-blue-500/25 bg-blue-50 dark:bg-blue-950/20"
           : isError
             ? "border-red-500/15 bg-red-50 dark:bg-red-950/15"
-            : "border-gray-200 dark:border-gray-700/30 bg-gray-50 dark:bg-gray-800/25"
+            : "border-border-secondary/30 bg-surface-dim"
       } ${canJump ? "cursor-pointer" : ""}`}
       onClick={canJump ? handleJump : undefined}
     >
@@ -127,15 +127,13 @@ export const DelegateCard = memo(function DelegateCard({
               ? "text-blue-600 dark:text-blue-400"
               : isError
                 ? "text-red-500 dark:text-red-400"
-                : "text-gray-800 dark:text-gray-300"
+                : "text-text-primary"
           }`}
         >
           {t("coordinator.delegate")}
         </span>
 
-        <span className="min-w-0 text-gray-600 dark:text-gray-400 truncate font-normal">
-          {displayTitle}
-        </span>
+        <span className="min-w-0 text-text-secondary truncate font-normal">{displayTitle}</span>
 
         <span className="flex-1 min-w-0" />
 
@@ -147,8 +145,8 @@ export const DelegateCard = memo(function DelegateCard({
                 : sessionStatus === "streaming"
                   ? "text-amber-500 dark:text-amber-400"
                   : sessionStatus === "idle"
-                    ? "text-gray-400 dark:text-gray-500"
-                    : "text-gray-500 dark:text-gray-400"
+                    ? "text-text-tertiary"
+                    : "text-text-tertiary"
             }`}
           >
             {statusLabel}
@@ -208,7 +206,7 @@ export const ForkCard = memo(function ForkCard({
           ? "border-blue-500/25 bg-blue-50 dark:bg-blue-950/20"
           : isError
             ? "border-red-500/15 bg-red-50 dark:bg-red-950/15"
-            : "border-gray-200 dark:border-gray-700/30 bg-gray-50 dark:bg-gray-800/25"
+            : "border-border-secondary/30 bg-surface-dim"
       } ${canJump ? "cursor-pointer" : ""}`}
       onClick={canJump ? handleJump : undefined}
     >
@@ -228,15 +226,13 @@ export const ForkCard = memo(function ForkCard({
               ? "text-blue-600 dark:text-blue-400"
               : isError
                 ? "text-red-500 dark:text-red-400"
-                : "text-gray-800 dark:text-gray-300"
+                : "text-text-primary"
           }`}
         >
           {t("coordinator.fork")}
         </span>
 
-        <span className="min-w-0 text-gray-600 dark:text-gray-400 truncate font-normal">
-          {displayTitle}
-        </span>
+        <span className="min-w-0 text-text-secondary truncate font-normal">{displayTitle}</span>
 
         <span className="flex-1 min-w-0" />
 
@@ -248,8 +244,8 @@ export const ForkCard = memo(function ForkCard({
                 : sessionStatus === "streaming"
                   ? "text-amber-500 dark:text-amber-400"
                   : sessionStatus === "idle"
-                    ? "text-gray-400 dark:text-gray-500"
-                    : "text-gray-500 dark:text-gray-400"
+                    ? "text-text-tertiary"
+                    : "text-text-tertiary"
             }`}
           >
             {statusLabel}

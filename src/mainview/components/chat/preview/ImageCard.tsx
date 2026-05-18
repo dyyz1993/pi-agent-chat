@@ -23,7 +23,7 @@ export const ImageCard = memo(function ImageCard({ details }: { details: Preview
   }
 
   return (
-    <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700/40 bg-white dark:bg-gray-900/60">
+    <div className="rounded-lg overflow-hidden border border-border-secondary dark:border-border-secondary/40 bg-bg-elevated dark:bg-surface-code/60">
       <CardHeader
         icon={<ImageIcon className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400 shrink-0" />}
         label={details.title ?? details.source}
@@ -31,9 +31,9 @@ export const ImageCard = memo(function ImageCard({ details }: { details: Preview
         absolutePath={details.absolutePath}
         onRetry={error ? handleRetry : undefined}
       />
-      <div className="relative bg-gray-100 dark:bg-black/30 flex items-center justify-center min-h-[120px] max-h-[400px]">
+      <div className="relative bg-surface-dim dark:bg-black/30 flex items-center justify-center min-h-[120px] max-h-[400px]">
         {!loaded && !error && (
-          <div className="text-gray-400 dark:text-gray-500 text-xs animate-pulse">
+          <div className="text-text-tertiary dark:text-text-tertiary text-xs animate-pulse">
             {t("loadingImage")}
           </div>
         )}
@@ -45,7 +45,7 @@ export const ImageCard = memo(function ImageCard({ details }: { details: Preview
             </div>
             <button
               onClick={handleRetry}
-              className="text-[10px] text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 underline underline-offset-2 transition-colors"
+              className="text-[10px] text-text-tertiary hover:text-text-primary dark:text-text-tertiary dark:hover:text-text-secondary underline underline-offset-2 transition-colors"
             >
               {t("retry")}
             </button>
@@ -68,12 +68,14 @@ export const ImageCard = memo(function ImageCard({ details }: { details: Preview
 function FallbackCard({ details }: { details: PreviewDetails }) {
   const { t } = useTranslation("chat");
   return (
-    <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700/40 bg-white dark:bg-gray-900/60">
+    <div className="rounded-lg overflow-hidden border border-border-secondary dark:border-border-secondary/40 bg-bg-elevated dark:bg-surface-code/60">
       <CardHeader
-        icon={<ImageIcon className="w-3.5 h-3.5 text-gray-400 dark:text-gray-400 shrink-0" />}
+        icon={
+          <ImageIcon className="w-3.5 h-3.5 text-text-tertiary dark:text-text-tertiary shrink-0" />
+        }
         label={details.title ?? details.source}
       />
-      <div className="px-3 py-4 text-xs text-gray-400 dark:text-gray-500 italic">
+      <div className="px-3 py-4 text-xs text-text-tertiary dark:text-text-tertiary italic">
         {t("noPathForPreview")}
       </div>
     </div>

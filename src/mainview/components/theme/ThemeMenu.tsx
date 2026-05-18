@@ -5,8 +5,8 @@ import { useThemeStore, THEME_META } from "../../stores/use-theme-store";
 import type { Theme } from "../../stores/use-theme-store";
 
 const THEME_DOT_COLORS: Record<Exclude<Theme, "system">, string> = {
-  light: "bg-white border border-gray-300",
-  dark: "bg-gray-900",
+  light: "bg-white border border-border-secondary",
+  dark: "bg-surface-code",
   nord: "bg-[#5e81ac]",
   solarized: "bg-[#b58900]",
   "warm-dark": "bg-[#d4956a]",
@@ -69,18 +69,18 @@ export function ThemeMenu() {
       <button
         data-testid="theme-menu-toggle"
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-gray-400 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/60 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+        className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-text-tertiary dark:text-text-tertiary hover:bg-surface-hover dark:hover:bg-surface-dim/60 hover:text-text-primary dark:hover:text-text-secondary transition-colors"
         aria-expanded={open}
         aria-label={t("ariaThemeSwitch")}
       >
-        <Icon className="w-3 h-3 shrink-0 text-gray-500" />
+        <Icon className="w-3 h-3 shrink-0 text-text-tertiary" />
         <span className="truncate flex-1 text-left">
           {t("switchLabel")} {current.label}
         </span>
       </button>
       {open && (
-        <div className="absolute bottom-full left-0 right-0 mb-1 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md shadow-xl py-1">
-          <div className="px-3 py-1 text-[10px] font-medium text-gray-400 uppercase tracking-wider">
+        <div className="absolute bottom-full left-0 right-0 mb-1 z-50 bg-bg-elevated dark:bg-surface-dim border border-border-secondary dark:border-border-secondary rounded-md shadow-xl py-1">
+          <div className="px-3 py-1 text-[10px] font-medium text-text-tertiary uppercase tracking-wider">
             Theme
           </div>
           {THEME_OPTIONS.map((opt) => {
@@ -97,7 +97,7 @@ export function ThemeMenu() {
                 className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors ${
                   isActive
                     ? "bg-indigo-500/15 text-indigo-600 dark:text-indigo-300"
-                    : "text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    : "text-text-secondary dark:text-text-primary hover:bg-surface-hover dark:hover:bg-surface-hover"
                 }`}
                 onClick={() => {
                   setTheme(opt.value);
@@ -112,15 +112,15 @@ export function ThemeMenu() {
                 <span>{opt.label}</span>
                 {dot && <span className={`w-2 h-2 rounded-full shrink-0 ml-auto ${dot}`} />}
                 {opt.value === "system" && (
-                  <span className="ml-auto text-[10px] text-gray-400 font-mono">
+                  <span className="ml-auto text-[10px] text-text-tertiary font-mono">
                     {resolvedTheme}
                   </span>
                 )}
               </button>
             );
           })}
-          <div className="my-1 border-t border-gray-200 dark:border-gray-700" />
-          <div className="px-3 py-1 text-[10px] font-medium text-gray-400 uppercase tracking-wider flex items-center gap-1">
+          <div className="my-1 border-t border-border-secondary dark:border-border-secondary" />
+          <div className="px-3 py-1 text-[10px] font-medium text-text-tertiary uppercase tracking-wider flex items-center gap-1">
             <Languages className="w-3 h-3" />
             Language
           </div>
@@ -133,7 +133,7 @@ export function ThemeMenu() {
                 className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors ${
                   isActive
                     ? "bg-indigo-500/15 text-indigo-600 dark:text-indigo-300"
-                    : "text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    : "text-text-secondary dark:text-text-primary hover:bg-surface-hover dark:hover:bg-surface-hover"
                 }`}
                 onClick={(e) => {
                   e.preventDefault();
@@ -148,7 +148,9 @@ export function ThemeMenu() {
                 )}
                 <span>{opt.label}</span>
                 {isActive && (
-                  <span className="ml-auto text-[10px] text-gray-400 font-mono">{opt.value}</span>
+                  <span className="ml-auto text-[10px] text-text-tertiary font-mono">
+                    {opt.value}
+                  </span>
                 )}
               </button>
             );

@@ -20,8 +20,8 @@ export const CodePreview = memo(function CodePreview({
 
   if (!language) {
     return (
-      <div className="overflow-auto bg-gray-100 dark:bg-gray-900/40 rounded" style={{ maxHeight }}>
-        <pre className="text-[11px] leading-relaxed font-mono text-gray-800 dark:text-gray-300 whitespace-pre p-2">
+      <div className="overflow-auto bg-surface-code rounded" style={{ maxHeight }}>
+        <pre className="text-[11px] leading-relaxed font-mono text-text-primary whitespace-pre p-2">
           {code}
         </pre>
       </div>
@@ -29,13 +29,13 @@ export const CodePreview = memo(function CodePreview({
   }
 
   return (
-    <div className="overflow-auto bg-gray-100 dark:bg-gray-900/40 rounded" style={{ maxHeight }}>
+    <div className="overflow-auto bg-surface-code rounded" style={{ maxHeight }}>
       <Highlight theme={prismTheme} code={code} language={language}>
         {({ tokens, getLineProps, getTokenProps }) => (
           <pre className="text-[11px] leading-relaxed font-mono p-2 m-0">
             {tokens.map((line, i) => (
               <div key={i} {...getLineProps({ line })} className="table-row">
-                <span className="table-cell text-right pr-3 select-none text-gray-400 dark:text-gray-600 w-8 text-[10px]">
+                <span className="table-cell text-right pr-3 select-none text-text-tertiary w-8 text-[10px]">
                   {i + 1}
                 </span>
                 <span className="table-cell whitespace-pre">

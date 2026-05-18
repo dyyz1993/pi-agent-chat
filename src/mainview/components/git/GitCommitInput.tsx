@@ -38,9 +38,9 @@ export function GitCommitInput() {
   const isCommitting = loadingAction === "commit";
 
   return (
-    <div className="p-2 border-b border-gray-200 dark:border-gray-700">
+    <div className="p-2 border-b border-border-secondary">
       <textarea
-        className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 text-xs text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 resize-none outline-none focus:border-semantic-accent transition-colors"
+        className="w-full bg-surface-dim border border-border-secondary rounded px-2 py-1.5 text-xs text-text-primary placeholder:text-text-tertiary resize-none outline-none focus:border-semantic-accent transition-colors"
         rows={3}
         placeholder="Commit message (Ctrl+Enter to commit)"
         value={message}

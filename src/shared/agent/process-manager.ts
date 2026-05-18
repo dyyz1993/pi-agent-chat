@@ -263,7 +263,7 @@ export class AgentProcessManager {
   }
 
   private broadcastSessionStatus(sessionId: string, status: string): void {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     const projectPath = managed?.info.projectPath ?? "";
     this.broadcastEvent(
       "agent.session_status_changed",
@@ -284,7 +284,7 @@ export class AgentProcessManager {
   ): Promise<{ agentId: string; status: "started" | "already_running" | "switched" }> {
     const tStart = performance.now();
 
-    const existing = this.clients.get(sessionId);
+    const existing = this.getActiveManaged(sessionId);
     if (existing) {
       perfLog.info("[start] already_running (cached hit)", {
         sessionId,
@@ -313,8 +313,12 @@ export class AgentProcessManager {
           ),
         ]);
         if (!result.cancelled) {
-          // Update mappings
-          this.clients.delete(oldSessionId);
+          // Update mappings: remove ALL stale clients entries pointing to this pooled process
+          for (const [sid, mc] of this.clients) {
+            if (mc === pooled && sid !== sessionId) {
+              this.clients.delete(sid);
+            }
+          }
           pooled._activeSessionId = sessionId;
           pooled.info = {
             sessionId,
@@ -347,8 +351,12 @@ export class AgentProcessManager {
         });
         // Remove from process pool so we don't try to reuse a stuck process
         this.processByCwd.delete(projectPath);
-        // Kill the old process entries but don't call full stop() to avoid cascading
-        this.clients.delete(oldSessionId);
+        // Kill ALL stale clients entries pointing to this stuck process
+        for (const [sid, mc] of this.clients) {
+          if (mc === pooled) {
+            this.clients.delete(sid);
+          }
+        }
         try {
           pooled.unsubscribe();
         } catch {
@@ -457,7 +465,7 @@ export class AgentProcessManager {
 
   async replayHoldEvents(sessionId: string): Promise<{ replayed: number }> {
     const t0 = performance.now();
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) {
       perfLog.info("[replayHoldEvents] no client", { sessionId, totalMs: 0 });
       return { replayed: 0 };
@@ -472,7 +480,7 @@ export class AgentProcessManager {
   }
 
   send(sessionId: string, content: string): boolean {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) {
       log.warn("send: no client", { sessionId });
       return false;
@@ -484,7 +492,7 @@ export class AgentProcessManager {
   }
 
   steer(sessionId: string, content: string): boolean {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return false;
     managed.client.steer(content).catch((err: unknown) => {
       log.warn("steer error", { sessionId, err: err instanceof Error ? err.message : String(err) });
@@ -493,7 +501,7 @@ export class AgentProcessManager {
   }
 
   followUp(sessionId: string, content: string): boolean {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return false;
     managed.client.followUp(content).catch((err: unknown) => {
       log.warn("followUp error", {
@@ -505,7 +513,7 @@ export class AgentProcessManager {
   }
 
   async abort(sessionId: string): Promise<boolean> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return false;
     await managed.client.abort().catch((err: unknown) => {
       log.warn("abort error", { sessionId, err: err instanceof Error ? err.message : String(err) });
@@ -514,7 +522,7 @@ export class AgentProcessManager {
   }
 
   async setCwd(sessionId: string, cwd: string): Promise<boolean> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return false;
     await managed.client.setCwd(cwd).catch((err: unknown) => {
       log.warn("setCwd error", {
@@ -527,7 +535,7 @@ export class AgentProcessManager {
   }
 
   respondUI(sessionId: string, requestId: string, response: Record<string, unknown>): boolean {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return false;
 
     managed.client.respondUI(requestId, response);
@@ -535,7 +543,7 @@ export class AgentProcessManager {
   }
 
   stop(sessionId: string): boolean {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return false;
 
     managed.info.status = "idle";
@@ -587,7 +595,7 @@ export class AgentProcessManager {
   }
 
   getStatus(sessionId: string): { status: "idle" | "streaming" | "stopped"; pid?: number } {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return { status: "stopped" };
     return { status: managed.info.status };
   }
@@ -653,6 +661,22 @@ export class AgentProcessManager {
     return entries;
   }
 
+  /**
+   * Get the managed client for a session, but ONLY if the pooled process
+   * is currently serving that session (i.e. _activeSessionId matches).
+   * If the pooled process has been switched to a different session, this
+   * returns null and cleans up the stale clients entry.
+   */
+  private getActiveManaged(sessionId: string): ManagedClient | null {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return null;
+    if (managed._activeSessionId === sessionId) return managed;
+    // Stale entry: pooled process was switched to a different session.
+    // Clean up to prevent serving wrong session data.
+    this.clients.delete(sessionId);
+    return null;
+  }
+
   private resolveSessionPath(sessionId: string): string {
     const managed = this.clients.get(sessionId);
     if (managed) return managed.info.sessionPath;
@@ -680,7 +704,7 @@ export class AgentProcessManager {
     isCompacting: boolean;
     messageCount: number;
   } | null> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return null;
 
     try {
@@ -712,7 +736,7 @@ export class AgentProcessManager {
   ): Promise<
     Array<{ name: string; description: string; source: "extension" | "prompt" | "skill" }>
   > {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return [];
 
     try {
@@ -737,7 +761,7 @@ export class AgentProcessManager {
     cost: number;
     contextUsage?: { tokens: number | null; contextWindow: number; percent: number | null };
   } | null> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return null;
 
     try {
@@ -778,7 +802,7 @@ export class AgentProcessManager {
     messages: AgentMessageForUI[];
     customEntries: Array<{ id: string; customType: string; data: unknown; timestamp: number }>;
   }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
 
     let messages: unknown[] = [];
     let resolvedSessionPath = sessionPath ?? "";
@@ -926,7 +950,7 @@ export class AgentProcessManager {
     customEntries: Array<{ id: string; customType: string; data: unknown; timestamp: number }>;
   }> {
     const t0 = performance.now();
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
 
     let messages: unknown[] = [];
     let resolvedSessionPath = sessionPath ?? "";
@@ -1143,7 +1167,7 @@ export class AgentProcessManager {
   async getAvailableModels(
     sessionId: string,
   ): Promise<Array<{ provider: string; id: string; contextWindow: number; reasoning: boolean }>> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return [];
     return managed.client.getAvailableModels().catch((err: unknown) => {
       log.warn("getAvailableModels error", {
@@ -1159,7 +1183,7 @@ export class AgentProcessManager {
     provider: string,
     modelId: string,
   ): Promise<{ provider: string; id: string }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) throw new Error("Client not found");
     return managed.client.setModel(provider, modelId);
   }
@@ -1169,7 +1193,7 @@ export class AgentProcessManager {
     thinkingLevel: string;
     isScoped: boolean;
   } | null> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return null;
     return managed.client.cycleModel().catch((err: unknown) => {
       log.warn("cycleModel error", {
@@ -1181,7 +1205,7 @@ export class AgentProcessManager {
   }
 
   async setThinkingLevel(sessionId: string, level: string): Promise<void> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return;
     await managed.client
       .setThinkingLevel(level as Parameters<typeof managed.client.setThinkingLevel>[0])
@@ -1194,7 +1218,7 @@ export class AgentProcessManager {
   }
 
   async cycleThinkingLevel(sessionId: string): Promise<{ level: string } | null> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return null;
     return managed.client.cycleThinkingLevel().catch((err: unknown) => {
       log.warn("cycleThinkingLevel error", {
@@ -1209,13 +1233,13 @@ export class AgentProcessManager {
     sessionId: string,
     customInstructions?: string,
   ): Promise<{ summary: string; tokensBefore: number }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) throw new Error("Client not found");
     return managed.client.compact(customInstructions);
   }
 
   async setAutoCompaction(sessionId: string, enabled: boolean): Promise<void> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return;
     await managed.client.setAutoCompaction(enabled).catch((err: unknown) => {
       log.warn("setAutoCompaction error", {
@@ -1226,7 +1250,7 @@ export class AgentProcessManager {
   }
 
   async setAutoRetry(sessionId: string, enabled: boolean): Promise<void> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return;
     await managed.client.setAutoRetry(enabled).catch((err: unknown) => {
       log.warn("setAutoRetry error", {
@@ -1237,7 +1261,7 @@ export class AgentProcessManager {
   }
 
   async abortRetry(sessionId: string): Promise<void> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return;
     await managed.client.abortRetry().catch((err: unknown) => {
       log.warn("abortRetry error", {
@@ -1248,7 +1272,7 @@ export class AgentProcessManager {
   }
 
   async setSteeringMode(sessionId: string, mode: string): Promise<void> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return;
     await managed.client.setSteeringMode(mode as "all" | "one-at-a-time").catch((err: unknown) => {
       log.warn("setSteeringMode error", {
@@ -1259,7 +1283,7 @@ export class AgentProcessManager {
   }
 
   async setFollowUpMode(sessionId: string, mode: string): Promise<void> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return;
     await managed.client.setFollowUpMode(mode as "all" | "one-at-a-time").catch((err: unknown) => {
       log.warn("setFollowUpMode error", {
@@ -1270,7 +1294,7 @@ export class AgentProcessManager {
   }
 
   async getActiveTools(sessionId: string): Promise<{ toolNames: string[] }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return { toolNames: [] };
     try {
       const result = await managed.client.getActiveTools();
@@ -1285,7 +1309,7 @@ export class AgentProcessManager {
   }
 
   async setActiveTools(sessionId: string, toolNames: string[]): Promise<void> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return;
     await managed.client.setActiveTools(toolNames).catch((err: unknown) => {
       log.warn("setActiveTools error", {
@@ -1296,7 +1320,7 @@ export class AgentProcessManager {
   }
 
   async getQueue(sessionId: string): Promise<{ steering: string[]; followUp: string[] }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return { steering: [], followUp: [] };
     return managed.client.getQueue().catch((err: unknown) => {
       log.warn("getQueue error", {
@@ -1308,7 +1332,7 @@ export class AgentProcessManager {
   }
 
   async clearQueue(sessionId: string): Promise<{ steering: string[]; followUp: string[] }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return { steering: [], followUp: [] };
     return managed.client.clearQueue().catch((err: unknown) => {
       log.warn("clearQueue error", {
@@ -1327,7 +1351,7 @@ export class AgentProcessManager {
       commandNames: string[];
     }>;
   }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return { extensions: [] };
     try {
       const result = await managed.client.getExtensions();
@@ -1350,7 +1374,7 @@ export class AgentProcessManager {
       disableModelInvocation: boolean;
     }>;
   }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return { skills: [] };
     try {
       const result = await managed.client.getSkills();
@@ -1365,7 +1389,7 @@ export class AgentProcessManager {
   }
 
   async reload(sessionId: string): Promise<void> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return;
     await managed.client.reload();
   }
@@ -1373,7 +1397,7 @@ export class AgentProcessManager {
   async getTools(
     sessionId: string,
   ): Promise<{ tools: Array<{ name: string; label: string; description: string }> }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return { tools: [] };
     try {
       const result = await managed.client.getTools();
@@ -1388,7 +1412,7 @@ export class AgentProcessManager {
   }
 
   async getMcpServers(sessionId: string): Promise<{ servers: McpServerInfo[] }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return { servers: [] };
     try {
       const servers = await managed.client.getMcpServers();
@@ -1407,7 +1431,7 @@ export class AgentProcessManager {
     name: string,
     enabled: boolean,
   ): Promise<{ success: boolean; error?: string }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return { success: false, error: "Client not found" };
     try {
       await managed.client.toggleMcpServer(name, enabled);
@@ -1423,7 +1447,7 @@ export class AgentProcessManager {
     sessionId: string,
     name: string,
   ): Promise<{ success: boolean; error?: string }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return { success: false, error: "Client not found" };
     try {
       await managed.client.restartMcpServer(name);
@@ -1438,7 +1462,7 @@ export class AgentProcessManager {
   async getContextUsage(
     sessionId: string,
   ): Promise<{ tokens: number | null; contextWindow: number; percent: number | null }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return { tokens: null, contextWindow: 0, percent: null };
     return managed.client.getContextUsage().catch((err: unknown) => {
       log.warn("getContextUsage error", {
@@ -1450,7 +1474,7 @@ export class AgentProcessManager {
   }
 
   async getTierModels(sessionId: string): Promise<{ models: Record<string, string> }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return { models: {} };
     const response = await (
       managed.client as unknown as { send: (cmd: unknown) => Promise<unknown> }
@@ -1469,7 +1493,7 @@ export class AgentProcessManager {
   }
 
   async setTierModels(sessionId: string, models: Record<string, string>): Promise<{ ok: boolean }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return { ok: false };
     await (managed.client as unknown as { send: (cmd: unknown) => Promise<unknown> })
       .send({ type: "set_tier_models", models })
@@ -1493,7 +1517,7 @@ export class AgentProcessManager {
       filePath: string;
     }>;
   }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return { agents: [] };
     try {
       const response = await (
@@ -1539,7 +1563,7 @@ export class AgentProcessManager {
     tier?: string;
     thinkingLevel?: string;
   }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) throw new Error("No agent process for session");
     const response = await (
       managed.client as unknown as { send: (cmd: unknown) => Promise<unknown> }
@@ -1554,7 +1578,7 @@ export class AgentProcessManager {
   }
 
   async getCurrentAgent(sessionId: string): Promise<{ agentName: string | null }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return { agentName: null };
     try {
       const response = await (
@@ -1572,7 +1596,7 @@ export class AgentProcessManager {
   }
 
   async getAgentDetail(sessionId: string, agentName: string) {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) throw new Error("Client not found");
     return (
       managed.client as unknown as {
@@ -1582,7 +1606,7 @@ export class AgentProcessManager {
   }
 
   async getAllTools(sessionId: string) {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) throw new Error("Client not found");
     return (
       managed.client as unknown as {
@@ -1592,7 +1616,7 @@ export class AgentProcessManager {
   }
 
   async getSystemPrompt(sessionId: string) {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) throw new Error(`No client for session ${sessionId}`);
     return (
       managed.client as unknown as {
@@ -1602,7 +1626,7 @@ export class AgentProcessManager {
   }
 
   async getLatestAgentChange(sessionId: string) {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return null;
     try {
       const response = await (
@@ -1628,7 +1652,7 @@ export class AgentProcessManager {
   }
 
   async getSettings(sessionId: string, scope?: string): Promise<Record<string, unknown>> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return {};
     return managed.client
       .getSettings(scope as "global" | "project" | undefined)
@@ -1647,7 +1671,7 @@ export class AgentProcessManager {
     settings: Record<string, unknown>,
     scope?: string,
   ): Promise<void> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return;
     await managed.client
       .setSettings(settings, scope as "global" | "project" | undefined)
@@ -1660,7 +1684,7 @@ export class AgentProcessManager {
   }
 
   async setSessionName(sessionId: string, name: string): Promise<void> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return;
     await managed.client.setSessionName(name).catch((err: unknown) => {
       log.warn("setSessionName error", {
@@ -1671,7 +1695,7 @@ export class AgentProcessManager {
   }
 
   async getLastAssistantText(sessionId: string): Promise<{ text: string | null }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return { text: null };
     try {
       const result = await managed.client.getLastAssistantText();
@@ -1688,7 +1712,7 @@ export class AgentProcessManager {
   async getForkMessages(
     sessionId: string,
   ): Promise<{ messages: Array<{ entryId: string; text: string }> }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return { messages: [] };
     try {
       const result = await managed.client.getForkMessages();
@@ -1712,7 +1736,7 @@ export class AgentProcessManager {
     newSessionFile?: string;
     newSessionId?: string;
   }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) throw new Error("Client not found");
     const result = await managed.client.fork(entryId, options);
     if (!result.cancelled) {
@@ -1730,7 +1754,7 @@ export class AgentProcessManager {
     targetId: string,
     options?: { summarize?: boolean; skipFiles?: boolean },
   ): Promise<{ cancelled: boolean }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (managed) {
       const result = await managed.client.navigateTree(targetId, options);
       if (!result.cancelled) {
@@ -1750,7 +1774,7 @@ export class AgentProcessManager {
     sessionId: string,
     targetId: string,
   ): Promise<{ restored: string[]; deleted: string[] }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (managed) {
       return managed.client.previewRollback(targetId);
     }
@@ -1769,7 +1793,7 @@ export class AgentProcessManager {
       entryId: string;
     }>
   > {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (managed) {
       return managed.client.getModifiedFiles({ fromEntryId, toEntryId });
     }
@@ -1793,7 +1817,7 @@ export class AgentProcessManager {
     }>;
     summary: { totalFiles: number; added: number; modified: number; deleted: number };
   }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (managed) {
       return managed.client.getBatchDiffs({ fromEntryId, toEntryId });
     }
@@ -1801,7 +1825,7 @@ export class AgentProcessManager {
   }
 
   async getTree(sessionId: string): Promise<{ entries: TreeEntry[]; leafId?: string | null }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (managed) {
       try {
         const result = await managed.client.getTree();
@@ -1835,7 +1859,7 @@ export class AgentProcessManager {
     snapshotTreeHash: string,
     files?: string[],
   ): Promise<string[]> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) throw new Error("Client not found");
 
     const result = (await managed.client
@@ -1848,25 +1872,25 @@ export class AgentProcessManager {
   }
 
   async clone(sessionId: string): Promise<{ cancelled: boolean }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) throw new Error("Client not found");
     return managed.client.clone();
   }
 
   async newSession(sessionId: string, parentSession?: string): Promise<{ cancelled: boolean }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) throw new Error("Client not found");
     return managed.client.newSession(parentSession);
   }
 
   async exportHtml(sessionId: string, outputPath?: string): Promise<{ path: string }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) throw new Error("Client not found");
     return managed.client.exportHtml(outputPath);
   }
 
   sendChannelData(sessionId: string, channelName: string, data: unknown): void {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return;
     const ch = managed.client.channel(channelName);
     ch.send(data);
@@ -1892,14 +1916,14 @@ export class AgentProcessManager {
     method: string,
     params: Record<string, unknown>,
   ): Promise<unknown> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) throw new Error("Client not found");
     const ch = managed.client.channel(channelName);
     return ch.call(method, params);
   }
 
   private handleEvent(sessionId: string, event: AgentEvent): void {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return;
 
     if (event.type === "channel_data") {
@@ -2273,14 +2297,14 @@ export class AgentProcessManager {
     }
 
     if (invokeId) {
-      let managed = this.clients.get(sessionId);
+      let managed = this.getActiveManaged(sessionId);
       // The session may have been evicted from clients during an async handler
       // (e.g. delegate_send restarts the target, switching the pooled process).
       // Fall back to processByCwd via sessionProjectPaths to find the channel.
       if (!managed) {
         const projectPath = this.sessionProjectPaths.get(sessionId) ?? "";
         if (projectPath) {
-          managed = this.processByCwd.get(projectPath);
+          managed = this.processByCwd.get(projectPath) ?? null;
           if (managed) {
             log.info("handleCoordinatorCall: routed response via processByCwd fallback", {
               sessionId,
@@ -2581,7 +2605,7 @@ export class AgentProcessManager {
     channelName: string,
     data: unknown,
   ): Promise<unknown> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return null;
     try {
       const ch = managed.client.channel(channelName);
@@ -2597,17 +2621,17 @@ export class AgentProcessManager {
   }
 
   hasSession(sessionId: string): boolean {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     return managed !== undefined;
   }
 
   getProjectPath(sessionId: string): string | undefined {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     return managed?.info?.projectPath;
   }
 
   getSessionPath(sessionId: string): string {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (managed) return managed.info.sessionPath;
     return this.sessionPaths.get(sessionId) ?? "";
   }

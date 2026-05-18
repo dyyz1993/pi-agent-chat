@@ -15,7 +15,7 @@ const TYPE_BADGES: Record<string, { labelKey: string; cls: string }> = {
   reference: { labelKey: "typeReference", cls: "bg-status-info/15 text-status-info" },
 };
 
-const EVENT_FALLBACK: MemoryTypeConfig = { icon: Brain, label: "", color: "text-gray-400" };
+const EVENT_FALLBACK: MemoryTypeConfig = { icon: Brain, label: "", color: "text-text-tertiary" };
 
 function getEventIcon(customType: string) {
   return ALL_MEMORY_TYPES[customType] ?? EVENT_FALLBACK;
@@ -39,7 +39,7 @@ function SectionHeader({
   return (
     <button
       onClick={onToggle}
-      className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-800/30 transition-colors"
+      className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium text-text-secondary dark:text-text-secondary hover:bg-surface-hover/50 dark:hover:bg-surface-dim/30 transition-colors"
     >
       {collapsed ? (
         <ChevronRight className="w-3 h-3 shrink-0" />
@@ -49,7 +49,7 @@ function SectionHeader({
       <Icon className={`w-3 h-3 shrink-0 ${iconCls ?? ""}`} />
       <span>{label}</span>
       {badge != null && badge > 0 && (
-        <span className="ml-auto text-[9px] text-gray-600">{badge}</span>
+        <span className="ml-auto text-[9px] text-text-secondary">{badge}</span>
       )}
     </button>
   );
@@ -82,18 +82,20 @@ function FileContentPreview({ filePath }: { filePath: string }) {
 
   if (loading) {
     return (
-      <div className="px-3 py-1.5 text-[10px] text-gray-400 dark:text-gray-600">{t("loading")}</div>
+      <div className="px-3 py-1.5 text-[10px] text-text-tertiary dark:text-text-tertiary">
+        {t("loading")}
+      </div>
     );
   }
   if (!content) {
     return (
-      <div className="px-3 py-1.5 text-[10px] text-gray-400 dark:text-gray-600">
+      <div className="px-3 py-1.5 text-[10px] text-text-tertiary dark:text-text-tertiary">
         {t("cannotRead")}
       </div>
     );
   }
   return (
-    <pre className="mx-2 mb-1.5 p-2 rounded bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-800 text-[10px] text-gray-600 dark:text-gray-400 overflow-x-auto whitespace-pre-wrap max-h-40 overflow-y-auto">
+    <pre className="mx-2 mb-1.5 p-2 rounded bg-surface-code dark:bg-surface-code/80 border border-border-secondary dark:border-surface-code text-[10px] text-text-secondary dark:text-text-secondary overflow-x-auto whitespace-pre-wrap max-h-40 overflow-y-auto">
       {content.length > 2000 ? content.slice(0, 2000) + "..." : content}
     </pre>
   );
@@ -132,7 +134,9 @@ export function MemoryPanel() {
 
   if (!sessionId) {
     return (
-      <div className="p-3 text-xs text-gray-500 dark:text-gray-500">{t("noActiveSession")}</div>
+      <div className="p-3 text-xs text-text-tertiary dark:text-text-tertiary">
+        {t("noActiveSession")}
+      </div>
     );
   }
 
@@ -180,7 +184,7 @@ export function MemoryPanel() {
       const d = data as { files?: Array<{ filename: string }> } | undefined;
       const fileList = d?.files ?? [];
       return fileList.length > 0 ? (
-        <span className="text-[9px] text-gray-500 truncate max-w-[120px]">
+        <span className="text-[9px] text-text-tertiary truncate max-w-[120px]">
           {fileList.map((f) => f.filename).join(", ")}
         </span>
       ) : null;
@@ -188,7 +192,7 @@ export function MemoryPanel() {
     if (customType === "memory_prefetch_result") {
       const d = data as { durationMs?: number } | undefined;
       return d?.durationMs != null ? (
-        <span className="text-[9px] text-gray-500">{d.durationMs}ms</span>
+        <span className="text-[9px] text-text-tertiary">{d.durationMs}ms</span>
       ) : null;
     }
     if (customType === "memory_irrelevant_marked") {
@@ -267,7 +271,7 @@ export function MemoryPanel() {
   return (
     <div className="py-1">
       {hasInjected && (
-        <div className="border-b border-gray-200 dark:border-gray-800/50">
+        <div className="border-b border-border-secondary dark:border-surface-code/50">
           <SectionHeader
             collapsed={collapsedSections.has("injected")}
             onToggle={() => toggleSection("injected")}
@@ -294,12 +298,12 @@ export function MemoryPanel() {
         </div>
       )}
 
-      <div className="border-b border-gray-200 dark:border-gray-800/50">
+      <div className="border-b border-border-secondary dark:border-surface-code/50">
         <SectionHeader
           collapsed={collapsedSections.has("files")}
           onToggle={() => toggleSection("files")}
           icon={FileText}
-          iconCls="text-gray-400"
+          iconCls="text-text-tertiary"
           label={t("memoryFiles")}
           badge={files.length}
         />
@@ -313,7 +317,7 @@ export function MemoryPanel() {
                   <div key={f.filePath}>
                     <button
                       onClick={() => setExpandedFile(isExpanded ? null : f.filePath)}
-                      className="w-full flex items-center gap-1.5 py-1 px-1 rounded hover:bg-gray-200/50 dark:hover:bg-gray-800/40 transition-colors text-left"
+                      className="w-full flex items-center gap-1.5 py-1 px-1 rounded hover:bg-surface-hover/50 dark:hover:bg-surface-code/40 transition-colors text-left"
                     >
                       {badge ? (
                         <span
@@ -322,14 +326,14 @@ export function MemoryPanel() {
                           {getBadgeLabel(f.type ?? "")}
                         </span>
                       ) : (
-                        <span className="px-1 py-0 rounded text-[8px] font-medium shrink-0 bg-gray-400/15 text-gray-400">
+                        <span className="px-1 py-0 rounded text-[8px] font-medium shrink-0 bg-text-tertiary/15 text-text-tertiary">
                           {t("typeOther")}
                         </span>
                       )}
-                      <span className="text-[10px] text-gray-700 dark:text-gray-300 truncate flex-1">
+                      <span className="text-[10px] text-text-secondary dark:text-text-secondary truncate flex-1">
                         {f.description ?? f.filename}
                       </span>
-                      <span className="text-[9px] text-gray-400 dark:text-gray-600 shrink-0">
+                      <span className="text-[9px] text-text-tertiary dark:text-text-tertiary shrink-0">
                         {relativeTimeStr(f.mtimeMs)}
                       </span>
                     </button>
@@ -340,9 +344,9 @@ export function MemoryPanel() {
             </div>
           ) : (
             <div className="px-2.5 pb-2 py-2 text-center">
-              <FileText className="w-4 h-4 mx-auto mb-1 text-gray-400 dark:text-gray-600" />
-              <p className="text-[10px] text-gray-500">{t("noMemoryFiles")}</p>
-              <p className="text-[9px] text-gray-400 dark:text-gray-600 mt-0.5">
+              <FileText className="w-4 h-4 mx-auto mb-1 text-text-tertiary dark:text-text-tertiary" />
+              <p className="text-[10px] text-text-tertiary">{t("noMemoryFiles")}</p>
+              <p className="text-[9px] text-text-tertiary dark:text-text-tertiary mt-0.5">
                 {t("autoExtract")}
               </p>
             </div>
@@ -350,7 +354,7 @@ export function MemoryPanel() {
       </div>
 
       {hasEntrypoint && (
-        <div className="border-b border-gray-200 dark:border-gray-800/50">
+        <div className="border-b border-border-secondary dark:border-surface-code/50">
           <SectionHeader
             collapsed={collapsedSections.has("entrypoint")}
             onToggle={() => toggleSection("entrypoint")}
@@ -360,7 +364,7 @@ export function MemoryPanel() {
           />
           {!collapsedSections.has("entrypoint") && (
             <div className="px-2.5 pb-1.5">
-              <pre className="p-2 rounded bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-800 text-[10px] text-gray-600 dark:text-gray-400 overflow-x-auto whitespace-pre-wrap max-h-40 overflow-y-auto">
+              <pre className="p-2 rounded bg-surface-code dark:bg-surface-code/80 border border-border-secondary dark:border-surface-code text-[10px] text-text-secondary dark:text-text-secondary overflow-x-auto whitespace-pre-wrap max-h-40 overflow-y-auto">
                 {(entrypoint || "").length > 2000
                   ? (entrypoint || "").slice(0, 2000) + "..."
                   : entrypoint}
@@ -370,12 +374,12 @@ export function MemoryPanel() {
         </div>
       )}
 
-      <div className="border-b border-gray-200 dark:border-gray-800/50 last:border-b-0">
+      <div className="border-b border-border-secondary dark:border-surface-code/50 last:border-b-0">
         <SectionHeader
           collapsed={collapsedSections.has("operations")}
           onToggle={() => toggleSection("operations")}
           icon={Brain}
-          iconCls="text-gray-400"
+          iconCls="text-text-tertiary"
           label={t("recentOperations")}
           badge={events.length}
         />
@@ -394,14 +398,14 @@ export function MemoryPanel() {
                 return (
                   <div
                     key={event.id}
-                    className={`flex items-center gap-1.5 py-0.5 px-1 rounded transition-colors ${config.pulse ? "bg-semantic-memory/5" : "hover:bg-gray-200/50 dark:hover:bg-gray-800/40"}`}
+                    className={`flex items-center gap-1.5 py-0.5 px-1 rounded transition-colors ${config.pulse ? "bg-semantic-memory/5" : "hover:bg-surface-hover/50 dark:hover:bg-surface-code/40"}`}
                   >
                     <Icon
                       className={`w-3 h-3 shrink-0 ${config.color} ${config.pulse ? "animate-spin" : ""}`}
                     />
                     <span className={`text-[10px] font-medium ${config.color}`}>{label}</span>
                     {detailEl}
-                    <span className="ml-auto text-[9px] text-gray-400 dark:text-gray-600 shrink-0">
+                    <span className="ml-auto text-[9px] text-text-tertiary dark:text-text-tertiary shrink-0">
                       {timeStr}
                     </span>
                   </div>
@@ -410,8 +414,8 @@ export function MemoryPanel() {
             </div>
           ) : (
             <div className="px-2.5 pb-2 py-2 text-center">
-              <Brain className="w-4 h-4 mx-auto mb-1 text-gray-400 dark:text-gray-600" />
-              <p className="text-[10px] text-gray-500">{t("noOperations")}</p>
+              <Brain className="w-4 h-4 mx-auto mb-1 text-text-tertiary dark:text-text-tertiary" />
+              <p className="text-[10px] text-text-tertiary">{t("noOperations")}</p>
             </div>
           ))}
       </div>

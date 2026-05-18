@@ -14,7 +14,7 @@ export function QueueCards({ sessionId }: { sessionId: string }) {
 
   return (
     <div className="px-3 py-1.5 flex-shrink-0">
-      <div className="flex items-start gap-2 p-2.5 rounded-lg bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700/50">
+      <div className="flex items-start gap-2 p-2.5 rounded-lg bg-surface-dim border border-border-secondary">
         <div className="flex-1 min-w-0 space-y-1">
           {queue.steering.map((text, i) => (
             <div
@@ -37,7 +37,7 @@ export function QueueCards({ sessionId }: { sessionId: string }) {
         </div>
         <button
           onClick={clearQueue}
-          className="shrink-0 p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700/60 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+          className="shrink-0 p-1 rounded hover:bg-surface-hover text-text-tertiary hover:text-text-primary transition-colors"
           title={t("revokeQueuedMessages", { count: total })}
           aria-label={t("revokeQueuedMessages", { count: total })}
         >

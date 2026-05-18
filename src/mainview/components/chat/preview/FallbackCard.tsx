@@ -10,13 +10,13 @@ export const FallbackCard = memo(function FallbackCard({ details }: { details: P
   const hasError = details.status === "error" || details.status === "not_found";
 
   return (
-    <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700/40 bg-white dark:bg-gray-900/60">
+    <div className="rounded-lg overflow-hidden border border-border-secondary dark:border-border-secondary/40 bg-bg-elevated dark:bg-surface-code/60">
       <CardHeader
         icon={
           hasError ? (
             <AlertCircle className="w-3.5 h-3.5 text-status-error shrink-0" />
           ) : (
-            <FileQuestion className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+            <FileQuestion className="w-3.5 h-3.5 text-text-tertiary shrink-0" />
           )
         }
         label={details.title ?? details.source}
@@ -27,16 +27,21 @@ export const FallbackCard = memo(function FallbackCard({ details }: { details: P
           <div className="text-status-error">{details.error}</div>
         ) : (
           <>
-            <div className="text-gray-600 dark:text-gray-400">
+            <div className="text-text-secondary dark:text-text-tertiary">
               {t("typeLabel", { type: details.resourceType })}
             </div>
             {details.mimeType && (
-              <div className="text-gray-400 dark:text-gray-500">
+              <div className="text-text-tertiary dark:text-text-tertiary">
                 {t("mimeLabel", { mime: details.mimeType })}
               </div>
             )}
             {details.size != null && (
-              <div className="text-gray-400 dark:text-gray-500">
+              <div className="text-text-tertiary dark:text-text-tertiary">
+                {t("mimeLabel", { mime: details.mimeType })}
+              </div>
+            )}
+            {details.size != null && (
+              <div className="text-text-tertiary">
                 {t("sizeLabel", { size: formatFileSize(details.size) })}
               </div>
             )}

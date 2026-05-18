@@ -379,11 +379,11 @@ export function ChatPanel() {
   };
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden relative bg-white dark:bg-gray-950">
+    <div className="flex-1 flex flex-col overflow-hidden relative bg-bg-elevated dark:bg-surface-code">
       <MarkdownExpandOverlay />
       <MermaidFullscreen />
       <RollbackOverlay />
-      <div className="flex items-center gap-4 px-4 py-1.5 bg-gray-100/80 dark:bg-gray-900/80 border-b border-gray-300 dark:border-gray-800 text-[11px] text-gray-500 dark:text-gray-500 flex-shrink-0">
+      <div className="flex items-center gap-4 px-4 py-1.5 bg-surface-dim/80 dark:bg-surface-code/80 border-b border-border-secondary dark:border-border-secondary text-[11px] text-text-tertiary dark:text-text-tertiary flex-shrink-0">
         <SessionToggleIcon />
         {isViewingSubagent && (
           <button
@@ -411,11 +411,11 @@ export function ChatPanel() {
             <div className="h-full flex items-center justify-center">
               <div className="flex flex-col items-center gap-3 max-w-xs text-center">
                 <AlertTriangle className="w-8 h-8 text-status-warning" />
-                <div className="text-sm text-gray-700 dark:text-gray-300">
+                <div className="text-sm text-text-secondary dark:text-text-secondary">
                   {t("sessionStartFailed")}
                 </div>
                 {projectError && (
-                  <div className="text-xs text-gray-400 dark:text-gray-500 break-all">
+                  <div className="text-xs text-text-tertiary dark:text-text-tertiary break-all">
                     {projectError}
                   </div>
                 )}
@@ -431,8 +431,8 @@ export function ChatPanel() {
           ) : isLoading ? (
             <div className="h-full flex items-center justify-center">
               <div className="flex flex-col items-center gap-2 opacity-50">
-                <Loader2 className="w-5 h-5 text-gray-400 dark:text-gray-500 animate-spin" />
-                <span className="text-xs text-gray-400 dark:text-gray-500">
+                <Loader2 className="w-5 h-5 text-text-tertiary dark:text-text-tertiary animate-spin" />
+                <span className="text-xs text-text-tertiary dark:text-text-tertiary">
                   {t("loadingSession")}
                 </span>
               </div>
@@ -485,15 +485,15 @@ export function ChatPanel() {
       {activeSessionId && !isViewingSubagent && <QueueCards sessionId={activeSessionId} />}
 
       <div
-        className="px-3 pt-2 pb-1.5 flex-shrink-0 flex items-stretch gap-1.5 bg-gray-100 dark:bg-gray-900 border-t border-gray-300 dark:border-gray-800 relative"
+        className="px-3 pt-2 pb-1.5 flex-shrink-0 flex items-stretch gap-1.5 bg-surface-dim dark:bg-surface-code border-t border-border-secondary dark:border-border-secondary relative"
         style={{ paddingBottom: "calc(0.375rem + env(safe-area-inset-bottom))" }}
       >
         {!isViewingSubagent && (
           <>
             {!sessionReady && !projectFailed ? (
               <div className="flex-1 flex items-center justify-center gap-2 py-2">
-                <Loader2 className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 animate-spin" />
-                <span className="text-xs text-gray-400 dark:text-gray-500">
+                <Loader2 className="w-3.5 h-3.5 text-text-tertiary dark:text-text-tertiary animate-spin" />
+                <span className="text-xs text-text-tertiary dark:text-text-tertiary">
                   {t("sessionStarting")}
                 </span>
               </div>
@@ -555,7 +555,7 @@ export function ChatPanel() {
                       !sessionReady ||
                       hasNoModel
                     }
-                    className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${(inputText.trim() || useAttachmentStore.getState().attachments.length > 0) && sessionReady && !hasNoModel ? (isStreaming ? "bg-status-warning text-white hover:bg-status-warning shadow-sm shadow-status-warning/20" : "bg-semantic-accent text-white hover:bg-semantic-accent shadow-sm shadow-semantic-accent/20") : "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed"}`}
+                    className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${(inputText.trim() || useAttachmentStore.getState().attachments.length > 0) && sessionReady && !hasNoModel ? (isStreaming ? "bg-status-warning text-white hover:bg-status-warning shadow-sm shadow-status-warning/20" : "bg-semantic-accent text-white hover:bg-semantic-accent shadow-sm shadow-semantic-accent/20") : "bg-surface-dim dark:bg-surface-code text-text-tertiary dark:text-text-secondary cursor-not-allowed"}`}
                     title={
                       hasNoModel ? t("sendDisabledNoModel") : isStreaming ? t("steer") : t("send")
                     }
@@ -572,7 +572,7 @@ export function ChatPanel() {
         )}
         {isViewingSubagent && (
           <div className="flex-1 flex items-center justify-center gap-3 py-2">
-            <span className="text-[11px] text-gray-400 dark:text-gray-600">
+            <span className="text-[11px] text-text-tertiary dark:text-text-secondary">
               {t("subagentReadonly")}
             </span>
             <button
@@ -625,7 +625,7 @@ function SessionToggleIcon() {
           e.stopPropagation();
           toggleSessionCollapse();
         }}
-        className="p-1 rounded transition-colors text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300"
+        className="p-1 rounded transition-colors text-text-tertiary dark:text-text-secondary hover:text-text-primary dark:hover:text-text-secondary"
         title={t("openSessionPanel")}
       >
         <PanelLeft className="w-3.5 h-3.5" />
@@ -647,7 +647,7 @@ function SessionToggleIcon() {
           showSession();
         }
       }}
-      className={`p-1 rounded transition-colors ${isVisible ? "text-semantic-accent hover:text-semantic-accent" : "text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300"}`}
+      className={`p-1 rounded transition-colors ${isVisible ? "text-semantic-accent hover:text-semantic-accent" : "text-text-tertiary dark:text-text-secondary hover:text-text-primary dark:hover:text-text-secondary"}`}
       title={isVisible ? t("closeSessionPanel") : t("openSessionPanel")}
     >
       <PanelLeft className="w-3.5 h-3.5" />
@@ -676,7 +676,7 @@ function StatusToggleIcon() {
           showStatus();
         }
       }}
-      className={`p-1 rounded transition-colors ${isVisible ? "text-semantic-accent hover:text-semantic-accent" : "text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300"}`}
+      className={`p-1 rounded transition-colors ${isVisible ? "text-semantic-accent hover:text-semantic-accent" : "text-text-tertiary dark:text-text-secondary hover:text-text-primary dark:hover:text-text-secondary"}`}
       title={isVisible ? t("closeStatusPanel") : t("openStatusPanel")}
     >
       <PanelRight className="w-3.5 h-3.5" />

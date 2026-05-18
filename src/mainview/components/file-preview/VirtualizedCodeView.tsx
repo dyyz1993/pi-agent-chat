@@ -48,7 +48,10 @@ export function VirtualizedCodeView({ code, filename }: VirtualizedCodeViewProps
   // --- Plain text path: no Prism tokenization ---
   if (forcePlainText) {
     return (
-      <div ref={parentRef} className="flex-1 min-h-0 overflow-auto bg-white dark:bg-gray-900">
+      <div
+        ref={parentRef}
+        className="flex-1 min-h-0 overflow-auto bg-bg-elevated dark:bg-surface-code"
+      >
         <div
           style={{ height: `${virtualizer.getTotalSize()}px`, width: "100%", position: "relative" }}
         >
@@ -65,11 +68,11 @@ export function VirtualizedCodeView({ code, filename }: VirtualizedCodeViewProps
               }}
               className="flex text-xs leading-5 font-mono"
             >
-              <span className="inline-block w-10 text-right pr-4 text-gray-400 dark:text-gray-600 select-none shrink-0">
+              <span className="inline-block w-10 text-right pr-4 text-text-tertiary dark:text-text-secondary select-none shrink-0">
                 {vr.index + 1}
               </span>
               <span
-                className="flex-1 text-gray-800 dark:text-gray-300 whitespace-pre"
+                className="flex-1 text-text-primary dark:text-text-secondary whitespace-pre"
                 style={{ tabSize: 2 }}
               >
                 {lines[vr.index]}
@@ -87,7 +90,10 @@ export function VirtualizedCodeView({ code, filename }: VirtualizedCodeViewProps
       {({ tokens, getTokenProps }) => {
         const tokensValid = tokens.length === lines.length;
         return (
-          <div ref={parentRef} className="flex-1 min-h-0 overflow-auto bg-white dark:bg-gray-900">
+          <div
+            ref={parentRef}
+            className="flex-1 min-h-0 overflow-auto bg-bg-elevated dark:bg-surface-code"
+          >
             <div
               style={{
                 height: `${virtualizer.getTotalSize()}px`,
@@ -113,12 +119,12 @@ export function VirtualizedCodeView({ code, filename }: VirtualizedCodeViewProps
                     }}
                     className="flex text-xs leading-5 font-mono"
                   >
-                    <span className="inline-block w-10 text-right pr-4 text-gray-400 dark:text-gray-600 select-none shrink-0">
+                    <span className="inline-block w-10 text-right pr-4 text-text-tertiary dark:text-text-secondary select-none shrink-0">
                       {vr.index + 1}
                     </span>
-                    {isLongLine || !tokensValid || !lineTokens ? (
+                    {isLongLine || !tokensValid ? (
                       <span
-                        className="flex-1 text-gray-800 dark:text-gray-300 whitespace-pre"
+                        className="flex-1 whitespace-pre text-text-primary dark:text-text-secondary"
                         style={{ tabSize: 2 }}
                       >
                         {lineText}

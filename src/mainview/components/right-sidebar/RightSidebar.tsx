@@ -118,7 +118,7 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
     return (
       <div
         data-testid="right-sidebar"
-        className="flex flex-col items-center bg-white dark:bg-gray-900 border-l border-gray-300 dark:border-gray-800 overflow-hidden z-20 pt-1"
+        className="flex flex-col items-center bg-bg-elevated dark:bg-surface-code border-l border-border-secondary dark:border-border-secondary overflow-hidden z-20 pt-1"
         style={{ width }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -134,7 +134,7 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
               className={`w-10 h-10 flex items-center justify-center rounded transition-colors ${
                 activePanelTab === tab.id
                   ? "text-indigo-500 dark:text-indigo-400 bg-indigo-500/10"
-                  : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                  : "text-text-tertiary dark:text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-dim"
               }`}
               title={tab.label}
             >
@@ -149,20 +149,20 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
   return (
     <div
       data-testid="right-sidebar"
-      className={`flex flex-col bg-gray-50 dark:bg-gray-900 border-l border-gray-300 dark:border-gray-800 overflow-hidden z-20 ${
+      className={`flex flex-col bg-surface-dim dark:bg-surface-code border-l border-border-secondary dark:border-border-secondary overflow-hidden z-20 ${
         overlay ? "animate-slide-in-right shadow-xl shadow-black/10 dark:shadow-black/30" : ""
       }`}
       style={overlay ? { position: "absolute", right: 0, top: 0, bottom: 0, width } : { width }}
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="flex items-center border-b border-gray-300 dark:border-gray-800 shrink-0">
+      <div className="flex items-center border-b border-border-secondary dark:border-border-secondary shrink-0">
         {overlay && (
           <button
             onClick={(e) => {
               e.stopPropagation();
               hideStatus();
             }}
-            className="p-1.5 mr-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors shrink-0"
+            className="p-1.5 mr-1 rounded hover:bg-surface-hover dark:hover:bg-surface-dim text-text-tertiary dark:text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary transition-colors shrink-0"
             title={t("closePanel")}
           >
             <PanelRight className="w-3.5 h-3.5" />
@@ -173,7 +173,7 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
             e.stopPropagation();
             toggleStatus();
           }}
-          className={`p-1.5 mr-1 rounded transition-colors shrink-0 max-sm:hidden ${isPinned ? "text-indigo-400" : "text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400"}`}
+          className={`p-1.5 mr-1 rounded transition-colors shrink-0 max-sm:hidden ${isPinned ? "text-indigo-400" : "text-text-tertiary dark:text-text-secondary hover:text-text-secondary dark:hover:text-tertiary"}`}
           title={isPinned ? t("unpinPanel") : t("pinPanel")}
         >
           <Pin className="w-3.5 h-3.5" fill={isPinned ? "currentColor" : "none"} />
@@ -189,7 +189,7 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
               className={`px-2.5 py-1.5 text-[11px] font-medium transition-colors whitespace-nowrap shrink-0 ${
                 activePanelTab === tab.id
                   ? "text-indigo-500 dark:text-indigo-400 border-b-2 border-indigo-500 dark:border-indigo-400"
-                  : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+                  : "text-text-tertiary dark:text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary"
               }`}
             >
               {tab.label}

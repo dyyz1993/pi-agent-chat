@@ -124,15 +124,15 @@ export function SnapshotPanel() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-gray-800">
-        <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-border-secondary dark:border-surface-code">
+        <div className="flex items-center gap-1.5 text-xs text-text-tertiary dark:text-text-tertiary">
           <Camera className="w-3.5 h-3.5" />
           <span>{t("snapshots", { count: snapshots.length })}</span>
         </div>
         <button
           onClick={() => sessionId && fetchSnapshots(sessionId)}
           disabled={!sessionId || loading}
-          className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors disabled:opacity-30"
+          className="p-1 rounded hover:bg-surface-hover dark:hover:bg-surface-dim text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary transition-colors disabled:opacity-30"
           title={t("refresh")}
         >
           <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} />
@@ -171,13 +171,13 @@ function SkeletonState() {
     <div className="px-3 py-4 space-y-3 animate-pulse">
       {[1, 2, 3].map((i) => (
         <div key={i} className="flex items-start gap-2">
-          <div className="w-3 h-3 rounded bg-gray-300 dark:bg-gray-700 shrink-0 mt-0.5" />
+          <div className="w-3 h-3 rounded bg-surface-hover dark:bg-surface-hover shrink-0 mt-0.5" />
           <div className="flex-1 space-y-1.5">
-            <div className="h-3 bg-gray-300 dark:bg-gray-700 rounded w-1/3" />
-            <div className="h-2.5 bg-gray-200 dark:bg-gray-800 rounded w-2/3" />
+            <div className="h-3 bg-surface-hover dark:bg-surface-hover rounded w-1/3" />
+            <div className="h-2.5 bg-surface-hover dark:bg-surface-code rounded w-2/3" />
             <div className="flex gap-2">
-              <div className="h-2 bg-gray-200 dark:bg-gray-800 rounded w-12" />
-              <div className="h-2 bg-gray-200 dark:bg-gray-800 rounded w-16" />
+              <div className="h-2 bg-surface-hover dark:bg-surface-code rounded w-12" />
+              <div className="h-2 bg-surface-hover dark:bg-surface-code rounded w-16" />
             </div>
           </div>
         </div>
@@ -190,9 +190,11 @@ function EmptyState() {
   const { t } = useTranslation("snapshot");
   return (
     <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-      <Camera className="w-8 h-8 text-gray-300 dark:text-gray-600 mb-3" />
-      <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">{t("noActiveSession")}</p>
-      <p className="text-[10px] text-gray-400 dark:text-gray-600 mt-1 max-w-[200px] leading-relaxed">
+      <Camera className="w-8 h-8 text-text-secondary dark:text-text-tertiary mb-3" />
+      <p className="text-xs text-text-tertiary dark:text-text-tertiary font-medium">
+        {t("noActiveSession")}
+      </p>
+      <p className="text-[10px] text-text-tertiary dark:text-text-tertiary mt-1 max-w-[200px] leading-relaxed">
         {t("noActiveSessionHint")}
       </p>
     </div>
@@ -203,9 +205,11 @@ function NoDataState() {
   const { t } = useTranslation("snapshot");
   return (
     <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-      <Camera className="w-8 h-8 text-gray-300 dark:text-gray-600 mb-3" />
-      <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">{t("noSnapshotsYet")}</p>
-      <p className="text-[10px] text-gray-400 dark:text-gray-600 mt-1 max-w-[200px] leading-relaxed">
+      <Camera className="w-8 h-8 text-text-secondary dark:text-text-tertiary mb-3" />
+      <p className="text-xs text-text-tertiary dark:text-text-tertiary font-medium">
+        {t("noSnapshotsYet")}
+      </p>
+      <p className="text-[10px] text-text-tertiary dark:text-text-tertiary mt-1 max-w-[200px] leading-relaxed">
         {t("noSnapshotsHint")}
       </p>
     </div>
@@ -265,7 +269,7 @@ const SnapshotCard = memo(function SnapshotCard({
 
   return (
     <div
-      className={`border-b border-gray-200/50 dark:border-gray-800/50 transition-colors ${
+      className={`border-b border-border-secondary/50 dark:border-surface-code/50 transition-colors ${
         snap.rolledBack ? "opacity-60" : ""
       }`}
     >
@@ -277,7 +281,7 @@ const SnapshotCard = memo(function SnapshotCard({
               onClick={() => onToggleExpand(snap.id)}
               className="flex items-center gap-1.5 text-left w-full"
             >
-              <span className="text-gray-400 dark:text-gray-600 shrink-0">
+              <span className="text-text-tertiary dark:text-text-tertiary shrink-0">
                 {isExpanded ? (
                   <ChevronDown className="w-3 h-3" />
                 ) : (
@@ -289,7 +293,7 @@ const SnapshotCard = memo(function SnapshotCard({
               ) : (
                 <Camera className="w-3 h-3 text-semantic-accent shrink-0" />
               )}
-              <span className="text-xs text-gray-700 dark:text-gray-300 font-medium">
+              <span className="text-xs text-text-secondary dark:text-text-secondary font-medium">
                 Step #{snap.stepIndex}
               </span>
               {isLatest && !snap.rolledBack && (
@@ -298,7 +302,7 @@ const SnapshotCard = memo(function SnapshotCard({
                 </span>
               )}
             </button>
-            <div className="flex items-center gap-2 mt-0.5 ml-6 text-[10px] text-gray-500 dark:text-gray-500">
+            <div className="flex items-center gap-2 mt-0.5 ml-6 text-[10px] text-text-tertiary dark:text-text-tertiary">
               <span>{timeStr}</span>
               {fileCount > 0 && (
                 <span className="flex items-center gap-0.5">
@@ -401,8 +405,8 @@ const ExpandedFileList = memo(function ExpandedFileList({
   const selectedDiff = diffData?.find((f) => f.path === selectedFile);
 
   return (
-    <div className="border-t border-gray-200/30 dark:border-gray-800/30">
-      <div className="px-3 py-1 text-[10px] text-gray-400 dark:text-gray-500 font-medium">
+    <div className="border-t border-border-secondary/30 dark:border-surface-dim/30">
+      <div className="px-3 py-1 text-[10px] text-text-tertiary dark:text-text-tertiary font-medium">
         {diffLoading ? t("snapshot") + "..." : `${allFiles.length} ${t("filesChanged")}`}
       </div>
 
@@ -424,7 +428,7 @@ const ExpandedFileList = memo(function ExpandedFileList({
               className={`w-full flex items-center gap-1.5 px-1.5 py-0.5 rounded text-[11px] transition-colors text-left ${
                 isSelected
                   ? "bg-semantic-accent/10 text-semantic-accent"
-                  : "text-gray-400 dark:text-gray-500 hover:bg-gray-200/30 dark:hover:bg-gray-800/30 hover:text-gray-300"
+                  : "text-text-tertiary dark:text-text-tertiary hover:bg-surface-hover/30 dark:hover:bg-surface-dim/30 hover:text-text-secondary"
               }`}
             >
               <StatusIcon className={`w-3 h-3 shrink-0 ${statusConfig.color}`} />
@@ -437,12 +441,12 @@ const ExpandedFileList = memo(function ExpandedFileList({
       </div>
 
       {selectedFile && selectedDiff?.diff?.unifiedDiff && (
-        <div className="border-t border-gray-200/30 dark:border-gray-800/30">
-          <div className="px-3 py-1 text-[10px] text-gray-400 dark:text-gray-500 font-medium flex items-center gap-1">
+        <div className="border-t border-border-secondary/30 dark:border-surface-dim/30">
+          <div className="px-3 py-1 text-[10px] text-text-tertiary dark:text-text-tertiary font-medium flex items-center gap-1">
             <FileEdit className="w-2.5 h-2.5" />
             <span className="truncate">{selectedFile}</span>
           </div>
-          <pre className="px-3 pb-2 text-[10px] text-gray-500 dark:text-gray-400 overflow-x-auto whitespace-pre-wrap font-mono max-h-48 overflow-y-auto leading-relaxed">
+          <pre className="px-3 pb-2 text-[10px] text-text-tertiary dark:text-text-tertiary overflow-x-auto whitespace-pre-wrap font-mono max-h-48 overflow-y-auto leading-relaxed">
             {selectedDiff.diff.unifiedDiff}
           </pre>
         </div>
@@ -475,7 +479,7 @@ const ActionBtn = memo(function ActionBtn({
       title={title}
       className={`p-1 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
         className ??
-        "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+        "text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-hover"
       }`}
     >
       {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Icon className="w-3 h-3" />}

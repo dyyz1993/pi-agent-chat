@@ -61,12 +61,12 @@ export function MermaidPreBlock({ children, node, ...rest }: PreBlockProps) {
               <div className="relative group">
                 <pre
                   className={`${className} rounded-lg text-[13px] overflow-x-auto whitespace-pre`}
-                  style={{ ...style, background: "var(--tw-colors-gray-900)" }}
+                  style={{ ...style, background: "var(--color-surface-code)" }}
                   {...rest}
                 >
                   {tokens.map((line, i) => (
                     <div key={i} {...getLineProps({ line })} className="table-row">
-                      <span className="table-cell text-right pr-4 select-none text-gray-500/50 w-8 text-xs leading-6">
+                      <span className="table-cell text-right pr-4 select-none text-text-tertiary/50 w-8 text-xs leading-6">
                         {i + 1}
                       </span>
                       <span className="table-cell whitespace-pre">

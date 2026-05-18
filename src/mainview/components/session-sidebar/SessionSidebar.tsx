@@ -127,14 +127,14 @@ export function SessionSidebar(_props: SessionSidebarProps) {
   return (
     <div className="flex flex-col h-full">
       <div className="px-2 py-1.5">
-        <div className="flex items-center gap-1.5 px-2 py-1 bg-gray-100/50 dark:bg-gray-800/50 rounded text-[11px] text-gray-400 dark:text-gray-500">
+        <div className="flex items-center gap-1.5 px-2 py-1 bg-surface-code/50 dark:bg-surface-dim/50 rounded text-[11px] text-text-tertiary dark:text-text-tertiary">
           <Search className="w-3 h-3 shrink-0" />
           <input
             data-testid="session-search"
             placeholder={t("searchSessions")}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="bg-transparent outline-none flex-1 min-w-0 placeholder:text-gray-400 dark:placeholder:text-gray-600"
+            className="bg-transparent outline-none flex-1 min-w-0 placeholder:text-text-tertiary dark:placeholder:text-text-secondary"
           />
         </div>
       </div>
@@ -200,8 +200,8 @@ function SessionList({
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center text-gray-400 dark:text-gray-600 text-xs p-4">
-        <div className="w-3 h-3 border-2 border-gray-300 dark:border-gray-600 border-t-transparent rounded-full animate-spin mr-2" />
+      <div className="flex-1 flex items-center justify-center text-text-tertiary dark:text-text-tertiary text-xs p-4">
+        <div className="w-3 h-3 border-2 border-border-secondary dark:border-border-secondary border-t-transparent rounded-full animate-spin mr-2" />
         {t("common:loading")}
       </div>
     );
@@ -209,14 +209,14 @@ function SessionList({
 
   if (rootSessions.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-gray-400 dark:text-gray-600 text-xs p-4 text-center">
+      <div className="flex-1 flex items-center justify-center text-text-tertiary dark:text-text-tertiary text-xs p-4 text-center">
         {searchQuery ? t("sidebar:noMatchingSessions") : t("sidebar:noSessions")}
       </div>
     );
   }
 
   return (
-    <div className="flex-1 overflow-y-auto overscroll-contain px-2 py-0.5 divide-y divide-gray-200 dark:divide-gray-800/50">
+    <div className="flex-1 overflow-y-auto overscroll-contain px-2 py-0.5 divide-y divide-border-secondary dark:divide-surface-dim/50">
       {rootSessions.map((sess) => (
         <SessionItem
           key={sess.sessionId}
@@ -425,7 +425,7 @@ function SessionItem({
         className={`group w-full text-left px-2.5 py-2 rounded-lg text-[11px] transition-all duration-150 cursor-pointer ${
           isActive
             ? "bg-[var(--color-accent)]/[0.15] text-[var(--color-accent-text)] shadow-sm shadow-[var(--color-accent)]/5 border border-[var(--color-accent)]/20"
-            : "text-gray-500 dark:text-gray-400 hover:bg-white/[0.04] dark:hover:bg-gray-800/50 hover:text-gray-200 dark:hover:text-gray-200 border border-transparent hover:border-gray-700/30 dark:hover:border-gray-700/30"
+            : "text-text-tertiary dark:text-text-tertiary hover:bg-bg-elevated/[0.04] dark:hover:bg-surface-dim/50 hover:text-text-primary dark:hover:text-text-primary border border-transparent hover:border-border-secondary/30 dark:hover:border-border-secondary/30"
         } ${isActive ? "ring-1 ring-[var(--color-accent)]/20" : ""}`}
         onClick={handleClick}
       >
@@ -434,7 +434,7 @@ function SessionItem({
             className={`flex items-center justify-center w-5 h-5 rounded-md shrink-0 transition-colors ${
               isActive
                 ? "bg-[var(--color-accent)]/20 text-[var(--color-accent-text)]"
-                : "bg-gray-200 text-gray-500 group-hover:bg-gray-300 dark:bg-gray-800/60 dark:group-hover:bg-gray-700/60 dark:group-hover:text-gray-400"
+                : "bg-surface-hover text-text-tertiary group-hover:bg-surface-hover dark:bg-surface-dim/60 dark:group-hover:bg-surface-hover/60 dark:group-hover:text-text-tertiary"
             }`}
           >
             <User className="w-3 h-3" />
@@ -452,17 +452,17 @@ function SessionItem({
                   if (e.key === "Enter") handleConfirmRename();
                   if (e.key === "Escape") handleCancelRename();
                 }}
-                className="flex-1 bg-white dark:bg-gray-800 border border-semantic-accent/50 rounded px-1.5 py-0.5 text-[11px] text-gray-800 dark:text-gray-200 outline-none"
+                className="flex-1 bg-bg-elevated dark:bg-surface-dim border border-semantic-accent/50 rounded px-1.5 py-0.5 text-[11px] text-text-primary dark:text-text-primary outline-none"
               />
               <button
                 onClick={handleConfirmRename}
-                className="p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-status-success"
+                className="p-0.5 rounded hover:bg-surface-hover dark:hover:bg-surface-hover text-status-success"
               >
                 <Check className="w-3 h-3" />
               </button>
               <button
                 onClick={handleCancelRename}
-                className="p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500"
+                className="p-0.5 rounded hover:bg-surface-hover dark:hover:bg-surface-hover text-text-tertiary"
               >
                 <X className="w-3 h-3" />
               </button>
@@ -495,7 +495,7 @@ function SessionItem({
                   e.stopPropagation();
                   onToggleExpand();
                 }}
-                className="shrink-0 p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+                className="shrink-0 p-0.5 rounded hover:bg-surface-hover dark:hover:bg-surface-hover text-text-tertiary dark:text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary transition-colors"
               >
                 {isExpanded ? (
                   <ChevronDown className="w-3.5 h-3.5" />
@@ -509,28 +509,28 @@ function SessionItem({
             <div className="ml-auto flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
               <button
                 onClick={handleTogglePin}
-                className={`p-1 rounded-md hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors ${session.pinned ? "text-semantic-accent" : "text-gray-600 hover:text-gray-300"}`}
+                className={`p-1 rounded-md hover:bg-surface-hover/60 dark:hover:bg-surface-hover/60 transition-colors ${session.pinned ? "text-semantic-accent" : "text-text-secondary hover:text-text-secondary"}`}
                 title={session.pinned ? t("sidebar:unpin") : t("sidebar:pin")}
               >
                 {session.pinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
               </button>
               <button
                 onClick={handleCopyId}
-                className="p-1 rounded-md hover:bg-gray-200/60 dark:hover:bg-gray-700/60 text-gray-600 hover:text-gray-300 transition-colors"
+                className="p-1 rounded-md hover:bg-surface-hover/60 dark:hover:bg-surface-hover/60 text-text-secondary hover:text-text-secondary transition-colors"
                 title={t("sidebar:copyId")}
               >
                 <Copy className="w-3 h-3" />
               </button>
               <button
                 onClick={handleStartRename}
-                className="p-1 rounded-md hover:bg-gray-200/60 dark:hover:bg-gray-700/60 text-gray-600 hover:text-gray-300 transition-colors"
+                className="p-1 rounded-md hover:bg-surface-hover/60 dark:hover:bg-surface-hover/60 text-text-secondary hover:text-text-secondary transition-colors"
                 title={t("common:rename")}
               >
                 <Pencil className="w-3 h-3" />
               </button>
               <button
                 onClick={handleDelete}
-                className="p-1 rounded-md hover:bg-status-error/40 text-gray-600 hover:text-status-error transition-colors"
+                className="p-1 rounded-md hover:bg-status-error/40 text-text-secondary hover:text-status-error transition-colors"
                 title={t("common:delete")}
               >
                 <Trash2 className="w-3 h-3" />
@@ -541,9 +541,9 @@ function SessionItem({
       </div>
 
       {isExpanded && hasExpandableChildren && (
-        <div className="ml-4 pl-3 border-l border-gray-200 dark:border-gray-800/60 mt-0.5 space-y-0">
+        <div className="ml-4 pl-3 border-l border-border-secondary dark:border-surface-code/60 mt-0.5 space-y-0">
           {loadingSubs && (
-            <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] text-gray-500 dark:text-gray-600">
+            <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] text-text-tertiary dark:text-text-secondary">
               <Loader2 className="w-3 h-3 animate-spin" />
               {t("sidebar:loadingSubagents")}
             </div>
@@ -675,7 +675,7 @@ function SubagentItem({
         className={`group w-full text-left px-2.5 py-2 rounded-lg text-[11px] cursor-pointer transition-all duration-150 ${
           isActive
             ? "border-l-2 border-l-[var(--color-accent)]/40 bg-[var(--color-accent)]/[0.08] text-[var(--color-accent-text)]"
-            : "text-gray-500 hover:bg-white/[0.04] dark:hover:bg-gray-800/50 hover:text-gray-300 border border-transparent hover:border-gray-700/30 dark:hover:border-gray-700/30"
+            : "text-text-tertiary hover:bg-bg-elevated/[0.04] dark:hover:bg-surface-dim/50 hover:text-text-secondary border border-transparent hover:border-border-secondary/30 dark:hover:border-border-secondary/30"
         }`}
         onClick={handleClick}
       >
@@ -684,7 +684,7 @@ function SubagentItem({
             className={`flex items-center justify-center w-5 h-5 rounded-md shrink-0 transition-colors ${
               isActive
                 ? "bg-[var(--color-accent)]/20 text-[var(--color-accent-text)]"
-                : "bg-gray-200 text-gray-500 group-hover:bg-gray-300 dark:bg-gray-800/60 group-hover:text-gray-400"
+                : "bg-surface-hover text-text-tertiary group-hover:bg-surface-hover dark:bg-surface-dim/60 group-hover:text-text-tertiary"
             }`}
           >
             <Bot className="w-3 h-3" />
@@ -702,17 +702,17 @@ function SubagentItem({
                   if (e.key === "Enter") handleConfirmRename();
                   if (e.key === "Escape") handleCancelRename();
                 }}
-                className="flex-1 bg-white dark:bg-gray-800 border border-semantic-agent/50 rounded px-1.5 py-0.5 text-[11px] text-gray-800 dark:text-gray-200 outline-none"
+                className="flex-1 bg-bg-elevated dark:bg-surface-dim border border-semantic-agent/50 rounded px-1.5 py-0.5 text-[11px] text-text-primary dark:text-text-primary outline-none"
               />
               <button
                 onClick={handleConfirmRename}
-                className="p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-status-success"
+                className="p-0.5 rounded hover:bg-surface-hover dark:hover:bg-surface-hover text-status-success"
               >
                 <Check className="w-3 h-3" />
               </button>
               <button
                 onClick={handleCancelRename}
-                className="p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500"
+                className="p-0.5 rounded hover:bg-surface-hover dark:hover:bg-surface-hover text-text-tertiary"
               >
                 <X className="w-3 h-3" />
               </button>
@@ -740,28 +740,28 @@ function SubagentItem({
           <div className="ml-auto flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
             <button
               onClick={handleCopyId}
-              className="p-1 rounded-md hover:bg-gray-200/60 dark:hover:bg-gray-700/60 text-gray-600 hover:text-gray-300 transition-colors"
+              className="p-1 rounded-md hover:bg-surface-hover/60 dark:hover:bg-surface-hover/60 text-text-secondary hover:text-text-secondary transition-colors"
               title={t("sidebar:copyId")}
             >
               <Copy className="w-3 h-3" />
             </button>
             <button
               onClick={handleStartRename}
-              className="p-1 rounded-md hover:bg-gray-200/60 dark:hover:bg-gray-700/60 text-gray-600 hover:text-gray-300 transition-colors"
+              className="p-1 rounded-md hover:bg-surface-hover/60 dark:hover:bg-surface-hover/60 text-text-secondary hover:text-text-secondary transition-colors"
               title={t("common:rename")}
             >
               <Copy className="w-3 h-3" />
             </button>
             <button
               onClick={handleStartRename}
-              className="p-1 rounded-md hover:bg-gray-700/60 text-gray-600 hover:text-gray-300 transition-colors"
+              className="p-1 rounded-md hover:bg-surface-hover/60 text-text-secondary hover:text-text-secondary transition-colors"
               title={t("common:rename")}
             >
               <Pencil className="w-3 h-3" />
             </button>
             <button
               onClick={handleDelete}
-              className="p-1 rounded-md hover:bg-status-error/40 text-gray-600 hover:text-status-error transition-colors"
+              className="p-1 rounded-md hover:bg-status-error/40 text-text-secondary hover:text-status-error transition-colors"
               title={t("common:delete")}
             >
               <Trash2 className="w-3 h-3" />

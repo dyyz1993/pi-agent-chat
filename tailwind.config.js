@@ -15,6 +15,11 @@ export default {
 					warning: "rgb(var(--color-status-warning) / <alpha-value>)",
 					info: "rgb(var(--color-status-info) / <alpha-value>)",
 				},
+					surface: {
+					code: "rgb(var(--surface-code) / <alpha-value>)",
+					hover: "rgb(var(--surface-hover) / <alpha-value>)",
+					dim: "rgb(var(--surface-dim) / <alpha-value>)",
+				},
 				semantic: {
 					agent: "rgb(var(--color-semantic-agent) / <alpha-value>)",
 					tool: "rgb(var(--color-semantic-tool) / <alpha-value>)",

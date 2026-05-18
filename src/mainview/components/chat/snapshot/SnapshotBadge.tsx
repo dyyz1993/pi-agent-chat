@@ -38,7 +38,7 @@ export const SnapshotBadge = memo(function SnapshotBadge({ data, blockId }: Snap
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
-        className="w-full px-3 py-1 flex items-center gap-1.5 text-[11px] text-semantic-accent/80 hover:bg-gray-200/15 dark:hover:bg-gray-800/15 rounded cursor-pointer select-none"
+        className="w-full px-3 py-1 flex items-center gap-1.5 text-[11px] text-semantic-accent/80 hover:bg-surface-hover/15 rounded cursor-pointer select-none"
         aria-expanded={expanded}
       >
         <Camera className="w-3 h-3 shrink-0" />
@@ -63,7 +63,7 @@ export const SnapshotBadge = memo(function SnapshotBadge({ data, blockId }: Snap
             </span>
           )}
         </span>
-        <span className="ml-auto text-gray-400 dark:text-gray-600">
+        <span className="ml-auto text-text-tertiary">
           {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
         </span>
       </button>
@@ -96,7 +96,7 @@ const SnapshotExpandPanel = memo(function SnapshotExpandPanel({ diff }: Snapshot
         return (
           <div
             key={file.path}
-            className="flex items-center gap-1.5 py-0.5 text-gray-400 dark:text-gray-500 hover:text-gray-300 transition-colors"
+            className="flex items-center gap-1.5 py-0.5 text-text-tertiary hover:text-text-primary transition-colors"
           >
             <StatusIcon className={`w-3 h-3 shrink-0 ${statusConfig.color}`} />
             <span className="truncate" title={file.path}>

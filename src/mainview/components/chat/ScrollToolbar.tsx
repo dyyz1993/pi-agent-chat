@@ -29,7 +29,7 @@ export const ScrollToolbar = memo(function ScrollToolbar({
         className={`w-9 h-9 rounded-full border flex items-center justify-center transition-colors ${
           autoScrollEnabled
             ? "border-semantic-accent/40 text-semantic-accent hover:text-semantic-accent hover:border-semantic-accent/50"
-            : "border-gray-400/30 dark:border-gray-500/30 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300/40 dark:hover:border-gray-400/40"
+            : "border-border-secondary/30 text-text-tertiary hover:text-text-primary hover:border-border-secondary/40"
         }`}
         title={autoScrollEnabled ? t("scroll.stopAutoScroll") : t("scroll.startAutoScroll")}
         aria-label={autoScrollEnabled ? t("scroll.stopAutoScroll") : t("scroll.startAutoScroll")}
@@ -41,7 +41,7 @@ export const ScrollToolbar = memo(function ScrollToolbar({
           {!isAtTop && (
             <button
               onClick={onScrollToTop}
-              className="w-9 h-9 rounded-full border border-gray-400/30 dark:border-gray-500/30 text-gray-400 dark:text-gray-500 hover:text-semantic-accent hover:border-semantic-accent/40 flex items-center justify-center transition-colors"
+              className="w-9 h-9 rounded-full border border-border-secondary/30 text-text-tertiary hover:text-semantic-accent hover:border-semantic-accent/40 flex items-center justify-center transition-colors"
               title={t("scroll.scrollToTop")}
               aria-label={t("scroll.scrollToTop")}
             >
@@ -52,7 +52,7 @@ export const ScrollToolbar = memo(function ScrollToolbar({
             <button
               data-testid="scroll-to-bottom-btn"
               onClick={onScrollToBottom}
-              className="w-9 h-9 rounded-full border border-gray-400/30 dark:border-gray-500/30 text-gray-400 dark:text-gray-500 hover:text-semantic-accent hover:border-semantic-accent/40 flex items-center justify-center transition-colors"
+              className="w-9 h-9 rounded-full border border-border-secondary/30 text-text-tertiary hover:text-semantic-accent hover:border-semantic-accent/40 flex items-center justify-center transition-colors"
               title={t("scroll.scrollToBottom")}
               aria-label={t("scroll.scrollToBottom")}
             >

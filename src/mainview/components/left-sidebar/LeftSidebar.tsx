@@ -26,7 +26,7 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
 
   return (
     <div
-      className={`flex flex-col bg-white dark:bg-gray-900 border-r border-gray-300 dark:border-gray-800 overflow-x-hidden z-20 ${
+      className={`flex flex-col bg-bg-elevated dark:bg-surface-code border-r border-border-secondary dark:border-border-secondary overflow-x-hidden z-20 ${
         overlay
           ? "animate-slide-in-left shadow-xl shadow-black/10 dark:shadow-black/30 will-change-transform"
           : ""
@@ -34,12 +34,10 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
       style={overlay ? { position: "absolute", left: 0, top: 0, bottom: 0, width } : { width }}
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-gray-800/80 shrink-0">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-border-secondary dark:border-border-secondary/80 shrink-0">
         <div className="flex items-center gap-1.5">
-          <span className="text-xs font-semibold text-gray-800 dark:text-gray-200 tracking-wide">
-            {t("sessions")}
-          </span>
-          <span className="text-[10px] text-gray-400 dark:text-gray-600 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded-full font-mono">
+          <span className="text-xs font-semibold text-text-primary dark:text-text-primary tracking-wide"></span>
+          <span className="text-[10px] text-text-tertiary dark:text-text-secondary bg-surface-dim dark:bg-surface-dim px-1.5 py-0.5 rounded-full font-mono">
             {useSessionCount()}
           </span>
         </div>
@@ -75,13 +73,13 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
               }
             }}
             disabled={isCreating}
-            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed relative"
+            className="p-1 rounded hover:bg-surface-hover dark:hover:bg-surface-dim text-text-tertiary dark:text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary transition-colors disabled:opacity-40 disabled:cursor-not-allowed relative"
             title={t("newSession")}
             aria-label={t("newSession")}
           >
             <Plus className="w-3.5 h-3.5" />
             {isCreating && (
-              <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-gray-900/80 rounded">
+              <div className="absolute inset-0 flex items-center justify-center bg-bg-elevated/80 dark:bg-surface-code/80 rounded">
                 <div className="w-2.5 h-2.5 border-2 border-semantic-accent border-t-transparent rounded-full animate-spin" />
               </div>
             )}
@@ -91,7 +89,7 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
               e.stopPropagation();
               toggleSession();
             }}
-            className={`p-1 rounded transition-colors max-sm:hidden ${isPinned ? "text-semantic-accent" : "text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400"}`}
+            className={`p-1 rounded transition-colors max-sm:hidden ${isPinned ? "text-semantic-accent" : "text-text-tertiary dark:text-text-secondary hover:text-text-secondary dark:hover:text-tertiary"}`}
             title={isPinned ? t("unpinPanel") : t("pinPanel")}
             aria-label={isPinned ? t("unpinPanel") : t("pinPanel")}
           >
@@ -103,7 +101,7 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
                 e.stopPropagation();
                 hideSession();
               }}
-              className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              className="p-1 rounded hover:bg-surface-hover dark:hover:bg-surface-dim text-text-tertiary dark:text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary transition-colors"
               title={t("closePanel")}
               aria-label={t("closePanel")}
             >
@@ -115,7 +113,7 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
                 e.stopPropagation();
                 useLayoutStore.getState().toggleSessionCollapse();
               }}
-              className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors max-sm:hidden"
+              className="p-1 rounded hover:bg-surface-hover dark:hover:bg-surface-dim text-text-tertiary dark:text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary transition-colors max-sm:hidden"
               title={t("collapseSidebar")}
               aria-label={t("collapseSidebar")}
             >

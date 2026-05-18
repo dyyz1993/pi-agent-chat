@@ -203,11 +203,11 @@ export const WriteFileCard = memo(function WriteFileCard({
           ? "border-status-success/25 bg-status-success/5"
           : isError
             ? "border-status-error/15 bg-status-error/5"
-            : "border-gray-200 dark:border-gray-700/30 bg-gray-50 dark:bg-gray-800/25"
+            : "border-border-secondary/30 bg-surface-dim"
       }`}
     >
       <div
-        className="px-3 py-1.5 flex items-center gap-2 text-xs cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800/40 transition-colors select-none"
+        className="px-3 py-1.5 flex items-center gap-2 text-xs cursor-pointer hover:bg-surface-hover transition-colors select-none"
         onClick={() => setCollapsed((c) => !c)}
         role="button"
         aria-expanded={!collapsed}
@@ -224,7 +224,7 @@ export const WriteFileCard = memo(function WriteFileCard({
             />
           );
         })()}
-        <span className="min-w-0 text-gray-800 dark:text-gray-300 font-mono" title={displayPath}>
+        <span className="min-w-0 text-text-primary font-mono" title={displayPath}>
           <span className="block truncate rtl" style={{ direction: "rtl", textAlign: "left" }}>
             <span style={{ direction: "ltr", display: "inline" }}>{displayPath}</span>
           </span>
@@ -235,7 +235,7 @@ export const WriteFileCard = memo(function WriteFileCard({
               e.stopPropagation();
               handleExpand();
             }}
-            className="p-0.5 rounded text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors shrink-0"
+            className="p-0.5 rounded text-text-tertiary hover:text-text-secondary dark:text-text-tertiary dark:hover:text-text-secondary hover:bg-surface-hover/50 transition-colors shrink-0"
             title={t("writeFile.previewMarkdown")}
           >
             <Maximize2 className="w-3.5 h-3.5" />
@@ -262,14 +262,14 @@ export const WriteFileCard = memo(function WriteFileCard({
                   <div className="flex items-center gap-1 px-1 pb-1">
                     <button
                       onClick={() => setSplitView(false)}
-                      className={`p-1 rounded transition-colors ${!splitView ? "bg-gray-400 dark:bg-gray-600 text-white" : "text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-white"}`}
+                      className={`p-1 rounded transition-colors ${!splitView ? "bg-surface-hover text-text-primary" : "text-text-tertiary hover:text-text-primary"}`}
                       title={t("diffLineByLine", { defaultValue: "Line by line" })}
                     >
                       <Rows3 className="w-3 h-3" />
                     </button>
                     <button
                       onClick={() => setSplitView(true)}
-                      className={`p-1 rounded transition-colors ${splitView ? "bg-gray-400 dark:bg-gray-600 text-white" : "text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-white"}`}
+                      className={`p-1 rounded transition-colors ${splitView ? "bg-surface-hover text-text-primary" : "text-text-tertiary hover:text-text-primary"}`}
                       title={t("diffSideBySide", { defaultValue: "Side by side" })}
                     >
                       <Columns2 className="w-3 h-3" />
@@ -296,7 +296,7 @@ export const WriteFileCard = memo(function WriteFileCard({
                   ))}
                 </div>
               ) : block.output ? (
-                <pre className="text-[11px] text-gray-800 dark:text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-36 overflow-y-auto bg-gray-100 dark:bg-gray-900/40 rounded mx-1 px-2 py-1.5">
+                <pre className="text-[11px] text-text-primary overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-36 overflow-y-auto bg-surface-code rounded mx-1 px-2 py-1.5">
                   {block.output}
                 </pre>
               ) : null}
@@ -304,9 +304,9 @@ export const WriteFileCard = memo(function WriteFileCard({
           ) : isMd && hasContent ? (
             <div
               ref={scrollContainerRef}
-              className="px-3 pb-2 max-h-40 overflow-y-auto bg-gray-100 dark:bg-gray-900/40 rounded-sm mx-2 mb-2"
+              className="px-3 pb-2 max-h-40 overflow-y-auto bg-surface-code rounded-sm mx-2 mb-2"
             >
-              <div className="px-2 py-2 prose prose-sm prose-gray dark:prose-invert max-w-none overflow-auto prose-p:my-1 prose-pre:bg-gray-200 dark:prose-pre:bg-black/30 prose-pre:rounded prose-pre:px-2 prose-pre:py-1.5 prose-headings:text-gray-900 dark:prose-headings:text-gray-100 prose-a:text-semantic-accent prose-code:text-pink-600 dark:prose-code:text-pink-300 prose-code:before:content-[''] prose-code:after:content-[''] prose-code:bg-gray-200 dark:prose-code:bg-gray-800/60 prose-code:px-1 prose-code:rounded prose-code:text-[11px] prose-strong:text-gray-900 dark:prose-strong:text-gray-100 prose-blockquote:border-l-semantic-accent/50 prose-blockquote:text-gray-600 dark:prose-blockquote:text-gray-300 prose-li:my-0.5 prose-ul:my-1 prose-ol:my-1">
+              <div className="px-2 py-2 prose prose-sm prose-gray dark:prose-invert max-w-none overflow-auto prose-p:my-1 prose-pre:bg-surface-hover dark:prose-pre:bg-black/30 prose-pre:rounded prose-pre:px-2 prose-pre:py-1.5 prose-headings:text-text-primary dark:prose-headings:text-text-secondary prose-a:text-semantic-accent prose-code:text-pink-600 dark:prose-code:text-pink-300 prose-code:before:content-[''] prose-code:after:content-[''] prose-code:bg-surface-hover dark:prose-code:bg-surface-dim/60 prose-code:px-1 prose-code:rounded prose-code:text-[11px] prose-strong:text-text-primary dark:prose-strong:text-text-secondary prose-blockquote:border-l-semantic-accent/50 prose-blockquote:text-text-secondary dark:prose-blockquote:text-text-tertiary prose-li:my-0.5 prose-ul:my-1 prose-ol:my-1">
                 <CachedReactMarkdown>{fileContent}</CachedReactMarkdown>
               </div>
             </div>
@@ -317,11 +317,11 @@ export const WriteFileCard = memo(function WriteFileCard({
           ) : (
             <div className="px-3 pb-2">
               {block.output ? (
-                <pre className="text-[11px] text-gray-800 dark:text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-36 overflow-y-auto bg-gray-100 dark:bg-gray-900/40 rounded px-2 py-1.5">
+                <pre className="text-[11px] text-text-primary overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-36 overflow-y-auto bg-surface-code rounded px-2 py-1.5">
                   {block.output}
                 </pre>
               ) : isRunning ? (
-                <div className="text-[11px] text-gray-400 dark:text-gray-600 italic py-1">
+                <div className="text-[11px] text-text-tertiary italic py-1">
                   {t("writeFile.writingProgress")}
                 </div>
               ) : null}
@@ -359,32 +359,23 @@ export const WriteFileCard = memo(function WriteFileCard({
                       <span className="text-status-warning/80 ml-1">{f.summary}</span>
                     </div>
                     {f.issues.map((issue, i) => (
-                      <div
-                        key={i}
-                        className="text-[11px] text-gray-600 dark:text-gray-400 pl-4 pt-0.5"
-                      >
+                      <div key={i} className="text-[11px] text-text-secondary pl-4 pt-0.5">
                         <span
                           className={
                             issue.severity === 1
                               ? "text-status-error"
                               : issue.severity === 2
                                 ? "text-status-warning"
-                                : "text-gray-400 dark:text-gray-500"
+                                : "text-text-tertiary"
                           }
                         >
                           L{issue.line}
                         </span>
                         {issue.source && (
-                          <span className="text-gray-400 dark:text-gray-600">
-                            {" "}
-                            [{issue.source}]
-                          </span>
+                          <span className="text-text-tertiary"> [{issue.source}]</span>
                         )}
                         {issue.code != null && (
-                          <span className="text-gray-400 dark:text-gray-600">
-                            {" "}
-                            ({String(issue.code)})
-                          </span>
+                          <span className="text-text-tertiary"> ({String(issue.code)})</span>
                         )}
                         : {issue.message}
                       </div>

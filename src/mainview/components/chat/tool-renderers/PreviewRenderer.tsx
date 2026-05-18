@@ -34,7 +34,7 @@ export const PreviewRenderer = memo(function PreviewRenderer({
             ? "border-blue-500/25 bg-blue-50 dark:bg-blue-950/20"
             : isError
               ? "border-red-500/15 bg-red-50 dark:bg-red-950/15"
-              : "border-gray-200 dark:border-gray-700/30 bg-gray-50 dark:bg-gray-800/25"
+              : "border-border-secondary/30 bg-surface-dim"
         }`}
       >
         <div className="px-3 py-1.5 flex items-center gap-2 text-xs">
@@ -46,7 +46,7 @@ export const PreviewRenderer = memo(function PreviewRenderer({
               />
             );
           })()}
-          <span className="min-w-0 text-gray-800 dark:text-gray-300 font-mono truncate">
+          <span className="min-w-0 text-text-primary font-mono truncate">
             {filePath || block.args}
           </span>
           {isRunning && (
@@ -62,7 +62,7 @@ export const PreviewRenderer = memo(function PreviewRenderer({
         </div>
         {block.output && (
           <div className="px-3 pb-2">
-            <pre className="text-[11px] text-gray-600 dark:text-gray-400 overflow-x-auto whitespace-pre-wrap font-mono max-h-32 overflow-y-auto bg-gray-100 dark:bg-gray-900/40 rounded px-2 py-1.5">
+            <pre className="text-[11px] text-text-secondary overflow-x-auto whitespace-pre-wrap font-mono max-h-32 overflow-y-auto bg-surface-code rounded px-2 py-1.5">
               {block.output}
             </pre>
           </div>

@@ -97,7 +97,7 @@ function OutputHighlighter({ content, isRunning }: { content: string; isRunning:
         <pre className="text-[11px] leading-relaxed font-mono p-0 m-0">
           {tokens.map((line, i) => (
             <div key={i} {...getLineProps({ line })} className="table-row">
-              <span className="table-cell text-right pr-2 select-none text-gray-400 dark:text-gray-600 w-6 text-[10px]">
+              <span className="table-cell text-right pr-2 select-none text-text-tertiary w-6 text-[10px]">
                 {i + 1}
               </span>
               <span className="table-cell whitespace-pre">
@@ -214,7 +214,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
   } else if (isError) {
     borderBg = "border-status-error/20 bg-status-error/10 dark:bg-status-error/15";
   } else {
-    borderBg = "border-gray-200 dark:border-gray-700/40 bg-gray-50 dark:bg-gray-800/25";
+    borderBg = "border-border-secondary/30 bg-surface-dim";
   }
 
   return (
@@ -223,7 +223,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
       className={`rounded-none overflow-hidden border-x-0 border-t border-b ${borderBg}`}
     >
       <div
-        className="px-3 py-1.5 flex items-center gap-2 text-xs cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800/40 transition-colors select-none"
+        className="px-3 py-1.5 flex items-center gap-2 text-xs cursor-pointer hover:bg-surface-hover transition-colors select-none"
         onClick={() => setCollapsed((c) => !c)}
         role="button"
         aria-expanded={!collapsed}
@@ -232,7 +232,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
           <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-status-info animate-pulse" />
         )}
         <span
-          className={`font-medium shrink-0 ${isBackground ? "text-status-warning" : isTerminated ? "text-status-error" : isRunning ? "text-status-info" : isError ? "text-status-error" : "text-gray-800 dark:text-gray-300"}`}
+          className={`font-medium shrink-0 ${isBackground ? "text-status-warning" : isTerminated ? "text-status-error" : isRunning ? "text-status-info" : isError ? "text-status-error" : "text-text-primary"}`}
         >
           {block.toolName}
         </span>
@@ -250,7 +250,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
             if (!summary) summary = block.args.split("\n")[0]?.trim().slice(0, 120);
           }
           return summary ? (
-            <span className="flex-1 min-w-0 text-gray-600 dark:text-gray-400 truncate text-[11px]">
+            <span className="flex-1 min-w-0 text-text-secondary truncate text-[11px]">
               {summary}
             </span>
           ) : (
@@ -258,7 +258,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
           );
         })()}
         {isRunning && !statusLabel && (
-          <span className="shrink-0 flex items-center gap-1 text-[10px] text-gray-400 dark:text-gray-500 tabular-nums">
+          <span className="shrink-0 flex items-center gap-1 text-[10px] text-text-tertiary tabular-nums">
             {formatDuration(elapsed)}
             {timeout != null &&
               timeout > 0 &&
@@ -277,35 +277,29 @@ export const BashExecutionCard = memo(function BashExecutionCard({
         )}
         {statusLabel}
         {bashDetails?.background && (
-          <span className="text-[10px] text-gray-400 dark:text-gray-500 shrink-0">
+          <span className="text-[10px] text-text-tertiary shrink-0">
             PID: {bashDetails.background.pid}
           </span>
         )}
         {(bashDetails?.background ?? (storeStatus === "background" && bashProcess)) && (
-          <span className="text-[10px] text-gray-400 dark:text-gray-500 tabular-nums shrink-0">
+          <span className="text-[10px] text-text-tertiary tabular-nums shrink-0">
             {formatDuration(
               bashDetails?.background?.durationMs ??
                 Date.now() - (bashProcess?.startedAt ?? Date.now()),
             )}
             {timeout != null && timeout > 0 && timeout <= 86400 && (
-              <span className="text-gray-300 dark:text-gray-600">
-                {" "}
-                / {formatDuration(timeout * 1000)}
-              </span>
+              <span className="text-text-secondary"> / {formatDuration(timeout * 1000)}</span>
             )}
           </span>
         )}
         {(bashDetails?.terminated ?? (storeStatus === "terminated" && bashProcess)) && (
-          <span className="text-[10px] text-gray-400 dark:text-gray-500 tabular-nums shrink-0">
+          <span className="text-[10px] text-text-tertiary tabular-nums shrink-0">
             {formatDuration(
               bashDetails?.terminated?.durationMs ??
                 (bashProcess?.endedAt ?? Date.now()) - (bashProcess?.startedAt ?? Date.now()),
             )}
             {timeout != null && timeout > 0 && timeout <= 86400 && (
-              <span className="text-gray-300 dark:text-gray-600">
-                {" "}
-                / {formatDuration(timeout * 1000)}
-              </span>
+              <span className="text-text-secondary"> / {formatDuration(timeout * 1000)}</span>
             )}
           </span>
         )}
@@ -322,12 +316,9 @@ export const BashExecutionCard = memo(function BashExecutionCard({
                 ? bashProcess.endedAt - bashProcess.startedAt
                 : 0;
             return (
-              <span className="text-[10px] text-gray-400 dark:text-gray-500 tabular-nums shrink-0">
+              <span className="text-[10px] text-text-tertiary tabular-nums shrink-0">
                 {formatDuration(durationMs)}
-                <span className="text-gray-300 dark:text-gray-600">
-                  {" "}
-                  / {formatDuration(timeout * 1000)}
-                </span>
+                <span className="text-text-secondary"> / {formatDuration(timeout * 1000)}</span>
               </span>
             );
           })()}
@@ -336,7 +327,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
       {collapsed ? null : (
         <>
           <details className="group">
-            <summary className="px-3 py-1 text-[11px] text-gray-400 dark:text-gray-500 cursor-pointer hover:text-gray-600 dark:hover:text-gray-400 select-none flex items-center gap-1.5 border-t border-gray-200 dark:border-gray-700/30">
+            <summary className="px-3 py-1 text-[11px] text-text-tertiary cursor-pointer hover:text-text-secondary select-none flex items-center gap-1.5 border-t border-border-secondary/30">
               <svg
                 className="w-3 h-3 transition-transform group-open:rotate-90 shrink-0"
                 viewBox="0 0 12 12"
@@ -362,7 +353,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
             onToggle={(e) => setOutputOpen(e.currentTarget.open)}
             className="group"
           >
-            <summary className="px-3 py-1 text-[11px] text-gray-400 dark:text-gray-500 cursor-pointer hover:text-gray-600 dark:hover:text-gray-400 select-none flex items-center gap-1.5 border-t border-gray-200 dark:border-gray-700/30">
+            <summary className="px-3 py-1 text-[11px] text-text-tertiary cursor-pointer hover:text-text-secondary select-none flex items-center gap-1.5 border-t border-border-secondary/30">
               <svg
                 className="w-3 h-3 transition-transform group-open:rotate-90 shrink-0"
                 viewBox="0 0 12 12"
@@ -389,9 +380,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
                   <OutputHighlighter content={block.output} isRunning={isRunning} />
                 </div>
               ) : isRunning ? (
-                <div className="text-[11px] text-gray-400 dark:text-gray-600 italic py-1">
-                  {t("waiting")}
-                </div>
+                <div className="text-[11px] text-text-tertiary italic py-1">{t("waiting")}</div>
               ) : null}
               {isRunning && !autoScroll && (
                 <button
@@ -400,7 +389,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
                     const el = outputScrollRef.current;
                     if (el) el.scrollTop = el.scrollHeight;
                   }}
-                  className="absolute bottom-1 right-3 flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-gray-200/80 dark:bg-gray-700/80 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors shadow-sm"
+                  className="absolute bottom-1 right-3 flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-surface-hover/80 text-text-secondary hover:bg-surface-hover transition-colors shadow-sm"
                   title={t("scroll.scrollToBottom")}
                 >
                   <ChevronDown className="w-3 h-3" />
@@ -410,7 +399,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
           </details>
 
           {isRunning && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 border-t border-gray-200 dark:border-gray-700/30">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 border-t border-border-secondary/30">
               {showBackground && (
                 <button
                   onClick={() => sendAction("background")}
@@ -436,7 +425,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
       )}
 
       {isBackground && (
-        <div className="flex items-center gap-1.5 px-3 py-1.5 border-t border-gray-200 dark:border-gray-700/30">
+        <div className="flex items-center gap-1.5 px-3 py-1.5 border-t border-border-secondary/30">
           <div className="flex-1" />
           <button
             onClick={() => setShowLogViewer(true)}

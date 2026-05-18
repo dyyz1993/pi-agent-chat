@@ -46,7 +46,7 @@ export function TierSwitcher() {
               ${
                 isActive
                   ? "bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 font-medium ring-1 ring-indigo-500/30"
-                  : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                  : "text-text-tertiary hover:text-text-primary hover:bg-surface-dim"
               }
               disabled:opacity-50 disabled:cursor-not-allowed
             `}

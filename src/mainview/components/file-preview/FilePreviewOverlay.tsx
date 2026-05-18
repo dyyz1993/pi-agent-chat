@@ -115,7 +115,7 @@ export function FilePreviewOverlay({
   const renderPreview = () => {
     if (loading || svgLoading) {
       return (
-        <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+        <div className="flex items-center justify-center h-full text-text-tertiary text-sm">
           <div className="w-5 h-5 border-2 border-semantic-accent border-t-transparent rounded-full animate-spin mr-2" />
           {t("loading")}
         </div>
@@ -125,7 +125,7 @@ export function FilePreviewOverlay({
     if (isSvg && svgContent) {
       return (
         <div
-          className="flex items-center justify-center h-full p-4 bg-gray-100 dark:bg-gray-900"
+          className="flex items-center justify-center h-full p-4 bg-surface-code dark:bg-surface-code"
           dangerouslySetInnerHTML={{
             __html: sanitizeSvg(svgContent).replace(
               /<svg/,
@@ -138,7 +138,7 @@ export function FilePreviewOverlay({
 
     if (preview.isImage && preview.imageUrl) {
       return (
-        <div className="flex items-center justify-center h-full p-4 bg-gray-900">
+        <div className="flex items-center justify-center h-full p-4 bg-surface-code">
           <img
             src={preview.imageUrl}
             alt={preview.name}
@@ -166,7 +166,7 @@ export function FilePreviewOverlay({
           value={editContent}
           onChange={(e) => setEditContent(e.target.value)}
           onKeyDown={handleEditorKeyDown}
-          className="flex-1 w-full h-full text-xs font-mono bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white border-0 outline-none resize-none p-4"
+          className="flex-1 w-full h-full text-xs font-mono bg-surface-dim dark:bg-surface-code text-text-primary dark:text-text-primary border-0 outline-none resize-none p-4"
           spellCheck={false}
         />
       );
@@ -180,18 +180,18 @@ export function FilePreviewOverlay({
   };
 
   return (
-    <div className="absolute inset-0 z-10 bg-white/95 dark:bg-gray-900/95 flex flex-col overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-2 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+    <div className="absolute inset-0 z-10 bg-bg-elevated/95 dark:bg-surface-code/95 flex flex-col overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2 bg-surface-dim dark:bg-surface-dim border-b border-border-secondary dark:border-border-secondary flex-shrink-0">
         <div className="flex items-center gap-2">
-          <FileText className="w-4 h-4 text-gray-400" />
-          <span className="text-sm font-medium text-gray-800 dark:text-gray-200">
+          <FileText className="w-4 h-4 text-text-tertiary" />
+          <span className="text-sm font-medium text-text-primary dark:text-text-primary">
             {preview.name}
           </span>
           {preview.size > 0 && (
-            <span className="text-xs text-gray-500">{formatSize(preview.size)}</span>
+            <span className="text-xs text-text-tertiary">{formatSize(preview.size)}</span>
           )}
           {preview.totalLines != null && (
-            <span className="text-xs text-gray-500">{preview.totalLines} lines</span>
+            <span className="text-xs text-text-tertiary">{preview.totalLines} lines</span>
           )}
         </div>
         <div className="flex items-center gap-1">
@@ -201,7 +201,7 @@ export function FilePreviewOverlay({
               className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors ${
                 htmlSourceMode
                   ? "text-semantic-accent bg-semantic-accent/10 hover:bg-semantic-accent/20"
-                  : "text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-700/50"
+                  : "text-text-tertiary hover:text-text-primary dark:hover:text-text-primary hover:bg-surface-hover/50 dark:hover:bg-surface-hover/50"
               }`}
               title={htmlSourceMode ? t("switchPreview") : t("switchSource")}
             >
@@ -212,7 +212,7 @@ export function FilePreviewOverlay({
           {preview.isText && !preview.editable && onToggleEdit && (
             <button
               onClick={() => onToggleEdit(true)}
-              className="flex items-center gap-1 px-2 py-1 rounded text-xs text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors"
+              className="flex items-center gap-1 px-2 py-1 rounded text-xs text-text-tertiary hover:text-text-primary dark:hover:text-text-primary hover:bg-surface-hover/50 dark:hover:bg-surface-hover/50 transition-colors"
               title="Edit"
             >
               <Pencil className="w-3.5 h-3.5" />
@@ -231,7 +231,7 @@ export function FilePreviewOverlay({
           )}
           <button
             onClick={onClose}
-            className="p-2 rounded text-gray-500 hover:text-gray-800 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+            className="p-2 rounded text-text-tertiary hover:text-text-primary dark:hover:text-text-primary hover:bg-surface-hover dark:hover:bg-surface-hover transition-colors"
           >
             <X className="w-4 h-4" />
           </button>

@@ -94,7 +94,7 @@ function buildNavItems(messages: ChatMessage[], t: (key: string) => string): Nav
       const blockId = `${msg.id}-${bi}`;
 
       if (b.type === "text") {
-        subs.push({ icon: Type, color: "text-gray-400", label: t("sideNav.text"), blockId });
+        subs.push({ icon: Type, color: "text-text-tertiary", label: t("sideNav.text"), blockId });
       } else if (b.type === "toolExecution" && !seenTools.has(b.toolName)) {
         seenTools.add(b.toolName);
         let ti = getToolIcon(b.toolName);
@@ -182,7 +182,7 @@ const NavDot = memo(function NavDot({
     iconColor = "text-semantic-accent";
     barCls += "bg-semantic-accent opacity-100 ";
   } else {
-    cls += "hover:bg-gray-200/60 dark:hover:bg-gray-800/60 ";
+    cls += "hover:bg-surface-hover ";
   }
 
   return (
@@ -223,7 +223,7 @@ const NavSubDot = memo(function NavSubDot({
     iconColor = "text-semantic-accent";
     barCls += "bg-semantic-accent opacity-100 ";
   } else {
-    cls += "hover:bg-gray-200/60 dark:hover:bg-gray-800/60 ";
+    cls += "hover:bg-surface-hover ";
   }
 
   return (
@@ -321,7 +321,7 @@ export const SideNav = memo(function SideNav({
   }, [selectedNavId, filteredNavItems]);
 
   return (
-    <div className="h-full min-h-0 flex flex-col bg-gray-50/30 dark:bg-gray-900/30 border-l border-gray-200/30 dark:border-gray-800/30">
+    <div className="h-full min-h-0 flex flex-col bg-surface-dim/30 dark:bg-surface-code/30 border-l border-border-secondary/30 dark:border-border-secondary/30">
       <VList
         ref={sidenavVlistRef}
         style={{ flex: 1, minHeight: 0, scrollbarWidth: "none", msOverflowStyle: "none" }}

@@ -64,19 +64,19 @@ export function DiffViewerPanel() {
 
   return (
     <div
-      className="absolute inset-0 bg-white dark:bg-gray-900 flex flex-col"
+      className="absolute inset-0 bg-bg-elevated dark:bg-surface-code flex flex-col"
       style={{ zIndex: 40 }}
     >
       {/* Header */}
-      <div className="h-9 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center px-3 text-xs flex-shrink-0 gap-2">
-        <span className="text-gray-800 dark:text-gray-300 font-medium">{fileName}</span>
-        <span className="text-gray-400 dark:text-gray-500 truncate text-[10px]">
+      <div className="h-9 bg-surface-dim dark:bg-surface-dim border-b border-border-secondary dark:border-border-secondary flex items-center px-3 text-xs flex-shrink-0 gap-2">
+        <span className="text-text-primary dark:text-text-secondary font-medium">{fileName}</span>
+        <span className="text-text-tertiary dark:text-text-tertiary truncate text-[10px]">
           {currentDiff?.filePath}
         </span>
         <div className="ml-auto flex items-center gap-1">
           <button
             onClick={() => setSplitView(false)}
-            className={`p-1 rounded transition-colors ${!splitView ? "bg-gray-400 dark:bg-gray-600 text-white" : "text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-white"}`}
+            className={`p-1 rounded transition-colors ${!splitView ? "bg-text-tertiary dark:bg-text-secondary text-white" : "text-text-tertiary dark:text-text-tertiary hover:text-text-primary dark:hover:text-text-primary"}`}
             title={t("diffLineByLine")}
             aria-label={t("diffLineByLine")}
           >
@@ -84,7 +84,7 @@ export function DiffViewerPanel() {
           </button>
           <button
             onClick={() => setSplitView(true)}
-            className={`p-1 rounded transition-colors ${splitView ? "bg-gray-400 dark:bg-gray-600 text-white" : "text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-white"}`}
+            className={`p-1 rounded transition-colors ${splitView ? "bg-text-tertiary dark:bg-text-secondary text-white" : "text-text-tertiary dark:text-text-tertiary hover:text-text-primary dark:hover:text-text-primary"}`}
             title={t("diffSideBySide")}
             aria-label={t("diffSideBySide")}
           >
@@ -92,7 +92,7 @@ export function DiffViewerPanel() {
           </button>
           <button
             onClick={clearDiff}
-            className="p-2 rounded text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+            className="p-2 rounded text-text-tertiary dark:text-text-tertiary hover:text-text-primary dark:hover:text-text-primary hover:bg-surface-hover dark:hover:bg-surface-hover transition-colors"
             aria-label={t("closeDiff")}
           >
             <X className="w-4 h-4" />
@@ -103,7 +103,7 @@ export function DiffViewerPanel() {
       {/* Diff content */}
       <div className="flex-1 overflow-auto">
         {loadingDiff ? (
-          <div className="flex items-center justify-center h-full text-gray-400 dark:text-gray-500">
+          <div className="flex items-center justify-center h-full text-text-tertiary dark:text-text-tertiary">
             {t("loadingDiff")}
           </div>
         ) : currentDiff ? (

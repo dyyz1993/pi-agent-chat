@@ -59,7 +59,7 @@ function TreeNodeItemInner({
       <div
         tabIndex={0}
         className={`flex items-center gap-1.5 px-2 py-0.5 text-xs rounded cursor-pointer transition-colors outline-none focus:ring-1 focus:ring-semantic-accent/50 ${
-          isSelected ? "bg-semantic-accent/30 text-white" : "hover:bg-gray-700"
+          isSelected ? "bg-semantic-accent/30 text-white" : "hover:bg-surface-hover"
         }`}
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
         onClick={() => (isDir ? onToggle(node.path) : onOpenFile(node))}
@@ -72,9 +72,9 @@ function TreeNodeItemInner({
       >
         {isDir ? (
           node.expanded ? (
-            <ChevronDown className="w-3 h-3 text-gray-500 shrink-0" />
+            <ChevronDown className="w-3 h-3 text-text-tertiary shrink-0" />
           ) : (
-            <ChevronRight className="w-3 h-3 text-gray-500 shrink-0" />
+            <ChevronRight className="w-3 h-3 text-text-tertiary shrink-0" />
           )
         ) : (
           <span className="w-3 shrink-0" />
@@ -89,7 +89,7 @@ function TreeNodeItemInner({
           />
         ) : (
           <span
-            className={`truncate ${isDir ? "text-status-info font-medium" : "text-gray-300"} ${isIgnored ? "!text-gray-500 !font-normal" : ""}`}
+            className={`truncate ${isDir ? "text-status-info font-medium" : "text-text-secondary"} ${isIgnored ? "!text-text-tertiary !font-normal" : ""}`}
           >
             {node.name}
           </span>

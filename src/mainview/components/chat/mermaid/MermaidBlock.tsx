@@ -131,7 +131,7 @@ export const MermaidBlock = memo(function MermaidBlock({ code, inline = true }: 
 
   if (loading && !svg && !error) {
     return (
-      <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/60 p-4 my-3 flex items-center justify-center min-h-[80px]">
+      <div className="rounded-lg border border-border-secondary dark:border-border-secondary bg-bg-elevated dark:bg-surface-code/60 p-4 my-3 flex items-center justify-center min-h-[80px]">
         <div className="inline-block w-4 h-4 border-2 border-indigo-500 dark:border-indigo-400 border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -139,11 +139,9 @@ export const MermaidBlock = memo(function MermaidBlock({ code, inline = true }: 
 
   if (error) {
     return (
-      <div className="rounded-lg border border-red-300/50 dark:border-red-900/50 bg-white dark:bg-gray-900/60 my-3 overflow-hidden">
-        <div className="px-3 py-1.5 text-xs text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border-b border-red-300/30 dark:border-red-900/30">
-          {t("chartRenderFailed")}
-        </div>
-        <pre className="p-3 text-xs text-gray-800 dark:text-gray-300 overflow-x-auto font-mono">
+      <div className="rounded-lg border border-red-300/50 dark:border-red-900/50 bg-bg-elevated dark:bg-surface-code/60 my-3 overflow-hidden">
+        <div className="px-3 py-1.5 text-xs text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border-b border-red-300/30 dark:border-red-900/30"></div>
+        <pre className="p-3 text-xs text-text-primary dark:text-text-secondary overflow-x-auto font-mono">
           <code>{code}</code>
         </pre>
       </div>
@@ -151,7 +149,7 @@ export const MermaidBlock = memo(function MermaidBlock({ code, inline = true }: 
   }
 
   return (
-    <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/60 my-3 overflow-hidden group relative">
+    <div className="rounded-lg border border-border-secondary dark:border-border-secondary bg-bg-elevated dark:bg-surface-code/60 my-3 overflow-hidden group relative">
       <div
         ref={containerRef}
         className="overflow-auto p-4"
@@ -166,34 +164,33 @@ export const MermaidBlock = memo(function MermaidBlock({ code, inline = true }: 
           dangerouslySetInnerHTML={svg ? { __html: svg } : undefined}
         />
       </div>
-      <div className="absolute top-2 right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 dark:bg-gray-800/90 rounded-md border border-gray-200 dark:border-gray-700 p-0.5">
+      <div className="absolute top-2 right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-bg-elevated/90 dark:bg-surface-dim/90 rounded-md border border-border-secondary dark:border-border-secondary p-0.5">
         <button
           onClick={handleZoomOut}
-          className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+          className="p-1 rounded hover:bg-surface-hover dark:hover:bg-surface-hover text-text-tertiary dark:text-text-tertiary hover:text-text-primary dark:hover:text-text-primary"
           title={t("zoomOut")}
         >
           <ZoomOut className="w-3.5 h-3.5" />
         </button>
         <button
           onClick={handleReset}
-          className="px-1.5 py-0.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 rounded min-w-[3rem] text-center"
+          className="px-1.5 py-0.5 text-xs text-text-tertiary dark:text-text-tertiary hover:text-text-primary dark:hover:text-text-primary hover:bg-surface-hover dark:hover:bg-surface-hover rounded min-w-[3rem] text-center"
           title={t("resetZoom")}
         >
           {Math.round(scale * 100)}%
         </button>
         <button
           onClick={handleZoomIn}
-          className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
-          title={t("zoomIn")}
+          className="p-1 rounded hover:bg-surface-hover dark:hover:bg-surface-hover text-text-tertiary dark:text-text-tertiary hover:text-text-primary dark:hover:text-text-primary"
         >
           <ZoomIn className="w-3.5 h-3.5" />
         </button>
         {inline && (
           <>
-            <div className="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-0.5" />
+            <div className="w-px h-4 bg-border-secondary dark:border-border-secondary mx-0.5" />
             <button
               onClick={handleFullscreen}
-              className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+              className="p-1 rounded hover:bg-surface-hover dark:hover:bg-surface-hover text-text-tertiary dark:text-text-tertiary hover:text-text-primary dark:hover:text-text-primary"
               title={t("fullscreenView")}
             >
               <Maximize2 className="w-3.5 h-3.5" />

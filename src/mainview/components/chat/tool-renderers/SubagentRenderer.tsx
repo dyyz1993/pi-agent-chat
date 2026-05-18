@@ -70,7 +70,7 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
           ? "bg-semantic-agent/5"
           : isError
             ? "bg-status-error/5"
-            : "hover:bg-gray-200/40 dark:hover:bg-gray-800/40"
+            : "hover:bg-surface-hover/40"
       }`}
       onClick={() => setCollapsed((c) => !c)}
     >
@@ -146,7 +146,7 @@ export const Header = memo(function Header({
             <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-status-info animate-pulse" />
           )}
         </div>
-        <p className="text-[11px] text-gray-600 dark:text-gray-400 leading-relaxed line-clamp-2">
+        <p className="text-[11px] text-text-secondary leading-relaxed line-clamp-2">
           {displayTitle}
         </p>
       </div>
@@ -229,7 +229,7 @@ export const OutputSection = memo(function OutputSection({
   const { t } = useTranslation("chat");
   return (
     <details className="group">
-      <summary className="px-3 py-1 text-[11px] text-gray-400 dark:text-gray-500 cursor-pointer hover:text-gray-600 dark:hover:text-gray-400 select-none flex items-center gap-1.5">
+      <summary className="px-3 py-1 text-[11px] text-text-tertiary cursor-pointer hover:text-text-secondary select-none flex items-center gap-1.5">
         <svg
           className="w-3 h-3 transition-transform group-open:rotate-90 shrink-0"
           viewBox="0 0 12 12"
@@ -248,13 +248,11 @@ export const OutputSection = memo(function OutputSection({
       </summary>
       <div className="px-3 pb-2">
         {block.output ? (
-          <pre className="text-[11px] text-gray-800 dark:text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-36 overflow-y-auto">
+          <pre className="text-[11px] text-text-primary overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-36 overflow-y-auto">
             {block.output}
           </pre>
         ) : (
-          <div className="text-[11px] text-gray-400 dark:text-gray-600 italic py-1">
-            {t("subagent.noOutput")}
-          </div>
+          <div className="text-[11px] text-text-tertiary italic py-1">{t("subagent.noOutput")}</div>
         )}
       </div>
     </details>

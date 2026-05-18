@@ -14,7 +14,7 @@ export function ActivityBar() {
   const togglePanel = useSidebarStore((s) => s.togglePanel);
 
   return (
-    <div className="w-12 bg-gray-100 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 flex flex-col items-center py-2 gap-1 flex-shrink-0">
+    <div className="w-12 bg-surface-code border-r border-border-secondary flex flex-col items-center py-2 gap-1 flex-shrink-0">
       {items.map(({ id, icon: Icon, labelKey }) => (
         <button
           key={id}
@@ -24,8 +24,8 @@ export function ActivityBar() {
           onClick={() => togglePanel(id)}
           className={`w-10 h-10 flex items-center justify-center rounded transition-colors ${
             activePanel === id
-              ? "bg-gray-300 dark:bg-gray-700 text-gray-900 dark:text-white border-l-2 border-gray-900 dark:border-white"
-              : "text-gray-500 hover:text-gray-800 dark:hover:text-gray-300"
+              ? "bg-surface-hover text-text-primary border-l-2 border-border-focus"
+              : "text-text-tertiary hover:text-text-primary"
           }`}
         >
           <Icon className="w-5 h-5" />
