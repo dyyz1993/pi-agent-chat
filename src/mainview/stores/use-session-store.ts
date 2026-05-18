@@ -300,13 +300,17 @@ export const useSessionStore = create<SessionState>()(
 
           const existing = get().sessionsByProject[projectPath] || [];
           const existingPaths = new Set(existing.map((s) => s.sessionPath));
-          sessions = sessions.filter((s) => !existingPaths.has(s.sessionPath));
+          const existingIds = new Set(existing.map((s) => s.sessionId));
+          const newFromDisk = sessions.filter((s) => !existingPaths.has(s.sessionPath));
 
-          const blankSessions = sessions.filter((s) => s.messageCount === 0 && !s.firstMessage);
-          if (blankSessions.length > 1) {
-            const toRemove = blankSessions.slice(0, -1);
-            const removeIds = new Set(toRemove.map((s) => s.sessionId));
-            sessions = sessions.filter((s) => !removeIds.has(s.sessionId));
+          // Merge: keep in-memory sessions + add new from disk, deduplicate
+          const allBlankSessions = [...existing, ...newFromDisk].filter(
+            (s) => s.messageCount === 0 && !s.firstMessage,
+          );
+          let blankToRemove: Set<string> | null = null;
+          if (allBlankSessions.length > 1) {
+            const toRemove = allBlankSessions.slice(0, -1);
+            blankToRemove = new Set(toRemove.map((s) => s.sessionId));
 
             for (const s of toRemove) {
               apiClient
@@ -315,11 +319,30 @@ export const useSessionStore = create<SessionState>()(
             }
           }
 
+          // Merge disk sessions into existing: update known ones, append new ones
+          const merged = existing.map((mem) => {
+            const disk = sessions.find((s) => s.sessionPath === mem.sessionPath);
+            return disk ?? mem;
+          });
+          for (const s of newFromDisk) {
+            if (
+              !existingIds.has(s.sessionId) &&
+              !merged.some((m) => m.sessionPath === s.sessionPath)
+            ) {
+              merged.push(s);
+            }
+          }
+
+          // Remove excess blank sessions from merged result
+          const finalSessions = blankToRemove
+            ? merged.filter((s) => !blankToRemove.has(s.sessionId))
+            : merged;
+
           set((s) => ({
-            sessionsByProject: { ...s.sessionsByProject, [projectPath]: sessions },
+            sessionsByProject: { ...s.sessionsByProject, [projectPath]: finalSessions },
             loading: false,
           }));
-          return sessions;
+          return finalSessions;
         } catch {
           set({ loading: false });
           return [];
