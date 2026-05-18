@@ -114,9 +114,9 @@ const FileItem = memo(function FileItem({
       {expanded && (
         <div className="ml-4 sm:ml-8 mr-2 sm:mr-3 mb-2 mt-1">
           {details ? (
-            <div className="rounded-md bg-surface-dim dark:bg-surface-dim/60 border border-border-secondary dark:border-border-secondary overflow-hidden">
-              <div className="px-3 py-1.5 bg-surface-hover/50 dark:bg-surface-hover/50 border-b border-border-secondary dark:border-border-secondary flex items-center gap-2">
-                <span className="text-[10px] text-text-tertiary dark:text-text-tertiary font-mono truncate">
+            <div className="rounded-md bg-surface-dim dark:bg-surface-dim/60 border border-border-secondary overflow-hidden">
+              <div className="px-3 py-1.5 bg-surface-hover/50 border-b border-border-secondary flex items-center gap-2">
+                <span className="text-[10px] text-text-tertiary font-mono truncate">
                   {filePath}
                 </span>
                 {(addedLines !== undefined || removedLines !== undefined) && (
@@ -157,12 +157,12 @@ const FileItem = memo(function FileItem({
                       return (
                         <div
                           key={i}
-                          className="text-text-tertiary dark:text-text-tertiary border-t border-dashed border-border-secondary dark:border-border-secondary my-1"
+                          className="text-text-tertiary border-t border-dashed border-border-secondary my-1"
                         />
                       );
                     }
                     return (
-                      <div key={i} className="text-text-secondary dark:text-text-secondary">
+                      <div key={i} className="text-text-secondary">
                         {line}
                       </div>
                     );
@@ -171,8 +171,8 @@ const FileItem = memo(function FileItem({
               </div>
             </div>
           ) : (
-            <div className="px-3 py-2 rounded-md bg-surface-dim dark:bg-surface-dim/60 border border-border-secondary dark:border-border-secondary">
-              <span className="text-xs text-text-tertiary dark:text-text-tertiary">
+            <div className="px-3 py-2 rounded-md bg-surface-dim dark:bg-surface-dim/60 border border-border-secondary">
+              <span className="text-xs text-text-tertiary">
                 {status === "deleted"
                   ? "文件将被删除"
                   : status === "added"
@@ -302,24 +302,24 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
       className="fixed inset-0 z-50 flex flex-col bg-bg-elevated/98 dark:bg-surface-code/98 backdrop-blur-sm overflow-hidden"
     >
       <div
-        className="flex items-center gap-2 px-4 py-2 bg-surface-dim/90 dark:bg-surface-code/90 border-b border-border-secondary dark:border-border-secondary flex-shrink-0"
+        className="flex items-center gap-2 px-4 py-2 bg-surface-dim/90 dark:bg-surface-code/90 border-b border-border-secondary flex-shrink-0"
         style={{
           paddingTop: "calc(0.5rem + env(safe-area-inset-top, 0px))",
         }}
       >
         <AlertTriangle className="w-4 h-4 text-status-warning shrink-0" />
-        <span className="text-sm font-medium text-text-primary dark:text-text-primary truncate flex-1 min-w-0">
+        <span className="text-sm font-medium text-text-primary truncate flex-1 min-w-0">
           {isWithFiles ? t("rollbackOverlay.titleWithFiles") : t("rollbackOverlay.title")}
         </span>
         {hasFiles && (
-          <span className="text-xs text-text-tertiary dark:text-text-tertiary">
+          <span className="text-xs text-text-tertiary">
             {preview?.summary?.totalFiles ?? files.length} 文件
           </span>
         )}
         <button
           type="button"
           onClick={closeRollback}
-          className="p-2 rounded text-text-tertiary dark:text-text-tertiary hover:text-text-primary dark:hover:text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-hover transition-colors"
+          className="p-2 rounded text-text-tertiary hover:text-text-primary dark:hover:text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-hover transition-colors"
           title={t("rollbackOverlay.cancel")}
         >
           <X className="w-4 h-4" />
@@ -355,9 +355,7 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
           )}
 
           {isWithFiles && !hasFiles && (
-            <p className="text-xs text-text-tertiary dark:text-text-tertiary mb-6">
-              {t("rollbackOverlay.noFiles")}
-            </p>
+            <p className="text-xs text-text-tertiary mb-6">{t("rollbackOverlay.noFiles")}</p>
           )}
 
           <div className="flex items-center justify-end gap-3 pt-2 flex-wrap">
@@ -365,7 +363,7 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
               type="button"
               onClick={closeRollback}
               disabled={loading}
-              className="px-4 py-2 text-sm rounded-lg border border-border-secondary dark:border-border-secondary text-text-secondary dark:text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 text-sm rounded-lg border border-border-secondary text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {t("rollbackOverlay.cancel")}
             </button>

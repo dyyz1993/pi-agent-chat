@@ -31,14 +31,10 @@ export const FallbackCard = memo(function FallbackCard({ details }: { details: P
               {t("typeLabel", { type: details.resourceType })}
             </div>
             {details.mimeType && (
-              <div className="text-text-tertiary dark:text-text-tertiary">
-                {t("mimeLabel", { mime: details.mimeType })}
-              </div>
+              <div className="text-text-tertiary">{t("mimeLabel", { mime: details.mimeType })}</div>
             )}
             {details.size != null && (
-              <div className="text-text-tertiary dark:text-text-tertiary">
-                {t("mimeLabel", { mime: details.mimeType })}
-              </div>
+              <div className="text-text-tertiary">{t("mimeLabel", { mime: details.mimeType })}</div>
             )}
             {details.size != null && (
               <div className="text-text-tertiary">

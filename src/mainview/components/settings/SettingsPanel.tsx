@@ -197,14 +197,12 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     >
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
 
-      <div className="relative w-[380px] max-w-[90vw] bg-bg-elevated dark:bg-surface-code border border-border-secondary dark:border-border-secondary rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+      <div className="relative w-[380px] max-w-[90vw] bg-bg-elevated dark:bg-surface-code border border-border-secondary rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
         <div className="flex items-center justify-between px-4 py-3 border-b border-border-secondary/80 dark:border-surface-dim/80">
-          <h2 className="text-sm font-semibold text-text-primary dark:text-text-primary">
-            {t("title")}
-          </h2>
+          <h2 className="text-sm font-semibold text-text-primary">{t("title")}</h2>
           <button
             onClick={onClose}
-            className="p-1 rounded text-text-tertiary dark:text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-dim transition-colors"
+            className="p-1 rounded text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-dim transition-colors"
             aria-label={t("close")}
           >
             <X className="w-4 h-4" />
@@ -215,10 +213,10 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
           <SectionHeader>{t("chatDisplay")}</SectionHeader>
 
           <div className="py-1">
-            <div className="text-[13px] text-text-primary dark:text-text-primary font-medium mb-1.5">
+            <div className="text-[13px] text-text-primary font-medium mb-1.5">
               {t("chatViewMode")}
             </div>
-            <div className="flex rounded-lg border border-border-secondary dark:border-border-secondary overflow-hidden">
+            <div className="flex rounded-lg border border-border-secondary overflow-hidden">
               {(["developer", "clean"] as const).map((mode) => (
                 <button
                   key={mode}
@@ -226,14 +224,14 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                   className={`flex-1 py-1.5 text-[12px] font-medium transition-colors ${
                     chatViewMode === mode
                       ? "bg-semantic-accent text-white"
-                      : "bg-bg-elevated dark:bg-surface-dim text-text-secondary dark:text-text-secondary hover:bg-surface-dim dark:hover:bg-surface-hover/60"
+                      : "bg-bg-elevated dark:bg-surface-dim text-text-secondary hover:bg-surface-dim dark:hover:bg-surface-hover/60"
                   }`}
                 >
                   {t(`chatViewMode${mode.charAt(0).toUpperCase() + mode.slice(1)}` as const)}
                 </button>
               ))}
             </div>
-            <div className="text-[11px] text-text-tertiary dark:text-text-tertiary mt-1">
+            <div className="text-[11px] text-text-tertiary mt-1">
               {chatViewMode === "developer"
                 ? t("chatViewModeDeveloperDesc")
                 : t("chatViewModeCleanDesc")}
@@ -246,12 +244,8 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
               className="flex items-start gap-3 py-2 px-1 rounded-lg hover:bg-surface-dim dark:hover:bg-surface-dim/40 cursor-pointer transition-colors group"
             >
               <div className="flex-1 min-w-0">
-                <div className="text-[13px] text-text-primary dark:text-text-primary font-medium">
-                  {t(labelKey)}
-                </div>
-                <div className="text-[11px] text-text-tertiary dark:text-text-tertiary mt-0.5">
-                  {t(descKey)}
-                </div>
+                <div className="text-[13px] text-text-primary font-medium">{t(labelKey)}</div>
+                <div className="text-[11px] text-text-tertiary mt-0.5">{t(descKey)}</div>
               </div>
               <ToggleSwitch checked={settings[key] as boolean} onChange={() => toggle(key)} />
             </label>
@@ -263,12 +257,8 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
 
           <label className="flex items-start gap-3 py-2 px-1 rounded-lg hover:bg-surface-dim dark:hover:bg-surface-dim/40 cursor-pointer transition-colors">
             <div className="flex-1 min-w-0">
-              <div className="text-[13px] text-text-primary dark:text-text-primary font-medium">
-                {t("retryEnabled")}
-              </div>
-              <div className="text-[11px] text-text-tertiary dark:text-text-tertiary mt-0.5">
-                {t("retryEnabledDesc")}
-              </div>
+              <div className="text-[13px] text-text-primary font-medium">{t("retryEnabled")}</div>
+              <div className="text-[11px] text-text-tertiary mt-0.5">{t("retryEnabledDesc")}</div>
             </div>
             <ToggleSwitch
               checked={retryConfig.enabled}
@@ -311,10 +301,8 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             return (
               <div key={tier} className="flex items-center gap-3 py-2 px-1">
                 <div className="flex items-center gap-1 w-16 shrink-0">
-                  <Icon className="w-3 h-3 text-text-tertiary dark:text-text-tertiary" />
-                  <span className="text-[13px] text-text-secondary dark:text-text-secondary">
-                    {TIER_LABELS[tier]}
-                  </span>
+                  <Icon className="w-3 h-3 text-text-tertiary" />
+                  <span className="text-[13px] text-text-secondary">{TIER_LABELS[tier]}</span>
                 </div>
                 <div className="flex-1 min-w-0">
                   <ModelPickerButton
@@ -347,12 +335,8 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
 
           <label className="flex items-start gap-3 py-2 px-1 rounded-lg hover:bg-surface-dim dark:hover:bg-surface-dim/40 cursor-pointer transition-colors">
             <div className="flex-1 min-w-0">
-              <div className="text-[13px] text-text-primary dark:text-text-primary font-medium">
-                {t("proxyEnabled")}
-              </div>
-              <div className="text-[11px] text-text-tertiary dark:text-text-tertiary mt-0.5">
-                {t("proxyEnabledDesc")}
-              </div>
+              <div className="text-[13px] text-text-primary font-medium">{t("proxyEnabled")}</div>
+              <div className="text-[11px] text-text-tertiary mt-0.5">{t("proxyEnabledDesc")}</div>
             </div>
             <ToggleSwitch checked={proxyLocalEnabled} onChange={toggleProxy} />
           </label>
@@ -365,7 +349,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
               resetRetryConfig();
               persistRetry(RETRY_DEFAULTS);
             }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs text-text-tertiary dark:text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary hover:bg-surface-hover/60 dark:hover:bg-surface-hover/60 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary hover:bg-surface-hover/60 dark:hover:bg-surface-hover/60 transition-colors"
           >
             <RotateCcw className="w-3 h-3" />
             <span>{t("reset")}</span>
@@ -384,7 +368,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
 
 function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
-    <div className="text-[11px] font-medium text-text-tertiary dark:text-text-tertiary uppercase tracking-wide">
+    <div className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide">
       {children}
     </div>
   );
@@ -416,15 +400,13 @@ function SelectRow<T extends number>({
   return (
     <div className="flex items-center gap-3 py-2 px-1">
       <div className="flex-1 min-w-0">
-        <div className="text-[13px] text-text-primary dark:text-text-primary font-medium">
-          {label}
-        </div>
-        <div className="text-[11px] text-text-tertiary dark:text-text-tertiary mt-0.5">{desc}</div>
+        <div className="text-[13px] text-text-primary font-medium">{label}</div>
+        <div className="text-[11px] text-text-tertiary mt-0.5">{desc}</div>
       </div>
       <select
         value={value}
         onChange={(e) => onChange(Number(e.target.value) as T)}
-        className="h-7 px-2 rounded-md border border-border-secondary dark:border-border-secondary bg-bg-elevated dark:bg-surface-dim text-[12px] text-text-secondary dark:text-text-secondary focus:outline-none focus:ring-1 focus:ring-semantic-accent cursor-pointer"
+        className="h-7 px-2 rounded-md border border-border-secondary bg-bg-elevated dark:bg-surface-dim text-[12px] text-text-secondary focus:outline-none focus:ring-1 focus:ring-semantic-accent cursor-pointer"
       >
         {options.map((opt) => (
           <option key={opt.value} value={opt.value}>
@@ -455,16 +437,14 @@ function BackoffPreview({
   return (
     <div className="mt-1 px-1 py-2 rounded-lg bg-surface-dim dark:bg-surface-dim/40 border-border-secondary dark:border-surface-dim">
       <div className="flex items-center justify-between mb-1">
-        <div className="text-[11px] text-text-tertiary dark:text-text-tertiary">
-          {t("retryPreview")}
-        </div>
+        <div className="text-[11px] text-text-tertiary">{t("retryPreview")}</div>
         <div
-          className={`text-[11px] font-medium ${totalMs >= 7200000 ? "text-status-success" : totalMs >= 3600000 ? "text-status-warning" : "text-text-tertiary dark:text-text-tertiary"}`}
+          className={`text-[11px] font-medium ${totalMs >= 7200000 ? "text-status-success" : totalMs >= 3600000 ? "text-status-warning" : "text-text-tertiary"}`}
         >
           {t("retryTotal")}: {formatMs(totalMs)}
         </div>
       </div>
-      <div className="text-[11px] text-text-tertiary dark:text-text-tertiary font-mono flex flex-wrap gap-x-3 gap-y-0.5">
+      <div className="text-[11px] text-text-tertiary font-mono flex flex-wrap gap-x-3 gap-y-0.5">
         {steps.map((s) => (
           <span key={s}>{s}</span>
         ))}

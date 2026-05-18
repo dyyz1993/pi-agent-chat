@@ -319,11 +319,11 @@ export function SidebarBottomControls() {
             setTierConfigOpen(false);
           }}
           disabled={!activeSessionId || !sessionReady || agentSwitching}
-          className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-text-tertiary dark:text-text-tertiary hover:bg-surface-hover/60 dark:hover:bg-surface-dim/60 hover:text-text-secondary dark:hover:text-text-secondary transition-colors disabled:opacity-40"
+          className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-text-tertiary hover:bg-surface-hover/60 dark:hover:bg-surface-dim/60 hover:text-text-secondary dark:hover:text-text-secondary transition-colors disabled:opacity-40"
           aria-expanded={agentOpen}
           aria-label={t("agentSelect")}
         >
-          <Bot className="w-3 h-3 shrink-0 text-text-tertiary dark:text-text-tertiary" />
+          <Bot className="w-3 h-3 shrink-0 text-text-tertiary" />
           <span className="truncate flex-1 text-left">
             {currentAgent === "build"
               ? t("agentBuild")
@@ -338,7 +338,7 @@ export function SidebarBottomControls() {
           />
         </button>
         {agentOpen && (
-          <div className="absolute bottom-full left-0 right-0 mb-1 z-50 bg-bg-elevated dark:bg-surface-dim border border-border-secondary dark:border-border-secondary rounded-md shadow-xl py-1">
+          <div className="absolute bottom-full left-0 right-0 mb-1 z-50 bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl py-1">
             <div className="overflow-y-auto max-h-[15rem]">
               {agents.map((agent) => {
                 const isActive = currentAgent === agent.name;
@@ -353,7 +353,7 @@ export function SidebarBottomControls() {
                     key={agent.name}
                     className={`w-full text-left px-3 py-2 text-xs flex items-start gap-2 transition-colors ${
                       isActive
-                        ? "bg-semantic-accent/15 text-semantic-accent dark:text-semantic-accent"
+                        ? "bg-semantic-accent/15 text-semantic-accent"
                         : "text-text-secondary dark:text-text-primary hover:bg-surface-hover dark:hover:bg-surface-hover"
                     }`}
                     onClick={async () => {
@@ -366,7 +366,7 @@ export function SidebarBottomControls() {
                     {isActive ? (
                       <Check className="w-3 h-3 shrink-0 text-semantic-accent mt-0.5" />
                     ) : (
-                      <Icon className="w-3 h-3 shrink-0 text-text-tertiary dark:text-text-tertiary mt-0.5" />
+                      <Icon className="w-3 h-3 shrink-0 text-text-tertiary mt-0.5" />
                     )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
@@ -383,7 +383,7 @@ export function SidebarBottomControls() {
                         </span>
                       </div>
                       {agent.description && (
-                        <div className="text-text-tertiary dark:text-text-tertiary text-[10px] mt-0.5 truncate">
+                        <div className="text-text-tertiary text-[10px] mt-0.5 truncate">
                           {agent.description}
                         </div>
                       )}
@@ -391,13 +391,13 @@ export function SidebarBottomControls() {
                         <CopyButton
                           text={agent.filePath}
                           size="xs"
-                          className="text-[9px] text-text-tertiary dark:text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary mt-0.5 w-fit"
+                          className="text-[9px] text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary mt-0.5 w-fit"
                           title={agent.filePath}
                         />
                       )}
                     </div>
                     {agent.tier && (
-                      <span className="text-[10px] text-text-tertiary dark:text-text-tertiary shrink-0 mt-0.5">
+                      <span className="text-[10px] text-text-tertiary shrink-0 mt-0.5">
                         {agent.tier}
                       </span>
                     )}
@@ -411,11 +411,11 @@ export function SidebarBottomControls() {
 
       <div className="relative" ref={workspaceRef}>
         {!isGitRepo ? (
-          <div className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-text-tertiary dark:text-text-tertiary">
+          <div className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-text-tertiary">
             <FolderTree className="w-3 h-3 shrink-0" />
             <div className="flex flex-col min-w-0 flex-1 text-left">
               <span className="truncate">{t("notGitRepo")}</span>
-              <span className="text-[10px] text-text-tertiary dark:text-text-tertiary truncate">
+              <span className="text-[10px] text-text-tertiary truncate">
                 {activeTabPath.split("/").pop()}
               </span>
             </div>
@@ -427,16 +427,14 @@ export function SidebarBottomControls() {
               setThinkingOpen(false);
             }}
             disabled={!activeSessionId || !sessionReady}
-            className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-text-tertiary dark:text-text-tertiary hover:bg-surface-hover/60 dark:hover:bg-surface-dim/60 hover:text-text-secondary dark:hover:text-text-secondary transition-colors disabled:opacity-40"
+            className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-text-tertiary hover:bg-surface-hover/60 dark:hover:bg-surface-dim/60 hover:text-text-secondary dark:hover:text-text-secondary transition-colors disabled:opacity-40"
             aria-expanded={workspaceOpen}
             aria-label={t("workspaceSelect")}
           >
-            <FolderTree className="w-3 h-3 shrink-0 text-text-tertiary dark:text-text-tertiary" />
+            <FolderTree className="w-3 h-3 shrink-0 text-text-tertiary" />
             <div className="flex flex-col min-w-0 flex-1 text-left">
               <span className="truncate">{workspaceName}</span>
-              <span className="text-[10px] text-text-tertiary dark:text-text-tertiary truncate">
-                {workspacePath}
-              </span>
+              <span className="text-[10px] text-text-tertiary truncate">{workspacePath}</span>
             </div>
             <ChevronDown
               className={`w-3 h-3 shrink-0 transition-transform ${workspaceOpen ? "rotate-180" : ""}`}
@@ -444,7 +442,7 @@ export function SidebarBottomControls() {
           </button>
         )}
         {isGitRepo && workspaceOpen && (
-          <div className="absolute bottom-full left-0 right-0 mb-1 z-50 max-h-64 overflow-hidden bg-bg-elevated dark:bg-surface-dim border border-border-secondary dark:border-border-secondary rounded-md shadow-xl flex flex-col">
+          <div className="absolute bottom-full left-0 right-0 mb-1 z-50 max-h-64 overflow-hidden bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl flex flex-col">
             <div className="overflow-y-auto flex-1 py-1">
               {worktrees.map((wt) => {
                 const isActive = currentWorkspace?.path === wt.path;
@@ -466,16 +464,14 @@ export function SidebarBottomControls() {
                     )}
                     <div className="flex flex-col min-w-0 flex-1">
                       <span className="truncate">{name}</span>
-                      <span className="text-[10px] text-text-tertiary dark:text-text-tertiary truncate">
-                        {wt.path}
-                      </span>
+                      <span className="text-[10px] text-text-tertiary truncate">{wt.path}</span>
                     </div>
                     {!wt.isMain && <GitBranch className="w-3 h-3 shrink-0 text-semantic-tool/60" />}
                   </button>
                 );
               })}
             </div>
-            <div className="border-t border-border-secondary/60 dark:border-border-secondary/60">
+            <div className="border-t border-border-secondary/60">
               <button
                 className="w-full text-left px-3 py-1.5 text-xs text-semantic-tool hover:bg-surface-hover dark:hover:bg-surface-hover flex items-center gap-2 transition-colors"
                 onClick={() => {
@@ -490,19 +486,17 @@ export function SidebarBottomControls() {
           </div>
         )}
         {showCreateDialog && (
-          <div className="absolute bottom-full left-0 right-0 mb-1 z-50 bg-bg-elevated dark:bg-surface-dim border border-border-secondary dark:border-border-secondary rounded-md shadow-xl p-3 space-y-2">
-            <div className="text-xs font-medium text-text-primary dark:text-text-primary">
-              {t("newWorkspaceTitle")}
-            </div>
+          <div className="absolute bottom-full left-0 right-0 mb-1 z-50 bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl p-3 space-y-2">
+            <div className="text-xs font-medium text-text-primary">{t("newWorkspaceTitle")}</div>
             <div className="space-y-1.5">
               <div>
-                <label className="text-[10px] text-text-tertiary dark:text-text-tertiary block mb-0.5">
+                <label className="text-[10px] text-text-tertiary block mb-0.5">
                   {t("baseBranch")}
                 </label>
                 <select
                   value={sourceBranch}
                   onChange={(e) => setSourceBranch(e.target.value)}
-                  className="w-full bg-bg-elevated dark:bg-surface-code border border-border-secondary dark:border-border-secondary rounded px-2 py-1 text-xs text-text-secondary dark:text-text-secondary outline-none"
+                  className="w-full bg-bg-elevated dark:bg-surface-code border border-border-secondary rounded px-2 py-1 text-xs text-text-secondary outline-none"
                 >
                   {worktrees.map((wt) => (
                     <option key={wt.path} value={wt.branch}>
@@ -513,14 +507,14 @@ export function SidebarBottomControls() {
                 </select>
               </div>
               <div>
-                <label className="text-[10px] text-text-tertiary dark:text-text-tertiary block mb-0.5">
+                <label className="text-[10px] text-text-tertiary block mb-0.5">
                   {t("newBranchName")}
                 </label>
                 <input
                   value={newBranch}
                   onChange={(e) => setNewBranch(e.target.value)}
                   placeholder="feature-xxx"
-                  className="w-full bg-bg-elevated dark:bg-surface-code border border-border-secondary dark:border-border-secondary rounded px-2 py-1 text-xs text-text-secondary dark:text-text-secondary outline-none"
+                  className="w-full bg-bg-elevated dark:bg-surface-code border border-border-secondary rounded px-2 py-1 text-xs text-text-secondary outline-none"
                 />
               </div>
             </div>
@@ -530,7 +524,7 @@ export function SidebarBottomControls() {
                   setShowCreateDialog(false);
                   setNewBranch("");
                 }}
-                className="px-2 py-1 rounded text-xs text-text-tertiary dark:text-text-tertiary hover:bg-surface-hover dark:hover:bg-surface-hover"
+                className="px-2 py-1 rounded text-xs text-text-tertiary hover:bg-surface-hover dark:hover:bg-surface-hover"
               >
                 {t("cancel", { ns: "common" })}
               </button>
@@ -563,11 +557,11 @@ export function SidebarBottomControls() {
           renderTrigger={({ open }) => (
             <button
               disabled={!activeSessionId || !sessionReady}
-              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-text-tertiary dark:text-text-tertiary hover:bg-surface-hover/60 dark:hover:bg-surface-dim/60 hover:text-text-secondary dark:hover:text-text-secondary transition-colors disabled:opacity-40 ${open ? "bg-surface-code/60 dark:bg-surface-dim/60" : ""}`}
+              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-text-tertiary hover:bg-surface-hover/60 dark:hover:bg-surface-dim/60 hover:text-text-secondary dark:hover:text-text-secondary transition-colors disabled:opacity-40 ${open ? "bg-surface-code/60 dark:bg-surface-dim/60" : ""}`}
               aria-expanded={open}
               aria-label={t("modelSelect")}
             >
-              <Cpu className="w-3 h-3 shrink-0 text-text-tertiary dark:text-text-tertiary" />
+              <Cpu className="w-3 h-3 shrink-0 text-text-tertiary" />
               <span className="truncate flex-1 text-left">
                 {t("modelLabel", { model: modelDisplay })}
               </span>
@@ -608,7 +602,7 @@ export function SidebarBottomControls() {
                 ${
                   isActive
                     ? "bg-semantic-accent/15 text-semantic-accent font-medium ring-1 ring-semantic-accent/30"
-                    : "text-text-tertiary dark:text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-dim"
+                    : "text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-dim"
                 }
                 disabled:opacity-50 disabled:cursor-not-allowed
               `}
@@ -622,7 +616,7 @@ export function SidebarBottomControls() {
         <button
           onClick={handleOpenTierConfig}
           disabled={!activeSessionId || !sessionReady}
-          className="p-0.5 rounded text-text-tertiary dark:text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-dim transition-colors disabled:opacity-40 shrink-0"
+          className="p-0.5 rounded text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-dim transition-colors disabled:opacity-40 shrink-0"
           title={t("tierConfigTitle", "Configure tier models")}
           aria-label={t("tierConfigTitle", "Configure tier models")}
         >
@@ -632,9 +626,9 @@ export function SidebarBottomControls() {
         {tierConfigOpen && (
           <div
             ref={tierConfigRef}
-            className="absolute bottom-full left-0 right-0 mb-1 z-50 bg-bg-elevated dark:bg-surface-dim border border-border-secondary dark:border-border-secondary rounded-md shadow-xl p-3 space-y-2"
+            className="absolute bottom-full left-0 right-0 mb-1 z-50 bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl p-3 space-y-2"
           >
-            <div className="text-xs font-medium text-text-primary dark:text-text-primary">
+            <div className="text-xs font-medium text-text-primary">
               {t("tierConfigTitle", "Configure tier models")}
             </div>
             {TIER_KEYS.map((tier) => {
@@ -652,10 +646,8 @@ export function SidebarBottomControls() {
               return (
                 <div key={tier} className="flex items-center gap-2">
                   <div className="flex items-center gap-1 w-14 shrink-0">
-                    <Icon className="w-3 h-3 text-text-tertiary dark:text-text-tertiary" />
-                    <span className="text-[11px] text-text-secondary dark:text-text-secondary">
-                      {labels[tier]}
-                    </span>
+                    <Icon className="w-3 h-3 text-text-tertiary" />
+                    <span className="text-[11px] text-text-secondary">{labels[tier]}</span>
                   </div>
                   <div className="flex-1 min-w-0">
                     <ModelPickerButton
@@ -681,7 +673,7 @@ export function SidebarBottomControls() {
             <div className="flex items-center justify-end gap-2 pt-1">
               <button
                 onClick={() => setTierConfigOpen(false)}
-                className="px-2 py-1 rounded text-[11px] text-text-tertiary dark:text-text-tertiary hover:bg-surface-hover dark:hover:bg-surface-hover"
+                className="px-2 py-1 rounded text-[11px] text-text-tertiary hover:bg-surface-hover dark:hover:bg-surface-hover"
               >
                 {t("cancel", { ns: "common" })}
               </button>
@@ -704,11 +696,11 @@ export function SidebarBottomControls() {
             setWorkspaceOpen(false);
           }}
           disabled={!activeSessionId || !sessionReady}
-          className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-text-tertiary dark:text-text-tertiary hover:bg-surface-hover/60 dark:hover:bg-surface-dim/60 hover:text-text-secondary dark:hover:text-text-secondary transition-colors disabled:opacity-40"
+          className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-text-tertiary hover:bg-surface-hover/60 dark:hover:bg-surface-dim/60 hover:text-text-secondary dark:hover:text-text-secondary transition-colors disabled:opacity-40"
           aria-expanded={thinkingOpen}
           aria-label={t("thinkingSelect")}
         >
-          <Brain className="w-3 h-3 shrink-0 text-text-tertiary dark:text-text-tertiary" />
+          <Brain className="w-3 h-3 shrink-0 text-text-tertiary" />
           <span className="truncate flex-1 text-left">
             {t("thinkingLabel", { level: thinkingDisplay })}
           </span>
@@ -717,7 +709,7 @@ export function SidebarBottomControls() {
           />
         </button>
         {thinkingOpen && (
-          <div className="absolute bottom-full left-0 right-0 mb-1 z-50 bg-bg-elevated dark:bg-surface-dim border border-border-secondary dark:border-border-secondary rounded-md shadow-xl py-1">
+          <div className="absolute bottom-full left-0 right-0 mb-1 z-50 bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl py-1">
             {THINKING_LEVEL_VALUES.map((value, idx) => {
               const isActive = currentThinkingLevel === value;
               return (
@@ -736,9 +728,7 @@ export function SidebarBottomControls() {
                     <span className="w-3 shrink-0" />
                   )}
                   <span>{t(THINKING_LEVEL_KEYS[idx])}</span>
-                  <span className="text-text-tertiary dark:text-text-tertiary ml-auto text-[10px] font-mono">
-                    {value}
-                  </span>
+                  <span className="text-text-tertiary ml-auto text-[10px] font-mono">{value}</span>
                 </button>
               );
             })}

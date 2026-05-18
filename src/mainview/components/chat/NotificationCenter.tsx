@@ -102,18 +102,18 @@ export function NotificationCenter() {
 
       {panelOpen && (
         <div
-          className="absolute right-0 top-full mt-1 w-72 max-h-80 overflow-hidden flex flex-col bg-surface-dim dark:bg-surface-dim border border-border-secondary dark:border-border-secondary rounded-lg shadow-xl z-50"
+          className="absolute right-0 top-full mt-1 w-72 max-h-80 overflow-hidden flex flex-col bg-surface-dim border border-border-secondary rounded-lg shadow-xl z-50"
           role="log"
           aria-label={t("notification.list")}
         >
-          <div className="flex items-center justify-between px-3 py-2 border-b border-border-secondary dark:border-border-secondary">
-            <span className="text-[11px] text-text-tertiary dark:text-text-tertiary font-medium">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-border-secondary">
+            <span className="text-[11px] text-text-tertiary font-medium">
               {t("notification.title")}
             </span>
             {notifications.length > 0 && (
               <button
                 onClick={clearAll}
-                className="text-[10px] text-text-tertiary dark:text-text-tertiary hover:text-text-primary dark:hover:text-text-secondary transition-colors flex items-center gap-0.5"
+                className="text-[10px] text-text-tertiary hover:text-text-primary dark:hover:text-text-secondary transition-colors flex items-center gap-0.5"
               >
                 <Trash2 className="w-2.5 h-2.5" />
                 {t("common:clear")}
@@ -133,7 +133,7 @@ export function NotificationCenter() {
                 return (
                   <div
                     key={n.id}
-                    className={`flex items-start gap-2 px-3 py-2 border-b border-border-secondary/50 dark:border-border-secondary/50 transition-colors ${!n.read ? "bg-surface-hover/20 dark:bg-surface-hover/20" : ""} ${isClickable ? "hover:bg-surface-hover/30 dark:hover:bg-surface-hover/30 cursor-pointer" : ""}`}
+                    className={`flex items-start gap-2 px-3 py-2 border-b border-border-secondary/50 transition-colors ${!n.read ? "bg-surface-hover/20" : ""} ${isClickable ? "hover:bg-surface-hover/30 dark:hover:bg-surface-hover/30 cursor-pointer" : ""}`}
                     onMouseEnter={() => {
                       if (!n.read) markRead(n.id);
                     }}
@@ -142,7 +142,7 @@ export function NotificationCenter() {
                     }}
                   >
                     <Icon className={`w-3 h-3 mt-0.5 shrink-0 ${LEVEL_COLOR[n.level]}`} />
-                    <span className="flex-1 text-[11px] text-text-secondary dark:text-text-secondary break-all leading-relaxed">
+                    <span className="flex-1 text-[11px] text-text-secondary break-all leading-relaxed">
                       {n.message}
                     </span>
                     <button
@@ -162,7 +162,7 @@ export function NotificationCenter() {
           </div>
 
           {pwaPerm !== "granted" && pwaPerm !== "denied" && (
-            <div className="px-3 py-2 border-t border-border-secondary dark:border-border-secondary">
+            <div className="px-3 py-2 border-t border-border-secondary">
               <button
                 onClick={handleEnablePwa}
                 className="w-full flex items-center justify-center gap-1.5 text-[11px] text-semantic-accent hover:text-semantic-accent transition-colors py-1"

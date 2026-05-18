@@ -255,7 +255,7 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
   return (
     <div
       data-testid="tab-bar"
-      className="h-9 bg-surface-dim dark:bg-surface-code border-b border-border-secondary dark:border-border-secondary flex items-center flex-shrink-0"
+      className="h-9 bg-surface-dim dark:bg-surface-code border-b border-border-secondary flex items-center flex-shrink-0"
       style={{
         paddingTop: "env(safe-area-inset-top)",
         height: "calc(2.25rem + env(safe-area-inset-top))",
@@ -307,7 +307,7 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
               onContextMenu={(e) => e.preventDefault()}
               className={`group flex items-center gap-1.5 px-3 py-1 text-xs rounded-t transition-all duration-150 relative cursor-pointer select-none shrink-0 ${
                 isActive
-                  ? "bg-bg-elevated dark:bg-surface-code text-text-primary dark:text-text-primary border-t-2 border-t-semantic-accent"
+                  ? "bg-bg-elevated dark:bg-surface-code text-text-primary border-t-2 border-t-semantic-accent"
                   : "text-text-secondary dark:text-text-tertiary hover:text-text-primary dark:hover:text-text-primary hover:bg-surface-hover/50 dark:hover:bg-surface-dim/50"
               } ${isPressing ? "scale-[0.97] opacity-90" : ""} ${
                 isDragSource
@@ -338,7 +338,7 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
         })}
       </div>
 
-      <div className="flex items-center gap-0.5 px-2 shrink-0 border-l border-border-secondary dark:border-border-secondary h-full">
+      <div className="flex items-center gap-0.5 px-2 shrink-0 border-l border-border-secondary h-full">
         <button
           data-testid="settings-open-btn"
           onClick={() => setSettingsOpen(true)}
@@ -368,15 +368,15 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
           }}
         >
           <div
-            className="bg-bg-elevated dark:bg-surface-dim border border-border-secondary dark:border-border-secondary rounded-lg shadow-2xl p-4 min-w-[300px] max-w-[400px]"
+            className="bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-lg shadow-2xl p-4 min-w-[300px] max-w-[400px]"
             role="dialog"
             aria-modal="true"
             aria-label={t("closeProjectTitle")}
           >
-            <h3 className="text-sm font-semibold text-text-primary dark:text-text-primary mb-2">
+            <h3 className="text-sm font-semibold text-text-primary mb-2">
               {t("closeProjectTitle")}
             </h3>
-            <p className="text-xs text-text-secondary dark:text-text-secondary mb-4">
+            <p className="text-xs text-text-secondary mb-4">
               {closeConfirmTab.runningSessionIds.length > 0
                 ? t("closeProjectRunningMessage", { name: closeConfirmTab.name })
                 : t("closeProjectIdleMessage", { name: closeConfirmTab.name })}
@@ -385,7 +385,7 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
               {closeConfirmTab.runningSessionIds.length > 0 ? (
                 <>
                   <button
-                    className="px-3 py-1.5 text-xs bg-surface-hover dark:bg-surface-hover hover:bg-surface-hover dark:hover:bg-surface-hover rounded transition-colors text-text-primary dark:text-text-primary"
+                    className="px-3 py-1.5 text-xs bg-surface-hover hover:bg-surface-hover dark:hover:bg-surface-hover rounded transition-colors text-text-primary"
                     onClick={handleKeepRunning}
                   >
                     {t("closeProjectContinue")}
@@ -400,7 +400,7 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
               ) : (
                 <>
                   <button
-                    className="px-3 py-1.5 text-xs bg-surface-hover dark:bg-surface-hover hover:bg-surface-hover dark:hover:bg-surface-hover rounded transition-colors text-text-primary dark:text-text-primary"
+                    className="px-3 py-1.5 text-xs bg-surface-hover hover:bg-surface-hover dark:hover:bg-surface-hover rounded transition-colors text-text-primary"
                     onClick={() => setCloseConfirmTab(null)}
                   >
                     {t("cancel", { ns: "common" })}

@@ -214,10 +214,10 @@ export const TimelineTurn = memo(function TimelineTurn({
           </button>
 
           {/* Model / summary info */}
-          <span className="text-[11px] text-text-tertiary dark:text-text-tertiary font-medium truncate">
+          <span className="text-[11px] text-text-tertiary font-medium truncate">
             {turn.model ?? "Assistant"}
             {toolCount > 0 && (
-              <span className="ml-1.5 text-text-tertiary dark:text-text-tertiary">
+              <span className="ml-1.5 text-text-tertiary">
                 · {toolCount} tool{toolCount > 1 ? "s" : ""}
               </span>
             )}
@@ -225,7 +225,7 @@ export const TimelineTurn = memo(function TimelineTurn({
 
           {/* Token usage badge */}
           {turn.tokenUsage && (
-            <span className="text-[10px] text-text-tertiary dark:text-text-tertiary font-mono ml-auto">
+            <span className="text-[10px] text-text-tertiary font-mono ml-auto">
               {formatTokens(turn.tokenUsage.input)} / {formatTokens(turn.tokenUsage.output)}
             </span>
           )}
@@ -282,7 +282,7 @@ export const TimelineTurn = memo(function TimelineTurn({
       {/* ── Collapsed Summary ── */}
       {collapsed && (
         <div
-          className="ml-[38px] py-1.5 px-3 text-[11px] text-text-tertiary dark:text-text-tertiary bg-surface-dim/40 dark:bg-surface-code/40 rounded-md border border-border-secondary/50 dark:border-border-secondary/50 cursor-pointer"
+          className="ml-[38px] py-1.5 px-3 text-[11px] text-text-tertiary bg-surface-dim/40 dark:bg-surface-code/40 rounded-md border border-border-secondary/50 cursor-pointer"
           onClick={toggleCollapse}
         >
           {turn.userText ? truncate(turn.userText, 60) : "(empty)"}
@@ -361,13 +361,9 @@ function TimelineItemRenderer({
       return (
         <div className="group/item relative">
           {showCheckbox && <ItemCheckbox checked={isSelected} onChange={handleToggle} />}
-          <div className="px-3 py-2 rounded-lg bg-surface-code/60 dark:bg-surface-dim/60 text-sm text-text-secondary dark:text-text-secondary font-mono">
+          <div className="px-3 py-2 rounded-lg bg-surface-code/60 dark:bg-surface-dim/60 text-sm text-text-secondary font-mono">
             <span className="text-semantic-accent">{item.toolName}</span>
-            {item.args && (
-              <span className="text-text-tertiary dark:text-text-tertiary ml-1">
-                {item.args.slice(0, 80)}
-              </span>
-            )}
+            {item.args && <span className="text-text-tertiary ml-1">{item.args.slice(0, 80)}</span>}
           </div>
         </div>
       );
@@ -375,7 +371,7 @@ function TimelineItemRenderer({
       return (
         <div className="group/item relative flex gap-2">
           {showCheckbox && <ItemCheckbox checked={isSelected} onChange={handleToggle} />}
-          <div className="px-3 py-2 rounded-lg bg-surface-code/40 dark:bg-surface-dim/40 text-sm text-text-secondary dark:text-text-secondary">
+          <div className="px-3 py-2 rounded-lg bg-surface-code/40 dark:bg-surface-dim/40 text-sm text-text-secondary">
             <span className="text-semantic-tool font-medium">[{item.customType}]</span>
           </div>
         </div>
@@ -395,7 +391,7 @@ function ItemCheckbox({ checked, onChange }: { checked: boolean; onChange: () =>
       className={`absolute -left-[26px] top-2 w-4 h-4 rounded border flex items-center justify-center transition-all shrink-0 ${
         checked
           ? "bg-semantic-accent border-semantic-accent text-white"
-          : "border-border-secondary dark:border-border-secondary hover:border-border-secondary bg-transparent"
+          : "border-border-secondary hover:border-border-secondary bg-transparent"
       }`}
     >
       {checked && <Check size={10} />}
@@ -409,7 +405,7 @@ function AssistantTextBlock({ text, isStreaming }: { text: string; isStreaming?:
 
   if (isStreaming) {
     return (
-      <div className="px-3 py-2 rounded-lg bg-surface-hover/60 dark:bg-surface-hover/60 text-sm text-text-primary dark:text-text-primary whitespace-pre-wrap break-words">
+      <div className="px-3 py-2 rounded-lg bg-surface-hover/60 text-sm text-text-primary whitespace-pre-wrap break-words">
         {text}
         <span className="inline-block w-1.5 h-4 bg-semantic-accent animate-pulse ml-0.5 align-text-bottom" />
       </div>
@@ -418,18 +414,13 @@ function AssistantTextBlock({ text, isStreaming }: { text: string; isStreaming?:
 
   return (
     <div className="group/text relative px-3 py-2 rounded-lg bg-surface-code/40 dark:bg-surface-dim/40 prose dark:prose-invert prose-sm max-w-none">
-      <pre className="whitespace-pre-wrap break-words text-sm text-text-primary dark:text-text-primary">
-        {text}
-      </pre>
+      <pre className="whitespace-pre-wrap break-words text-sm text-text-primary">{text}</pre>
       <button
         onClick={() => copy(text)}
         className="absolute top-1.5 right-1.5 p-1 rounded opacity-0 group-hover/text:opacity-100 hover:bg-surface-hover dark:hover:bg-surface-hover transition-all"
         title={copied ? t("common:copied") : t("chat:copyText")}
       >
-        <Copy
-          size={11}
-          className={copied ? "text-status-success" : "text-text-tertiary dark:text-text-tertiary"}
-        />
+        <Copy size={11} className={copied ? "text-status-success" : "text-text-tertiary"} />
       </button>
     </div>
   );
@@ -451,12 +442,12 @@ function TurnActionButton({
   disabled?: boolean;
 }) {
   const colorClass = disabled
-    ? "text-text-secondary dark:text-text-secondary cursor-not-allowed"
+    ? "text-text-secondary cursor-not-allowed"
     : variant === "warning"
       ? "text-status-warning/70 hover:text-status-warning hover:bg-status-warning/10"
       : variant === "info"
         ? "text-status-info/70 hover:text-status-info hover:bg-status-info/10"
-        : "text-text-tertiary dark:text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-dim";
+        : "text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-dim";
 
   const activeClass = active ? "!bg-semantic-accent/20 !text-semantic-accent" : "";
 

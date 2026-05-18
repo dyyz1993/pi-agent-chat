@@ -128,7 +128,7 @@ export function StatusPanel() {
     <>
       <div className="py-1">
         <div className="flex items-center justify-between px-2.5 py-1 border-b border-border-secondary dark:border-surface-code/50">
-          <span className="text-[10px] font-medium text-text-tertiary dark:text-text-tertiary uppercase tracking-wider">
+          <span className="text-[10px] font-medium text-text-tertiary uppercase tracking-wider">
             {t("status")}
           </span>
           <button
@@ -138,7 +138,7 @@ export function StatusPanel() {
             title={t("refreshResources")}
           >
             <RotateCw
-              className={`w-3 h-3 text-text-tertiary dark:text-text-tertiary ${refreshing ? "animate-spin" : ""}`}
+              className={`w-3 h-3 text-text-tertiary ${refreshing ? "animate-spin" : ""}`}
             />
           </button>
         </div>
@@ -151,7 +151,7 @@ export function StatusPanel() {
             >
               <button
                 onClick={() => toggleSection(id)}
-                className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium text-text-secondary dark:text-text-secondary hover:bg-surface-hover/50 dark:hover:bg-surface-code/30 transition-colors"
+                className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium text-text-secondary hover:bg-surface-hover/50 dark:hover:bg-surface-code/30 transition-colors"
               >
                 {collapsed ? (
                   <ChevronRight className="w-3 h-3 shrink-0" />
@@ -195,7 +195,7 @@ export function StatusPanel() {
                                 </span>
                               )}
                               <span
-                                className={`${todo.deleted ? "text-status-error/60 line-through" : todo.done ? "text-text-tertiary line-through" : "text-text-secondary dark:text-text-secondary"} truncate`}
+                                className={`${todo.deleted ? "text-status-error/60 line-through" : todo.done ? "text-text-tertiary line-through" : "text-text-secondary"} truncate`}
                               >
                                 {todo.text}
                               </span>
@@ -370,16 +370,16 @@ export function StatusPanel() {
                                     <ChevronRight className="w-3 h-3 text-text-tertiary" />
                                   )}
                                 </span>
-                                <span className="truncate flex-1 text-text-secondary dark:text-text-secondary">
+                                <span className="truncate flex-1 text-text-secondary">
                                   {p.name}
                                 </span>
                                 {p.toolNames.length > 0 && (
-                                  <span className="text-text-tertiary dark:text-text-tertiary">
+                                  <span className="text-text-tertiary">
                                     {t("pluginTools", { count: p.toolNames.length })}
                                   </span>
                                 )}
                                 {p.commandNames.length > 0 && (
-                                  <span className="text-text-tertiary dark:text-text-tertiary">
+                                  <span className="text-text-tertiary">
                                     {t("pluginCommands", { count: p.commandNames.length })}
                                   </span>
                                 )}
@@ -391,22 +391,20 @@ export function StatusPanel() {
                               </div>
                               {isExpanded && (
                                 <div className="ml-4 pl-2 border-l border-border-secondary dark:border-surface-code space-y-1 pt-1 text-[10px]">
-                                  <div className="text-text-tertiary dark:text-text-tertiary break-all">
-                                    <span className="text-text-tertiary dark:text-text-tertiary">
-                                      {t("pathLabel")}
-                                    </span>{" "}
+                                  <div className="text-text-tertiary break-all">
+                                    <span className="text-text-tertiary">{t("pathLabel")}</span>{" "}
                                     {p.path}
                                   </div>
                                   {p.toolNames.length > 0 && (
                                     <div>
-                                      <span className="text-text-tertiary dark:text-text-tertiary block mb-0.5">
+                                      <span className="text-text-tertiary block mb-0.5">
                                         {t("toolsLabel")}
                                       </span>
                                       <div className="space-y-px">
                                         {p.toolNames.map((tn) => (
                                           <div
                                             key={tn}
-                                            className="text-text-tertiary dark:text-text-tertiary pl-2 font-mono truncate"
+                                            className="text-text-tertiary pl-2 font-mono truncate"
                                           >
                                             {tn}
                                           </div>
@@ -416,14 +414,14 @@ export function StatusPanel() {
                                   )}
                                   {p.commandNames.length > 0 && (
                                     <div>
-                                      <span className="text-text-tertiary dark:text-text-tertiary block mb-0.5">
+                                      <span className="text-text-tertiary block mb-0.5">
                                         {t("commandsLabel")}
                                       </span>
                                       <div className="space-y-px">
                                         {p.commandNames.map((cn) => (
                                           <div
                                             key={cn}
-                                            className="text-text-tertiary dark:text-text-tertiary pl-2 font-mono truncate"
+                                            className="text-text-tertiary pl-2 font-mono truncate"
                                           >
                                             {cn}
                                           </div>
@@ -432,7 +430,7 @@ export function StatusPanel() {
                                     </div>
                                   )}
                                   {p.toolNames.length === 0 && p.commandNames.length === 0 && (
-                                    <div className="text-text-tertiary dark:text-text-tertiary">
+                                    <div className="text-text-tertiary">
                                       {t("noToolsOrCommands")}
                                     </div>
                                   )}
@@ -461,7 +459,7 @@ export function StatusPanel() {
                                 <span
                                   className={`w-1.5 h-1.5 rounded-full ${sk.enabled ? "bg-status-success" : "bg-text-tertiary dark:bg-text-secondary"}`}
                                 />
-                                <span className="truncate flex-1 text-text-secondary dark:text-text-secondary">
+                                <span className="truncate flex-1 text-text-secondary">
                                   {sk.name}
                                 </span>
                                 <span
@@ -486,20 +484,16 @@ export function StatusPanel() {
                               </div>
                               {isExpanded && (
                                 <div className="ml-4 pl-2 border-l border-border-secondary dark:border-surface-code space-y-1 pt-1 text-[10px]">
-                                  <div className="text-text-tertiary dark:text-text-tertiary break-all">
+                                  <div className="text-text-tertiary break-all">
                                     {sk.description || t("noDescription")}
                                   </div>
                                   <div className="space-y-0.5 text-text-tertiary">
                                     <div className="truncate" title={sk.filePath}>
-                                      <span className="text-text-tertiary dark:text-text-tertiary">
-                                        {t("fileLabel")}
-                                      </span>{" "}
+                                      <span className="text-text-tertiary">{t("fileLabel")}</span>{" "}
                                       {sk.filePath.split("/").pop()}
                                     </div>
                                     <div>
-                                      <span className="text-text-tertiary dark:text-text-tertiary">
-                                        {t("pathLabel")}
-                                      </span>
+                                      <span className="text-text-tertiary">{t("pathLabel")}</span>
                                       <span className="break-all">{sk.filePath}</span>
                                     </div>
                                     {sk.disableModelInvocation && (
@@ -596,11 +590,9 @@ function MCPToolsSection() {
                   <ChevronRight className="w-3 h-3 text-text-tertiary" />
                 )}
               </span>
-              <span className="truncate flex-1 text-text-secondary dark:text-text-secondary">
-                {srv.name}
-              </span>
+              <span className="truncate flex-1 text-text-secondary">{srv.name}</span>
               {srv.toolCount > 0 && (
-                <span className="text-text-tertiary dark:text-text-tertiary">
+                <span className="text-text-tertiary">
                   {t("mcpToolCount", { count: srv.toolCount })}
                 </span>
               )}
@@ -643,25 +635,21 @@ function MCPToolsSection() {
               <div className="ml-4 pl-2 border-l border-border-secondary dark:border-surface-code space-y-1 pt-1 text-[10px]">
                 {srv.error && <div className="text-status-error/80 break-all">{srv.error}</div>}
                 {srv.tools.length === 0 ? (
-                  <div className="text-text-tertiary dark:text-text-tertiary">
-                    {t("noMcpTools")}
-                  </div>
+                  <div className="text-text-tertiary">{t("noMcpTools")}</div>
                 ) : (
                   <>
                     <div>
-                      <span className="text-text-tertiary dark:text-text-tertiary block mb-0.5">
-                        {t("toolsLabel")}
-                      </span>
+                      <span className="text-text-tertiary block mb-0.5">{t("toolsLabel")}</span>
                       <div className="space-y-px">
                         {srv.tools.map((tool) => (
                           <div
                             key={tool.name}
-                            className="text-text-tertiary dark:text-text-tertiary pl-2 font-mono truncate"
+                            className="text-text-tertiary pl-2 font-mono truncate"
                             title={tool.description || undefined}
                           >
                             {tool.name}
                             {tool.description && (
-                              <span className="text-text-tertiary dark:text-text-tertiary font-sans ml-1">
+                              <span className="text-text-tertiary font-sans ml-1">
                                 — {tool.description}
                               </span>
                             )}
@@ -789,9 +777,7 @@ function SupervisorSectionContent({
 
       {status.activeGuards.length > 0 && (
         <div>
-          <span className="text-text-tertiary dark:text-text-tertiary block mb-0.5">
-            {t("supervisor.activeGuards")}
-          </span>
+          <span className="text-text-tertiary block mb-0.5">{t("supervisor.activeGuards")}</span>
           <div className="flex flex-wrap gap-1">
             {status.activeGuards.map((g) => (
               <span
@@ -807,9 +793,7 @@ function SupervisorSectionContent({
 
       {taskReports.length > 0 && (
         <div>
-          <span className="text-text-tertiary dark:text-text-tertiary block mb-0.5">
-            {t("supervisor.taskReport")}
-          </span>
+          <span className="text-text-tertiary block mb-0.5">{t("supervisor.taskReport")}</span>
           <div className="space-y-0.5">
             {taskReports.map((tr) => (
               <div key={tr.guardName} className="flex items-center gap-1">

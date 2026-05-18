@@ -375,8 +375,8 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
           <div
             className={
               mobile
-                ? "text-sm font-medium text-text-primary dark:text-text-primary truncate"
-                : "text-[12px] font-medium text-text-primary dark:text-text-primary truncate"
+                ? "text-sm font-medium text-text-primary truncate"
+                : "text-[12px] font-medium text-text-primary truncate"
             }
           >
             {proj.name}
@@ -484,9 +484,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
           className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer"
         >
           <Folder className="w-4 h-4 text-status-info/70 shrink-0" />
-          <span className="text-[12px] text-text-primary dark:text-text-primary truncate">
-            {entry.name}
-          </span>
+          <span className="text-[12px] text-text-primary truncate">{entry.name}</span>
         </div>
         <button
           onClick={() => handleSelectFolder(entry.path)}
@@ -536,9 +534,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
       >
         <Folder className="w-4 h-4 text-status-warning/70 shrink-0" />
         <div className="flex-1 min-w-0">
-          <span className="text-[12px] text-text-primary dark:text-text-primary truncate block">
-            {folder.name}
-          </span>
+          <span className="text-[12px] text-text-primary truncate block">{folder.name}</span>
           <span className="text-[10px] text-text-tertiary truncate block">{folder.path}</span>
         </div>
         <button
@@ -567,9 +563,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
       <div className="px-4 py-3 border-b border-border-secondary dark:border-surface-code">
         <div className="flex items-center gap-1.5">
           <Star className="w-3.5 h-3.5 text-status-warning" />
-          <p className="text-xs font-medium text-text-secondary dark:text-text-secondary">
-            {t("picker.favoritedDirs")}
-          </p>
+          <p className="text-xs font-medium text-text-secondary">{t("picker.favoritedDirs")}</p>
         </div>
         <p className="text-[10px] text-text-tertiary mt-0.5">{t("picker.favoritedDirsHint")}</p>
       </div>
@@ -600,7 +594,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
             value={browserSearchQuery}
             onChange={(e) => setBrowserSearchQuery(e.target.value)}
             placeholder={t("picker.searchCurrentDir")}
-            className="w-full pl-7 pr-3 py-1.5 bg-surface-code dark:bg-surface-dim/50 border border-border-secondary dark:border-border-secondary/50 rounded-md text-[11px] text-text-secondary dark:text-text-secondary placeholder:text-text-secondary outline-none focus:border-semantic-accent/50"
+            className="w-full pl-7 pr-3 py-1.5 bg-surface-code dark:bg-surface-dim/50 border border-border-secondary dark:border-border-secondary/50 rounded-md text-[11px] text-text-secondary placeholder:text-text-secondary outline-none focus:border-semantic-accent/50"
           />
         </div>
       </div>
@@ -628,7 +622,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
       {/* Mobile view */}
       <div
         ref={mobileDialogRef}
-        className="md:hidden fixed inset-0 z-[100] bg-white dark:bg-surface-code flex flex-col animate-slide-in-up"
+        className="md:hidden fixed inset-0 z-[100] bg-surface-code flex flex-col animate-slide-in-up"
         style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
         role="dialog"
         aria-modal="true"
@@ -638,9 +632,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
           className="flex items-center justify-between px-4 py-3 border-b border-border-secondary dark:border-surface-code shrink-0"
           style={{ paddingTop: "calc(0.75rem + env(safe-area-inset-top, 0px))" }}
         >
-          <h2 className="text-sm font-semibold text-text-primary dark:text-text-primary">
-            {t("picker.title")}
-          </h2>
+          <h2 className="text-sm font-semibold text-text-primary">{t("picker.title")}</h2>
           <button
             onClick={onClose}
             className="p-2 rounded-md hover:bg-surface-hover dark:hover:bg-surface-dim text-text-tertiary"
@@ -655,8 +647,8 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
             onClick={() => setMobileTab("recents")}
             className={`flex-1 py-2 text-xs font-medium rounded-md transition-colors ${
               mobileTab === "recents"
-                ? "bg-bg-elevated dark:bg-surface-hover text-text-primary dark:text-text-primary shadow-sm"
-                : "text-text-tertiary dark:text-text-tertiary"
+                ? "bg-bg-elevated dark:bg-surface-hover text-text-primary shadow-sm"
+                : "text-text-tertiary"
             }`}
           >
             {t("picker.recents")}
@@ -665,8 +657,8 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
             onClick={() => setMobileTab("favorites")}
             className={`flex-1 py-2 text-xs font-medium rounded-md transition-colors ${
               mobileTab === "favorites"
-                ? "bg-bg-elevated dark:bg-surface-hover text-text-primary dark:text-text-primary shadow-sm"
-                : "text-text-tertiary dark:text-text-tertiary"
+                ? "bg-bg-elevated dark:bg-surface-hover text-text-primary shadow-sm"
+                : "text-text-tertiary"
             }`}
           >
             {t("picker.favorites")}
@@ -678,8 +670,8 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
             }}
             className={`flex-1 py-2 text-xs font-medium rounded-md transition-colors ${
               mobileTab === "browse"
-                ? "bg-bg-elevated dark:bg-surface-hover text-text-primary dark:text-text-primary shadow-sm"
-                : "text-text-tertiary dark:text-text-tertiary"
+                ? "bg-bg-elevated dark:bg-surface-hover text-text-primary shadow-sm"
+                : "text-text-tertiary"
             }`}
           >
             {t("picker.browse")}
@@ -695,7 +687,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder={t("picker.searchProject")}
-                  className="w-full pl-9 pr-4 py-2.5 bg-surface-code dark:bg-surface-dim/60 border border-border-secondary dark:border-border-secondary/50 rounded-xl text-sm text-text-primary dark:text-text-primary placeholder:text-text-tertiary outline-none focus:border-semantic-accent/50"
+                  className="w-full pl-9 pr-4 py-2.5 bg-surface-code dark:bg-surface-dim/60 border border-border-secondary dark:border-border-secondary/50 rounded-xl text-sm text-text-primary placeholder:text-text-tertiary outline-none focus:border-semantic-accent/50"
                 />
               </div>
               {renderProjectList(sortedRecents, true)}
@@ -727,7 +719,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
                     >
                       <Folder className="w-5 h-5 text-status-warning/70 shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-text-primary dark:text-text-primary truncate">
+                        <div className="text-sm font-medium text-text-primary truncate">
                           {folder.name}
                         </div>
                         <div className="text-[11px] text-text-tertiary truncate">{folder.path}</div>
@@ -772,7 +764,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
                     value={browserSearchQuery}
                     onChange={(e) => setBrowserSearchQuery(e.target.value)}
                     placeholder={t("picker.searchCurrentDir")}
-                    className="w-full pl-7 pr-3 py-2 bg-surface-code dark:bg-surface-dim/60 border border-border-secondary dark:border-border-secondary/50 rounded-xl text-sm text-text-primary dark:text-text-primary placeholder:text-text-tertiary outline-none focus:border-semantic-accent/50"
+                    className="w-full pl-7 pr-3 py-2 bg-surface-code dark:bg-surface-dim/60 border border-border-secondary dark:border-border-secondary/50 rounded-xl text-sm text-text-primary placeholder:text-text-tertiary outline-none focus:border-semantic-accent/50"
                   />
                 </div>
               </div>
@@ -807,7 +799,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
                           >
                             <Folder className="w-5 h-5 text-status-info/70 shrink-0" />
                             <div className="flex-1 min-w-0">
-                              <div className="text-sm font-medium text-text-primary dark:text-text-primary truncate">
+                              <div className="text-sm font-medium text-text-primary truncate">
                                 {entry.name}
                               </div>
                             </div>
@@ -860,7 +852,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
                       }}
                       placeholder={t("picker.newFolderName")}
                       autoFocus
-                      className="flex-1 px-3 py-2 bg-surface-code dark:bg-surface-dim/60 border border-border-secondary dark:border-border-secondary/50 rounded-xl text-sm text-text-primary dark:text-text-primary placeholder:text-text-tertiary outline-none focus:border-semantic-accent/50"
+                      className="flex-1 px-3 py-2 bg-surface-code dark:bg-surface-dim/60 border border-border-secondary dark:border-border-secondary/50 rounded-xl text-sm text-text-primary placeholder:text-text-tertiary outline-none focus:border-semantic-accent/50"
                     />
                     <button
                       onClick={handleCreateFolder}
@@ -883,8 +875,8 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
                     }}
                     className={`flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors shrink-0 ${
                       showCreateFolder
-                        ? "bg-surface-hover dark:bg-surface-dim text-text-secondary dark:text-text-secondary"
-                        : "bg-surface-code dark:bg-surface-dim/60 text-text-secondary dark:text-text-secondary active:bg-surface-hover dark:active:bg-surface-hover"
+                        ? "bg-surface-hover dark:bg-surface-dim text-text-secondary"
+                        : "bg-surface-code dark:bg-surface-dim/60 text-text-secondary active:bg-surface-hover dark:active:bg-surface-hover"
                     }`}
                   >
                     <FolderPlus className="w-4 h-4" />
@@ -916,9 +908,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
           aria-label={t("picker.title")}
         >
           <div className="flex items-center justify-between px-5 py-3 border-b border-border-secondary dark:border-surface-code shrink-0">
-            <h2 className="text-sm font-semibold text-text-primary dark:text-text-primary">
-              {t("picker.title")}
-            </h2>
+            <h2 className="text-sm font-semibold text-text-primary">{t("picker.title")}</h2>
             <button
               onClick={onClose}
               className="p-1.5 rounded-md hover:bg-surface-hover dark:hover:bg-surface-dim text-text-tertiary hover:text-text-secondary dark:hover:text-text-primary transition-colors"
@@ -935,7 +925,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
             <div className="flex-1 flex flex-col min-w-0">
               <div className="px-4 py-3 border-b border-border-secondary dark:border-surface-code flex items-center justify-between shrink-0">
                 <div>
-                  <p className="text-xs font-medium text-text-secondary dark:text-text-secondary">
+                  <p className="text-xs font-medium text-text-secondary">
                     {t("picker.recentFolders")}
                   </p>
                   <p className="text-[10px] text-text-tertiary">
@@ -948,7 +938,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder={t("picker.searchPlaceholder")}
-                    className="pl-7 pr-3 py-1 w-36 bg-surface-code dark:bg-surface-dim/50 border border-border-secondary dark:border-border-secondary/50 rounded-md text-[11px] text-text-secondary dark:text-text-secondary placeholder:text-text-tertiary dark:placeholder:text-text-secondary outline-none focus:border-semantic-accent/50"
+                    className="pl-7 pr-3 py-1 w-36 bg-surface-code dark:bg-surface-dim/50 border border-border-secondary dark:border-border-secondary/50 rounded-md text-[11px] text-text-secondary placeholder:text-text-tertiary dark:placeholder:text-text-secondary outline-none focus:border-semantic-accent/50"
                   />
                 </div>
               </div>

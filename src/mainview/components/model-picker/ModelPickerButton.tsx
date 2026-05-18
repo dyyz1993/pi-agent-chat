@@ -172,7 +172,7 @@ export function ModelPickerButton({
               ${
                 open
                   ? "border-semantic-accent ring-1 ring-semantic-accent/30"
-                  : "border-border-secondary dark:border-border-secondary"
+                  : "border-border-secondary"
               }
                bg-bg-elevated dark:bg-surface-dim text-text-secondary dark:text-text-secondary`}
           >
@@ -195,20 +195,20 @@ export function ModelPickerButton({
           <div
             ref={dropdownRef}
             data-model-picker-dropdown
-            className="bg-bg-elevated dark:bg-surface-dim border border-border-secondary dark:border-border-secondary rounded-md shadow-xl flex flex-col"
+            className="bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl flex flex-col"
             style={dropdownStyle}
           >
             {/* Search + Favorites filter */}
-            <div className="px-2 py-1.5 border-b border-border-secondary/60 dark:border-border-secondary/60 shrink-0">
-              <div className="flex items-center gap-1.5 px-1.5 py-0.5 rounded bg-surface-code/60 dark:bg-surface-code/60 border border-border-secondary/50 dark:border-border-secondary/50">
-                <Search className="w-3 h-3 shrink-0 text-text-tertiary dark:text-text-tertiary" />
+            <div className="px-2 py-1.5 border-b border-border-secondary/60 shrink-0">
+              <div className="flex items-center gap-1.5 px-1.5 py-0.5 rounded bg-surface-code/60 border border-border-secondary/50">
+                <Search className="w-3 h-3 shrink-0 text-text-tertiary" />
                 <input
                   ref={searchInputRef}
                   type="text"
                   placeholder="搜索模型..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="flex-1 bg-transparent text-[11px] text-text-primary dark:text-text-secondary placeholder-text-tertiary dark:placeholder-text-tertiary outline-none min-w-0"
+                  className="flex-1 bg-transparent text-[11px] text-text-primary dark:text-text-secondary placeholder-text-tertiary outline-none min-w-0"
                 />
                 <button
                   type="button"
@@ -216,7 +216,7 @@ export function ModelPickerButton({
                   className={`p-0.5 rounded transition-colors shrink-0 ${
                     showFavoritesOnly
                       ? "text-status-warning"
-                      : "text-text-tertiary dark:text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary"
+                      : "text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary"
                   }`}
                   title={showFavoritesOnly ? "显示全部" : "仅显示收藏"}
                 >
@@ -230,11 +230,9 @@ export function ModelPickerButton({
             {/* Model list */}
             <div className="overflow-y-auto flex-1 py-1">
               {models.length === 0 ? (
-                <div className="text-text-tertiary dark:text-text-tertiary text-xs text-center py-3">
-                  没有可用模型
-                </div>
+                <div className="text-text-tertiary text-xs text-center py-3">没有可用模型</div>
               ) : displayModels.length === 0 ? (
-                <div className="text-text-tertiary dark:text-text-tertiary text-xs text-center py-3">
+                <div className="text-text-tertiary text-xs text-center py-3">
                   {showFavoritesOnly ? "没有收藏的模型" : "无匹配结果"}
                 </div>
               ) : (
@@ -283,7 +281,7 @@ export function ModelPickerButton({
                         title={isFav ? "取消收藏" : "收藏"}
                       >
                         <Star
-                          className={`w-3 h-3 ${isFav ? "fill-status-warning text-status-warning" : "text-text-tertiary dark:text-text-tertiary"}`}
+                          className={`w-3 h-3 ${isFav ? "fill-status-warning text-status-warning" : "text-text-tertiary"}`}
                         />
                       </button>
                     </div>

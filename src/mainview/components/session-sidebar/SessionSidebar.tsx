@@ -127,7 +127,7 @@ export function SessionSidebar(_props: SessionSidebarProps) {
   return (
     <div className="flex flex-col h-full">
       <div className="px-2 py-1.5">
-        <div className="flex items-center gap-1.5 px-2 py-1 bg-surface-code/50 dark:bg-surface-dim/50 rounded text-[11px] text-text-tertiary dark:text-text-tertiary">
+        <div className="flex items-center gap-1.5 px-2 py-1 bg-surface-code/50 dark:bg-surface-dim/50 rounded text-[11px] text-text-tertiary">
           <Search className="w-3 h-3 shrink-0" />
           <input
             data-testid="session-search"
@@ -200,8 +200,8 @@ function SessionList({
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center text-text-tertiary dark:text-text-tertiary text-xs p-4">
-        <div className="w-3 h-3 border-2 border-border-secondary dark:border-border-secondary border-t-transparent rounded-full animate-spin mr-2" />
+      <div className="flex-1 flex items-center justify-center text-text-tertiary text-xs p-4">
+        <div className="w-3 h-3 border-2 border-border-secondary border-t-transparent rounded-full animate-spin mr-2" />
         {t("common:loading")}
       </div>
     );
@@ -209,7 +209,7 @@ function SessionList({
 
   if (rootSessions.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-text-tertiary dark:text-text-tertiary text-xs p-4 text-center">
+      <div className="flex-1 flex items-center justify-center text-text-tertiary text-xs p-4 text-center">
         {searchQuery ? t("sidebar:noMatchingSessions") : t("sidebar:noSessions")}
       </div>
     );
@@ -425,7 +425,7 @@ function SessionItem({
         className={`group w-full text-left px-2.5 py-2 rounded-lg text-[11px] transition-all duration-150 cursor-pointer ${
           isActive
             ? "bg-[var(--color-accent)]/[0.15] text-[var(--color-accent-text)] shadow-sm shadow-[var(--color-accent)]/5 border border-[var(--color-accent)]/20"
-            : "text-text-tertiary dark:text-text-tertiary hover:bg-bg-elevated/[0.04] dark:hover:bg-surface-dim/50 hover:text-text-primary dark:hover:text-text-primary border border-transparent hover:border-border-secondary/30 dark:hover:border-border-secondary/30"
+            : "text-text-tertiary hover:bg-bg-elevated/[0.04] dark:hover:bg-surface-dim/50 hover:text-text-primary dark:hover:text-text-primary border border-transparent hover:border-border-secondary/30 dark:hover:border-border-secondary/30"
         } ${isActive ? "ring-1 ring-[var(--color-accent)]/20" : ""}`}
         onClick={handleClick}
       >
@@ -452,7 +452,7 @@ function SessionItem({
                   if (e.key === "Enter") handleConfirmRename();
                   if (e.key === "Escape") handleCancelRename();
                 }}
-                className="flex-1 bg-bg-elevated dark:bg-surface-dim border border-semantic-accent/50 rounded px-1.5 py-0.5 text-[11px] text-text-primary dark:text-text-primary outline-none"
+                className="flex-1 bg-bg-elevated dark:bg-surface-dim border border-semantic-accent/50 rounded px-1.5 py-0.5 text-[11px] text-text-primary outline-none"
               />
               <button
                 onClick={handleConfirmRename}
@@ -495,7 +495,7 @@ function SessionItem({
                   e.stopPropagation();
                   onToggleExpand();
                 }}
-                className="shrink-0 p-0.5 rounded hover:bg-surface-hover dark:hover:bg-surface-hover text-text-tertiary dark:text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary transition-colors"
+                className="shrink-0 p-0.5 rounded hover:bg-surface-hover dark:hover:bg-surface-hover text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary transition-colors"
               >
                 {isExpanded ? (
                   <ChevronDown className="w-3.5 h-3.5" />
@@ -702,7 +702,7 @@ function SubagentItem({
                   if (e.key === "Enter") handleConfirmRename();
                   if (e.key === "Escape") handleCancelRename();
                 }}
-                className="flex-1 bg-bg-elevated dark:bg-surface-dim border border-semantic-agent/50 rounded px-1.5 py-0.5 text-[11px] text-text-primary dark:text-text-primary outline-none"
+                className="flex-1 bg-bg-elevated dark:bg-surface-dim border border-semantic-agent/50 rounded px-1.5 py-0.5 text-[11px] text-text-primary outline-none"
               />
               <button
                 onClick={handleConfirmRename}

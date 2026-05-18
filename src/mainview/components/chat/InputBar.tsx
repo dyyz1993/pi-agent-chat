@@ -176,7 +176,7 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
 
   return (
     <div
-      className="flex-1 rounded-lg border border-border-secondary/50 dark:border-border-secondary/50 focus-within:border-semantic-accent/50 bg-surface-dim/50 dark:bg-surface-dim/50 overflow-hidden transition-colors"
+      className="flex-1 rounded-lg border border-border-secondary/50 focus-within:border-semantic-accent/50 bg-surface-dim/50 overflow-hidden transition-colors"
       style={{ minHeight: expanded ? "200px" : "80px" }}
     >
       <div className="relative h-full flex">
@@ -189,7 +189,7 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
           disabled={disabled}
           rows={1}
           placeholder={t("inputPlaceholder")}
-          className="flex-1 px-3 py-2 text-sm bg-transparent text-text-primary dark:text-text-primary resize-none outline-none placeholder:text-text-tertiary dark:placeholder:text-text-secondary"
+          className="flex-1 px-3 py-2 text-sm bg-transparent text-text-primary resize-none outline-none placeholder:text-text-tertiary dark:placeholder:text-text-secondary"
           style={{
             maxHeight: expanded ? "none" : `${maxHeight}px`,
             minHeight: expanded ? "200px" : "80px",
@@ -199,7 +199,7 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
           <div className="flex flex-col">
             <button
               onClick={handleClear}
-              className={`w-7 h-7 md:w-5 md:h-5 rounded border flex items-center justify-center transition-colors ${hasContent ? "border-border-secondary dark:border-border-secondary text-text-secondary dark:text-text-secondary hover:text-text-primary dark:hover:text-text-primary hover:border-border-secondary" : "border-border-secondary/50 dark:border-border-secondary/50 text-text-tertiary dark:text-text-secondary pointer-events-none"}`}
+              className={`w-7 h-7 md:w-5 md:h-5 rounded border flex items-center justify-center transition-colors ${hasContent ? "border-border-secondary text-text-secondary hover:text-text-primary dark:hover:text-text-primary hover:border-border-secondary" : "border-border-secondary/50 text-text-tertiary dark:text-text-secondary pointer-events-none"}`}
               title={t("clearInput")}
               aria-label={t("clearInput")}
             >
@@ -211,7 +211,7 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
           >
             <button
               onClick={toggleExpand}
-              className="w-7 h-7 md:w-5 md:h-5 rounded border border-border-secondary dark:border-border-secondary text-text-secondary dark:text-text-secondary hover:text-text-primary dark:hover:text-text-primary hover:border-border-secondary transition-colors flex items-center justify-center"
+              className="w-7 h-7 md:w-5 md:h-5 rounded border border-border-secondary text-text-secondary hover:text-text-primary dark:hover:text-text-primary hover:border-border-secondary transition-colors flex items-center justify-center"
               title={expanded ? t("collapse") : t("expand")}
               aria-expanded={expanded}
               aria-label={expanded ? t("collapseInput") : t("expandInput")}
@@ -225,7 +225,7 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
             <button
               onClick={handleNavPrev}
               disabled={!hasPrev}
-              className={`w-7 h-7 md:w-5 md:h-5 rounded border flex items-center justify-center transition-colors ${hasPrev ? "border-border-secondary dark:border-border-secondary text-text-secondary dark:text-text-secondary hover:text-text-primary dark:hover:text-primary hover:border-border-secondary" : "border-border-secondary/50 dark:border-border-secondary/50 text-text-tertiary dark:text-text-secondary pointer-events-none"}`}
+              className={`w-7 h-7 md:w-5 md:h-5 rounded border flex items-center justify-center transition-colors ${hasPrev ? "border-border-secondary text-text-secondary hover:text-text-primary dark:hover:text-primary hover:border-border-secondary" : "border-border-secondary/50 text-text-tertiary dark:text-text-secondary pointer-events-none"}`}
               title={t("collapse")}
               aria-label={t("prevHistory")}
             >
@@ -234,7 +234,7 @@ export const InputBar = forwardRef<InputBarHandle, InputBarProps>(function Input
             <button
               onClick={handleNavNext}
               disabled={!hasNext}
-              className={`w-7 h-7 md:w-5 md:h-5 rounded border flex items-center justify-center transition-colors ${hasNext ? "border-border-secondary dark:border-border-secondary text-text-secondary dark:text-text-secondary hover:text-text-primary dark:hover:text-primary hover:border-border-secondary" : "border-border-secondary/50 dark:border-border-secondary/50 text-text-tertiary dark:text-text-secondary pointer-events-none"}`}
+              className={`w-7 h-7 md:w-5 md:h-5 rounded border flex items-center justify-center transition-colors ${hasNext ? "border-border-secondary text-text-secondary hover:text-text-primary dark:hover:text-primary hover:border-border-secondary" : "border-border-secondary/50 text-text-tertiary dark:text-text-secondary pointer-events-none"}`}
               title={t("expand")}
               aria-label={t("nextHistory")}
             >

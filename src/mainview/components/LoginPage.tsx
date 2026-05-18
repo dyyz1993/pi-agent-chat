@@ -35,7 +35,7 @@ export function LoginPage({ onLogin, loginError, onClearError }: LoginPageProps)
   return (
     <div className="h-screen flex items-center justify-center bg-bg-elevated dark:bg-surface-code">
       <div className="w-full max-w-sm mx-4">
-        <div className="bg-bg-elevated dark:bg-surface-code rounded-2xl shadow-lg dark:shadow-surface-code/50 border border-border-secondary dark:border-border-secondary p-8">
+        <div className="bg-bg-elevated dark:bg-surface-code rounded-2xl shadow-lg dark:shadow-surface-code/50 border border-border-secondary p-8">
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-semantic-accent/10 dark:bg-semantic-accent/5 mb-4">
               <svg
@@ -52,24 +52,20 @@ export function LoginPage({ onLogin, loginError, onClearError }: LoginPageProps)
                 />
               </svg>
             </div>
-            <h1 className="text-xl font-semibold text-text-primary dark:text-text-primary">
-              PI Agent Chat
-            </h1>
-            <p className="text-sm text-text-tertiary dark:text-text-tertiary mt-1">
-              请输入 Auth Token 以连接服务
-            </p>
+            <h1 className="text-xl font-semibold text-text-primary">PI Agent Chat</h1>
+            <p className="text-sm text-text-tertiary mt-1">请输入 Auth Token 以连接服务</p>
           </div>
 
           <form onSubmit={handleSubmit}>
             {loginError && (
-              <div className="mb-4 p-3 rounded-lg bg-status-error/10 dark:bg-status-error/20 border border-status-error/30 dark:border-status-error/30 text-status-error dark:text-status-error/80 text-sm flex items-center gap-2">
+              <div className="mb-4 p-3 rounded-lg bg-status-error/10 dark:bg-status-error/20 border border-status-error/30 text-status-error dark:text-status-error/80 text-sm flex items-center gap-2">
                 ⚠️ {loginError}
               </div>
             )}
             <div className="mb-5">
               <label
                 htmlFor="auth-token"
-                className="block text-sm font-medium text-text-secondary dark:text-text-secondary mb-1.5"
+                className="block text-sm font-medium text-text-secondary mb-1.5"
               >
                 Auth Token
               </label>
@@ -80,14 +76,14 @@ export function LoginPage({ onLogin, loginError, onClearError }: LoginPageProps)
                   value={token}
                   onChange={(e) => setToken(e.target.value)}
                   placeholder="请输入 Token"
-                  className="flex-1 px-3 py-2 rounded-lg border border-border-secondary dark:border-border-secondary bg-bg-elevated dark:bg-surface-dim text-text-primary dark:text-text-primary placeholder-text-tertiary dark:placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-semantic-accent focus:border-transparent text-sm"
+                  className="flex-1 px-3 py-2 rounded-lg border border-border-secondary bg-bg-elevated dark:bg-surface-dim text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-semantic-accent focus:border-transparent text-sm"
                   autoFocus
                 />
                 {token && (
                   <button
                     type="button"
                     onClick={handleClear}
-                    className="px-3 py-2 rounded-lg border border-border-secondary dark:border-border-secondary hover:bg-surface-dim dark:hover:bg-surface-hover text-text-tertiary dark:text-text-tertiary text-sm"
+                    className="px-3 py-2 rounded-lg border border-border-secondary hover:bg-surface-dim dark:hover:bg-surface-hover text-text-tertiary text-sm"
                     title="清除 Token"
                   >
                     ✕
@@ -105,7 +101,7 @@ export function LoginPage({ onLogin, loginError, onClearError }: LoginPageProps)
             </button>
           </form>
 
-          <p className="text-xs text-text-tertiary dark:text-text-tertiary text-center mt-5">
+          <p className="text-xs text-text-tertiary text-center mt-5">
             Token 将保存在浏览器本地存储中
           </p>
         </div>

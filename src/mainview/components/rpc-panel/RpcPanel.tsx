@@ -37,7 +37,7 @@ function RpcEntry({ entry }: { entry: RpcLogEntry }) {
   }, [fullPayload, copy]);
 
   return (
-    <div className="group px-2 py-1 border-b border-border-secondary/30 dark:border-border-secondary/30 hover:bg-surface-hover/30 dark:hover:bg-surface-dim/30">
+    <div className="group px-2 py-1 border-b border-border-secondary/30 hover:bg-surface-hover/30 dark:hover:bg-surface-dim/30">
       <div className="flex items-center gap-1 mb-0.5">
         <Icon className={`w-2.5 h-2.5 shrink-0 ${color}`} />
         <span className={color}>{label}</span>
@@ -54,9 +54,7 @@ function RpcEntry({ entry }: { entry: RpcLogEntry }) {
           )}
         </button>
       </div>
-      <div className="text-text-tertiary dark:text-text-tertiary break-all leading-tight pl-3.5">
-        {truncated}
-      </div>
+      <div className="text-text-tertiary break-all leading-tight pl-3.5">{truncated}</div>
     </div>
   );
 }
@@ -70,16 +68,14 @@ export function RpcPanel() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-border-secondary dark:border-border-secondary shrink-0">
+      <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-border-secondary shrink-0">
         <div className="flex items-center gap-1.5">
           {isConnected ? (
             <Wifi className="w-3 h-3 text-status-success" />
           ) : (
             <WifiOff className="w-3 h-3 text-status-error" />
           )}
-          <span className="text-[11px] font-medium text-text-secondary dark:text-text-secondary">
-            {t("rpcEvents")}
-          </span>
+          <span className="text-[11px] font-medium text-text-secondary">{t("rpcEvents")}</span>
           <span
             className={`text-[9px] ${isConnected ? "text-status-success" : "text-status-error"}`}
           >

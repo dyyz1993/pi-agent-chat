@@ -59,7 +59,7 @@ export function GitBranchSelector({ onClose }: GitBranchSelectorProps) {
       className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors ${
         b.isCurrent
           ? "text-semantic-accent"
-          : "text-text-primary dark:text-text-primary hover:bg-surface-hover dark:hover:bg-surface-hover"
+          : "text-text-primary hover:bg-surface-hover dark:hover:bg-surface-hover"
       }`}
       onClick={() => handleCheckout(b)}
       disabled={loadingAction === "checkout"}
@@ -74,7 +74,7 @@ export function GitBranchSelector({ onClose }: GitBranchSelectorProps) {
   return (
     <div
       ref={ref}
-      className="fixed z-50 w-56 max-h-64 overflow-y-auto bg-bg-elevated dark:bg-surface-dim border border-border-secondary dark:border-border-secondary rounded-md shadow-xl py-1"
+      className="fixed z-50 w-56 max-h-64 overflow-y-auto bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl py-1"
       style={
         {
           /* positioned by parent via absolute */
@@ -82,9 +82,7 @@ export function GitBranchSelector({ onClose }: GitBranchSelectorProps) {
       }
     >
       {loadingBranches ? (
-        <div className="text-text-tertiary dark:text-text-tertiary text-xs text-center py-4">
-          Loading branches...
-        </div>
+        <div className="text-text-tertiary text-xs text-center py-4">Loading branches...</div>
       ) : (
         <>
           {localBranches.length > 0 && (
@@ -97,7 +95,7 @@ export function GitBranchSelector({ onClose }: GitBranchSelectorProps) {
           )}
           {remoteBranches.length > 0 && (
             <>
-              <div className="px-3 py-1 mt-1 text-[10px] uppercase tracking-wide text-text-tertiary font-semibold border-t border-border-secondary dark:border-border-secondary pt-1">
+              <div className="px-3 py-1 mt-1 text-[10px] uppercase tracking-wide text-text-tertiary font-semibold border-t border-border-secondary pt-1">
                 Remote
               </div>
               {remoteBranches.map(renderBranch)}

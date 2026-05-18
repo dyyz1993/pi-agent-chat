@@ -35,9 +35,7 @@ export const HtmlCard = memo(function HtmlCard({ details }: { details: PreviewDe
             {details.title ?? details.source}
           </span>
         </div>
-        <div className="px-3 py-4 text-xs text-text-tertiary dark:text-text-tertiary italic">
-          {t("noPathForPreview")}
-        </div>
+        <div className="px-3 py-4 text-xs text-text-tertiary italic">{t("noPathForPreview")}</div>
       </div>
     );
   }

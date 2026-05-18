@@ -296,7 +296,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     <div className="border-t border-border-secondary dark:border-surface-code">
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-1 px-2 py-1.5 text-[11px] font-medium text-text-secondary dark:text-text-secondary hover:bg-surface-hover/50 dark:hover:bg-surface-dim/50"
+        className="w-full flex items-center gap-1 px-2 py-1.5 text-[11px] font-medium text-text-secondary hover:bg-surface-hover/50 dark:hover:bg-surface-dim/50"
       >
         {open ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
         {title}
@@ -333,9 +333,9 @@ export function DiagnosticPanel() {
   return (
     <div
       ref={panelRef}
-      className="fixed top-10 right-2 w-[420px] max-sm:right-1 max-sm:w-[calc(100vw-16px)] max-h-[85vh] bg-bg-elevated dark:bg-surface-code border border-border-secondary dark:border-border-secondary rounded-lg shadow-2xl z-50 flex flex-col overflow-hidden"
+      className="fixed top-10 right-2 w-[420px] max-sm:right-1 max-sm:w-[calc(100vw-16px)] max-h-[85vh] bg-bg-elevated dark:bg-surface-code border border-border-secondary rounded-lg shadow-2xl z-50 flex flex-col overflow-hidden"
     >
-      <div className="flex items-center justify-between px-3 py-2 bg-surface-dim dark:bg-surface-dim border-b border-border-secondary dark:border-border-secondary flex-shrink-0">
+      <div className="flex items-center justify-between px-3 py-2 bg-surface-dim border-b border-border-secondary flex-shrink-0">
         <div className="flex items-center gap-1.5 text-xs font-medium text-semantic-accent">
           <Activity className="w-3.5 h-3.5" />
           Session Diagnostic
@@ -343,7 +343,7 @@ export function DiagnosticPanel() {
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => setAutoRefresh(!autoRefresh)}
-            className={`text-[10px] px-1.5 py-0.5 rounded ${autoRefresh ? "bg-status-success/30 text-status-success" : "bg-surface-hover dark:bg-surface-hover text-text-tertiary dark:text-text-tertiary"}`}
+            className={`text-[10px] px-1.5 py-0.5 rounded ${autoRefresh ? "bg-status-success/30 text-status-success" : "bg-surface-hover text-text-tertiary"}`}
           >
             {autoRefresh ? "AUTO" : "MANUAL"}
           </button>
@@ -373,7 +373,7 @@ export function DiagnosticPanel() {
       <div className="flex-1 overflow-y-auto overscroll-contain">
         {snapshot ? (
           <div className="text-[11px]">
-            <div className="px-3 py-1.5 bg-surface-code dark:bg-surface-dim/50 flex items-center justify-between text-[10px] text-text-tertiary dark:text-text-tertiary">
+            <div className="px-3 py-1.5 bg-surface-code dark:bg-surface-dim/50 flex items-center justify-between text-[10px] text-text-tertiary">
               <span>
                 Active: {snapshot.activeSessionId ?? "none"} | Tabs: {snapshot.projectTabs} |
                 Sessions: {snapshot.totalSessions}
@@ -405,14 +405,12 @@ export function DiagnosticPanel() {
 
             {snapshot.jsHeapUsed != null && snapshot.jsHeapTotal != null && (
               <div className="px-3 py-2 border-t border-border-secondary dark:border-surface-code">
-                <div className="text-[11px] font-medium text-text-secondary dark:text-text-secondary mb-1">
-                  JS Heap
-                </div>
-                <div className="text-[11px] text-text-tertiary dark:text-text-tertiary">
+                <div className="text-[11px] font-medium text-text-secondary mb-1">JS Heap</div>
+                <div className="text-[11px] text-text-tertiary">
                   Used: {formatBytes(snapshot.jsHeapUsed)} / Total:{" "}
                   {formatBytes(snapshot.jsHeapTotal)}
                 </div>
-                <div className="h-1.5 bg-surface-hover dark:bg-surface-hover rounded mt-1">
+                <div className="h-1.5 bg-surface-hover rounded mt-1">
                   <div
                     className="h-full bg-semantic-accent rounded"
                     style={{ width: `${(snapshot.jsHeapUsed / snapshot.jsHeapTotal) * 100}%` }}
@@ -421,7 +419,7 @@ export function DiagnosticPanel() {
               </div>
             )}
 
-            <div className="px-3 py-2 border-t border-border-secondary dark:border-surface-code text-[10px] text-text-tertiary dark:text-text-tertiary">
+            <div className="px-3 py-2 border-t border-border-secondary dark:border-surface-code text-[10px] text-text-tertiary">
               RPC debug entries: {snapshot.rpcDebugEntries} | toolCallNameMap:{" "}
               {snapshot.toolCallNameMapSize}
             </div>
@@ -433,7 +431,7 @@ export function DiagnosticPanel() {
         )}
       </div>
 
-      <div className="px-3 py-1.5 bg-surface-code dark:bg-surface-dim border-t border-border-secondary dark:border-border-secondary text-[10px] text-text-tertiary flex items-center justify-between flex-shrink-0">
+      <div className="px-3 py-1.5 bg-surface-code dark:bg-surface-dim border-t border-border-secondary text-[10px] text-text-tertiary flex items-center justify-between flex-shrink-0">
         <span>Ctrl+Shift+D to toggle | History: {history.length}/60</span>
       </div>
     </div>

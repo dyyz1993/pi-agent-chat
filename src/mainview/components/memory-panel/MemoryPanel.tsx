@@ -39,7 +39,7 @@ function SectionHeader({
   return (
     <button
       onClick={onToggle}
-      className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium text-text-secondary dark:text-text-secondary hover:bg-surface-hover/50 dark:hover:bg-surface-dim/30 transition-colors"
+      className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium text-text-secondary hover:bg-surface-hover/50 dark:hover:bg-surface-dim/30 transition-colors"
     >
       {collapsed ? (
         <ChevronRight className="w-3 h-3 shrink-0" />
@@ -81,21 +81,13 @@ function FileContentPreview({ filePath }: { filePath: string }) {
   }, [filePath]);
 
   if (loading) {
-    return (
-      <div className="px-3 py-1.5 text-[10px] text-text-tertiary dark:text-text-tertiary">
-        {t("loading")}
-      </div>
-    );
+    return <div className="px-3 py-1.5 text-[10px] text-text-tertiary">{t("loading")}</div>;
   }
   if (!content) {
-    return (
-      <div className="px-3 py-1.5 text-[10px] text-text-tertiary dark:text-text-tertiary">
-        {t("cannotRead")}
-      </div>
-    );
+    return <div className="px-3 py-1.5 text-[10px] text-text-tertiary">{t("cannotRead")}</div>;
   }
   return (
-    <pre className="mx-2 mb-1.5 p-2 rounded bg-surface-code dark:bg-surface-code/80 border border-border-secondary dark:border-surface-code text-[10px] text-text-secondary dark:text-text-secondary overflow-x-auto whitespace-pre-wrap max-h-40 overflow-y-auto">
+    <pre className="mx-2 mb-1.5 p-2 rounded bg-surface-code dark:bg-surface-code/80 border border-border-secondary dark:border-surface-code text-[10px] text-text-secondary overflow-x-auto whitespace-pre-wrap max-h-40 overflow-y-auto">
       {content.length > 2000 ? content.slice(0, 2000) + "..." : content}
     </pre>
   );
@@ -133,11 +125,7 @@ export function MemoryPanel() {
   }, [sessionId, activeProjectId, projectTabs]);
 
   if (!sessionId) {
-    return (
-      <div className="p-3 text-xs text-text-tertiary dark:text-text-tertiary">
-        {t("noActiveSession")}
-      </div>
-    );
+    return <div className="p-3 text-xs text-text-tertiary">{t("noActiveSession")}</div>;
   }
 
   const hasInjected = injected.length > 0;
@@ -330,10 +318,10 @@ export function MemoryPanel() {
                           {t("typeOther")}
                         </span>
                       )}
-                      <span className="text-[10px] text-text-secondary dark:text-text-secondary truncate flex-1">
+                      <span className="text-[10px] text-text-secondary truncate flex-1">
                         {f.description ?? f.filename}
                       </span>
-                      <span className="text-[9px] text-text-tertiary dark:text-text-tertiary shrink-0">
+                      <span className="text-[9px] text-text-tertiary shrink-0">
                         {relativeTimeStr(f.mtimeMs)}
                       </span>
                     </button>
@@ -344,11 +332,9 @@ export function MemoryPanel() {
             </div>
           ) : (
             <div className="px-2.5 pb-2 py-2 text-center">
-              <FileText className="w-4 h-4 mx-auto mb-1 text-text-tertiary dark:text-text-tertiary" />
+              <FileText className="w-4 h-4 mx-auto mb-1 text-text-tertiary" />
               <p className="text-[10px] text-text-tertiary">{t("noMemoryFiles")}</p>
-              <p className="text-[9px] text-text-tertiary dark:text-text-tertiary mt-0.5">
-                {t("autoExtract")}
-              </p>
+              <p className="text-[9px] text-text-tertiary mt-0.5">{t("autoExtract")}</p>
             </div>
           ))}
       </div>
@@ -364,7 +350,7 @@ export function MemoryPanel() {
           />
           {!collapsedSections.has("entrypoint") && (
             <div className="px-2.5 pb-1.5">
-              <pre className="p-2 rounded bg-surface-code dark:bg-surface-code/80 border border-border-secondary dark:border-surface-code text-[10px] text-text-secondary dark:text-text-secondary overflow-x-auto whitespace-pre-wrap max-h-40 overflow-y-auto">
+              <pre className="p-2 rounded bg-surface-code dark:bg-surface-code/80 border border-border-secondary dark:border-surface-code text-[10px] text-text-secondary overflow-x-auto whitespace-pre-wrap max-h-40 overflow-y-auto">
                 {(entrypoint || "").length > 2000
                   ? (entrypoint || "").slice(0, 2000) + "..."
                   : entrypoint}
@@ -405,7 +391,7 @@ export function MemoryPanel() {
                     />
                     <span className={`text-[10px] font-medium ${config.color}`}>{label}</span>
                     {detailEl}
-                    <span className="ml-auto text-[9px] text-text-tertiary dark:text-text-tertiary shrink-0">
+                    <span className="ml-auto text-[9px] text-text-tertiary shrink-0">
                       {timeStr}
                     </span>
                   </div>
@@ -414,7 +400,7 @@ export function MemoryPanel() {
             </div>
           ) : (
             <div className="px-2.5 pb-2 py-2 text-center">
-              <Brain className="w-4 h-4 mx-auto mb-1 text-text-tertiary dark:text-text-tertiary" />
+              <Brain className="w-4 h-4 mx-auto mb-1 text-text-tertiary" />
               <p className="text-[10px] text-text-tertiary">{t("noOperations")}</p>
             </div>
           ))}

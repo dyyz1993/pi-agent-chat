@@ -378,7 +378,7 @@ function LogViewer({
       onClick={onClose}
     >
       <div
-        className="bg-white dark:bg-surface-code border-t sm:border border-border-secondary sm:rounded-lg w-full sm:max-w-4xl flex flex-col h-full sm:h-[70vh] sm:max-h-[85vh]"
+        className="bg-surface-code border-t sm:border border-border-secondary sm:rounded-lg w-full sm:max-w-4xl flex flex-col h-full sm:h-[70vh] sm:max-h-[85vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

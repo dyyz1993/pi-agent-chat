@@ -136,7 +136,7 @@ const FileItem = memo(function FileItem({
       className={`group flex items-center gap-1.5 px-2 py-0.5 text-xs rounded cursor-pointer transition-colors ${
         isSelected
           ? "bg-semantic-accent/30 text-white"
-          : "hover:bg-surface-hover dark:hover:bg-surface-hover text-text-secondary dark:text-text-secondary"
+          : "hover:bg-surface-hover dark:hover:bg-surface-hover text-text-secondary"
       }`}
       onClick={() => onClick(path, isStaged)}
       onContextMenu={(e) => {
@@ -194,7 +194,7 @@ const UntrackedItem = memo(function UntrackedItem({
       className={`group flex items-center gap-1.5 px-2 py-0.5 text-xs rounded cursor-pointer transition-colors ${
         isSelected
           ? "bg-semantic-accent/30 text-white"
-          : "hover:bg-surface-hover dark:hover:bg-surface-hover text-text-tertiary dark:text-text-tertiary"
+          : "hover:bg-surface-hover dark:hover:bg-surface-hover text-text-tertiary"
       }`}
       onClick={() => onClick(path)}
       onContextMenu={(e) => {
@@ -240,7 +240,7 @@ const CommitFileItem = memo(function CommitFileItem({
       className={`flex items-center gap-1.5 pl-7 pr-2 py-0.5 text-xs rounded cursor-pointer transition-colors ${
         isSelected
           ? "bg-semantic-accent/30 text-white"
-          : "hover:bg-surface-hover dark:hover:bg-surface-hover text-text-tertiary dark:text-text-tertiary"
+          : "hover:bg-surface-hover dark:hover:bg-surface-hover text-text-tertiary"
       }`}
       onClick={onClick}
     >
@@ -291,9 +291,7 @@ const CommitItem = memo(function CommitItem({
           <ChevronRight className="w-3 h-3 text-text-tertiary mt-0.5 shrink-0" />
         )}
         <div className="flex-1 min-w-0">
-          <div className="text-text-secondary dark:text-text-secondary truncate">
-            {commit.message}
-          </div>
+          <div className="text-text-secondary truncate">{commit.message}</div>
           <div className="text-text-tertiary text-[10px] flex items-center gap-1.5 mt-0.5">
             <span className="text-semantic-accent font-mono">{commit.shortHash}</span>
             <span>{commit.author}</span>
@@ -304,9 +302,7 @@ const CommitItem = memo(function CommitItem({
       {expanded && (
         <div className="ml-1">
           {loading ? (
-            <div className="text-text-tertiary dark:text-text-tertiary text-[10px] pl-7 py-1">
-              Loading files...
-            </div>
+            <div className="text-text-tertiary text-[10px] pl-7 py-1">Loading files...</div>
           ) : files && files.length > 0 ? (
             files.map((f) => (
               <CommitFileItem
@@ -318,9 +314,7 @@ const CommitItem = memo(function CommitItem({
               />
             ))
           ) : (
-            <div className="text-text-tertiary dark:text-text-tertiary text-[10px] pl-7 py-1">
-              No files
-            </div>
+            <div className="text-text-tertiary text-[10px] pl-7 py-1">No files</div>
           )}
         </div>
       )}
@@ -528,19 +522,17 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
   if (!isGitRepo) {
     const notGitContent = (
       <>
-        <div className="px-2 py-1.5 text-xs text-text-tertiary dark:text-text-tertiary flex items-center gap-1.5 border-b border-border-secondary dark:border-border-secondary">
-          <GitBranch className="w-3.5 h-3.5 shrink-0 text-text-tertiary dark:text-text-tertiary" />
-          <span className="font-medium text-text-primary dark:text-text-primary">Git</span>
+        <div className="px-2 py-1.5 text-xs text-text-tertiary flex items-center gap-1.5 border-b border-border-secondary">
+          <GitBranch className="w-3.5 h-3.5 shrink-0 text-text-tertiary" />
+          <span className="font-medium text-text-primary">Git</span>
           <span className="ml-auto">{pinButton}</span>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center px-4 py-8 text-center">
           <div className="w-10 h-10 rounded-full bg-surface-code dark:bg-surface-dim flex items-center justify-center mb-3">
-            <FileQuestion className="w-5 h-5 text-text-tertiary dark:text-text-tertiary" />
+            <FileQuestion className="w-5 h-5 text-text-tertiary" />
           </div>
-          <p className="text-xs text-text-tertiary dark:text-text-tertiary font-medium mb-1">
-            Not a Git repository
-          </p>
-          <p className="text-[10px] text-text-tertiary dark:text-text-tertiary leading-relaxed">
+          <p className="text-xs text-text-tertiary font-medium mb-1">Not a Git repository</p>
+          <p className="text-[10px] text-text-tertiary leading-relaxed">
             Initialize a Git repository to enable version control features.
           </p>
         </div>
@@ -552,7 +544,7 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
     return (
       <div
         data-testid="git-panel"
-        className="w-60 bg-surface-dim dark:bg-surface-dim flex flex-col flex-shrink-0 overflow-hidden"
+        className="w-60 bg-surface-dim flex flex-col flex-shrink-0 overflow-hidden"
       >
         {notGitContent}
       </div>
@@ -562,17 +554,17 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
   const panelContent = (
     <>
       {/* Header: title + branch selector + actions in one row */}
-      <div className="px-2 py-1.5 text-xs text-text-tertiary dark:text-text-tertiary flex items-center gap-1.5 border-b border-border-secondary dark:border-border-secondary">
-        <GitBranch className="w-3.5 h-3.5 shrink-0 text-text-tertiary dark:text-text-tertiary" />
+      <div className="px-2 py-1.5 text-xs text-text-tertiary flex items-center gap-1.5 border-b border-border-secondary">
+        <GitBranch className="w-3.5 h-3.5 shrink-0 text-text-tertiary" />
         <button
           ref={branchBtnRef}
           className="flex items-center gap-1 hover:text-text-primary dark:hover:text-white transition-colors"
           onClick={() => setShowBranches(!showBranches)}
         >
-          <span className="font-medium text-text-primary dark:text-text-primary">{branch}</span>
+          <span className="font-medium text-text-primary">{branch}</span>
           {ahead > 0 && <span className="text-status-success">↑{ahead}</span>}
           {behind > 0 && <span className="text-semantic-notify">↓{behind}</span>}
-          <BranchChevron className="w-3 h-3 text-text-tertiary dark:text-text-tertiary" />
+          <BranchChevron className="w-3 h-3 text-text-tertiary" />
         </button>
 
         <span className="ml-auto flex items-center gap-1">
@@ -618,7 +610,7 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
             <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-text-tertiary font-semibold flex items-center flex-wrap gap-x-2">
               <span>Staged Changes ({staged.length})</span>
               {formatChangeSummary(staged) && (
-                <span className="text-text-tertiary dark:text-text-tertiary font-normal normal-case tracking-normal">
+                <span className="text-text-tertiary font-normal normal-case tracking-normal">
                   {formatChangeSummary(staged)}
                 </span>
               )}
@@ -653,7 +645,7 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
             <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-text-tertiary font-semibold flex items-center flex-wrap gap-x-2">
               <span>Changes ({changed.length})</span>
               {formatChangeSummary(changed) && (
-                <span className="text-text-tertiary dark:text-text-tertiary font-normal normal-case tracking-normal">
+                <span className="text-text-tertiary font-normal normal-case tracking-normal">
                   {formatChangeSummary(changed)}
                 </span>
               )}
@@ -701,13 +693,11 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
         )}
 
         {totalChanges === 0 && !commitsExpanded && (
-          <div className="text-text-tertiary dark:text-text-tertiary text-xs text-center py-8">
-            No changes detected
-          </div>
+          <div className="text-text-tertiary text-xs text-center py-8">No changes detected</div>
         )}
 
         {/* Commit History */}
-        <div className="mt-2 border-t border-border-secondary dark:border-border-secondary pt-1">
+        <div className="mt-2 border-t border-border-secondary pt-1">
           <button
             className="w-full px-2 py-1 text-[10px] uppercase tracking-wide text-text-tertiary font-semibold flex items-center gap-1 hover:text-text-secondary dark:hover:text-text-secondary transition-colors"
             onClick={toggleCommits}
@@ -719,9 +709,7 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
             )}
             Commits
             {commits.length > 0 && (
-              <span className="text-text-tertiary dark:text-text-tertiary ml-auto">
-                {commits.length}
-              </span>
+              <span className="text-text-tertiary ml-auto">{commits.length}</span>
             )}
           </button>
           {commitsExpanded && (
@@ -729,9 +717,7 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
               {loadingCommits ? (
                 <div className="text-text-tertiary text-xs text-center py-4">Loading...</div>
               ) : commits.length === 0 ? (
-                <div className="text-text-tertiary dark:text-text-tertiary text-xs text-center py-4">
-                  No commits
-                </div>
+                <div className="text-text-tertiary text-xs text-center py-4">No commits</div>
               ) : (
                 commits.map((c) => (
                   <CommitItem
@@ -768,7 +754,7 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
       {/* Worktree popup */}
       {showWorktrees && worktrees.length > 1 && (
         <div
-          className="fixed z-50 min-w-[200px] bg-bg-elevated dark:bg-surface-dim border border-border-secondary dark:border-border-secondary rounded-md shadow-xl py-1"
+          className="fixed z-50 min-w-[200px] bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl py-1"
           style={{ top: 80, left: 48 }}
         >
           <div className="px-3 py-1 text-[10px] uppercase tracking-wide text-text-tertiary font-semibold">
@@ -778,9 +764,7 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
             <div
               key={wt.path}
               className={`px-3 py-1.5 text-xs flex items-center gap-2 ${
-                wt.path === currentPath
-                  ? "text-semantic-accent"
-                  : "text-text-secondary dark:text-text-secondary"
+                wt.path === currentPath ? "text-semantic-accent" : "text-text-secondary"
               }`}
             >
               <FolderTree className="w-3 h-3 shrink-0" />
@@ -788,13 +772,11 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
                 <div className="truncate">{wt.branch}</div>
                 <div className="text-text-tertiary text-[10px] truncate">{wt.path}</div>
               </div>
-              {wt.isMain && (
-                <span className="text-text-tertiary dark:text-text-tertiary text-[10px]">main</span>
-              )}
+              {wt.isMain && <span className="text-text-tertiary text-[10px]">main</span>}
             </div>
           ))}
           <button
-            className="w-full text-left px-3 py-1 text-[10px] text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary border-t border-border-secondary dark:border-border-secondary mt-1 pt-1"
+            className="w-full text-left px-3 py-1 text-[10px] text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary border-t border-border-secondary mt-1 pt-1"
             onClick={() => setShowWorktrees(false)}
           >
             Close
@@ -829,7 +811,7 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
   return (
     <div
       data-testid="git-panel"
-      className="w-60 bg-surface-dim dark:bg-surface-dim flex flex-col flex-shrink-0 overflow-hidden"
+      className="w-60 bg-surface-dim flex flex-col flex-shrink-0 overflow-hidden"
     >
       {panelContent}
     </div>

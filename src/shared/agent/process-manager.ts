@@ -208,6 +208,14 @@ export class AgentProcessManager {
   /** CWD-based process pool: projectPath → the ManagedClient running for that project */
   private processByCwd = new Map<string, ManagedClient>();
   private servers = new Set<RPCServer>();
+  /** Guard: prevents recursive start() via coordinator session_delegate */
+  private _startInProgress = false;
+  /** Queued delegate requests received during start() */
+  private _pendingDelegateRequests: Array<{
+    sessionId: string;
+    msg: unknown;
+    resolve: (result: unknown) => void;
+  }> = [];
   private sessionPaths = new Map<string, string>();
   /** Persistent projectPath per session — NOT cleaned on stop(), only on service restart.
       Allows restarting an inactive session when receiving delegate messages. */
@@ -220,6 +228,21 @@ export class AgentProcessManager {
   private parentChildMap = new Map<string, Set<string>>();
   private delegateReplyCount = new Map<string, number>();
   private delegateCreatedAt = new Map<string, number>();
+
+  private async _drainPendingDelegates(): Promise<void> {
+    while (this._pendingDelegateRequests.length > 0) {
+      const { sessionId, msg, resolve } = this._pendingDelegateRequests.shift()!;
+      try {
+        const delegateResult = await this.handleCoordinatorDelegate(
+          sessionId,
+          msg as Extract<CoordinatorMethodCall, { __call: "session_delegate" }>,
+        );
+        resolve(delegateResult);
+      } catch (err: unknown) {
+        resolve({ error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+  }
 
   private findParentSession(childSessionId: string): string | null {
     for (const [parentId, children] of this.parentChildMap.entries()) {
@@ -284,12 +307,22 @@ export class AgentProcessManager {
   ): Promise<{ agentId: string; status: "started" | "already_running" | "switched" }> {
     const tStart = performance.now();
 
+    // Guard: prevent recursive start() triggered by coordinator session_delegate
+    // arriving during an ongoing start() (e.g. child process retarget in 0.74.50+).
+    if (this._startInProgress) {
+      log.warn("[start] reentrant call blocked", { sessionId });
+      return { agentId: sessionId, status: "already_running" };
+    }
+    this._startInProgress = true;
+
     const existing = this.getActiveManaged(sessionId);
     if (existing) {
       perfLog.info("[start] already_running (cached hit)", {
         sessionId,
         totalMs: Math.round(performance.now() - tStart),
       });
+      this._startInProgress = false;
+      this._drainPendingDelegates();
       return { agentId: sessionId, status: "already_running" };
     }
 
@@ -335,6 +368,8 @@ export class AgentProcessManager {
             oldSessionId,
             totalMs: Math.round(performance.now() - tSwitch),
           });
+          this._startInProgress = false;
+          this._drainPendingDelegates();
           return { agentId: sessionId, status: "switched" };
         }
         // If cancelled by an extension, fall through to create new process
@@ -438,6 +473,7 @@ export class AgentProcessManager {
         error: msg,
         createRpcMs: Math.round(performance.now() - tAfterCreate),
       });
+      this._startInProgress = false;
       throw new Error(`Agent startup failed for ${projectPath}: ${msg}`);
     }
     const tAfterProcessStart = performance.now();
@@ -460,6 +496,8 @@ export class AgentProcessManager {
     this.sessionPaths.set(sessionId, sessionPath);
     this.sessionProjectPaths.set(sessionId, projectPath);
     this.processByCwd.set(projectPath, managed);
+    this._startInProgress = false;
+    this._drainPendingDelegates();
     return { agentId: sessionId, status: "started" };
   }
 
@@ -2265,7 +2303,15 @@ export class AgentProcessManager {
     try {
       switch (method) {
         case "session_delegate":
-          result = await this.handleCoordinatorDelegate(sessionId, msg);
+          if (this._startInProgress) {
+            // Queue the request — will be processed after current start() finishes
+            log.info("[coordinator] session_delegate queued (start in progress)", { sessionId });
+            result = await new Promise<unknown>((resolve) => {
+              this._pendingDelegateRequests.push({ sessionId, msg, resolve });
+            });
+          } else {
+            result = await this.handleCoordinatorDelegate(sessionId, msg);
+          }
           break;
         case "session_delegate_send":
           result = await this.handleCoordinatorDelegateSend(msg);

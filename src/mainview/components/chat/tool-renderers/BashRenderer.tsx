@@ -403,7 +403,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
               {showBackground && (
                 <button
                   onClick={() => sendAction("background")}
-                  className="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded border border-status-warning/40 dark:border-status-warning/40 text-[10px] text-status-warning hover:bg-status-warning/10 dark:hover:bg-status-warning/15 transition-colors"
+                  className="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded border border-status-warning/40 text-[10px] text-status-warning hover:bg-status-warning/10 dark:hover:bg-status-warning/15 transition-colors"
                   title={t("bash.moveToBackground")}
                 >
                   <ArrowDownToLine className="w-3 h-3" />
@@ -413,7 +413,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
               {!showBackground && <div className="flex-1" />}
               <button
                 onClick={() => sendAction("kill")}
-                className="flex items-center justify-center gap-1 px-2 py-1 rounded border border-status-error/30 dark:border-status-error/30 text-[10px] text-status-error hover:bg-status-error/10 dark:hover:bg-status-error/10 transition-colors"
+                className="flex items-center justify-center gap-1 px-2 py-1 rounded border border-status-error/30 text-[10px] text-status-error hover:bg-status-error/10 dark:hover:bg-status-error/10 transition-colors"
                 title={t("bash.cancelExecution")}
               >
                 <X className="w-3 h-3" />
@@ -429,7 +429,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
           <div className="flex-1" />
           <button
             onClick={() => setShowLogViewer(true)}
-            className="flex items-center justify-center gap-1 px-2 py-1 rounded border border-semantic-tool/40 dark:border-semantic-tool/40 text-[10px] text-semantic-tool dark:text-semantic-tool hover:bg-semantic-tool/10 dark:hover:bg-semantic-tool/15 transition-colors"
+            className="flex items-center justify-center gap-1 px-2 py-1 rounded border border-semantic-tool/40 text-[10px] text-semantic-tool hover:bg-semantic-tool/10 dark:hover:bg-semantic-tool/15 transition-colors"
             title={t("bash.viewOutput")}
           >
             <Eye className="w-3 h-3" />

@@ -94,26 +94,23 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
       ref={ref}
       role="menu"
       aria-label={t("contextMenu")}
-      className="fixed z-50 min-w-[160px] bg-bg-elevated dark:bg-surface-dim border border-border-secondary dark:border-border-secondary rounded-md shadow-xl py-1"
+      className="fixed z-50 min-w-[160px] bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl py-1"
       style={{ left: pos.x, top: pos.y }}
     >
       {items.map((item, i) => (
         <div key={i}>
           {item.divider && i > 0 && (
-            <div
-              className="border-t border-border-secondary dark:border-border-secondary my-1"
-              role="separator"
-            />
+            <div className="border-t border-border-secondary my-1" role="separator" />
           )}
           <button
             role="menuitem"
             tabIndex={i === activeIndex ? 0 : -1}
             className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors outline-none ${
-              i === activeIndex ? "bg-surface-hover dark:bg-surface-hover" : ""
+              i === activeIndex ? "bg-surface-hover" : ""
             } ${
               item.danger
                 ? "text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 focus:bg-red-50 dark:focus:bg-red-900/30"
-                : "text-text-primary dark:text-text-primary hover:bg-surface-hover dark:hover:bg-surface-hover focus:bg-surface-hover dark:focus:bg-surface-hover"
+                : "text-text-primary hover:bg-surface-hover dark:hover:bg-surface-hover focus:bg-surface-hover dark:focus:bg-surface-hover"
             }`}
             onClick={() => {
               item.onClick();

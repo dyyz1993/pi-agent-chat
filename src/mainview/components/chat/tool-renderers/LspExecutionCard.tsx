@@ -108,8 +108,8 @@ export const LspExecutionCard = memo(function LspExecutionCard({ block }: LspExe
   const copyText = `[lsp] ${parsed.action}\n${block.output ?? ""}`;
 
   let bgClass: string;
-  if (isRunning) bgClass = "bg-status-info/10 dark:bg-status-info/10";
-  else if (isError) bgClass = "bg-status-error/5 dark:bg-status-error/5";
+  if (isRunning) bgClass = "bg-status-info/10";
+  else if (isError) bgClass = "bg-status-error/5";
   else bgClass = "bg-status-warning/[0.05] dark:bg-surface-dim/50";
 
   return (
@@ -173,7 +173,7 @@ export const LspExecutionCard = memo(function LspExecutionCard({ block }: LspExe
                 return (
                   <div
                     key={i}
-                    className="flex items-start gap-2 py-1 px-2 rounded hover:bg-white/5 dark:hover:bg-white/[0.03] group"
+                    className="flex items-start gap-2 py-1 px-2 rounded hover:bg-white/5 dark:hover:bg-white/5 group"
                   >
                     <Icon className={`w-3 h-3 mt-0.5 shrink-0 ${color}`} />
 

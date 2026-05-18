@@ -383,7 +383,7 @@ export function ChatPanel() {
       <MarkdownExpandOverlay />
       <MermaidFullscreen />
       <RollbackOverlay />
-      <div className="flex items-center gap-4 px-4 py-1.5 bg-surface-dim/80 dark:bg-surface-code/80 border-b border-border-secondary dark:border-border-secondary text-[11px] text-text-tertiary dark:text-text-tertiary flex-shrink-0">
+      <div className="flex items-center gap-4 px-4 py-1.5 bg-surface-dim/80 dark:bg-surface-code/80 border-b border-border-secondary text-[11px] text-text-tertiary flex-shrink-0">
         <SessionToggleIcon />
         {isViewingSubagent && (
           <button
@@ -411,13 +411,9 @@ export function ChatPanel() {
             <div className="h-full flex items-center justify-center">
               <div className="flex flex-col items-center gap-3 max-w-xs text-center">
                 <AlertTriangle className="w-8 h-8 text-status-warning" />
-                <div className="text-sm text-text-secondary dark:text-text-secondary">
-                  {t("sessionStartFailed")}
-                </div>
+                <div className="text-sm text-text-secondary">{t("sessionStartFailed")}</div>
                 {projectError && (
-                  <div className="text-xs text-text-tertiary dark:text-text-tertiary break-all">
-                    {projectError}
-                  </div>
+                  <div className="text-xs text-text-tertiary break-all">{projectError}</div>
                 )}
                 <button
                   onClick={retryActiveProject}
@@ -431,10 +427,8 @@ export function ChatPanel() {
           ) : isLoading ? (
             <div className="h-full flex items-center justify-center">
               <div className="flex flex-col items-center gap-2 opacity-50">
-                <Loader2 className="w-5 h-5 text-text-tertiary dark:text-text-tertiary animate-spin" />
-                <span className="text-xs text-text-tertiary dark:text-text-tertiary">
-                  {t("loadingSession")}
-                </span>
+                <Loader2 className="w-5 h-5 text-text-tertiary animate-spin" />
+                <span className="text-xs text-text-tertiary">{t("loadingSession")}</span>
               </div>
             </div>
           ) : isViewingSubagent ? (
@@ -485,17 +479,15 @@ export function ChatPanel() {
       {activeSessionId && !isViewingSubagent && <QueueCards sessionId={activeSessionId} />}
 
       <div
-        className="px-3 pt-2 pb-1.5 flex-shrink-0 flex items-stretch gap-1.5 bg-surface-dim dark:bg-surface-code border-t border-border-secondary dark:border-border-secondary relative"
+        className="px-3 pt-2 pb-1.5 flex-shrink-0 flex items-stretch gap-1.5 bg-surface-dim dark:bg-surface-code border-t border-border-secondary relative"
         style={{ paddingBottom: "calc(0.375rem + env(safe-area-inset-bottom))" }}
       >
         {!isViewingSubagent && (
           <>
             {!sessionReady && !projectFailed ? (
               <div className="flex-1 flex items-center justify-center gap-2 py-2">
-                <Loader2 className="w-3.5 h-3.5 text-text-tertiary dark:text-text-tertiary animate-spin" />
-                <span className="text-xs text-text-tertiary dark:text-text-tertiary">
-                  {t("sessionStarting")}
-                </span>
+                <Loader2 className="w-3.5 h-3.5 text-text-tertiary animate-spin" />
+                <span className="text-xs text-text-tertiary">{t("sessionStarting")}</span>
               </div>
             ) : (
               <>

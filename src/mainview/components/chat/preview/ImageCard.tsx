@@ -33,9 +33,7 @@ export const ImageCard = memo(function ImageCard({ details }: { details: Preview
       />
       <div className="relative bg-surface-dim dark:bg-black/30 flex items-center justify-center min-h-[120px] max-h-[400px]">
         {!loaded && !error && (
-          <div className="text-text-tertiary dark:text-text-tertiary text-xs animate-pulse">
-            {t("loadingImage")}
-          </div>
+          <div className="text-text-tertiary text-xs animate-pulse">{t("loadingImage")}</div>
         )}
         {error ? (
           <div className="flex flex-col items-center gap-2 py-6">
@@ -70,14 +68,10 @@ function FallbackCard({ details }: { details: PreviewDetails }) {
   return (
     <div className="rounded-lg overflow-hidden border border-border-secondary dark:border-border-secondary/40 bg-bg-elevated dark:bg-surface-code/60">
       <CardHeader
-        icon={
-          <ImageIcon className="w-3.5 h-3.5 text-text-tertiary dark:text-text-tertiary shrink-0" />
-        }
+        icon={<ImageIcon className="w-3.5 h-3.5 text-text-tertiary shrink-0" />}
         label={details.title ?? details.source}
       />
-      <div className="px-3 py-4 text-xs text-text-tertiary dark:text-text-tertiary italic">
-        {t("noPathForPreview")}
-      </div>
+      <div className="px-3 py-4 text-xs text-text-tertiary italic">{t("noPathForPreview")}</div>
     </div>
   );
 }

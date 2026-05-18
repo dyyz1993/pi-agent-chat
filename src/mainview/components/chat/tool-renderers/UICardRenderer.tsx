@@ -43,7 +43,7 @@ export function CardShell({ block, children }: { block: UIBlock; children: React
         <Icon className={`w-3.5 h-3.5 shrink-0 ${color}`} />
         <span className={`font-medium ${color}`}>{block.title ?? label}</span>
         {isPending && (
-          <span className="text-status-warning dark:text-status-warning animate-pulse text-[10px] flex items-center gap-1">
+          <span className="text-status-warning animate-pulse text-[10px] flex items-center gap-1">
             <Loader2 className="w-2.5 h-2.5 animate-spin" />
             {t("uiCard.waitingResponse")}
           </span>
@@ -80,14 +80,14 @@ export const ConfirmCard = memo(function ConfirmCard({ block }: { block: UIBlock
         <div className="px-3 py-1.5 flex gap-2">
           <button
             onClick={() => respondById(block.id, { confirmed: true })}
-            className="flex-1 flex items-center justify-center gap-1 py-1 text-[11px] rounded bg-status-success/100 dark:bg-status-success/20 text-status-success dark:text-status-success hover:bg-status-success/200 dark:hover:bg-status-success/30 transition-colors"
+            className="flex-1 flex items-center justify-center gap-1 py-1 text-[11px] rounded bg-status-success/100 dark:bg-status-success/20 text-status-success hover:bg-status-success/200 dark:hover:bg-status-success/30 transition-colors"
           >
             <CheckCircle className="w-3 h-3" />
             {t("common:confirm")}
           </button>
           <button
             onClick={() => dismissById(block.id)}
-            className="flex-1 flex items-center justify-center gap-1 py-1 text-[11px] rounded bg-status-error/100 dark:bg-status-error/15 text-status-error dark:text-status-error hover:bg-status-error/200 dark:hover:bg-status-error/25 transition-colors"
+            className="flex-1 flex items-center justify-center gap-1 py-1 text-[11px] rounded bg-status-error/100 dark:bg-status-error/15 text-status-error hover:bg-status-error/200 dark:hover:bg-status-error/25 transition-colors"
           >
             <XCircle className="w-3 h-3" />
             {t("common:cancel")}
@@ -96,7 +96,7 @@ export const ConfirmCard = memo(function ConfirmCard({ block }: { block: UIBlock
       ) : responseText ? (
         <div className="px-3 pb-1.5">
           <span
-            className={`text-[11px] ${block.response?.confirmed ? "text-status-success dark:text-status-success" : "text-status-error dark:text-status-error"}`}
+            className={`text-[11px] ${block.response?.confirmed ? "text-status-success" : "text-status-error"}`}
           >
             {responseText}
           </span>
@@ -152,12 +152,12 @@ export const SelectCard = memo(function SelectCard({ block }: { block: UIBlock }
                   onClick={() => toggleCheck(i)}
                   className={`w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-md text-[11px] transition-colors ${
                     checked
-                      ? "bg-status-info/100 dark:bg-status-info/15 text-status-info dark:text-status-info"
+                      ? "bg-status-info/100 dark:bg-status-info/15 text-status-info"
                       : "text-text-secondary hover:bg-surface-dim hover:text-text-primary"
                   }`}
                 >
                   {checked ? (
-                    <CheckSquare className="w-3.5 h-3.5 shrink-0 text-status-info dark:text-status-info" />
+                    <CheckSquare className="w-3.5 h-3.5 shrink-0 text-status-info" />
                   ) : (
                     <Square className="w-3.5 h-3.5 shrink-0 text-text-tertiary" />
                   )}
@@ -174,7 +174,7 @@ export const SelectCard = memo(function SelectCard({ block }: { block: UIBlock }
                   setCustomSelected(true);
                   setCheckedSet(new Set());
                 }}
-                className={`shrink-0 ${customSelected ? "text-status-info dark:text-status-info" : "text-text-tertiary"}`}
+                className={`shrink-0 ${customSelected ? "text-status-info" : "text-text-tertiary"}`}
               >
                 {customSelected ? (
                   <CheckSquare className="w-3.5 h-3.5" />
@@ -183,7 +183,7 @@ export const SelectCard = memo(function SelectCard({ block }: { block: UIBlock }
                 )}
               </button>
               <span
-                className={`text-[11px] ${customSelected ? "text-status-info dark:text-status-info" : "text-text-secondary"}`}
+                className={`text-[11px] ${customSelected ? "text-status-info" : "text-text-secondary"}`}
               >
                 {t("uiCard.customAnswer")}
               </span>
@@ -194,7 +194,7 @@ export const SelectCard = memo(function SelectCard({ block }: { block: UIBlock }
                 value={customValue}
                 onChange={(e) => setCustomValue(e.target.value)}
                 placeholder={block.placeholder ?? t("uiCard.inputYourAnswer")}
-                className="w-full ml-6 bg-white dark:bg-surface-dim border border-border-secondary rounded px-2 py-1 text-[11px] text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-status-warning/50"
+                className="w-full ml-6 bg-surface-dim border border-border-secondary rounded px-2 py-1 text-[11px] text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-status-warning/50"
                 onKeyDown={(e) =>
                   e.key === "Enter" &&
                   customValue.trim() &&
@@ -210,7 +210,7 @@ export const SelectCard = memo(function SelectCard({ block }: { block: UIBlock }
                   else if (customValue.trim()) respondById(block.id, { value: customValue.trim() });
                 }}
                 disabled={checkedSet.size === 0 && !customValue.trim()}
-                className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md bg-status-warning/100 dark:bg-status-warning/20 text-status-warning dark:text-status-warning hover:bg-status-warning/200 dark:hover:bg-status-warning/30 disabled:opacity-40 disabled:cursor-not-allowed text-[11px] transition-colors"
+                className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md bg-status-warning/100 dark:bg-status-warning/20 text-status-warning hover:bg-status-warning/200 dark:hover:bg-status-warning/30 disabled:opacity-40 disabled:cursor-not-allowed text-[11px] transition-colors"
               >
                 {t("common:submit")}
               </button>
@@ -240,12 +240,12 @@ export const SelectCard = memo(function SelectCard({ block }: { block: UIBlock }
                 }}
                 className={`w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-md text-[11px] transition-colors ${
                   selectedIdx === i
-                    ? "bg-status-info/100 dark:bg-status-info/15 text-status-info dark:text-status-info"
+                    ? "bg-status-info/100 dark:bg-status-info/15 text-status-info"
                     : "text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-hover/50 hover:text-text-primary dark:hover:text-text-secondary"
                 }`}
               >
                 <CircleDot
-                  className={`w-3.5 h-3.5 shrink-0 ${selectedIdx === i ? "text-status-info dark:text-status-info" : "text-text-tertiary"}`}
+                  className={`w-3.5 h-3.5 shrink-0 ${selectedIdx === i ? "text-status-info" : "text-text-tertiary"}`}
                 />
                 <div className="min-w-0">
                   <div>{label}</div>
@@ -260,16 +260,16 @@ export const SelectCard = memo(function SelectCard({ block }: { block: UIBlock }
                 setCustomSelected(true);
                 setSelectedIdx(null);
               }}
-              className={`shrink-0 ${customSelected || selectedIdx === -1 ? "text-status-info dark:text-status-info" : "text-text-tertiary"}`}
+              className={`shrink-0 ${customSelected || selectedIdx === -1 ? "text-status-info" : "text-text-tertiary"}`}
             >
               {customSelected || selectedIdx === -1 ? (
-                <CircleDot className="w-3.5 h-3.5 text-status-info dark:text-status-info" />
+                <CircleDot className="w-3.5 h-3.5 text-status-info" />
               ) : (
                 <CircleDot className="w-3.5 h-3.5 text-text-tertiary" />
               )}
             </button>
             <span
-              className={`text-[11px] ${customSelected || selectedIdx === -1 ? "text-status-info dark:text-status-info" : "text-text-secondary"}`}
+              className={`text-[11px] ${customSelected || selectedIdx === -1 ? "text-status-info" : "text-text-secondary"}`}
             >
               {t("uiCard.customAnswer")}
             </span>
@@ -280,7 +280,7 @@ export const SelectCard = memo(function SelectCard({ block }: { block: UIBlock }
               value={customValue}
               onChange={(e) => setCustomValue(e.target.value)}
               placeholder={block.placeholder ?? t("uiCard.inputYourAnswer")}
-              className="w-full ml-7 bg-white dark:bg-surface-dim border border-border-secondary rounded px-2 py-1 text-[11px] text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-status-warning/50"
+              className="w-full ml-7 bg-surface-dim border border-border-secondary rounded px-2 py-1 text-[11px] text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-status-warning/50"
               onKeyDown={(e) =>
                 e.key === "Enter" &&
                 customValue.trim() &&
@@ -296,7 +296,7 @@ export const SelectCard = memo(function SelectCard({ block }: { block: UIBlock }
                 else if (customValue.trim()) respondById(block.id, { value: customValue.trim() });
               }}
               disabled={selectedIdx == null && !customValue.trim()}
-              className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md bg-status-warning/100 dark:bg-status-warning/20 text-status-warning dark:text-status-warning hover:bg-status-warning/200 dark:hover:bg-status-warning/30 disabled:opacity-40 disabled:cursor-not-allowed text-[11px] transition-colors"
+              className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md bg-status-warning/100 dark:bg-status-warning/20 text-status-warning hover:bg-status-warning/200 dark:hover:bg-status-warning/30 disabled:opacity-40 disabled:cursor-not-allowed text-[11px] transition-colors"
             >
               {t("common:submit")}
             </button>
@@ -317,7 +317,7 @@ export const SelectCard = memo(function SelectCard({ block }: { block: UIBlock }
     return (
       <CardShell block={block}>
         <div className="px-3 pb-1.5">
-          <span className="text-[11px] text-status-info dark:text-status-info">
+          <span className="text-[11px] text-status-info">
             {isMulti
               ? t("uiCard.selected", { count: (responseValue as string[]).length })
               : t("uiCard.selectedSingle")}
@@ -349,21 +349,21 @@ export const InputCard = memo(function InputCard({ block }: { block: UIBlock }) 
             value={value}
             onChange={(e) => setValue(e.target.value)}
             placeholder={block.placeholder ?? t("uiCard.pleaseInput")}
-            className="flex-1 bg-white dark:bg-surface-dim/60 border border-border-secondary/50 rounded px-2 py-1 text-[11px] text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-status-warning/50"
+            className="flex-1 bg-surface-dim/60 border border-border-secondary/50 rounded px-2 py-1 text-[11px] text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-status-warning/50"
             onKeyDown={(e) => {
               if (e.key === "Enter") respondById(block.id, { value });
             }}
           />
           <button
             onClick={() => respondById(block.id, { value })}
-            className="flex items-center justify-center px-2 py-1 rounded bg-status-warning/100 dark:bg-status-warning/20 text-status-warning dark:text-status-warning hover:bg-status-warning/200 dark:hover:bg-status-warning/30 transition-colors"
+            className="flex items-center justify-center px-2 py-1 rounded bg-status-warning/100 dark:bg-status-warning/20 text-status-warning hover:bg-status-warning/200 dark:hover:bg-status-warning/30 transition-colors"
           >
             <Send className="w-3 h-3" />
           </button>
         </div>
       ) : responseValue != null ? (
         <div className="px-3 pb-1.5">
-          <span className="text-[11px] text-status-warning dark:text-status-warning">
+          <span className="text-[11px] text-status-warning">
             {t("uiCard.inputColon")}
             {responseValue || t("uiCard.empty")}
           </span>
@@ -400,7 +400,7 @@ export const EditorCard = memo(function EditorCard({ block }: { block: UIBlock }
           <div className="flex gap-1.5">
             <button
               onClick={() => respondById(block.id, { value })}
-              className="flex-1 flex items-center justify-center gap-1 py-1 text-[11px] rounded bg-semantic-agent/100 dark:bg-semantic-agent/20 text-semantic-agent dark:text-semantic-agent hover:bg-semantic-agent/200 dark:hover:bg-semantic-agent/30 transition-colors"
+              className="flex-1 flex items-center justify-center gap-1 py-1 text-[11px] rounded bg-semantic-agent/100 dark:bg-semantic-agent/20 text-semantic-agent hover:bg-semantic-agent/200 dark:hover:bg-semantic-agent/30 transition-colors"
             >
               <Send className="w-3 h-3" />
               {t("common:submit")}
@@ -417,7 +417,7 @@ export const EditorCard = memo(function EditorCard({ block }: { block: UIBlock }
       ) : responseValue != null ? (
         <div className="px-3 pb-1.5">
           <details>
-            <summary className="text-[11px] text-semantic-agent dark:text-semantic-agent cursor-pointer hover:text-semantic-agent dark:hover:text-semantic-agent">
+            <summary className="text-[11px] text-semantic-agent cursor-pointer hover:text-semantic-agent dark:hover:text-semantic-agent">
               {t("uiCard.editContent", { count: responseValue.length })}
             </summary>
             <pre className="mt-1 text-[11px] text-text-primary bg-surface-code rounded p-2 max-h-40 overflow-auto whitespace-pre-wrap font-mono">
@@ -469,12 +469,10 @@ export const RespondUICard = memo(function RespondUICard({ block }: { block: UIB
         <span className={`font-medium ${color}`}>
           {block.title ?? t("uiCard.asyncResponseInjection")}
         </span>
-        <Zap className="w-3 h-3 text-semantic-notify dark:text-semantic-notify shrink-0 ml-auto" />
+        <Zap className="w-3 h-3 text-semantic-notify shrink-0 ml-auto" />
       </div>
       {block.message && (
-        <div className="px-3 pb-1.5 text-[11px] text-semantic-notify/70 dark:text-semantic-notify/70">
-          {block.message}
-        </div>
+        <div className="px-3 pb-1.5 text-[11px] text-semantic-notify/70">{block.message}</div>
       )}
     </div>
   );

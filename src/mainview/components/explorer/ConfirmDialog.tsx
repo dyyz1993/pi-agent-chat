@@ -23,18 +23,16 @@ export function ConfirmDialog({ title, message, onConfirm, onCancel }: ConfirmDi
     >
       <div
         ref={dialogRef}
-        className="bg-bg-elevated dark:bg-surface-dim border border-border-secondary dark:border-border-secondary rounded-lg shadow-2xl p-4 min-w-[300px] max-w-[400px]"
+        className="bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-lg shadow-2xl p-4 min-w-[300px] max-w-[400px]"
         role="dialog"
         aria-modal="true"
         aria-label={title}
       >
-        <h3 className="text-sm font-semibold text-text-primary dark:text-text-primary mb-2">
-          {title}
-        </h3>
-        <p className="text-xs text-text-secondary dark:text-text-secondary mb-4">{message}</p>
+        <h3 className="text-sm font-semibold text-text-primary mb-2">{title}</h3>
+        <p className="text-xs text-text-secondary mb-4">{message}</p>
         <div className="flex justify-end gap-2">
           <button
-            className="px-3 py-1.5 text-xs bg-surface-hover dark:bg-surface-hover hover:bg-surface-hover dark:hover:bg-surface-hover rounded transition-colors text-text-primary dark:text-text-primary"
+            className="px-3 py-1.5 text-xs bg-surface-hover hover:bg-surface-hover dark:hover:bg-surface-hover rounded transition-colors text-text-primary"
             onClick={onCancel}
           >
             {t("cancel")}

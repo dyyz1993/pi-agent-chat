@@ -32,8 +32,8 @@ function PanelCard({
     const [customValue, setCustomValue] = useState("");
 
     return (
-      <div className="border border-border-secondary/40 dark:border-border-secondary/40 rounded-xl overflow-hidden bg-surface-dim/50 dark:bg-surface-code/50">
-        <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border-secondary/50 dark:border-border-secondary/50">
+      <div className="border border-border-secondary/40 rounded-xl overflow-hidden bg-surface-dim/50 dark:bg-surface-code/50">
+        <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border-secondary/50">
           <span
             className={`text-[11px] font-medium ${req.method === "select" ? "text-status-info" : "text-status-success"}`}
           >
@@ -43,9 +43,7 @@ function PanelCard({
         </div>
         <div className="px-3 py-2">
           {req.message && (
-            <p className="text-[11px] text-text-secondary dark:text-text-secondary mb-2 leading-relaxed">
-              {req.message}
-            </p>
+            <p className="text-[11px] text-text-secondary mb-2 leading-relaxed">{req.message}</p>
           )}
           <div className="space-y-0.5 mb-2">
             {options.map((opt, i) => {
@@ -67,21 +65,17 @@ function PanelCard({
                   className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left transition-colors ${
                     checked
                       ? "bg-status-info/15 text-status-info"
-                      : "hover:bg-surface-dim dark:hover:bg-surface-dim text-text-tertiary dark:text-text-tertiary"
+                      : "hover:bg-surface-dim dark:hover:bg-surface-dim text-text-tertiary"
                   }`}
                 >
                   {checked ? (
                     <CheckSquare className="w-3.5 h-3.5 shrink-0 text-status-info" />
                   ) : (
-                    <Square className="w-3.5 h-3.5 shrink-0 text-text-tertiary dark:text-text-tertiary" />
+                    <Square className="w-3.5 h-3.5 shrink-0 text-text-tertiary" />
                   )}
                   <div className="min-w-0">
                     <div className="text-[11px]">{label}</div>
-                    {desc && (
-                      <div className="text-[10px] text-text-tertiary dark:text-text-tertiary">
-                        {desc}
-                      </div>
-                    )}
+                    {desc && <div className="text-[10px] text-text-tertiary">{desc}</div>}
                   </div>
                 </button>
               );
@@ -93,7 +87,7 @@ function PanelCard({
               value={customValue}
               onChange={(e) => setCustomValue(e.target.value)}
               placeholder={req.placeholder ?? t("uiCard.customAnswer")}
-              className="flex-1 bg-surface-code dark:bg-surface-dim border border-border-secondary dark:border-border-secondary rounded px-2 py-1 text-[11px] text-text-primary dark:text-text-primary placeholder:text-text-tertiary dark:placeholder:text-text-tertiary focus:outline-none focus:border-status-warning/50"
+              className="flex-1 bg-surface-code dark:bg-surface-dim border border-border-secondary rounded px-2 py-1 text-[11px] text-text-primary placeholder:text-text-tertiary dark:placeholder:text-text-tertiary focus:outline-none focus:border-status-warning/50"
               onKeyDown={(e) =>
                 e.key === "Enter" &&
                 customValue.trim() &&
@@ -116,7 +110,7 @@ function PanelCard({
             </button>
             <button
               onClick={() => dismissById(req.requestId)}
-              className="flex items-center justify-center px-3 py-1.5 rounded-md bg-surface-hover/30 dark:bg-surface-hover/30 text-text-tertiary dark:text-text-tertiary hover:bg-border-secondary/50 dark:hover:bg-border-secondary/50 text-[11px] transition-colors"
+              className="flex items-center justify-center px-3 py-1.5 rounded-md bg-surface-hover/30 text-text-tertiary hover:bg-border-secondary/50 dark:hover:bg-border-secondary/50 text-[11px] transition-colors"
             >
               {t("common:dismiss")}
             </button>
@@ -128,16 +122,14 @@ function PanelCard({
 
   if (isConfirm) {
     return (
-      <div className="border border-border-secondary/40 dark:border-border-secondary/40 rounded-xl overflow-hidden bg-surface-dim/50 dark:bg-surface-code/50">
-        <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border-secondary/60 dark:border-border-secondary/60">
+      <div className="border border-border-secondary/40 rounded-xl overflow-hidden bg-surface-dim/50 dark:bg-surface-code/50">
+        <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border-secondary/60">
           <span className="text-[11px] font-medium text-status-success">{methodLabel.confirm}</span>
           <span className="text-[10px] text-text-tertiary ml-auto">{req.title}</span>
         </div>
         <div className="px-3 py-2">
           {req.message && (
-            <p className="text-[11px] text-text-secondary dark:text-text-secondary mb-2.5 leading-relaxed">
-              {req.message}
-            </p>
+            <p className="text-[11px] text-text-secondary mb-2.5 leading-relaxed">{req.message}</p>
           )}
           <div className="flex gap-2">
             <button
@@ -161,23 +153,21 @@ function PanelCard({
   if (isInput) {
     const [value, setValue] = useState("");
     return (
-      <div className="border border-border-secondary/40 dark:border-border-secondary/40 rounded-xl overflow-hidden bg-surface-dim/50 dark:bg-surface-code/50">
-        <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border-secondary/60 dark:border-border-secondary/60">
+      <div className="border border-border-secondary/40 rounded-xl overflow-hidden bg-surface-dim/50 dark:bg-surface-code/50">
+        <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border-secondary/60">
           <span className="text-[11px] font-medium text-status-warning">{methodLabel.input}</span>
           <span className="text-[10px] text-text-tertiary ml-auto">{req.title}</span>
         </div>
         <div className="px-3 py-2">
           {req.message && (
-            <p className="text-[11px] text-text-secondary dark:text-text-secondary mb-2.5 leading-relaxed">
-              {req.message}
-            </p>
+            <p className="text-[11px] text-text-secondary mb-2.5 leading-relaxed">{req.message}</p>
           )}
           <input
             type="text"
             value={value}
             onChange={(e) => setValue(e.target.value)}
             placeholder={req.placeholder ?? t("uiCard.pleaseInput")}
-            className="w-full bg-surface-code dark:bg-surface-dim border border-border-secondary dark:border-border-secondary rounded px-2.5 py-1.5 text-[11px] text-text-primary dark:text-text-primary placeholder:text-text-tertiary dark:placeholder:text-text-tertiary focus:outline-none focus:border-status-warning/50"
+            className="w-full bg-surface-code dark:bg-surface-dim border border-border-secondary rounded px-2.5 py-1.5 text-[11px] text-text-primary placeholder:text-text-tertiary dark:placeholder:text-text-tertiary focus:outline-none focus:border-status-warning/50"
             onKeyDown={(e) => e.key === "Enter" && respondById(req.requestId, { value })}
           />
           <div className="flex gap-2 mt-2">
@@ -190,7 +180,7 @@ function PanelCard({
             </button>
             <button
               onClick={() => dismissById(req.requestId)}
-              className="flex items-center justify-center px-3 py-1.5 rounded-md bg-surface-hover/30 dark:bg-surface-hover/30 text-text-tertiary dark:text-text-tertiary hover:bg-border-secondary/50 dark:hover:bg-border-secondary/50 text-[11px] transition-colors"
+              className="flex items-center justify-center px-3 py-1.5 rounded-md bg-surface-hover/30 text-text-tertiary hover:bg-border-secondary/50 dark:hover:bg-border-secondary/50 text-[11px] transition-colors"
             >
               {t("common:dismiss")}
             </button>
@@ -255,14 +245,14 @@ export function UIPendingCenter() {
         >
           <div
             ref={dialogRef}
-            className="w-full max-w-lg bg-surface-code dark:bg-surface-dim border border-border-secondary dark:border-border-secondary rounded-lg shadow-2xl overflow-hidden"
+            className="w-full max-w-lg bg-surface-code dark:bg-surface-dim border border-border-secondary rounded-lg shadow-2xl overflow-hidden"
             role="dialog"
             aria-modal="true"
             aria-label={t("uiPending.pendingRequestsTitle")}
           >
-            <div className="flex items-center justify-between px-3 py-1.5 border-b border-border-secondary/60 dark:border-border-secondary/60">
+            <div className="flex items-center justify-between px-3 py-1.5 border-b border-border-secondary/60">
               <div className="flex items-center gap-2">
-                <span className="text-[13px] font-medium text-text-primary dark:text-text-primary">
+                <span className="text-[13px] font-medium text-text-primary">
                   {t("uiPending.pendingRequestsTitle")}
                 </span>
                 <span className="px-1.5 py-0.5 rounded-full bg-status-warning/15 text-status-warning text-[11px] font-medium tabular-nums">
@@ -272,14 +262,14 @@ export function UIPendingCenter() {
               <div className="flex items-center gap-1">
                 <button
                   onClick={handleGotoChat}
-                  className="flex items-center gap-1 px-2.5 py-1 text-[11px] text-text-secondary dark:text-text-secondary hover:text-text-primary dark:hover:text-text-primary hover:bg-surface-hover/50 dark:hover:bg-surface-hover/50 transition-colors"
+                  className="flex items-center gap-1 px-2.5 py-1 text-[11px] text-text-secondary hover:text-text-primary dark:hover:text-text-primary hover:bg-surface-hover/50 dark:hover:bg-surface-hover/50 transition-colors"
                 >
                   {t("uiPending.gotoSession")}
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => setPanelOpen(false)}
-                  className="text-text-tertiary dark:text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary p-1 transition-colors"
+                  className="text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary p-1 transition-colors"
                   aria-label={t("common:close")}
                 >
                   <X className="w-4 h-4" />
@@ -292,7 +282,7 @@ export function UIPendingCenter() {
                 <PanelCard key={req.requestId} req={req} />
               ))}
               {pending.length === 0 && (
-                <div className="py-8 text-center text-[11px] text-text-tertiary dark:text-text-tertiary">
+                <div className="py-8 text-center text-[11px] text-text-tertiary">
                   {t("uiPending.noPendingRequests")}
                 </div>
               )}

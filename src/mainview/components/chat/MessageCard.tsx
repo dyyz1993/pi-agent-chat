@@ -286,7 +286,7 @@ export const MessageCard = memo(function MessageCard({
         </div>
         {isCollapsed ? (
           <div
-            className={`relative z-20 border-l-[3px] ${roleCfg.barColor} px-3 py-1 text-xs text-text-tertiary dark:text-text-tertiary italic leading-relaxed`}
+            className={`relative z-20 border-l-[3px] ${roleCfg.barColor} px-3 py-1 text-xs text-text-tertiary italic leading-relaxed`}
           >
             {firstLine}
           </div>
@@ -350,7 +350,7 @@ export const MessageCard = memo(function MessageCard({
             checked={isSelected}
             onChange={() => toggleMessageSelection(message.id)}
             onClick={(e) => e.stopPropagation()}
-            className="w-3 h-3 rounded border border-border-secondary dark:border-border-secondary accent-status-success shrink-0 cursor-pointer"
+            className="w-3 h-3 rounded border border-border-secondary accent-status-success shrink-0 cursor-pointer"
           />
         )}
 
@@ -385,7 +385,7 @@ export const MessageCard = memo(function MessageCard({
       {/* Content */}
       {isCollapsed ? (
         <div
-          className={`relative z-20 border-l-[3px] ${isSelected ? "border-l-status-error" : barColor} px-3 py-1 text-xs text-text-tertiary dark:text-text-tertiary italic leading-relaxed`}
+          className={`relative z-20 border-l-[3px] ${isSelected ? "border-l-status-error" : barColor} px-3 py-1 text-xs text-text-tertiary italic leading-relaxed`}
         >
           {message.content
             .filter((b) => b.type === "text")

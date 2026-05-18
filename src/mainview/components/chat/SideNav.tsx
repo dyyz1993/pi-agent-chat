@@ -321,7 +321,7 @@ export const SideNav = memo(function SideNav({
   }, [selectedNavId, filteredNavItems]);
 
   return (
-    <div className="h-full min-h-0 flex flex-col bg-surface-dim/30 dark:bg-surface-code/30 border-l border-border-secondary/30 dark:border-border-secondary/30">
+    <div className="h-full min-h-0 flex flex-col bg-surface-dim/30 dark:bg-surface-code/30 border-l border-border-secondary/30">
       <VList
         ref={sidenavVlistRef}
         style={{ flex: 1, minHeight: 0, scrollbarWidth: "none", msOverflowStyle: "none" }}

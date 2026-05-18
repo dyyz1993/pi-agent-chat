@@ -131,7 +131,7 @@ export const MermaidBlock = memo(function MermaidBlock({ code, inline = true }: 
 
   if (loading && !svg && !error) {
     return (
-      <div className="rounded-lg border border-border-secondary dark:border-border-secondary bg-bg-elevated dark:bg-surface-code/60 p-4 my-3 flex items-center justify-center min-h-[80px]">
+      <div className="rounded-lg border border-border-secondary bg-bg-elevated dark:bg-surface-code/60 p-4 my-3 flex items-center justify-center min-h-[80px]">
         <div className="inline-block w-4 h-4 border-2 border-indigo-500 dark:border-indigo-400 border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -149,7 +149,7 @@ export const MermaidBlock = memo(function MermaidBlock({ code, inline = true }: 
   }
 
   return (
-    <div className="rounded-lg border border-border-secondary dark:border-border-secondary bg-bg-elevated dark:bg-surface-code/60 my-3 overflow-hidden group relative">
+    <div className="rounded-lg border border-border-secondary bg-bg-elevated dark:bg-surface-code/60 my-3 overflow-hidden group relative">
       <div
         ref={containerRef}
         className="overflow-auto p-4"
@@ -164,24 +164,24 @@ export const MermaidBlock = memo(function MermaidBlock({ code, inline = true }: 
           dangerouslySetInnerHTML={svg ? { __html: svg } : undefined}
         />
       </div>
-      <div className="absolute top-2 right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-bg-elevated/90 dark:bg-surface-dim/90 rounded-md border border-border-secondary dark:border-border-secondary p-0.5">
+      <div className="absolute top-2 right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-bg-elevated/90 dark:bg-surface-dim/90 rounded-md border border-border-secondary p-0.5">
         <button
           onClick={handleZoomOut}
-          className="p-1 rounded hover:bg-surface-hover dark:hover:bg-surface-hover text-text-tertiary dark:text-text-tertiary hover:text-text-primary dark:hover:text-text-primary"
+          className="p-1 rounded hover:bg-surface-hover dark:hover:bg-surface-hover text-text-tertiary hover:text-text-primary dark:hover:text-text-primary"
           title={t("zoomOut")}
         >
           <ZoomOut className="w-3.5 h-3.5" />
         </button>
         <button
           onClick={handleReset}
-          className="px-1.5 py-0.5 text-xs text-text-tertiary dark:text-text-tertiary hover:text-text-primary dark:hover:text-text-primary hover:bg-surface-hover dark:hover:bg-surface-hover rounded min-w-[3rem] text-center"
+          className="px-1.5 py-0.5 text-xs text-text-tertiary hover:text-text-primary dark:hover:text-text-primary hover:bg-surface-hover dark:hover:bg-surface-hover rounded min-w-[3rem] text-center"
           title={t("resetZoom")}
         >
           {Math.round(scale * 100)}%
         </button>
         <button
           onClick={handleZoomIn}
-          className="p-1 rounded hover:bg-surface-hover dark:hover:bg-surface-hover text-text-tertiary dark:text-text-tertiary hover:text-text-primary dark:hover:text-text-primary"
+          className="p-1 rounded hover:bg-surface-hover dark:hover:bg-surface-hover text-text-tertiary hover:text-text-primary dark:hover:text-text-primary"
         >
           <ZoomIn className="w-3.5 h-3.5" />
         </button>
@@ -190,7 +190,7 @@ export const MermaidBlock = memo(function MermaidBlock({ code, inline = true }: 
             <div className="w-px h-4 bg-border-secondary dark:border-border-secondary mx-0.5" />
             <button
               onClick={handleFullscreen}
-              className="p-1 rounded hover:bg-surface-hover dark:hover:bg-surface-hover text-text-tertiary dark:text-text-tertiary hover:text-text-primary dark:hover:text-text-primary"
+              className="p-1 rounded hover:bg-surface-hover dark:hover:bg-surface-hover text-text-tertiary hover:text-text-primary dark:hover:text-text-primary"
               title={t("fullscreenView")}
             >
               <Maximize2 className="w-3.5 h-3.5" />

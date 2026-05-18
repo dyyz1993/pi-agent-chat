@@ -125,7 +125,7 @@ export function FilePreviewOverlay({
     if (isSvg && svgContent) {
       return (
         <div
-          className="flex items-center justify-center h-full p-4 bg-surface-code dark:bg-surface-code"
+          className="flex items-center justify-center h-full p-4 bg-surface-code"
           dangerouslySetInnerHTML={{
             __html: sanitizeSvg(svgContent).replace(
               /<svg/,
@@ -152,7 +152,7 @@ export function FilePreviewOverlay({
       return (
         <iframe
           src={fsUrl}
-          className="flex-1 w-full h-full border-0 bg-white"
+          className="flex-1 w-full h-full border-0 bg-bg-elevated"
           title={preview.name}
           sandbox="allow-scripts allow-same-origin"
         />
@@ -166,7 +166,7 @@ export function FilePreviewOverlay({
           value={editContent}
           onChange={(e) => setEditContent(e.target.value)}
           onKeyDown={handleEditorKeyDown}
-          className="flex-1 w-full h-full text-xs font-mono bg-surface-dim dark:bg-surface-code text-text-primary dark:text-text-primary border-0 outline-none resize-none p-4"
+          className="flex-1 w-full h-full text-xs font-mono bg-surface-dim dark:bg-surface-code text-text-primary border-0 outline-none resize-none p-4"
           spellCheck={false}
         />
       );
@@ -181,12 +181,10 @@ export function FilePreviewOverlay({
 
   return (
     <div className="absolute inset-0 z-10 bg-bg-elevated/95 dark:bg-surface-code/95 flex flex-col overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-2 bg-surface-dim dark:bg-surface-dim border-b border-border-secondary dark:border-border-secondary flex-shrink-0">
+      <div className="flex items-center justify-between px-4 py-2 bg-surface-dim border-b border-border-secondary flex-shrink-0">
         <div className="flex items-center gap-2">
           <FileText className="w-4 h-4 text-text-tertiary" />
-          <span className="text-sm font-medium text-text-primary dark:text-text-primary">
-            {preview.name}
-          </span>
+          <span className="text-sm font-medium text-text-primary">{preview.name}</span>
           {preview.size > 0 && (
             <span className="text-xs text-text-tertiary">{formatSize(preview.size)}</span>
           )}

@@ -69,7 +69,7 @@ export function ThemeMenu() {
       <button
         data-testid="theme-menu-toggle"
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-text-tertiary dark:text-text-tertiary hover:bg-surface-hover dark:hover:bg-surface-dim/60 hover:text-text-primary dark:hover:text-text-secondary transition-colors"
+        className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-text-tertiary hover:bg-surface-hover dark:hover:bg-surface-dim/60 hover:text-text-primary dark:hover:text-text-secondary transition-colors"
         aria-expanded={open}
         aria-label={t("ariaThemeSwitch")}
       >
@@ -79,7 +79,7 @@ export function ThemeMenu() {
         </span>
       </button>
       {open && (
-        <div className="absolute bottom-full left-0 right-0 mb-1 z-50 bg-bg-elevated dark:bg-surface-dim border border-border-secondary dark:border-border-secondary rounded-md shadow-xl py-1">
+        <div className="absolute bottom-full left-0 right-0 mb-1 z-50 bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl py-1">
           <div className="px-3 py-1 text-[10px] font-medium text-text-tertiary uppercase tracking-wider">
             Theme
           </div>
@@ -119,7 +119,7 @@ export function ThemeMenu() {
               </button>
             );
           })}
-          <div className="my-1 border-t border-border-secondary dark:border-border-secondary" />
+          <div className="my-1 border-t border-border-secondary" />
           <div className="px-3 py-1 text-[10px] font-medium text-text-tertiary uppercase tracking-wider flex items-center gap-1">
             <Languages className="w-3 h-3" />
             Language

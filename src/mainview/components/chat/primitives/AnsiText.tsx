@@ -4,7 +4,7 @@ const ESC = "\u001B";
 const ANSI_REGEX = new RegExp(`${ESC}\\[([0-9;]*)m`, "g");
 
 const COLOR_MAP: Record<string, string> = {
-  "30": "text-text-primary dark:text-text-primary",
+  "30": "text-text-primary",
   "31": "text-red-400",
   "32": "text-green-400",
   "33": "text-yellow-400",
@@ -12,7 +12,7 @@ const COLOR_MAP: Record<string, string> = {
   "35": "text-purple-400",
   "36": "text-cyan-400",
   "37": "text-text-primary dark:text-text-tertiary",
-  "90": "text-text-tertiary dark:text-text-tertiary",
+  "90": "text-text-tertiary",
   "91": "text-red-300 dark:text-red-400",
   "92": "text-green-300 dark:text-green-400",
   "93": "text-yellow-300 dark:text-yellow-400",
@@ -30,7 +30,7 @@ interface AnsiSpan {
 export function parseAnsi(input: string): AnsiSpan[] {
   const spans: AnsiSpan[] = [];
   const parts = input.split(ANSI_REGEX);
-  let currentClass = "text-text-secondary dark:text-text-secondary";
+  let currentClass = "text-text-secondary";
 
   for (let i = 0; i < parts.length; i++) {
     if (i % 2 === 1) {
@@ -38,7 +38,7 @@ export function parseAnsi(input: string): AnsiSpan[] {
       const codes = codesStr ? codesStr.split(";") : [];
       const reset = codes.includes("0") || codesStr === "";
       if (reset) {
-        currentClass = "text-text-secondary dark:text-text-secondary";
+        currentClass = "text-text-secondary";
       }
       for (const code of codes) {
         if (code === "1") {

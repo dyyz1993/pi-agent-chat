@@ -117,9 +117,9 @@ export function CommandPopup({
   return (
     <div
       ref={panelRef}
-      className="absolute left-0 right-0 bottom-full mb-2 max-w-md mx-auto bg-surface-dim dark:bg-surface-code border border-border-secondary dark:border-border-secondary rounded-lg shadow-xl shadow-black/40 overflow-hidden z-50"
+      className="absolute left-0 right-0 bottom-full mb-2 max-w-md mx-auto bg-surface-dim dark:bg-surface-code border border-border-secondary rounded-lg shadow-xl shadow-black/40 overflow-hidden z-50"
     >
-      <div className="flex items-center justify-between px-3 py-2 border-b border-border-secondary dark:border-border-secondary">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-border-secondary">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           {popupMode === "at" ? (
             <div className="flex gap-1 shrink-0">
@@ -130,7 +130,7 @@ export function CommandPopup({
                   className={`px-2.5 py-0.5 rounded text-xs transition-colors whitespace-nowrap ${
                     atTab === tab.key
                       ? "bg-semantic-accent/30 text-semantic-accent"
-                      : "text-text-tertiary dark:text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary hover:bg-surface-dim dark:hover:bg-surface-dim"
+                      : "text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary hover:bg-surface-dim dark:hover:bg-surface-dim"
                   }`}
                 >
                   {t(tab.labelKey)}
@@ -146,7 +146,7 @@ export function CommandPopup({
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
                 placeholder={t("quickAction.searchPlaceholder")}
-                className="flex-1 bg-transparent text-sm text-text-primary dark:text-text-primary placeholder:text-text-tertiary dark:placeholder:text-text-tertiary outline-none min-w-0"
+                className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-tertiary dark:placeholder:text-text-tertiary outline-none min-w-0"
               />
             </div>
           )}
@@ -154,7 +154,7 @@ export function CommandPopup({
         </div>
         <button
           onClick={onClose}
-          className="p-1 rounded hover:bg-surface-dim dark:hover:bg-surface-dim text-text-tertiary dark:text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary transition-colors shrink-0 ml-1"
+          className="p-1 rounded hover:bg-surface-dim dark:hover:bg-surface-dim text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary transition-colors shrink-0 ml-1"
           title={t("common:close")}
         >
           <X className="w-3.5 h-3.5" />
@@ -162,7 +162,7 @@ export function CommandPopup({
       </div>
 
       {popupMode === "at" && atTab === "files" && fileBreadcrumbs.length > 0 && (
-        <div className="flex items-center gap-1 px-3 py-1.5 border-b border-border-secondary/40 dark:border-border-secondary/40 text-xs overflow-x-auto">
+        <div className="flex items-center gap-1 px-3 py-1.5 border-b border-border-secondary/40 text-xs overflow-x-auto">
           <button
             onClick={() => onBreadcrumb(-1)}
             className="text-semantic-accent hover:text-semantic-accent shrink-0"
@@ -171,12 +171,12 @@ export function CommandPopup({
           </button>
           {fileBreadcrumbs.map((bc, i) => (
             <span key={bc.path} className="flex items-center gap-1 shrink-0">
-              <ChevronRight className="w-3 h-3 text-text-tertiary dark:text-text-tertiary" />
+              <ChevronRight className="w-3 h-3 text-text-tertiary" />
               <button
                 onClick={() => onBreadcrumb(i)}
                 className={`${
                   i === fileBreadcrumbs.length - 1
-                    ? "text-text-secondary dark:text-text-secondary"
+                    ? "text-text-secondary"
                     : "text-semantic-accent hover:text-semantic-accent"
                 }`}
               >
@@ -189,7 +189,7 @@ export function CommandPopup({
 
       <div className="max-h-[240px] min-h-[80px] overflow-y-auto" role="listbox">
         {filteredItems.length === 0 && !loading && (
-          <div className="px-3 py-6 text-center text-xs text-text-tertiary dark:text-text-tertiary">
+          <div className="px-3 py-6 text-center text-xs text-text-tertiary">
             {searchText || query ? t("quickAction.noMatchResults") : t("common:noData")}
           </div>
         )}
@@ -210,18 +210,12 @@ export function CommandPopup({
           >
             <div className={`shrink-0 ${item.accentColor}`}>{renderIcon(item.icon)}</div>
             <div className="min-w-0 flex-1">
-              <div className="text-sm text-text-primary dark:text-text-primary truncate">
-                {item.label}
-              </div>
+              <div className="text-sm text-text-primary truncate">{item.label}</div>
               {item.description && !item.isFolder && (
-                <div className="text-[11px] text-text-tertiary dark:text-text-tertiary truncate">
-                  {item.description}
-                </div>
+                <div className="text-[11px] text-text-tertiary truncate">{item.description}</div>
               )}
             </div>
-            {item.isFolder && (
-              <ChevronRight className="w-3.5 h-3.5 text-text-tertiary dark:text-text-tertiary shrink-0" />
-            )}
+            {item.isFolder && <ChevronRight className="w-3.5 h-3.5 text-text-tertiary shrink-0" />}
           </button>
         ))}
       </div>

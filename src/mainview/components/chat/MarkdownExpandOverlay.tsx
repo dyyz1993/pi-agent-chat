@@ -46,23 +46,23 @@ export const MarkdownExpandOverlay = memo(function MarkdownExpandOverlay() {
       className="absolute inset-0 z-50 flex flex-col bg-bg-elevated/98 dark:bg-surface-code/98 backdrop-blur-sm"
     >
       <div
-        className="flex items-center gap-2 px-4 py-2 bg-surface-dim/90 dark:bg-surface-code/90 border-b border-border-secondary dark:border-border-secondary flex-shrink-0"
+        className="flex items-center gap-2 px-4 py-2 bg-surface-dim/90 dark:bg-surface-code/90 border-b border-border-secondary flex-shrink-0"
         style={{ paddingTop: "calc(0.5rem + env(safe-area-inset-top, 0px))" }}
       >
-        <span className="text-xs text-text-tertiary dark:text-text-tertiary font-medium truncate flex-1 min-w-0">
+        <span className="text-xs text-text-tertiary font-medium truncate flex-1 min-w-0">
           {expandedTitle}
         </span>
         <div className="flex items-center gap-1 shrink-0">
           <button
             onClick={handleCopy}
-            className="p-2 rounded text-text-tertiary dark:text-text-tertiary hover:text-text-primary dark:hover:text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-dim transition-colors"
+            className="p-2 rounded text-text-tertiary hover:text-text-primary dark:hover:text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-dim transition-colors"
             title={t("copyContentTitle")}
           >
             <Copy className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={closeExpand}
-            className="p-2 rounded text-text-tertiary dark:text-text-tertiary hover:text-text-primary dark:hover:text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-dim transition-colors"
+            className="p-2 rounded text-text-tertiary hover:text-text-primary dark:hover:text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-dim transition-colors"
             title={t("markdownOverlay.closeEsc")}
           >
             <X className="w-4 h-4" />
