@@ -37,6 +37,9 @@ export default {
           hover: tokenColor("--color-accent-hover"),
           muted: "var(--color-accent-muted)",
           text: tokenColor("--color-accent-text"),
+          brand: tokenColor("--color-accent-brand"),
+          idle: tokenColor("--color-accent-idle"),
+          agent: tokenColor("--color-accent-agent"),
         },
         /* Semantic status colors (RGB format for opacity support) */
         status: {
@@ -52,6 +55,7 @@ export default {
           memory: "rgb(var(--color-semantic-memory) / <alpha-value>)",
           accent: "rgb(var(--color-semantic-accent) / <alpha-value>)",
           notify: "rgb(var(--color-semantic-notify) / <alpha-value>)",
+          line: tokenColor("--color-semantic-line"),
         },
         /* Surface colors */
         surface: {
@@ -70,6 +74,19 @@ export default {
         "safe-bottom": "var(--safe-area-bottom)",
         "safe-left": "var(--safe-area-left)",
         "safe-right": "var(--safe-area-right)",
+        indent: "var(--spacing-indent-base)",
+      },
+      fontSize: {
+        input: "var(--input-font-size)",
+      },
+      boxShadow: {
+        subtle: "var(--shadow-subtle)",
+        floating: "var(--shadow-floating)",
+      },
+      zIndex: {
+        float: "var(--z-float)",
+        header: "var(--z-header)",
+        drawer: "var(--z-drawer)",
       },
       keyframes: {
         "slide-in-left": {

@@ -202,6 +202,8 @@ body {
   --shadow-md: 0 8px 18px -14px rgba(15, 23, 42, 0.28);
   --shadow-lg: 0 18px 36px -24px rgba(15, 23, 42, 0.34);
   --shadow-xl: 0 28px 56px -32px rgba(15, 23, 42, 0.4);
+  --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-floating: 0 18px 36px -24px rgba(15, 23, 42, 0.34);
 
   --font-sans:
     "SF Pro Text", "PingFang SC", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
@@ -219,17 +221,21 @@ body {
 
   --touch-target-min: 44px;
 
-  --transition-fast: 150ms ease;
-  --transition-normal: 200ms ease;
+  --transition-fast: 150ms ease-out;
+  --transition-normal: 250ms ease-in-out;
   --transition-slow: 300ms ease;
 
   --z-base: 0;
+  --z-float: 10;
+  --z-header: 20;
+  --z-drawer: 40;
+  --z-modal: 50;
+  --z-popover: 60;
+  --z-toast: 70;
+  /* Legacy aliases (for gradual migration) */
   --z-overlay: 10;
   --z-dropdown: 50;
   --z-sticky: 100;
-  --z-modal: 200;
-  --z-popover: 300;
-  --z-toast: 400;
 
   --diff-bg: #f0f4f8;
   --diff-color: #172033;
@@ -247,6 +253,16 @@ body {
   --surface-code: #eef3f8;
   --surface-hover: #e7edf5;
   --surface-dim: #f3f6fa;
+
+  /* Accent identity colors */
+  --color-accent-brand: #1f77d0;
+  --color-accent-idle: #0f9f5f;
+  --color-accent-agent: #7457c2;
+  --color-semantic-line: #dbe3ed;
+
+  /* Layout */
+  --spacing-indent-base: 1.5rem;
+  --input-font-size: 16px;
 }
 
 html[data-theme="dark"] {
@@ -307,6 +323,16 @@ html[data-theme="dark"] {
   --surface-code: #0d1218;
   --surface-hover: #161f29;
   --surface-dim: #090d12;
+
+  /* Accent identity colors */
+  --color-accent-brand: #5fbfff;
+  --color-accent-idle: #49d887;
+  --color-accent-agent: #a88bfa;
+  --color-semantic-line: #18212b;
+
+  /* Semantic shadow aliases */
+  --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-floating: 0 20px 44px -28px rgba(0, 0, 0, 0.74);
 }
 
 html[data-theme="nord"] {
@@ -367,6 +393,16 @@ html[data-theme="nord"] {
   --surface-code: #3b4252;
   --surface-hover: #434c5e;
   --surface-dim: #3d4455;
+
+  /* Accent identity colors */
+  --color-accent-brand: #81a1c1;
+  --color-accent-idle: #a3be8c;
+  --color-accent-agent: #b48ead;
+  --color-semantic-line: #434c5e;
+
+  /* Semantic shadow aliases */
+  --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-floating: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
 }
 
 html[data-theme] body {
@@ -431,6 +467,16 @@ html[data-theme="solarized"] {
   --surface-code: #e8e0ce;
   --surface-hover: #ede4d1;
   --surface-dim: #f0ead8;
+
+  /* Accent identity colors */
+  --color-accent-brand: #268bd2;
+  --color-accent-idle: #859900;
+  --color-accent-agent: #6c71c4;
+  --color-semantic-line: #e0dac6;
+
+  /* Semantic shadow aliases */
+  --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.08);
+  --shadow-floating: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
 }
 
 html[data-theme="warm-dark"] {
@@ -491,6 +537,16 @@ html[data-theme="warm-dark"] {
   --surface-code: #333029;
   --surface-hover: #3e3930;
   --surface-dim: #2c2820;
+
+  /* Accent identity colors */
+  --color-accent-brand: #d4956a;
+  --color-accent-idle: #8cb369;
+  --color-accent-agent: #bb86a0;
+  --color-semantic-line: #342e26;
+
+  /* Semantic shadow aliases */
+  --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-floating: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
 }
 
 /* Rosé Pine — warm pinkish dark, inspired by Rosé Pine */
@@ -552,6 +608,16 @@ html[data-theme="rose"] {
   --surface-code: #2d2a3f;
   --surface-hover: #37334d;
   --surface-dim: #27253a;
+
+  /* Accent identity colors */
+  --color-accent-brand: #c4a7e7;
+  --color-accent-idle: #9ccfd8;
+  --color-accent-agent: #c4a7e7;
+  --color-semantic-line: #26233a;
+
+  /* Semantic shadow aliases */
+  --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-floating: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
 }
 
 /* Latte — warm creamy light, inspired by Catppuccin Latte */
@@ -613,6 +679,16 @@ html[data-theme="latte"] {
   --surface-code: #dde0e8;
   --surface-hover: #e2e4ec;
   --surface-dim: #e6e8ef;
+
+  /* Accent identity colors */
+  --color-accent-brand: #7287fd;
+  --color-accent-idle: #40a02b;
+  --color-accent-agent: #8839ef;
+  --color-semantic-line: #ccd0da;
+
+  /* Semantic shadow aliases */
+  --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-floating: 0 10px 25px -5px rgba(0, 0, 0, 0.08);
 }
 
 /* Sunset — warm amber/copper dark */
@@ -674,6 +750,16 @@ html[data-theme="sunset"] {
   --surface-code: #40342a;
   --surface-hover: #4e3e30;
   --surface-dim: #362c24;
+
+  /* Accent identity colors */
+  --color-accent-brand: #e8984a;
+  --color-accent-idle: #8cc269;
+  --color-accent-agent: #c880a0;
+  --color-semantic-line: #3a2c24;
+
+  /* Semantic shadow aliases */
+  --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-floating: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
 }
 
 button:focus-visible,

@@ -424,7 +424,7 @@ function SessionItem({
         data-testid={`session-item-${session.sessionId}`}
         className={`group w-full text-left px-2.5 py-2 rounded-lg text-[11px] transition-all duration-150 cursor-pointer ${
           isActive
-            ? "bg-semantic-accent/10 text-accent-text shadow-sm border border-semantic-accent/20"
+            ? "bg-semantic-accent/10 text-accent-text shadow-sm border border-semantic-accent/20 border-l-2 border-l-semantic-accent/50"
             : "text-text-tertiary hover:bg-surface-hover/40 hover:text-text-primary border border-transparent hover:border-border-primary/80"
         } ${isActive ? "ring-1 ring-semantic-accent/20" : ""}`}
         onClick={handleClick}
