@@ -60,7 +60,7 @@ export const ToolCardHeader = memo(function ToolCardHeader({
 
   return (
     <div
-      className={`px-3 py-1.5 flex items-center gap-2 text-xs cursor-pointer hover:bg-surface-hover transition-colors select-none ${className}`}
+      className={`px-3 py-1.5 flex items-center gap-2 text-xs cursor-pointer hover:bg-surface-hover transition-colors select-none overflow-hidden ${className}`}
       onClick={onClick}
       role="button"
       aria-expanded={onClick ? !collapsed : undefined}
@@ -90,7 +90,7 @@ export const ToolCardHeader = memo(function ToolCardHeader({
         <span className="shrink-0 text-[10px] text-status-info animate-pulse">...</span>
       )}
 
-      {badge}
+      <span className="shrink-0 flex items-center gap-1.5 overflow-hidden">{badge}</span>
     </div>
   );
 });

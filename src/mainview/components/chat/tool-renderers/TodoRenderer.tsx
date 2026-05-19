@@ -43,14 +43,10 @@ function getPriorityIcon(priority: string | undefined) {
   }
 }
 
-function trunc(s: string, n = 30) {
-  return s.length > n ? s.slice(0, n) + "…" : s;
-}
-
 function ActionSummary({ details }: { details: TodoDetails }) {
   switch (details.action) {
     case "list": {
-      const todos = details.todos ?? details.active ?? [];
+      const todos = (details.todos ?? []).filter((t) => !t.deleted);
       const count = details.totalActive ?? todos.length;
       const done = todos.filter((t) => t.done).length;
       return (
@@ -66,13 +62,11 @@ function ActionSummary({ details }: { details: TodoDetails }) {
     case "add": {
       const added = details.added ?? [];
       if (added.length === 0) return <span className="text-text-tertiary">添加失败</span>;
-      if (added.length === 1)
-        return (
-          <span className="text-status-success">
-            ✓ #{added[0].id}: {added[0].text}
-          </span>
-        );
-      const first = added[0].text ? trunc(added[0].text) : `#${added[0].id}`;
+      if (added.length === 1) {
+        const label = added[0].text || `#${added[0].id}`;
+        return <span className="text-status-success">✓ {label}</span>;
+      }
+      const first = added[0].text || `#${added[0].id}`;
       return (
         <span className="text-status-success">
           ✓ {first} 等{added.length}项
@@ -80,9 +74,9 @@ function ActionSummary({ details }: { details: TodoDetails }) {
       );
     }
     case "toggle": {
-      const todo = details.todos?.find((t) => t.id !== undefined);
+      const todo = details.modified?.[0];
       if (!todo) return <span className="text-text-tertiary">切换状态</span>;
-      const label = todo.text ? trunc(todo.text) : `#${todo.id}`;
+      const label = todo.text || `#${todo.id}`;
       return (
         <span className={todo.done ? "text-text-tertiary" : "text-status-info"}>
           {todo.done ? `☑ ${label} 已完成` : `☐ ${label} 未完成`}
@@ -93,7 +87,7 @@ function ActionSummary({ details }: { details: TodoDetails }) {
       const deleted = details.deleted ?? [];
       const count = deleted.length;
       if (count === 0) return <span className="text-text-tertiary">删除操作</span>;
-      const first = deleted[0].text ? trunc(deleted[0].text) : `#${deleted[0].id}`;
+      const first = deleted[0].text || `#${deleted[0].id}`;
       return (
         <span className="text-text-tertiary">
           🗑 删除 "{first}"{count > 1 ? ` 等${count}项` : ""}
