@@ -446,7 +446,7 @@ function StreamingMarkdown({ text }: { text: string }) {
             key={i}
             theme={prismTheme}
             code={part.content.trimEnd()}
-            language={part.language || "text"}
+            language={part.language ?? "text"}
           >
             {({ tokens, getLineProps, getTokenProps }) => (
               <pre className="text-[11px] leading-relaxed font-mono p-2 my-1 overflow-x-auto bg-surface-code dark:bg-surface-code/60 rounded whitespace-pre">
@@ -1499,7 +1499,7 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
         description={
           block.output && !isRunning
             ? block.output.split("\n")[0].slice(0, 100)
-            : block.description || block.toolName
+            : (block.description ?? block.toolName)
         }
         collapsed={collapsed}
         onClick={handleToggleCollapse}

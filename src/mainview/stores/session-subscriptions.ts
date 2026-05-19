@@ -2,6 +2,7 @@ import type { SessionMeta, ProjectTab, SessionStatus } from "../types";
 import type { BashChannelEvent } from "../../shared/modules/bash";
 import type { LspChannelEvent } from "../../shared/modules/lsp";
 import type { RulesChannelEvent } from "../../shared/modules/rules";
+import type { SupervisorChannelEvent } from "../../shared/modules/supervisor";
 import { apiClient } from "../lib/api-client";
 import { useSessionStore, insertAfterPinned } from "./use-session-store";
 import { useChatStore } from "./use-chat-store";
@@ -476,10 +477,7 @@ export function setupSubscriptions(
     apiClient
       .subscribe(
         "supervisor.event",
-        (payload: {
-          sessionId: string;
-          event: import("../../shared/modules/supervisor").SupervisorChannelEvent;
-        }) => {
+        (payload: { sessionId: string; event: SupervisorChannelEvent }) => {
           if (payload.sessionId !== id) return;
           useSupervisorStore.getState().handleEvent(id, payload.event);
         },

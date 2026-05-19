@@ -44,13 +44,19 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
       if (pm.hasSession(params.sessionId)) {
         try {
-          const result = await pm.callChannel(params.sessionId, "lsp", "getStatus", {});
-          const servers: LspServerStatus[] = result.servers.map(
-            (s: { name: string; fileTypes?: string[]; state: string; reason: string }) => ({
-              name: s.name,
-              fileTypes: s.fileTypes,
+          const raw: unknown = await pm.callChannel(
+            params.sessionId,
+            "lsp" as string,
+            "getStatus",
+            {},
+          );
+          const result = raw as Record<string, unknown>;
+          const servers: LspServerStatus[] = (result.servers as Array<Record<string, unknown>>).map(
+            (s) => ({
+              name: s.name as string,
+              fileTypes: s.fileTypes as string[] | undefined,
               state: s.state as LspServerStatus["state"],
-              reason: s.reason,
+              reason: (s.reason as string) ?? "",
             }),
           );
           const state = result.state as "inactive" | "starting" | "ready" | "error";
@@ -116,6 +122,8 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const { sessionId, mode } = params as { sessionId: string; mode: LspDiagnosticsMode };
     const pm = getProcessManager();
     if (!pm) throw new Error("No process manager available");
-    return pm.callChannel(sessionId, "lsp", "lsp.setMode", { mode });
+    return pm.callChannel(sessionId, "lsp", "lsp.setMode", {
+      mode,
+    }) as Promise<{ ok: boolean; mode: LspDiagnosticsMode }>;
   });
 }

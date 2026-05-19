@@ -456,9 +456,10 @@ export function handleSubagentEvent(subId: string, event: SubagentEvent, parentS
         });
       } else if (event.type === "tool_execution_update") {
         let output = "";
-        const partial = event.partialResult;
+        const partial: unknown = event.partialResult;
         if (partial) {
-          const partialContent = partial.content as
+          const partialObj = partial as Record<string, unknown>;
+          const partialContent = partialObj.content as
             | Array<{ type: string; text?: string }>
             | undefined;
           if (Array.isArray(partialContent)) {
@@ -474,11 +475,12 @@ export function handleSubagentEvent(subId: string, event: SubagentEvent, parentS
           blocks[targetIdx] = { ...prev, output: (prev.output ?? "") + output };
         }
       } else if (event.type === "tool_execution_end") {
-        const result = event.result;
+        const result: unknown = event.result;
         const isError = event.isError;
         let output = "";
         if (result) {
-          const resultContent = result.content as
+          const resultObj = result as Record<string, unknown>;
+          const resultContent = resultObj.content as
             | Array<{ type: string; text?: string }>
             | undefined;
           if (Array.isArray(resultContent)) {
@@ -489,11 +491,12 @@ export function handleSubagentEvent(subId: string, event: SubagentEvent, parentS
         }
         if (targetIdx >= 0) {
           const prev = blocks[targetIdx] as ToolExecBlock;
+          const resultWithDetails = result as Record<string, unknown> | null;
           blocks[targetIdx] = {
             ...prev,
             status: isError ? "error" : "done",
             output: (prev.output ?? "") + output,
-            details: result?.details,
+            details: resultWithDetails?.details,
           };
         }
       }

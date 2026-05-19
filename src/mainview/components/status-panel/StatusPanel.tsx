@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import type { SupervisorStatus, TaskReport } from "../../../shared/modules/supervisor";
 import {
   ChevronDown,
   ChevronRight,
@@ -695,8 +696,8 @@ function MCPCopyButton({ server }: { server: MCPServerInfo }) {
 }
 
 interface SupervisorSectionContentProps {
-  status: import("../../../shared/modules/supervisor").SupervisorStatus | null;
-  taskReports: import("../../../shared/modules/supervisor").TaskReport[];
+  status: SupervisorStatus | null;
+  taskReports: TaskReport[];
   sessionId: string | null;
   enable: (sessionId: string) => Promise<void>;
   disable: (sessionId: string) => Promise<void>;

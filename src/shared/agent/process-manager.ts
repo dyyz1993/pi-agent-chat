@@ -248,7 +248,9 @@ export class AgentProcessManager {
 
   private async _drainPendingDelegates(): Promise<void> {
     while (this._pendingDelegateRequests.length > 0) {
-      const { sessionId, msg, resolve } = this._pendingDelegateRequests.shift()!;
+      const item = this._pendingDelegateRequests.shift();
+      if (!item) break;
+      const { sessionId, msg, resolve } = item;
       try {
         const call = msg as CoordinatorMethodCall;
         let delegateResult: unknown;

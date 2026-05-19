@@ -24,23 +24,13 @@ import { useSessionStore } from "../../stores/use-session-store";
 import { apiClient } from "../../lib/api-client";
 import { useExplorerStore } from "../../stores/use-explorer-store";
 import { useMemoryStore } from "../../stores/use-memory-store";
+import { useStatusStore } from "../../stores/use-status-store";
 import { useSupervisorStore } from "../../stores/use-supervisor-store";
 import type { TreeNode } from "../../types";
 
 type PopupMode = "at" | "slash" | null;
 type AtTab = "agents" | "files" | "memory";
 type SlashCategory = "commands" | "skills";
-
-interface ExtensionInfo {
-  path: string;
-  toolNames: string[];
-}
-
-interface SkillInfo {
-  filePath: string;
-  name: string;
-  description?: string;
-}
 
 interface CommandInfo {
   name: string;
@@ -125,15 +115,13 @@ export function QuickActionToolbar() {
     setItems([]);
   }, []);
 
-  const fetchAtAgents = useCallback(async () => {
+  const fetchAtAgents = useCallback(() => {
     if (!activeSessionId) return;
     setLoading(true);
     const result: PopupItem[] = [];
     try {
-      const extRes = (await apiClient.call("agent.getExtensions", {
-        sessionId: activeSessionId,
-      })) as { extensions: ExtensionInfo[] };
-      for (const ext of extRes.extensions) {
+      const { plugins, skills } = useStatusStore.getState();
+      for (const ext of plugins) {
         for (const toolName of ext.toolNames) {
           result.push({
             id: `tool-${ext.path}-${toolName}`,
@@ -145,13 +133,7 @@ export function QuickActionToolbar() {
           });
         }
       }
-      const skillsRaw = (await apiClient.call("agent.getSkills", {
-        sessionId: activeSessionId,
-      })) as SkillInfo[] | { skills: SkillInfo[] };
-      const skillsArr: SkillInfo[] = Array.isArray(skillsRaw)
-        ? skillsRaw
-        : (skillsRaw.skills ?? []);
-      for (const skill of skillsArr) {
+      for (const skill of skills) {
         result.push({
           id: `skill-${skill.filePath}`,
           label: skill.name,
@@ -299,13 +281,8 @@ export function QuickActionToolbar() {
           insertText: `/${cmd.name}`,
         });
       }
-      const skillsRaw = (await apiClient.call("agent.getSkills", {
-        sessionId: activeSessionId,
-      })) as SkillInfo[] | { skills: SkillInfo[] };
-      const skillsArr: SkillInfo[] = Array.isArray(skillsRaw)
-        ? skillsRaw
-        : (skillsRaw.skills ?? []);
-      for (const skill of skillsArr) {
+      const { skills: storeSkills } = useStatusStore.getState();
+      for (const skill of storeSkills) {
         const exists = result.some((r) => r.label === skill.name);
         if (exists) continue;
         result.push({

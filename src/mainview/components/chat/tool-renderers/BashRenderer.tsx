@@ -60,7 +60,7 @@ function detectOutputLanguage(text: string): {
   const firstChar = trimmed[0];
   if (firstChar === "{" || firstChar === "[") {
     try {
-      const parsed = JSON.parse(trimmed);
+      const parsed: unknown = JSON.parse(trimmed);
       return { language: "json", formatted: JSON.stringify(parsed, null, 2) };
     } catch {
       /* not valid JSON */
@@ -235,14 +235,16 @@ export const BashExecutionCard = memo(function BashExecutionCard({
           let summary = block.description;
           if (!summary && block.args) {
             try {
-              const parsed = JSON.parse(block.args);
-              if (parsed && typeof parsed === "object" && typeof parsed.command === "string") {
+              const raw: unknown = JSON.parse(block.args);
+              const parsed =
+                typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : null;
+              if (parsed && typeof parsed.command === "string") {
                 summary = parsed.command.slice(0, 120);
               }
             } catch {
               /* not JSON, use raw */
             }
-            if (!summary) summary = block.args.split("\n")[0]?.trim().slice(0, 120);
+            summary ??= block.args.split("\n")[0]?.trim().slice(0, 120);
           }
           return summary ?? "";
         })()}

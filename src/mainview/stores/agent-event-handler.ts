@@ -612,7 +612,8 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       if (!pendingPrefetchMap.has(sessionId)) {
         pendingPrefetchMap.set(sessionId, new Map());
       }
-      const sessionMap = pendingPrefetchMap.get(sessionId)!;
+      const sessionMap = pendingPrefetchMap.get(sessionId);
+      if (!sessionMap) return;
 
       const timer = setTimeout(() => {
         sessionMap.delete(eventId);
@@ -639,8 +640,12 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       let resultData: unknown = event.data;
 
       if (sessionMap && sessionMap.size > 0) {
-        const entry = sessionMap.entries().next().value!;
-        const [firstKey, firstPending] = entry;
+        const entry = sessionMap.entries().next().value;
+        if (!Array.isArray(entry)) return;
+        const [firstKey, firstPending] = entry as [
+          string,
+          { agentEvent: typeof event; timer: ReturnType<typeof setTimeout> },
+        ];
         clearTimeout(firstPending.timer);
         sessionMap.delete(firstKey);
         if (sessionMap.size === 0) pendingPrefetchMap.delete(sessionId);

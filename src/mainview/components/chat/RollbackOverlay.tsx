@@ -72,7 +72,7 @@ const FileItem = memo(function FileItem({
   const config = STATUS_CONFIG[status];
   const Icon = config.icon;
 
-  const fileName = filePath.split("/").pop() || filePath;
+  const fileName = filePath.split("/").pop() ?? filePath;
   const dirPath = filePath.split("/").slice(0, -1).join("/");
 
   return (
