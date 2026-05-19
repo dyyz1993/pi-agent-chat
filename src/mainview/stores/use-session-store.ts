@@ -121,6 +121,7 @@ interface SessionState {
   projectStartFailed: Record<string, boolean>;
   projectStartError: Record<string, string>;
   _projectVersion: number;
+  newSessionCreatedAt: number;
 
   addProjectTab: (tab: ProjectTab) => void;
   removeProjectTab: (id: string) => void;
@@ -188,6 +189,7 @@ export const useSessionStore = create<SessionState>()(
       projectStartFailed: {},
       projectStartError: {},
       _projectVersion: 0,
+      newSessionCreatedAt: 0,
 
       addProjectTab: (tab) =>
         set((s) => {
@@ -631,10 +633,17 @@ export const useSessionStore = create<SessionState>()(
         const targetPath = projectPath ?? tab.path;
 
         const existing = get().sessionsByProject[tab.path];
-        const blankSession = existing?.find((s) => s.messageCount === 0 && !s.firstMessage);
+        const blankSession = existing?.find(
+          (s) =>
+            s.messageCount === 0 &&
+            !s.firstMessage &&
+            !s.parentSessionPath &&
+            !s.delegateParentSessionId,
+        );
         if (blankSession) {
           log.info("Reusing existing blank session", { sessionId: blankSession.sessionId });
           get().setActiveSession(blankSession.sessionId);
+          set({ newSessionCreatedAt: Date.now() });
           return;
         }
 
@@ -670,6 +679,7 @@ export const useSessionStore = create<SessionState>()(
           });
 
           get().setActiveSession(result.sessionId);
+          set({ newSessionCreatedAt: Date.now() });
 
           const currentTier = useTierStore.getState().currentTier;
           if (currentTier) {

@@ -119,6 +119,14 @@ export function SessionSidebar(_props: SessionSidebarProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
+  const newSessionCreatedAt = useSessionStore((s) => s.newSessionCreatedAt);
+
+  useEffect(() => {
+    if (newSessionCreatedAt > 0) {
+      setExpandedIds(new Set());
+    }
+  }, [newSessionCreatedAt]);
+
   const toggleExpand = useCallback((sessionId: string) => {
     setExpandedIds((prev) => {
       const next = new Set(prev);
