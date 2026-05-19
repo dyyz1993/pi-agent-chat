@@ -691,7 +691,7 @@ function SubagentItem({
               <Bot className="w-3 h-3" />
             </div>
             <span className="text-[8px] font-medium leading-none px-1 py-0.5 rounded-sm bg-semantic-agent/10 text-text-tertiary select-none">
-              {t("subagent")}
+              {t("toolLabels.subagent")}
             </span>
           </div>
           {isEditing ? (
