@@ -77,6 +77,7 @@ vi.mock("../src/mainview/stores/session-subscriptions", () => ({
 
 import { useSessionStore } from "../src/mainview/stores/use-session-store";
 import { apiClient } from "../src/mainview/lib/api-client";
+import { setupSubscriptions } from "../src/mainview/stores/session-subscriptions";
 import type { SessionMeta, ProjectTab } from "../src/mainview/types";
 
 const mockedCall = apiClient.call as unknown as ReturnType<typeof vi.fn>;
@@ -368,6 +369,52 @@ describe("deleteSession", () => {
     useSessionStore.getState().deleteSession("sess-2");
 
     expect(useSessionStore.getState().activeSessionId).toBe("sess-1");
+  });
+
+  it("switches to next session via setActiveSession when deleting the active session and others remain", async () => {
+    const sessA = makeSession({ sessionId: "sess-a" });
+    const sessB = makeSession({ sessionId: "sess-b" });
+    useSessionStore.setState({
+      sessionsByProject: { "/project-a": [sessA, sessB] },
+      activeSessionId: "sess-a",
+      activeProjectId: "tab-a",
+      projectTabs: [TAB_A],
+    });
+
+    useSessionStore.getState().deleteSession("sess-a");
+
+    const state = useSessionStore.getState();
+    expect(state.sessionsByProject["/project-a"]).toHaveLength(1);
+    expect(state.sessionsByProject["/project-a"][0].sessionId).toBe("sess-b");
+    expect(state.activeSessionId).toBe("sess-b");
+
+    await vi.waitFor(() => {
+      expect(setupSubscriptions).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        "sess-b",
+        expect.objectContaining({ sessionId: "sess-b" }),
+      );
+    });
+
+    expect(apiClient.call).toHaveBeenCalledWith(
+      "agent.start",
+      expect.objectContaining({ sessionId: "sess-b" }),
+    );
+  });
+
+  it("sets activeSessionId to null when deleting the last session in project", () => {
+    const session = makeSession({ sessionId: "only-one" });
+    useSessionStore.setState({
+      sessionsByProject: { "/project-a": [session] },
+      activeSessionId: "only-one",
+      activeProjectId: "tab-a",
+      projectTabs: [TAB_A],
+    });
+
+    useSessionStore.getState().deleteSession("only-one");
+
+    expect(useSessionStore.getState().activeSessionId).toBeNull();
   });
 });
 

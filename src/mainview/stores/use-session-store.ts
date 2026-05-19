@@ -761,8 +761,13 @@ export const useSessionStore = create<SessionState>()(
 
         set({
           sessionsByProject: updated,
-          activeSessionId: nextActiveId,
         });
+
+        if (nextActiveId) {
+          get().setActiveSession(nextActiveId, true);
+        } else {
+          set({ activeSessionId: null });
+        }
         if (deletedPath) {
           useChatStore.getState().clearSessionMessages(sessionId);
         }
