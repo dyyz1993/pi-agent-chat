@@ -78,6 +78,7 @@ interface InternalAPM {
     sessionId: string,
     projectPath: string,
     sessionPath: string,
+    options?: { forceNewProcess?: boolean },
   ) => Promise<{ agentId: string; status: string }>;
   send: (sessionId: string, content: string) => boolean;
 }
@@ -264,6 +265,114 @@ describe("coordinator.session_created — TDD 诊断", () => {
       startSpy.mockRestore();
       sendSpy.mockRestore();
       setSessionNameSpy.mockRestore();
+    });
+
+    it("should pass forceNewProcess:true to start() to avoid evicting parent from process pool", async () => {
+      const parentSessionId = "parent-session-1";
+      const projectPath = "/fake/project";
+      const sessionPath = join(tmpDir, "parent-session-1.jsonl");
+      writeFileSync(
+        sessionPath,
+        JSON.stringify({ type: "session", version: 3, id: parentSessionId }) + "\n",
+      );
+
+      const m = internals(manager);
+      const parentManaged = makeMockManaged({
+        sessionId: parentSessionId,
+        projectPath,
+        sessionPath,
+      });
+      m.clients.set(parentSessionId, parentManaged);
+      m.processByCwd.set(projectPath, parentManaged);
+
+      // Spy on start() to capture the options parameter
+      const startSpy = vi.spyOn(manager, "start").mockImplementation(async (sid: string) => {
+        const childManaged = makeMockManaged({
+          sessionId: sid,
+          projectPath,
+          sessionPath: join(tmpDir, `${sid}.jsonl`),
+        });
+        m.clients.set(sid, childManaged);
+        return { agentId: sid, status: "started" };
+      });
+
+      vi.spyOn(manager, "send").mockReturnValue(true);
+      vi.spyOn(
+        manager as unknown as { setSessionName: (a: string, b: string) => Promise<void> },
+        "setSessionName",
+      ).mockResolvedValue(undefined);
+
+      await m.handleCoordinatorDelegate(parentSessionId, {
+        __call: "session_delegate",
+        task: "do something",
+      });
+
+      // CRITICAL: start() must be called with { forceNewProcess: true }
+      // Without this, the delegate child would reuse the parent's pooled process
+      // via processByCwd, evicting the parent from the process pool.
+      expect(startSpy).toHaveBeenCalledWith(
+        expect.stringMatching(/^sess_coord_/),
+        projectPath,
+        expect.stringMatching(/\.jsonl$/),
+        { forceNewProcess: true },
+      );
+
+      startSpy.mockRestore();
+    });
+
+    it("should NOT register delegate child in processByCwd (parent must stay pooled)", async () => {
+      const parentSessionId = "parent-session-1";
+      const projectPath = "/fake/project";
+      const sessionPath = join(tmpDir, "parent-session-1.jsonl");
+      writeFileSync(
+        sessionPath,
+        JSON.stringify({ type: "session", version: 3, id: parentSessionId }) + "\n",
+      );
+
+      const m = internals(manager);
+      const parentManaged = makeMockManaged({
+        sessionId: parentSessionId,
+        projectPath,
+        sessionPath,
+      });
+      m.clients.set(parentSessionId, parentManaged);
+      m.processByCwd.set(projectPath, parentManaged);
+
+      // Mock start to simulate forceNewProcess behavior: do NOT set processByCwd
+      vi.spyOn(manager, "start").mockImplementation(
+        async (
+          sid: string,
+          _cwd: string,
+          _spath: string,
+          options?: { forceNewProcess?: boolean },
+        ) => {
+          const childManaged = makeMockManaged({
+            sessionId: sid,
+            projectPath,
+            sessionPath: join(tmpDir, `${sid}.jsonl`),
+          });
+          m.clients.set(sid, childManaged);
+          // Simulate real start() behavior: forceNewProcess skips pool registration
+          if (!options?.forceNewProcess) {
+            m.processByCwd.set(projectPath, childManaged);
+          }
+          return { agentId: sid, status: "started" };
+        },
+      );
+
+      vi.spyOn(manager, "send").mockReturnValue(true);
+      vi.spyOn(
+        manager as unknown as { setSessionName: (a: string, b: string) => Promise<void> },
+        "setSessionName",
+      ).mockResolvedValue(undefined);
+
+      await m.handleCoordinatorDelegate(parentSessionId, {
+        __call: "session_delegate",
+        task: "background task",
+      });
+
+      // Parent must remain as the pooled process for this projectPath
+      expect(m.processByCwd.get(projectPath)).toBe(parentManaged);
     });
   });
 

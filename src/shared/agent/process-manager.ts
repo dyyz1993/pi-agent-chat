@@ -2556,7 +2556,9 @@ export class AgentProcessManager {
     const sessionDir = path.dirname(parent.info.sessionPath);
     const sessionPath = path.join(sessionDir, `${newSessionId}.jsonl`);
 
-    const result = await this.start(newSessionId, projectPath, sessionPath);
+    const result = await this.start(newSessionId, projectPath, sessionPath, {
+      forceNewProcess: true,
+    });
 
     this.delegateCreatedAt.set(newSessionId, Date.now());
     this.delegateReplyCount.set(newSessionId, 0);
