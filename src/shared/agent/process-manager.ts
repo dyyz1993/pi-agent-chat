@@ -2456,7 +2456,17 @@ export class AgentProcessManager {
         const projectPath = this.sessionProjectPaths.get(sessionId) ?? "";
         if (projectPath) {
           managed = this.processByCwd.get(projectPath) ?? null;
-          if (managed) {
+          if (managed && managed._activeSessionId !== sessionId) {
+            log.warn(
+              "handleCoordinatorCall: processByCwd fallback _activeSessionId mismatch, dropping response",
+              {
+                sessionId,
+                activeSessionId: managed._activeSessionId,
+                projectPath,
+              },
+            );
+            managed = null;
+          } else if (managed) {
             log.info("handleCoordinatorCall: routed response via processByCwd fallback", {
               sessionId,
               projectPath,
@@ -2507,7 +2517,7 @@ export class AgentProcessManager {
     msg: Extract<CoordinatorMethodCall, { __call: "session_delegate" }>,
   ): Promise<{ sessionId: string; status: "started" | "already_running" | "switched" }> {
     const { task } = msg;
-    const parent = this.clients.get(parentSessionId);
+    const parent = this.getActiveManaged(parentSessionId);
     if (!parent) throw new Error("Parent session not found");
 
     const projectPath = parent.info.projectPath;
@@ -2595,7 +2605,7 @@ export class AgentProcessManager {
     error?: string;
   }> {
     const { task, title, agent, timeoutMs = 300000 } = msg;
-    const parent = this.clients.get(parentSessionId);
+    const parent = this.getActiveManaged(parentSessionId);
     if (!parent) throw new Error("Parent session not found");
 
     const projectPath = parent.info.projectPath;
@@ -2707,6 +2717,14 @@ export class AgentProcessManager {
     });
 
     const syncResult = await syncPromise;
+
+    this.stop(newSessionId);
+
+    const syncChildren = this.parentChildMap.get(parentSessionId);
+    if (syncChildren) {
+      syncChildren.delete(newSessionId);
+      if (syncChildren.size === 0) this.parentChildMap.delete(parentSessionId);
+    }
 
     return syncResult;
   }

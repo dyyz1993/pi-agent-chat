@@ -876,6 +876,8 @@ export const useSessionStore = create<SessionState>()(
             const agentChangePromise = apiClient.call("agent.getLatestAgentChange", { sessionId });
             const agentsPromise = apiClient.call("agent.getAgents", { sessionId });
             const currentAgentPromise = apiClient.call("agent.getCurrentAgent", { sessionId });
+            const tierPromise = apiClient.call("agent.getTierModels", { sessionId });
+            const favoritesPromise = apiClient.call("project.getModelFavorites", {});
 
             statePromise
               .then((rawResult) => {
@@ -916,10 +918,6 @@ export const useSessionStore = create<SessionState>()(
                     });
                   }
                 }
-
-                useTierStore
-                  .getState()
-                  .syncTierFromModel(result.model?.provider ?? "", result.model?.id ?? "");
               })
               .catch((err) => {
                 log.warn("agent.getState failed", {
@@ -927,6 +925,33 @@ export const useSessionStore = create<SessionState>()(
                   err: err instanceof Error ? err.message : String(err),
                 });
               });
+
+            // Tier sync requires BOTH state (model info) AND tier config
+            Promise.all([statePromise, tierPromise])
+              .then(([rawState, rawTier]) => {
+                const tierResult = rawTier as { models: Record<string, string> };
+                if (tierResult?.models) {
+                  useTierStore.getState().setTierModels(tierResult.models);
+                }
+                const stateResult = rawState as AgentStateResult;
+                if (stateResult?.model) {
+                  useTierStore
+                    .getState()
+                    .syncTierFromModel(
+                      stateResult.model.provider ?? "",
+                      stateResult.model.id ?? "",
+                    );
+                }
+              })
+              .catch(() => {});
+
+            favoritesPromise
+              .then((res) => {
+                if (res) {
+                  set({ modelFavorites: new Set((res as { favorites: string[] }).favorites) });
+                }
+              })
+              .catch(() => {});
 
             modelsPromise
               .then((modelsResult) => {

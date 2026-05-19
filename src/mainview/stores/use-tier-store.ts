@@ -13,6 +13,7 @@ interface TierState {
   switching: boolean;
   tierModels: Record<string, string>;
   setCurrentTier: (tier: TierKey | null) => void;
+  setTierModels: (models: Record<string, string>) => void;
   syncTierFromModel: (provider: string, modelId: string) => void;
   switchToTier: (tier: TierKey, sessionId: string) => Promise<void>;
   fetchTierConfig: (sessionId: string) => Promise<void>;
@@ -27,6 +28,8 @@ export const useTierStore = create<TierState>()((set, get) => ({
   tierModels: {},
 
   setCurrentTier: (tier) => set({ currentTier: tier }),
+
+  setTierModels: (models) => set({ tierModels: models }),
 
   syncTierFromModel: (provider, modelId) => {
     const fullName = `${provider}/${modelId}`;

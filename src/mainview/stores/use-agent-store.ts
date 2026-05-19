@@ -235,6 +235,7 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
         useSessionStore.getState().setThinkingLevel(result.thinkingLevel);
       }
       get().fetchAgentDetail(sessionId);
+      get().fetchAllTools(sessionId);
     } catch (err) {
       log.warn("agent switch failed, reverting", {
         agentName,
