@@ -127,7 +127,9 @@ const ASSISTANT_ENTRY: ToolIconEntry = {
 
 export function getToolIcon(toolName: string): ToolIconEntry {
   const key = toolName.toLowerCase();
-  for (const [k, v] of Object.entries(TOOL_ICON_MAP)) {
+  if (key in TOOL_ICON_MAP) return TOOL_ICON_MAP[key];
+  const entries = Object.entries(TOOL_ICON_MAP).sort((a, b) => b[0].length - a[0].length);
+  for (const [k, v] of entries) {
     if (key.includes(k)) return v;
   }
   return DEFAULT_ENTRY;
