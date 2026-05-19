@@ -2952,6 +2952,32 @@ export class AgentProcessManager {
     await this.setSessionName(forkedSessionId, title);
     this.send(forkedSessionId, task);
 
+    this.broadcastEvent(
+      "coordinator.session_created",
+      {
+        parentSessionId,
+        session: {
+          sessionId: forkedSessionId,
+          name: title,
+          sessionPath: forkedPath,
+          projectPath,
+          parentSessionPath: sessionPath,
+          delegateParentSessionId: parentSessionId,
+          messageCount: 0,
+          firstMessage: task,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          status: "running" as const,
+        },
+      },
+      { parentSessionId },
+    ).catch((err: unknown) => {
+      log.warn("broadcastEvent(coordinator.session_created from fork) error", {
+        sessionId: forkedSessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    });
+
     return { sessionId: forkedSessionId, status: result.status };
   }
 
