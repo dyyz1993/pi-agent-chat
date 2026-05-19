@@ -1444,6 +1444,23 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({
   }
 });
 
+interface HookDenialDetails {
+  hookDenial: {
+    reason: string;
+    toolName: string;
+    timestamp: number;
+  };
+}
+
+function isHookDenial(details: unknown): details is HookDenialDetails {
+  return (
+    typeof details === "object" &&
+    details !== null &&
+    "hookDenial" in details &&
+    typeof (details as HookDenialDetails).hookDenial?.reason === "string"
+  );
+}
+
 export const ToolExecutionCard = memo(function ToolExecutionCard({
   block,
   blockId,
@@ -1587,6 +1604,29 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
                 <div className="text-[11px] text-text-tertiary italic py-1">{t("waiting")}</div>
               ) : null}
             </div>
+          )}
+
+          {isError && isHookDenial(block.details) && (
+            <details className="group border-t border-status-error/20" open>
+              <summary className="px-3 py-1 text-[11px] text-status-error cursor-pointer hover:text-status-error select-none flex items-center gap-1.5">
+                <svg
+                  className="w-3 h-3 transition-transform group-open:rotate-90 shrink-0"
+                  viewBox="0 0 12 12"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                >
+                  <path d="M4.5 3l3 3-3 3" />
+                </svg>
+                <AlertTriangle className="w-3 h-3 shrink-0" />
+                <span>{t("hookDenied")}</span>
+              </summary>
+              <div className="px-3 pb-2">
+                <div className="text-[11px] text-status-error/90">
+                  {(block.details as HookDenialDetails).hookDenial.reason}
+                </div>
+              </div>
+            </details>
           )}
         </>
       )}

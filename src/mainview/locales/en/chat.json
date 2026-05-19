@@ -39,6 +39,7 @@
   "running": "running",
   "waiting": "waiting...",
   "waitingOutput": "(waiting for output)",
+  "hookDenied": "Hook Denied",
   "collapseToolCard": "Collapse tool card",
   "expandToolCard": "Expand tool card",
   "copyAllExecution": "Copy all execution results",

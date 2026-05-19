@@ -39,6 +39,7 @@
   "running": "running",
   "waiting": "waiting...",
   "waitingOutput": "(等待输出)",
+  "hookDenied": "Hook 拦截",
   "collapseToolCard": "折叠工具卡片",
   "expandToolCard": "展开工具卡片",
   "copyAllExecution": "复制全部执行结果",
