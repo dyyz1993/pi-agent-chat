@@ -93,21 +93,22 @@ function extractSkillSummary(body: string): string {
 
 function SkillBlockCollapsed({ block }: { block: SkillBlock }) {
   const summary = extractSkillSummary(block.body);
-  const bodyLineCount = block.body.split("\n").filter((l) => l.trim() !== "").length;
 
   return (
     <details className="my-1 rounded-md border border-border-secondary/40 bg-surface-dim/50">
-      <summary className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs cursor-pointer select-none hover:bg-surface-hover transition-colors list-none">
+      <summary className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs cursor-pointer select-none hover:bg-surface-hover transition-colors list-none min-w-0">
         <ChevronRight className="w-3 h-3 shrink-0 text-text-tertiary details-chevron" />
-        <BookOpen className="w-3.5 h-3.5 shrink-0 text-semantic-tool/80" />
+        <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-semantic-tool/10 text-semantic-tool text-[10px] font-medium">
+          <BookOpen className="w-3 h-3" />
+          技能
+        </span>
         <span className="font-medium text-text-primary truncate">{block.name}</span>
         {summary && (
           <>
-            <span className="text-text-tertiary">—</span>
+            <span className="text-text-tertiary shrink-0">·</span>
             <span className="text-text-secondary truncate">{summary}</span>
           </>
         )}
-        <span className="ml-auto text-text-tertiary shrink-0">{bodyLineCount} lines</span>
       </summary>
       <div className="px-2.5 pb-2 pt-1 border-t border-border-secondary/30">
         <div
