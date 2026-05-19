@@ -4,7 +4,7 @@ import {
   ChevronRight,
   Copy,
   Trash2,
-  GitBranch,
+  GitFork,
   RotateCcw,
   MessageSquare,
   Check,
@@ -18,6 +18,7 @@ import { useRollbackStore } from "../../../stores/use-rollback-store";
 import type { ModifiedFile } from "../../../stores/use-rollback-store";
 import { useSessionStore } from "../../../stores/use-session-store";
 import { useChatStore } from "../../../stores/use-chat-store";
+import { useForkDialogStore } from "../../../stores/use-fork-dialog-store";
 import { apiClient } from "../../../lib/api-client";
 
 interface TimelineTurnProps {
@@ -253,9 +254,36 @@ export const TimelineTurn = memo(function TimelineTurn({
               active={turnCopied}
             />
             <TurnActionButton
-              icon={<GitBranch size={12} />}
+              icon={<GitFork size={12} />}
               label={t("chat:fork")}
-              onClick={() => {}}
+              onClick={async () => {
+                const sessionId = useSessionStore.getState().activeSessionId;
+                if (!sessionId) return;
+                try {
+                  const result = await apiClient.call("agent.getTree", { sessionId });
+                  const entries: Array<{ id: string; type: string; label?: string }> =
+                    result.entries ?? result ?? [];
+                  if (!Array.isArray(entries) || entries.length === 0) return;
+                  const byId = new Map(entries.map((e) => [e.id, e]));
+                  let entryId: string | null = null;
+                  if (turn.assistantMessageId) {
+                    const entry = byId.get(turn.assistantMessageId);
+                    if (entry) entryId = entry.id;
+                  }
+                  if (!entryId && turn.userMessageId) {
+                    const entry = byId.get(turn.userMessageId);
+                    if (entry) entryId = entry.id;
+                  }
+                  if (!entryId) return;
+                  useForkDialogStore.getState().openDialog({
+                    sessionId,
+                    entryId,
+                    source: "timelineTurn",
+                  });
+                } catch {
+                  /* skip */
+                }
+              }}
             />
             <TurnActionButton
               icon={<Trash2 size={12} />}

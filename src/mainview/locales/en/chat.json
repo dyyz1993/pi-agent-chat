@@ -325,5 +325,11 @@
   "rollbackOverlay.confirm": "Confirm Rollback",
   "rollbackOverlay.cancel": "Cancel",
   "rollbackOverlay.noFiles": "No file changes in this turn",
-  "sendDisabledNoModel": "Please select a model first"
+  "sendDisabledNoModel": "Please select a model first",
+
+  "forkDialog.title": "Fork Session",
+  "forkDialog.agent": "Agent",
+  "forkDialog.model": "Model",
+  "forkDialog.cancel": "Cancel",
+  "forkDialog.confirm": "Fork"
 }

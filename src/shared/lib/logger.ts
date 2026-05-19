@@ -20,7 +20,8 @@ export type LogModule =
   | "tier"
   | "settings"
   | "proxy-register"
-  | "supervisor";
+  | "supervisor"
+  | "fork-dialog";
 type LogLevel = "debug" | "info" | "warn" | "error";
 
 interface LogEntry {

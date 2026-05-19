@@ -325,5 +325,11 @@
   "rollbackOverlay.confirm": "确认回滚",
   "rollbackOverlay.cancel": "取消",
   "rollbackOverlay.noFiles": "本轮无文件变更",
-  "sendDisabledNoModel": "请先选择模型"
+  "sendDisabledNoModel": "请先选择模型",
+
+  "forkDialog.title": "Fork 会话",
+  "forkDialog.agent": "智能体",
+  "forkDialog.model": "模型",
+  "forkDialog.cancel": "取消",
+  "forkDialog.confirm": "Fork"
 }
