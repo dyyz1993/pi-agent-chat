@@ -285,25 +285,30 @@ export const MessageBubble = memo(function MessageBubble({
             .filter((b) => b.type === "text")
             .map((b, i) => {
               const text = (b as Extract<ContentBlock, { type: "text" }>).text;
-              const hasSkillBlock = SKILL_REGEX.test(text);
-              SKILL_REGEX.lastIndex = 0;
 
-              if (!hasSkillBlock) {
+              try {
+                const hasSkillBlock = SKILL_REGEX.test(text);
+                SKILL_REGEX.lastIndex = 0;
+
+                if (!hasSkillBlock) {
+                  return renderUserTextWithLinks(text, i);
+                }
+
+                const segments = parseSkillBlocks(text);
+                return (
+                  <span key={i}>
+                    {segments.map((seg, si) =>
+                      seg.type === "skill" ? (
+                        <SkillBlockCollapsed key={`skill-${si}`} block={seg} />
+                      ) : (
+                        renderUserTextWithLinks(seg.text, `text-${si}`)
+                      ),
+                    )}
+                  </span>
+                );
+              } catch {
                 return renderUserTextWithLinks(text, i);
               }
-
-              const segments = parseSkillBlocks(text);
-              return (
-                <span key={i}>
-                  {segments.map((seg, si) =>
-                    seg.type === "skill" ? (
-                      <SkillBlockCollapsed key={`skill-${si}`} block={seg} />
-                    ) : (
-                      renderUserTextWithLinks(seg.text, `text-${si}`)
-                    ),
-                  )}
-                </span>
-              );
             })}
         </div>
       ) : (
