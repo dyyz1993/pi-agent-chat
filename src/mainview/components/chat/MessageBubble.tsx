@@ -82,7 +82,9 @@ function parseSkillBlocks(text: string): ParsedSegment[] {
 }
 
 function extractSkillSummary(body: string): string {
-  const lines = body.split("\n").filter((l) => l.trim() !== "" && !l.startsWith("References are relative to"));
+  const lines = body
+    .split("\n")
+    .filter((l) => l.trim() !== "" && !l.startsWith("References are relative to"));
   const firstHeading = lines.find((l) => l.startsWith("# "));
   if (firstHeading) return firstHeading.replace(/^#+\s*/, "");
   if (lines.length > 0) return lines[0].slice(0, 120);
@@ -108,7 +110,10 @@ function SkillBlockCollapsed({ block }: { block: SkillBlock }) {
         <span className="ml-auto text-text-tertiary shrink-0">{bodyLineCount} lines</span>
       </summary>
       <div className="px-2.5 pb-2 pt-1 border-t border-border-secondary/30">
-        <div className="text-[10px] text-text-tertiary mb-1 font-mono truncate" title={block.location}>
+        <div
+          className="text-[10px] text-text-tertiary mb-1 font-mono truncate"
+          title={block.location}
+        >
           {block.location}
         </div>
         <pre className="text-xs text-text-secondary whitespace-pre-wrap break-words max-h-64 overflow-y-auto font-mono leading-relaxed">
