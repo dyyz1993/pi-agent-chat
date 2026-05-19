@@ -397,6 +397,7 @@ export class AgentProcessManager {
           });
           this._startInProgress = false;
           this._drainPendingDelegates();
+          this.broadcastSessionStatus(sessionId, "idle");
           return { agentId: sessionId, status: "switched" };
         }
         // If cancelled by an extension, fall through to create new process
@@ -529,6 +530,7 @@ export class AgentProcessManager {
     }
     this._startInProgress = false;
     this._drainPendingDelegates();
+    this.broadcastSessionStatus(sessionId, "idle");
     return { agentId: sessionId, status: "started" };
   }
 
@@ -2109,6 +2111,24 @@ export class AgentProcessManager {
       }
     }
 
+    if (event.type === "session_info_changed") {
+      const name = (event as Record<string, unknown>).name;
+      if (typeof name === "string" && name.length > 0) {
+        const projectPath = managed.info.projectPath;
+        this.broadcastEvent(
+          "agent.session_renamed",
+          { sessionId, projectPath, newName: name },
+          {},
+        ).catch((err: unknown) => {
+          log.warn("broadcastEvent(session_renamed from info_changed) error", {
+            sessionId,
+            err: err instanceof Error ? err.message : String(err),
+          });
+        });
+      }
+      return;
+    }
+
     if (event.type === "message_end") {
       managed.info.holdEvents = [];
       if (this.subagentSyncChildren.has(sessionId)) {
@@ -2141,7 +2161,7 @@ export class AgentProcessManager {
     const parentId = this.findParentSession(sessionId);
     if (parentId) {
       this.broadcastEvent(
-        "coordinator.session.event",
+        "coordinator.session_event",
         {
           parentSessionId: parentId,
           childSessionId: sessionId,
@@ -2149,7 +2169,7 @@ export class AgentProcessManager {
         },
         { parentSessionId: parentId },
       ).catch((err: unknown) => {
-        log.warn("broadcastEvent(coordinator.session.event) error", {
+        log.warn("broadcastEvent(coordinator.session_event) error", {
           sessionId,
           err: err instanceof Error ? err.message : String(err),
         });

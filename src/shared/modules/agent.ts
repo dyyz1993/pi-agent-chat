@@ -486,6 +486,7 @@ export type AgentEvent =
   | ChannelDataEvent
   | { type: "custom_entry"; customType: string; data: unknown; id: string; display?: boolean }
   | { type: "session_rename"; oldName: string | undefined; newName: string }
+  | { type: "session_info_changed"; name: string }
   | {
       type: "auto_retry_start";
       attempt: number;
