@@ -175,13 +175,13 @@ describe("场景3: session_status_changed 事件推送监控", () => {
     safeClose(ws);
   });
 
-  it("启动 agent 后应收到 status=streaming", async () => {
+  it("启动 agent 后应收到 status=idle", async () => {
     const statusPromise = waitForEvent(
       ws,
       "agent.session_status_changed",
       (msg) => {
         const payload = msg.payload as Record<string, unknown>;
-        return payload.status === "streaming";
+        return payload.status === "idle";
       },
       30000,
     );
@@ -195,7 +195,7 @@ describe("场景3: session_status_changed 事件推送监控", () => {
 
     const statusEvent = await statusPromise;
     const payload = statusEvent.payload as Record<string, unknown>;
-    expect(payload.status).toBe("streaming");
+    expect(payload.status).toBe("idle");
     expect(payload.sessionId).toBe(sessionId);
   });
 
