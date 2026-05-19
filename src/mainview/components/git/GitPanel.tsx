@@ -392,7 +392,7 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
   /* File click handlers */
   const handleFileClick = useCallback(
     (filePath: string, staged?: boolean) => {
-      fetchDiff(currentPath, filePath, staged);
+      fetchDiff(currentPath, filePath, staged ?? false);
     },
     [fetchDiff, currentPath],
   );
@@ -428,7 +428,7 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
       {
         label: "Open Diff",
         icon: <Eye className="w-3 h-3" />,
-        onClick: () => fetchDiff(currentPath, filePath, isStaged),
+        onClick: () => fetchDiff(currentPath, filePath, isStaged ?? false),
       },
       {
         label: "Open File",
@@ -724,7 +724,7 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
                     key={c.hash}
                     commit={c}
                     expanded={expandedCommits.has(c.hash)}
-                    files={commitFiles[c.hash]}
+                    files={(commitFiles[c.hash] ?? []) as GitFileChange[]}
                     loading={loadingCommitFiles.has(c.hash)}
                     selectedFilePath={selectedFilePath}
                     onToggle={() => toggleCommitExpand(currentPath, c.hash)}

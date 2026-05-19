@@ -339,9 +339,8 @@ export const useSessionStore = create<SessionState>()(
           const finalSessions = blankToRemove
             ? merged.filter((s) => !blankToRemove.has(s.sessionId))
             : merged.filter((s) => {
-                // Filter out sessions whose sessionPath was not found in disk scan
-                // This ensures we only keep sessions that exist in current scan
-                return newFromDisk.some((disk) => disk.sessionPath === s.sessionPath);
+                // Keep only sessions that still exist on disk in the current scan
+                return sessions.some((disk) => disk.sessionPath === s.sessionPath);
               });
 
           set((s) => ({

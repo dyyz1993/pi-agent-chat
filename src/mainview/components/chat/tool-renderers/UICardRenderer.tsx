@@ -29,7 +29,7 @@ const BG_MAP: Record<string, string> = {
 
 export function CardShell({ block, children }: { block: UIBlock; children: React.ReactNode }) {
   const { t } = useTranslation("chat");
-  const { icon: Icon, color, label } = getUIMethodIcon(block.method);
+  const { icon: Icon, color } = getUIMethodIcon(block.method);
   const isPending = block.status === "pending";
   const isResponded = block.status === "responded";
   const isDismissed = block.status === "dismissed";
@@ -41,7 +41,7 @@ export function CardShell({ block, children }: { block: UIBlock; children: React
     >
       <div className="px-3 py-1.5 flex items-center gap-2 text-xs">
         <Icon className={`w-3.5 h-3.5 shrink-0 ${color}`} />
-        <span className={`font-medium ${color}`}>{block.title ?? label}</span>
+        {block.title && <span className={`font-medium ${color}`}>{block.title}</span>}
         {isPending && (
           <span className="text-status-warning animate-pulse text-[10px] flex items-center gap-1">
             <Loader2 className="w-2.5 h-2.5 animate-spin" />
@@ -456,7 +456,6 @@ export const NotifyCard = memo(function NotifyCard({ block }: { block: UIBlock }
 });
 
 export const RespondUICard = memo(function RespondUICard({ block }: { block: UIBlock }) {
-  const { t } = useTranslation("chat");
   const { icon: Icon, color } = getUIMethodIcon("respondUI");
 
   return (
@@ -466,9 +465,7 @@ export const RespondUICard = memo(function RespondUICard({ block }: { block: UIB
     >
       <div className="px-3 py-1.5 flex items-center gap-2 text-xs">
         <Icon className={`w-3.5 h-3.5 shrink-0 ${color}`} />
-        <span className={`font-medium ${color}`}>
-          {block.title ?? t("uiCard.asyncResponseInjection")}
-        </span>
+        {block.title && <span className={`font-medium ${color}`}>{block.title}</span>}
         <Zap className="w-3 h-3 text-semantic-notify shrink-0 ml-auto" />
       </div>
       {block.message && (
