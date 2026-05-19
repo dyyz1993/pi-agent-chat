@@ -11,7 +11,7 @@ import {
   Loader2,
   RefreshCw,
   AlertTriangle,
-  GitBranch,
+  GitFork,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useChatStore } from "../../stores/use-chat-store";
@@ -39,12 +39,14 @@ import { QueueCards } from "./QueueCards";
 import { MarkdownExpandOverlay } from "./MarkdownExpandOverlay";
 import { MermaidFullscreen } from "./mermaid";
 import { RollbackOverlay } from "./RollbackOverlay";
+import { ForkDialog } from "./ForkDialog";
 import { AttachmentButtons, AttachmentBar } from "./FileAttachment";
 import { useAttachmentStore } from "../../stores/use-attachment-store";
-import { useNotificationStore } from "../../stores/use-notification-store";
-import { useTierStore } from "../../stores/use-tier-store";
-import { insertAfterPinned } from "../../stores/use-session-store";
-import type { ChatMessage, SessionMeta } from "../../types";
+import { useForkDialogStore } from "../../stores/use-fork-dialog-store";
+import type { ChatMessage } from "../../types";
+import { createLogger } from "../../../shared/lib/logger";
+
+const log = createLogger("chat");
 
 const EMPTY_MSGS: never[] = [];
 
@@ -153,78 +155,15 @@ export function ChatPanel() {
       if (entries.length === 0) return;
       const lastEntry = entries[entries.length - 1];
 
-      const result = await apiClient
-        .call("agent.fork", {
-          sessionId: parentSessionId,
-          entryId: lastEntry.id,
-          position: "at",
-        })
-        .catch((err) => {
-          console.warn("[ChatPanel] fork failed:", err);
-          return undefined;
-        });
-
-      if (!result || result.cancelled || !result.newSessionId || !result.newSessionFile) return;
-
-      const state = useSessionStore.getState();
-      const activeTab = state.projectTabs.find((t) => t.id === state.activeProjectId);
-      if (!activeTab) return;
-
-      // Fetch original session name for the "fork:" prefix
-      const allSessions = state.sessionsByProject[activeTab.path] ?? [];
-      const originalSession = allSessions.find((s) => s.sessionId === parentSessionId);
-      const originalName = originalSession
-        ? originalSession.name || originalSession.firstMessage || ""
-        : "";
-
-      const now = Date.now();
-      const forkedSession: SessionMeta = {
-        sessionId: result.newSessionId,
-        name: originalName ? `fork: ${originalName}` : "",
-        sessionPath: result.newSessionFile,
-        projectPath: activeTab.path,
-        parentSessionPath: null,
-        delegateParentSessionId: null,
-        messageCount: 0,
-        firstMessage: "",
-        createdAt: now,
-        updatedAt: now,
-        status: "idle",
-      };
-
-      useSessionStore.setState((s) => ({
-        sessionsByProject: {
-          ...s.sessionsByProject,
-          [activeTab.path]: insertAfterPinned(
-            s.sessionsByProject[activeTab.path] || [],
-            forkedSession,
-          ),
-        },
-      }));
-
-      useSessionStore.getState().setActiveSession(result.newSessionId, undefined, {
-        skipCleanup: true,
-        forceNewProcess: true,
-      });
-      useChatStore.getState().loadSessionMessages(result.newSessionId, {
-        force: true,
-      });
-
-      // Inherit current tier config
-      const currentTier = useTierStore.getState().currentTier;
-      if (currentTier) {
-        useTierStore.getState().switchToTier(currentTier, result.newSessionId);
-      }
-
-      const pushNotification = useNotificationStore.getState().push;
-      pushNotification({
-        message: t("messageCard.forked"),
-        level: "info",
+      useForkDialogStore.getState().openDialog({
+        sessionId: parentSessionId,
+        entryId: lastEntry.id,
+        source: "chatPanel",
       });
     } catch (err) {
-      console.warn("[ChatPanel] subagent fork error:", err);
+      log.warn("[ChatPanel] subagent fork error:", { err });
     }
-  }, [t]);
+  }, []);
 
   const setNavId = useTurnStore((s) => s.setNavId);
   const lastSetNavIdRef = useRef<string | null>(null);
@@ -387,6 +326,7 @@ export function ChatPanel() {
       <MarkdownExpandOverlay />
       <MermaidFullscreen />
       <RollbackOverlay />
+      <ForkDialog />
       <div className="flex items-center gap-4 px-4 py-1.5 bg-bg-secondary/90 border-b border-border-primary text-[11px] text-text-tertiary flex-shrink-0">
         <SessionToggleIcon />
         {isViewingSubagent && (
@@ -576,7 +516,7 @@ export function ChatPanel() {
                 border border-semantic-accent/20 transition-colors"
               title={t("fork")}
             >
-              <GitBranch className="w-3 h-3" />
+              <GitFork className="w-3 h-3" />
               {t("fork")}
             </button>
           </div>

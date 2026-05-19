@@ -1,0 +1,354 @@
+/**
+ * Group 5: Hook Type Verification (command/prompt/http/if/once/matcher)
+ *
+ * Verifies behavior of different hook types and configuration options:
+ * - T1: command exit 0 = allow
+ * - T2: command exit 2 = deny (block tool)
+ * - T3: command exit 3 = ask (denied in headless/RPC mode)
+ * - T8: `if` filter only matches specified tools
+ * - T9: `once: true` only fires on first invocation
+ */
+import { describe, it, expect, beforeAll } from "vitest";
+import {
+  ensureHooksTestDir,
+  clearLog,
+  readLog,
+  createTaggedHookScript,
+  createDenyHookScript,
+  createAskHookScript,
+  createProjectDir,
+  writeProjectSettings,
+  setupHookTest,
+  teardownHookTest,
+  parseLogLines,
+  HOOK_BASE_PORT,
+} from "./helpers";
+
+const PORT = HOOK_BASE_PORT + 50;
+const AUTH_TOKEN = "hooks-test-token-g5";
+
+describe("Group 5: Hook Type Verification", () => {
+  beforeAll(async () => {
+    await ensureHooksTestDir();
+  });
+
+  it("T1: command exit 0 allows tool execution", async () => {
+    await clearLog();
+
+    const projectDir = await createProjectDir("g5-t1");
+    const allowScript = await createTaggedHookScript("allow");
+
+    await writeProjectSettings(projectDir, {
+      PreToolUse: [
+        {
+          hooks: [
+            {
+              type: "command",
+              command: allowScript,
+              timeout: 10,
+            },
+          ],
+        },
+      ],
+    });
+
+    const testCtx = await setupHookTest({
+      port: PORT,
+      authToken: AUTH_TOKEN,
+      projectDir,
+    });
+
+    try {
+      const { sendRPC: rpc, subscribe: sub, waitForEvent: wait } = await import("./helpers");
+
+      await rpc(testCtx.ws, "agent.start", {
+        sessionId: testCtx.sessionId,
+        projectPath: testCtx.projectDir,
+        sessionPath: testCtx.sessionPath,
+      });
+
+      sub(testCtx.ws, "agent.event", { sessionId: testCtx.sessionId });
+
+      const agentEndPromise = wait(
+        testCtx.ws,
+        "agent.event",
+        (msg) => {
+          const payload = msg.payload as Record<string, unknown>;
+          const event = payload.event as Record<string, unknown>;
+          return event?.type === "agent_end";
+        },
+        120_000,
+      );
+
+      await rpc(testCtx.ws, "agent.send", {
+        sessionId: testCtx.sessionId,
+        content: "Run: echo t1-test",
+      });
+
+      await agentEndPromise;
+      await new Promise((r) => setTimeout(r, 2000));
+
+      const log = await readLog();
+      expect(log).toContain("ALLOW-HOOK");
+    } finally {
+      await teardownHookTest(testCtx);
+    }
+  }, 180_000);
+
+  it("T2: command exit 2 blocks tool execution", async () => {
+    await clearLog();
+
+    const projectDir = await createProjectDir("g5-t2");
+    const denyScript = await createDenyHookScript();
+
+    await writeProjectSettings(projectDir, {
+      PreToolUse: [
+        {
+          hooks: [
+            {
+              type: "command",
+              command: denyScript,
+              timeout: 10,
+            },
+          ],
+        },
+      ],
+    });
+
+    const testCtx = await setupHookTest({
+      port: PORT,
+      authToken: AUTH_TOKEN,
+      projectDir,
+    });
+
+    try {
+      const { sendRPC: rpc, subscribe: sub, waitForEvent: wait } = await import("./helpers");
+
+      await rpc(testCtx.ws, "agent.start", {
+        sessionId: testCtx.sessionId,
+        projectPath: testCtx.projectDir,
+        sessionPath: testCtx.sessionPath,
+      });
+
+      sub(testCtx.ws, "agent.event", { sessionId: testCtx.sessionId });
+
+      const agentEndPromise = wait(
+        testCtx.ws,
+        "agent.event",
+        (msg) => {
+          const payload = msg.payload as Record<string, unknown>;
+          const event = payload.event as Record<string, unknown>;
+          return event?.type === "agent_end";
+        },
+        120_000,
+      );
+
+      await rpc(testCtx.ws, "agent.send", {
+        sessionId: testCtx.sessionId,
+        content: "Run: echo t2-test",
+      });
+
+      await agentEndPromise;
+      await new Promise((r) => setTimeout(r, 2000));
+
+      const log = await readLog();
+      expect(log).toContain("DENIED");
+    } finally {
+      await teardownHookTest(testCtx);
+    }
+  }, 180_000);
+
+  it("T3: command exit 3 is treated as deny in headless/RPC mode", async () => {
+    await clearLog();
+
+    const projectDir = await createProjectDir("g5-t3");
+    const askScript = await createAskHookScript();
+
+    await writeProjectSettings(projectDir, {
+      PreToolUse: [
+        {
+          hooks: [
+            {
+              type: "command",
+              command: askScript,
+              timeout: 10,
+            },
+          ],
+        },
+      ],
+    });
+
+    const testCtx = await setupHookTest({
+      port: PORT,
+      authToken: AUTH_TOKEN,
+      projectDir,
+    });
+
+    try {
+      const { sendRPC: rpc, subscribe: sub, waitForEvent: wait } = await import("./helpers");
+
+      await rpc(testCtx.ws, "agent.start", {
+        sessionId: testCtx.sessionId,
+        projectPath: testCtx.projectDir,
+        sessionPath: testCtx.sessionPath,
+      });
+
+      sub(testCtx.ws, "agent.event", { sessionId: testCtx.sessionId });
+
+      const agentEndPromise = wait(
+        testCtx.ws,
+        "agent.event",
+        (msg) => {
+          const payload = msg.payload as Record<string, unknown>;
+          const event = payload.event as Record<string, unknown>;
+          return event?.type === "agent_end";
+        },
+        120_000,
+      );
+
+      await rpc(testCtx.ws, "agent.send", {
+        sessionId: testCtx.sessionId,
+        content: "Run: echo t3-test",
+      });
+
+      await agentEndPromise;
+      await new Promise((r) => setTimeout(r, 2000));
+
+      const log = await readLog();
+      expect(log).toContain("ASKED");
+    } finally {
+      await teardownHookTest(testCtx);
+    }
+  }, 180_000);
+
+  it("T8: if filter only matches specified tools (bash|write)", async () => {
+    await clearLog();
+
+    const projectDir = await createProjectDir("g5-t8");
+    const filterScript = await createTaggedHookScript("filtered");
+
+    await writeProjectSettings(projectDir, {
+      PreToolUse: [
+        {
+          matcher: "bash|write",
+          hooks: [
+            {
+              type: "command",
+              command: filterScript,
+              timeout: 10,
+            },
+          ],
+        },
+      ],
+    });
+
+    const testCtx = await setupHookTest({
+      port: PORT,
+      authToken: AUTH_TOKEN,
+      projectDir,
+    });
+
+    try {
+      const { sendRPC: rpc, subscribe: sub, waitForEvent: wait } = await import("./helpers");
+
+      await rpc(testCtx.ws, "agent.start", {
+        sessionId: testCtx.sessionId,
+        projectPath: testCtx.projectDir,
+        sessionPath: testCtx.sessionPath,
+      });
+
+      sub(testCtx.ws, "agent.event", { sessionId: testCtx.sessionId });
+
+      const agentEndPromise = wait(
+        testCtx.ws,
+        "agent.event",
+        (msg) => {
+          const payload = msg.payload as Record<string, unknown>;
+          const event = payload.event as Record<string, unknown>;
+          return event?.type === "agent_end";
+        },
+        120_000,
+      );
+
+      await rpc(testCtx.ws, "agent.send", {
+        sessionId: testCtx.sessionId,
+        content: "Run: echo t8-test",
+      });
+
+      await agentEndPromise;
+      await new Promise((r) => setTimeout(r, 2000));
+
+      const log = await readLog();
+      expect(log).toContain("FILTERED-HOOK");
+      expect(log).toContain("tool=bash");
+    } finally {
+      await teardownHookTest(testCtx);
+    }
+  }, 180_000);
+
+  it("T9: once=true only fires on first tool invocation", async () => {
+    await clearLog();
+
+    const projectDir = await createProjectDir("g5-t9");
+    const onceScript = await createTaggedHookScript("once");
+
+    await writeProjectSettings(projectDir, {
+      PreToolUse: [
+        {
+          hooks: [
+            {
+              type: "command",
+              command: onceScript,
+              timeout: 10,
+              once: true,
+            },
+          ],
+        },
+      ],
+    });
+
+    const testCtx = await setupHookTest({
+      port: PORT,
+      authToken: AUTH_TOKEN,
+      projectDir,
+    });
+
+    try {
+      const { sendRPC: rpc, subscribe: sub, waitForEvent: wait } = await import("./helpers");
+
+      await rpc(testCtx.ws, "agent.start", {
+        sessionId: testCtx.sessionId,
+        projectPath: testCtx.projectDir,
+        sessionPath: testCtx.sessionPath,
+      });
+
+      sub(testCtx.ws, "agent.event", { sessionId: testCtx.sessionId });
+
+      const agentEndPromise = wait(
+        testCtx.ws,
+        "agent.event",
+        (msg) => {
+          const payload = msg.payload as Record<string, unknown>;
+          const event = payload.event as Record<string, unknown>;
+          return event?.type === "agent_end";
+        },
+        120_000,
+      );
+
+      await rpc(testCtx.ws, "agent.send", {
+        sessionId: testCtx.sessionId,
+        content: "Run these commands one by one: echo t9a then echo t9b then echo t9c",
+      });
+
+      await agentEndPromise;
+      await new Promise((r) => setTimeout(r, 2000));
+
+      const log = await readLog();
+      const onceCount = parseLogLines(log).filter((l) => l.startsWith("ONCE-HOOK")).length;
+
+      expect(onceCount).toBe(1);
+    } finally {
+      await teardownHookTest(testCtx);
+    }
+  }, 180_000);
+});

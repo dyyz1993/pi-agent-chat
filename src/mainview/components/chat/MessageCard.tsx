@@ -1,27 +1,16 @@
 import { memo, useCallback, useRef } from "react";
-import {
-  ChevronDown,
-  User,
-  Bot,
-  RotateCcw,
-  Undo2,
-  GitBranch,
-  Loader2,
-  Archive,
-} from "lucide-react";
+import { ChevronDown, User, Bot, RotateCcw, Undo2, GitFork, Loader2, Archive } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useTurnStore, EMPTY_SET } from "../../stores/use-turn-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useChatStore } from "../../stores/use-chat-store";
 import { useNotificationStore } from "../../stores/use-notification-store";
 import { useRollbackStore } from "../../stores/use-rollback-store";
-import { useTierStore } from "../../stores/use-tier-store";
+import { useForkDialogStore } from "../../stores/use-fork-dialog-store";
 
 const EMPTY_MSGS: never[] = [];
 import { apiClient } from "../../lib/api-client";
-import { insertAfterPinned } from "../../stores/use-session-store";
 import { createLogger } from "../../../shared/lib/logger";
-import type { SessionMeta } from "../../types";
 import type { TreeEntry } from "@dyyz1993/pi-coding-agent";
 import {
   MessageBubble,
@@ -532,63 +521,12 @@ const HeaderActions = memo(function HeaderActions({
     const tree = await fetchTree();
     const entryId = await resolveEntryId(tree);
     if (!sessionId || !entryId) return;
-    const result = await apiClient
-      .call("agent.fork", { sessionId, entryId, position: "at" })
-      .catch((err) => {
-        console.warn("[MessageCard] fork failed:", err);
-        return undefined;
-      });
-    if (!result || result.cancelled || !result.newSessionId || !result.newSessionFile) return;
-    const state = useSessionStore.getState();
-    const activeTab = state.projectTabs.find((t: { id: string }) => t.id === state.activeProjectId);
-    if (!activeTab) return;
-
-    // Fetch original session name for the "fork:" prefix
-    const allSessions = state.sessionsByProject[activeTab.path] ?? [];
-    const originalSession = allSessions.find((s) => s.sessionId === sessionId);
-    const originalName = originalSession
-      ? originalSession.name || originalSession.firstMessage || ""
-      : "";
-
-    const now = Date.now();
-    const forkedSession: SessionMeta = {
-      sessionId: result.newSessionId,
-      name: originalName ? `fork: ${originalName}` : "",
-      sessionPath: result.newSessionFile,
-      projectPath: activeTab.path,
-      parentSessionPath: null,
-      delegateParentSessionId: null,
-      messageCount: 0,
-      firstMessage: "",
-      createdAt: now,
-      updatedAt: now,
-      status: "idle",
-    };
-
-    useSessionStore.setState((s) => ({
-      sessionsByProject: {
-        ...s.sessionsByProject,
-        [activeTab.path]: insertAfterPinned(
-          s.sessionsByProject[activeTab.path] || [],
-          forkedSession,
-        ),
-      },
-    }));
-
-    state.setActiveSession(result.newSessionId, undefined, {
-      skipCleanup: true,
-      forceNewProcess: true,
+    useForkDialogStore.getState().openDialog({
+      sessionId,
+      entryId,
+      source: "messageCard",
     });
-    useChatStore.getState().loadSessionMessages(result.newSessionId, { force: true });
-
-    // Inherit current tier config
-    const currentTier = useTierStore.getState().currentTier;
-    if (currentTier) {
-      useTierStore.getState().switchToTier(currentTier, result.newSessionId);
-    }
-
-    pushNotification({ message: t("messageCard.forked"), level: "info" });
-  }, [sessionId, fetchTree, resolveEntryId, pushNotification]);
+  }, [sessionId, fetchTree, resolveEntryId]);
 
   const requestRollback = useCallback(
     async (mode: "message" | "withFiles") => {
@@ -701,7 +639,7 @@ const HeaderActions = memo(function HeaderActions({
 
   return (
     <>
-      <ActionBtn icon={GitBranch} title={t("fork")} onClick={handleFork} />
+      <ActionBtn icon={GitFork} title={t("fork")} onClick={handleFork} />
       <ActionBtn
         icon={Undo2}
         title={t("messageCard.rollbackMessage")}
