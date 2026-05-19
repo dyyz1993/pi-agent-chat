@@ -37,7 +37,20 @@
     "prepare": "husky",
     "postinstall": "patch-package",
     "test": "bun test --isolate",
-    "test:watch": "bun test --isolate --watch"
+    "test:watch": "bun test --isolate --watch",
+    "test:smoke": "bash run-tests.sh smoke",
+    "test:store": "bash run-tests.sh run store",
+    "test:handler": "bash run-tests.sh run handler",
+    "test:ui": "bash run-tests.sh run ui",
+    "test:util": "bash run-tests.sh run util",
+    "test:chat": "bash run-tests.sh run chat",
+    "test:bash": "bash run-tests.sh run bash",
+    "test:session": "bash run-tests.sh run session",
+    "test:git": "bash run-tests.sh run git",
+    "test:memory": "bash run-tests.sh run memory",
+    "test:agent": "bash run-tests.sh run agent",
+    "test:list": "bash run-tests.sh list",
+    "test:failed": "bash run-tests.sh failed"
   },
   "dependencies": {
     "@dyyz1993/pi-agent-core": "^0.74.50",

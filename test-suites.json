@@ -1,0 +1,242 @@
+{
+  "store": {
+    "desc": "Zustand store 状态管理测试（46 文件）",
+    "files": [
+      "bash-store.test.ts",
+      "chat-store.test.ts",
+      "chat-pagination.test.ts",
+      "context-usage-full.test.ts",
+      "context-usage-init.test.ts",
+      "fork-session-ordering.test.ts",
+      "memory-store.test.ts",
+      "notification-store.test.ts",
+      "queue-followup-steer.test.ts",
+      "refresh-recovery.test.ts",
+      "session-store.test.ts",
+      "status-store.test.ts",
+      "subagent-rename-delete.test.ts",
+      "theme-store.test.ts",
+      "tier-store.test.ts",
+      "ui-dialog-store.test.ts",
+      "use-attachment-store.test.ts",
+      "use-bash-store.test.ts",
+      "use-chat-nav-store.test.ts",
+      "use-chat-nav-store-flow.test.ts",
+      "use-chat-store-basic.test.ts",
+      "use-diagnostic-store.test.ts",
+      "use-expand-store.test.ts",
+      "use-git-store.test.ts",
+      "use-lsp-store.test.ts",
+      "use-memory-store.test.ts",
+      "use-mermaid-store.test.ts",
+      "use-notification-store.test.ts",
+      "use-retry-store.test.ts",
+      "use-rollback-store.test.ts",
+      "use-rpc-debug-store.test.ts",
+      "use-rules-store.test.ts",
+      "use-session-store-basic.test.ts",
+      "use-session-store-interactions.test.ts",
+      "use-settings-store.test.ts",
+      "use-sidebar-store.test.ts",
+      "use-snapshot-store.test.ts",
+      "use-status-store.test.ts",
+      "use-subagent-store.test.ts",
+      "use-theme-store.test.ts",
+      "use-tier-store.test.ts",
+      "use-turn-store.test.ts",
+      "use-turn-store-flow.test.ts",
+      "use-ui-dialog-store.test.ts",
+      "smoke-final-store.test.ts"
+    ]
+  },
+  "handler": {
+    "desc": "RPC Handler 请求处理测试（15 文件）",
+    "files": [
+      "agent-event-handler.test.ts",
+      "bash-handler.test.ts",
+      "browse-folder-handler.test.ts",
+      "custom-entry-handler.test.ts",
+      "file-handler.test.ts",
+      "git-handler.test.ts",
+      "lsp-handler.test.ts",
+      "memory-handler.test.ts",
+      "project-handler.test.ts",
+      "rules-handler.test.ts",
+      "session-handler.test.ts",
+      "snapshot-handler.test.ts",
+      "system-handler.test.ts",
+      "timer-handler.test.ts",
+      "todo-handler.test.ts"
+    ]
+  },
+  "util": {
+    "desc": "工具函数 / 纯逻辑测试（17 文件）",
+    "files": [
+      "clipboard.test.ts",
+      "constants.test.ts",
+      "custom-entry-registry.test.ts",
+      "drop-handler.test.ts",
+      "file-utils.test.ts",
+      "i18n.test.ts",
+      "linked-projects.test.ts",
+      "message-mapper-custom.test.ts",
+      "message-mapper-unit.test.ts",
+      "notification-gateway.test.ts",
+      "proxy.test.ts",
+      "save-to-input-history.test.ts",
+      "session-sidebar-dedup.test.ts",
+      "turn-aggregator.test.ts",
+      "turn-utils.test.ts",
+      "z-index.test.ts",
+      "memory-config.test.ts"
+    ]
+  },
+  "ui": {
+    "desc": "React 组件渲染 / DOM 交互测试（12 文件）",
+    "files": [
+      "bash-panel-scroll.test.tsx",
+      "bash-process-card.test.tsx",
+      "bash-renderer.test.tsx",
+      "CopyButton.test.tsx",
+      "keyboard-navigation.test.tsx",
+      "logviewer-interactions.test.tsx",
+      "memory-panel.test.tsx",
+      "MessageSelectionBar.test.tsx",
+      "status-panel-shell.test.tsx",
+      "ThemeToggle.test.tsx",
+      "tool-execution-card.test.tsx",
+      "use-input-history.test.tsx"
+    ]
+  },
+  "integration": {
+    "desc": "集成 / 回归 / Smoke 测试（30 文件）",
+    "files": [
+      "coordinator-frontend-handler.test.ts",
+      "coordinator-session-created.test.ts",
+      "empty-session-race.test.ts",
+      "file-upload.test.ts",
+      "minimal-event2.test.ts",
+      "process-manager-coordinator.test.ts",
+      "proxy-register.test.ts",
+      "rules-snapshot-race.test.ts",
+      "session-path-dedup.test.ts",
+      "stale-ctx-verification.test.ts",
+      "stop-vs-abort-regression.test.ts",
+      "bug-hunt-normalize.test.ts",
+      "bug-hunt-selection.test.ts",
+      "bug-hunt-session-crud.test.ts",
+      "smoke-p0.test.ts",
+      "smoke-p1.test.ts",
+      "smoke-p2.test.ts",
+      "smoke-p3.test.ts",
+      "smoke-p4.test.ts",
+      "smoke-batch3.test.ts",
+      "smoke-batch45.test.ts",
+      "smoke-batch6.test.ts",
+      "smoke-batch7.test.ts",
+      "smoke-batch8.test.ts",
+      "smoke-batch12.test.ts",
+      "smoke-batch-next.test.ts"
+    ]
+  },
+  "module": {
+    "chat": {
+      "desc": "聊天相关：消息、渲染、分页、流式",
+      "files": [
+        "chat-store.test.ts",
+        "chat-pagination.test.ts",
+        "use-chat-store-basic.test.ts",
+        "use-chat-nav-store.test.ts",
+        "use-chat-nav-store-flow.test.ts",
+        "refresh-recovery.test.ts",
+        "queue-followup-steer.test.ts",
+        "message-mapper-unit.test.ts",
+        "message-mapper-custom.test.ts",
+        "custom-entry-handler.test.ts",
+        "custom-entry-registry.test.ts",
+        "turn-aggregator.test.ts",
+        "turn-utils.test.ts",
+        "use-turn-store.test.ts",
+        "use-turn-store-flow.test.ts",
+        "bug-hunt-normalize.test.ts",
+        "MessageSelectionBar.test.tsx",
+        "tool-execution-card.test.tsx"
+      ]
+    },
+    "bash": {
+      "desc": "Bash 终端：进程管理、输出流、渲染",
+      "files": [
+        "bash-store.test.ts",
+        "use-bash-store.test.ts",
+        "bash-handler.test.ts",
+        "bash-panel-scroll.test.tsx",
+        "bash-process-card.test.tsx",
+        "bash-renderer.test.tsx",
+        "logviewer-interactions.test.tsx"
+      ]
+    },
+    "session": {
+      "desc": "Session 会话：创建、切换、侧边栏、去重",
+      "files": [
+        "session-store.test.ts",
+        "use-session-store-basic.test.ts",
+        "use-session-store-interactions.test.ts",
+        "session-handler.test.ts",
+        "fork-session-ordering.test.ts",
+        "empty-session-race.test.ts",
+        "session-path-dedup.test.ts",
+        "session-sidebar-dedup.test.ts",
+        "coordinator-frontend-handler.test.ts",
+        "coordinator-session-created.test.ts",
+        "bug-hunt-session-crud.test.ts",
+        "context-usage-full.test.ts",
+        "context-usage-init.test.ts"
+      ]
+    },
+    "git": {
+      "desc": "Git 版本控制：状态、分支、diff",
+      "files": ["use-git-store.test.ts", "git-handler.test.ts"]
+    },
+    "memory": {
+      "desc": "Memory 记忆：文件管理、搜索、书签",
+      "files": [
+        "memory-store.test.ts",
+        "use-memory-store.test.ts",
+        "memory-handler.test.ts",
+        "memory-config.test.ts",
+        "memory-panel.test.tsx"
+      ]
+    },
+    "theme": {
+      "desc": "主题：light/dark/system 切换",
+      "files": ["theme-store.test.ts", "use-theme-store.test.ts", "ThemeToggle.test.tsx"]
+    },
+    "settings": {
+      "desc": "设置：配置、重试、侧边栏",
+      "files": [
+        "use-settings-store.test.ts",
+        "use-retry-store.test.ts",
+        "use-sidebar-store.test.ts"
+      ]
+    },
+    "agent": {
+      "desc": "Agent 代理：生命周期、子代理、事件处理",
+      "files": [
+        "agent-event-handler.test.ts",
+        "use-subagent-store.test.ts",
+        "subagent-rename-delete.test.ts",
+        "minimal-event2.test.ts",
+        "process-manager-coordinator.test.ts",
+        "stop-vs-abort-regression.test.ts"
+      ]
+    },
+    "project": {
+      "desc": "Project 项目：切换、浏览、关联",
+      "files": [
+        "project-handler.test.ts",
+        "browse-folder-handler.test.ts",
+        "linked-projects.test.ts"
+      ]
+    }
+  }
+}
