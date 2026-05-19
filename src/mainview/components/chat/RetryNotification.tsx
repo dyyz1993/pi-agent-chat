@@ -37,31 +37,31 @@ export function RetryNotification() {
     <div className="absolute top-12 right-3 z-40 animate-in slide-in-from-top-2 fade-in duration-300">
       <div className="flex items-start gap-2.5 px-3 py-2.5 rounded-lg bg-status-error/95 border border-status-error/40 shadow-lg backdrop-blur-sm max-w-xs">
         <RefreshCw
-          className="w-4 h-4 text-status-error animate-spin shrink-0 mt-0.5"
+          className="w-4 h-4 text-white animate-spin shrink-0 mt-0.5"
           style={{ animationDuration: "2s" }}
         />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-0.5">
-            <AlertCircle className="w-3 h-3 text-status-error shrink-0" />
-            <span className="text-[11px] font-semibold text-status-error">{t("autoRetrying")}</span>
+            <AlertCircle className="w-3 h-3 text-white shrink-0" />
+            <span className="text-[11px] font-semibold text-white">{t("autoRetrying")}</span>
           </div>
-          <div className="text-[10px] text-status-error/80 space-y-0.5">
+          <div className="text-[10px] text-white/80 space-y-0.5">
             <div>
               {t("attemptRetry", { current: retryInfo.attempt, max: retryInfo.maxAttempts })}
             </div>
             {remaining > 0 && (
               <div className="flex items-center gap-1.5">
                 <span>{t("retryInSeconds", { seconds: remaining })}</span>
-                <div className="flex-1 h-1 bg-status-error/30 rounded-full overflow-hidden min-w-[40px]">
+                <div className="flex-1 h-1 bg-white/20 rounded-full overflow-hidden min-w-[40px]">
                   <div
-                    className="h-full bg-status-error rounded-full transition-all duration-200"
+                    className="h-full bg-white rounded-full transition-all duration-200"
                     style={{ width: `${progress * 100}%` }}
                   />
                 </div>
               </div>
             )}
             {retryInfo.errorMessage && (
-              <div className="text-status-error/70 truncate" title={retryInfo.errorMessage}>
+              <div className="text-white/70 truncate" title={retryInfo.errorMessage}>
                 {retryInfo.errorMessage.length > 40
                   ? `${retryInfo.errorMessage.slice(0, 40)}...`
                   : retryInfo.errorMessage}
