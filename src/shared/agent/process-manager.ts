@@ -214,6 +214,7 @@ export class AgentProcessManager {
   private _pendingDelegateRequests: Array<{
     sessionId: string;
     msg: unknown;
+    channelName: string;
     resolve: (result: unknown) => void;
   }> = [];
   private sessionPaths = new Map<string, string>();
@@ -461,6 +462,7 @@ export class AgentProcessManager {
     };
     managed.unsubscribe = client.onEvent(bridge);
 
+    const coordinatorChannelNames = new Set(["coordinator", "coordinator_client"]);
     const channelNames = [
       "bash",
       "todo",
@@ -469,12 +471,13 @@ export class AgentProcessManager {
       "rules-engine",
       "memory",
       "coordinator",
+      "coordinator_client",
       "supervisor",
     ] as const;
     for (const name of channelNames) {
       client.channel(name).onReceive((data: unknown) => {
-        if (name === "coordinator") {
-          this.handleCoordinatorCall(managed._activeSessionId, data);
+        if (coordinatorChannelNames.has(name)) {
+          this.handleCoordinatorCall(managed._activeSessionId, data, name);
           return;
         }
         this.handleEvent(managed._activeSessionId, {
@@ -2366,7 +2369,11 @@ export class AgentProcessManager {
     }
   }
 
-  private async handleCoordinatorCall(sessionId: string, data: unknown): Promise<void> {
+  private async handleCoordinatorCall(
+    sessionId: string,
+    data: unknown,
+    channelName: string,
+  ): Promise<void> {
     const msg = data as CoordinatorChannelEvent;
 
     if (!("__call" in msg)) {
@@ -2390,7 +2397,7 @@ export class AgentProcessManager {
             // Queue the request — will be processed after current start() finishes
             log.info("[coordinator] session_delegate queued (start in progress)", { sessionId });
             result = await new Promise<unknown>((resolve) => {
-              this._pendingDelegateRequests.push({ sessionId, msg, resolve });
+              this._pendingDelegateRequests.push({ sessionId, msg, channelName, resolve });
             });
           } else {
             result = await this.handleCoordinatorDelegate(sessionId, msg);
@@ -2405,7 +2412,7 @@ export class AgentProcessManager {
               sessionId,
             });
             result = await new Promise<unknown>((resolve) => {
-              this._pendingDelegateRequests.push({ sessionId, msg, resolve });
+              this._pendingDelegateRequests.push({ sessionId, msg, channelName, resolve });
             });
           } else {
             result = await this.handleCoordinatorDelegateSync(sessionId, msg);
@@ -2456,7 +2463,7 @@ export class AgentProcessManager {
         }
       }
       if (managed) {
-        managed.client.channel("coordinator").send({ ...(result as object), invokeId });
+        managed.client.channel(channelName).send({ ...(result as object), invokeId });
       }
     }
   }
