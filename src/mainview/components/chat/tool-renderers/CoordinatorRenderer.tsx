@@ -244,3 +244,229 @@ export const ForkCard = memo(function ForkCard({
     </div>
   );
 });
+
+export const DelegateSendCard = memo(function DelegateSendCard({
+  block,
+  blockId,
+}: {
+  block: ToolExecBlock;
+  blockId?: string;
+}) {
+  const { t } = useTranslation("chat");
+  const isRunning = block.status === "running";
+  const isDone = block.status === "done";
+  const details = extractDetails(block.details);
+  const args = parseArgs(block.args);
+  const message = (args.message as string) ?? "";
+  const delivered = details.delivered;
+
+  const displayTitle = message || t("coordinator.sendTask");
+
+  let badgeText: string | undefined;
+  let badgeColor = "text-text-tertiary";
+  if (isRunning) {
+    badgeText = t("coordinator.sending");
+    badgeColor = "text-status-info animate-pulse";
+  } else if (isDone) {
+    badgeText = delivered ? t("coordinator.delivered") : t("coordinator.sendFailed");
+    badgeColor = delivered ? "text-status-success" : "text-status-error";
+  }
+
+  return (
+    <div
+      data-block-id={blockId}
+      className="border-x-0 border-t border-b overflow-hidden border-border-secondary/30 bg-surface-dim"
+    >
+      <ToolCardHeader
+        toolName="session_delegate_send"
+        status={toCardStatus(block)}
+        description={displayTitle}
+        badge={
+          badgeText ? (
+            <span className={`shrink-0 text-[10px] ${badgeColor}`}>{badgeText}</span>
+          ) : undefined
+        }
+      />
+    </div>
+  );
+});
+
+export const DelegateStatusCard = memo(function DelegateStatusCard({
+  block,
+  blockId,
+}: {
+  block: ToolExecBlock;
+  blockId?: string;
+}) {
+  const { t } = useTranslation("chat");
+  const isRunning = block.status === "running";
+
+  const task = block.details as { task?: { title?: string; status?: string } } | undefined;
+  const taskTitle = task?.task?.title;
+  const taskStatus = task?.task?.status;
+
+  const displayTitle = taskTitle
+    ? `${t("coordinator.statusCheck")}: ${taskTitle}`
+    : t("coordinator.statusCheck");
+
+  let badgeText: string | undefined;
+  if (isRunning) {
+    badgeText = t("coordinator.checking");
+  } else if (taskStatus) {
+    badgeText = taskStatus;
+  }
+
+  return (
+    <div
+      data-block-id={blockId}
+      className="border-x-0 border-t border-b overflow-hidden border-border-secondary/30 bg-surface-dim"
+    >
+      <ToolCardHeader
+        toolName="session_delegate_status"
+        status={toCardStatus(block)}
+        description={displayTitle}
+        badge={
+          badgeText ? (
+            <span className="shrink-0 text-[10px] text-text-tertiary">{badgeText}</span>
+          ) : undefined
+        }
+      />
+    </div>
+  );
+});
+
+export const DelegateStopCard = memo(function DelegateStopCard({
+  block,
+  blockId,
+}: {
+  block: ToolExecBlock;
+  blockId?: string;
+}) {
+  const { t } = useTranslation("chat");
+  const isRunning = block.status === "running";
+  const isDone = block.status === "done";
+  const details = extractDetails(block.details);
+  const args = parseArgs(block.args);
+  const targetId = (args.sessionId as string) ?? "";
+  const ok = details.ok;
+
+  const displayTitle = targetId
+    ? `${t("coordinator.stopTask")}: #${targetId.slice(0, 8)}`
+    : t("coordinator.stopTask");
+
+  let badgeText: string | undefined;
+  let badgeColor = "text-text-tertiary";
+  if (isRunning) {
+    badgeText = t("coordinator.stopping");
+    badgeColor = "text-status-error animate-pulse";
+  } else if (isDone) {
+    badgeText = ok ? t("coordinator.stopped") : t("coordinator.stopFailed");
+    badgeColor = ok ? "text-status-warning" : "text-status-error";
+  }
+
+  return (
+    <div
+      data-block-id={blockId}
+      className="border-x-0 border-t border-b overflow-hidden border-border-secondary/30 bg-surface-dim"
+    >
+      <ToolCardHeader
+        toolName="session_delegate_stop"
+        status={toCardStatus(block)}
+        description={displayTitle}
+        badge={
+          badgeText ? (
+            <span className={`shrink-0 text-[10px] ${badgeColor}`}>{badgeText}</span>
+          ) : undefined
+        }
+      />
+    </div>
+  );
+});
+
+export const DelegateRemoveCard = memo(function DelegateRemoveCard({
+  block,
+  blockId,
+}: {
+  block: ToolExecBlock;
+  blockId?: string;
+}) {
+  const { t } = useTranslation("chat");
+  const isRunning = block.status === "running";
+  const isDone = block.status === "done";
+  const details = extractDetails(block.details);
+  const args = parseArgs(block.args);
+  const targetId = (args.sessionId as string) ?? "";
+  const ok = details.ok;
+
+  const displayTitle = targetId
+    ? `${t("coordinator.removeTask")}: #${targetId.slice(0, 8)}`
+    : t("coordinator.removeTask");
+
+  let badgeText: string | undefined;
+  let badgeColor = "text-text-tertiary";
+  if (isRunning) {
+    badgeText = t("coordinator.removing");
+    badgeColor = "text-status-error animate-pulse";
+  } else if (isDone) {
+    badgeText = ok ? t("coordinator.removed") : t("coordinator.removeFailed");
+    badgeColor = ok ? "text-text-tertiary" : "text-status-error";
+  }
+
+  return (
+    <div
+      data-block-id={blockId}
+      className="border-x-0 border-t border-b overflow-hidden border-border-secondary/30 bg-surface-dim"
+    >
+      <ToolCardHeader
+        toolName="session_delegate_remove"
+        status={toCardStatus(block)}
+        description={displayTitle}
+        badge={
+          badgeText ? (
+            <span className={`shrink-0 text-[10px] ${badgeColor}`}>{badgeText}</span>
+          ) : undefined
+        }
+      />
+    </div>
+  );
+});
+
+export const DelegateClearCard = memo(function DelegateClearCard({
+  block,
+  blockId,
+}: {
+  block: ToolExecBlock;
+  blockId?: string;
+}) {
+  const { t } = useTranslation("chat");
+  const isRunning = block.status === "running";
+  const isDone = block.status === "done";
+  const removed = (block.details as { removed?: number } | undefined)?.removed ?? 0;
+
+  const displayTitle = t("coordinator.clearStopped");
+
+  let badgeText: string | undefined;
+  if (isRunning) {
+    badgeText = t("coordinator.clearing");
+  } else if (isDone) {
+    badgeText = `${removed} ${t("coordinator.cleared")}`;
+  }
+
+  return (
+    <div
+      data-block-id={blockId}
+      className="border-x-0 border-t border-b overflow-hidden border-border-secondary/30 bg-surface-dim"
+    >
+      <ToolCardHeader
+        toolName="session_delegate_clear_stopped"
+        status={toCardStatus(block)}
+        description={displayTitle}
+        badge={
+          badgeText ? (
+            <span className="shrink-0 text-[10px] text-text-tertiary">{badgeText}</span>
+          ) : undefined
+        }
+      />
+    </div>
+  );
+});

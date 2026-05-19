@@ -30,6 +30,10 @@ import {
   FileCode,
   UserPlus,
   GitFork,
+  Send,
+  OctagonPause,
+  Trash2,
+  Eraser,
   type LucideIcon,
 } from "lucide-react";
 import { ALL_MEMORY_TYPES } from "./memory-config";
@@ -42,6 +46,17 @@ export type ToolIconEntry = {
 
 const TOOL_ICON_MAP: Record<string, ToolIconEntry> = {
   subagent: { icon: Bot, color: "text-semantic-agent", label: "SubAgent" },
+  session_delegate: { icon: UserPlus, color: "text-semantic-agent", label: "Delegate" },
+  session_delegate_fork: { icon: GitFork, color: "text-semantic-notify", label: "Fork" },
+  session_delegate_send: { icon: Send, color: "text-status-info", label: "Delegate Send" },
+  session_delegate_status: {
+    icon: Activity,
+    color: "text-text-tertiary",
+    label: "Delegate Status",
+  },
+  session_delegate_stop: { icon: OctagonPause, color: "text-status-error", label: "Delegate Stop" },
+  session_delegate_remove: { icon: Trash2, color: "text-status-error", label: "Delegate Remove" },
+  session_delegate_clear: { icon: Eraser, color: "text-text-tertiary", label: "Delegate Clear" },
   delegate: { icon: UserPlus, color: "text-semantic-agent", label: "Delegate" },
   fork: { icon: GitFork, color: "text-semantic-notify", label: "Fork" },
   read: { icon: Eye, color: "text-status-info", label: "Read" },
