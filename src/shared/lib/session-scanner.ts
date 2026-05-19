@@ -1,5 +1,7 @@
 import { readdir, stat, readFile } from "fs/promises";
+import { createReadStream } from "fs";
 import { existsSync } from "fs";
+import { createInterface } from "readline";
 import { join, basename } from "path";
 import { homedir } from "os";
 import type { SessionMeta, PiProject, MergedProject } from "../modules/project";
@@ -9,6 +11,59 @@ const SESSIONS_DIR = join(homedir(), ".pi", "agent", "sessions");
 
 function encodeCwd(cwd: string): string {
   return "--" + cwd.replace(/^\//, "").replace(/\//g, "-") + "--";
+}
+
+interface JsonlHeader {
+  type: "session";
+  version: number;
+  id: string;
+  timestamp: string;
+  cwd: string;
+  delegateParentSessionId?: string;
+}
+
+interface JsonlEntry {
+  type: string;
+  id: string;
+  parentId: string | null;
+  timestamp: string;
+  message?: {
+    role: string;
+    content?: Array<{ type: string; text?: string }>;
+  };
+  name?: string;
+  cwd?: string;
+}
+
+async function parseJsonlHeader(filePath: string): Promise<JsonlHeader | null> {
+  try {
+    const stream = createReadStream(filePath, { encoding: "utf-8" });
+    const rl = createInterface({ input: stream, crlfDelay: Infinity });
+    const firstLine: string | null = await new Promise((resolve) => {
+      rl.once("line", (line) => {
+        rl.close();
+        stream.destroy();
+        resolve(line);
+      });
+      rl.once("error", () => {
+        rl.close();
+        stream.destroy();
+        resolve(null);
+      });
+    });
+    if (!firstLine?.trim()) return null;
+    const header: unknown = JSON.parse(firstLine);
+    if (
+      typeof header === "object" &&
+      header !== null &&
+      "type" in header &&
+      (header as { type: string }).type !== "session"
+    )
+      return null;
+    return header as JsonlHeader;
+  } catch {
+    return null;
+  }
 }
 
 interface JsonlHeader {
@@ -30,26 +85,6 @@ interface JsonlEntry {
   };
   name?: string;
   cwd?: string;
-  delegateParentSessionId?: string;
-}
-
-async function parseJsonlHeader(filePath: string): Promise<JsonlHeader | null> {
-  try {
-    const content = await readFile(filePath, "utf-8");
-    const firstLine = content.split("\n")[0];
-    if (!firstLine?.trim()) return null;
-    const header: unknown = JSON.parse(firstLine);
-    if (
-      typeof header === "object" &&
-      header !== null &&
-      "type" in header &&
-      (header as { type: string }).type !== "session"
-    )
-      return null;
-    return header as JsonlHeader;
-  } catch {
-    return null;
-  }
 }
 
 async function parseJsonlMeta(filePath: string): Promise<{
@@ -57,7 +92,6 @@ async function parseJsonlMeta(filePath: string): Promise<{
   firstMessage: string;
   sessionName: string;
   parentSessionPath: string | null;
-  delegateParentSessionId: string | null;
   effectiveCwd: string | null;
 } | null> {
   try {
@@ -67,7 +101,6 @@ async function parseJsonlMeta(filePath: string): Promise<{
     let firstMessage = "";
     let sessionName = "";
     let parentSessionPath: string | null = null;
-    let delegateParentSessionId: string | null = null;
     let effectiveCwd: string | null = null;
 
     for (const line of lines) {
@@ -85,8 +118,6 @@ async function parseJsonlMeta(filePath: string): Promise<{
         if (entry.type === "session_info") {
           if (entry.name) sessionName = entry.name;
           if (entry.cwd) effectiveCwd = entry.cwd;
-          if (entry.delegateParentSessionId)
-            delegateParentSessionId = entry.delegateParentSessionId;
         }
         if (entry.type === "session" && "parentSession" in entry) {
           parentSessionPath = (entry as Record<string, unknown>).parentSession as string;
@@ -96,14 +127,7 @@ async function parseJsonlMeta(filePath: string): Promise<{
       }
     }
 
-    return {
-      messageCount,
-      firstMessage,
-      sessionName,
-      parentSessionPath,
-      delegateParentSessionId,
-      effectiveCwd,
-    };
+    return { messageCount, firstMessage, sessionName, parentSessionPath, effectiveCwd };
   } catch {
     return null;
   }
@@ -131,7 +155,7 @@ async function scanSessionDir(sessionDir: string, pinnedIds?: Set<string>): Prom
           sessionPath: filePath,
           projectPath: meta?.effectiveCwd ?? header.cwd,
           parentSessionPath: meta?.parentSessionPath ?? null,
-          delegateParentSessionId: meta?.delegateParentSessionId ?? null,
+          delegateParentSessionId: header.delegateParentSessionId ?? null,
           messageCount: meta?.messageCount ?? 0,
           firstMessage: meta?.firstMessage ?? "",
           createdAt: new Date(header.timestamp).getTime(),
@@ -192,7 +216,7 @@ export async function findSessionById(
       sessionPath: candidate,
       projectPath,
       parentSessionPath: meta?.parentSessionPath ?? null,
-      delegateParentSessionId: meta?.delegateParentSessionId ?? null,
+      delegateParentSessionId: header.delegateParentSessionId ?? null,
       messageCount: meta?.messageCount ?? 0,
       firstMessage: meta?.firstMessage ?? "",
       createdAt: new Date(header.timestamp).getTime(),
@@ -203,6 +227,45 @@ export async function findSessionById(
   }
 
   return null;
+}
+
+export function buildDelegateIndex(sessions: SessionMeta[]): Map<string, SessionMeta[]> {
+  const index = new Map<string, SessionMeta[]>();
+  for (const sess of sessions) {
+    if (!sess.delegateParentSessionId) continue;
+    const children = index.get(sess.delegateParentSessionId);
+    if (children) {
+      children.push(sess);
+    } else {
+      index.set(sess.delegateParentSessionId, [sess]);
+    }
+  }
+  return index;
+}
+
+export async function findDelegateChildren(
+  parentSessionId: string,
+  projectPath: string,
+): Promise<string[]> {
+  const dirName = encodeCwd(projectPath);
+  const sessionDir = join(SESSIONS_DIR, dirName);
+  if (!existsSync(sessionDir)) return [];
+
+  const files = await readdir(sessionDir);
+  const jsonlFiles = files.filter((f) => f.endsWith(".jsonl"));
+
+  const childIds: string[] = [];
+
+  await Promise.all(
+    jsonlFiles.map(async (file) => {
+      const header = await parseJsonlHeader(join(sessionDir, file));
+      if (header?.delegateParentSessionId === parentSessionId) {
+        childIds.push(header.id);
+      }
+    }),
+  );
+
+  return childIds;
 }
 
 export async function scanSessionsForProject(projectPath: string): Promise<SessionMeta[]> {

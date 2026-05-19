@@ -2611,6 +2611,7 @@ export class AgentProcessManager {
         id: newSessionId,
         timestamp: new Date().toISOString(),
         cwd: projectPath,
+        delegateParentSessionId: parentSessionId,
       });
       await writeFile(sessionPath, headerEntry + "\n", "utf-8");
     } catch (writeErr: unknown) {
@@ -2621,23 +2622,6 @@ export class AgentProcessManager {
     }
 
     await this.start(newSessionId, projectPath, sessionPath, { forceNewProcess: true });
-
-    try {
-      const { appendFile } = await import("fs/promises");
-      const metaEntry = JSON.stringify({
-        type: "session_info",
-        id: `meta_${Date.now()}`,
-        parentId: null,
-        timestamp: new Date().toISOString(),
-        delegateParentSessionId: parentSessionId,
-      });
-      await appendFile(sessionPath, metaEntry + "\n", "utf-8");
-    } catch (metaErr: unknown) {
-      log.warn("[handleCoordinatorDelegateSync] failed to write delegateParentSessionId metadata", {
-        sessionPath,
-        err: metaErr instanceof Error ? metaErr.message : String(metaErr),
-      });
-    }
 
     this.delegateCreatedAt.set(newSessionId, Date.now());
     this.delegateReplyCount.set(newSessionId, 0);
