@@ -327,16 +327,10 @@ export const useSessionStore = create<SessionState>()(
             }
           }
 
-          // Merge disk sessions into existing: update known ones, append new ones
-          const merged = existing.map((mem) => {
-            const disk = sessions.find((s) => s.sessionPath === mem.sessionPath);
-            return disk ?? mem;
-          });
+          // Merge disk sessions into existing: only add new unique sessionPaths
+          const merged = [...existing];
           for (const s of newFromDisk) {
-            if (
-              !existingIds.has(s.sessionId) &&
-              !merged.some((m) => m.sessionPath === s.sessionPath)
-            ) {
+            if (!existingIds.has(s.sessionId)) {
               merged.push(s);
             }
           }
@@ -344,7 +338,11 @@ export const useSessionStore = create<SessionState>()(
           // Remove excess blank sessions from merged result
           const finalSessions = blankToRemove
             ? merged.filter((s) => !blankToRemove.has(s.sessionId))
-            : merged;
+            : merged.filter((s) => {
+                // Filter out sessions whose sessionPath was not found in disk scan
+                // This ensures we only keep sessions that exist in current scan
+                return newFromDisk.some((disk) => disk.sessionPath === s.sessionPath);
+              });
 
           set((s) => ({
             sessionsByProject: { ...s.sessionsByProject, [projectPath]: finalSessions },
