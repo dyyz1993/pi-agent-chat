@@ -16,6 +16,7 @@ import {
   Target,
   Loader2,
   ThumbsDown,
+  BookOpen,
 } from "lucide-react";
 import { CachedReactMarkdown } from "./CachedReactMarkdown";
 import { CopyButton } from "./CopyButton";
@@ -36,6 +37,124 @@ import { ENTRY_TYPE_KEYS, getMemoryConfig, getMemorySummary } from "./memory-con
 import { useMemoryStore } from "../../stores/use-memory-store";
 import { SnapshotBadge } from "./snapshot/SnapshotBadge";
 import { formatTokenCount } from "../../utils/turn-utils";
+import { ToolCardHeader } from "./primitives/ToolCardHeader";
+
+type SkillBlock = {
+  type: "skill";
+  name: string;
+  location: string;
+  body: string;
+};
+
+type TextSegment = {
+  type: "text";
+  text: string;
+};
+
+type ParsedSegment = SkillBlock | TextSegment;
+
+const SKILL_REGEX = /<skill\s+name="([^"]+)"\s+location="([^"]+)">\n([\s\S]*?)\n<\/skill>/;
+
+function parseSkillBlocks(text: string): ParsedSegment[] {
+  const segments: ParsedSegment[] = [];
+  const regex = /<skill\s+name="([^"]+)"\s+location="([^"]+)">\n([\s\S]*?)\n<\/skill>/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      segments.push({ type: "text", text: text.slice(lastIndex, match.index) });
+    }
+    segments.push({
+      type: "skill",
+      name: match[1],
+      location: match[2],
+      body: match[3],
+    });
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    segments.push({ type: "text", text: text.slice(lastIndex) });
+  }
+
+  return segments;
+}
+
+function extractSkillSummary(body: string): string {
+  const lines = body.split("\n").filter((l) => l.trim() !== "" && !l.startsWith("References are relative to"));
+  const firstHeading = lines.find((l) => l.startsWith("# "));
+  if (firstHeading) return firstHeading.replace(/^#+\s*/, "");
+  if (lines.length > 0) return lines[0].slice(0, 120);
+  return "";
+}
+
+function SkillBlockCollapsed({ block }: { block: SkillBlock }) {
+  const summary = extractSkillSummary(block.body);
+  const bodyLineCount = block.body.split("\n").filter((l) => l.trim() !== "").length;
+
+  return (
+    <details className="my-1 rounded-md border border-border-secondary/40 bg-surface-dim/50">
+      <summary className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs cursor-pointer select-none hover:bg-surface-hover transition-colors list-none">
+        <ChevronRight className="w-3 h-3 shrink-0 text-text-tertiary details-chevron" />
+        <BookOpen className="w-3.5 h-3.5 shrink-0 text-semantic-tool/80" />
+        <span className="font-medium text-text-primary truncate">{block.name}</span>
+        {summary && (
+          <>
+            <span className="text-text-tertiary">—</span>
+            <span className="text-text-secondary truncate">{summary}</span>
+          </>
+        )}
+        <span className="ml-auto text-text-tertiary shrink-0">{bodyLineCount} lines</span>
+      </summary>
+      <div className="px-2.5 pb-2 pt-1 border-t border-border-secondary/30">
+        <div className="text-[10px] text-text-tertiary mb-1 font-mono truncate" title={block.location}>
+          {block.location}
+        </div>
+        <pre className="text-xs text-text-secondary whitespace-pre-wrap break-words max-h-64 overflow-y-auto font-mono leading-relaxed">
+          {block.body}
+        </pre>
+      </div>
+      <style>{`
+        details[open] > summary .details-chevron {
+          transform: rotate(90deg);
+          transition: transform 0.15s ease;
+        }
+        details:not([open]) > summary .details-chevron {
+          transform: rotate(0deg);
+          transition: transform 0.15s ease;
+        }
+      `}</style>
+    </details>
+  );
+}
+
+function renderUserTextWithLinks(text: string, keyPrefix: number | string) {
+  const urlRegex = /(https?:\/\/[^\s<|」》)>]+)/g;
+  const parts = text.split(urlRegex);
+  if (parts.length === 1) {
+    return <span key={keyPrefix}>{text}</span>;
+  }
+  return (
+    <span key={keyPrefix}>
+      {parts.map((part, j) =>
+        urlRegex.test(part) ? (
+          <a
+            key={j}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-status-info hover:underline break-all"
+          >
+            {part}
+          </a>
+        ) : (
+          part
+        ),
+      )}
+    </span>
+  );
+}
 
 export function getBlockBorderColor(block: ContentBlock, role: "user" | "assistant"): string {
   const roleDefault = role === "user" ? "border-l-status-info/60" : "border-l-status-success/50";
@@ -161,26 +280,21 @@ export const MessageBubble = memo(function MessageBubble({
             .filter((b) => b.type === "text")
             .map((b, i) => {
               const text = (b as Extract<ContentBlock, { type: "text" }>).text;
-              const urlRegex = /(https?:\/\/[^\s<|」》)>]+)/g;
-              const parts = text.split(urlRegex);
-              if (parts.length === 1) {
-                return <span key={i}>{text}</span>;
+              const hasSkillBlock = SKILL_REGEX.test(text);
+              SKILL_REGEX.lastIndex = 0;
+
+              if (!hasSkillBlock) {
+                return renderUserTextWithLinks(text, i);
               }
+
+              const segments = parseSkillBlocks(text);
               return (
                 <span key={i}>
-                  {parts.map((part, j) =>
-                    urlRegex.test(part) ? (
-                      <a
-                        key={j}
-                        href={part}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-status-info hover:underline break-all"
-                      >
-                        {part}
-                      </a>
+                  {segments.map((seg, si) =>
+                    seg.type === "skill" ? (
+                      <SkillBlockCollapsed key={`skill-${si}`} block={seg} />
                     ) : (
-                      part
+                      renderUserTextWithLinks(seg.text, `text-${si}`)
                     ),
                   )}
                 </span>
@@ -1368,41 +1482,28 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
 
   return (
     <div ref={cardRef} className={`overflow-hidden ${bgOnly}`} data-block-id={blockId}>
-      <div
-        className="px-3 py-1 flex items-center gap-2 text-xs cursor-pointer hover:brightness-110 transition-all"
+      <ToolCardHeader
+        toolName={block.toolName}
+        status={isRunning ? "running" : isError ? "error" : "done"}
+        description={
+          block.output && !isRunning
+            ? block.output.split("\n")[0].slice(0, 100)
+            : block.description || block.toolName
+        }
+        collapsed={collapsed}
         onClick={handleToggleCollapse}
-        role="button"
-        tabIndex={0}
-        aria-expanded={!collapsed}
-        aria-label={collapsed ? t("expandToolCard") : t("collapseToolCard")}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            handleToggleCollapse();
-          }
-        }}
-      >
-        <span
-          className={`font-medium ${isRunning ? "text-status-info" : isError ? "text-status-error" : "text-status-warning/80"}`}
-        >
-          {block.toolName}
-        </span>
-        {collapsed && isRunning && (
-          <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-status-info animate-pulse" />
-        )}
-        {isRunning && <span className="text-status-info animate-pulse text-[10px]">running</span>}
-        {!isRunning && !isError && (
-          <CheckCircle className="w-3.5 h-3.5 text-status-success shrink-0 ml-auto" />
-        )}
-        {isError && <XCircle className="w-3.5 h-3.5 text-status-error shrink-0 ml-auto" />}
-        <CopyButton text={fullExecutionText} size="xs" title={t("copyAllExecution")} />
-      </div>
+        badge={
+          <>
+            {!isRunning && !isError && (
+              <CheckCircle className="w-3.5 h-3.5 text-status-success shrink-0" />
+            )}
+            {isError && <XCircle className="w-3.5 h-3.5 text-status-error shrink-0" />}
+            <CopyButton text={fullExecutionText} size="xs" title={t("copyAllExecution")} />
+          </>
+        }
+      />
 
-      {collapsed ? (
-        <div className="px-3 pb-2 text-[11px] text-text-tertiary truncate">
-          {block.output ? block.output.split("\n")[0].slice(0, 100) : t("waitingOutput")}
-        </div>
-      ) : (
+      {!collapsed && (
         <>
           <div
             className="px-3 py-1 text-[11px] text-text-tertiary cursor-pointer hover:text-text-secondary dark:hover:text-text-tertiary select-none flex items-center gap-1.5"

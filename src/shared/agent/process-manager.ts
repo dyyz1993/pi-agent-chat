@@ -1769,8 +1769,19 @@ export class AgentProcessManager {
   async setSessionName(sessionId: string, name: string): Promise<void> {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) return;
+    const projectPath = managed.info.projectPath;
     await managed.client.setSessionName(name).catch((err: unknown) => {
       log.warn("setSessionName error", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    });
+    this.broadcastEvent(
+      "agent.session_renamed",
+      { sessionId, projectPath, newName: name },
+      {},
+    ).catch((err: unknown) => {
+      log.warn("broadcastEvent(session_renamed) error", {
         sessionId,
         err: err instanceof Error ? err.message : String(err),
       });

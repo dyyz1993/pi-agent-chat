@@ -641,6 +641,35 @@ export function syncTabsToBackend(tabs: ProjectTab[], activeTabId: string | null
 }
 
 let projectStatusSubId: string | null = null;
+let sessionRenamedSubId: string | null = null;
+
+export function setupSessionRenamedSubscription(): void {
+  if (sessionRenamedSubId) return;
+
+  apiClient
+    .subscribe(
+      "agent.session_renamed",
+      (payload: { sessionId: string; projectPath: string; newName: string }) => {
+        const s = useSessionStore.getState();
+        const sessions = s.sessionsByProject[payload.projectPath];
+        if (!sessions) return;
+        const idx = sessions.findIndex((sess) => sess.sessionId === payload.sessionId);
+        if (idx === -1) return;
+        const updated = [...sessions];
+        updated[idx] = { ...updated[idx], name: payload.newName };
+        useSessionStore.setState({
+          sessionsByProject: { ...s.sessionsByProject, [payload.projectPath]: updated },
+        });
+      },
+      {},
+    )
+    .then((subId) => {
+      sessionRenamedSubId = subId;
+    })
+    .catch((err) => {
+      useAppStore.getState().addLog(`[sub] ${String(err)}`);
+    });
+}
 
 export function setupProjectStatusSubscription(): void {
   if (projectStatusSubId) return;

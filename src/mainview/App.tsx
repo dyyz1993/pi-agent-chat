@@ -3,7 +3,10 @@ import { useTranslation } from "react-i18next";
 import { apiClient, resolveAuthToken } from "./lib/api-client";
 import { useAppStore } from "./stores/use-app-store";
 import { useSessionStore } from "./stores/use-session-store";
-import { setupProjectStatusSubscription } from "./stores/session-subscriptions";
+import {
+  setupProjectStatusSubscription,
+  setupSessionRenamedSubscription,
+} from "./stores/session-subscriptions";
 import { useChatStore } from "./stores/use-chat-store";
 import { createLogger } from "../shared/lib/logger";
 import { MainLayout } from "./layouts/MainLayout";
@@ -77,6 +80,7 @@ function App() {
       if (cancelled) return;
       initializeConnection();
       setupProjectStatusSubscription();
+      setupSessionRenamedSubscription();
     };
 
     doInit();
@@ -177,7 +181,13 @@ function App() {
               `Restored ${savedTabs.length} tabs from server config (${sessions.length} sessions)`,
             );
             if (sessions.length > 0) {
-              useSessionStore.getState().setActiveSession(sessions[0].sessionId);
+              const { lastActiveSessionByProject } = useSessionStore.getState();
+              const lastSid = lastActiveSessionByProject[tab.path];
+              const targetSession =
+                lastSid && sessions.some((s) => s.sessionId === lastSid)
+                  ? lastSid
+                  : sessions[0].sessionId;
+              useSessionStore.getState().setActiveSession(targetSession);
             } else {
               await useSessionStore.getState().createNewSession();
             }
@@ -204,7 +214,12 @@ function App() {
         addLog(`Restored project: ${first.name} (${sessions.length} sessions)`);
 
         if (sessions.length > 0) {
-          const sid = sessions[0].sessionId;
+          const { lastActiveSessionByProject } = useSessionStore.getState();
+          const lastSid = lastActiveSessionByProject[first.path];
+          const sid =
+            lastSid && sessions.some((s) => s.sessionId === lastSid)
+              ? lastSid
+              : sessions[0].sessionId;
           useSessionStore.getState().setActiveSession(sid);
         } else {
           await useSessionStore.getState().createNewSession();

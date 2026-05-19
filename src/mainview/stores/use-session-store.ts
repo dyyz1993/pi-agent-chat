@@ -17,6 +17,7 @@ import {
 import { useTurnStore } from "./use-turn-store";
 import { useChatNavStore } from "./use-chat-nav-store";
 import { useRetryStore } from "./use-retry-store";
+import { useRetryConfigStore, RETRY_DEFAULTS } from "./use-settings-store";
 import { useSubagentStore, clearSubagentToolNames } from "./use-subagent-store";
 import { useAgentStore } from "./use-agent-store";
 import {
@@ -116,6 +117,7 @@ interface SessionState {
     reasoning?: boolean;
   }>;
   modelFavorites: Set<string>;
+  lastActiveSessionByProject: Record<string, string>;
   projectStartFailed: Record<string, boolean>;
   projectStartError: Record<string, string>;
   _projectVersion: number;
@@ -178,6 +180,7 @@ export const useSessionStore = create<SessionState>()(
       currentThinkingLevel: "medium",
       availableModels: [],
       modelFavorites: new Set<string>(),
+      lastActiveSessionByProject: {},
       projectStartFailed: {},
       projectStartError: {},
       _projectVersion: 0,
@@ -272,7 +275,12 @@ export const useSessionStore = create<SessionState>()(
               }));
 
               if (sessions.length > 0) {
-                get().setActiveSession(sessions[0].sessionId);
+                const lastSid = get().lastActiveSessionByProject[tab.path];
+                const targetSession =
+                  lastSid && sessions.some((s) => s.sessionId === lastSid)
+                    ? lastSid
+                    : sessions[0].sessionId;
+                get().setActiveSession(targetSession);
                 // 拉取该项目的所有 session 状态
                 await get().fetchAllSessionStatuses();
               } else {
@@ -371,9 +379,20 @@ export const useSessionStore = create<SessionState>()(
           });
         }
 
+        const { projectTabs: curTabs, activeProjectId: curProjectId } = get();
+        const curTab = curTabs.find((t) => t.id === curProjectId);
+
         set({
           activeSessionId: id,
           sessionReady: id ? { ...get().sessionReady, [id]: false } : get().sessionReady,
+          ...(id && curTab
+            ? {
+                lastActiveSessionByProject: {
+                  ...get().lastActiveSessionByProject,
+                  [curTab.path]: id,
+                },
+              }
+            : {}),
         });
         if (!id) return;
 
@@ -878,6 +897,7 @@ export const useSessionStore = create<SessionState>()(
             const currentAgentPromise = apiClient.call("agent.getCurrentAgent", { sessionId });
             const tierPromise = apiClient.call("agent.getTierModels", { sessionId });
             const favoritesPromise = apiClient.call("project.getModelFavorites", {});
+            const settingsPromise = apiClient.call("agent.getSettings", { sessionId });
 
             statePromise
               .then((rawResult) => {
@@ -949,6 +969,29 @@ export const useSessionStore = create<SessionState>()(
               .then((res) => {
                 if (res) {
                   set({ modelFavorites: new Set((res as { favorites: string[] }).favorites) });
+                }
+              })
+              .catch(() => {});
+
+            settingsPromise
+              .then((raw) => {
+                const settings = raw as Record<string, unknown> | null;
+                if (!settings) return;
+                const retry = settings.retry as
+                  | {
+                      enabled?: boolean;
+                      maxRetries?: number;
+                      baseDelayMs?: number;
+                      maxDelayMs?: number;
+                    }
+                  | undefined;
+                if (retry) {
+                  useRetryConfigStore.getState().setRetryConfig({
+                    enabled: retry.enabled ?? RETRY_DEFAULTS.enabled,
+                    maxRetries: retry.maxRetries ?? RETRY_DEFAULTS.maxRetries,
+                    baseDelayMs: retry.baseDelayMs ?? RETRY_DEFAULTS.baseDelayMs,
+                    maxDelayMs: retry.maxDelayMs ?? RETRY_DEFAULTS.maxDelayMs,
+                  });
                 }
               })
               .catch(() => {});
@@ -1421,6 +1464,7 @@ export const useSessionStore = create<SessionState>()(
       name: "pi-agent-session",
       partialize: (state) => ({
         modelFavorites: [...state.modelFavorites],
+        lastActiveSessionByProject: state.lastActiveSessionByProject,
       }),
       merge: (persisted, current) => {
         const p = persisted as Partial<SessionState> & { modelFavorites?: string[] };
@@ -1428,6 +1472,7 @@ export const useSessionStore = create<SessionState>()(
           ...current,
           ...(persisted as Partial<SessionState>),
           modelFavorites: new Set(p.modelFavorites ?? []),
+          lastActiveSessionByProject: p.lastActiveSessionByProject ?? {},
           projectStartFailed: current.projectStartFailed,
           projectStartError: current.projectStartError,
           _projectVersion: current._projectVersion,
