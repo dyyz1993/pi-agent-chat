@@ -40,8 +40,14 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   const m = getManager();
 
   r("agent.start", async (params) => {
-    log.info("start called", { sessionId: params.sessionId, projectPath: params.projectPath });
-    const result = await m.start(params.sessionId, params.projectPath, params.sessionPath);
+    log.info("start called", {
+      sessionId: params.sessionId,
+      projectPath: params.projectPath,
+      forceNewProcess: params.forceNewProcess,
+    });
+    const result = await m.start(params.sessionId, params.projectPath, params.sessionPath, {
+      forceNewProcess: params.forceNewProcess,
+    });
     log.info("start result", { result });
     return result;
   });

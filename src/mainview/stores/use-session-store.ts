@@ -127,7 +127,11 @@ interface SessionState {
   reorderProjectTabs: (fromIndex: number, toIndex: number) => void;
   setActiveProject: (id: string, options?: { skipAutoSession?: boolean }) => void;
   loadSessionsForProject: (projectPath: string) => Promise<SessionMeta[]>;
-  setActiveSession: (id: string | null, force?: boolean) => void;
+  setActiveSession: (
+    id: string | null,
+    force?: boolean,
+    options?: { skipCleanup?: boolean; forceNewProcess?: boolean },
+  ) => void;
   retryActiveProject: () => void;
   createNewSession: (projectPath?: string) => Promise<void>;
   updateSessionProjectPath: (sessionId: string, projectPath: string) => void;
@@ -354,18 +358,20 @@ export const useSessionStore = create<SessionState>()(
         }
       },
 
-      setActiveSession: (id, force) => {
+      setActiveSession: (id, force, options) => {
         const tSwitchStart = performance.now();
         const prevId = get().activeSessionId;
         if (!force && prevId === id) return;
+        const skipCleanup = options?.skipCleanup ?? false;
 
         perfLog.info("[switch] === SESSION SWITCH START ===", {
           from: prevId ?? "(none)",
           to: id,
           force: !!force,
+          skipCleanup,
         });
 
-        if (prevId && prevId !== id) {
+        if (prevId && prevId !== id && !skipCleanup) {
           const t0 = performance.now();
           cleanupSession(get(), prevId);
           cleanupSessionData(prevId);
@@ -373,6 +379,10 @@ export const useSessionStore = create<SessionState>()(
           perfLog.info("[switch] step-1 cleanup old session", {
             prevId,
             ms: Math.round(performance.now() - t0),
+          });
+        } else if (skipCleanup && prevId && prevId !== id) {
+          perfLog.info("[switch] step-1 SKIPPED cleanup (fork scenario)", {
+            prevId,
           });
         }
 
@@ -437,6 +447,7 @@ export const useSessionStore = create<SessionState>()(
               sessionId: id,
               projectPath: session.projectPath,
               sessionPath: session.sessionPath,
+              forceNewProcess: options?.forceNewProcess,
             });
 
             const timeoutPromise = new Promise<never>((_, reject) =>
@@ -799,8 +810,18 @@ export const useSessionStore = create<SessionState>()(
         }
 
         if (deletedSessionPath) {
+          // Stop backend process first, then delete session file
           apiClient
-            .call("session.delete", { sessionId, sessionPath: deletedSessionPath })
+            .call("agent.stop", { sessionId })
+            .catch((err) => {
+              log.warn("agent.stop before delete failed", {
+                sessionId,
+                err: err instanceof Error ? err.message : String(err),
+              });
+            })
+            .then(() =>
+              apiClient.call("session.delete", { sessionId, sessionPath: deletedSessionPath }),
+            )
             .catch((err) => {
               log.warn("session.delete failed", {
                 err: err instanceof Error ? err.message : String(err),

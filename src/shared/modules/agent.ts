@@ -12,7 +12,12 @@ import type {
 
 export interface AgentMethods {
   "agent.start": {
-    params: { sessionId: string; projectPath: string; sessionPath: string };
+    params: {
+      sessionId: string;
+      projectPath: string;
+      sessionPath: string;
+      forceNewProcess?: boolean;
+    };
     result: { agentId: string; status: "started" | "already_running" | "switched" };
   };
   "agent.replayHoldEvents": {

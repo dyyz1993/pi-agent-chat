@@ -575,7 +575,10 @@ const HeaderActions = memo(function HeaderActions({
       },
     }));
 
-    state.setActiveSession(result.newSessionId);
+    state.setActiveSession(result.newSessionId, undefined, {
+      skipCleanup: true,
+      forceNewProcess: true,
+    });
     useChatStore.getState().loadSessionMessages(result.newSessionId, { force: true });
 
     // Inherit current tier config

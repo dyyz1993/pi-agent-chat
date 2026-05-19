@@ -2916,7 +2916,9 @@ export class AgentProcessManager {
     // Strip parentSession so the forked session is independent (not a child)
     stripParentSessionFromHeader(forkedPath);
 
-    const result = await this.start(forkedSessionId, projectPath, forkedPath);
+    const result = await this.start(forkedSessionId, projectPath, forkedPath, {
+      forceNewProcess: true,
+    });
 
     // Register parent-child relationship
     let children = this.parentChildMap.get(parentSessionId);

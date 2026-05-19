@@ -202,7 +202,10 @@ export function ChatPanel() {
         },
       }));
 
-      useSessionStore.getState().setActiveSession(result.newSessionId);
+      useSessionStore.getState().setActiveSession(result.newSessionId, undefined, {
+        skipCleanup: true,
+        forceNewProcess: true,
+      });
       useChatStore.getState().loadSessionMessages(result.newSessionId, {
         force: true,
       });
