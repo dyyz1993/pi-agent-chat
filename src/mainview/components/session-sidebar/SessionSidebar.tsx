@@ -38,6 +38,11 @@ export function groupSessions(
     return true;
   });
 
+  const idToPath = new Map<string, string>();
+  for (const sess of deduped) {
+    idToPath.set(sess.sessionId, sess.sessionPath);
+  }
+
   const children: Record<string, SessionMeta[]> = {};
   const roots: SessionMeta[] = [];
   const q = searchQuery.trim().toLowerCase();
@@ -46,6 +51,14 @@ export function groupSessions(
     if (sess.parentSessionPath) {
       if (!children[sess.parentSessionPath]) children[sess.parentSessionPath] = [];
       children[sess.parentSessionPath].push(sess);
+    } else if (sess.delegateParentSessionId) {
+      const parentPath = idToPath.get(sess.delegateParentSessionId);
+      if (parentPath) {
+        if (!children[parentPath]) children[parentPath] = [];
+        children[parentPath].push(sess);
+      } else {
+        roots.push(sess);
+      }
     } else {
       roots.push(sess);
     }
@@ -190,6 +203,14 @@ function SessionList({
     if (subs && subs.length > 0) {
       autoExpandedRef.current.add(activeSessionId);
       onExpandSession(activeSessionId);
+    }
+    const activeSession = rawSessions.find((s) => s.sessionId === activeSessionId);
+    if (activeSession?.delegateParentSessionId) {
+      const parentId = activeSession.delegateParentSessionId;
+      if (!autoExpandedRef.current.has(parentId)) {
+        autoExpandedRef.current.add(parentId);
+        onExpandSession(parentId);
+      }
     }
   }, [subsessionsByParent, activeSessionId, rawSessions, onExpandSession]);
 
