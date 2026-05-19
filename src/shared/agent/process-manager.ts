@@ -330,6 +330,7 @@ export class AgentProcessManager {
     sessionId: string,
     projectPath: string,
     sessionPath: string,
+    options?: { forceNewProcess?: boolean },
   ): Promise<{ agentId: string; status: "started" | "already_running" | "switched" }> {
     const tStart = performance.now();
 
@@ -353,7 +354,7 @@ export class AgentProcessManager {
     }
 
     // ── Process pool: reuse existing process for same cwd ──
-    const pooled = this.processByCwd.get(projectPath);
+    const pooled = options?.forceNewProcess ? null : this.processByCwd.get(projectPath);
     if (pooled) {
       const oldSessionId = pooled._activeSessionId;
       const tSwitch = performance.now();
@@ -523,7 +524,9 @@ export class AgentProcessManager {
     log.info("RpcClient started", { sessionId });
     this.sessionPaths.set(sessionId, sessionPath);
     this.sessionProjectPaths.set(sessionId, projectPath);
-    this.processByCwd.set(projectPath, managed);
+    if (!options?.forceNewProcess) {
+      this.processByCwd.set(projectPath, managed);
+    }
     this._startInProgress = false;
     this._drainPendingDelegates();
     return { agentId: sessionId, status: "started" };
@@ -2600,7 +2603,24 @@ export class AgentProcessManager {
     const sessionDir = path.dirname(parent.info.sessionPath);
     const sessionPath = path.join(sessionDir, `${newSessionId}.jsonl`);
 
-    await this.start(newSessionId, projectPath, sessionPath);
+    try {
+      const { writeFile } = await import("fs/promises");
+      const headerEntry = JSON.stringify({
+        type: "session",
+        version: 3,
+        id: newSessionId,
+        timestamp: new Date().toISOString(),
+        cwd: projectPath,
+      });
+      await writeFile(sessionPath, headerEntry + "\n", "utf-8");
+    } catch (writeErr: unknown) {
+      log.warn("[handleCoordinatorDelegateSync] failed to write session header", {
+        sessionPath,
+        err: writeErr instanceof Error ? writeErr.message : String(writeErr),
+      });
+    }
+
+    await this.start(newSessionId, projectPath, sessionPath, { forceNewProcess: true });
 
     try {
       const { appendFile } = await import("fs/promises");
