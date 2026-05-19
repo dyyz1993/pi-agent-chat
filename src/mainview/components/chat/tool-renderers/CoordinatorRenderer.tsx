@@ -1,8 +1,9 @@
-import { memo, useCallback, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { ExternalLink } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { ContentBlock, SessionStatus } from "../../../types";
 import { useSessionStore } from "../../../stores/use-session-store";
+import { useSettingsStore } from "../../../stores/use-settings-store";
 import { ToolCardHeader, type ToolCardStatus } from "../primitives/ToolCardHeader";
 
 type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
@@ -143,6 +144,17 @@ export const DelegateCard = memo(function DelegateCard({
       ? t("coordinator.creating")
       : undefined;
 
+  const collapseToolCards = useSettingsStore((s) => s.collapseToolCards);
+  const [collapsed, setCollapsed] = useState(() => !isRunning && collapseToolCards);
+  const wasRunningRef = useRef(isRunning);
+
+  useEffect(() => {
+    if (wasRunningRef.current && !isRunning && collapseToolCards) {
+      setCollapsed(true);
+    }
+    wasRunningRef.current = isRunning;
+  }, [isRunning, collapseToolCards]);
+
   return (
     <div
       data-block-id={blockId}
@@ -159,8 +171,26 @@ export const DelegateCard = memo(function DelegateCard({
         toolName="delegate"
         status={toCardStatus(block)}
         description={displayTitle}
+        collapsed={collapsed}
+        onClick={() => setCollapsed((c) => !c)}
         badge={renderBadge(statusLabel, isRunning, sessionStatus, isDone, canJump, handleJump)}
       />
+      {!collapsed && !isRunning && taskText && (
+        <div className="px-3 pb-2 border-t border-border-secondary/20">
+          <div className="text-[10px] text-text-tertiary mb-0.5 select-none">Input</div>
+          <span className="text-[11px] text-blue-600/70 dark:text-blue-400/70 italic block">
+            {taskText.slice(0, 500)}
+          </span>
+        </div>
+      )}
+      {!collapsed && !isRunning && block.output && (
+        <div className="px-3 pb-2 border-t border-border-secondary/20">
+          <div className="text-[10px] text-text-tertiary mb-0.5 select-none">Output</div>
+          <div className="text-[11px] text-text-tertiary font-mono whitespace-pre-wrap max-h-36 overflow-y-auto">
+            {block.output}
+          </div>
+        </div>
+      )}
     </div>
   );
 });

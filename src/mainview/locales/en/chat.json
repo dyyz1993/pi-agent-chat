@@ -181,6 +181,7 @@
   "subagent.error": "Error",
   "subagent.executing": "Executing...",
   "subagent.liveOutput": "Live output",
+  "subagent.input": "Input",
   "subagent.output": "Output",
   "subagent.noOutput": "No output yet",
 

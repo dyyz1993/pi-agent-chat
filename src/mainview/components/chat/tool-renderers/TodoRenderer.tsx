@@ -43,13 +43,23 @@ function getPriorityIcon(priority: string | undefined) {
   }
 }
 
+function trunc(s: string, n = 30) {
+  return s.length > n ? s.slice(0, n) + "…" : s;
+}
+
 function ActionSummary({ details }: { details: TodoDetails }) {
   switch (details.action) {
     case "list": {
-      const count = details.totalActive ?? details.active?.length ?? 0;
+      const todos = details.todos ?? details.active ?? [];
+      const count = details.totalActive ?? todos.length;
+      const done = todos.filter((t) => t.done).length;
       return (
         <span className="text-text-tertiary font-normal">
-          {count > 0 ? `${count} 个任务` : "暂无待办事项"}
+          {count > 0
+            ? done > 0
+              ? `${count} 个任务 (${done} 已完成)`
+              : `${count} 个任务`
+            : "暂无待办事项"}
         </span>
       );
     }
@@ -62,23 +72,32 @@ function ActionSummary({ details }: { details: TodoDetails }) {
             ✓ #{added[0].id}: {added[0].text}
           </span>
         );
-      return <span className="text-status-success">✓ 添加 {added.length} 个任务</span>;
+      const first = added[0].text ? trunc(added[0].text) : `#${added[0].id}`;
+      return (
+        <span className="text-status-success">
+          ✓ {first} 等{added.length}项
+        </span>
+      );
     }
     case "toggle": {
       const todo = details.todos?.find((t) => t.id !== undefined);
       if (!todo) return <span className="text-text-tertiary">切换状态</span>;
+      const label = todo.text ? trunc(todo.text) : `#${todo.id}`;
       return (
         <span className={todo.done ? "text-text-tertiary" : "text-status-info"}>
-          {todo.done ? `☑ #${todo.id} 已完成` : `☐ #${todo.id} 未完成`}
+          {todo.done ? `☑ ${label} 已完成` : `☐ ${label} 未完成`}
         </span>
       );
     }
     case "remove": {
-      const count = (details.deleted ?? []).length;
-      return count > 0 ? (
-        <span className="text-text-tertiary">🗑 删除 {count} 个任务</span>
-      ) : (
-        <span className="text-text-tertiary">删除操作</span>
+      const deleted = details.deleted ?? [];
+      const count = deleted.length;
+      if (count === 0) return <span className="text-text-tertiary">删除操作</span>;
+      const first = deleted[0].text ? trunc(deleted[0].text) : `#${deleted[0].id}`;
+      return (
+        <span className="text-text-tertiary">
+          🗑 删除 "{first}"{count > 1 ? ` 等${count}项` : ""}
+        </span>
       );
     }
     case "clear": {

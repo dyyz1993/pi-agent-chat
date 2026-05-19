@@ -1,4 +1,4 @@
-import { memo, useState, useEffect, useRef, useCallback } from "react";
+import { memo, useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { ExternalLink } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { ContentBlock, SubagentSessionInfo } from "../../../types";
@@ -57,6 +57,29 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
 
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
 
+  const [now, setNow] = useState(Date.now());
+  const startTime = matchedSub?.startedAt;
+  const endTime = matchedSub?.completedAt;
+
+  useEffect(() => {
+    if (!startTime || endTime) return;
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [startTime, endTime]);
+
+  const durationText = useMemo(() => {
+    if (!startTime) return null;
+    const end = endTime ?? now;
+    const diffMs = end - startTime;
+    if (diffMs < 0) return null;
+    if (diffMs < 1000) return `${diffMs}ms`;
+    const sec = Math.floor(diffMs / 1000);
+    if (sec < 60) return `${sec}s`;
+    const min = Math.floor(sec / 60);
+    const remainSec = sec % 60;
+    return remainSec > 0 ? `${min}m${remainSec}s` : `${min}m`;
+  }, [startTime, endTime, now]);
+
   const handleJumpToSession = useCallback(() => {
     if (!matchedSub) return;
     const childSessionId = matchedSub.sessionId;
@@ -90,6 +113,11 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
 
   const badgeContent = (
     <>
+      {matchedSub?.agent && (
+        <span className="shrink-0 text-[9px] px-1 py-0.5 rounded font-mono bg-semantic-accent/10 text-accent-text">
+          {matchedSub.agent}
+        </span>
+      )}
       <span className={`shrink-0 text-[10px] ${statusColorClass}`}>{statusText}</span>
       {matchedSub && !isRunning && (
         <button
@@ -118,19 +146,32 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
         collapsed={collapsed}
         onClick={() => setCollapsed((c) => !c)}
         badge={badgeContent}
+        time={
+          durationText ? (
+            <span className="shrink-0 text-[10px] text-text-tertiary tabular-nums">
+              {durationText}
+            </span>
+          ) : undefined
+        }
       />
 
-      {!collapsed && block.output && (
-        <div className="px-3 pb-2 pt-0.5 max-h-64 overflow-y-auto">
-          <AnsiText content={block.output} className="text-[11px] leading-relaxed" />
+      {!collapsed && instruction && (
+        <div className="px-3 pb-2 pt-0.5 border-t border-border-secondary/20">
+          <div className="text-[10px] text-text-tertiary mb-0.5 select-none">
+            {t("subagent.input")}
+          </div>
+          <span className="text-[11px] text-semantic-agent/70 italic block">
+            {instruction.slice(0, 500)}
+          </span>
         </div>
       )}
 
-      {!collapsed && isRunning && !block.output && instruction && (
-        <div className="px-3 pb-2 pt-0.5">
-          <span className="text-[11px] text-semantic-agent/70 italic truncate block">
-            {instruction.slice(0, 200)}
-          </span>
+      {!collapsed && block.output && (
+        <div className="px-3 pb-2 pt-0.5 border-t border-border-secondary/20">
+          <div className="text-[10px] text-text-tertiary mb-0.5 select-none">
+            {t("subagent.output")}
+          </div>
+          <AnsiText content={block.output} className="text-[11px] leading-relaxed" />
         </div>
       )}
     </div>

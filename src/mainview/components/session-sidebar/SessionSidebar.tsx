@@ -180,6 +180,7 @@ function SessionList({
     return s.sessionsByProject[tab.path] || EMPTY;
   });
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const activeSubId = useSubagentStore((s) => s.activeSubsessionId);
   const loading = useSessionStore((s) => s.loading);
 
   const activeSessionPath = useMemo(() => {
@@ -242,7 +243,7 @@ function SessionList({
         <SessionItem
           key={sess.sessionId}
           session={sess}
-          isActive={sess.sessionId === activeSessionId}
+          isActive={sess.sessionId === activeSessionId && !activeSubId}
           children={childMap[sess.sessionPath]}
           isExpanded={expandedIds.has(sess.sessionId)}
           onToggleExpand={() => onToggleExpand(sess.sessionId)}
@@ -324,6 +325,19 @@ function SubagentStatusBadge({ sub }: { sub: SubagentSessionInfo }) {
       <span className="w-1 h-1 rounded-full bg-status-warning animate-pulse" />
       {t("running")}
     </span>
+  );
+}
+
+function DelegateChildItem({ session }: { session: SessionMeta }) {
+  const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  return (
+    <SessionItem
+      key={session.sessionId}
+      session={session}
+      isActive={session.sessionId === activeSessionId}
+      isExpanded={false}
+      onToggleExpand={() => {}}
+    />
   );
 }
 
@@ -571,15 +585,7 @@ function SessionItem({
           )}
           {!loadingSubs &&
             hasPiChildren &&
-            children?.map((child) => (
-              <SessionItem
-                key={child.sessionId}
-                session={child}
-                isActive={false}
-                isExpanded={false}
-                onToggleExpand={() => {}}
-              />
-            ))}
+            children?.map((child) => <DelegateChildItem key={child.sessionId} session={child} />)}
           {!loadingSubs &&
             hasSubagents &&
             subsessions?.map((sub) => (
@@ -600,6 +606,32 @@ function SessionItem({
       )}
     </div>
   );
+}
+
+function formatDuration(startMs: number, endMs: number): string {
+  const diffMs = endMs - startMs;
+  if (diffMs < 0) return "0s";
+  if (diffMs < 1000) return `${Math.round(diffMs)}ms`;
+  const sec = Math.floor(diffMs / 1000);
+  if (sec < 60) return `${sec}s`;
+  const min = Math.floor(sec / 60);
+  const remainSec = sec % 60;
+  return remainSec > 0 ? `${min}m${remainSec}s` : `${min}m`;
+}
+
+function SubagentDuration({ sub }: { sub: SubagentSessionInfo }) {
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    if (sub.completedAt) return;
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [sub.completedAt]);
+
+  const end = sub.completedAt ?? now;
+  const text = formatDuration(sub.startedAt, end);
+
+  return <span className="text-[9px] text-text-tertiary tabular-nums">{text}</span>;
 }
 
 function SubagentItem({
@@ -763,6 +795,7 @@ function SubagentItem({
         </div>
         <div className="flex items-center gap-1.5 mt-1.5">
           <SubagentStatusBadge sub={sub} />
+          <SubagentDuration sub={sub} />
           <div className="ml-auto flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
             <button
               onClick={handleCopyId}

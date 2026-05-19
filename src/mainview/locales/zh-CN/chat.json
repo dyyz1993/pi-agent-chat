@@ -181,6 +181,7 @@
   "subagent.error": "出错",
   "subagent.executing": "执行中...",
   "subagent.liveOutput": "实时输出",
+  "subagent.input": "输入",
   "subagent.output": "输出",
   "subagent.noOutput": "暂无输出",
 
