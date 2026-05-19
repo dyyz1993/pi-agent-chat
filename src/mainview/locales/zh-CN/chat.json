@@ -173,6 +173,7 @@
   "bash.cancelExecution": "取消执行",
   "bash.viewOutput": "查看输出",
 
+  "subagent.subagent": "子代理",
   "subagent.subagentTask": "子代理任务",
   "subagent.view": "查看",
   "subagent.running": "运行中",

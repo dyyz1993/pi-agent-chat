@@ -11,6 +11,7 @@ import { tryFormatAsYaml } from "../../../../shared/lib/json-to-yaml";
 import { apiClient } from "../../../lib/api-client";
 import { useThemeStore, isDarkGroup } from "../../../stores/use-theme-store";
 import { AnsiText } from "../primitives/AnsiText";
+import { ToolCardHeader } from "../primitives/ToolCardHeader";
 import { LogViewer } from "../../bash-panel/BashPanel";
 
 type Block = Extract<ContentBlock, { type: "toolExecution" }>;
@@ -199,16 +200,11 @@ export const BashExecutionCard = memo(function BashExecutionCard({
   }
 
   let borderBg: string;
-  let statusLabel: React.ReactNode = null;
 
   if (isBackground) {
     borderBg = "border-status-warning/30 bg-status-warning/10 dark:bg-status-warning/20";
-    statusLabel = (
-      <span className="text-status-warning text-[10px]">{t("bash.backgroundRunning")}</span>
-    );
   } else if (isTerminated) {
     borderBg = "border-status-error/20 bg-status-error/10 dark:bg-status-error/15";
-    statusLabel = <span className="text-status-error text-[10px]">{t("common:cancelled")}</span>;
   } else if (isRunning) {
     borderBg = "border-status-info/30 bg-status-info/10 dark:bg-status-info/20";
   } else if (isError) {
@@ -222,21 +218,20 @@ export const BashExecutionCard = memo(function BashExecutionCard({
       data-block-id={blockId}
       className={`rounded-none overflow-hidden border-x-0 border-t border-b ${borderBg}`}
     >
-      <div
-        className="px-3 py-1.5 flex items-center gap-2 text-xs cursor-pointer hover:bg-surface-hover transition-colors select-none"
-        onClick={() => setCollapsed((c) => !c)}
-        role="button"
-        aria-expanded={!collapsed}
-      >
-        {collapsed && isRunning && (
-          <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-status-info animate-pulse" />
-        )}
-        <span
-          className={`font-medium shrink-0 ${isBackground ? "text-status-warning" : isTerminated ? "text-status-error" : isRunning ? "text-status-info" : isError ? "text-status-error" : "text-text-primary"}`}
-        >
-          {block.toolName}
-        </span>
-        {(() => {
+      <ToolCardHeader
+        toolName="bash"
+        status={
+          isBackground
+            ? "background"
+            : isTerminated
+              ? "terminated"
+              : isRunning
+                ? "running"
+                : isError
+                  ? "error"
+                  : "done"
+        }
+        description={(() => {
           let summary = block.description;
           if (!summary && block.args) {
             try {
@@ -249,80 +244,82 @@ export const BashExecutionCard = memo(function BashExecutionCard({
             }
             if (!summary) summary = block.args.split("\n")[0]?.trim().slice(0, 120);
           }
-          return summary ? (
-            <span className="flex-1 min-w-0 text-text-secondary truncate text-[11px]">
-              {summary}
-            </span>
-          ) : (
-            <span className="flex-1" />
-          );
+          return summary ?? "";
         })()}
-        {isRunning && !statusLabel && (
-          <span className="shrink-0 flex items-center gap-1 text-[10px] text-text-tertiary tabular-nums">
-            {formatDuration(elapsed)}
-            {timeout != null &&
-              timeout > 0 &&
-              timeout <= 86400 &&
-              (() => {
-                const remainingMs = timeout * 1000 - elapsed;
-                const remaining = Math.max(0, remainingMs);
-                const pct = (elapsed / (timeout * 1000)) * 100;
-                return (
-                  <span className={pct > 80 ? "text-status-error" : "text-status-warning"}>
-                    / {formatDuration(remaining)}
-                  </span>
-                );
-              })()}
-          </span>
-        )}
-        {statusLabel}
-        {bashDetails?.background && (
-          <span className="text-[10px] text-text-tertiary shrink-0">
-            PID: {bashDetails.background.pid}
-          </span>
-        )}
-        {(bashDetails?.background ?? (storeStatus === "background" && bashProcess)) && (
-          <span className="text-[10px] text-text-tertiary tabular-nums shrink-0">
-            {formatDuration(
-              bashDetails?.background?.durationMs ??
-                Date.now() - (bashProcess?.startedAt ?? Date.now()),
-            )}
-            {timeout != null && timeout > 0 && timeout <= 86400 && (
-              <span className="text-text-secondary"> / {formatDuration(timeout * 1000)}</span>
-            )}
-          </span>
-        )}
-        {(bashDetails?.terminated ?? (storeStatus === "terminated" && bashProcess)) && (
-          <span className="text-[10px] text-text-tertiary tabular-nums shrink-0">
-            {formatDuration(
-              bashDetails?.terminated?.durationMs ??
-                (bashProcess?.endedAt ?? Date.now()) - (bashProcess?.startedAt ?? Date.now()),
-            )}
-            {timeout != null && timeout > 0 && timeout <= 86400 && (
-              <span className="text-text-secondary"> / {formatDuration(timeout * 1000)}</span>
-            )}
-          </span>
-        )}
-        {!isRunning &&
-          !isBackground &&
-          !isTerminated &&
-          !isError &&
-          timeout != null &&
-          timeout > 0 &&
-          timeout <= 86400 &&
-          (() => {
-            const durationMs =
-              bashProcess?.endedAt && bashProcess?.startedAt
-                ? bashProcess.endedAt - bashProcess.startedAt
-                : 0;
-            return (
-              <span className="text-[10px] text-text-tertiary tabular-nums shrink-0">
-                {formatDuration(durationMs)}
-                <span className="text-text-secondary"> / {formatDuration(timeout * 1000)}</span>
-              </span>
-            );
-          })()}
-      </div>
+        collapsed={collapsed}
+        onClick={() => setCollapsed((c) => !c)}
+        time={
+          isRunning ? (
+            <span className="shrink-0 flex items-center gap-1 text-[10px] text-text-tertiary tabular-nums">
+              {formatDuration(elapsed)}
+              {timeout != null &&
+                timeout > 0 &&
+                timeout <= 86400 &&
+                (() => {
+                  const remainingMs = timeout * 1000 - elapsed;
+                  const remaining = Math.max(0, remainingMs);
+                  const pct = (elapsed / (timeout * 1000)) * 100;
+                  return (
+                    <span className={pct > 80 ? "text-status-error" : "text-status-warning"}>
+                      / {formatDuration(remaining)}
+                    </span>
+                  );
+                })()}
+            </span>
+          ) : undefined
+        }
+        badge={
+          isBackground ? (
+            <>
+              <span className="text-status-warning text-[10px]">{t("bash.backgroundRunning")}</span>
+              {bashDetails?.background && (
+                <span className="text-[10px] text-text-tertiary shrink-0">
+                  PID: {bashDetails.background.pid}
+                </span>
+              )}
+              {(bashDetails?.background ?? (storeStatus === "background" && bashProcess)) && (
+                <span className="text-[10px] text-text-tertiary tabular-nums shrink-0">
+                  {formatDuration(
+                    bashDetails?.background?.durationMs ??
+                      Date.now() - (bashProcess?.startedAt ?? Date.now()),
+                  )}
+                  {timeout != null && timeout > 0 && timeout <= 86400 && (
+                    <span className="text-text-secondary"> / {formatDuration(timeout * 1000)}</span>
+                  )}
+                </span>
+              )}
+            </>
+          ) : isTerminated ? (
+            <>
+              <span className="text-status-error text-[10px]">{t("common:cancelled")}</span>
+              {(bashDetails?.terminated ?? (storeStatus === "terminated" && bashProcess)) && (
+                <span className="text-[10px] text-text-tertiary tabular-nums shrink-0">
+                  {formatDuration(
+                    bashDetails?.terminated?.durationMs ??
+                      (bashProcess?.endedAt ?? Date.now()) - (bashProcess?.startedAt ?? Date.now()),
+                  )}
+                  {timeout != null && timeout > 0 && timeout <= 86400 && (
+                    <span className="text-text-secondary"> / {formatDuration(timeout * 1000)}</span>
+                  )}
+                </span>
+              )}
+            </>
+          ) : !isRunning && !isError && timeout != null && timeout > 0 && timeout <= 86400 ? (
+            (() => {
+              const durationMs =
+                bashProcess?.endedAt && bashProcess?.startedAt
+                  ? bashProcess.endedAt - bashProcess.startedAt
+                  : 0;
+              return (
+                <span className="text-[10px] text-text-tertiary tabular-nums shrink-0">
+                  {formatDuration(durationMs)}
+                  <span className="text-text-secondary"> / {formatDuration(timeout * 1000)}</span>
+                </span>
+              );
+            })()
+          ) : undefined
+        }
+      />
 
       {collapsed ? null : (
         <>

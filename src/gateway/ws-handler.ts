@@ -47,6 +47,13 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
     const wsTransport = {
       send: async (message: unknown): Promise<void> => {
         if (ws.readyState === WebSocket.OPEN) {
+          const msg = message as Record<string, unknown>;
+          if (msg.method || msg.event) {
+            log.info("[ws-out]", {
+              method: msg.method ?? msg.event,
+              id: msg.id,
+            });
+          }
           ws.send(JSON.stringify(message));
         }
       },
@@ -54,6 +61,13 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
         const listener = (data: Buffer) => {
           try {
             const msg = JSON.parse(data.toString()) as Record<string, unknown>;
+            if (msg.method || msg.type) {
+              log.info("[ws-in]", {
+                method: msg.method ?? msg.type,
+                id: msg.id,
+                paramsKeys: msg.params ? Object.keys(msg.params as object) : undefined,
+              });
+            }
             handler(msg);
           } catch (err) {
             log.error("Failed to parse message", {

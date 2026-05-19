@@ -28,6 +28,8 @@ import {
   Zap,
   ListTodo,
   FileCode,
+  UserPlus,
+  GitFork,
   type LucideIcon,
 } from "lucide-react";
 import { ALL_MEMORY_TYPES } from "./memory-config";
@@ -40,6 +42,8 @@ export type ToolIconEntry = {
 
 const TOOL_ICON_MAP: Record<string, ToolIconEntry> = {
   subagent: { icon: Bot, color: "text-semantic-agent", label: "SubAgent" },
+  delegate: { icon: UserPlus, color: "text-semantic-agent", label: "Delegate" },
+  fork: { icon: GitFork, color: "text-semantic-notify", label: "Fork" },
   read: { icon: Eye, color: "text-status-info", label: "Read" },
   edit: { icon: Pencil, color: "text-status-success", label: "Edit" },
   write: { icon: Pencil, color: "text-status-success", label: "Write" },

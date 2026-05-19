@@ -1,7 +1,7 @@
 import { memo, useState, useEffect, useRef } from "react";
 import { CheckSquare, Square, TriangleAlert, Zap, Activity } from "lucide-react";
 import type { ToolRendererProps } from "./registry";
-import { getToolIcon } from "../tool-icon-map";
+import { ToolCardHeader, type ToolCardStatus } from "../primitives/ToolCardHeader";
 import { useSettingsStore } from "../../../stores/use-settings-store";
 
 interface TodoItem {
@@ -171,53 +171,29 @@ export const TodoExecRenderer = memo(function TodoExecRenderer({ block }: ToolRe
     }
   })();
 
+  const status: ToolCardStatus = isRunning ? "running" : isError ? "error" : "done";
+
+  const description = operation || (details ? <ActionSummary details={details} /> : undefined);
+
+  const badge = isRunning ? (
+    <span className="shrink-0 text-[10px] text-status-info animate-pulse">执行中...</span>
+  ) : details ? (
+    <ActionSummary details={details} />
+  ) : undefined;
+
   return (
     <div
       data-toolcall-id={block.toolCallId}
       className={`rounded-none overflow-hidden border-x-0 border-t border-b ${borderBg}`}
     >
-      {/* Header */}
-      <div
-        className="px-3 py-1.5 flex items-center gap-2 text-xs cursor-pointer hover:bg-surface-hover transition-colors select-none"
+      <ToolCardHeader
+        toolName="todo"
+        status={status}
+        description={description}
+        collapsed={collapsed}
+        badge={badge}
         onClick={() => setCollapsed((c) => !c)}
-        role="button"
-        aria-expanded={!collapsed}
-      >
-        {collapsed && isRunning && (
-          <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-status-info animate-pulse" />
-        )}
-        {(() => {
-          const { icon: TodoIcon } = getToolIcon("todo");
-          return (
-            <TodoIcon
-              className={`w-3.5 h-3.5 shrink-0 ${
-                isRunning
-                  ? "text-status-info"
-                  : isError
-                    ? "text-status-error"
-                    : "text-status-warning/70"
-              }`}
-            />
-          );
-        })()}
-        <span
-          className={`font-medium shrink-0 ${
-            isRunning ? "text-status-info" : isError ? "text-status-error" : "text-text-primary"
-          }`}
-        >
-          todo
-        </span>
-
-        {operation && <span className="text-text-tertiary text-[11px]">{operation}</span>}
-
-        <span className="flex-1 min-w-0" />
-
-        {isRunning && (
-          <span className="shrink-0 text-[10px] text-status-info animate-pulse">执行中...</span>
-        )}
-
-        {!isRunning && details && <ActionSummary details={details} />}
-      </div>
+      />
 
       {/* Content */}
       {collapsed ? null : isRunning ? (

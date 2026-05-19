@@ -1,9 +1,10 @@
-import { memo, useState, useMemo, useEffect, useRef } from "react";
+import { memo, useState, useMemo, useEffect, useRef, Fragment } from "react";
 import { CheckCircle, AlertCircle, AlertTriangle, Info } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { ContentBlock } from "../../../types";
-import { getToolIcon } from "../tool-icon-map";
 import { CopyButton } from "../CopyButton";
+import { ToolCardHeader } from "../primitives/ToolCardHeader";
+import type { ToolCardStatus } from "../primitives/ToolCardHeader";
 import { useSettingsStore } from "../../../stores/use-settings-store";
 
 interface LspDiagnostic {
@@ -83,6 +84,43 @@ function getSeverityColor(severity?: number): string {
   }
 }
 
+function LspBadge({
+  hasDiagnostics,
+  errorCount,
+  warnCount,
+  totalIssues,
+  isError,
+  isRunning,
+  copyText,
+  copyTitle,
+}: {
+  hasDiagnostics: boolean;
+  errorCount: number;
+  warnCount: number;
+  totalIssues: number;
+  isError: boolean;
+  isRunning: boolean;
+  copyText: string;
+  copyTitle: string;
+}) {
+  return (
+    <Fragment>
+      {!isRunning && hasDiagnostics && (
+        <span className="text-[10px] flex items-center gap-1">
+          {errorCount > 0 && <span className="text-status-error">{errorCount}E</span>}
+          {warnCount > 0 && <span className="text-status-warning">{warnCount}W</span>}
+          <span className="text-text-tertiary">{totalIssues} issues</span>
+        </span>
+      )}
+      {!isRunning && !isError && (
+        <CheckCircle className="w-3.5 h-3.5 text-status-success shrink-0" />
+      )}
+      {isError && <span className="w-3.5 h-3.5 shrink-0 text-status-error">✕</span>}
+      <CopyButton text={copyText} size="xs" title={copyTitle} />
+    </Fragment>
+  );
+}
+
 export const LspExecutionCard = memo(function LspExecutionCard({ block }: LspExecutionCardProps) {
   const { t } = useTranslation("chat");
   const collapseToolCards = useSettingsStore((s) => s.collapseToolCards);
@@ -107,6 +145,25 @@ export const LspExecutionCard = memo(function LspExecutionCard({ block }: LspExe
 
   const copyText = `[lsp] ${parsed.action}\n${block.output ?? ""}`;
 
+  const status: ToolCardStatus = isRunning ? "running" : isError ? "error" : "done";
+
+  const description = parsed.action
+    ? parsed.action
+    : (block.output?.split("\n")[0]?.slice(0, 80) ?? t("waitingOutput"));
+
+  const badge = (
+    <LspBadge
+      hasDiagnostics={hasDiagnostics}
+      errorCount={errorCount}
+      warnCount={warnCount}
+      totalIssues={parsed.diagnostics.length}
+      isError={isError}
+      isRunning={isRunning}
+      copyText={copyText}
+      copyTitle={t("copyAllExecution")}
+    />
+  );
+
   let bgClass: string;
   if (isRunning) bgClass = "bg-status-info/10";
   else if (isError) bgClass = "bg-status-error/5";
@@ -114,53 +171,16 @@ export const LspExecutionCard = memo(function LspExecutionCard({ block }: LspExe
 
   return (
     <div className={`overflow-hidden ${bgClass}`}>
-      <div
-        className="px-3 py-1 flex items-center gap-2 text-xs cursor-pointer hover:bg-surface-hover transition-colors select-none"
+      <ToolCardHeader
+        toolName="lsp_exec"
+        status={status}
+        description={description}
+        collapsed={collapsed}
         onClick={() => setCollapsed((c) => !c)}
-        role="button"
-        aria-expanded={!collapsed}
-      >
-        {collapsed && isRunning && (
-          <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-status-info animate-pulse" />
-        )}
+        badge={badge}
+      />
 
-        {(() => {
-          const { icon: LspIcon } = getToolIcon("lsp_exec");
-          return <LspIcon className="w-3 h-3 shrink-0 text-semantic-tool" />;
-        })()}
-
-        <span className="font-medium text-semantic-tool/90">
-          lsp
-          {parsed.action && (
-            <span className="text-text-tertiary font-normal ml-1">· {parsed.action}</span>
-          )}
-        </span>
-
-        {!isRunning && hasDiagnostics && !collapsed && (
-          <span className="ml-1.5 text-[10px] flex items-center gap-1">
-            {errorCount > 0 && <span className="text-status-error">{errorCount}E</span>}
-            {warnCount > 0 && <span className="text-status-warning">{warnCount}W</span>}
-            <span className="text-text-tertiary">{parsed.diagnostics.length} issues</span>
-          </span>
-        )}
-
-        {isRunning && <span className="text-status-info animate-pulse text-[10px]">running</span>}
-
-        {!isRunning && !isError && (
-          <CheckCircle className="w-3.5 h-3.5 text-status-success shrink-0 ml-auto" />
-        )}
-        {isError && <span className="w-3.5 h-3.5 shrink-0 ml-auto text-status-error">✕</span>}
-
-        <CopyButton text={copyText} size="xs" title={t("copyAllExecution")} />
-      </div>
-
-      {collapsed ? (
-        <div className="px-3 pb-2 text-[11px] text-text-tertiary truncate">
-          {hasDiagnostics
-            ? `${parsed.diagnostics.length} diagnostics (${errorCount} errors, ${warnCount} warnings)`
-            : (block.output?.split("\n")[0].slice(0, 80) ?? t("waitingOutput"))}
-        </div>
-      ) : (
+      {!collapsed && (
         <div className="pb-2">
           {hasDiagnostics ? (
             <div className="px-3 pt-0.5 space-y-0.5">

@@ -1,9 +1,9 @@
 import { memo, useState, useEffect, useRef } from "react";
 import { Zap, CheckCircle2, RefreshCw } from "lucide-react";
-import { getToolIcon } from "../tool-icon-map";
 import { useTranslation } from "react-i18next";
 import type { ContentBlock } from "../../../types";
 import { useSettingsStore } from "../../../stores/use-settings-store";
+import { ToolCardHeader } from "../primitives/ToolCardHeader";
 
 type Block = Extract<ContentBlock, { type: "toolExecution" }>;
 
@@ -66,6 +66,13 @@ export const ReadFileCard = memo(function ReadFileCard({
   }
 
   const displayPath = filePath || block.args?.slice(0, 80) || "";
+
+  const headerStatus = isRunning
+    ? ("running" as const)
+    : isError
+      ? ("error" as const)
+      : ("done" as const);
+
   const rulesData = isRulesMatchedData(block.details) ? block.details : null;
 
   // Compute overall status across all rules
@@ -85,34 +92,22 @@ export const ReadFileCard = memo(function ReadFileCard({
             : "border-border-secondary/30 bg-surface-dim"
       }`}
     >
-      <div
-        className="px-3 py-1.5 flex items-center gap-2 text-xs cursor-pointer hover:bg-surface-hover transition-colors select-none"
+      <ToolCardHeader
+        toolName="read"
+        status={headerStatus}
+        description={displayPath}
+        mono={true}
+        rtl={true}
+        collapsed={collapsed}
         onClick={() => setCollapsed((c) => !c)}
-        role="button"
-        aria-expanded={!collapsed}
-      >
-        {collapsed && isRunning && (
-          <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-status-info animate-pulse" />
-        )}
-        {(() => {
-          const { icon: ReadIcon } = getToolIcon("read");
-          return (
-            <ReadIcon
-              className={`w-3.5 h-3.5 shrink-0 ${isRunning ? "text-status-info" : isError ? "text-status-error" : "text-status-info/70"}`}
-            />
-          );
-        })()}
-        <span className="min-w-0 text-text-primary font-mono" title={displayPath}>
-          <span className="block truncate rtl" style={{ direction: "rtl", textAlign: "left" }}>
-            <span style={{ direction: "ltr", display: "inline" }}>{displayPath}</span>
-          </span>
-        </span>
-        {isRunning && (
-          <span className="ml-auto text-[10px] text-status-info animate-pulse shrink-0">
-            {t("readFile.reading")}
-          </span>
-        )}
-      </div>
+        badge={
+          isRunning ? (
+            <span className="ml-auto text-[10px] text-status-info animate-pulse shrink-0">
+              {t("readFile.reading")}
+            </span>
+          ) : undefined
+        }
+      />
 
       {collapsed ? null : (
         <>

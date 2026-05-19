@@ -1,8 +1,9 @@
-import { memo, useCallback } from "react";
-import { ExternalLink, GitFork, UserPlus } from "lucide-react";
+import { memo, useCallback, type ReactNode } from "react";
+import { ExternalLink } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { ContentBlock, SessionStatus } from "../../../types";
 import { useSessionStore } from "../../../stores/use-session-store";
+import { ToolCardHeader, type ToolCardStatus } from "../primitives/ToolCardHeader";
 
 type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
 
@@ -70,6 +71,50 @@ function sessionStatusLabel(status: SessionStatus | undefined, t: (k: string) =>
   }
 }
 
+function toCardStatus(block: ToolExecBlock): ToolCardStatus {
+  if (block.status === "running") return "running";
+  if (block.status === "error") return "error";
+  return "done";
+}
+
+function renderBadge(
+  statusLabel: string | undefined,
+  isRunning: boolean,
+  sessionStatus: SessionStatus | undefined,
+  isDone: boolean,
+  canJump: boolean,
+  handleJump: () => void,
+): ReactNode {
+  return (
+    <>
+      {statusLabel && (
+        <span
+          className={`shrink-0 text-[10px] ${
+            isRunning
+              ? "text-blue-500 dark:text-blue-400 animate-pulse"
+              : sessionStatus === "streaming"
+                ? "text-amber-500 dark:text-amber-400"
+                : "text-text-tertiary"
+          }`}
+        >
+          {statusLabel}
+        </span>
+      )}
+      {isDone && canJump && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            handleJump();
+          }}
+          className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 transition-colors"
+        >
+          <ExternalLink className="w-3 h-3" />
+        </button>
+      )}
+    </>
+  );
+}
+
 export const DelegateCard = memo(function DelegateCard({
   block,
   blockId,
@@ -80,7 +125,6 @@ export const DelegateCard = memo(function DelegateCard({
   const { t } = useTranslation("chat");
   const isRunning = block.status === "running";
   const isDone = block.status === "done";
-  const isError = block.status === "error";
 
   const args = parseArgs(block.args);
   const taskText = (args.task as string) ?? "";
@@ -105,66 +149,18 @@ export const DelegateCard = memo(function DelegateCard({
       className={`border-x-0 border-t border-b overflow-hidden transition-colors ${
         isRunning
           ? "border-blue-500/25 bg-blue-50 dark:bg-blue-950/20"
-          : isError
+          : block.status === "error"
             ? "border-red-500/15 bg-red-50 dark:bg-red-950/15"
             : "border-border-secondary/30 bg-surface-dim"
       } ${canJump ? "cursor-pointer" : ""}`}
       onClick={canJump ? handleJump : undefined}
     >
-      <div className="px-3 py-1.5 flex items-center gap-2 text-xs">
-        <UserPlus
-          className={`w-3.5 h-3.5 shrink-0 ${
-            isRunning
-              ? "text-blue-500 dark:text-blue-400"
-              : isError
-                ? "text-red-500 dark:text-red-400"
-                : "text-blue-500/70 dark:text-blue-400/60"
-          }`}
-        />
-        <span
-          className={`font-medium shrink-0 ${
-            isRunning
-              ? "text-blue-600 dark:text-blue-400"
-              : isError
-                ? "text-red-500 dark:text-red-400"
-                : "text-text-primary"
-          }`}
-        >
-          {t("coordinator.delegate")}
-        </span>
-
-        <span className="min-w-0 text-text-secondary truncate font-normal">{displayTitle}</span>
-
-        <span className="flex-1 min-w-0" />
-
-        {statusLabel && (
-          <span
-            className={`shrink-0 text-[10px] ${
-              isRunning
-                ? "text-blue-500 dark:text-blue-400 animate-pulse"
-                : sessionStatus === "streaming"
-                  ? "text-amber-500 dark:text-amber-400"
-                  : sessionStatus === "idle"
-                    ? "text-text-tertiary"
-                    : "text-text-tertiary"
-            }`}
-          >
-            {statusLabel}
-          </span>
-        )}
-
-        {isDone && canJump && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleJump();
-            }}
-            className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 transition-colors"
-          >
-            <ExternalLink className="w-3 h-3" />
-          </button>
-        )}
-      </div>
+      <ToolCardHeader
+        toolName="delegate"
+        status={toCardStatus(block)}
+        description={displayTitle}
+        badge={renderBadge(statusLabel, isRunning, sessionStatus, isDone, canJump, handleJump)}
+      />
     </div>
   );
 });
@@ -179,7 +175,6 @@ export const ForkCard = memo(function ForkCard({
   const { t } = useTranslation("chat");
   const isRunning = block.status === "running";
   const isDone = block.status === "done";
-  const isError = block.status === "error";
 
   const args = parseArgs(block.args);
   const taskText = (args.task as string) ?? "";
@@ -204,66 +199,18 @@ export const ForkCard = memo(function ForkCard({
       className={`border-x-0 border-t border-b overflow-hidden transition-colors ${
         isRunning
           ? "border-blue-500/25 bg-blue-50 dark:bg-blue-950/20"
-          : isError
+          : block.status === "error"
             ? "border-red-500/15 bg-red-50 dark:bg-red-950/15"
             : "border-border-secondary/30 bg-surface-dim"
       } ${canJump ? "cursor-pointer" : ""}`}
       onClick={canJump ? handleJump : undefined}
     >
-      <div className="px-3 py-1.5 flex items-center gap-2 text-xs">
-        <GitFork
-          className={`w-3.5 h-3.5 shrink-0 ${
-            isRunning
-              ? "text-blue-500 dark:text-blue-400"
-              : isError
-                ? "text-red-500 dark:text-red-400"
-                : "text-blue-500/70 dark:text-blue-400/60"
-          }`}
-        />
-        <span
-          className={`font-medium shrink-0 ${
-            isRunning
-              ? "text-blue-600 dark:text-blue-400"
-              : isError
-                ? "text-red-500 dark:text-red-400"
-                : "text-text-primary"
-          }`}
-        >
-          {t("coordinator.fork")}
-        </span>
-
-        <span className="min-w-0 text-text-secondary truncate font-normal">{displayTitle}</span>
-
-        <span className="flex-1 min-w-0" />
-
-        {statusLabel && (
-          <span
-            className={`shrink-0 text-[10px] ${
-              isRunning
-                ? "text-blue-500 dark:text-blue-400 animate-pulse"
-                : sessionStatus === "streaming"
-                  ? "text-amber-500 dark:text-amber-400"
-                  : sessionStatus === "idle"
-                    ? "text-text-tertiary"
-                    : "text-text-tertiary"
-            }`}
-          >
-            {statusLabel}
-          </span>
-        )}
-
-        {isDone && canJump && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleJump();
-            }}
-            className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 transition-colors"
-          >
-            <ExternalLink className="w-3 h-3" />
-          </button>
-        )}
-      </div>
+      <ToolCardHeader
+        toolName="fork"
+        status={toCardStatus(block)}
+        description={displayTitle}
+        badge={renderBadge(statusLabel, isRunning, sessionStatus, isDone, canJump, handleJump)}
+      />
     </div>
   );
 });

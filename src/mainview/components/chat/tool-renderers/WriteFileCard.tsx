@@ -1,12 +1,11 @@
-import { memo, useCallback, useMemo, useState, useEffect, useRef } from "react";
-import { AlertTriangle, FileText, Maximize2, Columns2, Rows3 } from "lucide-react";
+import { memo, useMemo, useState, useEffect, useRef } from "react";
+import { AlertTriangle, FileText, Columns2, Rows3 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { ContentBlock } from "../../../types";
-import { getToolIcon } from "../tool-icon-map";
 import { CachedReactMarkdown } from "../CachedReactMarkdown";
-import { useExpandStore } from "../../../stores/use-expand-store";
 import { CopyButton } from "../CopyButton";
 import { CodePreview } from "./CodePreview";
+import { ToolCardHeader } from "../primitives/ToolCardHeader";
 import { InlineDiffViewer } from "./InlineDiffViewer";
 import { useSettingsStore } from "../../../stores/use-settings-store";
 
@@ -64,13 +63,6 @@ function isMarkdownFile(path: string): boolean {
     if (lower.endsWith(ext)) return true;
   }
   return false;
-}
-
-function extractFileName(path: string): string {
-  if (!path || typeof path !== "string") return "";
-  const sep = path.includes("/") ? "/" : "\\";
-  const parts = path.split(sep);
-  return parts[parts.length - 1] || path;
 }
 
 function parseWriteArgs(args: string): WriteToolArgs {
@@ -146,7 +138,6 @@ export const WriteFileCard = memo(function WriteFileCard({
   const isRunning = block.status === "running";
   const isError = block.status === "error";
   const isEdit = isEditTool(block);
-  const openExpand = useExpandStore((s) => s.openExpand);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const { t } = useTranslation("chat");
   const [splitView, setSplitView] = useState(false);
@@ -183,13 +174,6 @@ export const WriteFileCard = memo(function WriteFileCard({
     return parseUnifiedDiff(editDetails.diff);
   }, [editDetails?.diff]);
 
-  const handleExpand = useCallback(() => {
-    if (!fileContent) return;
-    const name = extractFileName(filePath);
-    const lines = fileContent.length > 0 ? fileContent.split("\n").length : 0;
-    openExpand(fileContent, `${name} (${t("common:lineCount", { count: lines })})`);
-  }, [filePath, fileContent, openExpand, t]);
-
   const copyContent = useMemo(() => {
     if (isEdit && editDetails?.diff) return editDetails.diff;
     return fileContent;
@@ -206,52 +190,26 @@ export const WriteFileCard = memo(function WriteFileCard({
             : "border-border-secondary/30 bg-surface-dim"
       }`}
     >
-      <div
-        className="px-3 py-1.5 flex items-center gap-2 text-xs cursor-pointer hover:bg-surface-hover transition-colors select-none"
+      <ToolCardHeader
+        toolName={isEditTool(block) ? "edit" : "write"}
+        status={isRunning ? "running" : isError ? "error" : "done"}
+        description={displayPath}
+        mono
+        rtl
+        collapsed={collapsed}
         onClick={() => setCollapsed((c) => !c)}
-        role="button"
-        aria-expanded={!collapsed}
-      >
-        {collapsed && isRunning && (
-          <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-status-info animate-pulse" />
-        )}
-        {(() => {
-          const toolKey = isEditTool(block) ? "edit" : "write";
-          const { icon: WriteIcon } = getToolIcon(toolKey);
-          return (
-            <WriteIcon
-              className={`w-3.5 h-3.5 shrink-0 ${isRunning ? "text-status-success" : isError ? "text-status-error" : "text-status-success/70"}`}
-            />
-          );
-        })()}
-        <span className="min-w-0 text-text-primary font-mono" title={displayPath}>
-          <span className="block truncate rtl" style={{ direction: "rtl", textAlign: "left" }}>
-            <span style={{ direction: "ltr", display: "inline" }}>{displayPath}</span>
-          </span>
-        </span>
-        {isMd && hasContent && !isRunning && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleExpand();
-            }}
-            className="p-0.5 rounded text-text-tertiary hover:text-text-secondary dark:text-text-tertiary dark:hover:text-text-secondary hover:bg-surface-hover/50 transition-colors shrink-0"
-            title={t("writeFile.previewMarkdown")}
-          >
-            <Maximize2 className="w-3.5 h-3.5" />
-          </button>
-        )}
-        {isRunning && (
-          <span className="ml-auto text-[10px] text-status-success animate-pulse shrink-0">
-            {t("writeFile.writing")}
-          </span>
-        )}
-        {!isRunning && copyContent && (
-          <div className="ml-auto shrink-0" onClick={(e) => e.stopPropagation()}>
-            <CopyButton text={copyContent} />
-          </div>
-        )}
-      </div>
+        badge={
+          isRunning ? (
+            <span className="text-[10px] text-status-success animate-pulse shrink-0">
+              {t("writeFile.writing")}
+            </span>
+          ) : copyContent ? (
+            <div onClick={(e) => e.stopPropagation()}>
+              <CopyButton text={copyContent} />
+            </div>
+          ) : undefined
+        }
+      />
 
       {collapsed ? null : (
         <>

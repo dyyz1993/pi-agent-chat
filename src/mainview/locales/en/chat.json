@@ -173,6 +173,7 @@
   "bash.cancelExecution": "Cancel execution",
   "bash.viewOutput": "View output",
 
+  "subagent.subagent": "SubAgent",
   "subagent.subagentTask": "Sub-agent task",
   "subagent.view": "View",
   "subagent.running": "Running",

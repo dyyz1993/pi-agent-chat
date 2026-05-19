@@ -1,11 +1,12 @@
-import { useCallback, memo, useState, useEffect, useRef } from "react";
-import { ArrowRight, ExternalLink } from "lucide-react";
+import { memo, useState, useEffect, useRef, useCallback } from "react";
+import { ExternalLink } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { ContentBlock, SubagentSessionInfo } from "../../../types";
-import { getToolIcon } from "../tool-icon-map";
 import { useSubagentStore } from "../../../stores/use-subagent-store";
 import { useSessionStore } from "../../../stores/use-session-store";
 import { useSettingsStore } from "../../../stores/use-settings-store";
+import { AnsiText } from "../primitives/AnsiText";
+import { ToolCardHeader, type ToolCardStatus } from "../primitives/ToolCardHeader";
 
 type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
 
@@ -56,205 +57,82 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
 
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
 
-  const handleViewSubagent = useCallback(() => {
-    if (matchedSub && activeSessionId) {
-      useSubagentStore.getState().setActiveSubsession(activeSessionId, matchedSub.sessionId);
+  const handleJumpToSession = useCallback(() => {
+    if (!matchedSub) return;
+    const childSessionId = matchedSub.sessionId;
+    if (!childSessionId) return;
+    const subStore = useSubagentStore.getState();
+    if (activeSessionId) {
+      subStore.setActiveSubsession(activeSessionId, childSessionId);
     }
   }, [matchedSub, activeSessionId]);
+
+  let borderBg: string;
+  if (isRunning) {
+    borderBg = "border-semantic-agent/25 bg-semantic-agent/5 dark:bg-semantic-agent/10";
+  } else if (isError) {
+    borderBg = "border-status-error/20 bg-status-error/10 dark:bg-status-error/15";
+  } else {
+    borderBg = "border-border-secondary/30 bg-surface-dim";
+  }
+
+  const status: ToolCardStatus = isRunning ? "running" : isError ? "error" : "done";
+
+  let statusText: string;
+  if (isRunning) statusText = t("subagent.running");
+  else if (isDone) statusText = t("subagent.completed");
+  else statusText = t("subagent.error");
+
+  let statusColorClass: string;
+  if (isRunning) statusColorClass = "text-semantic-agent animate-pulse";
+  else if (isDone) statusColorClass = "text-status-success";
+  else statusColorClass = "text-status-error";
+
+  const badgeContent = (
+    <>
+      <span className={`shrink-0 text-[10px] ${statusColorClass}`}>{statusText}</span>
+      {matchedSub && !isRunning && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            handleJumpToSession();
+          }}
+          className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-semantic-agent hover:text-semantic-agent hover:bg-semantic-agent/10 transition-colors"
+          title={t("subagent.view")}
+        >
+          <ExternalLink className="w-3 h-3" />
+        </button>
+      )}
+    </>
+  );
 
   return (
     <div
       data-block-id={blockId}
-      className={`cursor-pointer transition-colors ${
-        isRunning
-          ? "bg-semantic-agent/5"
-          : isError
-            ? "bg-status-error/5"
-            : "hover:bg-surface-hover/40"
-      }`}
-      onClick={() => setCollapsed((c) => !c)}
+      className={`rounded-none overflow-hidden border-x-0 border-t border-b ${borderBg}`}
     >
-      <Header
-        isRunning={isRunning}
-        isError={isError}
-        isDone={isDone}
-        displayTitle={displayTitle}
-        matchedSub={matchedSub}
-        onView={handleViewSubagent}
+      <ToolCardHeader
+        toolName="subagent"
+        status={status}
+        description={displayTitle}
         collapsed={collapsed}
+        onClick={() => setCollapsed((c) => !c)}
+        badge={badgeContent}
       />
 
-      {!collapsed && isRunning && <RunningInstruction instruction={instruction} />}
-
-      {!collapsed && (block.output ?? (!isRunning && block.args)) && (
-        <OutputSection block={block} isRunning={isRunning} />
-      )}
-    </div>
-  );
-});
-
-export const Header = memo(function Header({
-  isRunning,
-  isError,
-  isDone,
-  displayTitle,
-  matchedSub,
-  onView,
-  collapsed,
-}: {
-  isRunning: boolean;
-  isError: boolean;
-  isDone: boolean;
-  displayTitle: string;
-  matchedSub: SubagentSessionInfo | null;
-  onView: () => void;
-  collapsed?: boolean;
-}) {
-  const { t } = useTranslation("chat");
-  return (
-    <div className="px-3 py-1.5 flex items-start gap-2.5">
-      <div
-        className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 mt-0.5 ${
-          isRunning
-            ? "bg-semantic-agent/10"
-            : isError
-              ? "bg-status-error/10"
-              : "bg-semantic-agent/5"
-        }`}
-      >
-        {(() => {
-          const { icon: BotIcon } = getToolIcon("subagent");
-          return (
-            <BotIcon
-              className={`w-3.5 h-3.5 ${
-                isRunning
-                  ? "text-semantic-agent"
-                  : isError
-                    ? "text-status-error"
-                    : "text-semantic-agent/70"
-              }`}
-            />
-          );
-        })()}
-      </div>
-
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5 mb-0.5">
-          <span className="text-[11px] font-medium text-semantic-agent">SubAgent</span>
-          <StatusChip isRunning={isRunning} isDone={isDone} isError={isError} />
-          {collapsed && isRunning && (
-            <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-status-info animate-pulse" />
-          )}
+      {!collapsed && block.output && (
+        <div className="px-3 pb-2 pt-0.5 max-h-64 overflow-y-auto">
+          <AnsiText content={block.output} className="text-[11px] leading-relaxed" />
         </div>
-        <p className="text-[11px] text-text-secondary leading-relaxed line-clamp-2">
-          {displayTitle}
-        </p>
-      </div>
+      )}
 
-      {isDone && matchedSub && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onView();
-          }}
-          className="shrink-0 flex items-center gap-1 px-2 py-1 rounded text-[11px] text-semantic-agent hover:text-semantic-agent hover:bg-semantic-agent/10 transition-colors mt-1"
-        >
-          <ExternalLink className="w-3 h-3" />
-          {t("subagent.view")}
-        </button>
+      {!collapsed && isRunning && !block.output && instruction && (
+        <div className="px-3 pb-2 pt-0.5">
+          <span className="text-[11px] text-semantic-agent/70 italic truncate block">
+            {instruction.slice(0, 200)}
+          </span>
+        </div>
       )}
     </div>
-  );
-});
-
-export const StatusChip = memo(function StatusChip({
-  isRunning,
-  isDone,
-  isError,
-}: {
-  isRunning: boolean;
-  isDone: boolean;
-  isError: boolean;
-}) {
-  const { t } = useTranslation("chat");
-  if (isRunning) {
-    return (
-      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] bg-semantic-agent/10 text-semantic-agent">
-        <span className="w-1 h-1 rounded-full bg-semantic-agent animate-pulse" />
-        {t("subagent.running")}
-      </span>
-    );
-  }
-  if (isDone) {
-    return (
-      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] bg-status-success/10 text-status-success">
-        <span className="w-1 h-1 rounded-full bg-status-success" />
-        {t("subagent.completed")}
-      </span>
-    );
-  }
-  if (isError) {
-    return (
-      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] bg-status-error/10 text-status-error">
-        {t("subagent.error")}
-      </span>
-    );
-  }
-  return null;
-});
-
-export const RunningInstruction = memo(function RunningInstruction({
-  instruction,
-}: {
-  instruction: string;
-}) {
-  const { t } = useTranslation("chat");
-  return (
-    <div className="px-3 pb-2 pt-1">
-      <div className="flex items-center gap-1.5 text-[11px] text-semantic-agent/70">
-        <ArrowRight className="w-3 h-3 animate-pulse" />
-        <span className="truncate">{instruction.slice(0, 200) || t("subagent.executing")}</span>
-      </div>
-    </div>
-  );
-});
-
-export const OutputSection = memo(function OutputSection({
-  block,
-  isRunning,
-}: {
-  block: ToolExecBlock;
-  isRunning: boolean;
-}) {
-  const { t } = useTranslation("chat");
-  return (
-    <details className="group">
-      <summary className="px-3 py-1 text-[11px] text-text-tertiary cursor-pointer hover:text-text-secondary select-none flex items-center gap-1.5">
-        <svg
-          className="w-3 h-3 transition-transform group-open:rotate-90 shrink-0"
-          viewBox="0 0 12 12"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-        >
-          <path d="M4.5 3l3 3-3 3" />
-        </svg>
-        <span>{isRunning ? t("subagent.liveOutput") : t("subagent.output")}</span>
-        {isRunning && (
-          <span className="ml-auto text-semantic-agent/70 animate-pulse text-[11px]">
-            {t("streaming")}
-          </span>
-        )}
-      </summary>
-      <div className="px-3 pb-2">
-        {block.output ? (
-          <pre className="text-[11px] text-text-primary overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-36 overflow-y-auto">
-            {block.output}
-          </pre>
-        ) : (
-          <div className="text-[11px] text-text-tertiary italic py-1">{t("subagent.noOutput")}</div>
-        )}
-      </div>
-    </details>
   );
 });
