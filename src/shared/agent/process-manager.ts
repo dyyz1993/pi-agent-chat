@@ -2695,6 +2695,33 @@ export class AgentProcessManager {
     this.send(newSessionId, delegatePrompt);
 
     this.broadcastEvent(
+      "coordinator.session_created",
+      {
+        parentSessionId,
+        session: {
+          sessionId: newSessionId,
+          name: rawTitle,
+          sessionPath,
+          projectPath,
+          parentSessionPath: parent.info.sessionPath,
+          delegateParentSessionId: parentSessionId,
+          messageCount: 0,
+          firstMessage: task,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          status: "running" as const,
+        },
+      },
+      { parentSessionId },
+    ).catch((err: unknown) => {
+      log.warn("broadcastEvent(coordinator.session_created) error", {
+        parentSessionId,
+        newSessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    });
+
+    this.broadcastEvent(
       "subagent.event",
       {
         parentSessionId,
