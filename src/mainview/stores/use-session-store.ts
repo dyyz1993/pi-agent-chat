@@ -159,7 +159,7 @@ export const useSessionStore = create<SessionState>()(
       activeSessionId: null,
       projectTabs: [],
       activeProjectId: null,
-      loading: false,
+      loading: true,
       agentSubscriptions: {},
       subagentSubscriptions: {},
       todoSubscriptions: {},

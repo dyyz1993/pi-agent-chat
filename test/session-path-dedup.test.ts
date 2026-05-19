@@ -185,7 +185,7 @@ describe("loadSessionsForProject — sessionPath deduplication", () => {
     expect(result[0].sessionId).toBe("sess_coord_1");
   });
 
-  it("filters out scanned sessions whose sessionPath already exists in store", async () => {
+  it("keeps existing session and adds unique from scan when sessionPath matches", async () => {
     const existing = makeSession({
       sessionId: "019e3607-abc-def",
       sessionPath: "/sessions/019e3607-abc.jsonl",
@@ -204,8 +204,11 @@ describe("loadSessionsForProject — sessionPath deduplication", () => {
 
     const result = await useSessionStore.getState().loadSessionsForProject("/project-a");
 
-    expect(result).toHaveLength(1);
-    expect(result[0].sessionId).toBe("sess-unique");
+    // Existing session kept (path confirmed on disk), coord-new filtered (path dup),
+    // unique added (new path). 2 total.
+    expect(result).toHaveLength(2);
+    expect(result.find((s) => s.sessionId === "019e3607-abc-def")).toBeDefined();
+    expect(result.find((s) => s.sessionId === "sess-unique")).toBeDefined();
   });
 
   it("keeps all sessions when there are no sessionPath duplicates", async () => {
