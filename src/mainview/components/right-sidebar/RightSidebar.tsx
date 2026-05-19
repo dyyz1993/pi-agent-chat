@@ -22,7 +22,8 @@ import { RulesPanel } from "../rules-panel/RulesPanel";
 import { SnapshotPanel } from "../snapshot-panel/SnapshotPanel";
 import { AgentPanel } from "../agent-panel/AgentPanel";
 import { useExplorerStore } from "../../stores/use-explorer-store";
-import { useEffect } from "react";
+import { useGitStore } from "../../stores/use-git-store";
+import { useEffect, useRef } from "react";
 
 const TAB_ICONS: Record<PanelTabId, React.ComponentType<{ className?: string }>> = {
   git: GitBranch,
@@ -48,8 +49,9 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
   const setActivePanelTab = useLayoutStore((s) => s.setActivePanelTab);
   const listRootDir = useExplorerStore((s) => s.listRootDir);
 
-  const treeNodes = useExplorerStore((s) => s.treeNodes);
   const currentPath = useExplorerStore((s) => s.currentPath);
+
+  const treeNodes = useExplorerStore((s) => s.treeNodes);
   const selectedPath = useExplorerStore((s) => s.selectedPath);
   const editingNode = useExplorerStore((s) => s.editingNode);
   const toggleNode = useExplorerStore((s) => s.toggleNode);
@@ -64,12 +66,31 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
 
   const isPinned = statusPanel === "pinned";
   const hideStatus = useLayoutStore((s) => s.hideStatus);
-
+  const refreshAll = useGitStore((s) => s.refreshAll);
+  const prevPanelVisible = useRef(statusPanel !== "hidden");
   useEffect(() => {
     if (activePanelTab === "files") {
       listRootDir();
     }
   }, [activePanelTab, listRootDir]);
+
+  useEffect(() => {
+    if (activePanelTab === "git" && currentPath) {
+      refreshAll(currentPath);
+    }
+  }, [activePanelTab, refreshAll, currentPath]);
+
+  useEffect(() => {
+    const isVisible = statusPanel !== "hidden";
+    if (isVisible && !prevPanelVisible.current) {
+      if (activePanelTab === "git" && currentPath) {
+        refreshAll(currentPath);
+      } else if (activePanelTab === "files") {
+        listRootDir();
+      }
+    }
+    prevPanelVisible.current = isVisible;
+  }, [statusPanel, activePanelTab, currentPath, listRootDir]);
 
   function renderContent() {
     switch (activePanelTab) {
