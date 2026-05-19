@@ -146,6 +146,7 @@ export interface CoordinatorEvents {
       sessionPath: string;
       projectPath: string;
       parentSessionPath: string | null;
+      delegateParentSessionId: string | null;
       messageCount: number;
       firstMessage: string;
       createdAt: number;

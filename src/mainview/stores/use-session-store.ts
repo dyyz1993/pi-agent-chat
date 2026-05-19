@@ -623,6 +623,7 @@ export const useSessionStore = create<SessionState>()(
             sessionPath: result.sessionPath,
             projectPath: targetPath,
             parentSessionPath: null,
+            delegateParentSessionId: null,
             messageCount: 0,
             firstMessage: "",
             createdAt: now,

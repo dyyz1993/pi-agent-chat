@@ -184,6 +184,7 @@ export function ChatPanel() {
         sessionPath: result.newSessionFile,
         projectPath: activeTab.path,
         parentSessionPath: null,
+        delegateParentSessionId: null,
         messageCount: 0,
         firstMessage: "",
         createdAt: now,

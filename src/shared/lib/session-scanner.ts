@@ -30,6 +30,7 @@ interface JsonlEntry {
   };
   name?: string;
   cwd?: string;
+  delegateParentSessionId?: string;
 }
 
 async function parseJsonlHeader(filePath: string): Promise<JsonlHeader | null> {
@@ -56,6 +57,7 @@ async function parseJsonlMeta(filePath: string): Promise<{
   firstMessage: string;
   sessionName: string;
   parentSessionPath: string | null;
+  delegateParentSessionId: string | null;
   effectiveCwd: string | null;
 } | null> {
   try {
@@ -65,6 +67,7 @@ async function parseJsonlMeta(filePath: string): Promise<{
     let firstMessage = "";
     let sessionName = "";
     let parentSessionPath: string | null = null;
+    let delegateParentSessionId: string | null = null;
     let effectiveCwd: string | null = null;
 
     for (const line of lines) {
@@ -82,6 +85,8 @@ async function parseJsonlMeta(filePath: string): Promise<{
         if (entry.type === "session_info") {
           if (entry.name) sessionName = entry.name;
           if (entry.cwd) effectiveCwd = entry.cwd;
+          if (entry.delegateParentSessionId)
+            delegateParentSessionId = entry.delegateParentSessionId;
         }
         if (entry.type === "session" && "parentSession" in entry) {
           parentSessionPath = (entry as Record<string, unknown>).parentSession as string;
@@ -91,7 +96,14 @@ async function parseJsonlMeta(filePath: string): Promise<{
       }
     }
 
-    return { messageCount, firstMessage, sessionName, parentSessionPath, effectiveCwd };
+    return {
+      messageCount,
+      firstMessage,
+      sessionName,
+      parentSessionPath,
+      delegateParentSessionId,
+      effectiveCwd,
+    };
   } catch {
     return null;
   }
@@ -119,6 +131,7 @@ async function scanSessionDir(sessionDir: string, pinnedIds?: Set<string>): Prom
           sessionPath: filePath,
           projectPath: meta?.effectiveCwd ?? header.cwd,
           parentSessionPath: meta?.parentSessionPath ?? null,
+          delegateParentSessionId: meta?.delegateParentSessionId ?? null,
           messageCount: meta?.messageCount ?? 0,
           firstMessage: meta?.firstMessage ?? "",
           createdAt: new Date(header.timestamp).getTime(),
@@ -179,6 +192,7 @@ export async function findSessionById(
       sessionPath: candidate,
       projectPath,
       parentSessionPath: meta?.parentSessionPath ?? null,
+      delegateParentSessionId: meta?.delegateParentSessionId ?? null,
       messageCount: meta?.messageCount ?? 0,
       firstMessage: meta?.firstMessage ?? "",
       createdAt: new Date(header.timestamp).getTime(),
