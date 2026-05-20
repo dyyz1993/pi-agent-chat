@@ -34,9 +34,6 @@ export const FallbackCard = memo(function FallbackCard({ details }: { details: P
               <div className="text-text-tertiary">{t("mimeLabel", { mime: details.mimeType })}</div>
             )}
             {details.size != null && (
-              <div className="text-text-tertiary">{t("mimeLabel", { mime: details.mimeType })}</div>
-            )}
-            {details.size != null && (
               <div className="text-text-tertiary">
                 {t("sizeLabel", { size: formatFileSize(details.size) })}
               </div>

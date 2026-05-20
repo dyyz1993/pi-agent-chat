@@ -8,6 +8,8 @@ import {
   writeFileSync,
 } from "fs";
 import { createReadStream } from "fs";
+
+import * as os from "os";
 import * as path from "path";
 import * as readline from "readline";
 import type { RPCServer } from "@dyyz1993/rpc-core";
@@ -2555,7 +2557,16 @@ export class AgentProcessManager {
 
     const projectPath = rawProjectPath || parent.info.projectPath;
     const newSessionId = `sess_coord_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const sessionDir = path.dirname(parent.info.sessionPath);
+    const isCrossProject = rawProjectPath && rawProjectPath !== parent.info.projectPath;
+    let sessionDir: string;
+    if (isCrossProject) {
+      // 跨项目：用目标项目路径编码，放到 ~/.pi/agent/sessions/ 下，扫描器才能找到
+      const encodedTarget = "--" + projectPath.replace(/^\//, "").replace(/\//g, "-") + "--";
+      sessionDir = path.join(os.homedir(), ".pi", "agent", "sessions", encodedTarget);
+      if (!existsSync(sessionDir)) mkdirSync(sessionDir, { recursive: true });
+    } else {
+      sessionDir = path.dirname(parent.info.sessionPath);
+    }
     const sessionPath = path.join(sessionDir, `${newSessionId}.jsonl`);
 
     const result = await this.start(newSessionId, projectPath, sessionPath, {
@@ -2576,6 +2587,7 @@ export class AgentProcessManager {
     const rawTitle = msg.title ?? task.slice(0, 60);
     const title = `指派: ${rawTitle}`;
     await this.setSessionName(newSessionId, title);
+    const projectName = projectPath.split("/").pop() || projectPath;
     const delegatePrompt = [
       `[系统提示] 你是一个被委派的后台任务会话。`,
       ``,
@@ -2584,6 +2596,7 @@ export class AgentProcessManager {
       `- 委派方（父会话）ID: ${parentSessionId}`,
       `- 任务: ${title}`,
       `- 项目路径: ${projectPath}`,
+      `- 项目名称: ${projectName}`,
       ``,
       `**要求：**`,
       `1. 你是独立执行任务的助手，专注于完成委派给你的任务`,
@@ -2645,7 +2658,16 @@ export class AgentProcessManager {
 
     const projectPath = rawProjectPath || parent.info.projectPath;
     const newSessionId = `sess_sub_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const sessionDir = path.dirname(parent.info.sessionPath);
+    const isCrossProject = rawProjectPath && rawProjectPath !== parent.info.projectPath;
+    let sessionDir: string;
+    if (isCrossProject) {
+      // 跨项目：用目标项目路径编码，放到 ~/.pi/agent/sessions/ 下，扫描器才能找到
+      const encodedTarget = "--" + projectPath.replace(/^\//, "").replace(/\//g, "-") + "--";
+      sessionDir = path.join(os.homedir(), ".pi", "agent", "sessions", encodedTarget);
+      if (!existsSync(sessionDir)) mkdirSync(sessionDir, { recursive: true });
+    } else {
+      sessionDir = path.dirname(parent.info.sessionPath);
+    }
     const sessionPath = path.join(sessionDir, `${newSessionId}.jsonl`);
 
     try {
@@ -2698,10 +2720,13 @@ export class AgentProcessManager {
     const sessionTitle = `子代理: ${rawTitle}`;
     await this.setSessionName(newSessionId, sessionTitle);
 
+    const projectName = projectPath.split("/").pop() || projectPath;
     const delegatePrompt = [
       `[系统提示] 你是一个子代理任务会话。`,
       agent ? `**Agent 角色:** ${agent}` : "",
       `**任务:** ${rawTitle}`,
+      `**项目:** ${projectName}`,
+      `**项目路径:** ${projectPath}`,
       ``,
       `要求：`,
       `1. 专注于完成委派给你的任务`,

@@ -11,6 +11,10 @@ interface VirtualizedCodeViewProps {
 
 /** Lines longer than this skip syntax highlighting (plain text instead) */
 const LONG_LINE_THRESHOLD = 5000;
+/** Max lines to attempt Prism tokenization; beyond this, plain text only */
+const MAX_HIGHLIGHT_LINES = 5000;
+/** Max chars for JSON pretty-print; beyond this, skip formatting */
+const MAX_JSON_FORMAT_CHARS = 500_000;
 
 export function VirtualizedCodeView({ code, filename }: VirtualizedCodeViewProps) {
   const parentRef = useRef<HTMLDivElement>(null);
@@ -18,7 +22,7 @@ export function VirtualizedCodeView({ code, filename }: VirtualizedCodeViewProps
 
   const formattedCode = useMemo(() => {
     const ext = filename.split(".").pop()?.toLowerCase() ?? "";
-    if (ext === "json" || ext === "jsonc") {
+    if ((ext === "json" || ext === "jsonc") && code.length <= MAX_JSON_FORMAT_CHARS) {
       try {
         const parsed = JSON.parse(code) as unknown;
         return JSON.stringify(parsed, null, 2);
@@ -36,7 +40,11 @@ export function VirtualizedCodeView({ code, filename }: VirtualizedCodeViewProps
   const avgLineLength = formattedCode.length / Math.max(lines.length, 1);
   const NO_HIGHLIGHT_EXTS = new Set(["lock", "map", "log", "csv"]);
   const ext = filename.split(".").pop()?.toLowerCase() ?? "";
-  const forcePlainText = !language || avgLineLength > 500 || NO_HIGHLIGHT_EXTS.has(ext);
+  const forcePlainText =
+    !language ||
+    avgLineLength > 500 ||
+    NO_HIGHLIGHT_EXTS.has(ext) ||
+    lines.length > MAX_HIGHLIGHT_LINES;
 
   const virtualizer = useVirtualizer({
     count: lines.length,
