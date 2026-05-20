@@ -336,6 +336,8 @@ export const SideNav = memo(
       [toggleItemSelect],
     );
 
+    const prevNavIdxRef = useRef(-1);
+
     useEffect(() => {
       if (!selectedNavId) return;
       let idx = filteredNavItems.findIndex((n) => n.id === selectedNavId);
@@ -344,8 +346,22 @@ export const SideNav = memo(
       }
       if (idx < 0) return;
 
+      const prev = prevNavIdxRef.current;
+      prevNavIdxRef.current = idx;
+
       const isEdge = idx === 0 || idx === filteredNavItems.length - 1;
-      const align = isEdge ? (idx === 0 ? "start" : "end") : "center";
+      let align: "start" | "end" | "center";
+      if (isEdge) {
+        align = idx === 0 ? "start" : "end";
+      } else if (prev < 0) {
+        align = "end";
+      } else if (idx > prev) {
+        align = "end";
+      } else if (idx < prev) {
+        align = "start";
+      } else {
+        align = "end";
+      }
 
       const timer = setTimeout(() => {
         sidenavVlistRef.current?.scrollToIndex(idx, { align, smooth: true });
