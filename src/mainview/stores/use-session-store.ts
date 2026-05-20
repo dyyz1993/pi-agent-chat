@@ -275,21 +275,28 @@ export const useSessionStore = create<SessionState>()(
             .then(async (sessions) => {
               if (version !== get()._projectVersion) return;
 
-              set((s) => ({
-                projectStartFailed: { ...s.projectStartFailed, [id]: false },
-                projectStartError: { ...s.projectStartError, [id]: "" },
-              }));
-
               if (sessions.length > 0) {
                 const lastSid = get().lastActiveSessionByProject[tab.path];
                 const targetSession =
                   lastSid && sessions.some((s) => s.sessionId === lastSid)
                     ? lastSid
                     : sessions[0].sessionId;
-                get().setActiveSession(targetSession);
-                // 拉取该项目的所有 session 状态
+                set((s) => ({
+                  activeSessionId: targetSession,
+                  projectStartFailed: { ...s.projectStartFailed, [id]: false },
+                  projectStartError: { ...s.projectStartError, [id]: "" },
+                  lastActiveSessionByProject: {
+                    ...s.lastActiveSessionByProject,
+                    [tab.path]: targetSession,
+                  },
+                }));
+                get().setActiveSession(targetSession, true);
                 await get().fetchAllSessionStatuses();
               } else {
+                set((s) => ({
+                  projectStartFailed: { ...s.projectStartFailed, [id]: false },
+                  projectStartError: { ...s.projectStartError, [id]: "" },
+                }));
                 await get().createNewSession();
               }
             });
