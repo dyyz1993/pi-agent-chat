@@ -3,6 +3,7 @@ import type { HandlerOptions } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
 import { existsSync } from "fs";
 import { basename } from "path";
+import { createLogger } from "../lib/logger";
 import {
   addRecentProject,
   listRecentProjects,
@@ -74,8 +75,17 @@ export function register(server: RPCServer, options: HandlerOptions): void {
   });
 
   r("project.scanSessions", async (params) => {
-    const sessions = await scanSessionsForProject(params.projectPath);
-    return { sessions };
+    const log = createLogger("project");
+    const t0 = Date.now();
+    log.info("[scanSessions] handler begin", { projectPath: params.projectPath });
+    try {
+      const sessions = await scanSessionsForProject(params.projectPath);
+      log.info("[scanSessions] handler done", { count: sessions.length, ms: Date.now() - t0 });
+      return { sessions };
+    } catch (err) {
+      log.error("[scanSessions] handler FAILED", { error: String(err), ms: Date.now() - t0 });
+      throw err;
+    }
   });
 
   r("project.findSessionById", async (params) => {

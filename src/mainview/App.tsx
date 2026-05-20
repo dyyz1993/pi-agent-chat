@@ -176,7 +176,15 @@ function App() {
 
           const tab = savedTabs.find((t) => t.id === targetId);
           if (tab) {
-            const sessions = await loadSessionsForProject(tab.path);
+            const sessions = await Promise.race([
+              loadSessionsForProject(tab.path),
+              new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error("loadSessionsForProject timed out (10s)")), 10_000),
+              ),
+            ]).catch((err) => {
+              addLog(`Session load failed: ${err instanceof Error ? err.message : String(err)}`);
+              return [] as Awaited<ReturnType<typeof loadSessionsForProject>>;
+            });
             addLog(
               `Restored ${savedTabs.length} tabs from server config (${sessions.length} sessions)`,
             );

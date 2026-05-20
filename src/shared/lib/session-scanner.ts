@@ -1,4 +1,4 @@
-import { readdir, stat } from "fs/promises";
+import { readdir, stat, readFile } from "fs/promises";
 import { createReadStream } from "fs";
 import { existsSync } from "fs";
 import { createInterface } from "readline";
@@ -50,6 +50,12 @@ async function parseJsonlHeader(filePath: string): Promise<JsonlHeader | null> {
         stream.destroy();
         resolve(null);
       });
+      // Safety timeout — if no line event within 3s, treat as unreadable
+      setTimeout(() => {
+        rl.close();
+        stream.destroy();
+        resolve(null);
+      }, 3000);
     });
     if (!firstLine?.trim()) return null;
     const header: unknown = JSON.parse(firstLine);
@@ -95,21 +101,19 @@ async function parseJsonlMeta(filePath: string): Promise<{
   effectiveCwd: string | null;
 } | null> {
   try {
-    const stream = createReadStream(filePath, { encoding: "utf-8" });
-    const rl = createInterface({ input: stream, crlfDelay: Infinity });
-
+    // Read entire file but only parse first 50 lines
+    const content = await readFile(filePath, "utf-8");
+    const lines = content.split("\n");
     let messageCount = 0;
     let firstMessage = "";
     let sessionName = "";
     let parentSessionPath: string | null = null;
     let effectiveCwd: string | null = null;
-    let lineCount = 0;
     const MAX_LINES = 50;
 
-    for await (const line of rl) {
-      lineCount++;
-      if (lineCount > MAX_LINES) break;
-
+    for (let i = 0; i < Math.min(lines.length, MAX_LINES); i++) {
+      const line = lines[i];
+      if (!line.trim()) continue;
       try {
         const entry: JsonlEntry = JSON.parse(line) as JsonlEntry;
         if (entry.type === "message" && entry.message?.role === "user") {
@@ -133,12 +137,6 @@ async function parseJsonlMeta(filePath: string): Promise<{
       }
     }
 
-    rl.close();
-    stream.destroy();
-
-    // If we stopped early, count remaining lines for approximate messageCount
-    // by reading file size and estimating from what we've seen
-    // For now, just use the partial count — it's enough for display
     return { messageCount, firstMessage, sessionName, parentSessionPath, effectiveCwd };
   } catch {
     return null;
@@ -151,35 +149,46 @@ async function scanSessionDir(sessionDir: string, pinnedIds?: Set<string>): Prom
   const files = await readdir(sessionDir);
   const jsonlFiles = files.filter((f) => f.endsWith(".jsonl"));
 
-  const results = await Promise.all(
-    jsonlFiles.map(async (file) => {
-      const filePath = join(sessionDir, file);
-      try {
-        const [header, meta, fileStat] = await Promise.all([
-          parseJsonlHeader(filePath),
-          parseJsonlMeta(filePath),
-          stat(filePath),
-        ]);
-        if (!header) return null;
-        return {
-          sessionId: header.id,
-          name: meta?.sessionName ?? basename(file, ".jsonl"),
-          sessionPath: filePath,
-          projectPath: meta?.effectiveCwd ?? header.cwd,
-          parentSessionPath: meta?.parentSessionPath ?? null,
-          delegateParentSessionId: header.delegateParentSessionId ?? null,
-          messageCount: meta?.messageCount ?? 0,
-          firstMessage: meta?.firstMessage ?? "",
-          createdAt: new Date(header.timestamp).getTime(),
-          updatedAt: fileStat.mtimeMs,
-          status: "idle" as const,
-          pinned: pinnedIds ? pinnedIds.has(header.id) : false,
-        };
-      } catch {
-        return null;
-      }
-    }),
-  );
+  // Process in batches of 20 to avoid fd exhaustion with 400+ files
+  const BATCH_SIZE = 20;
+  const results: (SessionMeta | null)[] = [];
+
+  for (let i = 0; i < jsonlFiles.length; i += BATCH_SIZE) {
+    const batch = jsonlFiles.slice(i, i + BATCH_SIZE);
+    const batchResults = await Promise.all(
+      batch.map(async (file) => {
+        const filePath = join(sessionDir, file);
+        try {
+          // Quick size check first — skip empty files to avoid createReadStream hang
+          const fstat = await stat(filePath);
+          if (fstat.size === 0) return null;
+
+          const [header, meta] = await Promise.all([
+            parseJsonlHeader(filePath),
+            parseJsonlMeta(filePath),
+          ]);
+          if (!header) return null;
+          return {
+            sessionId: header.id,
+            name: meta?.sessionName ?? basename(file, ".jsonl"),
+            sessionPath: filePath,
+            projectPath: meta?.effectiveCwd ?? header.cwd,
+            parentSessionPath: meta?.parentSessionPath ?? null,
+            delegateParentSessionId: header.delegateParentSessionId ?? null,
+            messageCount: meta?.messageCount ?? 0,
+            firstMessage: meta?.firstMessage ?? "",
+            createdAt: new Date(header.timestamp).getTime(),
+            updatedAt: fstat.mtimeMs,
+            status: "idle" as const,
+            pinned: pinnedIds ? pinnedIds.has(header.id) : false,
+          };
+        } catch {
+          return null;
+        }
+      }),
+    );
+    results.push(...batchResults);
+  }
 
   const filtered = results
     .filter((s): s is NonNullable<typeof s> => s !== null)
@@ -188,7 +197,8 @@ async function scanSessionDir(sessionDir: string, pinnedIds?: Set<string>): Prom
     if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
     return b.updatedAt - a.updatedAt;
   });
-  return filtered as SessionMeta[];
+  // Limit to 100 most recent sessions to keep WS response size manageable
+  return filtered.slice(0, 100) as SessionMeta[];
 }
 
 export async function findSessionById(

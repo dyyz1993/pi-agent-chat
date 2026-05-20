@@ -46,28 +46,52 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
 
     const wsTransport = {
       send: async (message: unknown): Promise<void> => {
-        if (ws.readyState === WebSocket.OPEN) {
-          const msg = message as Record<string, unknown>;
-          if (msg.method || msg.event) {
-            log.info("[ws-out]", {
-              method: msg.method ?? msg.event,
-              id: msg.id,
-            });
-          }
-          ws.send(JSON.stringify(message));
+        if (ws.readyState !== WebSocket.OPEN) {
+          throw new Error("WebSocket not open");
         }
+        const msg = message as Record<string, unknown>;
+        // Log all outgoing messages (requests, responses, events)
+        log.info("[ws-out]", {
+          type: msg.type ?? "unknown",
+          method: msg.method,
+          event: msg.event,
+          id: msg.id,
+        });
+
+        return new Promise<void>((resolve, reject) => {
+          try {
+            ws.send(JSON.stringify(message), (err?: Error) => {
+              if (err) {
+                log.error("[ws-out] send failed", {
+                  type: msg.type,
+                  id: msg.id,
+                  error: err.message,
+                });
+                reject(err);
+              } else {
+                resolve();
+              }
+            });
+          } catch (err) {
+            log.error("[ws-out] send exception", {
+              type: msg.type,
+              id: msg.id,
+              error: String(err),
+            });
+            reject(err instanceof Error ? err : new Error(String(err)));
+          }
+        });
       },
       onMessage: (handler: (message: unknown) => void): (() => void) => {
         const listener = (data: Buffer) => {
           try {
             const msg = JSON.parse(data.toString()) as Record<string, unknown>;
-            if (msg.method || msg.type) {
-              log.info("[ws-in]", {
-                method: msg.method ?? msg.type,
-                id: msg.id,
-                paramsKeys: msg.params ? Object.keys(msg.params as object) : undefined,
-              });
-            }
+            log.info("[ws-in]", {
+              type: msg.type ?? "unknown",
+              method: msg.method,
+              id: msg.id,
+              paramsKeys: msg.params ? Object.keys(msg.params as object) : undefined,
+            });
             handler(msg);
           } catch (err) {
             log.error("Failed to parse message", {
@@ -78,17 +102,23 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
         ws.on("message", listener);
         return () => ws.off("message", listener);
       },
-      onError: (): (() => void) => {
-        return () => {};
+      onError: (handler: (error: Error) => void): (() => void) => {
+        ws.on("error", handler);
+        return () => ws.off("error", handler);
       },
-      onDisconnect: (): (() => void) => {
-        return () => {};
+      onDisconnect: (handler: () => void): (() => void) => {
+        ws.on("close", handler);
+        return () => ws.off("close", handler);
       },
       isConnected: (): boolean => ws.readyState === WebSocket.OPEN,
       close: (): void => {},
     };
 
-    const rpcServer = new RPCServer(wsTransport as Transport);
+    const rpcServer = new RPCServer(wsTransport as Transport, {
+      onError: (err) => {
+        log.error("[rpc] server error", { error: String(err) });
+      },
+    });
     registerAllHandlers(rpcServer, { platform: "web" });
 
     ws.on("close", (code: number, reason: Buffer) => {
