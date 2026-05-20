@@ -14,7 +14,7 @@ interface UseActiveScrollTrackerOptions {
 
 const BOTTOM_THRESHOLD_PX = 80;
 const TOP_THRESHOLD_PX = 80;
-const ACTIVE_THROTTLE_MS = 200;
+const ACTIVE_THROTTLE_MS = 50;
 
 export function useActiveScrollTracker({
   scrollRef,

@@ -16,7 +16,6 @@ import {
   Target,
   Loader2,
   ThumbsDown,
-  BookOpen,
 } from "lucide-react";
 import { CachedReactMarkdown } from "./CachedReactMarkdown";
 import { CopyButton } from "./CopyButton";
@@ -38,102 +37,9 @@ import { useMemoryStore } from "../../stores/use-memory-store";
 import { SnapshotBadge } from "./snapshot/SnapshotBadge";
 import { formatTokenCount } from "../../utils/turn-utils";
 import { ToolCardHeader } from "./primitives/ToolCardHeader";
-
-type SkillBlock = {
-  type: "skill";
-  name: string;
-  location: string;
-  body: string;
-};
-
-type TextSegment = {
-  type: "text";
-  text: string;
-};
-
-type ParsedSegment = SkillBlock | TextSegment;
-
-const SKILL_REGEX = /<skill\s+name="([^"]+)"\s+location="([^"]+)">\n([\s\S]*?)\n<\/skill>/;
-
-function parseSkillBlocks(text: string): ParsedSegment[] {
-  const segments: ParsedSegment[] = [];
-  const regex = /<skill\s+name="([^"]+)"\s+location="([^"]+)">\n([\s\S]*?)\n<\/skill>/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = regex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      segments.push({ type: "text", text: text.slice(lastIndex, match.index) });
-    }
-    segments.push({
-      type: "skill",
-      name: match[1],
-      location: match[2],
-      body: match[3],
-    });
-    lastIndex = regex.lastIndex;
-  }
-
-  if (lastIndex < text.length) {
-    segments.push({ type: "text", text: text.slice(lastIndex) });
-  }
-
-  return segments;
-}
-
-function extractSkillSummary(body: string): string {
-  const lines = body
-    .split("\n")
-    .filter((l) => l.trim() !== "" && !l.startsWith("References are relative to"));
-  const firstHeading = lines.find((l) => l.startsWith("# "));
-  if (firstHeading) return firstHeading.replace(/^#+\s*/, "");
-  if (lines.length > 0) return lines[0].slice(0, 120);
-  return "";
-}
-
-function SkillBlockCollapsed({ block }: { block: SkillBlock }) {
-  const summary = extractSkillSummary(block.body);
-
-  return (
-    <details className="my-1 rounded-md border border-border-secondary/40 bg-surface-dim/50">
-      <summary className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs cursor-pointer select-none hover:bg-surface-hover transition-colors list-none min-w-0">
-        <ChevronRight className="w-3 h-3 shrink-0 text-text-tertiary details-chevron" />
-        <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-semantic-tool/10 text-semantic-tool text-[10px] font-medium">
-          <BookOpen className="w-3 h-3" />
-          技能
-        </span>
-        <span className="font-medium text-text-primary truncate">{block.name}</span>
-        {summary && (
-          <>
-            <span className="text-text-tertiary shrink-0">·</span>
-            <span className="text-text-secondary truncate">{summary}</span>
-          </>
-        )}
-      </summary>
-      <div className="px-2.5 pb-2 pt-1 border-t border-border-secondary/30">
-        <div
-          className="text-[10px] text-text-tertiary mb-1 font-mono truncate"
-          title={block.location}
-        >
-          {block.location}
-        </div>
-        <pre className="text-xs text-text-secondary whitespace-pre-wrap break-words max-h-64 overflow-y-auto font-mono leading-relaxed">
-          {block.body}
-        </pre>
-      </div>
-      <style>{`
-        details[open] > summary .details-chevron {
-          transform: rotate(90deg);
-          transition: transform 0.15s ease;
-        }
-        details:not([open]) > summary .details-chevron {
-          transform: rotate(0deg);
-          transition: transform 0.15s ease;
-        }
-      `}</style>
-    </details>
-  );
-}
+import { parseSpecialBlocks, hasSpecialBlocks } from "./special-block-parser";
+import { getRegisteredTags, getRenderer } from "./special-block-registry";
+import "./special-block-renderers";
 
 function renderUserTextWithLinks(text: string, keyPrefix: number | string) {
   const urlRegex = /(https?:\/\/[^\s<|」》)>]+)/g;
@@ -169,16 +75,16 @@ export function getBlockBorderColor(block: ContentBlock, role: "user" | "assista
     case "thinking":
       return "border-l-semantic-agent/50";
     case "toolCall":
-      return "border-l-status-warning/40";
+      return "border-l-status-warning/50";
     case "toolResult":
-      return block.isError ? "border-l-status-error/50" : "border-l-status-warning/40";
+      return block.isError ? "border-l-status-error/50" : "border-l-status-warning/50";
     case "toolExecution": {
       if (block.toolName.toLowerCase() === "subagent") {
         return block.status === "error" ? "border-l-status-error/50" : "border-l-semantic-agent/50";
       }
-      if (block.status === "running") return "border-l-status-info/50";
-      if (block.status === "error") return "border-l-status-error/50";
-      return "border-l-status-warning/40";
+      if (block.status === "running") return "border-l-status-info/60";
+      if (block.status === "error") return "border-l-status-error/60";
+      return "border-l-semantic-tool/50";
     }
     case "custom": {
       const ct = block.customType;
@@ -288,23 +194,22 @@ export const MessageBubble = memo(function MessageBubble({
               const text = (b as Extract<ContentBlock, { type: "text" }>).text;
 
               try {
-                const hasSkillBlock = SKILL_REGEX.test(text);
-                SKILL_REGEX.lastIndex = 0;
-
-                if (!hasSkillBlock) {
+                const tags = getRegisteredTags();
+                if (!hasSpecialBlocks(text, tags)) {
                   return renderUserTextWithLinks(text, i);
                 }
 
-                const segments = parseSkillBlocks(text);
+                const segments = parseSpecialBlocks(text, tags);
                 return (
                   <span key={i}>
-                    {segments.map((seg, si) =>
-                      seg.type === "skill" ? (
-                        <SkillBlockCollapsed key={`skill-${si}`} block={seg} />
-                      ) : (
-                        renderUserTextWithLinks(seg.text, `text-${si}`)
-                      ),
-                    )}
+                    {segments.map((seg, si) => {
+                      if (seg.type === "special-block") {
+                        const Renderer = getRenderer(seg.tag);
+                        if (Renderer) return <Renderer key={`sb-${si}`} block={seg} />;
+                        return renderUserTextWithLinks(seg.raw, `raw-${si}`);
+                      }
+                      return renderUserTextWithLinks(seg.text, `text-${si}`);
+                    })}
                   </span>
                 );
               } catch {
@@ -518,7 +423,7 @@ export const TextContentCard = memo(function TextContentCard({
           )}
         </div>
       ) : hasMore ? (
-        <div className="py-1 px-3 text-[11px] text-text-tertiary truncate">
+        <div className="py-1 px-3 text-[11px] text-text-secondary truncate">
           {firstLine.length > 120 ? firstLine.slice(0, 120) + "..." : firstLine}
         </div>
       ) : null}
@@ -562,7 +467,7 @@ export const ThinkingCard = memo(function ThinkingCard({
         {isOpen ? (
           <span className="text-semantic-agent/70 font-medium">{t("thinkingLabel")}</span>
         ) : hasMore ? (
-          <span className="text-text-tertiary truncate flex-1 min-w-0">{collapsedText}</span>
+          <span className="text-text-secondary truncate flex-1 min-w-0">{collapsedText}</span>
         ) : (
           <span className="text-semantic-agent/70 font-medium">{t("thinkingLabel")}</span>
         )}
@@ -587,9 +492,9 @@ export const ThinkingCard = memo(function ThinkingCard({
       </div>
 
       {isOpen && (
-        <div className="px-3 pb-2 text-[11px] text-text-tertiary whitespace-pre-wrap leading-relaxed">
+        <div className="px-3 pb-2 text-[11px] text-text-secondary whitespace-pre-wrap leading-relaxed">
           {thinking || (
-            <span className="text-text-tertiary italic">{t("thinkingPlaceholder")}</span>
+            <span className="text-text-secondary italic">{t("thinkingPlaceholder")}</span>
           )}
         </div>
       )}
@@ -1155,9 +1060,9 @@ function PrefetchResultDetail({
                 return (
                   <div
                     key={f}
-                    className="flex items-center gap-1.5 pl-2 py-0.5 text-text-tertiary truncate"
+                    className="flex items-center gap-1.5 pl-2 py-0.5 text-text-secondary truncate"
                   >
-                    <FileText className="w-2.5 h-2.5 text-status-info/50 shrink-0" />
+                    <FileText className="w-2.5 h-2.5 text-status-info/70 shrink-0" />
                     <span className="truncate" title={f}>
                       {fileName}
                     </span>
@@ -1488,11 +1393,11 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
 
   let bgOnly: string;
   if (isRunning) {
-    bgOnly = "bg-status-info/15";
+    bgOnly = "bg-status-info/[0.10]";
   } else if (isError) {
-    bgOnly = "bg-status-error/10";
+    bgOnly = "bg-status-error/[0.08]";
   } else {
-    bgOnly = "bg-status-warning/[0.06] dark:bg-surface-dim/20";
+    bgOnly = "bg-surface-dim/60 dark:bg-surface-dim/20";
   }
 
   const fullExecutionText = useMemo(() => {
@@ -1534,7 +1439,7 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
       {!collapsed && (
         <>
           <div
-            className="px-3 py-1 text-[11px] text-text-tertiary cursor-pointer hover:text-text-secondary dark:hover:text-text-tertiary select-none flex items-center gap-1.5"
+            className="px-3 py-1 text-[11px] text-text-secondary cursor-pointer hover:text-text-primary dark:hover:text-text-primary select-none flex items-center gap-1.5"
             onClick={() => setInputOpen(!inputOpen)}
           >
             <svg
@@ -1565,7 +1470,7 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
           )}
 
           <div
-            className="px-3 py-1 text-[11px] text-text-tertiary cursor-pointer hover:text-text-secondary dark:hover:text-text-tertiary select-none flex items-center gap-1.5"
+            className="px-3 py-1 text-[11px] text-text-secondary cursor-pointer hover:text-text-primary dark:hover:text-text-primary select-none flex items-center gap-1.5"
             onClick={() => setOutputOpen(!outputOpen)}
           >
             <svg
@@ -1597,7 +1502,7 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
               {uiBlock && uiBlock.status === "pending" ? (
                 <UIInteractionCard block={uiBlock} />
               ) : block.output ? (
-                <pre className="text-[11px] text-text-secondary overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-36 overflow-y-auto bg-surface-dim dark:bg-surface-code/30 rounded px-2 py-1.5">
+                <pre className="text-[11px] text-text-secondary overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-36 overflow-y-auto bg-surface-code/80 dark:bg-surface-code/30 rounded px-2 py-1.5">
                   {block.output}
                 </pre>
               ) : isRunning ? (

@@ -290,8 +290,8 @@ function StatusBadge({ sessionId }: { sessionId: string }) {
     );
   }
   return (
-    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-success/10 text-status-success/80 border border-status-success/15">
-      <span className="w-1 h-1 rounded-full bg-status-success/60" />
+    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-success/15 text-status-success border border-status-success/25">
+      <span className="w-1 h-1 rounded-full bg-status-success" />
       {t("idle")}
     </span>
   );
@@ -584,7 +584,7 @@ function SessionItem({
       </div>
 
       {isExpanded && hasExpandableChildren && (
-        <div className="ml-4 pl-3 border-l border-border-primary/70 mt-0.5 space-y-0">
+        <div className="ml-2 pl-2 border-l border-border-primary/50 mt-0.5 space-y-0">
           {loadingSubs && (
             <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] text-text-tertiary">
               <Loader2 className="w-3 h-3 animate-spin" />

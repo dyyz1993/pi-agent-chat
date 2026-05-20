@@ -241,7 +241,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
 
   isStatusVisible: () => {
     const bp = get().breakpoint;
-    if (bp === "mobile") return false;
+    if (bp === "mobile" || bp === "tablet") return false;
     return get().statusPanel !== "hidden";
   },
 }));

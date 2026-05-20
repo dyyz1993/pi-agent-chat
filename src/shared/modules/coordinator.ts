@@ -82,7 +82,13 @@ export interface CoordinatorMethods {
 }
 
 export type CoordinatorMethodCall =
-  | { __call: "session_delegate"; task: string; title?: string; invokeId?: string }
+  | {
+      __call: "session_delegate";
+      task: string;
+      title?: string;
+      projectPath?: string;
+      invokeId?: string;
+    }
   | {
       __call: "session_delegate_send";
       targetSessionId: string;

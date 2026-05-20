@@ -19,12 +19,12 @@ type UIBlock = UIInteractionBlock;
 
 const BG_MAP: Record<string, string> = {
   pending:
-    "border border-status-warning/30 dark:border-status-warning/40 bg-status-warning/50 dark:bg-status-warning/25",
+    "border border-status-warning/30 dark:border-status-warning/40 bg-status-warning/10 dark:bg-status-warning/25",
   responded:
-    "border-l-2 border-status-success/30 dark:border-status-success/40 bg-status-success/50 dark:bg-status-success/20",
+    "border-l-2 border-status-success/30 dark:border-status-success/40 bg-status-success/10 dark:bg-status-success/20",
   dismissed: "border-l-2 border-border-secondary/60 bg-surface-dim",
   notified:
-    "border-l-2 border-status-info/30 dark:border-status-info/40 bg-status-info/50 dark:bg-status-info/20",
+    "border-l-2 border-status-info/30 dark:border-status-info/40 bg-status-info/10 dark:bg-status-info/20",
 };
 
 export function CardShell({ block, children }: { block: UIBlock; children: React.ReactNode }) {
@@ -80,14 +80,14 @@ export const ConfirmCard = memo(function ConfirmCard({ block }: { block: UIBlock
         <div className="px-3 py-1.5 flex gap-2">
           <button
             onClick={() => respondById(block.id, { confirmed: true })}
-            className="flex-1 flex items-center justify-center gap-1 py-1 text-[11px] rounded bg-status-success/100 dark:bg-status-success/20 text-status-success hover:bg-status-success/200 dark:hover:bg-status-success/30 transition-colors"
+            className="flex-1 flex items-center justify-center gap-1 py-1 text-[11px] rounded bg-status-success text-white dark:bg-status-success/20 dark:text-status-success hover:bg-status-success/90 dark:hover:bg-status-success/30 transition-colors"
           >
             <CheckCircle className="w-3 h-3" />
             {t("common:confirm")}
           </button>
           <button
             onClick={() => dismissById(block.id)}
-            className="flex-1 flex items-center justify-center gap-1 py-1 text-[11px] rounded bg-status-error/100 dark:bg-status-error/15 text-status-error hover:bg-status-error/200 dark:hover:bg-status-error/25 transition-colors"
+            className="flex-1 flex items-center justify-center gap-1 py-1 text-[11px] rounded bg-status-error text-white dark:bg-status-error/15 dark:text-status-error hover:bg-status-error/90 dark:hover:bg-status-error/25 transition-colors"
           >
             <XCircle className="w-3 h-3" />
             {t("common:cancel")}
@@ -152,18 +152,24 @@ export const SelectCard = memo(function SelectCard({ block }: { block: UIBlock }
                   onClick={() => toggleCheck(i)}
                   className={`w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-md text-[11px] transition-colors ${
                     checked
-                      ? "bg-status-info/100 dark:bg-status-info/15 text-status-info"
+                      ? "bg-status-info text-white dark:bg-status-info/15 dark:text-status-info"
                       : "text-text-secondary hover:bg-surface-dim hover:text-text-primary"
                   }`}
                 >
                   {checked ? (
-                    <CheckSquare className="w-3.5 h-3.5 shrink-0 text-status-info" />
+                    <CheckSquare className="w-3.5 h-3.5 shrink-0 text-white dark:text-status-info" />
                   ) : (
                     <Square className="w-3.5 h-3.5 shrink-0 text-text-tertiary" />
                   )}
                   <div className="min-w-0">
                     <div>{label}</div>
-                    {desc && <div className="text-[10px] text-text-tertiary">{desc}</div>}
+                    {desc && (
+                      <div
+                        className={`text-[10px] ${checked ? "text-white/70 dark:text-text-tertiary" : "text-text-tertiary"}`}
+                      >
+                        {desc}
+                      </div>
+                    )}
                   </div>
                 </button>
               );
@@ -210,7 +216,7 @@ export const SelectCard = memo(function SelectCard({ block }: { block: UIBlock }
                   else if (customValue.trim()) respondById(block.id, { value: customValue.trim() });
                 }}
                 disabled={checkedSet.size === 0 && !customValue.trim()}
-                className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md bg-status-warning/100 dark:bg-status-warning/20 text-status-warning hover:bg-status-warning/200 dark:hover:bg-status-warning/30 disabled:opacity-40 disabled:cursor-not-allowed text-[11px] transition-colors"
+                className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md bg-status-warning text-white dark:bg-status-warning/20 dark:text-status-warning hover:bg-status-warning/90 dark:hover:bg-status-warning/30 disabled:opacity-40 disabled:cursor-not-allowed text-[11px] transition-colors"
               >
                 {t("common:submit")}
               </button>
@@ -240,16 +246,22 @@ export const SelectCard = memo(function SelectCard({ block }: { block: UIBlock }
                 }}
                 className={`w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-md text-[11px] transition-colors ${
                   selectedIdx === i
-                    ? "bg-status-info/100 dark:bg-status-info/15 text-status-info"
+                    ? "bg-status-info text-white dark:bg-status-info/15 dark:text-status-info"
                     : "text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-hover/50 hover:text-text-primary dark:hover:text-text-secondary"
                 }`}
               >
                 <CircleDot
-                  className={`w-3.5 h-3.5 shrink-0 ${selectedIdx === i ? "text-status-info" : "text-text-tertiary"}`}
+                  className={`w-3.5 h-3.5 shrink-0 ${selectedIdx === i ? "text-white dark:text-status-info" : "text-text-tertiary"}`}
                 />
                 <div className="min-w-0">
                   <div>{label}</div>
-                  {desc && <div className="text-[10px] text-text-tertiary">{desc}</div>}
+                  {desc && (
+                    <div
+                      className={`text-[10px] ${selectedIdx === i ? "text-white/70 dark:text-text-tertiary" : "text-text-tertiary"}`}
+                    >
+                      {desc}
+                    </div>
+                  )}
                 </div>
               </button>
             );
@@ -296,7 +308,7 @@ export const SelectCard = memo(function SelectCard({ block }: { block: UIBlock }
                 else if (customValue.trim()) respondById(block.id, { value: customValue.trim() });
               }}
               disabled={selectedIdx == null && !customValue.trim()}
-              className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md bg-status-warning/100 dark:bg-status-warning/20 text-status-warning hover:bg-status-warning/200 dark:hover:bg-status-warning/30 disabled:opacity-40 disabled:cursor-not-allowed text-[11px] transition-colors"
+              className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md bg-status-warning text-white dark:bg-status-warning/20 dark:text-status-warning hover:bg-status-warning/90 dark:hover:bg-status-warning/30 disabled:opacity-40 disabled:cursor-not-allowed text-[11px] transition-colors"
             >
               {t("common:submit")}
             </button>
@@ -356,7 +368,7 @@ export const InputCard = memo(function InputCard({ block }: { block: UIBlock }) 
           />
           <button
             onClick={() => respondById(block.id, { value })}
-            className="flex items-center justify-center px-2 py-1 rounded bg-status-warning/100 dark:bg-status-warning/20 text-status-warning hover:bg-status-warning/200 dark:hover:bg-status-warning/30 transition-colors"
+            className="flex items-center justify-center px-2 py-1 rounded bg-status-warning text-white dark:bg-status-warning/20 dark:text-status-warning hover:bg-status-warning/90 dark:hover:bg-status-warning/30 transition-colors"
           >
             <Send className="w-3 h-3" />
           </button>
@@ -400,7 +412,7 @@ export const EditorCard = memo(function EditorCard({ block }: { block: UIBlock }
           <div className="flex gap-1.5">
             <button
               onClick={() => respondById(block.id, { value })}
-              className="flex-1 flex items-center justify-center gap-1 py-1 text-[11px] rounded bg-semantic-agent/100 dark:bg-semantic-agent/20 text-semantic-agent hover:bg-semantic-agent/200 dark:hover:bg-semantic-agent/30 transition-colors"
+              className="flex-1 flex items-center justify-center gap-1 py-1 text-[11px] rounded bg-semantic-agent text-white dark:bg-semantic-agent/20 dark:text-semantic-agent hover:bg-semantic-agent/90 dark:hover:bg-semantic-agent/30 transition-colors"
             >
               <Send className="w-3 h-3" />
               {t("common:submit")}

@@ -2549,11 +2549,11 @@ export class AgentProcessManager {
     parentSessionId: string,
     msg: Extract<CoordinatorMethodCall, { __call: "session_delegate" }>,
   ): Promise<{ sessionId: string; status: "started" | "already_running" | "switched" }> {
-    const { task } = msg;
+    const { task, projectPath: rawProjectPath } = msg;
     const parent = this.getActiveManaged(parentSessionId);
     if (!parent) throw new Error("Parent session not found");
 
-    const projectPath = parent.info.projectPath;
+    const projectPath = rawProjectPath || parent.info.projectPath;
     const newSessionId = `sess_coord_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const sessionDir = path.dirname(parent.info.sessionPath);
     const sessionPath = path.join(sessionDir, `${newSessionId}.jsonl`);
@@ -2639,11 +2639,11 @@ export class AgentProcessManager {
     finalText: string;
     error?: string;
   }> {
-    const { task, title, agent, timeoutMs = 300000 } = msg;
+    const { task, title, agent, timeoutMs = 300000, projectPath: rawProjectPath } = msg;
     const parent = this.getActiveManaged(parentSessionId);
     if (!parent) throw new Error("Parent session not found");
 
-    const projectPath = parent.info.projectPath;
+    const projectPath = rawProjectPath || parent.info.projectPath;
     const newSessionId = `sess_sub_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const sessionDir = path.dirname(parent.info.sessionPath);
     const sessionPath = path.join(sessionDir, `${newSessionId}.jsonl`);
@@ -2667,6 +2667,22 @@ export class AgentProcessManager {
     }
 
     await this.start(newSessionId, projectPath, sessionPath, { forceNewProcess: true });
+
+    if (agent) {
+      try {
+        await this.switchAgent(newSessionId, agent);
+        log.info("[handleCoordinatorDelegateSync] agent switched", {
+          newSessionId,
+          agent,
+        });
+      } catch (switchErr: unknown) {
+        log.warn("[handleCoordinatorDelegateSync] switchAgent failed, using default agent", {
+          newSessionId,
+          agent,
+          err: switchErr instanceof Error ? switchErr.message : String(switchErr),
+        });
+      }
+    }
 
     this.delegateCreatedAt.set(newSessionId, Date.now());
     this.delegateReplyCount.set(newSessionId, 0);

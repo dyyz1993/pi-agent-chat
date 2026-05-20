@@ -169,7 +169,7 @@ const NavDot = memo(function NavDot({
   onDoubleClick: () => void;
 }) {
   let cls =
-    "relative w-10 h-8 rounded-r flex items-center justify-center transition-all cursor-pointer ";
+    "relative w-10 h-8 rounded-r flex items-center justify-center leading-none transition-all cursor-pointer ";
   let iconColor = color;
   let barCls = "absolute left-0 top-1 bottom-1 w-[3px] rounded-full transition-all opacity-0 ";
 
@@ -193,7 +193,7 @@ const NavDot = memo(function NavDot({
       onDoubleClick={onDoubleClick}
     >
       <span className={barCls} />
-      <Icon className={`w-4 h-4 ${iconColor} transition-colors`} />
+      <Icon className={`w-4 h-4 shrink-0 ${iconColor} transition-colors`} />
     </button>
   );
 });
@@ -214,7 +214,7 @@ const NavSubDot = memo(function NavSubDot({
   onClick?: () => void;
 }) {
   let cls =
-    "relative w-10 h-8 rounded-r flex items-center justify-center transition-all cursor-pointer ";
+    "relative w-10 h-8 rounded-r flex items-center justify-center leading-none transition-all cursor-pointer ";
   let iconColor = color;
   let barCls = "absolute left-0 top-1 bottom-1 w-[3px] rounded-full transition-all opacity-0 ";
 
@@ -229,7 +229,7 @@ const NavSubDot = memo(function NavSubDot({
   return (
     <button className={cls} title={label} data-block-id={blockId} onClick={onClick}>
       <span className={barCls} />
-      <Icon className={`w-4 h-4 ${iconColor} transition-colors`} />
+      <Icon className={`w-4 h-4 shrink-0 ${iconColor} transition-colors`} />
     </button>
   );
 });
@@ -315,7 +315,7 @@ export const SideNav = memo(function SideNav({
     }
     if (idx < 0) return;
     const timer = setTimeout(() => {
-      sidenavVlistRef.current?.scrollToIndex(idx, { align: "nearest" });
+      sidenavVlistRef.current?.scrollToIndex(idx, { align: "center", smooth: true });
     }, 120);
     return () => clearTimeout(timer);
   }, [selectedNavId, filteredNavItems]);
