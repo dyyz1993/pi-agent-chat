@@ -64,6 +64,47 @@ vi.mock("../src/mainview/stores/use-chat-nav-store", () => ({
   },
 }));
 
+vi.mock("../src/mainview/stores/use-git-store", () => ({
+  useGitStore: {
+    getState: vi.fn(() => ({
+      checkGitRepo: vi.fn().mockResolvedValue(false),
+      fetchWorktrees: vi.fn(),
+      fetchStatus: vi.fn(),
+      fetchBranches: vi.fn(),
+    })),
+  },
+}));
+
+vi.mock("../src/mainview/stores/use-memory-store", () => ({
+  useMemoryStore: {
+    getState: vi.fn(() => ({ clearSessionData: vi.fn() })),
+  },
+}));
+
+vi.mock("../src/mainview/stores/use-rules-store", () => ({
+  useRulesStore: {
+    getState: vi.fn(() => ({ clearSessionData: vi.fn() })),
+  },
+}));
+
+vi.mock("../src/mainview/stores/use-bash-store", () => ({
+  useBashStore: {
+    getState: vi.fn(() => ({ clearSessionData: vi.fn() })),
+  },
+}));
+
+vi.mock("../src/mainview/stores/use-lsp-store", () => ({
+  useLspStore: {
+    getState: vi.fn(() => ({ clearSessionData: vi.fn() })),
+  },
+}));
+
+vi.mock("../src/mainview/stores/use-supervisor-store", () => ({
+  useSupervisorStore: {
+    getState: vi.fn(() => ({ clearSessionData: vi.fn() })),
+  },
+}));
+
 vi.mock("../src/mainview/stores/session-subscriptions", () => ({
   setupSubscriptions: vi.fn(),
   cleanupSession: vi.fn(),
@@ -176,6 +217,63 @@ describe("removeProjectTab", () => {
     useSessionStore.getState().addProjectTab(TAB_B);
     useSessionStore.getState().removeProjectTab("tab-a");
     expect(useSessionStore.getState().projectTabs[0].id).toBe("tab-b");
+  });
+
+  it("calls setActiveProject for the new tab when closing the active project tab", async () => {
+    const sessions = [makeSession({ sessionId: "sess-b1", projectPath: "/project-b" })];
+    mockedCall.mockResolvedValueOnce({ sessions });
+
+    useSessionStore.setState({
+      projectTabs: [TAB_A, TAB_B],
+      activeProjectId: "tab-b",
+      activeSessionId: "sess-old",
+      sessionsByProject: {},
+    });
+
+    useSessionStore.getState().removeProjectTab("tab-b");
+
+    await vi.waitFor(() => {
+      const state = useSessionStore.getState();
+      expect(state.activeProjectId).toBe("tab-a");
+      expect(state._projectVersion).toBeGreaterThan(0);
+      expect(state.activeSessionId).not.toBe("sess-old");
+    });
+
+    expect(mockedCall).toHaveBeenCalledWith(
+      "project.scanSessions",
+      expect.objectContaining({ projectPath: "/project-a" }),
+    );
+  });
+
+  it("does not call setActiveProject when closing a non-active tab", () => {
+    const versionBefore = useSessionStore.getState()._projectVersion;
+
+    useSessionStore.setState({
+      projectTabs: [TAB_A, TAB_B],
+      activeProjectId: "tab-a",
+      activeSessionId: "sess-a",
+      sessionsByProject: { "/project-a": [makeSession({ sessionId: "sess-a" })] },
+    });
+
+    useSessionStore.getState().removeProjectTab("tab-b");
+
+    expect(useSessionStore.getState()._projectVersion).toBe(versionBefore);
+    expect(useSessionStore.getState().activeProjectId).toBe("tab-a");
+  });
+
+  it("does not call setActiveProject when closing the last remaining tab", () => {
+    const versionBefore = useSessionStore.getState()._projectVersion;
+
+    useSessionStore.setState({
+      projectTabs: [TAB_A],
+      activeProjectId: "tab-a",
+      activeSessionId: "sess-a",
+    });
+
+    useSessionStore.getState().removeProjectTab("tab-a");
+
+    expect(useSessionStore.getState().activeProjectId).toBeNull();
+    expect(useSessionStore.getState()._projectVersion).toBe(versionBefore);
   });
 });
 

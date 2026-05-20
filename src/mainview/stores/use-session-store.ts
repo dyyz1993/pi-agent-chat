@@ -216,6 +216,7 @@ export const useSessionStore = create<SessionState>()(
           set((s) => clearSubscriptionState(s, sid));
         }
 
+        const wasActive = state.activeProjectId === id;
         set((s) => {
           const filtered = s.projectTabs.filter((t) => t.id !== id);
           const newActiveId =
@@ -228,6 +229,13 @@ export const useSessionStore = create<SessionState>()(
             activeProjectId: newActiveId,
           };
         });
+
+        if (wasActive) {
+          const newActiveId = get().activeProjectId;
+          if (newActiveId) {
+            get().setActiveProject(newActiveId);
+          }
+        }
       },
 
       reorderProjectTabs: (fromIndex: number, toIndex: number) => {
