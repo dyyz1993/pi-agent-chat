@@ -1,4 +1,12 @@
-import { useMemo, useCallback, useEffect, useRef, memo } from "react";
+import {
+  useMemo,
+  useCallback,
+  useEffect,
+  useRef,
+  memo,
+  useImperativeHandle,
+  forwardRef,
+} from "react";
 import { VList, type VListHandle } from "virtua";
 import {
   User,
@@ -234,135 +242,161 @@ const NavSubDot = memo(function NavSubDot({
   );
 });
 
-export const SideNav = memo(function SideNav({
-  messages,
-  onNavDotClick,
-}: {
-  messages: ChatMessage[];
-  onNavDotClick: (navId: string) => void;
-}) {
-  const { t } = useTranslation("chat");
-  const sessionId = useSessionStore((s) => s.activeSessionId);
-  const selectedNavId = useTurnStore(
-    useCallback(
-      (s) => (sessionId ? (s.selectedNavIdBySession[sessionId] ?? null) : null),
-      [sessionId],
-    ),
-  );
-  const setNavId = useTurnStore((s) => s.setNavId);
-  const selectedItems = useChatNavStore(
-    useCallback(
-      (s) => (sessionId ? (s.selectedItemsBySession[sessionId] ?? EMPTY_SET) : EMPTY_SET),
-      [sessionId],
-    ),
-  );
-  const toggleItemSelect = useChatNavStore((s) => s.toggleItemSelect);
+export const SideNav = memo(
+  forwardRef<
+    { getFirstIconId: () => string | null; getLastIconId: () => string | null },
+    { messages: ChatMessage[]; onNavDotClick: (navId: string) => void }
+  >(function SideNavInner({ messages, onNavDotClick }, ref) {
+    const { t } = useTranslation("chat");
+    const sessionId = useSessionStore((s) => s.activeSessionId);
+    const selectedNavId = useTurnStore(
+      useCallback(
+        (s) => (sessionId ? (s.selectedNavIdBySession[sessionId] ?? null) : null),
+        [sessionId],
+      ),
+    );
+    const setNavId = useTurnStore((s) => s.setNavId);
+    const selectedItems = useChatNavStore(
+      useCallback(
+        (s) => (sessionId ? (s.selectedItemsBySession[sessionId] ?? EMPTY_SET) : EMPTY_SET),
+        [sessionId],
+      ),
+    );
+    const toggleItemSelect = useChatNavStore((s) => s.toggleItemSelect);
 
-  const navItems = useMemo(() => buildNavItems(messages, t), [messages, t]);
+    const navItems = useMemo(() => buildNavItems(messages, t), [messages, t]);
 
-  const showToolCalls = useSettingsStore((s) => s.showToolCalls);
-  const showThinking = useSettingsStore((s) => s.showThinking);
+    const showToolCalls = useSettingsStore((s) => s.showToolCalls);
+    const showThinking = useSettingsStore((s) => s.showThinking);
 
-  const filteredNavItems = useMemo(() => {
-    if (showToolCalls && showThinking) return navItems;
-    return navItems.map((item) => ({
-      ...item,
-      subs: item.subs.filter((sub) => {
-        if (!showToolCalls && sub.label !== t("sideNav.text")) return false;
-        return true;
+    const filteredNavItems = useMemo(() => {
+      if (showToolCalls && showThinking) return navItems;
+      return navItems.map((item) => ({
+        ...item,
+        subs: item.subs.filter((sub) => {
+          if (!showToolCalls && sub.label !== t("sideNav.text")) return false;
+          return true;
+        }),
+      }));
+    }, [navItems, showToolCalls, showThinking, t]);
+
+    const sidenavVlistRef = useRef<VListHandle>(null);
+
+    const flatIconIds = useMemo(() => {
+      const ids: string[] = [];
+      for (const item of filteredNavItems) {
+        if (item.subs.length > 0) {
+          for (const sub of item.subs) {
+            ids.push(sub.blockId);
+          }
+        } else {
+          ids.push(item.id);
+        }
+      }
+      return ids;
+    }, [filteredNavItems]);
+
+    useImperativeHandle(
+      ref,
+      () => ({
+        getFirstIconId: () => flatIconIds[0] ?? null,
+        getLastIconId: () => flatIconIds[flatIconIds.length - 1] ?? null,
       }),
-    }));
-  }, [navItems, showToolCalls, showThinking, t]);
+      [flatIconIds],
+    );
 
-  const sidenavVlistRef = useRef<VListHandle>(null);
+    const handleDotClick = useCallback(
+      (id: string) => {
+        setNavId(id);
+        onNavDotClick(id);
+      },
+      [onNavDotClick, setNavId],
+    );
 
-  const handleDotClick = useCallback(
-    (id: string) => {
-      setNavId(id);
-      onNavDotClick(id);
-    },
-    [onNavDotClick, setNavId],
-  );
+    const handleSubDotClick = useCallback(
+      (blockId: string) => {
+        setNavId(blockId);
+        onNavDotClick(blockId);
+      },
+      [onNavDotClick, setNavId],
+    );
 
-  const handleSubDotClick = useCallback(
-    (blockId: string) => {
-      setNavId(blockId);
-      onNavDotClick(blockId);
-    },
-    [onNavDotClick, setNavId],
-  );
+    const handleContextMenu = useCallback(
+      (e: React.MouseEvent, id: string) => {
+        e.preventDefault();
+        toggleItemSelect(id);
+      },
+      [toggleItemSelect],
+    );
 
-  const handleContextMenu = useCallback(
-    (e: React.MouseEvent, id: string) => {
-      e.preventDefault();
-      toggleItemSelect(id);
-    },
-    [toggleItemSelect],
-  );
+    const handleDoubleClick = useCallback(
+      (id: string) => {
+        toggleItemSelect(id);
+      },
+      [toggleItemSelect],
+    );
 
-  const handleDoubleClick = useCallback(
-    (id: string) => {
-      toggleItemSelect(id);
-    },
-    [toggleItemSelect],
-  );
+    useEffect(() => {
+      if (!selectedNavId) return;
+      let idx = filteredNavItems.findIndex((n) => n.id === selectedNavId);
+      if (idx < 0) {
+        idx = filteredNavItems.findIndex((n) => n.subs.some((s) => s.blockId === selectedNavId));
+      }
+      if (idx < 0) return;
 
-  useEffect(() => {
-    if (!selectedNavId) return;
-    let idx = filteredNavItems.findIndex((n) => n.id === selectedNavId);
-    if (idx < 0) {
-      idx = filteredNavItems.findIndex((n) => n.subs.some((s) => s.blockId === selectedNavId));
-    }
-    if (idx < 0) return;
-    const timer = setTimeout(() => {
-      sidenavVlistRef.current?.scrollToIndex(idx, { align: "center", smooth: true });
-    }, 120);
-    return () => clearTimeout(timer);
-  }, [selectedNavId, filteredNavItems]);
+      const isEdge = idx === 0 || idx === filteredNavItems.length - 1;
+      const align = isEdge ? (idx === 0 ? "start" : "end") : "center";
 
-  return (
-    <div className="h-full min-h-0 flex flex-col bg-surface-dim/30 dark:bg-surface-code/30 border-l border-border-secondary/30">
-      <VList
-        ref={sidenavVlistRef}
-        style={{ flex: 1, minHeight: 0, scrollbarWidth: "none", msOverflowStyle: "none" }}
-      >
-        {filteredNavItems.map(({ id, icon: Icon, color, subs }) => (
-          <div key={id} data-nav-id={id}>
-            <div className="flex flex-col items-center w-full">
-              <NavDot
-                Icon={Icon}
-                color={color}
-                isClicked={selectedNavId === id}
-                isMultiSelected={selectedItems.has(id)}
-                onClick={() => handleDotClick(id)}
-                onContextMenu={(e) => handleContextMenu(e, id)}
-                onDoubleClick={() => handleDoubleClick(id)}
-              />
-              {subs.length > 0 && (
-                <div className="flex flex-col items-center ml-1 mt-0.5 space-y-0.5">
-                  {subs.map((sub) => (
-                    <NavSubDot
-                      key={sub.blockId}
-                      Icon={sub.icon}
-                      color={sub.color}
-                      label={sub.label}
-                      blockId={sub.blockId}
-                      isActive={selectedNavId === sub.blockId}
-                      onClick={() => handleSubDotClick(sub.blockId)}
-                    />
-                  ))}
-                </div>
-              )}
+      const timer = setTimeout(() => {
+        sidenavVlistRef.current?.scrollToIndex(idx, { align, smooth: true });
+      }, 120);
+      return () => clearTimeout(timer);
+    }, [selectedNavId, filteredNavItems]);
+
+    return (
+      <div className="h-full min-h-0 flex flex-col bg-surface-dim/30 dark:bg-surface-code/30 border-l border-border-secondary/30">
+        <VList
+          ref={sidenavVlistRef}
+          style={{ flex: 1, minHeight: 0, scrollbarWidth: "none", msOverflowStyle: "none" }}
+        >
+          {filteredNavItems.map(({ id, icon: Icon, color, subs }) => (
+            <div key={id} data-nav-id={id}>
+              <div className="flex flex-col items-center w-full">
+                <NavDot
+                  Icon={Icon}
+                  color={color}
+                  isClicked={selectedNavId === id}
+                  isMultiSelected={selectedItems.has(id)}
+                  onClick={() => handleDotClick(id)}
+                  onContextMenu={(e) => handleContextMenu(e, id)}
+                  onDoubleClick={() => handleDoubleClick(id)}
+                />
+                {subs.length > 0 && (
+                  <div className="flex flex-col items-center ml-1 mt-0.5 space-y-0.5">
+                    {subs.map((sub) => (
+                      <NavSubDot
+                        key={sub.blockId}
+                        Icon={sub.icon}
+                        color={sub.color}
+                        label={sub.label}
+                        blockId={sub.blockId}
+                        isActive={selectedNavId === sub.blockId}
+                        onClick={() => handleSubDotClick(sub.blockId)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
-      </VList>
+          ))}
+        </VList>
 
-      {selectedItems.size > 0 && (
-        <div className="px-1 py-1 text-[10px] text-status-error text-center border-t border-status-error/20 bg-status-error/5">
-          {t("sideNav.selected", { count: selectedItems.size })}
-        </div>
-      )}
-    </div>
-  );
-});
+        {selectedItems.size > 0 && (
+          <div className="px-1 py-1 text-[10px] text-status-error text-center border-t border-status-error/20 bg-status-error/5">
+            {t("sideNav.selected", { count: selectedItems.size })}
+          </div>
+        )}
+      </div>
+    );
+  }),
+);

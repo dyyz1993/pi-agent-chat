@@ -120,6 +120,10 @@ export function ChatPanel() {
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const vlistRef = useRef<VirtualizerHandle>(null);
   const inputBarRef = useRef<InputBarHandle>(null);
+  const sideNavRef = useRef<{
+    getFirstIconId: () => string | null;
+    getLastIconId: () => string | null;
+  }>(null);
   const messageIds = useMemo(() => messages.map((m) => m.id), [messages]);
   const isStreaming =
     effectiveStatus === "streaming" ||
@@ -221,8 +225,9 @@ export function ChatPanel() {
   const handleScrollToEdge = useCallback(
     (edge: "top" | "bottom") => {
       if (messageIds.length === 0) return;
-      const id = edge === "top" ? messageIds[0] : messageIds[messageIds.length - 1];
-      setNavId(id);
+      const iconId =
+        edge === "top" ? sideNavRef.current?.getFirstIconId() : sideNavRef.current?.getLastIconId();
+      if (iconId) setNavId(iconId);
       if (edge === "top") suspendAutoScroll();
       scrollToEdge(edge);
     },
@@ -406,7 +411,7 @@ export function ChatPanel() {
           )}
         </div>
         <div className="w-12 shrink-0 overflow-hidden">
-          <SideNav messages={messages} onNavDotClick={handleNavDotClick} />
+          <SideNav ref={sideNavRef} messages={messages} onNavDotClick={handleNavDotClick} />
         </div>
       </div>
 
