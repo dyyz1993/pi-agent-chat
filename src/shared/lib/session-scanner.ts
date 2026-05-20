@@ -1,4 +1,4 @@
-import { readdir, stat, readFile } from "fs/promises";
+import { readdir, stat } from "fs/promises";
 import { createReadStream } from "fs";
 import { existsSync } from "fs";
 import { createInterface } from "readline";
@@ -95,15 +95,21 @@ async function parseJsonlMeta(filePath: string): Promise<{
   effectiveCwd: string | null;
 } | null> {
   try {
-    const content = await readFile(filePath, "utf-8");
-    const lines = content.split("\n").filter((l) => l.trim());
+    const stream = createReadStream(filePath, { encoding: "utf-8" });
+    const rl = createInterface({ input: stream, crlfDelay: Infinity });
+
     let messageCount = 0;
     let firstMessage = "";
     let sessionName = "";
     let parentSessionPath: string | null = null;
     let effectiveCwd: string | null = null;
+    let lineCount = 0;
+    const MAX_LINES = 50;
 
-    for (const line of lines) {
+    for await (const line of rl) {
+      lineCount++;
+      if (lineCount > MAX_LINES) break;
+
       try {
         const entry: JsonlEntry = JSON.parse(line) as JsonlEntry;
         if (entry.type === "message" && entry.message?.role === "user") {
@@ -127,6 +133,12 @@ async function parseJsonlMeta(filePath: string): Promise<{
       }
     }
 
+    rl.close();
+    stream.destroy();
+
+    // If we stopped early, count remaining lines for approximate messageCount
+    // by reading file size and estimating from what we've seen
+    // For now, just use the partial count — it's enough for display
     return { messageCount, firstMessage, sessionName, parentSessionPath, effectiveCwd };
   } catch {
     return null;
