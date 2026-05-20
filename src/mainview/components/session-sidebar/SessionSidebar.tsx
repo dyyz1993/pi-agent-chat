@@ -120,12 +120,25 @@ export function SessionSidebar(_props: SessionSidebarProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   const newSessionCreatedAt = useSessionStore((s) => s.newSessionCreatedAt);
+  const activeProjectId = useSessionStore((s) => s.activeProjectId);
+  const projectTabs = useSessionStore((s) => s.projectTabs);
+  const fetchProjectSessionStatuses = useSessionStore((s) => s.fetchProjectSessionStatuses);
 
   useEffect(() => {
     if (newSessionCreatedAt > 0) {
       setExpandedIds(new Set());
     }
   }, [newSessionCreatedAt]);
+
+  // Lazy fetch: only when sidebar is visible, fetch current project's session statuses
+  const fetchedRef = useRef(false);
+  useEffect(() => {
+    if (fetchedRef.current) return;
+    const tab = projectTabs.find((t) => t.id === activeProjectId);
+    if (!tab) return;
+    fetchedRef.current = true;
+    fetchProjectSessionStatuses(tab.path);
+  }, [activeProjectId, projectTabs, fetchProjectSessionStatuses]);
 
   const toggleExpand = useCallback((sessionId: string) => {
     setExpandedIds((prev) => {

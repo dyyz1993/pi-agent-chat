@@ -4,7 +4,10 @@ import { useTranslation } from "react-i18next";
 import { useSessionStore } from "../../stores/use-session-store";
 import { apiClient } from "../../lib/api-client";
 import { SettingsPanel } from "../settings/SettingsPanel";
+import { createLogger } from "../../../shared/lib/logger";
 import type { SessionStatus } from "../../types";
+
+const log = createLogger("tab-bar");
 
 function resolveDotClass(
   sessions: { sessionId: string }[],
@@ -37,7 +40,6 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
   const sessionsByProject = useSessionStore((s) => s.sessionsByProject);
   const sessionStatusMap = useSessionStore((s) => s.sessionStatusMap);
   const loadSessionsForProject = useSessionStore((s) => s.loadSessionsForProject);
-  const fetchAllSessionStatuses = useSessionStore((s) => s.fetchAllSessionStatuses);
 
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
@@ -58,31 +60,27 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
     };
   }, []);
 
-  // 初始化所有项目的 sessions 和状态
+  // 初始化非活跃项目的 sessions 列表（仅列表，不拉状态）
   useEffect(() => {
     if (initializedRef.current) return;
     initializedRef.current = true;
 
-    const initAllProjects = async () => {
-      const tabsToInit = projectTabs.filter((tab) => !sessionsByProject[tab.path]);
-
-      if (tabsToInit.length === 0) {
-        // 所有项目都已加载 sessions，只拉取状态
-        await fetchAllSessionStatuses();
-        return;
+    const timer = setTimeout(async () => {
+      try {
+        const tabsToInit = projectTabs.filter((tab) => !sessionsByProject[tab.path]);
+        if (tabsToInit.length > 0) {
+          await Promise.all(tabsToInit.map((tab) => loadSessionsForProject(tab.path)));
+        }
+        // Session statuses are fetched lazily when SessionSidebar mounts
+      } catch (err) {
+        log.error("[TabBar] Failed to initialize projects:", {
+          err: err instanceof Error ? err.message : String(err),
+        });
       }
+    }, 3000);
 
-      // 并行加载所有项目的 sessions
-      await Promise.all(tabsToInit.map((tab) => loadSessionsForProject(tab.path)));
-
-      // 拉取所有 session 状态
-      await fetchAllSessionStatuses();
-    };
-
-    initAllProjects().catch((err) => {
-      console.error("[TabBar] Failed to initialize projects:", err);
-    });
-  }, [projectTabs, sessionsByProject, loadSessionsForProject, fetchAllSessionStatuses]);
+    return () => clearTimeout(timer);
+  }, [projectTabs, sessionsByProject, loadSessionsForProject]);
 
   useEffect(() => {
     if (!activeProjectId) return;

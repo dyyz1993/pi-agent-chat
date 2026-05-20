@@ -21,7 +21,8 @@ export type LogModule =
   | "settings"
   | "proxy-register"
   | "supervisor"
-  | "fork-dialog";
+  | "fork-dialog"
+  | "tab-bar";
 type LogLevel = "debug" | "info" | "warn" | "error";
 
 interface LogEntry {

@@ -153,6 +153,7 @@ interface SessionState {
   toggleModelFavorite: (modelKey: string) => void;
   cleanupActiveSession: (sessionId: string) => void;
   fetchAllSessionStatuses: () => Promise<void>;
+  fetchProjectSessionStatuses: (projectPath: string) => Promise<void>;
 }
 
 const _fetchInitPromiseMap = new Map<string, Promise<void>>();
@@ -1178,97 +1179,86 @@ export const useSessionStore = create<SessionState>()(
                   );
               });
 
-            agentsPromise
-              .then((agentsResult: unknown) => {
-                perfLog.info("[fetchInit] getAgents done", {
-                  sessionId,
-                  ms: Math.round(performance.now() - t0),
-                });
-                const raw = agentsResult as {
-                  agents?: Array<{
-                    name: string;
-                    description?: string;
-                    tier?: string;
-                    tools?: string[];
-                    permissionMode?: string;
-                    source?: string;
-                    filePath?: string;
-                  }>;
-                };
-                const agentList = (raw.agents ?? []).map((a) => ({
-                  name: a.name,
-                  description: a.description,
-                  tier: a.tier,
-                  tools: a.tools,
-                  permissionMode: a.permissionMode,
-                  source: (a.source ?? "builtin") as "builtin" | "user" | "project",
-                  filePath: a.filePath ?? "",
-                }));
-                useAgentStore.getState().setAgents(agentList);
-              })
-              .catch((err: unknown) => {
-                log.warn("agent.getAgents failed", {
-                  sessionId,
-                  err: err instanceof Error ? err.message : String(err),
-                });
-              });
-
-            currentAgentPromise
-              .then((currentResult: unknown) => {
-                perfLog.info("[fetchInit] getCurrentAgent done", {
-                  sessionId,
-                  ms: Math.round(performance.now() - t0),
-                });
-                const agentResult = currentResult as { agentName: string | null };
-                const agentName = agentResult.agentName ?? "build";
-                useAgentStore.getState().setCurrentAgent(sessionId, agentName);
-              })
-              .catch((err: unknown) => {
-                log.warn("agent.getCurrentAgent failed", {
-                  sessionId,
-                  err: err instanceof Error ? err.message : String(err),
-                });
-              });
-
-            // Agent change restoration runs AFTER agents + currentAgent are set
-            // so it can override the current agent with the persisted one
-            agentChangePromise
-              .then((result: unknown) => {
-                perfLog.info("[fetchInit] getLatestAgentChange done", {
-                  sessionId,
-                  ms: Math.round(performance.now() - t0),
-                });
-                if (
-                  result &&
-                  typeof result === "object" &&
-                  "agentName" in result &&
-                  typeof result.agentName === "string"
-                ) {
-                  const agentName = result.agentName;
-                  log.info("[fetchInit] restoring agent from latest change", {
+            // Agent restoration: wait for all three RPCs to resolve, then process
+            // in guaranteed order to prevent race conditions where currentAgentPromise
+            // resolves after agentChangePromise and overwrites the restored agent.
+            Promise.all([agentsPromise, currentAgentPromise, agentChangePromise])
+              .then(
+                ([agentsResult, currentResult, agentChangeResult]: [unknown, unknown, unknown]) => {
+                  // Step 1: set agents list
+                  perfLog.info("[fetchInit] getAgents done", {
                     sessionId,
-                    agentName,
-                    timestamp:
-                      "timestamp" in result && typeof result.timestamp === "string"
-                        ? result.timestamp
-                        : undefined,
+                    ms: Math.round(performance.now() - t0),
                   });
-                  const { switchAgent } = useAgentStore.getState();
-                  void switchAgent(agentName, sessionId).catch((err: unknown) => {
-                    log.warn("[fetchInit] failed to restore agent", {
+                  const raw = agentsResult as {
+                    agents?: Array<{
+                      name: string;
+                      description?: string;
+                      tier?: string;
+                      tools?: string[];
+                      permissionMode?: string;
+                      source?: string;
+                      filePath?: string;
+                    }>;
+                  };
+                  const agentList = (raw.agents ?? []).map((a) => ({
+                    name: a.name,
+                    description: a.description,
+                    tier: a.tier,
+                    tools: a.tools,
+                    permissionMode: a.permissionMode,
+                    source: (a.source ?? "builtin") as "builtin" | "user" | "project",
+                    filePath: a.filePath ?? "",
+                  }));
+                  useAgentStore.getState().setAgents(agentList);
+
+                  // Step 2: set current agent from process (may be "build" for fresh process)
+                  perfLog.info("[fetchInit] getCurrentAgent done", {
+                    sessionId,
+                    ms: Math.round(performance.now() - t0),
+                  });
+                  const agentResult = currentResult as { agentName: string | null };
+                  const agentName = agentResult.agentName ?? "build";
+                  useAgentStore.getState().setCurrentAgent(sessionId, agentName);
+
+                  // Step 3: override with persisted agent_change if available
+                  perfLog.info("[fetchInit] getLatestAgentChange done", {
+                    sessionId,
+                    ms: Math.round(performance.now() - t0),
+                  });
+                  const result = agentChangeResult;
+                  if (
+                    result &&
+                    typeof result === "object" &&
+                    "agentName" in result &&
+                    typeof result.agentName === "string"
+                  ) {
+                    const restoredName = result.agentName;
+                    log.info("[fetchInit] restoring agent from latest change", {
                       sessionId,
-                      agentName,
-                      err: err instanceof Error ? err.message : String(err),
+                      agentName: restoredName,
+                      timestamp:
+                        "timestamp" in result && typeof result.timestamp === "string"
+                          ? result.timestamp
+                          : undefined,
                     });
-                  });
-                } else {
-                  // No persisted agent change — load detail for the current agent
-                  useAgentStore.getState().fetchAgentDetail(sessionId);
-                  useAgentStore.getState().fetchAllTools(sessionId);
-                }
-              })
+                    const { switchAgent } = useAgentStore.getState();
+                    void switchAgent(restoredName, sessionId).catch((err: unknown) => {
+                      log.warn("[fetchInit] failed to restore agent", {
+                        sessionId,
+                        agentName: restoredName,
+                        err: err instanceof Error ? err.message : String(err),
+                      });
+                    });
+                  } else {
+                    // No persisted agent change — load detail for the current agent
+                    useAgentStore.getState().fetchAgentDetail(sessionId);
+                    useAgentStore.getState().fetchAllTools(sessionId);
+                  }
+                },
+              )
               .catch((err: unknown) => {
-                log.warn("agent.getLatestAgentChange failed", {
+                log.warn("[fetchInit] agent restoration failed", {
                   sessionId,
                   err: err instanceof Error ? err.message : String(err),
                 });
@@ -1405,60 +1395,62 @@ export const useSessionStore = create<SessionState>()(
       },
 
       fetchAllSessionStatuses: async () => {
-        const sessionsByProject = get().sessionsByProject;
+        // Delegate to project-scoped fetch for the active project
+        const { activeProjectId, projectTabs } = get();
+        const tab = projectTabs.find((t) => t.id === activeProjectId);
+        if (!tab) return;
+        await get().fetchProjectSessionStatuses(tab.path);
+      },
+
+      fetchProjectSessionStatuses: async (projectPath: string) => {
+        const sessions = get().sessionsByProject[projectPath];
+        if (!sessions || sessions.length === 0) return;
+
         const sessionStatusMap = get().sessionStatusMap;
+        const toFetch = sessions.filter((s) => !sessionStatusMap[s.sessionId]);
 
-        const allSessions: Array<{ sessionId: string; projectPath: string }> = [];
-        for (const [projectPath, sessions] of Object.entries(sessionsByProject)) {
-          for (const session of sessions) {
-            if (!sessionStatusMap[session.sessionId]) {
-              allSessions.push({ sessionId: session.sessionId, projectPath });
-            }
-          }
-        }
-
-        if (allSessions.length === 0) {
-          log.info("fetchAllSessionStatuses: all sessions already have status");
+        if (toFetch.length === 0) {
+          log.info("fetchProjectSessionStatuses: all sessions already have status", {
+            projectPath,
+          });
           return;
         }
 
-        log.info("fetchAllSessionStatuses: fetching statuses", {
-          count: allSessions.length,
+        log.info("fetchProjectSessionStatuses: fetching", {
+          projectPath,
+          count: toFetch.length,
         });
 
-        const promises = allSessions.map(({ sessionId }) =>
-          apiClient.call("agent.getState", { sessionId }).catch((err) => {
-            log.warn("agent.getState failed for session", {
-              sessionId,
-              err: err instanceof Error ? err.message : String(err),
-            });
-            return null;
-          }),
-        );
-
-        const results = await Promise.allSettled(promises);
-
+        // Batch with concurrency limit to avoid flooding WS
+        const CONCURRENCY = 5;
         let successCount = 0;
         let failCount = 0;
 
-        results.forEach((result, index) => {
-          const sessionId = allSessions[index].sessionId;
-          if (result.status === "fulfilled" && result.value) {
-            const state = result.value as AgentStateResult;
-            let status: SessionStatus = "idle";
-            if (state.isStreaming === true) {
-              status = "streaming";
-            } else if (state.isCompacting === true) {
-              status = "compacting";
-            }
-            get().updateSessionStatus(sessionId, status);
-            successCount++;
-          } else {
-            failCount++;
-          }
-        });
+        for (let i = 0; i < toFetch.length; i += CONCURRENCY) {
+          const batch = toFetch.slice(i, i + CONCURRENCY);
+          const results = await Promise.allSettled(
+            batch.map(({ sessionId }) =>
+              apiClient.call("agent.getState", { sessionId }).catch(() => null),
+            ),
+          );
 
-        log.info("fetchAllSessionStatuses: completed", {
+          results.forEach((result, index) => {
+            const sessionId = batch[index].sessionId;
+            if (result.status === "fulfilled" && result.value) {
+              const state = result.value as AgentStateResult;
+              let status: SessionStatus = "idle";
+              if (state.isStreaming === true) status = "streaming";
+              else if (state.isCompacting === true) status = "compacting";
+              get().updateSessionStatus(sessionId, status);
+              successCount++;
+            } else {
+              failCount++;
+            }
+          });
+        }
+
+        log.info("fetchProjectSessionStatuses: done", {
+          projectPath,
           success: successCount,
           failed: failCount,
         });
