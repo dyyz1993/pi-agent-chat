@@ -141,6 +141,48 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     return { pinnedSessionIds };
   });
 
+  r("session.getMetadata", async () => {
+    const cwd = process.cwd();
+    const sessionsDir = join(cwd, ".pi", "sessions");
+
+    if (!existsSync(sessionsDir)) {
+      throw new Error("No sessions directory found in current working directory");
+    }
+
+    const files = await (await import("fs/promises")).readdir(sessionsDir);
+    const sessionFiles = files.filter((f) => f.endsWith(".jsonl"));
+
+    if (sessionFiles.length === 0) {
+      throw new Error("No session files found in .pi/sessions directory");
+    }
+
+    // 读取第一个（最近）会话文件的 header
+    const sessionFile = join(sessionsDir, sessionFiles[0]);
+    const { readFile } = await import("fs/promises");
+    const content = await readFile(sessionFile, "utf-8");
+    const lines = content.split("\n").filter((l) => l.trim());
+
+    for (const line of lines) {
+      try {
+        const parsed = JSON.parse(line) as Record<string, unknown>;
+        if (parsed.type === "session") {
+          return {
+            sessionId: (parsed.id as string) ?? "",
+            sessionPath: sessionFile,
+            projectPath: (parsed.cwd as string) ?? cwd,
+            cwd: (parsed.cwd as string) ?? cwd,
+            delegateParentSessionId: parsed.delegateParentSessionId as string | undefined,
+            createdAt: parsed.timestamp as string | undefined,
+          };
+        }
+      } catch {
+        continue;
+      }
+    }
+
+    throw new Error("No session header found in session file");
+  });
+
   r("session.listPinned", async () => {
     const pinnedSessionIds = await listPinnedSessionIds();
     return { pinnedSessionIds };

@@ -30,6 +30,9 @@ const EMPTY: never[] = [];
 export function groupSessions(
   rawSessions: SessionMeta[],
   searchQuery: string,
+  filterType?: "all" | "delegate" | "normal",
+  filterAgent?: string | null,
+  agentBySession?: Record<string, string>,
 ): { rootSessions: SessionMeta[]; childMap: Record<string, SessionMeta[]> } {
   const seen = new Set<string>();
   const deduped = rawSessions.filter((sess) => {
@@ -82,6 +85,9 @@ export function groupSessions(
       return b.updatedAt - a.updatedAt;
     });
 
+  let resultRoots: SessionMeta[];
+  let resultChildMap: Record<string, SessionMeta[]>;
+
   if (q) {
     const filter = (s: SessionMeta[]) =>
       s.filter(
@@ -104,10 +110,30 @@ export function groupSessions(
         if (parentMatch) filteredChildren[parentPath] = filtered;
       }
     }
-    return { rootSessions: filteredRoots, childMap: filteredChildren };
+    resultRoots = filteredRoots;
+    resultChildMap = filteredChildren;
+  } else {
+    resultRoots = sortPinnedFirst(roots);
+    resultChildMap = children;
   }
 
-  return { rootSessions: sortPinnedFirst(roots), childMap: children };
+  if (filterType === "delegate") {
+    resultRoots = resultRoots.filter((r) => {
+      const kids = resultChildMap[r.sessionPath];
+      return kids && kids.some((c) => c.delegateParentSessionId);
+    });
+  } else if (filterType === "normal") {
+    resultRoots = resultRoots.filter((r) => {
+      const kids = resultChildMap[r.sessionPath];
+      return !kids || !kids.some((c) => c.delegateParentSessionId);
+    });
+  }
+
+  if (filterAgent) {
+    resultRoots = resultRoots.filter((r) => agentBySession?.[r.sessionId] === filterAgent);
+  }
+
+  return { rootSessions: resultRoots, childMap: resultChildMap };
 }
 
 interface SessionSidebarProps {
@@ -118,6 +144,8 @@ export function SessionSidebar(_props: SessionSidebarProps) {
   const { t } = useTranslation("sidebar");
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [filterType, setFilterType] = useState<"all" | "delegate" | "normal">("all");
+  const [filterAgent, setFilterAgent] = useState<string | null>(null);
 
   const newSessionCreatedAt = useSessionStore((s) => s.newSessionCreatedAt);
   const activeProjectId = useSessionStore((s) => s.activeProjectId);
@@ -173,8 +201,31 @@ export function SessionSidebar(_props: SessionSidebarProps) {
         </div>
       </div>
 
+      <div className="px-2 py-0.5 flex items-center gap-1">
+        {(["all", "delegate", "normal"] as const).map((type) => (
+          <button
+            key={type}
+            onClick={() => setFilterType(type)}
+            className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
+              filterType === type
+                ? "bg-semantic-accent/15 text-accent-text"
+                : "text-text-tertiary hover:bg-surface-hover/40 hover:text-text-secondary"
+            }`}
+          >
+            {type === "all"
+              ? t("sidebar:filterAll", "全部")
+              : type === "delegate"
+                ? t("sidebar:filterDelegate", "委派")
+                : t("sidebar:filterNormal", "普通")}
+          </button>
+        ))}
+        <AgentFilterDropdown selectedAgent={filterAgent} onSelectAgent={setFilterAgent} />
+      </div>
+
       <SessionList
         searchQuery={searchQuery}
+        filterType={filterType}
+        filterAgent={filterAgent}
         expandedIds={expandedIds}
         onToggleExpand={toggleExpand}
         onExpandSession={expandSession}
@@ -185,11 +236,15 @@ export function SessionSidebar(_props: SessionSidebarProps) {
 
 function SessionList({
   searchQuery,
+  filterType,
+  filterAgent,
   expandedIds,
   onToggleExpand,
   onExpandSession,
 }: {
   searchQuery: string;
+  filterType: "all" | "delegate" | "normal";
+  filterAgent: string | null;
   expandedIds: Set<string>;
   onToggleExpand: (id: string) => void;
   onExpandSession: (id: string) => void;
@@ -203,6 +258,7 @@ function SessionList({
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const activeSubId = useSubagentStore((s) => s.activeSubsessionId);
   const loading = useSessionStore((s) => s.loading);
+  const agentBySession = useAgentStore((s) => s.currentAgentBySession);
 
   const activeSessionPath = useMemo(() => {
     const sess = rawSessions.find((s) => s.sessionId === activeSessionId);
@@ -237,8 +293,8 @@ function SessionList({
   }, [subsessionsByParent, activeSessionId, rawSessions, onExpandSession]);
 
   const { rootSessions, childMap } = useMemo(
-    () => groupSessions(rawSessions, searchQuery),
-    [rawSessions, searchQuery],
+    () => groupSessions(rawSessions, searchQuery, filterType, filterAgent, agentBySession),
+    [rawSessions, searchQuery, filterType, filterAgent, agentBySession],
   );
 
   if (loading) {
@@ -390,6 +446,7 @@ function SessionItem({
   const inputRef = useRef<HTMLInputElement>(null);
   const hasPiChildren = !!(children && children.length > 0);
   const hasSubagents = !!(subsessions && subsessions.length > 0);
+  const hasDelegateChildren = !!(children && children.some((c) => c.delegateParentSessionId));
   const hasExpandableChildren = Boolean(hasPiChildren) || Boolean(hasSubagents);
   const workspaceInfo = useMemo(
     () =>
@@ -410,6 +467,13 @@ function SessionItem({
 
   const handleClick = () => {
     if (isEditing) return;
+
+    const { projectTabs, activeProjectId, setActiveProject } = useSessionStore.getState();
+    const targetTab = projectTabs.find((t) => t.path === session.projectPath);
+    if (targetTab && targetTab.id !== activeProjectId) {
+      setActiveProject(targetTab.id);
+    }
+
     setActiveSession(session.sessionId);
     useSubagentStore.getState().setActiveSubsession(session.sessionId, null);
     if (hasExpandableChildren && !isExpanded) {
@@ -537,6 +601,11 @@ function SessionItem({
                   title={t("sidebar:currentAgent", "Current Agent")}
                 >
                   {currentAgentName}
+                </span>
+              )}
+              {hasDelegateChildren && (
+                <span className="text-[9px] px-1 py-0.5 rounded font-medium shrink-0 ml-1 bg-semantic-agent/15 text-semantic-agent border border-semantic-agent/20">
+                  {t("sidebar:delegateTag", "委派")}
                 </span>
               )}
             </>
@@ -861,5 +930,37 @@ function SubagentItem({
         />
       )}
     </div>
+  );
+}
+
+function AgentFilterDropdown({
+  selectedAgent,
+  onSelectAgent,
+}: {
+  selectedAgent: string | null;
+  onSelectAgent: (agent: string | null) => void;
+}) {
+  const { t } = useTranslation("sidebar");
+  const agentBySession = useAgentStore((s) => s.currentAgentBySession);
+  const uniqueAgents = useMemo(() => {
+    const names = new Set(Object.values(agentBySession));
+    return [...names].filter(Boolean).sort();
+  }, [agentBySession]);
+
+  if (uniqueAgents.length === 0) return null;
+
+  return (
+    <select
+      value={selectedAgent ?? ""}
+      onChange={(e) => onSelectAgent(e.target.value || null)}
+      className="ml-auto text-[10px] bg-bg-elevated/70 border border-border-primary/70 rounded px-1.5 py-0.5 text-text-secondary outline-none cursor-pointer"
+    >
+      <option value="">{t("sidebar:filterAllAgents", "全部角色")}</option>
+      {uniqueAgents.map((agent) => (
+        <option key={agent} value={agent}>
+          {agent}
+        </option>
+      ))}
+    </select>
   );
 }

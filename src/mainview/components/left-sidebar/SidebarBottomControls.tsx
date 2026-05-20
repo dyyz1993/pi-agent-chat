@@ -26,6 +26,7 @@ import { ThemeMenu } from "../theme/ThemeMenu";
 import { ModelPickerButton } from "../model-picker/ModelPickerButton";
 import { CopyButton } from "../chat/CopyButton";
 import { useAgentStore, getSourceLabel, isGlobalAgent } from "../../stores/use-agent-store";
+import { agentColorStyle } from "../../utils/agent-color";
 
 const log = createLogger("chat");
 
@@ -84,6 +85,7 @@ export function SidebarBottomControls() {
     activeSessionId ? (s.currentAgentBySession[activeSessionId] ?? "build") : "build",
   );
   const agents = useAgentStore((s) => s.agents);
+  const agentDetailBySession = useAgentStore((s) => s.agentDetailBySession);
   const agentSwitching = useAgentStore((s) =>
     activeSessionId ? (s.switchingBySession[activeSessionId] ?? false) : false,
   );
@@ -308,6 +310,11 @@ export function SidebarBottomControls() {
       })()
     : t("default");
 
+  const currentAgentColor =
+    activeSessionId && agentDetailBySession[activeSessionId]?.color
+      ? agentColorStyle(agentDetailBySession[activeSessionId].color)
+      : null;
+
   return (
     <div className="shrink-0 border-t border-border-secondary/80 dark:border-surface-dim/80 px-3 py-2 space-y-1.5">
       <div className="relative" ref={agentRef}>
@@ -323,7 +330,14 @@ export function SidebarBottomControls() {
           aria-expanded={agentOpen}
           aria-label={t("agentSelect")}
         >
-          <Bot className="w-3 h-3 shrink-0 text-text-tertiary" />
+          {currentAgentColor ? (
+            <span
+              className="w-3 h-3 shrink-0 rounded-full"
+              style={{ backgroundColor: currentAgentColor.color }}
+            />
+          ) : (
+            <Bot className="w-3 h-3 shrink-0 text-text-tertiary" />
+          )}
           <span className="truncate flex-1 text-left">
             {currentAgent === "build"
               ? t("agentBuild")

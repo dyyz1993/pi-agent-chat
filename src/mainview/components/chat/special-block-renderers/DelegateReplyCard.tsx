@@ -3,11 +3,17 @@ import { ExternalLink } from "lucide-react";
 import type { SpecialBlockRendererProps } from "../special-block-registry";
 import { registerSpecialBlock } from "../special-block-registry";
 import { useSessionStore } from "../../../stores/use-session-store";
+import { useAgentStore } from "../../../stores/use-agent-store";
+import { agentColorStyle } from "../../../utils/agent-color";
 
 export const DelegateReplyCard = memo(function DelegateReplyCard({
   block,
 }: SpecialBlockRendererProps) {
   const { from, title, elapsed, historyCount } = block.attrs;
+
+  const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const agentDetailBySession = useAgentStore((s) => s.agentDetailBySession);
+  const cs = activeSessionId ? agentColorStyle(agentDetailBySession[activeSessionId]?.color) : null;
 
   const handleJumpToSession = () => {
     const sessionId = from;
@@ -30,10 +36,23 @@ export const DelegateReplyCard = memo(function DelegateReplyCard({
   };
 
   return (
-    <div className="my-1 rounded-md border border-border-secondary/40 bg-surface-dim/50">
+    <div
+      className="my-1 rounded-md border border-border-secondary/40 bg-surface-dim/50"
+      style={cs ? { borderColor: cs.border } : undefined}
+    >
       <div className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs min-w-0">
-        <ExternalLink className="w-3 h-3 shrink-0 text-semantic-agent/70" />
-        <span className="shrink-0 px-1.5 py-0.5 rounded bg-semantic-agent/10 text-semantic-agent text-[10px] font-medium">
+        <ExternalLink className="w-3 h-3 shrink-0" style={cs ? { color: cs.color } : undefined} />
+        <span
+          className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium"
+          style={
+            cs
+              ? { backgroundColor: cs.bg, color: cs.color }
+              : {
+                  backgroundColor: "rgba(var(--color-semantic-agent), 0.1)",
+                  color: "rgb(var(--color-semantic-agent))",
+                }
+          }
+        >
           委托回复
         </span>
         {title && <span className="font-medium text-text-primary truncate">{title}</span>}

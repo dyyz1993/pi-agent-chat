@@ -590,7 +590,33 @@ export function cleanupSession(state: SubscriptionMaps, sessionId: string): void
   }
 }
 
-export function cleanupSessionData(sessionId: string): void {
+/**
+ * Light cleanup: only reset lightweight UI state (status, ready flags).
+ * Keeps heavy data (messages, bash logs, memory) in cache for fast tab-switch-back.
+ */
+export function cleanupSessionLight(sessionId: string): void {
+  // Reset session status to idle so TabBar indicator won't show stale state
+  const sessionStore = useSessionStore.getState();
+  sessionStore.updateSessionStatus(sessionId, "idle");
+
+  // Reset toolCallNameMap for this session (same as cleanupSession)
+  const msgs = useChatStore.getState().messagesBySession[sessionId] || [];
+  for (const msg of msgs) {
+    if (msg.role === "assistant") {
+      for (const block of msg.content) {
+        if (block.type === "toolExecution") {
+          delete toolCallNameMap[block.toolCallId];
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Heavy cleanup: remove all cached data from all stores (same as old cleanupSessionData).
+ * Used when LRU eviction kicks in, or when a session is deleted.
+ */
+export function cleanupSessionHeavy(sessionId: string): void {
   useChatStore.getState().clearSessionMessages(sessionId);
   useTurnStore.getState().clearSessionUI(sessionId);
   useChatNavStore.getState().clearSessionUI(sessionId);
@@ -599,6 +625,11 @@ export function cleanupSessionData(sessionId: string): void {
   useBashStore.getState().clearSession(sessionId);
   useLspStore.getState().clearSession(sessionId);
   useSupervisorStore.getState().clearSession(sessionId);
+}
+
+/** @deprecated Use cleanupSessionLight or cleanupSessionHeavy instead */
+export function cleanupSessionData(sessionId: string): void {
+  cleanupSessionHeavy(sessionId);
 }
 
 export function clearSubscriptionState(

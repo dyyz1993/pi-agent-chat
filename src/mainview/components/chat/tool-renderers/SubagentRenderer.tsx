@@ -5,6 +5,8 @@ import type { ContentBlock, SubagentSessionInfo } from "../../../types";
 import { useSubagentStore } from "../../../stores/use-subagent-store";
 import { useSessionStore } from "../../../stores/use-session-store";
 import { useSettingsStore } from "../../../stores/use-settings-store";
+import { useAgentStore } from "../../../stores/use-agent-store";
+import { agentColorStyle } from "../../../utils/agent-color";
 import { AnsiText } from "../primitives/AnsiText";
 import { ToolCardHeader, type ToolCardStatus } from "../primitives/ToolCardHeader";
 
@@ -99,6 +101,10 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
     borderBg = "border-border-secondary/30 bg-surface-dim";
   }
 
+  const currentAgentColor = activeSessionId
+    ? agentColorStyle(useAgentStore.getState().agentDetailBySession[activeSessionId]?.color)
+    : null;
+
   const status: ToolCardStatus = isRunning ? "running" : isError ? "error" : "done";
 
   let statusText: string;
@@ -114,7 +120,14 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
   const badgeContent = (
     <>
       {matchedSub?.agent && (
-        <span className="shrink-0 text-[9px] px-1 py-0.5 rounded font-mono bg-semantic-accent/10 text-accent-text">
+        <span
+          className="shrink-0 text-[9px] px-1 py-0.5 rounded font-mono"
+          style={
+            currentAgentColor
+              ? { backgroundColor: currentAgentColor.bg, color: currentAgentColor.color }
+              : undefined
+          }
+        >
           {matchedSub.agent}
         </span>
       )}

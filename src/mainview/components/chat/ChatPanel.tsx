@@ -45,6 +45,8 @@ import { useAttachmentStore } from "../../stores/use-attachment-store";
 import { useForkDialogStore } from "../../stores/use-fork-dialog-store";
 import type { ChatMessage } from "../../types";
 import { createLogger } from "../../../shared/lib/logger";
+import { useAgentStore } from "../../stores/use-agent-store";
+import { agentColorStyle } from "../../utils/agent-color";
 
 const log = createLogger("chat");
 
@@ -115,7 +117,6 @@ export function ChatPanel() {
   const sendMessage = useChatStore((s) => s.sendMessage);
   const sendSteer = useChatStore((s) => s.sendSteer);
   const sendFollowUp = useChatStore((s) => s.sendFollowUp);
-  const setInputText = useChatStore((s) => s.setInputText);
   const setActive = useChatNavStore((s) => s.setActive);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const vlistRef = useRef<VirtualizerHandle>(null);
@@ -136,6 +137,11 @@ export function ChatPanel() {
 
   const streamVersion = useChatStore((s) => s.streamContentVersion);
   const historyLoadVersion = useChatStore((s) => s.historyLoadVersion);
+
+  const agentDetailBySession = useAgentStore((s) => s.agentDetailBySession);
+  const agentBorderColor = activeSessionId
+    ? agentColorStyle(agentDetailBySession[activeSessionId]?.color)
+    : null;
 
   const handleAbort = useCallback(async () => {
     if (!activeSessionId) return;
@@ -327,7 +333,10 @@ export function ChatPanel() {
   };
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden relative bg-bg-elevated">
+    <div
+      className="flex-1 flex flex-col overflow-hidden relative bg-bg-elevated"
+      style={agentBorderColor ? { borderLeft: `2px solid ${agentBorderColor.border}` } : undefined}
+    >
       <MarkdownExpandOverlay />
       <MermaidFullscreen />
       <RollbackOverlay />
@@ -445,8 +454,6 @@ export function ChatPanel() {
 
                 <InputBar
                   ref={inputBarRef}
-                  value={inputText}
-                  onChange={setInputText}
                   onSend={handleSend}
                   sessionId={activeSessionId ?? ""}
                   disabled={!sessionReady}

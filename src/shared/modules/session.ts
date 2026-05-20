@@ -1,4 +1,15 @@
 export interface SessionMethods {
+  "session.getMetadata": {
+    params: {};
+    result: {
+      sessionId: string;
+      sessionPath: string;
+      projectPath: string;
+      cwd: string;
+      delegateParentSessionId?: string;
+      createdAt?: string;
+    };
+  };
   "session.getEntries": {
     params: { sessionPath: string; limit?: number; cursor?: string };
     result: { entries: SessionEntry[]; hasMore: boolean };

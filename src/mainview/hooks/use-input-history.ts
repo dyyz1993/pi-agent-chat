@@ -94,8 +94,10 @@ export function useInputHistory(sessionId: string) {
   }, [sessionId]);
 
   const resetIndex = useCallback(() => {
-    indexRef.current = -1;
-    forceUpdate((n) => n + 1);
+    if (indexRef.current !== -1) {
+      indexRef.current = -1;
+      forceUpdate((n) => n + 1);
+    }
   }, []);
 
   return { saveToHistory, navigatePrev, navigateNext, clearHistory, resetIndex, hasPrev, hasNext };

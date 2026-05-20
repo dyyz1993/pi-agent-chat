@@ -238,8 +238,12 @@ export const BashExecutionCard = memo(function BashExecutionCard({
               const raw: unknown = JSON.parse(block.args);
               const parsed =
                 typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : null;
-              if (parsed && typeof parsed.command === "string") {
-                summary = parsed.command.slice(0, 120);
+              if (parsed) {
+                if (typeof parsed.description === "string") {
+                  summary = parsed.description;
+                } else if (typeof parsed.command === "string") {
+                  summary = parsed.command.slice(0, 120);
+                }
               }
             } catch {
               /* not JSON, use raw */

@@ -23,19 +23,11 @@ import { useAgentStore, type AgentDetail, type AgentToolInfo } from "../../store
 import { useSessionStore } from "../../stores/use-session-store";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import { copyToClipboard } from "../../utils/clipboard";
+import { agentColorStyle } from "../../utils/agent-color";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-const AGENT_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
-  red: { bg: "bg-status-error/15", text: "text-status-error", dot: "bg-status-error" },
-  blue: { bg: "bg-status-info/15", text: "text-status-info", dot: "bg-status-info" },
-  green: { bg: "bg-status-success/15", text: "text-status-success", dot: "bg-status-success" },
-  yellow: { bg: "bg-status-warning/15", text: "text-status-warning", dot: "bg-status-warning" },
-  purple: { bg: "bg-semantic-agent/15", text: "text-semantic-agent", dot: "bg-semantic-agent" },
-  orange: { bg: "bg-semantic-notify/15", text: "text-semantic-notify", dot: "bg-semantic-notify" },
-};
 
 function fieldValue(value: unknown): string {
   if (value === undefined || value === null) return "\u2014";
@@ -407,7 +399,7 @@ export function AgentPanel() {
     );
   }
 
-  const colorStyle = AGENT_COLORS[agent.color ?? ""] ?? null;
+  const cs = agentColorStyle(agent.color);
 
   return (
     <div className="h-full overflow-y-auto">
@@ -431,11 +423,13 @@ export function AgentPanel() {
           <div className="flex items-center gap-2 text-xs">
             <span className="text-[var(--color-text-secondary)] min-w-[80px]">Name:</span>
             <span
-              className={`text-base font-semibold ${colorStyle ? colorStyle.text : "text-[var(--color-text-primary)]"}`}
+              className="text-base font-semibold text-[var(--color-text-primary)]"
+              style={cs ? { color: cs.color } : undefined}
             >
-              {colorStyle && (
+              {cs && (
                 <span
-                  className={`inline-block w-2.5 h-2.5 rounded-full ${colorStyle.dot} mr-1.5`}
+                  className="inline-block w-2.5 h-2.5 rounded-full mr-1.5"
+                  style={{ backgroundColor: cs.color }}
                 />
               )}
               {agent.name}
@@ -477,7 +471,8 @@ export function AgentPanel() {
             {agent.color ? (
               <span className="flex items-center gap-1.5 text-[var(--color-text-primary)]">
                 <span
-                  className={`w-2.5 h-2.5 rounded-full ${colorStyle?.dot ?? "bg-[var(--color-text-secondary)]"}`}
+                  className="w-2.5 h-2.5 rounded-full"
+                  style={{ backgroundColor: cs?.color ?? "var(--color-text-secondary)" }}
                 />
                 {agent.color}
               </span>
