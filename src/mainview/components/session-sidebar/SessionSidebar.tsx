@@ -400,6 +400,7 @@ function DelegateChildItem({ session }: { session: SessionMeta }) {
       isActive={session.sessionId === activeSessionId}
       isExpanded={false}
       onToggleExpand={() => {}}
+      isChild
     />
   );
 }
@@ -410,12 +411,14 @@ function SessionItem({
   children,
   isExpanded,
   onToggleExpand,
+  isChild = false,
 }: {
   session: SessionMeta;
   isActive: boolean;
   children?: SessionMeta[];
   isExpanded: boolean;
   onToggleExpand: () => void;
+  isChild?: boolean;
 }) {
   const { t } = useTranslation(["sidebar", "common"]);
   const setActiveSession = useSessionStore((s) => s.setActiveSession);
@@ -606,23 +609,25 @@ function SessionItem({
 
         {!isEditing && (
           <div className="flex items-center gap-1.5 mt-1.5">
-            <div className="shrink-0 w-[18px]">
-              {hasExpandableChildren && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleExpand();
-                  }}
-                  className="p-0.5 rounded hover:bg-surface-hover text-text-tertiary hover:text-text-secondary transition-colors"
-                >
-                  {isExpanded ? (
-                    <ChevronDown className="w-3.5 h-3.5" />
-                  ) : (
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  )}
-                </button>
-              )}
-            </div>
+            {!isChild && (
+              <div className="shrink-0 w-[18px]">
+                {hasExpandableChildren && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleExpand();
+                    }}
+                    className="p-0.5 rounded hover:bg-surface-hover text-text-tertiary hover:text-text-secondary transition-colors"
+                  >
+                    {isExpanded ? (
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    ) : (
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+                )}
+              </div>
+            )}
             <StatusBadge sessionId={session.sessionId} />
             {workspaceInfo && !workspaceInfo.isMain && <WorkspaceBadge workspace={workspaceInfo} />}
             <div className="ml-auto flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
