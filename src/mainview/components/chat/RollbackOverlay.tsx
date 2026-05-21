@@ -69,6 +69,7 @@ const FileItem = memo(function FileItem({
   expanded,
   onToggle,
 }: FileItemProps) {
+  const { t } = useTranslation("chat");
   const config = STATUS_CONFIG[status];
   const Icon = config.icon;
 
@@ -131,42 +132,8 @@ const FileItem = memo(function FileItem({
                 )}
               </div>
               <div className="overflow-x-auto overscroll-contain">
-                <pre className="px-3 py-2 text-xs leading-5 whitespace-pre font-mono max-h-64 overflow-y-auto">
-                  {details.split("\n").map((line, i) => {
-                    if (line.startsWith("+ ")) {
-                      return (
-                        <div
-                          key={i}
-                          className="bg-status-success/15 dark:bg-status-success/20 text-status-success/80 dark:text-status-success"
-                        >
-                          {line}
-                        </div>
-                      );
-                    }
-                    if (line.startsWith("- ")) {
-                      return (
-                        <div
-                          key={i}
-                          className="bg-status-error/15 dark:bg-status-error/20 text-status-error/80 dark:text-status-error"
-                        >
-                          {line}
-                        </div>
-                      );
-                    }
-                    if (line === "---") {
-                      return (
-                        <div
-                          key={i}
-                          className="text-text-tertiary border-t border-dashed border-border-secondary my-1"
-                        />
-                      );
-                    }
-                    return (
-                      <div key={i} className="text-text-secondary">
-                        {line}
-                      </div>
-                    );
-                  })}
+                <pre className="px-3 py-2 text-xs leading-5 whitespace-pre font-mono max-h-64 overflow-y-auto text-text-secondary">
+                  {details}
                 </pre>
               </div>
             </div>
@@ -174,10 +141,10 @@ const FileItem = memo(function FileItem({
             <div className="px-3 py-2 rounded-md bg-surface-dim dark:bg-surface-dim/60 border border-border-secondary">
               <span className="text-xs text-text-tertiary">
                 {status === "deleted"
-                  ? "文件将被删除"
+                  ? t("rollbackOverlay.fileWillBeDeleted")
                   : status === "added"
-                    ? "文件将被移除（新建的内容将丢失）"
-                    : "文件将恢复到修改前的状态"}
+                    ? t("rollbackOverlay.fileWillBeRemoved")
+                    : t("rollbackOverlay.fileWillBeRestored")}
               </span>
             </div>
           )}
@@ -247,7 +214,7 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
           targetId: currentTarget.targetId,
         });
         useNotificationStore.getState().push({
-          message: "回滚操作被取消",
+          message: t("rollbackOverlay.rollbackCancelled"),
           level: "warning",
         });
         return;
@@ -265,7 +232,7 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
           targetId: currentTarget.targetId,
         });
         useNotificationStore.getState().push({
-          message: "回滚未生效，消息数量未减少",
+          message: t("rollbackOverlay.rollbackIneffective"),
           level: "warning",
         });
       } else {
@@ -282,7 +249,7 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
         err: err instanceof Error ? err.message : String(err),
       });
       useNotificationStore.getState().push({
-        message: "回滚操作失败，请重试",
+        message: t("rollbackOverlay.rollbackFailed"),
         level: "error",
       });
     } finally {
@@ -313,7 +280,9 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
         </span>
         {hasFiles && (
           <span className="text-xs text-text-tertiary">
-            {preview?.summary?.totalFiles ?? files.length} 文件
+            {t("rollbackOverlay.fileCount", {
+              count: preview?.summary?.totalFiles ?? files.length,
+            })}
           </span>
         )}
         <button

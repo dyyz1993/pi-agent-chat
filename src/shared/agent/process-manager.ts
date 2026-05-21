@@ -25,6 +25,11 @@ import type { BashChannelEvent } from "../modules/bash";
 import type { LspChannelEvent } from "../modules/lsp";
 import type { RulesChannelEvent } from "../modules/rules";
 import type { RpcClientAPI, TreeEntry, ChannelTypeRegistry } from "@dyyz1993/pi-coding-agent";
+import { performance } from "perf_hooks";
+
+// 沙箱模式
+import { SandboxManager } from "../../sandbox/sandbox-manager";
+import { SandboxRpcClient } from "../../sandbox/sandbox-rpc-client";
 
 type McpServerInfo = Awaited<ReturnType<RpcClientAPI["getMcpServers"]>>[number];
 
@@ -170,12 +175,37 @@ import type { AgentProcessInfo } from "../modules/agent";
 let cachedModule: { RpcClient: new (options?: Record<string, unknown>) => RpcClientAPI } | null =
   null;
 
+// 全局沙箱管理器（在 sandbox 模式下初始化）
+let globalSandboxManager: SandboxManager | null = null;
+
+export function initSandboxManager(projectsRoot: string): SandboxManager {
+  globalSandboxManager = new SandboxManager({
+    basePort: config.sandboxBasePort,
+    idleTimeoutMs: config.sandboxIdleTimeout * 1000,
+    gcIntervalMs: 60_000,
+    cliPath: config.piCliPath,
+    projectsRoot,
+  });
+  return globalSandboxManager;
+}
+
 async function createRpcClient(
   cliPath: string,
   cwd: string,
   sessionPath: string | undefined,
+  userId?: string,
 ): Promise<{ client: RpcClientInstance; timings: { dynamicImport: number; construct: number } }> {
   const t0 = performance.now();
+
+  // 沙箱模式：通过 SandboxRpcClient 转发到沙箱容器
+  if (config.sandboxEnabled && globalSandboxManager && userId) {
+    const sandbox = await globalSandboxManager.getOrCreate(userId, cwd);
+    const client = new SandboxRpcClient(sandbox.endpoint) as unknown as RpcClientInstance;
+    const t1 = performance.now();
+    const timings = { dynamicImport: Math.round(t1 - t0), construct: 0 };
+    perfLog.info("[createRpcClient] sandbox mode", { userId, endpoint: sandbox.endpoint });
+    return { client, timings };
+  }
 
   cachedModule ??= (await import("@dyyz1993/pi-coding-agent")) as unknown as {
     RpcClient: new (options?: Record<string, unknown>) => RpcClientAPI;
@@ -443,6 +473,7 @@ export class AgentProcessManager {
       config.piCliPath,
       projectPath,
       sessionPath,
+      config.sandboxEnabled ? sessionId : undefined,
     );
     const tAfterCreate = performance.now();
 
@@ -479,6 +510,7 @@ export class AgentProcessManager {
       "coordinator",
       "coordinator_client",
       "supervisor",
+      "file-snapshot",
     ] as const;
     for (const name of channelNames) {
       client.channel(name).onReceive((data: unknown) => {

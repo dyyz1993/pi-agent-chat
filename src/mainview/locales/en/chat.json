@@ -6,6 +6,7 @@
   "retry": "Retry",
   "steer": "Insert message (Steer)",
   "stop": "Stop",
+  "stopping": "Stopping...",
   "sendFollowUp": "Queue send (Follow-up)",
   "send": "Send",
   "subagentReadonly": "Sub-agent session is read-only",
@@ -332,5 +333,16 @@
   "forkDialog.agent": "Agent",
   "forkDialog.model": "Model",
   "forkDialog.cancel": "Cancel",
-  "forkDialog.confirm": "Fork"
+  "forkDialog.confirm": "Fork",
+  "rollbackOverlay.fileWillBeDeleted": "File will be deleted",
+  "rollbackOverlay.fileWillBeRemoved": "File will be removed (new content will be lost)",
+  "rollbackOverlay.fileWillBeRestored": "File will be restored to previous state",
+  "rollbackOverlay.rollbackCancelled": "Rollback was cancelled",
+  "rollbackOverlay.rollbackIneffective": "Rollback did not take effect, message count unchanged",
+  "rollbackOverlay.rollbackFailed": "Rollback failed, please try again",
+  "rollbackOverlay.fileCount": "{{count}} files",
+  "rollbackOverlay.fileCreatedLabel": "Created file, content",
+  "rollbackOverlay.beforeLabel": "Before",
+  "rollbackOverlay.afterLabel": "After",
+  "rollbackOverlay.truncated": "truncated"
 }

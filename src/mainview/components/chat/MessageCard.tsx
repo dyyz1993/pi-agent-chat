@@ -23,87 +23,6 @@ import type { ChatMessage, ContentBlock } from "../../types";
 import type { ModifiedFile } from "../../stores/use-rollback-store";
 import { getCustomTypeIcon } from "./tool-icon-map";
 
-const FILE_TOOLS = new Set(["edit", "write", "Edit", "Write"]);
-
-function extractFileChanges(messages: ChatMessage[]): ModifiedFile[] {
-  const seen = new Map<
-    string,
-    { status: ModifiedFile["status"]; details: string; addedLines: number; removedLines: number }
-  >();
-
-  for (const msg of messages) {
-    for (const block of msg.content) {
-      if (block.type !== "toolExecution") continue;
-      const tb = block as Extract<ContentBlock, { type: "toolExecution" }>;
-      if (!FILE_TOOLS.has(tb.toolName)) continue;
-      try {
-        const args: unknown = JSON.parse(tb.args || "{}");
-        const filePath =
-          typeof args === "object" && args !== null && "path" in args
-            ? ((args as Record<string, unknown>).path as string | undefined)
-            : undefined;
-        if (!filePath || typeof filePath !== "string") continue;
-        const status = tb.toolName.toLowerCase() === "write" ? "added" : "modified";
-        let details = "";
-        let addedLines = 0;
-        let removedLines = 0;
-        if (status === "added" && typeof args === "object" && args !== null) {
-          const content = (args as Record<string, unknown>).content as string | undefined;
-          if (content) {
-            const lines = content.split("\n");
-            addedLines = lines.length;
-            const shown = lines
-              .slice(0, 30)
-              .map((l) => `+ ${l}`)
-              .join("\n");
-            details =
-              lines.length > 30 ? `${shown}\n... (+${lines.length - 30} more lines)` : shown;
-          }
-        } else if (status === "modified" && typeof args === "object" && args !== null) {
-          const oldContent = (args as Record<string, unknown>).oldContent as string | undefined;
-          const newContent = (args as Record<string, unknown>).newContent as string | undefined;
-          if (oldContent !== undefined && newContent !== undefined) {
-            const oldLines = oldContent.split("\n");
-            const newLines = newContent.split("\n");
-            removedLines = oldLines.length;
-            addedLines = newLines.length;
-            const maxOld = oldLines
-              .slice(0, 20)
-              .map((l) => `- ${l}`)
-              .join("\n");
-            const maxNew = newLines
-              .slice(0, 20)
-              .map((l) => `+ ${l}`)
-              .join("\n");
-            const oldTrunc =
-              oldLines.length > 20 ? `\n... (${oldLines.length - 20} more lines)` : "";
-            const newTrunc =
-              newLines.length > 20 ? `\n... (${newLines.length - 20} more lines)` : "";
-            details = `${maxOld}${oldTrunc}\n---\n${maxNew}${newTrunc}`;
-          } else {
-            details = `参数: ${JSON.stringify(args).slice(0, 500)}`;
-          }
-        }
-        if (!seen.has(filePath)) {
-          seen.set(filePath, { status, details, addedLines, removedLines });
-        }
-      } catch {
-        // args not valid JSON, skip
-      }
-    }
-  }
-
-  return Array.from(seen.entries()).map(([path, data], idx) => ({
-    path,
-    status: data.status,
-    turnIndex: idx,
-    entryId: "",
-    details: data.details || undefined,
-    addedLines: data.addedLines || undefined,
-    removedLines: data.removedLines || undefined,
-  }));
-}
-
 const log = createLogger("chat");
 
 interface MessageCardProps {
@@ -582,33 +501,46 @@ const HeaderActions = memo(function HeaderActions({
         };
         const preview =
           mode === "withFiles"
-            ? (() => {
-                // 找到 targetId 对应的消息位置，从那里到当前消息
-                const targetIdx = result.targetId
-                  ? messages.findIndex((m) => m.entryId === result.targetId)
-                  : -1;
-                const currentIdx = messages.findIndex((m) => m.id === message.id);
-                // targetId 是回滚目标节点，它之后的消息到当前消息就是要被撤销的范围
-                const fromIdx = targetIdx >= 0 ? targetIdx + 1 : 0;
-                const toIdx = currentIdx >= 0 ? currentIdx + 1 : messages.length;
-                const slice = messages.slice(fromIdx, toIdx);
-                const fileOps = extractFileChanges(slice.length > 0 ? slice : messages);
-                log.info("extracted file changes", {
-                  fileCount: fileOps.length,
-                  fromIdx,
-                  toIdx,
-                  sliceLen: slice.length,
-                });
-                return {
-                  ...emptyPreview,
-                  files: fileOps,
-                  summary: {
-                    totalFiles: fileOps.length,
-                    added: fileOps.filter((f) => f.status === "added").length,
-                    modified: fileOps.filter((f) => f.status === "modified").length,
-                    deleted: 0,
-                  },
-                };
+            ? await (async () => {
+                try {
+                  const modResult = await apiClient.call("agent.getModifiedFiles", {
+                    sessionId,
+                    toEntryId: result.targetId,
+                  });
+                  const files: ModifiedFile[] = (
+                    modResult as Array<{
+                      path: string;
+                      status: "added" | "modified" | "deleted";
+                      turnIndex: number;
+                      entryId: string;
+                    }>
+                  ).map((f) => ({
+                    path: f.path,
+                    status: f.status,
+                    turnIndex: f.turnIndex,
+                    entryId: f.entryId,
+                  }));
+                  const restored = files
+                    .filter((f) => f.status === "modified" || f.status === "added")
+                    .map((f) => f.path);
+                  const deleted = files.filter((f) => f.status === "deleted").map((f) => f.path);
+                  return {
+                    restored,
+                    deleted,
+                    files,
+                    summary: {
+                      totalFiles: files.length,
+                      added: files.filter((f) => f.status === "added").length,
+                      modified: files.filter((f) => f.status === "modified").length,
+                      deleted: deleted.length,
+                    },
+                  };
+                } catch (err) {
+                  log.warn("getModifiedFiles failed, using empty preview", {
+                    err: err instanceof Error ? err.message : String(err),
+                  });
+                  return emptyPreview;
+                }
               })()
             : emptyPreview;
         log.info("opening rollback overlay", {

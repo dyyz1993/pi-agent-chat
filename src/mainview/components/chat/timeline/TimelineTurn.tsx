@@ -93,75 +93,48 @@ export const TimelineTurn = memo(function TimelineTurn({
         }
 
         if (mode === "withFiles") {
-          const msgs = useChatStore.getState().messagesBySession[sessionId] ?? [];
-          // 用 targetId 切片：从 targetId 对应消息到当前消息
-          const targetIdx = targetId ? msgs.findIndex((m) => m.entryId === targetId) : -1;
-          const assistantId = turn.assistantMessageId;
-          const currentIdx = msgs.findIndex((m) => m.id === assistantId);
-          const fromIdx = targetIdx >= 0 ? targetIdx + 1 : 0;
-          const toIdx = currentIdx >= 0 ? currentIdx + 1 : msgs.length;
-          const slice = msgs.slice(fromIdx, toIdx);
-          const files: ModifiedFile[] = [];
-          const seen = new Set<string>();
-          for (const msg of slice.length > 0 ? slice : msgs) {
-            for (const block of msg.content) {
-              if (block.type !== "toolExecution") continue;
-              const tb = block as Extract<typeof block, { type: "toolExecution" }>;
-              if (
-                tb.toolName !== "Edit" &&
-                tb.toolName !== "edit" &&
-                tb.toolName !== "Write" &&
-                tb.toolName !== "write"
-              )
-                continue;
-              try {
-                const args: unknown = JSON.parse(tb.args || "{}");
-                const fp =
-                  typeof args === "object" && args !== null && "path" in args
-                    ? ((args as Record<string, unknown>).path as string | undefined)
-                    : undefined;
-                if (fp && !seen.has(fp)) {
-                  seen.add(fp);
-                  let details = "";
-                  if (typeof args === "object" && args !== null) {
-                    const r = args as Record<string, unknown>;
-                    if (tb.toolName.toLowerCase() === "write") {
-                      const content = r.content as string | undefined;
-                      if (content)
-                        details = `创建文件，内容:\n${content.slice(0, 500)}${content.length > 500 ? "\n...(截断)" : ""}`;
-                    } else {
-                      const oldContent = r.oldContent as string | undefined;
-                      const newContent = r.newContent as string | undefined;
-                      if (oldContent !== undefined && newContent !== undefined) {
-                        details = `修改前:\n${oldContent.slice(0, 300)}${oldContent.length > 300 ? "\n...(截断)" : ""}\n\n修改后:\n${newContent.slice(0, 300)}${newContent.length > 300 ? "\n...(截断)" : ""}`;
-                      }
-                    }
-                  }
-                  files.push({
-                    path: fp,
-                    status: tb.toolName.toLowerCase() === "write" ? "added" : "modified",
-                    turnIndex: files.length,
-                    entryId: "",
-                    details: details || undefined,
-                  });
-                }
-              } catch {
-                /* skip */
-              }
-            }
-          }
-          const summary = {
-            totalFiles: files.length,
-            added: files.filter((f) => f.status === "added").length,
-            modified: files.filter((f) => f.status === "modified").length,
-            deleted: files.filter((f) => f.status === "deleted").length,
-          };
-          useRollbackStore
-            .getState()
-            .openRollback(
+          try {
+            const modResult = await apiClient.call("agent.getModifiedFiles", {
+              sessionId,
+              toEntryId: targetId,
+            });
+            const files: ModifiedFile[] = (
+              modResult as Array<{
+                path: string;
+                status: "added" | "modified" | "deleted";
+                turnIndex: number;
+                entryId: string;
+              }>
+            ).map((f) => ({
+              path: f.path,
+              status: f.status,
+              turnIndex: f.turnIndex,
+              entryId: f.entryId,
+            }));
+            const restored = files
+              .filter((f) => f.status === "modified" || f.status === "added")
+              .map((f) => f.path);
+            const deleted = files.filter((f) => f.status === "deleted").map((f) => f.path);
+            const summary = {
+              totalFiles: files.length,
+              added: files.filter((f) => f.status === "added").length,
+              modified: files.filter((f) => f.status === "modified").length,
+              deleted: deleted.length,
+            };
+            useRollbackStore
+              .getState()
+              .openRollback({ targetId, mode: "withFiles" }, { restored, deleted, files, summary });
+          } catch {
+            useRollbackStore.getState().openRollback(
               { targetId, mode: "withFiles" },
-              { restored: [], deleted: [], files, summary },
+              {
+                restored: [],
+                deleted: [],
+                files: [],
+                summary: { totalFiles: 0, added: 0, modified: 0, deleted: 0 },
+              },
             );
+          }
         } else {
           useRollbackStore.getState().openRollback(
             { targetId, mode: "message" },

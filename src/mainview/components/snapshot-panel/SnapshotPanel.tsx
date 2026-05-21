@@ -17,6 +17,7 @@ import { useSessionStore } from "../../stores/use-session-store";
 import { useNotificationStore } from "../../stores/use-notification-store";
 import { apiClient } from "../../lib/api-client";
 import { createLogger } from "../../../shared/lib/logger";
+import { InlineDiffViewer } from "../chat/tool-renderers/InlineDiffViewer";
 
 const log = createLogger("snapshot");
 
@@ -436,15 +437,25 @@ const ExpandedFileList = memo(function ExpandedFileList({
         })}
       </div>
 
-      {selectedFile && selectedDiff?.diff?.unifiedDiff && (
+      {selectedFile && selectedDiff?.diff && (
         <div className="border-t border-border-secondary/30 dark:border-surface-dim/30">
           <div className="px-3 py-1 text-[10px] text-text-tertiary font-medium flex items-center gap-1">
             <FileEdit className="w-2.5 h-2.5" />
             <span className="truncate">{selectedFile}</span>
           </div>
-          <pre className="px-3 pb-2 text-[10px] text-text-tertiary overflow-x-auto whitespace-pre-wrap font-mono max-h-48 overflow-y-auto leading-relaxed">
-            {selectedDiff.diff.unifiedDiff}
-          </pre>
+          {selectedDiff.diff.oldContent !== null && selectedDiff.diff.newContent !== null ? (
+            <div className="px-2 pb-2">
+              <InlineDiffViewer
+                oldValue={selectedDiff.diff.oldContent}
+                newValue={selectedDiff.diff.newContent}
+                maxHeight="192px"
+              />
+            </div>
+          ) : (
+            <pre className="px-3 pb-2 text-[10px] text-text-tertiary overflow-x-auto whitespace-pre-wrap font-mono max-h-48 overflow-y-auto leading-relaxed">
+              {selectedDiff.diff.unifiedDiff}
+            </pre>
+          )}
         </div>
       )}
     </div>

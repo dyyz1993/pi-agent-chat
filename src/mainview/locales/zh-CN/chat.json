@@ -6,6 +6,7 @@
   "retry": "重试",
   "steer": "插入消息 (Steer)",
   "stop": "停止",
+  "stopping": "正在停止...",
   "sendFollowUp": "排队等候 (Follow-up)",
   "send": "发送",
   "subagentReadonly": "子代理会话为只读模式",
@@ -332,5 +333,16 @@
   "forkDialog.agent": "智能体",
   "forkDialog.model": "模型",
   "forkDialog.cancel": "取消",
-  "forkDialog.confirm": "Fork"
+  "forkDialog.confirm": "Fork",
+  "rollbackOverlay.fileWillBeDeleted": "文件将被删除",
+  "rollbackOverlay.fileWillBeRemoved": "文件将被移除（新建的内容将丢失）",
+  "rollbackOverlay.fileWillBeRestored": "文件将恢复到修改前的状态",
+  "rollbackOverlay.rollbackCancelled": "回滚操作被取消",
+  "rollbackOverlay.rollbackIneffective": "回滚未生效，消息数量未减少",
+  "rollbackOverlay.rollbackFailed": "回滚操作失败，请重试",
+  "rollbackOverlay.fileCount": "{{count}} 个文件",
+  "rollbackOverlay.fileCreatedLabel": "创建文件，内容",
+  "rollbackOverlay.beforeLabel": "修改前",
+  "rollbackOverlay.afterLabel": "修改后",
+  "rollbackOverlay.truncated": "截断"
 }
