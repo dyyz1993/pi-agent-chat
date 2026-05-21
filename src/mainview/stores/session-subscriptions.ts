@@ -514,8 +514,9 @@ export function setupSubscriptions(
         (payload: { parentSessionId: string; session: SessionMeta }) => {
           if (payload.parentSessionId !== id) return;
 
+          const projectPath = payload.session.projectPath;
+
           useSessionStore.setState((s) => {
-            const projectPath = payload.session.projectPath;
             const sessions = s.sessionsByProject[projectPath] || [];
             if (sessions.find((sess) => sess.sessionId === payload.session.sessionId)) {
               return {};
@@ -523,12 +524,28 @@ export function setupSubscriptions(
             if (sessions.find((sess) => sess.sessionPath === payload.session.sessionPath)) {
               return {};
             }
-            return {
+
+            const updates: Record<string, unknown> = {
               sessionsByProject: {
                 ...s.sessionsByProject,
                 [projectPath]: insertAfterPinned(sessions, payload.session),
               },
             };
+
+            const tabExists = s.projectTabs.find((t) => t.path === projectPath);
+            if (!tabExists) {
+              const projectName = projectPath.split("/").pop() ?? projectPath;
+              const newTab: ProjectTab = {
+                id: `tab-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                name: projectName,
+                path: projectPath,
+              };
+              const nextTabs = [...s.projectTabs, newTab];
+              syncTabsToBackend(nextTabs, s.activeProjectId);
+              updates.projectTabs = nextTabs;
+            }
+
+            return updates;
           });
         },
         { parentSessionId: id },
