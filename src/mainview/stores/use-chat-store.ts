@@ -3,6 +3,7 @@ import type { Message } from "@dyyz1993/pi-ai";
 import type { ChatMessage, ContentBlock } from "../types";
 import { apiClient } from "../lib/api-client";
 import { useAppStore } from "./use-app-store";
+import { useNotificationStore } from "./use-notification-store";
 import { useSessionStore } from "./use-session-store";
 import { useMemoryStore } from "./use-memory-store";
 import { ALL_MEMORY_TYPE_KEYS } from "../components/chat/memory-config";
@@ -237,6 +238,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const sessionId = useSessionStore.getState().activeSessionId;
     if (!sessionId) {
       useAppStore.getState().addLog("No active session");
+      useNotificationStore.getState().push({ message: "No active session", level: "warning" });
       return;
     }
 
@@ -244,6 +246,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
       .activeSubsessionId;
     if (activeSubId) {
       useAppStore.getState().addLog("Cannot send to subagent session");
+      useNotificationStore
+        .getState()
+        .push({ message: "Cannot send to subagent session", level: "warning" });
       return;
     }
 
@@ -253,6 +258,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const sessionReady = useSessionStore.getState().sessionReady[sessionId];
       if (!sessionReady) {
         useAppStore.getState().addLog("Session not ready, cannot send");
+        useNotificationStore
+          .getState()
+          .push({ message: "Session not ready, please wait", level: "warning" });
         set({ inputText: text });
         return;
       }
@@ -280,9 +288,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
       set({ isStreaming: false });
     } catch (err) {
       set({ isStreaming: false });
-      useAppStore
-        .getState()
-        .addLog(`Send error: ${err instanceof Error ? err.message : String(err)}`);
+      const msg = err instanceof Error ? err.message : String(err);
+      useAppStore.getState().addLog(`Send error: ${msg}`);
+      useNotificationStore.getState().push({ message: `Send failed: ${msg}`, level: "error" });
     }
   },
 
@@ -297,9 +305,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
     try {
       await apiClient.call("agent.steer", { sessionId, content: text });
     } catch (err) {
-      useAppStore
-        .getState()
-        .addLog(`Steer error: ${err instanceof Error ? err.message : String(err)}`);
+      const msg = err instanceof Error ? err.message : String(err);
+      useAppStore.getState().addLog(`Steer error: ${msg}`);
+      useNotificationStore.getState().push({ message: `Steer failed: ${msg}`, level: "error" });
     }
   },
 
@@ -314,9 +322,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
     try {
       await apiClient.call("agent.followUp", { sessionId, content: text });
     } catch (err) {
-      useAppStore
-        .getState()
-        .addLog(`FollowUp error: ${err instanceof Error ? err.message : String(err)}`);
+      const msg = err instanceof Error ? err.message : String(err);
+      useAppStore.getState().addLog(`FollowUp error: ${msg}`);
+      useNotificationStore.getState().push({ message: `Follow-up failed: ${msg}`, level: "error" });
     }
   },
 

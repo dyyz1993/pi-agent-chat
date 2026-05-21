@@ -595,6 +595,13 @@ export class AgentProcessManager {
     }
     managed.client.prompt(content).catch((err: Error) => {
       log.warn("prompt error", { err: err.message });
+      this.emitAgentEvent(sessionId, { type: "agent_end" } as SanitizedEvent).catch(
+        (emitErr: unknown) => {
+          log.warn("emitAgentEvent(agent_end) after prompt error", {
+            err: emitErr instanceof Error ? emitErr.message : String(emitErr),
+          });
+        },
+      );
     });
     return true;
   }
@@ -626,6 +633,14 @@ export class AgentProcessManager {
     await managed.client.abort().catch((err: unknown) => {
       log.warn("abort error", { sessionId, err: err instanceof Error ? err.message : String(err) });
     });
+    this.emitAgentEvent(sessionId, { type: "agent_end" } as SanitizedEvent).catch(
+      (err: unknown) => {
+        log.warn("emitAgentEvent(agent_end) after abort error", {
+          sessionId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      },
+    );
     return true;
   }
 
@@ -947,6 +962,9 @@ export class AgentProcessManager {
         const treeResult = await managed.client.getTreeWithLeaf();
         const entries = treeResult.entries;
         const leafId = treeResult.leafId;
+        if (leafId) {
+          this.leafIds.set(sessionId, leafId);
+        }
         if (Array.isArray(entries) && leafId) {
           const byId = new Map<
             string,
@@ -1120,6 +1138,9 @@ export class AgentProcessManager {
         if (result?.tree) {
           const treeEntries = result.tree.entries;
           const leafId = result.tree.leafId;
+          if (leafId) {
+            this.leafIds.set(sessionId, leafId);
+          }
           if (Array.isArray(treeEntries) && leafId) {
             const byId = new Map<
               string,

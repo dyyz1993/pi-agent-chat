@@ -16,6 +16,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { useChatStore } from "../../stores/use-chat-store";
 import { useSessionStore } from "../../stores/use-session-store";
+import { useNotificationStore } from "../../stores/use-notification-store";
 import { NotificationCenter } from "./NotificationCenter";
 import { UIPendingCenter } from "./UIPendingCenter";
 import { RetryNotification } from "./RetryNotification";
@@ -143,11 +144,17 @@ export function ChatPanel() {
     ? agentColorStyle(agentDetailBySession[activeSessionId]?.color)
     : null;
 
+  const pushNotif = useNotificationStore((s) => s.push);
   const [isAborting, setIsAborting] = useState(false);
+  const abortFallbackRef = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
     if (!isStreaming && isAborting) {
       setIsAborting(false);
+      if (abortFallbackRef.current) {
+        clearTimeout(abortFallbackRef.current);
+        abortFallbackRef.current = undefined;
+      }
     }
   }, [isStreaming, isAborting]);
 
@@ -158,10 +165,22 @@ export function ChatPanel() {
     setIsAborting(true);
     try {
       await apiClient.call("agent.abort", { sessionId: activeSessionId });
+      pushNotif({ message: "Agent stopped", level: "info" });
+      abortFallbackRef.current = setTimeout(() => {
+        abortFallbackRef.current = undefined;
+        const sessionId = activeSessionId as string;
+        const status = useSessionStore.getState().sessionStatusMap[sessionId];
+        if (status === "streaming" || status === "retrying") {
+          useSessionStore.getState().updateSessionStatus(sessionId, "idle");
+          pushNotif({ message: "Session recovered after abort timeout", level: "warning" });
+        }
+        setIsAborting(false);
+      }, 10000);
     } catch {
       setIsAborting(false);
+      pushNotif({ message: "Failed to stop agent, please try again", level: "error" });
     }
-  }, [activeSessionId, activeSubId, isAborting]);
+  }, [activeSessionId, activeSubId, isAborting, pushNotif]);
 
   const handleSubagentFork = useCallback(async () => {
     const parentSessionId = useSessionStore.getState().activeSessionId;
@@ -285,7 +304,10 @@ export function ChatPanel() {
   );
 
   const handleSend = async () => {
-    if (!sessionReady) return;
+    if (!sessionReady) {
+      pushNotif({ message: "Session not ready, please wait", level: "warning" });
+      return;
+    }
     if (!inputText.trim() && useAttachmentStore.getState().attachments.length === 0) return;
 
     const attachmentStore = useAttachmentStore.getState();
@@ -295,7 +317,10 @@ export function ChatPanel() {
       const uploaded = await attachmentStore.uploadAll();
       const failedCount = attachmentStore.attachments.filter((a) => a.status === "error").length;
 
-      if (failedCount > 0 && uploaded.length === 0) return;
+      if (failedCount > 0 && uploaded.length === 0) {
+        pushNotif({ message: "All file uploads failed, cannot send", level: "warning" });
+        return;
+      }
 
       const filePaths = uploaded.map((a) => a.uploadedPath).filter(Boolean) as string[];
       attachmentStore.clearAll();
