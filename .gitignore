@@ -99,3 +99,6 @@ tsconfig.tsbuildinfo
 # Temporary intro pages
 intro.html
 introduction.html
+
+# Runtime session data
+.pi/sessions/
