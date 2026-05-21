@@ -479,6 +479,7 @@ export class AgentProcessManager {
       "coordinator",
       "coordinator_client",
       "supervisor",
+      "file-snapshot",
     ] as const;
     for (const name of channelNames) {
       client.channel(name).onReceive((data: unknown) => {
