@@ -30,7 +30,7 @@ const EMPTY: never[] = [];
 export function groupSessions(
   rawSessions: SessionMeta[],
   searchQuery: string,
-  filterType?: "all" | "delegate" | "subtask" | "normal",
+  filterType?: "all" | "delegate" | "normal",
   filterAgent?: string | null,
   agentBySession?: Record<string, string>,
 ): { rootSessions: SessionMeta[]; childMap: Record<string, SessionMeta[]> } {
@@ -51,7 +51,12 @@ export function groupSessions(
   const q = searchQuery.trim().toLowerCase();
 
   for (const sess of deduped) {
-    if (sess.delegateType === "subagent" && sess.delegateParentSessionId) {
+    const isSubagent =
+      sess.delegateType === "subagent" ||
+      (!sess.delegateType &&
+        sess.delegateParentSessionId &&
+        sess.sessionId.startsWith("sess_sub_"));
+    if (isSubagent && sess.delegateParentSessionId) {
       const parentPath = idToPath.get(sess.delegateParentSessionId);
       if (parentPath) {
         if (!children[parentPath]) children[parentPath] = [];
@@ -119,7 +124,9 @@ export function groupSessions(
 
   if (filterType === "delegate") {
     resultRoots = resultRoots.filter(
-      (r) => r.delegateType === "coordinator" || (!r.delegateType && !!r.delegateParentSessionId),
+      (r) =>
+        r.delegateType === "coordinator" ||
+        (!r.delegateType && !!r.delegateParentSessionId && r.sessionId.startsWith("sess_coord_")),
     );
   } else if (filterType === "normal") {
     resultRoots = resultRoots.filter((r) => !r.delegateParentSessionId);
@@ -140,7 +147,7 @@ export function SessionSidebar(_props: SessionSidebarProps) {
   const { t } = useTranslation("sidebar");
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [filterType, setFilterType] = useState<"all" | "delegate" | "subtask" | "normal">("all");
+  const [filterType, setFilterType] = useState<"all" | "delegate" | "normal">("all");
   const [filterAgent, setFilterAgent] = useState<string | null>(null);
 
   const newSessionCreatedAt = useSessionStore((s) => s.newSessionCreatedAt);
@@ -189,7 +196,7 @@ export function SessionSidebar(_props: SessionSidebarProps) {
       </div>
 
       <div className="px-2 py-0.5 flex items-center gap-1">
-        {(["all", "delegate", "subtask", "normal"] as const).map((type) => (
+        {(["all", "delegate", "normal"] as const).map((type) => (
           <button
             key={type}
             onClick={() => setFilterType(type)}
@@ -203,9 +210,7 @@ export function SessionSidebar(_props: SessionSidebarProps) {
               ? t("sidebar:filterAll", "全部")
               : type === "delegate"
                 ? t("sidebar:filterDelegate", "委派")
-                : type === "subtask"
-                  ? t("sidebar:filterSubtask", "子任务")
-                  : t("sidebar:filterNormal", "普通")}
+                : t("sidebar:filterNormal", "普通")}
           </button>
         ))}
         <AgentFilterDropdown selectedAgent={filterAgent} onSelectAgent={setFilterAgent} />
@@ -230,7 +235,7 @@ function SessionList({
   onToggleExpand,
 }: {
   searchQuery: string;
-  filterType: "all" | "delegate" | "subtask" | "normal";
+  filterType: "all" | "delegate" | "normal";
   filterAgent: string | null;
   expandedIds: Set<string>;
   onToggleExpand: (id: string) => void;
@@ -264,16 +269,11 @@ function SessionList({
   );
 
   const filteredRoots = useMemo(() => {
-    if (filterType === "subtask") {
-      return rootSessions.filter((r) => {
-        const hasSubChildren = childMap[r.sessionPath]?.some((c) => c.delegateType === "subagent");
-        const subs = subsessionsByParent[r.sessionPath];
-        return hasSubChildren || (subs && subs.length > 0);
-      });
-    }
     if (filterType === "normal") {
       return rootSessions.filter((r) => {
-        const hasSubChildren = childMap[r.sessionPath]?.some((c) => c.delegateType === "subagent");
+        const hasSubChildren = childMap[r.sessionPath]?.some(
+          (c) => c.delegateType === "subagent" || c.sessionId.startsWith("sess_sub_"),
+        );
         const subs = subsessionsByParent[r.sessionPath];
         return !hasSubChildren && (!subs || subs.length === 0) && !r.delegateParentSessionId;
       });
@@ -432,7 +432,11 @@ function SessionItem({
   const inputRef = useRef<HTMLInputElement>(null);
   const hasPiChildren = !!(children && children.length > 0);
   const hasSubagents = !!(subsessions && subsessions.length > 0);
-  const isDelegate = !!session.delegateParentSessionId;
+  const isDelegate =
+    session.delegateType === "coordinator" ||
+    (!session.delegateType &&
+      !!session.delegateParentSessionId &&
+      session.sessionId.startsWith("sess_coord_"));
   const hasExpandableChildren = Boolean(hasPiChildren) || Boolean(hasSubagents);
   const workspaceInfo = useMemo(
     () =>
@@ -602,21 +606,23 @@ function SessionItem({
 
         {!isEditing && (
           <div className="flex items-center gap-1.5 mt-1.5">
-            {hasExpandableChildren && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleExpand();
-                }}
-                className="shrink-0 p-0.5 rounded hover:bg-surface-hover text-text-tertiary hover:text-text-secondary transition-colors"
-              >
-                {isExpanded ? (
-                  <ChevronDown className="w-3.5 h-3.5" />
-                ) : (
-                  <ChevronRight className="w-3.5 h-3.5" />
-                )}
-              </button>
-            )}
+            <div className="shrink-0 w-[18px]">
+              {hasExpandableChildren && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleExpand();
+                  }}
+                  className="p-0.5 rounded hover:bg-surface-hover text-text-tertiary hover:text-text-secondary transition-colors"
+                >
+                  {isExpanded ? (
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  ) : (
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  )}
+                </button>
+              )}
+            </div>
             <StatusBadge sessionId={session.sessionId} />
             {workspaceInfo && !workspaceInfo.isMain && <WorkspaceBadge workspace={workspaceInfo} />}
             <div className="ml-auto flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">

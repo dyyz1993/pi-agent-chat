@@ -184,6 +184,46 @@ describe("groupSessions: nesting rules", () => {
     expect(result.rootSessions[0].sessionId).toBe("parent-1");
     expect(result.childMap["/s/parent-1.jsonl"]).toHaveLength(2);
   });
+
+  it("nests legacy subagent (no delegateType, sess_sub_ prefix) under parent", () => {
+    const parent = makeSession({
+      sessionId: "parent-1",
+      sessionPath: "/s/parent-1.jsonl",
+    });
+    const legacySub = makeSession({
+      sessionId: "sess_sub_1234_abcd",
+      sessionPath: "/s/sess_sub_1234_abcd.jsonl",
+      delegateParentSessionId: "parent-1",
+      delegateType: null,
+    });
+
+    const result = groupSessions([parent, legacySub], "");
+
+    expect(result.rootSessions).toHaveLength(1);
+    expect(result.rootSessions[0].sessionId).toBe("parent-1");
+    expect(result.childMap["/s/parent-1.jsonl"]).toHaveLength(1);
+    expect(result.childMap["/s/parent-1.jsonl"][0].sessionId).toBe("sess_sub_1234_abcd");
+  });
+
+  it("shows legacy coordinator (no delegateType, sess_coord_ prefix) as root", () => {
+    const parent = makeSession({
+      sessionId: "parent-1",
+      sessionPath: "/s/parent-1.jsonl",
+    });
+    const legacyCoord = makeSession({
+      sessionId: "sess_coord_5678_efgh",
+      sessionPath: "/s/sess_coord_5678_efgh.jsonl",
+      delegateParentSessionId: "parent-1",
+      delegateType: null,
+    });
+
+    const result = groupSessions([parent, legacyCoord], "");
+
+    expect(result.rootSessions).toHaveLength(2);
+    const ids = result.rootSessions.map((s) => s.sessionId);
+    expect(ids).toContain("parent-1");
+    expect(ids).toContain("sess_coord_5678_efgh");
+  });
 });
 
 describe("groupSessions: filter modes", () => {
@@ -200,19 +240,30 @@ describe("groupSessions: filter modes", () => {
     expect(result.rootSessions[0].sessionId).toBe("coord-1");
   });
 
-  it("filter=delegate includes legacy delegates without delegateType", () => {
+  it("filter=delegate includes legacy coord delegates (sess_coord_ prefix)", () => {
     const normal = makeSession({ sessionId: "normal-1" });
     const legacy = makeSession({
-      sessionId: "legacy-1",
+      sessionId: "sess_coord_1234_abcd",
       delegateParentSessionId: "parent-1",
     });
 
     const result = groupSessions([normal, legacy], "", "delegate");
     expect(result.rootSessions).toHaveLength(1);
-    expect(result.rootSessions[0].sessionId).toBe("legacy-1");
+    expect(result.rootSessions[0].sessionId).toBe("sess_coord_1234_abcd");
   });
 
-  it("filter=normal excludes all delegates", () => {
+  it("filter=delegate excludes subagents (sess_sub_ prefix)", () => {
+    const subagent = makeSession({
+      sessionId: "sess_sub_1234_abcd",
+      sessionPath: "/s/sess_sub_1234_abcd.jsonl",
+      delegateParentSessionId: "parent-1",
+    });
+
+    const result = groupSessions([subagent], "", "delegate");
+    expect(result.rootSessions).toHaveLength(0);
+  });
+
+  it("filter=normal excludes all delegates and subagents", () => {
     const normal = makeSession({ sessionId: "normal-1" });
     const coordinator = makeSession({
       sessionId: "coord-1",
