@@ -598,11 +598,6 @@ function SessionItem({
                   {t("sidebar:delegateTag", "委派")}
                 </span>
               )}
-              {hasSubagents && (
-                <span className="text-[9px] px-1 py-0.5 rounded font-medium shrink-0 ml-1 bg-semantic-agent/15 text-semantic-agent border border-semantic-agent/20">
-                  {t("sidebar:subtaskTag", "子任务")}
-                </span>
-              )}
             </>
           )}
         </div>
