@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUp,
   PanelLeft,
@@ -143,15 +143,25 @@ export function ChatPanel() {
     ? agentColorStyle(agentDetailBySession[activeSessionId]?.color)
     : null;
 
+  const [isAborting, setIsAborting] = useState(false);
+
+  useEffect(() => {
+    if (!isStreaming && isAborting) {
+      setIsAborting(false);
+    }
+  }, [isStreaming, isAborting]);
+
   const handleAbort = useCallback(async () => {
     if (!activeSessionId) return;
     if (activeSubId) return;
+    if (isAborting) return;
+    setIsAborting(true);
     try {
       await apiClient.call("agent.abort", { sessionId: activeSessionId });
     } catch {
-      /* ignore */
+      setIsAborting(false);
     }
-  }, [activeSessionId, activeSubId]);
+  }, [activeSessionId, activeSubId, isAborting]);
 
   const handleSubagentFork = useCallback(async () => {
     const parentSessionId = useSessionStore.getState().activeSessionId;
@@ -478,12 +488,16 @@ export function ChatPanel() {
                   ) : isStreaming ? (
                     <button
                       onClick={handleAbort}
-                      disabled={!isStreaming}
-                      className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-status-error text-white hover:bg-status-error"
-                      title={t("stop")}
-                      aria-label={t("stop")}
+                      disabled={isAborting}
+                      className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${isAborting ? "bg-status-error/40 text-white/70 cursor-wait" : "bg-status-error text-white hover:bg-status-error active:scale-90"}`}
+                      title={isAborting ? t("stopping") : t("stop")}
+                      aria-label={isAborting ? t("stopping") : t("stop")}
                     >
-                      <Square className="w-4 h-4" />
+                      {isAborting ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Square className="w-4 h-4" />
+                      )}
                     </button>
                   ) : (
                     <button
@@ -498,12 +512,13 @@ export function ChatPanel() {
                   <button
                     onClick={() => inputBarRef.current?.send()}
                     disabled={
+                      isAborting ||
                       (!inputText.trim() &&
                         useAttachmentStore.getState().attachments.length === 0) ||
                       !sessionReady ||
                       hasNoModel
                     }
-                    className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${(inputText.trim() || useAttachmentStore.getState().attachments.length > 0) && sessionReady && !hasNoModel ? (isStreaming ? "bg-status-warning text-white hover:bg-status-warning shadow-sm shadow-status-warning/20" : "bg-semantic-accent text-white hover:bg-semantic-accent shadow-sm shadow-semantic-accent/20") : "bg-surface-dim text-text-tertiary cursor-not-allowed"}`}
+                    className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${!isAborting && (inputText.trim() || useAttachmentStore.getState().attachments.length > 0) && sessionReady && !hasNoModel ? (isStreaming ? "bg-status-warning text-white hover:bg-status-warning shadow-sm shadow-status-warning/20" : "bg-semantic-accent text-white hover:bg-semantic-accent shadow-sm shadow-semantic-accent/20") : "bg-surface-dim text-text-tertiary cursor-not-allowed"}`}
                     title={
                       hasNoModel ? t("sendDisabledNoModel") : isStreaming ? t("steer") : t("send")
                     }

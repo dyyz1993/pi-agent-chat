@@ -169,7 +169,7 @@ export const MessageListView = memo(function MessageListView({
           if (item.hide) return <div key={item.msg.id} style={{ height: 0 }} />;
           const meta = cardMeta.get(item.msg.id);
           return (
-            <div key={item.msg.id} data-msg-id={item.msg.id} className="py-0.5 pl-2 pr-3">
+            <div key={item.msg.id} data-msg-id={item.msg.id} className="py-0.5 pl-1 pr-1.5">
               <MessageCard
                 message={item.msg}
                 cardLabel={meta?.cardLabel}

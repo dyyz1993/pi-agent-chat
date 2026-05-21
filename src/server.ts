@@ -3,6 +3,8 @@
  */
 
 import { createServer } from "http";
+import { existsSync, readFileSync, statSync } from "fs";
+import { extname, join, resolve } from "path";
 import { config } from "./server-config";
 import { createHttpHandler } from "./gateway/http-routes";
 import { createWsHandler } from "./gateway/ws-handler";
@@ -23,13 +25,58 @@ log.info("==============================");
 const httpServer = createServer();
 const wss = createWsHandler(httpServer, { config });
 
-httpServer.on(
-  "request",
-  createHttpHandler({
-    config,
-    getWebSocketClientCount: () => wss.clients.size,
-  }),
-);
+const distPath = resolve(process.cwd(), "dist");
+const STATIC_MIME: Record<string, string> = {
+  ".html": "text/html",
+  ".css": "text/css",
+  ".js": "application/javascript",
+  ".json": "application/json",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".svg": "image/svg+xml",
+  ".ico": "image/x-icon",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".ttf": "font/ttf",
+  ".webp": "image/webp",
+};
+
+const apiHandler = createHttpHandler({
+  config,
+  getWebSocketClientCount: () => wss.clients.size,
+});
+
+httpServer.on("request", (req, res) => {
+  const url = new URL(req.url ?? "/", "http://localhost");
+  const pathname = url.pathname;
+
+  if (
+    pathname.startsWith("/health") ||
+    pathname.startsWith("/info/") ||
+    pathname.startsWith("/file/") ||
+    pathname.startsWith("/fs/") ||
+    pathname.startsWith("/api/") ||
+    pathname.startsWith("/ws") ||
+    pathname.startsWith("/__proxy__/")
+  ) {
+    return apiHandler(req, res);
+  }
+
+  let filePath = join(distPath, pathname);
+  if (pathname === "/" || !existsSync(filePath) || statSync(filePath).isDirectory()) {
+    filePath = join(distPath, "index.html");
+  }
+
+  if (existsSync(filePath) && statSync(filePath).isFile()) {
+    const ext = extname(filePath);
+    const contentType = STATIC_MIME[ext] || "application/octet-stream";
+    res.writeHead(200, { "Content-Type": contentType });
+    res.end(readFileSync(filePath));
+    return;
+  }
+
+  return apiHandler(req, res);
+});
 
 httpServer.listen(config.port, () => {
   log.info(`HTTP + WebSocket server running on http://localhost:${config.port}`);
