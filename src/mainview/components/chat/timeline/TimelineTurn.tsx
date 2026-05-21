@@ -49,6 +49,17 @@ export const TimelineTurn = memo(function TimelineTurn({
     ),
   );
 
+  const sessionId = useSessionStore.getState().activeSessionId;
+  const isSessionStreaming = useSessionStore(
+    useCallback(
+      (s: { sessionStatusMap: Record<string, import("../../../types").SessionStatus> }) => {
+        const status = sessionId ? s.sessionStatusMap[sessionId] : undefined;
+        return status === "streaming" || status === "compacting" || status === "retrying";
+      },
+      [sessionId],
+    ),
+  );
+
   const allItemIds = turn.items.map(getItemId);
   const toolCount = turn.items.filter((i: TimelineItem) => i.itemType === "toolExecution").length;
   const textCount = turn.items.filter((i: TimelineItem) => i.itemType === "assistantText").length;
@@ -61,23 +72,27 @@ export const TimelineTurn = memo(function TimelineTurn({
       const sessionId = useSessionStore.getState().activeSessionId;
       if (!sessionId) return;
       try {
-        const result = await apiClient.call("agent.getTree", { sessionId });
-        const entries: Array<{
-          id: string;
-          parentId: string | null;
-          type: string;
-          label?: string;
-        }> = result.entries ?? result ?? [];
-        if (!Array.isArray(entries) || entries.length === 0) return;
+        // Prefer pre-resolved entryId from the message (matches backend tree)
+        let targetId: string | null = turn.assistantEntryId ?? null;
 
-        const byId = new Map(entries.map((e) => [e.id, e]));
+        // Fallback: resolve via tree lookup using the frontend message ID
+        if (!targetId) {
+          const result = await apiClient.call("agent.getTree", { sessionId });
+          const entries: Array<{
+            id: string;
+            parentId: string | null;
+            type: string;
+            label?: string;
+          }> = result.entries ?? result ?? [];
+          if (!Array.isArray(entries) || entries.length === 0) return;
 
-        let targetId: string | null = null;
+          const byId = new Map(entries.map((e) => [e.id, e]));
 
-        if (turn.assistantMessageId) {
-          const entry = byId.get(turn.assistantMessageId);
-          if (entry) {
-            targetId = entry.id;
+          if (turn.assistantMessageId) {
+            const entry = byId.get(turn.assistantMessageId);
+            if (entry) {
+              targetId = entry.id;
+            }
           }
         }
 
@@ -150,9 +165,8 @@ export const TimelineTurn = memo(function TimelineTurn({
         // Silent
       }
     },
-    [turn.assistantMessageId],
+    [turn.assistantEntryId, turn.assistantMessageId],
   );
-
   return (
     <div id={`turn-${turn.id}`} data-turn-id={turn.id} className="relative group/turn">
       {/* ── Left Timeline Line & Dots ── */}
@@ -233,20 +247,26 @@ export const TimelineTurn = memo(function TimelineTurn({
                 const sessionId = useSessionStore.getState().activeSessionId;
                 if (!sessionId) return;
                 try {
-                  const result = await apiClient.call("agent.getTree", { sessionId });
-                  const entries: Array<{ id: string; type: string; label?: string }> =
-                    result.entries ?? result ?? [];
-                  if (!Array.isArray(entries) || entries.length === 0) return;
-                  const byId = new Map(entries.map((e) => [e.id, e]));
-                  let entryId: string | null = null;
-                  if (turn.assistantMessageId) {
-                    const entry = byId.get(turn.assistantMessageId);
-                    if (entry) entryId = entry.id;
+                  // Prefer pre-resolved entryIds (match backend tree)
+                  let entryId: string | null = turn.assistantEntryId ?? turn.userEntryId ?? null;
+
+                  // Fallback: resolve via tree lookup
+                  if (!entryId) {
+                    const result = await apiClient.call("agent.getTree", { sessionId });
+                    const entries: Array<{ id: string; type: string; label?: string }> =
+                      result.entries ?? result ?? [];
+                    if (!Array.isArray(entries) || entries.length === 0) return;
+                    const byId = new Map(entries.map((e) => [e.id, e]));
+                    if (turn.assistantMessageId) {
+                      const entry = byId.get(turn.assistantMessageId);
+                      if (entry) entryId = entry.id;
+                    }
+                    if (!entryId && turn.userMessageId) {
+                      const entry = byId.get(turn.userMessageId);
+                      if (entry) entryId = entry.id;
+                    }
                   }
-                  if (!entryId && turn.userMessageId) {
-                    const entry = byId.get(turn.userMessageId);
-                    if (entry) entryId = entry.id;
-                  }
+
                   if (!entryId) return;
                   useForkDialogStore.getState().openDialog({
                     sessionId,
@@ -257,6 +277,7 @@ export const TimelineTurn = memo(function TimelineTurn({
                   /* skip */
                 }
               }}
+              disabled={isSessionStreaming}
             />
             <TurnActionButton
               icon={<Trash2 size={12} />}
@@ -269,12 +290,14 @@ export const TimelineTurn = memo(function TimelineTurn({
               label={t("chat:rollbackCode")}
               onClick={() => handleRollback("withFiles")}
               variant="warning"
+              disabled={isSessionStreaming}
             />
             <TurnActionButton
               icon={<MessageSquare size={12} />}
               label={t("chat:rollbackChat")}
               onClick={() => handleRollback("message")}
               variant="info"
+              disabled={isSessionStreaming}
             />
           </div>
         </div>

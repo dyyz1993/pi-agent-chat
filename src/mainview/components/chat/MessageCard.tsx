@@ -319,6 +319,15 @@ const HeaderActions = memo(function HeaderActions({
 }) {
   const { t } = useTranslation("chat");
   const sessionId = useSessionStore((s) => s.activeSessionId);
+  const isSessionStreaming = useSessionStore(
+    useCallback(
+      (s: { sessionStatusMap: Record<string, import("../../types").SessionStatus> }) => {
+        const status = sessionId ? s.sessionStatusMap[sessionId] : undefined;
+        return status === "streaming" || status === "compacting" || status === "retrying";
+      },
+      [sessionId],
+    ),
+  );
   const messages = useChatStore((s) =>
     sessionId ? s.messagesBySession[sessionId] || EMPTY_MSGS : EMPTY_MSGS,
   );
@@ -571,18 +580,23 @@ const HeaderActions = memo(function HeaderActions({
 
   return (
     <>
-      <ActionBtn icon={GitFork} title={t("fork")} onClick={handleFork} />
+      <ActionBtn
+        icon={GitFork}
+        title={t("fork")}
+        onClick={handleFork}
+        disabled={isSessionStreaming}
+      />
       <ActionBtn
         icon={Undo2}
         title={t("messageCard.rollbackMessage")}
         onClick={() => requestRollback("message")}
-        disabled={rollingBackRef.current}
+        disabled={rollingBackRef.current || isSessionStreaming}
       />
       <ActionBtn
         icon={RotateCcw}
         title={t("messageCard.rollbackMessageAndCode")}
         onClick={() => requestRollback("withFiles")}
-        disabled={rollingBackRef.current}
+        disabled={rollingBackRef.current || isSessionStreaming}
       />
     </>
   );

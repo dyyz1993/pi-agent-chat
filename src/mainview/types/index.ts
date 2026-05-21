@@ -262,9 +262,11 @@ export type TimelineTurn = {
   id: string;
   index: number;
   userMessageId: string | null;
+  userEntryId: string | null;
   userText: string;
   userTimestamp: number;
   assistantMessageId: string | null;
+  assistantEntryId: string | null;
   items: TimelineItem[];
   model?: string;
   provider?: string;
