@@ -51,11 +51,7 @@ export function groupSessions(
   const q = searchQuery.trim().toLowerCase();
 
   for (const sess of deduped) {
-    const isSubagent =
-      sess.delegateType === "subagent" ||
-      (!sess.delegateType &&
-        sess.delegateParentSessionId &&
-        sess.sessionId.startsWith("sess_sub_"));
+    const isSubagent = sess.sessionId.startsWith("sess_sub_");
     if (isSubagent && sess.delegateParentSessionId) {
       const parentPath = idToPath.get(sess.delegateParentSessionId);
       if (parentPath) {
@@ -123,11 +119,7 @@ export function groupSessions(
   }
 
   if (filterType === "delegate") {
-    resultRoots = resultRoots.filter(
-      (r) =>
-        r.delegateType === "coordinator" ||
-        (!r.delegateType && !!r.delegateParentSessionId && r.sessionId.startsWith("sess_coord_")),
-    );
+    resultRoots = resultRoots.filter((r) => r.sessionId.startsWith("sess_coord_"));
   } else if (filterType === "normal") {
     resultRoots = resultRoots.filter((r) => !r.delegateParentSessionId);
   }
@@ -271,8 +263,8 @@ function SessionList({
   const filteredRoots = useMemo(() => {
     if (filterType === "normal") {
       return rootSessions.filter((r) => {
-        const hasSubChildren = childMap[r.sessionPath]?.some(
-          (c) => c.delegateType === "subagent" || c.sessionId.startsWith("sess_sub_"),
+        const hasSubChildren = childMap[r.sessionPath]?.some((c) =>
+          c.sessionId.startsWith("sess_sub_"),
         );
         const subs = subsessionsByParent[r.sessionPath];
         return !hasSubChildren && (!subs || subs.length === 0) && !r.delegateParentSessionId;
@@ -435,11 +427,8 @@ function SessionItem({
   const inputRef = useRef<HTMLInputElement>(null);
   const hasPiChildren = !!(children && children.length > 0);
   const hasSubagents = !!(subsessions && subsessions.length > 0);
-  const isDelegate =
-    session.delegateType === "coordinator" ||
-    (!session.delegateType &&
-      !!session.delegateParentSessionId &&
-      session.sessionId.startsWith("sess_coord_"));
+  const isDelegate = session.sessionId.startsWith("sess_coord_");
+  const isSubtask = session.sessionId.startsWith("sess_sub_");
   const hasExpandableChildren = Boolean(hasPiChildren) || Boolean(hasSubagents);
   const workspaceInfo = useMemo(
     () =>
@@ -596,6 +585,11 @@ function SessionItem({
               {isDelegate && (
                 <span className="text-[9px] px-1 py-0.5 rounded font-medium shrink-0 ml-1 bg-semantic-notify/15 text-semantic-notify border border-semantic-notify/20">
                   {t("sidebar:delegateTag", "委派")}
+                </span>
+              )}
+              {isSubtask && (
+                <span className="text-[9px] px-1 py-0.5 rounded font-medium shrink-0 ml-1 bg-semantic-agent/15 text-semantic-agent border border-semantic-agent/20">
+                  {t("sidebar:subtaskTag", "子任务")}
                 </span>
               )}
             </>

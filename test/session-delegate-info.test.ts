@@ -113,10 +113,9 @@ describe("groupSessions: delegate filter uses delegateParentSessionId", () => {
         name: "Normal Session",
       }),
       makePartialSession({
-        sessionId: "delegate-1",
+        sessionId: "sess_coord_1234_delegate1",
         name: "指派: task",
         delegateParentSessionId: "parent-1",
-        delegateType: "coordinator",
       }),
     ];
 
@@ -125,7 +124,7 @@ describe("groupSessions: delegate filter uses delegateParentSessionId", () => {
 
     const delegates = groupSessions(sessions, "", "delegate");
     expect(delegates.rootSessions).toHaveLength(1);
-    expect(delegates.rootSessions[0].sessionId).toBe("delegate-1");
+    expect(delegates.rootSessions[0].sessionId).toBe("sess_coord_1234_delegate1");
 
     const normal = groupSessions(sessions, "", "normal");
     expect(normal.rootSessions).toHaveLength(1);
