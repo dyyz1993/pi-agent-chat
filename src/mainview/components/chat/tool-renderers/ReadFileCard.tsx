@@ -100,6 +100,8 @@ export const ReadFileCard = memo(function ReadFileCard({
         rtl={true}
         collapsed={collapsed}
         onClick={() => setCollapsed((c) => !c)}
+        startedAt={block.startedAt}
+        endedAt={block.endedAt}
         badge={
           isRunning ? (
             <span className="ml-auto text-[10px] text-status-info animate-pulse shrink-0">

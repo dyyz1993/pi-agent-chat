@@ -177,6 +177,8 @@ export const LspExecutionCard = memo(function LspExecutionCard({ block }: LspExe
         description={description}
         collapsed={collapsed}
         onClick={() => setCollapsed((c) => !c)}
+        startedAt={block.startedAt}
+        endedAt={block.endedAt}
         badge={badge}
       />
 

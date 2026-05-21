@@ -1,28 +1,21 @@
 import { memo, type ReactNode } from "react";
 import { getToolIcon } from "../tool-icon-map";
+import { useToolDuration } from "./useToolDuration";
 
 export type ToolCardStatus = "running" | "done" | "error" | "background" | "terminated";
 
 interface ToolCardHeaderProps {
-  /** Tool name for icon lookup (via getToolIcon) */
   toolName: string;
-  /** Block status for color theming */
   status: ToolCardStatus;
-  /** Main description text (single-line truncated) */
   description: ReactNode;
-  /** Whether the card is collapsed (shows running pulse if running) */
   collapsed?: boolean;
-  /** Elapsed time string (e.g. "3s", "1m20s") */
   time?: ReactNode;
-  /** Right-side badge / summary */
+  startedAt?: number;
+  endedAt?: number;
   badge?: ReactNode;
-  /** Click handler for toggle */
   onClick?: () => void;
-  /** Whether description should use monospace font (file paths) */
   mono?: boolean;
-  /** RTL truncation for file paths */
   rtl?: boolean;
-  /** Extra class on the root header div */
   className?: string;
 }
 
@@ -47,7 +40,9 @@ export const ToolCardHeader = memo(function ToolCardHeader({
   status,
   description,
   collapsed,
-  time,
+  time: timeProp,
+  startedAt,
+  endedAt,
   badge,
   onClick,
   mono,
@@ -57,6 +52,9 @@ export const ToolCardHeader = memo(function ToolCardHeader({
   const isRunning = status === "running";
   const { icon: Icon, color: baseColor } = getToolIcon(toolName);
   const iconColor = getStatusIconColor(status, `${baseColor}/70`);
+
+  const autoDuration = useToolDuration(startedAt, endedAt, status);
+  const displayTime = timeProp ?? (autoDuration ? <TimeLabel text={autoDuration} /> : undefined);
 
   return (
     <div
@@ -84,13 +82,17 @@ export const ToolCardHeader = memo(function ToolCardHeader({
         )}
       </span>
 
-      {time}
+      <span className="shrink-0 flex items-center gap-1.5 overflow-hidden">{badge}</span>
 
-      {isRunning && !time && !badge && (
+      {displayTime}
+
+      {isRunning && !displayTime && !badge && (
         <span className="shrink-0 text-[10px] text-status-info animate-pulse">...</span>
       )}
-
-      <span className="shrink-0 flex items-center gap-1.5 overflow-hidden">{badge}</span>
     </div>
   );
 });
+
+function TimeLabel({ text }: { text: string }) {
+  return <span className="shrink-0 text-[10px] text-text-tertiary/50 tabular-nums">{text}</span>;
+}

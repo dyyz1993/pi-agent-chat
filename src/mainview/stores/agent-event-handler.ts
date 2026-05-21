@@ -548,6 +548,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         status: isError ? "error" : "done",
         output,
         details: result?.details,
+        endedAt: event.timestamp ?? Date.now(),
       };
 
       const updated = [...existing];

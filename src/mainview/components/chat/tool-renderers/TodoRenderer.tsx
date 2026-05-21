@@ -206,6 +206,8 @@ export const TodoExecRenderer = memo(function TodoExecRenderer({ block }: ToolRe
         collapsed={collapsed}
         badge={badge}
         onClick={() => setCollapsed((c) => !c)}
+        startedAt={block.startedAt}
+        endedAt={block.endedAt}
       />
 
       {/* Content */}

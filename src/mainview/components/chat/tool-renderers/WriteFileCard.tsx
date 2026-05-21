@@ -198,6 +198,8 @@ export const WriteFileCard = memo(function WriteFileCard({
         rtl
         collapsed={collapsed}
         onClick={() => setCollapsed((c) => !c)}
+        startedAt={block.startedAt}
+        endedAt={block.endedAt}
         badge={
           isRunning ? (
             <span className="text-[10px] text-status-success animate-pulse shrink-0">

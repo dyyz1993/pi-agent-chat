@@ -175,6 +175,8 @@ export const DelegateCard = memo(function DelegateCard({
         description={displayTitle}
         collapsed={collapsed}
         onClick={() => setCollapsed((c) => !c)}
+        startedAt={block.startedAt}
+        endedAt={block.endedAt}
         badge={renderBadge(statusLabel, isRunning, sessionStatus, isDone, canJump, handleJump)}
       />
       {!collapsed && !isRunning && taskText && (
@@ -244,6 +246,8 @@ export const ForkCard = memo(function ForkCard({
         toolName="fork"
         status={toCardStatus(block)}
         description={displayTitle}
+        startedAt={block.startedAt}
+        endedAt={block.endedAt}
         badge={renderBadge(statusLabel, isRunning, sessionStatus, isDone, canJump, handleJump)}
       />
     </div>
@@ -286,6 +290,8 @@ export const DelegateSendCard = memo(function DelegateSendCard({
         toolName="session_delegate_send"
         status={toCardStatus(block)}
         description={displayTitle}
+        startedAt={block.startedAt}
+        endedAt={block.endedAt}
         badge={
           badgeText ? (
             <span className={`shrink-0 text-[10px] ${badgeColor}`}>{badgeText}</span>
@@ -330,6 +336,8 @@ export const DelegateStatusCard = memo(function DelegateStatusCard({
         toolName="session_delegate_status"
         status={toCardStatus(block)}
         description={displayTitle}
+        startedAt={block.startedAt}
+        endedAt={block.endedAt}
         badge={
           badgeText ? (
             <span className="shrink-0 text-[10px] text-text-tertiary">{badgeText}</span>
@@ -378,6 +386,8 @@ export const DelegateStopCard = memo(function DelegateStopCard({
         toolName="session_delegate_stop"
         status={toCardStatus(block)}
         description={displayTitle}
+        startedAt={block.startedAt}
+        endedAt={block.endedAt}
         badge={
           badgeText ? (
             <span className={`shrink-0 text-[10px] ${badgeColor}`}>{badgeText}</span>
@@ -426,6 +436,8 @@ export const DelegateRemoveCard = memo(function DelegateRemoveCard({
         toolName="session_delegate_remove"
         status={toCardStatus(block)}
         description={displayTitle}
+        startedAt={block.startedAt}
+        endedAt={block.endedAt}
         badge={
           badgeText ? (
             <span className={`shrink-0 text-[10px] ${badgeColor}`}>{badgeText}</span>
@@ -466,6 +478,8 @@ export const DelegateClearCard = memo(function DelegateClearCard({
         toolName="session_delegate_clear_stopped"
         status={toCardStatus(block)}
         description={displayTitle}
+        startedAt={block.startedAt}
+        endedAt={block.endedAt}
         badge={
           badgeText ? (
             <span className="shrink-0 text-[10px] text-text-tertiary">{badgeText}</span>

@@ -161,7 +161,7 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
         badge={badgeContent}
         time={
           durationText ? (
-            <span className="shrink-0 text-[10px] text-text-tertiary tabular-nums">
+            <span className="shrink-0 text-[10px] text-text-tertiary/50 tabular-nums">
               {durationText}
             </span>
           ) : undefined

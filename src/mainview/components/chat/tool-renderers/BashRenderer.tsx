@@ -256,7 +256,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
         onClick={() => setCollapsed((c) => !c)}
         time={
           isRunning ? (
-            <span className="shrink-0 flex items-center gap-1 text-[10px] text-text-tertiary tabular-nums">
+            <span className="shrink-0 flex items-center gap-1 text-[10px] text-text-tertiary/50 tabular-nums">
               {formatDuration(elapsed)}
               {timeout != null &&
                 timeout > 0 &&
@@ -284,7 +284,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
                 </span>
               )}
               {(bashDetails?.background ?? (storeStatus === "background" && bashProcess)) && (
-                <span className="text-[10px] text-text-tertiary tabular-nums shrink-0">
+                <span className="text-[10px] text-text-tertiary/50 tabular-nums shrink-0">
                   {formatDuration(
                     bashDetails?.background?.durationMs ??
                       Date.now() - (bashProcess?.startedAt ?? Date.now()),
@@ -299,7 +299,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
             <>
               <span className="text-status-error text-[10px]">{t("common:cancelled")}</span>
               {(bashDetails?.terminated ?? (storeStatus === "terminated" && bashProcess)) && (
-                <span className="text-[10px] text-text-tertiary tabular-nums shrink-0">
+                <span className="text-[10px] text-text-tertiary/50 tabular-nums shrink-0">
                   {formatDuration(
                     bashDetails?.terminated?.durationMs ??
                       (bashProcess?.endedAt ?? Date.now()) - (bashProcess?.startedAt ?? Date.now()),
@@ -317,7 +317,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
                   ? bashProcess.endedAt - bashProcess.startedAt
                   : 0;
               return (
-                <span className="text-[10px] text-text-tertiary tabular-nums shrink-0">
+                <span className="text-[10px] text-text-tertiary/50 tabular-nums shrink-0">
                   {formatDuration(durationMs)}
                   <span className="text-text-secondary"> / {formatDuration(timeout * 1000)}</span>
                 </span>

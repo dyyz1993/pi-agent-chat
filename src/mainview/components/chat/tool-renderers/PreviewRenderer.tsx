@@ -1,7 +1,7 @@
 import { memo } from "react";
 import type { ContentBlock } from "../../../types";
-import { getToolIcon } from "../tool-icon-map";
 import { PreviewCard, type PreviewDetails } from "../preview";
+import { ToolCardHeader } from "../primitives/ToolCardHeader";
 
 type Block = Extract<ContentBlock, { type: "toolExecution" }>;
 
@@ -37,29 +37,24 @@ export const PreviewRenderer = memo(function PreviewRenderer({
               : "border-border-secondary/30 bg-surface-dim"
         }`}
       >
-        <div className="px-3 py-1.5 flex items-center gap-2 text-xs">
-          {(() => {
-            const { icon: PreviewIcon } = getToolIcon("preview");
-            return (
-              <PreviewIcon
-                className={`w-3.5 h-3.5 shrink-0 ${isError ? "text-red-500 dark:text-red-400" : "text-cyan-500 dark:text-cyan-400"}`}
-              />
-            );
-          })()}
-          <span className="min-w-0 text-text-primary font-mono truncate">
-            {filePath || block.args}
-          </span>
-          {isRunning && (
-            <span className="ml-auto text-[10px] text-blue-500 dark:text-blue-400 animate-pulse shrink-0">
-              previewing
-            </span>
-          )}
-          {isError && (
-            <span className="ml-auto text-[10px] text-red-500 dark:text-red-400 shrink-0">
-              error
-            </span>
-          )}
-        </div>
+        <ToolCardHeader
+          toolName="preview"
+          status={isRunning ? "running" : isError ? "error" : "done"}
+          description={filePath || block.args}
+          mono
+          rtl
+          startedAt={block.startedAt}
+          endedAt={block.endedAt}
+          badge={
+            isRunning ? (
+              <span className="text-[10px] text-blue-500 dark:text-blue-400 animate-pulse shrink-0">
+                previewing
+              </span>
+            ) : isError ? (
+              <span className="text-[10px] text-red-500 dark:text-red-400 shrink-0">error</span>
+            ) : undefined
+          }
+        />
         {block.output && (
           <div className="px-3 pb-2">
             <pre className="text-[11px] text-text-secondary overflow-x-auto whitespace-pre-wrap font-mono max-h-32 overflow-y-auto bg-surface-code rounded px-2 py-1.5">

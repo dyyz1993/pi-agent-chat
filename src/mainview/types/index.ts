@@ -70,6 +70,7 @@ export type ContentBlock =
       details?: unknown;
       timeout?: number;
       startedAt?: number;
+      endedAt?: number;
       description?: string;
     }
   | { type: "custom"; customType: string; data: unknown }

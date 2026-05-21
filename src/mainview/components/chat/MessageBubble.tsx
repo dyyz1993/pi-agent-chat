@@ -595,6 +595,8 @@ export const LspDiagnosticsCard = memo(function LspDiagnosticsCard({ data }: { d
   );
 });
 
+import { formatDuration } from "./primitives/formatDuration";
+
 function getSearchingSummary(data: unknown): string | null {
   const d = data as Record<string, unknown> | undefined;
   if (!d) return "搜索中…";
@@ -777,6 +779,12 @@ export const MemoryCard = memo(function MemoryCard({
             <ThumbsDown className="w-3 h-3" />
           </span>
         )}
+        {typeof (displayData as Record<string, unknown>)?.durationMs === "number" &&
+          ((displayData as Record<string, unknown>).durationMs as number) > 0 && (
+            <span className="shrink-0 text-[10px] text-text-tertiary/50 tabular-nums">
+              {formatDuration((displayData as Record<string, unknown>).durationMs as number)}
+            </span>
+          )}
         <span className="text-text-tertiary shrink-0">
           {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
         </span>
@@ -1237,7 +1245,7 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({
       return (
         <div
           data-block-id={blockId}
-          className="my-0.5 group relative px-3 pr-10 prose dark:prose-invert prose-sm max-w-none prose-p:my-1 prose-pre:bg-transparent"
+          className="my-0.5 group relative px-3 prose dark:prose-invert prose-sm max-w-none prose-p:my-1 prose-pre:bg-transparent prose-hr:my-0.5"
         >
           <div className="absolute top-2 right-2 z-10 flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
             {shouldShowExpand && (
