@@ -511,6 +511,7 @@ export class AgentProcessManager {
       "coordinator_client",
       "supervisor",
       "file-snapshot",
+      "file-review",
     ] as const;
     for (const name of channelNames) {
       client.channel(name).onReceive((data: unknown) => {
@@ -1885,9 +1886,14 @@ export class AgentProcessManager {
     sessionId: string,
     targetId: string,
     options?: { summarize?: boolean; skipFiles?: boolean },
-  ): Promise<{ cancelled: boolean }> {
+  ): Promise<{ cancelled: boolean; reason?: string }> {
     const managed = this.getActiveManaged(sessionId);
     if (managed) {
+      // Block rollback while agent is actively streaming
+      if (managed.info.status === "streaming") {
+        log.warn("navigateTree: blocked — agent is streaming", { sessionId, targetId });
+        return { cancelled: true, reason: "Agent is streaming" };
+      }
       const result = await managed.client.navigateTree(targetId, options);
       if (!result.cancelled) {
         this.leafIds.set(sessionId, targetId);
@@ -1899,7 +1905,7 @@ export class AgentProcessManager {
       sessionId,
       targetId,
     });
-    return { cancelled: true };
+    return { cancelled: true, reason: "No active session" };
   }
 
   async previewRollback(

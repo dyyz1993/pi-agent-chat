@@ -10,6 +10,7 @@ import { createHttpHandler } from "./gateway/http-routes";
 import { createWsHandler } from "./gateway/ws-handler";
 import { createLogger, setLogSink } from "./shared/lib/logger";
 import { configureLogDir, writeLogLine } from "./shared/lib/logger.node";
+import { initSandboxManager } from "./shared/agent/process-manager";
 
 configureLogDir(config.logDir);
 setLogSink(writeLogLine);
@@ -85,4 +86,20 @@ httpServer.listen(config.port, () => {
     "Available RPC methods: system.ping, system.hello, system.echo, file.listDir, timer.start, timer.stop",
   );
   log.info("File endpoints: GET /file/{path}, GET /info/{path}");
+
+  // 初始化沙箱管理器（如果启用了沙箱模式）
+  if (config.sandboxEnabled) {
+    const projectsDir = resolve(process.cwd(), "data", "sandbox-projects");
+    const sm = initSandboxManager(projectsDir);
+    log.info("Sandbox manager initialized", { basePort: config.sandboxBasePort, projectsDir });
+    // 进程退出时清理沙箱
+    process.on("SIGINT", () => {
+      sm.stop();
+      process.exit(0);
+    });
+    process.on("SIGTERM", () => {
+      sm.stop();
+      process.exit(0);
+    });
+  }
 });

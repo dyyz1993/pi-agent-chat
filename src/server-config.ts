@@ -32,6 +32,12 @@ export const config = {
   proxyApiUrl: process.env.PROXY_API_URL ?? "",
   /** 代理服务的公网域名（如 shanbox.19930810.xyz:8443），用于构造公网 URL */
   proxyPublicDomain: process.env.PROXY_PUBLIC_DOMAIN ?? "",
+  /** 沙箱模式：启用后 agent 在隔离沙箱中运行 */
+  sandboxEnabled: process.env.SANDBOX_ENABLED === "true",
+  /** 沙箱基础端口 */
+  sandboxBasePort: parseInt(process.env.SANDBOX_BASE_PORT ?? "3200", 10),
+  /** 沙箱空闲超时（秒） */
+  sandboxIdleTimeout: parseInt(process.env.SANDBOX_IDLE_TIMEOUT ?? "1800", 10),
 } as const;
 
 if (MISSING_PI_VARS.length > 0) {
