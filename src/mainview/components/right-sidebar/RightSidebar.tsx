@@ -9,6 +9,7 @@ import {
   Shield,
   Camera,
   Bot,
+  ListChecks,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useLayoutStore } from "../../layouts/use-layout-store";
@@ -19,6 +20,7 @@ import { GitPanel } from "../git/GitPanel";
 import { RpcPanel } from "../rpc-panel/RpcPanel";
 import { MemoryPanel } from "../memory-panel/MemoryPanel";
 import { RulesPanel } from "../rules-panel/RulesPanel";
+import { HooksPanel } from "../hooks-panel/HooksPanel";
 import { SnapshotPanel } from "../snapshot-panel/SnapshotPanel";
 import { AgentPanel } from "../agent-panel/AgentPanel";
 import { useExplorerStore } from "../../stores/use-explorer-store";
@@ -33,6 +35,7 @@ const TAB_ICONS: Record<PanelTabId, React.ComponentType<{ className?: string }>>
   rpc: Terminal,
   memory: Brain,
   rules: Shield,
+  hooks: ListChecks,
   snapshot: Camera,
 };
 
@@ -126,6 +129,8 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
         return <MemoryPanel />;
       case "rules":
         return <RulesPanel />;
+      case "hooks":
+        return <HooksPanel />;
       case "snapshot":
         return <SnapshotPanel />;
       default:

@@ -12,6 +12,7 @@ import type { BashMethods, BashEvents } from "./modules/bash";
 import type { LspMethods, LspEvents } from "./modules/lsp";
 import type { MemoryMethods, MemoryEvents } from "./modules/memory";
 import type { RulesMethods, RulesEvents } from "./modules/rules";
+import type { HooksMethods, HooksEvents } from "./modules/hooks";
 import type { SnapshotMethods } from "./modules/snapshot";
 import type { CoordinatorEvents } from "./modules/coordinator";
 import type { SupervisorMethods, SupervisorEvents } from "./modules/supervisor";
@@ -32,6 +33,7 @@ export interface RPCMethods
     LspMethods,
     MemoryMethods,
     RulesMethods,
+    HooksMethods,
     SnapshotMethods,
     SupervisorMethods {}
 
@@ -44,6 +46,7 @@ export interface RPCEvents
     BashEvents,
     LspEvents,
     RulesEvents,
+    HooksEvents,
     MemoryEvents,
     FileEvents,
     CoordinatorEvents,

@@ -10,6 +10,7 @@ export type PanelTabId =
   | "rpc"
   | "memory"
   | "rules"
+  | "hooks"
   | "snapshot";
 
 export interface PanelTab {
@@ -25,6 +26,7 @@ export const PANEL_TABS: PanelTab[] = [
   { id: "rpc", label: "RPC" },
   { id: "memory", label: "记忆" },
   { id: "rules", label: "Rules" },
+  { id: "hooks", label: "Hooks" },
   { id: "snapshot", label: "快照" },
 ];
 
