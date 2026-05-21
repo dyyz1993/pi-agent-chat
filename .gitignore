@@ -92,3 +92,10 @@ scripts/continue-expansion.sh
 
 # Tech report drafts (knowledge base preferred)
 *缓存原理*.md
+
+# TypeScript build info
+tsconfig.tsbuildinfo
+
+# Temporary intro pages
+intro.html
+introduction.html
