@@ -90,6 +90,7 @@ export const ForkDialog = memo(function ForkDialog() {
         projectPath: activeTab.path,
         parentSessionPath: null,
         delegateParentSessionId: null,
+        delegateType: null,
         messageCount: 0,
         firstMessage: "",
         createdAt: now,

@@ -30,7 +30,7 @@ const EMPTY: never[] = [];
 export function groupSessions(
   rawSessions: SessionMeta[],
   searchQuery: string,
-  filterType?: "all" | "delegate" | "normal",
+  filterType?: "all" | "delegate" | "subtask" | "normal",
   filterAgent?: string | null,
   agentBySession?: Record<string, string>,
 ): { rootSessions: SessionMeta[]; childMap: Record<string, SessionMeta[]> } {
@@ -51,10 +51,7 @@ export function groupSessions(
   const q = searchQuery.trim().toLowerCase();
 
   for (const sess of deduped) {
-    if (sess.parentSessionPath) {
-      if (!children[sess.parentSessionPath]) children[sess.parentSessionPath] = [];
-      children[sess.parentSessionPath].push(sess);
-    } else if (sess.delegateParentSessionId) {
+    if (sess.delegateType === "subagent" && sess.delegateParentSessionId) {
       const parentPath = idToPath.get(sess.delegateParentSessionId);
       if (parentPath) {
         if (!children[parentPath]) children[parentPath] = [];
@@ -62,6 +59,9 @@ export function groupSessions(
       } else {
         roots.push(sess);
       }
+    } else if (!sess.delegateParentSessionId && sess.parentSessionPath) {
+      if (!children[sess.parentSessionPath]) children[sess.parentSessionPath] = [];
+      children[sess.parentSessionPath].push(sess);
     } else {
       roots.push(sess);
     }
@@ -118,15 +118,11 @@ export function groupSessions(
   }
 
   if (filterType === "delegate") {
-    resultRoots = resultRoots.filter((r) => {
-      const kids = resultChildMap[r.sessionPath];
-      return kids && kids.some((c) => c.delegateParentSessionId);
-    });
+    resultRoots = resultRoots.filter(
+      (r) => r.delegateType === "coordinator" || (!r.delegateType && !!r.delegateParentSessionId),
+    );
   } else if (filterType === "normal") {
-    resultRoots = resultRoots.filter((r) => {
-      const kids = resultChildMap[r.sessionPath];
-      return !kids || !kids.some((c) => c.delegateParentSessionId);
-    });
+    resultRoots = resultRoots.filter((r) => !r.delegateParentSessionId);
   }
 
   if (filterAgent) {
@@ -144,7 +140,7 @@ export function SessionSidebar(_props: SessionSidebarProps) {
   const { t } = useTranslation("sidebar");
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [filterType, setFilterType] = useState<"all" | "delegate" | "normal">("all");
+  const [filterType, setFilterType] = useState<"all" | "delegate" | "subtask" | "normal">("all");
   const [filterAgent, setFilterAgent] = useState<string | null>(null);
 
   const newSessionCreatedAt = useSessionStore((s) => s.newSessionCreatedAt);
@@ -177,15 +173,6 @@ export function SessionSidebar(_props: SessionSidebarProps) {
     });
   }, []);
 
-  const expandSession = useCallback((sessionId: string) => {
-    setExpandedIds((prev) => {
-      if (prev.has(sessionId)) return prev;
-      const next = new Set(prev);
-      next.add(sessionId);
-      return next;
-    });
-  }, []);
-
   return (
     <div className="flex flex-col h-full">
       <div className="px-2 py-1.5">
@@ -202,7 +189,7 @@ export function SessionSidebar(_props: SessionSidebarProps) {
       </div>
 
       <div className="px-2 py-0.5 flex items-center gap-1">
-        {(["all", "delegate", "normal"] as const).map((type) => (
+        {(["all", "delegate", "subtask", "normal"] as const).map((type) => (
           <button
             key={type}
             onClick={() => setFilterType(type)}
@@ -216,7 +203,9 @@ export function SessionSidebar(_props: SessionSidebarProps) {
               ? t("sidebar:filterAll", "全部")
               : type === "delegate"
                 ? t("sidebar:filterDelegate", "委派")
-                : t("sidebar:filterNormal", "普通")}
+                : type === "subtask"
+                  ? t("sidebar:filterSubtask", "子任务")
+                  : t("sidebar:filterNormal", "普通")}
           </button>
         ))}
         <AgentFilterDropdown selectedAgent={filterAgent} onSelectAgent={setFilterAgent} />
@@ -228,7 +217,6 @@ export function SessionSidebar(_props: SessionSidebarProps) {
         filterAgent={filterAgent}
         expandedIds={expandedIds}
         onToggleExpand={toggleExpand}
-        onExpandSession={expandSession}
       />
     </div>
   );
@@ -240,14 +228,12 @@ function SessionList({
   filterAgent,
   expandedIds,
   onToggleExpand,
-  onExpandSession,
 }: {
   searchQuery: string;
-  filterType: "all" | "delegate" | "normal";
+  filterType: "all" | "delegate" | "subtask" | "normal";
   filterAgent: string | null;
   expandedIds: Set<string>;
   onToggleExpand: (id: string) => void;
-  onExpandSession: (id: string) => void;
 }) {
   const { t } = useTranslation(["sidebar", "common"]);
   const rawSessions = useSessionStore((s) => {
@@ -271,31 +257,29 @@ function SessionList({
   }, [activeSessionPath]);
 
   const subsessionsByParent = useSubagentStore((s) => s.subsessionsByParent);
-  const autoExpandedRef = useRef<Set<string>>(new Set());
-
-  useEffect(() => {
-    if (!activeSessionId) return;
-    if (autoExpandedRef.current.has(activeSessionId)) return;
-    const sessionPath = rawSessions.find((s) => s.sessionId === activeSessionId)?.sessionPath ?? "";
-    const subs = subsessionsByParent[sessionPath];
-    if (subs && subs.length > 0) {
-      autoExpandedRef.current.add(activeSessionId);
-      onExpandSession(activeSessionId);
-    }
-    const activeSession = rawSessions.find((s) => s.sessionId === activeSessionId);
-    if (activeSession?.delegateParentSessionId) {
-      const parentId = activeSession.delegateParentSessionId;
-      if (!autoExpandedRef.current.has(parentId)) {
-        autoExpandedRef.current.add(parentId);
-        onExpandSession(parentId);
-      }
-    }
-  }, [subsessionsByParent, activeSessionId, rawSessions, onExpandSession]);
 
   const { rootSessions, childMap } = useMemo(
     () => groupSessions(rawSessions, searchQuery, filterType, filterAgent, agentBySession),
     [rawSessions, searchQuery, filterType, filterAgent, agentBySession],
   );
+
+  const filteredRoots = useMemo(() => {
+    if (filterType === "subtask") {
+      return rootSessions.filter((r) => {
+        const hasSubChildren = childMap[r.sessionPath]?.some((c) => c.delegateType === "subagent");
+        const subs = subsessionsByParent[r.sessionPath];
+        return hasSubChildren || (subs && subs.length > 0);
+      });
+    }
+    if (filterType === "normal") {
+      return rootSessions.filter((r) => {
+        const hasSubChildren = childMap[r.sessionPath]?.some((c) => c.delegateType === "subagent");
+        const subs = subsessionsByParent[r.sessionPath];
+        return !hasSubChildren && (!subs || subs.length === 0) && !r.delegateParentSessionId;
+      });
+    }
+    return rootSessions;
+  }, [rootSessions, filterType, subsessionsByParent, childMap]);
 
   if (loading) {
     return (
@@ -306,17 +290,19 @@ function SessionList({
     );
   }
 
-  if (rootSessions.length === 0) {
+  if (filteredRoots.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center text-text-tertiary text-xs p-4 text-center">
-        {searchQuery ? t("sidebar:noMatchingSessions") : t("sidebar:noSessions")}
+        {searchQuery || filterType !== "all"
+          ? t("sidebar:noMatchingSessions")
+          : t("sidebar:noSessions")}
       </div>
     );
   }
 
   return (
     <div className="flex-1 overflow-y-auto overscroll-contain px-2 py-0.5 space-y-1">
-      {rootSessions.map((sess) => (
+      {filteredRoots.map((sess) => (
         <SessionItem
           key={sess.sessionId}
           session={sess}
@@ -446,7 +432,7 @@ function SessionItem({
   const inputRef = useRef<HTMLInputElement>(null);
   const hasPiChildren = !!(children && children.length > 0);
   const hasSubagents = !!(subsessions && subsessions.length > 0);
-  const hasDelegateChildren = !!(children && children.some((c) => c.delegateParentSessionId));
+  const isDelegate = !!session.delegateParentSessionId;
   const hasExpandableChildren = Boolean(hasPiChildren) || Boolean(hasSubagents);
   const workspaceInfo = useMemo(
     () =>
@@ -476,9 +462,6 @@ function SessionItem({
 
     setActiveSession(session.sessionId);
     useSubagentStore.getState().setActiveSubsession(session.sessionId, null);
-    if (hasExpandableChildren && !isExpanded) {
-      onToggleExpand();
-    }
     const layout = useLayoutStore.getState();
     if (layout.breakpoint === "mobile" && layout.sessionPanel === "visible") {
       layout.hideSession();
@@ -603,9 +586,14 @@ function SessionItem({
                   {currentAgentName}
                 </span>
               )}
-              {hasDelegateChildren && (
-                <span className="text-[9px] px-1 py-0.5 rounded font-medium shrink-0 ml-1 bg-semantic-agent/15 text-semantic-agent border border-semantic-agent/20">
+              {isDelegate && (
+                <span className="text-[9px] px-1 py-0.5 rounded font-medium shrink-0 ml-1 bg-semantic-notify/15 text-semantic-notify border border-semantic-notify/20">
                   {t("sidebar:delegateTag", "委派")}
+                </span>
+              )}
+              {hasSubagents && (
+                <span className="text-[9px] px-1 py-0.5 rounded font-medium shrink-0 ml-1 bg-semantic-agent/15 text-semantic-agent border border-semantic-agent/20">
+                  {t("sidebar:subtaskTag", "子任务")}
                 </span>
               )}
             </>

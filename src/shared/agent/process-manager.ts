@@ -2555,7 +2555,7 @@ export class AgentProcessManager {
     const parent = this.getActiveManaged(parentSessionId);
     if (!parent) throw new Error("Parent session not found");
 
-    const projectPath = rawProjectPath || parent.info.projectPath;
+    const projectPath = rawProjectPath ?? parent.info.projectPath;
     const newSessionId = `sess_coord_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const isCrossProject = rawProjectPath && rawProjectPath !== parent.info.projectPath;
     let sessionDir: string;
@@ -2568,6 +2568,31 @@ export class AgentProcessManager {
       sessionDir = path.dirname(parent.info.sessionPath);
     }
     const sessionPath = path.join(sessionDir, `${newSessionId}.jsonl`);
+
+    try {
+      const { writeFile } = await import("fs/promises");
+      const headerEntry = JSON.stringify({
+        type: "session",
+        version: 3,
+        id: newSessionId,
+        timestamp: new Date().toISOString(),
+        cwd: projectPath,
+        delegateParentSessionId: parentSessionId,
+      });
+      const delegateInfoEntry = JSON.stringify({
+        type: "delegate_info",
+        delegateParentSessionId: parentSessionId,
+        parentSessionPath: parent.info.sessionPath,
+        delegateType: "coordinator",
+        createdAt: Date.now(),
+      });
+      await writeFile(sessionPath, headerEntry + "\n" + delegateInfoEntry + "\n", "utf-8");
+    } catch (writeErr: unknown) {
+      log.warn("[handleCoordinatorDelegate] failed to write session header", {
+        sessionPath,
+        err: writeErr instanceof Error ? writeErr.message : String(writeErr),
+      });
+    }
 
     const result = await this.start(newSessionId, projectPath, sessionPath, {
       forceNewProcess: true,
@@ -2587,7 +2612,7 @@ export class AgentProcessManager {
     const rawTitle = msg.title ?? task.slice(0, 60);
     const title = `指派: ${rawTitle}`;
     await this.setSessionName(newSessionId, title);
-    const projectName = projectPath.split("/").pop() || projectPath;
+    const projectName = projectPath.split("/").pop() ?? projectPath;
     const delegatePrompt = [
       `[系统提示] 你是一个被委派的后台任务会话。`,
       ``,
@@ -2624,6 +2649,7 @@ export class AgentProcessManager {
           projectPath,
           parentSessionPath: parent.info.sessionPath,
           delegateParentSessionId: parentSessionId,
+          delegateType: "coordinator",
           messageCount: 0,
           firstMessage: task,
           createdAt: Date.now(),
@@ -2656,7 +2682,7 @@ export class AgentProcessManager {
     const parent = this.getActiveManaged(parentSessionId);
     if (!parent) throw new Error("Parent session not found");
 
-    const projectPath = rawProjectPath || parent.info.projectPath;
+    const projectPath = rawProjectPath ?? parent.info.projectPath;
     const newSessionId = `sess_sub_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const isCrossProject = rawProjectPath && rawProjectPath !== parent.info.projectPath;
     let sessionDir: string;
@@ -2680,7 +2706,14 @@ export class AgentProcessManager {
         cwd: projectPath,
         delegateParentSessionId: parentSessionId,
       });
-      await writeFile(sessionPath, headerEntry + "\n", "utf-8");
+      const delegateInfoEntry = JSON.stringify({
+        type: "delegate_info",
+        delegateParentSessionId: parentSessionId,
+        parentSessionPath: parent.info.sessionPath,
+        delegateType: "subagent",
+        createdAt: Date.now(),
+      });
+      await writeFile(sessionPath, headerEntry + "\n" + delegateInfoEntry + "\n", "utf-8");
     } catch (writeErr: unknown) {
       log.warn("[handleCoordinatorDelegateSync] failed to write session header", {
         sessionPath,
@@ -2720,7 +2753,7 @@ export class AgentProcessManager {
     const sessionTitle = `子代理: ${rawTitle}`;
     await this.setSessionName(newSessionId, sessionTitle);
 
-    const projectName = projectPath.split("/").pop() || projectPath;
+    const projectName = projectPath.split("/").pop() ?? projectPath;
     const delegatePrompt = [
       `[系统提示] 你是一个子代理任务会话。`,
       agent ? `**Agent 角色:** ${agent}` : "",
@@ -2781,6 +2814,7 @@ export class AgentProcessManager {
           projectPath,
           parentSessionPath: parent.info.sessionPath,
           delegateParentSessionId: parentSessionId,
+          delegateType: "subagent",
           messageCount: 0,
           firstMessage: task,
           createdAt: Date.now(),
@@ -3008,6 +3042,7 @@ export class AgentProcessManager {
           projectPath,
           parentSessionPath: sessionPath,
           delegateParentSessionId: parentSessionId,
+          delegateType: "fork",
           messageCount: 0,
           firstMessage: task,
           createdAt: Date.now(),

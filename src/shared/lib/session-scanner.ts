@@ -22,19 +22,6 @@ interface JsonlHeader {
   delegateParentSessionId?: string;
 }
 
-interface JsonlEntry {
-  type: string;
-  id: string;
-  parentId: string | null;
-  timestamp: string;
-  message?: {
-    role: string;
-    content?: Array<{ type: string; text?: string }>;
-  };
-  name?: string;
-  cwd?: string;
-}
-
 async function parseJsonlHeader(filePath: string): Promise<JsonlHeader | null> {
   try {
     const stream = createReadStream(filePath, { encoding: "utf-8" });
@@ -80,28 +67,16 @@ interface JsonlHeader {
   cwd: string;
 }
 
-interface JsonlEntry {
-  type: string;
-  id: string;
-  parentId: string | null;
-  timestamp: string;
-  message?: {
-    role: string;
-    content?: Array<{ type: string; text?: string }>;
-  };
-  name?: string;
-  cwd?: string;
-}
-
 async function parseJsonlMeta(filePath: string): Promise<{
   messageCount: number;
   firstMessage: string;
   sessionName: string;
   parentSessionPath: string | null;
   effectiveCwd: string | null;
+  delegateParentSessionId: string | null;
+  delegateType: string | null;
 } | null> {
   try {
-    // Read entire file but only parse first 50 lines
     const content = await readFile(filePath, "utf-8");
     const lines = content.split("\n");
     let messageCount = 0;
@@ -109,35 +84,58 @@ async function parseJsonlMeta(filePath: string): Promise<{
     let sessionName = "";
     let parentSessionPath: string | null = null;
     let effectiveCwd: string | null = null;
+    let delegateParentSessionId: string | null = null;
+    let delegateType: string | null = null;
     const MAX_LINES = 50;
 
     for (let i = 0; i < Math.min(lines.length, MAX_LINES); i++) {
       const line = lines[i];
       if (!line.trim()) continue;
       try {
-        const entry: JsonlEntry = JSON.parse(line) as JsonlEntry;
-        if (entry.type === "message" && entry.message?.role === "user") {
+        const entry = JSON.parse(line) as Record<string, unknown>;
+        if (
+          entry.type === "message" &&
+          (entry.message as Record<string, unknown>)?.role === "user"
+        ) {
           messageCount++;
-          if (!firstMessage && entry.message.content) {
-            const textPart = entry.message.content.find((c) => c.type === "text" && c.text);
+          if (!firstMessage && (entry.message as Record<string, unknown>)?.content) {
+            const contentArr = (entry.message as Record<string, unknown>).content as Array<
+              Record<string, unknown>
+            >;
+            const textPart = contentArr.find((c) => c.type === "text" && c.text);
             if (textPart?.text) {
-              firstMessage = textPart.text.slice(0, 100);
+              firstMessage = (textPart.text as string).slice(0, 100);
             }
           }
         }
         if (entry.type === "session_info") {
-          if (entry.name) sessionName = entry.name;
-          if (entry.cwd) effectiveCwd = entry.cwd;
+          if (entry.name) sessionName = entry.name as string;
+          if (entry.cwd) effectiveCwd = entry.cwd as string;
         }
         if (entry.type === "session" && "parentSession" in entry) {
-          parentSessionPath = (entry as Record<string, unknown>).parentSession as string;
+          parentSessionPath = entry.parentSession as string;
+        }
+        if (entry.type === "delegate_info" && entry.delegateParentSessionId) {
+          delegateParentSessionId = entry.delegateParentSessionId as string;
+          if (entry.delegateType) delegateType = entry.delegateType as string;
+          if (entry.parentSessionPath && !parentSessionPath) {
+            parentSessionPath = entry.parentSessionPath as string;
+          }
         }
       } catch {
         continue;
       }
     }
 
-    return { messageCount, firstMessage, sessionName, parentSessionPath, effectiveCwd };
+    return {
+      messageCount,
+      firstMessage,
+      sessionName,
+      parentSessionPath,
+      effectiveCwd,
+      delegateParentSessionId,
+      delegateType,
+    };
   } catch {
     return null;
   }
@@ -174,7 +172,9 @@ async function scanSessionDir(sessionDir: string, pinnedIds?: Set<string>): Prom
             sessionPath: filePath,
             projectPath: meta?.effectiveCwd ?? header.cwd,
             parentSessionPath: meta?.parentSessionPath ?? null,
-            delegateParentSessionId: header.delegateParentSessionId ?? null,
+            delegateParentSessionId:
+              header.delegateParentSessionId ?? meta?.delegateParentSessionId ?? null,
+            delegateType: meta?.delegateType ?? null,
             messageCount: meta?.messageCount ?? 0,
             firstMessage: meta?.firstMessage ?? "",
             createdAt: new Date(header.timestamp).getTime(),
@@ -238,7 +238,9 @@ export async function findSessionById(
       sessionPath: candidate,
       projectPath,
       parentSessionPath: meta?.parentSessionPath ?? null,
-      delegateParentSessionId: header.delegateParentSessionId ?? null,
+      delegateParentSessionId:
+        header.delegateParentSessionId ?? meta?.delegateParentSessionId ?? null,
+      delegateType: meta?.delegateType ?? null,
       messageCount: meta?.messageCount ?? 0,
       firstMessage: meta?.firstMessage ?? "",
       createdAt: new Date(header.timestamp).getTime(),
@@ -280,8 +282,14 @@ export async function findDelegateChildren(
 
   await Promise.all(
     jsonlFiles.map(async (file) => {
-      const header = await parseJsonlHeader(join(sessionDir, file));
-      if (header?.delegateParentSessionId === parentSessionId) {
+      const filePath = join(sessionDir, file);
+      const [header, meta] = await Promise.all([
+        parseJsonlHeader(filePath),
+        parseJsonlMeta(filePath),
+      ]);
+      if (!header) return;
+      const delegateId = header.delegateParentSessionId ?? meta?.delegateParentSessionId ?? null;
+      if (delegateId === parentSessionId) {
         childIds.push(header.id);
       }
     }),

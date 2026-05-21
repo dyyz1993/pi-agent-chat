@@ -141,6 +141,7 @@ export interface SessionMeta {
   projectPath: string;
   parentSessionPath: string | null;
   delegateParentSessionId: string | null;
+  delegateType: string | null;
   messageCount: number;
   firstMessage: string;
   createdAt: number;

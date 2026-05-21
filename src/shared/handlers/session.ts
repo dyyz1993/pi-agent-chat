@@ -162,6 +162,9 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const content = await readFile(sessionFile, "utf-8");
     const lines = content.split("\n").filter((l) => l.trim());
 
+    let delegateParentSessionId: string | undefined;
+    let delegateType: string | undefined;
+
     for (const line of lines) {
       try {
         const parsed = JSON.parse(line) as Record<string, unknown>;
@@ -171,9 +174,15 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
             sessionPath: sessionFile,
             projectPath: (parsed.cwd as string) ?? cwd,
             cwd: (parsed.cwd as string) ?? cwd,
-            delegateParentSessionId: parsed.delegateParentSessionId as string | undefined,
+            delegateParentSessionId:
+              (parsed.delegateParentSessionId as string | undefined) ?? delegateParentSessionId,
+            delegateType: delegateType ?? null,
             createdAt: parsed.timestamp as string | undefined,
           };
+        }
+        if (parsed.type === "delegate_info" && parsed.delegateParentSessionId) {
+          delegateParentSessionId = parsed.delegateParentSessionId as string;
+          if (parsed.delegateType) delegateType = parsed.delegateType as string;
         }
       } catch {
         continue;
