@@ -10,6 +10,7 @@ import {
   Camera,
   Bot,
   ListChecks,
+  ClipboardCheck,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useLayoutStore } from "../../layouts/use-layout-store";
@@ -23,6 +24,8 @@ import { RulesPanel } from "../rules-panel/RulesPanel";
 import { HooksPanel } from "../hooks-panel/HooksPanel";
 import { SnapshotPanel } from "../snapshot-panel/SnapshotPanel";
 import { AgentPanel } from "../agent-panel/AgentPanel";
+import { ChangeReviewPanel } from "../change-review/ChangeReviewPanel";
+import { useChangeReviewStore } from "../../stores/use-change-review-store";
 import { useExplorerStore } from "../../stores/use-explorer-store";
 import { useGitStore } from "../../stores/use-git-store";
 import { useEffect, useRef } from "react";
@@ -37,6 +40,7 @@ const TAB_ICONS: Record<PanelTabId, React.ComponentType<{ className?: string }>>
   rules: Shield,
   hooks: ListChecks,
   snapshot: Camera,
+  changeReview: ClipboardCheck,
 };
 
 interface RightSidebarProps {
@@ -68,6 +72,8 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
   const importFiles = useExplorerStore((s) => s.importFiles);
 
   const isPinned = statusPanel === "pinned";
+  const pendingChanges = useChangeReviewStore((s) => s.changes);
+  const pendingCount = pendingChanges.filter((c) => c.status === "pending").length;
   const hideStatus = useLayoutStore((s) => s.hideStatus);
   const refreshAll = useGitStore((s) => s.refreshAll);
   const prevPanelVisible = useRef(statusPanel !== "hidden");
@@ -133,6 +139,8 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
         return <HooksPanel />;
       case "snapshot":
         return <SnapshotPanel />;
+      case "changeReview":
+        return <ChangeReviewPanel />;
       default:
         return null;
     }
@@ -157,7 +165,7 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
                 e.stopPropagation();
                 setActivePanelTab(tab.id);
               }}
-              className={`w-10 h-10 flex items-center justify-center rounded transition-colors ${
+              className={`relative w-10 h-10 flex items-center justify-center rounded transition-colors ${
                 activePanelTab === tab.id
                   ? "text-semantic-accent bg-semantic-accent/10"
                   : "text-text-tertiary hover:text-text-primary hover:bg-surface-hover"
@@ -165,6 +173,11 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
               title={tab.label}
             >
               <Icon className="w-4 h-4" />
+              {tab.id === "changeReview" && pendingCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-status-warning text-status-warning-foreground text-[9px] min-w-[16px] h-[16px] flex items-center justify-center rounded-full font-bold">
+                  {pendingCount > 9 ? "9+" : pendingCount}
+                </span>
+              )}
             </button>
           );
         })}
@@ -219,6 +232,11 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
               }`}
             >
               {tab.label}
+              {tab.id === "changeReview" && pendingCount > 0 && (
+                <span className="bg-status-warning/20 text-status-warning text-[10px] px-1.5 py-0.5 rounded-full font-medium ml-1">
+                  {pendingCount}
+                </span>
+              )}
             </button>
           ))}
         </div>

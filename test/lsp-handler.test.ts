@@ -155,7 +155,7 @@ describe("lsp handler", () => {
       mockHasSession.mockReturnValue(true);
       mockCallChannel.mockResolvedValue({
         state: "ready",
-        servers: [{ serverId: "pylsp", state: "ready" }],
+        servers: [{ name: "pylsp", state: "ready" }],
         mode: "disabled",
       });
 

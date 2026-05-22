@@ -91,7 +91,7 @@ describe("LogViewer auto-scroll behavior", () => {
     btns.forEach((btn) => {
       if (btn.textContent === "scrollToBottom") {
         // When autoScroll is true, the button has text-blue-500 class
-        expect(btn.className).toContain("text-blue");
+        expect(btn.className).toContain("text-status-info");
         foundScrollBtn = true;
       }
     });

@@ -14,6 +14,16 @@ vi.mock("../src/mainview/stores/use-theme-store", () => ({
       getState: () => ({ theme: currentTheme, setTheme: mockSetTheme }),
     },
   ),
+  THEME_META: {
+    light: { label: "Light", group: "light" },
+    dark: { label: "Dark", group: "dark" },
+    nord: { label: "Nord", group: "dark" },
+    solarized: { label: "Solarized", group: "light" },
+    "warm-dark": { label: "Warm Dark", group: "dark" },
+    rose: { label: "Rosé Pine", group: "dark" },
+    latte: { label: "Latte", group: "light" },
+    sunset: { label: "Sunset", group: "dark" },
+  },
 }));
 
 vi.mock("react-i18next", () => ({
@@ -37,7 +47,7 @@ describe("ThemeToggle", () => {
     expect(screen.getByTestId("theme-toggle")).toBeInTheDocument();
   });
 
-  it("click cycles theme light -> dark -> system -> light", () => {
+  it("click cycles through theme options", () => {
     currentTheme = "light";
     const { rerender } = render(<ThemeToggle />);
     fireEvent.click(screen.getByTestId("theme-toggle"));
@@ -46,12 +56,12 @@ describe("ThemeToggle", () => {
     currentTheme = "dark";
     rerender(<ThemeToggle />);
     fireEvent.click(screen.getByTestId("theme-toggle"));
-    expect(mockSetTheme).toHaveBeenLastCalledWith("system");
+    expect(mockSetTheme).toHaveBeenLastCalledWith("nord");
 
-    currentTheme = "system";
+    currentTheme = "nord";
     rerender(<ThemeToggle />);
     fireEvent.click(screen.getByTestId("theme-toggle"));
-    expect(mockSetTheme).toHaveBeenLastCalledWith("light");
+    expect(mockSetTheme).toHaveBeenLastCalledWith("solarized");
   });
 
   it("displays correct icon for current theme (system = Monitor)", () => {

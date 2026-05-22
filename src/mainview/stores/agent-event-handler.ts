@@ -9,6 +9,7 @@ import { useMemoryStore } from "./use-memory-store";
 import { useStatusStore, type MCPServerInfo } from "./use-status-store";
 import { useRetryStore } from "./use-retry-store";
 import { useUIDialogStore } from "./use-ui-dialog-store";
+import { useChangeReviewStore } from "./use-change-review-store";
 import { notificationGateway } from "../lib/notification-gateway";
 import { batchMessageUpdate, flushNow } from "./message-batcher";
 import { messageToChatMessage, extractTokenUsage } from "../lib/message-mapper";
@@ -688,6 +689,11 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     };
     chat.setMessagesForSession(sessionId, [...existing, customMsg]);
 
+    return;
+  }
+
+  if (event.type === "turn_end") {
+    useChangeReviewStore.getState().fetchPending();
     return;
   }
 

@@ -191,6 +191,20 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
         return;
       }
 
+      const sessionStatus = useSessionStore.getState().sessionStatusMap[sessionId];
+      if (
+        sessionStatus === "streaming" ||
+        sessionStatus === "compacting" ||
+        sessionStatus === "retrying"
+      ) {
+        useNotificationStore.getState().push({
+          message: "Cannot rollback while agent is streaming",
+          level: "warning",
+        });
+        state.closeRollback();
+        return;
+      }
+
       const beforeCount = useChatStore.getState().messagesBySession[sessionId]?.length ?? 0;
       const tab = sessionState.projectTabs.find((t) => t.id === sessionState.activeProjectId);
       let sessionPath: string | undefined;
@@ -212,9 +226,12 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
         log.warn("rollback cancelled by backend", {
           sessionId,
           targetId: currentTarget.targetId,
+          reason: result.reason,
         });
         useNotificationStore.getState().push({
-          message: t("rollbackOverlay.rollbackCancelled"),
+          message: result.reason
+            ? t("rollbackOverlay.rollbackCancelledReason", { reason: result.reason })
+            : t("rollbackOverlay.rollbackCancelled"),
           level: "warning",
         });
         return;

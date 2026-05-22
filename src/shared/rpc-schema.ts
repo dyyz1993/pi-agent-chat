@@ -14,6 +14,7 @@ import type { MemoryMethods, MemoryEvents } from "./modules/memory";
 import type { RulesMethods, RulesEvents } from "./modules/rules";
 import type { HooksMethods, HooksEvents } from "./modules/hooks";
 import type { SnapshotMethods } from "./modules/snapshot";
+import type { ChangeReviewMethods } from "./modules/change-review";
 import type { CoordinatorEvents } from "./modules/coordinator";
 import type { SupervisorMethods, SupervisorEvents } from "./modules/supervisor";
 
@@ -35,6 +36,7 @@ export interface RPCMethods
     RulesMethods,
     HooksMethods,
     SnapshotMethods,
+    ChangeReviewMethods,
     SupervisorMethods {}
 
 export interface RPCEvents

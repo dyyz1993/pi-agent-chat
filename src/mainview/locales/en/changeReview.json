@@ -1,0 +1,14 @@
+{
+  "title": "Change Review",
+  "refresh": "Refresh",
+  "approveAll": "Approve All",
+  "approve": "Approve",
+  "reject": "Reject",
+  "pending": "Pending",
+  "approved": "Approved",
+  "rejected": "Rejected",
+  "noChanges": "No pending changes",
+  "turn": "Turn {{index}}",
+  "fileCount": "{{count}} files",
+  "approveConfirm": "Approve all {{count}} pending changes?"
+}

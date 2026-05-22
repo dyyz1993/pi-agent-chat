@@ -1,14 +1,4 @@
-/**
- * Group 4: Multi-Level Hooks Merge (Global + Project + Agent)
- *
- * Verifies that settings hooks from all levels are merged and executed
- * in order: GLOBAL → PROJECT → AGENT.
- *
- * Also verifies that deny at any level short-circuits subsequent hooks.
- */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { readFileSync, existsSync, writeFileSync, unlinkSync } from "fs";
-import { join } from "path";
+import { describe, it, expect, beforeAll } from "vitest";
 import {
   ensureHooksTestDir,
   clearLog,
@@ -21,63 +11,29 @@ import {
   setupHookTest,
   teardownHookTest,
   parseLogLines,
+  getHookPaths,
   HOOK_BASE_PORT,
 } from "./helpers";
 
 const PORT = HOOK_BASE_PORT + 40;
 const AUTH_TOKEN = "hooks-test-token-g4";
+const paths = getHookPaths("g4");
 
 describe("Group 4: Multi-Level Hooks Merge", () => {
   let globalHookScript: string;
   let projectHookScript: string;
-  let savedGlobalSettings: string | null = null;
 
   beforeAll(async () => {
-    await ensureHooksTestDir();
-    globalHookScript = await createTaggedHookScript("global");
-    projectHookScript = await createTaggedHookScript("project");
-    await createTaggedHookScript("agent");
+    await ensureHooksTestDir(paths);
+    globalHookScript = await createTaggedHookScript("global", paths);
+    projectHookScript = await createTaggedHookScript("project", paths);
+    await createTaggedHookScript("agent", paths);
   });
 
-  afterAll(async () => {
-    const homeDir = process.env.HOME ?? "";
-    const globalSettingsPath = join(homeDir, ".claude", "settings.json");
-
-    if (savedGlobalSettings !== null) {
-      writeFileSync(globalSettingsPath, savedGlobalSettings);
-    } else if (existsSync(globalSettingsPath)) {
-      try {
-        unlinkSync(globalSettingsPath);
-      } catch {
-        // ignore
-      }
-    }
-  }, 15_000);
-
   it("M1: execution order is GLOBAL → PROJECT → AGENT", async () => {
-    await clearLog();
+    await clearLog(paths);
 
     const projectDir = await createProjectDir("g4-m1");
-
-    const homeDir = process.env.HOME ?? "";
-    const globalSettingsPath = join(homeDir, ".claude", "settings.json");
-    if (existsSync(globalSettingsPath)) {
-      savedGlobalSettings = readFileSync(globalSettingsPath, "utf-8");
-    }
-
-    await writeGlobalSettings({
-      PreToolUse: [
-        {
-          hooks: [
-            {
-              type: "command",
-              command: globalHookScript,
-              timeout: 10,
-            },
-          ],
-        },
-      ],
-    });
 
     await writeProjectSettings(projectDir, {
       PreToolUse: [
@@ -98,6 +54,24 @@ describe("Group 4: Multi-Level Hooks Merge", () => {
       authToken: AUTH_TOKEN,
       projectDir,
     });
+
+    const isolatedHome = testCtx.server.tmpDir + "/home";
+    await writeGlobalSettings(
+      {
+        PreToolUse: [
+          {
+            hooks: [
+              {
+                type: "command",
+                command: globalHookScript,
+                timeout: 10,
+              },
+            ],
+          },
+        ],
+      },
+      isolatedHome,
+    );
 
     try {
       const { sendRPC: rpc, subscribe: sub, waitForEvent: wait } = await import("./helpers");
@@ -129,7 +103,7 @@ describe("Group 4: Multi-Level Hooks Merge", () => {
       await agentEndPromise;
       await new Promise((r) => setTimeout(r, 2000));
 
-      const log = await readLog();
+      const log = await readLog(paths);
       const lines = parseLogLines(log);
 
       const globalIdx = lines.findIndex((l) => l.startsWith("GLOBAL-HOOK"));
@@ -144,24 +118,10 @@ describe("Group 4: Multi-Level Hooks Merge", () => {
   }, 180_000);
 
   it("M2: global deny prevents project and agent hooks from running", async () => {
-    await clearLog();
+    await clearLog(paths);
 
     const projectDir = await createProjectDir("g4-m2");
-    const denyScript = await createDenyHookScript();
-
-    await writeGlobalSettings({
-      PreToolUse: [
-        {
-          hooks: [
-            {
-              type: "command",
-              command: denyScript,
-              timeout: 10,
-            },
-          ],
-        },
-      ],
-    });
+    const denyScript = await createDenyHookScript(paths);
 
     await writeProjectSettings(projectDir, {
       PreToolUse: [
@@ -182,6 +142,24 @@ describe("Group 4: Multi-Level Hooks Merge", () => {
       authToken: AUTH_TOKEN,
       projectDir,
     });
+
+    const isolatedHome = testCtx.server.tmpDir + "/home";
+    await writeGlobalSettings(
+      {
+        PreToolUse: [
+          {
+            hooks: [
+              {
+                type: "command",
+                command: denyScript,
+                timeout: 10,
+              },
+            ],
+          },
+        ],
+      },
+      isolatedHome,
+    );
 
     try {
       const { sendRPC: rpc, subscribe: sub, waitForEvent: wait } = await import("./helpers");
@@ -213,7 +191,7 @@ describe("Group 4: Multi-Level Hooks Merge", () => {
       await agentEndPromise;
       await new Promise((r) => setTimeout(r, 2000));
 
-      const log = await readLog();
+      const log = await readLog(paths);
       expect(log).toContain("DENIED");
       expect(log).not.toContain("PROJECT-HOOK");
     } finally {
@@ -222,24 +200,10 @@ describe("Group 4: Multi-Level Hooks Merge", () => {
   }, 180_000);
 
   it("M3: global allow + project deny prevents agent hooks", async () => {
-    await clearLog();
+    await clearLog(paths);
 
     const projectDir = await createProjectDir("g4-m3");
-    const denyScript = await createDenyHookScript();
-
-    await writeGlobalSettings({
-      PreToolUse: [
-        {
-          hooks: [
-            {
-              type: "command",
-              command: globalHookScript,
-              timeout: 10,
-            },
-          ],
-        },
-      ],
-    });
+    const denyScript = await createDenyHookScript(paths);
 
     await writeProjectSettings(projectDir, {
       PreToolUse: [
@@ -260,6 +224,24 @@ describe("Group 4: Multi-Level Hooks Merge", () => {
       authToken: AUTH_TOKEN,
       projectDir,
     });
+
+    const isolatedHome = testCtx.server.tmpDir + "/home";
+    await writeGlobalSettings(
+      {
+        PreToolUse: [
+          {
+            hooks: [
+              {
+                type: "command",
+                command: globalHookScript,
+                timeout: 10,
+              },
+            ],
+          },
+        ],
+      },
+      isolatedHome,
+    );
 
     try {
       const { sendRPC: rpc, subscribe: sub, waitForEvent: wait } = await import("./helpers");
@@ -291,7 +273,7 @@ describe("Group 4: Multi-Level Hooks Merge", () => {
       await agentEndPromise;
       await new Promise((r) => setTimeout(r, 2000));
 
-      const log = await readLog();
+      const log = await readLog(paths);
       expect(log).toContain("GLOBAL-HOOK");
       expect(log).toContain("DENIED");
     } finally {

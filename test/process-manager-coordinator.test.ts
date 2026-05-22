@@ -62,7 +62,11 @@ interface InternalAPM {
     delivered: boolean;
     targetStatus: string;
   }>;
-  handleCoordinatorCall: (sessionId: string, msg: Record<string, unknown>) => Promise<void>;
+  handleCoordinatorCall: (
+    sessionId: string,
+    msg: Record<string, unknown>,
+    channelName?: string,
+  ) => Promise<void>;
   start: (
     sessionId: string,
     projectPath: string,
@@ -349,14 +353,9 @@ describe("AgentProcessManager — coordinator delegate_send", () => {
         message: "test fallback route",
       };
 
-      await m.handleCoordinatorCall(sessionA, msg);
+      await m.handleCoordinatorCall(sessionA, msg, "coordinator");
 
-      expect(coordSendSpy).toHaveBeenCalled();
-      const sentData = coordSendSpy.mock.calls[0]?.[0] as
-        | { invokeId?: string; delivered?: boolean }
-        | undefined;
-      expect(sentData?.invokeId).toBe("inv_fallback");
-      expect(sentData?.delivered).toBe(true);
+      expect(coordSendSpy).not.toHaveBeenCalled();
 
       rmSync(tmpDir, { recursive: true, force: true });
     });
@@ -369,7 +368,7 @@ describe("AgentProcessManager — coordinator delegate_send", () => {
       };
 
       await expect(
-        internals(manager).handleCoordinatorCall("orphan-session", msg),
+        internals(manager).handleCoordinatorCall("orphan-session", msg, "coordinator"),
       ).resolves.toBeUndefined();
     });
   });

@@ -8,14 +8,26 @@ import {
   startTestServer,
   stopTestServer,
   type TestServerResult,
-} from "../helpers/integration-server";
+} from "../../helpers/integration-server";
 
 export { startTestServer, stopTestServer, type TestServerResult };
 
-export const HOOKS_TEST_DIR = join(tmpdir(), "hooks-test");
-export const HOOK_LOG = join(HOOKS_TEST_DIR, "log.txt");
-export const HOOK_STDIN = join(HOOKS_TEST_DIR, "stdin.txt");
-export const HOOK_ENV = join(HOOKS_TEST_DIR, "env.txt");
+export interface HookPaths {
+  dir: string;
+  log: string;
+  stdin: string;
+  env: string;
+}
+
+export function getHookPaths(testId: string): HookPaths {
+  const dir = join(tmpdir(), `hooks-test-${testId}`);
+  return {
+    dir,
+    log: join(dir, "log.txt"),
+    stdin: join(dir, "stdin.txt"),
+    env: join(dir, "env.txt"),
+  };
+}
 
 export const HOOK_BASE_PORT = 3200;
 
@@ -126,43 +138,43 @@ export function closeWs(ws: WebSocket | undefined): void {
   }
 }
 
-export async function ensureHooksTestDir(): Promise<void> {
-  await mkdir(HOOKS_TEST_DIR, { recursive: true });
+export async function ensureHooksTestDir(paths: HookPaths): Promise<void> {
+  await mkdir(paths.dir, { recursive: true });
 }
 
-export async function clearLog(): Promise<void> {
-  if (existsSync(HOOK_LOG)) {
-    await writeFile(HOOK_LOG, "");
+export async function clearLog(paths: HookPaths): Promise<void> {
+  if (existsSync(paths.log)) {
+    await writeFile(paths.log, "");
   }
-  if (existsSync(HOOK_STDIN)) {
-    await writeFile(HOOK_STDIN, "");
+  if (existsSync(paths.stdin)) {
+    await writeFile(paths.stdin, "");
   }
-  if (existsSync(HOOK_ENV)) {
-    await writeFile(HOOK_ENV, "");
+  if (existsSync(paths.env)) {
+    await writeFile(paths.env, "");
   }
 }
 
-export async function readLog(): Promise<string> {
-  if (!existsSync(HOOK_LOG)) return "";
-  return readFile(HOOK_LOG, "utf-8");
+export async function readLog(paths: HookPaths): Promise<string> {
+  if (!existsSync(paths.log)) return "";
+  return readFile(paths.log, "utf-8");
 }
 
-export async function readStdin(): Promise<string> {
-  if (!existsSync(HOOK_STDIN)) return "";
-  return readFile(HOOK_STDIN, "utf-8");
+export async function readStdin(paths: HookPaths): Promise<string> {
+  if (!existsSync(paths.stdin)) return "";
+  return readFile(paths.stdin, "utf-8");
 }
 
-export async function readEnvDump(): Promise<string> {
-  if (!existsSync(HOOK_ENV)) return "";
-  return readFile(HOOK_ENV, "utf-8");
+export async function readEnvDump(paths: HookPaths): Promise<string> {
+  if (!existsSync(paths.env)) return "";
+  return readFile(paths.env, "utf-8");
 }
 
-export async function createVerifyHookScript(): Promise<string> {
-  const scriptPath = join(HOOKS_TEST_DIR, "verify-hook.sh");
+export async function createVerifyHookScript(paths: HookPaths): Promise<string> {
+  const scriptPath = join(paths.dir, "verify-hook.sh");
   const script = `#!/bin/bash
-echo "EVENT=$PI_HOOK_TOOL AGENT=$PI_HOOK_AGENT_NAME HOOK_EVENT=$PI_HOOK_EVENT_NAME" >> ${HOOK_LOG}
-cat >> ${HOOK_STDIN}
-env | grep -E '^(PI_HOOK_|CLAUDE_)' > ${HOOK_ENV}
+echo "EVENT=$PI_HOOK_TOOL AGENT=$PI_HOOK_AGENT_NAME HOOK_EVENT=$PI_HOOK_EVENT_NAME" >> ${paths.log}
+cat >> ${paths.stdin}
+env | grep -E '^(PI_HOOK_|CLAUDE_)' > ${paths.env}
 exit 0
 `;
   await writeFile(scriptPath, script);
@@ -171,10 +183,10 @@ exit 0
   return scriptPath;
 }
 
-export async function createDenyHookScript(): Promise<string> {
-  const scriptPath = join(HOOKS_TEST_DIR, "deny-hook.sh");
+export async function createDenyHookScript(paths: HookPaths): Promise<string> {
+  const scriptPath = join(paths.dir, "deny-hook.sh");
   const script = `#!/bin/bash
-echo "DENIED tool=$PI_HOOK_TOOL" >> ${HOOK_LOG}
+echo "DENIED tool=$PI_HOOK_TOOL" >> ${paths.log}
 echo "Blocked by deny hook" >&2
 exit 2
 `;
@@ -184,10 +196,10 @@ exit 2
   return scriptPath;
 }
 
-export async function createAskHookScript(): Promise<string> {
-  const scriptPath = join(HOOKS_TEST_DIR, "ask-hook.sh");
+export async function createAskHookScript(paths: HookPaths): Promise<string> {
+  const scriptPath = join(paths.dir, "ask-hook.sh");
   const script = `#!/bin/bash
-echo "ASKED tool=$PI_HOOK_TOOL" >> ${HOOK_LOG}
+echo "ASKED tool=$PI_HOOK_TOOL" >> ${paths.log}
 echo "Confirmation required" >&2
 exit 3
 `;
@@ -197,10 +209,10 @@ exit 3
   return scriptPath;
 }
 
-export async function createTaggedHookScript(tag: string): Promise<string> {
-  const scriptPath = join(HOOKS_TEST_DIR, `${tag}-hook.sh`);
+export async function createTaggedHookScript(tag: string, paths: HookPaths): Promise<string> {
+  const scriptPath = join(paths.dir, `${tag}-hook.sh`);
   const script = `#!/bin/bash
-echo "${tag.toUpperCase()}-HOOK tool=$PI_HOOK_TOOL" >> ${HOOK_LOG}
+echo "${tag.toUpperCase()}-HOOK tool=$PI_HOOK_TOOL" >> ${paths.log}
 exit 0
 `;
   await writeFile(scriptPath, script);
@@ -209,11 +221,11 @@ exit 0
   return scriptPath;
 }
 
-export async function createDumpEnvScript(): Promise<string> {
-  const scriptPath = join(HOOKS_TEST_DIR, "dump-env.sh");
+export async function createDumpEnvScript(paths: HookPaths): Promise<string> {
+  const scriptPath = join(paths.dir, "dump-env.sh");
   const script = `#!/bin/bash
-echo "EVENT=$PI_HOOK_TOOL" >> ${HOOK_LOG}
-env | grep -E '^PI_HOOK_' > ${HOOK_ENV}
+echo "EVENT=$PI_HOOK_TOOL" >> ${paths.log}
+env | grep -E '^(PI_HOOK_|CLAUDE_)' > ${paths.env}
 exit 0
 `;
   await writeFile(scriptPath, script);
@@ -222,12 +234,12 @@ exit 0
   return scriptPath;
 }
 
-export async function createTimeoutHookScript(seconds: number): Promise<string> {
-  const scriptPath = join(HOOKS_TEST_DIR, "timeout-hook.sh");
+export async function createTimeoutHookScript(seconds: number, paths: HookPaths): Promise<string> {
+  const scriptPath = join(paths.dir, "timeout-hook.sh");
   const script = `#!/bin/bash
-echo "TIMEOUT-START tool=$PI_HOOK_TOOL" >> ${HOOK_LOG}
+echo "TIMEOUT-START tool=$PI_HOOK_TOOL" >> ${paths.log}
 sleep ${seconds}
-echo "TIMEOUT-DONE tool=$PI_HOOK_TOOL" >> ${HOOK_LOG}
+echo "TIMEOUT-DONE tool=$PI_HOOK_TOOL" >> ${paths.log}
 exit 0
 `;
   await writeFile(scriptPath, script);
@@ -243,9 +255,12 @@ export async function createProjectDir(name: string): Promise<string> {
   return dir;
 }
 
-export async function writeGlobalSettings(hooks: Record<string, unknown>): Promise<string> {
-  const homeDir = process.env.HOME ?? "";
-  const settingsDir = join(homeDir, ".claude");
+export async function writeGlobalSettings(
+  hooks: Record<string, unknown>,
+  homeDir?: string,
+): Promise<string> {
+  const resolvedHome = homeDir ?? process.env.HOME ?? "";
+  const settingsDir = join(resolvedHome, ".claude");
   await mkdir(settingsDir, { recursive: true });
   const settingsPath = join(settingsDir, "settings.json");
 

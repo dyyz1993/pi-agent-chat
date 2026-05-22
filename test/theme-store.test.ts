@@ -69,9 +69,9 @@ describe("useThemeStore", () => {
 
     expect(store.getState().theme).toBe("light");
     expect(store.getState().resolvedTheme).toBe("light");
-    expect(addSpy).toHaveBeenCalledWith("light");
-    expect(removeSpy).toHaveBeenCalledWith("dark");
+    expect(removeSpy).toHaveBeenCalledWith("dark", "light");
     expect(document.documentElement.style.colorScheme).toBe("light");
+    expect(document.documentElement.getAttribute("data-theme")).toBe("light");
   });
 
   it("switches to dark and applies dark class", async () => {
@@ -82,8 +82,9 @@ describe("useThemeStore", () => {
 
     store.getState().setTheme("dark");
     expect(addSpy).toHaveBeenCalledWith("dark");
-    expect(removeSpy).toHaveBeenCalledWith("light");
+    expect(removeSpy).toHaveBeenCalledWith("dark", "light");
     expect(document.documentElement.style.colorScheme).toBe("dark");
+    expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
   });
 
   it("resolves system theme based on matchMedia", async () => {

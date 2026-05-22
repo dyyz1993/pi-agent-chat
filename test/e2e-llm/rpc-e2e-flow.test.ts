@@ -8,7 +8,7 @@ import {
   startTestServer,
   stopTestServer,
   type TestServerResult,
-} from "./helpers/integration-server";
+} from "../helpers/integration-server";
 
 const TEST_PORT = 3201;
 const AUTH_TOKEN = "pi-agent-chat-chat-token";

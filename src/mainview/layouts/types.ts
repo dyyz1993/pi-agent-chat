@@ -3,6 +3,7 @@ export type Breakpoint = "mobile" | "tablet" | "desktop" | "wide";
 export type PanelVisibility = "pinned" | "visible" | "hidden";
 
 export type PanelTabId =
+  | "changeReview"
   | "git"
   | "files"
   | "status"
@@ -19,6 +20,7 @@ export interface PanelTab {
 }
 
 export const PANEL_TABS: PanelTab[] = [
+  { id: "changeReview", label: "审核" },
   { id: "git", label: "Git" },
   { id: "files", label: "文件" },
   { id: "status", label: "状态" },

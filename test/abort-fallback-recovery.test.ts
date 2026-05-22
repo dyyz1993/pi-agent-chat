@@ -12,7 +12,6 @@ describe("handleAbort fallback recovery", () => {
     pushMock = vi.fn();
     isAborting = false;
     abortFallbackTimer = undefined;
-    setActiveSessionId = () => {};
   });
 
   afterEach(() => {

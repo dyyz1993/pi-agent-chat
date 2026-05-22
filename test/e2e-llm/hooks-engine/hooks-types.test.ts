@@ -1,13 +1,3 @@
-/**
- * Group 5: Hook Type Verification (command/prompt/http/if/once/matcher)
- *
- * Verifies behavior of different hook types and configuration options:
- * - T1: command exit 0 = allow
- * - T2: command exit 2 = deny (block tool)
- * - T3: command exit 3 = ask (denied in headless/RPC mode)
- * - T8: `if` filter only matches specified tools
- * - T9: `once: true` only fires on first invocation
- */
 import { describe, it, expect, beforeAll } from "vitest";
 import {
   ensureHooksTestDir,
@@ -21,22 +11,24 @@ import {
   setupHookTest,
   teardownHookTest,
   parseLogLines,
+  getHookPaths,
   HOOK_BASE_PORT,
 } from "./helpers";
 
 const PORT = HOOK_BASE_PORT + 50;
 const AUTH_TOKEN = "hooks-test-token-g5";
+const paths = getHookPaths("g5");
 
 describe("Group 5: Hook Type Verification", () => {
   beforeAll(async () => {
-    await ensureHooksTestDir();
+    await ensureHooksTestDir(paths);
   });
 
   it("T1: command exit 0 allows tool execution", async () => {
-    await clearLog();
+    await clearLog(paths);
 
     const projectDir = await createProjectDir("g5-t1");
-    const allowScript = await createTaggedHookScript("allow");
+    const allowScript = await createTaggedHookScript("allow", paths);
 
     await writeProjectSettings(projectDir, {
       PreToolUse: [
@@ -88,7 +80,7 @@ describe("Group 5: Hook Type Verification", () => {
       await agentEndPromise;
       await new Promise((r) => setTimeout(r, 2000));
 
-      const log = await readLog();
+      const log = await readLog(paths);
       expect(log).toContain("ALLOW-HOOK");
     } finally {
       await teardownHookTest(testCtx);
@@ -96,10 +88,10 @@ describe("Group 5: Hook Type Verification", () => {
   }, 180_000);
 
   it("T2: command exit 2 blocks tool execution", async () => {
-    await clearLog();
+    await clearLog(paths);
 
     const projectDir = await createProjectDir("g5-t2");
-    const denyScript = await createDenyHookScript();
+    const denyScript = await createDenyHookScript(paths);
 
     await writeProjectSettings(projectDir, {
       PreToolUse: [
@@ -151,7 +143,7 @@ describe("Group 5: Hook Type Verification", () => {
       await agentEndPromise;
       await new Promise((r) => setTimeout(r, 2000));
 
-      const log = await readLog();
+      const log = await readLog(paths);
       expect(log).toContain("DENIED");
     } finally {
       await teardownHookTest(testCtx);
@@ -159,10 +151,10 @@ describe("Group 5: Hook Type Verification", () => {
   }, 180_000);
 
   it("T3: command exit 3 is treated as deny in headless/RPC mode", async () => {
-    await clearLog();
+    await clearLog(paths);
 
     const projectDir = await createProjectDir("g5-t3");
-    const askScript = await createAskHookScript();
+    const askScript = await createAskHookScript(paths);
 
     await writeProjectSettings(projectDir, {
       PreToolUse: [
@@ -214,7 +206,7 @@ describe("Group 5: Hook Type Verification", () => {
       await agentEndPromise;
       await new Promise((r) => setTimeout(r, 2000));
 
-      const log = await readLog();
+      const log = await readLog(paths);
       expect(log).toContain("ASKED");
     } finally {
       await teardownHookTest(testCtx);
@@ -222,10 +214,10 @@ describe("Group 5: Hook Type Verification", () => {
   }, 180_000);
 
   it("T8: if filter only matches specified tools (bash|write)", async () => {
-    await clearLog();
+    await clearLog(paths);
 
     const projectDir = await createProjectDir("g5-t8");
-    const filterScript = await createTaggedHookScript("filtered");
+    const filterScript = await createTaggedHookScript("filtered", paths);
 
     await writeProjectSettings(projectDir, {
       PreToolUse: [
@@ -278,7 +270,7 @@ describe("Group 5: Hook Type Verification", () => {
       await agentEndPromise;
       await new Promise((r) => setTimeout(r, 2000));
 
-      const log = await readLog();
+      const log = await readLog(paths);
       expect(log).toContain("FILTERED-HOOK");
       expect(log).toContain("tool=bash");
     } finally {
@@ -287,10 +279,10 @@ describe("Group 5: Hook Type Verification", () => {
   }, 180_000);
 
   it("T9: once=true only fires on first tool invocation", async () => {
-    await clearLog();
+    await clearLog(paths);
 
     const projectDir = await createProjectDir("g5-t9");
-    const onceScript = await createTaggedHookScript("once");
+    const onceScript = await createTaggedHookScript("once", paths);
 
     await writeProjectSettings(projectDir, {
       PreToolUse: [
@@ -343,7 +335,7 @@ describe("Group 5: Hook Type Verification", () => {
       await agentEndPromise;
       await new Promise((r) => setTimeout(r, 2000));
 
-      const log = await readLog();
+      const log = await readLog(paths);
       const onceCount = parseLogLines(log).filter((l) => l.startsWith("ONCE-HOOK")).length;
 
       expect(onceCount).toBe(1);

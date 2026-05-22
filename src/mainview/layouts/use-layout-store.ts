@@ -13,6 +13,7 @@ const SESSION_MAX = 420;
 const STATUS_MIN = 220;
 
 function getStatusMax() {
+  if (typeof window === "undefined") return 1200;
   return Math.min(1200, Math.floor(window.innerWidth * 0.7));
 }
 
@@ -126,7 +127,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
 
   sessionWidth: clampSession(readNum(SESSION_WIDTH_KEY, 200)),
   statusWidth: clampStatus(readNum(STATUS_WIDTH_KEY, 300)),
-  activePanelTab: "status",
+  activePanelTab: "changeReview",
   sessionCollapsed: readBool(SESSION_COLLAPSED_KEY, false),
 
   setContentWidth: (w) => set({ contentWidth: w }),

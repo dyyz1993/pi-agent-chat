@@ -38,11 +38,14 @@ vi.mock("../src/mainview/stores/use-bash-store", () => ({
 }));
 
 vi.mock("../src/mainview/stores/use-session-store", () => ({
-  useSessionStore: Object.assign(vi.fn(() => ({})), {
-    getState: vi.fn(() => ({})),
-    subscribe: vi.fn(),
-    state: {},
-  }),
+  useSessionStore: Object.assign(
+    vi.fn(() => ({})),
+    {
+      getState: vi.fn(() => ({})),
+      subscribe: vi.fn(),
+      state: {},
+    },
+  ),
 }));
 
 vi.mock("../src/mainview/utils/clipboard", () => ({
@@ -87,16 +90,19 @@ vi.mock("../src/mainview/components/chat/tool-renderers/BashRenderer", () => ({
 }));
 
 vi.mock("../src/mainview/stores/use-expand-store", () => ({
-  useExpandStore: Object.assign(vi.fn(() => ({ expandedContent: null, expandedTitle: "" })), {
-    getState: vi.fn(() => ({
-      expandedContent: null,
-      expandedTitle: "",
-      openExpand: vi.fn(),
-      closeExpand: vi.fn(),
-    })),
-    subscribe: vi.fn(),
-    state: {},
-  }),
+  useExpandStore: Object.assign(
+    vi.fn(() => ({ expandedContent: null, expandedTitle: "" })),
+    {
+      getState: vi.fn(() => ({
+        expandedContent: null,
+        expandedTitle: "",
+        openExpand: vi.fn(),
+        closeExpand: vi.fn(),
+      })),
+      subscribe: vi.fn(),
+      state: {},
+    },
+  ),
 }));
 
 vi.mock("../src/mainview/stores/use-ui-dialog-store", () => ({
@@ -104,24 +110,30 @@ vi.mock("../src/mainview/stores/use-ui-dialog-store", () => ({
 }));
 
 vi.mock("../src/mainview/stores/use-chat-nav-store", () => ({
-  useChatNavStore: Object.assign(vi.fn(() => null), {
-    getState: vi.fn(() => ({})),
-    subscribe: vi.fn(),
-    state: {},
-  }),
+  useChatNavStore: Object.assign(
+    vi.fn(() => null),
+    {
+      getState: vi.fn(() => ({})),
+      subscribe: vi.fn(),
+      state: {},
+    },
+  ),
 }));
 
 vi.mock("../src/mainview/stores/use-turn-store", () => ({
   EMPTY_SET: new Set(),
-  useTurnStore: Object.assign(vi.fn(() => ({})), {
-    getState: vi.fn(() => ({})),
-    subscribe: vi.fn(),
-    state: {},
-  }),
+  useTurnStore: Object.assign(
+    vi.fn(() => ({})),
+    {
+      getState: vi.fn(() => ({})),
+      subscribe: vi.fn(),
+      state: {},
+    },
+  ),
 }));
 
 function makeBlock(
-  overrides: Partial<Extract<ContentBlock, { type: "toolExecution" }>> = {}
+  overrides: Partial<Extract<ContentBlock, { type: "toolExecution" }>> = {},
 ): Extract<ContentBlock, { type: "toolExecution" }> {
   return {
     type: "toolExecution",
@@ -138,39 +150,42 @@ describe("ToolExecutionCard", () => {
     cleanup();
   });
 
-  it("running without output shows 'running' text and 'waiting...'", () => {
+  it("running without output shows 'streaming' text and waiting placeholder", () => {
     const block = makeBlock({ status: "running" });
     render(<ToolExecutionCard block={block} blockId="blk-1" />);
 
-    expect(screen.getByText("running")).toBeInTheDocument();
-    expect(screen.getByText("waiting...")).toBeInTheDocument();
+    expect(screen.getByText("streaming")).toBeInTheDocument();
   });
 
-  it("running with output shows 'running' text and output in pre", () => {
+  it("running with output shows 'streaming' text and output in pre", () => {
     const block = makeBlock({ status: "running", output: "hello world" });
     render(<ToolExecutionCard block={block} blockId="blk-2" />);
 
-    expect(screen.getByText("running")).toBeInTheDocument();
+    expect(screen.getByText("streaming")).toBeInTheDocument();
     expect(screen.getByText("hello world")).toBeInTheDocument();
   });
 
-  it("done with output shows CheckCircle and output, no 'running'", () => {
+  it("done with output shows CheckCircle and output, no 'streaming'", () => {
     const block = makeBlock({ status: "done", output: "result data" });
     render(<ToolExecutionCard block={block} blockId="blk-3" />);
 
-    expect(screen.queryByText("running")).not.toBeInTheDocument();
-    const svg = document.querySelector("svg.text-green-500");
+    expect(screen.queryByText("streaming")).not.toBeInTheDocument();
+    const svg = document.querySelector("svg.text-status-success");
     expect(svg).toBeInTheDocument();
-    expect(screen.getByText("result data")).toBeInTheDocument();
+    const matches = screen.getAllByText("result data");
+    expect(matches.length).toBeGreaterThanOrEqual(1);
+    expect(matches.some((el) => el.tagName === "PRE")).toBe(true);
   });
 
   it("error with output shows XCircle and output", () => {
     const block = makeBlock({ status: "error", output: "error happened" });
     render(<ToolExecutionCard block={block} blockId="blk-4" />);
 
-    const svg = document.querySelector("svg.text-red-400");
+    const svg = document.querySelector("svg.text-status-error");
     expect(svg).toBeInTheDocument();
-    expect(screen.getByText("error happened")).toBeInTheDocument();
+    const matches = screen.getAllByText("error happened");
+    expect(matches.length).toBeGreaterThanOrEqual(1);
+    expect(matches.some((el) => el.tagName === "PRE")).toBe(true);
   });
 
   it("renders data-block-id on outer container", () => {

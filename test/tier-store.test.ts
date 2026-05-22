@@ -49,39 +49,40 @@ describe("setCurrentTier", () => {
 });
 
 describe("syncTierFromModel", () => {
-  it("syncs fast tier for haiku models", () => {
+  const TIER_FIXTURES = {
+    fast: "anthropic/claude-haiku-4",
+    pro: "anthropic/claude-sonnet-4",
+    max: "anthropic/claude-opus-4",
+  };
+
+  beforeEach(() => {
+    useTierStore.setState({ tierModels: TIER_FIXTURES });
+  });
+
+  it("syncs fast tier when model matches tierModels.fast", () => {
     useTierStore.getState().syncTierFromModel("anthropic", "claude-haiku-4");
     expect(useTierStore.getState().currentTier).toBe("fast");
   });
 
-  it("syncs fast tier for flash models", () => {
-    useTierStore.getState().syncTierFromModel("google", "gemini-2.0-flash");
-    expect(useTierStore.getState().currentTier).toBe("fast");
-  });
-
-  it("syncs fast tier for mini models", () => {
-    useTierStore.getState().syncTierFromModel("openai", "gpt-4o-mini");
-    expect(useTierStore.getState().currentTier).toBe("fast");
-  });
-
-  it("syncs max tier for opus models", () => {
+  it("syncs max tier when model matches tierModels.max", () => {
     useTierStore.getState().syncTierFromModel("anthropic", "claude-opus-4");
     expect(useTierStore.getState().currentTier).toBe("max");
   });
 
-  it("syncs max tier for thinking models", () => {
-    useTierStore.getState().syncTierFromModel("openai", "o3-thinking");
-    expect(useTierStore.getState().currentTier).toBe("max");
-  });
-
-  it("syncs pro tier for default models", () => {
+  it("syncs pro tier when model matches tierModels.pro", () => {
     useTierStore.getState().syncTierFromModel("anthropic", "claude-sonnet-4");
     expect(useTierStore.getState().currentTier).toBe("pro");
   });
 
-  it("syncs pro tier for unknown models", () => {
+  it("sets null when model does not match any tier", () => {
     useTierStore.getState().syncTierFromModel("zhipuai", "glm-4");
-    expect(useTierStore.getState().currentTier).toBe("pro");
+    expect(useTierStore.getState().currentTier).toBeNull();
+  });
+
+  it("sets null when tierModels is empty", () => {
+    useTierStore.setState({ tierModels: {} });
+    useTierStore.getState().syncTierFromModel("anthropic", "claude-haiku-4");
+    expect(useTierStore.getState().currentTier).toBeNull();
   });
 });
 
@@ -109,12 +110,13 @@ describe("switchToTier", () => {
     expect(mockSetCurrentModel).toHaveBeenCalledWith("anthropic", "claude-haiku-4");
   });
 
-  it("still sets tier on failure (fallback)", async () => {
+  it("does not change tier on failure", async () => {
+    useTierStore.setState({ currentTier: "pro" });
     mockedCall.mockRejectedValueOnce(new Error("Model not found"));
 
     await useTierStore.getState().switchToTier("max", "sess-1");
 
-    expect(useTierStore.getState().currentTier).toBe("max");
+    expect(useTierStore.getState().currentTier).toBe("pro");
     expect(useTierStore.getState().switching).toBe(false);
   });
 

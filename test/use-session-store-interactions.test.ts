@@ -228,8 +228,8 @@ describe("deleteSession flow", () => {
 
     expect(useSessionStore.getState().sessionsByProject["/project-a"]).toHaveLength(0);
     expect(mockedCall).toHaveBeenCalledWith(
-      "session.delete",
-      expect.objectContaining({ sessionId: "del-me", sessionPath: "/s/del" }),
+      "agent.stop",
+      expect.objectContaining({ sessionId: "del-me" }),
     );
   });
 

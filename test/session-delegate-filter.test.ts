@@ -5,6 +5,7 @@
  * body entry in JSONL files. Covers scanner, RPC handler, and UI filter.
  */
 import { describe, it, expect } from "vitest";
+import { groupSessions } from "../src/mainview/components/session-sidebar/SessionSidebar";
 
 function makeSession(overrides: Record<string, unknown> = {}) {
   return {
@@ -24,22 +25,19 @@ function makeSession(overrides: Record<string, unknown> = {}) {
 }
 
 describe("groupSessions: delegate filter scenarios", () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { groupSessions } = require("../src/mainview/components/session-sidebar/SessionSidebar");
-
   const normalSession = makeSession({
     sessionId: "normal-1",
     name: "My Project",
   });
 
   const delegateSession = makeSession({
-    sessionId: "delegate-1",
+    sessionId: "sess_coord_delegate-1",
     name: "指派: ## 任务: fix bug",
     delegateParentSessionId: "parent-1",
   });
 
   const delegateSession2 = makeSession({
-    sessionId: "delegate-2",
+    sessionId: "sess_coord_delegate-2",
     name: "指派: ## 任务: add tests",
     delegateParentSessionId: "parent-1",
   });
@@ -61,8 +59,8 @@ describe("groupSessions: delegate filter scenarios", () => {
     const result = groupSessions(allSessions, "", "delegate");
     expect(result.rootSessions).toHaveLength(2);
     const ids = result.rootSessions.map((s: { sessionId: string }) => s.sessionId);
-    expect(ids).toContain("delegate-1");
-    expect(ids).toContain("delegate-2");
+    expect(ids).toContain("sess_coord_delegate-1");
+    expect(ids).toContain("sess_coord_delegate-2");
   });
 
   it("returns only normal sessions with filterType=normal", () => {
@@ -76,7 +74,7 @@ describe("groupSessions: delegate filter scenarios", () => {
   it("combines text search with delegate filter", () => {
     const result = groupSessions(allSessions, "fix", "delegate");
     expect(result.rootSessions).toHaveLength(1);
-    expect(result.rootSessions[0].sessionId).toBe("delegate-1");
+    expect(result.rootSessions[0].sessionId).toBe("sess_coord_delegate-1");
   });
 
   it("combines text search with normal filter", () => {
@@ -99,9 +97,6 @@ describe("groupSessions: delegate filter scenarios", () => {
 });
 
 describe("groupSessions: agent filter", () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { groupSessions } = require("../src/mainview/components/session-sidebar/SessionSidebar");
-
   const s1 = makeSession({ sessionId: "s1", name: "Build task" });
   const s2 = makeSession({ sessionId: "s2", name: "Explore task" });
   const s3 = makeSession({ sessionId: "s3", name: "Plan task" });
@@ -128,23 +123,20 @@ describe("groupSessions: agent filter", () => {
 
   it("combines agent filter with delegate filter", () => {
     const delegate = makeSession({
-      sessionId: "d1",
+      sessionId: "sess_coord_d1",
       name: "指派: task",
       delegateParentSessionId: "p1",
     });
     const mixedSessions = [s1, s2, delegate];
-    const agentMap = { s1: "build", s2: "explore", d1: "build" };
+    const agentMap = { s1: "build", s2: "explore", sess_coord_d1: "build" };
 
     const result = groupSessions(mixedSessions, "", "delegate", "build", agentMap);
     expect(result.rootSessions).toHaveLength(1);
-    expect(result.rootSessions[0].sessionId).toBe("d1");
+    expect(result.rootSessions[0].sessionId).toBe("sess_coord_d1");
   });
 });
 
 describe("groupSessions: sorting with delegate sessions", () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { groupSessions } = require("../src/mainview/components/session-sidebar/SessionSidebar");
-
   it("pinned sessions sort before unpinned regardless of delegate status", () => {
     const normal = makeSession({ sessionId: "n1", updatedAt: Date.now() + 1000 });
     const pinned = makeSession({

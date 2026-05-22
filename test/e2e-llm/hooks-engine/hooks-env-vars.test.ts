@@ -1,16 +1,3 @@
-/**
- * Group 6: Environment Variables Verification
- *
- * Verifies that command hooks receive correct environment variables:
- * - E1: PI_HOOK_TOOL = tool name
- * - E2: PI_HOOK_INPUT = JSON string of tool input (via stdin, not env)
- * - E3: PI_HOOK_AGENT_NAME = agent name (from variables)
- * - E4: PI_HOOK_CWD = project directory (CLAUDE_PROJECT_DIR)
- * - E5: PI_HOOK_SESSION_ID = session ID (via stdin, not env)
- *
- * Note: Some variables are passed via stdin JSON, not env vars.
- * The hook script dumps both env vars and stdin for verification.
- */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
   ensureHooksTestDir,
@@ -23,21 +10,23 @@ import {
   writeProjectSettings,
   setupHookTest,
   teardownHookTest,
+  getHookPaths,
   type HookTestContext,
   HOOK_BASE_PORT,
 } from "./helpers";
 
 const PORT = HOOK_BASE_PORT + 60;
 const AUTH_TOKEN = "hooks-test-token-g6";
+const paths = getHookPaths("g6");
 
 describe("Group 6: Environment Variables Verification", () => {
   let ctx: HookTestContext;
   let envScript: string;
 
   beforeAll(async () => {
-    await ensureHooksTestDir();
-    envScript = await createDumpEnvScript();
-    await clearLog();
+    await ensureHooksTestDir(paths);
+    envScript = await createDumpEnvScript(paths);
+    await clearLog(paths);
 
     const projectDir = await createProjectDir("g6-env");
 
@@ -96,25 +85,25 @@ describe("Group 6: Environment Variables Verification", () => {
     await agentEndPromise;
     await new Promise((r) => setTimeout(r, 2000));
 
-    const log = await readLog();
+    const log = await readLog(paths);
     expect(log).toContain("EVENT=");
   });
 
   it("E1: PI_HOOK_TOOL is set to tool name (bash)", async () => {
-    const envDump = await readEnvDump();
-    const log = await readLog();
+    const envDump = await readEnvDump(paths);
+    const log = await readLog(paths);
 
     const envHasTool = envDump.includes("PI_HOOK_TOOL=") || log.includes("EVENT=bash");
     expect(envHasTool).toBe(true);
   });
 
   it("E4: CLAUDE_PROJECT_DIR is set to project directory", async () => {
-    const envDump = await readEnvDump();
+    const envDump = await readEnvDump(paths);
     expect(envDump).toContain("CLAUDE_PROJECT_DIR=");
   });
 
   it("E2: stdin contains JSON with tool_input", async () => {
-    const stdinData = await readStdin();
+    const stdinData = await readStdin(paths);
 
     if (stdinData.trim().length > 0) {
       const parsed = JSON.parse(stdinData.trim()) as Record<string, unknown>;
@@ -127,7 +116,7 @@ describe("Group 6: Environment Variables Verification", () => {
   });
 
   it("E5: stdin JSON contains session_id field", async () => {
-    const stdinData = await readStdin();
+    const stdinData = await readStdin(paths);
 
     if (stdinData.trim().length > 0) {
       const parsed = JSON.parse(stdinData.trim()) as Record<string, unknown>;

@@ -5,12 +5,18 @@ import type { BashProcess } from "../src/shared/modules/bash";
 
 type Block = Extract<ContentBlock, { type: "toolExecution" }>;
 
-const mockCall = vi.fn();
+const { mockCall } = vi.hoisted(() => ({
+  mockCall: vi.fn(),
+}));
 let mockBashProcess: BashProcess | undefined = undefined;
 
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
+vi.mock("react-i18next", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    useTranslation: () => ({ t: (key: string) => key }),
+  };
+});
 
 vi.mock("react-dom", () => ({
   createPortal: (children: React.ReactNode) => children,
@@ -104,17 +110,17 @@ afterEach(() => {
 });
 
 describe("BashExecutionCard state rendering", () => {
-  it("running state — blue border, Kill button, no View Output", () => {
+  it("running state — info border, Kill button, no View Output", () => {
     const block = makeBlock({ startedAt: Date.now() - 1000 });
     const { container } = render(<BashExecutionCard block={block} />);
 
     const wrapper = container.firstElementChild as HTMLElement;
-    expect(wrapper.className).toContain("border-blue-500");
+    expect(wrapper.className).toContain("border-status-info");
     expect(wrapper.textContent).toContain("common:cancel");
     expect(wrapper.textContent).not.toContain("bash.viewOutput");
   });
 
-  it("background state via store — yellow border, backgroundRunning text, View Output button", () => {
+  it("background state via store — warning border, backgroundRunning text, View Output button", () => {
     mockBashProcess = {
       toolCallId: "tc-1",
       command: "sleep 10",
@@ -129,12 +135,12 @@ describe("BashExecutionCard state rendering", () => {
     const { container } = render(<BashExecutionCard block={block} />);
 
     const wrapper = container.firstElementChild as HTMLElement;
-    expect(wrapper.className).toContain("border-yellow-500");
+    expect(wrapper.className).toContain("border-status-warning");
     expect(wrapper.textContent).toContain("bash.backgroundRunning");
     expect(wrapper.textContent).toContain("bash.viewOutput");
   });
 
-  it("background state via details — yellow border", () => {
+  it("background state via details — warning border", () => {
     const block = makeBlock({
       details: {
         background: {
@@ -149,10 +155,10 @@ describe("BashExecutionCard state rendering", () => {
     const { container } = render(<BashExecutionCard block={block} />);
 
     const wrapper = container.firstElementChild as HTMLElement;
-    expect(wrapper.className).toContain("border-yellow-500");
+    expect(wrapper.className).toContain("border-status-warning");
   });
 
-  it("terminated state via store — red border, cancelled text", () => {
+  it("terminated state via store — error border, cancelled text", () => {
     mockBashProcess = {
       toolCallId: "tc-1",
       command: "ls",
@@ -166,24 +172,24 @@ describe("BashExecutionCard state rendering", () => {
     const { container } = render(<BashExecutionCard block={block} />);
 
     const wrapper = container.firstElementChild as HTMLElement;
-    expect(wrapper.className).toContain("border-red-500");
+    expect(wrapper.className).toContain("border-status-error");
     expect(wrapper.textContent).toContain("common:cancelled");
   });
 
-  it("error state — red border", () => {
+  it("error state — error border", () => {
     const block = makeBlock({ status: "error" });
     const { container } = render(<BashExecutionCard block={block} />);
 
     const wrapper = container.firstElementChild as HTMLElement;
-    expect(wrapper.className).toContain("border-red-500");
+    expect(wrapper.className).toContain("border-status-error");
   });
 
-  it("completed state — gray border, no action buttons", () => {
+  it("completed state — secondary border, no action buttons", () => {
     const block = makeBlock({ status: "done" });
     const { container } = render(<BashExecutionCard block={block} />);
 
     const wrapper = container.firstElementChild as HTMLElement;
-    expect(wrapper.className).toContain("border-gray-200");
+    expect(wrapper.className).toContain("border-border-secondary");
     expect(wrapper.textContent).not.toContain("common:cancel");
     expect(wrapper.textContent).not.toContain("bash.viewOutput");
   });
@@ -293,11 +299,11 @@ describe("BashExecutionCard interactions", () => {
 });
 
 describe("BashExecutionCard content", () => {
-  it("shows tool name 'bash' in the header", () => {
+  it("shows command description in the header", () => {
     const block = makeBlock();
     const { container } = render(<BashExecutionCard block={block} />);
 
-    expect(container.textContent).toContain("bash");
+    expect(container.textContent).toContain("ls -la");
   });
 
   it("shows output in AnsiText component", () => {

@@ -92,15 +92,14 @@ describe("useThemeStore", () => {
   it("setTheme toggles document.documentElement class correctly", async () => {
     const store = await importThemeStore();
     store.getState().setTheme("light");
-    expect(addSpy).toHaveBeenCalledWith("light");
-    expect(removeSpy).toHaveBeenCalledWith("dark");
+    expect(removeSpy).toHaveBeenCalledWith("dark", "light");
 
     addSpy.mockReset();
     removeSpy.mockReset();
 
     store.getState().setTheme("dark");
     expect(addSpy).toHaveBeenCalledWith("dark");
-    expect(removeSpy).toHaveBeenCalledWith("light");
+    expect(removeSpy).toHaveBeenCalledWith("dark", "light");
   });
 
   it("setLanguage calls i18n.changeLanguage", async () => {

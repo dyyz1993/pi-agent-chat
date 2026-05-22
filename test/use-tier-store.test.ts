@@ -42,24 +42,26 @@ describe("useTierStore", () => {
     expect(useTierStore.getState().currentTier).toBe("fast");
   });
 
-  it("syncTierFromModel('anthropic','claude-3-haiku') → currentTier='fast'", () => {
+  it("syncTierFromModel matches tierModels and sets tier", () => {
+    useTierStore.setState({
+      tierModels: {
+        fast: "anthropic/claude-3-haiku",
+        pro: "openai/gpt-4o",
+        max: "anthropic/claude-3-opus",
+      },
+    });
     useTierStore.getState().syncTierFromModel("anthropic", "claude-3-haiku");
     expect(useTierStore.getState().currentTier).toBe("fast");
-  });
-
-  it("syncTierFromModel('anthropic','claude-3-opus') → currentTier='max'", () => {
     useTierStore.getState().syncTierFromModel("anthropic", "claude-3-opus");
     expect(useTierStore.getState().currentTier).toBe("max");
-  });
-
-  it("syncTierFromModel('openai','gpt-4o') → currentTier='pro'", () => {
     useTierStore.getState().syncTierFromModel("openai", "gpt-4o");
     expect(useTierStore.getState().currentTier).toBe("pro");
   });
 
-  it("syncTierFromModel('google','gemini-flash') → currentTier='fast'", () => {
+  it("syncTierFromModel sets null when no tierModels match", () => {
+    useTierStore.setState({ tierModels: { fast: "anthropic/claude-3-haiku" } });
     useTierStore.getState().syncTierFromModel("google", "gemini-flash");
-    expect(useTierStore.getState().currentTier).toBe("fast");
+    expect(useTierStore.getState().currentTier).toBeNull();
   });
 
   it("fetchTierConfig success → tierModels set", async () => {

@@ -25,7 +25,8 @@ export type LogModule =
   | "tab-bar"
   | "project"
   | "sandbox-mgr"
-  | "sandbox-rpc";
+  | "sandbox-rpc"
+  | "change-review";
 type LogLevel = "debug" | "info" | "warn" | "error";
 
 interface LogEntry {

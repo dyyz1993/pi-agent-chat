@@ -1,17 +1,4 @@
-/**
- * Group 3: Project-Level Settings Hooks
- *
- * Verifies that hooks in <project>/.claude/settings.json are loaded
- * and merged with global hooks (global first, then project appended).
- *
- * Key cases:
- * - P1: Execution order is GLOBAL → PROJECT
- * - P2: Project deny blocks tool (project hook runs after global allow)
- * - P3: Global deny short-circuits before project hook runs
- */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { readFileSync, existsSync, writeFileSync, unlinkSync } from "fs";
-import { join } from "path";
+import { describe, it, expect, beforeAll } from "vitest";
 import {
   ensureHooksTestDir,
   clearLog,
@@ -24,62 +11,28 @@ import {
   setupHookTest,
   teardownHookTest,
   parseLogLines,
+  getHookPaths,
   HOOK_BASE_PORT,
 } from "./helpers";
 
 const PORT = HOOK_BASE_PORT + 30;
 const AUTH_TOKEN = "hooks-test-token-g3";
+const paths = getHookPaths("g3");
 
 describe("Group 3: Project-Level Settings Hooks", () => {
   let globalHookScript: string;
   let projectHookScript: string;
-  let savedGlobalSettings: string | null = null;
 
   beforeAll(async () => {
-    await ensureHooksTestDir();
-    globalHookScript = await createTaggedHookScript("global");
-    projectHookScript = await createTaggedHookScript("project");
+    await ensureHooksTestDir(paths);
+    globalHookScript = await createTaggedHookScript("global", paths);
+    projectHookScript = await createTaggedHookScript("project", paths);
   });
 
-  afterAll(async () => {
-    const homeDir = process.env.HOME ?? "";
-    const globalSettingsPath = join(homeDir, ".claude", "settings.json");
-
-    if (savedGlobalSettings !== null) {
-      writeFileSync(globalSettingsPath, savedGlobalSettings);
-    } else if (existsSync(globalSettingsPath)) {
-      try {
-        unlinkSync(globalSettingsPath);
-      } catch {
-        // ignore
-      }
-    }
-  }, 15_000);
-
   it("P1: execution order is GLOBAL then PROJECT", async () => {
-    await clearLog();
+    await clearLog(paths);
 
     const projectDir = await createProjectDir("g3-p1");
-
-    const homeDir = process.env.HOME ?? "";
-    const globalSettingsPath = join(homeDir, ".claude", "settings.json");
-    if (existsSync(globalSettingsPath)) {
-      savedGlobalSettings = readFileSync(globalSettingsPath, "utf-8");
-    }
-
-    await writeGlobalSettings({
-      PreToolUse: [
-        {
-          hooks: [
-            {
-              type: "command",
-              command: globalHookScript,
-              timeout: 10,
-            },
-          ],
-        },
-      ],
-    });
 
     await writeProjectSettings(projectDir, {
       PreToolUse: [
@@ -100,6 +53,24 @@ describe("Group 3: Project-Level Settings Hooks", () => {
       authToken: AUTH_TOKEN,
       projectDir,
     });
+
+    const isolatedHome = testCtx.server.tmpDir + "/home";
+    await writeGlobalSettings(
+      {
+        PreToolUse: [
+          {
+            hooks: [
+              {
+                type: "command",
+                command: globalHookScript,
+                timeout: 10,
+              },
+            ],
+          },
+        ],
+      },
+      isolatedHome,
+    );
 
     try {
       const { sendRPC: rpc, subscribe: sub, waitForEvent: wait } = await import("./helpers");
@@ -131,7 +102,7 @@ describe("Group 3: Project-Level Settings Hooks", () => {
       await agentEndPromise;
       await new Promise((r) => setTimeout(r, 2000));
 
-      const log = await readLog();
+      const log = await readLog(paths);
       const lines = parseLogLines(log);
 
       const globalIdx = lines.findIndex((l) => l.startsWith("GLOBAL-HOOK"));
@@ -146,24 +117,10 @@ describe("Group 3: Project-Level Settings Hooks", () => {
   }, 180_000);
 
   it("P3: global deny short-circuits before project hook", async () => {
-    await clearLog();
+    await clearLog(paths);
 
     const projectDir = await createProjectDir("g3-p3");
-    const denyScript = await createDenyHookScript();
-
-    await writeGlobalSettings({
-      PreToolUse: [
-        {
-          hooks: [
-            {
-              type: "command",
-              command: denyScript,
-              timeout: 10,
-            },
-          ],
-        },
-      ],
-    });
+    const denyScript = await createDenyHookScript(paths);
 
     await writeProjectSettings(projectDir, {
       PreToolUse: [
@@ -184,6 +141,24 @@ describe("Group 3: Project-Level Settings Hooks", () => {
       authToken: AUTH_TOKEN,
       projectDir,
     });
+
+    const isolatedHome = testCtx.server.tmpDir + "/home";
+    await writeGlobalSettings(
+      {
+        PreToolUse: [
+          {
+            hooks: [
+              {
+                type: "command",
+                command: denyScript,
+                timeout: 10,
+              },
+            ],
+          },
+        ],
+      },
+      isolatedHome,
+    );
 
     try {
       const { sendRPC: rpc, subscribe: sub, waitForEvent: wait } = await import("./helpers");
@@ -215,7 +190,7 @@ describe("Group 3: Project-Level Settings Hooks", () => {
       await agentEndPromise;
       await new Promise((r) => setTimeout(r, 2000));
 
-      const log = await readLog();
+      const log = await readLog(paths);
       expect(log).toContain("DENIED");
       expect(log).not.toContain("PROJECT-HOOK");
     } finally {
