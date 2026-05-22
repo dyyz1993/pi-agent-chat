@@ -1105,21 +1105,16 @@ export class AgentProcessManager {
     if (managed) {
       resolvedSessionPath = managed.info.sessionPath;
 
-      // Step 1: Get tree/leaf metadata from SDK (lightweight — avoid deserializing full messages via IPC)
+      // Step 1: Get tree/leaf metadata from SDK via lightweight getTree() call
+      // (NOT getFullMessages which deserializes the entire message history through IPC)
       try {
-        const result = (await managed.client.getFullMessages()) as {
-          messages: unknown[];
-          hasMore: boolean;
-          totalCount: number;
-          nextCursor: string | null;
-          tree?: {
-            entries: Array<{ id: string; parentId: string | null; type: string; label?: string }>;
-            leafId: string | null;
-          };
+        const treeResult = (await managed.client.getTree()) as {
+          entries: Array<{ id: string; parentId: string | null; type: string; label?: string }>;
+          leafId: string;
         };
-        if (result?.tree) {
-          const treeEntries = result.tree.entries;
-          const leafId = result.tree.leafId;
+        if (treeResult) {
+          const treeEntries = treeResult.entries;
+          const leafId = treeResult.leafId;
           if (leafId) {
             this.leafIds.set(sessionId, leafId);
           }
@@ -1141,12 +1136,12 @@ export class AgentProcessManager {
             }
           }
         }
-        log.info("getFullMessages tree metadata extracted (messages read from JSONL)", {
-          hasTree: !!result?.tree,
+        log.info("getFullMessages tree metadata from getTree()", {
+          hasTree: !!treeResult,
           activePathSize: activePathIds?.size ?? 0,
         });
       } catch (err: unknown) {
-        log.warn("getFullMessages tree metadata failed, will read JSONL directly", {
+        log.warn("getTree() failed, will read JSONL directly", {
           err: err instanceof Error ? err.message : String(err),
         });
       }
