@@ -225,7 +225,7 @@ async function createRpcClient(
     cliPath,
     cwd,
     args,
-    env: { ...process.env, NODE_OPTIONS: "--max-old-space-size=4096" },
+    env: { ...process.env, NODE_OPTIONS: "--max-old-space-size=8192" },
   });
   const t2 = performance.now();
 
