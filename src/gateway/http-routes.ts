@@ -44,6 +44,7 @@ const MIME_TYPES: Record<string, string> = {
 // 路径白名单校验：阻止路径遍历攻击
 const ALLOWED_ROOTS = [
   resolve(process.cwd()),
+  resolve("/root"),
   resolve(process.env.HOME ?? "", ".claude", "rules"),
   resolve(process.env.HOME ?? "", ".config", "opencode", "rules"),
   resolve(process.env.HOME ?? "", ".opencode", "rules"),
