@@ -35,7 +35,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
     try {
       const result = await withTimeout(
-        manager.callChannel(params.sessionId, "file-review", "change-review.pending", {
+        manager.callChannel(params.sessionId, "file-review", "review.pending", {
           sessionId: params.sessionId,
         }),
         CHANNEL_TIMEOUT_MS,
@@ -58,7 +58,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
     try {
       const result = await withTimeout(
-        manager.callChannel(params.sessionId, "file-review", "change-review.approve", {
+        manager.callChannel(params.sessionId, "file-review", "review.approve", {
           sessionId: params.sessionId,
           turnIndex: params.turnIndex,
           path: params.path,
@@ -83,7 +83,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
     try {
       const result = await withTimeout(
-        manager.callChannel(params.sessionId, "file-review", "change-review.reject", {
+        manager.callChannel(params.sessionId, "file-review", "review.reject", {
           sessionId: params.sessionId,
           turnIndex: params.turnIndex,
           path: params.path,
@@ -108,7 +108,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
     try {
       const result = await withTimeout(
-        manager.callChannel(params.sessionId, "file-review", "change-review.approveAll", {
+        manager.callChannel(params.sessionId, "file-review", "review.approveAll", {
           sessionId: params.sessionId,
         }),
         CHANNEL_TIMEOUT_MS,
