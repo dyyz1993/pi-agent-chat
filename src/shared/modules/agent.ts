@@ -87,8 +87,14 @@ export interface AgentMethods {
     result: { messages: AgentMessageForUI[]; customEntries: CustomEntryForUI[] };
   };
   "agent.getFullMessages": {
-    params: { sessionId: string; sessionPath?: string };
-    result: { messages: AgentMessageForUI[]; customEntries: CustomEntryForUI[] };
+    params: { sessionId: string; sessionPath?: string; limit?: number; afterEntryId?: string };
+    result: {
+      messages: AgentMessageForUI[];
+      customEntries: CustomEntryForUI[];
+      hasMore: boolean;
+      totalCount: number;
+      nextCursor: string | null;
+    };
   };
   "agent.steer": {
     params: { sessionId: string; content: string };
@@ -272,7 +278,7 @@ export interface AgentMethods {
   };
   "agent.navigateTree": {
     params: { sessionId: string; targetId: string; summarize?: boolean; skipFiles?: boolean };
-    result: { cancelled: boolean };
+    result: { cancelled: boolean; reason?: string };
   };
   "agent.previewRollback": {
     params: { sessionId: string; targetId: string };

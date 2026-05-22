@@ -100,10 +100,16 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("agent.getFullMessages", async (params) => {
-    const result = await m.getFullMessages(params.sessionId, params.sessionPath);
+    const result = await m.getFullMessages(params.sessionId, params.sessionPath, {
+      limit: params.limit,
+      afterEntryId: params.afterEntryId,
+    });
     return {
       messages: result.messages,
       customEntries: result.customEntries,
+      hasMore: result.hasMore,
+      totalCount: result.totalCount,
+      nextCursor: result.nextCursor,
     } as R<"agent.getFullMessages">;
   });
 

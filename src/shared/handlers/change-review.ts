@@ -41,7 +41,13 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
         }),
         CHANNEL_TIMEOUT_MS,
       );
-      return (Array.isArray(result) ? result : []) as unknown as R<"change-review.pending">;
+      // ServerChannel wraps array responses as { result: [...], invokeId }
+      const items = Array.isArray(result)
+        ? result
+        : Array.isArray((result as Record<string, unknown>)?.result)
+          ? ((result as Record<string, unknown>).result as unknown[])
+          : [];
+      return items as unknown as R<"change-review.pending">;
     } catch (err) {
       log.warn("review.pending channel call failed", {
         sessionId: params.sessionId,
