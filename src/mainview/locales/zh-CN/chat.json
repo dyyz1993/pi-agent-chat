@@ -328,6 +328,7 @@
   "rollbackOverlay.cancel": "取消",
   "rollbackOverlay.noFiles": "本轮无文件变更",
   "sendDisabledNoModel": "请先选择模型",
+  "waitPermission": "等待权限确认",
 
   "forkDialog.title": "Fork 会话",
   "forkDialog.agent": "智能体",
@@ -338,6 +339,7 @@
   "rollbackOverlay.fileWillBeRemoved": "文件将被移除（新建的内容将丢失）",
   "rollbackOverlay.fileWillBeRestored": "文件将恢复到修改前的状态",
   "rollbackOverlay.rollbackCancelled": "回滚操作被取消",
+  "rollbackOverlay.rollbackCancelledReason": "回滚已取消：{{reason}}",
   "rollbackOverlay.rollbackIneffective": "回滚未生效，消息数量未减少",
   "rollbackOverlay.rollbackFailed": "回滚操作失败，请重试",
   "rollbackOverlay.fileCount": "{{count}} 个文件",

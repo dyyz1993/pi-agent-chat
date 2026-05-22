@@ -131,6 +131,7 @@ export function ChatPanel() {
     effectiveStatus === "streaming" ||
     effectiveStatus === "compacting" ||
     effectiveStatus === "retrying";
+  const isPermissionPending = effectiveStatus === "permission";
   const hasNoModel = effectiveStatus === "idle" && !currentModel;
   const breakpoint = useLayoutStore((s) => s.breakpoint);
   const isMobileOrTablet = breakpoint === "mobile" || breakpoint === "tablet";
@@ -538,6 +539,7 @@ export function ChatPanel() {
                     onClick={() => inputBarRef.current?.send()}
                     disabled={
                       isAborting ||
+                      isPermissionPending ||
                       (!inputText.trim() &&
                         useAttachmentStore.getState().attachments.length === 0) ||
                       !sessionReady ||
@@ -545,10 +547,22 @@ export function ChatPanel() {
                     }
                     className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${!isAborting && (inputText.trim() || useAttachmentStore.getState().attachments.length > 0) && sessionReady && !hasNoModel ? (isStreaming ? "bg-status-warning text-white hover:bg-status-warning shadow-sm shadow-status-warning/20" : "bg-semantic-accent text-white hover:bg-semantic-accent shadow-sm shadow-semantic-accent/20") : "bg-surface-dim text-text-tertiary cursor-not-allowed"}`}
                     title={
-                      hasNoModel ? t("sendDisabledNoModel") : isStreaming ? t("steer") : t("send")
+                      isPermissionPending
+                        ? t("waitPermission")
+                        : hasNoModel
+                          ? t("sendDisabledNoModel")
+                          : isStreaming
+                            ? t("steer")
+                            : t("send")
                     }
                     aria-label={
-                      hasNoModel ? t("sendDisabledNoModel") : isStreaming ? t("steer") : t("send")
+                      isPermissionPending
+                        ? t("waitPermission")
+                        : hasNoModel
+                          ? t("sendDisabledNoModel")
+                          : isStreaming
+                            ? t("steer")
+                            : t("send")
                     }
                   >
                     {isStreaming ? <Zap className="w-4 h-4" /> : <ArrowUp className="w-4 h-4" />}

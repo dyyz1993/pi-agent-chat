@@ -3,6 +3,7 @@ import { persist } from "zustand/middleware";
 import type { SessionMeta, ProjectTab, ContextUsage, SessionStatus } from "../types";
 import { apiClient } from "../lib/api-client";
 import { createLogger } from "../../shared/lib/logger";
+import { useNotificationStore } from "./use-notification-store";
 import { useTierStore } from "./use-tier-store";
 import { useChatStore } from "./use-chat-store";
 import { useAppStore } from "./use-app-store";
@@ -34,6 +35,17 @@ export type { TodoItem, TodoPriority } from "./session-subscriptions";
 
 const log = createLogger("session");
 const perfLog = createLogger("session-perf");
+
+const _statusWatchdogs = new Map<string, ReturnType<typeof setTimeout>>();
+const STATUS_STUCK_TIMEOUT_MS = 5 * 60 * 1000;
+
+function clearStatusWatchdog(sessionId: string) {
+  const watchdog = _statusWatchdogs.get(sessionId);
+  if (watchdog) {
+    clearTimeout(watchdog);
+    _statusWatchdogs.delete(sessionId);
+  }
+}
 
 interface ExtensionEntry {
   path: string;
@@ -211,6 +223,7 @@ export const useSessionStore = create<SessionState>()(
         const state = get();
         if (state.activeProjectId === id && state.activeSessionId) {
           const sid = state.activeSessionId;
+          clearStatusWatchdog(sid);
           cleanupSession(state, sid);
           cleanupSessionData(sid);
           set((s) => clearSubscriptionState(s, sid));
@@ -254,6 +267,7 @@ export const useSessionStore = create<SessionState>()(
         const skipAutoSession = options?.skipAutoSession ?? false;
 
         if (prevProjectId && prevProjectId !== id && prevSessionId) {
+          clearStatusWatchdog(prevSessionId);
           cleanupSession(get(), prevSessionId);
           cleanupSessionData(prevSessionId);
           set((s) => clearSubscriptionState(s, prevSessionId));
@@ -391,6 +405,7 @@ export const useSessionStore = create<SessionState>()(
 
         if (prevId && prevId !== id && !skipCleanup) {
           const t0 = performance.now();
+          clearStatusWatchdog(prevId);
           cleanupSession(get(), prevId);
           cleanupSessionData(prevId);
           set((s) => clearSubscriptionState(s, prevId));
@@ -768,6 +783,7 @@ export const useSessionStore = create<SessionState>()(
       },
 
       deleteSession: (sessionId) => {
+        clearStatusWatchdog(sessionId);
         cleanupSession(get(), sessionId);
         cleanupSessionData(sessionId);
         set((s) => clearSubscriptionState(s, sessionId));
@@ -907,6 +923,27 @@ export const useSessionStore = create<SessionState>()(
         set((s) => ({
           sessionStatusMap: { ...s.sessionStatusMap, [sessionId]: status },
         }));
+
+        const existing = _statusWatchdogs.get(sessionId);
+        if (existing) {
+          clearTimeout(existing);
+          _statusWatchdogs.delete(sessionId);
+        }
+
+        if (status !== "idle") {
+          const timer = setTimeout(() => {
+            const current = get().sessionStatusMap[sessionId];
+            if (current && current !== "idle") {
+              useNotificationStore.getState().push({
+                message: `Session status recovered from stuck "${current}" state`,
+                level: "warning",
+              });
+              get().updateSessionStatus(sessionId, "idle");
+            }
+            _statusWatchdogs.delete(sessionId);
+          }, STATUS_STUCK_TIMEOUT_MS);
+          _statusWatchdogs.set(sessionId, timer);
+        }
       },
 
       restoreContextFromHistory: (sessionId) => {
@@ -983,7 +1020,18 @@ export const useSessionStore = create<SessionState>()(
                 });
               });
 
-            await statePromise.catch(() => {});
+            // P1 gate: if getState fails (CLI dead), abort the entire fetch chain
+            let p1Ok = false;
+            try {
+              await statePromise;
+              p1Ok = true;
+            } catch {
+              log.warn("[fetchInit] P1 getState failed — aborting fetch chain", { sessionId });
+              set((s) => ({
+                sessionReady: { ...s.sessionReady, [sessionId]: false },
+              }));
+            }
+            if (!p1Ok) return;
 
             // --- Priority 2 (parallel, max 3) ---
             const modelsPromise = apiClient.call("agent.getAvailableModels", { sessionId });
@@ -1027,6 +1075,7 @@ export const useSessionStore = create<SessionState>()(
               .catch(() => {});
 
             const handleContextRetry = (_attempt: number): void => {
+              // Only retry once — avoid infinite retry loops when CLI is dead
               apiClient
                 .call("agent.getContextUsage", { sessionId })
                 .then((r) => {
@@ -1037,7 +1086,12 @@ export const useSessionStore = create<SessionState>()(
                     get().updateSessionContext(sessionId, update);
                   }
                 })
-                .catch(() => {});
+                .catch(() => {
+                  log.warn("agent.getContextUsage retry failed, giving up", {
+                    sessionId,
+                    attempt: _attempt,
+                  });
+                });
             };
 
             contextPromise
@@ -1406,6 +1460,7 @@ export const useSessionStore = create<SessionState>()(
       },
 
       cleanupActiveSession: (sessionId) => {
+        clearStatusWatchdog(sessionId);
         cleanupSession(get(), sessionId);
         cleanupSessionData(sessionId);
         set((s) => clearSubscriptionState(s, sessionId));
@@ -1531,6 +1586,7 @@ apiClient.onReconnect(() => {
     useSessionStore.setState(fn(useSessionStore.getState()));
 
   for (const sid of Object.keys(state.agentSubscriptions)) {
+    clearStatusWatchdog(sid);
     cleanupSession(state, sid);
   }
 

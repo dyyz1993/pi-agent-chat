@@ -328,6 +328,7 @@
   "rollbackOverlay.cancel": "Cancel",
   "rollbackOverlay.noFiles": "No file changes in this turn",
   "sendDisabledNoModel": "Please select a model first",
+  "waitPermission": "Waiting for permission",
 
   "forkDialog.title": "Fork Session",
   "forkDialog.agent": "Agent",
@@ -338,6 +339,7 @@
   "rollbackOverlay.fileWillBeRemoved": "File will be removed (new content will be lost)",
   "rollbackOverlay.fileWillBeRestored": "File will be restored to previous state",
   "rollbackOverlay.rollbackCancelled": "Rollback was cancelled",
+  "rollbackOverlay.rollbackCancelledReason": "Rollback cancelled: {{reason}}",
   "rollbackOverlay.rollbackIneffective": "Rollback did not take effect, message count unchanged",
   "rollbackOverlay.rollbackFailed": "Rollback failed, please try again",
   "rollbackOverlay.fileCount": "{{count}} files",

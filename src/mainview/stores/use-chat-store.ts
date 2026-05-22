@@ -284,7 +284,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       set({ isStreaming: true });
 
-      await apiClient.call("agent.send", { sessionId, content: text });
+      const SEND_TIMEOUT_MS = 60_000;
+      const sendPromise = apiClient.call("agent.send", { sessionId, content: text });
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Send timed out (60s)")), SEND_TIMEOUT_MS),
+      );
+      await Promise.race([sendPromise, timeoutPromise]);
       set({ isStreaming: false });
     } catch (err) {
       set({ isStreaming: false });
@@ -305,6 +310,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     try {
       await apiClient.call("agent.steer", { sessionId, content: text });
     } catch (err) {
+      set({ inputText: text });
       const msg = err instanceof Error ? err.message : String(err);
       useAppStore.getState().addLog(`Steer error: ${msg}`);
       useNotificationStore.getState().push({ message: `Steer failed: ${msg}`, level: "error" });
@@ -322,6 +328,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     try {
       await apiClient.call("agent.followUp", { sessionId, content: text });
     } catch (err) {
+      set({ inputText: text });
       const msg = err instanceof Error ? err.message : String(err);
       useAppStore.getState().addLog(`FollowUp error: ${msg}`);
       useNotificationStore.getState().push({ message: `Follow-up failed: ${msg}`, level: "error" });
@@ -408,11 +415,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const result = await apiClient.call("agent.getFullMessages", {
         sessionId: sid,
         sessionPath: options?.sessionPath,
+        limit: PAGE_SIZE,
       });
       perfLog.info("[loadMessages] RPC returned", {
         sessionId: sid,
         force: !!options?.force,
         rpcMs: Math.round(performance.now() - t0),
+        messageCount: result.messages?.length,
+        hasMore: result.hasMore,
+        totalCount: result.totalCount,
       });
 
       if (!options?.force) {
@@ -553,14 +564,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
         });
       }
 
-      const hasMore = msgs.length > PAGE_SIZE;
-      const displayMsgs = hasMore ? msgs.slice(-PAGE_SIZE) : msgs;
+      const hasMore = result.hasMore === true || msgs.length > PAGE_SIZE;
+      const displayMsgs = msgs;
 
       log.info("SET messages", {
         sessionId: sid,
         total: msgs.length,
         displayed: displayMsgs.length,
         hasMore,
+        serverHasMore: result.hasMore,
+        serverTotalCount: result.totalCount,
       });
 
       perfLog.info("[loadMessages] done", {
@@ -612,15 +625,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }));
 
     try {
-      const result = await apiClient.call("agent.getFullMessages", { sessionId: sid });
+      const result = await apiClient.call("agent.getFullMessages", {
+        sessionId: sid,
+      });
       const messages = result.messages;
       if (!Array.isArray(messages)) return;
 
       const toolCallNameMap: Record<string, string> = {};
-      const rawMessages: Array<{ raw: AgentMessageForUI; id?: string }> = [];
+      const allMsgs: ChatMessage[] = [];
 
       for (const msg of messages) {
-        rawMessages.push({ raw: msg, id: msg.id });
         const role = msg.role;
         if (role === "assistant") {
           const content = msg.content;
@@ -632,31 +646,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
             }
           }
         }
-      }
-
-      const allMsgs: ChatMessage[] = [];
-      for (const { raw, id } of rawMessages) {
-        const msg = messageToChatMessage(raw as unknown as Message, id, toolCallNameMap);
-        if (msg) allMsgs.push(msg);
+        const chatMsg = messageToChatMessage(msg as unknown as Message, msg.id, toolCallNameMap);
+        if (chatMsg) allMsgs.push(chatMsg);
       }
       normalizeToolBlocks(allMsgs);
 
-      const MAX_DISPLAY = PAGE_SIZE * 3;
-      const hasMoreBeyondWindow = allMsgs.length > MAX_DISPLAY;
-      const displayMsgs = hasMoreBeyondWindow ? allMsgs.slice(-MAX_DISPLAY) : allMsgs;
+      const hasMore = false;
 
-      log.info("LOAD ALL messages (fill gap)", {
+      log.info("LOAD ALL messages", {
         sessionId: sid,
         total: allMsgs.length,
-        displayed: displayMsgs.length,
-        hasMore: hasMoreBeyondWindow,
+        hasMore,
       });
 
       set((s) => ({
-        messagesBySession: { ...s.messagesBySession, [sid]: displayMsgs },
+        messagesBySession: { ...s.messagesBySession, [sid]: allMsgs },
         hasMoreMessagesBySession: {
           ...s.hasMoreMessagesBySession,
-          [sid]: hasMoreBeyondWindow,
+          [sid]: hasMore,
         },
       }));
     } catch (err) {
