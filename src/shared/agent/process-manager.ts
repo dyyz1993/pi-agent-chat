@@ -225,7 +225,7 @@ async function createRpcClient(
     cliPath,
     cwd,
     args,
-    env: { ...process.env, NODE_OPTIONS: "--max-old-space-size=8192" },
+    env: { ...process.env, NODE_OPTIONS: "--max-old-space-size=4096" },
   });
   const t2 = performance.now();
 
@@ -593,8 +593,12 @@ export class AgentProcessManager {
       log.warn("send: no client", { sessionId });
       return false;
     }
-    managed.client.prompt(content).catch((err: Error) => {
+    managed.client.prompt(content).catch(async (err: Error) => {
       log.warn("prompt error", { err: err.message });
+      if (!(await this.isClientAlive(sessionId, managed))) {
+        this.cleanupDeadClient(sessionId, `prompt failed: ${err.message}`);
+        return;
+      }
       this.emitAgentEvent(sessionId, { type: "agent_end" } as SanitizedEvent).catch(
         (emitErr: unknown) => {
           log.warn("emitAgentEvent(agent_end) after prompt error", {
@@ -814,6 +818,33 @@ export class AgentProcessManager {
     return null;
   }
 
+  /**
+   * Check if a managed client's CLI process is still alive.
+   * Uses a lightweight getState() probe — if it fails, the CLI likely OOM'd or crashed.
+   */
+  private async isClientAlive(sessionId: string, managed: ManagedClient): Promise<boolean> {
+    try {
+      // getState is cheap (scalar properties only, no serialization of messages)
+      await managed.client.getState();
+      return true;
+    } catch (probeErr: unknown) {
+      log.warn("CLI health check failed, process likely dead", {
+        sessionId,
+        probeErr: probeErr instanceof Error ? probeErr.message : String(probeErr),
+      });
+      return false;
+    }
+  }
+
+  /**
+   * Clean up a dead CLI client. Called when an RPC call fails and the CLI
+   * process is confirmed dead (OOM, crash, killed).
+   */
+  private cleanupDeadClient(sessionId: string, reason: string): void {
+    log.warn("[cleanupDeadClient] CLI process is dead, cleaning up", { sessionId, reason });
+    this.stop(sessionId);
+  }
+
   private resolveSessionPath(sessionId: string): string {
     const managed = this.clients.get(sessionId);
     if (managed) return managed.info.sessionPath;
@@ -863,7 +894,12 @@ export class AgentProcessManager {
         isCompacting: Boolean(state.isCompacting),
         messageCount: Number(state.messageCount ?? 0),
       };
-    } catch {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.warn("getState RPC failed, checking if CLI is alive", { sessionId, error: msg });
+      if (!(await this.isClientAlive(sessionId, managed))) {
+        this.cleanupDeadClient(sessionId, `getState failed: ${msg}`);
+      }
       return null;
     }
   }
@@ -924,10 +960,14 @@ export class AgentProcessManager {
           : undefined,
       };
     } catch (err: unknown) {
-      log.warn("getSessionStats failed", {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.warn("getSessionStats failed, checking if CLI is alive", {
         sessionId,
-        err: err instanceof Error ? err.message : String(err),
+        err: msg,
       });
+      if (!(await this.isClientAlive(sessionId, managed))) {
+        this.cleanupDeadClient(sessionId, `getSessionStats failed: ${msg}`);
+      }
       return null;
     }
   }
@@ -1082,111 +1122,121 @@ export class AgentProcessManager {
     return { messages: messages as AgentMessageForUI[], customEntries };
   }
 
-   async getFullMessages(
-     sessionId: string,
-     sessionPath?: string,
-   ): Promise<{
-     messages: AgentMessageForUI[];
-     customEntries: Array<{ id: string; customType: string; data: unknown; timestamp: number }>;
-   }> {
-     const t0 = performance.now();
-     const managed = this.getActiveManaged(sessionId);
+  async getFullMessages(
+    sessionId: string,
+    sessionPath?: string,
+    options?: { limit?: number; afterEntryId?: string },
+  ): Promise<{
+    messages: AgentMessageForUI[];
+    customEntries: Array<{ id: string; customType: string; data: unknown; timestamp: number }>;
+    hasMore: boolean;
+    totalCount: number;
+    nextCursor: string | null;
+  }> {
+    const t0 = performance.now();
+    const managed = this.getActiveManaged(sessionId);
 
-     let messages: unknown[] = [];
-     let resolvedSessionPath = sessionPath ?? "";
-     const customEntries: Array<{
-       id: string;
-       customType: string;
-       data: unknown;
-       timestamp: number;
-     }> = [];
+    // Resolve session file path first
+    const resolvedSessionPath = managed
+      ? managed.info.sessionPath
+      : this.resolveSessionPath(sessionId) || sessionPath || "";
 
-     // Resolve session file path
-     if (managed) {
-       resolvedSessionPath = managed.info.sessionPath;
-     } else {
-       resolvedSessionPath = this.resolveSessionPath(sessionId) ?? sessionPath ?? "";
-     }
+    // JSONL-first: always read messages directly from the JSONL file.
+    // This avoids CLI OOM — CLI's get_full_messages handler uses readFile internally
+    // which can blow the heap on large sessions (>8MB JSONL).
+    const allMessages: Array<{ entryId: string; message: unknown }> = [];
+    const customEntries: Array<{
+      id: string;
+      customType: string;
+      data: unknown;
+      timestamp: number;
+    }> = [];
 
-     // JSONL-first: always read messages directly from the JSONL file.
-     // This avoids depending on the CLI process which may be OOM'd or unresponsive.
-     if (resolvedSessionPath && existsSync(resolvedSessionPath)) {
-       try {
-         const rl = readline.createInterface({
-           input: createReadStream(resolvedSessionPath, { encoding: "utf-8" }),
-           crlfDelay: Infinity,
-         });
-         for await (const line of rl) {
-           if (!line.trim()) continue;
-           try {
-             const parsed = JSON.parse(line) as Record<string, unknown>;
-             if (parsed.type === "custom") {
-               customEntries.push({
-                 id: (parsed.id as string) ?? `custom-${Date.now()}`,
-                 customType: (parsed.customType as string) ?? "unknown",
-                 data: parsed.data,
-                 timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
-               });
-             } else if (parsed.type === "compaction") {
-               messages.push({
-                 id: parsed.id,
-                 role: "compactionSummary",
-                 summary: parsed.summary ?? "",
-                 tokensBefore: parsed.tokensBefore,
-                 timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
-               });
-             } else if (parsed.type === "message" && parsed.message) {
-               messages.push(parsed.message);
-             }
-           } catch (err: unknown) {
-             log.debug("skipping malformed JSONL entry", {
-               err: err instanceof Error ? err.message : String(err),
-             });
-           }
-         }
-         rl.close();
-       } catch (err: unknown) {
-         log.warn("Failed to read entries from JSONL", {
-           err: err instanceof Error ? err.message : String(err),
-         });
-       }
-     }
+    if (resolvedSessionPath && existsSync(resolvedSessionPath)) {
+      try {
+        const rl = readline.createInterface({
+          input: createReadStream(resolvedSessionPath, { encoding: "utf-8" }),
+          crlfDelay: Infinity,
+        });
+        for await (const line of rl) {
+          if (!line.trim()) continue;
+          try {
+            const parsed = JSON.parse(line) as Record<string, unknown>;
+            if (parsed.type === "custom") {
+              customEntries.push({
+                id: (parsed.id as string) ?? `custom-${Date.now()}`,
+                customType: (parsed.customType as string) ?? "unknown",
+                data: parsed.data,
+                timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
+              });
+            } else if (parsed.type === "message" && parsed.message) {
+              allMessages.push({
+                entryId: (parsed.id as string) ?? "",
+                message: parsed.message,
+              });
+            }
+          } catch (err: unknown) {
+            log.debug("skipping malformed JSONL entry", {
+              err: err instanceof Error ? err.message : String(err),
+            });
+          }
+        }
+        rl.close();
+      } catch (err: unknown) {
+        log.warn("Failed to read entries from JSONL", {
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
 
-     // If JSONL produced nothing and we have an active process, fall back to SDK
-     if (messages.length === 0 && managed) {
-       try {
-         const fallback = await managed.client.getMessages();
-         if (fallback) messages = fallback;
-       } catch (err: unknown) {
-         log.warn("getMessages SDK fallback also failed", {
-           sessionId,
-           err: err instanceof Error ? err.message : String(err),
-         });
-       }
-     }
+    // Apply pagination to JSONL results (take from the end)
+    const totalCount = allMessages.length;
+    const limit = options?.limit;
+    let hasMore = false;
+    let nextCursor: string | null = null;
 
-     const totalMs = Math.round(performance.now() - t0);
-     perfLog.info("[getFullMessages] done", {
-       sessionId,
-       source: messages.length > 0 ? "jsonl" : "empty",
-       messageCount: messages.length,
-       customEntryCount: customEntries.length,
-       totalMs,
-     });
+    let slicedMessages: unknown[];
+    if (limit !== undefined && limit < totalCount) {
+      slicedMessages = allMessages.slice(totalCount - limit).map((e) => e.message);
+      hasMore = true;
+      nextCursor = allMessages[totalCount - limit]?.entryId ?? null;
+    } else {
+      slicedMessages = allMessages.map((e) => e.message);
+    }
 
-     return { messages: messages as AgentMessageForUI[], customEntries };
-   }
+    const totalMs = Math.round(performance.now() - t0);
+    perfLog.info("[getFullMessages] JSONL fallback done", {
+      sessionId,
+      source: "jsonl",
+      messageCount: slicedMessages.length,
+      totalCount,
+      hasMore,
+      totalMs,
+    });
+
+    return {
+      messages: slicedMessages as AgentMessageForUI[],
+      customEntries,
+      hasMore,
+      totalCount,
+      nextCursor,
+    };
+  }
 
   async getAvailableModels(
     sessionId: string,
   ): Promise<Array<{ provider: string; id: string; contextWindow: number; reasoning: boolean }>> {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) return [];
-    return managed.client.getAvailableModels().catch((err: unknown) => {
-      log.warn("getAvailableModels error", {
+    return managed.client.getAvailableModels().catch(async (err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.warn("getAvailableModels error, checking if CLI is alive", {
         sessionId,
-        err: err instanceof Error ? err.message : String(err),
+        err: msg,
       });
+      if (!(await this.isClientAlive(sessionId, managed))) {
+        this.cleanupDeadClient(sessionId, `getAvailableModels failed: ${msg}`);
+      }
       return [];
     });
   }
@@ -1477,11 +1527,15 @@ export class AgentProcessManager {
   ): Promise<{ tokens: number | null; contextWindow: number; percent: number | null }> {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) return { tokens: null, contextWindow: 0, percent: null };
-    return managed.client.getContextUsage().catch((err: unknown) => {
-      log.warn("getContextUsage error", {
+    return managed.client.getContextUsage().catch(async (err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.warn("getContextUsage error, checking if CLI is alive", {
         sessionId,
-        err: err instanceof Error ? err.message : String(err),
+        err: msg,
       });
+      if (!(await this.isClientAlive(sessionId, managed))) {
+        this.cleanupDeadClient(sessionId, `getContextUsage failed: ${msg}`);
+      }
       return { tokens: null, contextWindow: 0, percent: null };
     });
   }
