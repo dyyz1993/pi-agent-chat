@@ -2,7 +2,6 @@ export interface PendingChangeResult {
   turnIndex: number;
   path: string;
   status: "pending" | "approved" | "rejected";
-  diff: string | null;
   timestamp: number;
 }
 

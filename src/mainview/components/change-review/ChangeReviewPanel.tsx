@@ -12,6 +12,9 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useChangeReviewStore } from "../../stores/use-change-review-store";
+import { useGitStore } from "../../stores/use-git-store";
+import { useSessionStore } from "../../stores/use-session-store";
+import { apiClient } from "../../lib/api-client";
 
 export function ChangeReviewPanel() {
   const { t } = useTranslation("changeReview");
@@ -144,7 +147,6 @@ interface ChangeItemProps {
     turnIndex: number;
     path: string;
     status: "pending" | "approved" | "rejected";
-    diff: string | null;
     timestamp: number;
   };
   isExpanded: boolean;
@@ -171,6 +173,27 @@ const ChangeItem = memo(function ChangeItem({ change, isExpanded, onToggle }: Ch
     rejectChange(change.turnIndex, change.path);
   }, [rejectChange, change.turnIndex, change.path]);
 
+  const handleViewDiff = useCallback(async () => {
+    const sessionId = useSessionStore.getState().activeSessionId;
+    if (!sessionId) return;
+    try {
+      const result = await apiClient.call("agent.getBatchDiffs", { sessionId });
+      const match = result?.files?.find((f: { path: string }) => f.path === change.path);
+      if (match?.diff) {
+        useGitStore.setState({
+          currentDiff: {
+            filePath: change.path,
+            diff: match.diff.unifiedDiff,
+            oldContent: match.diff.oldContent ?? "",
+            newContent: match.diff.newContent ?? "",
+          },
+        });
+      }
+    } catch {
+      // Silently fail — user can retry
+    }
+  }, [change.path]);
+
   return (
     <div className="border-b border-border-secondary/50 dark:border-surface-code/50">
       <div className="px-3 py-2">
@@ -189,8 +212,12 @@ const ChangeItem = memo(function ChangeItem({ change, isExpanded, onToggle }: Ch
             </span>
             <div className="flex-1 min-w-0">
               <span
-                className="text-[11px] font-mono text-text-secondary truncate block"
+                className="text-[11px] font-mono text-semantic-accent hover:underline cursor-pointer truncate block"
                 title={change.path}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleViewDiff();
+                }}
               >
                 {change.path}
               </span>
@@ -229,14 +256,6 @@ const ChangeItem = memo(function ChangeItem({ change, isExpanded, onToggle }: Ch
           </div>
         </div>
       </div>
-
-      {isExpanded && change.diff && (
-        <div className="border-t border-border-secondary/30 dark:border-surface-dim/30">
-          <pre className="px-3 py-2 text-[10px] text-text-tertiary overflow-x-auto whitespace-pre-wrap font-mono max-h-48 overflow-y-auto leading-relaxed">
-            {change.diff}
-          </pre>
-        </div>
-      )}
     </div>
   );
 });
