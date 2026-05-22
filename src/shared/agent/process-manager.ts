@@ -669,19 +669,20 @@ export class AgentProcessManager {
     return true;
   }
 
-  stop(sessionId: string): boolean {
+  stop(sessionId: string, crashReason?: string): boolean {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) return false;
 
     managed.info.status = "idle";
-    this.emitAgentEvent(sessionId, { type: "agent_end" } as SanitizedEvent).catch(
-      (err: unknown) => {
-        log.warn("emitAgentEvent(agent_end) error", {
-          sessionId,
-          err: err instanceof Error ? err.message : String(err),
-        });
-      },
-    );
+    const endEvent = crashReason
+      ? ({ type: "agent_end", reason: crashReason } as unknown as SanitizedEvent)
+      : ({ type: "agent_end" } as SanitizedEvent);
+    this.emitAgentEvent(sessionId, endEvent).catch((err: unknown) => {
+      log.warn("emitAgentEvent(agent_end) error", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    });
 
     // Cascade stop delegated children
     const children = this.parentChildMap.get(sessionId);
@@ -842,7 +843,12 @@ export class AgentProcessManager {
    */
   private cleanupDeadClient(sessionId: string, reason: string): void {
     log.warn("[cleanupDeadClient] CLI process is dead, cleaning up", { sessionId, reason });
-    this.stop(sessionId);
+    const shortReason = reason.includes("heap limit")
+      ? "Out of memory (OOM)"
+      : reason.includes("prompt failed")
+        ? "Agent process crashed"
+        : "Agent process died";
+    this.stop(sessionId, shortReason);
   }
 
   private resolveSessionPath(sessionId: string): string {

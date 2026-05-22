@@ -55,13 +55,24 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         break;
       }
     }
-    notificationGateway.emit({
-      type: "session_complete",
-      sessionId,
-      title: "会话完成",
-      body: `会话 ${sessionId.slice(0, 8)}... 执行完毕`,
-      level: "info",
-    });
+    const crashReason = (event as { reason?: string }).reason;
+    if (crashReason) {
+      notificationGateway.emit({
+        type: "session_complete",
+        sessionId,
+        title: "Agent 进程异常退出",
+        body: crashReason,
+        level: "error",
+      });
+    } else {
+      notificationGateway.emit({
+        type: "session_complete",
+        sessionId,
+        title: "会话完成",
+        body: `会话 ${sessionId.slice(0, 8)}... 执行完毕`,
+        level: "info",
+      });
+    }
     return;
   }
 
