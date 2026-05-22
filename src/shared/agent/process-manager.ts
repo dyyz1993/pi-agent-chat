@@ -1082,175 +1082,100 @@ export class AgentProcessManager {
     return { messages: messages as AgentMessageForUI[], customEntries };
   }
 
-  async getFullMessages(
-    sessionId: string,
-    sessionPath?: string,
-  ): Promise<{
-    messages: AgentMessageForUI[];
-    customEntries: Array<{ id: string; customType: string; data: unknown; timestamp: number }>;
-  }> {
-    const t0 = performance.now();
-    const managed = this.getActiveManaged(sessionId);
+   async getFullMessages(
+     sessionId: string,
+     sessionPath?: string,
+   ): Promise<{
+     messages: AgentMessageForUI[];
+     customEntries: Array<{ id: string; customType: string; data: unknown; timestamp: number }>;
+   }> {
+     const t0 = performance.now();
+     const managed = this.getActiveManaged(sessionId);
 
-    let messages: unknown[] = [];
-    let resolvedSessionPath = sessionPath ?? "";
-    let activePathIds: Set<string> | null = null;
-    const customEntries: Array<{
-      id: string;
-      customType: string;
-      data: unknown;
-      timestamp: number;
-    }> = [];
+     let messages: unknown[] = [];
+     let resolvedSessionPath = sessionPath ?? "";
+     const customEntries: Array<{
+       id: string;
+       customType: string;
+       data: unknown;
+       timestamp: number;
+     }> = [];
 
-    if (managed) {
-      resolvedSessionPath = managed.info.sessionPath;
+     // Resolve session file path
+     if (managed) {
+       resolvedSessionPath = managed.info.sessionPath;
+     } else {
+       resolvedSessionPath = this.resolveSessionPath(sessionId) ?? sessionPath ?? "";
+     }
 
-      // Step 1: Get tree/leaf metadata from SDK via lightweight getTree() call
-      // (NOT getFullMessages which deserializes the entire message history through IPC)
-      try {
-        const treeResult = (await managed.client.getTree()) as {
-          entries: Array<{ id: string; parentId: string | null; type: string; label?: string }>;
-          leafId: string;
-        };
-        if (treeResult) {
-          const treeEntries = treeResult.entries;
-          const leafId = treeResult.leafId;
-          if (leafId) {
-            this.leafIds.set(sessionId, leafId);
-          }
-          if (Array.isArray(treeEntries) && leafId) {
-            const byId = new Map<
-              string,
-              { id: string; parentId: string | null; type: string; label?: string }
-            >();
-            for (const e of treeEntries) byId.set(e.id, e);
-            activePathIds = new Set<string>();
-            let curId: string | null | undefined = leafId;
-            while (curId) {
-              activePathIds.add(curId);
-              const node = byId.get(curId);
-              curId =
-                node && typeof node.parentId === "string" && node.parentId
-                  ? node.parentId
-                  : undefined;
-            }
-          }
-        }
-        log.info("getFullMessages tree metadata from getTree()", {
-          hasTree: !!treeResult,
-          activePathSize: activePathIds?.size ?? 0,
-        });
-      } catch (err: unknown) {
-        log.warn("getTree() failed, will read JSONL directly", {
-          err: err instanceof Error ? err.message : String(err),
-        });
-      }
-    } else {
-      resolvedSessionPath = this.resolveSessionPath(sessionId) ?? sessionPath ?? "";
-      const leafId = this.leafIds.get(sessionId) ?? null;
-      if (resolvedSessionPath && leafId !== undefined) {
-        const jsonlEntries = await this.readJsonlEntries(resolvedSessionPath);
-        if (jsonlEntries.length > 0 && leafId !== null) {
-          const byId = new Map<
-            string,
-            { id: string; parentId: string | null; type: string; customType?: string }
-          >();
-          for (const e of jsonlEntries) byId.set(e.id, e);
-          activePathIds = new Set<string>();
-          let curId: string | null = leafId;
-          while (curId) {
-            activePathIds.add(curId);
-            const node = byId.get(curId);
-            curId = node?.parentId ?? null;
-          }
-        }
-        messages = this.buildMessagesFromJsonl(jsonlEntries, leafId);
-      }
-    }
+     // JSONL-first: always read messages directly from the JSONL file.
+     // This avoids depending on the CLI process which may be OOM'd or unresponsive.
+     if (resolvedSessionPath && existsSync(resolvedSessionPath)) {
+       try {
+         const rl = readline.createInterface({
+           input: createReadStream(resolvedSessionPath, { encoding: "utf-8" }),
+           crlfDelay: Infinity,
+         });
+         for await (const line of rl) {
+           if (!line.trim()) continue;
+           try {
+             const parsed = JSON.parse(line) as Record<string, unknown>;
+             if (parsed.type === "custom") {
+               customEntries.push({
+                 id: (parsed.id as string) ?? `custom-${Date.now()}`,
+                 customType: (parsed.customType as string) ?? "unknown",
+                 data: parsed.data,
+                 timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
+               });
+             } else if (parsed.type === "compaction") {
+               messages.push({
+                 id: parsed.id,
+                 role: "compactionSummary",
+                 summary: parsed.summary ?? "",
+                 tokensBefore: parsed.tokensBefore,
+                 timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
+               });
+             } else if (parsed.type === "message" && parsed.message) {
+               messages.push(parsed.message);
+             }
+           } catch (err: unknown) {
+             log.debug("skipping malformed JSONL entry", {
+               err: err instanceof Error ? err.message : String(err),
+             });
+           }
+         }
+         rl.close();
+       } catch (err: unknown) {
+         log.warn("Failed to read entries from JSONL", {
+           err: err instanceof Error ? err.message : String(err),
+         });
+       }
+     }
 
-    if (resolvedSessionPath && existsSync(resolvedSessionPath)) {
-      try {
-        const rl = readline.createInterface({
-          input: createReadStream(resolvedSessionPath, { encoding: "utf-8" }),
-          crlfDelay: Infinity,
-        });
-        for await (const line of rl) {
-          if (!line.trim()) continue;
-          try {
-            const parsed = JSON.parse(line) as Record<string, unknown>;
-            if (parsed.type === "custom") {
-              if (
-                activePathIds &&
-                typeof parsed.id === "string" &&
-                !activePathIds.has(parsed.id as string)
-              )
-                continue;
-              customEntries.push({
-                id: (parsed.id as string) ?? `custom-${Date.now()}`,
-                customType: (parsed.customType as string) ?? "unknown",
-                data: parsed.data,
-                timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
-              });
-            } else if (parsed.type === "compaction") {
-              if (
-                activePathIds &&
-                typeof parsed.id === "string" &&
-                !activePathIds.has(parsed.id as string)
-              )
-                continue;
-              messages.push({
-                id: parsed.id,
-                role: "compactionSummary",
-                summary: parsed.summary ?? "",
-                tokensBefore: parsed.tokensBefore,
-                timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
-              });
-            } else if (parsed.type === "message" && parsed.message) {
-              if (
-                activePathIds &&
-                typeof parsed.id === "string" &&
-                !activePathIds.has(parsed.id as string)
-              )
-                continue;
-              messages.push(parsed.message);
-            }
-          } catch (err: unknown) {
-            log.debug("skipping malformed JSONL entry", {
-              err: err instanceof Error ? err.message : String(err),
-            });
-          }
-        }
-        rl.close();
-      } catch (err: unknown) {
-        log.warn("Failed to read entries from JSONL", {
-          err: err instanceof Error ? err.message : String(err),
-        });
-      }
-    }
+     // If JSONL produced nothing and we have an active process, fall back to SDK
+     if (messages.length === 0 && managed) {
+       try {
+         const fallback = await managed.client.getMessages();
+         if (fallback) messages = fallback;
+       } catch (err: unknown) {
+         log.warn("getMessages SDK fallback also failed", {
+           sessionId,
+           err: err instanceof Error ? err.message : String(err),
+         });
+       }
+     }
 
-    // Fallback for active process: if JSONL read produced nothing, use SDK getMessages
-    if (managed && messages.length === 0) {
-      try {
-        const fallback = await managed.client.getMessages();
-        if (fallback) messages = fallback;
-      } catch (err: unknown) {
-        log.warn("getMessages fallback also failed", {
-          sessionId,
-          err: err instanceof Error ? err.message : String(err),
-        });
-      }
-    }
+     const totalMs = Math.round(performance.now() - t0);
+     perfLog.info("[getFullMessages] done", {
+       sessionId,
+       source: messages.length > 0 ? "jsonl" : "empty",
+       messageCount: messages.length,
+       customEntryCount: customEntries.length,
+       totalMs,
+     });
 
-    const totalMs = Math.round(performance.now() - t0);
-    perfLog.info("[getFullMessages] done", {
-      sessionId,
-      messageCount: messages.length,
-      customEntryCount: customEntries.length,
-      totalMs,
-    });
-
-    return { messages: messages as AgentMessageForUI[], customEntries };
-  }
+     return { messages: messages as AgentMessageForUI[], customEntries };
+   }
 
   async getAvailableModels(
     sessionId: string,
