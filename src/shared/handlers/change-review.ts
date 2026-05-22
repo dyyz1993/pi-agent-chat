@@ -3,6 +3,7 @@ import type { HandlerOptions, R } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
 import { createLogger } from "../lib/logger";
 import { getProcessManager } from "./agent";
+import { FILE_REVIEW_METHODS } from "../constants/channel-methods";
 
 const log = createLogger("change-review");
 
@@ -35,7 +36,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
     try {
       const result = await withTimeout(
-        manager.callChannel(params.sessionId, "file-review", "review.pending", {
+        manager.callChannel(params.sessionId, "file-review", FILE_REVIEW_METHODS.PENDING, {
           sessionId: params.sessionId,
         }),
         CHANNEL_TIMEOUT_MS,
@@ -58,7 +59,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
     try {
       const result = await withTimeout(
-        manager.callChannel(params.sessionId, "file-review", "review.approve", {
+        manager.callChannel(params.sessionId, "file-review", FILE_REVIEW_METHODS.APPROVE, {
           sessionId: params.sessionId,
           turnIndex: params.turnIndex,
           path: params.path,
@@ -83,7 +84,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
     try {
       const result = await withTimeout(
-        manager.callChannel(params.sessionId, "file-review", "review.reject", {
+        manager.callChannel(params.sessionId, "file-review", FILE_REVIEW_METHODS.REJECT, {
           sessionId: params.sessionId,
           turnIndex: params.turnIndex,
           path: params.path,
@@ -108,7 +109,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
     try {
       const result = await withTimeout(
-        manager.callChannel(params.sessionId, "file-review", "review.approveAll", {
+        manager.callChannel(params.sessionId, "file-review", FILE_REVIEW_METHODS.APPROVE_ALL, {
           sessionId: params.sessionId,
         }),
         CHANNEL_TIMEOUT_MS,
