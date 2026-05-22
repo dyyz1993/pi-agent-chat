@@ -1104,6 +1104,8 @@ export class AgentProcessManager {
 
     if (managed) {
       resolvedSessionPath = managed.info.sessionPath;
+
+      // Step 1: Get tree/leaf metadata from SDK (lightweight — avoid deserializing full messages via IPC)
       try {
         const result = (await managed.client.getFullMessages()) as {
           messages: unknown[];
@@ -1114,27 +1116,7 @@ export class AgentProcessManager {
             entries: Array<{ id: string; parentId: string | null; type: string; label?: string }>;
             leafId: string | null;
           };
-          customEntries?: Array<{
-            id: string;
-            customType: string;
-            data: unknown;
-            timestamp: number;
-          }>;
-          compactionEntries?: Array<{
-            id: string;
-            summary: string;
-            tokensBefore: number | undefined;
-            timestamp: number;
-          }>;
         };
-        log.info("getFullMessages SDK result", {
-          count: result?.messages?.length ?? 0,
-          hasMore: result?.hasMore,
-          totalCount: result?.totalCount,
-        });
-        if (result?.messages) {
-          messages = result.messages;
-        }
         if (result?.tree) {
           const treeEntries = result.tree.entries;
           const leafId = result.tree.leafId;
@@ -1157,61 +1139,16 @@ export class AgentProcessManager {
                   ? node.parentId
                   : undefined;
             }
-            // Filter messages by active path: message entries in tree correspond 1:1 with messages array
-            const messageTreeEntries = treeEntries.filter((e) => e.type === "message");
-            if (activePathIds.size > 0 && messageTreeEntries.length > 0) {
-              const filtered: unknown[] = [];
-              for (let i = 0; i < messageTreeEntries.length && i < messages.length; i++) {
-                if (activePathIds.has(messageTreeEntries[i].id)) {
-                  filtered.push(messages[i]);
-                }
-              }
-              log.info("getMessages filtered by tree path", {
-                before: messages.length,
-                after: filtered.length,
-                treeMsgEntries: messageTreeEntries.length,
-                activePathSize: activePathIds.size,
-              });
-              messages = filtered;
-            }
           }
         }
-        if (Array.isArray(result?.customEntries)) {
-          for (const ce of result.customEntries) {
-            if (activePathIds && !activePathIds.has(ce.id)) continue;
-            customEntries.push({
-              id: ce.id,
-              customType: ce.customType ?? "unknown",
-              data: ce.data,
-              timestamp: ce.timestamp,
-            });
-          }
-        }
-        if (Array.isArray(result?.compactionEntries)) {
-          for (const comp of result.compactionEntries) {
-            if (activePathIds && !activePathIds.has(comp.id)) continue;
-            messages.push({
-              id: comp.id,
-              role: "compactionSummary",
-              summary: comp.summary ?? "",
-              tokensBefore: comp.tokensBefore,
-              timestamp: comp.timestamp,
-            });
-          }
-        }
+        log.info("getFullMessages tree metadata extracted (messages read from JSONL)", {
+          hasTree: !!result?.tree,
+          activePathSize: activePathIds?.size ?? 0,
+        });
       } catch (err: unknown) {
-        log.error("getFullMessages SDK failed, falling back to getMessages", {
+        log.warn("getFullMessages tree metadata failed, will read JSONL directly", {
           err: err instanceof Error ? err.message : String(err),
         });
-        try {
-          const fallback = await managed.client.getMessages();
-          if (fallback) messages = fallback;
-        } catch (err: unknown) {
-          log.warn("getMessages fallback also failed", {
-            sessionId,
-            err: err instanceof Error ? err.message : String(err),
-          });
-        }
       }
     } else {
       resolvedSessionPath = this.resolveSessionPath(sessionId) ?? sessionPath ?? "";
@@ -1236,7 +1173,7 @@ export class AgentProcessManager {
       }
     }
 
-    if (!managed && resolvedSessionPath && existsSync(resolvedSessionPath)) {
+    if (resolvedSessionPath && existsSync(resolvedSessionPath)) {
       try {
         const rl = readline.createInterface({
           input: createReadStream(resolvedSessionPath, { encoding: "utf-8" }),
@@ -1291,6 +1228,19 @@ export class AgentProcessManager {
         rl.close();
       } catch (err: unknown) {
         log.warn("Failed to read entries from JSONL", {
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    // Fallback for active process: if JSONL read produced nothing, use SDK getMessages
+    if (managed && messages.length === 0) {
+      try {
+        const fallback = await managed.client.getMessages();
+        if (fallback) messages = fallback;
+      } catch (err: unknown) {
+        log.warn("getMessages fallback also failed", {
+          sessionId,
           err: err instanceof Error ? err.message : String(err),
         });
       }

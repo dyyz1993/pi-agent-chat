@@ -932,22 +932,10 @@ export const useSessionStore = create<SessionState>()(
         const promise = (async () => {
           try {
             const t0 = performance.now();
-            perfLog.info("[fetchInit] begin (all-parallel)", { sessionId });
+            perfLog.info("[fetchInit] begin (batched, maxConcurrency=3)", { sessionId });
 
+            // --- Priority 1: sequential, must complete first ---
             const statePromise = apiClient.call("agent.getState", { sessionId });
-            const modelsPromise = apiClient.call("agent.getAvailableModels", { sessionId });
-            const contextPromise = apiClient.call("agent.getContextUsage", { sessionId });
-            const extensionsPromise = apiClient.call("agent.getExtensions", { sessionId });
-            const skillsPromise = apiClient.call("agent.getSkills", { sessionId });
-            const disabledSkillsPromise = apiClient.call("agent.getDisabledSkills", {});
-            const mcpPromise = apiClient.call("agent.getMcpServers", { sessionId });
-            const queuePromise = apiClient.call("agent.getQueue", { sessionId });
-            const agentChangePromise = apiClient.call("agent.getLatestAgentChange", { sessionId });
-            const agentsPromise = apiClient.call("agent.getAgents", { sessionId });
-            const currentAgentPromise = apiClient.call("agent.getCurrentAgent", { sessionId });
-            const tierPromise = apiClient.call("agent.getTierModels", { sessionId });
-            const favoritesPromise = apiClient.call("project.getModelFavorites", {});
-            const settingsPromise = apiClient.call("agent.getSettings", { sessionId });
 
             statePromise
               .then((rawResult) => {
@@ -971,7 +959,6 @@ export const useSessionStore = create<SessionState>()(
                 }
 
                 if (result.model) {
-                  // Don't overwrite if user manually switched model via picker
                   const manuallySet = get().modelManuallySet;
                   set({
                     currentModel: {
@@ -996,32 +983,25 @@ export const useSessionStore = create<SessionState>()(
                 });
               });
 
-            // Tier sync requires BOTH state (model info) AND tier config
-            Promise.all([statePromise, tierPromise])
-              .then(([rawState, rawTier]) => {
-                const tierResult = rawTier as { models: Record<string, string> };
-                if (tierResult?.models) {
-                  useTierStore.getState().setTierModels(tierResult.models);
-                }
-                const stateResult = rawState as AgentStateResult;
-                if (stateResult?.model) {
-                  useTierStore
-                    .getState()
-                    .syncTierFromModel(
-                      stateResult.model.provider ?? "",
-                      stateResult.model.id ?? "",
-                    );
-                }
-              })
-              .catch(() => {});
+            await statePromise.catch(() => {});
 
-            favoritesPromise
-              .then((res) => {
-                if (res) {
-                  set({ modelFavorites: new Set((res as { favorites: string[] }).favorites) });
+            // --- Priority 2 (parallel, max 3) ---
+            const modelsPromise = apiClient.call("agent.getAvailableModels", { sessionId });
+            const contextPromise = apiClient.call("agent.getContextUsage", { sessionId });
+            const settingsPromise = apiClient.call("agent.getSettings", { sessionId });
+
+            modelsPromise
+              .then((modelsResult) => {
+                if (Array.isArray(modelsResult)) {
+                  set({ availableModels: modelsResult });
                 }
               })
-              .catch(() => {});
+              .catch((err) => {
+                log.warn("agent.getAvailableModels failed", {
+                  sessionId,
+                  err: err instanceof Error ? err.message : String(err),
+                });
+              });
 
             settingsPromise
               .then((raw) => {
@@ -1045,19 +1025,6 @@ export const useSessionStore = create<SessionState>()(
                 }
               })
               .catch(() => {});
-
-            modelsPromise
-              .then((modelsResult) => {
-                if (Array.isArray(modelsResult)) {
-                  set({ availableModels: modelsResult });
-                }
-              })
-              .catch((err) => {
-                log.warn("agent.getAvailableModels failed", {
-                  sessionId,
-                  err: err instanceof Error ? err.message : String(err),
-                });
-              });
 
             const handleContextRetry = (_attempt: number): void => {
               apiClient
@@ -1104,6 +1071,13 @@ export const useSessionStore = create<SessionState>()(
                 });
                 setTimeout(() => handleContextRetry(1), 1500);
               });
+
+            await Promise.allSettled([modelsPromise, contextPromise, settingsPromise]);
+
+            // --- Priority 3 (parallel, max 3) ---
+            const extensionsPromise = apiClient.call("agent.getExtensions", { sessionId });
+            const skillsPromise = apiClient.call("agent.getSkills", { sessionId });
+            const disabledSkillsPromise = apiClient.call("agent.getDisabledSkills", {});
 
             extensionsPromise
               .then((res) => {
@@ -1188,90 +1162,12 @@ export const useSessionStore = create<SessionState>()(
                   );
               });
 
-            // Agent restoration: wait for all three RPCs to resolve, then process
-            // in guaranteed order to prevent race conditions where currentAgentPromise
-            // resolves after agentChangePromise and overwrites the restored agent.
-            Promise.all([agentsPromise, currentAgentPromise, agentChangePromise])
-              .then(
-                ([agentsResult, currentResult, agentChangeResult]: [unknown, unknown, unknown]) => {
-                  // Step 1: set agents list
-                  perfLog.info("[fetchInit] getAgents done", {
-                    sessionId,
-                    ms: Math.round(performance.now() - t0),
-                  });
-                  const raw = agentsResult as {
-                    agents?: Array<{
-                      name: string;
-                      description?: string;
-                      tier?: string;
-                      tools?: string[];
-                      permissionMode?: string;
-                      source?: string;
-                      filePath?: string;
-                    }>;
-                  };
-                  const agentList = (raw.agents ?? []).map((a) => ({
-                    name: a.name,
-                    description: a.description,
-                    tier: a.tier,
-                    tools: a.tools,
-                    permissionMode: a.permissionMode,
-                    source: (a.source ?? "builtin") as "builtin" | "user" | "project",
-                    filePath: a.filePath ?? "",
-                  }));
-                  useAgentStore.getState().setAgents(agentList);
+            await Promise.allSettled([extensionsPromise, skillsPromise, disabledSkillsPromise]);
 
-                  // Step 2: set current agent from process (may be "build" for fresh process)
-                  perfLog.info("[fetchInit] getCurrentAgent done", {
-                    sessionId,
-                    ms: Math.round(performance.now() - t0),
-                  });
-                  const agentResult = currentResult as { agentName: string | null };
-                  const agentName = agentResult.agentName ?? "build";
-                  useAgentStore.getState().setCurrentAgent(sessionId, agentName);
-
-                  // Step 3: override with persisted agent_change if available
-                  perfLog.info("[fetchInit] getLatestAgentChange done", {
-                    sessionId,
-                    ms: Math.round(performance.now() - t0),
-                  });
-                  const result = agentChangeResult;
-                  if (
-                    result &&
-                    typeof result === "object" &&
-                    "agentName" in result &&
-                    typeof result.agentName === "string"
-                  ) {
-                    const restoredName = result.agentName;
-                    log.info("[fetchInit] restoring agent from latest change", {
-                      sessionId,
-                      agentName: restoredName,
-                      timestamp:
-                        "timestamp" in result && typeof result.timestamp === "string"
-                          ? result.timestamp
-                          : undefined,
-                    });
-                    const { switchAgent } = useAgentStore.getState();
-                    void switchAgent(restoredName, sessionId).catch((err: unknown) => {
-                      log.warn("[fetchInit] failed to restore agent", {
-                        sessionId,
-                        agentName: restoredName,
-                        err: err instanceof Error ? err.message : String(err),
-                      });
-                    });
-                  } else {
-                    // No persisted agent change — load detail for the current agent
-                    useAgentStore.getState().fetchAgentDetail(sessionId);
-                    useAgentStore.getState().fetchAllTools(sessionId);
-                  }
-                },
-              )
-              .catch((err: unknown) => {
-                log.warn("[fetchInit] agent restoration failed", {
-                  sessionId,
-                  err: err instanceof Error ? err.message : String(err),
-                });
-              });
+            // --- Priority 4 (parallel, max 3) ---
+            const mcpPromise = apiClient.call("agent.getMcpServers", { sessionId });
+            const queuePromise = apiClient.call("agent.getQueue", { sessionId });
+            const agentChangePromise = apiClient.call("agent.getLatestAgentChange", { sessionId });
 
             mcpPromise
               .then((res) => {
@@ -1329,6 +1225,118 @@ export const useSessionStore = create<SessionState>()(
               })
               .catch((err) => {
                 log.warn("agent.getQueue failed", {
+                  sessionId,
+                  err: err instanceof Error ? err.message : String(err),
+                });
+              });
+
+            await Promise.allSettled([mcpPromise, queuePromise, agentChangePromise]);
+
+            // --- Priority 5 (parallel) ---
+            const agentsPromise = apiClient.call("agent.getAgents", { sessionId });
+            const currentAgentPromise = apiClient.call("agent.getCurrentAgent", { sessionId });
+            const tierPromise = apiClient.call("agent.getTierModels", { sessionId });
+            const favoritesPromise = apiClient.call("project.getModelFavorites", {});
+
+            Promise.all([statePromise, tierPromise])
+              .then(([rawState, rawTier]) => {
+                const tierResult = rawTier as { models: Record<string, string> };
+                if (tierResult?.models) {
+                  useTierStore.getState().setTierModels(tierResult.models);
+                }
+                const stateResult = rawState as AgentStateResult;
+                if (stateResult?.model) {
+                  useTierStore
+                    .getState()
+                    .syncTierFromModel(
+                      stateResult.model.provider ?? "",
+                      stateResult.model.id ?? "",
+                    );
+                }
+              })
+              .catch(() => {});
+
+            favoritesPromise
+              .then((res) => {
+                if (res) {
+                  set({ modelFavorites: new Set((res as { favorites: string[] }).favorites) });
+                }
+              })
+              .catch(() => {});
+
+            Promise.all([agentsPromise, currentAgentPromise, agentChangePromise])
+              .then(
+                ([agentsResult, currentResult, agentChangeResult]: [unknown, unknown, unknown]) => {
+                  perfLog.info("[fetchInit] getAgents done", {
+                    sessionId,
+                    ms: Math.round(performance.now() - t0),
+                  });
+                  const raw = agentsResult as {
+                    agents?: Array<{
+                      name: string;
+                      description?: string;
+                      tier?: string;
+                      tools?: string[];
+                      permissionMode?: string;
+                      source?: string;
+                      filePath?: string;
+                    }>;
+                  };
+                  const agentList = (raw.agents ?? []).map((a) => ({
+                    name: a.name,
+                    description: a.description,
+                    tier: a.tier,
+                    tools: a.tools,
+                    permissionMode: a.permissionMode,
+                    source: (a.source ?? "builtin") as "builtin" | "user" | "project",
+                    filePath: a.filePath ?? "",
+                  }));
+                  useAgentStore.getState().setAgents(agentList);
+
+                  perfLog.info("[fetchInit] getCurrentAgent done", {
+                    sessionId,
+                    ms: Math.round(performance.now() - t0),
+                  });
+                  const agentResult = currentResult as { agentName: string | null };
+                  const agentName = agentResult.agentName ?? "build";
+                  useAgentStore.getState().setCurrentAgent(sessionId, agentName);
+
+                  perfLog.info("[fetchInit] getLatestAgentChange done", {
+                    sessionId,
+                    ms: Math.round(performance.now() - t0),
+                  });
+                  const result = agentChangeResult;
+                  if (
+                    result &&
+                    typeof result === "object" &&
+                    "agentName" in result &&
+                    typeof result.agentName === "string"
+                  ) {
+                    const restoredName = result.agentName;
+                    log.info("[fetchInit] restoring agent from latest change", {
+                      sessionId,
+                      agentName: restoredName,
+                      timestamp:
+                        "timestamp" in result && typeof result.timestamp === "string"
+                          ? result.timestamp
+                          : undefined,
+                    });
+                    const { switchAgent } = useAgentStore.getState();
+                    void switchAgent(restoredName, sessionId).catch((err: unknown) => {
+                      log.warn("[fetchInit] failed to restore agent", {
+                        sessionId,
+                        agentName: restoredName,
+                        err: err instanceof Error ? err.message : String(err),
+                      });
+                    });
+                  } else {
+                    useAgentStore.getState().fetchAgentDetail(sessionId);
+                    useAgentStore.getState().fetchAllTools(sessionId);
+                  }
+                },
+              )
+              .catch((err: unknown) => {
+                log.warn("[fetchInit] agent restoration failed", {
                   sessionId,
                   err: err instanceof Error ? err.message : String(err),
                 });
@@ -1416,52 +1424,24 @@ export const useSessionStore = create<SessionState>()(
         if (!sessions || sessions.length === 0) return;
 
         const sessionStatusMap = get().sessionStatusMap;
-        const toFetch = sessions.filter((s) => !sessionStatusMap[s.sessionId]);
+        const { activeSessionId } = get();
 
-        if (toFetch.length === 0) {
-          log.info("fetchProjectSessionStatuses: all sessions already have status", {
-            projectPath,
-          });
-          return;
-        }
+        let updated = 0;
 
-        log.info("fetchProjectSessionStatuses: fetching", {
-          projectPath,
-          count: toFetch.length,
-        });
-
-        // Batch with concurrency limit to avoid flooding WS
-        const CONCURRENCY = 5;
-        let successCount = 0;
-        let failCount = 0;
-
-        for (let i = 0; i < toFetch.length; i += CONCURRENCY) {
-          const batch = toFetch.slice(i, i + CONCURRENCY);
-          const results = await Promise.allSettled(
-            batch.map(({ sessionId }) =>
-              apiClient.call("agent.getState", { sessionId }).catch(() => null),
-            ),
-          );
-
-          results.forEach((result, index) => {
-            const sessionId = batch[index].sessionId;
-            if (result.status === "fulfilled" && result.value) {
-              const state = result.value as AgentStateResult;
-              let status: SessionStatus = "idle";
-              if (state.isStreaming === true) status = "streaming";
-              else if (state.isCompacting === true) status = "compacting";
-              get().updateSessionStatus(sessionId, status);
-              successCount++;
-            } else {
-              failCount++;
+        for (const s of sessions) {
+          if (!sessionStatusMap[s.sessionId]) {
+            if (s.sessionId !== activeSessionId) {
+              get().updateSessionStatus(s.sessionId, "idle");
             }
-          });
+            updated++;
+          }
         }
 
-        log.info("fetchProjectSessionStatuses: done", {
+        log.info("fetchProjectSessionStatuses: set idle for non-active sessions", {
           projectPath,
-          success: successCount,
-          failed: failCount,
+          total: sessions.length,
+          updated,
+          activeSessionId,
         });
       },
 

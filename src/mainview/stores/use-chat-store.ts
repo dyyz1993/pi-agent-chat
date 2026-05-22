@@ -641,16 +641,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
       normalizeToolBlocks(allMsgs);
 
+      const MAX_DISPLAY = PAGE_SIZE * 3;
+      const hasMoreBeyondWindow = allMsgs.length > MAX_DISPLAY;
+      const displayMsgs = hasMoreBeyondWindow ? allMsgs.slice(-MAX_DISPLAY) : allMsgs;
+
       log.info("LOAD ALL messages (fill gap)", {
         sessionId: sid,
         total: allMsgs.length,
+        displayed: displayMsgs.length,
+        hasMore: hasMoreBeyondWindow,
       });
 
       set((s) => ({
-        messagesBySession: { ...s.messagesBySession, [sid]: allMsgs },
+        messagesBySession: { ...s.messagesBySession, [sid]: displayMsgs },
         hasMoreMessagesBySession: {
           ...s.hasMoreMessagesBySession,
-          [sid]: false,
+          [sid]: hasMoreBeyondWindow,
         },
       }));
     } catch (err) {

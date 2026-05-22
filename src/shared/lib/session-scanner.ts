@@ -1,4 +1,4 @@
-import { readdir, stat, readFile } from "fs/promises";
+import { readdir, stat } from "fs/promises";
 import { createReadStream } from "fs";
 import { existsSync } from "fs";
 import { createInterface } from "readline";
@@ -59,14 +59,6 @@ async function parseJsonlHeader(filePath: string): Promise<JsonlHeader | null> {
   }
 }
 
-interface JsonlHeader {
-  type: "session";
-  version: number;
-  id: string;
-  timestamp: string;
-  cwd: string;
-}
-
 async function parseJsonlMeta(filePath: string): Promise<{
   messageCount: number;
   firstMessage: string;
@@ -77,8 +69,9 @@ async function parseJsonlMeta(filePath: string): Promise<{
   delegateType: string | null;
 } | null> {
   try {
-    const content = await readFile(filePath, "utf-8");
-    const lines = content.split("\n");
+    const stream = createReadStream(filePath, { encoding: "utf-8" });
+    const rl = createInterface({ input: stream, crlfDelay: Infinity });
+
     let messageCount = 0;
     let firstMessage = "";
     let sessionName = "";
@@ -86,56 +79,84 @@ async function parseJsonlMeta(filePath: string): Promise<{
     let effectiveCwd: string | null = null;
     let delegateParentSessionId: string | null = null;
     let delegateType: string | null = null;
+    let lineCount = 0;
     const MAX_LINES = 50;
 
-    for (let i = 0; i < Math.min(lines.length, MAX_LINES); i++) {
-      const line = lines[i];
-      if (!line.trim()) continue;
-      try {
-        const entry = JSON.parse(line) as Record<string, unknown>;
-        if (
-          entry.type === "message" &&
-          (entry.message as Record<string, unknown>)?.role === "user"
-        ) {
-          messageCount++;
-          if (!firstMessage && (entry.message as Record<string, unknown>)?.content) {
-            const contentArr = (entry.message as Record<string, unknown>).content as Array<
-              Record<string, unknown>
-            >;
-            const textPart = contentArr.find((c) => c.type === "text" && c.text);
-            if (textPart?.text) {
-              firstMessage = (textPart.text as string).slice(0, 100);
+    return new Promise((resolve) => {
+      let resolved = false;
+
+      const finish = () => {
+        if (resolved) return;
+        resolved = true;
+        resolve({
+          messageCount,
+          firstMessage,
+          sessionName,
+          parentSessionPath,
+          effectiveCwd,
+          delegateParentSessionId,
+          delegateType,
+        });
+      };
+
+      rl.on("line", (line) => {
+        lineCount++;
+        if (lineCount > MAX_LINES) {
+          rl.close();
+          stream.destroy();
+          return;
+        }
+        if (!line.trim()) return;
+        try {
+          const entry = JSON.parse(line) as Record<string, unknown>;
+          if (
+            entry.type === "message" &&
+            (entry.message as Record<string, unknown>)?.role === "user"
+          ) {
+            messageCount++;
+            if (!firstMessage && (entry.message as Record<string, unknown>)?.content) {
+              const contentArr = (entry.message as Record<string, unknown>).content as Array<
+                Record<string, unknown>
+              >;
+              const textPart = contentArr.find((c) => c.type === "text" && c.text);
+              if (textPart?.text) {
+                firstMessage = (textPart.text as string).slice(0, 100);
+              }
             }
           }
-        }
-        if (entry.type === "session_info") {
-          if (entry.name) sessionName = entry.name as string;
-          if (entry.cwd) effectiveCwd = entry.cwd as string;
-        }
-        if (entry.type === "session" && "parentSession" in entry) {
-          parentSessionPath = entry.parentSession as string;
-        }
-        if (entry.type === "delegate_info" && entry.delegateParentSessionId) {
-          delegateParentSessionId = entry.delegateParentSessionId as string;
-          if (entry.delegateType) delegateType = entry.delegateType as string;
-          if (entry.parentSessionPath && !parentSessionPath) {
-            parentSessionPath = entry.parentSessionPath as string;
+          if (entry.type === "session_info") {
+            if (entry.name) sessionName = entry.name as string;
+            if (entry.cwd) effectiveCwd = entry.cwd as string;
           }
+          if (entry.type === "session" && "parentSession" in entry) {
+            parentSessionPath = entry.parentSession as string;
+          }
+          if (entry.type === "delegate_info" && entry.delegateParentSessionId) {
+            delegateParentSessionId = entry.delegateParentSessionId as string;
+            if (entry.delegateType) delegateType = entry.delegateType as string;
+            if (entry.parentSessionPath && !parentSessionPath) {
+              parentSessionPath = entry.parentSessionPath as string;
+            }
+          }
+        } catch {
+          // Skip malformed lines
         }
-      } catch {
-        continue;
-      }
-    }
+      });
 
-    return {
-      messageCount,
-      firstMessage,
-      sessionName,
-      parentSessionPath,
-      effectiveCwd,
-      delegateParentSessionId,
-      delegateType,
-    };
+      rl.on("close", finish);
+
+      rl.on("error", () => {
+        rl.close();
+        stream.destroy();
+        finish();
+      });
+
+      setTimeout(() => {
+        rl.close();
+        stream.destroy();
+        finish();
+      }, 5000);
+    });
   } catch {
     return null;
   }
