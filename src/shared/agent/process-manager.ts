@@ -55,6 +55,19 @@ const log = createLogger("agent");
 const perfLog = createLogger("session-perf");
 
 /**
+ * Race a promise against a timeout. Rejects with a descriptive error if the
+ * promise does not settle within `ms` milliseconds.
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out (${ms}ms)`)), ms),
+    ),
+  ]);
+}
+
+/**
  * Strip parentSession from a JSONL session file's header entry.
  * Prevents forked sessions from being identified as subagent children on refresh.
  */
@@ -400,12 +413,11 @@ export class AgentProcessManager {
         });
         // Race switchSession with a 15-second timeout.
         // If the child process is busy (e.g. getFullMessages), don't queue behind it.
-        const result = await Promise.race([
+        const result = await withTimeout(
           pooled.client.switchSession(sessionPath),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error("switchSession timed out after 15s")), 15000),
-          ),
-        ]);
+          15_000,
+          "switchSession",
+        );
         if (!result.cancelled) {
           // Update mappings: remove ALL stale clients entries pointing to this pooled process
           for (const [sid, mc] of this.clients) {
@@ -531,13 +543,7 @@ export class AgentProcessManager {
 
     try {
       perfLog.info("[start] awaiting client.start()", { sessionId, projectPath });
-      const START_TIMEOUT_MS = 60_000;
-      await Promise.race([
-        client.start(),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("client.start() timed out (60s)")), START_TIMEOUT_MS),
-        ),
-      ]);
+      await withTimeout(client.start(), 60_000, "client.start()");
     } catch (startErr: unknown) {
       this.clients.delete(sessionId);
       const msg = startErr instanceof Error ? startErr.message : String(startErr);
@@ -833,7 +839,7 @@ export class AgentProcessManager {
   private async isClientAlive(sessionId: string, managed: ManagedClient): Promise<boolean> {
     try {
       // getState is cheap (scalar properties only, no serialization of messages)
-      await managed.client.getState();
+      await withTimeout(managed.client.getState(), 10_000, "getState");
       return true;
     } catch (probeErr: unknown) {
       log.warn("CLI health check failed, process likely dead", {
@@ -889,7 +895,7 @@ export class AgentProcessManager {
     if (!managed) return null;
 
     try {
-      const state = await managed.client.getState();
+      const state = await withTimeout(managed.client.getState(), 10_000, "getState");
       const model = state.model;
       return {
         model: model
@@ -926,7 +932,7 @@ export class AgentProcessManager {
     if (!managed) return [];
 
     try {
-      const commands = await managed.client.getCommands();
+      const commands = await withTimeout(managed.client.getCommands(), 10_000, "getCommands");
       if (!commands) return [];
       return commands.map((c) => ({
         name: String(c.name ?? ""),
@@ -951,7 +957,7 @@ export class AgentProcessManager {
     if (!managed) return null;
 
     try {
-      const stats = await managed.client.getSessionStats();
+      const stats = await withTimeout(managed.client.getSessionStats(), 10_000, "getSessionStats");
       if (!stats) return null;
       const tokens = stats.tokens;
       const cu = stats.contextUsage;
@@ -1001,7 +1007,11 @@ export class AgentProcessManager {
     if (managed) {
       resolvedSessionPath = managed.info.sessionPath;
       try {
-        const messagesResult = await managed.client.getMessages();
+        const messagesResult = await withTimeout(
+          managed.client.getMessages(),
+          15_000,
+          "getMessages",
+        );
         if (messagesResult) {
           messages = messagesResult;
         }
@@ -1012,7 +1022,11 @@ export class AgentProcessManager {
         });
       }
       try {
-        const treeResult = await managed.client.getTreeWithLeaf();
+        const treeResult = await withTimeout(
+          managed.client.getTreeWithLeaf(),
+          10_000,
+          "getTreeWithLeaf",
+        );
         const entries = treeResult.entries;
         const leafId = treeResult.leafId;
         if (leafId) {
@@ -1217,7 +1231,11 @@ export class AgentProcessManager {
     let leafId: string | null | undefined = undefined;
     if (managed) {
       try {
-        const treeResult = await managed.client.getTreeWithLeaf();
+        const treeResult = await withTimeout(
+          managed.client.getTreeWithLeaf(),
+          10_000,
+          "getTreeWithLeaf",
+        );
         if (treeResult.leafId) {
           leafId = treeResult.leafId;
           this.leafIds.set(sessionId, leafId);
@@ -1322,7 +1340,7 @@ export class AgentProcessManager {
   ): Promise<{ provider: string; id: string }> {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) throw new Error("Client not found");
-    return managed.client.setModel(provider, modelId);
+    return withTimeout(managed.client.setModel(provider, modelId), 15_000, "setModel");
   }
 
   async cycleModel(sessionId: string): Promise<{
@@ -1372,7 +1390,7 @@ export class AgentProcessManager {
   ): Promise<{ summary: string; tokensBefore: number }> {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) throw new Error("Client not found");
-    return managed.client.compact(customInstructions);
+    return withTimeout(managed.client.compact(customInstructions), 120_000, "compact");
   }
 
   async setAutoCompaction(sessionId: string, enabled: boolean): Promise<void> {
@@ -1434,7 +1452,7 @@ export class AgentProcessManager {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) return { toolNames: [] };
     try {
-      const result = await managed.client.getActiveTools();
+      const result = await withTimeout(managed.client.getActiveTools(), 10_000, "getActiveTools");
       return { toolNames: Array.isArray(result) ? result : [] };
     } catch (err: unknown) {
       log.warn("getActiveTools error", {
@@ -1491,7 +1509,7 @@ export class AgentProcessManager {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) return { extensions: [] };
     try {
-      const result = await managed.client.getExtensions();
+      const result = await withTimeout(managed.client.getExtensions(), 10_000, "getExtensions");
       return { extensions: Array.isArray(result) ? result : [] };
     } catch (err: unknown) {
       log.warn("getExtensions error", {
@@ -1514,7 +1532,7 @@ export class AgentProcessManager {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) return { skills: [] };
     try {
-      const result = await managed.client.getSkills();
+      const result = await withTimeout(managed.client.getSkills(), 10_000, "getSkills");
       return { skills: Array.isArray(result) ? result : [] };
     } catch (err: unknown) {
       log.warn("getSkills error", {
@@ -1528,7 +1546,7 @@ export class AgentProcessManager {
   async reload(sessionId: string): Promise<void> {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) return;
-    await managed.client.reload();
+    await withTimeout(managed.client.reload(), 30_000, "reload");
   }
 
   async getTools(
@@ -1537,7 +1555,7 @@ export class AgentProcessManager {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) return { tools: [] };
     try {
-      const result = await managed.client.getTools();
+      const result = await withTimeout(managed.client.getTools(), 10_000, "getTools");
       return { tools: Array.isArray(result) ? result : [] };
     } catch (err: unknown) {
       log.warn("getTools error", {
@@ -1552,7 +1570,7 @@ export class AgentProcessManager {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) return { servers: [] };
     try {
-      const servers = await managed.client.getMcpServers();
+      const servers = await withTimeout(managed.client.getMcpServers(), 10_000, "getMcpServers");
       return { servers: Array.isArray(servers) ? servers : [] };
     } catch (err) {
       log.warn("getMcpServers error", {
@@ -1850,7 +1868,11 @@ export class AgentProcessManager {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) return { text: null };
     try {
-      const result = await managed.client.getLastAssistantText();
+      const result = await withTimeout(
+        managed.client.getLastAssistantText(),
+        10_000,
+        "getLastAssistantText",
+      );
       return { text: result };
     } catch (err: unknown) {
       log.warn("getLastAssistantText error", {
@@ -1867,7 +1889,7 @@ export class AgentProcessManager {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) return { messages: [] };
     try {
-      const result = await managed.client.getForkMessages();
+      const result = await withTimeout(managed.client.getForkMessages(), 10_000, "getForkMessages");
       return { messages: Array.isArray(result) ? result : [] };
     } catch (err: unknown) {
       log.warn("getForkMessages error", {
@@ -1890,7 +1912,7 @@ export class AgentProcessManager {
   }> {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) throw new Error("Client not found");
-    const result = await managed.client.fork(entryId, options);
+    const result = await withTimeout(managed.client.fork(entryId, options), 60_000, "fork");
     // Don't stop the original session — the process pool's switchSession
     // will handle the transition when the forked session is started.
     // The original session remains on disk and can be re-activated later.
@@ -1913,7 +1935,11 @@ export class AgentProcessManager {
         log.warn("navigateTree: blocked — agent is streaming", { sessionId, targetId });
         return { cancelled: true, reason: "Agent is streaming" };
       }
-      const result = await managed.client.navigateTree(targetId, options);
+      const result = await withTimeout(
+        managed.client.navigateTree(targetId, options),
+        30_000,
+        "navigateTree",
+      );
       if (!result.cancelled) {
         this.leafIds.set(sessionId, targetId);
         log.info("navigateTree updated leafId", { sessionId, targetId });
@@ -1955,7 +1981,7 @@ export class AgentProcessManager {
   ): Promise<{ restored: string[]; deleted: string[] }> {
     const managed = this.getActiveManaged(sessionId);
     if (managed) {
-      return managed.client.previewRollback(targetId);
+      return withTimeout(managed.client.previewRollback(targetId), 15_000, "previewRollback");
     }
     return { restored: [], deleted: [] };
   }
@@ -1974,7 +2000,11 @@ export class AgentProcessManager {
   > {
     const managed = this.getActiveManaged(sessionId);
     if (managed) {
-      return managed.client.getModifiedFiles({ fromEntryId, toEntryId });
+      return withTimeout(
+        managed.client.getModifiedFiles({ fromEntryId, toEntryId }),
+        15_000,
+        "getModifiedFiles",
+      );
     }
     return [];
   }
@@ -1998,7 +2028,11 @@ export class AgentProcessManager {
   }> {
     const managed = this.getActiveManaged(sessionId);
     if (managed) {
-      return managed.client.getBatchDiffs({ fromEntryId, toEntryId });
+      return withTimeout(
+        managed.client.getBatchDiffs({ fromEntryId, toEntryId }),
+        30_000,
+        "getBatchDiffs",
+      );
     }
     return { files: [], summary: { totalFiles: 0, added: 0, modified: 0, deleted: 0 } };
   }
@@ -2007,7 +2041,7 @@ export class AgentProcessManager {
     const managed = this.getActiveManaged(sessionId);
     if (managed) {
       try {
-        const result = await managed.client.getTree();
+        const result = await withTimeout(managed.client.getTree(), 15_000, "getTree");
         return {
           entries: Array.isArray(result.entries) ? (result.entries as TreeEntry[]) : [],
           leafId: result.leafId,
@@ -2053,19 +2087,19 @@ export class AgentProcessManager {
   async clone(sessionId: string): Promise<{ cancelled: boolean }> {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) throw new Error("Client not found");
-    return managed.client.clone();
+    return withTimeout(managed.client.clone(), 60_000, "clone");
   }
 
   async newSession(sessionId: string, parentSession?: string): Promise<{ cancelled: boolean }> {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) throw new Error("Client not found");
-    return managed.client.newSession(parentSession);
+    return withTimeout(managed.client.newSession(parentSession), 30_000, "newSession");
   }
 
   async exportHtml(sessionId: string, outputPath?: string): Promise<{ path: string }> {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) throw new Error("Client not found");
-    return managed.client.exportHtml(outputPath);
+    return withTimeout(managed.client.exportHtml(outputPath), 60_000, "exportHtml");
   }
 
   sendChannelData(sessionId: string, channelName: string, data: unknown): void {
