@@ -72,9 +72,9 @@ export const TimelineTurn = memo(function TimelineTurn({
       const sessionId = useSessionStore.getState().activeSessionId;
       if (!sessionId) return;
       try {
-        // The backend's navigateTree handles the parentId jump for all message types,
-        // so we pass the assistant entryId directly.
-        let targetId: string | null = turn.assistantEntryId ?? null;
+        // Pass userEntryId so backend's navigateTree jumps over the entire turn
+        // (user + assistant), removing the turn completely.
+        let targetId: string | null = turn.userEntryId ?? null;
 
         // Fallback: resolve via tree lookup using the frontend message ID
         if (!targetId) {
@@ -89,8 +89,8 @@ export const TimelineTurn = memo(function TimelineTurn({
 
           const byId = new Map(entries.map((e) => [e.id, e]));
 
-          if (turn.assistantMessageId) {
-            const entry = byId.get(turn.assistantMessageId);
+          if (turn.userMessageId) {
+            const entry = byId.get(turn.userMessageId);
             if (entry) {
               targetId = entry.id;
             }
@@ -166,7 +166,7 @@ export const TimelineTurn = memo(function TimelineTurn({
         // Silent
       }
     },
-    [turn.assistantEntryId, turn.assistantMessageId],
+    [turn.userEntryId, turn.userMessageId],
   );
   return (
     <div id={`turn-${turn.id}`} data-turn-id={turn.id} className="relative group/turn">
@@ -242,63 +242,10 @@ export const TimelineTurn = memo(function TimelineTurn({
               active={turnCopied}
             />
             <TurnActionButton
-              icon={<GitFork size={12} />}
-              label={t("chat:fork")}
-              onClick={async () => {
-                const sessionId = useSessionStore.getState().activeSessionId;
-                if (!sessionId) return;
-                try {
-                  // Prefer pre-resolved entryIds (match backend tree)
-                  let entryId: string | null = turn.assistantEntryId ?? turn.userEntryId ?? null;
-
-                  // Fallback: resolve via tree lookup
-                  if (!entryId) {
-                    const result = await apiClient.call("agent.getTree", { sessionId });
-                    const entries: Array<{ id: string; type: string; label?: string }> =
-                      result.entries ?? result ?? [];
-                    if (!Array.isArray(entries) || entries.length === 0) return;
-                    const byId = new Map(entries.map((e) => [e.id, e]));
-                    if (turn.assistantMessageId) {
-                      const entry = byId.get(turn.assistantMessageId);
-                      if (entry) entryId = entry.id;
-                    }
-                    if (!entryId && turn.userMessageId) {
-                      const entry = byId.get(turn.userMessageId);
-                      if (entry) entryId = entry.id;
-                    }
-                  }
-
-                  if (!entryId) return;
-                  useForkDialogStore.getState().openDialog({
-                    sessionId,
-                    entryId,
-                    source: "timelineTurn",
-                  });
-                } catch {
-                  /* skip */
-                }
-              }}
-              disabled={isSessionStreaming}
-            />
-            <TurnActionButton
               icon={<Trash2 size={12} />}
               label={t("common:delete")}
               onClick={toggleSelectAll}
               active={isTurnSelected}
-            />
-            <TurnActionButton
-              icon={<RotateCcw size={12} />}
-              label={t("chat:rollbackCode")}
-              onClick={() => handleRollback("withFiles")}
-              variant="warning"
-              disabled={isSessionStreaming}
-            />
-            <TurnActionButton
-              icon={<MessageSquare size={12} />}
-              label={t("chat:rollbackChat")}
-              onClick={() => handleRollback("message")}
-              variant="info"
-              disabled={isSessionStreaming}
             />
           </div>
         </div>
@@ -321,7 +268,57 @@ export const TimelineTurn = memo(function TimelineTurn({
         <div className="ml-[38px] space-y-2 pb-2">
           {/* User message (no checkbox) */}
           {turn.userText && (
-            <div className="flex justify-end">
+            <div className="flex justify-end items-center gap-1">
+              <div className="flex items-center gap-0.5 opacity-0 group-hover/turn:opacity-100 transition-opacity shrink-0">
+                <TurnActionButton
+                  icon={<GitFork size={12} />}
+                  label={t("chat:fork")}
+                  onClick={async () => {
+                    const sessionId = useSessionStore.getState().activeSessionId;
+                    if (!sessionId) return;
+                    try {
+                      let entryId: string | null =
+                        turn.userEntryId ?? turn.assistantEntryId ?? null;
+                      if (!entryId) {
+                        const result = await apiClient.call("agent.getTree", { sessionId });
+                        const entries: Array<{ id: string; type: string; label?: string }> =
+                          result.entries ?? result ?? [];
+                        if (!Array.isArray(entries) || entries.length === 0) return;
+                        const byId = new Map(entries.map((e) => [e.id, e]));
+                        if (turn.userMessageId) {
+                          const entry = byId.get(turn.userMessageId);
+                          if (entry) entryId = entry.id;
+                        }
+                        if (!entryId && turn.assistantMessageId) {
+                          const entry = byId.get(turn.assistantMessageId);
+                          if (entry) entryId = entry.id;
+                        }
+                      }
+                      if (!entryId) return;
+                      useForkDialogStore
+                        .getState()
+                        .openDialog({ sessionId, entryId, source: "timelineTurn" });
+                    } catch {
+                      /* skip */
+                    }
+                  }}
+                  disabled={isSessionStreaming}
+                />
+                <TurnActionButton
+                  icon={<RotateCcw size={12} />}
+                  label={t("chat:rollbackCode")}
+                  onClick={() => handleRollback("withFiles")}
+                  variant="warning"
+                  disabled={isSessionStreaming}
+                />
+                <TurnActionButton
+                  icon={<MessageSquare size={12} />}
+                  label={t("chat:rollbackChat")}
+                  onClick={() => handleRollback("message")}
+                  variant="info"
+                  disabled={isSessionStreaming}
+                />
+              </div>
               <div className="max-w-[80%] px-3 py-2 rounded-lg bg-semantic-accent/90 text-white text-sm whitespace-pre-wrap break-words border border-semantic-accent/30">
                 {turn.userText}
               </div>

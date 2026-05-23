@@ -270,9 +270,7 @@ export const MessageCard = memo(function MessageCard({
         )}
 
         <div className="flex items-center gap-0.5 ml-auto shrink-0">
-          {(isAssistant || isUser) && !isEntry && (
-            <HeaderActions message={message} isUserCard={isUser} />
-          )}
+          {isUser && !isEntry && <HeaderActions message={message} isUserCard={isUser} />}
           {(isAssistant || isUser || isEntry) && (
             <button
               onClick={(e) => {
