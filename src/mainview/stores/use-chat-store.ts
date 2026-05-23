@@ -285,11 +285,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
       set({ isStreaming: true });
 
       const SEND_TIMEOUT_MS = 60_000;
+      const sendT0 = performance.now();
+      perfLog.info("[send] begin", { sessionId });
       const sendPromise = apiClient.call("agent.send", { sessionId, content: text });
       const timeoutPromise = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error("Send timed out (60s)")), SEND_TIMEOUT_MS),
       );
       await Promise.race([sendPromise, timeoutPromise]);
+      perfLog.info("[send] done", { sessionId, sendMs: Math.round(performance.now() - sendT0) });
       set({ isStreaming: false });
     } catch (err) {
       set({ isStreaming: false });
@@ -308,10 +311,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ inputText: "" });
 
     try {
-      await apiClient.call("agent.steer", { sessionId, content: text });
+      const STEER_TIMEOUT_MS = 15_000;
+      const steerT0 = performance.now();
+      perfLog.info("[steer] begin", { sessionId });
+      await Promise.race([
+        apiClient.call("agent.steer", { sessionId, content: text }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Steer timed out (15s)")), STEER_TIMEOUT_MS),
+        ),
+      ]);
+      perfLog.info("[steer] done", { sessionId, steerMs: Math.round(performance.now() - steerT0) });
     } catch (err) {
       set({ inputText: text });
       const msg = err instanceof Error ? err.message : String(err);
+      perfLog.info("[steer] failed", { sessionId, msg });
       useAppStore.getState().addLog(`Steer error: ${msg}`);
       useNotificationStore.getState().push({ message: `Steer failed: ${msg}`, level: "error" });
     }
@@ -326,10 +339,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ inputText: "" });
 
     try {
-      await apiClient.call("agent.followUp", { sessionId, content: text });
+      const FOLLOWUP_TIMEOUT_MS = 15_000;
+      const followUpT0 = performance.now();
+      perfLog.info("[followUp] begin", { sessionId });
+      await Promise.race([
+        apiClient.call("agent.followUp", { sessionId, content: text }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("FollowUp timed out (15s)")), FOLLOWUP_TIMEOUT_MS),
+        ),
+      ]);
+      perfLog.info("[followUp] done", {
+        sessionId,
+        followUpMs: Math.round(performance.now() - followUpT0),
+      });
     } catch (err) {
       set({ inputText: text });
       const msg = err instanceof Error ? err.message : String(err);
+      perfLog.info("[followUp] failed", { sessionId, msg });
       useAppStore.getState().addLog(`FollowUp error: ${msg}`);
       useNotificationStore.getState().push({ message: `Follow-up failed: ${msg}`, level: "error" });
     }
@@ -412,11 +438,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     try {
       const { apiClient } = await import("../lib/api-client");
-      const result = await apiClient.call("agent.getFullMessages", {
-        sessionId: sid,
-        sessionPath: options?.sessionPath,
-        limit: PAGE_SIZE,
-      });
+      const GET_MESSAGES_TIMEOUT_MS = 30_000;
+      const result = (await Promise.race([
+        apiClient.call("agent.getFullMessages", {
+          sessionId: sid,
+          sessionPath: options?.sessionPath,
+          limit: PAGE_SIZE,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error("getFullMessages timed out (30s)")),
+            GET_MESSAGES_TIMEOUT_MS,
+          ),
+        ),
+      ])) as Awaited<ReturnType<typeof apiClient.call<"agent.getFullMessages">>>;
       perfLog.info("[loadMessages] RPC returned", {
         sessionId: sid,
         force: !!options?.force,
@@ -467,14 +502,28 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
 
       const msgs: ChatMessage[] = [];
+      const nullCount = { byRole: {} as Record<string, number>, total: 0 };
       for (const { raw, id } of rawMessages) {
-        const msg = messageToChatMessage(raw as unknown as Message, id, toolCallNameMap);
-        if (msg) msgs.push(msg);
+        const msg = messageToChatMessage(raw as unknown as unknown as Message, id, toolCallNameMap);
+        if (msg) {
+          msgs.push(msg);
+        } else {
+          const role = (raw as unknown as { role: string }).role as string;
+          nullCount.byRole[role] = (nullCount.byRole[role] || 0) + 1;
+          nullCount.total++;
+          log.warn("messageToChatMessage returned null", {
+            sessionId: sid,
+            id,
+            role,
+            rawKeys: Object.keys(raw),
+          });
+        }
       }
       log.info("After messageToChatMessage", {
         sessionId: sid,
         mapped: msgs.length,
         raw: rawMessages.length,
+        nullCount,
       });
 
       normalizeToolBlocks(msgs);
@@ -625,9 +674,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }));
 
     try {
-      const result = await apiClient.call("agent.getFullMessages", {
-        sessionId: sid,
-      });
+      const LOAD_MORE_TIMEOUT_MS = 30_000;
+      const result = (await Promise.race([
+        apiClient.call("agent.getFullMessages", {
+          sessionId: sid,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error("loadMoreMessages timed out (30s)")),
+            LOAD_MORE_TIMEOUT_MS,
+          ),
+        ),
+      ])) as Awaited<ReturnType<typeof apiClient.call<"agent.getFullMessages">>>;
       const messages = result.messages;
       if (!Array.isArray(messages)) return;
 

@@ -65,17 +65,35 @@ export class SandboxRpcClient implements RpcClientAPI {
   /** HTTP POST 调用沙箱的 RPC 方法 */
   private async call<T>(method: string, ...params: unknown[]): Promise<T> {
     const url = `${this.endpoint}/rpc`;
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ method, params }),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30_000);
+    const t0 = performance.now();
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method, params }),
+        signal: controller.signal,
+      });
+    } catch (err) {
+      const ms = Math.round(performance.now() - t0);
+      throw new Error(
+        `Sandbox RPC ${method} failed after ${ms}ms: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    } finally {
+      clearTimeout(timeoutId);
+    }
     if (!res.ok) {
       const text = await res.text();
       throw new Error(`Sandbox RPC ${method} failed (${res.status}): ${text}`);
     }
     const json = (await res.json()) as { ok: boolean; data?: T; error?: string };
     if (!json.ok) throw new Error(json.error ?? "Sandbox RPC failed");
+    const ms = Math.round(performance.now() - t0);
+    if (ms > 3000) {
+      log.warn("[sandbox] slow RPC", { method, ms });
+    }
     return json.data as T;
   }
 
@@ -84,7 +102,14 @@ export class SandboxRpcClient implements RpcClientAPI {
   async start(): Promise<void> {
     log.info("Connecting to sandbox", { endpoint: this.endpoint });
     // 检查沙箱健康
-    const healthRes = await fetch(`${this.endpoint}/health`);
+    const healthController = new AbortController();
+    const healthTimeout = setTimeout(() => healthController.abort(), 10_000);
+    let healthRes: Response;
+    try {
+      healthRes = await fetch(`${this.endpoint}/health`, { signal: healthController.signal });
+    } finally {
+      clearTimeout(healthTimeout);
+    }
     if (!healthRes.ok) throw new Error(`Sandbox not reachable: ${healthRes.status}`);
     this._started = true;
 

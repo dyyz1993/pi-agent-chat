@@ -91,7 +91,16 @@ class APIClientImpl {
         this._transport = "websocket";
         const wsUrl = this.getWebSocketUrl();
         this.wsTransport = new WebSocketTransport({ url: wsUrl, reconnect: false });
-        await this.wsTransport.connect();
+        const WS_CONNECT_TIMEOUT_MS = 15_000;
+        await Promise.race([
+          this.wsTransport.connect(),
+          new Promise<never>((_, reject) =>
+            setTimeout(
+              () => reject(new Error("WebSocket connect timed out (15s)")),
+              WS_CONNECT_TIMEOUT_MS,
+            ),
+          ),
+        ]);
         this.client = createTypedClient<RPCMethods, RPCEvents>(this.wsTransport);
         this._reconnectDetected = false;
         this._reconnectAttempts = 0;
@@ -144,7 +153,7 @@ class APIClientImpl {
       }
 
       wasConnected = connected;
-    }, 500);
+    }, 2000);
   }
 
   private _scheduleReconnect(): void {
@@ -185,7 +194,16 @@ class APIClientImpl {
         }
 
         this.wsTransport = new WebSocketTransport({ url: freshUrl, reconnect: false });
-        await this.wsTransport.connect();
+        const WS_RECONNECT_TIMEOUT_MS = 15_000;
+        await Promise.race([
+          this.wsTransport.connect(),
+          new Promise<never>((_, reject) =>
+            setTimeout(
+              () => reject(new Error("WebSocket reconnect timed out (15s)")),
+              WS_RECONNECT_TIMEOUT_MS,
+            ),
+          ),
+        ]);
 
         this._reconnectAttempts = 0;
         this.client = createTypedClient<RPCMethods, RPCEvents>(this.wsTransport);

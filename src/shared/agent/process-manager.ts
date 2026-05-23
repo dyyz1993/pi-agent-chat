@@ -530,7 +530,14 @@ export class AgentProcessManager {
     this.clients.set(sessionId, managed);
 
     try {
-      await client.start();
+      perfLog.info("[start] awaiting client.start()", { sessionId, projectPath });
+      const START_TIMEOUT_MS = 60_000;
+      await Promise.race([
+        client.start(),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("client.start() timed out (60s)")), START_TIMEOUT_MS),
+        ),
+      ]);
     } catch (startErr: unknown) {
       this.clients.delete(sessionId);
       const msg = startErr instanceof Error ? startErr.message : String(startErr);
@@ -727,12 +734,12 @@ export class AgentProcessManager {
     if (this.processByCwd.get(cwd) === managed) {
       this.processByCwd.delete(cwd);
     }
-    // Note: sessionPaths and sessionProjectPaths are NOT cleared here.
-    // They persist for session restart support (coordinator delegate_send).
-    // The file path remains valid even after stop; session is re-activated
-    // on demand like clicking on a session in the UI.
+    // Note: sessionPaths, sessionProjectPaths, and leafIds are NOT cleared here.
+    // They persist for session restart support (coordinator delegate_send)
+    // and JSONL fallback navigateTree (rollback without active CLI process).
+    // When the CLI restarts, getTreeWithLeaf() will overwrite with the
+    // authoritative value, so stale data self-heals.
     this.lastLspState.delete(sessionId);
-    this.leafIds.delete(sessionId);
     return true;
   }
 
@@ -1913,11 +1920,33 @@ export class AgentProcessManager {
       }
       return result;
     }
-    log.warn("navigateTree: no managed client, rollback will not take effect", {
+    log.info("navigateTree: no managed client, applying JSONL fallback", {
       sessionId,
       targetId,
     });
-    return { cancelled: true, reason: "No active session" };
+
+    const sessionPath = this.resolveSessionPath(sessionId);
+    if (!sessionPath) {
+      return { cancelled: true, reason: "No session path found" };
+    }
+
+    const entries = await this.readJsonlEntries(sessionPath);
+    const exists = entries.some((e) => e.id === targetId);
+    if (!exists) {
+      return { cancelled: true, reason: "Target entry not found in session" };
+    }
+
+    this.leafIds.set(sessionId, targetId);
+
+    if (!options?.skipFiles) {
+      log.warn("navigateTree: file restore skipped (no active CLI process)", {
+        sessionId,
+        targetId,
+      });
+    }
+
+    log.info("navigateTree: JSONL fallback applied", { sessionId, targetId });
+    return { cancelled: false };
   }
 
   async previewRollback(
@@ -2833,6 +2862,11 @@ export class AgentProcessManager {
       error?: string;
     }>((resolve) => {
       const timeout = setTimeout(() => {
+        log.warn("[syncDelegate] timed out", {
+          sessionId: newSessionId,
+          parentSessionId,
+          timeoutMs,
+        });
         this.syncDelegateResolvers.delete(newSessionId);
         this.subagentSyncChildren.delete(newSessionId);
         this.syncDelegateLastText.delete(newSessionId);
