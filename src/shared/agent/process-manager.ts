@@ -1233,7 +1233,10 @@ export class AgentProcessManager {
     // the message list. Without filtering, all branches' messages are shown.
     let filteredMessages = allMessages;
     let customEntries = allCustomEntries;
-    if (leafId && parentById.size > 0) {
+    // Only filter when leafId actually exists in the JSONL.
+    // A stale leafId (from another session or expired cache) would produce
+    // an empty path and incorrectly filter out ALL messages.
+    if (leafId && parentById.size > 0 && parentById.has(leafId)) {
       const pathIds = new Set<string>();
       let curId: string | null = leafId;
       while (curId) {
@@ -1243,6 +1246,12 @@ export class AgentProcessManager {
       }
       filteredMessages = allMessages.filter((m) => pathIds.has(m.entryId));
       customEntries = allCustomEntries.filter((e) => pathIds.has(e.id));
+    } else if (leafId && parentById.size > 0 && !parentById.has(leafId)) {
+      log.warn("[getFullMessages] leafId not found in JSONL, skipping branch filter", {
+        sessionId,
+        leafId,
+        totalEntries: parentById.size,
+      });
     }
 
     // Apply pagination to filtered results (take from the end)

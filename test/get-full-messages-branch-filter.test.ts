@@ -7,7 +7,7 @@
  */
 import { writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 
 vi.mock("../src/server-config", () => ({
   config: {
@@ -245,6 +245,30 @@ describe("getFullMessages leaf→root path filtering", () => {
     expect(result.messages).toHaveLength(0);
     expect(result.totalCount).toBe(0);
     expect(result.customEntries).toHaveLength(0);
+  });
+
+  it("stale leafId not in JSONL returns all messages instead of filtering to zero", async () => {
+    // This is the bug the user hit: leafId from cache doesn't exist in the JSONL
+    // (e.g. from a different session or expired cache). Without the safety check,
+    // the path would be empty → all messages filtered out → user sees nothing.
+    writeFileSync(
+      sessionFile,
+      [
+        msgEntry("e1", null, "user", "hello"),
+        msgEntry("e2", "e1", "assistant", "hi"),
+        msgEntry("e3", "e2", "user", "more"),
+      ].join("\n"),
+    );
+
+    internals(manager).sessionPaths.set("s1", sessionFile);
+    // leafId that doesn't exist in the JSONL file
+    internals(manager).leafIds.set("s1", "nonexistent-entry-id");
+
+    const result = await manager.getFullMessages("s1", sessionFile);
+
+    // Should return ALL messages (unfiltered) because the leafId is not found
+    expect(result.messages).toHaveLength(3);
+    expect(result.totalCount).toBe(3);
   });
 
   it("end-to-end: rollback then getFullMessages shows fewer messages", async () => {
