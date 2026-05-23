@@ -1203,10 +1203,12 @@ export class AgentProcessManager {
     }
 
     // Resolve current leafId for branch filtering.
-    // After rollback, leafId is already in the map from navigateTree().
-    // For initial load, try to get it from the CLI.
-    let leafId: string | null | undefined = this.leafIds.get(sessionId);
-    if (leafId === undefined && managed) {
+    // Always fetch from CLI to get the latest leaf position, because:
+    // - After rollback + continue chatting, the CLI's leafId has moved to new entries
+    //   but this.leafIds may still hold the old rollback target.
+    // - The cache is only a fallback when CLI is unavailable.
+    let leafId: string | null | undefined = undefined;
+    if (managed) {
       try {
         const treeResult = await managed.client.getTreeWithLeaf();
         if (treeResult.leafId) {
@@ -1214,11 +1216,16 @@ export class AgentProcessManager {
           this.leafIds.set(sessionId, leafId);
         }
       } catch (err: unknown) {
-        log.warn("[getFullMessages] getTreeWithLeaf failed, skipping branch filter", {
+        log.warn("[getFullMessages] getTreeWithLeaf failed, using cached leafId", {
           sessionId,
           err: err instanceof Error ? err.message : String(err),
         });
+        // Fallback to cached value
+        leafId = this.leafIds.get(sessionId);
       }
+    } else {
+      // No managed client (session not running), use cache
+      leafId = this.leafIds.get(sessionId);
     }
 
     // Build leaf→root path set and filter messages to current branch only.

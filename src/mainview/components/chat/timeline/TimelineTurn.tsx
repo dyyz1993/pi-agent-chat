@@ -72,26 +72,9 @@ export const TimelineTurn = memo(function TimelineTurn({
       const sessionId = useSessionStore.getState().activeSessionId;
       if (!sessionId) return;
       try {
-        // Prefer pre-resolved entryId from the message (matches backend tree)
-        // Rollback means "remove this assistant reply and everything after it",
-        // so we target the parentId (the user message before it), not the assistant itself.
-        let targetId: string | null = null;
-
-        if (turn.assistantEntryId) {
-          // Need to find parentId of assistantEntryId
-          const result = await apiClient.call("agent.getTree", { sessionId });
-          const entries: Array<{
-            id: string;
-            parentId: string | null;
-            type: string;
-            label?: string;
-          }> = result.entries ?? result ?? [];
-          const byId = new Map(entries.map((e) => [e.id, e]));
-          const entry = byId.get(turn.assistantEntryId);
-          if (entry?.parentId) {
-            targetId = entry.parentId;
-          }
-        }
+        // The backend's navigateTree handles the parentId jump for all message types,
+        // so we pass the assistant entryId directly.
+        let targetId: string | null = turn.assistantEntryId ?? null;
 
         // Fallback: resolve via tree lookup using the frontend message ID
         if (!targetId) {
@@ -108,8 +91,8 @@ export const TimelineTurn = memo(function TimelineTurn({
 
           if (turn.assistantMessageId) {
             const entry = byId.get(turn.assistantMessageId);
-            if (entry?.parentId) {
-              targetId = entry.parentId;
+            if (entry) {
+              targetId = entry.id;
             }
           }
         }

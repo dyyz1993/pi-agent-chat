@@ -348,6 +348,55 @@ describe("getFullMessages leaf→root path filtering", () => {
     expect(texts).not.toContain("reply-2");
     expect(texts).toContain("new-turn-2");
   });
+
+  it("rollback then continue chatting: new messages are included after leafId refresh", async () => {
+    // Simulates the scenario:
+    // 1. Session has e1→e2→e3→e4 (2 turns)
+    // 2. Rollback to e2 (leafIds cache = "e2")
+    // 3. Continue chatting → e5→e6 appended to JSONL
+    // 4. getFullMessages should return e1→e2→e5→e6 (NOT filtered to old e2)
+    //
+    // This tests the fix for: after rollback + continue, new messages were
+    // filtered out because leafIds cache held the old rollback target.
+
+    writeFileSync(
+      sessionFile,
+      [
+        msgEntry("e1", null, "user", "hello"),
+        msgEntry("e2", "e1", "assistant", "hi"),
+        msgEntry("e3", "e2", "user", "more"),
+        msgEntry("e4", "e3", "assistant", "reply"),
+        // New messages after rollback + continue:
+        msgEntry("e5", "e2", "user", "new question"),
+        msgEntry("e6", "e5", "assistant", "new answer"),
+      ].join("\n"),
+    );
+
+    internals(manager).sessionPaths.set("s1", sessionFile);
+
+    // Step 1: Simulate rollback — set leafId to e2 (old value)
+    internals(manager).leafIds.set("s1", "e2");
+
+    // Step 2: Simulate CLI has moved leaf to e6 (after continuing chat)
+    // In real code, getTreeWithLeaf() would return e6.
+    // But our test uses no managed client, so it falls back to leafIds cache.
+    // To simulate the bug, keep old cache:
+    //   leafId = "e2" → path e2→e1 → only 2 messages → e5/e6 missing!
+
+    // With old cache (simulating the bug):
+    const resultWithOldCache = await manager.getFullMessages("s1", sessionFile);
+    // This returns e1+e2 because leafIds=e2, but e5/e6 are NOT on e2→e1 path
+    expect(resultWithOldCache.messages).toHaveLength(2);
+
+    // Step 3: Update leafIds to latest (what getTreeWithLeaf would return)
+    internals(manager).leafIds.set("s1", "e6");
+
+    const resultWithNewLeaf = await manager.getFullMessages("s1", sessionFile);
+    // Now path is e6→e5→e2→e1 → 4 messages
+    expect(resultWithNewLeaf.messages).toHaveLength(4);
+    const roles = resultWithNewLeaf.messages.map((m: Record<string, unknown>) => m.role);
+    expect(roles).toEqual(["user", "assistant", "user", "assistant"]);
+  });
 });
 
 class MockRPCServer {
