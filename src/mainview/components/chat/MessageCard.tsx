@@ -407,8 +407,18 @@ const HeaderActions = memo(function HeaderActions({
     [sessionId, message.id, message.entryId, messages, isUserCard, fetchTree],
   );
 
-  const findTurnBoundary = useCallback((entryId: string, _entries: TreeEntry[]): string | null => {
-    return entryId;
+  const findTurnBoundary = useCallback((entryId: string, entries: TreeEntry[]): string | null => {
+    // "Rollback message X" means "remove X and everything after it".
+    // Since navigateTree(targetId) sets targetId as the new leaf, and the
+    // leaf→root path INCLUDES the leaf, we must set leaf = parentId of X
+    // so that X itself is excluded from the visible messages.
+    const byId = new Map(entries.map((e) => [e.id, e]));
+    const entry = byId.get(entryId);
+    if (!entry) return null;
+    const parentId = entry.parentId;
+    // If this is the root message (no parent), we can't roll back further.
+    if (!parentId) return null;
+    return parentId;
   }, []);
 
   const resolveRollbackTarget = useCallback(async (): Promise<{
