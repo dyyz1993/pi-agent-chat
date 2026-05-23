@@ -1151,12 +1151,14 @@ export class AgentProcessManager {
     // This avoids CLI OOM — CLI's get_full_messages handler uses readFile internally
     // which can blow the heap on large sessions (>8MB JSONL).
     const allMessages: Array<{ entryId: string; message: unknown }> = [];
-    const customEntries: Array<{
+    const allCustomEntries: Array<{
       id: string;
       customType: string;
       data: unknown;
       timestamp: number;
     }> = [];
+    // Collect parentId map for leaf→root path filtering
+    const parentById = new Map<string, string | null>();
 
     if (resolvedSessionPath && existsSync(resolvedSessionPath)) {
       try {
@@ -1168,16 +1170,21 @@ export class AgentProcessManager {
           if (!line.trim()) continue;
           try {
             const parsed = JSON.parse(line) as Record<string, unknown>;
+            const entryId = (parsed.id as string) ?? "";
+            const parentId = (parsed.parentId as string | null | undefined) ?? null;
+            if (entryId) {
+              parentById.set(entryId, parentId);
+            }
             if (parsed.type === "custom") {
-              customEntries.push({
-                id: (parsed.id as string) ?? `custom-${Date.now()}`,
+              allCustomEntries.push({
+                id: entryId || `custom-${Date.now()}`,
                 customType: (parsed.customType as string) ?? "unknown",
                 data: parsed.data,
                 timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
               });
             } else if (parsed.type === "message" && parsed.message) {
               allMessages.push({
-                entryId: (parsed.id as string) ?? "",
+                entryId,
                 message: parsed.message,
               });
             }
@@ -1195,19 +1202,55 @@ export class AgentProcessManager {
       }
     }
 
-    // Apply pagination to JSONL results (take from the end)
-    const totalCount = allMessages.length;
+    // Resolve current leafId for branch filtering.
+    // After rollback, leafId is already in the map from navigateTree().
+    // For initial load, try to get it from the CLI.
+    let leafId: string | null | undefined = this.leafIds.get(sessionId);
+    if (leafId === undefined && managed) {
+      try {
+        const treeResult = await managed.client.getTreeWithLeaf();
+        if (treeResult.leafId) {
+          leafId = treeResult.leafId;
+          this.leafIds.set(sessionId, leafId);
+        }
+      } catch (err: unknown) {
+        log.warn("[getFullMessages] getTreeWithLeaf failed, skipping branch filter", {
+          sessionId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    // Build leaf→root path set and filter messages to current branch only.
+    // This ensures rollback (which moves the leaf pointer) is reflected in
+    // the message list. Without filtering, all branches' messages are shown.
+    let filteredMessages = allMessages;
+    let customEntries = allCustomEntries;
+    if (leafId && parentById.size > 0) {
+      const pathIds = new Set<string>();
+      let curId: string | null = leafId;
+      while (curId) {
+        pathIds.add(curId);
+        const parent = parentById.get(curId);
+        curId = parent ?? null;
+      }
+      filteredMessages = allMessages.filter((m) => pathIds.has(m.entryId));
+      customEntries = allCustomEntries.filter((e) => pathIds.has(e.id));
+    }
+
+    // Apply pagination to filtered results (take from the end)
+    const totalCount = filteredMessages.length;
     const limit = options?.limit;
     let hasMore = false;
     let nextCursor: string | null = null;
 
     let slicedMessages: unknown[];
     if (limit !== undefined && limit < totalCount) {
-      slicedMessages = allMessages.slice(totalCount - limit).map((e) => e.message);
+      slicedMessages = filteredMessages.slice(totalCount - limit).map((e) => e.message);
       hasMore = true;
-      nextCursor = allMessages[totalCount - limit]?.entryId ?? null;
+      nextCursor = filteredMessages[totalCount - limit]?.entryId ?? null;
     } else {
-      slicedMessages = allMessages.map((e) => e.message);
+      slicedMessages = filteredMessages.map((e) => e.message);
     }
 
     const totalMs = Math.round(performance.now() - t0);
@@ -1217,6 +1260,8 @@ export class AgentProcessManager {
       messageCount: slicedMessages.length,
       totalCount,
       hasMore,
+      leafId: leafId ?? "none",
+      pathFilterApplied: !!leafId,
       totalMs,
     });
 
