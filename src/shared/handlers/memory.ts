@@ -1,7 +1,7 @@
 import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { HandlerOptions, R } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
-import type { MemoryFile } from "../modules/memory";
+import type { MemoryFile, MemoryStatusResult } from "../modules/memory";
 import { readdir, readFile, stat } from "fs/promises";
 import { existsSync } from "fs";
 import { join, resolve } from "path";
@@ -136,15 +136,50 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     return { ok: true };
   });
 
-  r("memory.markIrrelevant", async (params) => {
+  r("memory.getStatus", async (params) => {
     const manager = getProcessManager();
-    if (manager && manager.hasSession(params.sessionId)) {
-      await manager.callChannel(params.sessionId, "memory", "memory.markIrrelevant", {
-        query: params.query,
-        selectedFiles: params.selectedFiles,
+    if (manager && params.sessionId && manager.hasSession(params.sessionId)) {
+      try {
+        const result = (await manager.callChannel(
+          params.sessionId,
+          "memory",
+          "memory.getStatus",
+          {},
+        )) as MemoryStatusResult | null;
+        if (result) return result;
+      } catch (err) {
+        console.warn("[memory] getStatus channel call failed:", err);
+      }
+    }
+    return {
+      skipRules: { builtin: [], custom: [] },
+      guardRules: { builtin: [], custom: [] },
+      excludeKeywords: [],
+      recentQueries: [],
+      dream: { lastRunAt: null },
+    };
+  });
+
+  r("memory.removeRule", async (params) => {
+    const manager = getProcessManager();
+    if (manager && params.sessionId && manager.hasSession(params.sessionId)) {
+      await manager.callChannel(params.sessionId, "memory", "memory.removeRule", {
+        rule: params.rule,
+        excludeKeyword: params.excludeKeyword,
       });
     }
+    return { ok: true };
+  });
 
+  r("memory.addRule", async (params) => {
+    const manager = getProcessManager();
+    if (manager && params.sessionId && manager.hasSession(params.sessionId)) {
+      await manager.callChannel(params.sessionId, "memory", "memory.addRule", {
+        pattern: params.pattern,
+        mode: params.mode,
+        action: params.action,
+      });
+    }
     return { ok: true };
   });
 }

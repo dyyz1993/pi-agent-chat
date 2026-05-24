@@ -524,7 +524,7 @@ const HeaderActions = memo(function HeaderActions({
                 try {
                   const modResult = await apiClient.call("agent.getModifiedFiles", {
                     sessionId,
-                    toUserMsgEntryId: message.entryId ?? undefined,
+                    toUserMsgEntryId: result.targetId ?? message.entryId ?? undefined,
                   });
                   const rawFiles = modResult as Array<{
                     path: string;

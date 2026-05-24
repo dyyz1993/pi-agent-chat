@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { apiClient } from "../lib/api-client";
 import { useSessionStore } from "./use-session-store";
+import type { MemoryStatusResult } from "../../shared/modules/memory";
 
 interface MemoryEvent {
   id: string;
@@ -32,6 +33,7 @@ interface MemoryState {
   collapsedSections: Set<string>;
   bookmarkCreatingBySession: Record<string, boolean>;
   irrelevantMarkedBySession: Record<string, Set<string>>;
+  statusBySession: Record<string, MemoryStatusResult | null>;
 
   addEvent: (sessionId: string, event: MemoryEvent) => void;
   loadFiles: (projectPath: string, sessionId: string) => Promise<void>;
@@ -48,6 +50,15 @@ interface MemoryState {
   ) => Promise<void>;
   isIrrelevantMarked: (sessionId: string, blockId: string) => boolean;
   addIrrelevantMark: (sessionId: string, blockId: string) => void;
+  loadStatus: (sessionId: string) => Promise<void>;
+  removeRule: (
+    sessionId: string,
+    params: { rule?: { pattern: string; mode: string }; excludeKeyword?: string },
+  ) => Promise<void>;
+  addRule: (
+    sessionId: string,
+    params: { pattern: string; mode: string; action: string },
+  ) => Promise<void>;
 }
 
 const loadFilesTimers: Record<string, ReturnType<typeof setTimeout>> = {};
@@ -61,6 +72,7 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
   collapsedSections: new Set(["operations"]),
   bookmarkCreatingBySession: {},
   irrelevantMarkedBySession: {},
+  statusBySession: {},
 
   addEvent: (sessionId, event) => {
     set((s) => {
@@ -148,6 +160,7 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
       const { [sessionId]: _p, ...restEntrypoint } = s.entrypointBySession;
       const { [sessionId]: _b, ...restBookmark } = s.bookmarkCreatingBySession;
       const { [sessionId]: _m, ...restIrrelevant } = s.irrelevantMarkedBySession;
+      const { [sessionId]: _s, ...restStatus } = s.statusBySession;
       return {
         eventsBySession: restEvents,
         filesBySession: restFiles,
@@ -155,6 +168,7 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
         entrypointBySession: restEntrypoint,
         bookmarkCreatingBySession: restBookmark,
         irrelevantMarkedBySession: restIrrelevant,
+        statusBySession: restStatus,
       };
     });
   },
@@ -196,5 +210,30 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
     } catch (err) {
       console.warn("[memory-store] markIrrelevant failed:", err);
     }
+  },
+
+  loadStatus: async (sessionId) => {
+    try {
+      const result = (await apiClient.call("memory.getStatus", {
+        sessionId,
+      })) as MemoryStatusResult;
+      set((s) => ({
+        statusBySession: { ...s.statusBySession, [sessionId]: result },
+      }));
+    } catch {
+      // silently fail
+    }
+  },
+
+  removeRule: async (sessionId, params) => {
+    await apiClient.call("memory.removeRule", { ...params, sessionId });
+    const store = get();
+    await store.loadStatus(sessionId);
+  },
+
+  addRule: async (sessionId, params) => {
+    await apiClient.call("memory.addRule", { ...params, sessionId });
+    const store = get();
+    await store.loadStatus(sessionId);
   },
 }));

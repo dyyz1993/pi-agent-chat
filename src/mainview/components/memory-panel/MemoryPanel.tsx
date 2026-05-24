@@ -1,5 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
-import { Brain, Search, FileText, ChevronDown, ChevronRight } from "lucide-react";
+import {
+  Brain,
+  Search,
+  FileText,
+  ChevronDown,
+  ChevronRight,
+  History,
+  Shield,
+  X,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useMemoryStore } from "../../stores/use-memory-store";
 import { useSessionStore } from "../../stores/use-session-store";
@@ -116,6 +125,17 @@ export function MemoryPanel() {
   const setExpandedFile = useMemoryStore((s) => s.setExpandedFile);
 
   const loadFiles = useMemoryStore((s) => s.loadFiles);
+  const memoryStatus = useMemoryStore(
+    useShallow((s) => (sessionId ? s.statusBySession[sessionId] : null)),
+  );
+  const loadStatus = useMemoryStore((s) => s.loadStatus);
+  const removeRuleAction = useMemoryStore((s) => s.removeRule);
+  const [builtinExpanded, setBuiltinExpanded] = useState(false);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    loadStatus(sessionId);
+  }, [sessionId]);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -178,9 +198,15 @@ export function MemoryPanel() {
       ) : null;
     }
     if (customType === "memory_prefetch_result") {
-      const d = data as { durationMs?: number } | undefined;
-      return d?.durationMs != null ? (
-        <span className="text-[9px] text-text-tertiary">{d.durationMs}ms</span>
+      const d = data as
+        | { durationMs?: number; layer?: string; selectedFiles?: string[] }
+        | undefined;
+      const parts: string[] = [];
+      if (d?.layer) parts.push(d.layer);
+      if (d?.selectedFiles?.length) parts.push(`${d.selectedFiles.length} files`);
+      if (d?.durationMs != null) parts.push(`${d.durationMs}ms`);
+      return parts.length > 0 ? (
+        <span className="text-[9px] text-text-tertiary">{parts.join(" · ")}</span>
       ) : null;
     }
     if (customType === "memory_irrelevant_marked") {
@@ -281,6 +307,48 @@ export function MemoryPanel() {
                   </span>
                 </div>
               ))}
+              {/* Debug info from latest prefetch */}
+              {(() => {
+                const prefetchEvents = events.filter(
+                  (e) => e.customType === "memory_prefetch_result",
+                );
+                const latest = prefetchEvents[prefetchEvents.length - 1];
+                if (!latest) return null;
+                const d = latest.data as
+                  | {
+                      layer?: string;
+                      durationMs?: number;
+                      selectedFiles?: string[];
+                      availableFiles?: number;
+                      skipHits?: string[];
+                      guardHits?: string[];
+                    }
+                  | undefined;
+                if (!d) return null;
+                const layerColors: Record<string, string> = {
+                  llm: "text-status-info",
+                  auto: "text-status-success",
+                  skip: "text-text-tertiary",
+                };
+                const layerIcons: Record<string, string> = { llm: "🔍", auto: "⚡", skip: "⏭️" };
+                return (
+                  <div className="mx-1 mt-1 px-1.5 py-1 rounded bg-surface-code/60 dark:bg-surface-code/40 text-[9px] text-text-tertiary flex items-center gap-1.5 flex-wrap">
+                    <span className={layerColors[d.layer ?? ""] ?? "text-text-tertiary"}>
+                      {layerIcons[d.layer ?? ""] ?? "?"} {d.layer}
+                    </span>
+                    <span>· {d.selectedFiles?.length ?? 0} files</span>
+                    {d.durationMs != null && <span>· {d.durationMs}ms</span>}
+                    {d.guardHits && d.guardHits.length > 0 && (
+                      <span className="text-status-success">
+                        ✅ guard: {d.guardHits.join(", ")}
+                      </span>
+                    )}
+                    {d.skipHits && d.skipHits.length > 0 && (
+                      <span className="text-status-warning">⏭️ skip: {d.skipHits.join(", ")}</span>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>
@@ -359,6 +427,220 @@ export function MemoryPanel() {
           )}
         </div>
       )}
+
+      {/* Filter Rules */}
+      <div className="border-b border-border-secondary dark:border-surface-code/50">
+        <SectionHeader
+          collapsed={collapsedSections.has("filters")}
+          onToggle={() => toggleSection("filters")}
+          icon={Shield}
+          iconCls="text-status-warning"
+          label={t("filterRules")}
+          badge={
+            (memoryStatus?.skipRules?.custom?.length ?? 0) +
+            (memoryStatus?.guardRules?.custom?.length ?? 0) +
+            (memoryStatus?.excludeKeywords?.length ?? 0)
+          }
+        />
+        {!collapsedSections.has("filters") && (
+          <div className="px-2.5 pb-1.5 space-y-2">
+            {/* Exclude Keywords */}
+            {(memoryStatus?.excludeKeywords?.length ?? 0) > 0 && (
+              <div>
+                <div className="text-[9px] font-medium text-text-tertiary mb-0.5">
+                  📌 {t("excludeKeywords")} ({memoryStatus!.excludeKeywords!.length})
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {memoryStatus!.excludeKeywords!.map((kw) => (
+                    <span
+                      key={kw}
+                      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-status-error/10 text-[9px] text-status-error group"
+                    >
+                      {kw}
+                      <button
+                        onClick={() =>
+                          sessionId && removeRuleAction(sessionId, { excludeKeyword: kw })
+                        }
+                        className="opacity-0 group-hover:opacity-100 transition-opacity"
+                        title={t("remove")}
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Custom Skip Rules */}
+            {(memoryStatus?.skipRules?.custom?.length ?? 0) > 0 && (
+              <div>
+                <div className="text-[9px] font-medium text-text-tertiary mb-0.5">
+                  ⏭️ {t("customSkipRules")} ({memoryStatus!.skipRules!.custom!.length})
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {memoryStatus!.skipRules!.custom!.map((rule, i) => (
+                    <span
+                      key={`${rule.pattern}-${rule.mode}-${i}`}
+                      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-surface-code dark:bg-surface-code/60 text-[9px] text-text-secondary group"
+                    >
+                      {rule.mode}: "{rule.pattern}"
+                      <button
+                        onClick={() =>
+                          sessionId &&
+                          removeRuleAction(sessionId, {
+                            rule: { pattern: rule.pattern, mode: rule.mode },
+                          })
+                        }
+                        className="opacity-0 group-hover:opacity-100 transition-opacity"
+                        title={t("remove")}
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Custom Guard Rules */}
+            {(memoryStatus?.guardRules?.custom?.length ?? 0) > 0 && (
+              <div>
+                <div className="text-[9px] font-medium text-text-tertiary mb-0.5">
+                  ✅ {t("customGuardRules")} ({memoryStatus!.guardRules!.custom!.length})
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {memoryStatus!.guardRules!.custom!.map((rule, i) => (
+                    <span
+                      key={`${rule.pattern}-${rule.mode}-${i}`}
+                      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-status-success/10 text-[9px] text-status-success group"
+                    >
+                      {rule.mode}: "{rule.pattern}"
+                      <button
+                        onClick={() =>
+                          sessionId &&
+                          removeRuleAction(sessionId, {
+                            rule: { pattern: rule.pattern, mode: rule.mode },
+                          })
+                        }
+                        className="opacity-0 group-hover:opacity-100 transition-opacity"
+                        title={t("remove")}
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Built-in rules (collapsed) */}
+            <div>
+              <button
+                onClick={() => setBuiltinExpanded(!builtinExpanded)}
+                className="text-[9px] text-text-tertiary hover:text-text-secondary transition-colors w-full text-left"
+              >
+                ──{" "}
+                {builtinExpanded
+                  ? t("hideBuiltin")
+                  : t("showBuiltin", {
+                      skip: memoryStatus?.skipRules?.builtin?.length ?? 0,
+                      guard: memoryStatus?.guardRules?.builtin?.length ?? 0,
+                    })}{" "}
+                ──
+              </button>
+              {builtinExpanded && (
+                <div className="mt-1 space-y-1">
+                  <div className="flex flex-wrap gap-0.5">
+                    {(memoryStatus?.skipRules?.builtin ?? []).map((r, i) => (
+                      <span
+                        key={`s-${i}`}
+                        className="px-1 py-0 rounded text-[8px] text-text-tertiary bg-surface-code/40"
+                      >
+                        ⏭️ {r.mode}: "{r.pattern}"
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap gap-0.5">
+                    {(memoryStatus?.guardRules?.builtin ?? []).map((r, i) => (
+                      <span
+                        key={`g-${i}`}
+                        className="px-1 py-0 rounded text-[8px] text-status-success/60 bg-status-success/5"
+                      >
+                        ✅ {r.mode}: "{r.pattern}"
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Empty state */}
+            {(memoryStatus?.skipRules?.custom?.length ?? 0) === 0 &&
+              (memoryStatus?.guardRules?.custom?.length ?? 0) === 0 &&
+              (memoryStatus?.excludeKeywords?.length ?? 0) === 0 && (
+                <div className="py-2 text-center text-[10px] text-text-tertiary">
+                  {t("noCustomRules")}
+                </div>
+              )}
+          </div>
+        )}
+      </div>
+
+      {/* Search History */}
+      <div className="border-b border-border-secondary dark:border-surface-code/50">
+        <SectionHeader
+          collapsed={collapsedSections.has("history")}
+          onToggle={() => toggleSection("history")}
+          icon={History}
+          iconCls="text-text-tertiary"
+          label={t("searchHistory")}
+          badge={memoryStatus?.recentQueries?.length}
+        />
+        {!collapsedSections.has("history") && (
+          <div className="px-2.5 pb-1.5 space-y-1">
+            {(memoryStatus?.recentQueries?.length ?? 0) > 0 ? (
+              [...(memoryStatus?.recentQueries ?? [])].reverse().map((q, i) => {
+                const layerColors: Record<string, string> = {
+                  llm: "text-status-info",
+                  auto: "text-status-success",
+                  skip: "text-text-tertiary",
+                };
+                const layerIcons: Record<string, string> = { llm: "🔍", auto: "⚡", skip: "⏭️" };
+                return (
+                  <div
+                    key={i}
+                    className="px-1.5 py-1 rounded hover:bg-surface-hover/30 dark:hover:bg-surface-code/30"
+                  >
+                    <div className="text-[10px] text-text-primary truncate">"{q.query}"</div>
+                    <div className="flex items-center gap-1.5 mt-0.5 text-[9px] text-text-tertiary flex-wrap">
+                      <span className={layerColors[q.skipped ? "skip" : "llm"]}>
+                        {layerIcons[q.skipped ? "skip" : "llm"]} {q.skipped ? "skip" : "matched"}
+                      </span>
+                      <span>· {q.selected?.length ?? 0} files</span>
+                      <span className="ml-auto">{relativeTimeStr(q.timestamp)}</span>
+                    </div>
+                    {q.guard_hits?.length > 0 && (
+                      <div className="text-[9px] text-status-success mt-0.5">
+                        ✅ guard: {q.guard_hits.join(", ")}
+                      </div>
+                    )}
+                    {q.skip_hits?.length > 0 && (
+                      <div className="text-[9px] text-status-warning mt-0.5">
+                        ⏭️ skip: {q.skip_hits.join(", ")}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            ) : (
+              <div className="py-2 text-center text-[10px] text-text-tertiary">
+                {t("noSearchHistory")}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       <div className="border-b border-border-secondary dark:border-surface-code/50 last:border-b-0">
         <SectionHeader

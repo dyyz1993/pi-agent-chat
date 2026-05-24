@@ -66,6 +66,9 @@ export const MEMORY_METHODS = {
   LIST: "memory.list",
   USER_REMEMBER: "memory.userRemember",
   MARK_IRRELEVANT: "memory.markIrrelevant",
+  GET_STATUS: "memory.getStatus",
+  REMOVE_RULE: "memory.removeRule",
+  ADD_RULE: "memory.addRule",
 } as const;
 
 // ---- supervisor channel ----
