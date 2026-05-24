@@ -514,21 +514,44 @@ const HeaderActions = memo(function HeaderActions({
                 try {
                    const modResult = await apiClient.call("agent.getModifiedFiles", {
                      sessionId,
-                     toTurnIndex: messages.filter((m) => m.role === "user").findIndex((m) => m.id === message.id),
+                     toUserMsgEntryId: message.entryId ?? undefined,
                    });
-                  const files: ModifiedFile[] = (
-                    modResult as Array<{
-                      path: string;
-                      status: "added" | "modified" | "deleted";
-                      turnIndex: number;
-                      entryId: string;
-                    }>
-                  ).map((f) => ({
-                    path: f.path,
-                    status: f.status,
-                    turnIndex: f.turnIndex,
-                    entryId: f.entryId,
-                  }));
+                   const rawFiles = (modResult as Array<{
+                     path: string;
+                     status: "added" | "modified" | "deleted";
+                     turnIndex: number;
+                     entryId: string;
+                   }>);
+                   const files: ModifiedFile[] = await Promise.all(
+                     rawFiles.map(async (f) => {
+                       if (f.status === "modified" || f.status === "added") {
+                         try {
+                           const diffResult = await apiClient.call("agent.getFileDiff", {
+                             sessionId,
+                             filePath: f.path,
+                             toEntryId: f.entryId,
+                           });
+                           const diff = diffResult as { oldContent?: string | null; newContent?: string | null; unifiedDiff?: string } | null;
+                           if (diff) {
+                             const oldLines = diff.oldContent?.split("\n").length ?? 0;
+                             const newLines = diff.newContent?.split("\n").length ?? 0;
+                             return {
+                               path: f.path,
+                               status: f.status,
+                               turnIndex: f.turnIndex,
+                               entryId: f.entryId,
+                               details: diff.unifiedDiff ?? undefined,
+                               addedLines: f.status === "added" ? newLines : Math.max(0, newLines - oldLines),
+                               removedLines: f.status === "added" ? 0 : Math.max(0, oldLines - newLines),
+                             };
+                           }
+                         } catch {
+                           /* skip diff */
+                         }
+                       }
+                       return { path: f.path, status: f.status, turnIndex: f.turnIndex, entryId: f.entryId };
+                     }),
+                   );
                   const restored = files
                     .filter((f) => f.status === "modified" || f.status === "added")
                     .map((f) => f.path);
