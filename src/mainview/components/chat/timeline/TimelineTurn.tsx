@@ -110,10 +110,9 @@ export const TimelineTurn = memo(function TimelineTurn({
 
         if (mode === "withFiles") {
           try {
-             const modResult = await apiClient.call("agent.getModifiedFiles", {
-               sessionId,
-               toTurnIndex: turn.index,
-             });
+              const modResult = await apiClient.call("agent.getModifiedFiles", {
+                sessionId,
+              });
             const files: ModifiedFile[] = (
               modResult as Array<{
                 path: string;
