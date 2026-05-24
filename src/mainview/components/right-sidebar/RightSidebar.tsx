@@ -28,6 +28,7 @@ import { ChangeReviewPanel } from "../change-review/ChangeReviewPanel";
 import { useChangeReviewStore } from "../../stores/use-change-review-store";
 import { useExplorerStore } from "../../stores/use-explorer-store";
 import { useGitStore } from "../../stores/use-git-store";
+import { useSessionStore } from "../../stores/use-session-store";
 import { useEffect, useRef } from "react";
 
 const TAB_ICONS: Record<PanelTabId, React.ComponentType<{ className?: string }>> = {
@@ -77,6 +78,15 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
   const hideStatus = useLayoutStore((s) => s.hideStatus);
   const refreshAll = useGitStore((s) => s.refreshAll);
   const prevPanelVisible = useRef(statusPanel !== "hidden");
+  const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const fetchPending = useChangeReviewStore((s) => s.fetchPending);
+
+  useEffect(() => {
+    if (activeSessionId && activePanelTab === "changeReview") {
+      fetchPending();
+    }
+  }, [activeSessionId, activePanelTab, fetchPending]);
+
   useEffect(() => {
     if (activePanelTab === "files") {
       listRootDir();

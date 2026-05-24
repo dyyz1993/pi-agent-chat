@@ -191,7 +191,9 @@ export const TodoExecRenderer = memo(function TodoExecRenderer({ block }: ToolRe
   const badge = isRunning ? (
     <span className="shrink-0 text-[10px] text-status-info animate-pulse">执行中...</span>
   ) : details ? (
-    <ActionSummary details={details} />
+    <span className="text-[10px]">
+      <ActionSummary details={details} />
+    </span>
   ) : undefined;
 
   return (

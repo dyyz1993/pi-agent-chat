@@ -314,7 +314,7 @@ function StatusBadge({ sessionId }: { sessionId: string }) {
 
   if (status === "streaming" || status === "compacting") {
     return (
-      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-warning/15 text-status-warning border border-status-warning/20">
+      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-warning/15 text-status-warning border border-status-warning/20 whitespace-nowrap">
         <span className="w-1 h-1 rounded-full bg-status-warning animate-pulse" />
         {t("working")}
       </span>
@@ -322,7 +322,7 @@ function StatusBadge({ sessionId }: { sessionId: string }) {
   }
   if (status === "permission") {
     return (
-      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-error/15 text-status-error border border-status-error/20">
+      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-error/15 text-status-error border border-status-error/20 whitespace-nowrap">
         <span className="w-1 h-1 rounded-full bg-status-error" />
         {t("needHelp")}
       </span>
@@ -330,14 +330,14 @@ function StatusBadge({ sessionId }: { sessionId: string }) {
   }
   if (status === "retrying") {
     return (
-      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-error/15 text-status-error border border-status-error/20">
+      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-error/15 text-status-error border border-status-error/20 whitespace-nowrap">
         <span className="w-1 h-1 rounded-full bg-status-error animate-pulse" />
         {t("retrying")}
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-success/15 text-status-success border border-status-success/25">
+    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-success/15 text-status-success border border-status-success/25 whitespace-nowrap">
       <span className="w-1 h-1 rounded-full bg-status-success" />
       {t("idle")}
     </span>
@@ -362,7 +362,7 @@ function SubagentStatusBadge({ sub }: { sub: SubagentSessionInfo }) {
   const { t } = useTranslation("common");
   if (sub.exitCode === 0) {
     return (
-      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-success/15 text-status-success border border-status-success/20">
+      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-success/15 text-status-success border border-status-success/20 whitespace-nowrap">
         <span className="w-1 h-1 rounded-full bg-status-success" />
         {t("idle")}
       </span>
@@ -370,13 +370,13 @@ function SubagentStatusBadge({ sub }: { sub: SubagentSessionInfo }) {
   }
   if (sub.error || (sub.exitCode !== undefined && sub.exitCode !== 0)) {
     return (
-      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-error/15 text-status-error border border-status-error/20">
+      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-error/15 text-status-error border border-status-error/20 whitespace-nowrap">
         {t("error")}
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-warning/15 text-status-warning border border-status-warning/20">
+    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-warning/15 text-status-warning border border-status-warning/20 whitespace-nowrap">
       <span className="w-1 h-1 rounded-full bg-status-warning animate-pulse" />
       {t("running")}
     </span>

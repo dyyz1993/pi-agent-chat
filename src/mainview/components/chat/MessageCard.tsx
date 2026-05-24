@@ -405,9 +405,19 @@ const HeaderActions = memo(function HeaderActions({
     [sessionId, message.id, message.entryId, messages, isUserCard, fetchTree],
   );
 
-  const findTurnBoundary = useCallback((entryId: string, _entries: TreeEntry[]): string | null => {
+  const findTurnBoundary = useCallback((entryId: string, entries: TreeEntry[]): string | null => {
     // The backend's navigateTree handles the parentId jump for all message types
     // (user, assistant, etc.), so the frontend just passes the clicked entryId directly.
+    // However, if this is the FIRST user message entry in the tree, rolling back would
+    // navigate to before any conversation content exists, effectively clearing everything.
+    // Return null to trigger the first-message guard.
+    const entry = entries.find((e) => e.id === entryId);
+    if (entry && entry.type === "message" && entry.label === "user") {
+      const userEntries = entries.filter((e) => e.type === "message" && e.label === "user");
+      if (userEntries.length > 0 && userEntries[0].id === entryId) {
+        return null;
+      }
+    }
     return entryId;
   }, []);
 
@@ -512,46 +522,59 @@ const HeaderActions = memo(function HeaderActions({
           mode === "withFiles"
             ? await (async () => {
                 try {
-                   const modResult = await apiClient.call("agent.getModifiedFiles", {
-                     sessionId,
-                     toUserMsgEntryId: message.entryId ?? undefined,
-                   });
-                   const rawFiles = (modResult as Array<{
-                     path: string;
-                     status: "added" | "modified" | "deleted";
-                     turnIndex: number;
-                     entryId: string;
-                   }>);
-                   const files: ModifiedFile[] = await Promise.all(
-                     rawFiles.map(async (f) => {
-                       if (f.status === "modified" || f.status === "added") {
-                         try {
-                           const diffResult = await apiClient.call("agent.getFileDiff", {
-                             sessionId,
-                             filePath: f.path,
-                             toEntryId: f.entryId,
-                           });
-                           const diff = diffResult as { oldContent?: string | null; newContent?: string | null; unifiedDiff?: string } | null;
-                           if (diff) {
-                             const oldLines = diff.oldContent?.split("\n").length ?? 0;
-                             const newLines = diff.newContent?.split("\n").length ?? 0;
-                             return {
-                               path: f.path,
-                               status: f.status,
-                               turnIndex: f.turnIndex,
-                               entryId: f.entryId,
-                               details: diff.unifiedDiff ?? undefined,
-                               addedLines: f.status === "added" ? newLines : Math.max(0, newLines - oldLines),
-                               removedLines: f.status === "added" ? 0 : Math.max(0, oldLines - newLines),
-                             };
-                           }
-                         } catch {
-                           /* skip diff */
-                         }
-                       }
-                       return { path: f.path, status: f.status, turnIndex: f.turnIndex, entryId: f.entryId };
-                     }),
-                   );
+                  const modResult = await apiClient.call("agent.getModifiedFiles", {
+                    sessionId,
+                    toUserMsgEntryId: message.entryId ?? undefined,
+                  });
+                  const rawFiles = modResult as Array<{
+                    path: string;
+                    status: "added" | "modified" | "deleted";
+                    turnIndex: number;
+                    entryId: string;
+                  }>;
+                  const files: ModifiedFile[] = await Promise.all(
+                    rawFiles.map(async (f) => {
+                      try {
+                        const diffResult = await apiClient.call("agent.getFileDiff", {
+                          sessionId,
+                          filePath: f.path,
+                          toEntryId: f.entryId,
+                        });
+                        const diff = diffResult as {
+                          oldContent?: string | null;
+                          newContent?: string | null;
+                          unifiedDiff?: string;
+                        } | null;
+                        if (diff) {
+                          const oldLines = diff.oldContent?.split("\n").length ?? 0;
+                          const newLines = diff.newContent?.split("\n").length ?? 0;
+                          return {
+                            path: f.path,
+                            status: f.status,
+                            turnIndex: f.turnIndex,
+                            entryId: f.entryId,
+                            details: diff.unifiedDiff ?? undefined,
+                            addedLines:
+                              f.status === "added" ? newLines : Math.max(0, newLines - oldLines),
+                            removedLines:
+                              f.status === "added"
+                                ? 0
+                                : f.status === "deleted"
+                                  ? oldLines
+                                  : Math.max(0, oldLines - newLines),
+                          };
+                        }
+                      } catch {
+                        /* skip diff */
+                      }
+                      return {
+                        path: f.path,
+                        status: f.status,
+                        turnIndex: f.turnIndex,
+                        entryId: f.entryId,
+                      };
+                    }),
+                  );
                   const restored = files
                     .filter((f) => f.status === "modified" || f.status === "added")
                     .map((f) => f.path);

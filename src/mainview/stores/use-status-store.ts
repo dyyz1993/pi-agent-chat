@@ -101,6 +101,7 @@ interface StatusState {
   toggleMcpExpanded: (name: string) => void;
   toggleMcpServer: (sessionId: string, name: string, enabled: boolean) => void;
   restartMcpServer: (sessionId: string, name: string) => void;
+  clearSessionData: () => void;
 }
 
 export const useStatusStore = create<StatusState>((set) => ({
@@ -170,4 +171,17 @@ export const useStatusStore = create<StatusState>((set) => ({
       console.warn("[status] restartMcpServer failed:", err);
     });
   },
+  clearSessionData: () =>
+    set({
+      yoloEnabled: false,
+      planMode: true,
+      shellActive: false,
+      mcpServers: [],
+      lspStatus: "disconnected",
+      plugins: [],
+      skills: [],
+      expandedSkill: null,
+      expandedPlugin: null,
+      expandedMcpServer: null,
+    }),
 }));

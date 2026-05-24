@@ -125,6 +125,18 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     return;
   }
 
+  if (event.type === "extension_llm_error") {
+    const errMsg = event.error || "Unknown error";
+    notificationGateway.emit({
+      type: "extension_llm_error",
+      sessionId,
+      title: "LLM 服务异常",
+      body: errMsg.length > 100 ? `${errMsg.slice(0, 100)}...` : errMsg,
+      level: "warning",
+    });
+    return;
+  }
+
   if (event.type === "extension_ui_request") {
     const INTERACTIVE = new Set(["confirm", "input", "select", "editor"]);
     const method = event.method;
@@ -144,7 +156,11 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         prefill: event.prefill,
         timeout: event.timeout,
         toolCallId: event.toolCallId,
-        hookMeta: (event as { hookMeta?: { toolName: string; matcher: string; command?: string; reason: string } }).hookMeta,
+        hookMeta: (
+          event as {
+            hookMeta?: { toolName: string; matcher: string; command?: string; reason: string };
+          }
+        ).hookMeta,
       });
 
       storeGet().updateSessionStatus(sessionId, "permission");

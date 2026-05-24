@@ -1286,12 +1286,19 @@ export class AgentProcessManager {
     let nextCursor: string | null = null;
 
     let slicedMessages: unknown[];
+    const injectEntryId = (e: { entryId: string; message: unknown }) => {
+      const msg = e.message as Record<string, unknown>;
+      if (msg && typeof msg === "object" && e.entryId) {
+        return { ...msg, entryId: e.entryId };
+      }
+      return msg;
+    };
     if (limit !== undefined && limit < totalCount) {
-      slicedMessages = filteredMessages.slice(totalCount - limit).map((e) => e.message);
+      slicedMessages = filteredMessages.slice(totalCount - limit).map(injectEntryId);
       hasMore = true;
       nextCursor = filteredMessages[totalCount - limit]?.entryId ?? null;
     } else {
-      slicedMessages = filteredMessages.map((e) => e.message);
+      slicedMessages = filteredMessages.map(injectEntryId);
     }
 
     const totalMs = Math.round(performance.now() - t0);
@@ -1990,6 +1997,7 @@ export class AgentProcessManager {
     sessionId: string,
     fromEntryId?: string,
     toEntryId?: string,
+    toUserMsgEntryId?: string,
   ): Promise<
     Array<{
       path: string;
@@ -2000,11 +2008,16 @@ export class AgentProcessManager {
   > {
     const managed = this.getActiveManaged(sessionId);
     if (managed) {
-      return withTimeout(
-        managed.client.getModifiedFiles({ fromEntryId, toEntryId }),
+      const result = await withTimeout(
+        managed.client.getModifiedFiles({
+          fromEntryId,
+          toEntryId,
+          ...((toUserMsgEntryId ? { toUserMsgEntryId } : {}) as Record<string, string>),
+        }),
         15_000,
         "getModifiedFiles",
       );
+      return result;
     }
     return [];
   }

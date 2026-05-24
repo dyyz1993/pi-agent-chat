@@ -1,0 +1,10 @@
+{
+  "version": "v1",
+  "packages": {
+    "@dyyz1993/pi-coding-agent": {
+      "signature": "9e381372c073ca00a3ba78b86d995786",
+      "file": true,
+      "replaced": "^0.74.54"
+    }
+  }
+}

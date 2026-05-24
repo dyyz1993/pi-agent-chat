@@ -109,7 +109,7 @@ function renderBadge(
             e.stopPropagation();
             handleJump();
           }}
-          className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 transition-colors"
+          className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 transition-colors"
         >
           <ExternalLink className="w-3 h-3" />
         </button>

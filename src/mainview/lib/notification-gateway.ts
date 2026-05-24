@@ -5,7 +5,8 @@ export type GatewayEventType =
   | "retry_success"
   | "retry_failed"
   | "agent_notify"
-  | "permission_request";
+  | "permission_request"
+  | "extension_llm_error";
 
 export interface GatewayEvent {
   type: GatewayEventType;

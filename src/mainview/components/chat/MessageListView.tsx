@@ -1,10 +1,43 @@
-import { useMemo, memo } from "react";
+import { useMemo, memo, useCallback } from "react";
 import { Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Virtualizer, type VirtualizerHandle } from "virtua";
 import { MessageCard } from "./MessageCard";
 import type { ChatMessage } from "../../types";
 import { ALL_MEMORY_TYPE_KEYS } from "./memory-config";
+import { useChatStore } from "../../stores/use-chat-store";
+import { useSubagentStore } from "../../stores/use-subagent-store";
+import { useSessionStore } from "../../stores/use-session-store";
+
+const EMPTY_MSGS: ChatMessage[] = [];
+
+/**
+ * Stable selector: only returns a new reference when message count or
+ * last message id actually changes. This prevents unnecessary re-renders
+ * when the array is replaced with identical content.
+ */
+function useStableMessages(source: "main" | "sub"): ChatMessage[] {
+  const sessionId = useSessionStore((s) => s.activeSessionId);
+  const activeSubId = useSubagentStore((s) => s.activeSubsessionId);
+
+  const selector = useCallback(
+    (s: { messagesBySession: Record<string, ChatMessage[]> }) => {
+      if (!sessionId) return EMPTY_MSGS;
+      return s.messagesBySession[sessionId] || EMPTY_MSGS;
+    },
+    [sessionId],
+  );
+
+  const subSelector = useCallback(
+    (s: { messagesBySubsession: Record<string, ChatMessage[]> }) => {
+      if (!activeSubId) return EMPTY_MSGS;
+      return s.messagesBySubsession[activeSubId] || EMPTY_MSGS;
+    },
+    [activeSubId],
+  );
+
+  return source === "sub" ? useSubagentStore(subSelector) : useChatStore(selector);
+}
 
 interface ProcessedMessage {
   msg: ChatMessage;
@@ -95,7 +128,8 @@ function buildCardMeta(
 }
 
 interface MessageListViewProps {
-  messages: ChatMessage[];
+  /** Which message source to read from store */
+  source: "main" | "sub";
   scrollRef?: React.RefObject<HTMLDivElement | null>;
   vlistRef?: React.RefObject<VirtualizerHandle> | React.Ref<VirtualizerHandle>;
   onScroll?: () => void;
@@ -105,7 +139,7 @@ interface MessageListViewProps {
 }
 
 export const MessageListView = memo(function MessageListView({
-  messages,
+  source,
   scrollRef,
   vlistRef,
   onScroll,
@@ -113,6 +147,8 @@ export const MessageListView = memo(function MessageListView({
   isLoadingMore,
   hasMoreMessages,
 }: MessageListViewProps) {
+  // Read messages directly from store — avoids prop drilling that breaks memo
+  const messages = useStableMessages(source);
   const { t } = useTranslation("chat");
   const cardMeta = useMemo(() => buildCardMeta(messages, t), [messages, t]);
   const processedMessages = useMemo(() => buildProcessedMessages(messages), [messages]);

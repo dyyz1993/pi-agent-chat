@@ -20,6 +20,7 @@ export default tseslint.config(
       'preview-test/**',
       '*.html',
       '.codenomad/**',
+      '.yalc/**',
 
       'src/electrobun-shim.d.ts',
       'eslint.config.mjs',

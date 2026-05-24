@@ -101,12 +101,13 @@ export interface HttpRouteDeps {
     readonly proxyPublicDomain: string;
   };
   getWebSocketClientCount: () => number;
+  broadcastEvent?: (event: Record<string, unknown>) => void;
 }
 
 export function createHttpHandler(
   deps: HttpRouteDeps,
 ): (req: IncomingMessage, res: ServerResponse) => void {
-  const { config: cfg, getWebSocketClientCount } = deps;
+  const { config: cfg, getWebSocketClientCount, broadcastEvent } = deps;
 
   const proxyRegistrar =
     cfg.proxyApiUrl && cfg.proxyPublicDomain
@@ -310,6 +311,74 @@ export function createHttpHandler(
         console.error("[http-routes] debug-log read failed:", err);
         res.writeHead(200, { "Content-Type": "text/plain" }).end("");
       }
+      return;
+    }
+
+    // TEST endpoint: inject mock agent events for UI testing
+    if (url.pathname === "/api/test/inject" && req.method === "POST") {
+      if (!broadcastEvent) {
+        res.writeHead(500).end(JSON.stringify({ error: "broadcastEvent not available" }));
+        return;
+      }
+      const chunks: Buffer[] = [];
+      for await (const chunk of req as AsyncIterable<Buffer | string>)
+        chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+      const body = JSON.parse(Buffer.concat(chunks).toString()) as {
+        sessionId: string;
+        method?: string;
+        title?: string;
+        message?: string;
+        options?: string[];
+        multiple?: boolean;
+        id?: string;
+      };
+
+      const event = {
+        id: `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        type: "event" as const,
+        eventType: "agent.event",
+        sessionId: body.sessionId,
+        metadata: { sessionId: body.sessionId },
+        payload: {
+          sessionId: body.sessionId,
+          event: {
+            type: "extension_ui_request",
+            id: body.id || `test-req-${Date.now()}`,
+            method: body.method || "confirm",
+            title: body.title || "Test Request",
+            message: body.message || "This is a test request",
+            options: body.options,
+            multiple: body.multiple,
+          },
+        },
+      };
+
+      broadcastEvent(event);
+      log.info("[test-inject] Sent event to clients", {
+        sessionId: body.sessionId,
+        method: body.method,
+      });
+      res
+        .writeHead(200, { "Content-Type": "application/json" })
+        .end(JSON.stringify({ ok: true, eventId: event.id }));
+      return;
+    }
+
+    // TEST endpoint: clear all mock requests
+    if (url.pathname === "/api/test/clear" && req.method === "POST") {
+      if (!broadcastEvent) {
+        res.writeHead(500).end(JSON.stringify({ error: "broadcastEvent not available" }));
+        return;
+      }
+      // Send a synthetic clear event
+      broadcastEvent({
+        id: `test-clear-${Date.now()}`,
+        type: "event",
+        eventType: "agent.event",
+        metadata: {},
+        payload: { type: "test_clear_all" },
+      });
+      res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ ok: true }));
       return;
     }
 

@@ -8,6 +8,7 @@ import { extname, join, resolve } from "path";
 import { config } from "./server-config";
 import { createHttpHandler } from "./gateway/http-routes";
 import { createWsHandler } from "./gateway/ws-handler";
+import { type WebSocket } from "ws";
 import { createLogger, setLogSink } from "./shared/lib/logger";
 import { configureLogDir, writeLogLine } from "./shared/lib/logger.node";
 import { initSandboxManager } from "./shared/agent/process-manager";
@@ -45,6 +46,14 @@ const STATIC_MIME: Record<string, string> = {
 const apiHandler = createHttpHandler({
   config,
   getWebSocketClientCount: () => wss.clients.size,
+  broadcastEvent: (event: Record<string, unknown>) => {
+    const msg = JSON.stringify(event);
+    for (const ws of wss.clients as Set<WebSocket>) {
+      try {
+        ws.send(msg);
+      } catch {}
+    }
+  },
 });
 
 httpServer.on("request", (req, res) => {

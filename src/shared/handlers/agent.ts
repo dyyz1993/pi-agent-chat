@@ -306,9 +306,12 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("agent.getModifiedFiles", async (params) => {
-    return m.getModifiedFiles(params.sessionId, params.fromEntryId, params.toEntryId) as Promise<
-      R<"agent.getModifiedFiles">
-    >;
+    return m.getModifiedFiles(
+      params.sessionId,
+      params.fromEntryId,
+      params.toEntryId,
+      params.toUserMsgEntryId,
+    ) as Promise<R<"agent.getModifiedFiles">>;
   });
 
   r("agent.getBatchDiffs", async (params) => {

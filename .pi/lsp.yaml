@@ -1,0 +1,5 @@
+# Project-level LSP override — only what this project needs
+servers:
+  typescript:
+    command: [typescript-language-server, --stdio]
+    fileTypes: [".ts", ".tsx", ".js", ".jsx"]

@@ -121,7 +121,7 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
     <>
       {matchedSub?.agent && (
         <span
-          className="shrink-0 text-[9px] px-1 py-0.5 rounded font-mono"
+          className="shrink-0 text-[10px] px-1 py-0.5 rounded font-mono"
           style={
             currentAgentColor
               ? { backgroundColor: currentAgentColor.bg, color: currentAgentColor.color }
@@ -138,7 +138,7 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
             e.stopPropagation();
             handleJumpToSession();
           }}
-          className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-semantic-agent hover:text-semantic-agent hover:bg-semantic-agent/10 transition-colors"
+          className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-semantic-agent hover:text-semantic-agent hover:bg-semantic-agent/10 transition-colors"
           title={t("subagent.view")}
         >
           <ExternalLink className="w-3 h-3" />

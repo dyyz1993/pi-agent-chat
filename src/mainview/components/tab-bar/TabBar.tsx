@@ -1,7 +1,8 @@
-import { Plus, X, Settings } from "lucide-react";
+import { Plus, X, Settings, MessageCircleQuestion } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSessionStore } from "../../stores/use-session-store";
+import { useUIDialogStore } from "../../stores/use-ui-dialog-store";
 import { apiClient } from "../../lib/api-client";
 import { SettingsPanel } from "../settings/SettingsPanel";
 import { createLogger } from "../../../shared/lib/logger";
@@ -19,6 +20,21 @@ function resolveDotClass(
     if (st === "streaming" || st === "compacting") return "bg-status-warning animate-pulse";
   }
   return "bg-status-success";
+}
+
+function hasPermissionPending(
+  sessions: { sessionId: string }[],
+  statusMap: Record<string, SessionStatus | undefined>,
+): boolean {
+  return sessions.some((s) => statusMap[s.sessionId] === "permission");
+}
+
+function getProjectPendingCount(
+  sessions: { sessionId: string }[],
+  allPending: { sessionId: string }[],
+): number {
+  const sessionIds = new Set(sessions.map((s) => s.sessionId));
+  return allPending.filter((r) => sessionIds.has(r.sessionId)).length;
 }
 
 const LONG_PRESS_MS = 800;
@@ -40,6 +56,7 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
   const sessionsByProject = useSessionStore((s) => s.sessionsByProject);
   const sessionStatusMap = useSessionStore((s) => s.sessionStatusMap);
   const loadSessionsForProject = useSessionStore((s) => s.loadSessionsForProject);
+  const allPending = useUIDialogStore((s) => s.pending);
 
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
@@ -317,6 +334,19 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
                 <span className="absolute left-0 top-1 bottom-1 w-0.5 bg-semantic-accent rounded-full" />
               )}
               <span className={`w-2 h-2 rounded-full ${dotClass} flex-shrink-0`} />
+              {hasPermissionPending(sessions, sessionStatusMap) && (
+                <span className="relative flex-shrink-0" title={t("hasPendingPermissions")}>
+                  <MessageCircleQuestion className="w-3 h-3 text-status-warning" />
+                  {(() => {
+                    const cnt = getProjectPendingCount(sessions, allPending);
+                    return cnt > 0 ? (
+                      <span className="absolute -top-1 -right-1 min-w-[8px] h-[8px] flex items-center justify-center bg-status-warning rounded-full text-[6px] leading-none text-white font-bold px-[1px]">
+                        {cnt > 9 ? "9+" : cnt}
+                      </span>
+                    ) : null;
+                  })()}
+                </span>
+              )}
               <span className="min-w-[60px] whitespace-nowrap">{tab.name}</span>
               <button
                 data-testid={`tab-close-${index}`}

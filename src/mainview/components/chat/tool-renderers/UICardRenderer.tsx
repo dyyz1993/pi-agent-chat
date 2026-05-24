@@ -9,7 +9,6 @@ import {
   X,
   Loader2,
   Zap,
-  ShieldCheck,
   Terminal,
   Eye,
   Pencil,
@@ -91,14 +90,15 @@ export const ConfirmCard = memo(function ConfirmCard({ block }: { block: UIBlock
   const responseText =
     block.status === "responded" && block.response
       ? block.response.confirmed
-        ? block.response.alwaysAllow
-          ? t("uiCard.alwaysAllowed")
-          : t("uiCard.confirmed")
+        ? t("uiCard.confirmed")
         : t("uiCard.rejected")
       : null;
 
   if (isHookConfirm) {
-    const hookIcon = HOOK_TOOL_ICONS[hookMeta.toolName?.toLowerCase()] ?? { icon: Wrench, color: "text-gray-400" };
+    const hookIcon = HOOK_TOOL_ICONS[hookMeta.toolName?.toLowerCase()] ?? {
+      icon: Wrench,
+      color: "text-gray-400",
+    };
     const HookIcon = hookIcon.icon;
 
     return (
@@ -114,13 +114,6 @@ export const ConfirmCard = memo(function ConfirmCard({ block }: { block: UIBlock
               </div>
             )}
             <div className="flex gap-1.5">
-              <button
-                onClick={() => respondById(block.id, { confirmed: true, alwaysAllow: true })}
-                className="flex-1 flex items-center justify-center gap-1 py-1.5 text-[11px] rounded bg-status-info/80 text-white hover:bg-status-info/90 transition-colors"
-              >
-                <ShieldCheck className="w-3 h-3" />
-                {t("uiCard.alwaysAllow")}
-              </button>
               <button
                 onClick={() => respondById(block.id, { confirmed: true })}
                 className="flex-1 flex items-center justify-center gap-1 py-1 text-[11px] rounded bg-status-success text-white dark:bg-status-success/20 dark:text-status-success hover:bg-status-success/90 dark:hover:bg-status-success/30 transition-colors"

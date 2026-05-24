@@ -272,7 +272,12 @@ export class SandboxRpcClient implements RpcClientAPI {
 
   // ─── File operations ────────────────────────────────────
 
-  async getModifiedFiles(options?: { fromEntryId?: string; toEntryId?: string }): Promise<
+  async getModifiedFiles(
+    options?: { fromEntryId?: string; toEntryId?: string; toUserMsgEntryId?: string } & Record<
+      string,
+      unknown
+    >,
+  ): Promise<
     Array<{
       path: string;
       status: "added" | "modified" | "deleted";
@@ -367,6 +372,17 @@ export class SandboxRpcClient implements RpcClientAPI {
 
   async setAutoCompaction(enabled: boolean): Promise<void> {
     return this.call("agent.setAutoCompaction", enabled);
+  }
+
+  async deleteEntries(targetIds: string[]): Promise<{ entryId: string }> {
+    return this.call("agent.deleteEntries", targetIds);
+  }
+
+  async summarizeEntries(
+    targetIds: string[],
+    options?: { summary?: string; model?: string },
+  ): Promise<{ entryId: string }> {
+    return this.call("agent.summarizeEntries", targetIds, options);
   }
 
   // ─── Retry ──────────────────────────────────────────────

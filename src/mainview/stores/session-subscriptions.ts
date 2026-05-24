@@ -14,6 +14,8 @@ import { useMemoryStore } from "./use-memory-store";
 import { useTurnStore } from "./use-turn-store";
 import { useChatNavStore } from "./use-chat-nav-store";
 import { useSupervisorStore } from "./use-supervisor-store";
+import { useStatusStore } from "./use-status-store";
+import { useChangeReviewStore } from "./use-change-review-store";
 import { handleAgentEvent, toolCallNameMap } from "./agent-event-handler";
 import { notificationGateway } from "../lib/notification-gateway";
 import { useAppStore } from "./use-app-store";
@@ -642,6 +644,8 @@ export function cleanupSessionHeavy(sessionId: string): void {
   useBashStore.getState().clearSession(sessionId);
   useLspStore.getState().clearSession(sessionId);
   useSupervisorStore.getState().clearSession(sessionId);
+  useStatusStore.getState().clearSessionData();
+  useChangeReviewStore.getState().clearAll();
 }
 
 /** @deprecated Use cleanupSessionLight or cleanupSessionHeavy instead */
