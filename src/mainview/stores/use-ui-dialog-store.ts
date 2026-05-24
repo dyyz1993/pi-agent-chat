@@ -189,11 +189,6 @@ export const useUIDialogStore = create<UIDialogState>((set, get) => ({
   togglePanel: () => set((s) => ({ panelOpen: !s.panelOpen })),
 }));
 
-// Expose store for debugging/testing (only in browser)
-if (typeof window !== "undefined") {
-  (window as unknown as Record<string, unknown>).__uiDialogStore = useUIDialogStore;
-}
-
 export function useUIBlockMap(
   content: ContentBlock[],
   sessionId: string,

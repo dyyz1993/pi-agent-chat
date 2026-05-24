@@ -435,9 +435,6 @@ export const useSessionStore = create<SessionState>()(
             : {}),
         });
 
-        if (typeof window !== "undefined" && id) {
-          (window as unknown as Record<string, unknown>).__activeSessionId = id;
-        }
         if (!id) return;
 
         const { projectTabs, activeProjectId } = get();
@@ -1571,11 +1568,6 @@ export const useSessionStore = create<SessionState>()(
     },
   ),
 );
-
-// Expose store for debugging/testing (only in browser)
-if (typeof window !== "undefined") {
-  (window as unknown as Record<string, unknown>).__sessionStore = useSessionStore;
-}
 
 apiClient.onReconnect(() => {
   log.info("[onReconnect] triggered");
