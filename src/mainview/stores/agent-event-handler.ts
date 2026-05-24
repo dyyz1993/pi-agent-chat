@@ -42,6 +42,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
   if (event.type === "agent_end") {
     storeGet().updateSessionStatus(sessionId, "idle");
     useUIDialogStore.getState().clearPendingBySession(sessionId);
+    useChangeReviewStore.getState().fetchPending();
     const currentQueue = storeGet().queueBySession;
     if (currentQueue[sessionId]) {
       const { [sessionId]: _removed, ...rest } = currentQueue;
@@ -768,4 +769,25 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
 if (typeof window !== "undefined") {
   (window as unknown as Record<string, unknown>).__toolCallNameMap = toolCallNameMap;
+  (window as unknown as Record<string, unknown>).__testPermissionPopup = (
+    sessionId?: string,
+    title = "确认执行 Bash 命令",
+    message = "Agent 请求执行 Bash 命令: ls -la",
+  ) => {
+    const sid =
+      sessionId ?? ((window as unknown as Record<string, unknown>).__activeSessionId as string);
+    if (!sid) {
+      return "Error: No session ID. Usage: __testPermissionPopup('session-id') or set __activeSessionId first";
+    }
+    const id = `test-perm-${Date.now()}`;
+    handleAgentEvent(sid, {
+      type: "extension_ui_request",
+      id,
+      method: "confirm",
+      title,
+      message,
+      options: ["允许", "拒绝"],
+    });
+    return `Registered permission request: ${id} for session: ${sid}`;
+  };
 }

@@ -141,5 +141,7 @@
   "closeProjectIdleMessage": "确定关闭项目 \"{{name}}\" 吗？",
   "closeProjectContinue": "继续运行",
   "closeProjectStop": "停止",
-  "closeProjectClose": "关闭"
+  "closeProjectClose": "关闭",
+  "hasPendingPermissions": "有待处理的权限请求",
+  "changeReview": "变更审核"
 }

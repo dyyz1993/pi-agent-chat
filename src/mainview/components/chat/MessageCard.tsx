@@ -512,10 +512,9 @@ const HeaderActions = memo(function HeaderActions({
           mode === "withFiles"
             ? await (async () => {
                 try {
-                  const modResult = await apiClient.call("agent.getModifiedFiles", {
-                    sessionId,
-                    toEntryId: result.targetId,
-                  });
+                    const modResult = await apiClient.call("agent.getModifiedFiles", {
+                      sessionId,
+                    });
                   const files: ModifiedFile[] = (
                     modResult as Array<{
                       path: string;

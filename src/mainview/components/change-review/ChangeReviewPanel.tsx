@@ -1,3 +1,4 @@
+import { diffLines } from "diff";
 import { memo, useEffect, useCallback, useMemo } from "react";
 import {
   CheckCircle2,
@@ -9,12 +10,26 @@ import {
   FileText,
   Loader2,
   RefreshCw,
+  Plus,
+  Minus,
+  Pencil,
+  XSquare,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useChangeReviewStore } from "../../stores/use-change-review-store";
 import { useGitStore } from "../../stores/use-git-store";
-import { useSessionStore } from "../../stores/use-session-store";
-import { apiClient } from "../../lib/api-client";
+import type { FileStatus } from "../../../shared/modules/change-review";
+
+/* ── Git-style status helpers (reusing GitPanel patterns) ── */
+
+const FILE_STATUS_CONFIG: Record<
+  FileStatus,
+  { Icon: typeof Plus; label: string; color: string; bg: string }
+> = {
+  added: { Icon: Plus, label: "A", color: "text-status-success", bg: "bg-status-success/10" },
+  modified: { Icon: Pencil, label: "M", color: "text-status-warning", bg: "bg-status-warning/10" },
+  deleted: { Icon: Minus, label: "D", color: "text-status-error", bg: "bg-status-error/10" },
+};
 
 export function ChangeReviewPanel() {
   const { t } = useTranslation("changeReview");
@@ -23,6 +38,7 @@ export function ChangeReviewPanel() {
   const selectedPath = useChangeReviewStore((s) => s.selectedPath);
   const fetchPending = useChangeReviewStore((s) => s.fetchPending);
   const approveAll = useChangeReviewStore((s) => s.approveAll);
+  const rejectAll = useChangeReviewStore((s) => s.rejectAll);
   const setSelectedPath = useChangeReviewStore((s) => s.setSelectedPath);
 
   const pendingCount = useMemo(
@@ -37,7 +53,6 @@ export function ChangeReviewPanel() {
 
   const handleApproveAll = useCallback(() => {
     if (pendingCount === 0) return;
-    if (!window.confirm(t("approveConfirm", { count: pendingCount }))) return;
     approveAll();
   }, [pendingCount, approveAll, t]);
 
@@ -70,6 +85,15 @@ export function ChangeReviewPanel() {
           >
             <CheckSquare className="w-3 h-3" />
             {t("approveAll")}
+          </button>
+          <button
+            onClick={rejectAll}
+            disabled={pendingCount === 0}
+            className="flex items-center gap-1 px-2 py-1 text-[10px] rounded bg-status-error/15 text-status-error hover:bg-status-error/25 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            title={t("rejectAll")}
+          >
+            <XSquare className="w-3 h-3" />
+            {t("rejectAll")}
           </button>
         </div>
       </div>
@@ -146,8 +170,11 @@ interface ChangeItemProps {
   change: {
     turnIndex: number;
     path: string;
+    fileStatus: FileStatus;
     status: "pending" | "approved" | "rejected";
     timestamp: number;
+    oldContent: string | null;
+    newContent: string | null;
   };
   isExpanded: boolean;
   onToggle: () => void;
@@ -160,39 +187,49 @@ const ChangeItem = memo(function ChangeItem({ change, isExpanded, onToggle }: Ch
 
   const statusCfg = STATUS_CONFIG[change.status];
   const StatusIcon = statusCfg.Icon;
+  const fileCfg = FILE_STATUS_CONFIG[change.fileStatus] ?? FILE_STATUS_CONFIG.modified;
+  const FileStatusIcon = fileCfg.Icon;
+
+  // Compute diff stats from oldContent/newContent
+  const stats = useMemo(() => {
+    if (change.oldContent === null && change.newContent === null) return null;
+    if (change.oldContent === null)
+      return { additions: (change.newContent ?? "").split("\n").length, deletions: 0 };
+    if (change.newContent === null)
+      return { additions: 0, deletions: change.oldContent.split("\n").length };
+    const changes = diffLines(change.oldContent, change.newContent);
+    let additions = 0;
+    let deletions = 0;
+    for (const part of changes) {
+      if (part.added) additions += part.count ?? 0;
+      else if (part.removed) deletions += part.count ?? 0;
+    }
+    return { additions, deletions };
+  }, [change.oldContent, change.newContent]);
+
   const timeStr = new Date(change.timestamp).toLocaleTimeString("zh-CN", {
     hour: "2-digit",
     minute: "2-digit",
   });
 
   const handleApprove = useCallback(() => {
-    approveChange(change.turnIndex, change.path);
-  }, [approveChange, change.turnIndex, change.path]);
+    approveChange(change.path);
+  }, [approveChange, change.path]);
 
   const handleReject = useCallback(() => {
-    rejectChange(change.turnIndex, change.path);
-  }, [rejectChange, change.turnIndex, change.path]);
+    rejectChange(change.path);
+  }, [rejectChange, change.path]);
 
-  const handleViewDiff = useCallback(async () => {
-    const sessionId = useSessionStore.getState().activeSessionId;
-    if (!sessionId) return;
-    try {
-      const result = await apiClient.call("agent.getBatchDiffs", { sessionId });
-      const match = result?.files?.find((f: { path: string }) => f.path === change.path);
-      if (match?.diff) {
-        useGitStore.setState({
-          currentDiff: {
-            filePath: change.path,
-            diff: match.diff.unifiedDiff,
-            oldContent: match.diff.oldContent ?? "",
-            newContent: match.diff.newContent ?? "",
-          },
-        });
-      }
-    } catch {
-      // Silently fail — user can retry
-    }
-  }, [change.path]);
+  const handleViewDiff = useCallback(() => {
+    useGitStore.setState({
+      currentDiff: {
+        filePath: change.path,
+        diff: "",
+        oldContent: change.oldContent ?? "",
+        newContent: change.newContent ?? "",
+      },
+    });
+  }, [change.path, change.oldContent, change.newContent]);
 
   return (
     <div className="border-b border-border-secondary/50 dark:border-surface-code/50">
@@ -211,17 +248,37 @@ const ChangeItem = memo(function ChangeItem({ change, isExpanded, onToggle }: Ch
               )}
             </span>
             <div className="flex-1 min-w-0">
-              <span
-                className="text-[11px] font-mono text-semantic-accent hover:underline cursor-pointer truncate block"
-                title={change.path}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleViewDiff();
-                }}
-              >
-                {change.path}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className={`shrink-0 ${fileCfg.color}`}>
+                  <FileStatusIcon className="w-3 h-3" />
+                </span>
+                <span
+                  className="text-[11px] font-mono text-semantic-accent hover:underline cursor-pointer truncate"
+                  title={change.path}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleViewDiff();
+                  }}
+                >
+                  {change.path}
+                </span>
+              </div>
               <div className="flex items-center gap-2 mt-0.5">
+                <span
+                  className={`px-1 rounded text-[10px] font-medium ${fileCfg.color} ${fileCfg.bg}`}
+                >
+                  {fileCfg.label}
+                </span>
+                {stats && (
+                  <span className="flex items-center gap-0.5 text-[10px] font-mono">
+                    {stats.additions > 0 && (
+                      <span className="text-status-success">+{stats.additions}</span>
+                    )}
+                    {stats.deletions > 0 && (
+                      <span className="text-status-error">-{stats.deletions}</span>
+                    )}
+                  </span>
+                )}
                 <span className="text-[10px] text-text-tertiary">
                   {t("turn", { index: change.turnIndex })}
                 </span>

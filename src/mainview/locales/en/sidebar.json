@@ -141,5 +141,7 @@
   "closeProjectIdleMessage": "Close project \"{{name}}\"?",
   "closeProjectContinue": "Keep Running",
   "closeProjectStop": "Stop",
-  "closeProjectClose": "Close"
+  "closeProjectClose": "Close",
+  "hasPendingPermissions": "Has pending permission requests",
+  "changeReview": "Change Review"
 }

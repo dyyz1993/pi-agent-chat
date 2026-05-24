@@ -12,6 +12,7 @@ import {
   RefreshCw,
   AlertTriangle,
   GitFork,
+  ClipboardCheck,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useChatStore } from "../../stores/use-chat-store";
@@ -19,6 +20,7 @@ import { useSessionStore } from "../../stores/use-session-store";
 import { useNotificationStore } from "../../stores/use-notification-store";
 import { NotificationCenter } from "./NotificationCenter";
 import { UIPendingCenter } from "./UIPendingCenter";
+import { useChangeReviewStore } from "../../stores/use-change-review-store";
 import { RetryNotification } from "./RetryNotification";
 import { useSubagentStore } from "../../stores/use-subagent-store";
 import { useLayoutStore } from "../../layouts/use-layout-store";
@@ -393,6 +395,7 @@ export function ChatPanel() {
         <div className="ml-auto flex items-center gap-1">
           <UIPendingCenter />
           <NotificationCenter />
+          <ChangeReviewBell />
           <StatusToggleIcon />
         </div>
       </div>
@@ -427,7 +430,7 @@ export function ChatPanel() {
             </div>
           ) : isViewingSubagent ? (
             <MessageListView
-              messages={messages}
+              source="sub"
               scrollRef={messagesScrollRef}
               vlistRef={vlistRef}
               onScroll={handleScroll}
@@ -435,7 +438,7 @@ export function ChatPanel() {
             />
           ) : (
             <MessageListView
-              messages={mainMessages}
+              source="main"
               scrollRef={messagesScrollRef}
               vlistRef={vlistRef}
               onScroll={handleScroll}
@@ -680,6 +683,45 @@ function StatusToggleIcon() {
       title={isVisible ? t("closeStatusPanel") : t("openStatusPanel")}
     >
       <PanelRight className="w-3.5 h-3.5" />
+    </button>
+  );
+}
+
+function ChangeReviewBell() {
+  const pendingReviewCount = useChangeReviewStore(
+    (s) => s.changes.filter((c) => c.status === "pending").length,
+  );
+  const fetchPending = useChangeReviewStore((s) => s.fetchPending);
+  const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const { t } = useTranslation("sidebar");
+
+  useEffect(() => {
+    if (activeSessionId) {
+      fetchPending();
+    }
+  }, [activeSessionId, fetchPending]);
+
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        const layout = useLayoutStore.getState();
+        layout.setActivePanelTab("changeReview");
+        if (layout.statusPanel === "hidden") {
+          layout.showStatus();
+        }
+        fetchPending();
+      }}
+      className="p-1 rounded transition-colors text-text-tertiary dark:text-text-secondary hover:text-text-primary dark:hover:text-text-secondary relative"
+      title={t("changeReview")}
+      aria-label={t("changeReview")}
+    >
+      <ClipboardCheck className="w-3.5 h-3.5" />
+      {pendingReviewCount > 0 && (
+        <span className="absolute -top-0.5 -right-0.5 min-w-[10px] h-[10px] flex items-center justify-center bg-status-warning rounded-full text-[7px] leading-none text-white font-bold px-[2px]">
+          {pendingReviewCount > 9 ? "9+" : pendingReviewCount}
+        </span>
+      )}
     </button>
   );
 }

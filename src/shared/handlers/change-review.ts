@@ -67,7 +67,6 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       const result = await withTimeout(
         manager.callChannel(params.sessionId, "file-review", FILE_REVIEW_METHODS.APPROVE, {
           sessionId: params.sessionId,
-          turnIndex: params.turnIndex,
           path: params.path,
         }),
         CHANNEL_TIMEOUT_MS,
@@ -85,14 +84,13 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   r("change-review.reject", async (params) => {
     const manager = getProcessManager();
     if (!manager || !manager.hasSession(params.sessionId)) {
-      return { ok: false };
+      return { ok: false, error: "No session" };
     }
 
     try {
       const result = await withTimeout(
         manager.callChannel(params.sessionId, "file-review", FILE_REVIEW_METHODS.REJECT, {
           sessionId: params.sessionId,
-          turnIndex: params.turnIndex,
           path: params.path,
         }),
         CHANNEL_TIMEOUT_MS,
@@ -103,7 +101,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
         sessionId: params.sessionId,
         err: err instanceof Error ? err.message : String(err),
       });
-      return { ok: false };
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
   });
 
@@ -129,6 +127,32 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
         err: err instanceof Error ? err.message : String(err),
       });
       return { count: 0 };
+    }
+  });
+
+  r("change-review.rejectAll", async (params) => {
+    const manager = getProcessManager();
+    if (!manager || !manager.hasSession(params.sessionId)) {
+      return { count: 0, rolledBack: 0 };
+    }
+
+    try {
+      const result = await withTimeout(
+        manager.callChannel(params.sessionId, "file-review", FILE_REVIEW_METHODS.REJECT_ALL, {
+          sessionId: params.sessionId,
+        }),
+        CHANNEL_TIMEOUT_MS,
+      );
+      return ((result as { count: number; rolledBack: number } | null) ?? {
+        count: 0,
+        rolledBack: 0,
+      }) as R<"change-review.rejectAll">;
+    } catch (err) {
+      log.warn("review.rejectAll channel call failed", {
+        sessionId: params.sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return { count: 0, rolledBack: 0 };
     }
   });
 }

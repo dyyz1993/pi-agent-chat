@@ -19,6 +19,7 @@ export const FILE_REVIEW_METHODS = {
   APPROVE: "review.approve",
   REJECT: "review.reject",
   APPROVE_ALL: "review.approveAll",
+  REJECT_ALL: "review.rejectAll",
   APPROVALS: "review.approvals",
 } as const;
 
@@ -116,9 +117,9 @@ export const CHANNEL_METHOD_MAP: Readonly<Record<string, ReadonlySet<string>>> =
   "file-snapshot": new Set(Object.values(FILE_SNAPSHOT_METHODS)),
   "bash-ext": new Set(Object.values(BASH_METHODS)),
   "hooks-engine": new Set(Object.values(HOOKS_METHODS)),
-  "lsp": new Set(Object.values(LSP_METHODS)),
-  "memory": new Set(Object.values(MEMORY_METHODS)),
-  "supervisor": new Set(Object.values(SUPERVISOR_METHODS)),
+  lsp: new Set(Object.values(LSP_METHODS)),
+  memory: new Set(Object.values(MEMORY_METHODS)),
+  supervisor: new Set(Object.values(SUPERVISOR_METHODS)),
   "rules-engine": new Set(Object.values(RULES_METHODS)),
-  "coordinator": new Set(Object.values(COORDINATOR_METHODS)),
+  coordinator: new Set(Object.values(COORDINATOR_METHODS)),
 };

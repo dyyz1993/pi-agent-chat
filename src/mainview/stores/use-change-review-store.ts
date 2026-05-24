@@ -16,11 +16,12 @@ interface ChangeReviewState {
   setChanges: (changes: PendingChange[]) => void;
   setLoading: (loading: boolean) => void;
   setSelectedPath: (path: string | null) => void;
-  updateChangeStatus: (turnIndex: number, path: string, status: PendingChange["status"]) => void;
+  updateChangeStatus: (path: string, status: PendingChange["status"]) => void;
   fetchPending: () => Promise<void>;
-  approveChange: (turnIndex: number, path: string) => Promise<void>;
-  rejectChange: (turnIndex: number, path: string) => Promise<void>;
+  approveChange: (path: string) => Promise<void>;
+  rejectChange: (path: string) => Promise<void>;
   approveAll: () => Promise<void>;
+  rejectAll: () => Promise<void>;
   clearAll: () => void;
 }
 
@@ -38,11 +39,9 @@ export const useChangeReviewStore = create<ChangeReviewState>()((set, get) => ({
 
   setSelectedPath: (path) => set({ selectedPath: path }),
 
-  updateChangeStatus: (turnIndex, path, status) =>
+  updateChangeStatus: (path, status) =>
     set((s) => ({
-      changes: s.changes.map((c) =>
-        c.turnIndex === turnIndex && c.path === path ? { ...c, status } : c,
-      ),
+      changes: s.changes.map((c) => (c.path === path ? { ...c, status } : c)),
     })),
 
   fetchPending: async () => {
@@ -53,21 +52,17 @@ export const useChangeReviewStore = create<ChangeReviewState>()((set, get) => ({
       const result = await apiClient.call("change-review.pending", { sessionId });
       const changes = (Array.isArray(result) ? result : []) as PendingChange[];
       set({ changes, loading: false });
-    } catch (err) {
+    } catch {
       set({ loading: false });
-      useNotificationStore.getState().push({
-        message: `Failed to fetch pending changes: ${err instanceof Error ? err.message : String(err)}`,
-        level: "error",
-      });
     }
   },
 
-  approveChange: async (turnIndex, path) => {
+  approveChange: async (path) => {
     const sessionId = useSessionStore.getState().activeSessionId;
     if (!sessionId) return;
     try {
-      await apiClient.call("change-review.approve", { sessionId, turnIndex, path });
-      get().updateChangeStatus(turnIndex, path, "approved");
+      await apiClient.call("change-review.approve", { sessionId, path });
+      get().updateChangeStatus(path, "approved");
     } catch (err) {
       useNotificationStore.getState().push({
         message: `Approve failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -76,12 +71,19 @@ export const useChangeReviewStore = create<ChangeReviewState>()((set, get) => ({
     }
   },
 
-  rejectChange: async (turnIndex, path) => {
+  rejectChange: async (path) => {
     const sessionId = useSessionStore.getState().activeSessionId;
     if (!sessionId) return;
     try {
-      await apiClient.call("change-review.reject", { sessionId, turnIndex, path });
-      get().updateChangeStatus(turnIndex, path, "rejected");
+      const result = await apiClient.call("change-review.reject", { sessionId, path });
+      if (result.rolledBack) {
+        // File was rolled back — remove from list
+        set((s) => ({
+          changes: s.changes.filter((c) => c.path !== path),
+        }));
+      } else {
+        get().updateChangeStatus(path, "rejected");
+      }
     } catch (err) {
       useNotificationStore.getState().push({
         message: `Reject failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -105,6 +107,29 @@ export const useChangeReviewStore = create<ChangeReviewState>()((set, get) => ({
     } catch (err) {
       useNotificationStore.getState().push({
         message: `Approve all failed: ${err instanceof Error ? err.message : String(err)}`,
+        level: "error",
+      });
+    }
+  },
+
+  rejectAll: async () => {
+    const sessionId = useSessionStore.getState().activeSessionId;
+    if (!sessionId) return;
+    const pending = get().changes.filter((c) => c.status === "pending");
+    if (pending.length === 0) return;
+    try {
+      const result = await apiClient.call("change-review.rejectAll", { sessionId });
+      // All rolled-back files are removed from pending list
+      set({ changes: [] });
+      if (result.rolledBack > 0) {
+        useNotificationStore.getState().push({
+          message: `Rejected ${result.count} changes, ${result.rolledBack} files rolled back`,
+          level: "info",
+        });
+      }
+    } catch (err) {
+      useNotificationStore.getState().push({
+        message: `Reject all failed: ${err instanceof Error ? err.message : String(err)}`,
         level: "error",
       });
     }

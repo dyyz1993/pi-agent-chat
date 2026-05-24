@@ -20,33 +20,27 @@ import { createLogger } from "../../../shared/lib/logger";
 
 const log = createLogger("chat");
 
-const STATUS_CONFIG: Record<
+const FILE_STATUS_CONFIG: Record<
   ModifiedFile["status"],
-  { icon: typeof FilePlus; label: string; colorClass: string; bgClass: string; badgeClass: string }
+  { icon: typeof FilePlus; label: string; color: string; bg: string }
 > = {
   added: {
     icon: FilePlus,
     label: "A",
-    colorClass: "text-status-success",
-    bgClass: "hover:bg-status-success/10 dark:hover:bg-status-success/20",
-    badgeClass:
-      "bg-status-success/15 text-status-success/80 dark:bg-status-success/20 dark:text-status-success",
+    color: "text-status-success",
+    bg: "bg-status-success/10",
   },
   modified: {
     icon: FileEdit,
     label: "M",
-    colorClass: "text-status-warning",
-    bgClass: "hover:bg-status-warning/10 dark:hover:bg-status-warning/20",
-    badgeClass:
-      "bg-status-warning/15 text-status-warning/80 dark:bg-status-warning/20 dark:text-status-warning",
+    color: "text-status-warning",
+    bg: "bg-status-warning/10",
   },
   deleted: {
     icon: FileMinus,
     label: "D",
-    colorClass: "text-status-error",
-    bgClass: "hover:bg-status-error/10 dark:hover:bg-status-error/20",
-    badgeClass:
-      "bg-status-error/15 text-status-error/80 dark:bg-status-error/20 dark:text-status-error",
+    color: "text-status-error",
+    bg: "bg-status-error/10",
   },
 };
 
@@ -70,50 +64,56 @@ const FileItem = memo(function FileItem({
   onToggle,
 }: FileItemProps) {
   const { t } = useTranslation("chat");
-  const config = STATUS_CONFIG[status];
+  const config = FILE_STATUS_CONFIG[status];
   const Icon = config.icon;
 
-  const fileName = filePath.split("/").pop() ?? filePath;
-  const dirPath = filePath.split("/").slice(0, -1).join("/");
-
   return (
-    <div className="min-w-0">
-      <button
-        type="button"
-        onClick={onToggle}
-        className={`w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm ${config.bgClass} transition-colors`}
-      >
-        {expanded ? (
-          <ChevronDown className={`w-3.5 h-3.5 shrink-0 ${config.colorClass}`} />
-        ) : (
-          <ChevronRight className={`w-3.5 h-3.5 shrink-0 ${config.colorClass}`} />
-        )}
-        <Icon className={`w-3.5 h-3.5 shrink-0 ${config.colorClass}`} />
-        <span
-          className={`truncate font-mono text-xs flex-1 min-w-0 ${config.colorClass}`}
-          title={filePath}
+    <div className="border-b border-border-secondary/50 dark:border-surface-code/50">
+      <div className="px-3 py-2">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex items-start gap-1.5 text-left w-full"
         >
-          {dirPath ? <span className="opacity-60">{dirPath}/</span> : null}
-          <span className="font-semibold">{fileName}</span>
-        </span>
-        {(addedLines !== undefined || removedLines !== undefined) && (
-          <span className="shrink-0 flex items-center gap-1 text-[10px] font-mono">
-            {removedLines !== undefined && removedLines > 0 && (
-              <span className="text-status-error">-{removedLines}</span>
-            )}
-            {addedLines !== undefined && addedLines > 0 && (
-              <span className="text-status-success">+{addedLines}</span>
+          <span className="text-text-tertiary shrink-0 mt-0.5">
+            {expanded ? (
+              <ChevronDown className="w-3 h-3" />
+            ) : (
+              <ChevronRight className="w-3 h-3" />
             )}
           </span>
-        )}
-        <span
-          className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold ${config.badgeClass}`}
-        >
-          {config.label}
-        </span>
-      </button>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className={`shrink-0 ${config.color}`}>
+                <Icon className="w-3 h-3" />
+              </span>
+              <span
+                className="text-[11px] font-mono text-semantic-accent truncate"
+                title={filePath}
+              >
+                {filePath}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className={`px-1 rounded text-[10px] font-medium ${config.color} ${config.bg}`}>
+                {config.label}
+              </span>
+              {(addedLines !== undefined || removedLines !== undefined) && (
+                <span className="flex items-center gap-0.5 text-[10px] font-mono">
+                  {removedLines !== undefined && removedLines > 0 && (
+                    <span className="text-status-error">-{removedLines}</span>
+                  )}
+                  {addedLines !== undefined && addedLines > 0 && (
+                    <span className="text-status-success">+{addedLines}</span>
+                  )}
+                </span>
+              )}
+            </div>
+          </div>
+        </button>
+      </div>
       {expanded && (
-        <div className="ml-4 sm:ml-8 mr-2 sm:mr-3 mb-2 mt-1">
+        <div className="px-3 pb-2 ml-4">
           {details ? (
             <div className="rounded-md bg-surface-dim dark:bg-surface-dim/60 border border-border-secondary overflow-hidden">
               <div className="px-3 py-1.5 bg-surface-hover/50 border-b border-border-secondary flex items-center gap-2">
@@ -324,7 +324,7 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
           </p>
 
           {isWithFiles && hasFiles && (
-            <div className="space-y-1 mb-6">
+            <div className="mb-6">
               {files.map((file) => (
                 <FileItem
                   key={`${file.status}-${file.path}`}
