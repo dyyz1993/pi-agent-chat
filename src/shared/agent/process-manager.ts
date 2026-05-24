@@ -2022,6 +2022,29 @@ export class AgentProcessManager {
     return [];
   }
 
+  async getFileDiff(
+    sessionId: string,
+    filePath: string,
+    fromEntryId?: string,
+    toEntryId?: string,
+  ): Promise<{
+    path: string;
+    oldContent: string | null;
+    newContent: string | null;
+    unifiedDiff: string;
+  } | null> {
+    const managed = this.getActiveManaged(sessionId);
+    if (managed) {
+      const result = await withTimeout(
+        managed.client.getFileDiff({ filePath, fromEntryId, toEntryId }),
+        15_000,
+        "getFileDiff",
+      );
+      return result;
+    }
+    return null;
+  }
+
   async getBatchDiffs(
     sessionId: string,
     fromEntryId?: string,

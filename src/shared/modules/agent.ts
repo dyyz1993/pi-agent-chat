@@ -298,6 +298,20 @@ export interface AgentMethods {
       entryId: string;
     }>;
   };
+  "agent.getFileDiff": {
+    params: {
+      sessionId: string;
+      filePath: string;
+      fromEntryId?: string;
+      toEntryId?: string;
+    };
+    result: {
+      path: string;
+      oldContent: string | null;
+      newContent: string | null;
+      unifiedDiff: string;
+    } | null;
+  };
   "agent.getBatchDiffs": {
     params: { sessionId: string; fromEntryId?: string; toEntryId?: string };
     result: {

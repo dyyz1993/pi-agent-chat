@@ -314,6 +314,15 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     ) as Promise<R<"agent.getModifiedFiles">>;
   });
 
+  r("agent.getFileDiff", async (params) => {
+    return m.getFileDiff(
+      params.sessionId,
+      params.filePath,
+      params.fromEntryId,
+      params.toEntryId,
+    ) as Promise<R<"agent.getFileDiff">>;
+  });
+
   r("agent.getBatchDiffs", async (params) => {
     return m.getBatchDiffs(params.sessionId, params.fromEntryId, params.toEntryId) as Promise<
       R<"agent.getBatchDiffs">
