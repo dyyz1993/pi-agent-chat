@@ -45,6 +45,12 @@ export type UIInteractionBlock = {
   notifyType?: "info" | "warning" | "error";
   response?: Record<string, unknown>;
   respondedAt?: number;
+  hookMeta?: {
+    toolName: string;
+    matcher: string;
+    command?: string;
+    reason: string;
+  };
 };
 
 export type ContentBlock =

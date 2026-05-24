@@ -285,7 +285,12 @@ export interface AgentMethods {
     result: { restored: string[]; deleted: string[] };
   };
   "agent.getModifiedFiles": {
-    params: { sessionId: string; fromEntryId?: string; toEntryId?: string };
+    params: {
+      sessionId: string;
+      fromEntryId?: string;
+      toEntryId?: string;
+      toUserMsgEntryId?: string;
+    };
     result: Array<{
       path: string;
       status: "added" | "modified" | "deleted";
@@ -449,6 +454,13 @@ export interface ChannelDataEvent {
   data: Record<string, unknown>;
 }
 
+export interface HookMeta {
+  toolName: string;
+  matcher: string;
+  command?: string;
+  reason: string;
+}
+
 export interface ExtensionUIRequestEvent {
   type: "extension_ui_request";
   id: string;
@@ -469,6 +481,8 @@ export interface ExtensionUIRequestEvent {
   placeholder?: string;
   prefill?: string;
   timeout?: number;
+  toolCallId?: string;
+  hookMeta?: HookMeta;
   notifyType?: "info" | "warning" | "error";
   statusKey?: string;
   statusText?: string;

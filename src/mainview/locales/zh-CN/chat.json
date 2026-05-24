@@ -168,6 +168,9 @@
   "uiCard.editCancelled": "已取消编辑",
   "uiCard.notificationSent": "通知已发送",
   "uiCard.asyncResponseInjection": "异步响应注入",
+  "uiCard.alwaysAllow": "始终允许",
+  "uiCard.allowOnce": "允许一次",
+  "uiCard.alwaysAllowed": "已始终允许",
 
   "bash.backgroundRunning": "已后台运行",
   "bash.moveToBackground": "转为后台运行",

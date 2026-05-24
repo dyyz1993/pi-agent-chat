@@ -9,6 +9,14 @@ import {
   X,
   Loader2,
   Zap,
+  ShieldCheck,
+  Terminal,
+  Eye,
+  Pencil,
+  Search,
+  FolderOpen,
+  FileText,
+  Wrench,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { UIInteractionBlock } from "../../../types";
@@ -61,18 +69,86 @@ export function CardShell({ block, children }: { block: UIBlock; children: React
   );
 }
 
+const HOOK_TOOL_ICONS: Record<string, { icon: typeof Terminal; color: string }> = {
+  bash: { icon: Terminal, color: "text-orange-400" },
+  read: { icon: Eye, color: "text-blue-400" },
+  write: { icon: FileText, color: "text-green-400" },
+  edit: { icon: Pencil, color: "text-amber-400" },
+  grep: { icon: Search, color: "text-purple-400" },
+  find: { icon: FolderOpen, color: "text-cyan-400" },
+  ls: { icon: FolderOpen, color: "text-cyan-400" },
+};
+
 export const ConfirmCard = memo(function ConfirmCard({ block }: { block: UIBlock }) {
   const { t } = useTranslation("chat");
   const respondById = useUIDialogStore((s) => s.respondById);
   const dismissById = useUIDialogStore((s) => s.dismissById);
   const isPending = block.status === "pending";
 
+  const hookMeta = block.hookMeta;
+  const isHookConfirm = !!hookMeta;
+
   const responseText =
     block.status === "responded" && block.response
       ? block.response.confirmed
-        ? t("uiCard.confirmed")
+        ? block.response.alwaysAllow
+          ? t("uiCard.alwaysAllowed")
+          : t("uiCard.confirmed")
         : t("uiCard.rejected")
       : null;
+
+  if (isHookConfirm) {
+    const hookIcon = HOOK_TOOL_ICONS[hookMeta.toolName?.toLowerCase()] ?? { icon: Wrench, color: "text-gray-400" };
+    const HookIcon = hookIcon.icon;
+
+    return (
+      <CardShell block={block}>
+        {isPending ? (
+          <div className="px-3 pb-2 space-y-2">
+            {hookMeta.command && (
+              <div className="flex items-start gap-1.5 bg-black/30 dark:bg-black/40 rounded px-2 py-1">
+                <HookIcon className={`w-3 h-3 mt-0.5 shrink-0 ${hookIcon.color}`} />
+                <code className="text-[11px] text-text-primary font-mono break-all leading-relaxed">
+                  {hookMeta.command}
+                </code>
+              </div>
+            )}
+            <div className="flex gap-1.5">
+              <button
+                onClick={() => respondById(block.id, { confirmed: true, alwaysAllow: true })}
+                className="flex-1 flex items-center justify-center gap-1 py-1.5 text-[11px] rounded bg-status-info/80 text-white hover:bg-status-info/90 transition-colors"
+              >
+                <ShieldCheck className="w-3 h-3" />
+                {t("uiCard.alwaysAllow")}
+              </button>
+              <button
+                onClick={() => respondById(block.id, { confirmed: true })}
+                className="flex-1 flex items-center justify-center gap-1 py-1 text-[11px] rounded bg-status-success text-white dark:bg-status-success/20 dark:text-status-success hover:bg-status-success/90 dark:hover:bg-status-success/30 transition-colors"
+              >
+                <CheckCircle className="w-3 h-3" />
+                {t("uiCard.allowOnce")}
+              </button>
+              <button
+                onClick={() => dismissById(block.id)}
+                className="flex items-center justify-center gap-1 px-3 py-1 text-[11px] rounded bg-status-error text-white dark:bg-status-error/15 dark:text-status-error hover:bg-status-error/90 dark:hover:bg-status-error/25 transition-colors"
+              >
+                <XCircle className="w-3 h-3" />
+                {t("common:cancel")}
+              </button>
+            </div>
+          </div>
+        ) : responseText ? (
+          <div className="px-3 pb-1.5">
+            <span
+              className={`text-[11px] ${block.response?.confirmed ? "text-status-success" : "text-status-error"}`}
+            >
+              {responseText}
+            </span>
+          </div>
+        ) : null}
+      </CardShell>
+    );
+  }
 
   return (
     <CardShell block={block}>

@@ -168,6 +168,9 @@
   "uiCard.editCancelled": "Edit cancelled",
   "uiCard.notificationSent": "Notification sent",
   "uiCard.asyncResponseInjection": "Async response injection",
+  "uiCard.alwaysAllow": "Always Allow",
+  "uiCard.allowOnce": "Allow Once",
+  "uiCard.alwaysAllowed": "Always Allowed",
 
   "bash.backgroundRunning": "Running in background",
   "bash.moveToBackground": "Move to background",

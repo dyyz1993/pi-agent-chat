@@ -143,6 +143,8 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         placeholder: event.placeholder,
         prefill: event.prefill,
         timeout: event.timeout,
+        toolCallId: event.toolCallId,
+        hookMeta: (event as { hookMeta?: { toolName: string; matcher: string; command?: string; reason: string } }).hookMeta,
       });
 
       storeGet().updateSessionStatus(sessionId, "permission");

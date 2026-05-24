@@ -15,6 +15,13 @@ export interface UIPendingRequest {
   placeholder?: string;
   prefill?: string;
   timeout?: number;
+  toolCallId?: string;
+  hookMeta?: {
+    toolName: string;
+    matcher: string;
+    command?: string;
+    reason: string;
+  };
 }
 
 interface UIRequestState {
@@ -61,6 +68,7 @@ function toBlock(state: UIRequestState): UIInteractionBlock {
     prefill: request.prefill,
     response,
     respondedAt: status !== "pending" ? Date.now() : undefined,
+    hookMeta: request.hookMeta,
   };
 }
 
@@ -181,6 +189,11 @@ export const useUIDialogStore = create<UIDialogState>((set, get) => ({
   togglePanel: () => set((s) => ({ panelOpen: !s.panelOpen })),
 }));
 
+// Expose store for debugging/testing (only in browser)
+if (typeof window !== "undefined") {
+  (window as unknown as Record<string, unknown>).__uiDialogStore = useUIDialogStore;
+}
+
 export function useUIBlockMap(
   content: ContentBlock[],
   sessionId: string,
@@ -201,8 +214,28 @@ export function useUIBlockMap(
 
     const assigned = new Set<string>();
 
+    // Pass 1: toolCallId exact match (hooks ask etc.)
+    for (const req of storePending) {
+      if (req.sessionId !== sessionId || !req.toolCallId) continue;
+      const state = storeStates.get(req.requestId);
+      if (!state) continue;
+
+      for (const block of content) {
+        if (block.type !== "toolExecution") continue;
+        if (block.toolCallId === req.toolCallId) {
+          assigned.add(req.requestId);
+          const uiBlock = toBlock(state);
+          uiBlock.toolName = block.toolName;
+          result.set(block.toolCallId, uiBlock);
+          break;
+        }
+      }
+    }
+
+    // Pass 2: toolName match (ask-tools etc.)
     for (const block of content) {
       if (block.type !== "toolExecution" || block.status !== "running") continue;
+      if (result.has(block.toolCallId)) continue;
       const method = toolNameToMethod(block.toolName);
       if (!method) continue;
       const queue = pendingByMethod.get(method);
