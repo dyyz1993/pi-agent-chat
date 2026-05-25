@@ -1,72 +1,94 @@
 import { test, type ConsoleMessage } from "@playwright/test";
 
-test.describe("Rollback button debug", () => {
+test.describe("Rollback debug diagnostics", () => {
   const chatLogs: string[] = [];
+  const TOKEN = process.env.ROLLBACK_TEST_TOKEN ?? "demo-test-token";
+  const SESSION_ID = "dda31fa6-3a10-479c-b9c9-2958c0d0ceef";
 
   test.beforeEach(({ page }) => {
     chatLogs.length = 0;
     page.on("console", (msg: ConsoleMessage) => {
       const text = msg.text();
-      if (text.includes("[chat]") || text.includes("rollback")) {
+      if (
+        text.includes("[chat]") ||
+        text.includes("rollback") ||
+        text.includes("navigateTree") ||
+        text.includes("fetchTree")
+      ) {
         chatLogs.push(`[${msg.type()}] ${text}`);
       }
     });
   });
 
-  test("debug: click rollback button and capture console output", async ({ page }) => {
-    // 1. 打开页面
-    await page.goto("/?token=demo-test-token");
+  test("debug: dump page state and rollback button details", async ({ page }) => {
+    await page.goto(`/?token=${TOKEN}&session=${SESSION_ID}`);
     await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15000 }).catch(() => {});
-    await page.screenshot({ path: "test-results/rollback-01-loaded.png" });
+    await page.waitForSelector("[data-msg-card-id]", { timeout: 20000 });
+    await page.waitForTimeout(3000);
+    await page.screenshot({ path: "test-results/rollback-debug-01-loaded.png" });
 
-    // 2. 检查页面状态 — 有没有 tab/session
     const tabCount = await page.locator('[data-testid="tab-bar"] [role="tab"]').count();
     console.log(`Tab count: ${tabCount}`);
 
-    // 3. 查找所有可能的回滚按钮
-    const undoButtons = await page.locator('button[title="回滚消息"]').count();
-    const rotateButtons = await page.locator('button[title="回滚消息+代码"]').count();
-    console.log(`Undo buttons found: ${undoButtons}`);
-    console.log(`Rotate buttons found: ${rotateButtons}`);
+    const msgCards = await page.locator("[data-msg-card-id]").count();
+    console.log(`Message cards: ${msgCards}`);
 
-    // 4. 查找所有消息卡片
-    const allButtons = await page.locator("button").allTextContents();
-    console.log(`Total buttons on page: ${allButtons.length}`);
+    const enMsg = await page.locator('button[title="Rollback message"]').count();
+    const enCode = await page.locator('button[title="Rollback message & code"]').count();
+    const zhMsg = await page.locator('button[title="回滚消息"]').count();
+    const zhCode = await page.locator('button[title="回滚消息+代码"]').count();
+    console.log(`EN buttons: msg=${enMsg}, code=${enCode}`);
+    console.log(`ZH buttons: msg=${zhMsg}, code=${zhCode}`);
 
-    // 5. 检查有没有消息
-    const pageContent = await page.content();
-    const hasMessages = pageContent.includes("你") || pageContent.includes("assistant");
-    console.log(`Has messages: ${hasMessages}`);
-
-    // 6. 如果有回滚按钮，尝试点击
-    if (undoButtons > 0) {
-      // 先让按钮可见（hover）
-      const btn = page.locator('button[title="回滚消息"]').first();
-      const parent = btn.locator("..");
-      await parent.hover({ timeout: 3000 }).catch(() => {});
-      await page.waitForTimeout(500);
-      await btn.click({ timeout: 5000 }).catch((err) => {
-        console.log(`Click failed: ${err.message}`);
+    const cardInfo = await page.evaluate(() => {
+      return Array.from(document.querySelectorAll("[data-msg-card-id]")).map((el) => {
+        const id = el.getAttribute("data-msg-card-id")?.slice(0, 16);
+        const allBtns = Array.from(el.querySelectorAll("button[title]"))
+          .map((b) => b.getAttribute("title"))
+          .filter(Boolean);
+        const header = el.querySelector("span");
+        const roleText = header?.textContent?.trim().slice(0, 30) ?? "";
+        return { id, role: roleText, buttons: allBtns };
       });
-      await page.waitForTimeout(2000);
-      await page.screenshot({ path: "test-results/rollback-02-after-click.png" });
-    } else {
-      console.log("No rollback buttons found — likely no active session with messages");
-      await page.screenshot({ path: "test-results/rollback-02-no-buttons.png" });
+    });
+    console.log("Cards:", JSON.stringify(cardInfo, null, 2));
+
+    const allTitles = await page.evaluate(() =>
+      Array.from(
+        new Set(
+          Array.from(document.querySelectorAll("button[title]"))
+            .map((b) => b.getAttribute("title"))
+            .filter(Boolean),
+        ),
+      ),
+    );
+    console.log(`Unique button titles: ${JSON.stringify(allTitles)}`);
+
+    const selector = enMsg > 0 ? 'button[title="Rollback message"]' : 'button[title="回滚消息"]';
+    const count = enMsg > 0 ? enMsg : zhMsg;
+    if (count > 0) {
+      const btn = page.locator(selector).last();
+      await btn.click({ timeout: 10000 });
+      await page.waitForTimeout(3000);
+
+      const overlay = page.locator('[data-testid="rollback-overlay"]');
+      const overlayVisible = await overlay.isVisible().catch(() => false);
+      console.log(`Overlay visible after click: ${overlayVisible}`);
+
+      if (overlayVisible) {
+        const overlayText = await overlay.textContent();
+        console.log(`Overlay content: ${overlayText?.slice(0, 200)}`);
+
+        const cancelSelector = enMsg > 0 ? "Cancel" : "取消";
+        await page.locator("button").filter({ hasText: cancelSelector }).first().click();
+        await page.waitForTimeout(1500);
+      }
     }
 
-    // 7. 输出所有 chat 日志
+    await page.screenshot({ path: "test-results/rollback-debug-02-final.png" });
+
     console.log("\n=== CHAT LOGS ===");
-    for (const log of chatLogs) {
-      console.log(log);
-    }
-    console.log("=== END CHAT LOGS ===\n");
-
-    // 8. 检查是否弹出了 overlay
-    const overlay = await page.locator("text=回滚确认").count();
-    const overlayAlt = await page.locator("text=已是第一条消息").count();
-    console.log(`Overlay appeared: ${overlay > 0}`);
-    console.log(`First-message notification: ${overlayAlt > 0}`);
-    await page.screenshot({ path: "test-results/rollback-03-final.png" });
+    for (const log of chatLogs) console.log(log);
+    console.log("=== END ===");
   });
 });

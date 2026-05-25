@@ -314,6 +314,7 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
   return (
     <div
       ref={containerRef}
+      data-testid="rollback-overlay"
       className="fixed inset-0 z-50 flex flex-col bg-bg-elevated/98 dark:bg-surface-code/98 backdrop-blur-sm overflow-hidden"
     >
       <div
