@@ -30,6 +30,9 @@ import { performance } from "perf_hooks";
 // 沙箱模式
 import { SandboxManager } from "../../sandbox/sandbox-manager";
 import { SandboxRpcClient } from "../../sandbox/sandbox-rpc-client";
+import type { ISandboxProvider } from "../../sandbox/types";
+import { LocalProcessProvider } from "../../sandbox/providers/local";
+import { SandboxBoxProvider } from "../../sandbox/providers/sandbox-box";
 
 type McpServerInfo = Awaited<ReturnType<RpcClientAPI["getMcpServers"]>>[number];
 
@@ -192,12 +195,40 @@ let cachedModule: { RpcClient: new (options?: Record<string, unknown>) => RpcCli
 let globalSandboxManager: SandboxManager | null = null;
 
 export function initSandboxManager(projectsRoot: string): SandboxManager {
-  globalSandboxManager = new SandboxManager({
-    basePort: config.sandboxBasePort,
+  let provider: ISandboxProvider;
+
+  switch (config.sandboxProvider) {
+    case "sandbox-box":
+      provider = new SandboxBoxProvider({
+        sshHost: config.sandboxBoxSshHost,
+        sshPort: config.sandboxBoxSshPort,
+        sshUser: config.sandboxBoxSshUser,
+        sshKeyPath: config.sandboxBoxSshKey || undefined,
+        domainSuffix: config.sandboxBoxDomainSuffix,
+      });
+      break;
+    case "cloudflare":
+      throw new Error(
+        "Cloudflare provider requires Workers runtime. Use 'local' or 'sandbox-box'.",
+      );
+    case "local":
+    default:
+      provider = new LocalProcessProvider({
+        basePort: config.sandboxBasePort,
+        cliPath: config.piCliPath,
+        projectsRoot,
+      });
+      break;
+  }
+
+  globalSandboxManager = new SandboxManager(provider, {
     idleTimeoutMs: config.sandboxIdleTimeout * 1000,
     gcIntervalMs: 60_000,
-    cliPath: config.piCliPath,
-    projectsRoot,
+    providerConfig: {
+      idleTimeout: `${config.sandboxIdleTimeout}s`,
+      enableInternet: true,
+      envVars: {},
+    },
   });
   return globalSandboxManager;
 }
@@ -212,7 +243,7 @@ async function createRpcClient(
 
   // 沙箱模式：通过 SandboxRpcClient 转发到沙箱容器
   if (config.sandboxEnabled && globalSandboxManager && userId) {
-    const sandbox = await globalSandboxManager.getOrCreate(userId, cwd);
+    const sandbox = await globalSandboxManager.getOrCreate(userId);
     const client = new SandboxRpcClient(sandbox.endpoint) as unknown as RpcClientInstance;
     const t1 = performance.now();
     const timings = { dynamicImport: Math.round(t1 - t0), construct: 0 };

@@ -100,7 +100,7 @@ httpServer.listen(config.port, () => {
   if (config.sandboxEnabled) {
     const projectsDir = resolve(process.cwd(), "data", "sandbox-projects");
     const sm = initSandboxManager(projectsDir);
-    log.info("Sandbox manager initialized", { basePort: config.sandboxBasePort, projectsDir });
+    log.info("Sandbox manager initialized", { provider: config.sandboxProvider, projectsDir });
     // 进程退出时清理沙箱
     process.on("SIGINT", () => {
       sm.stop();

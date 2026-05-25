@@ -34,8 +34,23 @@ export const config = {
   proxyPublicDomain: process.env.PROXY_PUBLIC_DOMAIN ?? "",
   /** 沙箱模式：启用后 agent 在隔离沙箱中运行 */
   sandboxEnabled: process.env.SANDBOX_ENABLED === "true",
-  /** 沙箱基础端口 */
+  /** 沙盒后端类型: local | sandbox-box | cloudflare */
+  sandboxProvider: (process.env.SANDBOX_PROVIDER ?? "local") as
+    | "local"
+    | "sandbox-box"
+    | "cloudflare",
+  /** 沙箱基础端口（local provider） */
   sandboxBasePort: parseInt(process.env.SANDBOX_BASE_PORT ?? "3200", 10),
+  /** sandbox-box SSH 连接地址 */
+  sandboxBoxSshHost: process.env.SANDBOX_BOX_SSH_HOST ?? "192.168.0.29",
+  /** sandbox-box SSH 端口 */
+  sandboxBoxSshPort: parseInt(process.env.SANDBOX_BOX_SSH_PORT ?? "2201", 10),
+  /** sandbox-box SSH 用户 */
+  sandboxBoxSshUser: process.env.SANDBOX_BOX_SSH_USER ?? "root",
+  /** sandbox-box SSH 密钥路径 */
+  sandboxBoxSshKey: process.env.SANDBOX_BOX_SSH_KEY ?? "",
+  /** sandbox-box 域名后缀 */
+  sandboxBoxDomainSuffix: process.env.SANDBOX_BOX_DOMAIN_SUFFIX ?? "sandbox.19930810.xyz",
   /** 沙箱空闲超时（秒） */
   sandboxIdleTimeout: parseInt(process.env.SANDBOX_IDLE_TIMEOUT ?? "1800", 10),
 } as const;

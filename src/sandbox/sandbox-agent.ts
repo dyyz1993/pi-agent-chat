@@ -1,9 +1,11 @@
 /**
- * Sandbox Agent — 沙箱容器内运行的 RPC 代理服务
+ * Sandbox Agent — RPC 代理服务
  *
- * 接收来自主网关的 HTTP RPC 请求，在容器内调用真实的 pi agent。
- * 不依赖 @dyyz1993/pi-coding-agent 的 RpcClient，
- * 直接 spawn node + pi CLI 并通过 JSONL 通信。
+ * 接收来自主网关的 HTTP RPC 请求，通过 JSONL 与 pi agent 通信。
+ *
+ * 两种模式：
+ *   - 本地模式：直接 spawn pi CLI（默认）
+ *   - SSH 模式：通过 SSH 连接到沙盒内的 pi CLI（--ssh-*）
  */
 
 import { createServer } from "http";
@@ -19,10 +21,19 @@ const PORT = parseInt(process.argv.find((a) => a.startsWith("--port="))?.split("
 const CLI_PATH =
   process.argv.find((a) => a.startsWith("--cli-path="))?.split("=")[1] ?? "/usr/bin/pi";
 const CWD = process.argv.find((a) => a.startsWith("--cwd="))?.split("=")[1] ?? process.cwd();
+const SSH_HOST = process.argv.find((a) => a.startsWith("--ssh-host="))?.split("=")[1] ?? "";
+const SSH_PORT = process.argv.find((a) => a.startsWith("--ssh-port="))?.split("=")[1] ?? "2201";
+const SSH_USER = process.argv.find((a) => a.startsWith("--ssh-user="))?.split("=")[1] ?? "root";
+const SSH_SANDBOX = process.argv.find((a) => a.startsWith("--ssh-sandbox="))?.split("=")[1] ?? "";
+const SSH_KEY = process.argv.find((a) => a.startsWith("--ssh-key="))?.split("=")[1] ?? "";
 
-log.info(`starting on port ${PORT}, cli=${CLI_PATH}, cwd=${CWD}`);
+const isSsh = !!SSH_HOST && !!SSH_SANDBOX;
 
-// ─── 直接 spawn pi agent 进程 ───────────────────────────
+log.info(
+  `starting on port ${PORT}, local=${!isSsh}, ssh=${isSsh ? `${SSH_USER}@${SSH_HOST}:${SSH_PORT}/${SSH_SANDBOX}` : "none"}`,
+);
+
+// ─── JSONL 管道 ─────────────────────────────────────────
 
 let piProcess: ChildProcess | null = null;
 const pendingRequests = new Map<
@@ -33,14 +44,28 @@ let requestId = 0;
 
 function startPi(): Promise<void> {
   return new Promise((resolve, reject) => {
-    const args = ["--mode", "rpc"];
-    const env = { ...process.env, NODE_OPTIONS: "--max-old-space-size=4096" };
+    let cmd: string;
+    let args: string[];
 
-    piProcess = spawn("/usr/bin/node", [CLI_PATH, ...args], {
-      cwd: CWD,
-      env,
-      stdio: ["pipe", "pipe", "pipe"],
-    });
+    if (isSsh) {
+      // SSH 模式：通过 SSH 连接到沙盒内的 pi
+      const keyFlag = SSH_KEY ? `-i ${SSH_KEY}` : "";
+      const sshCmd = `ssh ${keyFlag} -o StrictHostKeyChecking=no -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST} sandbox ${SSH_SANDBOX} 'pi --mode rpc'`;
+      cmd = "sh";
+      args = ["-c", sshCmd];
+    } else {
+      // 本地模式：直接 spawn pi CLI
+      cmd = "/usr/bin/node";
+      args = [CLI_PATH, "--mode", "rpc"];
+    }
+
+    const env = { ...process.env, NODE_OPTIONS: "--max-old-space-size=4096" };
+    const spawnOpts: Record<string, unknown> = { env, stdio: ["pipe", "pipe", "pipe"] };
+    if (!isSsh) {
+      (spawnOpts as Record<string, unknown>).cwd = CWD;
+    }
+
+    piProcess = spawn(cmd, args, spawnOpts as Record<string, unknown>);
 
     let buffer = "";
     piProcess.stdout?.on("data", (data: Buffer) => {
@@ -58,9 +83,11 @@ function startPi(): Promise<void> {
       }
     });
 
-    piProcess.stderr?.on("data", (data: Buffer) => {
-      process.stderr.write(data);
-    });
+    if (!isSsh) {
+      piProcess.stderr?.on("data", (data: Buffer) => {
+        process.stderr.write(data);
+      });
+    }
 
     piProcess.on("error", reject);
     piProcess.on("exit", (code) => {
@@ -69,7 +96,7 @@ function startPi(): Promise<void> {
     });
 
     // 等待 ready 事件
-    const timeout = setTimeout(() => reject(new Error("pi agent start timeout")), 30000);
+    const timeout = setTimeout(() => reject(new Error("pi agent start timeout")), 60000);
     const origResolve = resolve;
     pendingRequests.set("__ready__", {
       resolve: () => {
@@ -82,9 +109,9 @@ function startPi(): Promise<void> {
 }
 
 function handleMessage(msg: Record<string, unknown>): void {
-  const { id, type, method, result, error, params } = msg;
+  const { id, type, method } = msg;
 
-  // ready 通知
+  // ready 通知（无 id）
   if (type === "ready" || (method === "start" && type === "result")) {
     const pending = pendingRequests.get("__ready__");
     if (pending) {
@@ -94,27 +121,29 @@ function handleMessage(msg: Record<string, unknown>): void {
     return;
   }
 
-  // RPC 结果
+  // RPC 结果 — pi CLI 返回 { id, success, data } 或 { id, success: false, error }
   if (id && pendingRequests.has(String(id))) {
     const pending = pendingRequests.get(String(id));
     if (!pending) return;
-    if (error) pending.reject(new Error(String(error)));
-    else pending.resolve(result ?? params);
+    if (msg.success === false) {
+      pending.reject(new Error(String(msg.error)));
+    } else {
+      pending.resolve(msg.data ?? msg);
+    }
     pendingRequests.delete(String(id));
   }
 }
 
-function callPi(method: string, params: unknown[] = []): Promise<unknown> {
+function callPi(type: string, params: unknown[] = []): Promise<unknown> {
   return new Promise((resolve, reject) => {
-    const id = String(++requestId);
-    const msg = JSON.stringify({ id, method, params }) + "\n";
+    const id = `req_${++requestId}`;
+    const msg = JSON.stringify({ type, id, params }) + "\n";
     pendingRequests.set(id, { resolve, reject });
     piProcess?.stdin?.write(msg);
-    // Timeout
     setTimeout(() => {
       const pending = pendingRequests.get(id);
       if (pending) {
-        pending.reject(new Error(`RPC timeout: ${method}`));
+        pending.reject(new Error(`RPC timeout: ${type}`));
         pendingRequests.delete(id);
       }
     }, 60000);

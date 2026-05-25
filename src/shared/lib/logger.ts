@@ -26,6 +26,9 @@ export type LogModule =
   | "project"
   | "sandbox-mgr"
   | "sandbox-rpc"
+  | "sandbox-local"
+  | "sandbox-box"
+  | "sandbox-cf"
   | "change-review";
 type LogLevel = "debug" | "info" | "warn" | "error";
 
