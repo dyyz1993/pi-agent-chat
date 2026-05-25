@@ -76,11 +76,7 @@ const FileItem = memo(function FileItem({
           className="flex items-start gap-1.5 text-left w-full"
         >
           <span className="text-text-tertiary shrink-0 mt-0.5">
-            {expanded ? (
-              <ChevronDown className="w-3 h-3" />
-            ) : (
-              <ChevronRight className="w-3 h-3" />
-            )}
+            {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
           </span>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
@@ -114,7 +110,7 @@ const FileItem = memo(function FileItem({
       </div>
       {expanded && (
         <div className="px-3 pb-2 ml-4">
-          {details ? (
+          {details != null ? (
             <div className="rounded-md bg-surface-dim dark:bg-surface-dim/60 border border-border-secondary overflow-hidden">
               <div className="px-3 py-1.5 bg-surface-hover/50 border-b border-border-secondary flex items-center gap-2">
                 <span className="text-[10px] text-text-tertiary font-mono truncate">
@@ -162,6 +158,7 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
   const loading = useRollbackStore((s) => s.loading);
   const closeRollback = useRollbackStore((s) => s.closeRollback);
   const containerRef = useRef<HTMLDivElement>(null);
+  const confirmingRef = useRef(false);
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
 
   useFocusTrap(containerRef, { onEscape: closeRollback });
@@ -179,9 +176,14 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
   }, []);
 
   const confirmRollback = useCallback(async () => {
+    if (confirmingRef.current) return;
+    confirmingRef.current = true;
     const state = useRollbackStore.getState();
     const currentTarget = state.target;
-    if (!currentTarget) return;
+    if (!currentTarget) {
+      confirmingRef.current = false;
+      return;
+    }
     state.setLoading(true);
     try {
       const sessionState = useSessionStore.getState();
@@ -270,6 +272,7 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
         level: "error",
       });
     } finally {
+      confirmingRef.current = false;
       useRollbackStore.getState().closeRollback();
     }
   }, []);

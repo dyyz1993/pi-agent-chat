@@ -522,22 +522,32 @@ const HeaderActions = memo(function HeaderActions({
           mode === "withFiles"
             ? await (async () => {
                 try {
-                  const modResult = await apiClient.call("agent.getModifiedFiles", {
+                  const modResponse = (await apiClient.call("agent.getModifiedFiles", {
                     sessionId,
                     toUserMsgEntryId: result.targetId ?? message.entryId ?? undefined,
-                  });
-                  const rawFiles = modResult as Array<{
+                  })) as {
+                    files?: Array<{
+                      path: string;
+                      status: "added" | "modified" | "deleted";
+                      turnIndex: number;
+                      entryId: string;
+                    }>;
+                    resolvedFromEntryId?: string | null;
+                  } & Array<{
                     path: string;
                     status: "added" | "modified" | "deleted";
                     turnIndex: number;
                     entryId: string;
                   }>;
+                  const rawFiles = modResponse.files ?? modResponse;
+                  const resolvedFromEntryId = modResponse.resolvedFromEntryId;
                   const files: ModifiedFile[] = await Promise.all(
                     rawFiles.map(async (f) => {
                       try {
                         const diffResult = await apiClient.call("agent.getFileDiff", {
                           sessionId,
                           filePath: f.path,
+                          fromEntryId: resolvedFromEntryId ?? undefined,
                           toEntryId: f.entryId,
                         });
                         const diff = diffResult as {
