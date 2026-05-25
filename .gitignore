@@ -102,3 +102,7 @@ introduction.html
 
 # Runtime session data
 .pi/sessions/
+
+# Yalc local dependency
+.yalc/
+yalc.lock
