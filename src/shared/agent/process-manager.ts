@@ -2029,14 +2029,15 @@ export class AgentProcessManager {
     fromEntryId?: string,
     toEntryId?: string,
     toUserMsgEntryId?: string,
-  ): Promise<
-    Array<{
+  ): Promise<{
+    files: Array<{
       path: string;
       status: "added" | "modified" | "deleted";
       turnIndex: number;
       entryId: string;
-    }>
-  > {
+    }>;
+    resolvedFromEntryId: string | null;
+  }> {
     const managed = this.getActiveManaged(sessionId);
     if (managed) {
       const result = await withTimeout(
@@ -2050,7 +2051,7 @@ export class AgentProcessManager {
       );
       return result;
     }
-    return [];
+    return { files: [], resolvedFromEntryId: null };
   }
 
   async getFileDiff(

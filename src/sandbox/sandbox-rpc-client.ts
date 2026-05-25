@@ -277,14 +277,15 @@ export class SandboxRpcClient implements RpcClientAPI {
       string,
       unknown
     >,
-  ): Promise<
-    Array<{
+  ): Promise<{
+    files: Array<{
       path: string;
       status: "added" | "modified" | "deleted";
       turnIndex: number;
       entryId: string;
-    }>
-  > {
+    }>;
+    resolvedFromEntryId: string | null;
+  }> {
     return this.call("agent.getModifiedFiles", options);
   }
 

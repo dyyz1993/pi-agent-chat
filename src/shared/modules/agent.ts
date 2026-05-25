@@ -291,12 +291,15 @@ export interface AgentMethods {
       toEntryId?: string;
       toUserMsgEntryId?: string;
     };
-    result: Array<{
-      path: string;
-      status: "added" | "modified" | "deleted";
-      turnIndex: number;
-      entryId: string;
-    }>;
+    result: {
+      files: Array<{
+        path: string;
+        status: "added" | "modified" | "deleted";
+        turnIndex: number;
+        entryId: string;
+      }>;
+      resolvedFromEntryId: string | null;
+    };
   };
   "agent.getFileDiff": {
     params: {

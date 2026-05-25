@@ -522,25 +522,12 @@ const HeaderActions = memo(function HeaderActions({
           mode === "withFiles"
             ? await (async () => {
                 try {
-                  const modResponse = (await apiClient.call("agent.getModifiedFiles", {
+                  const modResponse = await apiClient.call("agent.getModifiedFiles", {
                     sessionId,
                     toUserMsgEntryId: result.targetId ?? message.entryId ?? undefined,
-                  })) as {
-                    files?: Array<{
-                      path: string;
-                      status: "added" | "modified" | "deleted";
-                      turnIndex: number;
-                      entryId: string;
-                    }>;
-                    resolvedFromEntryId?: string | null;
-                  } & Array<{
-                    path: string;
-                    status: "added" | "modified" | "deleted";
-                    turnIndex: number;
-                    entryId: string;
-                  }>;
-                  const rawFiles = modResponse.files ?? modResponse;
+                  });
                   const resolvedFromEntryId = modResponse.resolvedFromEntryId;
+                  const rawFiles = modResponse.files;
                   const files: ModifiedFile[] = await Promise.all(
                     rawFiles.map(async (f) => {
                       try {
@@ -564,6 +551,8 @@ const HeaderActions = memo(function HeaderActions({
                             turnIndex: f.turnIndex,
                             entryId: f.entryId,
                             details: diff.unifiedDiff ?? undefined,
+                            oldContent: diff.oldContent,
+                            newContent: diff.newContent,
                             addedLines:
                               f.status === "added" ? newLines : Math.max(0, newLines - oldLines),
                             removedLines:

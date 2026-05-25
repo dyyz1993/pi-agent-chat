@@ -114,18 +114,15 @@ export const TimelineTurn = memo(function TimelineTurn({
               sessionId,
               toUserMsgEntryId: turn.userEntryId ?? undefined,
             });
-            const rawFiles = modResult as Array<{
-              path: string;
-              status: "added" | "modified" | "deleted";
-              turnIndex: number;
-              entryId: string;
-            }>;
+            const rawFiles = modResult.files;
+            const resolvedFromEntryId = modResult.resolvedFromEntryId;
             const files: ModifiedFile[] = await Promise.all(
               rawFiles.map(async (f) => {
                 try {
                   const diffResult = await apiClient.call("agent.getFileDiff", {
                     sessionId,
                     filePath: f.path,
+                    fromEntryId: resolvedFromEntryId ?? undefined,
                     toEntryId: f.entryId,
                   });
                   const diff = diffResult as {
@@ -142,6 +139,8 @@ export const TimelineTurn = memo(function TimelineTurn({
                       turnIndex: f.turnIndex,
                       entryId: f.entryId,
                       details: diff.unifiedDiff ?? undefined,
+                      oldContent: diff.oldContent,
+                      newContent: diff.newContent,
                       addedLines:
                         f.status === "added" ? newLines : Math.max(0, newLines - oldLines),
                       removedLines:

@@ -17,6 +17,7 @@ import { useNotificationStore } from "../../stores/use-notification-store";
 import { useFocusTrap } from "../../hooks/use-focus-trap";
 import { apiClient } from "../../lib/api-client";
 import { createLogger } from "../../../shared/lib/logger";
+import { InlineDiffViewer } from "./tool-renderers/InlineDiffViewer";
 
 const log = createLogger("chat");
 
@@ -48,6 +49,8 @@ interface FileItemProps {
   filePath: string;
   status: ModifiedFile["status"];
   details?: string;
+  oldContent?: string | null;
+  newContent?: string | null;
   addedLines?: number;
   removedLines?: number;
   expanded: boolean;
@@ -58,6 +61,8 @@ const FileItem = memo(function FileItem({
   filePath,
   status,
   details,
+  oldContent,
+  newContent,
   addedLines,
   removedLines,
   expanded,
@@ -110,7 +115,30 @@ const FileItem = memo(function FileItem({
       </div>
       {expanded && (
         <div className="px-3 pb-2 ml-4">
-          {details != null ? (
+          {details != null && (oldContent != null || newContent != null) ? (
+            <div className="rounded-md bg-surface-dim dark:bg-surface-dim/60 border border-border-secondary overflow-hidden">
+              <div className="px-3 py-1.5 bg-surface-hover/50 border-b border-border-secondary flex items-center gap-2">
+                <span className="text-[10px] text-text-tertiary font-mono truncate">
+                  {filePath}
+                </span>
+                {(addedLines !== undefined || removedLines !== undefined) && (
+                  <span className="shrink-0 flex items-center gap-1 text-[10px] font-mono">
+                    {removedLines !== undefined && removedLines > 0 && (
+                      <span className="text-status-error">-{removedLines}</span>
+                    )}
+                    {addedLines !== undefined && addedLines > 0 && (
+                      <span className="text-status-success">+{addedLines}</span>
+                    )}
+                  </span>
+                )}
+              </div>
+              <InlineDiffViewer
+                oldValue={oldContent ?? ""}
+                newValue={newContent ?? ""}
+                maxHeight="256px"
+              />
+            </div>
+          ) : details != null ? (
             <div className="rounded-md bg-surface-dim dark:bg-surface-dim/60 border border-border-secondary overflow-hidden">
               <div className="px-3 py-1.5 bg-surface-hover/50 border-b border-border-secondary flex items-center gap-2">
                 <span className="text-[10px] text-text-tertiary font-mono truncate">
@@ -334,6 +362,8 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
                   filePath={file.path}
                   status={file.status}
                   details={file.details}
+                  oldContent={file.oldContent}
+                  newContent={file.newContent}
                   addedLines={file.addedLines}
                   removedLines={file.removedLines}
                   expanded={expandedFiles.has(`${file.status}-${file.path}`)}

@@ -2,7 +2,7 @@
   "version": "v1",
   "packages": {
     "@dyyz1993/pi-coding-agent": {
-      "signature": "1d724cb310ac37fe4dfa63c6a7bc0709",
+      "signature": "d82ae5aff1b16d47de6aef116c43d6b9",
       "file": true,
       "replaced": "^0.74.54"
     }
