@@ -127,6 +127,7 @@ interface SessionState {
     name?: string;
     contextWindow?: number;
     reasoning?: boolean;
+    input?: string[];
   }>;
   modelFavorites: Set<string>;
   lastActiveSessionByProject: Record<string, string>;

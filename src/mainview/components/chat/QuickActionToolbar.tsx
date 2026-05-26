@@ -28,6 +28,7 @@ import { useMemoryStore } from "../../stores/use-memory-store";
 import { useStatusStore } from "../../stores/use-status-store";
 import { useSupervisorStore } from "../../stores/use-supervisor-store";
 import type { TreeNode } from "../../types";
+import { isVisionModel } from "../../lib/vision-detection";
 
 type PopupMode = "at" | "slash" | null;
 type AtTab = "agents" | "files" | "memory";
@@ -89,6 +90,16 @@ export function QuickActionToolbar() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const addFiles = useAttachmentStore((s) => s.addFiles);
+
+  const currentModel = useSessionStore((s) => s.currentModel);
+  const availableModels = useSessionStore((s) => s.availableModels);
+  const supportsVision = currentModel
+    ? isVisionModel(
+        availableModels.find(
+          (m) => m.provider === currentModel.provider && m.id === currentModel.id,
+        ) ?? currentModel,
+      )
+    : false;
 
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -485,21 +496,25 @@ export function QuickActionToolbar() {
           >
             <Paperclip className="w-4 h-4" />
           </button>
-          <input
-            ref={imageInputRef}
-            type="file"
-            accept="image/*"
-            multiple
-            className="hidden"
-            onChange={handleImageSelect}
-          />
-          <button
-            onClick={() => imageInputRef.current?.click()}
-            className="p-1.5 rounded-md hover:bg-surface-dim dark:hover:bg-surface-dim text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary transition-colors"
-            title={t("quickAction.image")}
-          >
-            <ImageIcon className="w-4 h-4" />
-          </button>
+          {supportsVision && (
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={handleImageSelect}
+            />
+          )}
+          {supportsVision && (
+            <button
+              onClick={() => imageInputRef.current?.click()}
+              className="p-1.5 rounded-md hover:bg-surface-dim dark:hover:bg-surface-dim text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary transition-colors"
+              title={t("quickAction.image")}
+            >
+              <ImageIcon className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
         <div className="ml-auto flex items-center gap-0.5">
