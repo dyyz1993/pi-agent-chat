@@ -165,7 +165,7 @@ const FileItem = memo(function FileItem({
             <div className="px-3 py-2 rounded-md bg-surface-dim dark:bg-surface-dim/60 border border-border-secondary">
               <span className="text-xs text-text-tertiary">
                 {status === "deleted"
-                  ? t("rollbackOverlay.fileWillBeDeleted")
+                  ? t("rollbackOverlay.fileWillBeRestored")
                   : status === "added"
                     ? t("rollbackOverlay.fileWillBeRemoved")
                     : t("rollbackOverlay.fileWillBeRestored")}
