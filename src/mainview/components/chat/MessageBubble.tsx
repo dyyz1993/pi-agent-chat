@@ -1352,6 +1352,17 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({
       );
     case "compactionSummary":
       return <CompactionSummaryCard summary={block.summary} blockId={blockId} />;
+    case "imageBlock":
+      return (
+        <div data-block-id={blockId} className="my-1 px-3">
+          <img
+            src={block.url}
+            alt={block.alt ?? ""}
+            className="max-w-full max-h-[400px] rounded-lg border border-border-secondary/50"
+            loading="lazy"
+          />
+        </div>
+      );
     case "uiInteraction":
       return <UIInteractionCard block={block} />;
   }

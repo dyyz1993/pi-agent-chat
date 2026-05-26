@@ -631,13 +631,17 @@ export class AgentProcessManager {
     return { replayed: events.length };
   }
 
-  send(sessionId: string, content: string): boolean {
+  send(
+    sessionId: string,
+    content: string,
+    images?: import("@dyyz1993/pi-ai").ImageContent[],
+  ): boolean {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) {
       log.warn("send: no client", { sessionId });
       return false;
     }
-    managed.client.prompt(content).catch(async (err: Error) => {
+    managed.client.prompt(content, images).catch(async (err: Error) => {
       log.warn("prompt error", { err: err.message });
       if (!(await this.isClientAlive(sessionId, managed))) {
         this.cleanupDeadClient(sessionId, `prompt failed: ${err.message}`);
@@ -654,19 +658,27 @@ export class AgentProcessManager {
     return true;
   }
 
-  steer(sessionId: string, content: string): boolean {
+  steer(
+    sessionId: string,
+    content: string,
+    images?: import("@dyyz1993/pi-ai").ImageContent[],
+  ): boolean {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) return false;
-    managed.client.steer(content).catch((err: unknown) => {
+    managed.client.steer(content, images).catch((err: unknown) => {
       log.warn("steer error", { sessionId, err: err instanceof Error ? err.message : String(err) });
     });
     return true;
   }
 
-  followUp(sessionId: string, content: string): boolean {
+  followUp(
+    sessionId: string,
+    content: string,
+    images?: import("@dyyz1993/pi-ai").ImageContent[],
+  ): boolean {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) return false;
-    managed.client.followUp(content).catch((err: unknown) => {
+    managed.client.followUp(content, images).catch((err: unknown) => {
       log.warn("followUp error", {
         sessionId,
         err: err instanceof Error ? err.message : String(err),

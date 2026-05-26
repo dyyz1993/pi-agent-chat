@@ -9,6 +9,7 @@ import type {
   ToolCall,
   ThinkingContent,
 } from "@dyyz1993/pi-ai";
+import type { ImageContent } from "@dyyz1993/pi-ai";
 
 export interface AgentMethods {
   "agent.start": {
@@ -25,7 +26,7 @@ export interface AgentMethods {
     result: { replayed: number };
   };
   "agent.send": {
-    params: { sessionId: string; content: string };
+    params: { sessionId: string; content: string; images?: ImageContent[] };
     result: { ok: boolean };
   };
   "agent.stop": {
@@ -97,11 +98,11 @@ export interface AgentMethods {
     };
   };
   "agent.steer": {
-    params: { sessionId: string; content: string };
+    params: { sessionId: string; content: string; images?: ImageContent[] };
     result: { ok: boolean };
   };
   "agent.followUp": {
-    params: { sessionId: string; content: string };
+    params: { sessionId: string; content: string; images?: ImageContent[] };
     result: { ok: boolean };
   };
   "agent.abort": {

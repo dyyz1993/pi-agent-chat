@@ -81,6 +81,7 @@ export type ContentBlock =
     }
   | { type: "custom"; customType: string; data: unknown }
   | { type: "compactionSummary"; summary: string; tokensBefore?: number }
+  | { type: "imageBlock"; url: string; alt?: string }
   | UIInteractionBlock;
 
 export type TokenUsage = {

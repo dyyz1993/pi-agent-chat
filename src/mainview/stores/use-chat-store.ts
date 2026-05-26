@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Message } from "@dyyz1993/pi-ai";
+import type { Message, ImageContent } from "@dyyz1993/pi-ai";
 import type { ChatMessage, ContentBlock } from "../types";
 import { apiClient } from "../lib/api-client";
 import { useAppStore } from "./use-app-store";
@@ -201,7 +201,9 @@ interface ChatState {
   hasMoreMessagesBySession: Record<string, boolean>;
   isLoadingMoreBySession: Record<string, boolean>;
 
+  pendingImages: ImageContent[];
   setInputText: (text: string) => void;
+  setPendingImages: (images: ImageContent[]) => void;
   sendMessage: () => Promise<void>;
   sendSteer: () => Promise<void>;
   sendFollowUp: () => Promise<void>;
@@ -221,6 +223,7 @@ interface ChatState {
 export const useChatStore = create<ChatState>((set, get) => ({
   messagesBySession: {},
   inputText: "",
+  pendingImages: [],
   isStreaming: false,
   streamContentVersion: 0,
   loadingSessions: new Set<string>(),
@@ -229,6 +232,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   isLoadingMoreBySession: {},
 
   setInputText: (text) => set({ inputText: text }),
+  setPendingImages: (images) => set({ pendingImages: images }),
 
   sendMessage: async () => {
     const { inputText } = get();
@@ -287,7 +291,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const SEND_TIMEOUT_MS = 60_000;
       const sendT0 = performance.now();
       perfLog.info("[send] begin", { sessionId });
-      const sendPromise = apiClient.call("agent.send", { sessionId, content: text });
+      const pendingImages = get().pendingImages;
+      if (pendingImages.length > 0) {
+        set({ pendingImages: [] });
+      }
+      const sendPromise = apiClient.call("agent.send", {
+        sessionId,
+        content: text,
+        images: pendingImages,
+      });
       const timeoutPromise = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error("Send timed out (60s)")), SEND_TIMEOUT_MS),
       );
@@ -314,8 +326,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const STEER_TIMEOUT_MS = 15_000;
       const steerT0 = performance.now();
       perfLog.info("[steer] begin", { sessionId });
+      const pendingImages = get().pendingImages;
+      if (pendingImages.length > 0) {
+        set({ pendingImages: [] });
+      }
       await Promise.race([
-        apiClient.call("agent.steer", { sessionId, content: text }),
+        apiClient.call("agent.steer", { sessionId, content: text, images: pendingImages }),
         new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error("Steer timed out (15s)")), STEER_TIMEOUT_MS),
         ),
@@ -342,8 +358,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const FOLLOWUP_TIMEOUT_MS = 15_000;
       const followUpT0 = performance.now();
       perfLog.info("[followUp] begin", { sessionId });
+      const pendingImages = get().pendingImages;
+      if (pendingImages.length > 0) {
+        set({ pendingImages: [] });
+      }
       await Promise.race([
-        apiClient.call("agent.followUp", { sessionId, content: text }),
+        apiClient.call("agent.followUp", { sessionId, content: text, images: pendingImages }),
         new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error("FollowUp timed out (15s)")), FOLLOWUP_TIMEOUT_MS),
         ),

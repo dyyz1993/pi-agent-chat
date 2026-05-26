@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useAttachmentStore } from "../../stores/use-attachment-store";
 import {
   Paperclip,
   Image as ImageIcon,
@@ -83,6 +84,32 @@ export function QuickActionToolbar() {
   const setActivePanelTab = useLayoutStore((s) => s.setActivePanelTab);
   const supervisorStatus = useSupervisorStore(
     (s) => (activeSessionId ? s.bySession[activeSessionId]?.status : null) ?? null,
+  );
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const addFiles = useAttachmentStore((s) => s.addFiles);
+
+  const handleFileSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if (files && files.length > 0) {
+        addFiles(Array.from(files));
+      }
+      e.target.value = "";
+    },
+    [addFiles],
+  );
+
+  const handleImageSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if (files && files.length > 0) {
+        addFiles(Array.from(files));
+      }
+      e.target.value = "";
+    },
+    [addFiles],
   );
 
   const query = useMemo(() => {
@@ -444,13 +471,30 @@ export function QuickActionToolbar() {
     <div className="relative px-3 pt-1">
       <div className="flex items-center gap-1 min-h-[40px]">
         <div className="flex items-center gap-0.5">
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={handleFileSelect}
+          />
           <button
+            onClick={() => fileInputRef.current?.click()}
             className="p-1.5 rounded-md hover:bg-surface-dim dark:hover:bg-surface-dim text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary transition-colors"
             title={t("quickAction.attachment")}
           >
             <Paperclip className="w-4 h-4" />
           </button>
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={handleImageSelect}
+          />
           <button
+            onClick={() => imageInputRef.current?.click()}
             className="p-1.5 rounded-md hover:bg-surface-dim dark:hover:bg-surface-dim text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary transition-colors"
             title={t("quickAction.image")}
           >

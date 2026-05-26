@@ -317,20 +317,51 @@ export function ChatPanel() {
     const hasAttachments = attachmentStore.attachments.length > 0;
 
     if (hasAttachments) {
-      const uploaded = await attachmentStore.uploadAll();
-      const failedCount = attachmentStore.attachments.filter((a) => a.status === "error").length;
+      const attachments = attachmentStore.attachments;
+      const imageAttachments = attachments.filter((a) => a.type.startsWith("image/"));
+      const fileAttachments = attachments.filter((a) => !a.type.startsWith("image/"));
 
-      if (failedCount > 0 && uploaded.length === 0) {
-        pushNotif({ message: "All file uploads failed, cannot send", level: "warning" });
-        return;
+      const images: import("@dyyz1993/pi-ai").ImageContent[] = [];
+      for (const att of imageAttachments) {
+        try {
+          const arrayBuffer = await att.file.arrayBuffer();
+          const { Buffer: BunBuffer } = await import("buffer");
+          const base64 = BunBuffer.from(arrayBuffer).toString("base64");
+          const ext = att.name.split(".").pop()?.toLowerCase();
+          const mimeType =
+            ext === "jpg" || ext === "jpeg"
+              ? "image/jpeg"
+              : ext === "gif"
+                ? "image/gif"
+                : ext === "webp"
+                  ? "image/webp"
+                  : "image/png";
+          images.push({ type: "image", data: base64, mimeType });
+        } catch {
+          fileAttachments.push(att);
+        }
       }
 
-      const filePaths = uploaded.map((a) => a.uploadedPath).filter(Boolean) as string[];
+      let filePaths: string[] = [];
+      if (fileAttachments.length > 0) {
+        attachmentStore.clearAll();
+        for (const att of fileAttachments) {
+          useAttachmentStore.getState().addFiles([att.file]);
+        }
+        const uploaded = await useAttachmentStore.getState().uploadAll();
+        filePaths = uploaded.map((a) => a.uploadedPath).filter(Boolean) as string[];
+      }
+
       attachmentStore.clearAll();
+
+      if (images.length > 0) {
+        useChatStore.getState().setPendingImages(images);
+      }
 
       if (filePaths.length > 0) {
         const fileRefs = filePaths.map((p) => `@${p}`).join(" ");
-        const text = inputText.trim() ? `${inputText.trim()}\n${fileRefs}` : fileRefs;
+        const currentText = useChatStore.getState().inputText;
+        const text = currentText.trim() ? `${currentText.trim()}\n${fileRefs}` : fileRefs;
         useChatStore.getState().setInputText(text);
       }
     }
@@ -350,6 +381,56 @@ export function ChatPanel() {
     if (!inputText.trim() || !isStreaming) return;
     await sendFollowUp();
   };
+
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const files: File[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.kind === "file") {
+        const file = item.getAsFile();
+        if (file) files.push(file);
+      }
+    }
+    if (files.length > 0) {
+      e.preventDefault();
+      useAttachmentStore.getState().addFiles(files);
+    }
+  }, []);
+
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+    const items = e.dataTransfer?.items;
+    if (!items) return;
+    const files: File[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.kind === "file") {
+        const file = item.getAsFile();
+        if (file) files.push(file);
+      }
+    }
+    if (files.length > 0) {
+      useAttachmentStore.getState().addFiles(files);
+    }
+  }, []);
 
   useEffect(() => {
     if (!activeSessionId || !isAtTop || !hasMoreMessages || isLoadingMore || isViewingSubagent)
@@ -476,8 +557,12 @@ export function ChatPanel() {
       {activeSessionId && !isViewingSubagent && <QueueCards sessionId={activeSessionId} />}
 
       <div
-        className="px-3 pt-2 pb-1.5 flex-shrink-0 flex items-stretch gap-1.5 bg-bg-secondary border-t border-border-primary relative"
+        className={`px-3 pt-2 pb-1.5 flex-shrink-0 flex items-stretch gap-1.5 bg-bg-secondary border-t border-border-primary relative ${isDragOver ? "ring-2 ring-semantic-accent/50 bg-semantic-accent/5" : ""}`}
         style={{ paddingBottom: "calc(0.375rem + env(safe-area-inset-bottom))" }}
+        onPaste={handlePaste}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
       >
         {!isViewingSubagent && (
           <>
