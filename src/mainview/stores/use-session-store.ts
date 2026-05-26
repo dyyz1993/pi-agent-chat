@@ -1610,9 +1610,17 @@ apiClient.onReconnect(() => {
         useSessionStore.setState((s) => ({
           sessionReady: { ...s.sessionReady, [activeSessionId]: true },
         }));
-        // Request rules snapshot after session is confirmed started
         requestRulesSnapshot(activeSessionId);
         storeGet().fetchInitialState(activeSessionId);
+        // Refresh session list to pick up sessions created/deleted during disconnect
+        storeGet()
+          .loadSessionsForProject(tab.path)
+          .catch((err) => {
+            log.warn("[onReconnect] loadSessionsForProject failed", {
+              projectPath: tab.path,
+              err: err instanceof Error ? err.message : String(err),
+            });
+          });
         if (result.status === "already_running") {
           apiClient.call("agent.replayHoldEvents", { sessionId: activeSessionId }).catch((err) => {
             log.warn("agent.replayHoldEvents failed", {
