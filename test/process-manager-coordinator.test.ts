@@ -57,7 +57,7 @@ interface InternalAPM {
   clients: Map<string, ManagedClientShape>;
   sessionPaths: Map<string, string>;
   sessionProjectPaths: Map<string, string>;
-  processByCwd: Map<string, ManagedClientShape>;
+  processByCwd: Map<string, Set<ManagedClientShape>>;
   handleCoordinatorDelegateSend: (msg: Record<string, unknown>) => Promise<{
     delivered: boolean;
     targetStatus: string;
@@ -317,7 +317,7 @@ describe("AgentProcessManager — coordinator delegate_send", () => {
       });
 
       m.clients.set(sessionA, mockManagedA);
-      m.processByCwd.set(projectPath, mockManagedA);
+      m.processByCwd.set(projectPath, new Set([mockManagedA]));
       m.sessionPaths.set(sessionA, `${tmpDir}/session-a.jsonl`);
       m.sessionPaths.set(sessionB, realPathB);
       m.sessionProjectPaths.set(sessionA, projectPath);
@@ -333,7 +333,7 @@ describe("AgentProcessManager — coordinator delegate_send", () => {
             mockManagedA.info.sessionPath = sp;
             m.clients.set(sessionB, mockManagedA);
           }
-          return { agentId: sid, status: sid === sessionB ? "switched" : "started" };
+          return { agentId: sid, status: sid === sessionB ? "started" : "started" };
         },
       );
 

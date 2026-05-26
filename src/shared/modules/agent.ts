@@ -19,7 +19,7 @@ export interface AgentMethods {
       sessionPath: string;
       forceNewProcess?: boolean;
     };
-    result: { agentId: string; status: "started" | "already_running" | "switched" };
+    result: { agentId: string; status: "started" | "already_running" };
   };
   "agent.replayHoldEvents": {
     params: { sessionId: string };

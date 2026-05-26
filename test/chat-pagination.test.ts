@@ -70,6 +70,7 @@ vi.mock("../src/mainview/stores/session-subscriptions", () => ({
   setupSubscriptions: vi.fn(),
   cleanupSession: vi.fn(),
   cleanupSessionData: vi.fn(),
+  cleanupSessionLight: vi.fn(),
   clearSubscriptionState: vi.fn(),
   syncTabsToBackend: vi.fn(),
 }));

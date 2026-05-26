@@ -24,6 +24,7 @@ import { useAgentStore } from "./use-agent-store";
 import {
   setupSubscriptions,
   cleanupSession,
+  cleanupSessionLight,
   cleanupSessionData,
   clearSubscriptionState,
   syncTabsToBackend,
@@ -407,10 +408,10 @@ export const useSessionStore = create<SessionState>()(
         if (prevId && prevId !== id && !skipCleanup) {
           const t0 = performance.now();
           clearStatusWatchdog(prevId);
-          cleanupSession(get(), prevId);
-          cleanupSessionData(prevId);
-          set((s) => clearSubscriptionState(s, prevId));
-          perfLog.info("[switch] step-1 cleanup old session", {
+          // Light cleanup: reset UI state only, keep subscriptions and data alive
+          // so the old session can continue running in the background.
+          cleanupSessionLight(prevId);
+          perfLog.info("[switch] step-1 light cleanup old session (keep-alive)", {
             prevId,
             ms: Math.round(performance.now() - t0),
           });
@@ -497,11 +498,7 @@ export const useSessionStore = create<SessionState>()(
                   ms: Math.round(performance.now() - tAgentStart),
                 });
 
-                if (
-                  result.status === "already_running" ||
-                  result.status === "started" ||
-                  result.status === "switched"
-                ) {
+                if (result.status === "already_running" || result.status === "started") {
                   set((s) => {
                     const projectId = s.activeProjectId;
                     if (!projectId) return {};
@@ -1601,11 +1598,7 @@ apiClient.onReconnect(() => {
       sessionPath: session.sessionPath,
     })
     .then((result) => {
-      if (
-        result.status === "already_running" ||
-        result.status === "started" ||
-        result.status === "switched"
-      ) {
+      if (result.status === "already_running" || result.status === "started") {
         useSessionStore.setState((s) => {
           const projectId = s.activeProjectId;
           if (!projectId) return {};

@@ -281,8 +281,8 @@ async function createRpcClient(
 
 export class AgentProcessManager {
   private clients = new Map<string, ManagedClient>();
-  /** CWD-based process pool: projectPath → the ManagedClient running for that project */
-  private processByCwd = new Map<string, ManagedClient>();
+  /** CWD-based process tracking: projectPath → set of ManagedClients for that project */
+  private processByCwd = new Map<string, Set<ManagedClient>>();
   private servers = new Set<RPCServer>();
   /** Guard: prevents recursive start() via coordinator session_delegate */
   private _startInProgress = false;
@@ -408,8 +408,8 @@ export class AgentProcessManager {
     sessionId: string,
     projectPath: string,
     sessionPath: string,
-    options?: { forceNewProcess?: boolean },
-  ): Promise<{ agentId: string; status: "started" | "already_running" | "switched" }> {
+    _options?: { forceNewProcess?: boolean },
+  ): Promise<{ agentId: string; status: "started" | "already_running" }> {
     const tStart = performance.now();
 
     // Guard: prevent recursive start() triggered by coordinator session_delegate
@@ -420,8 +420,8 @@ export class AgentProcessManager {
     }
     this._startInProgress = true;
 
-    const existing = this.getActiveManaged(sessionId);
-    if (existing) {
+    const existing = this.clients.get(sessionId);
+    if (existing && existing._activeSessionId === sessionId) {
       perfLog.info("[start] already_running (cached hit)", {
         sessionId,
         totalMs: Math.round(performance.now() - tStart),
@@ -429,85 +429,6 @@ export class AgentProcessManager {
       this._startInProgress = false;
       this._drainPendingDelegates();
       return { agentId: sessionId, status: "already_running" };
-    }
-
-    // ── Process pool: reuse existing process for same cwd ──
-    const pooled = options?.forceNewProcess ? null : this.processByCwd.get(projectPath);
-    if (pooled) {
-      const oldSessionId = pooled._activeSessionId;
-      const tSwitch = performance.now();
-      try {
-        perfLog.info("[start] reusing pooled process", {
-          sessionId,
-          projectPath,
-          oldSessionId,
-        });
-        // Race switchSession with a 15-second timeout.
-        // If the child process is busy (e.g. getFullMessages), don't queue behind it.
-        const result = await withTimeout(
-          pooled.client.switchSession(sessionPath),
-          15_000,
-          "switchSession",
-        );
-        if (!result.cancelled) {
-          // Update mappings: remove ALL stale clients entries pointing to this pooled process
-          for (const [sid, mc] of this.clients) {
-            if (mc === pooled && sid !== sessionId) {
-              this.clients.delete(sid);
-            }
-          }
-          pooled._activeSessionId = sessionId;
-          pooled.info = {
-            sessionId,
-            projectPath,
-            sessionPath,
-            status: "idle",
-            holdEvents: [],
-          };
-          this.clients.set(sessionId, pooled);
-          this.sessionPaths.set(sessionId, sessionPath);
-          this.sessionProjectPaths.set(sessionId, projectPath);
-          perfLog.info("[start] switchSession done", {
-            sessionId,
-            oldSessionId,
-            totalMs: Math.round(performance.now() - tSwitch),
-          });
-          this._startInProgress = false;
-          this._drainPendingDelegates();
-          this.broadcastSessionStatus(sessionId, "idle");
-          return { agentId: sessionId, status: "switched" };
-        }
-        // If cancelled by an extension, fall through to create new process
-        perfLog.info("[start] switchSession cancelled by extension, creating new process");
-      } catch (err: unknown) {
-        const switchMs = Math.round(performance.now() - tSwitch);
-        // switchSession failed or timed out — kill the pooled process (it may be stuck)
-        // and fall through to create a fresh one.
-        perfLog.info("[start] switchSession failed, killing pooled process", {
-          sessionId,
-          oldSessionId,
-          switchMs,
-          error: err instanceof Error ? err.message : String(err),
-        });
-        // Remove from process pool so we don't try to reuse a stuck process
-        this.processByCwd.delete(projectPath);
-        // Kill ALL stale clients entries pointing to this stuck process
-        for (const [sid, mc] of this.clients) {
-          if (mc === pooled) {
-            this.clients.delete(sid);
-          }
-        }
-        try {
-          pooled.unsubscribe();
-        } catch {
-          /* ignore */
-        }
-        try {
-          await pooled.client.stop();
-        } catch {
-          /* ignore */
-        }
-      }
     }
 
     perfLog.info("[start] begin (new process)", { sessionId, projectPath });
@@ -606,9 +527,13 @@ export class AgentProcessManager {
     log.info("RpcClient started", { sessionId });
     this.sessionPaths.set(sessionId, sessionPath);
     this.sessionProjectPaths.set(sessionId, projectPath);
-    if (!options?.forceNewProcess) {
-      this.processByCwd.set(projectPath, managed);
+    // Track process under its project for lifecycle management
+    let procSet = this.processByCwd.get(projectPath);
+    if (!procSet) {
+      procSet = new Set();
+      this.processByCwd.set(projectPath, procSet);
     }
+    procSet.add(managed);
     this._startInProgress = false;
     this._drainPendingDelegates();
     this.broadcastSessionStatus(sessionId, "idle");
@@ -778,10 +703,14 @@ export class AgentProcessManager {
       log.warn("stop error", { sessionId, err: err instanceof Error ? err.message : String(err) });
     });
     this.clients.delete(sessionId);
-    // Clean up process pool if this was the pooled process for its cwd
+    // Clean up process tracking for this project
     const cwd = managed.info.projectPath;
-    if (this.processByCwd.get(cwd) === managed) {
-      this.processByCwd.delete(cwd);
+    const procSet = this.processByCwd.get(cwd);
+    if (procSet) {
+      procSet.delete(managed);
+      if (procSet.size === 0) {
+        this.processByCwd.delete(cwd);
+      }
     }
     // Note: sessionPaths, sessionProjectPaths, and leafIds are NOT cleared here.
     // They persist for session restart support (coordinator delegate_send)
@@ -860,19 +789,13 @@ export class AgentProcessManager {
   }
 
   /**
-   * Get the managed client for a session, but ONLY if the pooled process
-   * is currently serving that session (i.e. _activeSessionId matches).
-   * If the pooled process has been switched to a different session, this
-   * returns null and cleans up the stale clients entry.
+   * Get the managed client for a session.
+   * Each session now has its own dedicated CLI process.
    */
   private getActiveManaged(sessionId: string): ManagedClient | null {
     const managed = this.clients.get(sessionId);
     if (!managed) return null;
-    if (managed._activeSessionId === sessionId) return managed;
-    // Stale entry: pooled process was switched to a different session.
-    // Clean up to prevent serving wrong session data.
-    this.clients.delete(sessionId);
-    return null;
+    return managed;
   }
 
   /**
@@ -2685,28 +2608,34 @@ export class AgentProcessManager {
     if (invokeId) {
       let managed = this.getActiveManaged(sessionId);
       // The session may have been evicted from clients during an async handler
-      // (e.g. delegate_send restarts the target, switching the pooled process).
+      // (e.g. delegate_send restarts the target).
       // Fall back to processByCwd via sessionProjectPaths to find the channel.
       if (!managed) {
         const projectPath = this.sessionProjectPaths.get(sessionId) ?? "";
         if (projectPath) {
-          managed = this.processByCwd.get(projectPath) ?? null;
-          if (managed && managed._activeSessionId !== sessionId) {
+          const procSet = this.processByCwd.get(projectPath);
+          if (procSet) {
+            for (const mc of procSet) {
+              if (mc._activeSessionId === sessionId) {
+                managed = mc;
+                log.info("handleCoordinatorCall: routed response via processByCwd fallback", {
+                  sessionId,
+                  projectPath,
+                  activeSession: managed._activeSessionId,
+                });
+                break;
+              }
+            }
+          }
+          if (!managed) {
             log.warn(
-              "handleCoordinatorCall: processByCwd fallback _activeSessionId mismatch, dropping response",
+              "handleCoordinatorCall: processByCwd fallback could not find matching process",
               {
                 sessionId,
-                activeSessionId: managed._activeSessionId,
                 projectPath,
+                processCount: procSet?.size ?? 0,
               },
             );
-            managed = null;
-          } else if (managed) {
-            log.info("handleCoordinatorCall: routed response via processByCwd fallback", {
-              sessionId,
-              projectPath,
-              activeSession: managed._activeSessionId,
-            });
           }
         }
       }
@@ -2750,7 +2679,7 @@ export class AgentProcessManager {
   private async handleCoordinatorDelegate(
     parentSessionId: string,
     msg: Extract<CoordinatorMethodCall, { __call: "session_delegate" }>,
-  ): Promise<{ sessionId: string; status: "started" | "already_running" | "switched" }> {
+  ): Promise<{ sessionId: string; status: "started" | "already_running" }> {
     const { task, projectPath: rawProjectPath } = msg;
     const parent = this.getActiveManaged(parentSessionId);
     if (!parent) throw new Error("Parent session not found");
@@ -3201,7 +3130,7 @@ export class AgentProcessManager {
   private async handleCoordinatorDelegateFork(
     parentSessionId: string,
     msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_fork" }>,
-  ): Promise<{ sessionId: string; status: "started" | "already_running" | "switched" }> {
+  ): Promise<{ sessionId: string; status: "started" | "already_running" }> {
     const { task } = msg;
     const base = this.clients.get(parentSessionId);
     if (!base) throw new Error("Base session not found");
