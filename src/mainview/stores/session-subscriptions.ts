@@ -610,14 +610,14 @@ export function cleanupSession(state: SubscriptionMaps, sessionId: string): void
 }
 
 /**
- * Light cleanup: only reset lightweight UI state (status, ready flags).
+ * Light cleanup: reset lightweight UI state while preserving status.
  * Keeps heavy data (messages, bash logs, memory) in cache for fast tab-switch-back.
+ * Status is NOT reset here — the backend `agent.session_status_changed` subscription
+ * and `agent.event` subscription continue to push accurate status for background sessions.
+ * This ensures the TabBar and session list always reflect the true running state
+ * even when the user switches away from an active session.
  */
 export function cleanupSessionLight(sessionId: string): void {
-  // Reset session status to idle so TabBar indicator won't show stale state
-  const sessionStore = useSessionStore.getState();
-  sessionStore.updateSessionStatus(sessionId, "idle");
-
   // Reset toolCallNameMap for this session (same as cleanupSession)
   const msgs = useChatStore.getState().messagesBySession[sessionId] || [];
   for (const msg of msgs) {
