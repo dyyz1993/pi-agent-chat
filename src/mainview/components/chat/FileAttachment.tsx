@@ -6,6 +6,7 @@ import { formatFileSize } from "../chat/preview/types";
 import { useSupervisorStore } from "../../stores/use-supervisor-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useLayoutStore } from "../../layouts/use-layout-store";
+import { isVisionModel } from "../../lib/vision-detection";
 
 function AttachmentPreview({ att, onRemove }: { att: AttachmentFile; onRemove: () => void }) {
   const isImage = att.type.startsWith("image/");
@@ -65,6 +66,15 @@ export function AttachmentButtons() {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const addFiles = useAttachmentStore((s) => s.addFiles);
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const currentModel = useSessionStore((s) => s.currentModel);
+  const availableModels = useSessionStore((s) => s.availableModels);
+  const supportsVision = currentModel
+    ? isVisionModel(
+        availableModels.find(
+          (m) => m.provider === currentModel.provider && m.id === currentModel.id,
+        ) ?? {},
+      )
+    : false;
   const supervisorStatus = useSupervisorStore(
     (s) => (activeSessionId ? s.bySession[activeSessionId]?.status : null) ?? null,
   );
@@ -134,21 +144,25 @@ export function AttachmentButtons() {
         <Paperclip className="w-4 h-4" />
       </button>
 
-      <input
-        ref={imageInputRef}
-        type="file"
-        accept="image/*"
-        multiple
-        className="hidden"
-        onChange={handleImageSelect}
-      />
-      <button
-        onClick={() => imageInputRef.current?.click()}
-        className="p-1.5 rounded-md hover:bg-surface-hover dark:hover:bg-surface-dim text-text-tertiary hover:text-text-primary dark:hover:text-text-secondary transition-colors"
-        title={t("fileAttachment.addImage")}
-      >
-        <ImageIcon className="w-4 h-4" />
-      </button>
+      {supportsVision && (
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={handleImageSelect}
+        />
+      )}
+      {supportsVision && (
+        <button
+          onClick={() => imageInputRef.current?.click()}
+          className="p-1.5 rounded-md hover:bg-surface-hover dark:hover:bg-surface-dim text-text-tertiary hover:text-text-primary dark:hover:text-text-secondary transition-colors"
+          title={t("fileAttachment.addImage")}
+        >
+          <ImageIcon className="w-4 h-4" />
+        </button>
+      )}
 
       <button
         onClick={handleSupervisorClick}
