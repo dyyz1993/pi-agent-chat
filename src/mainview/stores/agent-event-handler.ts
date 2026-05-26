@@ -36,6 +36,20 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
   if (event.type === "agent_start") {
     storeGet().updateSessionStatus(sessionId, "streaming");
+    // Bump updatedAt so the session bubbles to the top of the sidebar list
+    const now = Date.now();
+    const { sessionsByProject } = storeGet();
+    for (const [projectPath, sessions] of Object.entries(sessionsByProject)) {
+      const idx = sessions.findIndex((sess) => sess.sessionId === sessionId);
+      if (idx !== -1) {
+        const updated = [...sessions];
+        updated[idx] = { ...updated[idx], updatedAt: now };
+        useSessionStore.setState((prev) => ({
+          sessionsByProject: { ...prev.sessionsByProject, [projectPath]: updated },
+        }));
+        break;
+      }
+    }
     return;
   }
 
