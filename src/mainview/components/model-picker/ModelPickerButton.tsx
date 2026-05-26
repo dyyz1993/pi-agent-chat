@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
-import { Search, Star, Check } from "lucide-react";
+import { Search, Star, Check, Eye } from "lucide-react";
 import { useSessionStore } from "../../stores/use-session-store";
 
 interface ModelItem {
@@ -9,6 +9,7 @@ interface ModelItem {
   name?: string;
   contextWindow?: number;
   reasoning?: boolean;
+  input?: ("text" | "image")[];
 }
 
 interface ModelPickerButtonProps {
@@ -271,6 +272,11 @@ export function ModelPickerButton({
                           </span>
                         </div>
                       </button>
+                      {m.input?.includes("image") && (
+                        <span title="支持图片输入">
+                          <Eye className="w-3 h-3 text-status-info shrink-0" />
+                        </span>
+                      )}
                       <button
                         type="button"
                         onClick={(e) => {
