@@ -75,10 +75,14 @@ export function setupSubscriptions(
     }));
 
     apiClient
-      .subscribe("agent.event", (payload) => {
-        if (payload.sessionId !== id) return;
-        handleAgentEvent(id, payload.event);
-      })
+      .subscribe(
+        "agent.event",
+        (payload) => {
+          if (payload.sessionId !== id) return;
+          handleAgentEvent(id, payload.event);
+        },
+        { sessionId: id },
+      )
       .then((subId) => {
         set((s) => ({
           agentSubscriptions: { ...s.agentSubscriptions, [id]: subId },
