@@ -124,10 +124,10 @@ interface SessionState {
   availableModels: Array<{
     provider: string;
     id: string;
-    name?: string;
-    contextWindow?: number;
-    reasoning?: boolean;
-    input?: string[];
+    name: string;
+    contextWindow: number;
+    reasoning: boolean;
+    input: ("text" | "image")[];
   }>;
   modelFavorites: Set<string>;
   lastActiveSessionByProject: Record<string, string>;

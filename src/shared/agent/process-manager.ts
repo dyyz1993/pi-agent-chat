@@ -1365,12 +1365,19 @@ export class AgentProcessManager {
     };
   }
 
-  async getAvailableModels(
-    sessionId: string,
-  ): Promise<Array<{ provider: string; id: string; contextWindow: number; reasoning: boolean }>> {
+  async getAvailableModels(sessionId: string): Promise<
+    Array<{
+      provider: string;
+      id: string;
+      name: string;
+      contextWindow: number;
+      reasoning: boolean;
+      input: ("text" | "image")[];
+    }>
+  > {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) return [];
-    return managed.client.getAvailableModels().catch(async (err: unknown) => {
+    return (managed.client as SandboxRpcClient).getAvailableModels().catch(async (err: unknown) => {
       const msg = err instanceof Error ? err.message : String(err);
       log.warn("getAvailableModels error, checking if CLI is alive", {
         sessionId,

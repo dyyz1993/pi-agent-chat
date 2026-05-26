@@ -97,7 +97,7 @@ export function QuickActionToolbar() {
     ? isVisionModel(
         availableModels.find(
           (m) => m.provider === currentModel.provider && m.id === currentModel.id,
-        ) ?? currentModel,
+        ) ?? {},
       )
     : false;
 

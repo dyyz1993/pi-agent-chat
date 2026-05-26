@@ -115,7 +115,14 @@ export interface AgentMethods {
   };
   "agent.getAvailableModels": {
     params: { sessionId: string };
-    result: Array<{ provider: string; id: string; contextWindow: number; reasoning: boolean }>;
+    result: Array<{
+      provider: string;
+      id: string;
+      name: string;
+      contextWindow: number;
+      reasoning: boolean;
+      input: ("text" | "image")[];
+    }>;
   };
   "agent.setModel": {
     params: { sessionId: string; provider: string; modelId: string };

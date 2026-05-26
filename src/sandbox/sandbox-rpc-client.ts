@@ -13,7 +13,6 @@
 
 import type {
   RpcClientAPI,
-  ModelInfo,
   RpcSessionState,
   CompactionResult,
   ModelCycleResult,
@@ -341,8 +340,26 @@ export class SandboxRpcClient implements RpcClientAPI {
     return this.call("agent.cycleModel");
   }
 
-  async getAvailableModels(): Promise<ModelInfo[]> {
-    return this.call("agent.getAvailableModels");
+  async getAvailableModels(): Promise<
+    Array<{
+      provider: string;
+      id: string;
+      name: string;
+      contextWindow: number;
+      reasoning: boolean;
+      input: ("text" | "image")[];
+    }>
+  > {
+    return this.call("agent.getAvailableModels") as Promise<
+      Array<{
+        provider: string;
+        id: string;
+        name: string;
+        contextWindow: number;
+        reasoning: boolean;
+        input: ("text" | "image")[];
+      }>
+    >;
   }
 
   // ─── Thinking ───────────────────────────────────────────
