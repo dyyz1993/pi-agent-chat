@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
-import { Search, Star, Check, Eye } from "lucide-react";
+import { Search, Star, Check, ImageIcon } from "lucide-react";
 import { useSessionStore } from "../../stores/use-session-store";
 
 interface ModelItem {
@@ -274,7 +274,7 @@ export function ModelPickerButton({
                       </button>
                       {m.input?.includes("image") && (
                         <span title="支持图片输入">
-                          <Eye className="w-3 h-3 text-status-info shrink-0" />
+                          <ImageIcon className="w-3 h-3 text-status-info shrink-0" />
                         </span>
                       )}
                       <button

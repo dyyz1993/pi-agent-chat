@@ -269,10 +269,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
         return;
       }
 
+      const pendingImages = get().pendingImages;
+
+      const contentBlocks: ContentBlock[] = [{ type: "text", text }];
+      for (const img of pendingImages) {
+        contentBlocks.push({
+          type: "imageBlock",
+          url: `data:${img.mimeType};base64,${img.data}`,
+          alt: "uploaded image",
+        });
+      }
+
       const userMsg: ChatMessage = {
         id: `user_${Date.now()}`,
         role: "user",
-        content: [{ type: "text", text }],
+        content: contentBlocks,
         timestamp: Date.now(),
         _local: true,
       };
@@ -286,15 +297,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
         };
       });
 
-      set({ isStreaming: true });
+      set({ isStreaming: true, pendingImages: [] });
 
       const SEND_TIMEOUT_MS = 60_000;
       const sendT0 = performance.now();
       perfLog.info("[send] begin", { sessionId });
-      const pendingImages = get().pendingImages;
-      if (pendingImages.length > 0) {
-        set({ pendingImages: [] });
-      }
       const sendPromise = apiClient.call("agent.send", {
         sessionId,
         content: text,

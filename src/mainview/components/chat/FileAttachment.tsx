@@ -1,4 +1,4 @@
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useState } from "react";
 import { Paperclip, ImageIcon, X, Loader2, AlertCircle, Shield } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAttachmentStore, type AttachmentFile } from "../../stores/use-attachment-store";
@@ -10,6 +10,47 @@ import { isVisionModel } from "../../lib/vision-detection";
 
 function AttachmentPreview({ att, onRemove }: { att: AttachmentFile; onRemove: () => void }) {
   const isImage = att.type.startsWith("image/");
+  const [expanded, setExpanded] = useState(false);
+
+  if (isImage && att.preview) {
+    return (
+      <>
+        <div className="group relative inline-block">
+          <img
+            src={att.preview}
+            alt={att.name}
+            className="h-16 max-w-[120px] rounded-lg border border-border-secondary/50 object-cover cursor-pointer hover:opacity-90 transition-opacity"
+            onClick={() => setExpanded(true)}
+          />
+          <button
+            onClick={onRemove}
+            className="absolute -top-1 -right-1 p-0.5 rounded-full bg-bg-elevated dark:bg-surface-dim border border-border-secondary text-text-tertiary hover:text-text-primary dark:hover:text-text-secondary opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+        {expanded && (
+          <div
+            className="fixed inset-0 z-[200] bg-black/70 flex items-center justify-center p-4"
+            onClick={() => setExpanded(false)}
+          >
+            <img
+              src={att.preview}
+              alt={att.name}
+              className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg"
+              onClick={(e) => e.stopPropagation()}
+            />
+            <button
+              onClick={() => setExpanded(false)}
+              className="absolute top-4 right-4 p-2 rounded-full bg-white/20 hover:bg-white/30 text-white transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        )}
+      </>
+    );
+  }
 
   return (
     <div className="group relative flex items-center gap-1.5 px-2 py-1 rounded-md bg-surface-dim border border-border-secondary/50 max-w-[200px]">
@@ -24,11 +65,7 @@ function AttachmentPreview({ att, onRemove }: { att: AttachmentFile; onRemove: (
         <div className="w-3 h-3 rounded-full bg-text-secondary shrink-0" />
       )}
 
-      {isImage && att.preview ? (
-        <img src={att.preview} alt={att.name} className="w-6 h-6 rounded object-cover shrink-0" />
-      ) : (
-        <Paperclip className="w-3 h-3 text-text-tertiary shrink-0" />
-      )}
+      <Paperclip className="w-3 h-3 text-text-tertiary shrink-0" />
 
       <div className="min-w-0 flex-1">
         <div className="text-[10px] text-text-secondary truncate">{att.name}</div>
@@ -52,7 +89,7 @@ export function AttachmentBar() {
   if (attachments.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap gap-1 px-1 pb-1">
+    <div className="flex flex-wrap gap-1.5 px-1 pb-1">
       {attachments.map((att) => (
         <AttachmentPreview key={att.id} att={att} onRemove={() => removeFile(att.id)} />
       ))}

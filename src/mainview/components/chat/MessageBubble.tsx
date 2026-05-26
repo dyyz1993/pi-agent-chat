@@ -16,6 +16,7 @@ import {
   Target,
   Loader2,
   ThumbsDown,
+  X,
 } from "lucide-react";
 import { CachedReactMarkdown } from "./CachedReactMarkdown";
 import { CopyButton } from "./CopyButton";
@@ -124,6 +125,7 @@ export const MessageBubble = memo(function MessageBubble({
   mergedResultData,
 }: MessageBubbleProps) {
   const isUser = message.role === "user";
+  const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const sessionId = useSessionStore((s) => s.activeSessionId);
   const uiBlockMap = useUIBlockMap(message.content, sessionId ?? "");
   const isActive = useChatNavStore(
@@ -188,10 +190,9 @@ export const MessageBubble = memo(function MessageBubble({
           <div className="absolute -top-0.5 right-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-10">
             <CopyButton text={fullTextForCopy} size="xs" />
           </div>
-          {message.content
-            .filter((b) => b.type === "text")
-            .map((b, i) => {
-              const text = (b as Extract<ContentBlock, { type: "text" }>).text;
+          {message.content.map((block, i) => {
+            if (block.type === "text") {
+              const text = (block as Extract<ContentBlock, { type: "text" }>).text;
 
               try {
                 const tags = getRegisteredTags();
@@ -215,7 +216,28 @@ export const MessageBubble = memo(function MessageBubble({
               } catch {
                 return renderUserTextWithLinks(text, i);
               }
-            })}
+            }
+
+            if (block.type === "imageBlock") {
+              const imgBlock = block as Extract<ContentBlock, { type: "imageBlock" }>;
+              return (
+                <div key={i} className="mt-1.5">
+                  <img
+                    src={imgBlock.url}
+                    alt={imgBlock.alt ?? ""}
+                    className="max-w-[240px] max-h-[180px] rounded-lg border border-border-secondary/50 cursor-pointer hover:opacity-90 transition-opacity"
+                    loading="lazy"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setExpandedImage(imgBlock.url);
+                    }}
+                  />
+                </div>
+              );
+            }
+
+            return null;
+          })}
         </div>
       ) : (
         <div className={`w-full text-text-primary transition-colors ${styleMemo.bg} min-w-0`}>
@@ -274,6 +296,31 @@ export const MessageBubble = memo(function MessageBubble({
                 <MessageMetaFooter message={message} />
               </div>
             )}
+        </div>
+      )}
+
+      {expandedImage && (
+        <div
+          className="fixed inset-0 z-[200] bg-black/70 flex items-center justify-center p-4"
+          style={{
+            paddingTop: "calc(1rem + env(safe-area-inset-top, 0px))",
+            paddingBottom: "env(safe-area-inset-bottom, 0px)",
+          }}
+          onClick={() => setExpandedImage(null)}
+        >
+          <img
+            src={expandedImage}
+            alt="preview"
+            className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            onClick={() => setExpandedImage(null)}
+            className="absolute top-4 right-4 p-2 rounded-full bg-white/20 hover:bg-white/30 text-white transition-colors"
+            style={{ top: "calc(1rem + env(safe-area-inset-top, 0px))" }}
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
       )}
     </div>
