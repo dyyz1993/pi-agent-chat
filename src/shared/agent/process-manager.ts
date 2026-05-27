@@ -3075,8 +3075,11 @@ export class AgentProcessManager {
 
     const status = this.getStatus(targetSessionId);
     if (status.status === "stopped") {
+      // Distinguish "session never existed" from "session existed but is inactive"
+      const hasRecord =
+        this.sessionPaths.has(targetSessionId) || this.sessionProjectPaths.has(targetSessionId);
       return {
-        status: "stopped",
+        status: hasRecord ? "stopped" : "not_found",
         isCompacting: false,
         contextUsage: { tokens: null, contextWindow: 0, percent: null },
       };
@@ -3131,9 +3134,9 @@ export class AgentProcessManager {
     parentSessionId: string,
     msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_fork" }>,
   ): Promise<{ sessionId: string; status: "started" | "already_running" }> {
-    const { task } = msg;
-    const base = this.clients.get(parentSessionId);
-    if (!base) throw new Error("Base session not found");
+    const { task, sessionId: targetSessionId } = msg;
+    const base = this.clients.get(targetSessionId);
+    if (!base) throw new Error(`Session not found: ${targetSessionId}`);
 
     const sessionPath = base.info.sessionPath;
     const projectPath = base.info.projectPath;
