@@ -408,14 +408,14 @@ export const useSessionStore = create<SessionState>()(
         if (prevId && prevId !== id && !skipCleanup) {
           const t0 = performance.now();
           clearStatusWatchdog(prevId);
-          // Light cleanup: reset UI state only, keep subscriptions and data alive
-          // so the old session can continue running in the background.
+          useChatStore.getState().saveInputDraft(prevId);
           cleanupSessionLight(prevId);
           perfLog.info("[switch] step-1 light cleanup old session (keep-alive)", {
             prevId,
             ms: Math.round(performance.now() - t0),
           });
         } else if (skipCleanup && prevId && prevId !== id) {
+          useChatStore.getState().saveInputDraft(prevId);
           perfLog.info("[switch] step-1 SKIPPED cleanup (fork scenario)", {
             prevId,
           });
@@ -438,6 +438,8 @@ export const useSessionStore = create<SessionState>()(
         });
 
         if (!id) return;
+
+        useChatStore.getState().restoreInputDraft(id);
 
         const { projectTabs, activeProjectId } = get();
         const tab = projectTabs.find((t) => t.id === activeProjectId);
@@ -712,9 +714,34 @@ export const useSessionStore = create<SessionState>()(
           get().setActiveSession(result.sessionId);
           set({ newSessionCreatedAt: Date.now() });
 
-          const currentTier = useTierStore.getState().currentTier;
-          if (currentTier) {
-            useTierStore.getState().switchToTier(currentTier, result.sessionId);
+          const prevSessionId = get().activeSessionId;
+          if (prevSessionId) {
+            const tierStore = useTierStore.getState();
+            const prevTierModels = tierStore.getTierModels(prevSessionId);
+            const prevTier = tierStore.getCurrentTier(prevSessionId);
+            const prevModel = get().currentModel;
+
+            useTierStore.getState().setSessionTierModels(result.sessionId, { ...prevTierModels });
+            useTierStore.getState().setSessionCurrentTier(result.sessionId, prevTier);
+
+            apiClient
+              .call("session.saveTierConfig", {
+                sessionPath: result.sessionPath,
+                tierModels: prevTierModels,
+                currentTier: prevTier,
+                currentModel: prevModel,
+              })
+              .catch(() => {});
+
+            if (prevTier) {
+              await useTierStore.getState().switchToTier(prevTier, result.sessionId);
+            } else if (prevModel) {
+              await apiClient.call("agent.setModel", {
+                sessionId: result.sessionId,
+                provider: prevModel.provider,
+                modelId: prevModel.id,
+              });
+            }
           }
         } catch (error) {
           const errMsg = error instanceof Error ? error.message : String(error);
@@ -820,6 +847,7 @@ export const useSessionStore = create<SessionState>()(
         }
         if (deletedPath) {
           useChatStore.getState().clearSessionMessages(sessionId);
+          useChatStore.getState().clearInputDraft(sessionId);
         }
         useTurnStore.getState().clearSessionUI(sessionId);
         useChatNavStore.getState().clearSessionUI(sessionId);
@@ -1290,18 +1318,45 @@ export const useSessionStore = create<SessionState>()(
             const currentAgentPromise = apiClient.call("agent.getCurrentAgent", { sessionId });
             const tierPromise = apiClient.call("agent.getTierModels", { sessionId });
             const favoritesPromise = apiClient.call("project.getModelFavorites", {});
+            const currentSessionMeta = (() => {
+              for (const sessions of Object.values(get().sessionsByProject)) {
+                const found = sessions.find((s) => s.sessionId === sessionId);
+                if (found) return found;
+              }
+              return null;
+            })();
+            const persistedTierPromise = currentSessionMeta
+              ? apiClient
+                  .call("session.loadTierConfig", { sessionPath: currentSessionMeta.sessionPath })
+                  .catch(() => ({ config: null }))
+              : Promise.resolve({ config: null as unknown });
 
-            Promise.all([statePromise, tierPromise])
-              .then(([rawState, rawTier]) => {
+            Promise.all([statePromise, tierPromise, persistedTierPromise])
+              .then(([rawState, rawTier, rawPersisted]) => {
                 const tierResult = rawTier as { models: Record<string, string> };
                 if (tierResult?.models) {
-                  useTierStore.getState().setTierModels(tierResult.models);
+                  useTierStore.getState().setGlobalDefaults(tierResult.models);
+                }
+                const persisted = rawPersisted as {
+                  config: { tierModels: Record<string, string>; currentTier: string | null } | null;
+                };
+                if (persisted.config) {
+                  useTierStore
+                    .getState()
+                    .setSessionTierModels(sessionId, persisted.config.tierModels);
+                  useTierStore
+                    .getState()
+                    .setSessionCurrentTier(
+                      sessionId,
+                      persisted.config.currentTier as "fast" | "pro" | "max" | null,
+                    );
                 }
                 const stateResult = rawState as AgentStateResult;
                 if (stateResult?.model) {
                   useTierStore
                     .getState()
                     .syncTierFromModel(
+                      sessionId,
                       stateResult.model.provider ?? "",
                       stateResult.model.id ?? "",
                     );
@@ -1463,6 +1518,7 @@ export const useSessionStore = create<SessionState>()(
         cleanupSession(get(), sessionId);
         cleanupSessionData(sessionId);
         set((s) => clearSubscriptionState(s, sessionId));
+        useTierStore.getState().clearSession(sessionId);
       },
 
       fetchAllSessionStatuses: async () => {
@@ -1612,6 +1668,19 @@ apiClient.onReconnect(() => {
         }));
         requestRulesSnapshot(activeSessionId);
         storeGet().fetchInitialState(activeSessionId);
+        // Force reload messages to recover from events missed during disconnect
+        useChatStore
+          .getState()
+          .loadSessionMessages(activeSessionId, {
+            force: true,
+            sessionPath: session.sessionPath,
+          })
+          .catch((err) => {
+            log.warn("[onReconnect] loadSessionMessages failed", {
+              sessionId: activeSessionId,
+              err: err instanceof Error ? err.message : String(err),
+            });
+          });
         // Refresh session list to pick up sessions created/deleted during disconnect
         storeGet()
           .loadSessionsForProject(tab.path)

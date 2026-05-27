@@ -40,7 +40,17 @@ vi.mock("../src/shared/lib/logger", () => ({
 
 vi.mock("../src/mainview/stores/use-tier-store", () => ({
   useTierStore: {
-    getState: () => ({ currentTier: null, syncTierFromModel: vi.fn(), switchToTier: vi.fn() }),
+    getState: () => ({
+      getCurrentTier: vi.fn(() => null),
+      getTierModels: vi.fn(() => ({})),
+      syncTierFromModel: vi.fn(),
+      switchToTier: vi.fn(),
+      setGlobalDefaults: vi.fn(),
+      setSessionTierModels: vi.fn(),
+      setSessionCurrentTier: vi.fn(),
+      dataBySession: {},
+      globalDefaults: {},
+    }),
   },
 }));
 
@@ -135,8 +145,17 @@ vi.mock("../src/mainview/stores/session-subscriptions", () => ({
 
 import { useSessionStore } from "../src/mainview/stores/use-session-store";
 import { apiClient } from "../src/mainview/lib/api-client";
+import { useChatStore } from "../src/mainview/stores/use-chat-store";
 
 const mockedCall = apiClient.call as unknown as ReturnType<typeof vi.fn>;
+const mockedLoadSessionMessages = vi.fn(() => Promise.resolve());
+
+// Override the mock's loadSessionMessages with a spy we can inspect
+(useChatStore as unknown as { getState: () => Record<string, unknown> }).getState = () => ({
+  loadSessionMessages: mockedLoadSessionMessages,
+  clearSessionMessages: vi.fn(),
+  messagesBySession: {},
+});
 
 const TAB_A: ProjectTab = { id: "tab-a", name: "Project A", path: "/project-a" };
 
@@ -312,5 +331,32 @@ describe("onReconnect - session list refresh", () => {
 
     // scanSessions should NOT be called since there's no active session
     expect(mockedCall).not.toHaveBeenCalledWith("project.scanSessions", expect.anything());
+  });
+
+  it("should force-reload messages after reconnect to recover missed events", async () => {
+    const oldSession = makeSession({ sessionId: "sess-old" });
+    useSessionStore.setState({
+      projectTabs: [TAB_A],
+      activeProjectId: "tab-a",
+      activeSessionId: "sess-old",
+      sessionsByProject: { "/project-a": [oldSession] },
+    });
+
+    mockedCall.mockImplementation((method: string) => {
+      if (method === "agent.start") return Promise.resolve({ status: "already_running" });
+      if (method === "project.scanSessions") return Promise.resolve({ sessions: [oldSession] });
+      return Promise.resolve({});
+    });
+
+    const onReconnect = getReconnectCallback();
+    onReconnect();
+
+    await new Promise((r) => setTimeout(r, 200));
+
+    // loadSessionMessages must be called with force: true
+    expect(mockedLoadSessionMessages).toHaveBeenCalledWith(
+      "sess-old",
+      expect.objectContaining({ force: true }),
+    );
   });
 });
