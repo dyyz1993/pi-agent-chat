@@ -484,60 +484,65 @@ export function ChatPanel() {
       <RetryNotification />
 
       <div className="flex-1 flex overflow-hidden">
-        <div className="flex-1 min-w-0 relative">
-          {projectFailed && !isViewingSubagent && !isLoading ? (
-            <div className="h-full flex items-center justify-center">
-              <div className="flex flex-col items-center gap-3 max-w-xs text-center">
-                <AlertTriangle className="w-8 h-8 text-status-warning" />
-                <div className="text-sm text-text-secondary">{t("sessionStartFailed")}</div>
-                {projectError && (
-                  <div className="text-xs text-text-tertiary break-all">{projectError}</div>
-                )}
-                <button
-                  onClick={retryActiveProject}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-semantic-accent text-white text-xs hover:bg-semantic-accent transition-colors"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  {t("retry")}
-                </button>
+        <div className="flex-1 min-w-0 flex flex-col">
+          <div className="flex-1 min-w-0 relative overflow-hidden">
+            {projectFailed && !isViewingSubagent && !isLoading ? (
+              <div className="h-full flex items-center justify-center">
+                <div className="flex flex-col items-center gap-3 max-w-xs text-center">
+                  <AlertTriangle className="w-8 h-8 text-status-warning" />
+                  <div className="text-sm text-text-secondary">{t("sessionStartFailed")}</div>
+                  {projectError && (
+                    <div className="text-xs text-text-tertiary break-all">{projectError}</div>
+                  )}
+                  <button
+                    onClick={retryActiveProject}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-semantic-accent text-white text-xs hover:bg-semantic-accent transition-colors"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    {t("retry")}
+                  </button>
+                </div>
               </div>
-            </div>
-          ) : isLoading ? (
-            <div className="h-full flex items-center justify-center">
-              <div className="flex flex-col items-center gap-2 opacity-50">
-                <Loader2 className="w-5 h-5 text-text-tertiary animate-spin" />
-                <span className="text-xs text-text-tertiary">{t("loadingSession")}</span>
+            ) : isLoading ? (
+              <div className="h-full flex items-center justify-center">
+                <div className="flex flex-col items-center gap-2 opacity-50">
+                  <Loader2 className="w-5 h-5 text-text-tertiary animate-spin" />
+                  <span className="text-xs text-text-tertiary">{t("loadingSession")}</span>
+                </div>
               </div>
-            </div>
-          ) : isViewingSubagent ? (
-            <MessageListView
-              source="sub"
-              scrollRef={messagesScrollRef}
-              vlistRef={vlistRef}
-              onScroll={handleScroll}
-              onScrollEnd={wrappedHandleScrollEnd}
-            />
-          ) : (
-            <MessageListView
-              source="main"
-              scrollRef={messagesScrollRef}
-              vlistRef={vlistRef}
-              onScroll={handleScroll}
-              onScrollEnd={wrappedHandleScrollEnd}
-              isLoadingMore={isLoadingMore}
-              hasMoreMessages={hasMoreMessages}
-            />
-          )}
-          {messages.length > 0 && (
-            <ScrollToolbar
-              isAtTop={isAtTop}
-              isAtBottom={isAtBottom}
-              autoScrollEnabled={autoScrollEnabled}
-              onScrollToTop={() => handleScrollToEdge("top")}
-              onScrollToBottom={() => handleScrollToEdge("bottom")}
-              onToggleAutoScroll={toggleAutoScroll}
-            />
-          )}
+            ) : isViewingSubagent ? (
+              <MessageListView
+                source="sub"
+                scrollRef={messagesScrollRef}
+                vlistRef={vlistRef}
+                onScroll={handleScroll}
+                onScrollEnd={wrappedHandleScrollEnd}
+                activeSessionId={activeSubId ?? undefined}
+              />
+            ) : (
+              <MessageListView
+                source="main"
+                scrollRef={messagesScrollRef}
+                vlistRef={vlistRef}
+                onScroll={handleScroll}
+                onScrollEnd={wrappedHandleScrollEnd}
+                isLoadingMore={isLoadingMore}
+                hasMoreMessages={hasMoreMessages}
+                activeSessionId={activeSessionId ?? undefined}
+              />
+            )}
+            {messages.length > 0 && (
+              <ScrollToolbar
+                isAtTop={isAtTop}
+                isAtBottom={isAtBottom}
+                autoScrollEnabled={autoScrollEnabled}
+                onScrollToTop={() => handleScrollToEdge("top")}
+                onScrollToBottom={() => handleScrollToEdge("bottom")}
+                onToggleAutoScroll={toggleAutoScroll}
+              />
+            )}
+          </div>
+          {activeSessionId && !isViewingSubagent && <QueueCards sessionId={activeSessionId} />}
         </div>
         <div className="w-12 shrink-0 overflow-hidden">
           <SideNav ref={sideNavRef} messages={messages} onNavDotClick={handleNavDotClick} />
@@ -554,10 +559,8 @@ export function ChatPanel() {
 
       {!isViewingSubagent && <QuickActionToolbar />}
 
-      {activeSessionId && !isViewingSubagent && <QueueCards sessionId={activeSessionId} />}
-
       <div
-        className={`px-3 pt-2 pb-1.5 flex-shrink-0 flex items-stretch gap-1.5 bg-bg-secondary border-t border-border-primary relative ${isDragOver ? "ring-2 ring-semantic-accent/50 bg-semantic-accent/5" : ""}`}
+        className={`px-3 pt-2 pb-1.5 flex-shrink-0 bg-bg-secondary border-t border-border-primary relative ${isDragOver ? "ring-2 ring-semantic-accent/50 bg-semantic-accent/5" : ""}`}
         style={{ paddingBottom: "calc(0.375rem + env(safe-area-inset-bottom))" }}
         onPaste={handlePaste}
         onDragOver={handleDragOver}
@@ -574,22 +577,23 @@ export function ChatPanel() {
             ) : (
               <>
                 <AttachmentBar />
-                {!isMobileOrTablet && <AttachmentButtons />}
+                <div className="flex items-stretch gap-1.5">
+                  {!isMobileOrTablet && <AttachmentButtons />}
 
-                <InputBar
-                  ref={inputBarRef}
-                  onSend={handleSend}
-                  sessionId={activeSessionId ?? ""}
-                  disabled={!sessionReady}
-                  onTriggerPopup={!isMobileOrTablet ? commandPopup.openPopup : undefined}
-                  popupOpen={!isMobileOrTablet && !!commandPopup.popupMode}
-                  onPopupConfirm={commandPopup.confirmSelection}
-                  onPopupCancel={commandPopup.closePopup}
-                  onPopupArrowUp={commandPopup.navigateUp}
-                  onPopupArrowDown={commandPopup.navigateDown}
-                />
+                  <InputBar
+                    ref={inputBarRef}
+                    onSend={handleSend}
+                    sessionId={activeSessionId ?? ""}
+                    disabled={!sessionReady}
+                    onTriggerPopup={!isMobileOrTablet ? commandPopup.openPopup : undefined}
+                    popupOpen={!isMobileOrTablet && !!commandPopup.popupMode}
+                    onPopupConfirm={commandPopup.confirmSelection}
+                    onPopupCancel={commandPopup.closePopup}
+                    onPopupArrowUp={commandPopup.navigateUp}
+                    onPopupArrowDown={commandPopup.navigateDown}
+                  />
 
-                <div className="flex flex-col gap-1.5 shrink-0 justify-between py-1">
+                  <div className="flex flex-col gap-1.5 shrink-0 justify-between py-1">
                   {isStreaming && inputText.trim() ? (
                     <button
                       onClick={handleFollowUp}
@@ -655,6 +659,7 @@ export function ChatPanel() {
                   >
                     {isStreaming ? <Zap className="w-4 h-4" /> : <ArrowUp className="w-4 h-4" />}
                   </button>
+                </div>
                 </div>
               </>
             )}
@@ -748,9 +753,11 @@ function StatusToggleIcon() {
   const statusPanel = useLayoutStore((s) => s.statusPanel);
   const showStatus = useLayoutStore((s) => s.showStatus);
   const hideStatus = useLayoutStore((s) => s.hideStatus);
-  const isMobile = useLayoutStore((s) => s.breakpoint) === "mobile";
+  const breakpoint = useLayoutStore((s) => s.breakpoint);
+  const isMobile = breakpoint === "mobile";
+  const isTablet = breakpoint === "tablet";
 
-  if (statusPanel === "pinned" && !isMobile) return null;
+  if (statusPanel === "pinned" && !isMobile && !isTablet) return null;
 
   const isVisible = statusPanel === "visible";
 

@@ -11,6 +11,7 @@ import { X, Maximize2, Minimize2, ChevronUp, ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useInputHistory } from "../../hooks/use-input-history";
 import { useChatStore } from "../../stores/use-chat-store";
+import { useAttachmentStore } from "../../stores/use-attachment-store";
 
 export interface InputBarHandle {
   send: () => void;
@@ -50,6 +51,7 @@ export const InputBar = memo(
 
     const inputText = useChatStore((s) => s.inputText);
     const setInputText = useChatStore((s) => s.setInputText);
+    const attachmentCount = useAttachmentStore((s) => s.attachments.length);
 
     const valueRef = useRef(inputText);
     valueRef.current = inputText;
@@ -93,6 +95,25 @@ export const InputBar = memo(
             return;
           }
         }
+        if (e.key === "ArrowUp" && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
+          const el = e.currentTarget as HTMLTextAreaElement;
+          if (el.selectionStart === 0 && el.selectionEnd === 0) {
+            e.preventDefault();
+            const prevText = navigatePrev();
+            if (prevText !== null) setInputText(prevText);
+          }
+          return;
+        }
+        if (e.key === "ArrowDown" && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
+          const el = e.currentTarget as HTMLTextAreaElement;
+          const len = el.value.length;
+          if (el.selectionStart === len && el.selectionEnd === len) {
+            e.preventDefault();
+            const nextText = navigateNext();
+            if (nextText !== null) setInputText(nextText);
+          }
+          return;
+        }
         if (e.key === "Enter" && !e.shiftKey) {
           e.preventDefault();
           const val = valueRef.current;
@@ -102,7 +123,17 @@ export const InputBar = memo(
           }
         }
       },
-      [saveToHistory, popupOpen, onPopupConfirm, onPopupCancel, onPopupArrowUp, onPopupArrowDown],
+      [
+        saveToHistory,
+        popupOpen,
+        onPopupConfirm,
+        onPopupCancel,
+        onPopupArrowUp,
+        onPopupArrowDown,
+        navigatePrev,
+        navigateNext,
+        setInputText,
+      ],
     );
 
     const onTriggerPopupRef = useRef(onTriggerPopup);
@@ -205,7 +236,11 @@ export const InputBar = memo(
             onKeyDown={handleKeyDown}
             disabled={disabled}
             rows={1}
-            placeholder={t("inputPlaceholder")}
+            placeholder={
+              attachmentCount > 0
+                ? t("inputPlaceholderWithAttachment", { count: attachmentCount })
+                : t("inputPlaceholder")
+            }
             className="flex-1 px-3 py-2 text-sm bg-transparent text-text-primary resize-none outline-none placeholder:text-text-tertiary"
             style={{
               maxHeight: expanded ? "none" : `${maxHeight}px`,
