@@ -7,6 +7,7 @@ import type {
   TextContent,
   ThinkingContent,
   ToolCall,
+  ImageContent,
   Usage,
 } from "@dyyz1993/pi-ai";
 
@@ -58,6 +59,15 @@ function extractContent(msg: UserMessage | AssistantMessage): ContentBlock[] {
       const toolCall = block as ToolCall;
       const input = JSON.stringify(toolCall.arguments, null, 2);
       blocks.push({ type: "toolCall", id: toolCall.id, name: toolCall.name, input });
+    } else if (block.type === "image") {
+      const imgBlock = block as ImageContent;
+      if (imgBlock.data && imgBlock.mimeType) {
+        blocks.push({
+          type: "imageBlock",
+          url: `data:${imgBlock.mimeType};base64,${imgBlock.data}`,
+          alt: "uploaded image",
+        });
+      }
     }
   }
 

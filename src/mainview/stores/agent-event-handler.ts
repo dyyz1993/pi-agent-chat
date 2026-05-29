@@ -232,7 +232,16 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         const localIdx = existing.findIndex((m) => m.role === "user" && m._local);
         if (localIdx >= 0) {
           const updated = [...existing];
-          updated[localIdx] = { ...msg };
+          const localMsg = existing[localIdx];
+          const serverHasImages = msg.content.some((b) => b.type === "imageBlock");
+          const localHasImages = localMsg.content.some((b) => b.type === "imageBlock");
+          if (!serverHasImages && localHasImages) {
+            const textBlocks = msg.content.filter((b) => b.type !== "imageBlock");
+            const imageBlocks = localMsg.content.filter((b) => b.type === "imageBlock");
+            updated[localIdx] = { ...msg, content: [...textBlocks, ...imageBlocks] };
+          } else {
+            updated[localIdx] = { ...msg };
+          }
           chat.setMessagesForSession(sessionId, updated);
         } else {
           chat.setMessagesForSession(sessionId, [...existing, msg]);
@@ -310,6 +319,9 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
   }
 
   if (event.type === "message_update") {
+    if (storeGet().sessionStatusMap[sessionId] !== "streaming") {
+      storeGet().updateSessionStatus(sessionId, "streaming");
+    }
     batchMessageUpdate(sessionId, () => {
       const chat = useChatStore.getState();
       const existing = chat.messagesBySession[sessionId] || [];
