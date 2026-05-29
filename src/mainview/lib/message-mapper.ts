@@ -148,7 +148,6 @@ export function messageToChatMessage(
   if (role === "compactionSummary") {
     const raw = message as unknown as { summary?: string; tokensBefore?: number };
     const summary = raw.summary ?? "";
-    if (!summary) return null;
     return {
       id: msgId,
       role: "compactionSummary",

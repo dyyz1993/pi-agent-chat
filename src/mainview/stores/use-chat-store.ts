@@ -190,6 +190,7 @@ export function normalizeToolBlocks(msgs: ChatMessage[]): void {
 }
 
 const PAGE_SIZE = 50;
+const INPUT_DRAFT_KEY = "pi-input-draft";
 
 interface ChatState {
   messagesBySession: Record<string, ChatMessage[]>;
@@ -215,9 +216,34 @@ interface ChatState {
     sessionId: string,
     options?: { force?: boolean; sessionPath?: string },
   ) => Promise<void>;
+  /** Background refresh: fetch latest messages and silently update store if different */
+  _backgroundRefreshMessages: (sessionId: string, sessionPath?: string) => void;
   loadMoreMessages: (sessionId: string) => Promise<void>;
   setIsStreaming: (v: boolean) => void;
   incrementStreamVersion: () => void;
+  saveInputDraft: (sessionId: string) => void;
+  restoreInputDraft: (sessionId: string) => void;
+  clearInputDraft: (sessionId: string) => void;
+}
+
+function readDraft(sessionId: string): string {
+  try {
+    return localStorage.getItem(`${INPUT_DRAFT_KEY}:${sessionId}`) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function writeDraft(sessionId: string, text: string): void {
+  try {
+    if (text) {
+      localStorage.setItem(`${INPUT_DRAFT_KEY}:${sessionId}`, text);
+    } else {
+      localStorage.removeItem(`${INPUT_DRAFT_KEY}:${sessionId}`);
+    }
+  } catch {
+    /* ignore quota */
+  }
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -257,6 +283,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
 
     set({ inputText: "" });
+    writeDraft(sessionId, "");
 
     try {
       const sessionReady = useSessionStore.getState().sessionReady[sessionId];
@@ -328,6 +355,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const sessionId = useSessionStore.getState().activeSessionId;
     if (!sessionId) return;
     set({ inputText: "" });
+    writeDraft(sessionId, "");
 
     try {
       const STEER_TIMEOUT_MS = 15_000;
@@ -360,6 +388,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const sessionId = useSessionStore.getState().activeSessionId;
     if (!sessionId) return;
     set({ inputText: "" });
+    writeDraft(sessionId, "");
 
     try {
       const FOLLOWUP_TIMEOUT_MS = 15_000;
@@ -447,10 +476,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
         (m) => m.role === "user" || (m.role === "assistant" && m.tokenUsage),
       );
       if (hasRealMessages) {
-        log.warn("GUARD-2: existing real messages, skip", {
+        // Optimistic render: cached messages are already in the store, user sees them instantly.
+        // Background refresh: fetch latest from server to guarantee completeness.
+        perfLog.info("[loadMessages] GUARD-2: cached messages exist, background refresh", {
           sessionId: sid,
-          count: preflight.length,
+          cachedCount: preflight.length,
         });
+        get()._backgroundRefreshMessages(sid, options?.sessionPath);
         return;
       }
     }
@@ -682,6 +714,131 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
+  /** Background refresh: fetch latest messages from server and silently update store if different.
+   *  Used after optimistic render from cache to guarantee data completeness. */
+  _backgroundRefreshMessages: (sessionId: string, sessionPath?: string) => {
+    const sid = sessionId;
+    // Don't run if already loading (avoid competing with foreground load)
+    if (get().loadingSessions.has(sid)) return;
+
+    const t0 = performance.now();
+    perfLog.info("[bgRefresh] begin", { sessionId: sid });
+
+    set((s) => ({ loadingSessions: new Set(s.loadingSessions).add(sid) }));
+
+    (async () => {
+      try {
+        const { apiClient } = await import("../lib/api-client");
+        const BG_REFRESH_TIMEOUT_MS = 15_000;
+        const result = (await Promise.race([
+          apiClient.call("agent.getFullMessages", {
+            sessionId: sid,
+            sessionPath,
+            limit: PAGE_SIZE,
+          }),
+          new Promise<never>((_, reject) =>
+            setTimeout(
+              () => reject(new Error("bgRefresh getFullMessages timed out (15s)")),
+              BG_REFRESH_TIMEOUT_MS,
+            ),
+          ),
+        ])) as Awaited<ReturnType<typeof apiClient.call<"agent.getFullMessages">>>;
+
+        const rpcMs = Math.round(performance.now() - t0);
+        perfLog.info("[bgRefresh] RPC returned", {
+          sessionId: sid,
+          rpcMs,
+          messageCount: result.messages?.length,
+        });
+
+        const messages = result.messages;
+        if (!Array.isArray(messages)) return;
+
+        // Process messages the same way as loadSessionMessages
+        const toolCallNameMap: Record<string, string> = {};
+        const msgs: ChatMessage[] = [];
+        for (const msg of messages) {
+          const mapped = messageToChatMessage(
+            msg as unknown as unknown as Message,
+            msg.id,
+            toolCallNameMap,
+          );
+          if (mapped) msgs.push(mapped);
+        }
+        normalizeToolBlocks(msgs);
+
+        // Process custom entries (memory events)
+        const customEntries = result.customEntries;
+        if (Array.isArray(customEntries) && customEntries.length > 0) {
+          const memoryStore = useMemoryStore.getState();
+          for (const entry of customEntries) {
+            if (!ALL_MEMORY_TYPE_KEYS.has(entry.customType)) continue;
+            memoryStore.addEvent(sid, {
+              id: entry.id,
+              customType: entry.customType,
+              data: entry.data,
+              timestamp: entry.timestamp,
+            });
+            if (entry.customType === "memory_prefetch_result" && entry.data) {
+              const payload = entry.data as Record<string, unknown>;
+              memoryStore.addInjected(sid, {
+                summary: (payload.summary as string) ?? "",
+                snippet: (payload.snippet as string) ?? "",
+              });
+            }
+            msgs.push({
+              id: entry.id,
+              role: "custom",
+              content: [{ type: "custom", customType: entry.customType, data: entry.data }],
+              timestamp: entry.timestamp,
+            });
+          }
+          msgs.sort((a, b) => {
+            if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
+            return (a.id || "").localeCompare(b.id || "");
+          });
+        }
+
+        // Compare with current store: only update if different
+        const current = get().messagesBySession[sid] || [];
+        const isSame =
+          current.length === msgs.length && current.every((m, i) => m.id === msgs[i]?.id);
+
+        if (isSame) {
+          perfLog.info("[bgRefresh] data unchanged, skip update", {
+            sessionId: sid,
+            count: msgs.length,
+          });
+        } else {
+          perfLog.info("[bgRefresh] data changed, updating store", {
+            sessionId: sid,
+            oldCount: current.length,
+            newCount: msgs.length,
+          });
+          const hasMore = result.hasMore === true || msgs.length > PAGE_SIZE;
+          set((s) => ({
+            messagesBySession: { ...s.messagesBySession, [sid]: msgs },
+            historyLoadVersion: s.historyLoadVersion + 1,
+            hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: hasMore },
+          }));
+          useSessionStore.getState().restoreContextFromHistory(sid);
+        }
+      } catch (err) {
+        perfLog.info("[bgRefresh] failed (non-critical)", {
+          sessionId: sid,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        // Background refresh failure is non-critical: cached messages are still visible
+      } finally {
+        set((s) => {
+          const next = new Set(s.loadingSessions);
+          next.delete(sid);
+          return { loadingSessions: next };
+        });
+      }
+    })();
+  },
+
   loadMoreMessages: async (sessionId: string) => {
     const sid = sessionId;
     if (!sid) return;
@@ -736,7 +893,92 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
       normalizeToolBlocks(allMsgs);
 
-      const hasMore = false;
+      const customEntries = result.customEntries;
+      if (Array.isArray(customEntries) && customEntries.length > 0) {
+        const memoryStore = useMemoryStore.getState();
+
+        const resultMap = new Map<string, (typeof customEntries)[0]>();
+        const prefetchIds = new Set<string>();
+
+        for (const entry of customEntries) {
+          if (entry.customType === "memory_prefetch") {
+            prefetchIds.add(entry.id);
+          }
+          if (entry.customType === "memory_prefetch_result") {
+            resultMap.set(entry.id, entry);
+          }
+        }
+
+        const mergedResultIds = new Set<string>();
+
+        for (const entry of customEntries) {
+          if (entry.customType !== "memory_prefetch") continue;
+
+          let bestResult: (typeof customEntries)[0] | undefined;
+          for (const [, rentry] of resultMap) {
+            if (rentry.timestamp >= entry.timestamp && !mergedResultIds.has(rentry.id)) {
+              if (!bestResult || rentry.timestamp < bestResult.timestamp) {
+                bestResult = rentry;
+              }
+            }
+          }
+
+          if (bestResult) {
+            mergedResultIds.add(bestResult.id);
+            const prefData = entry.data as Record<string, unknown> | undefined;
+            const resData = bestResult.data as Record<string, unknown> | undefined;
+            bestResult.data = {
+              ...(resData ?? {}),
+              _prefetchQuery: typeof prefData?.query === "string" ? prefData.query : "",
+              _prefetchAvailableFiles:
+                typeof prefData?.availableFiles === "number" ? prefData.availableFiles : 0,
+            } as unknown;
+          }
+        }
+
+        for (const entry of customEntries) {
+          if (entry.customType === "memory_prefetch") {
+            const hasLaterMergedResult = Array.from(resultMap.values()).some(
+              (r) =>
+                r.customType === "memory_prefetch_result" &&
+                mergedResultIds.has(r.id) &&
+                r.timestamp >= entry.timestamp,
+            );
+            if (hasLaterMergedResult) continue;
+          }
+
+          if (!ALL_MEMORY_TYPE_KEYS.has(entry.customType)) continue;
+
+          memoryStore.addEvent(sid, {
+            id: entry.id,
+            customType: entry.customType,
+            data: entry.data,
+            timestamp: entry.timestamp,
+          });
+
+          if (entry.customType === "memory_prefetch_result" && entry.data) {
+            const payload = entry.data as Record<string, unknown>;
+            memoryStore.addInjected(sid, {
+              summary: (payload.summary as string) ?? "",
+              snippet: (payload.snippet as string) ?? "",
+            });
+          }
+
+          allMsgs.push({
+            id: entry.id,
+            role: "custom",
+            content: [{ type: "custom", customType: entry.customType, data: entry.data }],
+            timestamp: entry.timestamp,
+          });
+        }
+
+        allMsgs.sort((a, b) => {
+          if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
+          return (a.id || "").localeCompare(b.id || "");
+        });
+      }
+
+      const hasMore = result.hasMore === true;
 
       log.info("LOAD ALL messages", {
         sessionId: sid,
@@ -746,6 +988,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       set((s) => ({
         messagesBySession: { ...s.messagesBySession, [sid]: allMsgs },
+        historyLoadVersion: s.historyLoadVersion + 1,
         hasMoreMessagesBySession: {
           ...s.hasMoreMessagesBySession,
           [sid]: hasMore,
@@ -759,6 +1002,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
       set((s) => ({
         isLoadingMoreBySession: { ...s.isLoadingMoreBySession, [sid]: false },
       }));
+    }
+  },
+
+  saveInputDraft: (sessionId: string) => {
+    const text = get().inputText;
+    writeDraft(sessionId, text);
+  },
+
+  restoreInputDraft: (sessionId: string) => {
+    const text = readDraft(sessionId);
+    set({ inputText: text });
+  },
+
+  clearInputDraft: (sessionId: string) => {
+    writeDraft(sessionId, "");
+    if (useSessionStore.getState().activeSessionId === sessionId) {
+      set({ inputText: "" });
     }
   },
 }));
