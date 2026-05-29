@@ -14,7 +14,7 @@ import { createLogger } from "../../shared/lib/logger";
 const log = createLogger("chat-store");
 const perfLog = createLogger("session-perf");
 
-export function normalizeToolBlocks(msgs: ChatMessage[]): void {
+export function normalizeToolBlocks(msgs: ChatMessage[], isHistorical = false): void {
   const toolCallById = new Map<
     string,
     { msgIndex: number; blockIndex: number; name: string; input: string }
@@ -130,7 +130,7 @@ export function normalizeToolBlocks(msgs: ChatMessage[]): void {
             toolCallId: b.id,
             toolName: b.name,
             args,
-            status: "running",
+            status: isHistorical ? "unknown" : "running",
             description,
           });
         }
@@ -173,7 +173,7 @@ export function normalizeToolBlocks(msgs: ChatMessage[]): void {
           toolCallId: b.id,
           toolName: b.name,
           args,
-          status: "running",
+          status: isHistorical ? "unknown" : "running",
         });
       } else {
         newContent.push(b);
@@ -325,6 +325,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       });
 
       set({ isStreaming: true, pendingImages: [] });
+      useSessionStore.getState().updateSessionStatus(sessionId, "streaming");
 
       const SEND_TIMEOUT_MS = 60_000;
       const sendT0 = performance.now();
@@ -342,6 +343,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       set({ isStreaming: false });
     } catch (err) {
       set({ isStreaming: false });
+      useSessionStore.getState().updateSessionStatus(sessionId, "idle");
       const msg = err instanceof Error ? err.message : String(err);
       useAppStore.getState().addLog(`Send error: ${msg}`);
       useNotificationStore.getState().push({ message: `Send failed: ${msg}`, level: "error" });
@@ -486,13 +488,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
         return;
       }
     }
-    if (options?.force) {
-      set((s) => {
-        const map = { ...s.messagesBySession };
-        delete map[sid];
-        return { messagesBySession: map };
-      });
-    }
     set((s) => ({ loadingSessions: new Set(s.loadingSessions).add(sid) }));
 
     try {
@@ -585,11 +580,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
         nullCount,
       });
 
-      normalizeToolBlocks(msgs);
+      normalizeToolBlocks(msgs, true);
 
       const customEntries = result.customEntries;
       if (Array.isArray(customEntries) && customEntries.length > 0) {
         const memoryStore = useMemoryStore.getState();
+        memoryStore.clearSession(sid);
 
         const resultMap = new Map<string, (typeof customEntries)[0]>();
         const prefetchIds = new Set<string>();
@@ -691,8 +687,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
         totalMs: Math.round(performance.now() - t0),
       });
 
+      const localMsgs = (get().messagesBySession[sid] || []).filter((m) => m._local);
+      const finalMsgs = localMsgs.length > 0 ? [...displayMsgs, ...localMsgs] : displayMsgs;
+
       set((s) => ({
-        messagesBySession: { ...s.messagesBySession, [sid]: displayMsgs },
+        messagesBySession: { ...s.messagesBySession, [sid]: finalMsgs },
         historyLoadVersion: s.historyLoadVersion + 1,
         hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: hasMore },
       }));

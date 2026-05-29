@@ -24,7 +24,7 @@ export type FilePreview = {
   editable?: boolean;
 };
 
-export type ToolExecutionStatus = "running" | "done" | "error" | "background";
+export type ToolExecutionStatus = "running" | "done" | "error" | "background" | "unknown";
 
 export type UIMethod = "confirm" | "select" | "input" | "editor" | "notify";
 
@@ -150,6 +150,10 @@ export type SessionMeta = {
   sessionStatus?: SessionStatus;
   contextUsage?: ContextUsage;
   pinned?: boolean;
+  tierConfig?: {
+    tierModels: Record<string, string>;
+    currentTier: string | null;
+  };
 };
 
 export type RecentProject = {
