@@ -322,6 +322,160 @@ export class AgentProcessManager {
   private subagentSyncChildren = new Set<string>();
   private syncDelegateLastText = new Map<string, string>();
 
+  private sessionMsgCache = new Map<
+    string,
+    {
+      messages: Array<{ entryId: string; message: unknown }>;
+      customEntries: Array<{
+        id: string;
+        customType: string;
+        data: unknown;
+        timestamp: number;
+      }>;
+      parentById: Map<string, string | null>;
+      fileSize: number;
+      mtimeMs: number;
+      lineCount: number;
+    }
+  >();
+  private static SESSION_CACHE_MAX = 10;
+
+  /**
+   * Get cached session data. Three outcomes:
+   * 1. Exact match (file unchanged) → return cached data
+   * 2. File grew → return cached data + mark for incremental append
+   * 3. No cache / file shrunk / file gone → return null
+   */
+  private getSessionCache(
+    sessionId: string,
+    sessionPath: string,
+  ):
+    | {
+        messages: Array<{ entryId: string; message: unknown }>;
+        customEntries: Array<{
+          id: string;
+          customType: string;
+          data: unknown;
+          timestamp: number;
+        }>;
+        parentById: Map<string, string | null>;
+        lineCount: number;
+        needsIncremental: boolean;
+      }
+    | null {
+    const cached = this.sessionMsgCache.get(sessionId);
+    if (!cached) return null;
+    try {
+      const st = statSync(sessionPath);
+      if (st.size === cached.fileSize && st.mtimeMs === cached.mtimeMs) {
+        // Exact match — file unchanged
+        this.sessionMsgCache.delete(sessionId);
+        this.sessionMsgCache.set(sessionId, cached);
+        return { ...cached, needsIncremental: false };
+      }
+      if (st.size > cached.fileSize) {
+        // File grew — can do incremental append
+        this.sessionMsgCache.delete(sessionId);
+        this.sessionMsgCache.set(sessionId, cached);
+        return { ...cached, needsIncremental: true };
+      }
+      // File shrunk or changed drastically — invalidate
+    } catch {
+      // file gone or inaccessible
+    }
+    this.sessionMsgCache.delete(sessionId);
+    return null;
+  }
+
+  private setSessionCache(
+    sessionId: string,
+    sessionPath: string,
+    data: {
+      messages: Array<{ entryId: string; message: unknown }>;
+      customEntries: Array<{
+        id: string;
+        customType: string;
+        data: unknown;
+        timestamp: number;
+      }>;
+      parentById: Map<string, string | null>;
+      lineCount: number;
+    },
+  ): void {
+    try {
+      const st = statSync(sessionPath);
+      if (this.sessionMsgCache.size >= AgentProcessManager.SESSION_CACHE_MAX) {
+        const oldest = this.sessionMsgCache.keys().next().value;
+        if (oldest) this.sessionMsgCache.delete(oldest);
+      }
+      this.sessionMsgCache.set(sessionId, {
+        ...data,
+        fileSize: st.size,
+        mtimeMs: st.mtimeMs,
+      });
+    } catch {
+      // file gone — don't cache
+    }
+  }
+
+  clearSessionCache(sessionId?: string): void {
+    if (sessionId) {
+      this.sessionMsgCache.delete(sessionId);
+    } else {
+      this.sessionMsgCache.clear();
+    }
+  }
+
+  /**
+   * Read JSONL from a specific physical line number onwards and append results.
+   * Returns { newEntries: number of new parsed entries, totalLines: total physical lines in file }
+   */
+  private async readJsonlFromLine(
+    sessionPath: string,
+    startLine: number,
+    messages: Array<{ entryId: string; message: unknown }>,
+    customEntries: Array<{ id: string; customType: string; data: unknown; timestamp: number }>,
+    parentById: Map<string, string | null>,
+  ): Promise<{ newEntries: number; totalLines: number }> {
+    let lineIndex = 0;
+    let newEntries = 0;
+    const rl = readline.createInterface({
+      input: createReadStream(sessionPath, { encoding: "utf-8" }),
+      crlfDelay: Infinity,
+    });
+    for await (const line of rl) {
+      lineIndex++;
+      if (lineIndex <= startLine) continue; // skip already-parsed lines
+      if (!line.trim()) continue;
+      try {
+        const parsed = JSON.parse(line) as Record<string, unknown>;
+        const entryId = (parsed.id as string) ?? "";
+        const parentId = (parsed.parentId as string | null | undefined) ?? null;
+        if (entryId) {
+          parentById.set(entryId, parentId);
+        }
+        if (parsed.type === "message" && parsed.message) {
+          messages.push({ entryId, message: parsed.message });
+          newEntries++;
+        } else if (parsed.type === "custom") {
+          customEntries.push({
+            id: entryId || `custom-${Date.now()}`,
+            customType: (parsed.customType as string) ?? "unknown",
+            data: parsed.data,
+            timestamp: new Date(
+              (parsed.timestamp as string | number | Date) ?? 0,
+            ).getTime(),
+          });
+          newEntries++;
+        }
+      } catch {
+        // skip malformed
+      }
+    }
+    rl.close();
+    return { newEntries, totalLines: lineIndex };
+  }
+
   private async _drainPendingDelegates(): Promise<void> {
     while (this._pendingDelegateRequests.length > 0) {
       const item = this._pendingDelegateRequests.shift();
@@ -433,12 +587,21 @@ export class AgentProcessManager {
 
     perfLog.info("[start] begin (new process)", { sessionId, projectPath });
 
-    const { client, timings: createTimings } = await createRpcClient(
-      config.piCliPath,
-      projectPath,
-      sessionPath,
-      config.sandboxEnabled ? sessionId : undefined,
-    );
+    let client: RpcClientAPI;
+    let createTimings: Record<string, number>;
+    try {
+      const result = await createRpcClient(
+        config.piCliPath,
+        projectPath,
+        sessionPath,
+        config.sandboxEnabled ? sessionId : undefined,
+      );
+      client = result.client;
+      createTimings = result.timings;
+    } catch (err) {
+      this._startInProgress = false;
+      throw err;
+    }
     const tAfterCreate = performance.now();
 
     log.info("Spawning pi via RpcClient", { cwd: projectPath, sessionPath });
@@ -718,6 +881,7 @@ export class AgentProcessManager {
     // When the CLI restarts, getTreeWithLeaf() will overwrite with the
     // authoritative value, so stale data self-heals.
     this.lastLspState.delete(sessionId);
+    this.clearSessionCache(sessionId);
     return true;
   }
 
@@ -725,6 +889,13 @@ export class AgentProcessManager {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) return { status: "stopped" };
     return { status: managed.info.status };
+  }
+
+  batchGetSessionsStatus(sessionIds: string[]): Array<{ sessionId: string; status: "idle" | "streaming" | "stopped" }> {
+    return sessionIds.map((sid) => {
+      const managed = this.getActiveManaged(sid);
+      return { sessionId: sid, status: managed?.info.status ?? "stopped" };
+    });
   }
 
   private async readJsonlEntries(sessionPath: string): Promise<
@@ -1137,85 +1308,171 @@ export class AgentProcessManager {
     // JSONL-first: always read messages directly from the JSONL file.
     // This avoids CLI OOM — CLI's get_full_messages handler uses readFile internally
     // which can blow the heap on large sessions (>8MB JSONL).
-    const allMessages: Array<{ entryId: string; message: unknown }> = [];
-    const allCustomEntries: Array<{
+    let allMessages: Array<{ entryId: string; message: unknown }> = [];
+    let allCustomEntries: Array<{
       id: string;
       customType: string;
       data: unknown;
       timestamp: number;
     }> = [];
-    // Collect parentId map for leaf→root path filtering
-    const parentById = new Map<string, string | null>();
+    let parentById: Map<string, string | null> = new Map();
+    let cacheHit = false;
+    let incrementalAppend = false;
 
+    // --- Parallel: start getTreeWithLeaf RPC and JSONL reading at the same time ---
+    // For running sessions, getTreeWithLeaf can take seconds if CLI is busy.
+    // Running it in parallel with JSONL reading hides that latency.
+    let leafIdPromise: Promise<string | null | undefined> | undefined;
+    if (managed) {
+      leafIdPromise = (async () => {
+        try {
+          const treeResult = await withTimeout(
+            managed.client.getTreeWithLeaf(),
+            10_000,
+            "getTreeWithLeaf",
+          );
+          if (treeResult.leafId) {
+            this.leafIds.set(sessionId, treeResult.leafId);
+          }
+          return treeResult.leafId;
+        } catch (err: unknown) {
+          log.warn("[getFullMessages] getTreeWithLeaf failed, using cached leafId", {
+            sessionId,
+            err: err instanceof Error ? err.message : String(err),
+          });
+          return this.leafIds.get(sessionId);
+        }
+      })();
+    }
+
+    // --- JSONL reading with incremental append support ---
     if (resolvedSessionPath && existsSync(resolvedSessionPath)) {
-      try {
-        const rl = readline.createInterface({
-          input: createReadStream(resolvedSessionPath, { encoding: "utf-8" }),
-          crlfDelay: Infinity,
-        });
-        for await (const line of rl) {
-          if (!line.trim()) continue;
+      const cached = this.getSessionCache(sessionId, resolvedSessionPath);
+      if (cached) {
+        if (cached.needsIncremental && cached.lineCount > 0) {
+          // File grew — only read new lines and append
+          allMessages = [...cached.messages];
+          allCustomEntries = [...cached.customEntries];
+          parentById = new Map(cached.parentById);
+          cacheHit = true;
+          incrementalAppend = true;
+
           try {
-            const parsed = JSON.parse(line) as Record<string, unknown>;
-            const entryId = (parsed.id as string) ?? "";
-            const parentId = (parsed.parentId as string | null | undefined) ?? null;
-            if (entryId) {
-              parentById.set(entryId, parentId);
-            }
-            if (parsed.type === "custom") {
-              allCustomEntries.push({
-                id: entryId || `custom-${Date.now()}`,
-                customType: (parsed.customType as string) ?? "unknown",
-                data: parsed.data,
-                timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
-              });
-            } else if (parsed.type === "message" && parsed.message) {
-              allMessages.push({
-                entryId,
-                message: parsed.message,
-              });
-            }
+            const result = await this.readJsonlFromLine(
+              resolvedSessionPath,
+              cached.lineCount,
+              allMessages,
+              allCustomEntries,
+              parentById,
+            );
+            // Store the new total line count for next incremental read
+            cached.lineCount = result.totalLines;
+            log.debug("[getFullMessages] incremental append", {
+              sessionId,
+              existingLines: cached.lineCount - result.newEntries,
+              newEntries: result.newEntries,
+              totalLines: result.totalLines,
+            });
           } catch (err: unknown) {
-            log.debug("skipping malformed JSONL entry", {
+            // Incremental failed — fall through to use whatever we had
+            log.warn("[getFullMessages] incremental append failed", {
+              sessionId,
               err: err instanceof Error ? err.message : String(err),
             });
           }
+        } else {
+          // Exact match — file unchanged
+          allMessages = cached.messages;
+          allCustomEntries = cached.customEntries;
+          parentById = cached.parentById;
+          cacheHit = true;
         }
-        rl.close();
-      } catch (err: unknown) {
-        log.warn("Failed to read entries from JSONL", {
-          err: err instanceof Error ? err.message : String(err),
-        });
       }
     }
 
-    // Resolve current leafId for branch filtering.
-    // Always fetch from CLI to get the latest leaf position, because:
-    // - After rollback + continue chatting, the CLI's leafId has moved to new entries
-    //   but this.leafIds may still hold the old rollback target.
-    // - The cache is only a fallback when CLI is unavailable.
-    let leafId: string | null | undefined = undefined;
-    if (managed) {
-      try {
-        const treeResult = await withTimeout(
-          managed.client.getTreeWithLeaf(),
-          10_000,
-          "getTreeWithLeaf",
-        );
-        if (treeResult.leafId) {
-          leafId = treeResult.leafId;
-          this.leafIds.set(sessionId, leafId);
+    if (!cacheHit) {
+      allMessages = [];
+      allCustomEntries = [];
+      parentById = new Map<string, string | null>();
+      let totalLines = 0; // track physical lines (including blank) for incremental reads
+
+      if (resolvedSessionPath && existsSync(resolvedSessionPath)) {
+        try {
+          const rl = readline.createInterface({
+            input: createReadStream(resolvedSessionPath, { encoding: "utf-8" }),
+            crlfDelay: Infinity,
+          });
+          for await (const line of rl) {
+            totalLines++; // count ALL physical lines (including blank)
+            if (!line.trim()) continue;
+            try {
+              const parsed = JSON.parse(line) as Record<string, unknown>;
+              const entryId = (parsed.id as string) ?? "";
+              const parentId = (parsed.parentId as string | null | undefined) ?? null;
+              if (entryId) {
+                parentById.set(entryId, parentId);
+              }
+              if (parsed.type === "custom") {
+                allCustomEntries.push({
+                  id: entryId || `custom-${Date.now()}`,
+                  customType: (parsed.customType as string) ?? "unknown",
+                  data: parsed.data,
+                  timestamp: new Date(
+                    (parsed.timestamp as string | number | Date) ?? 0,
+                  ).getTime(),
+                });
+              } else if (parsed.type === "message" && parsed.message) {
+                allMessages.push({
+                  entryId,
+                  message: parsed.message,
+                });
+              }
+            } catch (err: unknown) {
+              log.debug("skipping malformed JSONL entry", {
+                err: err instanceof Error ? err.message : String(err),
+              });
+            }
+          }
+          rl.close();
+        } catch (err: unknown) {
+          log.warn("Failed to read entries from JSONL", {
+            err: err instanceof Error ? err.message : String(err),
+          });
         }
-      } catch (err: unknown) {
-        log.warn("[getFullMessages] getTreeWithLeaf failed, using cached leafId", {
-          sessionId,
-          err: err instanceof Error ? err.message : String(err),
+      }
+
+      if (resolvedSessionPath) {
+        this.setSessionCache(sessionId, resolvedSessionPath, {
+          messages: allMessages,
+          customEntries: allCustomEntries,
+          parentById,
+          lineCount: totalLines,
         });
-        // Fallback to cached value
+      }
+    } else if (incrementalAppend && resolvedSessionPath) {
+      // Update cache — lineCount was already updated on the cached object
+      // by the incremental read (cached.lineCount = result.totalLines)
+      const updatedCached = this.sessionMsgCache.get(sessionId);
+      this.setSessionCache(sessionId, resolvedSessionPath, {
+        messages: allMessages,
+        customEntries: allCustomEntries,
+        parentById,
+        lineCount: updatedCached?.lineCount ?? parentById.size,
+      });
+    }
+
+    // Resolve leafId — await getTreeWithLeaf result to ensure we use the
+    // correct current leaf. Previously this was fire-and-forget which caused
+    // stale leafId after rollback+continue to filter out new messages.
+    let leafId: string | null | undefined = undefined;
+    if (managed && leafIdPromise) {
+      try {
+        const freshLeafId = await leafIdPromise;
+        leafId = freshLeafId ?? this.leafIds.get(sessionId);
+      } catch {
         leafId = this.leafIds.get(sessionId);
       }
     } else {
-      // No managed client (session not running), use cache
       leafId = this.leafIds.get(sessionId);
     }
 
@@ -1270,12 +1527,14 @@ export class AgentProcessManager {
     const totalMs = Math.round(performance.now() - t0);
     perfLog.info("[getFullMessages] JSONL fallback done", {
       sessionId,
-      source: "jsonl",
+      source: cacheHit ? (incrementalAppend ? "incremental" : "cache") : "jsonl",
       messageCount: slicedMessages.length,
       totalCount,
       hasMore,
       leafId: leafId ?? "none",
       pathFilterApplied: !!leafId,
+      cacheHit,
+      incrementalAppend,
       totalMs,
     });
 
