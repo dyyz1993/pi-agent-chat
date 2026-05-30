@@ -12,310 +12,171 @@ import {
   Bot,
   Type,
   AlertTriangle,
-  Terminal,
-  ScanSearch,
-  Brain,
   Archive,
+  Brain,
   type LucideIcon,
 } from "lucide-react";
-import { useTranslation } from "react-i18next";
 import type { ChatMessage } from "../../types";
 import { useChatNavStore } from "../../stores/use-chat-nav-store";
 import { useTurnStore, EMPTY_SET } from "../../stores/use-turn-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { getToolIcon, getPreviewResourceIcon, getCustomTypeIcon } from "./tool-icon-map";
-import { ALL_MEMORY_TYPE_KEYS } from "./memory-config";
-import { useSettingsStore } from "../../stores/use-settings-store";
+import { useChatStore } from "../../stores/use-chat-store";
 
-type SubItem = {
-  icon: LucideIcon;
-  color: string;
-  label: string;
-  blockId: string;
-};
+type FlatItem = { key: string; navId: string; icon: LucideIcon; color: string };
 
-type NavItem = {
-  id: string;
-  role: "user" | "assistant" | "custom";
-  icon: LucideIcon;
-  color: string;
-  subs: SubItem[];
-};
+function buildFlatItems(messages: ChatMessage[]): FlatItem[] {
+  const items: FlatItem[] = [];
+  for (const msg of messages) {
+    const id = msg.id;
 
-function buildNavItems(messages: ChatMessage[], t: (key: string) => string): NavItem[] {
-  return messages.map((msg) => {
     if (msg.role === "user") {
-      return {
-        id: msg.id,
-        role: "user" as const,
-        icon: User,
-        color: "text-semantic-accent",
-        subs: [],
-      };
+      items.push({ key: id, navId: id, icon: User, color: "text-semantic-accent" });
+      continue;
     }
 
     if (msg.role === "custom") {
-      const customBlock = msg.content.find((b) => b.type === "custom") as
+      const cb = msg.content.find((b) => b.type === "custom") as
         | { type: "custom"; customType: string; data: unknown }
         | undefined;
-      const customType = customBlock?.customType ?? "unknown";
-      const iconEntry = getCustomTypeIcon(customType);
-      return {
-        id: msg.id,
-        role: "custom",
-        icon: iconEntry.icon,
-        color: iconEntry.color,
-        label: iconEntry.label,
-        subs: [],
-      };
+      const ct = cb?.customType ?? "unknown";
+      const ie = getCustomTypeIcon(ct);
+      items.push({ key: id, navId: id, icon: ie.icon, color: ie.color });
+      continue;
     }
 
     if (msg.role === "compactionSummary") {
-      return {
-        id: msg.id,
-        role: "assistant" as const,
-        icon: Archive,
-        color: "text-semantic-tool",
-        subs: [],
-      };
+      items.push({ key: id, navId: id, icon: Archive, color: "text-semantic-tool" });
+      continue;
     }
 
     const customBlock = msg.content.find((b) => b.type === "custom") as
       | { type: "custom"; customType: string; data: unknown }
       | undefined;
-    if (customBlock && customBlock.customType === "lsp_diagnostics") {
-      return {
-        id: msg.id,
-        role: "assistant",
-        icon: AlertTriangle,
-        color: "text-status-warning",
-        subs: [],
-      };
+    if (customBlock?.customType === "lsp_diagnostics") {
+      items.push({ key: id, navId: id, icon: AlertTriangle, color: "text-status-warning" });
+      continue;
     }
 
-    const subs: SubItem[] = [];
-    const seenTools = new Set<string>();
+    const hasError = msg.content.some(
+      (b) =>
+        b.type === "toolResult" && b.isError
+          ? true
+          : b.type === "toolExecution" && b.status === "error",
+    );
+    const errorColor = hasError ? "text-status-error" : undefined;
 
-    for (let bi = 0; bi < msg.content.length; bi++) {
-      const b = msg.content[bi];
-      const blockId = `${msg.id}-${bi}`;
+    items.push({ key: `${id}-bot`, navId: id, icon: Bot, color: errorColor ?? "text-status-success" });
 
-      if (b.type === "text") {
-        subs.push({ icon: Type, color: "text-text-tertiary", label: t("sideNav.text"), blockId });
-      } else if (b.type === "toolExecution" && !seenTools.has(b.toolName)) {
-        seenTools.add(b.toolName);
+    let count = 1;
+    let hasContentBlock = false;
+
+    for (const b of msg.content) {
+      if (b.type === "thinking") {
+        count++;
+        items.push({ key: `${id}-${count}`, navId: id, icon: Brain, color: errorColor ?? "text-purple-400" });
+        hasContentBlock = true;
+      } else if (b.type === "text") {
+        count++;
+        items.push({ key: `${id}-${count}`, navId: id, icon: Type, color: errorColor ?? "text-text-tertiary" });
+        hasContentBlock = true;
+      } else if (b.type === "toolExecution") {
+        count++;
         let ti = getToolIcon(b.toolName);
-        let label = ti.label;
         if (b.toolName.toLowerCase() === "preview" && (b as { details?: unknown }).details) {
-          const rt = (
-            (b as { details?: { resourceType?: string } }).details as { resourceType?: string }
-          )?.resourceType;
-          if (rt) {
-            ti = getPreviewResourceIcon(rt);
-            label = ti.label;
-          }
+          const rt = ((b as { details?: { resourceType?: string } }).details as { resourceType?: string } | undefined)?.resourceType;
+          if (rt) ti = getPreviewResourceIcon(rt);
         }
-        subs.push({ icon: ti.icon, color: ti.color, label, blockId });
-      } else if (b.type === "custom") {
-        let icon: LucideIcon = Brain;
-        let color = "text-status-warning";
-        let label = b.customType;
-        switch (b.customType) {
-          case "bash_background_exit":
-            icon = Terminal;
-            color = "text-semantic-tool";
-            label = t("sideNav.backgroundProcess");
-            break;
-          case "lsp_diagnostics":
-            icon = ScanSearch;
-            color = "text-status-warning";
-            break;
-          default:
-            if (ALL_MEMORY_TYPE_KEYS.has(b.customType)) {
-              const memIcon = getCustomTypeIcon(b.customType);
-              icon = memIcon.icon;
-              color = memIcon.color;
-              label = t("sideNav.memory");
-            }
-            break;
-        }
-        subs.push({ icon, color, label, blockId });
+        items.push({ key: `${id}-${count}`, navId: id, icon: ti.icon, color: errorColor ?? ti.color });
+        hasContentBlock = true;
       }
     }
 
-    const hasError = msg.content.some((b) =>
-      b.type === "toolResult" && b.isError
-        ? true
-        : b.type === "toolExecution" && b.status === "error",
-    );
-    return {
-      id: msg.id,
-      role: "assistant",
-      icon: Bot,
-      color: hasError ? "text-status-error" : "text-status-success",
-      subs,
-    };
-  });
+    if (!hasContentBlock) {
+      items.push({ key: id, navId: id, icon: Type, color: errorColor ?? "text-text-tertiary" });
+    }
+  }
+
+  return items;
 }
 
-const NavDot = memo(function NavDot({
+function NavDot({
   Icon,
   color,
-  isClicked,
+  isActive,
   isMultiSelected,
+  dataNavKey,
   onClick,
   onContextMenu,
-  onDoubleClick,
 }: {
-  Icon: React.ComponentType<{ className?: string }>;
+  Icon: LucideIcon;
   color: string;
-  isClicked: boolean;
+  isActive: boolean;
   isMultiSelected: boolean;
-  onClick?: () => void;
+  dataNavKey?: string;
+  onClick: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
-  onDoubleClick: () => void;
 }) {
-  let cls =
-    "relative w-10 h-8 rounded-r flex items-center justify-center leading-none transition-all cursor-pointer ";
-  let iconColor = color;
-  let barCls = "absolute left-0 top-1 bottom-1 w-[3px] rounded-full transition-all opacity-0 ";
+  let bg = "hover:bg-surface-hover ";
+  let barBg = "";
+  let iconClr = color;
 
   if (isMultiSelected) {
-    cls += "bg-status-error/25 ";
-    iconColor = "text-status-error";
-    barCls += "bg-status-error opacity-100 ";
-  } else if (isClicked) {
-    cls += "bg-semantic-accent/25 shadow-[0_0_10px_rgba(99,102,241,0.3)] ";
-    iconColor = "text-semantic-accent";
-    barCls += "bg-semantic-accent opacity-100 ";
-  } else {
-    cls += "hover:bg-surface-hover ";
+    bg = "bg-status-error/25 ";
+    barBg = "bg-status-error opacity-100 ";
+    iconClr = "text-status-error";
+  } else if (isActive) {
+    bg = "bg-semantic-accent/25 shadow-[0_0_10px_rgba(99,102,241,0.3)] ";
+    barBg = "bg-semantic-accent opacity-100 ";
+    iconClr = "text-semantic-accent";
   }
 
   return (
-    <button
-      className={cls}
+    <div
+      className={`relative w-10 h-8 rounded-r flex items-center justify-center leading-none transition-all cursor-pointer ${bg}`}
       onClick={onClick}
       onContextMenu={onContextMenu}
-      onDoubleClick={onDoubleClick}
+      data-nav-key={dataNavKey}
     >
-      <span className={barCls} />
-      <Icon className={`w-4 h-4 shrink-0 ${iconColor} transition-colors`} />
-    </button>
+      <span className={`absolute left-0 top-1 bottom-1 w-[3px] rounded-full transition-all opacity-0 ${barBg}`} />
+      <Icon className={`w-4 h-4 shrink-0 ${iconClr} transition-colors`} />
+    </div>
   );
-});
-
-const NavSubDot = memo(function NavSubDot({
-  Icon,
-  color,
-  label,
-  isActive,
-  blockId,
-  onClick,
-}: {
-  Icon: React.ComponentType<{ className?: string }>;
-  color: string;
-  label: string;
-  isActive: boolean;
-  blockId: string;
-  onClick?: () => void;
-}) {
-  let cls =
-    "relative w-10 h-8 rounded-r flex items-center justify-center leading-none transition-all cursor-pointer ";
-  let iconColor = color;
-  let barCls = "absolute left-0 top-1 bottom-1 w-[3px] rounded-full transition-all opacity-0 ";
-
-  if (isActive) {
-    cls += "bg-semantic-accent/25 shadow-[0_0_6px_rgba(99,102,241,0.25)] ";
-    iconColor = "text-semantic-accent";
-    barCls += "bg-semantic-accent opacity-100 ";
-  } else {
-    cls += "hover:bg-surface-hover ";
-  }
-
-  return (
-    <button className={cls} title={label} data-block-id={blockId} onClick={onClick}>
-      <span className={barCls} />
-      <Icon className={`w-4 h-4 shrink-0 ${iconColor} transition-colors`} />
-    </button>
-  );
-});
+}
 
 export const SideNav = memo(
   forwardRef<
     { getFirstIconId: () => string | null; getLastIconId: () => string | null },
     { messages: ChatMessage[]; onNavDotClick: (navId: string) => void }
   >(function SideNavInner({ messages, onNavDotClick }, ref) {
-    const { t } = useTranslation("chat");
     const sessionId = useSessionStore((s) => s.activeSessionId);
+
     const selectedNavId = useTurnStore(
-      useCallback(
-        (s) => (sessionId ? (s.selectedNavIdBySession[sessionId] ?? null) : null),
-        [sessionId],
-      ),
+      useCallback((s) => (sessionId ? s.selectedNavIdBySession[sessionId] ?? null : null), [sessionId]),
     );
     const setNavId = useTurnStore((s) => s.setNavId);
     const selectedItems = useChatNavStore(
-      useCallback(
-        (s) => (sessionId ? (s.selectedItemsBySession[sessionId] ?? EMPTY_SET) : EMPTY_SET),
-        [sessionId],
-      ),
+      useCallback((s) => (sessionId ? s.selectedItemsBySession[sessionId] ?? EMPTY_SET : EMPTY_SET), [sessionId]),
     );
     const toggleItemSelect = useChatNavStore((s) => s.toggleItemSelect);
 
-    const navItems = useMemo(() => buildNavItems(messages, t), [messages, t]);
-
-    const showToolCalls = useSettingsStore((s) => s.showToolCalls);
-    const showThinking = useSettingsStore((s) => s.showThinking);
-
-    const filteredNavItems = useMemo(() => {
-      if (showToolCalls && showThinking) return navItems;
-      return navItems.map((item) => ({
-        ...item,
-        subs: item.subs.filter((sub) => {
-          if (!showToolCalls && sub.label !== t("sideNav.text")) return false;
-          return true;
-        }),
-      }));
-    }, [navItems, showToolCalls, showThinking, t]);
+    const items = useMemo(() => buildFlatItems(messages), [messages]);
 
     const scrollRef = useRef<HTMLDivElement>(null);
-
-    const flatIconIds = useMemo(() => {
-      const ids: string[] = [];
-      for (const item of filteredNavItems) {
-        if (item.subs.length > 0) {
-          for (const sub of item.subs) {
-            ids.push(sub.blockId);
-          }
-        } else {
-          ids.push(item.id);
-        }
-      }
-      return ids;
-    }, [filteredNavItems]);
 
     useImperativeHandle(
       ref,
       () => ({
-        getFirstIconId: () => flatIconIds[0] ?? null,
-        getLastIconId: () => flatIconIds[flatIconIds.length - 1] ?? null,
+        getFirstIconId: () => items[0]?.navId ?? null,
+        getLastIconId: () => items[items.length - 1]?.navId ?? null,
       }),
-      [flatIconIds],
+      [items],
     );
 
-    const handleDotClick = useCallback(
-      (id: string) => {
-        setNavId(id);
-        onNavDotClick(id);
-      },
-      [onNavDotClick, setNavId],
-    );
-
-    const handleSubDotClick = useCallback(
-      (blockId: string) => {
-        setNavId(blockId);
-        onNavDotClick(blockId);
+    const handleClick = useCallback(
+      (key: string, navId: string) => {
+        setNavId(key);
+        onNavDotClick(navId);
       },
       [onNavDotClick, setNavId],
     );
@@ -328,29 +189,40 @@ export const SideNav = memo(
       [toggleItemSelect],
     );
 
-    const handleDoubleClick = useCallback(
-      (id: string) => {
-        toggleItemSelect(id);
-      },
-      [toggleItemSelect],
+    useEffect(() => {
+      if (!selectedNavId) return;
+      const timer = setTimeout(() => {
+        const el = scrollRef.current?.querySelector(`[data-nav-key="${selectedNavId}"]`) as HTMLElement | null;
+        el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }, 120);
+      return () => clearTimeout(timer);
+    }, [selectedNavId]);
+
+    const loadMoreMessages = useChatStore((s) => s.loadMoreMessages);
+    const hasMoreMessages = useChatStore(
+      useCallback((s) => (sessionId ? s.hasMoreMessagesBySession[sessionId] ?? false : false), [sessionId]),
+    );
+    const isLoadingMore = useChatStore(
+      useCallback((s) => (sessionId ? s.isLoadingMoreBySession[sessionId] ?? false : false), [sessionId]),
     );
 
     useEffect(() => {
-      if (!selectedNavId) return;
       const container = scrollRef.current;
       if (!container) return;
-
-      const navId = filteredNavItems.find(
-        (n) => n.id === selectedNavId || n.subs.some((s) => s.blockId === selectedNavId),
-      )?.id;
-      if (!navId) return;
-
-      const timer = setTimeout(() => {
-        const target = container.querySelector(`[data-nav-id="${navId}"]`);
-        if (target) target.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      }, 120);
-      return () => clearTimeout(timer);
-    }, [selectedNavId, filteredNavItems]);
+      let ticking = false;
+      const onScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => {
+          ticking = false;
+          if (container.scrollTop < 30 && hasMoreMessages && !isLoadingMore && sessionId) {
+            loadMoreMessages(sessionId);
+          }
+        });
+      };
+      container.addEventListener("scroll", onScroll, { passive: true });
+      return () => container.removeEventListener("scroll", onScroll);
+    }, [hasMoreMessages, isLoadingMore, loadMoreMessages, sessionId]);
 
     return (
       <div className="h-full min-h-0 flex flex-col bg-surface-dim/30 dark:bg-surface-code/30 border-l border-border-secondary/30">
@@ -359,41 +231,30 @@ export const SideNav = memo(
           className="flex-1 min-h-0 overflow-y-auto"
           style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
         >
-          {filteredNavItems.map(({ id, icon: Icon, color, subs }) => (
-            <div key={id} data-nav-id={id}>
-              <div className="flex flex-col items-center w-full">
-                <NavDot
-                  Icon={Icon}
-                  color={color}
-                  isClicked={selectedNavId === id}
-                  isMultiSelected={selectedItems.has(id)}
-                  onClick={() => handleDotClick(id)}
-                  onContextMenu={(e) => handleContextMenu(e, id)}
-                  onDoubleClick={() => handleDoubleClick(id)}
-                />
-                {subs.length > 0 && (
-                  <div className="flex flex-col items-center ml-1 mt-0.5 space-y-0.5">
-                    {subs.map((sub) => (
-                      <NavSubDot
-                        key={sub.blockId}
-                        Icon={sub.icon}
-                        color={sub.color}
-                        label={sub.label}
-                        blockId={sub.blockId}
-                        isActive={selectedNavId === sub.blockId}
-                        onClick={() => handleSubDotClick(sub.blockId)}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
+          {items.map((item, i) => {
+            let active = selectedNavId === item.key;
+            if (!active && selectedNavId === item.navId) {
+              active = !items[i - 1] || items[i - 1].navId !== item.navId;
+            }
+            const multi = selectedItems.has(item.navId);
+            return (
+              <NavDot
+                key={item.key}
+                dataNavKey={item.key}
+                Icon={item.icon}
+                color={item.color}
+                isActive={active}
+                isMultiSelected={multi}
+                onClick={() => handleClick(item.key, item.navId)}
+                onContextMenu={(e) => handleContextMenu(e, item.navId)}
+              />
+            );
+          })}
         </div>
 
         {selectedItems.size > 0 && (
           <div className="px-1 py-1 text-[10px] text-status-error text-center border-t border-status-error/20 bg-status-error/5">
-            {t("sideNav.selected", { count: selectedItems.size })}
+            {selectedItems.size} selected
           </div>
         )}
       </div>
