@@ -1,5 +1,5 @@
 import { memo, useCallback, useRef } from "react";
-import { ChevronDown, User, Bot, RotateCcw, Undo2, GitFork, Loader2, Archive } from "lucide-react";
+import { ChevronDown, User, Bot, RotateCcw, Undo2, GitFork, Loader2, Archive, AlertTriangle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useTurnStore, EMPTY_SET } from "../../stores/use-turn-store";
 import { useSessionStore } from "../../stores/use-session-store";
@@ -141,6 +141,19 @@ export const MessageCard = memo(function MessageCard({
     return (
       <div data-msg-card-id={message.id} className="relative w-full py-1.5">
         <MessageBubble message={message} mergedResultData={mergedResultData} />
+      </div>
+    );
+  }
+
+  if (message.role === "error") {
+    const textBlock = message.content.find((b): b is Extract<typeof b, { type: "text" }> => b.type === "text");
+    const errorText = textBlock?.text ?? "Unknown error";
+    return (
+      <div data-msg-card-id={message.id} className="relative w-full py-1.5">
+        <div className="flex items-center gap-2 mx-3 px-3 py-2 rounded-lg bg-status-error/10 border border-status-error/20 text-sm text-status-error">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>{errorText}</span>
+        </div>
       </div>
     );
   }

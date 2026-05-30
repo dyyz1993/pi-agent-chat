@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { apiClient } from "../lib/api-client";
 import { useAppStore } from "./use-app-store";
+import { useChatOverlayStore } from "./use-chat-overlay-store";
 
 export interface GitFileChange {
   path: string;
@@ -151,6 +152,7 @@ export const useGitStore = create<GitState>((set, get) => ({
       const res = await apiClient.call("git.diff", { repoPath, filePath, staged });
       addLog(`Git diff result: ${res.diff.length} chars`);
       set({ currentDiff: res, loadingDiff: false });
+      useChatOverlayStore.getState().openDiff();
     } catch (err) {
       addLog(`Git diff error: ${err instanceof Error ? err.message : String(err)}`);
       set({ loadingDiff: false });
@@ -173,7 +175,10 @@ export const useGitStore = create<GitState>((set, get) => ({
     }
   },
 
-  clearDiff: () => set({ currentDiff: null }),
+  clearDiff: () => {
+    useChatOverlayStore.getState().close();
+    set({ currentDiff: null });
+  },
 
   toggleCommitExpand: async (repoPath, hash) => {
     const { expandedCommits, commitFiles } = get();
@@ -214,6 +219,7 @@ export const useGitStore = create<GitState>((set, get) => ({
     try {
       const res = await apiClient.call("git.commitFileDiff", { repoPath, hash, filePath });
       set({ currentDiff: res, loadingDiff: false });
+      useChatOverlayStore.getState().openDiff();
     } catch (err) {
       addLog(`Git commitFileDiff error: ${err instanceof Error ? err.message : String(err)}`);
       set({ loadingDiff: false });

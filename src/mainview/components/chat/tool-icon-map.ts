@@ -1,6 +1,7 @@
 import {
   Eye,
   Pencil,
+  FilePen,
   Search,
   Code,
   Terminal,
@@ -61,7 +62,7 @@ const TOOL_ICON_MAP: Record<string, ToolIconEntry> = {
   fork: { icon: GitFork, color: "text-semantic-notify", label: "Fork" },
   read: { icon: Eye, color: "text-status-info", label: "Read" },
   edit: { icon: Pencil, color: "text-status-success", label: "Edit" },
-  write: { icon: Pencil, color: "text-status-success", label: "Write" },
+  write: { icon: FilePen, color: "text-blue-400", label: "Write" },
   search: { icon: Search, color: "text-status-warning", label: "Search" },
   grep: { icon: Search, color: "text-status-warning", label: "Grep" },
   glob: { icon: Search, color: "text-status-warning", label: "Glob" },

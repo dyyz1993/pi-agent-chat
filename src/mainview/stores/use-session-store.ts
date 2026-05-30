@@ -40,6 +40,28 @@ const perfLog = createLogger("session-perf");
 const _statusWatchdogs = new Map<string, ReturnType<typeof setTimeout>>();
 const STATUS_STUCK_TIMEOUT_MS = 5 * 60 * 1000;
 
+function detectEmptyTurnAndInjectError(sessionId: string) {
+  const chat = useChatStore.getState();
+  const msgs = chat.messagesBySession[sessionId] || [];
+  const lastMsg = msgs[msgs.length - 1];
+  if (lastMsg && (lastMsg.role === "user" || lastMsg.role === "custom")) {
+    chat.setMessagesForSession(sessionId, [
+      ...msgs,
+      {
+        id: `error_${Date.now()}`,
+        role: "error" as const,
+        content: [{ type: "text" as const, text: "Agent 未返回响应，可能是 LLM 服务异常或网络问题" }],
+        timestamp: Date.now(),
+      },
+    ]);
+    useNotificationStore.getState().push({
+      message: "Agent 未返回任何响应，请检查模型配置或重试",
+      level: "error",
+      sessionId,
+    });
+  }
+}
+
 function clearStatusWatchdog(sessionId: string) {
   const watchdog = _statusWatchdogs.get(sessionId);
   if (watchdog) {
@@ -1003,6 +1025,7 @@ export const useSessionStore = create<SessionState>()(
                 level: "warning",
               });
               get().updateSessionStatus(sessionId, "idle");
+              detectEmptyTurnAndInjectError(sessionId);
             }
             _statusWatchdogs.delete(sessionId);
           }, STATUS_STUCK_TIMEOUT_MS);

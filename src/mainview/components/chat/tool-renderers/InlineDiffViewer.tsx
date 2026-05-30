@@ -1,149 +1,149 @@
-import { memo, useMemo } from "react";
+import { memo, useMemo, useCallback, useState } from "react";
+import { Columns2, Rows3, Maximize2 } from "lucide-react";
 import ReactDiffViewer, { DiffMethod } from "react-diff-viewer-continued";
+import { Highlight, themes } from "prism-react-renderer";
+import { useTranslation } from "react-i18next";
 import { useThemeStore, isDarkGroup } from "../../../stores/use-theme-store";
 import { useLayoutStore } from "../../../layouts/use-layout-store";
+import { useChatOverlayStore } from "../../../stores/use-chat-overlay-store";
+import { getLanguage } from "../../../utils/file-utils";
+import { createDiffStyles, DIFF_STYLE_PRESETS } from "../../diff/diff-style-factory";
 
 interface InlineDiffViewerProps {
   oldValue: string;
   newValue: string;
   maxHeight?: string;
   splitView?: boolean;
+  showToggle?: boolean;
+  expandable?: boolean;
+  filePath?: string;
 }
 
-type DiffStyleOverride = Record<string, Record<string, unknown>>;
+function useSyntaxRenderer(filePath: string | undefined) {
+  const resolvedTheme = useThemeStore((s) => s.resolvedTheme);
+  const prismTheme = isDarkGroup(resolvedTheme) ? themes.nightOwl : themes.nightOwlLight;
+  const language = filePath ? getLanguage(filePath) : "";
 
-function makeCompactStyles(extra?: DiffStyleOverride): DiffStyleOverride {
-  return {
-    variables: {
-      light: {
-        diffViewerBackground: "transparent",
-      },
-      dark: {
-        diffViewerBackground: "transparent",
-        diffViewerColor: "var(--diff-color)",
-        addedBackground: "var(--diff-added-bg)",
-        addedColor: "var(--diff-added-color)",
-        removedBackground: "var(--diff-removed-bg)",
-        removedColor: "var(--diff-removed-color)",
-        wordAddedBackground: "var(--diff-word-added-bg)",
-        wordRemovedBackground: "var(--diff-word-removed-bg)",
-        addedGutterBackground: "var(--diff-added-bg)",
-        removedGutterBackground: "var(--diff-removed-bg)",
-        gutterBackground: "var(--diff-gutter-bg)",
-        gutterColor: "var(--diff-gutter-color)",
-        codeFoldGutterBackground: "var(--diff-gutter-bg)",
-        codeFoldBackground: "var(--diff-gutter-bg)",
-        emptyLineBackground: "transparent",
-        gutterBackgroundDark: "var(--diff-gutter-bg)",
-        highlightGutterBackground: "var(--diff-highlight-bg)",
-        highlightBackground: "var(--diff-highlight-bg)",
-      },
+  return useCallback(
+    (source: string) => {
+      if (!language) return <>{source}</>;
+      return (
+        <Highlight theme={prismTheme} code={source} language={language}>
+          {({ tokens, getLineProps, getTokenProps }) => (
+            <>
+              {tokens.map((line, i) => (
+                <span key={i} {...getLineProps({ line })}>
+                  {line.map((token, key) => (
+                    <span key={key} {...getTokenProps({ token })} />
+                  ))}
+                  {i < tokens.length - 1 && "\n"}
+                </span>
+              ))}
+            </>
+          )}
+        </Highlight>
+      );
     },
-    diffContainer: {
-      minWidth: "unset",
-      fontSize: "11px",
-      fontFamily: "ui-monospace, SFMono-Regular, monospace",
-      lineHeight: "1.5",
-      border: "none",
-      borderRadius: "4px",
-    },
-    line: {
-      fontSize: "11px",
-      lineHeight: "1.5",
-      padding: "0 4px",
-    },
-    gutter: {
-      minWidth: 32,
-      width: 32,
-      padding: "0 3px",
-      fontSize: "10px",
-    },
-    contentText: {
-      fontSize: "11px",
-    },
-    lineContent: {
-      padding: "0",
-    },
-    marker: {
-      width: 16,
-      paddingLeft: 2,
-      paddingRight: 2,
-      fontSize: "11px",
-    },
-    emptyGutter: {
-      minWidth: 32,
-    },
-    codeFoldGutter: {
-      minWidth: 20,
-      width: 20,
-      padding: "0 2px",
-      fontSize: "9px",
-    },
-    codeFold: {
-      fontSize: "10px",
-    },
-    ...extra,
-  };
+    [language, prismTheme],
+  );
 }
 
 export const InlineDiffViewer = memo(function InlineDiffViewer({
   oldValue,
   newValue,
   maxHeight = "200px",
-  splitView = false,
+  splitView: externalSplitView,
+  showToggle = false,
+  expandable = true,
+  filePath,
 }: InlineDiffViewerProps) {
+  const { t } = useTranslation();
+  const [internalSplitView, setInternalSplitView] = useState(false);
   const resolvedTheme = useThemeStore((s) => s.resolvedTheme);
   const isDark = isDarkGroup(resolvedTheme);
   const breakpoint = useLayoutStore((s) => s.breakpoint);
   const isMobile = breakpoint === "mobile";
+  const openNodeExpand = useChatOverlayStore((s) => s.openExpand);
 
-  const styles = useMemo(() => {
-    if (!isMobile) return makeCompactStyles();
-    return makeCompactStyles({
-      gutter: {
-        minWidth: 24,
-        width: 24,
-        padding: "0 1px",
-        fontSize: "9px",
-      },
-      marker: {
-        width: 14,
-        paddingLeft: 1,
-        paddingRight: 1,
-        fontSize: "9px",
-      },
-      line: {
-        fontSize: "10px",
-        lineHeight: "1.35",
-        padding: "0 2px",
-      },
-      emptyGutter: {
-        minWidth: 24,
-      },
-      codeFoldGutter: {
-        minWidth: 18,
-        width: 18,
-        padding: "0 1px",
-        fontSize: "8px",
-      },
-      contentText: {
-        fontSize: "10px",
-      },
-    });
-  }, [isMobile]);
+  const splitView = externalSplitView ?? internalSplitView;
+
+  const inlineStyles = useMemo(
+    () => createDiffStyles(isMobile ? DIFF_STYLE_PRESETS.inlineMobile : DIFF_STYLE_PRESETS.inline),
+    [isMobile],
+  );
+  const overlayStyles = useMemo(
+    () => createDiffStyles(isMobile ? DIFF_STYLE_PRESETS.overlayMobile : DIFF_STYLE_PRESETS.overlay),
+    [isMobile],
+  );
+
+  const renderContent = useSyntaxRenderer(filePath);
+
+  const handleExpand = useCallback(() => {
+    openNodeExpand(
+      filePath?.split("/").pop() ?? "Diff",
+      <div className="h-full overflow-auto">
+        <ReactDiffViewer
+          oldValue={oldValue}
+          newValue={newValue}
+          splitView={splitView}
+          compareMethod={DiffMethod.LINES}
+          useDarkTheme={isDark}
+          styles={overlayStyles}
+          hideLineNumbers={false}
+          showDiffOnly
+          renderContent={renderContent}
+          {...(splitView && { leftTitle: t("diffBefore", { defaultValue: "Before" }), rightTitle: t("diffAfter", { defaultValue: "After" }) })}
+        />
+      </div>,
+    );
+  }, [openNodeExpand, filePath, oldValue, newValue, splitView, isDark, overlayStyles, renderContent, t]);
 
   return (
-    <div className="overflow-auto rounded text-[11px]" style={{ maxHeight }}>
-      <ReactDiffViewer
-        oldValue={oldValue}
-        newValue={newValue}
-        splitView={splitView}
-        compareMethod={DiffMethod.LINES}
-        useDarkTheme={isDark}
-        styles={styles}
-        hideLineNumbers={false}
-        showDiffOnly
-      />
-    </div>
+    <>
+      <div className="flex items-center gap-1 px-1 pb-1">
+        {showToggle && (
+          <>
+            <button
+              onClick={() => setInternalSplitView(false)}
+              className={`p-1 rounded transition-colors ${!splitView ? "bg-surface-hover text-text-primary" : "text-text-tertiary hover:text-text-primary"}`}
+              title={t("diffLineByLine", { defaultValue: "Line by line" })}
+            >
+              <Rows3 className="w-3 h-3" />
+            </button>
+            <button
+              onClick={() => setInternalSplitView(true)}
+              className={`p-1 rounded transition-colors ${splitView ? "bg-surface-hover text-text-primary" : "text-text-tertiary hover:text-text-primary"}`}
+              title={t("diffSideBySide", { defaultValue: "Side by side" })}
+            >
+              <Columns2 className="w-3 h-3" />
+            </button>
+          </>
+        )}
+        {expandable && (
+          <button
+            onClick={handleExpand}
+            className="ml-auto p-1 rounded text-text-tertiary hover:text-text-primary hover:bg-surface-hover transition-colors"
+            title={t("expand", { defaultValue: "Expand" })}
+          >
+            <Maximize2 className="w-3 h-3" />
+          </button>
+        )}
+      </div>
+      <div className="rounded">
+        <div className="overflow-auto" style={{ maxHeight }}>
+          <ReactDiffViewer
+            oldValue={oldValue}
+            newValue={newValue}
+            splitView={splitView}
+            compareMethod={DiffMethod.LINES}
+            useDarkTheme={isDark}
+            styles={inlineStyles}
+            hideLineNumbers={false}
+            showDiffOnly
+            renderContent={renderContent}
+          />
+        </div>
+      </div>
+    </>
   );
 });

@@ -1,5 +1,5 @@
 declare module "react-diff-viewer-continued" {
-  import { type ComponentType } from "react";
+  import { type ComponentType, type ReactElement } from "react";
 
   interface DiffViewerProps {
     oldValue: string;
@@ -12,6 +12,7 @@ declare module "react-diff-viewer-continued" {
     showDiffOnly?: boolean;
     useDarkTheme?: boolean;
     compareMethod?: string;
+    renderContent?: (source: string) => ReactElement;
   }
 
   export const DiffViewer: ComponentType<DiffViewerProps>;

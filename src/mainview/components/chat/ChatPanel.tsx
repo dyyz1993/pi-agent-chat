@@ -22,6 +22,7 @@ import { NotificationCenter } from "./NotificationCenter";
 import { UIPendingCenter } from "./UIPendingCenter";
 import { useChangeReviewStore } from "../../stores/use-change-review-store";
 import { RetryNotification } from "./RetryNotification";
+import { InlineErrorToast } from "./InlineErrorToast";
 import { useSubagentStore } from "../../stores/use-subagent-store";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import { useChatNavStore } from "../../stores/use-chat-nav-store";
@@ -39,7 +40,6 @@ import { CommandPopup } from "./CommandPopup";
 import { useCommandPopup } from "../../hooks/use-command-popup";
 import { ScrollToolbar } from "./ScrollToolbar";
 import { QueueCards } from "./QueueCards";
-import { MarkdownExpandOverlay } from "./MarkdownExpandOverlay";
 import { MermaidFullscreen } from "./mermaid";
 import { RollbackOverlay } from "./RollbackOverlay";
 import { ForkDialog } from "./ForkDialog";
@@ -456,7 +456,6 @@ export function ChatPanel() {
       className="flex-1 flex flex-col overflow-hidden relative bg-bg-elevated"
       style={agentBorderColor ? { borderLeft: `2px solid ${agentBorderColor.border}` } : undefined}
     >
-      <MarkdownExpandOverlay />
       <MermaidFullscreen />
       <RollbackOverlay />
       <ForkDialog />
@@ -482,6 +481,7 @@ export function ChatPanel() {
       </div>
 
       <RetryNotification />
+      <InlineErrorToast />
 
       <div className="flex-1 flex overflow-hidden">
         <div className="flex-1 min-w-0 flex flex-col">

@@ -5,6 +5,7 @@ import type { TreeNode, FilePreview, EditingNode } from "../types";
 import { isTextFile, isImageFile, formatSize } from "../utils/file-utils";
 import { MAX_PREVIEW_SIZE } from "../utils/constants";
 import { useAppStore } from "./use-app-store";
+import { useChatOverlayStore } from "./use-chat-overlay-store";
 import { uploadEntriesWeb, importFilesDesktop, type DropEntry } from "../utils/drop-handler";
 
 interface ExplorerState {
@@ -271,9 +272,13 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
     }
 
     set({ filePreview: preview, loadingFile: false });
+    useChatOverlayStore.getState().openFile();
   },
 
-  closePreview: () => set({ filePreview: null, selectedPath: null }),
+  closePreview: () => {
+    useChatOverlayStore.getState().close();
+    set({ filePreview: null, selectedPath: null });
+  },
 
   createFile: async (dirPath: string, name: string) => {
     const addLog = useAppStore.getState().addLog;

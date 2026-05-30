@@ -450,6 +450,7 @@ const ExpandedFileList = memo(function ExpandedFileList({
                 oldValue={selectedDiff.diff.oldContent}
                 newValue={selectedDiff.diff.newContent}
                 maxHeight="192px"
+                filePath={selectedDiff.path}
               />
             </div>
           ) : (

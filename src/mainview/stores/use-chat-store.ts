@@ -341,12 +341,54 @@ export const useChatStore = create<ChatState>((set, get) => ({
       await Promise.race([sendPromise, timeoutPromise]);
       perfLog.info("[send] done", { sessionId, sendMs: Math.round(performance.now() - sendT0) });
       set({ isStreaming: false });
+
+      const EMPTY_TURN_CHECK_MS = 30_000;
+      const checkSessionId = sessionId;
+      const checkUserMsgId = userMsg.id;
+      setTimeout(() => {
+        const chat = get();
+        const msgs = chat.messagesBySession[checkSessionId] || [];
+        const hasAssistant = msgs.some(
+          (m) => m.role === "assistant" && m.id !== checkUserMsgId,
+        );
+        if (!hasAssistant) {
+          const status = useSessionStore.getState().sessionStatusMap[checkSessionId];
+          const isStillStreaming =
+            status === "streaming" || status === "compacting" || status === "retrying";
+          if (!isStillStreaming) {
+            chat.setMessagesForSession(checkSessionId, [
+              ...msgs,
+              {
+                id: `error_${Date.now()}`,
+                role: "error" as const,
+                content: [{ type: "text" as const, text: "Agent 未返回响应，可能是 LLM 服务异常或网络问题" }],
+                timestamp: Date.now(),
+              },
+            ]);
+            useNotificationStore.getState().push({
+              message: "Agent 未返回任何响应，请检查模型配置或重试",
+              level: "error",
+              sessionId: checkSessionId,
+            });
+          }
+        }
+      }, EMPTY_TURN_CHECK_MS);
     } catch (err) {
-      set({ isStreaming: false });
+      set((s) => {
+        const msgs = s.messagesBySession[sessionId] || [];
+        return {
+          isStreaming: false,
+          messagesBySession: {
+            ...s.messagesBySession,
+            [sessionId]: msgs.filter((m) => !m._local),
+          },
+        };
+      });
       useSessionStore.getState().updateSessionStatus(sessionId, "idle");
       const msg = err instanceof Error ? err.message : String(err);
       useAppStore.getState().addLog(`Send error: ${msg}`);
       useNotificationStore.getState().push({ message: `Send failed: ${msg}`, level: "error" });
+      set({ inputText: text });
     }
   },
 

@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { ContentBlock } from "../../../types";
 import { useSettingsStore } from "../../../stores/use-settings-store";
 import { ToolCardHeader } from "../primitives/ToolCardHeader";
+import { InlineCodeViewer } from "./InlineCodeViewer";
 import { formatFilePath } from "../../../lib/format-path";
 
 type Block = Extract<ContentBlock, { type: "toolExecution" }>;
@@ -118,9 +119,7 @@ export const ReadFileCard = memo(function ReadFileCard({
             <summary className="sr-only">{t("expand")}</summary>
             <div className="px-3 pb-2">
               {block.output ? (
-                <pre className="text-[11px] text-text-primary overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-36 overflow-y-auto bg-surface-code rounded px-2 py-1.5">
-                  {block.output}
-                </pre>
+                <InlineCodeViewer code={block.output} filename={filePath} maxHeight="144px" />
               ) : isRunning ? (
                 <div className="text-[11px] text-text-tertiary italic py-1">
                   {t("readFile.readingProgress")}

@@ -6,7 +6,7 @@ import { formatSize } from "../../utils/file-utils";
 import { VirtualizedCodeView } from "./VirtualizedCodeView";
 import { apiClient } from "../../lib/api-client";
 
-interface FilePreviewOverlayProps {
+interface FileOverlayProps {
   preview: FilePreview;
   loading: boolean;
   onClose: () => void;
@@ -42,13 +42,13 @@ function canUseFsRoute(): boolean {
   return apiClient.getTransport() === "websocket";
 }
 
-export function FilePreviewOverlay({
+export function FileOverlay({
   preview,
   loading,
   onClose,
   onSave,
   onToggleEdit,
-}: FilePreviewOverlayProps) {
+}: FileOverlayProps) {
   const { t } = useTranslation("explorer");
   const [svgContent, setSvgContent] = useState<string | null>(null);
   const [svgLoading, setSvgLoading] = useState(false);

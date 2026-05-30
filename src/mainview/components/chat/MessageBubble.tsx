@@ -30,7 +30,7 @@ import { getToolRenderer } from "./tool-renderers";
 import { BlockErrorBoundary } from "./tool-renderers/BlockErrorBoundary";
 import { getCustomTypeIcon } from "./tool-icon-map";
 import { tryFormatAsYaml } from "../../../shared/lib/json-to-yaml";
-import { useExpandStore } from "../../stores/use-expand-store";
+import { useChatOverlayStore } from "../../stores/use-chat-overlay-store";
 import { useSettingsStore } from "../../stores/use-settings-store";
 import { useUIBlockMap } from "../../stores/use-ui-dialog-store";
 import { ENTRY_TYPE_KEYS, getMemoryConfig, getMemorySummary } from "./memory-config";
@@ -650,6 +650,7 @@ import { formatDuration } from "./primitives/formatDuration";
 function getSearchingSummary(data: unknown): string | null {
   const d = data as Record<string, unknown> | undefined;
   if (!d) return "搜索中…";
+  if (d._timedOut) return "搜索超时";
   const q = typeof d.query === "string" ? d.query : "";
   if (!q) return "搜索中…";
   return `「${q.length > 40 ? q.slice(0, 40) + "…" : q}」搜索中…`;
@@ -1259,7 +1260,7 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({
 }) {
   const blockId = `${msgId}-${blockIndex}`;
   const { t } = useTranslation("chat");
-  const openExpand = useExpandStore((s) => s.openExpand);
+  const openExpand = useChatOverlayStore((s) => s.openMarkdown);
   const showToolCalls = useSettingsStore((s) => s.showToolCalls);
   const showToolResults = useSettingsStore((s) => s.showToolResults);
   const showThinking = useSettingsStore((s) => s.showThinking);

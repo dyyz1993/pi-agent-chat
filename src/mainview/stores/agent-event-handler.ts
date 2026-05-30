@@ -80,13 +80,37 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         level: "error",
       });
     } else {
-      notificationGateway.emit({
-        type: "session_complete",
-        sessionId,
-        title: "会话完成",
-        body: `会话 ${sessionId.slice(0, 8)}... 执行完毕`,
-        level: "info",
-      });
+      const chat = useChatStore.getState();
+      const msgs = chat.messagesBySession[sessionId] || [];
+      const lastMsg = msgs[msgs.length - 1];
+      const lastIsUser = lastMsg && (lastMsg.role === "user" || lastMsg.role === "custom");
+
+      if (lastIsUser) {
+        chat.setMessagesForSession(sessionId, [
+          ...msgs,
+          {
+            id: `error_${Date.now()}`,
+            role: "error" as const,
+            content: [{ type: "text" as const, text: "Agent 未返回响应，可能是 LLM 服务异常或网络问题" }],
+            timestamp: Date.now(),
+          },
+        ]);
+        notificationGateway.emit({
+          type: "session_error",
+          sessionId,
+          title: "响应失败",
+          body: "Agent 未返回任何响应，请检查模型配置或重试",
+          level: "error",
+        });
+      } else {
+        notificationGateway.emit({
+          type: "session_complete",
+          sessionId,
+          title: "会话完成",
+          body: `会话 ${sessionId.slice(0, 8)}... 执行完毕`,
+          level: "info",
+        });
+      }
     }
     return;
   }
@@ -100,6 +124,18 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     log.info("compaction_end → force reload", { sessionId });
     const tokensAfter = event.result?.tokensAfter;
     storeGet().updateSessionContext(sessionId, { tokens: tokensAfter ?? null });
+
+    if (event.aborted || (event.reason && event.reason !== "success")) {
+      const errMsg = event.reason ?? "压缩失败";
+      notificationGateway.emit({
+        type: "session_error",
+        sessionId,
+        title: "上下文压缩失败",
+        body: errMsg,
+        level: "warning",
+      });
+    }
+
     storeGet().updateSessionStatus(sessionId, "idle");
     useChatStore.getState().loadSessionMessages(sessionId, { force: true });
     return;
@@ -464,7 +500,22 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     );
 
     if (!hasContent) {
-      chat.setMessagesForSession(sessionId, existing.slice(0, -1));
+      chat.setMessagesForSession(sessionId, [
+        ...existing.slice(0, -1),
+        {
+          ...lastMsg,
+          role: "error" as const,
+          content: [{ type: "text" as const, text: "LLM 未返回有效响应" }],
+          isStreaming: false,
+        },
+      ]);
+      notificationGateway.emit({
+        type: "session_error",
+        sessionId,
+        title: "响应为空",
+        body: "LLM 返回了空响应，可能是模型配置问题或 API 错误",
+        level: "warning",
+      });
       return;
     }
 
@@ -683,7 +734,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
           {
             id: eventId,
             role: "custom" as const,
-            content: [{ type: "custom" as const, customType: "memory_prefetch", data: event.data }],
+            content: [{ type: "custom" as const, customType: "memory_prefetch", data: { ...(event.data as Record<string, unknown>), _timedOut: true } }],
             timestamp: Date.now(),
           },
         ]);

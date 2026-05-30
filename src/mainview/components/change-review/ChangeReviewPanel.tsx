@@ -18,6 +18,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { useChangeReviewStore } from "../../stores/use-change-review-store";
 import { useGitStore } from "../../stores/use-git-store";
+import { useChatOverlayStore } from "../../stores/use-chat-overlay-store";
 import type { FileStatus } from "../../../shared/modules/change-review";
 
 /* ── Git-style status helpers (reusing GitPanel patterns) ── */
@@ -224,6 +225,7 @@ const ChangeItem = memo(function ChangeItem({ change, isExpanded, onToggle }: Ch
         newContent: change.newContent ?? "",
       },
     });
+    useChatOverlayStore.getState().openDiff();
   }, [change.path, change.oldContent, change.newContent]);
 
   const fileName = change.path.split("/").pop() ?? change.path;

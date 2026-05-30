@@ -95,7 +95,7 @@ export type TokenUsage = {
 
 export type ChatMessage = {
   id: string;
-  role: "user" | "assistant" | "toolResult" | "custom" | "compactionSummary";
+  role: "user" | "assistant" | "toolResult" | "custom" | "compactionSummary" | "error";
   content: ContentBlock[];
   timestamp: number;
   provider?: string;

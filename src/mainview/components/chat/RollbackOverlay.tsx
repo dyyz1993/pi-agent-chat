@@ -174,6 +174,7 @@ const FileItem = memo(function FileItem({
                 newValue={oldContent ?? ""}
                 maxHeight="256px"
                 splitView={splitView}
+                filePath={filePath}
               />
             </div>
           ) : details != null ? (

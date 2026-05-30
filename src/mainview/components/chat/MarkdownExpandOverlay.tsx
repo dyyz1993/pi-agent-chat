@@ -2,15 +2,15 @@ import { memo, useCallback, useEffect, useRef } from "react";
 import { X, Copy } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { CachedReactMarkdown } from "./CachedReactMarkdown";
-import { useExpandStore } from "../../stores/use-expand-store";
+import { useChatOverlayStore } from "../../stores/use-chat-overlay-store";
 import { copyToClipboard } from "../../utils/clipboard";
 import { useFocusTrap } from "../../hooks/use-focus-trap";
 
 export const MarkdownExpandOverlay = memo(function MarkdownExpandOverlay() {
   const { t } = useTranslation("chat");
-  const expandedContent = useExpandStore((s) => s.expandedContent);
-  const expandedTitle = useExpandStore((s) => s.expandedTitle);
-  const closeExpand = useExpandStore((s) => s.closeExpand);
+  const expandedContent = useChatOverlayStore((s) => s.markdownContent);
+  const expandedTitle = useChatOverlayStore((s) => s.markdownTitle);
+  const closeExpand = useChatOverlayStore((s) => s.close);
   const scrollRef = useRef<HTMLDivElement>(null);
   const prevContentRef = useRef<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);

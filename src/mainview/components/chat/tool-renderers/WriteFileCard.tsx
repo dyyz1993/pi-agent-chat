@@ -1,10 +1,10 @@
 import { memo, useMemo, useState, useEffect, useRef } from "react";
-import { AlertTriangle, FileText, Columns2, Rows3 } from "lucide-react";
+import { AlertTriangle, FileText } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { ContentBlock } from "../../../types";
 import { CachedReactMarkdown } from "../CachedReactMarkdown";
 import { CopyButton } from "../CopyButton";
-import { CodePreview } from "./CodePreview";
+import { InlineCodeViewer } from "./InlineCodeViewer";
 import { ToolCardHeader } from "../primitives/ToolCardHeader";
 import { InlineDiffViewer } from "./InlineDiffViewer";
 import { useSettingsStore } from "../../../stores/use-settings-store";
@@ -141,7 +141,6 @@ export const WriteFileCard = memo(function WriteFileCard({
   const isEdit = isEditTool(block);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const { t } = useTranslation("chat");
-  const [splitView, setSplitView] = useState(false);
 
   const collapseToolCards = useSettingsStore((s) => s.collapseToolCards);
   const [collapsed, setCollapsed] = useState(() => !isRunning && collapseToolCards);
@@ -219,30 +218,13 @@ export const WriteFileCard = memo(function WriteFileCard({
           {isEdit && !isRunning ? (
             <div className="px-2 pb-2">
               {diffData ? (
-                <>
-                  <div className="flex items-center gap-1 px-1 pb-1">
-                    <button
-                      onClick={() => setSplitView(false)}
-                      className={`p-1 rounded transition-colors ${!splitView ? "bg-surface-hover text-text-primary" : "text-text-tertiary hover:text-text-primary"}`}
-                      title={t("diffLineByLine", { defaultValue: "Line by line" })}
-                    >
-                      <Rows3 className="w-3 h-3" />
-                    </button>
-                    <button
-                      onClick={() => setSplitView(true)}
-                      className={`p-1 rounded transition-colors ${splitView ? "bg-surface-hover text-text-primary" : "text-text-tertiary hover:text-text-primary"}`}
-                      title={t("diffSideBySide", { defaultValue: "Side by side" })}
-                    >
-                      <Columns2 className="w-3 h-3" />
-                    </button>
-                  </div>
-                  <InlineDiffViewer
-                    oldValue={diffData.oldValue}
-                    newValue={diffData.newValue}
-                    maxHeight="250px"
-                    splitView={splitView}
-                  />
-                </>
+                <InlineDiffViewer
+                  oldValue={diffData.oldValue}
+                  newValue={diffData.newValue}
+                  maxHeight="250px"
+                  showToggle
+                  filePath={filePath}
+                />
               ) : editArgs.edits.length > 0 ? (
                 <div className="px-1">
                   {editArgs.edits.map((edit, i) => (
@@ -273,7 +255,7 @@ export const WriteFileCard = memo(function WriteFileCard({
             </div>
           ) : !isMd && hasContent && !isRunning ? (
             <div className="px-2 pb-2">
-              <CodePreview code={fileContent} filename={filePath} maxHeight="250px" />
+              <InlineCodeViewer code={fileContent} filename={filePath} maxHeight="250px" />
             </div>
           ) : (
             <div className="px-3 pb-2">
