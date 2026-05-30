@@ -522,9 +522,27 @@ const HeaderActions = memo(function HeaderActions({
           mode === "withFiles"
             ? await (async () => {
                 try {
+                  // Let the backend resolve fromEntryId from toUserMsgEntryId.
+                  // Previously the frontend set fromEntryId to the snapshot
+                  // BEFORE the target turn, but getModifiedFiles uses inclusive
+                  // semantics for fromEntryId — this included one extra turn's
+                  // file changes.  By only passing toUserMsgEntryId the backend
+                  // correctly resolves fromEntryId to the target turn's own
+                  // snapshot.
                   const modResponse = await apiClient.call("agent.getModifiedFiles", {
                     sessionId,
                     toUserMsgEntryId: result.targetId ?? message.entryId ?? undefined,
+                  });
+                  log.info("rollback getModifiedFiles", {
+                    sessionId,
+                    targetId: result.targetId,
+                    messageEntryId: message.entryId,
+                    fileCount: Array.isArray(modResponse)
+                      ? (modResponse as unknown[]).length
+                      : ((modResponse as { files?: unknown[] }).files ?? []).length,
+                    resolvedFromEntryId: Array.isArray(modResponse)
+                      ? null
+                      : (modResponse as { resolvedFromEntryId?: unknown }).resolvedFromEntryId,
                   });
                   // Defensive: handle both { files, resolvedFromEntryId } and raw array formats
                   const isArray = Array.isArray(modResponse);
@@ -544,11 +562,13 @@ const HeaderActions = memo(function HeaderActions({
                         entryId: string;
                       };
                       try {
+                        // Compare rollback target (fromEntryId) against
+                        // the LATEST file state (no toEntryId → backend uses
+                        // lastCommittedTreeHash / working tree).
                         const diffResult = await apiClient.call("agent.getFileDiff", {
                           sessionId,
                           filePath: f.path,
                           fromEntryId: resolvedFromEntryId ?? undefined,
-                          toEntryId: f.entryId,
                         });
                         const diff = diffResult as {
                           oldContent?: string | null;
@@ -558,6 +578,18 @@ const HeaderActions = memo(function HeaderActions({
                         if (diff) {
                           const oldLines = diff.oldContent?.split("\n").length ?? 0;
                           const newLines = diff.newContent?.split("\n").length ?? 0;
+                          // Count actual added/removed lines from unifiedDiff for accuracy.
+                          // unifiedDiff is oldContent→newContent (rollback-target→current),
+                          // but rollback preview shows current→rollback-target (swapped),
+                          // so we swap the counts: "+" lines (current has) → "removed",
+                          // "-" lines (current lacks) → "added back".
+                          const diffStr = diff.unifiedDiff ?? "";
+                          const diffAdded = diffStr
+                            .split("\n")
+                            .filter((l) => l.startsWith("+") && !l.startsWith("++")).length;
+                          const diffRemoved = diffStr
+                            .split("\n")
+                            .filter((l) => l.startsWith("-") && !l.startsWith("--")).length;
                           return {
                             path: f.path,
                             status: f.status,
@@ -566,14 +598,20 @@ const HeaderActions = memo(function HeaderActions({
                             details: diff.unifiedDiff ?? undefined,
                             oldContent: diff.oldContent,
                             newContent: diff.newContent,
+                            // Rollback preview: "+" in unifiedDiff = lines in current
+                            // that will disappear (removed); "-" = lines to be restored (added).
                             addedLines:
-                              f.status === "added" ? newLines : Math.max(0, newLines - oldLines),
+                              f.status === "deleted"
+                                ? newLines
+                                : f.status === "added"
+                                  ? 0
+                                  : diffRemoved,
                             removedLines:
                               f.status === "added"
-                                ? 0
+                                ? newLines
                                 : f.status === "deleted"
                                   ? oldLines
-                                  : Math.max(0, oldLines - newLines),
+                                  : diffAdded,
                           };
                         }
                       } catch {

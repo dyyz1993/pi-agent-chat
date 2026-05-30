@@ -20,6 +20,9 @@ import { useSessionStore } from "../../../stores/use-session-store";
 import { useChatStore } from "../../../stores/use-chat-store";
 import { useForkDialogStore } from "../../../stores/use-fork-dialog-store";
 import { apiClient } from "../../../lib/api-client";
+import { createLogger } from "../../../../shared/lib/logger";
+
+const log = createLogger("chat");
 
 interface TimelineTurnProps {
   turn: TTurn;
@@ -79,15 +82,14 @@ export const TimelineTurn = memo(function TimelineTurn({
         // Fallback: resolve via tree lookup using the frontend message ID
         if (!targetId) {
           const result = await apiClient.call("agent.getTree", { sessionId });
-          const entries: Array<{
-            id: string;
-            parentId: string | null;
-            type: string;
-            label?: string;
-          }> = result.entries ?? result ?? [];
+          const entries = result.entries ?? result ?? [];
           if (!Array.isArray(entries) || entries.length === 0) return;
 
-          const byId = new Map(entries.map((e) => [e.id, e]));
+          const byId = new Map(
+            (entries as Array<{ id: string; parentId: string | null; type: string }>).map(
+              (e) => [e.id, e] as const,
+            ),
+          );
 
           if (turn.userMessageId) {
             const entry = byId.get(turn.userMessageId);
@@ -110,9 +112,28 @@ export const TimelineTurn = memo(function TimelineTurn({
 
         if (mode === "withFiles") {
           try {
+            // Let the backend resolve fromEntryId from toUserMsgEntryId.
+            // Previously the frontend set fromEntryId to the snapshot BEFORE
+            // the target turn, but getModifiedFiles uses inclusive semantics
+            // for fromEntryId — this included one extra turn's file changes.
+            // By only passing toUserMsgEntryId the backend correctly resolves
+            // fromEntryId to the target turn's own snapshot.
+            log.info("rollback getModifiedFiles params", {
+              sessionId,
+              toUserMsgEntryId: turn.userEntryId ?? undefined,
+              targetId,
+            });
             const modResult = await apiClient.call("agent.getModifiedFiles", {
               sessionId,
               toUserMsgEntryId: turn.userEntryId ?? undefined,
+            });
+            log.info("rollback getModifiedFiles result", {
+              fileCount: Array.isArray(modResult)
+                ? (modResult as unknown[]).length
+                : ((modResult as { files?: unknown[] }).files ?? []).length,
+              resolvedFromEntryId: Array.isArray(modResult)
+                ? null
+                : (modResult as { resolvedFromEntryId?: unknown }).resolvedFromEntryId,
             });
             // Defensive: handle both { files, resolvedFromEntryId } and raw array formats
             const isArr = Array.isArray(modResult);
@@ -132,11 +153,13 @@ export const TimelineTurn = memo(function TimelineTurn({
                   entryId: string;
                 };
                 try {
+                  // Compare rollback target (fromEntryId) against
+                  // the LATEST file state (no toEntryId → backend uses
+                  // lastCommittedTreeHash / working tree).
                   const diffResult = await apiClient.call("agent.getFileDiff", {
                     sessionId,
                     filePath: f.path,
                     fromEntryId: resolvedFromEntryId ?? undefined,
-                    toEntryId: f.entryId,
                   });
                   const diff = diffResult as {
                     oldContent?: string | null;
@@ -146,6 +169,18 @@ export const TimelineTurn = memo(function TimelineTurn({
                   if (diff) {
                     const oldLines = diff.oldContent?.split("\n").length ?? 0;
                     const newLines = diff.newContent?.split("\n").length ?? 0;
+                    // Count actual +/- lines from unifiedDiff for accuracy.
+                    // unifiedDiff is oldContent→newContent (target→current), but
+                    // rollback preview shows current→target (swapped), so we swap:
+                    // "+" lines → removed (current has, will disappear)
+                    // "-" lines → added (target has, will be restored)
+                    const diffStr = diff.unifiedDiff ?? "";
+                    const diffAdded = diffStr
+                      .split("\n")
+                      .filter((l) => l.startsWith("+") && !l.startsWith("++")).length;
+                    const diffRemoved = diffStr
+                      .split("\n")
+                      .filter((l) => l.startsWith("-") && !l.startsWith("--")).length;
                     return {
                       path: f.path,
                       status: f.status,
@@ -155,13 +190,13 @@ export const TimelineTurn = memo(function TimelineTurn({
                       oldContent: diff.oldContent,
                       newContent: diff.newContent,
                       addedLines:
-                        f.status === "added" ? newLines : Math.max(0, newLines - oldLines),
+                        f.status === "deleted" ? newLines : f.status === "added" ? 0 : diffRemoved,
                       removedLines:
                         f.status === "added"
-                          ? 0
+                          ? newLines
                           : f.status === "deleted"
                             ? oldLines
-                            : Math.max(0, oldLines - newLines),
+                            : diffAdded,
                     };
                   }
                 } catch {
