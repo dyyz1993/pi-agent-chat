@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { apiClient } from "../lib/api-client";
 import { useSessionStore } from "./use-session-store";
 import { useNotificationStore } from "./use-notification-store";
+import { useGitStore } from "./use-git-store";
 import type { PendingChangeResult } from "../../shared/modules/change-review";
 
 export type PendingChange = PendingChangeResult;
@@ -45,11 +46,20 @@ export const useChangeReviewStore = create<ChangeReviewState>()((set, get) => ({
     })),
 
   fetchPending: async () => {
-    const sessionId = useSessionStore.getState().activeSessionId;
+    const sessionState = useSessionStore.getState();
+    const sessionId = sessionState.activeSessionId;
     if (!sessionId) return;
     set({ loading: true });
     try {
-      const result = await apiClient.call("change-review.pending", { sessionId });
+      const session = sessionState.sessionsByProject
+        ? Object.values(sessionState.sessionsByProject)
+            .flat()
+            .find((s) => s.sessionId === sessionId)
+        : undefined;
+      const result = await apiClient.call("change-review.pending", {
+        sessionId,
+        ...(session?.sessionPath ? { sessionPath: session.sessionPath } : {}),
+      });
       const changes = (Array.isArray(result) ? result : []) as PendingChange[];
       set({ changes, loading: false });
     } catch {
@@ -63,6 +73,7 @@ export const useChangeReviewStore = create<ChangeReviewState>()((set, get) => ({
     try {
       await apiClient.call("change-review.approve", { sessionId, path });
       get().updateChangeStatus(path, "approved");
+      useGitStore.getState().clearDiff();
     } catch (err) {
       useNotificationStore.getState().push({
         message: `Approve failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -77,13 +88,13 @@ export const useChangeReviewStore = create<ChangeReviewState>()((set, get) => ({
     try {
       const result = await apiClient.call("change-review.reject", { sessionId, path });
       if (result.rolledBack) {
-        // File was rolled back — remove from list
         set((s) => ({
           changes: s.changes.filter((c) => c.path !== path),
         }));
       } else {
         get().updateChangeStatus(path, "rejected");
       }
+      useGitStore.getState().clearDiff();
     } catch (err) {
       useNotificationStore.getState().push({
         message: `Reject failed: ${err instanceof Error ? err.message : String(err)}`,

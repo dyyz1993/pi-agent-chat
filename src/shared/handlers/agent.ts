@@ -375,4 +375,8 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const result = await m.getLatestAgentChange(params.sessionId);
     return result as unknown as Promise<R<"agent.getLatestAgentChange">>;
   });
+
+  r("agent.batchGetSessionsStatus", async (params) => {
+    return m.batchGetSessionsStatus(params.sessionIds);
+  });
 }

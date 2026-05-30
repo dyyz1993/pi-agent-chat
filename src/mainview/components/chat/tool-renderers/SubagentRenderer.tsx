@@ -117,6 +117,8 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
   else if (isDone) statusColorClass = "text-status-success";
   else statusColorClass = "text-status-error";
 
+  const canJump = !!matchedSub?.sessionId;
+
   const badgeContent = (
     <>
       {matchedSub?.agent && (
@@ -132,7 +134,7 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
         </span>
       )}
       <span className={`shrink-0 text-[10px] ${statusColorClass}`}>{statusText}</span>
-      {matchedSub && !isRunning && (
+      {canJump && (
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -150,7 +152,8 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
   return (
     <div
       data-block-id={blockId}
-      className={`rounded-none overflow-hidden border-x-0 border-t border-b ${borderBg}`}
+      className={`rounded-none overflow-hidden border-x-0 border-t border-b transition-colors ${borderBg} ${canJump ? "cursor-pointer" : ""}`}
+      onClick={canJump ? handleJumpToSession : undefined}
     >
       <ToolCardHeader
         toolName="subagent"

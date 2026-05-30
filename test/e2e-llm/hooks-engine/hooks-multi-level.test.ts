@@ -19,7 +19,9 @@ const PORT = HOOK_BASE_PORT + 40;
 const AUTH_TOKEN = "hooks-test-token-g4";
 const paths = getHookPaths("g4");
 
-describe("Group 4: Multi-Level Hooks Merge", () => {
+const shouldRun = process.env.PI_E2E_LLM === "1";
+
+describe.skipIf(shouldRun === false)("Group 4: Multi-Level Hooks Merge", () => {
   let globalHookScript: string;
   let projectHookScript: string;
 

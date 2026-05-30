@@ -1,3 +1,14 @@
 .yalc/
 node_modules/
 dist/
+test/rollback-e2e-backtest.test.ts
+test/rollback-leafid-persistence.test.ts
+test/rollback-managed-restart.test.ts
+test/rollback-scenarios.test.ts
+test/status-visibility-harness.test.ts
+test/streaming-status.test.ts
+test/agent-config.test.ts
+test/change-review-handler.test.ts
+test/getfullmessages-cache.test.ts
+test/process-manager-linecount.test.ts
+test/rollback-toUserMsgEntryId.test.ts

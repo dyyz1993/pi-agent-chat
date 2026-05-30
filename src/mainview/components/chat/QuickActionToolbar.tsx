@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useAttachmentStore } from "../../stores/use-attachment-store";
+import { formatFilePath } from "../../lib/format-path";
 import {
   Paperclip,
   Image as ImageIcon,
@@ -202,7 +203,7 @@ export function QuickActionToolbar() {
           result.push({
             id: `file-${e.path}`,
             label: e.name,
-            description: e.path,
+            description: formatFilePath(e.path),
             icon: e.type === "directory" ? "folder" : "file",
             accentColor: e.type === "directory" ? "text-semantic-notify" : "text-status-info",
             insertText: e.type === "directory" ? "" : `@${e.path}`,

@@ -78,7 +78,11 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const fetchModelState = useSessionStore((s) => s.fetchModelState);
 
   // ---- Tier 模型配置 ----
-  const tierModels = useTierStore((s) => s.tierModels);
+  const tierModels = useTierStore((s) =>
+    sessionId ? s.dataBySession[sessionId]?.tierModels : undefined,
+  );
+  const globalDefaults = useTierStore((s) => s.globalDefaults);
+  const effectiveTierModels = tierModels ?? globalDefaults;
   const fetchTierConfig = useTierStore((s) => s.fetchTierConfig);
   const [localTierModels, setLocalTierModels] = useState<Record<string, string>>({});
   const [tierSaving, setTierSaving] = useState(false);
@@ -104,8 +108,8 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
 
   // 将 store 中的 tierModels 同步到本地编辑状态
   useEffect(() => {
-    setLocalTierModels({ ...tierModels });
-  }, [tierModels]);
+    setLocalTierModels({ ...effectiveTierModels });
+  }, [effectiveTierModels]);
 
   const handleSaveTierConfig = useCallback(async () => {
     if (!sessionId) return;
@@ -115,15 +119,14 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
         sessionId,
         models: localTierModels,
       });
+      useTierStore.getState().setSessionTierModels(sessionId, localTierModels);
       await fetchTierConfig(sessionId);
-      // If the currently active tier exists, re-apply it to switch to the new model
-      const {
-        currentTier: activeTier,
-        tierModels: updatedModels,
-        switchToTier,
-      } = useTierStore.getState();
+      const { dataBySession, globalDefaults } = useTierStore.getState();
+      const sessionData = dataBySession[sessionId];
+      const activeTier = sessionData?.currentTier ?? null;
+      const updatedModels = sessionData?.tierModels ?? globalDefaults;
       if (activeTier && updatedModels[activeTier]) {
-        await switchToTier(activeTier, sessionId);
+        await useTierStore.getState().switchToTier(activeTier, sessionId);
       }
     } catch (err) {
       log.warn("save tier config failed", {
@@ -131,7 +134,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
       });
     }
     setTierSaving(false);
-  }, [sessionId, localTierModels, fetchTierConfig]);
+  }, [sessionId, localTierModels, fetchTierConfig, effectiveTierModels]);
 
   // ---- 代理设置 ----
   const [proxyLocalEnabled, setProxyLocalEnabled] = useState(isProxyEnabled());

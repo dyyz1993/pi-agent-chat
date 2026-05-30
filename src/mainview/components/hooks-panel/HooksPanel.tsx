@@ -16,6 +16,7 @@ import {
 import { useHooksStore } from "../../stores/use-hooks-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useShallow } from "zustand/react/shallow";
+import { formatFilePath } from "../../lib/format-path";
 import { apiClient } from "../../lib/api-client";
 import type { HookLogEntry, HookRuleStats, HookConfigSnapshot } from "../../stores/use-hooks-store";
 
@@ -177,7 +178,9 @@ function ConfigSources({ config }: { config: HookConfigSnapshot }) {
           ) : (
             <FileText className="w-2.5 h-2.5 text-text-tertiary shrink-0" />
           )}
-          <span className="text-text-tertiary truncate min-w-0 flex-1">{src.path}</span>
+          <span className="text-text-tertiary truncate min-w-0 flex-1" title={src.path}>
+            {formatFilePath(src.path)}
+          </span>
           <span className="text-[9px] px-1 py-0.5 rounded bg-surface-code dark:bg-surface-dim/60 text-text-secondary shrink-0">
             {src.scope}
           </span>

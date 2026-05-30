@@ -18,6 +18,7 @@ import { useNotificationStore } from "../../stores/use-notification-store";
 import { apiClient } from "../../lib/api-client";
 import { createLogger } from "../../../shared/lib/logger";
 import { InlineDiffViewer } from "../chat/tool-renderers/InlineDiffViewer";
+import { formatFilePath } from "../../lib/format-path";
 
 const log = createLogger("snapshot");
 
@@ -430,7 +431,7 @@ const ExpandedFileList = memo(function ExpandedFileList({
             >
               <StatusIcon className={`w-3 h-3 shrink-0 ${statusConfig.color}`} />
               <span className="truncate" title={file.path}>
-                {file.path}
+                {formatFilePath(file.path)}
               </span>
             </button>
           );

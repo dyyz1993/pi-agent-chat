@@ -32,19 +32,19 @@ const mockedCall = apiClient.call as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   vi.clearAllMocks();
-  useTierStore.setState({ currentTier: null, switching: false, tierModels: {} });
+  useTierStore.setState({ globalDefaults: {}, dataBySession: {}, switching: false });
 });
 
-describe("setCurrentTier", () => {
+describe("setSessionCurrentTier", () => {
   it("sets tier to fast", () => {
-    useTierStore.getState().setCurrentTier("fast");
-    expect(useTierStore.getState().currentTier).toBe("fast");
+    useTierStore.getState().setSessionCurrentTier("sess-1", "fast");
+    expect(useTierStore.getState().getCurrentTier("sess-1")).toBe("fast");
   });
 
   it("sets tier to null", () => {
-    useTierStore.getState().setCurrentTier("fast");
-    useTierStore.getState().setCurrentTier(null);
-    expect(useTierStore.getState().currentTier).toBeNull();
+    useTierStore.getState().setSessionCurrentTier("sess-1", "fast");
+    useTierStore.getState().setSessionCurrentTier("sess-1", null);
+    expect(useTierStore.getState().getCurrentTier("sess-1")).toBeNull();
   });
 });
 
@@ -56,33 +56,33 @@ describe("syncTierFromModel", () => {
   };
 
   beforeEach(() => {
-    useTierStore.setState({ tierModels: TIER_FIXTURES });
+    useTierStore.getState().setSessionTierModels("sess-1", TIER_FIXTURES);
   });
 
   it("syncs fast tier when model matches tierModels.fast", () => {
-    useTierStore.getState().syncTierFromModel("anthropic", "claude-haiku-4");
-    expect(useTierStore.getState().currentTier).toBe("fast");
+    useTierStore.getState().syncTierFromModel("sess-1", "anthropic", "claude-haiku-4");
+    expect(useTierStore.getState().getCurrentTier("sess-1")).toBe("fast");
   });
 
   it("syncs max tier when model matches tierModels.max", () => {
-    useTierStore.getState().syncTierFromModel("anthropic", "claude-opus-4");
-    expect(useTierStore.getState().currentTier).toBe("max");
+    useTierStore.getState().syncTierFromModel("sess-1", "anthropic", "claude-opus-4");
+    expect(useTierStore.getState().getCurrentTier("sess-1")).toBe("max");
   });
 
   it("syncs pro tier when model matches tierModels.pro", () => {
-    useTierStore.getState().syncTierFromModel("anthropic", "claude-sonnet-4");
-    expect(useTierStore.getState().currentTier).toBe("pro");
+    useTierStore.getState().syncTierFromModel("sess-1", "anthropic", "claude-sonnet-4");
+    expect(useTierStore.getState().getCurrentTier("sess-1")).toBe("pro");
   });
 
   it("sets null when model does not match any tier", () => {
-    useTierStore.getState().syncTierFromModel("zhipuai", "glm-4");
-    expect(useTierStore.getState().currentTier).toBeNull();
+    useTierStore.getState().syncTierFromModel("sess-1", "zhipuai", "glm-4");
+    expect(useTierStore.getState().getCurrentTier("sess-1")).toBeNull();
   });
 
   it("sets null when tierModels is empty", () => {
-    useTierStore.setState({ tierModels: {} });
-    useTierStore.getState().syncTierFromModel("anthropic", "claude-haiku-4");
-    expect(useTierStore.getState().currentTier).toBeNull();
+    useTierStore.getState().setSessionTierModels("sess-1", {});
+    useTierStore.getState().syncTierFromModel("sess-1", "anthropic", "claude-haiku-4");
+    expect(useTierStore.getState().getCurrentTier("sess-1")).toBeNull();
   });
 });
 
@@ -95,7 +95,7 @@ describe("switchToTier", () => {
 
     await useTierStore.getState().switchToTier("fast", "sess-1");
 
-    expect(useTierStore.getState().currentTier).toBe("fast");
+    expect(useTierStore.getState().getCurrentTier("sess-1")).toBe("fast");
     expect(useTierStore.getState().switching).toBe(false);
   });
 
@@ -111,12 +111,12 @@ describe("switchToTier", () => {
   });
 
   it("does not change tier on failure", async () => {
-    useTierStore.setState({ currentTier: "pro" });
+    useTierStore.getState().setSessionCurrentTier("sess-1", "pro");
     mockedCall.mockRejectedValueOnce(new Error("Model not found"));
 
     await useTierStore.getState().switchToTier("max", "sess-1");
 
-    expect(useTierStore.getState().currentTier).toBe("pro");
+    expect(useTierStore.getState().getCurrentTier("sess-1")).toBe("pro");
     expect(useTierStore.getState().switching).toBe(false);
   });
 
@@ -133,26 +133,26 @@ describe("switchToTier", () => {
 });
 
 describe("fetchTierConfig", () => {
-  it("fetches tier models from backend", async () => {
+  it("fetches tier models from backend and sets globalDefaults", async () => {
     mockedCall.mockResolvedValueOnce({
       models: { fast: "a/haiku", pro: "a/sonnet", max: "a/opus" },
     });
 
     await useTierStore.getState().fetchTierConfig("sess-1");
 
-    expect(useTierStore.getState().tierModels).toEqual({
+    expect(useTierStore.getState().globalDefaults).toEqual({
       fast: "a/haiku",
       pro: "a/sonnet",
       max: "a/opus",
     });
   });
 
-  it("keeps tierModels unchanged on failure", async () => {
-    useTierStore.setState({ tierModels: { fast: "a/haiku" } });
+  it("keeps globalDefaults unchanged on failure", async () => {
+    useTierStore.setState({ globalDefaults: { fast: "a/haiku" } });
     mockedCall.mockRejectedValueOnce(new Error("network error"));
 
     await useTierStore.getState().fetchTierConfig("sess-1");
 
-    expect(useTierStore.getState().tierModels).toEqual({ fast: "a/haiku" });
+    expect(useTierStore.getState().globalDefaults).toEqual({ fast: "a/haiku" });
   });
 });

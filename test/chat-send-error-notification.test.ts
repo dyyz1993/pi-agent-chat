@@ -33,6 +33,7 @@ vi.mock("../src/mainview/stores/use-session-store", () => ({
       sessionReady: { "sess-1": true },
       sessionContextMap: {},
       restoreContextFromHistory: vi.fn(),
+      updateSessionStatus: vi.fn(),
     })),
     setState: vi.fn(),
   },
@@ -90,6 +91,7 @@ beforeEach(() => {
     sessionReady: { "sess-1": true },
     sessionContextMap: {},
     restoreContextFromHistory: vi.fn(),
+    updateSessionStatus: vi.fn(),
   });
 });
 

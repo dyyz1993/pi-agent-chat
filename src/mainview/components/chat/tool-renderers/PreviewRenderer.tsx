@@ -2,6 +2,7 @@ import { memo } from "react";
 import type { ContentBlock } from "../../../types";
 import { PreviewCard, type PreviewDetails } from "../preview";
 import { ToolCardHeader } from "../primitives/ToolCardHeader";
+import { formatFilePath } from "../../../lib/format-path";
 
 type Block = Extract<ContentBlock, { type: "toolExecution" }>;
 
@@ -40,7 +41,7 @@ export const PreviewRenderer = memo(function PreviewRenderer({
         <ToolCardHeader
           toolName="preview"
           status={isRunning ? "running" : isError ? "error" : "done"}
-          description={filePath || block.args}
+          description={filePath ? formatFilePath(filePath) : block.args}
           mono
           rtl
           startedAt={block.startedAt}

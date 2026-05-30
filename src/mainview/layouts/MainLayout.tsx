@@ -223,12 +223,17 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
         )}
 
         {/* ---- COL 3: Right Sidebar ---- */}
-        {statusPanel !== "hidden" && (!isMobile || statusPanel === "visible") && !isTablet && (
-          <RightSidebar
-            width={isMobile ? Math.min(320, Math.round(contentWidth * 0.8)) : statusWidth}
-            overlay={statusPanel === "visible"}
-          />
-        )}
+        {statusPanel !== "hidden" &&
+          ((isTablet && statusPanel === "visible") ||
+            (!isMobile && !isTablet) ||
+            (isMobile && statusPanel === "visible")) && (
+            <RightSidebar
+              width={
+                isMobile || isTablet ? Math.min(320, Math.round(contentWidth * 0.8)) : statusWidth
+              }
+              overlay={statusPanel === "visible"}
+            />
+          )}
       </div>
     </div>
   );

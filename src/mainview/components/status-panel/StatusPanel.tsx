@@ -37,6 +37,7 @@ import type { StatusSection } from "../../stores/use-status-store";
 import type { TodoPriority } from "../../stores/use-session-store";
 import { copyToClipboard } from "../../utils/clipboard";
 import type { PluginInfo } from "../../stores/use-status-store";
+import { formatFilePath } from "../../lib/format-path";
 
 const PRIORITY_STYLES: Record<TodoPriority, { dot: string; label: string }> = {
   high: { dot: "bg-status-error", label: "H" },
@@ -334,8 +335,8 @@ export function StatusPanel() {
                           <AlertTriangle
                             className={`w-2.5 h-2.5 ${lspData.lastDiagnostics.count > 0 ? "text-status-warning" : "text-status-success"}`}
                           />
-                          <span className="truncate">
-                            {lspData.lastDiagnostics.filePath}:{" "}
+                          <span className="truncate" title={lspData.lastDiagnostics.filePath}>
+                            {formatFilePath(lspData.lastDiagnostics.filePath)}:{" "}
                             {t("issues", {
                               count: lspData.lastDiagnostics.count,
                               plural: lspData.lastDiagnostics.count !== 1 ? "s" : "",
@@ -488,7 +489,7 @@ export function StatusPanel() {
                                   <div className="space-y-0.5 text-text-tertiary">
                                     <div className="truncate" title={sk.filePath}>
                                       <span className="text-text-tertiary">{t("fileLabel")}</span>{" "}
-                                      {sk.filePath.split("/").pop()}
+                                      {formatFilePath(sk.filePath)}
                                     </div>
                                     <div>
                                       <span className="text-text-tertiary">{t("pathLabel")}</span>

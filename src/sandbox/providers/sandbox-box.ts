@@ -10,8 +10,8 @@
  */
 
 import { spawn } from "child_process";
-import { resolve } from "path";
 import { createLogger } from "../../shared/lib/logger";
+import { getProjectRoot, getSandboxAgentPath, getSandboxAgentRunner } from "../../shared/lib/paths";
 import type { ISandboxProvider, SandboxInstance, SandboxProviderConfig } from "../types";
 
 const log = createLogger("sandbox-box");
@@ -72,6 +72,17 @@ export class SandboxBoxProvider implements ISandboxProvider {
     await this.execSsh(
       `sandbox ${sandboxName} 'pkill -9 python3 2>/dev/null; pkill -9 python 2>/dev/null' 2>&1 || true`,
     );
+
+    // 2.5 注入 pi 配置（模型、settings 等）到沙盒
+    const sbAgentDir = `/root/data/sandboxes/${sandboxName}/home/.pi/agent`;
+    const hostAgentDir = "/root/.pi/agent";
+    await this.execSsh(`mkdir -p ${sbAgentDir}`).catch(() => {});
+    await this.execSsh(
+      `test -f ${hostAgentDir}/models.json && cp ${hostAgentDir}/models.json ${sbAgentDir}/models.json`,
+    ).catch(() => {});
+    await this.execSsh(
+      `test -f ${hostAgentDir}/settings.json && cp ${hostAgentDir}/settings.json ${sbAgentDir}/settings.json`,
+    ).catch(() => {});
 
     // 3. 启动本地 sandbox-agent，通过 SSH 连到沙盒内的 pi
     const port = await this.startBridge(userId, sandboxName);
@@ -150,7 +161,7 @@ export class SandboxBoxProvider implements ISandboxProvider {
     const keyFlag = this.options.sshKeyPath ? `--ssh-key=${this.options.sshKeyPath}` : "";
 
     const args = [
-      "src/sandbox/sandbox-agent.ts",
+      getSandboxAgentPath(),
       `--port=${port}`,
       `--ssh-host=${this.options.sshHost}`,
       `--ssh-port=${this.options.sshPort}`,
@@ -161,9 +172,9 @@ export class SandboxBoxProvider implements ISandboxProvider {
 
     log.info("Starting bridge", { userId, port, sandboxName });
 
-    const proc = spawn("bun", args, {
+    const proc = spawn(getSandboxAgentRunner(), args, {
       stdio: ["ignore", "pipe", "pipe"],
-      cwd: resolve(__dirname, "../../.."),
+      cwd: getProjectRoot(),
     });
 
     proc.stdout?.on("data", (d: Buffer) => log.info(`[bridge-${userId}] ${d.toString().trim()}`));

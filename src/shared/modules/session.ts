@@ -42,6 +42,25 @@ export interface SessionMethods {
     params: { sessionPath: string; newCwd: string };
     result: { ok: boolean };
   };
+  "session.saveTierConfig": {
+    params: {
+      sessionPath: string;
+      tierModels: Record<string, string>;
+      currentTier: string | null;
+      currentModel: { provider: string; id: string } | null;
+    };
+    result: { ok: boolean };
+  };
+  "session.loadTierConfig": {
+    params: { sessionPath: string };
+    result: {
+      config: {
+        tierModels: Record<string, string>;
+        currentTier: string | null;
+        currentModel: { provider: string; id: string } | null;
+      } | null;
+    };
+  };
 }
 
 export interface SessionEntry {

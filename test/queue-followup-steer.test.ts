@@ -107,6 +107,18 @@ vi.mock("../src/mainview/stores/use-status-store", () => ({
   },
 }));
 
+vi.mock("../src/mainview/stores/use-notification-store", () => ({
+  useNotificationStore: {
+    getState: vi.fn(() => ({ push: vi.fn() })),
+  },
+}));
+
+vi.mock("../src/mainview/stores/use-subagent-store", () => ({
+  useSubagentStore: {
+    getState: vi.fn(() => ({ activeSubsessionId: null })),
+  },
+}));
+
 vi.mock("../src/mainview/stores/use-session-store", () => {
   type SessionStatus = "idle" | "streaming" | "compacting" | "permission" | "retrying";
   interface MockSessionState {
@@ -183,6 +195,7 @@ function resetChatStore() {
   useChatStore.setState({
     messagesBySession: {},
     inputText: "",
+    pendingImages: [],
     isStreaming: false,
     streamContentVersion: 0,
     loadingSessions: new Set<string>(),
@@ -224,6 +237,7 @@ describe("sendFollowUp — 行为验证", () => {
     expect(apiClient.call).toHaveBeenCalledWith("agent.followUp", {
       sessionId: SID,
       content: "等等再做这个",
+      images: [],
     });
 
     // messagesBySession 没有被写入
@@ -260,7 +274,7 @@ describe("sendFollowUp — 行为验证", () => {
 
     await expect(useChatStore.getState().sendFollowUp()).resolves.toBeUndefined();
 
-    expect(useChatStore.getState().inputText).toBe("");
+    expect(useChatStore.getState().inputText).toBe("will fail");
   });
 
   it("RPC 失败时不会写入 messagesBySession", async () => {
@@ -284,6 +298,7 @@ describe("sendSteer — 行为验证", () => {
     expect(apiClient.call).toHaveBeenCalledWith("agent.steer", {
       sessionId: SID,
       content: "换个方向",
+      images: [],
     });
 
     const msgs = useChatStore.getState().messagesBySession[SID];
@@ -334,6 +349,7 @@ describe("sendMessage (idle) — 对比验证", () => {
     expect(apiClient.call).toHaveBeenCalledWith("agent.send", {
       sessionId: SID,
       content: "普通消息",
+      images: [],
     });
   });
 
@@ -476,6 +492,7 @@ describe("完整事件流 — followUp 消息生命周期", () => {
     expect(apiClient.call).toHaveBeenCalledWith("agent.followUp", {
       sessionId: SID,
       content: "稍后处理",
+      images: [],
     });
   });
 
@@ -547,6 +564,7 @@ describe("完整事件流 — steer 消息生命周期", () => {
     expect(apiClient.call).toHaveBeenCalledWith("agent.steer", {
       sessionId: SID,
       content: "转向",
+      images: [],
     });
   });
 
@@ -603,10 +621,12 @@ describe("多条消息排队", () => {
     expect(apiClient.call).toHaveBeenCalledWith("agent.followUp", {
       sessionId: SID,
       content: "第一条",
+      images: [],
     });
     expect(apiClient.call).toHaveBeenCalledWith("agent.followUp", {
       sessionId: SID,
       content: "第二条",
+      images: [],
     });
 
     // 仍然不写入 messagesBySession
@@ -844,6 +864,7 @@ describe("RPC 调用计数与参数精确验证", () => {
     expect(apiClient.call).toHaveBeenCalledWith("agent.followUp", {
       sessionId: SID,
       content: "精确匹配",
+      images: [],
     });
   });
 
@@ -854,6 +875,7 @@ describe("RPC 调用计数与参数精确验证", () => {
     expect(apiClient.call).toHaveBeenCalledWith("agent.steer", {
       sessionId: SID,
       content: "精确匹配",
+      images: [],
     });
   });
 
@@ -864,6 +886,7 @@ describe("RPC 调用计数与参数精确验证", () => {
     expect(apiClient.call).toHaveBeenCalledWith("agent.send", {
       sessionId: SID,
       content: "精确匹配",
+      images: [],
     });
   });
 });

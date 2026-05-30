@@ -1,4 +1,4 @@
-import type { AnyMethods, RPCServer } from "@dyyz1993/rpc-core";
+import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { SystemMethods } from "./modules/system";
 import type { FileMethods, FileEvents } from "./modules/file";
 import type { TimerMethods, TimerEvents } from "./modules/timer";
@@ -20,7 +20,6 @@ import type { SupervisorMethods, SupervisorEvents } from "./modules/supervisor";
 
 export interface RPCMethods
   extends
-    AnyMethods,
     SystemMethods,
     FileMethods,
     TimerMethods,
@@ -56,6 +55,7 @@ export interface RPCEvents
 
 export interface HandlerOptions {
   platform: "desktop" | "web";
+  userId?: string;
 }
 
 export interface HandlerRegister {

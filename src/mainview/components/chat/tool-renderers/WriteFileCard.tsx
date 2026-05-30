@@ -8,6 +8,7 @@ import { CodePreview } from "./CodePreview";
 import { ToolCardHeader } from "../primitives/ToolCardHeader";
 import { InlineDiffViewer } from "./InlineDiffViewer";
 import { useSettingsStore } from "../../../stores/use-settings-store";
+import { formatFilePath } from "../../../lib/format-path";
 
 type Block = Extract<ContentBlock, { type: "toolExecution" }>;
 
@@ -163,7 +164,7 @@ export const WriteFileCard = memo(function WriteFileCard({
     }
   }, [fileContent, isRunning]);
 
-  const displayPath = filePath || block.args?.slice(0, 80) || "";
+  const displayPath = filePath ? formatFilePath(filePath) : block.args?.slice(0, 80) || "";
   const isMd = isMarkdownFile(filePath);
   const hasContent = (fileContent ?? "").length > 0;
 

@@ -100,6 +100,164 @@ src/mainview/
 - E2E: `@playwright/test` with `workers: 3`, `headless: true`
 - Config: `vitest.config.ts`, `playwright.config.ts`
 
+### WebSocket RPC 端到端测试方法
+
+通过 WebSocket 直接调用 RPC API，对真实 dev server 做端到端验证。适用于验证 Agent 会话行为、回滚、消息过滤等涉及前后端+CLI 进程的完整链路。
+
+**前提条件**：
+
+- Dev server 已启动（`bun run dev:web`），默认端口 3100
+- `node_modules` 中有 `ws` 包（项目已安装）
+- AUTH_TOKEN 配置在 `.env` 中（默认 `demo-test-token`）
+
+**核心 RPC 方法**：
+
+| 方法                    | 参数                                      | 用途                                          |
+| ----------------------- | ----------------------------------------- | --------------------------------------------- |
+| `session.create`        | `{ projectPath }`                         | 创建新会话，返回 `{ sessionId, sessionPath }` |
+| `agent.start`           | `{ sessionId, projectPath, sessionPath }` | 启动 Agent 进程（必须先调才能发消息）         |
+| `agent.send`            | `{ sessionId, content }`                  | 发送用户消息                                  |
+| `agent.stop`            | `{ sessionId }`                           | 停止 Agent 进程（确保 JSONL 写完）            |
+| `agent.getFullMessages` | `{ sessionId, sessionPath }`              | 获取当前分支的过滤后消息                      |
+| `agent.navigateTree`    | `{ sessionId, targetId, summarize }`      | 回滚到指定 entry                              |
+| `agent.getTree`         | `{ sessionId }`                           | 获取会话树结构                                |
+
+**测试脚本模板**：
+
+```javascript
+// e2e-test.mjs — 放在项目根目录，用 node e2e-test.mjs 运行
+import WebSocket from "ws";
+import { execSync } from "child_process";
+import { readFileSync } from "fs";
+
+const WS_URL = "ws://localhost:3100/ws?token=demo-test-token";
+const CWD = `/tmp/e2e-test-${Date.now()}`;
+execSync(`mkdir -p ${CWD}`);
+
+let msgId = 0;
+const pending = new Map();
+
+function wsConnect() {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(WS_URL);
+    ws.on("message", (data) => {
+      const msg = JSON.parse(data.toString());
+      // 路由 RPC response 到对应的 pending promise
+      if (msg.id && pending.has(msg.id)) {
+        pending.get(msg.id)(msg);
+        pending.delete(msg.id);
+      }
+    });
+    ws.on("open", () => resolve(ws));
+    setTimeout(() => reject(new Error("connect timeout")), 10000);
+  });
+}
+
+function rpc(ws, method, params, timeout = 30000) {
+  return new Promise((resolve, reject) => {
+    const id = `test-${++msgId}`;
+    const timer = setTimeout(() => {
+      pending.delete(id);
+      reject(new Error(`${method} timeout`));
+    }, timeout);
+    pending.set(id, (msg) => {
+      clearTimeout(timer);
+      resolve(msg);
+    });
+    ws.send(JSON.stringify({ type: "request", id, method, params }));
+  });
+}
+
+// 轮询等待消息数变化（因为 agent.send 不返回完成信号）
+async function waitForMessages(ws, sid, sp, minCount, timeout = 90000) {
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    const res = await rpc(ws, "agent.getFullMessages", { sessionId: sid, sessionPath: sp });
+    const msgs = res.result?.messages || [];
+    if (msgs.length >= minCount) return msgs;
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+  throw new Error(`timeout: expected >= ${minCount} messages`);
+}
+
+// 读取 JSONL 中的 entry IDs（用于定位回滚目标）
+function getMessageEntryIds(sessionPath) {
+  const lines = readFileSync(sessionPath, "utf-8").trim().split("\n");
+  return lines
+    .map((l) => {
+      try {
+        return JSON.parse(l);
+      } catch {
+        return null;
+      }
+    })
+    .filter((e) => e?.type === "message")
+    .map((e) => ({ id: e.id, role: e.message?.role, parentId: e.parentId }));
+}
+
+// === 使用示例 ===
+async function main() {
+  const ws = await wsConnect();
+
+  // 1. 创建会话 + 启动 Agent
+  const sr = await rpc(ws, "session.create", { projectPath: CWD });
+  const sid = sr.result.sessionId;
+  const sp = sr.result.sessionPath;
+  await rpc(ws, "agent.start", { sessionId: sid, projectPath: CWD, sessionPath: sp });
+
+  // 2. 发消息 + 等待回复
+  await rpc(ws, "agent.send", { sessionId: sid, content: "你好" });
+  await waitForMessages(ws, sid, sp, 2); // user + assistant
+
+  // 3. 停止 Agent（确保 JSONL 写完）
+  await rpc(ws, "agent.stop", { sessionId: sid });
+
+  // 4. 读 JSONL 找回滚目标
+  const entries = getMessageEntryIds(sp);
+  const firstAssistant = entries.find((e) => e.role === "assistant");
+
+  // 5. 重启 Agent + 回滚
+  await rpc(ws, "agent.start", { sessionId: sid, projectPath: CWD, sessionPath: sp });
+  await rpc(ws, "agent.navigateTree", {
+    sessionId: sid,
+    targetId: firstAssistant.id,
+    summarize: false,
+  });
+
+  // 6. 验证回滚后的消息
+  const msgs = await rpc(ws, "agent.getFullMessages", { sessionId: sid, sessionPath: sp });
+  console.log("Messages after rollback:", msgs.result?.messages?.length);
+
+  // 7. 检查 JSONL 中的 leaf_pointer
+  const jsonl = readFileSync(sp, "utf-8");
+  const leafPointers = jsonl
+    .trim()
+    .split("\n")
+    .filter((l) => l.includes('"type":"leaf_pointer"'));
+  console.log("leaf_pointer entries:", leafPointers.length);
+
+  ws.close();
+}
+
+main().catch(console.error);
+```
+
+**注意事项**：
+
+- `agent.send` 不阻塞等待完成，需要用 `waitForMessages` 轮询消息数变化
+- 回滚前先 `agent.stop` 确保 JSONL 写完，再读 entry IDs 定位目标，再 `agent.start` 后调 `navigateTree`
+- LLM 响应时间不确定，轮询 timeout 建议 60-90 秒
+- 脚本放在项目根目录运行（`node e2e-test.mjs`），因为需要 `ws` 依赖
+- 测试完清理临时目录：`rm -rf /tmp/e2e-test-*`
+
+**典型验证场景**：
+
+1. **回滚消息过滤**：发 A → 发 B → 回滚到 A → 验证只有 A 的消息
+2. **回滚后继续对话**：回滚后发新消息 → 验证 LLM 上下文正确
+3. **多次回滚**：A → B → 回滚到 A → C → 回滚到中间 → 验证消息树
+4. **JSONL 持久化**：回滚后检查 leaf_pointer 是否写入、entry 是否正确
+5. **重启恢复**：回滚 → 停止进程 → 重新 agent.start → 验证消息状态恢复
+
 ## Code Style
 
 - No `any` type, use `unknown` with narrowing

@@ -25,6 +25,7 @@ import { ContextMenu, type MenuItem } from "../explorer/ContextMenu";
 import { GitCommitInput } from "./GitCommitInput";
 import { GitBranchSelector } from "./GitBranchSelector";
 import { PinButton } from "../sidebar/PinButton";
+import { formatFilePath } from "../../lib/format-path";
 
 /* ── Helpers ────────────────────────────────────────────── */
 
@@ -145,7 +146,9 @@ const FileItem = memo(function FileItem({
       }}
     >
       {statusIcon(status)}
-      <span className="truncate flex-1">{path.split("/").pop()}</span>
+      <span className="truncate flex-1" title={path}>
+        {formatFilePath(path)}
+      </span>
       {showStats && (
         <span className="flex items-center gap-0.5 text-[10px] font-mono shrink-0">
           {(additions ?? 0) > 0 && <span className="text-status-success">+{additions}</span>}
@@ -245,7 +248,9 @@ const CommitFileItem = memo(function CommitFileItem({
       onClick={onClick}
     >
       {statusIcon(status)}
-      <span className="truncate flex-1">{path.split("/").pop()}</span>
+      <span className="truncate flex-1" title={path}>
+        {formatFilePath(path)}
+      </span>
       <span className={`px-1.5 rounded text-[10px] font-medium ${statusColor(status)}`}>
         {statusLabel(status)}
       </span>

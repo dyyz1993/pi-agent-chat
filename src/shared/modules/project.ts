@@ -148,6 +148,10 @@ export interface SessionMeta {
   updatedAt: number;
   status: "idle" | "running";
   pinned?: boolean;
+  tierConfig?: {
+    tierModels: Record<string, string>;
+    currentTier: string | null;
+  };
 }
 
 export interface DirectoryEntry {

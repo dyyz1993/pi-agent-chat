@@ -81,6 +81,12 @@ const METHOD_MAP: Record<string, string> = {
   "agent.abortBash": "abort_bash",
   "agent.stop": "stop",
   "agent.reload": "reload",
+  "agent.getAgents": "get_agents",
+  "agent.switchAgent": "switch_agent",
+  "agent.getCurrentAgent": "get_current_agent",
+  "agent.getAgentDetail": "get_agent_detail",
+  "agent.getAllTools": "get_all_tools",
+  "agent.getLatestAgentChange": "get_latest_agent_change",
 };
 
 /**
@@ -124,6 +130,8 @@ const PARAM_NAMES_MAP: Record<string, string[]> = {
   get_settings: ["scope"],
   register_remote_tool: ["toolDef"],
   unregister_remote_tool: ["toolName"],
+  switch_agent: ["agentName"],
+  get_agent_detail: ["agentName"],
 };
 
 import { createServer } from "http";
@@ -291,6 +299,26 @@ function callPi(rpcType: string, params: unknown[] = []): Promise<unknown> {
   });
 }
 
+/**
+ * Forward a raw command directly to pi CLI without method/param translation.
+ * Used by process-manager's send() for switchAgent, getCurrentAgent, etc.
+ */
+function callPiRaw(command: Record<string, unknown>): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const id = `req_${++requestId}`;
+    const msg = JSON.stringify({ ...command, id }) + "\n";
+    pendingRequests.set(id, { resolve, reject });
+    piProcess?.stdin?.write(msg);
+    setTimeout(() => {
+      const pending = pendingRequests.get(id);
+      if (pending) {
+        pending.reject(new Error(`RPC timeout: ${String(command.type ?? "unknown")}`));
+        pendingRequests.delete(id);
+      }
+    }, 60000);
+  });
+}
+
 // ─── HTTP service ───────────────────────────────────────
 
 const server = createServer(async (req, res) => {
@@ -313,15 +341,25 @@ const server = createServer(async (req, res) => {
   if (url.pathname === "/rpc" && req.method === "POST") {
     const chunks: Buffer[] = [];
     for await (const chunk of req) chunks.push(chunk as Buffer);
-    const body = JSON.parse(Buffer.concat(chunks).toString()) as {
-      method: string;
-      params?: unknown[];
-    };
-    const { method, params } = body;
+    const body = JSON.parse(Buffer.concat(chunks).toString()) as Record<string, unknown>;
 
     try {
-      const rpcType = METHOD_MAP[method] ?? method;
-      const result = await callPi(rpcType, params ?? []);
+      let result: unknown;
+
+      // Support two request formats:
+      // 1. Raw command: { type: "switch_agent", agentName: "build" } — from send()
+      // 2. Standard RPC: { method: "agent.getAgentDetail", params: ["build"] } — from call()
+      if (body.type) {
+        // Raw command — forward directly to pi CLI
+        result = await callPiRaw(body);
+      } else {
+        // Standard RPC — translate method + params first
+        const method = body.method as string;
+        const params = (body.params ?? []) as unknown[];
+        const rpcType = METHOD_MAP[method] ?? method;
+        result = await callPi(rpcType, params);
+      }
+
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: true, data: result }));
     } catch (err) {

@@ -1,6 +1,7 @@
 import {
   Pin,
   PanelRight,
+  PanelRightClose,
   GitBranch,
   FolderTree,
   Activity,
@@ -205,29 +206,42 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
       onClick={(e) => e.stopPropagation()}
     >
       <div className="flex items-center border-b border-border-primary shrink-0 bg-bg-secondary">
-        {overlay && (
+        <div className="flex items-center gap-0.5 shrink-0 pl-1">
+          {overlay ? (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                hideStatus();
+              }}
+              className="p-1.5 rounded-md hover:bg-surface-hover text-text-tertiary hover:text-text-primary transition-colors"
+              title={t("closePanel")}
+            >
+              <PanelRight className="w-3.5 h-3.5" />
+            </button>
+          ) : (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                hideStatus();
+              }}
+              className="p-1.5 rounded-md hover:bg-surface-hover text-text-tertiary hover:text-text-primary transition-colors max-sm:hidden"
+              title={t("closePanel")}
+            >
+              <PanelRightClose className="w-3.5 h-3.5" />
+            </button>
+          )}
           <button
             onClick={(e) => {
               e.stopPropagation();
-              hideStatus();
+              toggleStatus();
             }}
-            className="p-1.5 mr-1 rounded-md hover:bg-surface-hover text-text-tertiary hover:text-text-primary transition-colors shrink-0"
-            title={t("closePanel")}
+            className={`p-1.5 rounded-md transition-colors max-sm:hidden ${isPinned ? "text-semantic-accent bg-semantic-accent/10" : "text-text-tertiary hover:text-text-primary hover:bg-surface-hover"}`}
+            title={isPinned ? t("unpinPanel") : t("pinPanel")}
           >
-            <PanelRight className="w-3.5 h-3.5" />
+            <Pin className="w-3.5 h-3.5" fill={isPinned ? "currentColor" : "none"} />
           </button>
-        )}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            toggleStatus();
-          }}
-          className={`p-1.5 mr-1 rounded-md transition-colors shrink-0 max-sm:hidden ${isPinned ? "text-semantic-accent bg-semantic-accent/10" : "text-text-tertiary hover:text-text-primary hover:bg-surface-hover"}`}
-          title={isPinned ? t("unpinPanel") : t("pinPanel")}
-        >
-          <Pin className="w-3.5 h-3.5" fill={isPinned ? "currentColor" : "none"} />
-        </button>
-        <div className="flex items-center overflow-x-auto scrollbar-none">
+        </div>
+        <div className="flex items-center overflow-x-auto scrollbar-none flex-1">
           {PANEL_TABS.map((tab: { id: PanelTabId; label: string }) => (
             <button
               key={tab.id}

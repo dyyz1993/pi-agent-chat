@@ -24,6 +24,7 @@ import { useSessionStore } from "../../stores/use-session-store";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import { copyToClipboard } from "../../utils/clipboard";
 import { agentColorStyle } from "../../utils/agent-color";
+import { formatFilePath } from "../../lib/format-path";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -454,7 +455,7 @@ export function AgentPanel() {
                 className="text-[var(--color-text-primary)] font-mono text-[11px] truncate"
                 title={agent.filePath}
               >
-                {agent.filePath}
+                {formatFilePath(agent.filePath)}
               </span>
             ) : (
               <span className="text-[var(--color-text-primary)] opacity-50">{"\u2014"}</span>

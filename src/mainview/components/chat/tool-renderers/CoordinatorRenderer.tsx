@@ -1,10 +1,11 @@
-import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { memo, useEffect, useRef, useState, type ReactNode } from "react";
 import { ExternalLink } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { ContentBlock, SessionStatus } from "../../../types";
 import { useSessionStore } from "../../../stores/use-session-store";
 import { useSettingsStore } from "../../../stores/use-settings-store";
 import { ToolCardHeader, type ToolCardStatus } from "../primitives/ToolCardHeader";
+import { useJumpToSession } from "../primitives/useJumpToSession";
 import { CachedReactMarkdown } from "../CachedReactMarkdown";
 import { CopyButton } from "../CopyButton";
 
@@ -34,23 +35,6 @@ function parseArgs(args?: string): Record<string, unknown> {
 function extractDetails(detailData: unknown): CoordinatorDetails {
   if (!detailData || typeof detailData !== "object") return {};
   return detailData as CoordinatorDetails;
-}
-
-function useJumpToSession(sessionId: string | undefined): {
-  canJump: boolean;
-  handleJump: () => void;
-} {
-  const activeSessionId = useSessionStore((s) => s.activeSessionId);
-  const setActiveSession = useSessionStore((s) => s.setActiveSession);
-
-  const canJump = !!sessionId && sessionId !== activeSessionId;
-
-  const handleJump = useCallback(() => {
-    if (!sessionId) return;
-    setActiveSession(sessionId);
-  }, [sessionId, setActiveSession]);
-
-  return { canJump, handleJump };
 }
 
 function useTargetSessionStatus(sessionId: string | undefined): SessionStatus | undefined {
@@ -268,8 +252,16 @@ export const DelegateSendCard = memo(function DelegateSendCard({
   const args = parseArgs(block.args);
   const message = (args.message as string) ?? "";
   const delivered = details.delivered;
+  const targetSessionId =
+    details.targetSessionId ??
+    details.sessionId ??
+    (args.targetSessionId as string) ??
+    (args.sessionId as string) ??
+    undefined;
 
-  const displayTitle = message || t("coordinator.sendTask");
+  const { canJump, handleJump } = useJumpToSession(targetSessionId);
+
+  const displayTitle = message ?? t("coordinator.sendTask");
 
   let badgeText: string | undefined;
   let badgeColor = "text-text-tertiary";
@@ -281,23 +273,67 @@ export const DelegateSendCard = memo(function DelegateSendCard({
     badgeColor = delivered ? "text-status-success" : "text-status-error";
   }
 
+  const collapseToolCards = useSettingsStore((s) => s.collapseToolCards);
+  const [collapsed, setCollapsed] = useState(() => !isRunning && collapseToolCards);
+  const wasRunningRef = useRef(isRunning);
+
+  useEffect(() => {
+    if (wasRunningRef.current && !isRunning && collapseToolCards) {
+      setCollapsed(true);
+    }
+    wasRunningRef.current = isRunning;
+  }, [isRunning, collapseToolCards]);
+
   return (
     <div
       data-block-id={blockId}
-      className="border-x-0 border-t border-b overflow-hidden border-border-secondary/30 bg-surface-dim"
+      className={`border-x-0 border-t border-b overflow-hidden border-border-secondary/30 bg-surface-dim ${canJump ? "cursor-pointer" : ""}`}
+      onClick={canJump ? handleJump : undefined}
     >
       <ToolCardHeader
         toolName="session_delegate_send"
         status={toCardStatus(block)}
         description={displayTitle}
+        collapsed={collapsed}
+        onClick={() => setCollapsed((c) => !c)}
         startedAt={block.startedAt}
         endedAt={block.endedAt}
         badge={
-          badgeText ? (
-            <span className={`shrink-0 text-[10px] ${badgeColor}`}>{badgeText}</span>
-          ) : undefined
+          <>
+            {badgeText && <span className={`shrink-0 text-[10px] ${badgeColor}`}>{badgeText}</span>}
+            {canJump && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleJump();
+                }}
+                className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 transition-colors"
+              >
+                <ExternalLink className="w-3 h-3" />
+              </button>
+            )}
+          </>
         }
       />
+      {!collapsed && !isRunning && message && (
+        <div className="px-3 pb-2 border-t border-border-secondary/20">
+          <div className="text-[10px] text-text-tertiary mb-0.5 select-none">Message</div>
+          <span className="text-[11px] text-blue-600/70 dark:text-blue-400/70 italic block">
+            {message.slice(0, 500)}
+          </span>
+        </div>
+      )}
+      {!collapsed && !isRunning && block.output && (
+        <div className="px-3 pb-2 border-t border-border-secondary/20">
+          <div className="flex items-center justify-between mb-0.5">
+            <div className="text-[10px] text-text-tertiary select-none">Output</div>
+            <CopyButton text={block.output} size="xs" />
+          </div>
+          <div className="text-[11px] text-text-primary prose prose-sm max-w-none max-h-64 overflow-y-auto">
+            <CachedReactMarkdown>{block.output}</CachedReactMarkdown>
+          </div>
+        </div>
+      )}
     </div>
   );
 });
@@ -312,38 +348,80 @@ export const DelegateStatusCard = memo(function DelegateStatusCard({
   const { t } = useTranslation("chat");
   const isRunning = block.status === "running";
 
-  const task = block.details as { task?: { title?: string; status?: string } } | undefined;
+  const task = block.details as
+    | { task?: { title?: string; status?: string; sessionId?: string } }
+    | undefined;
   const taskTitle = task?.task?.title;
   const taskStatus = task?.task?.status;
+  const taskSessionId = task?.task?.sessionId;
 
   const displayTitle = taskTitle
     ? `${t("coordinator.statusCheck")}: ${taskTitle}`
     : t("coordinator.statusCheck");
 
   let badgeText: string | undefined;
+  let badgeColor = "text-text-tertiary";
   if (isRunning) {
     badgeText = t("coordinator.checking");
+    badgeColor = "text-status-info animate-pulse";
   } else if (taskStatus) {
     badgeText = taskStatus;
   }
 
+  const { canJump, handleJump } = useJumpToSession(taskSessionId);
+  const collapseToolCards = useSettingsStore((s) => s.collapseToolCards);
+  const [collapsed, setCollapsed] = useState(() => !isRunning && collapseToolCards);
+  const wasRunningRef = useRef(isRunning);
+
+  useEffect(() => {
+    if (wasRunningRef.current && !isRunning && collapseToolCards) {
+      setCollapsed(true);
+    }
+    wasRunningRef.current = isRunning;
+  }, [isRunning, collapseToolCards]);
+
   return (
     <div
       data-block-id={blockId}
-      className="border-x-0 border-t border-b overflow-hidden border-border-secondary/30 bg-surface-dim"
+      className={`border-x-0 border-t border-b overflow-hidden border-border-secondary/30 bg-surface-dim ${canJump ? "cursor-pointer" : ""}`}
+      onClick={canJump ? handleJump : undefined}
     >
       <ToolCardHeader
         toolName="session_delegate_status"
         status={toCardStatus(block)}
         description={displayTitle}
+        collapsed={collapsed}
+        onClick={() => setCollapsed((c) => !c)}
         startedAt={block.startedAt}
         endedAt={block.endedAt}
         badge={
-          badgeText ? (
-            <span className="shrink-0 text-[10px] text-text-tertiary">{badgeText}</span>
-          ) : undefined
+          <>
+            {badgeText && <span className={`shrink-0 text-[10px] ${badgeColor}`}>{badgeText}</span>}
+            {canJump && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleJump();
+                }}
+                className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 transition-colors"
+              >
+                <ExternalLink className="w-3 h-3" />
+              </button>
+            )}
+          </>
         }
       />
+      {!collapsed && !isRunning && block.output && (
+        <div className="px-3 pb-2 border-t border-border-secondary/20">
+          <div className="flex items-center justify-between mb-0.5">
+            <div className="text-[10px] text-text-tertiary select-none">Output</div>
+            <CopyButton text={block.output} size="xs" />
+          </div>
+          <div className="text-[11px] text-text-primary prose prose-sm max-w-none max-h-64 overflow-y-auto">
+            <CachedReactMarkdown>{block.output}</CachedReactMarkdown>
+          </div>
+        </div>
+      )}
     </div>
   );
 });
@@ -363,6 +441,8 @@ export const DelegateStopCard = memo(function DelegateStopCard({
   const targetId = (args.sessionId as string) ?? "";
   const ok = details.ok;
 
+  const { canJump, handleJump } = useJumpToSession(targetId || undefined);
+
   const displayTitle = targetId
     ? `${t("coordinator.stopTask")}: #${targetId.slice(0, 8)}`
     : t("coordinator.stopTask");
@@ -377,23 +457,59 @@ export const DelegateStopCard = memo(function DelegateStopCard({
     badgeColor = ok ? "text-status-warning" : "text-status-error";
   }
 
+  const collapseToolCards = useSettingsStore((s) => s.collapseToolCards);
+  const [collapsed, setCollapsed] = useState(() => !isRunning && collapseToolCards);
+  const wasRunningRef = useRef(isRunning);
+
+  useEffect(() => {
+    if (wasRunningRef.current && !isRunning && collapseToolCards) {
+      setCollapsed(true);
+    }
+    wasRunningRef.current = isRunning;
+  }, [isRunning, collapseToolCards]);
+
   return (
     <div
       data-block-id={blockId}
-      className="border-x-0 border-t border-b overflow-hidden border-border-secondary/30 bg-surface-dim"
+      className={`border-x-0 border-t border-b overflow-hidden border-border-secondary/30 bg-surface-dim ${canJump ? "cursor-pointer" : ""}`}
+      onClick={canJump ? handleJump : undefined}
     >
       <ToolCardHeader
         toolName="session_delegate_stop"
         status={toCardStatus(block)}
         description={displayTitle}
+        collapsed={collapsed}
+        onClick={() => setCollapsed((c) => !c)}
         startedAt={block.startedAt}
         endedAt={block.endedAt}
         badge={
-          badgeText ? (
-            <span className={`shrink-0 text-[10px] ${badgeColor}`}>{badgeText}</span>
-          ) : undefined
+          <>
+            {badgeText && <span className={`shrink-0 text-[10px] ${badgeColor}`}>{badgeText}</span>}
+            {canJump && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleJump();
+                }}
+                className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 transition-colors"
+              >
+                <ExternalLink className="w-3 h-3" />
+              </button>
+            )}
+          </>
         }
       />
+      {!collapsed && !isRunning && block.output && (
+        <div className="px-3 pb-2 border-t border-border-secondary/20">
+          <div className="flex items-center justify-between mb-0.5">
+            <div className="text-[10px] text-text-tertiary select-none">Output</div>
+            <CopyButton text={block.output} size="xs" />
+          </div>
+          <div className="text-[11px] text-text-primary prose prose-sm max-w-none max-h-64 overflow-y-auto">
+            <CachedReactMarkdown>{block.output}</CachedReactMarkdown>
+          </div>
+        </div>
+      )}
     </div>
   );
 });
@@ -413,6 +529,8 @@ export const DelegateRemoveCard = memo(function DelegateRemoveCard({
   const targetId = (args.sessionId as string) ?? "";
   const ok = details.ok;
 
+  const { canJump, handleJump } = useJumpToSession(targetId || undefined);
+
   const displayTitle = targetId
     ? `${t("coordinator.removeTask")}: #${targetId.slice(0, 8)}`
     : t("coordinator.removeTask");
@@ -427,23 +545,59 @@ export const DelegateRemoveCard = memo(function DelegateRemoveCard({
     badgeColor = ok ? "text-text-tertiary" : "text-status-error";
   }
 
+  const collapseToolCards = useSettingsStore((s) => s.collapseToolCards);
+  const [collapsed, setCollapsed] = useState(() => !isRunning && collapseToolCards);
+  const wasRunningRef = useRef(isRunning);
+
+  useEffect(() => {
+    if (wasRunningRef.current && !isRunning && collapseToolCards) {
+      setCollapsed(true);
+    }
+    wasRunningRef.current = isRunning;
+  }, [isRunning, collapseToolCards]);
+
   return (
     <div
       data-block-id={blockId}
-      className="border-x-0 border-t border-b overflow-hidden border-border-secondary/30 bg-surface-dim"
+      className={`border-x-0 border-t border-b overflow-hidden border-border-secondary/30 bg-surface-dim ${canJump ? "cursor-pointer" : ""}`}
+      onClick={canJump ? handleJump : undefined}
     >
       <ToolCardHeader
         toolName="session_delegate_remove"
         status={toCardStatus(block)}
         description={displayTitle}
+        collapsed={collapsed}
+        onClick={() => setCollapsed((c) => !c)}
         startedAt={block.startedAt}
         endedAt={block.endedAt}
         badge={
-          badgeText ? (
-            <span className={`shrink-0 text-[10px] ${badgeColor}`}>{badgeText}</span>
-          ) : undefined
+          <>
+            {badgeText && <span className={`shrink-0 text-[10px] ${badgeColor}`}>{badgeText}</span>}
+            {canJump && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleJump();
+                }}
+                className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/10 transition-colors"
+              >
+                <ExternalLink className="w-3 h-3" />
+              </button>
+            )}
+          </>
         }
       />
+      {!collapsed && !isRunning && block.output && (
+        <div className="px-3 pb-2 border-t border-border-secondary/20">
+          <div className="flex items-center justify-between mb-0.5">
+            <div className="text-[10px] text-text-tertiary select-none">Output</div>
+            <CopyButton text={block.output} size="xs" />
+          </div>
+          <div className="text-[11px] text-text-primary prose prose-sm max-w-none max-h-64 overflow-y-auto">
+            <CachedReactMarkdown>{block.output}</CachedReactMarkdown>
+          </div>
+        </div>
+      )}
     </div>
   );
 });
@@ -469,6 +623,17 @@ export const DelegateClearCard = memo(function DelegateClearCard({
     badgeText = `${removed} ${t("coordinator.cleared")}`;
   }
 
+  const collapseToolCards = useSettingsStore((s) => s.collapseToolCards);
+  const [collapsed, setCollapsed] = useState(() => !isRunning && collapseToolCards);
+  const wasRunningRef = useRef(isRunning);
+
+  useEffect(() => {
+    if (wasRunningRef.current && !isRunning && collapseToolCards) {
+      setCollapsed(true);
+    }
+    wasRunningRef.current = isRunning;
+  }, [isRunning, collapseToolCards]);
+
   return (
     <div
       data-block-id={blockId}
@@ -478,6 +643,8 @@ export const DelegateClearCard = memo(function DelegateClearCard({
         toolName="session_delegate_clear_stopped"
         status={toCardStatus(block)}
         description={displayTitle}
+        collapsed={collapsed}
+        onClick={() => setCollapsed((c) => !c)}
         startedAt={block.startedAt}
         endedAt={block.endedAt}
         badge={
@@ -486,6 +653,17 @@ export const DelegateClearCard = memo(function DelegateClearCard({
           ) : undefined
         }
       />
+      {!collapsed && !isRunning && block.output && (
+        <div className="px-3 pb-2 border-t border-border-secondary/20">
+          <div className="flex items-center justify-between mb-0.5">
+            <div className="text-[10px] text-text-tertiary select-none">Output</div>
+            <CopyButton text={block.output} size="xs" />
+          </div>
+          <div className="text-[11px] text-text-primary prose prose-sm max-w-none max-h-64 overflow-y-auto">
+            <CachedReactMarkdown>{block.output}</CachedReactMarkdown>
+          </div>
+        </div>
+      )}
     </div>
   );
 });

@@ -2,7 +2,7 @@ import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { HandlerOptions } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
 import type { SessionEntry } from "../modules/session";
-import { readFile, writeFile, mkdir, unlink } from "fs/promises";
+import { readFile, writeFile, appendFile, mkdir, unlink } from "fs/promises";
 import { existsSync, createReadStream } from "fs";
 import * as readline from "readline";
 import { join } from "path";
@@ -234,5 +234,64 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
     await writeFile(sessionPath, lines.join("\n") + "\n", "utf-8");
     return { ok: true };
+  });
+
+  r("session.saveTierConfig", async (params) => {
+    const { sessionPath, tierModels, currentTier, currentModel } = params;
+    if (!existsSync(sessionPath)) {
+      return { ok: false };
+    }
+
+    const entry = {
+      type: "session_tier_config",
+      id: randomUUID(),
+      timestamp: new Date().toISOString(),
+      tierModels,
+      currentTier,
+      currentModel,
+    };
+    await appendFile(sessionPath, JSON.stringify(entry) + "\n", "utf-8");
+    return { ok: true };
+  });
+
+  r("session.loadTierConfig", async (params) => {
+    const { sessionPath } = params;
+    if (!existsSync(sessionPath)) {
+      return { config: null };
+    }
+
+    const rl = readline.createInterface({
+      input: createReadStream(sessionPath, { encoding: "utf-8" }),
+      crlfDelay: Infinity,
+    });
+
+    const tierEntries: Array<{
+      tierModels: Record<string, string>;
+      currentTier: string | null;
+      currentModel: { provider: string; id: string } | null;
+    }> = [];
+
+    for await (const line of rl) {
+      if (!line.trim()) continue;
+      try {
+        const parsed = JSON.parse(line) as Record<string, unknown>;
+        if (parsed.type === "session_tier_config") {
+          tierEntries.push({
+            tierModels: parsed.tierModels as Record<string, string>,
+            currentTier: parsed.currentTier as string | null,
+            currentModel: parsed.currentModel as { provider: string; id: string } | null,
+          });
+        }
+      } catch (err) {
+        log.debug("loadTierConfig: skipping malformed entry:", { err: String(err) });
+      }
+    }
+    rl.close();
+
+    if (tierEntries.length === 0) {
+      return { config: null };
+    }
+
+    return { config: tierEntries[tierEntries.length - 1] };
   });
 }

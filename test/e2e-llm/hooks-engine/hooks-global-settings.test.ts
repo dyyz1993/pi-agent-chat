@@ -17,7 +17,9 @@ const PORT = HOOK_BASE_PORT + 20;
 const AUTH_TOKEN = "hooks-test-token-g2";
 const paths = getHookPaths("g2");
 
-describe("Group 2: Global Settings Hooks", () => {
+const shouldRun = process.env.PI_E2E_LLM === "1";
+
+describe.skipIf(shouldRun === false)("Group 2: Global Settings Hooks", () => {
   let ctx: HookTestContext;
   let globalHookScript: string;
 

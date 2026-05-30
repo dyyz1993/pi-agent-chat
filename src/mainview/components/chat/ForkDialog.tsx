@@ -32,8 +32,15 @@ export const ForkDialog = memo(function ForkDialog() {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const agents = useAgentStore((s) => s.agents);
-  const currentTier = useTierStore((s) => s.currentTier);
-  const tierModels = useTierStore((s) => s.tierModels);
+  const forkSessionId = useForkDialogStore((s) => s.config?.sessionId);
+  const currentTier = useTierStore((s) =>
+    forkSessionId ? (s.dataBySession[forkSessionId]?.currentTier ?? null) : null,
+  );
+  const forkTierModels = useTierStore((s) =>
+    forkSessionId ? s.dataBySession[forkSessionId]?.tierModels : undefined,
+  );
+  const globalDefaults = useTierStore((s) => s.globalDefaults);
+  const tierModels = forkTierModels ?? globalDefaults;
 
   const [selectedAgent, setSelectedAgent] = useState("build");
   const [selectedTier, setSelectedTier] = useState<TierKey>("pro");
@@ -42,7 +49,8 @@ export const ForkDialog = memo(function ForkDialog() {
     if (open && config) {
       const agent = useAgentStore.getState().getCurrentAgentForSession(config.sessionId);
       setSelectedAgent(agent);
-      const tier = useTierStore.getState().currentTier ?? "pro";
+      const tier =
+        (forkSessionId ? useTierStore.getState().getCurrentTier(forkSessionId) : null) ?? "pro";
       setSelectedTier(tier as TierKey);
     }
   }, [open, config]);

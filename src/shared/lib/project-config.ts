@@ -1,10 +1,18 @@
-import { readFile, writeFile, mkdir, readdir } from "fs/promises";
-import { existsSync } from "fs";
+import { readFile, writeFile, mkdir, readdir, copyFile } from "fs/promises";
+import { existsSync, statSync } from "fs";
 import { join, dirname, basename } from "path";
 import { homedir } from "os";
+import { createLogger } from "../lib/logger";
 import type { RecentProject, ConfiguredPath } from "../modules/project";
 
-const CONFIG_PATH = join(homedir(), ".pi-agent-chat", "config.json");
+const logger = createLogger("project-config");
+
+const CONFIG_DIR = join(homedir(), ".pi-agent-chat");
+const CONFIG_PATH = join(CONFIG_DIR, "config.json");
+const BACKUP_PATH = join(CONFIG_DIR, "config.json.bak");
+
+// Minimum file size (bytes) for a valid config — "{}" is 2 bytes, plus indentation
+const MIN_VALID_SIZE = 2;
 
 export interface PersistedTab {
   id: string;
@@ -37,47 +45,102 @@ interface ProjectConfig {
   modelFavorites: string[];
 }
 
-async function load(): Promise<ProjectConfig> {
+function emptyConfig(): ProjectConfig {
+  return {
+    recentProjects: [],
+    activeProject: null,
+    configuredPaths: [],
+    openTabs: [],
+    activeTabId: null,
+    pinnedSessionIds: [],
+    favoriteFolders: [],
+    disabledSkills: [],
+    modelFavorites: [],
+  };
+}
+
+function parseConfig(raw: string): ProjectConfig {
+  const parsed = JSON.parse(raw) as Partial<ProjectConfig>;
+  return {
+    recentProjects: parsed.recentProjects ?? [],
+    activeProject: parsed.activeProject ?? null,
+    configuredPaths: parsed.configuredPaths ?? [],
+    openTabs: parsed.openTabs ?? [],
+    activeTabId: parsed.activeTabId ?? null,
+    pinnedSessionIds: parsed.pinnedSessionIds ?? [],
+    favoriteFolders: parsed.favoriteFolders ?? [],
+    disabledSkills: parsed.disabledSkills ?? [],
+    modelFavorites: parsed.modelFavorites ?? [],
+  };
+}
+
+/**
+ * Check if a config looks like it has real user data (not just empty defaults).
+ * Used to detect potentially corrupted loads.
+ */
+function hasUserData(config: ProjectConfig): boolean {
+  return (
+    config.recentProjects.length > 0 ||
+    config.pinnedSessionIds.length > 0 ||
+    config.favoriteFolders.length > 0 ||
+    config.modelFavorites.length > 0 ||
+    config.disabledSkills.length > 0 ||
+    config.openTabs.length > 0 ||
+    config.configuredPaths.length > 0
+  );
+}
+
+async function tryReadFile(filePath: string): Promise<ProjectConfig | null> {
   try {
-    if (!existsSync(CONFIG_PATH)) {
-      return {
-        recentProjects: [],
-        activeProject: null,
-        configuredPaths: [],
-        openTabs: [],
-        activeTabId: null,
-        pinnedSessionIds: [],
-        favoriteFolders: [],
-        disabledSkills: [],
-        modelFavorites: [],
-      };
-    }
-    const raw = await readFile(CONFIG_PATH, "utf-8");
-    const parsed = JSON.parse(raw) as Partial<ProjectConfig>;
-    return {
-      recentProjects: parsed.recentProjects ?? [],
-      activeProject: parsed.activeProject ?? null,
-      configuredPaths: parsed.configuredPaths ?? [],
-      openTabs: parsed.openTabs ?? [],
-      activeTabId: parsed.activeTabId ?? null,
-      pinnedSessionIds: parsed.pinnedSessionIds ?? [],
-      favoriteFolders: parsed.favoriteFolders ?? [],
-      disabledSkills: parsed.disabledSkills ?? [],
-      modelFavorites: parsed.modelFavorites ?? [],
-    };
+    if (!existsSync(filePath)) return null;
+    // Quick sanity check: empty or tiny file is suspicious
+    const stat = statSync(filePath);
+    if (stat.size < MIN_VALID_SIZE) return null;
+    const raw = await readFile(filePath, "utf-8");
+    return parseConfig(raw);
   } catch {
-    return {
-      recentProjects: [],
-      activeProject: null,
-      configuredPaths: [],
-      openTabs: [],
-      activeTabId: null,
-      pinnedSessionIds: [],
-      favoriteFolders: [],
-      disabledSkills: [],
-      modelFavorites: [],
-    };
+    return null;
   }
+}
+
+/**
+ * Load config with backup-based protection:
+ * 1. Try reading the main config file
+ * 2. If it fails OR the result is empty, try the backup
+ * 3. Only return empty defaults if both are unavailable
+ *
+ * IMPORTANT: When loading from backup, we do NOT write back to main —
+ * that's the caller's responsibility (via loadAndSave).
+ */
+async function load(): Promise<ProjectConfig> {
+  // Step 1: Try main config
+  const mainConfig = await tryReadFile(CONFIG_PATH);
+  if (mainConfig && hasUserData(mainConfig)) {
+    return mainConfig;
+  }
+
+  // Step 2: Main is empty or corrupted — try backup
+  const backupConfig = await tryReadFile(BACKUP_PATH);
+  if (backupConfig && hasUserData(backupConfig)) {
+    logger.warn("Main config empty/corrupted, restored from backup");
+    // Restore: copy backup to main so subsequent reads work
+    try {
+      await copyFile(BACKUP_PATH, CONFIG_PATH);
+      logger.info("Backup restored to main config");
+    } catch (err) {
+      logger.error("Failed to restore backup to main:", { error: String(err) });
+    }
+    return backupConfig;
+  }
+
+  // Step 3: Both available but main was empty — that's a legitimate new state
+  if (mainConfig) {
+    return mainConfig;
+  }
+
+  // Step 4: Neither file exists — first run or both truly gone
+  logger.info("No config or backup found, starting fresh");
+  return emptyConfig();
 }
 
 // Serial queue for load→modify→save operations to prevent concurrent write races
@@ -101,12 +164,35 @@ async function loadAndSave<T>(patcher: (config: ProjectConfig) => T): Promise<T>
 
   // 4. Do the actual work
   try {
-    const config = await load();
+    let config: ProjectConfig;
+
+    try {
+      config = await load();
+    } catch (err) {
+      logger.error("Failed to load config, aborting write to prevent data loss:", {
+        error: String(err),
+      });
+      throw err;
+    }
+
     const result = patcher(config);
+
+    // Write protection: backup current file BEFORE overwriting
     const dir = dirname(CONFIG_PATH);
     if (!existsSync(dir)) {
       await mkdir(dir, { recursive: true });
     }
+
+    // Backup existing file before write (only if it has content)
+    if (existsSync(CONFIG_PATH)) {
+      try {
+        await copyFile(CONFIG_PATH, BACKUP_PATH);
+      } catch (err) {
+        // Backup failure is non-fatal but log it
+        logger.warn("Failed to create backup before write:", { error: String(err) });
+      }
+    }
+
     await writeFile(CONFIG_PATH, JSON.stringify(config, null, 2), "utf-8");
     return result;
   } finally {

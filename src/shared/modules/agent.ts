@@ -37,6 +37,10 @@ export interface AgentMethods {
     params: { sessionId: string };
     result: { status: "idle" | "streaming" | "stopped"; pid?: number };
   };
+  "agent.batchGetSessionsStatus": {
+    params: { sessionIds: string[] };
+    result: Array<{ sessionId: string; status: "idle" | "streaming" | "stopped" }>;
+  };
   "agent.respondUI": {
     params: { sessionId: string; requestId: string; response: Record<string, unknown> };
     result: { ok: boolean };

@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useSessionStore } from "../../stores/use-session-store";
+import { formatFilePath } from "../../lib/format-path";
 import { useGitStore } from "../../stores/use-git-store";
 import { useTierStore, TIER_KEYS } from "../../stores/use-tier-store";
 import type { TierKey } from "../../stores/use-tier-store";
@@ -71,10 +72,16 @@ export function SidebarBottomControls() {
   const thinkingRef = useRef<HTMLDivElement>(null);
   const [switching, setSwitching] = useState(false);
 
-  const currentTier = useTierStore((s) => s.currentTier);
+  const currentTier = useTierStore((s) =>
+    activeSessionId ? (s.dataBySession[activeSessionId]?.currentTier ?? null) : null,
+  );
   const switchToTier = useTierStore((s) => s.switchToTier);
   const fetchTierConfig = useTierStore((s) => s.fetchTierConfig);
-  const tierModels = useTierStore((s) => s.tierModels);
+  const sessionTierModels = useTierStore((s) =>
+    activeSessionId ? s.dataBySession[activeSessionId]?.tierModels : undefined,
+  );
+  const globalDefaults = useTierStore((s) => s.globalDefaults);
+  const tierModels = sessionTierModels ?? globalDefaults;
   const [switchingTier, setSwitchingTier] = useState(false);
   const [tierConfigOpen, setTierConfigOpen] = useState(false);
   const [tierConfigModels, setTierConfigModels] = useState<Record<string, string>>({});
@@ -239,10 +246,14 @@ export function SidebarBottomControls() {
         sessionId: activeSessionId,
         models: tierConfigModels,
       });
+      useTierStore.getState().setSessionTierModels(activeSessionId, tierConfigModels);
       setTierConfigOpen(false);
       await fetchTierConfig(activeSessionId);
       // If the currently active tier exists, re-apply it to switch to the new model
-      const { currentTier: activeTier, tierModels: updatedModels } = useTierStore.getState();
+      const { dataBySession, globalDefaults } = useTierStore.getState();
+      const sessionData = dataBySession[activeSessionId ?? ""];
+      const activeTier = sessionData?.currentTier ?? null;
+      const updatedModels = sessionData?.tierModels ?? globalDefaults;
       if (activeTier && updatedModels[activeTier]) {
         await switchToTier(activeTier, activeSessionId);
       }
@@ -267,7 +278,7 @@ export function SidebarBottomControls() {
           modelId,
         });
         setCurrentModel(provider, modelId);
-        useTierStore.getState().syncTierFromModel(provider, modelId);
+        useTierStore.getState().syncTierFromModel(activeSessionId ?? "", provider, modelId);
       } catch (err) {
         console.warn("[SidebarControls] setModel failed:", err);
       }
@@ -402,12 +413,20 @@ export function SidebarBottomControls() {
                         </div>
                       )}
                       {agent.filePath && (
-                        <CopyButton
-                          text={agent.filePath}
-                          size="xs"
-                          className="text-[9px] text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary mt-0.5 w-fit"
-                          title={agent.filePath}
-                        />
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <span
+                            className="text-[9px] text-text-tertiary truncate"
+                            title={agent.filePath}
+                          >
+                            {formatFilePath(agent.filePath)}
+                          </span>
+                          <CopyButton
+                            text={agent.filePath}
+                            size="xs"
+                            className="text-[9px] text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary"
+                            title={agent.filePath}
+                          />
+                        </div>
                       )}
                     </div>
                     {agent.tier && (

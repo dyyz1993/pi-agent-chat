@@ -168,6 +168,9 @@ interface SessionState {
   cleanupActiveSession: (sessionId: string) => void;
   fetchAllSessionStatuses: () => Promise<void>;
   fetchProjectSessionStatuses: (projectPath: string) => Promise<void>;
+  refreshSessionsInBackground: (projectPath: string) => void;
+  fetchSessionsStatusBatch: (sessionIds: string[]) => Promise<void>;
+  fetchAllProjectsSessionsStatus: () => Promise<void>;
 }
 
 const _fetchInitPromiseMap = new Map<string, Promise<void>>();
@@ -271,8 +274,9 @@ export const useSessionStore = create<SessionState>()(
         if (prevProjectId && prevProjectId !== id && prevSessionId) {
           clearStatusWatchdog(prevSessionId);
           cleanupSession(get(), prevSessionId);
-          cleanupSessionData(prevSessionId);
+          cleanupSessionLight(prevSessionId);
           set((s) => clearSubscriptionState(s, prevSessionId));
+          useGitStore.getState().clearDiff();
         }
 
         const version = get()._projectVersion + 1;
@@ -295,36 +299,64 @@ export const useSessionStore = create<SessionState>()(
         });
 
         if (!skipAutoSession) {
-          get()
-            .loadSessionsForProject(tab.path)
-            .then(async (sessions) => {
-              if (version !== get()._projectVersion) return;
+          const cached = get().sessionsByProject[tab.path];
 
-              if (sessions.length > 0) {
-                const lastSid = get().lastActiveSessionByProject[tab.path];
-                const targetSession =
-                  lastSid && sessions.some((s) => s.sessionId === lastSid)
-                    ? lastSid
-                    : sessions[0].sessionId;
-                set((s) => ({
-                  activeSessionId: targetSession,
-                  projectStartFailed: { ...s.projectStartFailed, [id]: false },
-                  projectStartError: { ...s.projectStartError, [id]: "" },
-                  lastActiveSessionByProject: {
-                    ...s.lastActiveSessionByProject,
-                    [tab.path]: targetSession,
-                  },
-                }));
-                get().setActiveSession(targetSession, true);
-                await get().fetchAllSessionStatuses();
-              } else {
-                set((s) => ({
-                  projectStartFailed: { ...s.projectStartFailed, [id]: false },
-                  projectStartError: { ...s.projectStartError, [id]: "" },
-                }));
-                await get().createNewSession();
-              }
-            });
+          if (cached && cached.length > 0) {
+            // 有缓存：立即选中会话，后台刷新列表
+            const lastSid = get().lastActiveSessionByProject[tab.path];
+            const targetSession =
+              lastSid && cached.some((s) => s.sessionId === lastSid)
+                ? lastSid
+                : cached[0].sessionId;
+            set((s) => ({
+              activeSessionId: targetSession,
+              projectStartFailed: { ...s.projectStartFailed, [id]: false },
+              projectStartError: { ...s.projectStartError, [id]: "" },
+              lastActiveSessionByProject: {
+                ...s.lastActiveSessionByProject,
+                [tab.path]: targetSession,
+              },
+            }));
+            get().setActiveSession(targetSession, true);
+
+            // 后台轻量刷新会话列表（不阻塞 UI）
+            get().refreshSessionsInBackground(tab.path);
+
+            // 后台拉取当前项目其他会话状态
+            get().fetchProjectSessionStatuses(tab.path);
+          } else {
+            // 无缓存：走完整加载
+            get()
+              .loadSessionsForProject(tab.path)
+              .then(async (sessions) => {
+                if (version !== get()._projectVersion) return;
+
+                if (sessions.length > 0) {
+                  const lastSid = get().lastActiveSessionByProject[tab.path];
+                  const targetSession =
+                    lastSid && sessions.some((s) => s.sessionId === lastSid)
+                      ? lastSid
+                      : sessions[0].sessionId;
+                  set((s) => ({
+                    activeSessionId: targetSession,
+                    projectStartFailed: { ...s.projectStartFailed, [id]: false },
+                    projectStartError: { ...s.projectStartError, [id]: "" },
+                    lastActiveSessionByProject: {
+                      ...s.lastActiveSessionByProject,
+                      [tab.path]: targetSession,
+                    },
+                  }));
+                  get().setActiveSession(targetSession, true);
+                  await get().fetchAllSessionStatuses();
+                } else {
+                  set((s) => ({
+                    projectStartFailed: { ...s.projectStartFailed, [id]: false },
+                    projectStartError: { ...s.projectStartError, [id]: "" },
+                  }));
+                  await get().createNewSession();
+                }
+              });
+          }
         }
       },
 
@@ -410,6 +442,7 @@ export const useSessionStore = create<SessionState>()(
           clearStatusWatchdog(prevId);
           useChatStore.getState().saveInputDraft(prevId);
           cleanupSessionLight(prevId);
+          useGitStore.getState().clearDiff();
           perfLog.info("[switch] step-1 light cleanup old session (keep-alive)", {
             prevId,
             ms: Math.round(performance.now() - t0),
@@ -539,25 +572,29 @@ export const useSessionStore = create<SessionState>()(
                           })
                       : Promise.resolve();
 
-                  perfLog.info("[switch] step-6 loadSessionMessages begin", { sessionId: id });
+                  perfLog.info("[switch] step-6 loadSessionMessages (after replay) begin", {
+                    sessionId: id,
+                  });
                   const tLoad = performance.now();
-                  const loadMessagesPromise = useChatStore
-                    .getState()
-                    .loadSessionMessages(id, { sessionPath: session.sessionPath })
-                    .then(() => {
-                      perfLog.info("[switch] step-6 loadSessionMessages done", {
-                        sessionId: id,
-                        count: useChatStore.getState().messagesBySession[id]?.length,
-                        ms: Math.round(performance.now() - tLoad),
-                      });
-                    })
-                    .catch((e) => {
-                      log.error("loadSessionMessages FAILED", {
-                        error: e instanceof Error ? e.message : String(e),
-                      });
-                    });
+                  const loadMessagesPromise = replayPromise.then(() =>
+                    useChatStore
+                      .getState()
+                      .loadSessionMessages(id, { force: true, sessionPath: session.sessionPath })
+                      .then(() => {
+                        perfLog.info("[switch] step-6 loadSessionMessages done", {
+                          sessionId: id,
+                          count: useChatStore.getState().messagesBySession[id]?.length,
+                          ms: Math.round(performance.now() - tLoad),
+                        });
+                      })
+                      .catch((e) => {
+                        log.error("loadSessionMessages FAILED", {
+                          error: e instanceof Error ? e.message : String(e),
+                        });
+                      }),
+                  );
 
-                  Promise.all([replayPromise, loadMessagesPromise]).then(() => {
+                  loadMessagesPromise.then(() => {
                     perfLog.info("[switch] === SESSION SWITCH COMPLETE ===", {
                       sessionId: id,
                       totalMs: Math.round(performance.now() - tSwitchStart),
@@ -1019,7 +1056,14 @@ export const useSessionStore = create<SessionState>()(
                 } else if (result.isCompacting) {
                   get().updateSessionStatus(sessionId, "compacting");
                 } else {
-                  get().updateSessionStatus(sessionId, "idle");
+                  const currentStatus = get().sessionStatusMap[sessionId];
+                  if (
+                    currentStatus !== "streaming" &&
+                    currentStatus !== "compacting" &&
+                    currentStatus !== "retrying"
+                  ) {
+                    get().updateSessionStatus(sessionId, "idle");
+                  }
                 }
 
                 if (result.model) {
@@ -1555,6 +1599,126 @@ export const useSessionStore = create<SessionState>()(
         });
       },
 
+      /**
+       * 后台轻量刷新会话列表：调 scanSessions，与缓存做 diff，只更新变化部分。
+       * 不阻塞 UI，失败静默忽略。
+       */
+      refreshSessionsInBackground: (projectPath) => {
+        apiClient
+          .call("project.scanSessions", { projectPath })
+          .then((result) => {
+            let sessions = result.sessions as SessionMeta[];
+
+            const seen = new Set<string>();
+            const seenPaths = new Set<string>();
+            sessions = sessions.filter((s) => {
+              if (seen.has(s.sessionId)) return false;
+              if (seenPaths.has(s.sessionPath)) return false;
+              seen.add(s.sessionId);
+              seenPaths.add(s.sessionPath);
+              return true;
+            });
+
+            const cached = get().sessionsByProject[projectPath] ?? [];
+            const cachedIds = new Set(cached.map((s) => s.sessionId));
+            const freshIds = new Set(sessions.map((s) => s.sessionId));
+
+            const added = sessions.filter((s) => !cachedIds.has(s.sessionId));
+            const removedIds = new Set(
+              cached
+                .filter((s) => !freshIds.has(s.sessionId) && !s.delegateParentSessionId)
+                .map((s) => s.sessionId),
+            );
+
+            if (added.length > 0 || removedIds.size > 0) {
+              const updatedMap = new Map(cached.map((s) => [s.sessionId, s]));
+              for (const fresh of sessions) {
+                const existing = updatedMap.get(fresh.sessionId);
+                if (existing) {
+                  updatedMap.set(fresh.sessionId, {
+                    ...existing,
+                    messageCount: fresh.messageCount,
+                    firstMessage: fresh.firstMessage,
+                    updatedAt: fresh.updatedAt,
+                  });
+                }
+              }
+
+              const merged = cached.filter((s) => !removedIds.has(s.sessionId)).concat(added);
+
+              set((s) => ({
+                sessionsByProject: { ...s.sessionsByProject, [projectPath]: merged },
+              }));
+
+              log.info("refreshSessionsInBackground: updated", {
+                projectPath,
+                added: added.length,
+                removed: removedIds.size,
+              });
+            }
+          })
+          .catch(() => {
+            // 后台刷新失败不影响用户
+          });
+      },
+
+      /**
+       * 批量拉取多个 session 的运行状态（轻量）。
+       * 优先尝试 batchGetSessionsStatus RPC，fallback 到逐个 agent.getState。
+       */
+      fetchSessionsStatusBatch: async (sessionIds) => {
+        if (sessionIds.length === 0) return;
+
+        const { activeSessionId } = get();
+        const targetIds = sessionIds.filter((id) => id !== activeSessionId);
+        if (targetIds.length === 0) return;
+
+        try {
+          const results: Array<{ sessionId: string; status: SessionStatus }> = [];
+
+          const raw = await apiClient.call("agent.batchGetSessionsStatus", {
+            sessionIds: targetIds,
+          });
+          for (const r of raw) {
+            results.push({ sessionId: r.sessionId, status: r.status as SessionStatus });
+          }
+
+          const updates: Record<string, SessionStatus> = {};
+          for (const r of results) {
+            updates[r.sessionId] = r.status;
+          }
+
+          set((s) => ({
+            sessionStatusMap: { ...s.sessionStatusMap, ...updates },
+          }));
+
+          log.info("fetchSessionsStatusBatch: updated", {
+            count: results.length,
+          });
+        } catch {
+          // 失败不影响用户
+        }
+      },
+
+      /**
+       * 拉取所有项目的所有会话状态（后台异步）
+       */
+      fetchAllProjectsSessionsStatus: async () => {
+        const { sessionsByProject, activeSessionId } = get();
+        const allIds: string[] = [];
+
+        for (const sessions of Object.values(sessionsByProject)) {
+          for (const s of sessions) {
+            if (s.sessionId !== activeSessionId) {
+              allIds.push(s.sessionId);
+            }
+          }
+        }
+
+        if (allIds.length === 0) return;
+        await get().fetchSessionsStatusBatch(allIds);
+      },
+
       restoreFromPersisted: async () => {
         const { activeProjectId, activeSessionId, projectTabs } = get();
         if (!activeProjectId || !activeSessionId || projectTabs.length === 0) {
@@ -1582,8 +1746,13 @@ export const useSessionStore = create<SessionState>()(
           set({ activeSessionId: null });
           get().setActiveSession(targetId);
 
-          // 恢复成功后，拉取所有 session 的状态
-          await get().fetchAllSessionStatuses();
+          // 恢复成功后，拉取活跃项目的 session 状态（不阻塞）
+          get().fetchAllSessionStatuses();
+
+          // 后台拉取所有项目所有 session 的运行状态
+          setTimeout(() => {
+            get().fetchAllProjectsSessionsStatus();
+          }, 500);
 
           return true;
         } catch {

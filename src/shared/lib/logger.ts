@@ -29,7 +29,9 @@ export type LogModule =
   | "sandbox-local"
   | "sandbox-box"
   | "sandbox-cf"
-  | "change-review";
+  | "change-review"
+  | "sandbox-channel"
+  | "project-config";
 type LogLevel = "debug" | "info" | "warn" | "error";
 
 interface LogEntry {

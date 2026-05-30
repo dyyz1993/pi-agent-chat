@@ -22,10 +22,20 @@ log.info("AUTH_TOKEN:", { value: process.env.AUTH_TOKEN });
 log.info("PORT:", { value: process.env.PORT });
 log.info("LOG_DIR:", { value: process.env.LOG_DIR });
 log.info("PI_CLI_PATH:", { value: process.env.PI_CLI_PATH });
+log.info("TOKEN_USERS:", { value: process.env.TOKEN_USERS });
 log.info("==============================");
 
+// 解析用户 token 列表（如 tk-alpha=user-alpha,tk-beta=user-beta）
+const tokenUsersRaw = process.env.TOKEN_USERS ?? "";
+const validTokens = new Set(
+  tokenUsersRaw
+    .split(",")
+    .map((pair) => pair.split("=")[0])
+    .filter(Boolean),
+);
+
 const httpServer = createServer();
-const wss = createWsHandler(httpServer, { config });
+const wss = createWsHandler(httpServer, { config, validTokens });
 
 const distPath = resolve(process.cwd(), "dist");
 const STATIC_MIME: Record<string, string> = {

@@ -7,6 +7,8 @@ import {
   FileEdit,
   ChevronRight,
   ChevronDown,
+  Rows3,
+  Columns2,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useRollbackStore } from "../../stores/use-rollback-store";
@@ -18,6 +20,7 @@ import { useFocusTrap } from "../../hooks/use-focus-trap";
 import { apiClient } from "../../lib/api-client";
 import { createLogger } from "../../../shared/lib/logger";
 import { InlineDiffViewer } from "./tool-renderers/InlineDiffViewer";
+import { formatFilePath } from "../../lib/format-path";
 
 const log = createLogger("chat");
 
@@ -71,6 +74,7 @@ const FileItem = memo(function FileItem({
   const { t } = useTranslation("chat");
   const config = FILE_STATUS_CONFIG[status];
   const Icon = config.icon;
+  const [splitView, setSplitView] = useState(false);
 
   return (
     <div className="border-b border-border-secondary/50 dark:border-surface-code/50">
@@ -92,7 +96,7 @@ const FileItem = memo(function FileItem({
                 className="text-[11px] font-mono text-semantic-accent truncate"
                 title={filePath}
               >
-                {filePath}
+                {formatFilePath(filePath)}
               </span>
             </div>
             <div className="flex items-center gap-2 mt-0.5">
@@ -118,8 +122,11 @@ const FileItem = memo(function FileItem({
           {details != null && (oldContent != null || newContent != null) ? (
             <div className="rounded-md bg-surface-dim dark:bg-surface-dim/60 border border-border-secondary overflow-hidden">
               <div className="px-3 py-1.5 bg-surface-hover/50 border-b border-border-secondary flex items-center gap-2">
-                <span className="text-[10px] text-text-tertiary font-mono truncate">
-                  {filePath}
+                <span
+                  className="text-[10px] text-text-tertiary font-mono truncate"
+                  title={filePath}
+                >
+                  {formatFilePath(filePath)}
                 </span>
                 {(addedLines !== undefined || removedLines !== undefined) && (
                   <span className="shrink-0 flex items-center gap-1 text-[10px] font-mono">
@@ -131,18 +138,52 @@ const FileItem = memo(function FileItem({
                     )}
                   </span>
                 )}
+                <div className="shrink-0 flex items-center gap-0.5 ml-1">
+                  <button
+                    type="button"
+                    onClick={() => setSplitView(false)}
+                    className={`p-1 rounded transition-colors ${
+                      !splitView
+                        ? "bg-text-tertiary dark:bg-text-secondary text-white"
+                        : "text-text-tertiary hover:text-text-primary dark:hover:text-text-primary"
+                    }`}
+                    title={t("diffLineByLine", { defaultValue: "Line by line" })}
+                    aria-label={t("diffLineByLine", { defaultValue: "Line by line" })}
+                  >
+                    <Rows3 className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSplitView(true)}
+                    className={`p-1 rounded transition-colors ${
+                      splitView
+                        ? "bg-text-tertiary dark:bg-text-secondary text-white"
+                        : "text-text-tertiary hover:text-text-primary dark:hover:text-text-primary"
+                    }`}
+                    title={t("diffSideBySide", { defaultValue: "Side by side" })}
+                    aria-label={t("diffSideBySide", { defaultValue: "Side by side" })}
+                  >
+                    <Columns2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
               <InlineDiffViewer
-                oldValue={oldContent ?? ""}
-                newValue={newContent ?? ""}
+                // Swap old/new for rollback preview: show what WILL CHANGE
+                // (current → post-rollback), so removed=red, added=green.
+                oldValue={newContent ?? ""}
+                newValue={oldContent ?? ""}
                 maxHeight="256px"
+                splitView={splitView}
               />
             </div>
           ) : details != null ? (
             <div className="rounded-md bg-surface-dim dark:bg-surface-dim/60 border border-border-secondary overflow-hidden">
               <div className="px-3 py-1.5 bg-surface-hover/50 border-b border-border-secondary flex items-center gap-2">
-                <span className="text-[10px] text-text-tertiary font-mono truncate">
-                  {filePath}
+                <span
+                  className="text-[10px] text-text-tertiary font-mono truncate"
+                  title={filePath}
+                >
+                  {formatFilePath(filePath)}
                 </span>
                 {(addedLines !== undefined || removedLines !== undefined) && (
                   <span className="shrink-0 flex items-center gap-1 text-[10px] font-mono">
@@ -313,92 +354,91 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
 
   return (
     <div
-      ref={containerRef}
-      data-testid="rollback-overlay"
-      className="fixed inset-0 z-50 flex flex-col bg-bg-elevated/98 dark:bg-surface-code/98 backdrop-blur-sm overflow-hidden"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+      onClick={closeRollback}
     >
       <div
-        className="flex items-center gap-2 px-4 py-2 bg-surface-dim/90 dark:bg-surface-code/90 border-b border-border-secondary flex-shrink-0"
-        style={{
-          paddingTop: "calc(0.5rem + env(safe-area-inset-top, 0px))",
-        }}
+        ref={containerRef}
+        data-testid="rollback-overlay"
+        className="relative w-full max-w-xl mx-4 bg-bg-elevated dark:bg-surface-code rounded-xl shadow-2xl border border-border-secondary flex flex-col overflow-hidden"
+        style={{ maxHeight: "min(80vh, 560px)" }}
+        onClick={(e) => e.stopPropagation()}
       >
-        <AlertTriangle className="w-4 h-4 text-status-warning shrink-0" />
-        <span className="text-sm font-medium text-text-primary truncate flex-1 min-w-0">
-          {isWithFiles ? t("rollbackOverlay.titleWithFiles") : t("rollbackOverlay.title")}
-        </span>
-        {hasFiles && (
-          <span className="text-xs text-text-tertiary">
-            {t("rollbackOverlay.fileCount", {
-              count: preview?.summary?.totalFiles ?? files.length,
-            })}
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-border-secondary flex-shrink-0">
+          <AlertTriangle className="w-4 h-4 text-status-warning shrink-0" />
+          <span className="text-sm font-medium text-text-primary truncate flex-1 min-w-0">
+            {isWithFiles ? t("rollbackOverlay.titleWithFiles") : t("rollbackOverlay.title")}
           </span>
-        )}
-        <button
-          type="button"
-          onClick={closeRollback}
-          className="p-2 rounded text-text-tertiary hover:text-text-primary dark:hover:text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-hover transition-colors"
-          title={t("rollbackOverlay.cancel")}
-        >
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-
-      <div
-        className="flex-1 overflow-y-auto overscroll-contain"
-        style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
-      >
-        <div className="max-w-2xl w-full mx-auto px-4 sm:px-6 py-6">
-          <p className="text-sm text-text-secondary dark:text-text-tertiary mb-4">
-            {isWithFiles
-              ? t("rollbackOverlay.withFilesModeDesc")
-              : t("rollbackOverlay.messageModeDesc")}
-          </p>
-
-          {isWithFiles && hasFiles && (
-            <div className="mb-6">
-              {files.map((file) => (
-                <FileItem
-                  key={`${file.status}-${file.path}`}
-                  filePath={file.path}
-                  status={file.status}
-                  details={file.details}
-                  oldContent={file.oldContent}
-                  newContent={file.newContent}
-                  addedLines={file.addedLines}
-                  removedLines={file.removedLines}
-                  expanded={expandedFiles.has(`${file.status}-${file.path}`)}
-                  onToggle={() => toggleFile(`${file.status}-${file.path}`)}
-                />
-              ))}
-            </div>
+          {hasFiles && (
+            <span className="text-xs text-text-tertiary">
+              {t("rollbackOverlay.fileCount", {
+                count: preview?.summary?.totalFiles ?? files.length,
+              })}
+            </span>
           )}
+          <button
+            type="button"
+            onClick={closeRollback}
+            className="p-1.5 rounded text-text-tertiary hover:text-text-primary dark:hover:text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-hover transition-colors"
+            title={t("rollbackOverlay.cancel")}
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
 
-          {isWithFiles && !hasFiles && (
-            <p className="text-xs text-text-tertiary mb-6">{t("rollbackOverlay.noFiles")}</p>
-          )}
+        <div className="flex-1 overflow-y-auto overscroll-contain min-h-0">
+          <div className="px-4 py-4">
+            <p className="text-sm text-text-secondary dark:text-text-tertiary mb-4">
+              {isWithFiles
+                ? t("rollbackOverlay.withFilesModeDesc")
+                : t("rollbackOverlay.messageModeDesc")}
+            </p>
 
-          <div className="flex items-center justify-end gap-3 pt-2 flex-wrap">
-            <button
-              type="button"
-              onClick={closeRollback}
-              disabled={loading}
-              className="px-4 py-2 text-sm rounded-lg border border-border-secondary text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {t("rollbackOverlay.cancel")}
-            </button>
-            <button
-              type="button"
-              onClick={confirmRollback}
-              disabled={loading}
-              className="px-4 py-2 text-sm rounded-lg bg-status-error hover:bg-status-error/80 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {loading && (
-                <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              )}
-              {t("rollbackOverlay.confirm")}
-            </button>
+            {isWithFiles && hasFiles && (
+              <div className="mb-4 border border-border-secondary rounded-lg overflow-hidden">
+                {files.map((file) => (
+                  <FileItem
+                    key={`${file.status}-${file.path}`}
+                    filePath={file.path}
+                    status={file.status}
+                    details={file.details}
+                    oldContent={file.oldContent}
+                    newContent={file.newContent}
+                    addedLines={file.addedLines}
+                    removedLines={file.removedLines}
+                    expanded={expandedFiles.has(`${file.status}-${file.path}`)}
+                    onToggle={() => toggleFile(`${file.status}-${file.path}`)}
+                  />
+                ))}
+              </div>
+            )}
+
+            {isWithFiles && !hasFiles && (
+              <p className="text-xs text-text-tertiary mb-4">{t("rollbackOverlay.noFiles")}</p>
+            )}
           </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 px-4 py-3 border-t border-border-secondary flex-shrink-0">
+          <button
+            type="button"
+            onClick={closeRollback}
+            disabled={loading}
+            className="px-4 py-1.5 text-sm rounded-lg border border-border-secondary text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {t("rollbackOverlay.cancel")}
+          </button>
+          <button
+            type="button"
+            onClick={confirmRollback}
+            disabled={loading}
+            className="px-4 py-1.5 text-sm rounded-lg bg-status-error hover:bg-status-error/80 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {loading && (
+              <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            )}
+            {t("rollbackOverlay.confirm")}
+          </button>
         </div>
       </div>
     </div>

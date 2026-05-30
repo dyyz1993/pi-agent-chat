@@ -258,7 +258,10 @@ describe("useChangeReviewStore", () => {
     it("should not clear when user cancels confirm", async () => {
       (globalThis.window.confirm as ReturnType<typeof vi.fn>).mockReturnValueOnce(false);
 
-      const files = [makeChange({ path: "src/a.ts" }), makeChange({ path: "src/b.ts" })];
+      const files = [
+        makeChange({ path: "src/a.ts", status: "approved" }),
+        makeChange({ path: "src/b.ts", status: "rejected" }),
+      ];
       useChangeReviewStore.setState({ changes: files });
 
       await useChangeReviewStore.getState().rejectAll();

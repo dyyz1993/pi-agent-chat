@@ -302,9 +302,19 @@ export function MemoryPanel() {
                   className="flex items-start gap-1.5 px-1.5 py-1 rounded bg-status-info/5 border border-status-info/10"
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-status-info mt-1.5 shrink-0" />
-                  <span className="text-[10px] text-status-info/80 leading-tight">
-                    {item.summary}
-                  </span>
+                  <div className="flex flex-col gap-0.5 min-w-0">
+                    <span className="text-[10px] text-status-info/80 leading-tight">
+                      {item.summary}
+                    </span>
+                    {item.snippet && (
+                      <span
+                        className="text-[9px] text-text-tertiary leading-tight truncate"
+                        title={item.snippet}
+                      >
+                        {item.snippet}
+                      </span>
+                    )}
+                  </div>
                 </div>
               ))}
               {/* Debug info from latest prefetch */}
@@ -340,7 +350,12 @@ export function MemoryPanel() {
                     {d.durationMs != null && <span>· {d.durationMs}ms</span>}
                     {d.guardHits && d.guardHits.length > 0 && (
                       <span className="text-status-success">
-                        ✅ guard: {d.guardHits.join(", ")}
+                        ✅ guard:{" "}
+                        {d.guardHits
+                          .map((h: string | { pattern?: string; mode?: string }) =>
+                            typeof h === "string" ? h : (h.pattern ?? JSON.stringify(h)),
+                          )
+                          .join(", ")}
                       </span>
                     )}
                     {d.skipHits && d.skipHits.length > 0 && (
@@ -448,10 +463,10 @@ export function MemoryPanel() {
             {(memoryStatus?.excludeKeywords?.length ?? 0) > 0 && (
               <div>
                 <div className="text-[9px] font-medium text-text-tertiary mb-0.5">
-                  📌 {t("excludeKeywords")} ({memoryStatus!.excludeKeywords!.length})
+                  📌 {t("excludeKeywords")} ({memoryStatus?.excludeKeywords?.length ?? 0})
                 </div>
                 <div className="flex flex-wrap gap-1">
-                  {memoryStatus!.excludeKeywords!.map((kw) => (
+                  {memoryStatus?.excludeKeywords?.map((kw) => (
                     <span
                       key={kw}
                       className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-status-error/10 text-[9px] text-status-error group"
@@ -476,10 +491,10 @@ export function MemoryPanel() {
             {(memoryStatus?.skipRules?.custom?.length ?? 0) > 0 && (
               <div>
                 <div className="text-[9px] font-medium text-text-tertiary mb-0.5">
-                  ⏭️ {t("customSkipRules")} ({memoryStatus!.skipRules!.custom!.length})
+                  ⏭️ {t("customSkipRules")} ({memoryStatus?.skipRules?.custom?.length ?? 0})
                 </div>
                 <div className="flex flex-wrap gap-1">
-                  {memoryStatus!.skipRules!.custom!.map((rule, i) => (
+                  {memoryStatus?.skipRules?.custom?.map((rule, i) => (
                     <span
                       key={`${rule.pattern}-${rule.mode}-${i}`}
                       className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-surface-code dark:bg-surface-code/60 text-[9px] text-text-secondary group"
@@ -507,10 +522,10 @@ export function MemoryPanel() {
             {(memoryStatus?.guardRules?.custom?.length ?? 0) > 0 && (
               <div>
                 <div className="text-[9px] font-medium text-text-tertiary mb-0.5">
-                  ✅ {t("customGuardRules")} ({memoryStatus!.guardRules!.custom!.length})
+                  ✅ {t("customGuardRules")} ({memoryStatus?.guardRules?.custom?.length ?? 0})
                 </div>
                 <div className="flex flex-wrap gap-1">
-                  {memoryStatus!.guardRules!.custom!.map((rule, i) => (
+                  {memoryStatus?.guardRules?.custom?.map((rule, i) => (
                     <span
                       key={`${rule.pattern}-${rule.mode}-${i}`}
                       className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-status-success/10 text-[9px] text-status-success group"
@@ -622,7 +637,12 @@ export function MemoryPanel() {
                     </div>
                     {q.guard_hits?.length > 0 && (
                       <div className="text-[9px] text-status-success mt-0.5">
-                        ✅ guard: {q.guard_hits.join(", ")}
+                        ✅ guard:{" "}
+                        {q.guard_hits
+                          .map((h: string | { pattern?: string; mode?: string }) =>
+                            typeof h === "string" ? h : (h.pattern ?? JSON.stringify(h)),
+                          )
+                          .join(", ")}
                       </div>
                     )}
                     {q.skip_hits?.length > 0 && (

@@ -29,9 +29,15 @@ vi.mock("../src/shared/lib/logger", () => ({
 vi.mock("../src/mainview/stores/use-tier-store", () => ({
   useTierStore: {
     getState: vi.fn(() => ({
-      currentTier: null,
+      getCurrentTier: vi.fn(() => null),
+      getTierModels: vi.fn(() => ({})),
       syncTierFromModel: vi.fn(),
       switchToTier: vi.fn(),
+      setGlobalDefaults: vi.fn(),
+      setSessionTierModels: vi.fn(),
+      setSessionCurrentTier: vi.fn(),
+      dataBySession: {},
+      globalDefaults: {},
     })),
   },
 }));
@@ -42,6 +48,9 @@ vi.mock("../src/mainview/stores/use-chat-store", () => ({
       loadSessionMessages: vi.fn().mockResolvedValue(undefined),
       clearSessionMessages: vi.fn(),
       messagesBySession: {},
+      saveInputDraft: vi.fn(),
+      restoreInputDraft: vi.fn(),
+      clearInputDraft: vi.fn(),
     })),
     setState: vi.fn(),
   },

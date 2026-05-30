@@ -94,15 +94,12 @@ export const useSubagentStore = create<SubagentState>()((set, get) => ({
 
     if (!subId) return;
 
-    const { messagesBySubsession } = get();
-    if (!messagesBySubsession[subId] || messagesBySubsession[subId].length === 0) {
-      const { subsessionsByParent } = get();
-      for (const subs of Object.values(subsessionsByParent)) {
-        const match = subs.find((s) => s.sessionId === subId);
-        if (match && match.sessionPath) {
-          get().loadSubHistory(match.sessionPath, subId);
-          break;
-        }
+    const { subsessionsByParent } = get();
+    for (const subs of Object.values(subsessionsByParent)) {
+      const match = subs.find((s) => s.sessionId === subId);
+      if (match && match.sessionPath) {
+        get().loadSubHistory(match.sessionPath, subId);
+        break;
       }
     }
   },
@@ -116,16 +113,26 @@ export const useSubagentStore = create<SubagentState>()((set, get) => ({
       if (!result?.entries || !Array.isArray(result.entries) || result.entries.length === 0) {
         return;
       }
-      const msgs: ChatMessage[] = [];
+      const historyMsgs: ChatMessage[] = [];
       for (const entry of result.entries) {
         const entryData = entry.data;
         const raw = entryData.message;
         if (!raw) continue;
         const msg = messageToChatMessage(raw as Message, entry.id);
-        if (msg) msgs.push(msg);
+        if (msg) historyMsgs.push(msg);
       }
-      if (msgs.length > 0) {
-        set((s) => ({ messagesBySubsession: { ...s.messagesBySubsession, [subId]: msgs } }));
+      if (historyMsgs.length > 0) {
+        set((s) => {
+          const liveMsgs = s.messagesBySubsession[subId] || [];
+          const historyIds = new Set(historyMsgs.map((m) => m.id));
+          const liveOnly = liveMsgs.filter((m) => !historyIds.has(m.id));
+          return {
+            messagesBySubsession: {
+              ...s.messagesBySubsession,
+              [subId]: [...historyMsgs, ...liveOnly],
+            },
+          };
+        });
       }
     } catch {
       // Subagent session file may not exist yet (still streaming via live events).

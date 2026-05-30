@@ -229,7 +229,9 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
 
       if (result.tier) {
         const { useTierStore } = await import("./use-tier-store");
-        useTierStore.getState().setCurrentTier(result.tier as "fast" | "pro" | "max");
+        useTierStore
+          .getState()
+          .setSessionCurrentTier(sessionId, result.tier as "fast" | "pro" | "max");
       }
       if (result.thinkingLevel) {
         useSessionStore.getState().setThinkingLevel(result.thinkingLevel);

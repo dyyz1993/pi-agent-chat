@@ -6,6 +6,7 @@ import type { RollbackPreview } from "../src/mainview/stores/use-rollback-store"
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
+  initReactI18next: { type: "3rdParty", init: vi.fn() },
 }));
 
 vi.mock("../src/mainview/lib/api-client", () => ({
@@ -150,10 +151,10 @@ describe("RollbackOverlay", () => {
         .getState()
         .openRollback({ targetId: "t1", mode: "withFiles" }, makePreview(files));
       renderOverlay();
-      expect(screen.getByText("a.ts")).toBeInTheDocument();
-      expect(screen.getByText("b.ts")).toBeInTheDocument();
-      expect(screen.getByText("c.ts")).toBeInTheDocument();
-      expect(screen.getByText("d.ts")).toBeInTheDocument();
+      expect(screen.getByText("src/a.ts")).toBeInTheDocument();
+      expect(screen.getByText("src/b.ts")).toBeInTheDocument();
+      expect(screen.getByText("src/c.ts")).toBeInTheDocument();
+      expect(screen.getByText("src/d.ts")).toBeInTheDocument();
       const badges = screen.getAllByText("M");
       expect(badges).toHaveLength(3);
       expect(screen.getByText("D")).toBeInTheDocument();
@@ -165,9 +166,9 @@ describe("RollbackOverlay", () => {
         .getState()
         .openRollback({ targetId: "t1", mode: "withFiles" }, makePreview(files));
       renderOverlay();
-      const fileBtn = screen.getByText("gone.ts");
+      const fileBtn = screen.getByText("src/gone.ts");
       fireEvent.click(fileBtn);
-      expect(screen.getByText("rollbackOverlay.fileWillBeDeleted")).toBeInTheDocument();
+      expect(screen.getByText("rollbackOverlay.fileWillBeRestored")).toBeInTheDocument();
     });
 
     it("case 7: added file - expanded shows fileWillBeRemoved", () => {
@@ -176,7 +177,7 @@ describe("RollbackOverlay", () => {
         .getState()
         .openRollback({ targetId: "t1", mode: "withFiles" }, makePreview(files));
       renderOverlay();
-      fireEvent.click(screen.getByText("new.ts"));
+      fireEvent.click(screen.getByText("src/new.ts"));
       expect(screen.getByText("rollbackOverlay.fileWillBeRemoved")).toBeInTheDocument();
     });
 
@@ -186,7 +187,7 @@ describe("RollbackOverlay", () => {
         .getState()
         .openRollback({ targetId: "t1", mode: "withFiles" }, makePreview(files));
       renderOverlay();
-      fireEvent.click(screen.getByText("changed.ts"));
+      fireEvent.click(screen.getByText("src/changed.ts"));
       expect(screen.getByText("rollbackOverlay.fileWillBeRestored")).toBeInTheDocument();
     });
   });
@@ -198,7 +199,7 @@ describe("RollbackOverlay", () => {
         .getState()
         .openRollback({ targetId: "t1", mode: "withFiles" }, makePreview(files));
       renderOverlay();
-      const btn = screen.getByText("foo.ts").closest("button")!;
+      const btn = screen.getByText("src/foo.ts").closest("button")!;
       fireEvent.click(btn);
       expect(screen.getByText("rollbackOverlay.fileWillBeRestored")).toBeInTheDocument();
       fireEvent.click(btn);

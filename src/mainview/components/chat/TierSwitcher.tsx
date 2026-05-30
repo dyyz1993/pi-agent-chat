@@ -12,10 +12,12 @@ const ICONS: Record<TierKey, React.ComponentType<{ className?: string }>> = {
 
 export function TierSwitcher() {
   const { t } = useTranslation("chat");
-  const currentTier = useTierStore((s) => s.currentTier);
+  const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const currentTier = useTierStore((s) =>
+    activeSessionId ? (s.dataBySession[activeSessionId]?.currentTier ?? null) : null,
+  );
   const switching = useTierStore((s) => s.switching);
   const switchToTier = useTierStore((s) => s.switchToTier);
-  const activeSessionId = useSessionStore((s) => s.activeSessionId);
 
   if (!activeSessionId) return null;
 

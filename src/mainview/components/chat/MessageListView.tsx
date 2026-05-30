@@ -136,6 +136,7 @@ interface MessageListViewProps {
   onScrollEnd?: () => void;
   isLoadingMore?: boolean;
   hasMoreMessages?: boolean;
+  activeSessionId?: string;
 }
 
 export const MessageListView = memo(function MessageListView({
@@ -146,6 +147,7 @@ export const MessageListView = memo(function MessageListView({
   onScrollEnd,
   isLoadingMore,
   hasMoreMessages,
+  activeSessionId: _activeSessionId,
 }: MessageListViewProps) {
   // Read messages directly from store — avoids prop drilling that breaks memo
   const messages = useStableMessages(source);
@@ -175,7 +177,7 @@ export const MessageListView = memo(function MessageListView({
         scrollbarWidth: "thin",
         scrollbarColor: "transparent transparent",
         overflowAnchor: "none",
-        willChange: "scroll-position",
+        willChange: undefined,
       }}
       onMouseEnter={(e) => {
         (e.currentTarget as HTMLElement).style.scrollbarColor =

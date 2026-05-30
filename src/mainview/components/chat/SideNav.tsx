@@ -7,7 +7,6 @@ import {
   useImperativeHandle,
   forwardRef,
 } from "react";
-import { VList, type VListHandle } from "virtua";
 import {
   User,
   Bot,
@@ -280,7 +279,7 @@ export const SideNav = memo(
       }));
     }, [navItems, showToolCalls, showThinking, t]);
 
-    const sidenavVlistRef = useRef<VListHandle>(null);
+    const scrollRef = useRef<HTMLDivElement>(null);
 
     const flatIconIds = useMemo(() => {
       const ids: string[] = [];
@@ -336,44 +335,29 @@ export const SideNav = memo(
       [toggleItemSelect],
     );
 
-    const prevNavIdxRef = useRef(-1);
-
     useEffect(() => {
       if (!selectedNavId) return;
-      let idx = filteredNavItems.findIndex((n) => n.id === selectedNavId);
-      if (idx < 0) {
-        idx = filteredNavItems.findIndex((n) => n.subs.some((s) => s.blockId === selectedNavId));
-      }
-      if (idx < 0) return;
+      const container = scrollRef.current;
+      if (!container) return;
 
-      const prev = prevNavIdxRef.current;
-      prevNavIdxRef.current = idx;
-
-      const isEdge = idx === 0 || idx === filteredNavItems.length - 1;
-      let align: "start" | "end" | "center";
-      if (isEdge) {
-        align = idx === 0 ? "start" : "end";
-      } else if (prev < 0) {
-        align = "end";
-      } else if (idx > prev) {
-        align = "end";
-      } else if (idx < prev) {
-        align = "start";
-      } else {
-        align = "end";
-      }
+      const navId = filteredNavItems.find(
+        (n) => n.id === selectedNavId || n.subs.some((s) => s.blockId === selectedNavId),
+      )?.id;
+      if (!navId) return;
 
       const timer = setTimeout(() => {
-        sidenavVlistRef.current?.scrollToIndex(idx, { align, smooth: true });
+        const target = container.querySelector(`[data-nav-id="${navId}"]`);
+        if (target) target.scrollIntoView({ behavior: "smooth", block: "nearest" });
       }, 120);
       return () => clearTimeout(timer);
     }, [selectedNavId, filteredNavItems]);
 
     return (
       <div className="h-full min-h-0 flex flex-col bg-surface-dim/30 dark:bg-surface-code/30 border-l border-border-secondary/30">
-        <VList
-          ref={sidenavVlistRef}
-          style={{ flex: 1, minHeight: 0, scrollbarWidth: "none", msOverflowStyle: "none" }}
+        <div
+          ref={scrollRef}
+          className="flex-1 min-h-0 overflow-y-auto"
+          style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
         >
           {filteredNavItems.map(({ id, icon: Icon, color, subs }) => (
             <div key={id} data-nav-id={id}>
@@ -405,7 +389,7 @@ export const SideNav = memo(
               </div>
             </div>
           ))}
-        </VList>
+        </div>
 
         {selectedItems.size > 0 && (
           <div className="px-1 py-1 text-[10px] text-status-error text-center border-t border-status-error/20 bg-status-error/5">

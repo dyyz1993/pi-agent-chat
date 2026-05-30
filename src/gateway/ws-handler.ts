@@ -8,6 +8,8 @@ const log = createLogger("gateway");
 
 export interface WsHandlerDeps {
   config: { readonly port: number; readonly authToken: string; readonly maxUploadSize: number };
+  /** 额外允许的 WebSocket token 集合（例如用户 token） */
+  validTokens?: Set<string>;
 }
 
 export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSocketServer {
@@ -28,7 +30,8 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
     }
 
     const token = url.searchParams.get("token");
-    if (token !== cfg.authToken) {
+    const isValidToken = token === cfg.authToken || (deps.validTokens?.has(token ?? "") ?? false);
+    if (!isValidToken) {
       log.warn("Connection rejected: invalid token");
       socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
       socket.destroy();

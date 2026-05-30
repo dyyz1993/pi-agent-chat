@@ -67,6 +67,7 @@ async function parseJsonlMeta(filePath: string): Promise<{
   effectiveCwd: string | null;
   delegateParentSessionId: string | null;
   delegateType: string | null;
+  tierConfig: { tierModels: Record<string, string>; currentTier: string | null } | undefined;
 } | null> {
   try {
     const stream = createReadStream(filePath, { encoding: "utf-8" });
@@ -79,6 +80,7 @@ async function parseJsonlMeta(filePath: string): Promise<{
     let effectiveCwd: string | null = null;
     let delegateParentSessionId: string | null = null;
     let delegateType: string | null = null;
+    let tierConfig: { tierModels: Record<string, string>; currentTier: string | null } | undefined;
     let lineCount = 0;
     const MAX_LINES = 50;
 
@@ -96,6 +98,7 @@ async function parseJsonlMeta(filePath: string): Promise<{
           effectiveCwd,
           delegateParentSessionId,
           delegateType,
+          tierConfig,
         });
       };
 
@@ -127,6 +130,12 @@ async function parseJsonlMeta(filePath: string): Promise<{
           if (entry.type === "session_info") {
             if (entry.name) sessionName = entry.name as string;
             if (entry.cwd) effectiveCwd = entry.cwd as string;
+          }
+          if (entry.type === "session_tier_config") {
+            tierConfig = {
+              tierModels: entry.tierModels as Record<string, string>,
+              currentTier: entry.currentTier as string | null,
+            };
           }
           if (entry.type === "session" && "parentSession" in entry) {
             parentSessionPath = entry.parentSession as string;
@@ -202,6 +211,7 @@ async function scanSessionDir(sessionDir: string, pinnedIds?: Set<string>): Prom
             updatedAt: fstat.mtimeMs,
             status: "idle" as const,
             pinned: pinnedIds ? pinnedIds.has(header.id) : false,
+            tierConfig: meta?.tierConfig,
           };
         } catch {
           return null;
@@ -268,6 +278,7 @@ export async function findSessionById(
       updatedAt: fileStat.mtimeMs,
       status: "idle" as const,
       pinned: pinnedIds.has(header.id),
+      tierConfig: meta?.tierConfig,
     };
   }
 

@@ -8,6 +8,7 @@
 import { spawn, type ChildProcess } from "child_process";
 import { resolve } from "path";
 import { createLogger } from "../../shared/lib/logger";
+import { getProjectRoot, getSandboxAgentPath, getSandboxAgentRunner } from "../../shared/lib/paths";
 import type {
   ISandboxProvider,
   SandboxInstance,
@@ -90,16 +91,16 @@ export class LocalProcessProvider implements ISandboxProvider {
     log.info("Creating local sandbox", { userId, port });
 
     const proc = spawn(
-      "bun",
+      getSandboxAgentRunner(),
       [
-        "src/sandbox/sandbox-agent.ts",
+        getSandboxAgentPath(),
         `--port=${port}`,
         `--cli-path=${this.options.cliPath}`,
         `--cwd=${userProjectDir}`,
       ],
       {
         stdio: ["ignore", "pipe", "pipe"],
-        cwd: resolve(__dirname, "../../.."),
+        cwd: getProjectRoot(),
         env: {
           ...process.env,
           PATH: process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin:/root/.bun/bin",

@@ -12,7 +12,7 @@ export interface PendingChangeResult {
 
 export interface ChangeReviewMethods {
   "change-review.pending": {
-    params: { sessionId: string };
+    params: { sessionId: string; sessionPath?: string };
     result: PendingChangeResult[];
   };
   "change-review.approve": {

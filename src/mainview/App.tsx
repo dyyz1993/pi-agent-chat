@@ -179,7 +179,10 @@ function App() {
             const sessions = await Promise.race([
               loadSessionsForProject(tab.path),
               new Promise<never>((_, reject) =>
-                setTimeout(() => reject(new Error("loadSessionsForProject timed out (10s)")), 10_000),
+                setTimeout(
+                  () => reject(new Error("loadSessionsForProject timed out (10s)")),
+                  10_000,
+                ),
               ),
             ]).catch((err) => {
               addLog(`Session load failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -243,6 +246,13 @@ function App() {
       cancelled = true;
     };
   }, [ready, addLog, addProjectTab, loadSessionsForProject]);
+
+  // 首次恢复完成后，后台拉取所有项目所有会话的运行状态
+  useEffect(() => {
+    if (!restoring && ready) {
+      useSessionStore.getState().fetchAllProjectsSessionsStatus();
+    }
+  }, [restoring, ready]);
 
   const handleSelectProject = async (path: string, name: string) => {
     setProjectLoading(true);

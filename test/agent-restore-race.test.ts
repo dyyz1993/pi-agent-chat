@@ -91,9 +91,14 @@ vi.mock("../src/mainview/stores/use-retry-store", () => ({
 vi.mock("../src/mainview/stores/use-tier-store", () => ({
   useTierStore: {
     getState: vi.fn(() => ({
-      setTierModels: vi.fn(),
       syncTierFromModel: vi.fn(),
-      setCurrentTier: vi.fn(),
+      setSessionCurrentTier: vi.fn(),
+      setGlobalDefaults: vi.fn(),
+      setSessionTierModels: vi.fn(),
+      getCurrentTier: vi.fn(() => null),
+      getTierModels: vi.fn(() => ({})),
+      dataBySession: {},
+      globalDefaults: {},
     })),
   },
 }));

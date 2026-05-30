@@ -138,7 +138,9 @@ afterAll(async () => {
   await stopTestServer(server);
 });
 
-describe("Fork 派发测试: 通过 RPC JSON 触发 agent 委派 fork", () => {
+const shouldRun = process.env.PI_E2E_LLM === "1";
+
+describe.skipIf(shouldRun === false)("Fork 派发测试: 通过 RPC JSON 触发 agent 委派 fork", () => {
   let ws: WebSocket;
   let sessionId: string;
   let sessionPath: string;

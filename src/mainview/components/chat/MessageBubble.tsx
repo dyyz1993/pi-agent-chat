@@ -36,6 +36,7 @@ import { useUIBlockMap } from "../../stores/use-ui-dialog-store";
 import { ENTRY_TYPE_KEYS, getMemoryConfig, getMemorySummary } from "./memory-config";
 import { useMemoryStore } from "../../stores/use-memory-store";
 import { SnapshotBadge } from "./snapshot/SnapshotBadge";
+import { formatFilePath } from "../../lib/format-path";
 import { formatTokenCount } from "../../utils/turn-utils";
 import { ToolCardHeader } from "./primitives/ToolCardHeader";
 import { parseSpecialBlocks, hasSpecialBlocks } from "./special-block-parser";
@@ -612,7 +613,9 @@ export const LspDiagnosticsCard = memo(function LspDiagnosticsCard({ data }: { d
           >
             <div className="text-[11px] text-status-warning font-medium flex items-center gap-1">
               <FileText className="w-3 h-3 shrink-0" />
-              <span>{f.filePath}</span>
+              <span className="truncate" title={f.filePath}>
+                {formatFilePath(f.filePath)}
+              </span>
               <span className="text-status-warning ml-1">{f.summary}</span>
             </div>
             {f.issues.map((issue, i) => (
@@ -1111,7 +1114,6 @@ function PrefetchResultDetail({
                 {t("sourceFiles", { count: selectedFiles.length })}
               </div>
               {selectedFiles.map((f) => {
-                const fileName = f.split("/").pop() ?? f;
                 return (
                   <div
                     key={f}
@@ -1119,7 +1121,7 @@ function PrefetchResultDetail({
                   >
                     <FileText className="w-2.5 h-2.5 text-status-info/70 shrink-0" />
                     <span className="truncate" title={f}>
-                      {fileName}
+                      {formatFilePath(f)}
                     </span>
                   </div>
                 );

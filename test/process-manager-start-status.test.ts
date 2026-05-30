@@ -39,18 +39,20 @@ vi.mock("../src/shared/agent/process-manager", async (importOriginal) => {
         projectPath: string,
         sessionPath: string,
       ): Promise<{ agentId: string; status: "started" | "already_running" }> => {
-        // Access internals via 'as any' to manipulate maps
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const self = this as any;
+        type MockInternal = {
+          clients: Map<string, { _activeSessionId: string }>;
+          sessionPaths: Map<string, string>;
+          sessionProjectPaths: Map<string, string>;
+          processByCwd: Map<string, Set<unknown>>;
+          servers: Set<{ emitEvent: (...args: unknown[]) => void }>;
+        };
+        const self = this as unknown as MockInternal;
 
-        // Check if already running
         const existing = self.clients.get(sessionId);
         if (existing && existing._activeSessionId === sessionId) {
           return { agentId: sessionId, status: "already_running" };
         }
 
-        // Simulate creating a new process
-        callCount++;
         const mockClient = {
           channel: () => ({
             send: vi.fn(),
@@ -68,7 +70,7 @@ vi.mock("../src/shared/agent/process-manager", async (importOriginal) => {
             projectPath,
             sessionPath,
             status: "idle",
-            holdEvents: [],
+            holdEvents: [] as unknown[],
           },
           _activeSessionId: sessionId,
           unsubscribe: () => {},
@@ -78,7 +80,6 @@ vi.mock("../src/shared/agent/process-manager", async (importOriginal) => {
         self.sessionPaths.set(sessionId, sessionPath);
         self.sessionProjectPaths.set(sessionId, projectPath);
 
-        // Track in processByCwd (Set-based)
         let procSet = self.processByCwd.get(projectPath);
         if (!procSet) {
           procSet = new Set();
@@ -86,7 +87,6 @@ vi.mock("../src/shared/agent/process-manager", async (importOriginal) => {
         }
         procSet.add(managed);
 
-        // Broadcast status
         for (const server of self.servers) {
           server.emitEvent(
             "agent.session_status_changed",

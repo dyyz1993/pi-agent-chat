@@ -76,13 +76,16 @@ export function groupSessions(
           sess.sessionStatus === "streaming" ||
           sess.sessionStatus === "compacting" ||
           sess.sessionStatus === "retrying";
+        const isEmpty = sess.messageCount === 0 && !sess.firstMessage;
         if (isRunning) return 0;
         if (sess.pinned) return 1;
-        return 2;
+        if (isEmpty) return 2; // 空会话放在 pinned 之后
+        return 3;
       };
       const priorityA = getPriority(a);
       const priorityB = getPriority(b);
       if (priorityA !== priorityB) return priorityA - priorityB;
+      // 相同优先级按更新时间降序（最新的在上面）
       return b.updatedAt - a.updatedAt;
     });
 

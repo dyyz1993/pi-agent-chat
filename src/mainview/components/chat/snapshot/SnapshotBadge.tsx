@@ -1,6 +1,7 @@
 import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight, FilePlus, FileEdit, FileX, Camera } from "lucide-react";
+import { formatFilePath } from "../../../lib/format-path";
 
 interface SnapshotDiff {
   added: string[];
@@ -100,7 +101,7 @@ const SnapshotExpandPanel = memo(function SnapshotExpandPanel({ diff }: Snapshot
           >
             <StatusIcon className={`w-3 h-3 shrink-0 ${statusConfig.color}`} />
             <span className="truncate" title={file.path}>
-              {file.path}
+              {formatFilePath(file.path)}
             </span>
           </div>
         );

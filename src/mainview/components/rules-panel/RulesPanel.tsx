@@ -16,6 +16,7 @@ import { useTranslation } from "react-i18next";
 import { useRulesStore } from "../../stores/use-rules-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useShallow } from "zustand/react/shallow";
+import { formatFilePath } from "../../lib/format-path";
 import { apiClient } from "../../lib/api-client";
 import type { RuleDetail, MatchRecord, LifecycleEntry } from "../../../shared/modules/rules";
 
@@ -207,7 +208,9 @@ function MatchRecordCard({ record }: { record: MatchRecord }) {
           {new Date(record.timestamp).toLocaleTimeString()}
         </span>
         <span className="text-text-secondary dark:text-text-tertiary">|</span>
-        <span className="text-text-tertiary truncate">{record.filePath.split("/").pop()}</span>
+        <span className="text-text-tertiary truncate" title={record.filePath}>
+          {formatFilePath(record.filePath)}
+        </span>
         <span className="text-text-secondary dark:text-text-tertiary">&rarr;</span>
         <span className="text-text-secondary truncate">{record.toolName}</span>
       </div>

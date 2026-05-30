@@ -142,8 +142,9 @@ describe("chat pagination", () => {
   it("loadMoreMessages should prepend older messages", async () => {
     const allMessages = makeRpcResult(100);
     (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
-      messages: allMessages.messages,
+      messages: allMessages.messages.slice(-PAGE_SIZE),
       customEntries: [],
+      hasMore: true,
     });
 
     await useChatStore.getState().loadSessionMessages("test-session");
@@ -152,6 +153,12 @@ describe("chat pagination", () => {
     expect(initialMsgs.length).toBe(PAGE_SIZE);
 
     expect(useChatStore.getState().hasMoreMessagesBySession!["test-session"]).toBe(true);
+
+    (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
+      messages: allMessages.messages,
+      customEntries: [],
+      hasMore: false,
+    });
 
     await useChatStore.getState().loadMoreMessages!("test-session");
 
@@ -208,8 +215,9 @@ describe("chat pagination", () => {
   it("should track hasMoreMessages based on initial load result", async () => {
     const manyMessages = makeRpcResult(200);
     (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
-      messages: manyMessages.messages,
+      messages: manyMessages.messages.slice(0, PAGE_SIZE),
       customEntries: [],
+      hasMore: true,
     });
 
     await useChatStore.getState().loadSessionMessages("test-session");
@@ -222,8 +230,9 @@ describe("chat pagination", () => {
   it("isLoadingMore should be true during loadMoreMessages and false after", async () => {
     const manyMessages = makeRpcResult(200);
     (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
-      messages: manyMessages.messages,
+      messages: manyMessages.messages.slice(0, PAGE_SIZE),
       customEntries: [],
+      hasMore: true,
     });
 
     await useChatStore.getState().loadSessionMessages("test-session");
@@ -232,7 +241,8 @@ describe("chat pagination", () => {
     (apiClient.call as ReturnType<typeof vi.fn>).mockImplementation(
       () =>
         new Promise((r) => {
-          resolveLoadMore = () => r({ messages: manyMessages.messages, customEntries: [] });
+          resolveLoadMore = () =>
+            r({ messages: manyMessages.messages, customEntries: [], hasMore: false });
         }),
     );
 

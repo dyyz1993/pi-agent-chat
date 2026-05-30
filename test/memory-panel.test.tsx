@@ -67,7 +67,7 @@ vi.mock("react-i18next", () => ({
 }));
 
 vi.mock("../src/mainview/lib/api-client", () => ({
-  apiClient: { call: vi.fn() },
+  apiClient: { call: vi.fn().mockResolvedValue({}) },
 }));
 
 vi.mock("../src/mainview/stores/use-rpc-debug-store", () => ({
@@ -276,7 +276,12 @@ describe("MemoryPanel", () => {
       collapsedSections: new Set(["operations"]),
     });
 
-    mockApiCall.mockResolvedValueOnce({ content: "file content here" });
+    mockApiCall.mockImplementation((method: string) => {
+      if (method === "memory.readFile") {
+        return Promise.resolve({ content: "file content here" });
+      }
+      return Promise.resolve({});
+    });
 
     render(<MemoryPanel />);
 

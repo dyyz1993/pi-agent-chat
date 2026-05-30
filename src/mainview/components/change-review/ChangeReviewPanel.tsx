@@ -207,11 +207,6 @@ const ChangeItem = memo(function ChangeItem({ change, isExpanded, onToggle }: Ch
     return { additions, deletions };
   }, [change.oldContent, change.newContent]);
 
-  const timeStr = new Date(change.timestamp).toLocaleTimeString("zh-CN", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-
   const handleApprove = useCallback(() => {
     approveChange(change.path);
   }, [approveChange, change.path]);
@@ -231,69 +226,53 @@ const ChangeItem = memo(function ChangeItem({ change, isExpanded, onToggle }: Ch
     });
   }, [change.path, change.oldContent, change.newContent]);
 
+  const fileName = change.path.split("/").pop() ?? change.path;
+  const dirPath = (() => {
+    const parts = change.path.split("/");
+    return parts.length > 1 ? parts.slice(0, -1).join("/") : "";
+  })();
+
   return (
-    <div className="border-b border-border-secondary/50 dark:border-surface-code/50">
-      <div className="px-3 py-2">
-        <div className="flex items-start justify-between gap-2">
-          <button
-            type="button"
-            onClick={onToggle}
-            className="flex items-start gap-1.5 text-left flex-1 min-w-0"
-          >
-            <span className="text-text-tertiary shrink-0 mt-0.5">
-              {isExpanded ? (
-                <ChevronDown className="w-3 h-3" />
-              ) : (
-                <ChevronRight className="w-3 h-3" />
-              )}
-            </span>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5">
-                <span className={`shrink-0 ${fileCfg.color}`}>
-                  <FileStatusIcon className="w-3 h-3" />
-                </span>
-                <span
-                  className="text-[11px] font-mono text-semantic-accent hover:underline cursor-pointer truncate"
-                  title={change.path}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleViewDiff();
-                  }}
-                >
-                  {change.path}
-                </span>
-              </div>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span
-                  className={`px-1 rounded text-[10px] font-medium ${fileCfg.color} ${fileCfg.bg}`}
-                >
-                  {fileCfg.label}
-                </span>
-                {stats && (
-                  <span className="flex items-center gap-0.5 text-[10px] font-mono">
-                    {stats.additions > 0 && (
-                      <span className="text-status-success">+{stats.additions}</span>
-                    )}
-                    {stats.deletions > 0 && (
-                      <span className="text-status-error">-{stats.deletions}</span>
-                    )}
-                  </span>
-                )}
-                <span className="text-[10px] text-text-tertiary">
-                  {t("turn", { index: change.turnIndex })}
-                </span>
-                <span className="text-[10px] text-text-tertiary">{timeStr}</span>
-              </div>
-            </div>
+    <div className="border-b border-border-secondary/50 dark:border-surface-code/50 hover:bg-surface-hover/40 dark:hover:bg-surface-hover/20 transition-colors">
+      <div className="px-2 py-1.5">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <button type="button" onClick={onToggle} className="text-text-tertiary shrink-0">
+            {isExpanded ? (
+              <ChevronDown className="w-3 h-3" />
+            ) : (
+              <ChevronRight className="w-3 h-3" />
+            )}
           </button>
 
-          <div className="flex items-center gap-1.5 shrink-0">
+          <span className={`shrink-0 ${fileCfg.color}`}>
+            <FileStatusIcon className="w-3.5 h-3.5" />
+          </span>
+
+          <div className="flex-1 min-w-0 flex items-center gap-1.5">
             <span
-              className={`inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded ${statusCfg.bg} ${statusCfg.color}`}
+              className="text-[11px] font-mono font-medium text-text-primary dark:text-text-secondary hover:underline cursor-pointer truncate"
+              title={change.path}
+              onClick={handleViewDiff}
             >
-              <StatusIcon className="w-2.5 h-2.5" />
-              {t(change.status)}
+              {fileName}
             </span>
+            {dirPath && (
+              <span className="text-[10px] text-text-tertiary truncate" title={dirPath}>
+                {dirPath}
+              </span>
+            )}
+          </div>
+
+          <span className="flex items-center gap-1 text-[10px] font-mono shrink-0">
+            {stats && stats.additions > 0 && (
+              <span className="text-status-success">+{stats.additions}</span>
+            )}
+            {stats && stats.deletions > 0 && (
+              <span className="text-status-error">-{stats.deletions}</span>
+            )}
+          </span>
+
+          <div className="flex items-center gap-1 shrink-0">
             {change.status === "pending" && (
               <>
                 <ActionBtn
@@ -309,6 +288,14 @@ const ChangeItem = memo(function ChangeItem({ change, isExpanded, onToggle }: Ch
                   className="text-status-error hover:text-status-error"
                 />
               </>
+            )}
+            {change.status !== "pending" && (
+              <span
+                className={`inline-flex items-center gap-0.5 text-[10px] px-1 py-0.5 rounded ${statusCfg.bg} ${statusCfg.color}`}
+              >
+                <StatusIcon className="w-2.5 h-2.5" />
+                {t(change.status)}
+              </span>
             )}
           </div>
         </div>

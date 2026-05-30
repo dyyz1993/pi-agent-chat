@@ -6,6 +6,7 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import { stat, readFile, writeFile, mkdir, appendFile, unlink } from "fs/promises";
 import { existsSync } from "fs";
+import { tmpdir } from "os";
 import { extname, basename, dirname, resolve } from "path";
 import { createLogger } from "../shared/lib/logger";
 import { listRecentProjects, restoreOpenTabs } from "../shared/lib/project-config";
@@ -44,12 +45,13 @@ const MIME_TYPES: Record<string, string> = {
 // 路径白名单校验：阻止路径遍历攻击
 const ALLOWED_ROOTS = [
   resolve(process.cwd()),
+  resolve(process.env.HOME ?? "/"),
   resolve("/root"),
-  resolve(process.env.HOME ?? "", ".claude", "rules"),
-  resolve(process.env.HOME ?? "", ".config", "opencode", "rules"),
-  resolve(process.env.HOME ?? "", ".opencode", "rules"),
   resolve("/tmp"),
   resolve("/private/tmp"),
+  resolve("/var"),
+  resolve("/private/var"),
+  resolve(tmpdir()),
 ];
 let cachedAllowedRoots: string[] | null = null;
 let rootsCacheTime = 0;
@@ -343,10 +345,10 @@ export function createHttpHandler(
           sessionId: body.sessionId,
           event: {
             type: "extension_ui_request",
-            id: body.id || `test-req-${Date.now()}`,
-            method: body.method || "confirm",
-            title: body.title || "Test Request",
-            message: body.message || "This is a test request",
+            id: body.id ?? `test-req-${Date.now()}`,
+            method: body.method ?? "confirm",
+            title: body.title ?? "Test Request",
+            message: body.message ?? "This is a test request",
             options: body.options,
             multiple: body.multiple,
           },

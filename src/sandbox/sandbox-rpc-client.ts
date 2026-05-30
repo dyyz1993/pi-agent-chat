@@ -579,9 +579,74 @@ export class SandboxRpcClient implements RpcClientAPI {
     return this.call("agent.promptAndWait", message, images, timeout);
   }
 
-  // ─── Channels ──────────────────────────────────────────
+  // ─── Compatibility shims for process-manager ──────────
 
-  channel(_name: string): Pick<Channel, "name" | "send" | "onReceive" | "invoke" | "call"> {
-    throw new Error("Channel not supported in sandbox mode");
+  /**
+   * Send a raw command directly to the sandbox agent.
+   * Used by process-manager for switchAgent, getCurrentAgent, getLatestAgentChange, etc.
+   * The sandbox-agent forwards the raw command to pi CLI.
+   */
+  async send(command: Record<string, unknown>): Promise<{ data: unknown }> {
+    const rpcType = command.type as string;
+    if (!rpcType) throw new Error("send: command must have a type");
+    const url = `${this.endpoint}/rpc`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(command),
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Sandbox send failed (${res.status}): ${text}`);
+      }
+      const json = (await res.json()) as { ok: boolean; data?: unknown; error?: string };
+      if (!json.ok) throw new Error(json.error ?? "Sandbox send failed");
+      return { data: json.data ?? json };
+    } catch (err) {
+      throw new Error(
+        `Sandbox send ${rpcType} failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  /** Used by process-manager to send a simple text prompt. */
+  async sendMessage(message: string): Promise<void> {
+    return this.prompt(message);
+  }
+
+  /** Get agent detail by name. Called via process-manager.getAgentDetail(). */
+  async getAgentDetail(agentName: string): Promise<unknown> {
+    return this.call("agent.getAgentDetail", agentName || "build");
+  }
+
+  /** Get all tools for current agent. Called via process-manager.getAllTools(). */
+  async getAllTools(): Promise<unknown> {
+    const result = await this.call("agent.getAllTools");
+    // Unwrap nested { tools: [...] } response if needed
+    if (result && typeof result === "object" && "tools" in (result as Record<string, unknown>)) {
+      return (result as Record<string, unknown>).tools;
+    }
+    return result;
+  }
+
+  // ─── Channels ──────────────────────────────────────────
+  // Sandbox 模式不支持 channel（实时双向通信），返回 no-op 实现
+
+  channel(name: string): Pick<Channel, "name" | "send" | "onReceive" | "invoke" | "call"> {
+    const log = createLogger("sandbox-channel");
+    log.warn("Channel not available in sandbox mode, returning no-op", { channel: name });
+    return {
+      name,
+      send: async () => {},
+      onReceive: () => () => {},
+      invoke: async () => undefined,
+      call: async () => undefined,
+    };
   }
 }

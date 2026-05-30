@@ -19,7 +19,9 @@ const PORT = HOOK_BASE_PORT + 60;
 const AUTH_TOKEN = "hooks-test-token-g6";
 const paths = getHookPaths("g6");
 
-describe("Group 6: Environment Variables Verification", () => {
+const shouldRun = process.env.PI_E2E_LLM === "1";
+
+describe.skipIf(shouldRun === false)("Group 6: Environment Variables Verification", () => {
   let ctx: HookTestContext;
   let envScript: string;
 

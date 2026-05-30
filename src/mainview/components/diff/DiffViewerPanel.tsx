@@ -5,6 +5,7 @@ import ReactDiffViewer, { DiffMethod } from "react-diff-viewer-continued";
 import { useGitStore } from "../../stores/use-git-store";
 import { useThemeStore, isDarkGroup } from "../../stores/use-theme-store";
 import { useLayoutStore } from "../../layouts/use-layout-store";
+import { formatFilePath } from "../../lib/format-path";
 
 /* Module-level constant: avoids re-creating the styles object on every render */
 export const DIFF_STYLES = {
@@ -60,7 +61,8 @@ export function DiffViewerPanel() {
 
   if (!currentDiff && !loadingDiff) return null;
 
-  const fileName = currentDiff?.filePath.split("/").pop() ?? "";
+  const rawPath = currentDiff?.filePath ?? "";
+  const fileName = rawPath.split("/").pop() ?? "";
 
   return (
     <div
@@ -70,7 +72,9 @@ export function DiffViewerPanel() {
       {/* Header */}
       <div className="h-9 bg-surface-dim border-b border-border-secondary flex items-center px-3 text-xs flex-shrink-0 gap-2">
         <span className="text-text-primary dark:text-text-secondary font-medium">{fileName}</span>
-        <span className="text-text-tertiary truncate text-[10px]">{currentDiff?.filePath}</span>
+        <span className="text-text-tertiary truncate text-[10px]" title={rawPath}>
+          {rawPath ? formatFilePath(rawPath) : ""}
+        </span>
         <div className="ml-auto flex items-center gap-1">
           <button
             onClick={() => setSplitView(false)}

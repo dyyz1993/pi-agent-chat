@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { ContentBlock } from "../../../types";
 import { useSettingsStore } from "../../../stores/use-settings-store";
 import { ToolCardHeader } from "../primitives/ToolCardHeader";
+import { formatFilePath } from "../../../lib/format-path";
 
 type Block = Extract<ContentBlock, { type: "toolExecution" }>;
 
@@ -65,7 +66,7 @@ export const ReadFileCard = memo(function ReadFileCard({
     /* args not valid JSON, use default */
   }
 
-  const displayPath = filePath || block.args?.slice(0, 80) || "";
+  const displayPath = filePath ? formatFilePath(filePath) : block.args?.slice(0, 80) || "";
 
   const headerStatus = isRunning
     ? ("running" as const)
