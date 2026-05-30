@@ -298,6 +298,80 @@ export class AgentProcessManager {
       Allows restarting an inactive session when receiving delegate messages. */
   private sessionProjectPaths = new Map<string, string>();
   private leafIds = new Map<string, string | null>();
+
+  private async persistLeafId(sessionPath: string, leafId: string): Promise<void> {
+    try {
+      const { appendFile } = await import("fs/promises");
+      const entry = JSON.stringify({
+        type: "leaf_pointer",
+        id: `leaf-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        leafId,
+        timestamp: new Date().toISOString(),
+      });
+      await appendFile(sessionPath, "\n" + entry + "\n", "utf-8");
+    } catch (err) {
+      log.warn("persistLeafId failed", {
+        sessionPath,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  private loadPersistedLeafId(sessionPath: string): {
+    leafId: string;
+    isLastEntry: boolean;
+  } | null {
+    try {
+      if (!existsSync(sessionPath)) return null;
+      const content = readFileSync(sessionPath, "utf-8");
+      const lines = content.split("\n").filter((l) => l.trim());
+      if (lines.length === 0) return null;
+      for (let i = lines.length - 1; i >= 0; i--) {
+        try {
+          const parsed = JSON.parse(lines[i]) as Record<string, unknown>;
+          if (parsed.type === "leaf_pointer" && typeof parsed.leafId === "string") {
+            let isLast = i === lines.length - 1;
+            if (!isLast) {
+              isLast = true;
+              for (let j = i + 1; j < lines.length; j++) {
+                try {
+                  const after = JSON.parse(lines[j]) as Record<string, unknown>;
+                  if (after.type === "message") {
+                    isLast = false;
+                    break;
+                  }
+                } catch { continue; }
+              }
+            }
+            return { leafId: parsed.leafId, isLastEntry: isLast };
+          }
+        } catch { continue; }
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  private findLastMessageLeaf(sessionPath: string): string | null {
+    try {
+      if (!existsSync(sessionPath)) return null;
+      const content = readFileSync(sessionPath, "utf-8");
+      const lines = content.split("\n").filter((l) => l.trim());
+      for (let i = lines.length - 1; i >= 0; i--) {
+        try {
+          const parsed = JSON.parse(lines[i]) as Record<string, unknown>;
+          if (parsed.type === "message" && parsed.id) {
+            return parsed.id as string;
+          }
+        } catch { continue; }
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
   private lastLspState = new Map<
     string,
     { state: string; servers: unknown[]; mode?: string; activeLanguages?: string[] }
@@ -456,6 +530,20 @@ export class AgentProcessManager {
         }
         if (parsed.type === "message" && parsed.message) {
           messages.push({ entryId, message: parsed.message });
+          newEntries++;
+        } else if (parsed.type === "compaction") {
+          messages.push({
+            entryId,
+            message: {
+              id: parsed.id,
+              role: "compactionSummary",
+              summary: parsed.summary ?? "",
+              tokensBefore: parsed.tokensBefore,
+              timestamp: new Date(
+                (parsed.timestamp as string | number | Date) ?? 0,
+              ).getTime(),
+            },
+          });
           newEntries++;
         } else if (parsed.type === "custom") {
           customEntries.push({
@@ -1322,6 +1410,27 @@ export class AgentProcessManager {
     // --- Parallel: start getTreeWithLeaf RPC and JSONL reading at the same time ---
     // For running sessions, getTreeWithLeaf can take seconds if CLI is busy.
     // Running it in parallel with JSONL reading hides that latency.
+    let persistedLeafId: string | null | undefined;
+    let persistedIsLast = false;
+    if (resolvedSessionPath) {
+      const pLeaf = this.loadPersistedLeafId(resolvedSessionPath);
+      if (pLeaf) {
+        persistedLeafId = pLeaf.leafId;
+        persistedIsLast = pLeaf.isLastEntry;
+        perfLog.info("[getFullMessages] persisted leaf loaded", {
+          sessionId,
+          persistedLeafId,
+          persistedIsLast,
+          managed: !!managed,
+        });
+      } else {
+        perfLog.info("[getFullMessages] no persisted leaf found", {
+          sessionId,
+          managed: !!managed,
+        });
+      }
+    }
+
     let leafIdPromise: Promise<string | null | undefined> | undefined;
     if (managed) {
       leafIdPromise = (async () => {
@@ -1331,21 +1440,25 @@ export class AgentProcessManager {
             10_000,
             "getTreeWithLeaf",
           );
-          if (treeResult.leafId) {
-            this.leafIds.set(sessionId, treeResult.leafId);
-          }
-          return treeResult.leafId;
+          const cliLeaf = treeResult.leafId;
+          if (!cliLeaf) return persistedLeafId ?? this.leafIds.get(sessionId);
+
+          // CLI leaf is authoritative for managed sessions — always prefer it
+          // over persisted leaf_pointer (which may be stale after compaction).
+          this.leafIds.set(sessionId, cliLeaf);
+          return cliLeaf;
         } catch (err: unknown) {
           log.warn("[getFullMessages] getTreeWithLeaf failed, using cached leafId", {
             sessionId,
             err: err instanceof Error ? err.message : String(err),
           });
-          return this.leafIds.get(sessionId);
+          return persistedLeafId ?? this.leafIds.get(sessionId);
         }
       })();
     }
 
     // --- JSONL reading with incremental append support ---
+    let incrementalLineCount = 0;
     if (resolvedSessionPath && existsSync(resolvedSessionPath)) {
       const cached = this.getSessionCache(sessionId, resolvedSessionPath);
       if (cached) {
@@ -1365,11 +1478,10 @@ export class AgentProcessManager {
               allCustomEntries,
               parentById,
             );
-            // Store the new total line count for next incremental read
-            cached.lineCount = result.totalLines;
+            incrementalLineCount = result.totalLines;
             log.debug("[getFullMessages] incremental append", {
               sessionId,
-              existingLines: cached.lineCount - result.newEntries,
+              existingLines: cached.lineCount,
               newEntries: result.newEntries,
               totalLines: result.totalLines,
             });
@@ -1421,6 +1533,19 @@ export class AgentProcessManager {
                     (parsed.timestamp as string | number | Date) ?? 0,
                   ).getTime(),
                 });
+              } else if (parsed.type === "compaction") {
+                allMessages.push({
+                  entryId,
+                  message: {
+                    id: parsed.id,
+                    role: "compactionSummary",
+                    summary: parsed.summary ?? "",
+                    tokensBefore: parsed.tokensBefore,
+                    timestamp: new Date(
+                      (parsed.timestamp as string | number | Date) ?? 0,
+                    ).getTime(),
+                  },
+                });
               } else if (parsed.type === "message" && parsed.message) {
                 allMessages.push({
                   entryId,
@@ -1450,14 +1575,11 @@ export class AgentProcessManager {
         });
       }
     } else if (incrementalAppend && resolvedSessionPath) {
-      // Update cache — lineCount was already updated on the cached object
-      // by the incremental read (cached.lineCount = result.totalLines)
-      const updatedCached = this.sessionMsgCache.get(sessionId);
       this.setSessionCache(sessionId, resolvedSessionPath, {
         messages: allMessages,
         customEntries: allCustomEntries,
         parentById,
-        lineCount: updatedCached?.lineCount ?? parentById.size,
+        lineCount: incrementalLineCount,
       });
     }
 
@@ -1469,9 +1591,23 @@ export class AgentProcessManager {
       try {
         const freshLeafId = await leafIdPromise;
         leafId = freshLeafId ?? this.leafIds.get(sessionId);
+        perfLog.info("[getFullMessages] leafId resolved (managed)", {
+          sessionId,
+          leafId,
+          source: freshLeafId ? "leafIdPromise" : "leafIds",
+          persistedLeafId,
+          persistedIsLast,
+        });
       } catch {
         leafId = this.leafIds.get(sessionId);
       }
+    } else if (persistedIsLast && persistedLeafId) {
+      leafId = persistedLeafId;
+      this.leafIds.set(sessionId, persistedLeafId);
+    } else if (!persistedIsLast && persistedLeafId && resolvedSessionPath) {
+      const lastMsgLeaf = this.findLastMessageLeaf(resolvedSessionPath);
+      leafId = lastMsgLeaf ?? this.leafIds.get(sessionId);
+      if (lastMsgLeaf) this.leafIds.set(sessionId, lastMsgLeaf);
     } else {
       leafId = this.leafIds.get(sessionId);
     }
@@ -1491,6 +1627,29 @@ export class AgentProcessManager {
         pathIds.add(curId);
         const parent = parentById.get(curId);
         curId = parent ?? null;
+      }
+      const childById = new Map<string, string[]>();
+      for (const [childId, parentId] of parentById) {
+        if (!parentId) continue;
+        let children = childById.get(parentId);
+        if (!children) { children = []; childById.set(parentId, children); }
+        children.push(childId);
+      }
+      const expand = (id: string) => {
+        const children = childById.get(id);
+        if (!children) return;
+        for (const child of children) {
+          if (pathIds.has(child)) continue;
+          if (childById.has(child)) {
+            const grandChildren = childById.get(child);
+            if (grandChildren && grandChildren.length > 0) continue;
+          }
+          pathIds.add(child);
+        }
+      };
+      const ancestors = [...pathIds];
+      for (const id of ancestors) {
+        expand(id);
       }
       filteredMessages = allMessages.filter((m) => pathIds.has(m.entryId));
       customEntries = allCustomEntries.filter((e) => pathIds.has(e.id));
@@ -1525,7 +1684,7 @@ export class AgentProcessManager {
     }
 
     const totalMs = Math.round(performance.now() - t0);
-    perfLog.info("[getFullMessages] JSONL fallback done", {
+    perfLog.info("[getFullMessages] done", {
       sessionId,
       source: cacheHit ? (incrementalAppend ? "incremental" : "cache") : "jsonl",
       messageCount: slicedMessages.length,
@@ -2180,8 +2339,24 @@ export class AgentProcessManager {
         "navigateTree",
       );
       if (!result.cancelled) {
-        this.leafIds.set(sessionId, targetId);
-        log.info("navigateTree updated leafId", { sessionId, targetId });
+    let actualLeaf: string | null = targetId;
+        try {
+          const treeResult = await withTimeout(
+            managed.client.getTreeWithLeaf(),
+            5_000,
+            "getTreeWithLeaf",
+          );
+          if (treeResult.leafId) actualLeaf = treeResult.leafId;
+        } catch {
+          log.warn("navigateTree: getTreeWithLeaf after navigate failed, using targetId", {
+            sessionId,
+            targetId,
+          });
+        }
+        this.leafIds.set(sessionId, actualLeaf);
+        const sp = this.resolveSessionPath(sessionId);
+        if (sp) await this.persistLeafId(sp, actualLeaf);
+        log.info("navigateTree updated leafId", { sessionId, targetId, actualLeaf });
       }
       return result;
     }
@@ -2202,6 +2377,7 @@ export class AgentProcessManager {
     }
 
     this.leafIds.set(sessionId, targetId);
+    if (sessionPath) await this.persistLeafId(sessionPath, targetId);
 
     if (!options?.skipFiles) {
       log.warn("navigateTree: file restore skipped (no active CLI process)", {
