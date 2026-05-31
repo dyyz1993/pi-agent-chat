@@ -220,4 +220,6 @@ export class SandboxBoxProvider implements ISandboxProvider {
       proc.on("error", reject);
     });
   }
+
+  async cleanupStaleSandboxes(_activeIds: string[]): Promise<void> {}
 }

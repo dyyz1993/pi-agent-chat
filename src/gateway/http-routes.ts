@@ -4,15 +4,30 @@
  */
 
 import type { IncomingMessage, ServerResponse } from "http";
+import { request as httpRequest } from "http";
 import { stat, readFile, writeFile, mkdir, appendFile, unlink } from "fs/promises";
 import { existsSync } from "fs";
-import { tmpdir } from "os";
 import { extname, basename, dirname, resolve } from "path";
 import { createLogger } from "../shared/lib/logger";
 import { listRecentProjects, restoreOpenTabs } from "../shared/lib/project-config";
 import { createProxyRegistrar } from "./proxy-register";
 
 const log = createLogger("gateway");
+function resolveTokenUser(token: string): string | undefined {
+  const tokenUsersRaw = String(process.env.TOKEN_USERS);
+  void tokenUsersRaw;
+  const pairs = tokenUsersRaw.split(",");
+  void pairs;
+  for (let i = 0; i < pairs.length; i++) {
+    const pair = pairs[i].trim();
+    const eq = pair.indexOf("=");
+    if (eq > 0) {
+      const tk = pair.substring(0, eq).trim();
+      if (tk === token) return pair.substring(eq + 1).trim();
+    }
+  }
+  return undefined;
+}
 
 const FS_COOKIE_NAME = "fs_token";
 const FS_COOKIE_MAX_AGE = 3600;
@@ -45,13 +60,12 @@ const MIME_TYPES: Record<string, string> = {
 // 路径白名单校验：阻止路径遍历攻击
 const ALLOWED_ROOTS = [
   resolve(process.cwd()),
-  resolve(process.env.HOME ?? "/"),
   resolve("/root"),
+  resolve(process.env.HOME ?? "", ".claude", "rules"),
+  resolve(process.env.HOME ?? "", ".config", "opencode", "rules"),
+  resolve(process.env.HOME ?? "", ".opencode", "rules"),
   resolve("/tmp"),
   resolve("/private/tmp"),
-  resolve("/var"),
-  resolve("/private/var"),
-  resolve(tmpdir()),
 ];
 let cachedAllowedRoots: string[] | null = null;
 let rootsCacheTime = 0;
@@ -86,7 +100,25 @@ function verifyToken(req: IncomingMessage, authToken: string): boolean {
   if (req.url) {
     try {
       const url = new URL(req.url, "http://localhost");
-      if (url.searchParams.get("token") === authToken) return true;
+      const token = url.searchParams.get("token");
+      if (token === authToken) return true;
+      if (token) {
+        const tokenUsersRaw = String(process.env.TOKEN_USERS);
+        void tokenUsersRaw;
+        const pairs = tokenUsersRaw.split(",");
+        void pairs;
+        for (let i = 0; i < pairs.length; i++) {
+          const pair = pairs[i].trim();
+          const eq = pair.indexOf("=");
+          if (eq > 0) {
+            const tk = pair.substring(0, eq).trim();
+            if (tk === token) {
+              globalThis.__lastTokenUser = pair.substring(eq + 1).trim();
+              return true;
+            }
+          }
+        }
+      }
     } catch {
       /* invalid URL */
     }
@@ -104,12 +136,48 @@ export interface HttpRouteDeps {
   };
   getWebSocketClientCount: () => number;
   broadcastEvent?: (event: Record<string, unknown>) => void;
+  sandboxEnabled?: boolean;
+  getSandboxPreviewEndpoint?: (userId: string) => Promise<string | null>;
 }
 
 export function createHttpHandler(
   deps: HttpRouteDeps,
 ): (req: IncomingMessage, res: ServerResponse) => void {
-  const { config: cfg, getWebSocketClientCount, broadcastEvent } = deps;
+  const { config: cfg, getWebSocketClientCount, broadcastEvent, sandboxEnabled, getSandboxPreviewEndpoint } = deps;
+
+  function proxyToSandbox(previewUrl: string, sandboxPath: string, req: IncomingMessage, res: ServerResponse): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const targetUrl = `${previewUrl}/raw${sandboxPath.startsWith("/") ? sandboxPath : "/" + sandboxPath}`;
+      const proxyReq = httpRequest(targetUrl, { method: req.method ?? "GET", headers: req.headers }, (proxyRes) => {
+        res.writeHead(proxyRes.statusCode ?? 502, proxyRes.headers as Record<string, string>);
+        proxyRes.pipe(res);
+        proxyRes.on("end", resolve);
+        proxyRes.on("error", reject);
+      });
+      proxyReq.on("error", reject);
+      req.pipe(proxyReq);
+    });
+  }
+
+  function extractUserId(req: IncomingMessage): string | undefined {
+    const url = req.url ? new URL(req.url, "http://localhost") : null;
+    const queryToken = url?.searchParams.get("token");
+    if (queryToken) {
+      const uid = resolveTokenUser(queryToken);
+      if (uid) return uid;
+    }
+    const cookieToken = parseFsCookie(req);
+    if (cookieToken) {
+      const uid = resolveTokenUser(cookieToken);
+      if (uid) return uid;
+    }
+    const auth = req.headers["authorization"];
+    if (typeof auth === "string" && auth.startsWith("Bearer ")) {
+      const uid = resolveTokenUser(auth.slice(7));
+      if (uid) return uid;
+    }
+    return undefined;
+  }
 
   const proxyRegistrar =
     cfg.proxyApiUrl && cfg.proxyPublicDomain
@@ -269,6 +337,23 @@ export function createHttpHandler(
 
     // 文件服务（干净路径，支持 HTML 相对资源）: GET /fs/{path}
     if (url.pathname.startsWith("/fs/")) {
+      if (sandboxEnabled && getSandboxPreviewEndpoint) {
+        const userId = extractUserId(req);
+        if (userId) {
+          const previewUrl = await getSandboxPreviewEndpoint(userId);
+          if (previewUrl) {
+            const filePath = url.pathname.slice(4);
+            if (filePath) {
+              try {
+                await proxyToSandbox(previewUrl, decodeURIComponent(filePath), req, res);
+                return;
+              } catch (err) {
+                log.warn("Sandbox proxy failed, falling back to local", { filePath, error: String(err) });
+              }
+            }
+          }
+        }
+      }
       await handleFsRoute(url, req, res, cfg.authToken);
       return;
     }
@@ -288,6 +373,24 @@ export function createHttpHandler(
       if (url.pathname === "/file/delete" && req.method === "POST") {
         await handleFileDelete(url.searchParams.get("path"), res);
         return;
+      }
+      if (sandboxEnabled && getSandboxPreviewEndpoint) {
+        const userId = extractUserId(req);
+        log.info("[sandbox-file] checking", { sandboxEnabled, hasEndpoint: !!getSandboxPreviewEndpoint, userId, path: url.pathname });
+        if (userId) {
+          const previewUrl = await getSandboxPreviewEndpoint(userId);
+          if (previewUrl) {
+            const encodedPath = url.pathname.slice(6);
+            if (encodedPath) {
+              try {
+                await proxyToSandbox(previewUrl, decodeURIComponent(encodedPath), req, res);
+                return;
+              } catch (err) {
+                log.warn("Sandbox proxy failed, falling back to local", { path: encodedPath, error: String(err) });
+              }
+            }
+          }
+        }
       }
       await handleFileContent(url.pathname.slice(6), req, res);
       return;
@@ -345,10 +448,10 @@ export function createHttpHandler(
           sessionId: body.sessionId,
           event: {
             type: "extension_ui_request",
-            id: body.id ?? `test-req-${Date.now()}`,
-            method: body.method ?? "confirm",
-            title: body.title ?? "Test Request",
-            message: body.message ?? "This is a test request",
+            id: body.id || `test-req-${Date.now()}`,
+            method: body.method || "confirm",
+            title: body.title || "Test Request",
+            message: body.message || "This is a test request",
             options: body.options,
             multiple: body.multiple,
           },
@@ -408,7 +511,7 @@ async function handleFsRoute(
   const cookieToken = parseFsCookie(req);
   const token = queryToken ?? cookieToken;
 
-  if (token !== authToken) {
+  if (token !== authToken && !(token && resolveTokenUser(token))) {
     res.writeHead(401, { "Content-Type": "text/plain" }).end("Unauthorized");
     return;
   }

@@ -29,10 +29,9 @@ import { performance } from "perf_hooks";
 
 // 沙箱模式
 import { SandboxManager } from "../../sandbox/sandbox-manager";
-import { SandboxRpcClient } from "../../sandbox/sandbox-rpc-client";
-import type { ISandboxProvider } from "../../sandbox/types";
-import { LocalProcessProvider } from "../../sandbox/providers/local";
 import { SandboxBoxProvider } from "../../sandbox/providers/sandbox-box";
+import type { ISandboxProvider } from "../../sandbox/types";
+import { SandboxRpcClient } from "../../sandbox/sandbox-rpc-client";
 
 type McpServerInfo = Awaited<ReturnType<RpcClientAPI["getMcpServers"]>>[number];
 
@@ -196,40 +195,50 @@ let globalSandboxManager: SandboxManager | null = null;
 
 export function initSandboxManager(projectsRoot: string): SandboxManager {
   let provider: ISandboxProvider;
+  const providerType = config.sandboxProvider ?? "local";
 
-  switch (config.sandboxProvider) {
-    case "sandbox-box":
-      provider = new SandboxBoxProvider({
-        sshHost: config.sandboxBoxSshHost,
-        sshPort: config.sandboxBoxSshPort,
-        sshUser: config.sandboxBoxSshUser,
-        sshKeyPath: config.sandboxBoxSshKey || undefined,
-        domainSuffix: config.sandboxBoxDomainSuffix,
-      });
-      break;
-    case "cloudflare":
-      throw new Error(
-        "Cloudflare provider requires Workers runtime. Use 'local' or 'sandbox-box'.",
-      );
-    case "local":
-    default:
-      provider = new LocalProcessProvider({
-        basePort: config.sandboxBasePort,
-        cliPath: config.piCliPath,
-        projectsRoot,
-      });
-      break;
+  if (providerType === "sandbox-box") {
+    provider = new SandboxBoxProvider({
+      sshHost: config.sandboxBoxSshHost ?? "192.168.0.29",
+      sshPort: config.sandboxBoxSshPort ?? 2201,
+      sshUser: config.sandboxBoxSshUser ?? "root",
+      sshKeyPath: config.sandboxBoxSshKey ?? "~/.ssh/id_rsa",
+      sandboxPort: 3200,
+      bridgePort: 3101,
+      baseLocalPort: config.sandboxBasePort,
+      piCliPath: config.piCliPath,
+      projectSourcePath: projectsRoot,
+      modelsJsonPath: config.sandboxBoxModelsJson,
+      settingsJsonPath: config.sandboxBoxSettingsJson,
+      extensionsPath: config.sandboxBoxExtensionsPath,
+    });
+  } else {
+    throw new Error(`Unknown sandbox provider: ${providerType}. Only "sandbox-box" is supported.`);
   }
 
   globalSandboxManager = new SandboxManager(provider, {
-    idleTimeoutMs: config.sandboxIdleTimeout * 1000,
+    idleTimeoutMs: (config.sandboxIdleTimeout ?? 1800) * 1000,
     gcIntervalMs: 60_000,
-    providerConfig: {
-      idleTimeout: `${config.sandboxIdleTimeout}s`,
-      enableInternet: true,
-      envVars: {},
-    },
   });
+
+  if (providerType === "sandbox-box" && provider instanceof SandboxBoxProvider) {
+    provider.cleanupStaleSandboxes([]).catch((err) => {
+      log.warn("startup sandbox cleanup failed (non-fatal)", { error: String(err) });
+    });
+  }
+
+  return globalSandboxManager;
+}
+
+export function getSandboxEndpoint(userId: string): string | null {
+  if (!globalSandboxManager) return null;
+  const endpoint = (
+    globalSandboxManager as { getEndpoint(userId: string): string | undefined }
+  ).getEndpoint(userId);
+  return endpoint ?? null;
+}
+
+export function getSandboxManager(): SandboxManager | null {
   return globalSandboxManager;
 }
 
@@ -298,80 +307,6 @@ export class AgentProcessManager {
       Allows restarting an inactive session when receiving delegate messages. */
   private sessionProjectPaths = new Map<string, string>();
   private leafIds = new Map<string, string | null>();
-
-  private async persistLeafId(sessionPath: string, leafId: string): Promise<void> {
-    try {
-      const { appendFile } = await import("fs/promises");
-      const entry = JSON.stringify({
-        type: "leaf_pointer",
-        id: `leaf-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        leafId,
-        timestamp: new Date().toISOString(),
-      });
-      await appendFile(sessionPath, "\n" + entry + "\n", "utf-8");
-    } catch (err) {
-      log.warn("persistLeafId failed", {
-        sessionPath,
-        err: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
-
-  private loadPersistedLeafId(sessionPath: string): {
-    leafId: string;
-    isLastEntry: boolean;
-  } | null {
-    try {
-      if (!existsSync(sessionPath)) return null;
-      const content = readFileSync(sessionPath, "utf-8");
-      const lines = content.split("\n").filter((l) => l.trim());
-      if (lines.length === 0) return null;
-      for (let i = lines.length - 1; i >= 0; i--) {
-        try {
-          const parsed = JSON.parse(lines[i]) as Record<string, unknown>;
-          if (parsed.type === "leaf_pointer" && typeof parsed.leafId === "string") {
-            let isLast = i === lines.length - 1;
-            if (!isLast) {
-              isLast = true;
-              for (let j = i + 1; j < lines.length; j++) {
-                try {
-                  const after = JSON.parse(lines[j]) as Record<string, unknown>;
-                  if (after.type === "message") {
-                    isLast = false;
-                    break;
-                  }
-                } catch { continue; }
-              }
-            }
-            return { leafId: parsed.leafId, isLastEntry: isLast };
-          }
-        } catch { continue; }
-      }
-      return null;
-    } catch {
-      return null;
-    }
-  }
-
-  private findLastMessageLeaf(sessionPath: string): string | null {
-    try {
-      if (!existsSync(sessionPath)) return null;
-      const content = readFileSync(sessionPath, "utf-8");
-      const lines = content.split("\n").filter((l) => l.trim());
-      for (let i = lines.length - 1; i >= 0; i--) {
-        try {
-          const parsed = JSON.parse(lines[i]) as Record<string, unknown>;
-          if (parsed.type === "message" && parsed.id) {
-            return parsed.id as string;
-          }
-        } catch { continue; }
-      }
-      return null;
-    } catch {
-      return null;
-    }
-  }
-
   private lastLspState = new Map<
     string,
     { state: string; servers: unknown[]; mode?: string; activeLanguages?: string[] }
@@ -423,20 +358,18 @@ export class AgentProcessManager {
   private getSessionCache(
     sessionId: string,
     sessionPath: string,
-  ):
-    | {
-        messages: Array<{ entryId: string; message: unknown }>;
-        customEntries: Array<{
-          id: string;
-          customType: string;
-          data: unknown;
-          timestamp: number;
-        }>;
-        parentById: Map<string, string | null>;
-        lineCount: number;
-        needsIncremental: boolean;
-      }
-    | null {
+  ): {
+    messages: Array<{ entryId: string; message: unknown }>;
+    customEntries: Array<{
+      id: string;
+      customType: string;
+      data: unknown;
+      timestamp: number;
+    }>;
+    parentById: Map<string, string | null>;
+    lineCount: number;
+    needsIncremental: boolean;
+  } | null {
     const cached = this.sessionMsgCache.get(sessionId);
     if (!cached) return null;
     try {
@@ -531,28 +464,12 @@ export class AgentProcessManager {
         if (parsed.type === "message" && parsed.message) {
           messages.push({ entryId, message: parsed.message });
           newEntries++;
-        } else if (parsed.type === "compaction") {
-          messages.push({
-            entryId,
-            message: {
-              id: parsed.id,
-              role: "compactionSummary",
-              summary: parsed.summary ?? "",
-              tokensBefore: parsed.tokensBefore,
-              timestamp: new Date(
-                (parsed.timestamp as string | number | Date) ?? 0,
-              ).getTime(),
-            },
-          });
-          newEntries++;
         } else if (parsed.type === "custom") {
           customEntries.push({
             id: entryId || `custom-${Date.now()}`,
             customType: (parsed.customType as string) ?? "unknown",
             data: parsed.data,
-            timestamp: new Date(
-              (parsed.timestamp as string | number | Date) ?? 0,
-            ).getTime(),
+            timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
           });
           newEntries++;
         }
@@ -650,8 +567,8 @@ export class AgentProcessManager {
     sessionId: string,
     projectPath: string,
     sessionPath: string,
-    _options?: { forceNewProcess?: boolean },
-  ): Promise<{ agentId: string; status: "started" | "already_running" }> {
+    options?: { forceNewProcess?: boolean; userId?: string },
+  ): Promise<{ agentId: string; status: "started" | "already_running" | "switched" }> {
     const tStart = performance.now();
 
     // Guard: prevent recursive start() triggered by coordinator session_delegate
@@ -673,23 +590,96 @@ export class AgentProcessManager {
       return { agentId: sessionId, status: "already_running" };
     }
 
+    // ── Process pool: reuse existing process for same cwd ──
+    // In sandbox mode, each userId gets its own process pool entry
+    const poolKey =
+      config.sandboxEnabled && options?.userId ? `${projectPath}::${options.userId}` : projectPath;
+    const pooled = options?.forceNewProcess ? null : this.processByCwd.get(poolKey);
+    if (pooled) {
+      const oldSessionId = pooled._activeSessionId;
+      const tSwitch = performance.now();
+      try {
+        perfLog.info("[start] reusing pooled process", {
+          sessionId,
+          projectPath,
+          oldSessionId,
+        });
+        // Race switchSession with a 15-second timeout.
+        // If the child process is busy (e.g. getFullMessages), don't queue behind it.
+        const result = await withTimeout(
+          pooled.client.switchSession(sessionPath),
+          15_000,
+          "switchSession",
+        );
+        if (!result.cancelled) {
+          // Update mappings: remove ALL stale clients entries pointing to this pooled process
+          for (const [sid, mc] of this.clients) {
+            if (mc === pooled && sid !== sessionId) {
+              this.clients.delete(sid);
+            }
+          }
+          pooled._activeSessionId = sessionId;
+          pooled.info = {
+            sessionId,
+            projectPath,
+            sessionPath,
+            status: "idle",
+            holdEvents: [],
+          };
+          this.clients.set(sessionId, pooled);
+          this.sessionPaths.set(sessionId, sessionPath);
+          this.sessionProjectPaths.set(sessionId, projectPath);
+          perfLog.info("[start] switchSession done", {
+            sessionId,
+            oldSessionId,
+            totalMs: Math.round(performance.now() - tSwitch),
+          });
+          this._startInProgress = false;
+          this._drainPendingDelegates();
+          this.broadcastSessionStatus(sessionId, "idle");
+          return { agentId: sessionId, status: "switched" };
+        }
+        // If cancelled by an extension, fall through to create new process
+        perfLog.info("[start] switchSession cancelled by extension, creating new process");
+      } catch (err: unknown) {
+        const switchMs = Math.round(performance.now() - tSwitch);
+        // switchSession failed or timed out — kill the pooled process (it may be stuck)
+        // and fall through to create a fresh one.
+        perfLog.info("[start] switchSession failed, killing pooled process", {
+          sessionId,
+          oldSessionId,
+          switchMs,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        // Remove from process pool so we don't try to reuse a stuck process
+        this.processByCwd.delete(poolKey);
+        // Kill ALL stale clients entries pointing to this stuck process
+        for (const [sid, mc] of this.clients) {
+          if (mc === pooled) {
+            this.clients.delete(sid);
+          }
+        }
+        try {
+          pooled.unsubscribe();
+        } catch {
+          /* ignore */
+        }
+        try {
+          await pooled.client.stop();
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+
     perfLog.info("[start] begin (new process)", { sessionId, projectPath });
 
-    let client: RpcClientAPI;
-    let createTimings: Record<string, number>;
-    try {
-      const result = await createRpcClient(
-        config.piCliPath,
-        projectPath,
-        sessionPath,
-        config.sandboxEnabled ? sessionId : undefined,
-      );
-      client = result.client;
-      createTimings = result.timings;
-    } catch (err) {
-      this._startInProgress = false;
-      throw err;
-    }
+    const { client, timings: createTimings } = await createRpcClient(
+      config.piCliPath,
+      projectPath,
+      sessionPath,
+      config.sandboxEnabled ? (options?.userId ?? sessionId) : undefined,
+    );
     const tAfterCreate = performance.now();
 
     log.info("Spawning pi via RpcClient", { cwd: projectPath, sessionPath });
@@ -712,7 +702,12 @@ export class AgentProcessManager {
     const bridge = (event: unknown): void => {
       this.handleEvent(managed._activeSessionId, event as AgentEvent);
     };
-    managed.unsubscribe = client.onEvent(bridge);
+    try {
+      managed.unsubscribe = client.onEvent(bridge);
+    } catch {
+      // sandbox mode: onEvent may not be supported
+      managed.unsubscribe = () => {};
+    }
 
     const coordinatorChannelNames = new Set(["coordinator", "coordinator_client"]);
     const channelNames = [
@@ -729,17 +724,21 @@ export class AgentProcessManager {
       "file-review",
     ] as const;
     for (const name of channelNames) {
-      client.channel(name).onReceive((data: unknown) => {
-        if (coordinatorChannelNames.has(name)) {
-          this.handleCoordinatorCall(managed._activeSessionId, data, name);
-          return;
-        }
-        this.handleEvent(managed._activeSessionId, {
-          type: "channel_data",
-          name,
-          data,
-        } as ChannelDataEvent);
-      });
+      try {
+        client.channel(name).onReceive((data: unknown) => {
+          if (coordinatorChannelNames.has(name)) {
+            this.handleCoordinatorCall(managed._activeSessionId, data, name);
+            return;
+          }
+          this.handleEvent(managed._activeSessionId, {
+            type: "channel_data",
+            name,
+            data,
+          } as ChannelDataEvent);
+        });
+      } catch {
+        // sandbox mode: channels not supported, skip
+      }
     }
 
     this.clients.set(sessionId, managed);
@@ -778,13 +777,9 @@ export class AgentProcessManager {
     log.info("RpcClient started", { sessionId });
     this.sessionPaths.set(sessionId, sessionPath);
     this.sessionProjectPaths.set(sessionId, projectPath);
-    // Track process under its project for lifecycle management
-    let procSet = this.processByCwd.get(projectPath);
-    if (!procSet) {
-      procSet = new Set();
-      this.processByCwd.set(projectPath, procSet);
+    if (!options?.forceNewProcess) {
+      this.processByCwd.set(poolKey, managed);
     }
-    procSet.add(managed);
     this._startInProgress = false;
     this._drainPendingDelegates();
     this.broadcastSessionStatus(sessionId, "idle");
@@ -807,19 +802,22 @@ export class AgentProcessManager {
     return { replayed: events.length };
   }
 
-  send(
+  async send(
     sessionId: string,
     content: string,
     images?: import("@dyyz1993/pi-ai").ImageContent[],
-  ): boolean {
-    const managed = this.getActiveManaged(sessionId);
+  ): Promise<boolean> {
+    let managed = this.getActiveManaged(sessionId);
     if (!managed) {
-      log.warn("send: no client", { sessionId });
+      managed = await this.ensureManagedClient(sessionId);
+    }
+    if (!managed) {
+      log.warn("send: no client after ensure", { sessionId });
       return false;
     }
     managed.client.prompt(content, images).catch(async (err: Error) => {
       log.warn("prompt error", { err: err.message });
-      if (!(await this.isClientAlive(sessionId, managed))) {
+      if (!(await this.isClientAlive(sessionId, managed!))) {
         this.cleanupDeadClient(sessionId, `prompt failed: ${err.message}`);
         return;
       }
@@ -954,13 +952,12 @@ export class AgentProcessManager {
       log.warn("stop error", { sessionId, err: err instanceof Error ? err.message : String(err) });
     });
     this.clients.delete(sessionId);
-    // Clean up process tracking for this project
-    const cwd = managed.info.projectPath;
-    const procSet = this.processByCwd.get(cwd);
-    if (procSet) {
-      procSet.delete(managed);
-      if (procSet.size === 0) {
-        this.processByCwd.delete(cwd);
+    // Clean up process pool if this was the pooled process for its cwd
+    // Need to check both plain projectPath and userId-keyed variants
+    for (const [key, val] of this.processByCwd) {
+      if (val === managed) {
+        this.processByCwd.delete(key);
+        break;
       }
     }
     // Note: sessionPaths, sessionProjectPaths, and leafIds are NOT cleared here.
@@ -979,7 +976,9 @@ export class AgentProcessManager {
     return { status: managed.info.status };
   }
 
-  batchGetSessionsStatus(sessionIds: string[]): Array<{ sessionId: string; status: "idle" | "streaming" | "stopped" }> {
+  batchGetSessionsStatus(
+    sessionIds: string[],
+  ): Array<{ sessionId: string; status: "idle" | "streaming" | "stopped" }> {
     return sessionIds.map((sid) => {
       const managed = this.getActiveManaged(sid);
       return { sessionId: sid, status: managed?.info.status ?? "stopped" };
@@ -1054,7 +1053,68 @@ export class AgentProcessManager {
   private getActiveManaged(sessionId: string): ManagedClient | null {
     const managed = this.clients.get(sessionId);
     if (!managed) return null;
-    return managed;
+    if (managed._activeSessionId === sessionId) return managed;
+    this.clients.delete(sessionId);
+    return null;
+  }
+
+  /**
+   * Ensure a managed client exists for the session.
+   * In sandbox mode, if the managed client was GC'd, this will rebuild it
+   * by calling start() with the persisted session/project metadata.
+   */
+  private async ensureManagedClient(sessionId: string): Promise<ManagedClient | null> {
+    const existing = this.getActiveManaged(sessionId);
+    if (existing) return existing;
+
+    if (!config.sandboxEnabled) return null;
+
+    const projectPath = this.sessionProjectPaths.get(sessionId);
+    const sessionPath = this.sessionPaths.get(sessionId);
+    if (!projectPath || !sessionPath) {
+      log.warn("[ensureManagedClient] no persisted session metadata", { sessionId });
+      return null;
+    }
+
+    const userId = this._getSandboxUserId(sessionId) ?? sessionId;
+
+    log.info("[ensureManagedClient] rebuilding GC'd sandbox", { sessionId, projectPath, userId });
+
+    try {
+      const result = await this.start(sessionId, projectPath, sessionPath, {
+        forceNewProcess: false,
+        userId,
+      });
+      log.info("[ensureManagedClient] rebuild complete", { sessionId, status: result.status });
+    } catch (err: unknown) {
+      log.error("[ensureManagedClient] rebuild failed", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return null;
+    }
+
+    return this.getActiveManaged(sessionId);
+  }
+
+  private _getSandboxUserId(sessionId: string): string | null {
+    if (!config.sandboxEnabled) return null;
+    for (const [key, mc] of this.processByCwd) {
+      if (mc._activeSessionId === sessionId && key.includes("::")) {
+        return key.split("::")[1] ?? null;
+      }
+    }
+    for (const [, mc] of this.clients) {
+      if (mc._activeSessionId === sessionId) {
+        const projectPath = mc.info.projectPath;
+        for (const [key] of this.processByCwd) {
+          if (key.startsWith(`${projectPath}::`)) {
+            return key.split("::")[1] ?? null;
+          }
+        }
+      }
+    }
+    return null;
   }
 
   /**
@@ -1116,7 +1176,10 @@ export class AgentProcessManager {
     isCompacting: boolean;
     messageCount: number;
   } | null> {
-    const managed = this.getActiveManaged(sessionId);
+    let managed = this.getActiveManaged(sessionId);
+    if (!managed) {
+      managed = await this.ensureManagedClient(sessionId);
+    }
     if (!managed) return null;
 
     try {
@@ -1311,7 +1374,59 @@ export class AgentProcessManager {
       data: unknown;
       timestamp: number;
     }> = [];
-    if (resolvedSessionPath && existsSync(resolvedSessionPath)) {
+    const isSandboxSessionPath = resolvedSessionPath?.startsWith("/root/workspace/sessions/");
+
+    if (isSandboxSessionPath && globalSandboxManager && !managed) {
+      try {
+        const userId = this._getSandboxUserId(sessionId);
+        if (userId) {
+          const raw = await globalSandboxManager.execInSandbox(
+            userId,
+            `cat ${resolvedSessionPath}`,
+          );
+          const lines = raw.split("\n");
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+              const parsed = JSON.parse(line) as Record<string, unknown>;
+              if (parsed.type === "custom") {
+                if (activePathIds && typeof parsed.id === "string" && !activePathIds.has(parsed.id))
+                  continue;
+                customEntries.push({
+                  id: (parsed.id as string) ?? `custom-${Date.now()}`,
+                  customType: (parsed.customType as string) ?? "unknown",
+                  data: parsed.data,
+                  timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
+                });
+              } else if (parsed.type === "compaction") {
+                if (activePathIds && typeof parsed.id === "string" && !activePathIds.has(parsed.id))
+                  continue;
+                messages.push({
+                  id: parsed.id,
+                  role: "compactionSummary",
+                  summary: parsed.summary ?? "",
+                  tokensBefore: parsed.tokensBefore,
+                  timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
+                });
+              } else if (parsed.type === "message" && parsed.message) {
+                if (activePathIds && typeof parsed.id === "string" && !activePathIds.has(parsed.id))
+                  continue;
+                messages.push(parsed.message);
+              }
+            } catch (err: unknown) {
+              log.debug("skipping malformed JSONL entry (sandbox getMessages)", {
+                err: err instanceof Error ? err.message : String(err),
+              });
+            }
+          }
+        }
+      } catch (err: unknown) {
+        log.warn("Failed to read sandbox JSONL in getMessages", {
+          sessionPath: resolvedSessionPath,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
+    } else if (resolvedSessionPath && existsSync(resolvedSessionPath)) {
       try {
         const rl = readline.createInterface({
           input: createReadStream(resolvedSessionPath, { encoding: "utf-8" }),
@@ -1396,126 +1511,26 @@ export class AgentProcessManager {
     // JSONL-first: always read messages directly from the JSONL file.
     // This avoids CLI OOM — CLI's get_full_messages handler uses readFile internally
     // which can blow the heap on large sessions (>8MB JSONL).
-    let allMessages: Array<{ entryId: string; message: unknown }> = [];
-    let allCustomEntries: Array<{
+    const allMessages: Array<{ entryId: string; message: unknown }> = [];
+    const allCustomEntries: Array<{
       id: string;
       customType: string;
       data: unknown;
       timestamp: number;
     }> = [];
-    let parentById: Map<string, string | null> = new Map();
-    let cacheHit = false;
-    let incrementalAppend = false;
+    const parentById: Map<string, string | null> = new Map();
+    const isSandboxSessionPath = resolvedSessionPath?.startsWith("/root/workspace/sessions/");
 
-    // --- Parallel: start getTreeWithLeaf RPC and JSONL reading at the same time ---
-    // For running sessions, getTreeWithLeaf can take seconds if CLI is busy.
-    // Running it in parallel with JSONL reading hides that latency.
-    let persistedLeafId: string | null | undefined;
-    let persistedIsLast = false;
-    if (resolvedSessionPath) {
-      const pLeaf = this.loadPersistedLeafId(resolvedSessionPath);
-      if (pLeaf) {
-        persistedLeafId = pLeaf.leafId;
-        persistedIsLast = pLeaf.isLastEntry;
-        perfLog.info("[getFullMessages] persisted leaf loaded", {
-          sessionId,
-          persistedLeafId,
-          persistedIsLast,
-          managed: !!managed,
-        });
-      } else {
-        perfLog.info("[getFullMessages] no persisted leaf found", {
-          sessionId,
-          managed: !!managed,
-        });
-      }
-    }
-
-    let leafIdPromise: Promise<string | null | undefined> | undefined;
-    if (managed) {
-      leafIdPromise = (async () => {
-        try {
-          const treeResult = await withTimeout(
-            managed.client.getTreeWithLeaf(),
-            10_000,
-            "getTreeWithLeaf",
+    if (isSandboxSessionPath && globalSandboxManager) {
+      try {
+        const userId = this._getSandboxUserId(sessionId);
+        if (userId) {
+          const raw = await globalSandboxManager.execInSandbox(
+            userId,
+            `cat ${resolvedSessionPath}`,
           );
-          const cliLeaf = treeResult.leafId;
-          if (!cliLeaf) return persistedLeafId ?? this.leafIds.get(sessionId);
-
-          // CLI leaf is authoritative for managed sessions — always prefer it
-          // over persisted leaf_pointer (which may be stale after compaction).
-          this.leafIds.set(sessionId, cliLeaf);
-          return cliLeaf;
-        } catch (err: unknown) {
-          log.warn("[getFullMessages] getTreeWithLeaf failed, using cached leafId", {
-            sessionId,
-            err: err instanceof Error ? err.message : String(err),
-          });
-          return persistedLeafId ?? this.leafIds.get(sessionId);
-        }
-      })();
-    }
-
-    // --- JSONL reading with incremental append support ---
-    let incrementalLineCount = 0;
-    if (resolvedSessionPath && existsSync(resolvedSessionPath)) {
-      const cached = this.getSessionCache(sessionId, resolvedSessionPath);
-      if (cached) {
-        if (cached.needsIncremental && cached.lineCount > 0) {
-          // File grew — only read new lines and append
-          allMessages = [...cached.messages];
-          allCustomEntries = [...cached.customEntries];
-          parentById = new Map(cached.parentById);
-          cacheHit = true;
-          incrementalAppend = true;
-
-          try {
-            const result = await this.readJsonlFromLine(
-              resolvedSessionPath,
-              cached.lineCount,
-              allMessages,
-              allCustomEntries,
-              parentById,
-            );
-            incrementalLineCount = result.totalLines;
-            log.debug("[getFullMessages] incremental append", {
-              sessionId,
-              existingLines: cached.lineCount,
-              newEntries: result.newEntries,
-              totalLines: result.totalLines,
-            });
-          } catch (err: unknown) {
-            // Incremental failed — fall through to use whatever we had
-            log.warn("[getFullMessages] incremental append failed", {
-              sessionId,
-              err: err instanceof Error ? err.message : String(err),
-            });
-          }
-        } else {
-          // Exact match — file unchanged
-          allMessages = cached.messages;
-          allCustomEntries = cached.customEntries;
-          parentById = cached.parentById;
-          cacheHit = true;
-        }
-      }
-    }
-
-    if (!cacheHit) {
-      allMessages = [];
-      allCustomEntries = [];
-      parentById = new Map<string, string | null>();
-      let totalLines = 0; // track physical lines (including blank) for incremental reads
-
-      if (resolvedSessionPath && existsSync(resolvedSessionPath)) {
-        try {
-          const rl = readline.createInterface({
-            input: createReadStream(resolvedSessionPath, { encoding: "utf-8" }),
-            crlfDelay: Infinity,
-          });
-          for await (const line of rl) {
-            totalLines++; // count ALL physical lines (including blank)
+          const lines = raw.split("\n");
+          for (const line of lines) {
             if (!line.trim()) continue;
             try {
               const parsed = JSON.parse(line) as Record<string, unknown>;
@@ -1529,22 +1544,7 @@ export class AgentProcessManager {
                   id: entryId || `custom-${Date.now()}`,
                   customType: (parsed.customType as string) ?? "unknown",
                   data: parsed.data,
-                  timestamp: new Date(
-                    (parsed.timestamp as string | number | Date) ?? 0,
-                  ).getTime(),
-                });
-              } else if (parsed.type === "compaction") {
-                allMessages.push({
-                  entryId,
-                  message: {
-                    id: parsed.id,
-                    role: "compactionSummary",
-                    summary: parsed.summary ?? "",
-                    tokensBefore: parsed.tokensBefore,
-                    timestamp: new Date(
-                      (parsed.timestamp as string | number | Date) ?? 0,
-                    ).getTime(),
-                  },
+                  timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
                 });
               } else if (parsed.type === "message" && parsed.message) {
                 allMessages.push({
@@ -1553,73 +1553,66 @@ export class AgentProcessManager {
                 });
               }
             } catch (err: unknown) {
-              log.debug("skipping malformed JSONL entry", {
+              log.debug("skipping malformed JSONL entry (sandbox)", {
                 err: err instanceof Error ? err.message : String(err),
               });
             }
           }
-          rl.close();
-        } catch (err: unknown) {
-          log.warn("Failed to read entries from JSONL", {
-            err: err instanceof Error ? err.message : String(err),
-          });
         }
-      }
-
-      if (resolvedSessionPath) {
-        this.setSessionCache(sessionId, resolvedSessionPath, {
-          messages: allMessages,
-          customEntries: allCustomEntries,
-          parentById,
-          lineCount: totalLines,
+      } catch (err: unknown) {
+        log.warn("Failed to read sandbox JSONL", {
+          sessionPath: resolvedSessionPath,
+          err: err instanceof Error ? err.message : String(err),
         });
       }
-    } else if (incrementalAppend && resolvedSessionPath) {
-      this.setSessionCache(sessionId, resolvedSessionPath, {
-        messages: allMessages,
-        customEntries: allCustomEntries,
-        parentById,
-        lineCount: incrementalLineCount,
-      });
-    }
-
-    // Resolve leafId — await getTreeWithLeaf result to ensure we use the
-    // correct current leaf. Previously this was fire-and-forget which caused
-    // stale leafId after rollback+continue to filter out new messages.
-    let leafId: string | null | undefined = undefined;
-    if (managed && leafIdPromise) {
+    } else if (resolvedSessionPath && existsSync(resolvedSessionPath)) {
       try {
-        const freshLeafId = await leafIdPromise;
-        leafId = freshLeafId ?? this.leafIds.get(sessionId);
-        perfLog.info("[getFullMessages] leafId resolved (managed)", {
-          sessionId,
-          leafId,
-          source: freshLeafId ? "leafIdPromise" : "leafIds",
-          persistedLeafId,
-          persistedIsLast,
+        const rl = readline.createInterface({
+          input: createReadStream(resolvedSessionPath, { encoding: "utf-8" }),
+          crlfDelay: Infinity,
         });
-      } catch {
-        leafId = this.leafIds.get(sessionId);
+        for await (const line of rl) {
+          if (!line.trim()) continue;
+          try {
+            const parsed = JSON.parse(line) as Record<string, unknown>;
+            const entryId = (parsed.id as string) ?? "";
+            const parentId = (parsed.parentId as string | null | undefined) ?? null;
+            if (entryId) {
+              parentById.set(entryId, parentId);
+            }
+            if (parsed.type === "custom") {
+              allCustomEntries.push({
+                id: entryId || `custom-${Date.now()}`,
+                customType: (parsed.customType as string) ?? "unknown",
+                data: parsed.data,
+                timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
+              });
+            } else if (parsed.type === "message" && parsed.message) {
+              allMessages.push({
+                entryId,
+                message: parsed.message,
+              });
+            }
+          } catch (err: unknown) {
+            log.debug("skipping malformed JSONL entry", {
+              err: err instanceof Error ? err.message : String(err),
+            });
+          }
+        }
+        rl.close();
+      } catch (err: unknown) {
+        log.warn("Failed to read entries from JSONL", {
+          err: err instanceof Error ? err.message : String(err),
+        });
       }
-    } else if (persistedIsLast && persistedLeafId) {
-      leafId = persistedLeafId;
-      this.leafIds.set(sessionId, persistedLeafId);
-    } else if (!persistedIsLast && persistedLeafId && resolvedSessionPath) {
-      const lastMsgLeaf = this.findLastMessageLeaf(resolvedSessionPath);
-      leafId = lastMsgLeaf ?? this.leafIds.get(sessionId);
-      if (lastMsgLeaf) this.leafIds.set(sessionId, lastMsgLeaf);
-    } else {
-      leafId = this.leafIds.get(sessionId);
     }
+
+    // Resolve leafId from cache
+    const leafId = this.leafIds.get(sessionId) ?? null;
 
     // Build leaf→root path set and filter messages to current branch only.
-    // This ensures rollback (which moves the leaf pointer) is reflected in
-    // the message list. Without filtering, all branches' messages are shown.
     let filteredMessages = allMessages;
     let customEntries = allCustomEntries;
-    // Only filter when leafId actually exists in the JSONL.
-    // A stale leafId (from another session or expired cache) would produce
-    // an empty path and incorrectly filter out ALL messages.
     if (leafId && parentById.size > 0 && parentById.has(leafId)) {
       const pathIds = new Set<string>();
       let curId: string | null = leafId;
@@ -1627,29 +1620,6 @@ export class AgentProcessManager {
         pathIds.add(curId);
         const parent = parentById.get(curId);
         curId = parent ?? null;
-      }
-      const childById = new Map<string, string[]>();
-      for (const [childId, parentId] of parentById) {
-        if (!parentId) continue;
-        let children = childById.get(parentId);
-        if (!children) { children = []; childById.set(parentId, children); }
-        children.push(childId);
-      }
-      const expand = (id: string) => {
-        const children = childById.get(id);
-        if (!children) return;
-        for (const child of children) {
-          if (pathIds.has(child)) continue;
-          if (childById.has(child)) {
-            const grandChildren = childById.get(child);
-            if (grandChildren && grandChildren.length > 0) continue;
-          }
-          pathIds.add(child);
-        }
-      };
-      const ancestors = [...pathIds];
-      for (const id of ancestors) {
-        expand(id);
       }
       filteredMessages = allMessages.filter((m) => pathIds.has(m.entryId));
       customEntries = allCustomEntries.filter((e) => pathIds.has(e.id));
@@ -1686,14 +1656,10 @@ export class AgentProcessManager {
     const totalMs = Math.round(performance.now() - t0);
     perfLog.info("[getFullMessages] done", {
       sessionId,
-      source: cacheHit ? (incrementalAppend ? "incremental" : "cache") : "jsonl",
       messageCount: slicedMessages.length,
       totalCount,
       hasMore,
       leafId: leafId ?? "none",
-      pathFilterApplied: !!leafId,
-      cacheHit,
-      incrementalAppend,
       totalMs,
     });
 
@@ -1706,17 +1672,18 @@ export class AgentProcessManager {
     };
   }
 
-  async getAvailableModels(sessionId: string): Promise<
-    Array<{
-      provider: string;
-      id: string;
-      name: string;
-      contextWindow: number;
-      reasoning: boolean;
-      input: ("text" | "image")[];
-    }>
-  > {
-    const managed = this.getActiveManaged(sessionId);
+  async getAvailableModels(
+    sessionId: string,
+  ): Promise<Array<{ provider: string; id: string; contextWindow: number; reasoning: boolean }>> {
+    // Retry with short delay: session may be mid-switch (agent.start in progress)
+    let managed = this.getActiveManaged(sessionId);
+    if (!managed) {
+      await new Promise((r) => setTimeout(r, 200));
+      managed = this.getActiveManaged(sessionId);
+    }
+    if (!managed) {
+      managed = await this.ensureManagedClient(sessionId);
+    }
     if (!managed) return [];
     return (managed.client as SandboxRpcClient).getAvailableModels().catch(async (err: unknown) => {
       const msg = err instanceof Error ? err.message : String(err);
@@ -1736,7 +1703,10 @@ export class AgentProcessManager {
     provider: string,
     modelId: string,
   ): Promise<{ provider: string; id: string }> {
-    const managed = this.getActiveManaged(sessionId);
+    let managed = this.getActiveManaged(sessionId);
+    if (!managed) {
+      managed = await this.ensureManagedClient(sessionId);
+    }
     if (!managed) throw new Error("Client not found");
     return withTimeout(managed.client.setModel(provider, modelId), 15_000, "setModel");
   }
@@ -1746,7 +1716,10 @@ export class AgentProcessManager {
     thinkingLevel: string;
     isScoped: boolean;
   } | null> {
-    const managed = this.getActiveManaged(sessionId);
+    let managed = this.getActiveManaged(sessionId);
+    if (!managed) {
+      managed = await this.ensureManagedClient(sessionId);
+    }
     if (!managed) return null;
     return managed.client.cycleModel().catch((err: unknown) => {
       log.warn("cycleModel error", {
@@ -2015,7 +1988,10 @@ export class AgentProcessManager {
   async getContextUsage(
     sessionId: string,
   ): Promise<{ tokens: number | null; contextWindow: number; percent: number | null }> {
-    const managed = this.getActiveManaged(sessionId);
+    let managed = this.getActiveManaged(sessionId);
+    if (!managed) {
+      managed = await this.ensureManagedClient(sessionId);
+    }
     if (!managed) return { tokens: null, contextWindow: 0, percent: null };
     return managed.client.getContextUsage().catch(async (err: unknown) => {
       const msg = err instanceof Error ? err.message : String(err);
@@ -2031,7 +2007,14 @@ export class AgentProcessManager {
   }
 
   async getTierModels(sessionId: string): Promise<{ models: Record<string, string> }> {
-    const managed = this.getActiveManaged(sessionId);
+    let managed = this.getActiveManaged(sessionId);
+    if (!managed) {
+      await new Promise((r) => setTimeout(r, 200));
+      managed = this.getActiveManaged(sessionId);
+    }
+    if (!managed) {
+      managed = await this.ensureManagedClient(sessionId);
+    }
     if (!managed) return { models: {} };
     const response = await (
       managed.client as unknown as { send: (cmd: unknown) => Promise<unknown> }
@@ -2074,7 +2057,10 @@ export class AgentProcessManager {
       filePath: string;
     }>;
   }> {
-    const managed = this.getActiveManaged(sessionId);
+    let managed = this.getActiveManaged(sessionId);
+    if (!managed) {
+      managed = await this.ensureManagedClient(sessionId);
+    }
     if (!managed) return { agents: [] };
     try {
       const response = await (
@@ -2120,7 +2106,10 @@ export class AgentProcessManager {
     tier?: string;
     thinkingLevel?: string;
   }> {
-    const managed = this.getActiveManaged(sessionId);
+    let managed = this.getActiveManaged(sessionId);
+    if (!managed) {
+      managed = await this.ensureManagedClient(sessionId);
+    }
     if (!managed) throw new Error("No agent process for session");
     const response = await (
       managed.client as unknown as { send: (cmd: unknown) => Promise<unknown> }
@@ -2135,7 +2124,10 @@ export class AgentProcessManager {
   }
 
   async getCurrentAgent(sessionId: string): Promise<{ agentName: string | null }> {
-    const managed = this.getActiveManaged(sessionId);
+    let managed = this.getActiveManaged(sessionId);
+    if (!managed) {
+      managed = await this.ensureManagedClient(sessionId);
+    }
     if (!managed) return { agentName: null };
     try {
       const response = await (
@@ -2339,24 +2331,8 @@ export class AgentProcessManager {
         "navigateTree",
       );
       if (!result.cancelled) {
-    let actualLeaf: string | null = targetId;
-        try {
-          const treeResult = await withTimeout(
-            managed.client.getTreeWithLeaf(),
-            5_000,
-            "getTreeWithLeaf",
-          );
-          if (treeResult.leafId) actualLeaf = treeResult.leafId;
-        } catch {
-          log.warn("navigateTree: getTreeWithLeaf after navigate failed, using targetId", {
-            sessionId,
-            targetId,
-          });
-        }
-        this.leafIds.set(sessionId, actualLeaf);
-        const sp = this.resolveSessionPath(sessionId);
-        if (sp) await this.persistLeafId(sp, actualLeaf);
-        log.info("navigateTree updated leafId", { sessionId, targetId, actualLeaf });
+        this.leafIds.set(sessionId, targetId);
+        log.info("navigateTree updated leafId", { sessionId, targetId });
       }
       return result;
     }
@@ -2377,7 +2353,6 @@ export class AgentProcessManager {
     }
 
     this.leafIds.set(sessionId, targetId);
-    if (sessionPath) await this.persistLeafId(sessionPath, targetId);
 
     if (!options?.skipFiles) {
       log.warn("navigateTree: file restore skipped (no active CLI process)", {
@@ -2574,7 +2549,14 @@ export class AgentProcessManager {
     method: string,
     params: Record<string, unknown>,
   ): Promise<unknown> {
-    const managed = this.getActiveManaged(sessionId);
+    let managed = this.getActiveManaged(sessionId);
+    if (!managed) {
+      await new Promise((r) => setTimeout(r, 200));
+      managed = this.getActiveManaged(sessionId);
+    }
+    if (!managed) {
+      managed = await this.ensureManagedClient(sessionId);
+    }
     if (!managed) throw new Error("Client not found");
     const ch = managed.client.channel(channelName);
     return ch.call(method, params);
@@ -2656,6 +2638,17 @@ export class AgentProcessManager {
       managed.info.status = "idle";
       managed.info.holdEvents = [];
       this.broadcastSessionStatus(sessionId, "idle");
+
+      if (config.sandboxEnabled && managed.info.projectPath) {
+        this.broadcastEvent(
+          "file.changed",
+          {
+            changedPath: managed.info.projectPath,
+            type: "create",
+          },
+          { sessionId },
+        ).catch(() => {});
+      }
 
       const resolver = this.syncDelegateResolvers.get(sessionId);
       if (resolver) {

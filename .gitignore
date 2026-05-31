@@ -122,3 +122,19 @@ introduction.html
 # Yalc local dependency
 .yalc/
 yalc.lock
+
+# OpenCode session registry (runtime generated)
+.opencode/session-registry.json
+
+# Server distribution archives
+dist-server/
+dist-server.tar.gz
+
+# Debug/test temp scripts
+test-*-*.mjs
+
+# Promo drafts
+promo/
+
+# Temporary plan docs
+.compaction-verify-plan.md

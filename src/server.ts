@@ -11,31 +11,36 @@ import { createWsHandler } from "./gateway/ws-handler";
 import { type WebSocket } from "ws";
 import { createLogger, setLogSink } from "./shared/lib/logger";
 import { configureLogDir, writeLogLine } from "./shared/lib/logger.node";
-import { initSandboxManager } from "./shared/agent/process-manager";
+import { initSandboxManager, getSandboxManager } from "./shared/agent/process-manager";
 
 configureLogDir(config.logDir);
 setLogSink(writeLogLine);
 const log = createLogger("server");
+
+// ── Crash protection: catch unhandled errors at process level ──
+process.on("uncaughtException", (err) => {
+  log.error("UNCAUGHT EXCEPTION — server staying alive", {
+    error: err instanceof Error ? err.message : String(err),
+    stack: err instanceof Error ? err.stack : undefined,
+  });
+});
+
+process.on("unhandledRejection", (reason) => {
+  log.error("UNHANDLED REJECTION — server staying alive", {
+    reason: reason instanceof Error ? reason.message : String(reason),
+    stack: reason instanceof Error ? reason.stack : undefined,
+  });
+});
 
 log.info("=== 服务器环境变量诊断 ===");
 log.info("AUTH_TOKEN:", { value: process.env.AUTH_TOKEN });
 log.info("PORT:", { value: process.env.PORT });
 log.info("LOG_DIR:", { value: process.env.LOG_DIR });
 log.info("PI_CLI_PATH:", { value: process.env.PI_CLI_PATH });
-log.info("TOKEN_USERS:", { value: process.env.TOKEN_USERS });
 log.info("==============================");
 
-// 解析用户 token 列表（如 tk-alpha=user-alpha,tk-beta=user-beta）
-const tokenUsersRaw = process.env.TOKEN_USERS ?? "";
-const validTokens = new Set(
-  tokenUsersRaw
-    .split(",")
-    .map((pair) => pair.split("=")[0])
-    .filter(Boolean),
-);
-
 const httpServer = createServer();
-const wss = createWsHandler(httpServer, { config, validTokens });
+const wss = createWsHandler(httpServer, { config });
 
 const distPath = resolve(process.cwd(), "dist");
 const STATIC_MIME: Record<string, string> = {
@@ -64,6 +69,19 @@ const apiHandler = createHttpHandler({
       } catch {}
     }
   },
+  sandboxEnabled: config.sandboxEnabled,
+  getSandboxPreviewEndpoint: config.sandboxEnabled
+    ? async (userId: string) => {
+        const mgr = getSandboxManager();
+        if (!mgr) return null;
+        try {
+          const instance = await mgr.getOrCreate(userId, "/root/workspace/project");
+          return instance.endpoint ?? null;
+        } catch {
+          return null;
+        }
+      }
+    : undefined,
 });
 
 httpServer.on("request", (req, res) => {

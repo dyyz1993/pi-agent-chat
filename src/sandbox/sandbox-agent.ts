@@ -1,141 +1,24 @@
-/**
- * Sandbox Agent — RPC proxy service
- *
- * Receives HTTP RPC requests from the main gateway, communicates with pi agent via JSONL.
- *
- * Two modes:
- *   - Local mode: directly spawn pi CLI (default)
- *   - SSH mode: connect to pi CLI inside a sandbox via SSH (--ssh-*)
- */
-
-/**
- * Map frontend method names ("agent.camelCase") to pi CLI RPC command names ("snake_case").
- * The pi CLI process only understands snake_case command types.
- */
-const METHOD_MAP: Record<string, string> = {
-  "agent.getModifiedFiles": "get_modified_files",
-  "agent.getFileDiff": "get_file_diff",
-  "agent.getBatchDiffs": "get_batch_diffs",
-  "agent.getFileHistory": "get_file_history",
-  "agent.navigateTree": "navigate_tree",
-  "agent.switchSession": "switch_session",
-  "agent.previewRollback": "preview_rollback",
-  "agent.exportHtml": "export_html",
-  "agent.newSession": "new_session",
-  "agent.getFullMessages": "get_full_messages",
-  "agent.getMessages": "get_messages",
-  "agent.getTree": "get_tree",
-  "agent.getTreeWithLeaf": "get_tree_with_leaf",
-  "agent.setSessionName": "set_session_name",
-  "agent.getSessionStats": "get_session_stats",
-  "agent.setModel": "set_model",
-  "agent.cycleModel": "cycle_model",
-  "agent.getAvailableModels": "get_available_models",
-  "agent.setThinkingLevel": "set_thinking_level",
-  "agent.cycleThinkingLevel": "cycle_thinking_level",
-  "agent.setSteeringMode": "set_steering_mode",
-  "agent.setFollowUpMode": "set_follow_up_mode",
-  "agent.setAutoRetry": "set_auto_retry",
-  "agent.abortRetry": "abort_retry",
-  "agent.setAutoCompaction": "set_auto_compaction",
-  "agent.deleteEntries": "delete_entries",
-  "agent.summarizeEntries": "summarize_entries",
-  "agent.setActiveTools": "set_active_tools",
-  "agent.getActiveTools": "get_active_tools",
-  "agent.getContextUsage": "get_context_usage",
-  "agent.getSystemPrompt": "get_system_prompt",
-  "agent.getMcpServers": "get_mcp_servers",
-  "agent.toggleMcpServer": "toggle_mcp_server",
-  "agent.restartMcpServer": "restart_mcp_server",
-  "agent.getCommands": "get_commands",
-  "agent.getSkills": "get_skills",
-  "agent.getExtensions": "get_extensions",
-  "agent.getTools": "get_tools",
-  "agent.getSettings": "get_settings",
-  "agent.setSettings": "set_settings",
-  "agent.getFlags": "get_flags",
-  "agent.getFlagValues": "get_flag_values",
-  "agent.setFlag": "set_flag",
-  "agent.getQueue": "get_queue",
-  "agent.clearQueue": "clear_queue",
-  "agent.getForkMessages": "get_fork_messages",
-  "agent.getLastAssistantText": "get_last_assistant_text",
-  "agent.getAgentsFiles": "get_agents_files",
-  "agent.registerRemoteTool": "register_remote_tool",
-  "agent.unregisterRemoteTool": "unregister_remote_tool",
-  "agent.sendRemoteToolResult": "send_remote_tool_result",
-  "agent.respondUI": "respond_ui",
-  "agent.waitForIdle": "wait_for_idle",
-  "agent.collectEvents": "collect_events",
-  "agent.promptAndWait": "prompt_and_wait",
-  "agent.getState": "get_state",
-  "agent.setCwd": "set_cwd",
-  "agent.clone": "clone",
-  "agent.fork": "fork",
-  "agent.prompt": "prompt",
-  "agent.steer": "steer",
-  "agent.followUp": "follow_up",
-  "agent.abort": "abort",
-  "agent.compact": "compact",
-  "agent.bash": "bash",
-  "agent.abortBash": "abort_bash",
-  "agent.stop": "stop",
-  "agent.reload": "reload",
-  "agent.getAgents": "get_agents",
-  "agent.switchAgent": "switch_agent",
-  "agent.getCurrentAgent": "get_current_agent",
-  "agent.getAgentDetail": "get_agent_detail",
-  "agent.getAllTools": "get_all_tools",
-  "agent.getLatestAgentChange": "get_latest_agent_change",
-};
-
-/**
- * For multi-arg RPC methods, map positional params to the named fields
- * that the pi CLI rpc-mode.ts expects on the `command` object.
- * Single-object-param methods don't need this — the object is flattened directly.
- */
-const PARAM_NAMES_MAP: Record<string, string[]> = {
-  set_model: ["provider", "modelId"],
-  fork: ["entryId", "options"],
-  navigate_tree: ["targetId", "options"],
-  summarize_entries: ["targetIds", "options"],
-  set_settings: ["settings", "scope"],
-  toggle_mcp_server: ["name", "enabled"],
-  set_flag: ["name", "value"],
-  send_remote_tool_result: ["toolCallId", "result"],
-  respond_ui: ["requestId", "response"],
-  prompt_and_wait: ["message", "images", "timeout"],
-  prompt: ["message", "images"],
-  steer: ["message", "images"],
-  follow_up: ["message", "images"],
-  compact: ["customInstructions"],
-  set_session_name: ["name"],
-  new_session: ["parentSession"],
-  switch_session: ["sessionPath"],
-  export_html: ["outputPath"],
-  delete_entries: ["targetIds"],
-  set_active_tools: ["toolNames"],
-  set_auto_compaction: ["enabled"],
-  set_auto_retry: ["enabled"],
-  set_thinking_level: ["level"],
-  set_steering_mode: ["mode"],
-  set_follow_up_mode: ["mode"],
-  bash: ["command"],
-  get_full_messages: ["options"],
-  get_modified_files: ["options"],
-  get_file_diff: ["options"],
-  get_batch_diffs: ["options"],
-  get_file_history: ["options"],
-  preview_rollback: ["targetId"],
-  get_settings: ["scope"],
-  register_remote_tool: ["toolDef"],
-  unregister_remote_tool: ["toolName"],
-  switch_agent: ["agentName"],
-  get_agent_detail: ["agentName"],
-};
-
-import { createServer } from "http";
+import { createServer, type ServerResponse } from "http";
 import { spawn, type ChildProcess } from "child_process";
+import {
+  readdirSync,
+  statSync,
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  unlinkSync,
+  rmSync,
+  renameSync,
+  copyFileSync,
+  existsSync,
+  constants,
+} from "fs";
+import { join, basename as pathBasename, dirname } from "path";
+
+const PORT = parseInt(process.argv.find((a) => a.startsWith("--port="))?.split("=")[1] ?? "3101");
+const CLI_PATH =
+  process.argv.find((a) => a.startsWith("--cli-path="))?.split("=")[1] ?? "/usr/bin/pi";
+const CWD = process.argv.find((a) => a.startsWith("--cwd="))?.split("=")[1] ?? process.cwd();
 
 const log = {
   info: (...args: unknown[]) => process.stdout.write(`[sandbox-agent] ${JSON.stringify(args)}\n`),
@@ -143,183 +26,128 @@ const log = {
     process.stderr.write(`[sandbox-agent] ERROR ${JSON.stringify(args)}\n`),
 };
 
-const PORT = parseInt(process.argv.find((a) => a.startsWith("--port="))?.split("=")[1] ?? "3101");
-const CLI_PATH =
-  process.argv.find((a) => a.startsWith("--cli-path="))?.split("=")[1] ?? "/usr/bin/pi";
-const CWD = process.argv.find((a) => a.startsWith("--cwd="))?.split("=")[1] ?? process.cwd();
-const SSH_HOST = process.argv.find((a) => a.startsWith("--ssh-host="))?.split("=")[1] ?? "";
-const SSH_PORT = process.argv.find((a) => a.startsWith("--ssh-port="))?.split("=")[1] ?? "2201";
-const SSH_USER = process.argv.find((a) => a.startsWith("--ssh-user="))?.split("=")[1] ?? "root";
-const SSH_SANDBOX = process.argv.find((a) => a.startsWith("--ssh-sandbox="))?.split("=")[1] ?? "";
-const SSH_KEY = process.argv.find((a) => a.startsWith("--ssh-key="))?.split("=")[1] ?? "";
-
-const isSsh = !!SSH_HOST && !!SSH_SANDBOX;
-
-log.info(
-  `starting on port ${PORT}, local=${!isSsh}, ssh=${isSsh ? `${SSH_USER}@${SSH_HOST}:${SSH_PORT}/${SSH_SANDBOX}` : "none"}`,
-);
-
-// ─── JSONL pipeline ─────────────────────────────────────
+// ─── Pi Process Management ─────────────────────────────
 
 let piProcess: ChildProcess | null = null;
 const pendingRequests = new Map<
   string,
-  { resolve: (v: unknown) => void; reject: (e: Error) => void }
+  {
+    resolve: (v: unknown) => void;
+    reject: (e: Error) => void;
+    timer: ReturnType<typeof setTimeout>;
+  }
 >();
 let requestId = 0;
+let readyResolve: (() => void) | null = null;
+const sseClients = new Set<ServerResponse>();
 
 function startPi(): Promise<void> {
   return new Promise((resolve, reject) => {
-    let cmd: string;
-    let args: string[];
+    readyResolve = resolve;
+    const timeout = setTimeout(() => reject(new Error("pi agent start timeout")), 60_000);
 
-    if (isSsh) {
-      const keyFlag = SSH_KEY ? `-i ${SSH_KEY}` : "";
-      const sshCmd = `ssh ${keyFlag} -o StrictHostKeyChecking=no -p ${SSH_PORT} ${SSH_USER}@${SSH_HOST} sandbox ${SSH_SANDBOX} 'pi --mode rpc'`;
-      cmd = "sh";
-      args = ["-c", sshCmd];
-    } else {
-      cmd = "/usr/bin/node";
-      args = [CLI_PATH, "--mode", "rpc"];
-    }
-
-    const env = { ...process.env, NODE_OPTIONS: "--max-old-space-size=4096" };
-    const spawnOpts: Record<string, unknown> = { env, stdio: ["pipe", "pipe", "pipe"] };
-    if (!isSsh) {
-      (spawnOpts as Record<string, unknown>).cwd = CWD;
-    }
-
-    piProcess = spawn(cmd, args, spawnOpts as Record<string, unknown>);
+    piProcess = spawn(process.execPath, [CLI_PATH, "--mode", "rpc"], {
+      cwd: CWD,
+      env: { ...process.env, NODE_OPTIONS: "--max-old-space-size=4096" },
+      stdio: ["pipe", "pipe", "pipe"],
+    });
 
     let buffer = "";
-    piProcess.stdout?.on("data", (data: Buffer) => {
+    piProcess.stdout!.on("data", (data: Buffer) => {
       buffer += data.toString();
       const lines = buffer.split("\n");
       buffer = lines.pop() ?? "";
       for (const line of lines) {
         if (!line.trim()) continue;
         try {
-          const msg = JSON.parse(line) as Record<string, unknown>;
-          handleMessage(msg);
+          const msg = JSON.parse(line);
+          handlePiMessage(msg);
         } catch {
           /* skip malformed */
         }
       }
     });
 
-    if (!isSsh) {
-      piProcess.stderr?.on("data", (data: Buffer) => {
-        process.stderr.write(data);
-      });
-    }
+    piProcess.stderr!.on("data", (data: Buffer) => process.stderr.write(data));
 
-    piProcess.on("error", reject);
+    piProcess.on("error", (err) => {
+      clearTimeout(timeout);
+      reject(err);
+    });
     piProcess.on("exit", (code) => {
       log.info(`pi agent exited with code ${code}`);
       piProcess = null;
-    });
-
-    const timeout = setTimeout(() => reject(new Error("pi agent start timeout")), 60000);
-    const origResolve = resolve;
-    pendingRequests.set("__ready__", {
-      resolve: () => {
-        clearTimeout(timeout);
-        origResolve();
-      },
-      reject,
+      clearTimeout(timeout);
+      reject(new Error(`pi agent exited with code ${code}`));
     });
   });
 }
 
-function handleMessage(msg: Record<string, unknown>): void {
-  const { id, type, method } = msg;
-
-  // ready notification (no id)
-  if (type === "ready" || (method === "start" && type === "result")) {
-    const pending = pendingRequests.get("__ready__");
-    if (pending) {
-      pending.resolve(null);
-      pendingRequests.delete("__ready__");
+function handlePiMessage(msg: Record<string, unknown>): void {
+  if (msg.type === "ready") {
+    if (readyResolve) {
+      readyResolve();
+      readyResolve = null;
     }
     return;
   }
 
-  // RPC result — pi CLI returns { id, success, data } or { id, success: false, error }
-  if (id && pendingRequests.has(String(id))) {
-    const pending = pendingRequests.get(String(id));
-    if (!pending) return;
+  if (msg.type === "response" && msg.id && pendingRequests.has(String(msg.id))) {
+    const pending = pendingRequests.get(String(msg.id))!;
+    pendingRequests.delete(String(msg.id));
+    clearTimeout(pending.timer);
     if (msg.success === false) {
-      pending.reject(new Error(String(msg.error)));
+      pending.reject(new Error(String(msg.error ?? "unknown error")));
     } else {
       pending.resolve(msg.data ?? msg);
     }
-    pendingRequests.delete(String(id));
+    broadcastSSE(msg);
+    return;
+  }
+
+  broadcastSSE(msg);
+}
+
+function broadcastSSE(data: Record<string, unknown>): void {
+  const payload = `data: ${JSON.stringify(data)}\n\n`;
+  for (const client of sseClients) {
+    try {
+      client.write(payload);
+    } catch {
+      sseClients.delete(client);
+    }
   }
 }
 
-function callPi(rpcType: string, params: unknown[] = []): Promise<unknown> {
+function sendToPi(command: Record<string, unknown>): Promise<unknown> {
   return new Promise((resolve, reject) => {
-    const id = `req_${++requestId}`;
-    // pi CLI expects named fields at the top level of the JSON message.
-    // SandboxRpcClient passes params as positional args.
-    // For single-object-param calls (most RPC methods), flatten directly.
-    // For multi-arg calls, use PARAM_NAMES_MAP to assign correct field names.
-    let paramObj: Record<string, unknown>;
-    if (params.length === 0) {
-      paramObj = {};
-    } else if (params.length === 1 && typeof params[0] === "object" && params[0] !== null) {
-      // Single object arg — flatten directly (covers most methods)
-      paramObj = params[0] as Record<string, unknown>;
-    } else {
-      // Multi-arg or single primitive arg — look up param names
-      const names = PARAM_NAMES_MAP[rpcType];
-      if (names && names.length >= params.length) {
-        paramObj = {};
-        for (let i = 0; i < params.length; i++) {
-          paramObj[names[i]] = params[i];
-        }
-      } else {
-        // Fallback: positional keys — won't work for pi CLI but won't crash
-        paramObj = {};
-        for (let i = 0; i < params.length; i++) {
-          paramObj[i] = params[i];
-        }
-      }
+    if (!piProcess || !piProcess.stdin) {
+      reject(new Error("pi process not running"));
+      return;
     }
-    const msg = JSON.stringify({ type: rpcType, id, ...paramObj }) + "\n";
-    pendingRequests.set(id, { resolve, reject });
-    piProcess?.stdin?.write(msg);
-    setTimeout(() => {
-      const pending = pendingRequests.get(id);
-      if (pending) {
-        pending.reject(new Error(`RPC timeout: ${rpcType}`));
+    if (!command.id) {
+      command.id = `req_${++requestId}`;
+    }
+    const id = String(command.id);
+    const timer = setTimeout(() => {
+      if (pendingRequests.has(id)) {
         pendingRequests.delete(id);
+        reject(new Error(`RPC timeout: ${command.type ?? "unknown"}`));
       }
     }, 60000);
+    pendingRequests.set(id, { resolve, reject, timer });
+    piProcess.stdin.write(JSON.stringify(command) + "\n");
   });
 }
 
-/**
- * Forward a raw command directly to pi CLI without method/param translation.
- * Used by process-manager's send() for switchAgent, getCurrentAgent, etc.
- */
-function callPiRaw(command: Record<string, unknown>): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    const id = `req_${++requestId}`;
-    const msg = JSON.stringify({ ...command, id }) + "\n";
-    pendingRequests.set(id, { resolve, reject });
-    piProcess?.stdin?.write(msg);
-    setTimeout(() => {
-      const pending = pendingRequests.get(id);
-      if (pending) {
-        pending.reject(new Error(`RPC timeout: ${String(command.type ?? "unknown")}`));
-        pendingRequests.delete(id);
-      }
-    }, 60000);
-  });
+function writeToPi(message: Record<string, unknown>): void {
+  if (!piProcess || !piProcess.stdin) {
+    throw new Error("pi process not running");
+  }
+  piProcess.stdin.write(JSON.stringify(message) + "\n");
 }
 
-// ─── HTTP service ───────────────────────────────────────
+// ─── HTTP Server ──────────────────────────────────────
 
 const server = createServer(async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -334,39 +162,262 @@ const server = createServer(async (req, res) => {
 
   if (url.pathname === "/health") {
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ status: "ok", pid: process.pid, piAlive: piProcess !== null }));
+    res.end(
+      JSON.stringify({
+        status: "ok",
+        pid: process.pid,
+        piAlive: piProcess !== null,
+      }),
+    );
     return;
   }
 
-  if (url.pathname === "/rpc" && req.method === "POST") {
+  if (url.pathname === "/events") {
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    });
+    sseClients.add(res);
+    req.on("close", () => sseClients.delete(res));
+    return;
+  }
+
+  if (url.pathname === "/jsonl" && req.method === "POST") {
     const chunks: Buffer[] = [];
     for await (const chunk of req) chunks.push(chunk as Buffer);
-    const body = JSON.parse(Buffer.concat(chunks).toString()) as Record<string, unknown>;
-
+    const command = JSON.parse(Buffer.concat(chunks).toString()) as Record<string, unknown>;
     try {
-      let result: unknown;
-
-      // Support two request formats:
-      // 1. Raw command: { type: "switch_agent", agentName: "build" } — from send()
-      // 2. Standard RPC: { method: "agent.getAgentDetail", params: ["build"] } — from call()
-      if (body.type) {
-        // Raw command — forward directly to pi CLI
-        result = await callPiRaw(body);
-      } else {
-        // Standard RPC — translate method + params first
-        const method = body.method as string;
-        const params = (body.params ?? []) as unknown[];
-        const rpcType = METHOD_MAP[method] ?? method;
-        result = await callPi(rpcType, params);
-      }
-
+      const result = await sendToPi(command);
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: true, data: result }));
     } catch (err) {
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(
-        JSON.stringify({ ok: false, error: err instanceof Error ? err.message : String(err) }),
+        JSON.stringify({
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        }),
       );
+    }
+    return;
+  }
+
+  if (url.pathname === "/write" && req.method === "POST") {
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) chunks.push(chunk as Buffer);
+    const message = JSON.parse(Buffer.concat(chunks).toString()) as Record<string, unknown>;
+    try {
+      writeToPi(message);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
+    } catch (err) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    }
+    return;
+  }
+
+  // ─── File System Operations ─────────────────────────
+  if (url.pathname.startsWith("/fs/")) {
+    const action = url.pathname.slice(4);
+    try {
+      let body: Record<string, unknown> = {};
+      if (req.method === "POST") {
+        const chunks: Buffer[] = [];
+        for await (const chunk of req) chunks.push(chunk as Buffer);
+        body = JSON.parse(Buffer.concat(chunks).toString()) as Record<string, unknown>;
+      }
+      const queryPath = url.searchParams.get("path");
+      if (queryPath && !body.path) {
+        body.path = queryPath;
+      }
+      let result: unknown;
+      switch (action) {
+        case "listDir": {
+          const dirPath = String(body.path ?? CWD);
+          const entries = readdirSync(dirPath).map((name) => {
+            const fullPath = join(dirPath, name);
+            try {
+              const stat = statSync(fullPath);
+              return {
+                name,
+                path: fullPath,
+                isDirectory: stat.isDirectory(),
+                isFile: stat.isFile(),
+                size: stat.size,
+                modified: stat.mtime.toISOString(),
+              };
+            } catch {
+              return {
+                name,
+                path: fullPath,
+                isDirectory: false,
+                isFile: false,
+                size: 0,
+                modified: "",
+              };
+            }
+          });
+          result = { entries, basePath: dirPath };
+          break;
+        }
+        case "readFile": {
+          const filePath = String(body.path);
+          const content = readFileSync(filePath, "utf-8");
+          const stat = statSync(filePath);
+          result = { content, size: stat.size };
+          break;
+        }
+        case "writeFile": {
+          const filePath = String(body.path);
+          const dir = dirname(filePath);
+          if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+          writeFileSync(filePath, String(body.content ?? ""), "utf-8");
+          result = { ok: true };
+          break;
+        }
+        case "editFile": {
+          const filePath = String(body.path);
+          let content = readFileSync(filePath, "utf-8");
+          const edits = (body.edits as Array<{ oldText: string; newText: string }>) ?? [];
+          for (const edit of edits) {
+            content = content.replace(edit.oldText, edit.newText);
+          }
+          writeFileSync(filePath, content, "utf-8");
+          result = { ok: true };
+          break;
+        }
+        case "createFile": {
+          const dir = String(body.dirPath);
+          const name = String(body.name);
+          const filePath = join(dir, name);
+          if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+          writeFileSync(filePath, "", "utf-8");
+          result = { path: filePath };
+          break;
+        }
+        case "createDir": {
+          const dir = String(body.dirPath);
+          const name = String(body.name);
+          const dirPath = join(dir, name);
+          mkdirSync(dirPath, { recursive: true });
+          result = { path: dirPath };
+          break;
+        }
+        case "rename": {
+          const oldPath = String(body.oldPath);
+          const newName = String(body.newName);
+          const newPath = join(dirname(oldPath), newName);
+          renameSync(oldPath, newPath);
+          result = { newPath };
+          break;
+        }
+        case "delete": {
+          const targetPath = String(body.path);
+          const stat = statSync(targetPath);
+          if (stat.isDirectory()) {
+            rmSync(targetPath, { recursive: true, force: true });
+          } else {
+            unlinkSync(targetPath);
+          }
+          result = { ok: true };
+          break;
+        }
+        case "copy": {
+          const srcPath = String(body.srcPath);
+          const destDir = String(body.destDir);
+          const destPath = join(destDir, pathBasename(srcPath));
+          copyFileSync(srcPath, destPath, constants.COPYFILE_FICLONE);
+          result = { path: destPath };
+          break;
+        }
+        case "stat": {
+          const filePath = String(body.path);
+          const stat = statSync(filePath);
+          result = {
+            exists: true,
+            isDirectory: stat.isDirectory(),
+            isFile: stat.isFile(),
+            size: stat.size,
+            modified: stat.mtime.toISOString(),
+          };
+          break;
+        }
+        default:
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ ok: false, error: `Unknown fs action: ${action}` }));
+          return;
+      }
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, data: result }));
+    } catch (err) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    }
+    return;
+  }
+
+  if (url.pathname.startsWith("/raw/")) {
+    let filePath = decodeURIComponent(url.pathname.slice(5));
+    if (!filePath.startsWith("/")) filePath = "/" + filePath;
+    if (!filePath || !existsSync(filePath)) {
+      res.writeHead(404, { "Content-Type": "text/plain" }).end("Not found");
+      return;
+    }
+    try {
+      const stat = statSync(filePath);
+      if (stat.isDirectory()) {
+        res.writeHead(400, { "Content-Type": "text/plain" }).end("Is a directory");
+        return;
+      }
+      const ext = filePath.lastIndexOf(".");
+      const mimeType: Record<string, string> = {
+        ".html": "text/html",
+        ".css": "text/css",
+        ".js": "application/javascript",
+        ".json": "application/json",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".svg": "image/svg+xml",
+        ".pdf": "application/pdf",
+        ".txt": "text/plain",
+        ".md": "text/markdown",
+      };
+      const ct = ext >= 0 ? mimeType[filePath.slice(ext)] ?? "application/octet-stream" : "application/octet-stream";
+      const range = req.headers["range"];
+      const data = readFileSync(filePath);
+      if (range) {
+        const parts = String(range).replace(/bytes=/, "").split("-");
+        const start = parseInt(parts[0], 10);
+        const end = parts[1] ? parseInt(parts[1], 10) : stat.size - 1;
+        res.writeHead(206, {
+          "Content-Range": `bytes ${start}-${end}/${stat.size}`,
+          "Accept-Ranges": "bytes",
+          "Content-Length": end - start + 1,
+          "Content-Type": ct,
+        });
+        res.end(data.subarray(start, end + 1));
+      } else {
+        res.writeHead(200, {
+          "Content-Length": stat.size,
+          "Content-Type": ct,
+          "Accept-Ranges": "bytes",
+        });
+        res.end(data);
+      }
+    } catch {
+      res.writeHead(500, { "Content-Type": "text/plain" }).end("Read error");
     }
     return;
   }
@@ -374,13 +425,12 @@ const server = createServer(async (req, res) => {
   res.writeHead(404).end();
 });
 
-// ─── Startup ────────────────────────────────────────────
+// ─── Start ────────────────────────────────────────────
 
 async function main() {
-  log.info("starting pi agent...");
+  log.info(`starting on port ${PORT}, cli=${CLI_PATH}, cwd=${CWD}`);
   await startPi();
   log.info("pi agent ready");
-
   server.listen(PORT, "0.0.0.0", () => {
     log.info(`listening on 0.0.0.0:${PORT}`);
   });
