@@ -27,6 +27,7 @@ export default tseslint.config(
       'commitlint.config.js',
       'dist-server/**',
       'e2e-*.mjs',
+      'test-*.mjs',
       'test/rollback-e2e-backtest.test.ts',
       'test/rollback-leafid-persistence.test.ts',
       'test/rollback-managed-restart.test.ts',
