@@ -191,6 +191,7 @@ export type DirectoryEntry = {
   name: string;
   path: string;
   isDirectory: boolean;
+  mtime?: number;
 };
 
 export type FavoriteFolder = {

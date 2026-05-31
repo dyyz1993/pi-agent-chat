@@ -13,6 +13,8 @@ import {
   Loader2,
   Plus,
   FolderPlus,
+  ArrowDownAZ,
+  Clock,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { apiClient } from "../../lib/api-client";
@@ -108,6 +110,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
   const [favoriteFolders, setFavoriteFolders] = useState<FavoriteFolder[]>([]);
   const [browserSearchQuery, setBrowserSearchQuery] = useState("");
   const [browsingLoading, setBrowsingLoading] = useState(false);
+  const [browserSortBy, setBrowserSortBy] = useState<"mtime" | "name">("mtime");
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [creating, setCreating] = useState(false);
@@ -166,6 +169,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
       setLeftView("default");
       setCurrentPath("");
       setDirectoryEntries([]);
+      setBrowserSortBy("mtime");
       setShowCreateFolder(false);
       setNewFolderName("");
       setCreating(false);
@@ -186,6 +190,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
       .call("project.listDirectory", {
         dirPath: currentPath,
         searchQuery: browserSearchQuery || undefined,
+        sortBy: browserSortBy,
       })
       .then((result) => {
         if (!cancelled) setDirectoryEntries((result.entries as DirectoryEntry[]) || []);
@@ -200,7 +205,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
     return () => {
       cancelled = true;
     };
-  }, [open, leftView, currentPath, browserSearchQuery]);
+  }, [open, leftView, currentPath, browserSearchQuery, browserSortBy]);
 
   const navigateTo = useCallback((path: string) => {
     setCurrentPath(path);
@@ -588,14 +593,32 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
     <>
       {renderBreadcrumb()}
       <div className="px-3 py-2 border-b border-border-secondary dark:border-surface-code">
-        <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-text-tertiary" />
-          <input
-            value={browserSearchQuery}
-            onChange={(e) => setBrowserSearchQuery(e.target.value)}
-            placeholder={t("picker.searchCurrentDir")}
-            className="w-full pl-7 pr-3 py-1.5 bg-surface-code dark:bg-surface-dim/50 border border-border-secondary dark:border-border-secondary/50 rounded-md text-[11px] text-text-secondary placeholder:text-text-secondary outline-none focus:border-semantic-accent/50"
-          />
+        <div className="flex items-center gap-1.5">
+          <div className="relative flex-1">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-text-tertiary" />
+            <input
+              value={browserSearchQuery}
+              onChange={(e) => setBrowserSearchQuery(e.target.value)}
+              placeholder={t("picker.searchCurrentDir")}
+              className="w-full pl-7 pr-3 py-1.5 bg-surface-code dark:bg-surface-dim/50 border border-border-secondary dark:border-border-secondary/50 rounded-md text-[11px] text-text-secondary placeholder:text-text-secondary outline-none focus:border-semantic-accent/50"
+            />
+          </div>
+          <button
+            onClick={() => setBrowserSortBy((prev) => (prev === "mtime" ? "name" : "mtime"))}
+            className={`flex items-center gap-1 px-2 py-1.5 rounded-md border text-[10px] transition-colors shrink-0 ${
+              browserSortBy === "mtime"
+                ? "border-semantic-accent/40 bg-semantic-accent/10 text-semantic-accent"
+                : "border-border-secondary dark:border-border-secondary/50 text-text-tertiary hover:text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-hover/50"
+            }`}
+            title={browserSortBy === "mtime" ? t("picker.sortByModified") : t("picker.sortByName")}
+          >
+            {browserSortBy === "mtime" ? (
+              <Clock className="w-3 h-3" />
+            ) : (
+              <ArrowDownAZ className="w-3 h-3" />
+            )}
+            {browserSortBy === "mtime" ? t("picker.sortModified") : t("picker.sortName")}
+          </button>
         </div>
       </div>
       <div className="flex-1 overflow-y-auto px-2 py-1 space-y-0.5">{renderFolderList()}</div>
@@ -758,14 +781,32 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
             <div className="flex-1 flex flex-col min-h-0">
               {renderBreadcrumb()}
               <div className="px-1 py-2 shrink-0">
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-text-tertiary" />
-                  <input
-                    value={browserSearchQuery}
-                    onChange={(e) => setBrowserSearchQuery(e.target.value)}
-                    placeholder={t("picker.searchCurrentDir")}
-                    className="w-full pl-7 pr-3 py-2 bg-surface-code dark:bg-surface-dim/60 border border-border-secondary dark:border-border-secondary/50 rounded-xl text-sm text-text-primary placeholder:text-text-tertiary outline-none focus:border-semantic-accent/50"
-                  />
+                <div className="flex items-center gap-1.5">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-text-tertiary" />
+                    <input
+                      value={browserSearchQuery}
+                      onChange={(e) => setBrowserSearchQuery(e.target.value)}
+                      placeholder={t("picker.searchCurrentDir")}
+                      className="w-full pl-7 pr-3 py-2 bg-surface-code dark:bg-surface-dim/60 border border-border-secondary dark:border-border-secondary/50 rounded-xl text-sm text-text-primary placeholder:text-text-tertiary outline-none focus:border-semantic-accent/50"
+                    />
+                  </div>
+                  <button
+                    onClick={() =>
+                      setBrowserSortBy((prev) => (prev === "mtime" ? "name" : "mtime"))
+                    }
+                    className={`flex items-center gap-1 px-2.5 py-2 rounded-xl border text-xs transition-colors shrink-0 ${
+                      browserSortBy === "mtime"
+                        ? "border-semantic-accent/40 bg-semantic-accent/10 text-semantic-accent"
+                        : "border-border-secondary dark:border-border-secondary/50 text-text-tertiary active:text-text-secondary active:bg-surface-hover"
+                    }`}
+                  >
+                    {browserSortBy === "mtime" ? (
+                      <Clock className="w-3.5 h-3.5" />
+                    ) : (
+                      <ArrowDownAZ className="w-3.5 h-3.5" />
+                    )}
+                  </button>
                 </div>
               </div>
               <div className="flex-1 overflow-y-auto">

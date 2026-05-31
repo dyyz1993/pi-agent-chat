@@ -30,6 +30,7 @@ export interface DirectoryEntry {
   name: string;
   path: string;
   isDirectory: boolean;
+  mtime?: number;
 }
 
 interface ProjectConfig {
@@ -382,6 +383,7 @@ export async function toggleProjectPin(projectPath: string): Promise<boolean> {
 export async function listDirectory(
   dirPath: string,
   searchQuery?: string,
+  sortBy?: "name" | "mtime",
 ): Promise<DirectoryEntry[]> {
   if (!existsSync(dirPath)) return [];
   try {
@@ -391,9 +393,20 @@ export async function listDirectory(
       if (entry.name.startsWith(".")) continue;
       if (!entry.isDirectory()) continue;
       const fullPath = join(dirPath, entry.name);
-      results.push({ name: entry.name, path: fullPath, isDirectory: true });
+      let mtime: number | undefined;
+      try {
+        mtime = statSync(fullPath).mtimeMs;
+      } catch {
+        /* permission denied or other stat error */
+      }
+      results.push({ name: entry.name, path: fullPath, isDirectory: true, mtime });
     }
-    results.sort((a, b) => a.name.localeCompare(b.name));
+    const effectiveSort = sortBy ?? "mtime";
+    if (effectiveSort === "mtime") {
+      results.sort((a, b) => (b.mtime ?? 0) - (a.mtime ?? 0));
+    } else {
+      results.sort((a, b) => a.name.localeCompare(b.name));
+    }
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       results = results.filter((e) => e.name.toLowerCase().includes(q));

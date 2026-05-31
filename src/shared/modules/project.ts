@@ -58,7 +58,7 @@ export interface ProjectMethods {
     result: { tabs: PersistedTab[]; activeTabId: string | null };
   };
   "project.listDirectory": {
-    params: { dirPath: string; searchQuery?: string };
+    params: { dirPath: string; searchQuery?: string; sortBy?: "name" | "mtime" };
     result: { entries: DirectoryEntry[] };
   };
   "project.toggleFavoriteFolder": {
@@ -158,6 +158,7 @@ export interface DirectoryEntry {
   name: string;
   path: string;
   isDirectory: boolean;
+  mtime?: number;
 }
 
 export interface FavoriteFolder {

@@ -143,7 +143,7 @@ export function register(server: RPCServer, options: HandlerOptions): void {
   });
 
   r("project.listDirectory", async (params) => {
-    const entries = await listDirectory(params.dirPath, params.searchQuery);
+    const entries = await listDirectory(params.dirPath, params.searchQuery, params.sortBy);
     return { entries };
   });
 
