@@ -198,6 +198,8 @@ interface SessionState {
 }
 
 const _fetchInitPromiseMap = new Map<string, Promise<void>>();
+const _fetchInitTimestampMap = new Map<string, number>();
+const FETCH_INIT_TTL_MS = 30_000;
 
 export const useSessionStore = create<SessionState>()(
   persist(
@@ -513,7 +515,7 @@ export const useSessionStore = create<SessionState>()(
         };
 
         ensureSession()
-          .then((session) => {
+          .then(async (session) => {
             if (get().activeSessionId !== id) return;
             if (!session) {
               set((s) => {
@@ -530,6 +532,19 @@ export const useSessionStore = create<SessionState>()(
               return;
             }
 
+            const statusResult = await apiClient
+              .call("agent.getStatus", { sessionId: id })
+              .catch(() => ({ status: "stopped" as const }));
+            const isHot =
+              (statusResult as { status?: string }).status === "idle" ||
+              (statusResult as { status?: string }).status === "streaming";
+
+            perfLog.info("[switch] probe result", {
+              sessionId: id,
+              status: (statusResult as { status?: string }).status,
+              isHot,
+            });
+
             const tSubs = performance.now();
             setupSubscriptions(get(), set, id, session);
             perfLog.info("[switch] step-2 setupSubscriptions dispatched", {
@@ -537,33 +552,23 @@ export const useSessionStore = create<SessionState>()(
               ms: Math.round(performance.now() - tSubs),
             });
 
-            perfLog.info("[switch] step-3 agent.start RPC begin", { sessionId: id });
-            const tAgentStart = performance.now();
+            if (isHot) {
+              set((s) => ({ sessionReady: { ...s.sessionReady, [id]: true } }));
 
-            const startPromise = apiClient.call("agent.start", {
-              sessionId: id,
-              projectPath: session.projectPath,
-              sessionPath: session.sessionPath,
-              forceNewProcess: options?.forceNewProcess,
-            });
-
-            const timeoutPromise = new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error("agent.start timed out (30s)")), 30_000),
-            );
-
-            Promise.race([startPromise, timeoutPromise])
-              .then((result) => {
-                perfLog.info("[switch] step-3 agent.start RPC done", {
+              perfLog.info("[switch] HOT: agent.start (background)", { sessionId: id });
+              const tAgentStart = performance.now();
+              apiClient
+                .call("agent.start", {
                   sessionId: id,
-                  status: result.status,
-                  ms: Math.round(performance.now() - tAgentStart),
-                });
-
-                if (
-                  result.status === "already_running" ||
-                  result.status === "started" ||
-                  result.status === "switched"
-                ) {
+                  projectPath: session.projectPath,
+                  sessionPath: session.sessionPath,
+                })
+                .then((result) => {
+                  perfLog.info("[switch] HOT: agent.start done", {
+                    sessionId: id,
+                    status: result.status,
+                    ms: Math.round(performance.now() - tAgentStart),
+                  });
                   set((s) => {
                     const projectId = s.activeProjectId;
                     if (!projectId) return {};
@@ -572,102 +577,181 @@ export const useSessionStore = create<SessionState>()(
                       projectStartError: { ...s.projectStartError, [projectId]: "" },
                     };
                   });
-                  log.info("agent.start result", { status: result.status, sessionId: id });
-                  set((s) => ({ sessionReady: { ...s.sessionReady, [id]: true } }));
-
-                  // Request rules snapshot after session is confirmed started
                   requestRulesSnapshot(id);
 
-                  perfLog.info("[switch] step-4 fetchInitialState begin", { sessionId: id });
-                  get().fetchInitialState(id);
-
-                  const tParallel = performance.now();
-
-                  const replayPromise =
-                    result.status === "already_running"
-                      ? apiClient
-                          .call("agent.replayHoldEvents", { sessionId: id })
-                          .then((r) => {
-                            perfLog.info("[switch] step-5 replayHoldEvents done", {
-                              sessionId: id,
-                              replayed: r.replayed,
-                              ms: Math.round(performance.now() - tParallel),
-                            });
-                          })
-                          .catch((err) => {
-                            log.warn("replayHoldEvents failed", {
-                              sessionId: id,
-                              err: err instanceof Error ? err.message : String(err),
-                            });
-                          })
-                      : Promise.resolve();
-
-                  perfLog.info("[switch] step-6 loadSessionMessages (after replay) begin", {
-                    sessionId: id,
-                  });
-                  const tLoad = performance.now();
-                  const cachedMsgs = useChatStore.getState().messagesBySession[id] || [];
-                  const hasCached = cachedMsgs.some(
-                    (m) => m.role === "user" || (m.role === "assistant" && m.tokenUsage),
-                  );
-                  const loadMessagesPromise = replayPromise.then(() =>
-                    useChatStore
-                      .getState()
-                      .loadSessionMessages(id, {
-                        force: !hasCached,
-                        sessionPath: session.sessionPath,
-                      })
-                      .then(() => {
-                        perfLog.info("[switch] step-6 loadSessionMessages done", {
+                  if (result.status === "already_running") {
+                    apiClient
+                      .call("agent.replayHoldEvents", { sessionId: id })
+                      .then((r) => {
+                        perfLog.info("[switch] HOT: replayHoldEvents done", {
                           sessionId: id,
-                          count: useChatStore.getState().messagesBySession[id]?.length,
-                          ms: Math.round(performance.now() - tLoad),
+                          replayed: r.replayed,
                         });
                       })
-                      .catch((e) => {
-                        log.error("loadSessionMessages FAILED", {
-                          error: e instanceof Error ? e.message : String(e),
+                      .catch((err) => {
+                        log.warn("replayHoldEvents failed", {
+                          sessionId: id,
+                          err: err instanceof Error ? err.message : String(err),
                         });
-                      }),
-                  );
-
-                  loadMessagesPromise.then(() => {
-                    perfLog.info("[switch] === SESSION SWITCH COMPLETE ===", {
-                      sessionId: id,
-                      totalMs: Math.round(performance.now() - tSwitchStart),
-                    });
+                      });
+                  }
+                })
+                .catch((err) => {
+                  log.error("HOT agent.start failed", {
+                    sessionId: id,
+                    err: err instanceof Error ? err.message : String(err),
                   });
-                } else {
-                  const projectId = get().activeProjectId;
-                  if (projectId) {
-                    set((s) => ({
+                });
+
+              get().fetchInitialState(id);
+
+              const cachedMsgs = useChatStore.getState().messagesBySession[id] || [];
+              const hasCached = cachedMsgs.some(
+                (m: { role: string; tokenUsage?: unknown }) =>
+                  m.role === "user" || (m.role === "assistant" && m.tokenUsage),
+              );
+              if (hasCached) {
+                useChatStore.getState()._backgroundRefreshMessages(id, session.sessionPath);
+              } else {
+                useChatStore
+                  .getState()
+                  .loadSessionMessages(id, { force: true, sessionPath: session.sessionPath });
+              }
+
+              perfLog.info("[switch] === HOT SWITCH DISPATCHED ===", {
+                sessionId: id,
+                totalMs: Math.round(performance.now() - tSwitchStart),
+              });
+            } else {
+              perfLog.info("[switch] COLD: agent.start begin", { sessionId: id });
+              const tAgentStart = performance.now();
+
+              const startPromise = apiClient.call("agent.start", {
+                sessionId: id,
+                projectPath: session.projectPath,
+                sessionPath: session.sessionPath,
+                forceNewProcess: options?.forceNewProcess,
+              });
+
+              const timeoutPromise = new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error("agent.start timed out (30s)")), 30_000),
+              );
+
+              Promise.race([startPromise, timeoutPromise])
+                .then((result) => {
+                  perfLog.info("[switch] COLD: agent.start done", {
+                    sessionId: id,
+                    status: result.status,
+                    ms: Math.round(performance.now() - tAgentStart),
+                  });
+
+                  if (
+                    result.status === "already_running" ||
+                    result.status === "started" ||
+                    result.status === "switched"
+                  ) {
+                    set((s) => {
+                      const projectId = s.activeProjectId;
+                      if (!projectId) return {};
+                      return {
+                        projectStartFailed: { ...s.projectStartFailed, [projectId]: false },
+                        projectStartError: { ...s.projectStartError, [projectId]: "" },
+                      };
+                    });
+                    log.info("agent.start result", { status: result.status, sessionId: id });
+                    set((s) => ({ sessionReady: { ...s.sessionReady, [id]: true } }));
+
+                    requestRulesSnapshot(id);
+
+                    perfLog.info("[switch] COLD: fetchInitialState begin", { sessionId: id });
+                    get().fetchInitialState(id);
+
+                    const tParallel = performance.now();
+                    const replayPromise =
+                      result.status === "already_running"
+                        ? apiClient
+                            .call("agent.replayHoldEvents", { sessionId: id })
+                            .then((r) => {
+                              perfLog.info("[switch] COLD: replayHoldEvents done", {
+                                sessionId: id,
+                                replayed: r.replayed,
+                                ms: Math.round(performance.now() - tParallel),
+                              });
+                            })
+                            .catch((err) => {
+                              log.warn("replayHoldEvents failed", {
+                                sessionId: id,
+                                err: err instanceof Error ? err.message : String(err),
+                              });
+                            })
+                        : Promise.resolve();
+
+                    perfLog.info("[switch] COLD: loadSessionMessages begin", { sessionId: id });
+                    const tLoad = performance.now();
+                    const cachedMsgs = useChatStore.getState().messagesBySession[id] || [];
+                    const hasCached = cachedMsgs.some(
+                      (m: { role: string; tokenUsage?: unknown }) =>
+                        m.role === "user" || (m.role === "assistant" && m.tokenUsage),
+                    );
+                    const loadMessagesPromise = replayPromise.then(() =>
+                      useChatStore
+                        .getState()
+                        .loadSessionMessages(id, {
+                          force: !hasCached,
+                          sessionPath: session.sessionPath,
+                        })
+                        .then(() => {
+                          perfLog.info("[switch] COLD: loadSessionMessages done", {
+                            sessionId: id,
+                            count: useChatStore.getState().messagesBySession[id]?.length,
+                            ms: Math.round(performance.now() - tLoad),
+                          });
+                        })
+                        .catch((e) => {
+                          log.error("loadSessionMessages FAILED", {
+                            error: e instanceof Error ? e.message : String(e),
+                          });
+                        }),
+                    );
+
+                    loadMessagesPromise.then(() => {
+                      perfLog.info("[switch] === COLD SWITCH COMPLETE ===", {
+                        sessionId: id,
+                        totalMs: Math.round(performance.now() - tSwitchStart),
+                      });
+                    });
+                  } else {
+                    const projectId = get().activeProjectId;
+                    if (projectId) {
+                      set((s) => ({
+                        projectStartFailed: { ...s.projectStartFailed, [projectId]: true },
+                        projectStartError: {
+                          ...s.projectStartError,
+                          [projectId]: `Unexpected status: ${result.status}`,
+                        },
+                      }));
+                    }
+                  }
+                })
+                .catch((err) => {
+                  log.error("agent.start failed", {
+                    sessionId: id,
+                    err: err instanceof Error ? err.message : String(err),
+                  });
+                  set((s) => {
+                    const projectId = s.activeProjectId;
+                    if (!projectId) return {};
+                    return {
                       projectStartFailed: { ...s.projectStartFailed, [projectId]: true },
                       projectStartError: {
                         ...s.projectStartError,
-                        [projectId]: `Unexpected status: ${result.status}`,
+                        [projectId]: err instanceof Error ? err.message : String(err),
                       },
-                    }));
-                  }
-                }
-              })
-              .catch((err) => {
-                const errMsg = err instanceof Error ? err.message : String(err);
-                useAppStore.getState().addLog(`agent.start failed: ${errMsg}`);
-                perfLog.error("[switch] agent.start FAILED", {
-                  sessionId: id,
-                  error: errMsg,
-                  totalMs: Math.round(performance.now() - tSwitchStart),
+                      sessionReady: { ...s.sessionReady, [id]: false },
+                    };
+                  });
                 });
-                set((s) => {
-                  const projectId = s.activeProjectId;
-                  if (!projectId) return {};
-                  return {
-                    sessionReady: { ...s.sessionReady, [id]: false },
-                    projectStartFailed: { ...s.projectStartFailed, [projectId]: true },
-                    projectStartError: { ...s.projectStartError, [projectId]: errMsg },
-                  };
-                });
-              });
+            }
           })
           .catch((err) => {
             const errMsg = err instanceof Error ? err.message : String(err);
@@ -1069,6 +1153,15 @@ export const useSessionStore = create<SessionState>()(
       fetchInitialState: (sessionId) => {
         const existing = _fetchInitPromiseMap.get(sessionId);
         if (existing) return existing;
+
+        const lastFetch = _fetchInitTimestampMap.get(sessionId);
+        if (lastFetch && Date.now() - lastFetch < FETCH_INIT_TTL_MS) {
+          perfLog.info("[fetchInit] TTL cache hit, skipping", {
+            sessionId,
+            ageMs: Date.now() - lastFetch,
+          });
+          return Promise.resolve();
+        }
 
         const promise = (async () => {
           try {
@@ -1535,6 +1628,7 @@ export const useSessionStore = create<SessionState>()(
               });
           } finally {
             _fetchInitPromiseMap.delete(sessionId);
+            _fetchInitTimestampMap.set(sessionId, Date.now());
           }
         })();
 
