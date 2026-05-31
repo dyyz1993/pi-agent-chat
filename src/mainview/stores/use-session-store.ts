@@ -200,6 +200,14 @@ interface SessionState {
 const _fetchInitPromiseMap = new Map<string, Promise<void>>();
 const _fetchInitTimestampMap = new Map<string, number>();
 const FETCH_INIT_TTL_MS = 30_000;
+const _agentStartedSessions = new Set<string>();
+
+export function markAgentStarted(sessionId: string) {
+  _agentStartedSessions.add(sessionId);
+}
+export function clearAgentStarted(sessionId: string) {
+  _agentStartedSessions.delete(sessionId);
+}
 
 export const useSessionStore = create<SessionState>()(
   persist(
@@ -549,6 +557,44 @@ export const useSessionStore = create<SessionState>()(
               ms: Math.round(performance.now() - tSubs),
             });
 
+            const isAgentKnownRunning = _agentStartedSessions.has(id);
+
+            if (isAgentKnownRunning) {
+              perfLog.info("[switch] HOT (cached): agent.start SKIPPED", { sessionId: id });
+
+              set((s) => {
+                const projectId = s.activeProjectId;
+                if (!projectId) return {};
+                return {
+                  sessionReady: { ...s.sessionReady, [id]: true },
+                  projectStartFailed: { ...s.projectStartFailed, [projectId]: false },
+                  projectStartError: { ...s.projectStartError, [projectId]: "" },
+                };
+              });
+
+              requestRulesSnapshot(id);
+
+              const cachedMsgs = useChatStore.getState().messagesBySession[id] || [];
+              const hasCachedMsgs = cachedMsgs.some(
+                (m: { role: string; tokenUsage?: unknown }) =>
+                  m.role === "user" || (m.role === "assistant" && m.tokenUsage),
+              );
+              if (hasCachedMsgs) {
+                useChatStore.getState()._backgroundRefreshMessages(id, session.sessionPath);
+              } else {
+                useChatStore.getState().loadSessionMessages(id, {
+                  force: true,
+                  sessionPath: session.sessionPath,
+                });
+              }
+
+              perfLog.info("[switch] === HOT SWITCH COMPLETE (cached) ===", {
+                sessionId: id,
+                totalMs: Math.round(performance.now() - tSwitchStart),
+              });
+              return;
+            }
+
             perfLog.info("[switch] agent.start begin", { sessionId: id });
             const tAgentStart = performance.now();
 
@@ -588,6 +634,7 @@ export const useSessionStore = create<SessionState>()(
                       projectStartError: { ...s.projectStartError, [projectId]: "" },
                     };
                   });
+                  _agentStartedSessions.add(id);
 
                   requestRulesSnapshot(id);
                   get().fetchInitialState(id);
@@ -690,6 +737,7 @@ export const useSessionStore = create<SessionState>()(
                 }
               })
               .catch((err) => {
+                _agentStartedSessions.delete(id);
                 log.error("agent.start failed", {
                   sessionId: id,
                   err: err instanceof Error ? err.message : String(err),
@@ -924,6 +972,7 @@ export const useSessionStore = create<SessionState>()(
       },
 
       deleteSession: (sessionId) => {
+        _agentStartedSessions.delete(sessionId);
         clearStatusWatchdog(sessionId);
         cleanupSession(get(), sessionId);
         cleanupSessionData(sessionId);

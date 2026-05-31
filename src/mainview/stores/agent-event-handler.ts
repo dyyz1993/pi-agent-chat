@@ -4,7 +4,7 @@ import type { AgentEvent } from "../../shared/modules/agent";
 import type { AssistantMessage, Message, Usage } from "@dyyz1993/pi-ai";
 import { apiClient } from "../lib/api-client";
 import { useChatStore } from "./use-chat-store";
-import { useSessionStore } from "./use-session-store";
+import { useSessionStore, clearAgentStarted } from "./use-session-store";
 import { useMemoryStore } from "./use-memory-store";
 import { useStatusStore, type MCPServerInfo } from "./use-status-store";
 import { useRetryStore } from "./use-retry-store";
@@ -54,6 +54,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
   }
 
   if (event.type === "agent_end") {
+    clearAgentStarted(sessionId);
     storeGet().updateSessionStatus(sessionId, "idle");
     useUIDialogStore.getState().clearPendingBySession(sessionId);
     useChangeReviewStore.getState().fetchPending();
@@ -91,7 +92,12 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
           {
             id: `error_${Date.now()}`,
             role: "error" as const,
-            content: [{ type: "text" as const, text: "Agent 未返回响应\nAgent 在处理你的消息后异常退出，可能是 LLM 服务异常或网络问题" }],
+            content: [
+              {
+                type: "text" as const,
+                text: "Agent 未返回响应\nAgent 在处理你的消息后异常退出，可能是 LLM 服务异常或网络问题",
+              },
+            ],
             timestamp: Date.now(),
           },
         ]);
@@ -501,9 +507,10 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
     if (!hasContent) {
       const assistantMsg = message as AssistantMessage;
-      const errorDetail = assistantMsg.errorMessage
-        ?? (assistantMsg.stopReason === "error" ? "LLM 返回了错误响应" : undefined)
-        ?? "LLM 返回了空响应";
+      const errorDetail =
+        assistantMsg.errorMessage ??
+        (assistantMsg.stopReason === "error" ? "LLM 返回了错误响应" : undefined) ??
+        "LLM 返回了空响应";
       const errorTitle = "LLM 未返回有效响应";
       chat.setMessagesForSession(sessionId, [
         ...existing.slice(0, -1),
@@ -740,7 +747,13 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
           {
             id: eventId,
             role: "custom" as const,
-            content: [{ type: "custom" as const, customType: "memory_prefetch", data: { ...(event.data as Record<string, unknown>), _timedOut: true } }],
+            content: [
+              {
+                type: "custom" as const,
+                customType: "memory_prefetch",
+                data: { ...(event.data as Record<string, unknown>), _timedOut: true },
+              },
+            ],
             timestamp: Date.now(),
           },
         ]);
