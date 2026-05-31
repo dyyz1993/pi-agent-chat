@@ -102,10 +102,10 @@ src/mainview/
 
 ## Architecture Design Docs
 
-| 文档                                                        | 状态           | 说明                                                                        |
-| ----------------------------------------------------------- | -------------- | --------------------------------------------------------------------------- |
-| `docs/plans/2026-06-01-process-per-session-design.md`       | Phase 1 已完成 | 每会话独立 CLI 进程，LRU 淘汰，全局进程池                                   |
-| `docs/plans/2026-06-01-session-switch-experience-design.md` | 待实施         | 会话切换体验优化：热/冷切换分流、fetchInitialState 缓存、MessageList 无闪烁 |
+| 文档                                                        | 状态             | 说明                                                                        |
+| ----------------------------------------------------------- | ---------------- | --------------------------------------------------------------------------- |
+| `docs/plans/2026-06-01-process-per-session-design.md`       | Phase 1 已完成   | 每会话独立 CLI 进程，LRU 淘汰，全局进程池                                   |
+| `docs/plans/2026-06-01-session-switch-experience-design.md` | Phase 1-3 已实施 | 会话切换体验优化：热/冷切换分流、fetchInitialState 缓存、MessageList 无闪烁 |
 
 ### WebSocket RPC 端到端测试方法
 
