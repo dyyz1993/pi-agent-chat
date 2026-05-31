@@ -483,10 +483,20 @@ export const useSessionStore = create<SessionState>()(
         const { projectTabs: curTabs, activeProjectId: curProjectId } = get();
         const curTab = curTabs.find((t) => t.id === curProjectId);
 
+        const hasCachedMessages =
+          id &&
+          (useChatStore.getState().messagesBySession[id] || []).some(
+            (m: { role: string; tokenUsage?: unknown }) =>
+              m.role === "user" || (m.role === "assistant" && m.tokenUsage),
+          );
+
         set({
           activeSessionId: id,
           sessionReady: id
-            ? { ...get().sessionReady, [id]: get().sessionReady[id] ?? false }
+            ? {
+                ...get().sessionReady,
+                [id]: hasCachedMessages ? true : (get().sessionReady[id] ?? false),
+              }
             : get().sessionReady,
           ...(id && curTab
             ? {
@@ -515,7 +525,7 @@ export const useSessionStore = create<SessionState>()(
         };
 
         ensureSession()
-          .then(async (session) => {
+          .then((session) => {
             if (get().activeSessionId !== id) return;
             if (!session) {
               set((s) => {
@@ -532,19 +542,6 @@ export const useSessionStore = create<SessionState>()(
               return;
             }
 
-            const statusResult = await apiClient
-              .call("agent.getStatus", { sessionId: id })
-              .catch(() => ({ status: "stopped" as const }));
-            const isHot =
-              (statusResult as { status?: string }).status === "idle" ||
-              (statusResult as { status?: string }).status === "streaming";
-
-            perfLog.info("[switch] probe result", {
-              sessionId: id,
-              status: (statusResult as { status?: string }).status,
-              isHot,
-            });
-
             const tSubs = performance.now();
             setupSubscriptions(get(), set, id, session);
             perfLog.info("[switch] step-2 setupSubscriptions dispatched", {
@@ -552,34 +549,50 @@ export const useSessionStore = create<SessionState>()(
               ms: Math.round(performance.now() - tSubs),
             });
 
-            if (isHot) {
-              set((s) => ({ sessionReady: { ...s.sessionReady, [id]: true } }));
+            perfLog.info("[switch] agent.start begin", { sessionId: id });
+            const tAgentStart = performance.now();
 
-              perfLog.info("[switch] HOT: agent.start (background)", { sessionId: id });
-              const tAgentStart = performance.now();
-              apiClient
-                .call("agent.start", {
+            const startPromise = apiClient.call("agent.start", {
+              sessionId: id,
+              projectPath: session.projectPath,
+              sessionPath: session.sessionPath,
+              forceNewProcess: options?.forceNewProcess,
+            });
+
+            const timeoutPromise = new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error("agent.start timed out (30s)")), 30_000),
+            );
+
+            Promise.race([startPromise, timeoutPromise])
+              .then((result) => {
+                const isHot = result.status === "already_running";
+
+                perfLog.info("[switch] agent.start done", {
                   sessionId: id,
-                  projectPath: session.projectPath,
-                  sessionPath: session.sessionPath,
-                })
-                .then((result) => {
-                  perfLog.info("[switch] HOT: agent.start done", {
-                    sessionId: id,
-                    status: result.status,
-                    ms: Math.round(performance.now() - tAgentStart),
-                  });
+                  status: result.status,
+                  isHot,
+                  ms: Math.round(performance.now() - tAgentStart),
+                });
+
+                if (
+                  result.status === "already_running" ||
+                  result.status === "started" ||
+                  result.status === "switched"
+                ) {
                   set((s) => {
                     const projectId = s.activeProjectId;
                     if (!projectId) return {};
                     return {
+                      sessionReady: { ...s.sessionReady, [id]: true },
                       projectStartFailed: { ...s.projectStartFailed, [projectId]: false },
                       projectStartError: { ...s.projectStartError, [projectId]: "" },
                     };
                   });
-                  requestRulesSnapshot(id);
 
-                  if (result.status === "already_running") {
+                  requestRulesSnapshot(id);
+                  get().fetchInitialState(id);
+
+                  if (isHot) {
                     apiClient
                       .call("agent.replayHoldEvents", { sessionId: id })
                       .then((r) => {
@@ -594,110 +607,52 @@ export const useSessionStore = create<SessionState>()(
                           err: err instanceof Error ? err.message : String(err),
                         });
                       });
-                  }
-                })
-                .catch((err) => {
-                  log.error("HOT agent.start failed", {
-                    sessionId: id,
-                    err: err instanceof Error ? err.message : String(err),
-                  });
-                });
 
-              get().fetchInitialState(id);
-
-              const cachedMsgs = useChatStore.getState().messagesBySession[id] || [];
-              const hasCached = cachedMsgs.some(
-                (m: { role: string; tokenUsage?: unknown }) =>
-                  m.role === "user" || (m.role === "assistant" && m.tokenUsage),
-              );
-              if (hasCached) {
-                useChatStore.getState()._backgroundRefreshMessages(id, session.sessionPath);
-              } else {
-                useChatStore
-                  .getState()
-                  .loadSessionMessages(id, { force: true, sessionPath: session.sessionPath });
-              }
-
-              perfLog.info("[switch] === HOT SWITCH DISPATCHED ===", {
-                sessionId: id,
-                totalMs: Math.round(performance.now() - tSwitchStart),
-              });
-            } else {
-              perfLog.info("[switch] COLD: agent.start begin", { sessionId: id });
-              const tAgentStart = performance.now();
-
-              const startPromise = apiClient.call("agent.start", {
-                sessionId: id,
-                projectPath: session.projectPath,
-                sessionPath: session.sessionPath,
-                forceNewProcess: options?.forceNewProcess,
-              });
-
-              const timeoutPromise = new Promise<never>((_, reject) =>
-                setTimeout(() => reject(new Error("agent.start timed out (30s)")), 30_000),
-              );
-
-              Promise.race([startPromise, timeoutPromise])
-                .then((result) => {
-                  perfLog.info("[switch] COLD: agent.start done", {
-                    sessionId: id,
-                    status: result.status,
-                    ms: Math.round(performance.now() - tAgentStart),
-                  });
-
-                  if (
-                    result.status === "already_running" ||
-                    result.status === "started" ||
-                    result.status === "switched"
-                  ) {
-                    set((s) => {
-                      const projectId = s.activeProjectId;
-                      if (!projectId) return {};
-                      return {
-                        projectStartFailed: { ...s.projectStartFailed, [projectId]: false },
-                        projectStartError: { ...s.projectStartError, [projectId]: "" },
-                      };
-                    });
-                    log.info("agent.start result", { status: result.status, sessionId: id });
-                    set((s) => ({ sessionReady: { ...s.sessionReady, [id]: true } }));
-
-                    requestRulesSnapshot(id);
-
-                    perfLog.info("[switch] COLD: fetchInitialState begin", { sessionId: id });
-                    get().fetchInitialState(id);
-
-                    const tParallel = performance.now();
-                    const replayPromise =
-                      result.status === "already_running"
-                        ? apiClient
-                            .call("agent.replayHoldEvents", { sessionId: id })
-                            .then((r) => {
-                              perfLog.info("[switch] COLD: replayHoldEvents done", {
-                                sessionId: id,
-                                replayed: r.replayed,
-                                ms: Math.round(performance.now() - tParallel),
-                              });
-                            })
-                            .catch((err) => {
-                              log.warn("replayHoldEvents failed", {
-                                sessionId: id,
-                                err: err instanceof Error ? err.message : String(err),
-                              });
-                            })
-                        : Promise.resolve();
-
-                    perfLog.info("[switch] COLD: loadSessionMessages begin", { sessionId: id });
-                    const tLoad = performance.now();
                     const cachedMsgs = useChatStore.getState().messagesBySession[id] || [];
                     const hasCached = cachedMsgs.some(
                       (m: { role: string; tokenUsage?: unknown }) =>
                         m.role === "user" || (m.role === "assistant" && m.tokenUsage),
                     );
+                    if (hasCached) {
+                      useChatStore.getState()._backgroundRefreshMessages(id, session.sessionPath);
+                    } else {
+                      useChatStore.getState().loadSessionMessages(id, {
+                        force: true,
+                        sessionPath: session.sessionPath,
+                      });
+                    }
+
+                    perfLog.info("[switch] === HOT SWITCH COMPLETE ===", {
+                      sessionId: id,
+                      totalMs: Math.round(performance.now() - tSwitchStart),
+                    });
+                  } else {
+                    const tParallel = performance.now();
+                    const replayPromise = apiClient
+                      .call("agent.replayHoldEvents", { sessionId: id })
+                      .then((r) => {
+                        perfLog.info("[switch] COLD: replayHoldEvents done", {
+                          sessionId: id,
+                          replayed: r.replayed,
+                          ms: Math.round(performance.now() - tParallel),
+                        });
+                      })
+                      .catch((err) => {
+                        log.warn("replayHoldEvents failed", {
+                          sessionId: id,
+                          err: err instanceof Error ? err.message : String(err),
+                        });
+                      });
+
+                    perfLog.info("[switch] COLD: loadSessionMessages begin", {
+                      sessionId: id,
+                    });
+                    const tLoad = performance.now();
                     const loadMessagesPromise = replayPromise.then(() =>
                       useChatStore
                         .getState()
                         .loadSessionMessages(id, {
-                          force: !hasCached,
+                          force: true,
                           sessionPath: session.sessionPath,
                         })
                         .then(() => {
@@ -720,38 +675,38 @@ export const useSessionStore = create<SessionState>()(
                         totalMs: Math.round(performance.now() - tSwitchStart),
                       });
                     });
-                  } else {
-                    const projectId = get().activeProjectId;
-                    if (projectId) {
-                      set((s) => ({
-                        projectStartFailed: { ...s.projectStartFailed, [projectId]: true },
-                        projectStartError: {
-                          ...s.projectStartError,
-                          [projectId]: `Unexpected status: ${result.status}`,
-                        },
-                      }));
-                    }
                   }
-                })
-                .catch((err) => {
-                  log.error("agent.start failed", {
-                    sessionId: id,
-                    err: err instanceof Error ? err.message : String(err),
-                  });
-                  set((s) => {
-                    const projectId = s.activeProjectId;
-                    if (!projectId) return {};
-                    return {
+                } else {
+                  const projectId = get().activeProjectId;
+                  if (projectId) {
+                    set((s) => ({
                       projectStartFailed: { ...s.projectStartFailed, [projectId]: true },
                       projectStartError: {
                         ...s.projectStartError,
-                        [projectId]: err instanceof Error ? err.message : String(err),
+                        [projectId]: `Unexpected status: ${result.status}`,
                       },
-                      sessionReady: { ...s.sessionReady, [id]: false },
-                    };
-                  });
+                    }));
+                  }
+                }
+              })
+              .catch((err) => {
+                log.error("agent.start failed", {
+                  sessionId: id,
+                  err: err instanceof Error ? err.message : String(err),
                 });
-            }
+                set((s) => {
+                  const projectId = s.activeProjectId;
+                  if (!projectId) return {};
+                  return {
+                    projectStartFailed: { ...s.projectStartFailed, [projectId]: true },
+                    projectStartError: {
+                      ...s.projectStartError,
+                      [projectId]: err instanceof Error ? err.message : String(err),
+                    },
+                    sessionReady: { ...s.sessionReady, [id]: false },
+                  };
+                });
+              });
           })
           .catch((err) => {
             const errMsg = err instanceof Error ? err.message : String(err);
