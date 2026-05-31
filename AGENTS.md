@@ -100,6 +100,13 @@ src/mainview/
 - E2E: `@playwright/test` with `workers: 3`, `headless: true`
 - Config: `vitest.config.ts`, `playwright.config.ts`
 
+## Architecture Design Docs
+
+| 文档                                                        | 状态           | 说明                                                                        |
+| ----------------------------------------------------------- | -------------- | --------------------------------------------------------------------------- |
+| `docs/plans/2026-06-01-process-per-session-design.md`       | Phase 1 已完成 | 每会话独立 CLI 进程，LRU 淘汰，全局进程池                                   |
+| `docs/plans/2026-06-01-session-switch-experience-design.md` | 待实施         | 会话切换体验优化：热/冷切换分流、fetchInitialState 缓存、MessageList 无闪烁 |
+
 ### WebSocket RPC 端到端测试方法
 
 通过 WebSocket 直接调用 RPC API，对真实 dev server 做端到端验证。适用于验证 Agent 会话行为、回滚、消息过滤等涉及前后端+CLI 进程的完整链路。
