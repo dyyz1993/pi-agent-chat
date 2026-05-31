@@ -281,9 +281,14 @@ async function createRpcClient(
     args,
     env: { ...process.env, NODE_OPTIONS: "--max-old-space-size=8192" },
   });
+  await client.start();
   const t2 = performance.now();
 
-  const timings = { dynamicImport: Math.round(t1 - t0), construct: Math.round(t2 - t1) };
+  const timings = {
+    dynamicImport: Math.round(t1 - t0),
+    construct: Math.round(t2 - t1),
+    start: Math.round(t2 - t1),
+  };
   perfLog.info("[createRpcClient] done", timings);
 
   return { client, timings };
