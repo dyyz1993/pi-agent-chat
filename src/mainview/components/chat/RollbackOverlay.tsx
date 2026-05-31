@@ -361,7 +361,7 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
       <div
         ref={containerRef}
         data-testid="rollback-overlay"
-        className="relative w-full max-w-xl mx-4 bg-bg-elevated dark:bg-surface-code rounded-xl shadow-2xl border border-border-secondary flex flex-col overflow-hidden"
+        className="relative w-full max-w-xl mx-4 bg-bg-primary dark:bg-surface-code rounded-xl shadow-2xl border border-border-secondary flex flex-col overflow-hidden"
         style={{ maxHeight: "min(80vh, 560px)" }}
         onClick={(e) => e.stopPropagation()}
       >
