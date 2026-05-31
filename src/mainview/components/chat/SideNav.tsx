@@ -1,4 +1,5 @@
 import {
+  useState,
   useMemo,
   useCallback,
   useEffect,
@@ -197,6 +198,8 @@ export const SideNav = memo(
     itemsRef.current = items;
 
     const scrollRef = useRef<HTMLDivElement>(null);
+    const ITEM_HEIGHT = 32;
+    const [visibleRange, setVisibleRange] = useState({ start: 0, end: 50 });
 
     useImperativeHandle(
       ref,
@@ -225,6 +228,24 @@ export const SideNav = memo(
 
     useEffect(() => {
       if (!selectedNavId) return;
+      const container = scrollRef.current;
+      const currentItems = itemsRef.current;
+      if (container) {
+        const targetIdx = currentItems.findIndex(
+          (item) =>
+            item.key === selectedNavId ||
+            item.blockId === selectedNavId ||
+            item.navId === selectedNavId,
+        );
+        if (targetIdx !== -1) {
+          const itemTop = targetIdx * ITEM_HEIGHT;
+          const viewTop = container.scrollTop;
+          const viewBottom = viewTop + container.clientHeight;
+          if (itemTop < viewTop || itemTop + ITEM_HEIGHT > viewBottom) {
+            container.scrollTop = Math.max(0, itemTop - Math.floor(container.clientHeight / 3));
+          }
+        }
+      }
       const timer = setTimeout(() => {
         const container = scrollRef.current;
         const currentItems = itemsRef.current;
@@ -293,6 +314,28 @@ export const SideNav = memo(
       return () => container.removeEventListener("scroll", onScroll);
     }, [hasMoreMessages, isLoadingMore, loadMoreMessages, sessionId]);
 
+    useEffect(() => {
+      const container = scrollRef.current;
+      if (!container) return;
+      const updateRange = () => {
+        const scrollTop = container.scrollTop;
+        const containerHeight = container.clientHeight;
+        const BUFFER = 10;
+        const start = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - BUFFER);
+        const end = Math.min(
+          items.length,
+          Math.ceil((scrollTop + containerHeight) / ITEM_HEIGHT) + BUFFER,
+        );
+        setVisibleRange((prev) => {
+          if (prev.start === start && prev.end === end) return prev;
+          return { start, end };
+        });
+      };
+      updateRange();
+      container.addEventListener("scroll", updateRange, { passive: true });
+      return () => container.removeEventListener("scroll", updateRange);
+    }, [items.length]);
+
     return (
       <div className="h-full min-h-0 flex flex-col bg-surface-dim/30 dark:bg-surface-code/30 border-l border-border-secondary/30">
         <div
@@ -300,25 +343,37 @@ export const SideNav = memo(
           className="flex-1 min-h-0 overflow-y-auto"
           style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
         >
-          {items.map((item, i) => {
-            let active = selectedNavId === item.key || selectedNavId === item.blockId;
-            if (!active && selectedNavId === item.navId) {
-              active = !items[i - 1] || items[i - 1].navId !== item.navId;
-            }
-            const multi = selectedItems.has(item.navId);
-            return (
-              <NavDot
-                key={item.key}
-                dataNavKey={item.key}
-                Icon={item.icon}
-                color={item.color}
-                isActive={active}
-                isMultiSelected={multi}
-                onClick={() => handleClick(item.key, item.navId, item.blockId)}
-                onContextMenu={(e) => handleContextMenu(e, item.navId)}
-              />
-            );
-          })}
+          <div style={{ height: items.length * ITEM_HEIGHT, position: "relative" }}>
+            <div
+              style={{
+                position: "absolute",
+                top: visibleRange.start * ITEM_HEIGHT,
+                left: 0,
+                right: 0,
+              }}
+            >
+              {items.slice(visibleRange.start, visibleRange.end).map((item, localIndex) => {
+                const i = visibleRange.start + localIndex;
+                let active = selectedNavId === item.key || selectedNavId === item.blockId;
+                if (!active && selectedNavId === item.navId) {
+                  active = !items[i - 1] || items[i - 1].navId !== item.navId;
+                }
+                const multi = selectedItems.has(item.navId);
+                return (
+                  <NavDot
+                    key={item.key}
+                    dataNavKey={item.key}
+                    Icon={item.icon}
+                    color={item.color}
+                    isActive={active}
+                    isMultiSelected={multi}
+                    onClick={() => handleClick(item.key, item.navId, item.blockId)}
+                    onContextMenu={(e) => handleContextMenu(e, item.navId)}
+                  />
+                );
+              })}
+            </div>
+          </div>
         </div>
 
         {selectedItems.size > 0 && (
