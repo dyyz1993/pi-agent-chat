@@ -1,6 +1,6 @@
 # 会话切换体验优化设计
 
-> 状态：待实施
+> 状态：Phase 1-3 已实施（hot/cold 分流、fetchInit TTL 缓存、backgroundRefresh 差异更新）
 > 日期：2026-06-01
 > 影响范围：`use-session-store.ts`、`use-chat-store.ts`、`session-subscriptions.ts`、`ChatPanel.tsx`
 > 前置依赖：process-per-session Phase 1（已完成）
