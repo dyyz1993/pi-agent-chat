@@ -181,9 +181,9 @@ interface ManagedClient {
   client: RpcClientInstance;
   info: AgentProcessInfo;
   unsubscribe: () => void;
-  /** Mutable reference — updated on switchSession to reroute events */
   _activeSessionId: string;
   lastActiveAt: number;
+  activeBackgroundTools: Set<string>;
 }
 
 import type { AgentProcessInfo } from "../modules/agent";
@@ -364,10 +364,10 @@ export class AgentProcessManager {
 
     let oldest: ManagedClient | null = null;
     for (const mc of pool) {
-      if (mc.info.status !== "streaming") {
-        if (!oldest || mc.lastActiveAt < oldest.lastActiveAt) {
-          oldest = mc;
-        }
+      if (mc.info.status === "streaming") continue;
+      if (mc.activeBackgroundTools.size > 0) continue;
+      if (!oldest || mc.lastActiveAt < oldest.lastActiveAt) {
+        oldest = mc;
       }
     }
 
@@ -676,6 +676,7 @@ export class AgentProcessManager {
       unsubscribe: () => {},
       _activeSessionId: sessionId,
       lastActiveAt: Date.now(),
+      activeBackgroundTools: new Set(),
     };
 
     const bridge = (event: unknown): void => {
@@ -2768,6 +2769,15 @@ export class AgentProcessManager {
     if (!data) return;
 
     log.info("Bash channel data", { sessionId, type: data.type, toolCallId: data.toolCallId });
+
+    const managed = this.clients.get(sessionId);
+    if (managed && data.toolCallId) {
+      if (data.type === "background") {
+        managed.activeBackgroundTools.add(data.toolCallId);
+      } else if (data.type === "end" || data.type === "error" || data.type === "terminated") {
+        managed.activeBackgroundTools.delete(data.toolCallId);
+      }
+    }
 
     await this.broadcastEvent("bash.event", { sessionId, event: data }, { sessionId });
   }
