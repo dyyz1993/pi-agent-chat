@@ -106,6 +106,7 @@ src/mainview/
 | ----------------------------------------------------------- | ---------------- | --------------------------------------------------------------------------- |
 | `docs/plans/2026-06-01-process-per-session-design.md`       | Phase 1 已完成   | 每会话独立 CLI 进程，LRU 淘汰，全局进程池                                   |
 | `docs/plans/2026-06-01-session-switch-experience-design.md` | Phase 1-3 已实施 | 会话切换体验优化：热/冷切换分流、fetchInitialState 缓存、MessageList 无闪烁 |
+| `docs/plans/2026-06-01-render-cache-design.md`              | 已实施           | 渲染层按 session 缓存：processedMessages/cardMeta/flatItems/messageIds      |
 
 ### WebSocket RPC 端到端测试方法
 
