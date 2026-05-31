@@ -483,7 +483,9 @@ export const useSessionStore = create<SessionState>()(
 
         set({
           activeSessionId: id,
-          sessionReady: id ? { ...get().sessionReady, [id]: false } : get().sessionReady,
+          sessionReady: id
+            ? { ...get().sessionReady, [id]: get().sessionReady[id] ?? false }
+            : get().sessionReady,
           ...(id && curTab
             ? {
                 lastActiveSessionByProject: {
@@ -660,6 +662,7 @@ export const useSessionStore = create<SessionState>()(
                   const projectId = s.activeProjectId;
                   if (!projectId) return {};
                   return {
+                    sessionReady: { ...s.sessionReady, [id]: false },
                     projectStartFailed: { ...s.projectStartFailed, [projectId]: true },
                     projectStartError: { ...s.projectStartError, [projectId]: errMsg },
                   };
@@ -678,6 +681,7 @@ export const useSessionStore = create<SessionState>()(
               const projectId = s.activeProjectId;
               if (!projectId) return {};
               return {
+                sessionReady: { ...s.sessionReady, [id]: false },
                 projectStartFailed: { ...s.projectStartFailed, [projectId]: true },
                 projectStartError: { ...s.projectStartError, [projectId]: errMsg },
               };
