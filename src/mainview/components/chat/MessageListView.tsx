@@ -8,8 +8,34 @@ import { ALL_MEMORY_TYPE_KEYS } from "./memory-config";
 import { useChatStore } from "../../stores/use-chat-store";
 import { useSubagentStore } from "../../stores/use-subagent-store";
 import { useSessionStore } from "../../stores/use-session-store";
+import { createLogger } from "../../../shared/lib/logger";
+
+const renderLog = createLogger("render-cache");
 
 const EMPTY_MSGS: ChatMessage[] = [];
+
+const MAX_CACHE_SIZE = 10;
+
+interface CacheEntry<T> {
+  ref: ChatMessage[];
+  result: T;
+}
+
+const _processedMessagesCache = new Map<string, CacheEntry<ProcessedMessage[]>>();
+
+interface CardMetaEntry {
+  cardLabel: string | undefined;
+  prevBarColor: string | undefined;
+}
+
+const _cardMetaCache = new Map<string, CacheEntry<Map<string, CardMetaEntry>>>();
+
+function evictIfNeeded<K, V>(cache: Map<K, V>): void {
+  if (cache.size > MAX_CACHE_SIZE) {
+    const firstKey = cache.keys().next().value;
+    if (firstKey !== undefined) cache.delete(firstKey);
+  }
+}
 
 /**
  * Stable selector: only returns a new reference when message count or
@@ -147,13 +173,45 @@ export const MessageListView = memo(function MessageListView({
   onScrollEnd,
   isLoadingMore,
   hasMoreMessages,
-  activeSessionId: _activeSessionId,
+  activeSessionId,
 }: MessageListViewProps) {
-  // Read messages directly from store — avoids prop drilling that breaks memo
   const messages = useStableMessages(source);
   const { t } = useTranslation("chat");
-  const cardMeta = useMemo(() => buildCardMeta(messages, t), [messages, t]);
-  const processedMessages = useMemo(() => buildProcessedMessages(messages), [messages]);
+  const cardMeta = useMemo(() => {
+    if (!activeSessionId) return buildCardMeta(messages, t);
+    const cached = _cardMetaCache.get(activeSessionId);
+    if (cached && cached.ref === messages) {
+      renderLog.info("cache HIT (cardMeta)", {
+        sessionId: activeSessionId,
+        count: messages.length,
+      });
+      return cached.result;
+    }
+    renderLog.info("cache MISS (cardMeta)", { sessionId: activeSessionId, count: messages.length });
+    const result = buildCardMeta(messages, t);
+    _cardMetaCache.set(activeSessionId, { ref: messages, result });
+    evictIfNeeded(_cardMetaCache);
+    return result;
+  }, [messages, t, activeSessionId]);
+  const processedMessages = useMemo(() => {
+    if (!activeSessionId) return buildProcessedMessages(messages);
+    const cached = _processedMessagesCache.get(activeSessionId);
+    if (cached && cached.ref === messages) {
+      renderLog.info("cache HIT (processedMessages)", {
+        sessionId: activeSessionId,
+        count: messages.length,
+      });
+      return cached.result;
+    }
+    renderLog.info("cache MISS (processedMessages)", {
+      sessionId: activeSessionId,
+      count: messages.length,
+    });
+    const result = buildProcessedMessages(messages);
+    _processedMessagesCache.set(activeSessionId, { ref: messages, result });
+    evictIfNeeded(_processedMessagesCache);
+    return result;
+  }, [messages, activeSessionId]);
 
   if (messages.length === 0 && scrollRef) {
     return (

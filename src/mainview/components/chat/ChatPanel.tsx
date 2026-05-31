@@ -53,6 +53,17 @@ import { agentColorStyle } from "../../utils/agent-color";
 
 const log = createLogger("chat");
 
+const MAX_MSG_IDS_CACHE = 10;
+
+const _messageIdsCache = new Map<string, { ref: ChatMessage[]; result: string[] }>();
+
+function evictMsgIdsIfNeeded(): void {
+  if (_messageIdsCache.size > MAX_MSG_IDS_CACHE) {
+    const firstKey = _messageIdsCache.keys().next().value;
+    if (firstKey !== undefined) _messageIdsCache.delete(firstKey);
+  }
+}
+
 const EMPTY_MSGS: never[] = [];
 
 export function ChatPanel() {
@@ -122,7 +133,15 @@ export function ChatPanel() {
     getFirstIconId: () => string | null;
     getLastIconId: () => string | null;
   }>(null);
-  const messageIds = useMemo(() => messages.map((m) => m.id), [messages]);
+  const messageIds = useMemo(() => {
+    if (!activeSessionId) return messages.map((m) => m.id);
+    const cached = _messageIdsCache.get(activeSessionId);
+    if (cached && cached.ref === messages) return cached.result;
+    const result = messages.map((m) => m.id);
+    _messageIdsCache.set(activeSessionId, { ref: messages, result });
+    evictMsgIdsIfNeeded();
+    return result;
+  }, [messages, activeSessionId]);
   const isStreaming =
     effectiveStatus === "streaming" ||
     effectiveStatus === "compacting" ||

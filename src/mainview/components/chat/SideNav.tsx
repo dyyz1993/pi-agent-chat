@@ -16,8 +16,36 @@ import { useSessionStore } from "../../stores/use-session-store";
 import { getToolIcon, getPreviewResourceIcon, getCustomTypeIcon } from "./tool-icon-map";
 import { useChatStore } from "../../stores/use-chat-store";
 import { useSettingsStore } from "../../stores/use-settings-store";
+import { createLogger } from "../../../shared/lib/logger";
+
+const renderLog = createLogger("render-cache");
 
 type FlatItem = { key: string; navId: string; icon: LucideIcon; color: string; blockId?: string };
+
+const MAX_SIDE_NAV_CACHE = 10;
+
+interface FlatItemsCacheEntry {
+  ref: ChatMessage[];
+  showThinking: boolean;
+  result: FlatItem[];
+}
+
+const _flatItemsCache = new Map<string, FlatItemsCacheEntry>();
+
+function evictFlatItemsIfNeeded(): void {
+  if (_flatItemsCache.size > MAX_SIDE_NAV_CACHE) {
+    const firstKey = _flatItemsCache.keys().next().value;
+    if (firstKey !== undefined) _flatItemsCache.delete(firstKey);
+  }
+}
+
+export function clearSideNavCache(sessionId?: string): void {
+  if (sessionId) {
+    _flatItemsCache.delete(sessionId);
+  } else {
+    _flatItemsCache.clear();
+  }
+}
 
 function buildFlatItems(messages: ChatMessage[], showThinking: boolean): FlatItem[] {
   const items: FlatItem[] = [];
@@ -193,7 +221,23 @@ export const SideNav = memo(
 
     const showThinking = useSettingsStore((s) => s.showThinking);
 
-    const items = useMemo(() => buildFlatItems(messages, showThinking), [messages, showThinking]);
+    const items = useMemo(() => {
+      if (!sessionId) return buildFlatItems(messages, showThinking);
+      const cached = _flatItemsCache.get(sessionId);
+      if (cached && cached.ref === messages && cached.showThinking === showThinking) {
+        renderLog.info("cache HIT (flatItems)", { sessionId, count: messages.length });
+        return cached.result;
+      }
+      const result = buildFlatItems(messages, showThinking);
+      renderLog.info("cache MISS (flatItems)", {
+        sessionId,
+        count: messages.length,
+        computeCount: result.length,
+      });
+      _flatItemsCache.set(sessionId, { ref: messages, showThinking, result });
+      evictFlatItemsIfNeeded();
+      return result;
+    }, [messages, showThinking, sessionId]);
     const itemsRef = useRef(items);
     itemsRef.current = items;
 
