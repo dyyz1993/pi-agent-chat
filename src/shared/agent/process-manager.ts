@@ -358,28 +358,64 @@ export class AgentProcessManager {
     }
   }
 
-  private evictLRU(poolKey: string): void {
-    const pool = this.processByCwd.get(poolKey);
-    if (!pool || pool.size < AgentProcessManager.MAX_POOL_SIZE) return;
+  private evictLRU(currentPoolKey: string): void {
+    const totalProcesses = [...this.processByCwd.values()].reduce(
+      (sum, pool) => sum + pool.size,
+      0,
+    );
+    if (totalProcesses < AgentProcessManager.MAX_POOL_SIZE) return;
 
     let oldest: ManagedClient | null = null;
-    for (const mc of pool) {
-      if (mc.info.status === "streaming") continue;
-      if (mc.activeBackgroundTools.size > 0) continue;
-      if (!oldest || mc.lastActiveAt < oldest.lastActiveAt) {
-        oldest = mc;
+    let oldestPoolKey: string | null = null;
+
+    const currentPool = this.processByCwd.get(currentPoolKey);
+    const currentPoolSize = currentPool?.size ?? 0;
+
+    for (const [poolKey, pool] of this.processByCwd) {
+      for (const mc of pool) {
+        if (mc.info.status === "streaming") continue;
+        if (mc.activeBackgroundTools.size > 0) continue;
+
+        const isCurrentProject = poolKey === currentPoolKey;
+
+        if (isCurrentProject && currentPoolSize <= 1) continue;
+
+        if (!oldest) {
+          oldest = mc;
+          oldestPoolKey = poolKey;
+        } else {
+          const oldestIsCurrent = oldestPoolKey === currentPoolKey;
+          if (!isCurrentProject && oldestIsCurrent) {
+            oldest = mc;
+            oldestPoolKey = poolKey;
+          } else if (
+            isCurrentProject === oldestIsCurrent &&
+            mc.lastActiveAt < oldest.lastActiveAt
+          ) {
+            oldest = mc;
+            oldestPoolKey = poolKey;
+          }
+        }
       }
     }
 
-    if (oldest) {
+    if (oldest && oldestPoolKey) {
       const sid = oldest._activeSessionId;
-      log.info("[evictLRU] evicting idle process", { poolKey, sessionId: sid });
+      log.info("[evictLRU] evicting idle process", {
+        totalBefore: totalProcesses,
+        poolKey: oldestPoolKey,
+        sessionId: sid,
+        isCurrentProject: oldestPoolKey === currentPoolKey,
+      });
       oldest.unsubscribe();
       oldest.client.stop().catch(() => {});
       this.clients.delete(sid);
-      pool.delete(oldest);
-      if (pool.size === 0) {
-        this.processByCwd.delete(poolKey);
+      const pool = this.processByCwd.get(oldestPoolKey);
+      if (pool) {
+        pool.delete(oldest);
+        if (pool.size === 0) {
+          this.processByCwd.delete(oldestPoolKey);
+        }
       }
     }
   }
