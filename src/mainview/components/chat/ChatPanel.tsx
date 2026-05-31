@@ -219,6 +219,16 @@ export function ChatPanel() {
       clearTimeout(navScrollTimerRef.current);
       navScrollTimerRef.current = null;
     }
+    const timer = setTimeout(() => {
+      if (messageIds.length > 0) {
+        const lastIconId = sideNavRef.current?.getLastIconId();
+        if (lastIconId) {
+          lastSetNavIdRef.current = lastIconId;
+          setNavId(lastIconId);
+        }
+      }
+    }, 300);
+    return () => clearTimeout(timer);
   }, [activeSessionId, activeSubId]);
 
   const {
@@ -276,11 +286,17 @@ export function ChatPanel() {
   const handleScrollToEdge = useCallback(
     (edge: "top" | "bottom") => {
       if (messageIds.length === 0) return;
-      const iconId =
-        edge === "top" ? sideNavRef.current?.getFirstIconId() : sideNavRef.current?.getLastIconId();
-      if (iconId) setNavId(iconId);
       suspendAutoScroll();
+      lastSetNavIdRef.current = null;
       scrollToEdge(edge);
+      setTimeout(() => {
+        const iconId =
+          edge === "top" ? sideNavRef.current?.getFirstIconId() : sideNavRef.current?.getLastIconId();
+        if (iconId) {
+          lastSetNavIdRef.current = iconId;
+          setNavId(iconId);
+        }
+      }, 200);
     },
     [messageIds, setNavId, scrollToEdge, suspendAutoScroll],
   );
@@ -506,7 +522,7 @@ export function ChatPanel() {
       <div className="flex-1 flex overflow-hidden">
         <div className="flex-1 min-w-0 flex flex-col">
           <div className="flex-1 min-w-0 relative overflow-hidden">
-            {projectFailed && !isViewingSubagent && !isLoading ? (
+            {projectFailed && !isViewingSubagent ? (
               <div className="h-full flex items-center justify-center">
                 <div className="flex flex-col items-center gap-3 max-w-xs text-center">
                   <AlertTriangle className="w-8 h-8 text-status-warning" />
@@ -523,33 +539,27 @@ export function ChatPanel() {
                   </button>
                 </div>
               </div>
-            ) : isLoading ? (
-              <div className="h-full flex items-center justify-center">
-                <div className="flex flex-col items-center gap-2 opacity-50">
-                  <Loader2 className="w-5 h-5 text-text-tertiary animate-spin" />
-                  <span className="text-xs text-text-tertiary">{t("loadingSession")}</span>
-                </div>
-              </div>
-            ) : isViewingSubagent ? (
-              <MessageListView
-                source="sub"
-                scrollRef={messagesScrollRef}
-                vlistRef={vlistRef}
-                onScroll={handleScroll}
-                onScrollEnd={wrappedHandleScrollEnd}
-                activeSessionId={activeSubId ?? undefined}
-              />
             ) : (
-              <MessageListView
-                source="main"
-                scrollRef={messagesScrollRef}
-                vlistRef={vlistRef}
-                onScroll={handleScroll}
-                onScrollEnd={wrappedHandleScrollEnd}
-                isLoadingMore={isLoadingMore}
-                hasMoreMessages={hasMoreMessages}
-                activeSessionId={activeSessionId ?? undefined}
-              />
+              <div className="relative h-full">
+                <MessageListView
+                  source={isViewingSubagent ? "sub" : "main"}
+                  scrollRef={messagesScrollRef}
+                  vlistRef={vlistRef}
+                  onScroll={handleScroll}
+                  onScrollEnd={wrappedHandleScrollEnd}
+                  isLoadingMore={!isViewingSubagent ? isLoadingMore : undefined}
+                  hasMoreMessages={!isViewingSubagent ? hasMoreMessages : undefined}
+                  activeSessionId={(isViewingSubagent ? activeSubId : activeSessionId) ?? undefined}
+                />
+                {isLoading && messages.length === 0 && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-bg-primary/80 z-10">
+                    <div className="flex flex-col items-center gap-2 opacity-50">
+                      <Loader2 className="w-5 h-5 text-text-tertiary animate-spin" />
+                      <span className="text-xs text-text-tertiary">{t("loadingSession")}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
             {messages.length > 0 && (
               <ScrollToolbar

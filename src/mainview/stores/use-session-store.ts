@@ -598,10 +598,17 @@ export const useSessionStore = create<SessionState>()(
                     sessionId: id,
                   });
                   const tLoad = performance.now();
+                  const cachedMsgs = useChatStore.getState().messagesBySession[id] || [];
+                  const hasCached = cachedMsgs.some(
+                    (m) => m.role === "user" || (m.role === "assistant" && m.tokenUsage),
+                  );
                   const loadMessagesPromise = replayPromise.then(() =>
                     useChatStore
                       .getState()
-                      .loadSessionMessages(id, { force: true, sessionPath: session.sessionPath })
+                      .loadSessionMessages(id, {
+                        force: !hasCached,
+                        sessionPath: session.sessionPath,
+                      })
                       .then(() => {
                         perfLog.info("[switch] step-6 loadSessionMessages done", {
                           sessionId: id,

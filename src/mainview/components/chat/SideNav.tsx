@@ -202,6 +202,12 @@ export const SideNav = memo(
         if (!container) return;
         let el = container.querySelector(`[data-nav-key="${selectedNavId}"]`) as HTMLElement | null;
         if (!el) {
+          const idx = items.findIndex((item) => item.blockId === selectedNavId);
+          if (idx !== -1) {
+            el = container.querySelector(`[data-nav-key="${items[idx].key}"]`) as HTMLElement | null;
+          }
+        }
+        if (!el) {
           const idx = items.findIndex((item) => item.navId === selectedNavId);
           if (idx !== -1) {
             el = container.querySelector(`[data-nav-key="${items[idx].key}"]`) as HTMLElement | null;
@@ -210,11 +216,14 @@ export const SideNav = memo(
         if (el) {
           const containerRect = container.getBoundingClientRect();
           const elRect = el.getBoundingClientRect();
-          if (elRect.top < containerRect.top || elRect.bottom > containerRect.bottom) {
-            el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          const isFullyVisible = elRect.top >= containerRect.top - 2 && elRect.bottom <= containerRect.bottom + 2;
+          if (!isFullyVisible) {
+            const relativeTop = elRect.top - containerRect.top + container.scrollTop;
+            const targetTop = Math.max(0, relativeTop - Math.floor(container.clientHeight / 3));
+            container.scrollTo({ top: targetTop, behavior: "smooth" });
           }
         }
-      }, 120);
+      }, 150);
       return () => clearTimeout(timer);
     }, [selectedNavId, items]);
 

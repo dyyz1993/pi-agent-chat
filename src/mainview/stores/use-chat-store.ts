@@ -732,11 +732,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const localMsgs = (get().messagesBySession[sid] || []).filter((m) => m._local);
       const finalMsgs = localMsgs.length > 0 ? [...displayMsgs, ...localMsgs] : displayMsgs;
 
-      set((s) => ({
-        messagesBySession: { ...s.messagesBySession, [sid]: finalMsgs },
-        historyLoadVersion: s.historyLoadVersion + 1,
-        hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: hasMore },
-      }));
+      const currentMsgs = get().messagesBySession[sid] || [];
+      const isSameContent =
+        currentMsgs.length === finalMsgs.length &&
+        currentMsgs.every((m, i) => m.id === finalMsgs[i]?.id);
+
+      if (isSameContent) {
+        perfLog.info("[loadMessages] content unchanged, skip update", {
+          sessionId: sid,
+          count: finalMsgs.length,
+        });
+      } else {
+        set((s) => ({
+          messagesBySession: { ...s.messagesBySession, [sid]: finalMsgs },
+          historyLoadVersion: s.historyLoadVersion + 1,
+          hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: hasMore },
+        }));
+      }
 
       useSessionStore.getState().restoreContextFromHistory(sid);
     } catch (err) {

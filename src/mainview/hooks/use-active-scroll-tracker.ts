@@ -272,6 +272,13 @@ export function useActiveScrollTracker({
     }
 
     if (!userScrolledUpRef.current) {
+      const handle = vlistRef.current;
+      const isAlreadyAtBottom = handle
+        ? handle.scrollSize - handle.scrollOffset - handle.viewportSize < 50
+        : false;
+
+      if (isAlreadyAtBottom && didInitRef.current) return;
+
       let attempts = 0;
       const MAX_ATTEMPTS = 10;
       let rafId: number;
