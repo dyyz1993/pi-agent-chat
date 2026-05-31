@@ -97,12 +97,6 @@ export function ChatPanel() {
     useCallback((s) => !!activeSessionId && s.sessionReady[activeSessionId], [activeSessionId]),
   );
 
-  const isLoading = useChatStore(
-    useCallback(
-      (s) => !!activeSessionId && s.loadingSessions.has(activeSessionId),
-      [activeSessionId],
-    ),
-  );
   const hasMoreMessages = useChatStore(
     useCallback(
       (s) => !!activeSessionId && !!s.hasMoreMessagesBySession?.[activeSessionId],
@@ -219,16 +213,6 @@ export function ChatPanel() {
       clearTimeout(navScrollTimerRef.current);
       navScrollTimerRef.current = null;
     }
-    const timer = setTimeout(() => {
-      if (messageIds.length > 0) {
-        const lastIconId = sideNavRef.current?.getLastIconId();
-        if (lastIconId) {
-          lastSetNavIdRef.current = lastIconId;
-          setNavId(lastIconId);
-        }
-      }
-    }, 300);
-    return () => clearTimeout(timer);
   }, [activeSessionId, activeSubId]);
 
   const {
@@ -246,26 +230,20 @@ export function ChatPanel() {
     vlistRef,
     messageIds,
     sessionId: isViewingSubagent ? activeSubId : (activeSessionId ?? undefined),
+    onInitComplete: useCallback(() => {
+      const lastIconId = sideNavRef.current?.getLastIconId();
+      if (lastIconId) {
+        lastSetNavIdRef.current = lastIconId;
+        setNavId(lastIconId);
+      }
+    }, [setNavId]),
     setActive: useCallback(
       (id: string | null) => {
         setActive(id);
         if (navScrollingRef.current) return;
         if (id && id !== lastSetNavIdRef.current) {
           lastSetNavIdRef.current = id;
-          let navKey = id;
-          const msgEl = messagesScrollRef.current?.querySelector(`[data-msg-card-id="${id}"]`);
-          if (msgEl) {
-            const containerRect = messagesScrollRef.current!.getBoundingClientRect();
-            const blocks = msgEl.querySelectorAll("[data-block-id]");
-            for (const block of blocks) {
-              const rect = block.getBoundingClientRect();
-              if (rect.top >= containerRect.top - 20 && rect.top <= containerRect.bottom) {
-                navKey = block.getAttribute("data-block-id") ?? id;
-                break;
-              }
-            }
-          }
-          setNavId(navKey);
+          setNavId(id);
         }
       },
       [setActive, setNavId],
@@ -291,7 +269,9 @@ export function ChatPanel() {
       scrollToEdge(edge);
       setTimeout(() => {
         const iconId =
-          edge === "top" ? sideNavRef.current?.getFirstIconId() : sideNavRef.current?.getLastIconId();
+          edge === "top"
+            ? sideNavRef.current?.getFirstIconId()
+            : sideNavRef.current?.getLastIconId();
         if (iconId) {
           lastSetNavIdRef.current = iconId;
           setNavId(iconId);
@@ -551,14 +531,6 @@ export function ChatPanel() {
                   hasMoreMessages={!isViewingSubagent ? hasMoreMessages : undefined}
                   activeSessionId={(isViewingSubagent ? activeSubId : activeSessionId) ?? undefined}
                 />
-                {isLoading && messages.length === 0 && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-bg-primary/80 z-10">
-                    <div className="flex flex-col items-center gap-2 opacity-50">
-                      <Loader2 className="w-5 h-5 text-text-tertiary animate-spin" />
-                      <span className="text-xs text-text-tertiary">{t("loadingSession")}</span>
-                    </div>
-                  </div>
-                )}
               </div>
             )}
             {messages.length > 0 && (
@@ -624,72 +596,72 @@ export function ChatPanel() {
                   />
 
                   <div className="flex flex-col gap-1.5 shrink-0 justify-between py-1">
-                  {isStreaming && inputText.trim() ? (
-                    <button
-                      onClick={handleFollowUp}
-                      className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-status-info text-white hover:bg-status-info shadow-sm shadow-status-info/20"
-                      title={t("sendFollowUp")}
-                      aria-label={t("sendFollowUp")}
-                    >
-                      <Clock className="w-4 h-4" />
-                    </button>
-                  ) : isStreaming ? (
-                    <button
-                      onClick={handleAbort}
-                      disabled={isAborting}
-                      className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${isAborting ? "bg-status-error/40 text-white/70 cursor-wait" : "bg-status-error text-white hover:bg-status-error active:scale-90"}`}
-                      title={isAborting ? t("stopping") : t("stop")}
-                      aria-label={isAborting ? t("stopping") : t("stop")}
-                    >
-                      {isAborting ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
+                    {isStreaming && inputText.trim() ? (
+                      <button
+                        onClick={handleFollowUp}
+                        className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-status-info text-white hover:bg-status-info shadow-sm shadow-status-info/20"
+                        title={t("sendFollowUp")}
+                        aria-label={t("sendFollowUp")}
+                      >
+                        <Clock className="w-4 h-4" />
+                      </button>
+                    ) : isStreaming ? (
+                      <button
+                        onClick={handleAbort}
+                        disabled={isAborting}
+                        className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${isAborting ? "bg-status-error/40 text-white/70 cursor-wait" : "bg-status-error text-white hover:bg-status-error active:scale-90"}`}
+                        title={isAborting ? t("stopping") : t("stop")}
+                        aria-label={isAborting ? t("stopping") : t("stop")}
+                      >
+                        {isAborting ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Square className="w-4 h-4" />
+                        )}
+                      </button>
+                    ) : (
+                      <button
+                        disabled
+                        className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-status-error/30 text-status-error/50 cursor-not-allowed"
+                        title={t("stop")}
+                        aria-label={t("stop")}
+                      >
                         <Square className="w-4 h-4" />
-                      )}
-                    </button>
-                  ) : (
+                      </button>
+                    )}
                     <button
-                      disabled
-                      className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-status-error/30 text-status-error/50 cursor-not-allowed"
-                      title={t("stop")}
-                      aria-label={t("stop")}
+                      onClick={() => inputBarRef.current?.send()}
+                      disabled={
+                        isAborting ||
+                        isPermissionPending ||
+                        (!inputText.trim() &&
+                          useAttachmentStore.getState().attachments.length === 0) ||
+                        !sessionReady ||
+                        hasNoModel
+                      }
+                      className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${!isAborting && (inputText.trim() || useAttachmentStore.getState().attachments.length > 0) && sessionReady && !hasNoModel ? (isStreaming ? "bg-status-warning text-white hover:bg-status-warning shadow-sm shadow-status-warning/20" : "bg-semantic-accent text-white hover:bg-semantic-accent shadow-sm shadow-semantic-accent/20") : "bg-surface-dim text-text-tertiary cursor-not-allowed"}`}
+                      title={
+                        isPermissionPending
+                          ? t("waitPermission")
+                          : hasNoModel
+                            ? t("sendDisabledNoModel")
+                            : isStreaming
+                              ? t("steer")
+                              : t("send")
+                      }
+                      aria-label={
+                        isPermissionPending
+                          ? t("waitPermission")
+                          : hasNoModel
+                            ? t("sendDisabledNoModel")
+                            : isStreaming
+                              ? t("steer")
+                              : t("send")
+                      }
                     >
-                      <Square className="w-4 h-4" />
+                      {isStreaming ? <Zap className="w-4 h-4" /> : <ArrowUp className="w-4 h-4" />}
                     </button>
-                  )}
-                  <button
-                    onClick={() => inputBarRef.current?.send()}
-                    disabled={
-                      isAborting ||
-                      isPermissionPending ||
-                      (!inputText.trim() &&
-                        useAttachmentStore.getState().attachments.length === 0) ||
-                      !sessionReady ||
-                      hasNoModel
-                    }
-                    className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${!isAborting && (inputText.trim() || useAttachmentStore.getState().attachments.length > 0) && sessionReady && !hasNoModel ? (isStreaming ? "bg-status-warning text-white hover:bg-status-warning shadow-sm shadow-status-warning/20" : "bg-semantic-accent text-white hover:bg-semantic-accent shadow-sm shadow-semantic-accent/20") : "bg-surface-dim text-text-tertiary cursor-not-allowed"}`}
-                    title={
-                      isPermissionPending
-                        ? t("waitPermission")
-                        : hasNoModel
-                          ? t("sendDisabledNoModel")
-                          : isStreaming
-                            ? t("steer")
-                            : t("send")
-                    }
-                    aria-label={
-                      isPermissionPending
-                        ? t("waitPermission")
-                        : hasNoModel
-                          ? t("sendDisabledNoModel")
-                          : isStreaming
-                            ? t("steer")
-                            : t("send")
-                    }
-                  >
-                    {isStreaming ? <Zap className="w-4 h-4" /> : <ArrowUp className="w-4 h-4" />}
-                  </button>
-                </div>
+                  </div>
                 </div>
               </>
             )}

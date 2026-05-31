@@ -50,7 +50,9 @@ function detectEmptyTurnAndInjectError(sessionId: string) {
       {
         id: `error_${Date.now()}`,
         role: "error" as const,
-        content: [{ type: "text" as const, text: "Agent 未返回响应，可能是 LLM 服务异常或网络问题" }],
+        content: [
+          { type: "text" as const, text: "Agent 未返回响应，可能是 LLM 服务异常或网络问题" },
+        ],
         timestamp: Date.now(),
       },
     ]);
@@ -555,7 +557,11 @@ export const useSessionStore = create<SessionState>()(
                   ms: Math.round(performance.now() - tAgentStart),
                 });
 
-                if (result.status === "already_running" || result.status === "started") {
+                if (
+                  result.status === "already_running" ||
+                  result.status === "started" ||
+                  result.status === "switched"
+                ) {
                   set((s) => {
                     const projectId = s.activeProjectId;
                     if (!projectId) return {};
@@ -1853,7 +1859,11 @@ apiClient.onReconnect(() => {
       sessionPath: session.sessionPath,
     })
     .then((result) => {
-      if (result.status === "already_running" || result.status === "started") {
+      if (
+        result.status === "already_running" ||
+        result.status === "started" ||
+        result.status === "switched"
+      ) {
         useSessionStore.setState((s) => {
           const projectId = s.activeProjectId;
           if (!projectId) return {};

@@ -348,9 +348,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       setTimeout(() => {
         const chat = get();
         const msgs = chat.messagesBySession[checkSessionId] || [];
-        const hasAssistant = msgs.some(
-          (m) => m.role === "assistant" && m.id !== checkUserMsgId,
-        );
+        const hasAssistant = msgs.some((m) => m.role === "assistant" && m.id !== checkUserMsgId);
         if (!hasAssistant) {
           const status = useSessionStore.getState().sessionStatusMap[checkSessionId];
           const isStillStreaming =
@@ -361,7 +359,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
               {
                 id: `error_${Date.now()}`,
                 role: "error" as const,
-                content: [{ type: "text" as const, text: "Agent 未返回响应，可能是 LLM 服务异常或网络问题" }],
+                content: [
+                  {
+                    type: "text" as const,
+                    text: "Agent 未返回响应，可能是 LLM 服务异常或网络问题",
+                  },
+                ],
                 timestamp: Date.now(),
               },
             ]);
@@ -733,11 +736,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const finalMsgs = localMsgs.length > 0 ? [...displayMsgs, ...localMsgs] : displayMsgs;
 
       const currentMsgs = get().messagesBySession[sid] || [];
-      const isSameContent =
+      const hasSameIds =
         currentMsgs.length === finalMsgs.length &&
         currentMsgs.every((m, i) => m.id === finalMsgs[i]?.id);
 
-      if (isSameContent) {
+      if (hasSameIds) {
         perfLog.info("[loadMessages] content unchanged, skip update", {
           sessionId: sid,
           count: finalMsgs.length,
@@ -868,9 +871,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
             oldCount: current.length,
             newCount: msgs.length,
           });
+          const serverIds = new Set(msgs.map((m) => m.id));
+          const localOnly = current.filter((m) => !serverIds.has(m.id));
           const hasMore = result.hasMore === true || msgs.length > PAGE_SIZE;
+          const merged =
+            localOnly.length > 0
+              ? [...msgs, ...localOnly].sort((a, b) => a.timestamp - b.timestamp)
+              : msgs;
           set((s) => ({
-            messagesBySession: { ...s.messagesBySession, [sid]: msgs },
+            messagesBySession: { ...s.messagesBySession, [sid]: merged },
             historyLoadVersion: s.historyLoadVersion + 1,
             hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: hasMore },
           }));
