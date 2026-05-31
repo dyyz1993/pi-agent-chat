@@ -9,6 +9,7 @@ import {
   ChevronDown,
   Rows3,
   Columns2,
+  Maximize2,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useRollbackStore } from "../../stores/use-rollback-store";
@@ -20,6 +21,7 @@ import { useFocusTrap } from "../../hooks/use-focus-trap";
 import { apiClient } from "../../lib/api-client";
 import { createLogger } from "../../../shared/lib/logger";
 import { InlineDiffViewer } from "./tool-renderers/InlineDiffViewer";
+import { useChatOverlayStore } from "../../stores/use-chat-overlay-store";
 import { formatFilePath } from "../../lib/format-path";
 
 const log = createLogger("chat");
@@ -165,15 +167,34 @@ const FileItem = memo(function FileItem({
                   >
                     <Columns2 className="w-3.5 h-3.5" />
                   </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      useChatOverlayStore.getState().openExpand(
+                        filePath.split("/").pop() ?? "Diff",
+                        <InlineDiffViewer
+                          oldValue={newContent ?? ""}
+                          newValue={oldContent ?? ""}
+                          splitView={splitView}
+                          expandable={false}
+                          filePath={filePath}
+                          maxHeight="100%"
+                        />,
+                      )
+                    }
+                    className="p-1 rounded text-text-tertiary hover:text-text-primary dark:hover:text-text-primary hover:bg-surface-hover transition-colors"
+                    title={t("expand", { defaultValue: "Expand" })}
+                  >
+                    <Maximize2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
               <InlineDiffViewer
-                // Swap old/new for rollback preview: show what WILL CHANGE
-                // (current → post-rollback), so removed=red, added=green.
                 oldValue={newContent ?? ""}
                 newValue={oldContent ?? ""}
                 maxHeight="256px"
                 splitView={splitView}
+                expandable={false}
                 filePath={filePath}
               />
             </div>
