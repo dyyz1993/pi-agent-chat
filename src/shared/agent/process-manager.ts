@@ -183,6 +183,7 @@ interface ManagedClient {
   unsubscribe: () => void;
   /** Mutable reference — updated on switchSession to reroute events */
   _activeSessionId: string;
+  lastActiveAt: number;
 }
 
 import type { AgentProcessInfo } from "../modules/agent";
@@ -330,6 +331,57 @@ export class AgentProcessManager {
   >();
   private subagentSyncChildren = new Set<string>();
   private syncDelegateLastText = new Map<string, string>();
+
+  private static MAX_POOL_SIZE = 5;
+
+  private addToPool(poolKey: string, managed: ManagedClient): void {
+    let pool = this.processByCwd.get(poolKey);
+    if (!pool) {
+      pool = new Set();
+      this.processByCwd.set(poolKey, pool);
+    }
+    pool.add(managed);
+  }
+
+  private removeFromPool(poolKey: string, managed: ManagedClient): void {
+    const pool = this.processByCwd.get(poolKey);
+    if (pool) {
+      pool.delete(managed);
+      if (pool.size === 0) {
+        this.processByCwd.delete(poolKey);
+      }
+    }
+  }
+
+  private evictLRU(poolKey: string): void {
+    const pool = this.processByCwd.get(poolKey);
+    if (!pool || pool.size < AgentProcessManager.MAX_POOL_SIZE) return;
+
+    let oldest: ManagedClient | null = null;
+    for (const mc of pool) {
+      if (mc.info.status !== "streaming") {
+        if (!oldest || mc.lastActiveAt < oldest.lastActiveAt) {
+          oldest = mc;
+        }
+      }
+    }
+
+    if (oldest) {
+      const sid = oldest._activeSessionId;
+      log.info("[evictLRU] evicting idle process", { poolKey, sessionId: sid });
+      oldest.unsubscribe();
+      oldest.client.stop().catch(() => {});
+      this.clients.delete(sid);
+      pool.delete(oldest);
+      if (pool.size === 0) {
+        this.processByCwd.delete(poolKey);
+      }
+    }
+  }
+
+  private getPoolKey(projectPath: string, userId?: string): string {
+    return config.sandboxEnabled && userId ? `${projectPath}::${userId}` : projectPath;
+  }
 
   private sessionMsgCache = new Map<
     string,
@@ -568,11 +620,9 @@ export class AgentProcessManager {
     projectPath: string,
     sessionPath: string,
     options?: { forceNewProcess?: boolean; userId?: string },
-  ): Promise<{ agentId: string; status: "started" | "already_running" | "switched" }> {
+  ): Promise<{ agentId: string; status: "started" | "already_running" }> {
     const tStart = performance.now();
 
-    // Guard: prevent recursive start() triggered by coordinator session_delegate
-    // arriving during an ongoing start() (e.g. child process retarget in 0.74.50+).
     if (this._startInProgress) {
       log.warn("[start] reentrant call blocked", { sessionId });
       return { agentId: sessionId, status: "already_running" };
@@ -585,94 +635,17 @@ export class AgentProcessManager {
         sessionId,
         totalMs: Math.round(performance.now() - tStart),
       });
+      existing.lastActiveAt = Date.now();
       this._startInProgress = false;
       this._drainPendingDelegates();
       return { agentId: sessionId, status: "already_running" };
     }
 
-    // ── Process pool: reuse existing process for same cwd ──
-    // In sandbox mode, each userId gets its own process pool entry
-    const poolKey =
-      config.sandboxEnabled && options?.userId ? `${projectPath}::${options.userId}` : projectPath;
-    const pooled = options?.forceNewProcess ? null : this.processByCwd.get(poolKey);
-    if (pooled) {
-      const oldSessionId = pooled._activeSessionId;
-      const tSwitch = performance.now();
-      try {
-        perfLog.info("[start] reusing pooled process", {
-          sessionId,
-          projectPath,
-          oldSessionId,
-        });
-        // Race switchSession with a 15-second timeout.
-        // If the child process is busy (e.g. getFullMessages), don't queue behind it.
-        const result = await withTimeout(
-          pooled.client.switchSession(sessionPath),
-          15_000,
-          "switchSession",
-        );
-        if (!result.cancelled) {
-          // Update mappings: remove ALL stale clients entries pointing to this pooled process
-          for (const [sid, mc] of this.clients) {
-            if (mc === pooled && sid !== sessionId) {
-              this.clients.delete(sid);
-            }
-          }
-          pooled._activeSessionId = sessionId;
-          pooled.info = {
-            sessionId,
-            projectPath,
-            sessionPath,
-            status: "idle",
-            holdEvents: [],
-          };
-          this.clients.set(sessionId, pooled);
-          this.sessionPaths.set(sessionId, sessionPath);
-          this.sessionProjectPaths.set(sessionId, projectPath);
-          perfLog.info("[start] switchSession done", {
-            sessionId,
-            oldSessionId,
-            totalMs: Math.round(performance.now() - tSwitch),
-          });
-          this._startInProgress = false;
-          this._drainPendingDelegates();
-          this.broadcastSessionStatus(sessionId, "idle");
-          return { agentId: sessionId, status: "switched" };
-        }
-        // If cancelled by an extension, fall through to create new process
-        perfLog.info("[start] switchSession cancelled by extension, creating new process");
-      } catch (err: unknown) {
-        const switchMs = Math.round(performance.now() - tSwitch);
-        // switchSession failed or timed out — kill the pooled process (it may be stuck)
-        // and fall through to create a fresh one.
-        perfLog.info("[start] switchSession failed, killing pooled process", {
-          sessionId,
-          oldSessionId,
-          switchMs,
-          error: err instanceof Error ? err.message : String(err),
-        });
-        // Remove from process pool so we don't try to reuse a stuck process
-        this.processByCwd.delete(poolKey);
-        // Kill ALL stale clients entries pointing to this stuck process
-        for (const [sid, mc] of this.clients) {
-          if (mc === pooled) {
-            this.clients.delete(sid);
-          }
-        }
-        try {
-          pooled.unsubscribe();
-        } catch {
-          /* ignore */
-        }
-        try {
-          await pooled.client.stop();
-        } catch {
-          /* ignore */
-        }
-      }
-    }
+    const poolKey = this.getPoolKey(projectPath, options?.userId);
 
     perfLog.info("[start] begin (new process)", { sessionId, projectPath });
+
+    this.evictLRU(poolKey);
 
     const { client, timings: createTimings } = await createRpcClient(
       config.piCliPath,
@@ -697,6 +670,7 @@ export class AgentProcessManager {
       info,
       unsubscribe: () => {},
       _activeSessionId: sessionId,
+      lastActiveAt: Date.now(),
     };
 
     const bridge = (event: unknown): void => {
@@ -705,7 +679,6 @@ export class AgentProcessManager {
     try {
       managed.unsubscribe = client.onEvent(bridge);
     } catch {
-      // sandbox mode: onEvent may not be supported
       managed.unsubscribe = () => {};
     }
 
@@ -741,35 +714,13 @@ export class AgentProcessManager {
       }
     }
 
-    this.clients.set(sessionId, managed);
-
-    try {
-      perfLog.info("[start] awaiting client.start()", { sessionId, projectPath });
-      await withTimeout(client.start(), 60_000, "client.start()");
-    } catch (startErr: unknown) {
-      this.clients.delete(sessionId);
-      const msg = startErr instanceof Error ? startErr.message : String(startErr);
-      log.error("[start] RpcClient.start failed", {
-        sessionId,
-        projectPath,
-        error: msg,
-        createRpcMs: Math.round(performance.now() - tAfterCreate),
-      });
-      this._startInProgress = false;
-      throw new Error(`Agent startup failed for ${projectPath}: ${msg}`);
-    }
-    const tAfterProcessStart = performance.now();
-
-    const totalMs = Math.round(tAfterProcessStart - tStart);
-    const createRpcMs = Math.round(tAfterCreate - tStart);
-    const processStartMs = Math.round(tAfterProcessStart - tAfterCreate);
-
-    perfLog.info("[start] completed", {
+    const processStartMs = Math.round(performance.now() - tAfterCreate);
+    perfLog.info("[start] RpcClient ready", {
       sessionId,
-      totalMs,
+      totalMs: Math.round(performance.now() - tStart),
       dynamicImportMs: createTimings.dynamicImport,
       constructMs: createTimings.construct,
-      createRpcTotalMs: createRpcMs,
+      createRpcTotalMs: Math.round(tAfterCreate - tStart),
       processStartMs,
       channelsRegistered: channelNames.length,
     });
@@ -777,9 +728,8 @@ export class AgentProcessManager {
     log.info("RpcClient started", { sessionId });
     this.sessionPaths.set(sessionId, sessionPath);
     this.sessionProjectPaths.set(sessionId, projectPath);
-    if (!options?.forceNewProcess) {
-      this.processByCwd.set(poolKey, managed);
-    }
+    this.clients.set(sessionId, managed);
+    this.addToPool(poolKey, managed);
     this._startInProgress = false;
     this._drainPendingDelegates();
     this.broadcastSessionStatus(sessionId, "idle");
@@ -815,6 +765,7 @@ export class AgentProcessManager {
       log.warn("send: no client after ensure", { sessionId });
       return false;
     }
+    managed.lastActiveAt = Date.now();
     managed.client.prompt(content, images).catch(async (err: Error) => {
       log.warn("prompt error", { err: err.message });
       if (!(await this.isClientAlive(sessionId, managed!))) {
@@ -952,13 +903,11 @@ export class AgentProcessManager {
       log.warn("stop error", { sessionId, err: err instanceof Error ? err.message : String(err) });
     });
     this.clients.delete(sessionId);
-    // Clean up process pool if this was the pooled process for its cwd
-    // Need to check both plain projectPath and userId-keyed variants
-    for (const [key, val] of this.processByCwd) {
-      if (val === managed) {
-        this.processByCwd.delete(key);
-        break;
-      }
+    const poolKey = this.getPoolKey(managed.info.projectPath);
+    this.removeFromPool(poolKey, managed);
+    const sandboxKey = this.getPoolKey(managed.info.projectPath, managed._activeSessionId);
+    if (sandboxKey !== poolKey) {
+      this.removeFromPool(sandboxKey, managed);
     }
     // Note: sessionPaths, sessionProjectPaths, and leafIds are NOT cleared here.
     // They persist for session restart support (coordinator delegate_send)
@@ -1099,9 +1048,11 @@ export class AgentProcessManager {
 
   private _getSandboxUserId(sessionId: string): string | null {
     if (!config.sandboxEnabled) return null;
-    for (const [key, mc] of this.processByCwd) {
-      if (mc._activeSessionId === sessionId && key.includes("::")) {
-        return key.split("::")[1] ?? null;
+    for (const [key, pool] of this.processByCwd) {
+      for (const mc of pool) {
+        if (mc._activeSessionId === sessionId && key.includes("::")) {
+          return key.split("::")[1] ?? null;
+        }
       }
     }
     for (const [, mc] of this.clients) {
@@ -2630,12 +2581,14 @@ export class AgentProcessManager {
 
     if (event.type === "agent_start") {
       managed.info.status = "streaming";
+      managed.lastActiveAt = Date.now();
       managed.info.holdEvents = [];
       this.broadcastSessionStatus(sessionId, "streaming");
     }
 
     if (event.type === "agent_end") {
       managed.info.status = "idle";
+      managed.lastActiveAt = Date.now();
       managed.info.holdEvents = [];
       this.broadcastSessionStatus(sessionId, "idle");
 
