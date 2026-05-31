@@ -98,38 +98,39 @@ export const InlineDiffViewer = memo(function InlineDiffViewer({
     );
   }, [openNodeExpand, filePath, oldValue, newValue, splitView, isDark, overlayStyles, renderContent, t]);
 
+  const expandInToolbar = expandable && showToggle;
+  const expandFloating = expandable && !showToggle;
+
   return (
     <>
-      <div className="flex items-center gap-1 px-1 pb-1">
-        {showToggle && (
-          <>
-            <button
-              onClick={() => setInternalSplitView(false)}
-              className={`p-1 rounded transition-colors ${!splitView ? "bg-surface-hover text-text-primary" : "text-text-tertiary hover:text-text-primary"}`}
-              title={t("diffLineByLine", { defaultValue: "Line by line" })}
-            >
-              <Rows3 className="w-3 h-3" />
-            </button>
-            <button
-              onClick={() => setInternalSplitView(true)}
-              className={`p-1 rounded transition-colors ${splitView ? "bg-surface-hover text-text-primary" : "text-text-tertiary hover:text-text-primary"}`}
-              title={t("diffSideBySide", { defaultValue: "Side by side" })}
-            >
-              <Columns2 className="w-3 h-3" />
-            </button>
-          </>
-        )}
-        {expandable && (
+      {showToggle && (
+        <div className="flex items-center gap-1 px-1 pb-1">
           <button
-            onClick={handleExpand}
-            className="ml-auto p-1 rounded text-text-tertiary hover:text-text-primary hover:bg-surface-hover transition-colors"
-            title={t("expand", { defaultValue: "Expand" })}
+            onClick={() => setInternalSplitView(false)}
+            className={`p-1 rounded transition-colors ${!splitView ? "bg-surface-hover text-text-primary" : "text-text-tertiary hover:text-text-primary"}`}
+            title={t("diffLineByLine", { defaultValue: "Line by line" })}
           >
-            <Maximize2 className="w-3 h-3" />
+            <Rows3 className="w-3 h-3" />
           </button>
-        )}
-      </div>
-      <div className="rounded">
+          <button
+            onClick={() => setInternalSplitView(true)}
+            className={`p-1 rounded transition-colors ${splitView ? "bg-surface-hover text-text-primary" : "text-text-tertiary hover:text-text-primary"}`}
+            title={t("diffSideBySide", { defaultValue: "Side by side" })}
+          >
+            <Columns2 className="w-3 h-3" />
+          </button>
+          {expandInToolbar && (
+            <button
+              onClick={handleExpand}
+              className="ml-auto p-1 rounded text-text-tertiary hover:text-text-primary hover:bg-surface-hover transition-colors"
+              title={t("expand", { defaultValue: "Expand" })}
+            >
+              <Maximize2 className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+      )}
+      <div className="relative rounded">
         <div className="overflow-auto" style={{ maxHeight }}>
           <ReactDiffViewer
             oldValue={oldValue}
@@ -143,6 +144,15 @@ export const InlineDiffViewer = memo(function InlineDiffViewer({
             renderContent={renderContent}
           />
         </div>
+        {expandFloating && (
+          <button
+            onClick={handleExpand}
+            className="absolute top-1 right-1 p-1.5 rounded bg-bg-elevated/80 text-text-tertiary hover:text-text-primary hover:bg-surface-hover transition-colors"
+            title={t("expand", { defaultValue: "Expand" })}
+          >
+            <Maximize2 className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
     </>
   );
