@@ -91,7 +91,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
           {
             id: `error_${Date.now()}`,
             role: "error" as const,
-            content: [{ type: "text" as const, text: "Agent 未返回响应，可能是 LLM 服务异常或网络问题" }],
+            content: [{ type: "text" as const, text: "Agent 未返回响应\nAgent 在处理你的消息后异常退出，可能是 LLM 服务异常或网络问题" }],
             timestamp: Date.now(),
           },
         ]);
@@ -500,12 +500,18 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     );
 
     if (!hasContent) {
+      const assistantMsg = message as AssistantMessage;
+      const errorDetail = assistantMsg.errorMessage
+        ?? (assistantMsg.stopReason === "error" ? "LLM 返回了错误响应" : undefined)
+        ?? "LLM 返回了空响应";
+      const errorTitle = "LLM 未返回有效响应";
       chat.setMessagesForSession(sessionId, [
         ...existing.slice(0, -1),
         {
           ...lastMsg,
           role: "error" as const,
-          content: [{ type: "text" as const, text: "LLM 未返回有效响应" }],
+          content: [{ type: "text" as const, text: `${errorTitle}\n${errorDetail}` }],
+          stopReason: assistantMsg.stopReason ?? undefined,
           isStreaming: false,
         },
       ]);

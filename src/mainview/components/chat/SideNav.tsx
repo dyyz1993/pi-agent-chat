@@ -22,10 +22,11 @@ import { useTurnStore, EMPTY_SET } from "../../stores/use-turn-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { getToolIcon, getPreviewResourceIcon, getCustomTypeIcon } from "./tool-icon-map";
 import { useChatStore } from "../../stores/use-chat-store";
+import { useSettingsStore } from "../../stores/use-settings-store";
 
-type FlatItem = { key: string; navId: string; icon: LucideIcon; color: string };
+type FlatItem = { key: string; navId: string; icon: LucideIcon; color: string; blockId?: string };
 
-function buildFlatItems(messages: ChatMessage[]): FlatItem[] {
+function buildFlatItems(messages: ChatMessage[], showThinking: boolean): FlatItem[] {
   const items: FlatItem[] = [];
   for (const msg of messages) {
     const id = msg.id;
@@ -70,15 +71,18 @@ function buildFlatItems(messages: ChatMessage[]): FlatItem[] {
 
     let count = 1;
     let hasContentBlock = false;
+    let blockIndex = -1;
 
     for (const b of msg.content) {
-      if (b.type === "thinking") {
+      blockIndex++;
+      const blockId = `${id}-${blockIndex}`;
+      if (b.type === "thinking" && showThinking) {
         count++;
-        items.push({ key: `${id}-${count}`, navId: id, icon: Brain, color: errorColor ?? "text-purple-400" });
+        items.push({ key: `${id}-${count}`, navId: id, blockId, icon: Brain, color: errorColor ?? "text-purple-400" });
         hasContentBlock = true;
       } else if (b.type === "text") {
         count++;
-        items.push({ key: `${id}-${count}`, navId: id, icon: Type, color: errorColor ?? "text-text-tertiary" });
+        items.push({ key: `${id}-${count}`, navId: id, blockId, icon: Type, color: errorColor ?? "text-text-tertiary" });
         hasContentBlock = true;
       } else if (b.type === "toolExecution") {
         count++;
@@ -87,7 +91,7 @@ function buildFlatItems(messages: ChatMessage[]): FlatItem[] {
           const rt = ((b as { details?: { resourceType?: string } }).details as { resourceType?: string } | undefined)?.resourceType;
           if (rt) ti = getPreviewResourceIcon(rt);
         }
-        items.push({ key: `${id}-${count}`, navId: id, icon: ti.icon, color: errorColor ?? ti.color });
+        items.push({ key: `${id}-${count}`, navId: id, blockId, icon: ti.icon, color: errorColor ?? ti.color });
         hasContentBlock = true;
       }
     }
@@ -160,23 +164,25 @@ export const SideNav = memo(
     );
     const toggleItemSelect = useChatNavStore((s) => s.toggleItemSelect);
 
-    const items = useMemo(() => buildFlatItems(messages), [messages]);
+    const showThinking = useSettingsStore((s) => s.showThinking);
+
+    const items = useMemo(() => buildFlatItems(messages, showThinking), [messages, showThinking]);
 
     const scrollRef = useRef<HTMLDivElement>(null);
 
     useImperativeHandle(
       ref,
       () => ({
-        getFirstIconId: () => items[0]?.navId ?? null,
-        getLastIconId: () => items[items.length - 1]?.navId ?? null,
+        getFirstIconId: () => items[0]?.key ?? null,
+        getLastIconId: () => items[items.length - 1]?.key ?? null,
       }),
       [items],
     );
 
     const handleClick = useCallback(
-      (key: string, navId: string) => {
+      (key: string, navId: string, blockId: string | undefined) => {
         setNavId(key);
-        onNavDotClick(navId);
+        onNavDotClick(blockId ?? navId);
       },
       [onNavDotClick, setNavId],
     );
@@ -192,11 +198,25 @@ export const SideNav = memo(
     useEffect(() => {
       if (!selectedNavId) return;
       const timer = setTimeout(() => {
-        const el = scrollRef.current?.querySelector(`[data-nav-key="${selectedNavId}"]`) as HTMLElement | null;
-        el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        const container = scrollRef.current;
+        if (!container) return;
+        let el = container.querySelector(`[data-nav-key="${selectedNavId}"]`) as HTMLElement | null;
+        if (!el) {
+          const idx = items.findIndex((item) => item.navId === selectedNavId);
+          if (idx !== -1) {
+            el = container.querySelector(`[data-nav-key="${items[idx].key}"]`) as HTMLElement | null;
+          }
+        }
+        if (el) {
+          const containerRect = container.getBoundingClientRect();
+          const elRect = el.getBoundingClientRect();
+          if (elRect.top < containerRect.top || elRect.bottom > containerRect.bottom) {
+            el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          }
+        }
       }, 120);
       return () => clearTimeout(timer);
-    }, [selectedNavId]);
+    }, [selectedNavId, items]);
 
     const loadMoreMessages = useChatStore((s) => s.loadMoreMessages);
     const hasMoreMessages = useChatStore(
@@ -232,7 +252,7 @@ export const SideNav = memo(
           style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
         >
           {items.map((item, i) => {
-            let active = selectedNavId === item.key;
+            let active = selectedNavId === item.key || selectedNavId === item.blockId;
             if (!active && selectedNavId === item.navId) {
               active = !items[i - 1] || items[i - 1].navId !== item.navId;
             }
@@ -245,7 +265,7 @@ export const SideNav = memo(
                 color={item.color}
                 isActive={active}
                 isMultiSelected={multi}
-                onClick={() => handleClick(item.key, item.navId)}
+                onClick={() => handleClick(item.key, item.navId, item.blockId)}
                 onContextMenu={(e) => handleContextMenu(e, item.navId)}
               />
             );

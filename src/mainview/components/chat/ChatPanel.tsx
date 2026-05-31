@@ -242,7 +242,20 @@ export function ChatPanel() {
         if (navScrollingRef.current) return;
         if (id && id !== lastSetNavIdRef.current) {
           lastSetNavIdRef.current = id;
-          setNavId(id);
+          let navKey = id;
+          const msgEl = messagesScrollRef.current?.querySelector(`[data-msg-card-id="${id}"]`);
+          if (msgEl) {
+            const containerRect = messagesScrollRef.current!.getBoundingClientRect();
+            const blocks = msgEl.querySelectorAll("[data-block-id]");
+            for (const block of blocks) {
+              const rect = block.getBoundingClientRect();
+              if (rect.top >= containerRect.top - 20 && rect.top <= containerRect.bottom) {
+                navKey = block.getAttribute("data-block-id") ?? id;
+                break;
+              }
+            }
+          }
+          setNavId(navKey);
         }
       },
       [setActive, setNavId],
@@ -266,7 +279,7 @@ export function ChatPanel() {
       const iconId =
         edge === "top" ? sideNavRef.current?.getFirstIconId() : sideNavRef.current?.getLastIconId();
       if (iconId) setNavId(iconId);
-      if (edge === "top") suspendAutoScroll();
+      suspendAutoScroll();
       scrollToEdge(edge);
     },
     [messageIds, setNavId, scrollToEdge, suspendAutoScroll],
@@ -283,27 +296,34 @@ export function ChatPanel() {
       }, 800);
 
       let index = messageIds.indexOf(navId);
-      if (index !== -1) {
-        lastSetNavIdRef.current = navId;
-        vlistRef.current?.scrollToIndex(index, { smooth: true });
-        return;
+      let blockNavId: string | undefined;
+
+      if (index === -1) {
+        const dashIdx = navId.lastIndexOf("-");
+        if (dashIdx >= 0) {
+          const msgId = navId.slice(0, dashIdx);
+          index = messageIds.indexOf(msgId);
+          if (index !== -1) blockNavId = navId;
+        }
       }
 
-      const lastDashIdx = navId.lastIndexOf("-");
-      if (lastDashIdx < 0) return;
-      const msgId = navId.slice(0, lastDashIdx);
-      index = messageIds.indexOf(msgId);
-      if (index === -1) return;
-      lastSetNavIdRef.current = msgId;
-      vlistRef.current?.scrollToIndex(index, { smooth: true });
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          const blockEl = messagesScrollRef.current?.querySelector(`[data-block-id="${navId}"]`);
-          if (blockEl) blockEl.scrollIntoView({ block: "start", behavior: "instant" });
-        });
-      });
+      if (index !== -1) {
+        lastSetNavIdRef.current = messageIds[index];
+        vlistRef.current?.scrollToIndex(index, { smooth: true });
+
+        if (blockNavId) {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              const blockEl = messagesScrollRef.current?.querySelector(
+                `[data-block-id="${blockNavId}"]`,
+              );
+              if (blockEl) blockEl.scrollIntoView({ block: "start", behavior: "instant" });
+            });
+          });
+        }
+      }
     },
-    [messageIds, suspendAutoScroll],
+    [messageIds, suspendAutoScroll, setNavId],
   );
 
   const handleSend = async () => {
