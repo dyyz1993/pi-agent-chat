@@ -80,9 +80,11 @@ function App() {
 
     const doInit = async () => {
       if (cancelled) return;
-      initializeConnection();
-      setupProjectStatusSubscription();
-      setupSessionRenamedSubscription();
+      await Promise.all([
+        initializeConnection(),
+        setupProjectStatusSubscription(),
+        setupSessionRenamedSubscription(),
+      ]);
     };
 
     doInit();

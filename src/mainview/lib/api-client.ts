@@ -91,12 +91,12 @@ class APIClientImpl {
         this._transport = "websocket";
         const wsUrl = this.getWebSocketUrl();
         this.wsTransport = new WebSocketTransport({ url: wsUrl, reconnect: false });
-        const WS_CONNECT_TIMEOUT_MS = 15_000;
+        const WS_CONNECT_TIMEOUT_MS = 5_000;
         await Promise.race([
           this.wsTransport.connect(),
           new Promise<never>((_, reject) =>
             setTimeout(
-              () => reject(new Error("WebSocket connect timed out (15s)")),
+              () => reject(new Error("WebSocket connect timed out (5s)")),
               WS_CONNECT_TIMEOUT_MS,
             ),
           ),
@@ -194,12 +194,12 @@ class APIClientImpl {
         }
 
         this.wsTransport = new WebSocketTransport({ url: freshUrl, reconnect: false });
-        const WS_RECONNECT_TIMEOUT_MS = 15_000;
+        const WS_RECONNECT_TIMEOUT_MS = 5_000;
         await Promise.race([
           this.wsTransport.connect(),
           new Promise<never>((_, reject) =>
             setTimeout(
-              () => reject(new Error("WebSocket reconnect timed out (15s)")),
+              () => reject(new Error("WebSocket reconnect timed out (5s)")),
               WS_RECONNECT_TIMEOUT_MS,
             ),
           ),
