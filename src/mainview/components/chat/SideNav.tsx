@@ -242,7 +242,6 @@ export const SideNav = memo(
     itemsRef.current = items;
 
     const scrollRef = useRef<HTMLDivElement>(null);
-    const scrollTargetRef = useRef<number | null>(null);
     const ITEM_HEIGHT = 32;
     const [visibleRange, setVisibleRange] = useState({ start: 0, end: 50 });
 
@@ -291,34 +290,12 @@ export const SideNav = memo(
         return;
       }
 
-      const itemTop = targetIdx * ITEM_HEIGHT;
-      const itemCenter = itemTop + ITEM_HEIGHT / 2;
-      const viewTop = container.scrollTop;
-      const viewHeight = container.clientHeight;
-      const viewCenter = viewTop + viewHeight / 2;
+      const maxScroll = totalHeight - container.clientHeight;
+      const targetScroll = Math.min(Math.max(0, targetIdx * ITEM_HEIGHT), maxScroll);
 
-      const MARGIN = ITEM_HEIGHT;
-      const EDGE_ZONE = Math.floor(viewHeight * 0.25);
-
-      const relativeTop = itemTop - viewTop;
-      const relativeBottom = relativeTop + ITEM_HEIGHT;
-
-      const isNearTopEdge = relativeTop >= -2 && relativeTop <= EDGE_ZONE;
-      const isNearBottomEdge =
-        relativeBottom >= viewHeight - EDGE_ZONE && relativeBottom <= viewHeight + 2;
-
-      if (isNearTopEdge || isNearBottomEdge) return;
-
-      let targetScroll: number;
-      if (itemCenter <= viewCenter) {
-        targetScroll = Math.max(0, itemTop - MARGIN);
-      } else {
-        targetScroll = Math.max(0, itemTop + ITEM_HEIGHT - viewHeight + MARGIN);
+      if (container.scrollTop !== targetScroll) {
+        container.scrollTop = targetScroll;
       }
-
-      if (scrollTargetRef.current === targetScroll) return;
-      scrollTargetRef.current = targetScroll;
-      container.scrollTo({ top: targetScroll, behavior: "smooth" });
     }, [selectedNavId]);
 
     const loadMoreMessages = useChatStore((s) => s.loadMoreMessages);
