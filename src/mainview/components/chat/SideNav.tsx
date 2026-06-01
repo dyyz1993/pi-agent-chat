@@ -270,60 +270,53 @@ export const SideNav = memo(
       [toggleItemSelect],
     );
 
+    const prevNavIndexRef = useRef(-1);
+
     useEffect(() => {
       if (!selectedNavId) return;
       const container = scrollRef.current;
       const currentItems = itemsRef.current;
-      if (container) {
-        const targetIdx = currentItems.findIndex(
-          (item) =>
-            item.key === selectedNavId ||
-            item.blockId === selectedNavId ||
-            item.navId === selectedNavId,
-        );
-        if (targetIdx !== -1) {
-          const itemTop = targetIdx * ITEM_HEIGHT;
-          const viewTop = container.scrollTop;
-          const viewBottom = viewTop + container.clientHeight;
-          if (itemTop < viewTop || itemTop + ITEM_HEIGHT > viewBottom) {
-            container.scrollTop = Math.max(0, itemTop - Math.floor(container.clientHeight / 3));
-          }
-        }
+      if (!container) return;
+
+      const targetIdx = currentItems.findIndex(
+        (item) =>
+          item.key === selectedNavId ||
+          item.blockId === selectedNavId ||
+          item.navId === selectedNavId,
+      );
+      if (targetIdx === -1) return;
+
+      const itemTop = targetIdx * ITEM_HEIGHT;
+      const itemBottom = itemTop + ITEM_HEIGHT;
+      const viewTop = container.scrollTop;
+      const viewBottom = viewTop + container.clientHeight;
+      const isFullyVisible = itemTop >= viewTop && itemBottom <= viewBottom;
+
+      const totalHeight = currentItems.length * ITEM_HEIGHT;
+      const fitsInContainer = totalHeight <= container.clientHeight;
+      if (fitsInContainer) {
+        container.scrollTop = 0;
+        prevNavIndexRef.current = targetIdx;
+        return;
       }
-      const timer = setTimeout(() => {
-        const container = scrollRef.current;
-        const currentItems = itemsRef.current;
-        if (!container) return;
-        let el = container.querySelector(`[data-nav-key="${selectedNavId}"]`) as HTMLElement | null;
-        if (!el) {
-          const idx = currentItems.findIndex((item) => item.blockId === selectedNavId);
-          if (idx !== -1) {
-            el = container.querySelector(
-              `[data-nav-key="${currentItems[idx].key}"]`,
-            ) as HTMLElement | null;
-          }
-        }
-        if (!el) {
-          const idx = currentItems.findIndex((item) => item.navId === selectedNavId);
-          if (idx !== -1) {
-            el = container.querySelector(
-              `[data-nav-key="${currentItems[idx].key}"]`,
-            ) as HTMLElement | null;
-          }
-        }
-        if (el) {
-          const containerRect = container.getBoundingClientRect();
-          const elRect = el.getBoundingClientRect();
-          const isFullyVisible =
-            elRect.top >= containerRect.top - 2 && elRect.bottom <= containerRect.bottom + 2;
-          if (!isFullyVisible) {
-            const relativeTop = elRect.top - containerRect.top + container.scrollTop;
-            const targetTop = Math.max(0, relativeTop - Math.floor(container.clientHeight / 3));
-            container.scrollTo({ top: targetTop, behavior: "smooth" });
-          }
-        }
-      }, 150);
-      return () => clearTimeout(timer);
+
+      if (isFullyVisible) {
+        prevNavIndexRef.current = targetIdx;
+        return;
+      }
+
+      const MARGIN = ITEM_HEIGHT;
+      const isNavigatingDown = targetIdx > prevNavIndexRef.current;
+
+      let targetScroll: number;
+      if (isNavigatingDown) {
+        targetScroll = Math.max(0, itemTop - MARGIN);
+      } else {
+        targetScroll = Math.max(0, itemBottom - container.clientHeight + MARGIN);
+      }
+
+      container.scrollTo({ top: targetScroll, behavior: "smooth" });
+      prevNavIndexRef.current = targetIdx;
     }, [selectedNavId]);
 
     const loadMoreMessages = useChatStore((s) => s.loadMoreMessages);
