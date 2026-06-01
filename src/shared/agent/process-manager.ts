@@ -2367,7 +2367,55 @@ export class AgentProcessManager {
       return { cancelled: true, reason: "Target entry not found in session" };
     }
 
-    this.leafIds.set(sessionId, targetId);
+    // Compute the actual branch point (skip metadata types, like findBranchPointAbove in CLI SDK).
+    // When rolling back a user message, the leaf should point to the ancestor, not the target itself.
+    const skipTypes = new Set([
+      "custom",
+      "agent_change",
+      "model_change",
+      "thinking_level_change",
+      "tier_models_change",
+      "custom_message",
+      "session_info",
+      "segment_summary",
+      "deletion",
+      "label",
+      "leaf_pointer",
+      "fold",
+    ]);
+    const entryById = new Map(entries.map((e: Record<string, unknown>) => [e.id, e]));
+    let branchPointId: string | null = targetId;
+    const targetEntry = entryById.get(targetId) as Record<string, unknown> | undefined;
+    if (targetEntry?.type === "message" && targetEntry?.label === "user") {
+      branchPointId = (targetEntry.parentId as string) ?? null;
+      while (branchPointId) {
+        const ancestor = entryById.get(branchPointId) as Record<string, unknown> | undefined;
+        if (!ancestor) break;
+        if (!skipTypes.has(ancestor.type as string)) break;
+        branchPointId = (ancestor.parentId as string) ?? null;
+      }
+    }
+
+    this.leafIds.set(sessionId, branchPointId);
+
+    // Write leaf_pointer to JSONL so it survives restart (without active CLI,
+    // the SDK's branch() is unavailable, so we append directly).
+    try {
+      const { appendFile: appendFileAsync } = await import("node:fs/promises");
+      const leafPointerEntry = JSON.stringify({
+        type: "leaf_pointer",
+        id: `fallback-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+        parentId: null,
+        timestamp: new Date().toISOString(),
+        leafId: branchPointId,
+      });
+      await appendFileAsync(sessionPath, `\n${leafPointerEntry}\n`, "utf-8");
+    } catch (leafErr: unknown) {
+      log.warn("navigateTree: failed to write leaf_pointer in fallback", {
+        sessionId,
+        err: leafErr instanceof Error ? leafErr.message : String(leafErr),
+      });
+    }
 
     if (!options?.skipFiles) {
       log.warn("navigateTree: file restore skipped (no active CLI process)", {
