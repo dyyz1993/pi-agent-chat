@@ -505,6 +505,12 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         b.type === "custom",
     );
 
+    // During streaming, message_end may arrive before replayed message_update events
+    // populate the content. Skip the empty-content error check in this case.
+    if (!hasContent && storeGet().sessionStatusMap[sessionId] === "streaming") {
+      return;
+    }
+
     if (!hasContent) {
       const assistantMsg = message as AssistantMessage;
       const errorDetail =

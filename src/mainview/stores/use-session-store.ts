@@ -101,6 +101,7 @@ interface AgentStateResult {
   thinkingLevel?: string;
   isStreaming?: boolean;
   isCompacting?: boolean;
+  streamingMessage?: unknown;
 }
 
 export interface ModelInfo {
@@ -640,88 +641,67 @@ export const useSessionStore = create<SessionState>()(
                   get().fetchInitialState(id);
 
                   if (isHot) {
-                    apiClient
-                      .call("agent.replayHoldEvents", { sessionId: id })
-                      .then((r) => {
-                        perfLog.info("[switch] HOT: replayHoldEvents done", {
-                          sessionId: id,
-                          replayed: r.replayed,
-                        });
-                      })
-                      .catch((err) => {
-                        log.warn("replayHoldEvents failed", {
-                          sessionId: id,
-                          err: err instanceof Error ? err.message : String(err),
-                        });
-                      });
-
                     const cachedMsgs = useChatStore.getState().messagesBySession[id] || [];
                     const hasCached = cachedMsgs.some(
                       (m: { role: string; tokenUsage?: unknown }) =>
                         m.role === "user" || (m.role === "assistant" && m.tokenUsage),
                     );
-                    if (hasCached) {
-                      useChatStore.getState()._backgroundRefreshMessages(id, session.sessionPath);
-                    } else {
-                      useChatStore.getState().loadSessionMessages(id, {
-                        force: true,
-                        sessionPath: session.sessionPath,
-                      });
-                    }
+                    const loadPromise: Promise<void> = hasCached
+                      ? (useChatStore
+                          .getState()
+                          ._backgroundRefreshMessages(id, session.sessionPath) ?? Promise.resolve())
+                      : useChatStore.getState().loadSessionMessages(id, {
+                          force: true,
+                          sessionPath: session.sessionPath,
+                        });
 
-                    perfLog.info("[switch] === HOT SWITCH COMPLETE ===", {
-                      sessionId: id,
-                      totalMs: Math.round(performance.now() - tSwitchStart),
-                    });
-                  } else {
-                    const tParallel = performance.now();
-                    const replayPromise = apiClient
-                      .call("agent.replayHoldEvents", { sessionId: id })
-                      .then((r) => {
-                        perfLog.info("[switch] COLD: replayHoldEvents done", {
+                    loadPromise
+                      .catch(() => {})
+                      .then(() => {
+                        return apiClient.call("agent.replayHoldEvents", { sessionId: id });
+                      })
+                      .then(() => {
+                        perfLog.info("[switch] === HOT SWITCH COMPLETE ===", {
                           sessionId: id,
-                          replayed: r.replayed,
-                          ms: Math.round(performance.now() - tParallel),
+                          totalMs: Math.round(performance.now() - tSwitchStart),
                         });
                       })
-                      .catch((err) => {
-                        log.warn("replayHoldEvents failed", {
+                      .catch((err: unknown) => {
+                        log.warn("load+replay failed in hot switch", {
                           sessionId: id,
                           err: err instanceof Error ? err.message : String(err),
                         });
                       });
-
+                  } else {
                     perfLog.info("[switch] COLD: loadSessionMessages begin", {
                       sessionId: id,
                     });
                     const tLoad = performance.now();
-                    const loadMessagesPromise = replayPromise.then(() =>
-                      useChatStore
-                        .getState()
-                        .loadSessionMessages(id, {
-                          force: true,
-                          sessionPath: session.sessionPath,
-                        })
-                        .then(() => {
-                          perfLog.info("[switch] COLD: loadSessionMessages done", {
-                            sessionId: id,
-                            count: useChatStore.getState().messagesBySession[id]?.length,
-                            ms: Math.round(performance.now() - tLoad),
-                          });
-                        })
-                        .catch((e) => {
-                          log.error("loadSessionMessages FAILED", {
-                            error: e instanceof Error ? e.message : String(e),
-                          });
-                        }),
-                    );
-
-                    loadMessagesPromise.then(() => {
-                      perfLog.info("[switch] === COLD SWITCH COMPLETE ===", {
-                        sessionId: id,
-                        totalMs: Math.round(performance.now() - tSwitchStart),
+                    useChatStore
+                      .getState()
+                      .loadSessionMessages(id, {
+                        force: true,
+                        sessionPath: session.sessionPath,
+                      })
+                      .then(() => {
+                        perfLog.info("[switch] COLD: loadSessionMessages done", {
+                          sessionId: id,
+                          count: useChatStore.getState().messagesBySession[id]?.length,
+                          ms: Math.round(performance.now() - tLoad),
+                        });
+                        return apiClient.call("agent.replayHoldEvents", { sessionId: id });
+                      })
+                      .then(() => {
+                        perfLog.info("[switch] === COLD SWITCH COMPLETE ===", {
+                          sessionId: id,
+                          totalMs: Math.round(performance.now() - tSwitchStart),
+                        });
+                      })
+                      .catch((e) => {
+                        log.error("COLD switch load+replay failed", {
+                          error: e instanceof Error ? e.message : String(e),
+                        });
                       });
-                    });
                   }
                 } else {
                   const projectId = get().activeProjectId;
@@ -1176,7 +1156,7 @@ export const useSessionStore = create<SessionState>()(
             const statePromise = apiClient.call("agent.getState", { sessionId });
 
             statePromise
-              .then((rawResult) => {
+              .then(async (rawResult) => {
                 perfLog.info("[fetchInit] getState done", {
                   sessionId,
                   ms: Math.round(performance.now() - t0),
@@ -1190,6 +1170,40 @@ export const useSessionStore = create<SessionState>()(
                 }
                 if (result.isStreaming) {
                   get().updateSessionStatus(sessionId, "streaming");
+                  if (
+                    result.streamingMessage &&
+                    typeof result.streamingMessage === "object" &&
+                    "role" in (result.streamingMessage as object)
+                  ) {
+                    const raw = result.streamingMessage as {
+                      role: string;
+                      content?: unknown;
+                      timestamp?: number;
+                    };
+                    if (raw.role === "assistant") {
+                      try {
+                        const { messageToChatMessage } = await import("../lib/message-mapper");
+                        const msg = messageToChatMessage(
+                          raw as Parameters<typeof messageToChatMessage>[0],
+                        );
+                        if (msg) {
+                          const chat = useChatStore.getState();
+                          const existing = chat.messagesBySession[sessionId] || [];
+                          const alreadyStreaming = existing.some(
+                            (m) => m.role === "assistant" && m.isStreaming,
+                          );
+                          if (!alreadyStreaming) {
+                            chat.setMessagesForSession(sessionId, [
+                              ...existing,
+                              { ...msg, isStreaming: true },
+                            ]);
+                          }
+                        }
+                      } catch {
+                        /* ignore */
+                      }
+                    }
+                  }
                 } else if (result.isCompacting) {
                   get().updateSessionStatus(sessionId, "compacting");
                 } else {
@@ -1219,6 +1233,10 @@ export const useSessionStore = create<SessionState>()(
                       manualModel: `${result.model.provider}/${result.model.id}`,
                     });
                   }
+                }
+
+                if (result.thinkingLevel) {
+                  set({ currentThinkingLevel: result.thinkingLevel });
                 }
               })
               .catch((err) => {
@@ -1984,26 +2002,36 @@ apiClient.onReconnect(() => {
         requestRulesSnapshot(activeSessionId);
         storeGet().fetchInitialState(activeSessionId);
 
-        useChatStore
-          .getState()
-          .loadSessionMessages(activeSessionId, {
-            force: true,
-            sessionPath: session.sessionPath,
-          })
-          .catch((err) => {
-            log.warn("[onReconnect] loadSessionMessages failed", {
-              sessionId: activeSessionId,
-              err: err instanceof Error ? err.message : String(err),
-            });
-          });
-
         if (result.status === "already_running") {
-          apiClient.call("agent.replayHoldEvents", { sessionId: activeSessionId }).catch((err) => {
-            log.warn("agent.replayHoldEvents failed", {
-              sessionId: activeSessionId,
-              err: err instanceof Error ? err.message : String(err),
+          useChatStore
+            .getState()
+            .loadSessionMessages(activeSessionId, {
+              force: true,
+              sessionPath: session.sessionPath,
+            })
+            .catch(() => {})
+            .then(() => {
+              return apiClient.call("agent.replayHoldEvents", { sessionId: activeSessionId });
+            })
+            .catch((err) => {
+              log.warn("[onReconnect] load+replay failed", {
+                sessionId: activeSessionId,
+                err: err instanceof Error ? err.message : String(err),
+              });
             });
-          });
+        } else {
+          useChatStore
+            .getState()
+            .loadSessionMessages(activeSessionId, {
+              force: true,
+              sessionPath: session.sessionPath,
+            })
+            .catch((err) => {
+              log.warn("[onReconnect] loadSessionMessages failed", {
+                sessionId: activeSessionId,
+                err: err instanceof Error ? err.message : String(err),
+              });
+            });
         }
       }
     })

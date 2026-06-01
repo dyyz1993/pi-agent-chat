@@ -1181,6 +1181,7 @@ export class AgentProcessManager {
     isStreaming: boolean;
     isCompacting: boolean;
     messageCount: number;
+    streamingMessage?: AssistantMessage;
   } | null> {
     let managed = this.getActiveManaged(sessionId);
     if (!managed) {
@@ -1206,6 +1207,7 @@ export class AgentProcessManager {
         isStreaming: Boolean(state.isStreaming),
         isCompacting: Boolean(state.isCompacting),
         messageCount: Number(state.messageCount ?? 0),
+        streamingMessage: state.streamingMessage as AssistantMessage | undefined,
       };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -1669,6 +1671,40 @@ export class AgentProcessManager {
     }
 
     const totalMs = Math.round(performance.now() - t0);
+
+    // When streaming, JSONL may be incomplete (e.g. toolResult not persisted yet).
+    // Merge in-memory messages from CLI to supplement the JSONL data.
+    if (managed && managed.info.status === "streaming") {
+      try {
+        const memResult = await withTimeout(
+          managed.client.getMessages(),
+          5_000,
+          "getMessages (streaming merge)",
+        );
+        if (Array.isArray(memResult) && memResult.length > 0) {
+          const jsonlEntryIds = new Set(allMessages.map((m) => m.entryId).filter(Boolean));
+          for (const msg of memResult) {
+            const m = msg as unknown as Record<string, unknown>;
+            const eid = (m.entryId as string) ?? "";
+            if (!jsonlEntryIds.has(eid)) {
+              slicedMessages.push(m as unknown as AgentMessageForUI);
+              jsonlEntryIds.add(eid);
+            }
+          }
+          perfLog.info("[getFullMessages] streaming merge: added from CLI memory", {
+            sessionId,
+            jsonlCount: slicedMessages.length - (memResult.length > 0 ? 1 : 0),
+            mergedCount: slicedMessages.length,
+          });
+        }
+      } catch (err: unknown) {
+        log.debug("[getFullMessages] CLI memory merge skipped", {
+          sessionId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
     perfLog.info("[getFullMessages] done", {
       sessionId,
       messageCount: slicedMessages.length,
@@ -2763,7 +2799,6 @@ export class AgentProcessManager {
     }
 
     if (event.type === "message_end") {
-      managed.info.holdEvents = [];
       if (this.subagentSyncChildren.has(sessionId)) {
         const msgEvent = event as {
           type: "message_end";

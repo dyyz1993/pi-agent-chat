@@ -14,7 +14,11 @@ import { createLogger } from "../../shared/lib/logger";
 const log = createLogger("chat-store");
 const perfLog = createLogger("session-perf");
 
-export function normalizeToolBlocks(msgs: ChatMessage[], isHistorical = false): void {
+export function normalizeToolBlocks(
+  msgs: ChatMessage[],
+  isHistorical = false,
+  isStreaming = false,
+): void {
   const toolCallById = new Map<
     string,
     { msgIndex: number; blockIndex: number; name: string; input: string }
@@ -130,7 +134,7 @@ export function normalizeToolBlocks(msgs: ChatMessage[], isHistorical = false): 
             toolCallId: b.id,
             toolName: b.name,
             args,
-            status: isHistorical ? "unknown" : "running",
+            status: isStreaming ? "running" : isHistorical ? "unknown" : "running",
             description,
           });
         }
@@ -625,7 +629,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
         nullCount,
       });
 
-      normalizeToolBlocks(msgs, true);
+      normalizeToolBlocks(
+        msgs,
+        true,
+        useSessionStore.getState().sessionStatusMap[sid] === "streaming",
+      );
 
       const customEntries = result.customEntries;
       if (Array.isArray(customEntries) && customEntries.length > 0) {
@@ -733,9 +741,30 @@ export const useChatStore = create<ChatState>((set, get) => ({
       });
 
       const localMsgs = (get().messagesBySession[sid] || []).filter((m) => m._local);
-      const finalMsgs = localMsgs.length > 0 ? [...displayMsgs, ...localMsgs] : displayMsgs;
-
       const currentMsgs = get().messagesBySession[sid] || [];
+
+      // When streaming, preserve the last streaming assistant message from replay/events.
+      // loadSessionMessages reads JSONL which may be incomplete during streaming,
+      // and overwriting would lose toolExecution state populated by replayHoldEvents.
+      const lastCurrent = currentMsgs[currentMsgs.length - 1];
+      const isStreamingSession = useSessionStore.getState().sessionStatusMap[sid] === "streaming";
+      const preserveStreaming =
+        isStreamingSession &&
+        lastCurrent &&
+        lastCurrent.role === "assistant" &&
+        lastCurrent.isStreaming === true;
+
+      let finalMsgs = localMsgs.length > 0 ? [...displayMsgs, ...localMsgs] : displayMsgs;
+
+      if (preserveStreaming) {
+        const streamingInFinal = finalMsgs.findIndex(
+          (m) => m.role === "assistant" && m.isStreaming,
+        );
+        if (streamingInFinal === -1) {
+          finalMsgs = [...finalMsgs, lastCurrent];
+        }
+      }
+
       const hasSameIds =
         currentMsgs.length === finalMsgs.length &&
         currentMsgs.every((m, i) => m.id === finalMsgs[i]?.id);
