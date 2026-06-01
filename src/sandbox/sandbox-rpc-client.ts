@@ -350,16 +350,17 @@ export class SandboxRpcClient implements RpcClientAPI {
       input: ("text" | "image")[];
     }>
   > {
-    return this.call("agent.getAvailableModels") as Promise<
-      Array<{
+    const raw = await this.call<{
+      models?: Array<{
         provider: string;
         id: string;
         name: string;
         contextWindow: number;
         reasoning: boolean;
         input: ("text" | "image")[];
-      }>
-    >;
+      }>;
+    }>("agent.getAvailableModels");
+    return raw.models ?? [];
   }
 
   // ─── Thinking ───────────────────────────────────────────

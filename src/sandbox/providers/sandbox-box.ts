@@ -1,135 +1,124 @@
-/**
- * SandboxBoxProvider — 自建 sandbox-box 沙盒（Linux namespace 隔离）
- *
- * 通过 SSH 管理沙盒，本地运行 sandbox-agent 通过 SSH JSONL 管道
- * 与沙盒内的 pi --mode rpc 通信。
- *
- * 链路：
- *   SandboxRpcClient → HTTP → localhost:PORT
- *   → sandbox-agent (SSH JSONL) → SSH → NAS sandbox → pi --mode rpc
- */
-
-import { spawn } from "child_process";
+import { execFile } from "child_process";
+import { resolve } from "path";
+import { existsSync } from "fs";
 import { createLogger } from "../../shared/lib/logger";
-import { getProjectRoot, getSandboxAgentPath, getSandboxAgentRunner } from "../../shared/lib/paths";
-import type { ISandboxProvider, SandboxInstance, SandboxProviderConfig } from "../types";
+import { getProjectRoot } from "../../shared/lib/paths";
+import type { ISandboxProvider, SandboxInstance, SandboxStatus } from "../types";
 
 const log = createLogger("sandbox-box");
 
-export interface SandboxBoxProviderOptions {
-  /** SSH 连接地址 */
+export interface SandboxBoxConfig {
   sshHost: string;
-  /** SSH 端口 */
   sshPort: number;
-  /** SSH 用户 */
   sshUser: string;
-  /** SSH 密钥路径 */
-  sshKeyPath?: string;
-  /** 沙盒域名后缀 */
-  domainSuffix: string;
-  /** sandbox-agent 本地端口基值 */
-  basePort?: number;
+  sshKeyPath: string;
+  sandboxPort: number;
+  bridgePort: number;
+  baseLocalPort: number;
+  piCliPath: string;
+  projectSourcePath: string;
+  modelsJsonPath?: string;
+  settingsJsonPath?: string;
+  extensionsPath?: string;
 }
 
-interface LocalBridge {
-  process: ReturnType<typeof spawn>;
-  port: number;
+interface SandboxRecord {
+  instance: SandboxInstance;
+  tunnelPid?: number;
+}
+
+function exec(cmd: string, args: string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile(
+      cmd,
+      args,
+      { maxBuffer: 10 * 1024 * 1024, timeout: 120_000 },
+      (err, stdout, stderr) => {
+        if (err) {
+          reject(new Error(`${cmd} ${args.join(" ")} failed: ${err.message}\nstderr: ${stderr}`));
+          return;
+        }
+        resolve(stdout);
+      },
+    );
+  });
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
 }
 
 export class SandboxBoxProvider implements ISandboxProvider {
-  private sandboxes = new Map<string, SandboxInstance>();
-  private bridges = new Map<string, LocalBridge>();
-  private options: SandboxBoxProviderOptions;
+  private readonly config: SandboxBoxConfig;
+  private readonly sandboxes = new Map<string, SandboxRecord>();
+  private nextLocalPort: number;
 
-  constructor(options: SandboxBoxProviderOptions) {
-    this.options = options;
+  constructor(config: SandboxBoxConfig) {
+    this.config = config;
+    this.nextLocalPort = config.baseLocalPort;
   }
 
-  async getOrCreate(userId: string, _config: SandboxProviderConfig): Promise<SandboxInstance> {
-    const sandboxName = `user-${userId}`;
-
-    const existing = this.sandboxes.get(userId);
-    if (existing && existing.status === "running") {
-      existing.lastActiveAt = Date.now();
-      return existing;
-    }
-
-    // 1. 创建/恢复沙盒
-    const out = await this.execSsh(`sandbox list 2>/dev/null | grep -w '${sandboxName}' || true`);
-    if (out.trim()) {
-      log.info("Resuming sandbox", { sandboxName });
-      await this.execSsh(`sandbox resume ${sandboxName} --port 3200 2>/dev/null || true`);
-    } else {
-      log.info("Creating sandbox", { sandboxName });
-      await this.execSsh(`sandbox create ${sandboxName} --port 3200 2>&1 || true`);
-      const created = await this.execSsh(
-        `sandbox list 2>/dev/null | grep -w '${sandboxName}' || true`,
-      );
-      if (!created.trim()) throw new Error(`Failed to create sandbox '${sandboxName}'`);
-    }
-
-    // 2. 杀掉沙盒内默认的 HTTP preview（占着 3100）
-    await this.execSsh(
-      `sandbox ${sandboxName} 'pkill -9 python3 2>/dev/null; pkill -9 python 2>/dev/null' 2>&1 || true`,
-    );
-
-    // 2.5 注入 pi 配置（模型、settings 等）到沙盒
-    const sbAgentDir = `/root/data/sandboxes/${sandboxName}/home/.pi/agent`;
-    const hostAgentDir = "/root/.pi/agent";
-    await this.execSsh(`mkdir -p ${sbAgentDir}`).catch(() => {});
-    await this.execSsh(
-      `test -f ${hostAgentDir}/models.json && cp ${hostAgentDir}/models.json ${sbAgentDir}/models.json`,
-    ).catch(() => {});
-    await this.execSsh(
-      `test -f ${hostAgentDir}/settings.json && cp ${hostAgentDir}/settings.json ${sbAgentDir}/settings.json`,
-    ).catch(() => {});
-
-    // 3. 启动本地 sandbox-agent，通过 SSH 连到沙盒内的 pi
-    const port = await this.startBridge(userId, sandboxName);
-
-    const instance: SandboxInstance = {
-      userId,
-      status: "running",
-      endpoint: `http://localhost:${port}`,
-      createdAt: Date.now(),
-      lastActiveAt: Date.now(),
-    };
-    this.sandboxes.set(userId, instance);
-    log.info("Sandbox ready", { userId, endpoint: instance.endpoint });
-    return instance;
+  private sandboxName(userId: string): string {
+    return `user-${userId}`;
   }
 
-  async destroy(userId: string): Promise<void> {
-    const sandboxName = `user-${userId}`;
-    log.info("Destroying sandbox", { sandboxName });
+  private async ssh(cmd: string): Promise<string> {
+    const args = [
+      "-i",
+      this.config.sshKeyPath,
+      "-p",
+      String(this.config.sshPort),
+      "-o",
+      "StrictHostKeyChecking=no",
+      "-o",
+      "UserKnownHostsFile=/dev/null",
+      "-o",
+      "LogLevel=ERROR",
+      `${this.config.sshUser}@${this.config.sshHost}`,
+      cmd,
+    ];
+    return exec("ssh", args);
+  }
 
-    // 停本地 bridge
-    const bridge = this.bridges.get(userId);
-    if (bridge && !bridge.process.killed) {
-      bridge.process.kill("SIGTERM");
-    }
-    this.bridges.delete(userId);
+  private async nsenter(pid: number, cmd: string): Promise<string> {
+    return this.ssh(`nsenter -t ${pid} -p -m -n -- ${cmd}`);
+  }
 
-    // 销毁沙盒
+  private async scp(localPath: string, remotePath: string): Promise<void> {
+    const args = [
+      "-i",
+      this.config.sshKeyPath,
+      "-P",
+      String(this.config.sshPort),
+      "-o",
+      "StrictHostKeyChecking=no",
+      "-o",
+      "UserKnownHostsFile=/dev/null",
+      "-o",
+      "LogLevel=ERROR",
+      localPath,
+      `${this.config.sshUser}@${this.config.sshHost}:${remotePath}`,
+    ];
+    await exec("scp", args);
+  }
+
+  private allocLocalPort(): number {
+    return this.nextLocalPort++;
+  }
+
+  private async findSandboxPid(name: string): Promise<number | null> {
     try {
-      await this.execSsh(`sandbox destroy ${sandboxName} 2>&1 || true`);
-    } catch (err) {
-      log.warn("Destroy failed", { userId, error: String(err) });
-    }
-
-    this.sandboxes.delete(userId);
-  }
-
-  async getStatus(userId: string): Promise<SandboxInstance | null> {
-    const sandboxName = `user-${userId}`;
-    try {
-      const out = await this.execSsh(`sandbox health ${sandboxName} 2>&1 || true`);
-      const running =
-        out.toLowerCase().includes("running") || out.toLowerCase().includes("healthy");
-      const cached = this.sandboxes.get(userId);
-      if (cached) {
-        cached.status = running ? "running" : "stopped";
-        return cached;
+      const out = await this.ssh("sandbox list");
+      const lines = out.split("\n");
+      for (const line of lines) {
+        if (line.includes(name) && line.includes("running")) {
+          const parts = line.trim().split(/\s+/);
+          const numParts = parts.filter((p) => /^\d+$/.test(p));
+          const pidStr = numParts[numParts.length - 1];
+          if (pidStr) {
+            return parseInt(pidStr, 10);
+          }
+        }
       }
       return null;
     } catch {
@@ -137,89 +126,486 @@ export class SandboxBoxProvider implements ISandboxProvider {
     }
   }
 
-  keepAlive(userId: string): void {
-    const sb = this.sandboxes.get(userId);
-    if (sb) sb.lastActiveAt = Date.now();
+  private async getSandboxIP(pid: number): Promise<string> {
+    const out = await this.nsenter(pid, "ip addr show eth0");
+    const match = out.match(/inet\s+(10\.10\.\d+\.\d+)/);
+    if (!match) {
+      throw new Error(`failed to find sandbox IP for pid ${pid}`);
+    }
+    return match[1];
   }
 
-  async shutdown(): Promise<void> {
-    for (const userId of this.bridges.keys()) {
-      const b = this.bridges.get(userId);
-      if (b && !b.process.killed) b.process.kill("SIGTERM");
-    }
-    this.bridges.clear();
-    for (const userId of this.sandboxes.keys()) {
-      await this.destroy(userId);
-    }
-  }
-
-  // ─── Private ────────────────────────────────────
-
-  private async startBridge(userId: string, sandboxName: string): Promise<number> {
-    const port = (this.options.basePort ?? 3200) + this.bridges.size + 1;
-
-    const keyFlag = this.options.sshKeyPath ? `--ssh-key=${this.options.sshKeyPath}` : "";
-
-    const args = [
-      getSandboxAgentPath(),
-      `--port=${port}`,
-      `--ssh-host=${this.options.sshHost}`,
-      `--ssh-port=${this.options.sshPort}`,
-      `--ssh-user=${this.options.sshUser}`,
-      `--ssh-sandbox=${sandboxName}`,
-      keyFlag,
-    ].filter(Boolean);
-
-    log.info("Starting bridge", { userId, port, sandboxName });
-
-    const proc = spawn(getSandboxAgentRunner(), args, {
-      stdio: ["ignore", "pipe", "pipe"],
-      cwd: getProjectRoot(),
-    });
-
-    proc.stdout?.on("data", (d: Buffer) => log.info(`[bridge-${userId}] ${d.toString().trim()}`));
-    proc.stderr?.on("data", (d: Buffer) => log.warn(`[bridge-${userId}] ${d.toString().trim()}`));
-
-    this.bridges.set(userId, { process: proc, port });
-
-    // 等待就绪
-    for (let i = 0; i < 20; i++) {
+  private async waitForBridge(pid: number, maxRetries = 15): Promise<void> {
+    const sandboxIP = await this.getSandboxIP(pid);
+    for (let i = 0; i < maxRetries; i++) {
       try {
-        const res = await fetch(`http://localhost:${port}/health`, {
-          signal: AbortSignal.timeout(2000),
-        });
-        if (res.ok) return port;
+        const out = await this.nsenter(
+          pid,
+          `curl -sf http://${sandboxIP}:${this.config.bridgePort}/health --max-time 3`,
+        );
+        const parsed = JSON.parse(out) as { status: string };
+        if (parsed.status === "ok") {
+          log.info("bridge ready", { pid, sandboxIP });
+          return;
+        }
       } catch {
-        /* not ready */
+        // not ready yet
       }
-      await new Promise((r) => setTimeout(r, 2000));
+      log.info("waiting for bridge", { attempt: i + 1, pid });
+      await sleep(2000);
+    }
+    throw new Error(`bridge not ready after ${maxRetries} retries for pid ${pid}`);
+  }
+
+  private async killTunnel(localPort: number): Promise<void> {
+    try {
+      let pids: string[] = [];
+      try {
+        const out = await exec("lsof", ["-ti", `:${localPort}`]);
+        pids = out.trim().split("\n").filter(Boolean);
+      } catch {
+        try {
+          const out = await exec("ss", ["-tlnp", `sport = :${localPort}`]);
+          const pidRegex = /pid=(\d+)/g;
+          let match: RegExpExecArray | null;
+          while ((match = pidRegex.exec(out)) !== null) {
+            pids.push(match[1]);
+          }
+        } catch {}
+      }
+      for (const pid of pids) {
+        try {
+          process.kill(parseInt(pid, 10), "SIGKILL");
+        } catch {}
+      }
+    } catch {}
+  }
+
+  private async establishTunnel(localPort: number, sandboxIP: string): Promise<void> {
+    const args = [
+      "-i",
+      this.config.sshKeyPath,
+      "-p",
+      String(this.config.sshPort),
+      "-o",
+      "StrictHostKeyChecking=no",
+      "-o",
+      "UserKnownHostsFile=/dev/null",
+      "-o",
+      "LogLevel=ERROR",
+      "-f",
+      "-N",
+      "-L",
+      `${localPort}:${sandboxIP}:${this.config.bridgePort}`,
+      `${this.config.sshUser}@${this.config.sshHost}`,
+    ];
+    await exec("ssh", args);
+  }
+
+  private async isSandboxAlive(name: string): Promise<boolean> {
+    try {
+      const pid = await this.findSandboxPid(name);
+      return pid !== null && pid > 0;
+    } catch {
+      return false;
+    }
+  }
+
+  async getOrCreate(userId: string, projectPath: string): Promise<SandboxInstance> {
+    const name = this.sandboxName(userId);
+    const existing = this.sandboxes.get(userId);
+    if (existing && existing.instance.status === "ready") {
+      const alive = await this.isSandboxAlive(name);
+      if (alive) {
+        existing.instance.lastActiveAt = Date.now();
+        return existing.instance;
+      }
+      log.warn("sandbox marked ready but dead on host, will recreate", { name });
+      if (existing.instance.sandboxPid) {
+        await this._backupMemoryFromPid(userId, existing.instance.sandboxPid).catch(() => {});
+      }
+      this.sandboxes.delete(userId);
     }
 
-    throw new Error(`Bridge for '${sandboxName}' did not become ready`);
+    const pid = await this.findSandboxPid(name);
+
+    if (pid !== null && pid > 0) {
+      log.info("sandbox exists, re-establishing tunnel", { name, pid });
+      const sandboxIP = await this.getSandboxIP(pid);
+      const localPort = this.allocLocalPort();
+      await this.killTunnel(localPort);
+      await this.establishTunnel(localPort, sandboxIP);
+      await this.waitForBridge(pid);
+
+      const instance: SandboxInstance = {
+        id: name,
+        userId,
+        projectPath,
+        endpoint: `http://127.0.0.1:${localPort}`,
+        status: "ready",
+        createdAt: existing?.instance.createdAt ?? Date.now(),
+        lastActiveAt: Date.now(),
+        sandboxName: name,
+        sandboxPid: pid,
+        localPort,
+      };
+      this.sandboxes.set(userId, { instance, tunnelPid: undefined });
+      return instance;
+    }
+
+    log.info("creating sandbox", { name });
+    await this._syncFromPreservedData(userId, name);
+    await this.ssh(`sandbox destroy ${name} 2>/dev/null || true`);
+    const record: SandboxRecord = {
+      instance: {
+        id: name,
+        userId,
+        projectPath,
+        endpoint: "",
+        status: "creating",
+        createdAt: Date.now(),
+        lastActiveAt: Date.now(),
+        sandboxName: name,
+      },
+    };
+    this.sandboxes.set(userId, record);
+
+    try {
+      await this.ssh(`sandbox create ${name} --port ${this.config.sandboxPort} || true`).catch(
+        (err) => {
+          log.warn("sandbox create had errors (ignored)", { error: err.message });
+        },
+      );
+
+      const newPid = await this.findSandboxPid(name);
+      if (newPid === null) {
+        throw new Error(`failed to find sandbox pid after create for ${name}`);
+      }
+      record.instance.sandboxPid = newPid;
+      record.instance.status = "starting";
+      log.info("sandbox created", { name, pid: newPid });
+
+      const npmGlobal = "/usr/local";
+      const piPath = `${npmGlobal}/bin/pi`;
+
+      const piExists = await this.nsenter(newPid, `test -f ${piPath} && echo yes`).catch(() => "");
+      if (piExists.trim() !== "yes") {
+        await this.nsenter(
+          newPid,
+          `bash -c 'PATH="/usr/local/bin:/usr/bin:/bin" npm install -g @dyyz1993/pi-coding-agent 2>&1 || true'`,
+        ).catch(() => log.warn("npm install pi failed (non-fatal)", { name }));
+      }
+      log.info("pi ready", { name, pid: newPid, existed: piExists.trim() === "yes" });
+
+      const tmpDir = `/tmp/sandbox-staging-${name}`;
+      await this.ssh(`mkdir -p ${tmpDir}`);
+
+      if (this.config.modelsJsonPath) {
+        await this.scp(this.config.modelsJsonPath, `${tmpDir}/models.json`);
+        await this.nsenter(newPid, `mkdir -p /root/.pi/agent`);
+        await this.ssh(
+          `nsenter -t ${newPid} -p -m -n -- cp ${tmpDir}/models.json /root/.pi/agent/models.json`,
+        );
+      }
+
+      if (this.config.settingsJsonPath) {
+        await this.scp(this.config.settingsJsonPath, `${tmpDir}/settings.json`);
+        await this.nsenter(newPid, `mkdir -p /root/.pi/agent`);
+        await this.ssh(
+          `nsenter -t ${newPid} -p -m -n -- cp ${tmpDir}/settings.json /root/.pi/agent/settings.json`,
+        );
+      }
+
+      if (this.config.extensionsPath) {
+        await this.ssh(
+          `tar czf ${tmpDir}/extensions.tar.gz -C ${this.config.extensionsPath} . || true`,
+        );
+        await this.nsenter(newPid, `mkdir -p /root/.pi/agent/extensions`);
+        await this.ssh(
+          `nsenter -t ${newPid} -p -m -n -- bash -c 'tar xzf ${tmpDir}/extensions.tar.gz -C /root/.pi/agent/extensions'`,
+        );
+      }
+
+      const mjsPath = resolve(getProjectRoot(), "dist-server/sandbox-agent.mjs");
+      const jsPath = resolve(getProjectRoot(), "dist-server/sandbox-agent.js");
+      const agentBundle = existsSync(mjsPath) ? mjsPath : jsPath;
+      const agentExt = agentBundle.endsWith(".mjs") ? "mjs" : "js";
+      const agentName = `sandbox-agent.${agentExt}`;
+      const tmpBundle = `${tmpDir}/${agentName}`;
+      await this.scp(agentBundle, tmpBundle);
+      await this.nsenter(newPid, `mkdir -p /root/workspace`);
+      await this.ssh(
+        `nsenter -t ${newPid} -p -m -n -- cp ${tmpDir}/${agentName} /root/workspace/${agentName}`,
+      );
+      await this.nsenter(newPid, `mkdir -p /root/workspace/project`);
+
+      await this._restoreUserDataToSandbox(userId, newPid);
+
+      const startCmd = [
+        `PATH="${npmGlobal}/bin:/usr/local/bin:/usr/bin:/bin"`,
+        `setsid node /root/workspace/${agentName}`,
+        `--port=${this.config.bridgePort}`,
+        `--cli-path=${piPath}`,
+        "--cwd=/root/workspace/project",
+        "</dev/null",
+        ">/root/workspace/bridge.log",
+        "2>&1 & disown",
+      ].join(" ");
+
+      await this.nsenter(newPid, `bash -c '${startCmd}'`);
+      log.info("bridge started", { name, pid: newPid });
+
+      await this.waitForBridge(newPid);
+
+      const sandboxIP = await this.getSandboxIP(newPid);
+      const localPort = this.allocLocalPort();
+      await this.killTunnel(localPort);
+      await this.establishTunnel(localPort, sandboxIP);
+
+      record.instance.endpoint = `http://127.0.0.1:${localPort}`;
+      record.instance.status = "ready";
+      record.instance.localPort = localPort;
+      record.instance.lastActiveAt = Date.now();
+
+      log.info("sandbox ready", {
+        name,
+        pid: newPid,
+        localPort,
+        endpoint: record.instance.endpoint,
+      });
+      return record.instance;
+    } catch (err) {
+      record.instance.status = "error";
+      log.error("failed to create sandbox", {
+        name,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      throw err;
+    }
   }
 
-  private async execSsh(command: string): Promise<string> {
-    const { sshHost, sshPort, sshUser, sshKeyPath } = this.options;
-    const keyFlag = sshKeyPath ? `-i ${sshKeyPath}` : "";
-    const cmd = `ssh ${keyFlag} -p ${sshPort} -o StrictHostKeyChecking=no -o ConnectTimeout=10 ${sshUser}@${sshHost} ${JSON.stringify(command)}`;
-
-    return new Promise((resolve, reject) => {
-      const proc = spawn("sh", ["-c", cmd], { stdio: ["ignore", "pipe", "pipe"] });
-      let stdout = "";
-      let stderr = "";
-      proc.stdout.on("data", (d: Buffer) => {
-        stdout += d.toString();
-      });
-      proc.stderr.on("data", (d: Buffer) => {
-        stderr += d.toString();
-      });
-      proc.on("close", (code) => {
-        if (code === 0 || code === null) resolve(stdout);
-        else reject(new Error(`SSH exec failed (${code}): ${stderr || stdout.slice(0, 200)}`));
-      });
-      proc.on("error", reject);
-    });
+  private userDataDir(userId: string): string {
+    return `/root/data/user-data/${userId}`;
   }
 
-  async cleanupStaleSandboxes(_activeIds: string[]): Promise<void> {}
+  private async _backupMemoryFromPid(userId: string, pid: number): Promise<void> {
+    try {
+      const hasWorkspace = await this.nsenter(
+        pid,
+        `test -d /root/workspace && echo yes || echo no`,
+      );
+      if (hasWorkspace.trim() === "yes") {
+        await this.ssh(`mkdir -p ${this.userDataDir(userId)}`);
+        const backupDir = `${this.userDataDir(userId)}/workspace`;
+        await this.ssh(`rm -rf ${backupDir}`);
+        await this.ssh(`mkdir -p ${backupDir}`);
+        await this.ssh(
+          `nsenter -t ${pid} -p -m -n -- bash -c 'tar cf - --exclude=sandbox-agent.* --exclude=bridge.log -C /root workspace' | tar xf - -C ${this.userDataDir(userId)}`,
+        );
+      }
+
+      const hasMemory = await this.nsenter(
+        pid,
+        `test -d /root/.pi/agent/memory && echo yes || echo no`,
+      ).catch(() => "no");
+      if (hasMemory.trim() === "yes") {
+        const memoryBackupDir = `${this.userDataDir(userId)}/pi-memory`;
+        await this.ssh(`rm -rf ${memoryBackupDir} && mkdir -p ${memoryBackupDir}`);
+        await this.ssh(
+          `nsenter -t ${pid} -p -m -n -- bash -c 'tar cf - -C /root/.pi/agent memory' | tar xf - -C ${memoryBackupDir}`,
+        );
+      }
+      log.info("backupFromPid: backed up", { userId });
+    } catch (err) {
+      log.warn("backupFromPid: failed", {
+        userId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  private async _syncFromPreservedData(userId: string, name: string): Promise<void> {
+    try {
+      const preservedHome = `/root/data/sandboxes/${name}/home`;
+      const hasPreserved = await this.ssh(
+        `test -d ${preservedHome}/workspace && echo yes || echo no`,
+      );
+      if (hasPreserved.trim() !== "yes") {
+        log.info("syncFromPreservedData: no preserved data", { userId, name });
+        return;
+      }
+
+      const targetDir = `${this.userDataDir(userId)}/workspace`;
+      const hasTarget = await this.ssh(`test -d ${targetDir} && echo yes || echo no`);
+
+      if (hasTarget.trim() === "yes") {
+        log.info("syncFromPreservedData: user-data already exists, skipping", { userId });
+        return;
+      }
+
+      await this.ssh(`mkdir -p ${this.userDataDir(userId)}`);
+      await this.ssh(
+        `tar cf - --exclude=sandbox-agent.* --exclude=bridge.log -C ${preservedHome} workspace | tar xf - -C ${this.userDataDir(userId)}`,
+      );
+      log.info("syncFromPreservedData: restored from preserved", { userId, name });
+    } catch (err) {
+      log.warn("syncFromPreservedData: failed", {
+        userId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  private async _restoreUserDataToSandbox(userId: string, pid: number): Promise<void> {
+    const workspaceDir = `${this.userDataDir(userId)}/workspace`;
+    const memoryDir = `${this.userDataDir(userId)}/pi-memory/memory`;
+    try {
+      const hasWorkspace = await this.ssh(`test -d ${workspaceDir} && echo yes || echo no`);
+      if (hasWorkspace.trim() === "yes") {
+        await this.ssh(
+          `tar cf - -C ${this.userDataDir(userId)} workspace | nsenter -t ${pid} -p -m -n -- tar xf - -C /root`,
+        );
+      }
+
+      const hasMemory = await this.ssh(`test -d ${memoryDir} && echo yes || echo no`);
+      if (hasMemory.trim() === "yes") {
+        await this.nsenter(pid, `mkdir -p /root/.pi/agent/memory`);
+        await this.ssh(
+          `tar cf - -C ${this.userDataDir(userId)}/pi-memory memory | nsenter -t ${pid} -p -m -n -- tar xf - -C /root/.pi/agent`,
+        );
+      }
+
+      log.info("restoreUserData: restored", { userId });
+    } catch (err) {
+      log.warn("restoreUserData: failed (non-fatal)", {
+        userId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  async destroy(userId: string): Promise<void> {
+    const record = this.sandboxes.get(userId);
+    if (!record) return;
+
+    const name = this.sandboxName(userId);
+
+    if (record.instance.localPort) {
+      await this.killTunnel(record.instance.localPort).catch(() => {});
+    }
+
+    if (record.instance.sandboxPid) {
+      await this._backupMemoryFromPid(userId, record.instance.sandboxPid).catch(() => {});
+    }
+
+    try {
+      await this.ssh(`sandbox destroy ${name}`);
+    } catch (err) {
+      log.warn("failed to destroy sandbox on remote", {
+        name,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
+    this.sandboxes.delete(userId);
+    log.info("sandbox destroyed", { name });
+  }
+
+  getStatus(userId: string): SandboxStatus {
+    const record = this.sandboxes.get(userId);
+    return record?.instance.status ?? "stopped";
+  }
+
+  async isAlive(userId: string): Promise<boolean> {
+    const name = this.sandboxName(userId);
+    return this.isSandboxAlive(name);
+  }
+
+  keepAlive(userId: string): void {
+    const record = this.sandboxes.get(userId);
+    if (record) {
+      record.instance.lastActiveAt = Date.now();
+    }
+  }
+
+  async execInSandbox(userId: string, cmd: string): Promise<string> {
+    const record = this.sandboxes.get(userId);
+    if (!record?.instance.sandboxPid) {
+      throw new Error(`No running sandbox for ${userId}`);
+    }
+    return this.nsenter(record.instance.sandboxPid, cmd);
+  }
+
+  getSandboxPid(userId: string): number | undefined {
+    return this.sandboxes.get(userId)?.instance.sandboxPid;
+  }
+
+  async cleanupStaleSandboxes(
+    activePrefixes: string[],
+  ): Promise<{ destroyed: number; kept: number }> {
+    log.info("cleanupStaleSandboxes: scanning", { activePrefixes });
+    try {
+      const out = await this.ssh("sandbox list 2>/dev/null || true");
+      const lines = out
+        .split("\n")
+        .filter((l) => l.trim() && !l.includes("NAME") && !l.includes("---"));
+      let destroyed = 0;
+      let kept = 0;
+      for (const line of lines) {
+        const parts = line.trim().split(/\s+/);
+        const name = parts[0];
+        if (!name || name.startsWith("pi-sandbox-box")) {
+          kept++;
+          continue;
+        }
+        const isActive = activePrefixes.some((p) => name === p);
+        if (isActive) {
+          kept++;
+          continue;
+        }
+        const status = parts[1] ?? "";
+        const pidStr = parts[parts.length - 1] ?? "0";
+        const pid = parseInt(pidStr, 10);
+        const isStopped = status === "stopped" || pid === 0;
+        const isUserOwned = name.startsWith("user-");
+        const isOldRunning = !isActive && !isStopped && !isUserOwned;
+        const shouldCleanup = isOldRunning || (isStopped && !isUserOwned);
+        if (shouldCleanup) {
+          try {
+            if (name.startsWith("user-") && pid > 0) {
+              const userId = name.slice(5);
+              await this._backupMemoryFromPid(userId, pid).catch(() => {});
+            }
+            await this.ssh(`sandbox destroy ${name} 2>/dev/null || true`);
+            if (!name.startsWith("user-")) {
+              await this.ssh(`rm -rf /root/data/sandboxes/${name} 2>/dev/null || true`);
+            }
+            log.info("cleanupStaleSandboxes: destroyed", { name, wasStopped: isStopped });
+            destroyed++;
+          } catch (err) {
+            log.warn("cleanupStaleSandboxes: destroy failed", { name, error: String(err) });
+          }
+        } else {
+          kept++;
+        }
+      }
+      log.info("cleanupStaleSandboxes: done", { destroyed, kept });
+      return { destroyed, kept };
+    } catch (err) {
+      log.warn("cleanupStaleSandboxes: scan failed", { error: String(err) });
+      return { destroyed: 0, kept: 0 };
+    }
+  }
+
+  shutdown(): void {
+    const userIds = [...this.sandboxes.keys()];
+    for (const userId of userIds) {
+      this.destroy(userId).catch((err) => {
+        log.warn("shutdown destroy failed", {
+          userId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+    }
+  }
 }
