@@ -54,5 +54,6 @@
   "errorDetail": "错误详情",
   "connectingRpc": "Connecting to RPC server...",
   "loadingProject": "加载项目中...",
-  "restoringSession": "恢复会话中..."
+  "restoringSession": "恢复会话中...",
+  "connectionFailed": "连接失败，请检查后端服务是否启动"
 }

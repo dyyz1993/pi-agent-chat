@@ -1948,11 +1948,15 @@ apiClient.onReconnect(() => {
     useSessionStore.setState(fn(useSessionStore.getState()));
 
   for (const sid of Object.keys(state.agentSubscriptions)) {
-    clearStatusWatchdog(sid);
-    cleanupSession(state, sid);
+    if (sid !== activeSessionId) {
+      clearStatusWatchdog(sid);
+      cleanupSession(state, sid);
+    }
   }
 
-  setupSubscriptions(useSessionStore.getState(), storeSet, activeSessionId, session);
+  if (!state.agentSubscriptions[activeSessionId]) {
+    setupSubscriptions(useSessionStore.getState(), storeSet, activeSessionId, session);
+  }
 
   apiClient
     .call("agent.start", {
@@ -1979,7 +1983,7 @@ apiClient.onReconnect(() => {
         }));
         requestRulesSnapshot(activeSessionId);
         storeGet().fetchInitialState(activeSessionId);
-        // Force reload messages to recover from events missed during disconnect
+
         useChatStore
           .getState()
           .loadSessionMessages(activeSessionId, {
@@ -1992,15 +1996,7 @@ apiClient.onReconnect(() => {
               err: err instanceof Error ? err.message : String(err),
             });
           });
-        // Refresh session list to pick up sessions created/deleted during disconnect
-        storeGet()
-          .loadSessionsForProject(tab.path)
-          .catch((err) => {
-            log.warn("[onReconnect] loadSessionsForProject failed", {
-              projectPath: tab.path,
-              err: err instanceof Error ? err.message : String(err),
-            });
-          });
+
         if (result.status === "already_running") {
           apiClient.call("agent.replayHoldEvents", { sessionId: activeSessionId }).catch((err) => {
             log.warn("agent.replayHoldEvents failed", {
@@ -2023,4 +2019,17 @@ apiClient.onReconnect(() => {
         };
       });
     });
+
+  storeGet()
+    .loadSessionsForProject(tab.path)
+    .catch((err) => {
+      log.warn("[onReconnect] loadSessionsForProject failed", {
+        projectPath: tab.path,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    });
+
+  setTimeout(() => {
+    useSessionStore.getState().fetchAllProjectsSessionsStatus();
+  }, 3000);
 });

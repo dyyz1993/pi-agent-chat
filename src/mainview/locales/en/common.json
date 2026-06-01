@@ -54,5 +54,6 @@
   "errorDetail": "Error details",
   "connectingRpc": "Connecting to RPC server...",
   "loadingProject": "Loading project...",
-  "restoringSession": "Restoring session..."
+  "restoringSession": "Restoring session...",
+  "connectionFailed": "Connection failed. Please check if the backend service is running"
 }

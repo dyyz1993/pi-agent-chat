@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { RefreshCw } from "lucide-react";
 import { apiClient, resolveAuthToken } from "./lib/api-client";
 import { useAppStore } from "./stores/use-app-store";
 import { useSessionStore } from "./stores/use-session-store";
@@ -19,6 +20,7 @@ import { LoginPage } from "./components/LoginPage";
 function App() {
   const { t } = useTranslation("common");
   const log = createLogger("chat");
+  const initError = useAppStore((s) => s.initError);
   const ready = useAppStore((s) => s.ready);
   const initializeConnection = useAppStore((s) => s.initializeConnection);
   const addLog = useAppStore((s) => s.addLog);
@@ -290,18 +292,37 @@ function App() {
   }
 
   if (!ready || restoring || projectLoading) {
+    const showRetry = initError && !restoring && !projectLoading;
     return (
       <ErrorBoundary>
         <div className="h-screen flex items-center justify-center bg-bg-primary">
           <div className="text-center">
-            <div className="inline-block w-8 h-8 border-2 border-semantic-accent border-t-transparent rounded-full animate-spin mb-4" />
-            <div className="text-text-secondary text-sm">
-              {!ready
-                ? t("connectingRpc")
-                : projectLoading
-                  ? t("loadingProject")
-                  : t("restoringSession")}
-            </div>
+            {showRetry ? (
+              <>
+                <div className="text-status-error text-sm font-medium mb-2">
+                  {t("connectionFailed")}
+                </div>
+                <div className="text-text-tertiary text-xs mb-4 max-w-xs">{initError}</div>
+                <button
+                  onClick={initializeConnection}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-semantic-accent hover:bg-semantic-accent rounded-lg text-sm text-white transition-colors"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  {t("retry")}
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="inline-block w-8 h-8 border-2 border-semantic-accent border-t-transparent rounded-full animate-spin mb-4" />
+                <div className="text-text-secondary text-sm">
+                  {!ready
+                    ? t("connectingRpc")
+                    : projectLoading
+                      ? t("loadingProject")
+                      : t("restoringSession")}
+                </div>
+              </>
+            )}
           </div>
         </div>
       </ErrorBoundary>
