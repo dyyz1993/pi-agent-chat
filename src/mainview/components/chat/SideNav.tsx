@@ -242,6 +242,7 @@ export const SideNav = memo(
     itemsRef.current = items;
 
     const scrollRef = useRef<HTMLDivElement>(null);
+    const scrollTargetRef = useRef<number | null>(null);
     const ITEM_HEIGHT = 32;
     const [visibleRange, setVisibleRange] = useState({ start: 0, end: 50 });
 
@@ -315,6 +316,8 @@ export const SideNav = memo(
         targetScroll = Math.max(0, itemTop + ITEM_HEIGHT - viewHeight + MARGIN);
       }
 
+      if (scrollTargetRef.current === targetScroll) return;
+      scrollTargetRef.current = targetScroll;
       container.scrollTo({ top: targetScroll, behavior: "smooth" });
     }, [selectedNavId]);
 
