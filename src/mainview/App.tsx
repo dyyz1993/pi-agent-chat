@@ -178,6 +178,8 @@ function App() {
               : savedTabs[0].id;
           useSessionStore.getState().setActiveProject(targetId, { skipAutoSession: true });
 
+          if (!cancelled) setRestoring(false);
+
           const tab = savedTabs.find((t) => t.id === targetId);
           if (tab) {
             const sessions = await Promise.race([
@@ -207,7 +209,6 @@ function App() {
               await useSessionStore.getState().createNewSession();
             }
           }
-          if (!cancelled) setRestoring(false);
           return;
         }
 
@@ -225,6 +226,8 @@ function App() {
         addProjectTab({ id: tabId, name: first.name, path: first.path });
         useSessionStore.getState().setActiveProject(tabId, { skipAutoSession: true });
 
+        if (!cancelled) setRestoring(false);
+
         const sessions = await loadSessionsForProject(first.path);
         addLog(`Restored project: ${first.name} (${sessions.length} sessions)`);
 
@@ -239,7 +242,6 @@ function App() {
         } else {
           await useSessionStore.getState().createNewSession();
         }
-        if (!cancelled) setRestoring(false);
       } catch (err) {
         addLog(`Restore failed: ${err instanceof Error ? err.message : String(err)}`);
         if (!cancelled) setRestoring(false);
