@@ -270,8 +270,6 @@ export const SideNav = memo(
       [toggleItemSelect],
     );
 
-    const prevNavIndexRef = useRef(-1);
-
     useEffect(() => {
       if (!selectedNavId) return;
       const container = scrollRef.current;
@@ -284,50 +282,40 @@ export const SideNav = memo(
           item.blockId === selectedNavId ||
           item.navId === selectedNavId,
       );
-      if (targetIdx === -1) {
-        prevNavIndexRef.current = targetIdx;
-        return;
-      }
+      if (targetIdx === -1) return;
 
       const totalHeight = currentItems.length * ITEM_HEIGHT;
       if (totalHeight <= container.clientHeight) {
         container.scrollTop = 0;
-        prevNavIndexRef.current = targetIdx;
         return;
       }
 
       const itemTop = targetIdx * ITEM_HEIGHT;
-      const itemBottom = itemTop + ITEM_HEIGHT;
+      const itemCenter = itemTop + ITEM_HEIGHT / 2;
       const viewTop = container.scrollTop;
       const viewHeight = container.clientHeight;
-      const viewBottom = viewTop + viewHeight;
-
-      const relativeTop = itemTop - viewTop;
-      const relativeBottom = itemBottom - viewTop;
-      const EDGE_THRESHOLD = Math.floor(viewHeight * 0.25);
-
-      const isNearTopEdge = relativeTop >= -2 && relativeTop <= EDGE_THRESHOLD;
-      const isNearBottomEdge =
-        relativeBottom >= viewHeight - EDGE_THRESHOLD && relativeBottom <= viewHeight + 2;
-      const isAboveView = itemBottom < viewTop;
-      const isBelowView = itemTop > viewBottom;
-
-      if (isNearTopEdge || isNearBottomEdge) {
-        prevNavIndexRef.current = targetIdx;
-        return;
-      }
+      const viewCenter = viewTop + viewHeight / 2;
 
       const MARGIN = ITEM_HEIGHT;
-      let targetScroll: number;
+      const EDGE_ZONE = Math.floor(viewHeight * 0.25);
 
-      if (isAboveView || (!isBelowView && targetIdx > prevNavIndexRef.current)) {
+      const relativeTop = itemTop - viewTop;
+      const relativeBottom = relativeTop + ITEM_HEIGHT;
+
+      const isNearTopEdge = relativeTop >= -2 && relativeTop <= EDGE_ZONE;
+      const isNearBottomEdge =
+        relativeBottom >= viewHeight - EDGE_ZONE && relativeBottom <= viewHeight + 2;
+
+      if (isNearTopEdge || isNearBottomEdge) return;
+
+      let targetScroll: number;
+      if (itemCenter <= viewCenter) {
         targetScroll = Math.max(0, itemTop - MARGIN);
       } else {
-        targetScroll = Math.max(0, itemBottom - viewHeight + MARGIN);
+        targetScroll = Math.max(0, itemTop + ITEM_HEIGHT - viewHeight + MARGIN);
       }
 
       container.scrollTo({ top: targetScroll, behavior: "smooth" });
-      prevNavIndexRef.current = targetIdx;
     }, [selectedNavId]);
 
     const loadMoreMessages = useChatStore((s) => s.loadMoreMessages);
