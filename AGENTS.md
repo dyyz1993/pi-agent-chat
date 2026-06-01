@@ -2,6 +2,19 @@
 
 AI-powered coding agent with chat interface. Runs on macOS (Electrobun), web, and mobile browsers. Built with React 18 + TypeScript + Vite + Tailwind CSS + Zustand.
 
+## Source Code Dependency (pi-coding-agent)
+
+The core agent runtime (`@dyyz1993/pi-coding-agent`) is linked via **yalc** from a local fork:
+
+- **Fork path**: `/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/`
+- **package.json**: `"@dyyz1993/pi-coding-agent": "file:.yalc/@dyyz1993/pi-coding-agent"`
+- **How to update**:
+  1. Edit source in `pi-momo-fork/packages/coding-agent/src/`
+  2. Build: `cd pi-momo-fork/packages/coding-agent && npm run build`
+  3. Push: `cd pi-momo-fork/packages/coding-agent && yalc push`
+  4. This updates `pi-agent-chat/.yalc/` and `node_modules/` automatically
+- **IMPORTANT**: Never manually edit `node_modules/@dyyz1993/pi-coding-agent/dist/` — changes will be lost on next `yalc push` or `npm install`. Always edit the fork source and rebuild.
+
 ## Theme & Design System
 
 ### Token Location

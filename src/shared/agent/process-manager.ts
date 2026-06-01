@@ -892,7 +892,7 @@ export class AgentProcessManager {
     return true;
   }
 
-  stop(sessionId: string, crashReason?: string): boolean {
+  async stop(sessionId: string, crashReason?: string): Promise<boolean> {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) return false;
 
@@ -940,6 +940,19 @@ export class AgentProcessManager {
       });
     }
 
+    // Sync leafId before unsubscribe closes the connection
+    try {
+      const treeResult = await withTimeout(
+        managed.client.getTreeWithLeaf(),
+        3_000,
+        "getTreeWithLeaf-stop",
+      );
+      if (treeResult.leafId) {
+        this.leafIds.set(sessionId, treeResult.leafId);
+      }
+    } catch {
+      // Best effort — process may already be unresponsive
+    }
     managed.unsubscribe();
     managed.client.stop().catch((err: unknown) => {
       log.warn("stop error", { sessionId, err: err instanceof Error ? err.message : String(err) });
@@ -1512,6 +1525,7 @@ export class AgentProcessManager {
       timestamp: number;
     }> = [];
     const parentById: Map<string, string | null> = new Map();
+    let lastJsonlLeafPointer: string | null = null;
     const isSandboxSessionPath = resolvedSessionPath?.startsWith("/root/workspace/sessions/");
 
     if (isSandboxSessionPath && globalSandboxManager) {
@@ -1544,6 +1558,8 @@ export class AgentProcessManager {
                   entryId,
                   message: parsed.message,
                 });
+              } else if (parsed.type === "leaf_pointer" && typeof parsed.leafId === "string") {
+                lastJsonlLeafPointer = parsed.leafId;
               }
             } catch (err: unknown) {
               log.debug("skipping malformed JSONL entry (sandbox)", {
@@ -1585,6 +1601,8 @@ export class AgentProcessManager {
                 entryId,
                 message: parsed.message,
               });
+            } else if (parsed.type === "leaf_pointer" && typeof parsed.leafId === "string") {
+              lastJsonlLeafPointer = parsed.leafId;
             }
           } catch (err: unknown) {
             log.debug("skipping malformed JSONL entry", {
@@ -1600,8 +1618,12 @@ export class AgentProcessManager {
       }
     }
 
-    // Resolve leafId from cache
-    const leafId = this.leafIds.get(sessionId) ?? null;
+    // Resolve leafId: prefer JSONL leaf_pointer (authoritative on-disk value),
+    // fall back to in-memory cache (may be stale after process kill)
+    const leafId = lastJsonlLeafPointer ?? this.leafIds.get(sessionId) ?? null;
+    if (leafId && leafId !== this.leafIds.get(sessionId)) {
+      this.leafIds.set(sessionId, leafId);
+    }
 
     // Build leaf→root path set and filter messages to current branch only.
     let filteredMessages = allMessages;
@@ -2633,6 +2655,19 @@ export class AgentProcessManager {
       managed.lastActiveAt = Date.now();
       managed.info.holdEvents = [];
       this.broadcastSessionStatus(sessionId, "idle");
+
+      // Sync leafId from CLI SDK after agent completes, so that subsequent
+      // getFullMessages calls (including page refreshes) see the latest leaf.
+      if (managed.client) {
+        managed.client
+          .getTreeWithLeaf()
+          .then((treeResult: { entries: unknown[]; leafId: string | null }) => {
+            if (treeResult.leafId) {
+              this.leafIds.set(sessionId, treeResult.leafId);
+            }
+          })
+          .catch(() => {});
+      }
 
       if (config.sandboxEnabled && managed.info.projectPath) {
         this.broadcastEvent(

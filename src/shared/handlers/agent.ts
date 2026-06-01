@@ -66,7 +66,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("agent.stop", async (params) => {
-    const ok = m.stop(params.sessionId);
+    const ok = await m.stop(params.sessionId);
     return { ok };
   });
 
