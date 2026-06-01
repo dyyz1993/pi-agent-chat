@@ -1,5 +1,17 @@
 import { memo, useCallback, useRef, useState } from "react";
-import { ChevronDown, User, Bot, RotateCcw, Undo2, GitFork, Loader2, Archive, AlertTriangle, Copy, Check } from "lucide-react";
+import {
+  ChevronDown,
+  User,
+  Bot,
+  RotateCcw,
+  Undo2,
+  GitFork,
+  Loader2,
+  Archive,
+  AlertTriangle,
+  Copy,
+  Check,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useTurnStore, EMPTY_SET } from "../../stores/use-turn-store";
 import { useSessionStore } from "../../stores/use-session-store";
@@ -7,6 +19,7 @@ import { useChatStore } from "../../stores/use-chat-store";
 import { useNotificationStore } from "../../stores/use-notification-store";
 import { useRollbackStore } from "../../stores/use-rollback-store";
 import { useForkDialogStore } from "../../stores/use-fork-dialog-store";
+import { useClipboard } from "./preview/use-clipboard";
 
 const EMPTY_MSGS: never[] = [];
 import { apiClient } from "../../lib/api-client";
@@ -146,12 +159,21 @@ export const MessageCard = memo(function MessageCard({
   }
 
   if (message.role === "error") {
-    const textBlock = message.content.find((b): b is Extract<typeof b, { type: "text" }> => b.type === "text");
+    const textBlock = message.content.find(
+      (b): b is Extract<typeof b, { type: "text" }> => b.type === "text",
+    );
     const fullText = textBlock?.text ?? "Unknown error";
     const lines = fullText.split("\n");
     const title = lines[0];
     const detail = lines.slice(1).join("\n").trim();
-    return <ErrorMessageCard message={message} title={title} detail={detail} stopReason={message.stopReason} />;
+    return (
+      <ErrorMessageCard
+        message={message}
+        title={title}
+        detail={detail}
+        stopReason={message.stopReason}
+      />
+    );
   }
 
   if (isCompaction) {
@@ -753,17 +775,16 @@ function ErrorMessageCard({
   detail: string;
   stopReason?: string | null;
 }) {
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useClipboard(2000);
   const [expanded, setExpanded] = useState(false);
   const hasDetail = detail.length > 0;
 
   const handleCopy = useCallback(() => {
-    const copyText = [title, detail, stopReason ? `stopReason: ${stopReason}` : ""].filter(Boolean).join("\n");
-    navigator.clipboard.writeText(copyText).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
-  }, [title, detail, stopReason]);
+    const copyText = [title, detail, stopReason ? `stopReason: ${stopReason}` : ""]
+      .filter(Boolean)
+      .join("\n");
+    copy(copyText);
+  }, [title, detail, stopReason, copy]);
 
   return (
     <div data-msg-card-id={message.id} className="relative w-full py-1.5">
@@ -784,7 +805,9 @@ function ErrorMessageCard({
                 onClick={() => setExpanded(!expanded)}
                 className="text-xs text-status-error/70 hover:text-status-error mt-0.5 flex items-center gap-1 cursor-pointer"
               >
-                <ChevronDown className={`w-3 h-3 transition-transform ${expanded ? "rotate-180" : ""}`} />
+                <ChevronDown
+                  className={`w-3 h-3 transition-transform ${expanded ? "rotate-180" : ""}`}
+                />
                 {expanded ? "收起详情" : "查看详情"}
               </button>
             )}

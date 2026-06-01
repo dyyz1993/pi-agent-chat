@@ -1,9 +1,9 @@
 import { memo, useCallback, useEffect, useRef } from "react";
-import { X, Copy } from "lucide-react";
+import { X, Copy, Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { CachedReactMarkdown } from "./CachedReactMarkdown";
 import { useChatOverlayStore } from "../../stores/use-chat-overlay-store";
-import { copyToClipboard } from "../../utils/clipboard";
+import { useClipboard } from "./preview/use-clipboard";
 import { useFocusTrap } from "../../hooks/use-focus-trap";
 
 export const MarkdownExpandOverlay = memo(function MarkdownExpandOverlay() {
@@ -34,9 +34,11 @@ export const MarkdownExpandOverlay = memo(function MarkdownExpandOverlay() {
     return () => window.removeEventListener("keydown", handler);
   }, [expandedContent, closeExpand]);
 
+  const { copied, copy } = useClipboard(2000);
+
   const handleCopy = useCallback(() => {
-    if (expandedContent) copyToClipboard(expandedContent);
-  }, [expandedContent]);
+    if (expandedContent) copy(expandedContent);
+  }, [expandedContent, copy]);
 
   if (!expandedContent) return null;
 
@@ -58,7 +60,11 @@ export const MarkdownExpandOverlay = memo(function MarkdownExpandOverlay() {
             className="p-2 rounded text-text-tertiary hover:text-text-primary dark:hover:text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-dim transition-colors"
             title={t("copyContentTitle")}
           >
-            <Copy className="w-3.5 h-3.5" />
+            {copied ? (
+              <Check className="w-3.5 h-3.5 text-status-success" />
+            ) : (
+              <Copy className="w-3.5 h-3.5" />
+            )}
           </button>
           <button
             onClick={closeExpand}

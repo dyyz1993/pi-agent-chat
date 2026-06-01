@@ -22,7 +22,7 @@ import {
 import { useAgentStore, type AgentDetail, type AgentToolInfo } from "../../stores/use-agent-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useLayoutStore } from "../../layouts/use-layout-store";
-import { copyToClipboard } from "../../utils/clipboard";
+import { useClipboard } from "../chat/preview/use-clipboard";
 import { agentColorStyle } from "../../utils/agent-color";
 import { formatFilePath } from "../../lib/format-path";
 
@@ -206,16 +206,11 @@ function HooksList({ agent }: { agent: AgentDetail }) {
 
 function PromptViewer({ agent }: { agent: AgentDetail }) {
   const [expanded, setExpanded] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useClipboard(1500);
 
   const handleCopy = useCallback(() => {
-    copyToClipboard(agent.systemPrompt).then((ok) => {
-      if (ok) {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      }
-    });
-  }, [agent.systemPrompt]);
+    copy(agent.systemPrompt);
+  }, [agent.systemPrompt, copy]);
 
   if (!agent.systemPrompt) {
     return <div className="text-xs text-[var(--color-text-secondary)] opacity-50">{"\u2014"}</div>;

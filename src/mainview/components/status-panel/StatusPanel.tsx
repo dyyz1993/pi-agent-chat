@@ -35,7 +35,7 @@ import { BashProcessCard, LogViewer } from "../bash-panel/BashPanel";
 import type { LspDiagnosticsMode } from "../../../shared/modules/lsp";
 import type { StatusSection } from "../../stores/use-status-store";
 import type { TodoPriority } from "../../stores/use-session-store";
-import { copyToClipboard } from "../../utils/clipboard";
+import { useClipboard } from "../chat/preview/use-clipboard";
 import type { PluginInfo } from "../../stores/use-status-store";
 import { formatFilePath } from "../../lib/format-path";
 
@@ -47,7 +47,7 @@ const PRIORITY_STYLES: Record<TodoPriority, { dot: string; label: string }> = {
 
 function PluginCopyButton({ plugin }: { plugin: PluginInfo }) {
   const { t } = useTranslation("status");
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useClipboard(1500);
   const handleCopy = useCallback(() => {
     const scopeLabel = plugin.scope === "global" ? t("global") : t("project");
     const lines = [
@@ -57,13 +57,8 @@ function PluginCopyButton({ plugin }: { plugin: PluginInfo }) {
       `${t("toolsFieldLabel", { count: plugin.toolNames.length })} ${plugin.toolNames.join(", ") || t("none")}`,
       `${t("commandsFieldLabel", { count: plugin.commandNames.length })} ${plugin.commandNames.join(", ") || t("none")}`,
     ];
-    copyToClipboard(lines.join("\n")).then((ok) => {
-      if (ok) {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      }
-    });
-  }, [plugin, t]);
+    copy(lines.join("\n"));
+  }, [plugin, t, copy]);
 
   return (
     <button
@@ -670,20 +665,15 @@ function MCPToolsSection() {
 
 function MCPCopyButton({ server }: { server: MCPServerInfo }) {
   const { t } = useTranslation("status");
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useClipboard(1500);
   const handleCopy = useCallback(() => {
     const lines = [
       `${t("nameLabel")} ${server.name}`,
       `${t("locationLabel")} ${server.scope === "project" ? t("project") : t("global")}`,
       `${t("toolsFieldLabel", { count: server.toolCount })} ${server.tools.map((t) => t.name).join(", ") || t("none")}`,
     ];
-    copyToClipboard(lines.join("\n")).then((ok) => {
-      if (ok) {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      }
-    });
-  }, [server, t]);
+    copy(lines.join("\n"));
+  }, [server, t, copy]);
 
   return (
     <button
