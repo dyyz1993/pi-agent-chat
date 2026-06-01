@@ -284,35 +284,46 @@ export const SideNav = memo(
           item.blockId === selectedNavId ||
           item.navId === selectedNavId,
       );
-      if (targetIdx === -1) return;
-
-      const itemTop = targetIdx * ITEM_HEIGHT;
-      const itemBottom = itemTop + ITEM_HEIGHT;
-      const viewTop = container.scrollTop;
-      const viewBottom = viewTop + container.clientHeight;
-      const isFullyVisible = itemTop >= viewTop && itemBottom <= viewBottom;
+      if (targetIdx === -1) {
+        prevNavIndexRef.current = targetIdx;
+        return;
+      }
 
       const totalHeight = currentItems.length * ITEM_HEIGHT;
-      const fitsInContainer = totalHeight <= container.clientHeight;
-      if (fitsInContainer) {
+      if (totalHeight <= container.clientHeight) {
         container.scrollTop = 0;
         prevNavIndexRef.current = targetIdx;
         return;
       }
 
-      if (isFullyVisible) {
+      const itemTop = targetIdx * ITEM_HEIGHT;
+      const itemBottom = itemTop + ITEM_HEIGHT;
+      const viewTop = container.scrollTop;
+      const viewHeight = container.clientHeight;
+      const viewBottom = viewTop + viewHeight;
+
+      const relativeTop = itemTop - viewTop;
+      const relativeBottom = itemBottom - viewTop;
+      const EDGE_THRESHOLD = Math.floor(viewHeight * 0.25);
+
+      const isNearTopEdge = relativeTop >= -2 && relativeTop <= EDGE_THRESHOLD;
+      const isNearBottomEdge =
+        relativeBottom >= viewHeight - EDGE_THRESHOLD && relativeBottom <= viewHeight + 2;
+      const isAboveView = itemBottom < viewTop;
+      const isBelowView = itemTop > viewBottom;
+
+      if (isNearTopEdge || isNearBottomEdge) {
         prevNavIndexRef.current = targetIdx;
         return;
       }
 
       const MARGIN = ITEM_HEIGHT;
-      const isNavigatingDown = targetIdx > prevNavIndexRef.current;
-
       let targetScroll: number;
-      if (isNavigatingDown) {
+
+      if (isAboveView || (!isBelowView && targetIdx > prevNavIndexRef.current)) {
         targetScroll = Math.max(0, itemTop - MARGIN);
       } else {
-        targetScroll = Math.max(0, itemBottom - container.clientHeight + MARGIN);
+        targetScroll = Math.max(0, itemBottom - viewHeight + MARGIN);
       }
 
       container.scrollTo({ top: targetScroll, behavior: "smooth" });
