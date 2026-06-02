@@ -3,7 +3,7 @@ import { resolve } from "path";
 import { existsSync } from "fs";
 import { createLogger } from "../../shared/lib/logger";
 import { getProjectRoot } from "../../shared/lib/paths";
-import type { ISandboxProvider, SandboxInstance, SandboxStatus } from "../types";
+import type { ISandboxProvider, SandboxInstance } from "../types";
 
 const log = createLogger("sandbox-box");
 
@@ -511,9 +511,9 @@ export class SandboxBoxProvider implements ISandboxProvider {
     log.info("sandbox destroyed", { name });
   }
 
-  getStatus(userId: string): SandboxStatus {
+  async getStatus(userId: string): Promise<SandboxInstance | null> {
     const record = this.sandboxes.get(userId);
-    return record?.instance.status ?? "stopped";
+    return record?.instance ?? null;
   }
 
   async isAlive(userId: string): Promise<boolean> {
@@ -597,7 +597,7 @@ export class SandboxBoxProvider implements ISandboxProvider {
     }
   }
 
-  shutdown(): void {
+  async shutdown(): Promise<void> {
     const userIds = [...this.sandboxes.keys()];
     for (const userId of userIds) {
       this.destroy(userId).catch((err) => {

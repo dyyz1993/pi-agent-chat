@@ -7,10 +7,12 @@
  *   - CloudflareProvider    — Cloudflare Containers（上云用）
  */
 
-export type SandboxStatus = "creating" | "running" | "stopped" | "error";
+export type SandboxStatus = "creating" | "starting" | "ready" | "running" | "stopped" | "error";
 
 export interface SandboxInstance {
+  id?: string;
   userId: string;
+  projectPath?: string;
   status: SandboxStatus;
   /** HTTP 端点，供 SandboxRpcClient 连接 */
   endpoint: string;
@@ -18,22 +20,17 @@ export interface SandboxInstance {
   createdAt: number;
   /** 最后活跃时间 */
   lastActiveAt: number;
-}
-
-export interface SandboxProviderConfig {
-  /** 容器镜像 */
-  image?: string;
-  /** 空闲超时，如 "30m" */
-  idleTimeout: string;
-  /** 是否允许外网访问 */
-  enableInternet: boolean;
-  /** 传递给容器的环境变量 */
-  envVars?: Record<string, string>;
+  /** 沙盒名称（sandbox-box 专用） */
+  sandboxName?: string;
+  /** 沙盒进程 PID（sandbox-box 专用） */
+  sandboxPid?: number;
+  /** 本地隧道端口（sandbox-box 专用） */
+  localPort?: number;
 }
 
 export interface ISandboxProvider {
   /** 获取或创建用户沙盒 */
-  getOrCreate(userId: string, config: SandboxProviderConfig): Promise<SandboxInstance>;
+  getOrCreate(userId: string, projectPath: string): Promise<SandboxInstance>;
 
   /** 销毁用户沙盒 */
   destroy(userId: string): Promise<void>;

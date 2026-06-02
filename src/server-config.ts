@@ -53,6 +53,9 @@ export const config = {
   sandboxBoxDomainSuffix: process.env.SANDBOX_BOX_DOMAIN_SUFFIX ?? "sandbox.19930810.xyz",
   /** 沙箱空闲超时（秒） */
   sandboxIdleTimeout: parseInt(process.env.SANDBOX_IDLE_TIMEOUT ?? "1800", 10),
+  sandboxBoxModelsJson: process.env.SANDBOX_BOX_MODELS_JSON ?? "",
+  sandboxBoxSettingsJson: process.env.SANDBOX_BOX_SETTINGS_JSON ?? "",
+  sandboxBoxExtensionsPath: process.env.SANDBOX_BOX_EXTENSIONS_PATH ?? "",
 } as const;
 
 if (MISSING_PI_VARS.length > 0) {

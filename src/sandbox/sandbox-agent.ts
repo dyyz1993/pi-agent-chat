@@ -149,6 +149,47 @@ function writeToPi(message: Record<string, unknown>): void {
   piProcess.stdin.write(JSON.stringify(message) + "\n");
 }
 
+const PARAM_NAMES: Record<string, string[]> = {
+  prompt: ["message", "images"],
+  steer: ["message", "images"],
+  follow_up: ["message", "images"],
+  set_model: ["provider", "modelId"],
+  set_thinking_level: ["level"],
+  bash: ["command"],
+  new_session: ["parentSession"],
+  switch_session: ["sessionPath"],
+  fork: ["entryId", "options"],
+  navigate_tree: ["targetId", "options"],
+  preview_rollback: ["targetId"],
+  set_session_name: ["name"],
+  get_full_messages: ["options"],
+  get_modified_files: ["options"],
+  get_file_diff: ["options"],
+  get_batch_diffs: ["options"],
+  get_file_history: ["options"],
+  set_auto_compaction: ["enabled"],
+  delete_entries: ["targetIds"],
+  summarize_entries: ["targetIds", "options"],
+  set_auto_retry: ["enabled"],
+  set_steering_mode: ["mode"],
+  set_follow_up_mode: ["mode"],
+  set_settings: ["settings", "scope"],
+  get_settings: ["scope"],
+  get_agent_detail: ["agentName"],
+  set_cwd: ["cwd"],
+  set_flag: ["name", "value"],
+  toggle_mcp_server: ["name", "enabled"],
+  restart_mcp_server: ["name"],
+  set_active_tools: ["toolNames"],
+  register_remote_tool: ["tool"],
+  unregister_remote_tool: ["name"],
+  send_remote_tool_result: ["toolCallId", "result"],
+  respond_ui: ["requestId", "response"],
+  wait_for_idle: ["timeout"],
+  collect_events: ["timeout"],
+  prompt_and_wait: ["message", "images", "timeout"],
+};
+
 // ─── HTTP Server ──────────────────────────────────────
 
 const server = createServer(async (req, res) => {
@@ -225,47 +266,6 @@ const server = createServer(async (req, res) => {
     return;
   }
 
-  const PARAM_NAMES: Record<string, string[]> = {
-    prompt: ["message", "images"],
-    steer: ["message", "images"],
-    follow_up: ["message", "images"],
-    set_model: ["provider", "modelId"],
-    set_thinking_level: ["level"],
-    bash: ["command"],
-    new_session: ["parentSession"],
-    switch_session: ["sessionPath"],
-    fork: ["entryId", "options"],
-    navigate_tree: ["targetId", "options"],
-    preview_rollback: ["targetId"],
-    set_session_name: ["name"],
-    get_full_messages: ["options"],
-    get_modified_files: ["options"],
-    get_file_diff: ["options"],
-    get_batch_diffs: ["options"],
-    get_file_history: ["options"],
-    set_auto_compaction: ["enabled"],
-    delete_entries: ["targetIds"],
-    summarize_entries: ["targetIds", "options"],
-    set_auto_retry: ["enabled"],
-    set_steering_mode: ["mode"],
-    set_follow_up_mode: ["mode"],
-    set_settings: ["settings", "scope"],
-    get_settings: ["scope"],
-    get_agent_detail: ["agentName"],
-    set_cwd: ["cwd"],
-    set_flag: ["name", "value"],
-    toggle_mcp_server: ["name", "enabled"],
-    restart_mcp_server: ["name"],
-    set_active_tools: ["toolNames"],
-    register_remote_tool: ["tool"],
-    unregister_remote_tool: ["name"],
-    send_remote_tool_result: ["toolCallId", "result"],
-    respond_ui: ["requestId", "response"],
-    wait_for_idle: ["timeout"],
-    collect_events: ["timeout"],
-    prompt_and_wait: ["message", "images", "timeout"],
-  };
-
   if (url.pathname === "/write" && req.method === "POST") {
     const chunks: Buffer[] = [];
     for await (const chunk of req) chunks.push(chunk as Buffer);
@@ -305,7 +305,7 @@ const server = createServer(async (req, res) => {
       let result: unknown;
       switch (action) {
         case "listDir": {
-          const dirPath = String(body.path ?? mapPath(CWD));
+          const dirPath = String(body.path ?? CWD);
           const entries = readdirSync(dirPath).map((name) => {
             const fullPath = join(dirPath, name);
             try {
