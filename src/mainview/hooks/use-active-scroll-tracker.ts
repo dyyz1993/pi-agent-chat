@@ -220,14 +220,6 @@ export function useActiveScrollTracker({
 
   useEffect(() => {
     if (historyLoadVersion === undefined || historyLoadVersion === 0) return;
-    if (!userScrolledUpRef.current) {
-      didInitRef.current = false;
-    }
-    prevCountRef.current = messageIds.length;
-
-    if (messageIds.length > 0) {
-      setActive(messageIds[messageIds.length - 1]);
-    }
 
     if (!userScrolledUpRef.current) {
       const handle = vlistRef.current;
@@ -235,8 +227,20 @@ export function useActiveScrollTracker({
         ? handle.scrollSize - handle.scrollOffset - handle.viewportSize < 50
         : false;
 
-      if (isAlreadyAtBottom && didInitRef.current) return;
+      if (isAlreadyAtBottom && didInitRef.current) {
+        prevCountRef.current = messageIds.length;
+        return;
+      }
 
+      didInitRef.current = false;
+    }
+    prevCountRef.current = messageIds.length;
+
+    if (messageIds.length > 0 && !didInitRef.current) {
+      setActive(messageIds[messageIds.length - 1]);
+    }
+
+    if (!userScrolledUpRef.current) {
       let attempts = 0;
       const MAX_ATTEMPTS = 10;
       let rafId: number;
@@ -251,7 +255,9 @@ export function useActiveScrollTracker({
         handle.scrollToIndex(messageIds.length - 1, { align: "end" });
 
         const isAtBottom = handle.scrollSize - handle.scrollOffset - handle.viewportSize < 50;
-        if (!isAtBottom && attempts < MAX_ATTEMPTS) {
+        if (isAtBottom) {
+          didInitRef.current = true;
+        } else if (attempts < MAX_ATTEMPTS) {
           rafId = requestAnimationFrame(tryScroll);
         }
       };
