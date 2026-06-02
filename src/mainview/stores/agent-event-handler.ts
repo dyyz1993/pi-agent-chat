@@ -143,7 +143,17 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     }
 
     storeGet().updateSessionStatus(sessionId, "idle");
-    useChatStore.getState().loadSessionMessages(sessionId, { force: true });
+
+    const chatState = useChatStore.getState();
+    const currentMsgs = chatState.messagesBySession[sessionId] || [];
+    const isActivelyStreaming = currentMsgs.some(
+      (m) => m.role === "assistant" && m.isStreaming === true,
+    );
+    if (isActivelyStreaming) {
+      log.info("compaction_end → session streaming, skip force reload", { sessionId });
+    } else {
+      chatState.loadSessionMessages(sessionId, { force: true });
+    }
     return;
   }
 
