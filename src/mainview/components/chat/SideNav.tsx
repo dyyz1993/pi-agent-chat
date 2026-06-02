@@ -88,7 +88,7 @@ function buildFlatItems(messages: ChatMessage[], showThinking: boolean): FlatIte
     const errorColor = hasError ? "text-status-error" : undefined;
 
     items.push({
-      key: `${id}-bot`,
+      key: `nav:${id}:bot`,
       navId: id,
       icon: Bot,
       color: errorColor ?? "text-status-success",
@@ -104,7 +104,7 @@ function buildFlatItems(messages: ChatMessage[], showThinking: boolean): FlatIte
       if (b.type === "thinking" && showThinking) {
         count++;
         items.push({
-          key: `${id}-${count}`,
+          key: `nav:${id}:${count}`,
           navId: id,
           blockId,
           icon: Brain,
@@ -114,7 +114,7 @@ function buildFlatItems(messages: ChatMessage[], showThinking: boolean): FlatIte
       } else if (b.type === "text") {
         count++;
         items.push({
-          key: `${id}-${count}`,
+          key: `nav:${id}:${count}`,
           navId: id,
           blockId,
           icon: Type,
@@ -133,7 +133,7 @@ function buildFlatItems(messages: ChatMessage[], showThinking: boolean): FlatIte
           if (rt) ti = getPreviewResourceIcon(rt);
         }
         items.push({
-          key: `${id}-${count}`,
+          key: `nav:${id}:${count}`,
           navId: id,
           blockId,
           icon: ti.icon,
