@@ -100,23 +100,19 @@ function stripParentSessionFromHeader(filePath: string): void {
  * Layout: each subdirectory with an index.ts/js, or each .ts/.js file,
  * is treated as an extension. Symlinks are resolved.
  */
-function discoverExtensionArgs(): string[] {
-  const extDir = config.piExtensionsDir;
-  if (!existsSync(extDir)) {
-    log.warn("Global extensions directory not found", { extDir });
-    return [];
-  }
+function scanExtensionDir(dir: string, extensionPaths: string[]): void {
+  if (!existsSync(dir)) return;
 
-  const extensionPaths: string[] = [];
   try {
-    for (const entry of readdirSync(extDir, { withFileTypes: true })) {
-      if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name.startsWith(".") || entry.name === "node_modules" || entry.name === "__tests__")
+        continue;
 
       let isDir = entry.isDirectory();
       let isFile = entry.isFile();
       if (entry.isSymbolicLink()) {
         try {
-          const stats = statSync(path.join(extDir, entry.name));
+          const stats = statSync(path.join(dir, entry.name));
           isDir = stats.isDirectory();
           isFile = stats.isFile();
         } catch {
@@ -124,7 +120,7 @@ function discoverExtensionArgs(): string[] {
         }
       }
 
-      const fullPath = path.join(extDir, entry.name);
+      const fullPath = path.join(dir, entry.name);
       if (isDir) {
         const indexTs = path.join(fullPath, "index.ts");
         const indexJs = path.join(fullPath, "index.js");
@@ -139,12 +135,40 @@ function discoverExtensionArgs(): string[] {
     }
   } catch (err: unknown) {
     log.warn("Failed to scan extensions directory", {
-      extDir,
+      dir,
       err: err instanceof Error ? err.message : String(err),
     });
   }
+}
 
-  log.info("Discovered extensions", { extDir, count: extensionPaths.length });
+function getBuiltinExtensionsDir(): string {
+  const cliPath = config.piCliPath;
+  const nmDir = path.resolve(cliPath, "..", "..");
+  const pkgDir = path.join(nmDir, "@dyyz1993", "pi-coding-agent");
+  const srcExists = existsSync(path.join(pkgDir, "src"));
+  return path.join(pkgDir, srcExists ? "src" : "dist", "extensions");
+}
+
+function discoverExtensionArgs(): string[] {
+  const extensionPaths: string[] = [];
+
+  const userExtDir = config.piExtensionsDir;
+  if (existsSync(userExtDir)) {
+    scanExtensionDir(userExtDir, extensionPaths);
+  } else {
+    log.warn("Global extensions directory not found", { extDir: userExtDir });
+  }
+
+  const builtinExtDir = getBuiltinExtensionsDir();
+  if (existsSync(builtinExtDir)) {
+    scanExtensionDir(builtinExtDir, extensionPaths);
+  }
+
+  log.info("Discovered extensions", {
+    userDir: userExtDir,
+    builtinDir: builtinExtDir,
+    count: extensionPaths.length,
+  });
   for (const p of extensionPaths) {
     log.info("  → extension:", { path: p });
   }
@@ -233,10 +257,7 @@ export function initSandboxManager(projectsRoot: string): SandboxManager {
 
 export function getSandboxEndpoint(userId: string): string | null {
   if (!globalSandboxManager) return null;
-  const endpoint = (
-    globalSandboxManager as { getEndpoint(userId: string): string | undefined }
-  ).getEndpoint(userId);
-  return endpoint ?? null;
+  return globalSandboxManager.getEndpoint(userId) ?? null;
 }
 
 export function getSandboxManager(): SandboxManager | null {
@@ -440,138 +461,12 @@ export class AgentProcessManager {
       lineCount: number;
     }
   >();
-  private static SESSION_CACHE_MAX = 10;
-
-  /**
-   * Get cached session data. Three outcomes:
-   * 1. Exact match (file unchanged) → return cached data
-   * 2. File grew → return cached data + mark for incremental append
-   * 3. No cache / file shrunk / file gone → return null
-   */
-  private getSessionCache(
-    sessionId: string,
-    sessionPath: string,
-  ): {
-    messages: Array<{ entryId: string; message: unknown }>;
-    customEntries: Array<{
-      id: string;
-      customType: string;
-      data: unknown;
-      timestamp: number;
-    }>;
-    parentById: Map<string, string | null>;
-    lineCount: number;
-    needsIncremental: boolean;
-  } | null {
-    const cached = this.sessionMsgCache.get(sessionId);
-    if (!cached) return null;
-    try {
-      const st = statSync(sessionPath);
-      if (st.size === cached.fileSize && st.mtimeMs === cached.mtimeMs) {
-        // Exact match — file unchanged
-        this.sessionMsgCache.delete(sessionId);
-        this.sessionMsgCache.set(sessionId, cached);
-        return { ...cached, needsIncremental: false };
-      }
-      if (st.size > cached.fileSize) {
-        // File grew — can do incremental append
-        this.sessionMsgCache.delete(sessionId);
-        this.sessionMsgCache.set(sessionId, cached);
-        return { ...cached, needsIncremental: true };
-      }
-      // File shrunk or changed drastically — invalidate
-    } catch {
-      // file gone or inaccessible
-    }
-    this.sessionMsgCache.delete(sessionId);
-    return null;
-  }
-
-  private setSessionCache(
-    sessionId: string,
-    sessionPath: string,
-    data: {
-      messages: Array<{ entryId: string; message: unknown }>;
-      customEntries: Array<{
-        id: string;
-        customType: string;
-        data: unknown;
-        timestamp: number;
-      }>;
-      parentById: Map<string, string | null>;
-      lineCount: number;
-    },
-  ): void {
-    try {
-      const st = statSync(sessionPath);
-      if (this.sessionMsgCache.size >= AgentProcessManager.SESSION_CACHE_MAX) {
-        const oldest = this.sessionMsgCache.keys().next().value;
-        if (oldest) this.sessionMsgCache.delete(oldest);
-      }
-      this.sessionMsgCache.set(sessionId, {
-        ...data,
-        fileSize: st.size,
-        mtimeMs: st.mtimeMs,
-      });
-    } catch {
-      // file gone — don't cache
-    }
-  }
-
   clearSessionCache(sessionId?: string): void {
     if (sessionId) {
       this.sessionMsgCache.delete(sessionId);
     } else {
       this.sessionMsgCache.clear();
     }
-  }
-
-  /**
-   * Read JSONL from a specific physical line number onwards and append results.
-   * Returns { newEntries: number of new parsed entries, totalLines: total physical lines in file }
-   */
-  private async readJsonlFromLine(
-    sessionPath: string,
-    startLine: number,
-    messages: Array<{ entryId: string; message: unknown }>,
-    customEntries: Array<{ id: string; customType: string; data: unknown; timestamp: number }>,
-    parentById: Map<string, string | null>,
-  ): Promise<{ newEntries: number; totalLines: number }> {
-    let lineIndex = 0;
-    let newEntries = 0;
-    const rl = readline.createInterface({
-      input: createReadStream(sessionPath, { encoding: "utf-8" }),
-      crlfDelay: Infinity,
-    });
-    for await (const line of rl) {
-      lineIndex++;
-      if (lineIndex <= startLine) continue; // skip already-parsed lines
-      if (!line.trim()) continue;
-      try {
-        const parsed = JSON.parse(line) as Record<string, unknown>;
-        const entryId = (parsed.id as string) ?? "";
-        const parentId = (parsed.parentId as string | null | undefined) ?? null;
-        if (entryId) {
-          parentById.set(entryId, parentId);
-        }
-        if (parsed.type === "message" && parsed.message) {
-          messages.push({ entryId, message: parsed.message });
-          newEntries++;
-        } else if (parsed.type === "custom") {
-          customEntries.push({
-            id: entryId || `custom-${Date.now()}`,
-            customType: (parsed.customType as string) ?? "unknown",
-            data: parsed.data,
-            timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
-          });
-          newEntries++;
-        }
-      } catch {
-        // skip malformed
-      }
-    }
-    rl.close();
-    return { newEntries, totalLines: lineIndex };
   }
 
   private async _drainPendingDelegates(): Promise<void> {
@@ -1736,17 +1631,19 @@ export class AgentProcessManager {
       managed = await this.ensureManagedClient(sessionId);
     }
     if (!managed) return [];
-    return (managed.client as SandboxRpcClient).getAvailableModels().catch(async (err: unknown) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.warn("getAvailableModels error, checking if CLI is alive", {
-        sessionId,
-        err: msg,
+    return (managed.client as unknown as SandboxRpcClient)
+      .getAvailableModels()
+      .catch(async (err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.warn("getAvailableModels error, checking if CLI is alive", {
+          sessionId,
+          err: msg,
+        });
+        if (!(await this.isClientAlive(sessionId, managed))) {
+          this.cleanupDeadClient(sessionId, `getAvailableModels failed: ${msg}`);
+        }
+        return [];
       });
-      if (!(await this.isClientAlive(sessionId, managed))) {
-        this.cleanupDeadClient(sessionId, `getAvailableModels failed: ${msg}`);
-      }
-      return [];
-    });
   }
 
   async setModel(
@@ -3685,7 +3582,7 @@ export class AgentProcessManager {
     if (!children || !children.has(targetSessionId)) {
       return { ok: false };
     }
-    const ok = this.stop(targetSessionId);
+    const ok = await this.stop(targetSessionId);
     return { ok };
   }
 
