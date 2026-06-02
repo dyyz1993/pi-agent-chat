@@ -74,6 +74,7 @@ function PluginCopyButton({ plugin }: { plugin: PluginInfo }) {
 export function StatusPanel() {
   const { t } = useTranslation("status");
   const yoloEnabled = useStatusStore((s) => s.yoloEnabled);
+  const yoloLoading = useStatusStore((s) => s.yoloLoading);
   const plugins = useStatusStore((s) => s.plugins);
   const skills = useStatusStore((s) => s.skills);
   const expandedSkill = useStatusStore((s) => s.expandedSkill);
@@ -160,9 +161,10 @@ export function StatusPanel() {
                   {id === "yolo" && (
                     <button
                       onClick={toggleYolo}
-                      className={`px-2 py-0.5 rounded text-[10px] ${yoloEnabled ? "bg-status-warning/30 text-status-warning" : "bg-surface-hover dark:bg-surface-code text-text-tertiary"}`}
+                      disabled={yoloLoading}
+                      className={`px-2 py-0.5 rounded text-[10px] ${yoloLoading ? "opacity-50 cursor-wait" : ""} ${yoloEnabled ? "bg-status-warning/30 text-status-warning" : "bg-surface-hover dark:bg-surface-code text-text-tertiary"}`}
                     >
-                      {yoloEnabled ? t("enabled") : t("disabled")}
+                      {yoloLoading ? "..." : yoloEnabled ? t("enabled") : t("disabled")}
                     </button>
                   )}
                   {id === "plan" && (

@@ -185,6 +185,12 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     return { ok: true };
   });
 
+  r("agent.setPermissionMode", async (params) => {
+    return m.setPermissionMode(params.sessionId, params.mode) as Promise<
+      R<"agent.setPermissionMode">
+    >;
+  });
+
   r("agent.getActiveTools", async (params) => {
     return m.getActiveTools(params.sessionId) as Promise<R<"agent.getActiveTools">>;
   });

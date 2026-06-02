@@ -168,6 +168,10 @@ export interface AgentMethods {
     params: { sessionId: string; mode: string };
     result: { ok: boolean };
   };
+  "agent.setPermissionMode": {
+    params: { sessionId: string; mode: string };
+    result: { mode: string };
+  };
   "agent.setFollowUpMode": {
     params: { sessionId: string; mode: string };
     result: { ok: boolean };

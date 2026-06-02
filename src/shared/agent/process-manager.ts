@@ -1870,6 +1870,15 @@ export class AgentProcessManager {
     });
   }
 
+  async setPermissionMode(sessionId: string, mode: string): Promise<{ mode: string }> {
+    let managed = this.getActiveManaged(sessionId);
+    if (!managed) {
+      managed = await this.ensureManagedClient(sessionId);
+    }
+    if (!managed) throw new Error("Client not found");
+    return withTimeout(managed.client.setPermissionMode(mode), 15_000, "setPermissionMode");
+  }
+
   async getActiveTools(sessionId: string): Promise<{ toolNames: string[] }> {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) return { toolNames: [] };
