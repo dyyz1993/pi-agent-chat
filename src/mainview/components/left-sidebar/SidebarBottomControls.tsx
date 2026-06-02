@@ -363,7 +363,7 @@ export function SidebarBottomControls() {
           />
         </button>
         {agentOpen && (
-          <div className="absolute bottom-full left-0 right-0 mb-1 z-50 bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl py-1">
+          <div className="absolute bottom-full left-0 right-0 mb-1 z-popover bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl py-1">
             <div className="overflow-y-auto max-h-[15rem]">
               {agents.map((agent) => {
                 const isActive = currentAgent === agent.name;
@@ -475,7 +475,7 @@ export function SidebarBottomControls() {
           </button>
         )}
         {isGitRepo && workspaceOpen && (
-          <div className="absolute bottom-full left-0 right-0 mb-1 z-50 max-h-64 overflow-hidden bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl flex flex-col">
+          <div className="absolute bottom-full left-0 right-0 mb-1 z-popover max-h-64 overflow-hidden bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl flex flex-col">
             <div className="overflow-y-auto flex-1 py-1">
               {worktrees.map((wt) => {
                 const isActive = currentWorkspace?.path === wt.path;
@@ -519,7 +519,7 @@ export function SidebarBottomControls() {
           </div>
         )}
         {showCreateDialog && (
-          <div className="absolute bottom-full left-0 right-0 mb-1 z-50 bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl p-3 space-y-2">
+          <div className="absolute bottom-full left-0 right-0 mb-1 z-popover bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl p-3 space-y-2">
             <div className="text-xs font-medium text-text-primary">{t("newWorkspaceTitle")}</div>
             <div className="space-y-1.5">
               <div>
@@ -659,7 +659,7 @@ export function SidebarBottomControls() {
         {tierConfigOpen && (
           <div
             ref={tierConfigRef}
-            className="absolute bottom-full left-0 right-0 mb-1 z-50 bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl p-3 space-y-2"
+            className="absolute bottom-full left-0 right-0 mb-1 z-popover bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl p-3 space-y-2"
           >
             <div className="text-xs font-medium text-text-primary">
               {t("tierConfigTitle", "Configure tier models")}
@@ -742,7 +742,7 @@ export function SidebarBottomControls() {
           />
         </button>
         {thinkingOpen && (
-          <div className="absolute bottom-full left-0 right-0 mb-1 z-50 bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl py-1">
+          <div className="absolute bottom-full left-0 right-0 mb-1 z-popover bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl py-1">
             {THINKING_LEVEL_VALUES.map((value, idx) => {
               const isActive = currentThinkingLevel === value;
               return (

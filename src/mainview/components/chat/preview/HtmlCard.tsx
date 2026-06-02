@@ -1,17 +1,16 @@
 import { memo, useState, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Code, X, RefreshCw, Maximize2, Copy, Check, ExternalLink } from "lucide-react";
+import { Code, X, RefreshCw, Maximize2, ExternalLink } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { PreviewDetails } from "./types";
 import { getFileHttpUrl } from "./types";
-import { useClipboard } from "./use-clipboard";
+import { CopyAction, IconButton } from "../../primitives";
 
 export const HtmlCard = memo(function HtmlCard({ details }: { details: PreviewDetails }) {
   const { t } = useTranslation("chat");
   const httpUrl = details.absolutePath ? getFileHttpUrl(details.absolutePath) : "";
   const [iframeKey, setIframeKey] = useState(0);
   const [fullscreen, setFullscreen] = useState(false);
-  const { copied, copy } = useClipboard();
 
   const handleRetry = useCallback(() => {
     setIframeKey((k) => k + 1);
@@ -42,48 +41,47 @@ export const HtmlCard = memo(function HtmlCard({ details }: { details: PreviewDe
 
   const headerButtons = (
     <div className="flex items-center gap-1 ml-auto shrink-0">
-      <button
+      <IconButton
         onClick={handleRetry}
-        className="p-0.5 rounded text-text-tertiary hover:text-text-primary dark:text-text-tertiary dark:hover:text-text-secondary hover:bg-surface-hover/50 dark:hover:bg-surface-hover/50 transition-colors"
-        title={t("reloadTitle")}
+        label={t("reloadTitle")}
+        size="sm"
+        className="h-7 w-7 rounded-md"
       >
         <RefreshCw className="w-3 h-3" />
-      </button>
+      </IconButton>
       {!fullscreen && (
-        <button
+        <IconButton
           onClick={() => setFullscreen(true)}
-          className="p-0.5 rounded text-text-tertiary hover:text-text-primary dark:text-text-tertiary dark:hover:text-text-secondary hover:bg-surface-hover/50 dark:hover:bg-surface-hover/50 transition-colors"
-          title={t("fullscreenTitle")}
+          label={t("fullscreenTitle")}
+          size="sm"
+          className="h-7 w-7 rounded-md"
         >
           <Maximize2 className="w-3 h-3" />
-        </button>
+        </IconButton>
       )}
-      <button
-        onClick={() => copy(httpUrl)}
-        className="p-0.5 rounded text-text-tertiary hover:text-text-primary dark:text-text-tertiary dark:hover:text-text-secondary hover:bg-surface-hover/50 dark:hover:bg-surface-hover/50 transition-colors"
+      <CopyAction
+        text={httpUrl}
+        size="xs"
         title={t("copyLinkTitle")}
-      >
-        {copied ? (
-          <Check className="w-3 h-3 text-green-500 dark:text-green-400" />
-        ) : (
-          <Copy className="w-3 h-3" />
-        )}
-      </button>
-      <button
+        className="h-7 w-7 rounded-md"
+      />
+      <IconButton
         onClick={() => window.open(httpUrl, "_blank", "noopener,noreferrer")}
-        className="p-0.5 rounded text-text-tertiary hover:text-text-primary dark:text-text-tertiary dark:hover:text-text-secondary hover:bg-surface-hover/50 dark:hover:bg-surface-hover/50 transition-colors"
-        title={t("openInNewWindowTitle")}
+        label={t("openInNewWindowTitle")}
+        size="sm"
+        className="h-7 w-7 rounded-md"
       >
         <ExternalLink className="w-3 h-3" />
-      </button>
+      </IconButton>
       {fullscreen && (
-        <button
+        <IconButton
           onClick={() => setFullscreen(false)}
-          className="p-2 rounded text-text-secondary hover:text-text-primary dark:text-text-tertiary dark:hover:text-text-primary hover:bg-surface-hover dark:hover:bg-surface-hover/50 transition-colors ml-1"
-          title={t("closeEscTitle")}
+          label={t("closeEscTitle")}
+          size="md"
+          className="ml-1 h-10 w-10 rounded-md"
         >
           <X className="w-4 h-4" />
-        </button>
+        </IconButton>
       )}
     </div>
   );
@@ -105,7 +103,7 @@ export const HtmlCard = memo(function HtmlCard({ details }: { details: PreviewDe
 
   if (fullscreen) {
     return createPortal(
-      <div className="fixed inset-0 z-[200] bg-bg-elevated dark:bg-black flex flex-col">
+      <div className="fixed inset-0 z-fullscreen bg-bg-elevated dark:bg-black flex flex-col">
         {header}
         <iframe
           key={iframeKey}

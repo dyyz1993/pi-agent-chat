@@ -302,7 +302,7 @@ export const MessageBubble = memo(function MessageBubble({
 
       {expandedImage && (
         <div
-          className="fixed inset-0 z-[200] bg-black/70 flex items-center justify-center p-4"
+          className="fixed inset-0 z-fullscreen bg-black/70 flex items-center justify-center p-4"
           style={{
             paddingTop: "calc(1rem + env(safe-area-inset-top, 0px))",
             paddingBottom: "env(safe-area-inset-bottom, 0px)",

@@ -220,6 +220,10 @@ export function initSandboxManager(projectsRoot: string): SandboxManager {
   globalSandboxManager = new SandboxManager(provider, {
     idleTimeoutMs: (config.sandboxIdleTimeout ?? 1800) * 1000,
     gcIntervalMs: 60_000,
+    providerConfig: {
+      idleTimeout: `${config.sandboxIdleTimeout ?? 1800}s`,
+      enableInternet: true,
+    },
   });
 
   if (providerType === "sandbox-box" && provider instanceof SandboxBoxProvider) {
@@ -233,9 +237,7 @@ export function initSandboxManager(projectsRoot: string): SandboxManager {
 
 export function getSandboxEndpoint(userId: string): string | null {
   if (!globalSandboxManager) return null;
-  const endpoint = (
-    globalSandboxManager as { getEndpoint(userId: string): string | undefined }
-  ).getEndpoint(userId);
+  const endpoint = globalSandboxManager.getEndpoint(userId);
   return endpoint ?? null;
 }
 
@@ -448,7 +450,7 @@ export class AgentProcessManager {
    * 2. File grew → return cached data + mark for incremental append
    * 3. No cache / file shrunk / file gone → return null
    */
-  private getSessionCache(
+  getSessionCache(
     sessionId: string,
     sessionPath: string,
   ): {
@@ -487,7 +489,7 @@ export class AgentProcessManager {
     return null;
   }
 
-  private setSessionCache(
+  setSessionCache(
     sessionId: string,
     sessionPath: string,
     data: {
@@ -530,7 +532,7 @@ export class AgentProcessManager {
    * Read JSONL from a specific physical line number onwards and append results.
    * Returns { newEntries: number of new parsed entries, totalLines: total physical lines in file }
    */
-  private async readJsonlFromLine(
+  async readJsonlFromLine(
     sessionPath: string,
     startLine: number,
     messages: Array<{ entryId: string; message: unknown }>,
@@ -1191,6 +1193,9 @@ export class AgentProcessManager {
 
     try {
       const state = await withTimeout(managed.client.getState(), 10_000, "getState");
+      const stateWithStreaming = state as typeof state & {
+        streamingMessage?: AssistantMessage;
+      };
       const model = state.model;
       return {
         model: model
@@ -1207,7 +1212,7 @@ export class AgentProcessManager {
         isStreaming: Boolean(state.isStreaming),
         isCompacting: Boolean(state.isCompacting),
         messageCount: Number(state.messageCount ?? 0),
-        streamingMessage: state.streamingMessage as AssistantMessage | undefined,
+        streamingMessage: stateWithStreaming.streamingMessage,
       };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -1736,7 +1741,7 @@ export class AgentProcessManager {
       managed = await this.ensureManagedClient(sessionId);
     }
     if (!managed) return [];
-    return (managed.client as SandboxRpcClient).getAvailableModels().catch(async (err: unknown) => {
+    return managed.client.getAvailableModels().catch(async (err: unknown) => {
       const msg = err instanceof Error ? err.message : String(err);
       log.warn("getAvailableModels error, checking if CLI is alive", {
         sessionId,
@@ -3685,7 +3690,7 @@ export class AgentProcessManager {
     if (!children || !children.has(targetSessionId)) {
       return { ok: false };
     }
-    const ok = this.stop(targetSessionId);
+    const ok = await this.stop(targetSessionId);
     return { ok };
   }
 

@@ -58,7 +58,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
   r("agent.send", async (params) => {
     log.info("send called", { sessionId: params.sessionId, content: params.content });
-    const ok = m.send(params.sessionId, params.content, params.images);
+    const ok = await m.send(params.sessionId, params.content, params.images);
     if (!ok) {
       throw new Error(`Agent not started for session ${params.sessionId}`);
     }

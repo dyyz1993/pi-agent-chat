@@ -13,6 +13,11 @@ import { listRecentProjects, restoreOpenTabs } from "../shared/lib/project-confi
 import { createProxyRegistrar } from "./proxy-register";
 
 const log = createLogger("gateway");
+
+declare global {
+  var __lastTokenUser: string | undefined;
+}
+
 function resolveTokenUser(token: string): string | undefined {
   const tokenUsersRaw = String(process.env.TOKEN_USERS);
   void tokenUsersRaw;
@@ -143,17 +148,32 @@ export interface HttpRouteDeps {
 export function createHttpHandler(
   deps: HttpRouteDeps,
 ): (req: IncomingMessage, res: ServerResponse) => void {
-  const { config: cfg, getWebSocketClientCount, broadcastEvent, sandboxEnabled, getSandboxPreviewEndpoint } = deps;
+  const {
+    config: cfg,
+    getWebSocketClientCount,
+    broadcastEvent,
+    sandboxEnabled,
+    getSandboxPreviewEndpoint,
+  } = deps;
 
-  function proxyToSandbox(previewUrl: string, sandboxPath: string, req: IncomingMessage, res: ServerResponse): Promise<void> {
+  function proxyToSandbox(
+    previewUrl: string,
+    sandboxPath: string,
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> {
     return new Promise((resolve, reject) => {
       const targetUrl = `${previewUrl}/raw${sandboxPath.startsWith("/") ? sandboxPath : "/" + sandboxPath}`;
-      const proxyReq = httpRequest(targetUrl, { method: req.method ?? "GET", headers: req.headers }, (proxyRes) => {
-        res.writeHead(proxyRes.statusCode ?? 502, proxyRes.headers as Record<string, string>);
-        proxyRes.pipe(res);
-        proxyRes.on("end", resolve);
-        proxyRes.on("error", reject);
-      });
+      const proxyReq = httpRequest(
+        targetUrl,
+        { method: req.method ?? "GET", headers: req.headers },
+        (proxyRes) => {
+          res.writeHead(proxyRes.statusCode ?? 502, proxyRes.headers as Record<string, string>);
+          proxyRes.pipe(res);
+          proxyRes.on("end", resolve);
+          proxyRes.on("error", reject);
+        },
+      );
       proxyReq.on("error", reject);
       req.pipe(proxyReq);
     });
@@ -348,7 +368,10 @@ export function createHttpHandler(
                 await proxyToSandbox(previewUrl, decodeURIComponent(filePath), req, res);
                 return;
               } catch (err) {
-                log.warn("Sandbox proxy failed, falling back to local", { filePath, error: String(err) });
+                log.warn("Sandbox proxy failed, falling back to local", {
+                  filePath,
+                  error: String(err),
+                });
               }
             }
           }
@@ -376,7 +399,12 @@ export function createHttpHandler(
       }
       if (sandboxEnabled && getSandboxPreviewEndpoint) {
         const userId = extractUserId(req);
-        log.info("[sandbox-file] checking", { sandboxEnabled, hasEndpoint: !!getSandboxPreviewEndpoint, userId, path: url.pathname });
+        log.info("[sandbox-file] checking", {
+          sandboxEnabled,
+          hasEndpoint: !!getSandboxPreviewEndpoint,
+          userId,
+          path: url.pathname,
+        });
         if (userId) {
           const previewUrl = await getSandboxPreviewEndpoint(userId);
           if (previewUrl) {
@@ -386,7 +414,10 @@ export function createHttpHandler(
                 await proxyToSandbox(previewUrl, decodeURIComponent(encodedPath), req, res);
                 return;
               } catch (err) {
-                log.warn("Sandbox proxy failed, falling back to local", { path: encodedPath, error: String(err) });
+                log.warn("Sandbox proxy failed, falling back to local", {
+                  path: encodedPath,
+                  error: String(err),
+                });
               }
             }
           }

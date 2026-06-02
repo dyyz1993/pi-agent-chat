@@ -3,7 +3,7 @@ import { resolve } from "path";
 import { existsSync } from "fs";
 import { createLogger } from "../../shared/lib/logger";
 import { getProjectRoot } from "../../shared/lib/paths";
-import type { ISandboxProvider, SandboxInstance, SandboxStatus } from "../types";
+import type { ISandboxProvider, SandboxInstance, SandboxProviderConfig } from "../types";
 
 const log = createLogger("sandbox-box");
 
@@ -211,8 +211,9 @@ export class SandboxBoxProvider implements ISandboxProvider {
     }
   }
 
-  async getOrCreate(userId: string, projectPath: string): Promise<SandboxInstance> {
+  async getOrCreate(userId: string, _config: SandboxProviderConfig): Promise<SandboxInstance> {
     const name = this.sandboxName(userId);
+    const projectPath = this.config.projectSourcePath;
     const existing = this.sandboxes.get(userId);
     if (existing && existing.instance.status === "ready") {
       const alive = await this.isSandboxAlive(name);
@@ -511,9 +512,9 @@ export class SandboxBoxProvider implements ISandboxProvider {
     log.info("sandbox destroyed", { name });
   }
 
-  getStatus(userId: string): SandboxStatus {
+  async getStatus(userId: string): Promise<SandboxInstance | null> {
     const record = this.sandboxes.get(userId);
-    return record?.instance.status ?? "stopped";
+    return record?.instance ?? null;
   }
 
   async isAlive(userId: string): Promise<boolean> {
@@ -597,15 +598,17 @@ export class SandboxBoxProvider implements ISandboxProvider {
     }
   }
 
-  shutdown(): void {
+  async shutdown(): Promise<void> {
     const userIds = [...this.sandboxes.keys()];
-    for (const userId of userIds) {
-      this.destroy(userId).catch((err) => {
-        log.warn("shutdown destroy failed", {
-          userId,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      });
-    }
+    await Promise.all(
+      userIds.map((userId) =>
+        this.destroy(userId).catch((err) => {
+          log.warn("shutdown destroy failed", {
+            userId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }),
+      ),
+    );
   }
 }

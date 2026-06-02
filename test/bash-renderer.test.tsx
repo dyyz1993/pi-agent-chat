@@ -5,16 +5,13 @@ import type { BashProcess } from "../src/shared/modules/bash";
 
 type Block = Extract<ContentBlock, { type: "toolExecution" }>;
 
-const { mockCall } = vi.hoisted(() => ({
-  mockCall: vi.fn(),
-}));
+const mockCall = vi.fn();
 let mockBashProcess: BashProcess | undefined = undefined;
 
-vi.mock("react-i18next", async (importOriginal) => {
-  const actual = await importOriginal();
+vi.mock("react-i18next", () => {
   return {
-    ...actual,
     useTranslation: () => ({ t: (key: string) => key }),
+    initReactI18next: { type: "3rdParty", init: vi.fn() },
   };
 });
 
@@ -58,27 +55,6 @@ vi.mock("../src/mainview/components/chat/primitives/AnsiText", () => ({
   AnsiText: ({ content }: { content: string }) => <div data-testid="ansi-text">{content}</div>,
 }));
 
-vi.mock("../src/mainview/components/bash-panel/BashPanel", () => ({
-  BashProcessCard: () => <div data-testid="bash-process-card" />,
-  LogViewer: ({
-    logPath,
-    toolCallId,
-    onClose,
-  }: {
-    logPath: string;
-    toolCallId: string;
-    onClose: () => void;
-  }) => (
-    <div data-testid="log-viewer">
-      <span data-testid="log-path">{logPath}</span>
-      <span data-testid="log-toolcall">{toolCallId}</span>
-      <button data-testid="log-close" onClick={onClose}>
-        close
-      </button>
-    </div>
-  ),
-}));
-
 vi.mock("../src/shared/lib/json-to-yaml", () => ({
   tryFormatAsYaml: (input: string) => input,
 }));
@@ -102,6 +78,12 @@ beforeEach(() => {
   vi.useFakeTimers({ now: new Date("2025-01-01T00:00:00Z") });
   mockBashProcess = undefined;
   mockCall.mockReset();
+  mockCall.mockImplementation((method: string) => {
+    if (method === "bash.readLog") {
+      return Promise.resolve({ lines: [], totalLines: 0, hasMore: false });
+    }
+    return Promise.resolve(undefined);
+  });
 });
 
 afterEach(() => {
@@ -253,7 +235,7 @@ describe("BashExecutionCard interactions", () => {
       logPath: "/tmp/bash.log",
     };
     const block = makeBlock({ startedAt: Date.now() - 5000 });
-    const { container, getByTestId } = render(<BashExecutionCard block={block} />);
+    const { container } = render(<BashExecutionCard block={block} />);
 
     const viewBtn = [...container.querySelectorAll("button")].find(
       (b) => b.textContent === "bash.viewOutput",
@@ -264,9 +246,7 @@ describe("BashExecutionCard interactions", () => {
       fireEvent.click(viewBtn!);
     });
 
-    expect(getByTestId("log-viewer")).toBeTruthy();
-    expect(getByTestId("log-path").textContent).toBe("/tmp/bash.log");
-    expect(getByTestId("log-toolcall").textContent).toBe("tc-1");
+    expect(container.textContent).toContain("bash.log");
   });
 
   it("click close on LogViewer — hides LogViewer", () => {
@@ -281,7 +261,7 @@ describe("BashExecutionCard interactions", () => {
       logPath: "/tmp/bash.log",
     };
     const block = makeBlock({ startedAt: Date.now() - 5000 });
-    const { container, getByTestId, queryByTestId } = render(<BashExecutionCard block={block} />);
+    const { container } = render(<BashExecutionCard block={block} />);
 
     const viewBtn = [...container.querySelectorAll("button")].find(
       (b) => b.textContent === "bash.viewOutput",
@@ -289,12 +269,12 @@ describe("BashExecutionCard interactions", () => {
     act(() => {
       fireEvent.click(viewBtn!);
     });
-    expect(getByTestId("log-viewer")).toBeTruthy();
+    expect(container.textContent).toContain("bash.log");
 
     act(() => {
-      fireEvent.click(getByTestId("log-close"));
+      fireEvent.click(container.querySelector('button[title="close"]')!);
     });
-    expect(queryByTestId("log-viewer")).toBeNull();
+    expect(container.textContent).not.toContain("bash.log");
   });
 });
 

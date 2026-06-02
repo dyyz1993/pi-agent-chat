@@ -117,7 +117,7 @@ export function CommandPopup({
   return (
     <div
       ref={panelRef}
-      className="absolute left-0 right-0 bottom-full mb-2 max-w-md mx-auto bg-surface-dim dark:bg-surface-code border border-border-secondary rounded-lg shadow-xl shadow-black/40 overflow-hidden z-50"
+      className="absolute left-0 right-0 bottom-full mb-2 max-w-md mx-auto bg-surface-dim dark:bg-surface-code border border-border-secondary rounded-lg shadow-xl shadow-black/40 overflow-hidden z-popover"
     >
       <div className="flex items-center justify-between px-3 py-2 border-b border-border-secondary">
         <div className="flex items-center gap-2 min-w-0 flex-1">

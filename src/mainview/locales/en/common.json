@@ -12,6 +12,8 @@
   "save": "Save",
   "copy": "Copy",
   "copied": "Copied",
+  "copiedToClipboard": "Copied to clipboard",
+  "copyFailed": "Copy failed",
   "loading": "Loading...",
   "noData": "No data",
   "noResults": "No results found",

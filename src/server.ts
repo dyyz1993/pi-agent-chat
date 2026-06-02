@@ -75,7 +75,7 @@ const apiHandler = createHttpHandler({
         const mgr = getSandboxManager();
         if (!mgr) return null;
         try {
-          const instance = await mgr.getOrCreate(userId, "/root/workspace/project");
+          const instance = await mgr.getOrCreate(userId);
           return instance.endpoint ?? null;
         } catch {
           return null;
