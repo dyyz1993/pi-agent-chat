@@ -472,7 +472,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       if (userMsg) {
         chat.setMessagesForSession(
           sessionId,
-          existing.map((m) => (m.id === userMsg.id ? { ...m, entryId } : m)),
+          existing.map((m) => (m.id === userMsg.id ? { ...m, entryId, _local: false } : m)),
         );
       }
       return;
