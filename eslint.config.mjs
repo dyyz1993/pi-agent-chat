@@ -90,6 +90,8 @@ export default tseslint.config(
       'rpc/no-namespace-iterate': 'error',
       'rpc/no-component-rpc-fetch': 'warn',
       'rpc/valid-channel-method': 'error',
+      'rpc/compaction-entries-sync': 'error',
+      'rpc/compaction-reload-pairing': 'error',
 
       // 主题/颜色约束规则
       'theme/color-pairing': 'error',
