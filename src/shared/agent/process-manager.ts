@@ -1578,22 +1578,49 @@ export class AgentProcessManager {
         );
         if (Array.isArray(memResult) && memResult.length > 0) {
           const jsonlEntryIds = new Set(allMessages.map((m) => m.entryId).filter(Boolean));
+          const jsonlUserTexts = new Set(
+            allMessages
+              .filter((m) => {
+                const msg = m.message as Record<string, unknown> | undefined;
+                return msg && (msg.role as string) === "user";
+              })
+              .map((m) => {
+                const msg = m.message as { content?: unknown[] };
+                if (Array.isArray(msg.content)) {
+                  return (msg.content as Array<Record<string, unknown>>)
+                    .filter((c) => c.type === "text")
+                    .map((c) => (c.text as string) ?? "")
+                    .join("");
+                }
+                return "";
+              })
+              .filter(Boolean),
+          );
           for (const msg of memResult) {
             const m = msg as unknown as Record<string, unknown>;
             const eid = (m.entryId as string) ?? "";
-            if (!jsonlEntryIds.has(eid)) {
-              slicedMessages.push(m as unknown as AgentMessageForUI);
-              jsonlEntryIds.add(eid);
+            const role = (m.role as string) ?? "";
+            if (eid && jsonlEntryIds.has(eid)) continue;
+            if (role === "user" && !eid) {
+              const content = m.content as unknown[];
+              const text = Array.isArray(content)
+                ? (content as Array<Record<string, unknown>>)
+                    .filter((c) => c.type === "text")
+                    .map((c) => (c.text as string) ?? "")
+                    .join("")
+                : "";
+              if (text && jsonlUserTexts.has(text)) continue;
             }
+            slicedMessages.push(m as unknown as AgentMessageForUI);
+            if (eid) jsonlEntryIds.add(eid);
           }
           perfLog.info("[getFullMessages] streaming merge: added from CLI memory", {
             sessionId,
-            jsonlCount: slicedMessages.length - (memResult.length > 0 ? 1 : 0),
             mergedCount: slicedMessages.length,
           });
         }
       } catch (err: unknown) {
-        log.debug("[getFullMessages] CLI memory merge skipped", {
+        log.debug("[getMessages] CLI memory merge skipped", {
           sessionId,
           err: err instanceof Error ? err.message : String(err),
         });
@@ -3263,7 +3290,7 @@ export class AgentProcessManager {
     finalText: string;
     error?: string;
   }> {
-    const { task, title, agent, timeoutMs = 300000, projectPath: rawProjectPath } = msg;
+    const { task, title, agent, timeoutMs = 1800000, projectPath: rawProjectPath } = msg;
     const parent = this.getActiveManaged(parentSessionId);
     if (!parent) throw new Error("Parent session not found");
 
@@ -3367,12 +3394,25 @@ export class AgentProcessManager {
       finalText: string;
       error?: string;
     }>((resolve) => {
+      // Pre-timeout: inject a "summarize now" instruction 60s before hard deadline
+      const preTimeoutMs = Math.max(timeoutMs - 60_000, 30_000);
+      const preTimeout = setTimeout(() => {
+        if (!this.syncDelegateResolvers.has(newSessionId)) return;
+        log.info("[syncDelegate] pre-timeout summarize injection", { sessionId: newSessionId });
+        this.followUp(
+          newSessionId,
+          "[系统指令] 即将超时，请立即停止当前操作，用几句话总结你到目前为止的工作成果和进展。",
+        );
+      }, preTimeoutMs);
+
       const timeout = setTimeout(() => {
+        clearTimeout(preTimeout);
         log.warn("[syncDelegate] timed out", {
           sessionId: newSessionId,
           parentSessionId,
           timeoutMs,
         });
+        const lastText = this.syncDelegateLastText.get(newSessionId) ?? "";
         this.syncDelegateResolvers.delete(newSessionId);
         this.subagentSyncChildren.delete(newSessionId);
         this.syncDelegateLastText.delete(newSessionId);
@@ -3380,7 +3420,7 @@ export class AgentProcessManager {
           sessionId: newSessionId,
           status: "timeout",
           exitCode: 1,
-          finalText: "(timed out)",
+          finalText: lastText || "(timed out, no output captured)",
         });
       }, timeoutMs);
 

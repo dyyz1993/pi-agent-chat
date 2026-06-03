@@ -1192,10 +1192,21 @@ export const useSessionStore = create<SessionState>()(
                           const alreadyStreaming = existing.some(
                             (m) => m.role === "assistant" && m.isStreaming,
                           );
-                          if (!alreadyStreaming) {
+                          const lastMsg = existing[existing.length - 1];
+                          const lastIsAssistant = lastMsg && lastMsg.role === "assistant";
+                          const lastHasContent =
+                            lastIsAssistant &&
+                            Array.isArray(lastMsg.content) &&
+                            lastMsg.content.length > 0;
+                          if (!alreadyStreaming && !lastHasContent) {
                             chat.setMessagesForSession(sessionId, [
                               ...existing,
                               { ...msg, isStreaming: true },
+                            ]);
+                          } else if (lastIsAssistant && !alreadyStreaming) {
+                            chat.setMessagesForSession(sessionId, [
+                              ...existing.slice(0, -1),
+                              { ...lastMsg, isStreaming: true },
                             ]);
                           }
                         }
