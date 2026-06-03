@@ -34,6 +34,7 @@ vi.mock("../src/mainview/stores/use-session-store", () => ({
       activeSessionId: "sess-1",
       sessionReady: { "sess-1": true },
       sessionContextMap: {},
+      sessionStatusMap: {},
       restoreContextFromHistory: vi.fn(),
     })),
     setState: vi.fn(),
@@ -45,6 +46,7 @@ vi.mock("../src/mainview/stores/use-memory-store", () => ({
     getState: vi.fn(() => ({
       addEvent: vi.fn(),
       addInjected: vi.fn(),
+      clearSession: vi.fn(),
     })),
   },
 }));
