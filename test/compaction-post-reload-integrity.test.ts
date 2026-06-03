@@ -755,4 +755,153 @@ describe("压缩后 force reload：同一 assistant 消息中多个 toolCall", (
     );
     expect(finalMsg).toBeDefined();
   });
+
+  it("compactionSummary appears in correct chronological order (not at end)", async () => {
+    // Simulate server returning messages in JSONL chronological order:
+    // user → assistant → compactionSummary → user → assistant
+    const serverData = {
+      messages: [
+        {
+          id: "msg-user-1",
+          role: "user",
+          content: [{ type: "text", text: "第一个问题" }],
+          timestamp: 1000,
+          entryId: "entry-1",
+        },
+        {
+          id: "msg-assistant-1",
+          role: "assistant",
+          content: [{ type: "text", text: "第一个回答" }],
+          timestamp: 2000,
+          tokenUsage: { input: 100, output: 50 },
+          entryId: "entry-2",
+        },
+        {
+          id: "compact-1",
+          role: "compactionSummary",
+          summary: "压缩了前两条消息",
+          tokensBefore: 80000,
+          timestamp: 3000,
+          entryId: "entry-compaction-1",
+        },
+        {
+          id: "msg-user-2",
+          role: "user",
+          content: [{ type: "text", text: "第二个问题" }],
+          timestamp: 4000,
+          entryId: "entry-3",
+        },
+        {
+          id: "msg-assistant-2",
+          role: "assistant",
+          content: [{ type: "text", text: "第二个回答" }],
+          timestamp: 5000,
+          tokenUsage: { input: 200, output: 80 },
+          entryId: "entry-4",
+        },
+      ],
+      customEntries: [],
+      hasMore: false,
+      totalCount: 5,
+    };
+
+    mockedCall.mockResolvedValue(serverData);
+
+    await useChatStore.getState().loadSessionMessages(SID, { force: true });
+
+    const msgs = useChatStore.getState().messagesBySession[SID] ?? [];
+    const roles = msgs.map((m) => m.role);
+
+    // compactionSummary should be between assistant-1 and user-2, NOT at the end
+    expect(roles).toEqual(["user", "assistant", "compactionSummary", "user", "assistant"]);
+
+    // Verify the compactionSummary is at index 2 (not at end)
+    const compactIdx = msgs.findIndex((m) => m.role === "compactionSummary");
+    expect(compactIdx).toBe(2);
+
+    // Verify messages after compaction are in correct order
+    const afterCompaction = msgs.slice(compactIdx + 1);
+    expect(afterCompaction.map((m) => m.role)).toEqual(["user", "assistant"]);
+  });
+
+  it("multiple compactionSummaries maintain correct order", async () => {
+    // Simulate multiple compactions in a long session
+    const serverData = {
+      messages: [
+        {
+          id: "msg-user-1",
+          role: "user",
+          content: [{ type: "text", text: "问题1" }],
+          timestamp: 1000,
+          entryId: "entry-1",
+        },
+        {
+          id: "compact-1",
+          role: "compactionSummary",
+          summary: "第一次压缩",
+          tokensBefore: 80000,
+          timestamp: 2000,
+          entryId: "entry-comp-1",
+        },
+        {
+          id: "msg-user-2",
+          role: "user",
+          content: [{ type: "text", text: "问题2" }],
+          timestamp: 3000,
+          entryId: "entry-2",
+        },
+        {
+          id: "msg-assistant-2",
+          role: "assistant",
+          content: [{ type: "text", text: "回答2" }],
+          timestamp: 4000,
+          tokenUsage: { input: 100, output: 50 },
+          entryId: "entry-3",
+        },
+        {
+          id: "compact-2",
+          role: "compactionSummary",
+          summary: "第二次压缩",
+          tokensBefore: 90000,
+          timestamp: 5000,
+          entryId: "entry-comp-2",
+        },
+        {
+          id: "msg-user-3",
+          role: "user",
+          content: [{ type: "text", text: "问题3" }],
+          timestamp: 6000,
+          entryId: "entry-4",
+        },
+      ],
+      customEntries: [],
+      hasMore: false,
+      totalCount: 6,
+    };
+
+    mockedCall.mockResolvedValue(serverData);
+
+    await useChatStore.getState().loadSessionMessages(SID, { force: true });
+
+    const msgs = useChatStore.getState().messagesBySession[SID] ?? [];
+    const roles = msgs.map((m) => m.role);
+
+    // Both compactionSummaries should be in correct chronological positions
+    expect(roles).toEqual([
+      "user",
+      "compactionSummary",
+      "user",
+      "assistant",
+      "compactionSummary",
+      "user",
+    ]);
+
+    // Verify first compaction is between user-1 and user-2
+    const compact1Idx = msgs.findIndex((m) => m.id === "compact-1");
+    expect(compact1Idx).toBe(1);
+
+    // Verify second compaction is between assistant-2 and user-3
+    const compact2Idx = msgs.findIndex((m) => m.id === "compact-2");
+    expect(compact2Idx).toBe(4);
+  });
 });
