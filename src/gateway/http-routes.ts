@@ -118,7 +118,9 @@ function verifyToken(req: IncomingMessage, authToken: string): boolean {
           if (eq > 0) {
             const tk = pair.substring(0, eq).trim();
             if (tk === token) {
-              globalThis.__lastTokenUser = pair.substring(eq + 1).trim();
+              (globalThis as Record<string, unknown>).__lastTokenUser = pair
+                .substring(eq + 1)
+                .trim();
               return true;
             }
           }

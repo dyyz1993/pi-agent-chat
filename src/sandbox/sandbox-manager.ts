@@ -14,12 +14,7 @@
  */
 
 import { createLogger } from "../shared/lib/logger";
-import type {
-  ISandboxProvider,
-  SandboxInstance,
-  SandboxProviderConfig,
-  SandboxStatus,
-} from "./types";
+import type { ISandboxProvider, SandboxInstance, SandboxStatus } from "./types";
 
 const log = createLogger("sandbox-mgr");
 
@@ -32,8 +27,6 @@ export interface SandboxManagerConfig {
   idleTimeoutMs: number;
   /** 回收检查间隔 */
   gcIntervalMs: number;
-  /** 传递给 provider 的配置 */
-  providerConfig: SandboxProviderConfig;
 }
 
 export class SandboxManager {
@@ -49,7 +42,7 @@ export class SandboxManager {
   }
 
   /** 获取用户的沙箱，没有则创建 */
-  async getOrCreate(userId: string): Promise<SandboxInstance> {
+  async getOrCreate(userId: string, projectPath?: string): Promise<SandboxInstance> {
     const existing = this.instances.get(userId);
     if (existing && isUsableSandboxStatus(existing.status)) {
       existing.lastActiveAt = Date.now();
@@ -57,9 +50,29 @@ export class SandboxManager {
       return existing;
     }
 
-    const instance = await this.provider.getOrCreate(userId, this.config.providerConfig);
+    const instance = await this.provider.getOrCreate(
+      userId,
+      projectPath ?? "/root/workspace/project",
+    );
     this.instances.set(userId, instance);
     return instance;
+  }
+
+  /** 获取用户沙盒端点 */
+  getEndpoint(userId: string): string | undefined {
+    return this.instances.get(userId)?.endpoint;
+  }
+
+  /** 在沙箱内执行命令（仅 sandbox-box provider 支持） */
+  async execInSandbox(userId: string, cmd: string): Promise<string> {
+    if ("execInSandbox" in this.provider) {
+      return (
+        this.provider as ISandboxProvider & {
+          execInSandbox(userId: string, cmd: string): Promise<string>;
+        }
+      ).execInSandbox(userId, cmd);
+    }
+    throw new Error("Current provider does not support execInSandbox");
   }
 
   /** 保活 */

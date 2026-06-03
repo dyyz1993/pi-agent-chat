@@ -886,33 +886,44 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
         // Compare with current store: only update if different
         const current = get().messagesBySession[sid] || [];
-        const isSame =
-          current.length === msgs.length && current.every((m, i) => m.id === msgs[i]?.id);
 
-        if (isSame) {
-          perfLog.info("[bgRefresh] data unchanged, skip update", {
+        const streamingMsgs = current.filter(
+          (m) => m.role === "assistant" && m.isStreaming === true,
+        );
+        if (streamingMsgs.length > 0) {
+          perfLog.info("[bgRefresh] session is streaming, skip update", {
             sessionId: sid,
-            count: msgs.length,
+            streamingCount: streamingMsgs.length,
           });
         } else {
-          perfLog.info("[bgRefresh] data changed, updating store", {
-            sessionId: sid,
-            oldCount: current.length,
-            newCount: msgs.length,
-          });
-          const serverIds = new Set(msgs.map((m) => m.id));
-          const localOnly = current.filter((m) => !serverIds.has(m.id));
-          const hasMore = result.hasMore === true || msgs.length > PAGE_SIZE;
-          const merged =
-            localOnly.length > 0
-              ? [...msgs, ...localOnly].sort((a, b) => a.timestamp - b.timestamp)
-              : msgs;
-          set((s) => ({
-            messagesBySession: { ...s.messagesBySession, [sid]: merged },
-            historyLoadVersion: s.historyLoadVersion + 1,
-            hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: hasMore },
-          }));
-          useSessionStore.getState().restoreContextFromHistory(sid);
+          const isSame =
+            current.length === msgs.length && current.every((m, i) => m.id === msgs[i]?.id);
+
+          if (isSame) {
+            perfLog.info("[bgRefresh] data unchanged, skip update", {
+              sessionId: sid,
+              count: msgs.length,
+            });
+          } else {
+            perfLog.info("[bgRefresh] data changed, updating store", {
+              sessionId: sid,
+              oldCount: current.length,
+              newCount: msgs.length,
+            });
+            const serverIds = new Set(msgs.map((m) => m.id));
+            const localOnly = current.filter((m) => !serverIds.has(m.id));
+            const hasMore = result.hasMore === true || msgs.length > PAGE_SIZE;
+            const merged =
+              localOnly.length > 0
+                ? [...msgs, ...localOnly].sort((a, b) => a.timestamp - b.timestamp)
+                : msgs;
+            set((s) => ({
+              messagesBySession: { ...s.messagesBySession, [sid]: merged },
+              historyLoadVersion: s.historyLoadVersion + 1,
+              hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: hasMore },
+            }));
+            useSessionStore.getState().restoreContextFromHistory(sid);
+          }
         }
       } catch (err) {
         perfLog.info("[bgRefresh] failed (non-critical)", {

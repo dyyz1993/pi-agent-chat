@@ -9,7 +9,7 @@
  */
 
 import { createLogger } from "../../shared/lib/logger";
-import type { ISandboxProvider, SandboxInstance, SandboxProviderConfig } from "../types";
+import type { ISandboxProvider, SandboxInstance } from "../types";
 
 const log = createLogger("sandbox-cf");
 
@@ -34,7 +34,7 @@ export class CloudflareSandboxProvider implements ISandboxProvider {
     this.options = options;
   }
 
-  async getOrCreate(userId: string, _config: SandboxProviderConfig): Promise<SandboxInstance> {
+  async getOrCreate(userId: string, _projectPath: string): Promise<SandboxInstance> {
     const cached = this.cache.get(userId);
     if (cached && cached.status === "running") {
       cached.lastActiveAt = Date.now();

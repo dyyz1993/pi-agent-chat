@@ -640,8 +640,11 @@ export class SandboxRpcClient implements RpcClientAPI {
     return result;
   }
 
+  async setPermissionMode(mode: string): Promise<{ mode: string }> {
+    return this.call<{ mode: string }>("agent.setPermissionMode", mode);
+  }
+
   // ─── Channels ──────────────────────────────────────────
-  // Sandbox 模式不支持 channel（实时双向通信），返回 no-op 实现
 
   channel(name: string): Pick<Channel, "name" | "send" | "onReceive" | "invoke" | "call"> {
     const log = createLogger("sandbox-channel");

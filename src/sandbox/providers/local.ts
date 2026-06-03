@@ -9,12 +9,7 @@ import { spawn, type ChildProcess } from "child_process";
 import { resolve } from "path";
 import { createLogger } from "../../shared/lib/logger";
 import { getProjectRoot, getSandboxAgentPath, getSandboxAgentRunner } from "../../shared/lib/paths";
-import type {
-  ISandboxProvider,
-  SandboxInstance,
-  SandboxProviderConfig,
-  SandboxStatus,
-} from "../types";
+import type { ISandboxProvider, SandboxInstance, SandboxStatus } from "../types";
 
 const log = createLogger("sandbox-local");
 
@@ -42,7 +37,7 @@ export class LocalProcessProvider implements ISandboxProvider {
     this.options = options;
   }
 
-  async getOrCreate(userId: string, _config: SandboxProviderConfig): Promise<SandboxInstance> {
+  async getOrCreate(userId: string, _projectPath: string): Promise<SandboxInstance> {
     const existing = this.sandboxes.get(userId);
     if (existing) {
       existing.lastActiveAt = Date.now();

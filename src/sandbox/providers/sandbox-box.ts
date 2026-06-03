@@ -3,7 +3,7 @@ import { resolve } from "path";
 import { existsSync } from "fs";
 import { createLogger } from "../../shared/lib/logger";
 import { getProjectRoot } from "../../shared/lib/paths";
-import type { ISandboxProvider, SandboxInstance, SandboxProviderConfig } from "../types";
+import type { ISandboxProvider, SandboxInstance } from "../types";
 
 const log = createLogger("sandbox-box");
 
