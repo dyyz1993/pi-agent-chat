@@ -1,10 +1,8 @@
 import { render, screen, cleanup } from "@testing-library/react";
 import { describe, it, expect, vi, afterEach } from "vitest";
 
-const { sessionStoreState, uiDialogStoreState } = vi.hoisted(() => ({
-  sessionStoreState: {} as Record<string, unknown>,
-  uiDialogStoreState: {} as Record<string, unknown>,
-}));
+const sessionStoreState: Record<string, unknown> = {};
+const uiDialogStoreState: Record<string, unknown> = {};
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -30,10 +28,6 @@ vi.mock("../src/mainview/components/settings/SettingsPanel", () => ({
       <button onClick={onClose}>close</button>
     </div>
   ),
-}));
-
-vi.mock("../src/mainview/hooks/use-focus-trap", () => ({
-  useFocusTrap: () => {},
 }));
 
 import { TabBar } from "../src/mainview/components/tab-bar/TabBar";

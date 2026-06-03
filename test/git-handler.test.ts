@@ -1,19 +1,16 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 
-const { mockFn } = vi.hoisted(() => {
-  const mockFn = vi.fn<(args: string[]) => string>(() => "");
-  globalThis.Bun = {
-    spawnSync: (cmd: unknown[]) => {
-      const cmdArgs = (Array.isArray(cmd) ? cmd.slice(1) : []) as string[];
-      const output = mockFn(cmdArgs);
-      if (output.startsWith("ERROR:")) {
-        return { exitCode: 1, stdout: Buffer.alloc(0), stderr: Buffer.from(output.slice(6)) };
-      }
-      return { exitCode: 0, stdout: Buffer.from(output), stderr: Buffer.alloc(0) };
-    },
-  } as unknown as typeof Bun;
-  return { mockFn };
-});
+const mockFn = vi.fn<(args: string[]) => string>(() => "");
+const originalSpawnSync = Bun.spawnSync;
+
+Bun.spawnSync = ((cmd: unknown[]) => {
+  const cmdArgs = (Array.isArray(cmd) ? cmd.slice(1) : []) as string[];
+  const output = mockFn(cmdArgs);
+  if (output.startsWith("ERROR:")) {
+    return { exitCode: 1, stdout: Buffer.alloc(0), stderr: Buffer.from(output.slice(6)) };
+  }
+  return { exitCode: 0, stdout: Buffer.from(output), stderr: Buffer.alloc(0) };
+}) as typeof Bun.spawnSync;
 
 import { register } from "../src/shared/handlers/git";
 
@@ -33,6 +30,10 @@ type MockServer = ReturnType<typeof createMockServer>;
 
 describe("git handler", () => {
   let server: MockServer;
+
+  afterAll(() => {
+    Bun.spawnSync = originalSpawnSync;
+  });
 
   beforeEach(() => {
     mockFn.mockImplementation((args) => {

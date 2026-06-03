@@ -3,10 +3,8 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { MessageSelectionBar } from "../src/mainview/components/chat/MessageSelectionBar";
 import type { ChatMessage, TokenUsage } from "../src/mainview/types";
 
-const { mockClearSelection, mockApiCall } = vi.hoisted(() => ({
-  mockClearSelection: vi.fn(),
-  mockApiCall: vi.fn(() => Promise.resolve()),
-}));
+const mockClearSelection = vi.fn();
+const mockApiCall = vi.fn(() => Promise.resolve());
 
 let selectedIds: Set<string> = new Set(["msg-1", "msg-2"]);
 

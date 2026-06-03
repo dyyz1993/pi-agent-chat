@@ -383,6 +383,10 @@ export class SandboxRpcClient implements RpcClientAPI {
     return this.call("agent.setFollowUpMode", mode);
   }
 
+  async setPermissionMode(mode: string): Promise<{ mode: string }> {
+    return this.call("agent.setPermissionMode", mode);
+  }
+
   // ─── Compaction ─────────────────────────────────────────
 
   async compact(customInstructions?: string): Promise<CompactionResult> {

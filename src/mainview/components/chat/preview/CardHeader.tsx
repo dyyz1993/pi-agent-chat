@@ -1,7 +1,7 @@
 import { memo } from "react";
-import { ExternalLink, Copy, Check, RefreshCw, Maximize2 } from "lucide-react";
+import { ExternalLink, RefreshCw, Maximize2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useClipboard } from "./use-clipboard";
+import { CopyAction, IconButton } from "../../primitives";
 import { getFileHttpUrl } from "./types";
 
 interface CardActionBarProps {
@@ -16,7 +16,6 @@ export const CardActionBar = memo(function CardActionBar({
   onExpand,
 }: CardActionBarProps) {
   const { t } = useTranslation("chat");
-  const { copied, copy } = useClipboard();
 
   if (!absolutePath) return null;
 
@@ -25,41 +24,34 @@ export const CardActionBar = memo(function CardActionBar({
   return (
     <div className="flex items-center gap-1 ml-auto shrink-0">
       {onRetry && (
-        <button
+        <IconButton
           onClick={onRetry}
-          className="p-0.5 rounded text-text-tertiary hover:text-text-primary hover:bg-surface-hover transition-colors"
-          title={t("reloadTitle")}
+          label={t("reloadTitle")}
+          size="sm"
+          className="h-7 w-7 rounded-md"
         >
           <RefreshCw className="w-3 h-3" />
-        </button>
+        </IconButton>
       )}
       {onExpand && (
-        <button
+        <IconButton
           onClick={onExpand}
-          className="p-0.5 rounded text-text-tertiary hover:text-text-primary hover:bg-surface-hover transition-colors"
-          title={t("fullscreenTitle")}
+          label={t("fullscreenTitle")}
+          size="sm"
+          className="h-7 w-7 rounded-md"
         >
           <Maximize2 className="w-3 h-3" />
-        </button>
+        </IconButton>
       )}
-      <button
-        onClick={() => copy(url)}
-        className="p-0.5 rounded text-text-tertiary hover:text-text-primary hover:bg-surface-hover transition-colors"
-        title={t("copyLinkTitle")}
-      >
-        {copied ? (
-          <Check className="w-3 h-3 text-green-500 dark:text-green-400" />
-        ) : (
-          <Copy className="w-3 h-3" />
-        )}
-      </button>
-      <button
+      <CopyAction text={url} size="xs" title={t("copyLinkTitle")} className="h-7 w-7 rounded-md" />
+      <IconButton
         onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
-        className="p-0.5 rounded text-text-tertiary hover:text-text-primary hover:bg-surface-hover transition-colors"
-        title={t("openInNewWindowTitle")}
+        label={t("openInNewWindowTitle")}
+        size="sm"
+        className="h-7 w-7 rounded-md"
       >
         <ExternalLink className="w-3 h-3" />
-      </button>
+      </IconButton>
     </div>
   );
 });

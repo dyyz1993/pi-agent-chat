@@ -244,6 +244,10 @@ export function initSandboxManager(projectsRoot: string): SandboxManager {
   globalSandboxManager = new SandboxManager(provider, {
     idleTimeoutMs: (config.sandboxIdleTimeout ?? 1800) * 1000,
     gcIntervalMs: 60_000,
+    providerConfig: {
+      idleTimeout: `${config.sandboxIdleTimeout ?? 1800}s`,
+      enableInternet: true,
+    },
   });
 
   if (providerType === "sandbox-box" && provider instanceof SandboxBoxProvider) {
@@ -461,12 +465,138 @@ export class AgentProcessManager {
       lineCount: number;
     }
   >();
+  private static SESSION_CACHE_MAX = 10;
+
+  /**
+   * Get cached session data. Three outcomes:
+   * 1. Exact match (file unchanged) → return cached data
+   * 2. File grew → return cached data + mark for incremental append
+   * 3. No cache / file shrunk / file gone → return null
+   */
+  getSessionCache(
+    sessionId: string,
+    sessionPath: string,
+  ): {
+    messages: Array<{ entryId: string; message: unknown }>;
+    customEntries: Array<{
+      id: string;
+      customType: string;
+      data: unknown;
+      timestamp: number;
+    }>;
+    parentById: Map<string, string | null>;
+    lineCount: number;
+    needsIncremental: boolean;
+  } | null {
+    const cached = this.sessionMsgCache.get(sessionId);
+    if (!cached) return null;
+    try {
+      const st = statSync(sessionPath);
+      if (st.size === cached.fileSize && st.mtimeMs === cached.mtimeMs) {
+        // Exact match — file unchanged
+        this.sessionMsgCache.delete(sessionId);
+        this.sessionMsgCache.set(sessionId, cached);
+        return { ...cached, needsIncremental: false };
+      }
+      if (st.size > cached.fileSize) {
+        // File grew — can do incremental append
+        this.sessionMsgCache.delete(sessionId);
+        this.sessionMsgCache.set(sessionId, cached);
+        return { ...cached, needsIncremental: true };
+      }
+      // File shrunk or changed drastically — invalidate
+    } catch {
+      // file gone or inaccessible
+    }
+    this.sessionMsgCache.delete(sessionId);
+    return null;
+  }
+
+  setSessionCache(
+    sessionId: string,
+    sessionPath: string,
+    data: {
+      messages: Array<{ entryId: string; message: unknown }>;
+      customEntries: Array<{
+        id: string;
+        customType: string;
+        data: unknown;
+        timestamp: number;
+      }>;
+      parentById: Map<string, string | null>;
+      lineCount: number;
+    },
+  ): void {
+    try {
+      const st = statSync(sessionPath);
+      if (this.sessionMsgCache.size >= AgentProcessManager.SESSION_CACHE_MAX) {
+        const oldest = this.sessionMsgCache.keys().next().value;
+        if (oldest) this.sessionMsgCache.delete(oldest);
+      }
+      this.sessionMsgCache.set(sessionId, {
+        ...data,
+        fileSize: st.size,
+        mtimeMs: st.mtimeMs,
+      });
+    } catch {
+      // file gone — don't cache
+    }
+  }
+
   clearSessionCache(sessionId?: string): void {
     if (sessionId) {
       this.sessionMsgCache.delete(sessionId);
     } else {
       this.sessionMsgCache.clear();
     }
+  }
+
+  /**
+   * Read JSONL from a specific physical line number onwards and append results.
+   * Returns { newEntries: number of new parsed entries, totalLines: total physical lines in file }
+   */
+  async readJsonlFromLine(
+    sessionPath: string,
+    startLine: number,
+    messages: Array<{ entryId: string; message: unknown }>,
+    customEntries: Array<{ id: string; customType: string; data: unknown; timestamp: number }>,
+    parentById: Map<string, string | null>,
+  ): Promise<{ newEntries: number; totalLines: number }> {
+    let lineIndex = 0;
+    let newEntries = 0;
+    const rl = readline.createInterface({
+      input: createReadStream(sessionPath, { encoding: "utf-8" }),
+      crlfDelay: Infinity,
+    });
+    for await (const line of rl) {
+      lineIndex++;
+      if (lineIndex <= startLine) continue; // skip already-parsed lines
+      if (!line.trim()) continue;
+      try {
+        const parsed = JSON.parse(line) as Record<string, unknown>;
+        const entryId = (parsed.id as string) ?? "";
+        const parentId = (parsed.parentId as string | null | undefined) ?? null;
+        if (entryId) {
+          parentById.set(entryId, parentId);
+        }
+        if (parsed.type === "message" && parsed.message) {
+          messages.push({ entryId, message: parsed.message });
+          newEntries++;
+        } else if (parsed.type === "custom") {
+          customEntries.push({
+            id: entryId || `custom-${Date.now()}`,
+            customType: (parsed.customType as string) ?? "unknown",
+            data: parsed.data,
+            timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
+          });
+          newEntries++;
+        }
+      } catch {
+        // skip malformed
+      }
+    }
+    rl.close();
+    return { newEntries, totalLines: lineIndex };
   }
 
   private async _drainPendingDelegates(): Promise<void> {
@@ -1086,6 +1216,9 @@ export class AgentProcessManager {
 
     try {
       const state = await withTimeout(managed.client.getState(), 10_000, "getState");
+      const stateWithStreaming = state as typeof state & {
+        streamingMessage?: AssistantMessage;
+      };
       const model = state.model;
       return {
         model: model
@@ -1102,7 +1235,7 @@ export class AgentProcessManager {
         isStreaming: Boolean(state.isStreaming),
         isCompacting: Boolean(state.isCompacting),
         messageCount: Number(state.messageCount ?? 0),
-        streamingMessage: state.streamingMessage as AssistantMessage | undefined,
+        streamingMessage: stateWithStreaming.streamingMessage,
       };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -1718,19 +1851,17 @@ export class AgentProcessManager {
       managed = await this.ensureManagedClient(sessionId);
     }
     if (!managed) return [];
-    return (managed.client as unknown as SandboxRpcClient)
-      .getAvailableModels()
-      .catch(async (err: unknown) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        log.warn("getAvailableModels error, checking if CLI is alive", {
-          sessionId,
-          err: msg,
-        });
-        if (!(await this.isClientAlive(sessionId, managed))) {
-          this.cleanupDeadClient(sessionId, `getAvailableModels failed: ${msg}`);
-        }
-        return [];
+    return managed.client.getAvailableModels().catch(async (err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.warn("getAvailableModels error, checking if CLI is alive", {
+        sessionId,
+        err: msg,
       });
+      if (!(await this.isClientAlive(sessionId, managed))) {
+        this.cleanupDeadClient(sessionId, `getAvailableModels failed: ${msg}`);
+      }
+      return [];
+    });
   }
 
   async setModel(

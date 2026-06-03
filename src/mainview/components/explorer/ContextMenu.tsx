@@ -94,7 +94,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
       ref={ref}
       role="menu"
       aria-label={t("contextMenu")}
-      className="fixed z-50 min-w-[160px] bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl py-1"
+      className="fixed z-popover min-w-[160px] bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl py-1"
       style={{ left: pos.x, top: pos.y }}
     >
       {items.map((item, i) => (

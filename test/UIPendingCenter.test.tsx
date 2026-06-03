@@ -72,10 +72,6 @@ vi.mock("../src/mainview/stores/use-session-store", () => ({
   ),
 }));
 
-vi.mock("../src/mainview/hooks/use-focus-trap", () => ({
-  useFocusTrap: () => {},
-}));
-
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string, opts?: Record<string, unknown>) => {

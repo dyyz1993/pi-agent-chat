@@ -211,8 +211,9 @@ export class SandboxBoxProvider implements ISandboxProvider {
     }
   }
 
-  async getOrCreate(userId: string, projectPath: string): Promise<SandboxInstance> {
+  async getOrCreate(userId: string, _config: SandboxProviderConfig): Promise<SandboxInstance> {
     const name = this.sandboxName(userId);
+    const projectPath = this.config.projectSourcePath;
     const existing = this.sandboxes.get(userId);
     if (existing && existing.instance.status === "ready") {
       const alive = await this.isSandboxAlive(name);
@@ -599,13 +600,15 @@ export class SandboxBoxProvider implements ISandboxProvider {
 
   async shutdown(): Promise<void> {
     const userIds = [...this.sandboxes.keys()];
-    for (const userId of userIds) {
-      this.destroy(userId).catch((err) => {
-        log.warn("shutdown destroy failed", {
-          userId,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      });
-    }
+    await Promise.all(
+      userIds.map((userId) =>
+        this.destroy(userId).catch((err) => {
+          log.warn("shutdown destroy failed", {
+            userId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }),
+      ),
+    );
   }
 }

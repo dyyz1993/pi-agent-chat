@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   MessageCircleQuestion,
-  X,
   ArrowRight,
   CheckSquare,
   Square,
@@ -13,13 +12,9 @@ import {
 import { useTranslation } from "react-i18next";
 import { useUIDialogStore, type UIPendingRequest } from "../../stores/use-ui-dialog-store";
 import { useSessionStore } from "../../stores/use-session-store";
-import { useFocusTrap } from "../../hooks/use-focus-trap";
+import { IconButton, ModalDialog } from "../primitives";
 
-function PanelCard({
-  req,
-}: {
-  req: UIPendingRequest;
-}) {
+function PanelCard({ req }: { req: UIPendingRequest }) {
   const { t } = useTranslation("chat");
   const respondById = useUIDialogStore((s) => s.respondById);
   const dismissById = useUIDialogStore((s) => s.dismissById);
@@ -181,7 +176,9 @@ function PanelCard({
             onChange={(e) => setInputValue(e.target.value)}
             placeholder={req.placeholder ?? t("uiCard.pleaseInput")}
             className="w-full bg-surface-code dark:bg-surface-dim border border-border-secondary rounded px-2.5 py-1.5 text-[11px] text-text-primary placeholder:text-text-tertiary dark:placeholder:text-text-tertiary focus:outline-none focus:border-status-warning/50"
-            onKeyDown={(e) => e.key === "Enter" && respondById(req.requestId, { value: inputValue })}
+            onKeyDown={(e) =>
+              e.key === "Enter" && respondById(req.requestId, { value: inputValue })
+            }
           />
           <div className="flex gap-2 mt-2">
             <button
@@ -316,8 +313,6 @@ export function UIPendingCenter() {
   const panelOpen = useUIDialogStore((s) => s.panelOpen);
   const setPanelOpen = useUIDialogStore((s) => s.setPanelOpen);
   const togglePanel = useUIDialogStore((s) => s.togglePanel);
-  const dialogRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(dialogRef, { onEscape: () => setPanelOpen(false) });
 
   const activeProjectId = useSessionStore((s) => s.activeProjectId);
   const projectTabs = useSessionStore((s) => s.projectTabs);
@@ -375,13 +370,14 @@ export function UIPendingCenter() {
 
   return (
     <>
-      <button
+      <IconButton
+        label={t("uiPending.pendingRequestsCount", { count: pendingCount })}
+        size="sm"
         onClick={(e) => {
           e.stopPropagation();
           togglePanel();
         }}
-        className="p-1 rounded transition-colors text-status-warning hover:text-status-warning relative animate-pulse"
-        title={t("uiPending.pendingRequestsCount", { count: pendingCount })}
+        className="relative animate-pulse text-status-warning hover:text-status-warning"
       >
         <MessageCircleQuestion className="w-3.5 h-3.5" />
         {pendingCount > 0 && (
@@ -389,58 +385,40 @@ export function UIPendingCenter() {
             {pendingCount > 9 ? "9+" : pendingCount}
           </span>
         )}
-      </button>
+      </IconButton>
 
       {panelOpen && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/50"
-          onClick={(e) => e.target === e.currentTarget && setPanelOpen(false)}
+        <ModalDialog
+          title={
+            <span className="flex items-center gap-2">
+              <span>{t("uiPending.pendingRequestsTitle")}</span>
+              <span className="px-1.5 py-0.5 rounded-full bg-status-warning/15 text-status-warning text-[11px] font-medium tabular-nums">
+                {pendingCount}
+              </span>
+            </span>
+          }
+          onClose={() => setPanelOpen(false)}
+          closeLabel={t("common:close")}
+          size="md"
+          className="max-w-lg bg-surface-code dark:bg-surface-dim max-h-[min(520px,80vh)]"
+          bodyClassName="overflow-y-auto px-3 pb-3 pt-2 space-y-2.5"
         >
-          <div
-            ref={dialogRef}
-            className="w-full max-w-lg bg-surface-code dark:bg-surface-dim border border-border-secondary rounded-lg shadow-2xl overflow-hidden flex flex-col"
-            style={{ maxHeight: "min(520px, 80vh)" }}
-            role="dialog"
-            aria-modal="true"
-            aria-label={t("uiPending.pendingRequestsTitle")}
-          >
-            <div className="flex items-center justify-between px-3 py-1.5 border-b border-border-secondary/60 shrink-0">
-              <div className="flex items-center gap-2">
-                <span className="text-[13px] font-medium text-text-primary">
-                  {t("uiPending.pendingRequestsTitle")}
-                </span>
-                <span className="px-1.5 py-0.5 rounded-full bg-status-warning/15 text-status-warning text-[11px] font-medium tabular-nums">
-                  {pendingCount}
-                </span>
-              </div>
-              <button
-                onClick={() => setPanelOpen(false)}
-                className="text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary p-1 transition-colors"
-                aria-label={t("common:close")}
-              >
-                <X className="w-4 h-4" />
-              </button>
+          {pendingCount === 0 ? (
+            <div className="py-8 text-center text-[11px] text-text-tertiary">
+              {t("uiPending.noPendingRequests")}
             </div>
-
-            <div className="overflow-y-auto px-3 pb-3 pt-2 space-y-2.5 flex-1">
-              {pendingCount === 0 ? (
-                <div className="py-8 text-center text-[11px] text-text-tertiary">
-                  {t("uiPending.noPendingRequests")}
-                </div>
-              ) : (
-                Array.from(grouped.entries()).map(([sessionId, requests]) => (
-                  <SessionGroup
-                    key={sessionId}
-                    sessionId={sessionId}
-                    sessionName={sessionNameMap.get(sessionId) ?? sessionId.slice(0, 8)}
-                    requests={requests}
-                    onGotoSession={handleGotoSession}
-                  />
-                ))
-              )}
-            </div>
-          </div>
-        </div>
+          ) : (
+            Array.from(grouped.entries()).map(([sessionId, requests]) => (
+              <SessionGroup
+                key={sessionId}
+                sessionId={sessionId}
+                sessionName={sessionNameMap.get(sessionId) ?? sessionId.slice(0, 8)}
+                requests={requests}
+                onGotoSession={handleGotoSession}
+              />
+            ))
+          )}
+        </ModalDialog>
       )}
     </>
   );

@@ -206,7 +206,7 @@ function HooksList({ agent }: { agent: AgentDetail }) {
 
 function PromptViewer({ agent }: { agent: AgentDetail }) {
   const [expanded, setExpanded] = useState(false);
-  const { copied, copy } = useClipboard(1500);
+  const { copied, copy } = useClipboard(1500, { showToast: true });
 
   const handleCopy = useCallback(() => {
     copy(agent.systemPrompt);

@@ -91,6 +91,27 @@ function FocusTrapTestDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
+function TwoFocusTrapTestDialogs({
+  onOuterClose,
+  onInnerClose,
+}: {
+  onOuterClose: () => void;
+  onInnerClose: () => void;
+}) {
+  const outerRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(outerRef, { onEscape: onOuterClose });
+  useFocusTrap(innerRef, { onEscape: onInnerClose });
+  return (
+    <div ref={outerRef}>
+      <button>Outer</button>
+      <div ref={innerRef}>
+        <button>Inner</button>
+      </div>
+    </div>
+  );
+}
+
 describe("FocusTrap", () => {
   afterEach(() => {
     cleanup();
@@ -119,5 +140,15 @@ describe("FocusTrap", () => {
 
     fireEvent.keyDown(document, { key: "Escape" });
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("should only close the topmost active trap on Escape", () => {
+    const onOuterClose = vi.fn();
+    const onInnerClose = vi.fn();
+    render(<TwoFocusTrapTestDialogs onOuterClose={onOuterClose} onInnerClose={onInnerClose} />);
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onInnerClose).toHaveBeenCalledTimes(1);
+    expect(onOuterClose).not.toHaveBeenCalled();
   });
 });

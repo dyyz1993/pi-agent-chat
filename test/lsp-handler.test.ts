@@ -12,16 +12,6 @@ vi.mock("../src/shared/handlers/agent", () => ({
   })),
 }));
 
-vi.mock("fs/promises", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("fs/promises")>();
-  return { ...actual, readFile: vi.fn() };
-});
-
-vi.mock("fs", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("fs")>();
-  return { ...actual, existsSync: vi.fn(() => false) };
-});
-
 import { register } from "../src/shared/handlers/lsp";
 
 function createMockServer() {

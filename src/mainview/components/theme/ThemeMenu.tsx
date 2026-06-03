@@ -79,7 +79,7 @@ export function ThemeMenu() {
         </span>
       </button>
       {open && (
-        <div className="absolute bottom-full left-0 right-0 mb-1 z-50 bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl py-1">
+        <div className="absolute bottom-full left-0 right-0 mb-1 z-popover bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl py-1">
           <div className="px-3 py-1 text-[10px] font-medium text-text-tertiary uppercase tracking-wider">
             Theme
           </div>

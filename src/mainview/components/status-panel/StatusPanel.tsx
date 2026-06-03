@@ -47,7 +47,7 @@ const PRIORITY_STYLES: Record<TodoPriority, { dot: string; label: string }> = {
 
 function PluginCopyButton({ plugin }: { plugin: PluginInfo }) {
   const { t } = useTranslation("status");
-  const { copied, copy } = useClipboard(1500);
+  const { copied, copy } = useClipboard(1500, { showToast: true });
   const handleCopy = useCallback(() => {
     const scopeLabel = plugin.scope === "global" ? t("global") : t("project");
     const lines = [
@@ -667,7 +667,7 @@ function MCPToolsSection() {
 
 function MCPCopyButton({ server }: { server: MCPServerInfo }) {
   const { t } = useTranslation("status");
-  const { copied, copy } = useClipboard(1500);
+  const { copied, copy } = useClipboard(1500, { showToast: true });
   const handleCopy = useCallback(() => {
     const lines = [
       `${t("nameLabel")} ${server.name}`,

@@ -19,13 +19,13 @@ import {
 } from "lucide-react";
 import { useGitStore, type GitFileChange, type GitCommit } from "../../stores/use-git-store";
 import { useExplorerStore } from "../../stores/use-explorer-store";
-import { copyToClipboard } from "../../utils/clipboard";
 import { useSessionStore } from "../../stores/use-session-store";
 import { ContextMenu, type MenuItem } from "../explorer/ContextMenu";
 import { GitCommitInput } from "./GitCommitInput";
 import { GitBranchSelector } from "./GitBranchSelector";
 import { PinButton } from "../sidebar/PinButton";
 import { formatFilePath } from "../../lib/format-path";
+import { useCopyFeedback } from "../primitives";
 
 /* ── Helpers ────────────────────────────────────────────── */
 
@@ -379,6 +379,7 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
     y: number;
     commit: GitCommit;
   } | null>(null);
+  const copyWithFeedback = useCopyFeedback();
 
   const branchBtnRef = useRef<HTMLButtonElement>(null);
 
@@ -423,9 +424,9 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
 
   const handleCopyPath = useCallback(
     async (filePath: string) => {
-      await copyToClipboard(`${currentPath}/${filePath}`);
+      await copyWithFeedback(`${currentPath}/${filePath}`);
     },
-    [currentPath],
+    [copyWithFeedback, currentPath],
   );
 
   const getContextMenuItems = useCallback(
@@ -460,15 +461,15 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
       {
         label: "Copy Hash",
         icon: <Copy className="w-3 h-3" />,
-        onClick: () => copyToClipboard(commit.hash),
+        onClick: () => copyWithFeedback(commit.hash),
       },
       {
         label: "Copy Message",
         icon: <Copy className="w-3 h-3" />,
-        onClick: () => copyToClipboard(commit.message),
+        onClick: () => copyWithFeedback(commit.message),
       },
     ],
-    [],
+    [copyWithFeedback],
   );
 
   /* Commit file diff */
@@ -746,7 +747,7 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
       {/* Branch selector popup */}
       {showBranches && branchBtnRef.current && (
         <div
-          className="absolute z-50"
+          className="absolute z-popover"
           style={{
             top: branchBtnRef.current.getBoundingClientRect().bottom + 4,
             left: branchBtnRef.current.getBoundingClientRect().left,
@@ -759,7 +760,7 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
       {/* Worktree popup */}
       {showWorktrees && worktrees.length > 1 && (
         <div
-          className="fixed z-50 min-w-[200px] bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl py-1"
+          className="fixed z-popover min-w-[200px] bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl py-1"
           style={{ top: 80, left: 48 }}
         >
           <div className="px-3 py-1 text-[10px] uppercase tracking-wide text-text-tertiary font-semibold">

@@ -232,6 +232,9 @@ body {
   --z-modal: 50;
   --z-popover: 60;
   --z-toast: 70;
+  --z-tooltip: 80;
+  --z-fullscreen: 200;
+  --z-system: 300;
   /* Legacy aliases (for gradual migration) */
   --z-overlay: 10;
   --z-dropdown: 50;

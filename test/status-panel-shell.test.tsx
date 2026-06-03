@@ -15,7 +15,12 @@ vi.mock("react-dom", () => ({
 
 vi.mock("../src/mainview/lib/api-client", () => ({
   apiClient: {
-    call: vi.fn(),
+    call: vi.fn((method: string) => {
+      if (method === "bash.readLog") {
+        return Promise.resolve({ lines: [], totalLines: 0, hasMore: false });
+      }
+      return Promise.resolve(undefined);
+    }),
     subscribe: vi.fn(() => Promise.resolve("sub-id")),
     unsubscribe: vi.fn(),
     onReconnect: () => {},
@@ -89,34 +94,6 @@ vi.mock("../src/mainview/stores/use-lsp-store", () => ({
   },
 }));
 
-vi.mock("../src/mainview/components/bash-panel/BashPanel", () => ({
-  BashProcessCard: ({ process, onOpenLog }: { process: BashProcess; onOpenLog: () => void }) => (
-    <div data-testid="bash-process-card" data-tool-call-id={process.toolCallId}>
-      <span data-testid="card-command">{process.command}</span>
-      <button data-testid="card-view-log" onClick={onOpenLog}>
-        View Log
-      </button>
-    </div>
-  ),
-  LogViewer: ({
-    logPath,
-    toolCallId,
-    onClose,
-  }: {
-    logPath: string;
-    toolCallId: string;
-    onClose: () => void;
-  }) => (
-    <div data-testid="log-viewer">
-      <span data-testid="log-path">{logPath}</span>
-      <span data-testid="log-toolcall">{toolCallId}</span>
-      <button data-testid="log-close" onClick={onClose}>
-        Close
-      </button>
-    </div>
-  ),
-}));
-
 vi.mock("../../utils/clipboard", () => ({
   copyToClipboard: vi.fn(() => Promise.resolve(true)),
 }));
@@ -157,7 +134,7 @@ describe("StatusPanel shell section", () => {
   it("shows idle when no background processes", () => {
     const { container } = render(<StatusPanel />);
     expect(container.textContent).toContain("idle");
-    expect(container.querySelectorAll("[data-testid='bash-process-card']").length).toBe(0);
+    expect(container.textContent).not.toContain("npm test");
   });
 
   it("shows BashProcessCard for each backgrounded process", () => {
@@ -167,12 +144,8 @@ describe("StatusPanel shell section", () => {
     mockBackgroundedIds = new Set(["tc-1", "tc-2"]);
 
     const { container } = render(<StatusPanel />);
-    const cards = container.querySelectorAll("[data-testid='bash-process-card']");
-    expect(cards.length).toBe(2);
-
-    const commands = container.querySelectorAll("[data-testid='card-command']");
-    expect(commands[0]?.textContent).toBe("npm run build");
-    expect(commands[1]?.textContent).toBe("npm test");
+    expect(container.textContent).toContain("npm run build");
+    expect(container.textContent).toContain("npm test");
   });
 
   it("does NOT show non-backgrounded processes", () => {
@@ -182,9 +155,8 @@ describe("StatusPanel shell section", () => {
     mockBackgroundedIds = new Set(["tc-bg"]);
 
     const { container } = render(<StatusPanel />);
-    const cards = container.querySelectorAll("[data-testid='bash-process-card']");
-    expect(cards.length).toBe(1);
-    expect(cards[0]?.getAttribute("data-tool-call-id")).toBe("tc-bg");
+    expect(container.textContent).toContain("bg-cmd");
+    expect(container.textContent).not.toContain("fg-cmd");
   });
 
   it("opens LogViewer when clicking View Log on a card", () => {
@@ -193,16 +165,13 @@ describe("StatusPanel shell section", () => {
     mockBackgroundedIds = new Set(["tc-log"]);
 
     const { container } = render(<StatusPanel />);
-    expect(container.querySelector("[data-testid='log-viewer']")).toBeNull();
+    expect(container.textContent).not.toContain("test.log");
 
-    const viewLogBtn = container.querySelector("[data-testid='card-view-log']");
+    const viewLogBtn = container.querySelector('button[title="viewLog"]');
     expect(viewLogBtn).not.toBeNull();
     fireEvent.click(viewLogBtn!);
 
-    const viewer = container.querySelector("[data-testid='log-viewer']");
-    expect(viewer).not.toBeNull();
-    expect(container.querySelector("[data-testid='log-path']")?.textContent).toBe("/tmp/test.log");
-    expect(container.querySelector("[data-testid='log-toolcall']")?.textContent).toBe("tc-log");
+    expect(container.textContent).toContain("test.log");
   });
 
   it("closes LogViewer when clicking close", () => {
@@ -212,11 +181,11 @@ describe("StatusPanel shell section", () => {
 
     const { container } = render(<StatusPanel />);
 
-    fireEvent.click(container.querySelector("[data-testid='card-view-log']")!);
-    expect(container.querySelector("[data-testid='log-viewer']")).not.toBeNull();
+    fireEvent.click(container.querySelector('button[title="viewLog"]')!);
+    expect(container.textContent).toContain("close.log");
 
-    fireEvent.click(container.querySelector("[data-testid='log-close']")!);
-    expect(container.querySelector("[data-testid='log-viewer']")).toBeNull();
+    fireEvent.click(container.querySelector('button[title="close"]')!);
+    expect(container.textContent).not.toContain("close.log");
   });
 
   it("collapsible section toggles on header click", () => {
