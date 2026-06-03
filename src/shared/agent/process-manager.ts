@@ -1421,6 +1421,12 @@ export class AgentProcessManager {
       data: unknown;
       timestamp: number;
     }> = [];
+    const allCompactionEntries: Array<{
+      entryId: string;
+      summary: string;
+      tokensBefore?: number;
+      timestamp: number;
+    }> = [];
     const parentById: Map<string, string | null> = new Map();
     let lastJsonlLeafPointer: string | null = null;
     const isSandboxSessionPath = resolvedSessionPath?.startsWith("/root/workspace/sessions/");
@@ -1454,6 +1460,25 @@ export class AgentProcessManager {
                 allMessages.push({
                   entryId,
                   message: parsed.message,
+                });
+              } else if (parsed.type === "compaction") {
+                allCompactionEntries.push({
+                  entryId,
+                  summary: (parsed.summary as string) ?? "",
+                  tokensBefore: parsed.tokensBefore as number | undefined,
+                  timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
+                });
+                // Inject in-place to preserve JSONL chronological order
+                allMessages.push({
+                  entryId,
+                  message: {
+                    role: "compactionSummary",
+                    summary: (parsed.summary as string) ?? "",
+                    tokensBefore: parsed.tokensBefore as number | undefined,
+                    timestamp: new Date(
+                      (parsed.timestamp as string | number | Date) ?? 0,
+                    ).getTime(),
+                  },
                 });
               } else if (parsed.type === "leaf_pointer" && typeof parsed.leafId === "string") {
                 lastJsonlLeafPointer = parsed.leafId;
@@ -1498,6 +1523,23 @@ export class AgentProcessManager {
                 entryId,
                 message: parsed.message,
               });
+            } else if (parsed.type === "compaction") {
+              allCompactionEntries.push({
+                entryId,
+                summary: (parsed.summary as string) ?? "",
+                tokensBefore: parsed.tokensBefore as number | undefined,
+                timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
+              });
+              // Inject in-place to preserve JSONL chronological order
+              allMessages.push({
+                entryId,
+                message: {
+                  role: "compactionSummary",
+                  summary: (parsed.summary as string) ?? "",
+                  tokensBefore: parsed.tokensBefore as number | undefined,
+                  timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
+                },
+              });
             } else if (parsed.type === "leaf_pointer" && typeof parsed.leafId === "string") {
               lastJsonlLeafPointer = parsed.leafId;
             }
@@ -1514,6 +1556,10 @@ export class AgentProcessManager {
         });
       }
     }
+
+    // Compaction entries were injected into allMessages in-place during JSONL
+    // parsing above (preserving chronological order). allCompactionEntries is
+    // still used for the streaming merge dedup guard below.
 
     // Resolve leafId: prefer JSONL leaf_pointer (authoritative on-disk value),
     // fall back to in-memory cache (may be stale after process kill)
@@ -1596,11 +1642,25 @@ export class AgentProcessManager {
               })
               .filter(Boolean),
           );
+          const compactionEntryIds = new Set(allCompactionEntries.map((c) => c.entryId));
+          const filteredHasCompaction = filteredMessages.some((fm) => {
+            const fmMsg = fm.message as Record<string, unknown>;
+            return fmMsg && (fmMsg.role as string) === "compactionSummary";
+          });
           for (const msg of memResult) {
             const m = msg as unknown as Record<string, unknown>;
             const eid = (m.entryId as string) ?? "";
             const role = (m.role as string) ?? "";
             if (eid && jsonlEntryIds.has(eid)) continue;
+            // compactionSummary is already injected from JSONL in-place; skip CLI
+            // memory duplicate. Use entryId-based dedup for precision: only skip
+            // if the compaction entry from JSONL is on the current branch.
+            if (role === "compactionSummary") {
+              if (eid && compactionEntryIds.has(eid)) continue;
+              // Also skip if no entryId (CLI-generated in-memory) but JSONL has any
+              // compaction on the current filtered branch.
+              if (!eid && filteredHasCompaction) continue;
+            }
             if (role === "user" && !eid) {
               const content = m.content as unknown[];
               const text = Array.isArray(content)
@@ -3399,9 +3459,9 @@ export class AgentProcessManager {
       const preTimeout = setTimeout(() => {
         if (!this.syncDelegateResolvers.has(newSessionId)) return;
         log.info("[syncDelegate] pre-timeout summarize injection", { sessionId: newSessionId });
-        this.followUp(
+        this.steer(
           newSessionId,
-          "[系统指令] 即将超时，请立即停止当前操作，用几句话总结你到目前为止的工作成果和进展。",
+          `[系统指令] 任务已运行较长时间（${Math.round((timeoutMs - 60_000) / 60_000)} 分钟），请在 60 秒内汇报阶段性成果：已完成的工作、未完成的部分、以及下一步该怎么做，以便主任务可以恢复继续。`,
         );
       }, preTimeoutMs);
 

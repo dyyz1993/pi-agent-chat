@@ -20,6 +20,11 @@ const log = createLogger("event-handler");
 
 export const toolCallNameMap: Record<string, string> = {};
 
+// Track sessions where compaction_end was deferred due to active streaming.
+// When agent_end fires for these sessions, a force reload is triggered to sync
+// messages with the compacted JSONL data.
+const compactionDeferredSessions = new Set<string>();
+
 const pendingPrefetchMap = new Map<
   string,
   Map<string, { agentEvent: AgentEvent; timer: ReturnType<typeof setTimeout> }>
@@ -71,6 +76,15 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         break;
       }
     }
+
+    // If compaction was deferred during streaming, force reload now that
+    // streaming has ended to sync the store with the compacted JSONL data.
+    if (compactionDeferredSessions.has(sessionId)) {
+      compactionDeferredSessions.delete(sessionId);
+      log.info("agent_end → deferred compaction reload", { sessionId });
+      useChatStore.getState().loadSessionMessages(sessionId, { force: true });
+    }
+
     const crashReason = (event as { reason?: string }).reason;
     if (crashReason) {
       notificationGateway.emit({
@@ -150,7 +164,9 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       (m) => m.role === "assistant" && m.isStreaming === true,
     );
     if (isActivelyStreaming) {
-      log.info("compaction_end → session streaming, skip force reload", { sessionId });
+      // Defer the reload: agent_end will trigger it once streaming finishes.
+      compactionDeferredSessions.add(sessionId);
+      log.info("compaction_end → session streaming, deferred reload to agent_end", { sessionId });
     } else {
       chatState.loadSessionMessages(sessionId, { force: true });
     }

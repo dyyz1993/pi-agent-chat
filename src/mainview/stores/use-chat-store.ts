@@ -754,7 +754,28 @@ export const useChatStore = create<ChatState>((set, get) => ({
         lastCurrent.role === "assistant" &&
         lastCurrent.isStreaming === true;
 
-      let finalMsgs = localMsgs.length > 0 ? [...displayMsgs, ...localMsgs] : displayMsgs;
+      // Dedup _local messages against server messages to prevent duplicates.
+      // The server returns user messages from JSONL; if a _local user message
+      // has matching text content with a server message, the server version wins.
+      const nonDupLocalMsgs = localMsgs.filter((local) => {
+        if (local.role !== "user") return true;
+        const localText = local.content
+          .filter((b) => b.type === "text")
+          .map((b) => (b as { text: string }).text)
+          .join("");
+        if (!localText) return true;
+        return !displayMsgs.some((srv) => {
+          if (srv.role !== "user") return false;
+          const srvText = srv.content
+            .filter((b) => b.type === "text")
+            .map((b) => (b as { text: string }).text)
+            .join("");
+          return srvText === localText;
+        });
+      });
+
+      let finalMsgs =
+        nonDupLocalMsgs.length > 0 ? [...displayMsgs, ...nonDupLocalMsgs] : displayMsgs;
 
       if (preserveStreaming) {
         const streamingInFinal = finalMsgs.findIndex(
