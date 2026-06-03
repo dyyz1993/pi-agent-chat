@@ -797,7 +797,7 @@ export const useSessionStore = create<SessionState>()(
         }
       },
 
-      createNewSession: async (projectPath?: string) => {
+      createNewSession: async (_projectPath?: string) => {
         const { projectTabs, activeProjectId } = get();
         const tab = projectTabs.find((t) => t.id === activeProjectId);
         if (!tab) {
@@ -805,7 +805,7 @@ export const useSessionStore = create<SessionState>()(
           return;
         }
 
-        const targetPath = projectPath ?? tab.path;
+        const targetPath = tab.path;
 
         const existing = get().sessionsByProject[tab.path];
         const blankSession = existing?.find(
