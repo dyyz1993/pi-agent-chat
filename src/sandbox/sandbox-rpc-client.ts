@@ -37,11 +37,7 @@ type SessionOperationResult = InferReturn<"newSession">;
 type SystemPromptResult = InferReturn<"getSystemPrompt">;
 type QueueState = InferReturn<"getQueue">;
 type TreeWithLeaf = InferReturn<"getTreeWithLeaf">;
-type RemoteToolCall = Parameters<RpcClientAPI["onRemoteToolCall"]>[0] extends (
-  call: infer T,
-) => void
-  ? T
-  : never;
+type RemoteToolCall = Parameters<Parameters<RpcClientAPI["onRemoteToolCall"]>[0]>[0];
 type RemoteToolResult = Parameters<RpcClientAPI["sendRemoteToolResult"]>[1];
 type RpcSlashCommand = InferReturn<"getCommands"> extends Array<infer T> ? T : never;
 type RpcContextUsage = InferReturn<"getContextUsage">;
@@ -213,7 +209,9 @@ export class SandboxRpcClient implements RpcClientAPI {
   async navigateTree(
     targetId: string,
     options?: { summarize?: boolean; skipFiles?: boolean },
-  ): Promise<SessionOperationResult> {
+  ): Promise<
+    SessionOperationResult & { editorText?: string; newLeafId: string | null; reason?: string }
+  > {
     return this.call("agent.navigateTree", targetId, options);
   }
 
@@ -261,7 +259,9 @@ export class SandboxRpcClient implements RpcClientAPI {
     return this.call("agent.getFullMessages", options);
   }
 
-  async getTree(): Promise<{ entries: unknown[]; leafId: string }> {
+  async getTree(): Promise<{
+    entries: Array<{ id: string; parentId: string | null; type: string; label?: string }>;
+  }> {
     return this.call("agent.getTree");
   }
 
@@ -361,6 +361,14 @@ export class SandboxRpcClient implements RpcClientAPI {
       }>;
     }>("agent.getAvailableModels");
     return raw.models ?? [];
+  }
+
+  async getTierModels(): Promise<Record<string, string>> {
+    return this.call("agent.getTierModels");
+  }
+
+  async setTierModels(models: { fast?: string; pro?: string; max?: string }): Promise<void> {
+    return this.call("agent.setTierModels", models);
   }
 
   // ─── Thinking ───────────────────────────────────────────
@@ -524,7 +532,7 @@ export class SandboxRpcClient implements RpcClientAPI {
 
   // ─── Set Cwd ──────────────────────────────────────────
 
-  async setCwd(cwd: string): Promise<void> {
+  async setCwd(cwd: string): Promise<SessionOperationResult> {
     return this.call("agent.setCwd", cwd);
   }
 
@@ -532,6 +540,22 @@ export class SandboxRpcClient implements RpcClientAPI {
 
   async getAgentsFiles(): Promise<AgentsFile[]> {
     return this.call("agent.getAgentsFiles");
+  }
+
+  async getAgents(): Promise<InferReturn<"getAgents">> {
+    return this.call("agent.getAgents");
+  }
+
+  async switchAgent(agentName: string): Promise<InferReturn<"switchAgent">> {
+    return this.call("agent.switchAgent", agentName);
+  }
+
+  async getCurrentAgent(): Promise<InferReturn<"getCurrentAgent">> {
+    return this.call("agent.getCurrentAgent");
+  }
+
+  async getLatestAgentChange(): Promise<InferReturn<"getLatestAgentChange">> {
+    return this.call("agent.getLatestAgentChange");
   }
 
   // ─── Remote tools ─────────────────────────────────────
@@ -622,22 +646,20 @@ export class SandboxRpcClient implements RpcClientAPI {
   }
 
   /** Get agent detail by name. Called via process-manager.getAgentDetail(). */
-  async getAgentDetail(agentName: string): Promise<unknown> {
+  async getAgentDetail(agentName: string): Promise<InferReturn<"getAgentDetail">> {
     return this.call("agent.getAgentDetail", agentName || "build");
   }
 
   /** Get all tools for current agent. Called via process-manager.getAllTools(). */
-  async getAllTools(): Promise<unknown> {
-    const result = await this.call("agent.getAllTools");
-    // Unwrap nested { tools: [...] } response if needed
-    if (result && typeof result === "object" && "tools" in (result as Record<string, unknown>)) {
-      return (result as Record<string, unknown>).tools;
-    }
+  async getAllTools(): Promise<InferReturn<"getAllTools">> {
+    const result = await this.call<InferReturn<"getAllTools">>("agent.getAllTools");
     return result;
   }
 
-  async setPermissionMode(mode: string): Promise<{ mode: string }> {
-    return this.call<{ mode: string }>("agent.setPermissionMode", mode);
+  async setPermissionMode(
+    mode: "auto" | "acceptEdits" | "dontAsk" | "always-allow" | "always-deny",
+  ): Promise<{ mode: "auto" | "acceptEdits" | "dontAsk" | "always-allow" | "always-deny" }> {
+    return this.call("agent.setPermissionMode", mode);
   }
 
   // ─── Channels ──────────────────────────────────────────
