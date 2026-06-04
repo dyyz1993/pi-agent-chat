@@ -1786,9 +1786,12 @@ export class AgentProcessManager {
       });
     }
 
-    // Apply pagination to filtered results (take from the end)
+    // Apply pagination to filtered results. Without a cursor this returns the
+    // newest page. With afterEntryId, return the page immediately before that
+    // entry so the UI can prepend older history without loading the full JSONL.
     const totalCount = filteredMessages.length;
     const limit = options?.limit;
+    const afterEntryId = options?.afterEntryId;
     let hasMore = false;
     let nextCursor: string | null = null;
 
@@ -1800,10 +1803,24 @@ export class AgentProcessManager {
       }
       return msg;
     };
-    if (limit !== undefined && limit < totalCount) {
-      slicedMessages = filteredMessages.slice(totalCount - limit).map(injectEntryId);
-      hasMore = true;
-      nextCursor = filteredMessages[totalCount - limit]?.entryId ?? null;
+    const cursorIndex =
+      afterEntryId != null
+        ? filteredMessages.findIndex((entry) => entry.entryId === afterEntryId)
+        : -1;
+
+    if (afterEntryId != null && cursorIndex < 0) {
+      log.warn("[getFullMessages] afterEntryId not found, returning empty page", {
+        sessionId,
+        afterEntryId,
+        totalCount,
+      });
+      slicedMessages = [];
+    } else if (limit !== undefined) {
+      const endIndex = cursorIndex >= 0 ? cursorIndex : totalCount;
+      const startIndex = Math.max(0, endIndex - limit);
+      slicedMessages = filteredMessages.slice(startIndex, endIndex).map(injectEntryId);
+      hasMore = startIndex > 0;
+      nextCursor = hasMore ? (filteredMessages[startIndex]?.entryId ?? null) : null;
     } else {
       slicedMessages = filteredMessages.map(injectEntryId);
     }

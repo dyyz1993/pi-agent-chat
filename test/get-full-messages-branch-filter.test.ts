@@ -236,6 +236,41 @@ describe("getFullMessages leaf→root path filtering", () => {
     expect(result.hasMore).toBe(true);
   });
 
+  it("uses afterEntryId cursor to return the previous page", async () => {
+    writeFileSync(
+      sessionFile,
+      [
+        msgEntry("e1", null, "user", "start"),
+        msgEntry("e2", "e1", "assistant", "reply"),
+        msgEntry("e3", "e2", "user", "more"),
+        msgEntry("e4", "e3", "assistant", "reply-2"),
+        msgEntry("e5", "e4", "user", "again"),
+        msgEntry("e6", "e5", "assistant", "reply-3"),
+      ].join("\n"),
+    );
+
+    internals(manager).sessionPaths.set("s1", sessionFile);
+    internals(manager).leafIds.set("s1", "e6");
+
+    const latest = await manager.getFullMessages("s1", sessionFile, { limit: 2 });
+
+    expect(latest.messages.map((m) => (m as { entryId?: string }).entryId)).toEqual(["e5", "e6"]);
+    expect(latest.hasMore).toBe(true);
+    expect(latest.nextCursor).toBe("e5");
+
+    const previous = await manager.getFullMessages("s1", sessionFile, {
+      limit: 2,
+      afterEntryId: latest.nextCursor ?? undefined,
+    });
+
+    expect(previous.messages.map((m) => (m as { entryId?: string }).entryId)).toEqual([
+      "e3",
+      "e4",
+    ]);
+    expect(previous.hasMore).toBe(true);
+    expect(previous.nextCursor).toBe("e3");
+  });
+
   it("handles session with no JSONL file gracefully", async () => {
     internals(manager).sessionPaths.set("s1", "/nonexistent/path.jsonl");
     internals(manager).leafIds.set("s1", "e1");

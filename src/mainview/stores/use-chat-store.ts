@@ -196,6 +196,41 @@ export function normalizeToolBlocks(
 const PAGE_SIZE = 50;
 const INPUT_DRAFT_KEY = "pi-input-draft";
 
+function getMessageRevisionKey(msg: ChatMessage): string {
+  const record = msg as unknown as Record<string, unknown>;
+  try {
+    return JSON.stringify({
+      id: msg.id,
+      role: msg.role,
+      entryId: record.entryId,
+      timestamp: msg.timestamp,
+      isStreaming: record.isStreaming,
+      stopReason: record.stopReason,
+      provider: record.provider,
+      model: record.model,
+      tokenUsage: record.tokenUsage,
+      content: msg.content,
+    });
+  } catch {
+    return [
+      msg.id,
+      msg.role,
+      String(msg.timestamp),
+      String(record.entryId ?? ""),
+      String(record.isStreaming ?? ""),
+      String(record.stopReason ?? ""),
+      String(msg.content.length),
+    ].join("|");
+  }
+}
+
+function hasSameMessageSnapshots(current: ChatMessage[], next: ChatMessage[]): boolean {
+  return (
+    current.length === next.length &&
+    current.every((msg, index) => getMessageRevisionKey(msg) === getMessageRevisionKey(next[index]))
+  );
+}
+
 interface ChatState {
   messagesBySession: Record<string, ChatMessage[]>;
   inputText: string;
@@ -205,6 +240,7 @@ interface ChatState {
   historyLoadVersion: number;
   hasMoreMessagesBySession: Record<string, boolean>;
   isLoadingMoreBySession: Record<string, boolean>;
+  nextCursorBySession: Record<string, string | null>;
 
   pendingImages: ImageContent[];
   setInputText: (text: string) => void;
@@ -218,7 +254,7 @@ interface ChatState {
   clearSessionMessages: (sessionId: string) => void;
   loadSessionMessages: (
     sessionId: string,
-    options?: { force?: boolean; sessionPath?: string },
+    options?: { force?: boolean; sessionPath?: string; preserveStreaming?: boolean },
   ) => Promise<void>;
   /** Background refresh: fetch latest messages and silently update store if different */
   _backgroundRefreshMessages: (sessionId: string, sessionPath?: string) => void;
@@ -260,6 +296,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   historyLoadVersion: 0,
   hasMoreMessagesBySession: {},
   isLoadingMoreBySession: {},
+  nextCursorBySession: {},
 
   setInputText: (text) => set({ inputText: text }),
   setPendingImages: (images) => set({ pendingImages: images }),
@@ -509,7 +546,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   loadSessionMessages: async (
     sessionId: string,
-    options?: { force?: boolean; sessionPath?: string },
+    options?: { force?: boolean; sessionPath?: string; preserveStreaming?: boolean },
   ) => {
     const t0 = performance.now();
     const sid = sessionId;
@@ -749,6 +786,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const lastCurrent = currentMsgs[currentMsgs.length - 1];
       const isStreamingSession = useSessionStore.getState().sessionStatusMap[sid] === "streaming";
       const preserveStreaming =
+        options?.preserveStreaming !== false &&
         isStreamingSession &&
         lastCurrent &&
         lastCurrent.role === "assistant" &&
@@ -786,20 +824,27 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
       }
 
-      const hasSameIds =
-        currentMsgs.length === finalMsgs.length &&
-        currentMsgs.every((m, i) => m.id === finalMsgs[i]?.id);
-
-      if (hasSameIds) {
+      if (hasSameMessageSnapshots(currentMsgs, finalMsgs)) {
         perfLog.info("[loadMessages] content unchanged, skip update", {
           sessionId: sid,
           count: finalMsgs.length,
         });
+        set((s) => ({
+          hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: hasMore },
+          nextCursorBySession: {
+            ...s.nextCursorBySession,
+            [sid]: result.nextCursor ?? null,
+          },
+        }));
       } else {
         set((s) => ({
           messagesBySession: { ...s.messagesBySession, [sid]: finalMsgs },
           historyLoadVersion: s.historyLoadVersion + 1,
           hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: hasMore },
+          nextCursorBySession: {
+            ...s.nextCursorBySession,
+            [sid]: result.nextCursor ?? null,
+          },
         }));
       }
 
@@ -917,10 +962,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             streamingCount: streamingMsgs.length,
           });
         } else {
-          const isSame =
-            current.length === msgs.length && current.every((m, i) => m.id === msgs[i]?.id);
-
-          if (isSame) {
+          if (hasSameMessageSnapshots(current, msgs)) {
             perfLog.info("[bgRefresh] data unchanged, skip update", {
               sessionId: sid,
               count: msgs.length,
@@ -942,6 +984,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
               messagesBySession: { ...s.messagesBySession, [sid]: merged },
               historyLoadVersion: s.historyLoadVersion + 1,
               hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: hasMore },
+              nextCursorBySession: {
+                ...s.nextCursorBySession,
+                [sid]: result.nextCursor ?? null,
+              },
             }));
             useSessionStore.getState().restoreContextFromHistory(sid);
           }
@@ -982,9 +1028,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     try {
       const LOAD_MORE_TIMEOUT_MS = 30_000;
+      const current = get().messagesBySession[sid] || [];
+      const cursor = get().nextCursorBySession[sid] ?? current[0]?.entryId;
       const result = (await Promise.race([
         apiClient.call("agent.getFullMessages", {
           sessionId: sid,
+          limit: PAGE_SIZE,
+          afterEntryId: cursor,
         }),
         new Promise<never>((_, reject) =>
           setTimeout(
@@ -1109,12 +1159,27 @@ export const useChatStore = create<ChatState>((set, get) => ({
         hasMore,
       });
 
+      const currentById = new Map(current.map((msg) => [msg.id, msg]));
+      const loadedIds = new Set(allMsgs.map((msg) => msg.id));
+      const mergedMsgs = [
+        ...allMsgs,
+        ...current.filter((msg) => !loadedIds.has(msg.id)),
+      ].sort((a, b) => {
+        if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
+        return (a.entryId ?? a.id).localeCompare(b.entryId ?? b.id);
+      });
+      const finalMsgs = mergedMsgs.map((msg) => currentById.get(msg.id) ?? msg);
+
       set((s) => ({
-        messagesBySession: { ...s.messagesBySession, [sid]: allMsgs },
+        messagesBySession: { ...s.messagesBySession, [sid]: finalMsgs },
         historyLoadVersion: s.historyLoadVersion + 1,
         hasMoreMessagesBySession: {
           ...s.hasMoreMessagesBySession,
           [sid]: hasMore,
+        },
+        nextCursorBySession: {
+          ...s.nextCursorBySession,
+          [sid]: result.nextCursor ?? null,
         },
       }));
     } catch (err) {
