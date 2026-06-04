@@ -2661,8 +2661,12 @@ export class AgentProcessManager {
   ): Promise<unknown> {
     let managed = this.getActiveManaged(sessionId);
     if (!managed) {
-      await new Promise((r) => setTimeout(r, 200));
-      managed = this.getActiveManaged(sessionId);
+      // Wait up to 3s for agent process to finish starting (spawn takes ~1.5s)
+      for (let i = 0; i < 15; i++) {
+        await new Promise((r) => setTimeout(r, 200));
+        managed = this.getActiveManaged(sessionId);
+        if (managed) break;
+      }
     }
     if (!managed) {
       managed = await this.ensureManagedClient(sessionId);
@@ -3798,7 +3802,7 @@ export class AgentProcessManager {
 
   hasSession(sessionId: string): boolean {
     const managed = this.getActiveManaged(sessionId);
-    return managed !== undefined;
+    return managed !== null;
   }
 
   getProjectPath(sessionId: string): string | undefined {
