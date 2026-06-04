@@ -143,6 +143,7 @@ function safeClose(ws: WebSocket | undefined) {
 }
 
 let server: TestServerResult;
+const shouldRun = process.env.PI_E2E_LLM === "1" && !!process.env.PI_CLI_PATH;
 
 beforeAll(async () => {
   server = await startTestServer({
@@ -243,7 +244,7 @@ async function runSubagentTest(backgroundMode: boolean): Promise<{
   return { durationMs, toolCalls, agentEvents: events, finalText };
 }
 
-describe("Subagent background=true 严谨验证", () => {
+describe.skipIf(shouldRun === false)("Subagent background=true 严谨验证", () => {
   it(
     "Test A: subagent background=false (同步基准)",
     async () => {

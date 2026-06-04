@@ -19,7 +19,7 @@ const PORT = HOOK_BASE_PORT + 50;
 const AUTH_TOKEN = "hooks-test-token-g5";
 const paths = getHookPaths("g5");
 
-const shouldRun = process.env.PI_E2E_LLM === "1";
+const shouldRun = process.env.PI_E2E_LLM === "1" && !!process.env.PI_CLI_PATH;
 
 describe.skipIf(shouldRun === false)("Group 5: Hook Type Verification", () => {
   beforeAll(async () => {

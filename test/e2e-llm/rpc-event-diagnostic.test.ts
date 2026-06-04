@@ -125,6 +125,7 @@ function safeClose(ws: WebSocket | undefined) {
 }
 
 let server: TestServerResult;
+const shouldRun = process.env.PI_E2E_LLM === "1" && !!process.env.PI_CLI_PATH;
 
 beforeAll(async () => {
   server = await startTestServer({
@@ -141,7 +142,7 @@ afterAll(async () => {
 // =====================================================
 // 场景 3: agent.session_status_changed 事件推送
 // =====================================================
-describe("场景3: session_status_changed 事件推送监控", () => {
+describe.skipIf(shouldRun === false)("场景3: session_status_changed 事件推送监控", () => {
   let ws: WebSocket;
   let sessionId: string;
   let sessionPath: string;
@@ -236,7 +237,7 @@ describe("场景3: session_status_changed 事件推送监控", () => {
 // =====================================================
 // 场景 2: 发消息后标题生成 / session_rename 事件
 // =====================================================
-describe("场景2: 发消息后标题生成事件监控", () => {
+describe.skipIf(shouldRun === false)("场景2: 发消息后标题生成事件监控", () => {
   let ws: WebSocket;
   let sessionId: string;
   let sessionPath: string;
@@ -357,7 +358,7 @@ describe("场景2: 发消息后标题生成事件监控", () => {
 // =====================================================
 // 场景 1: 委派任务 → coordinator.session_created 事件
 // =====================================================
-describe("场景1: 委派任务 coordinator 事件推送监控", () => {
+describe.skipIf(shouldRun === false)("场景1: 委派任务 coordinator 事件推送监控", () => {
   let ws: WebSocket;
   let sessionId: string;
   let sessionPath: string;

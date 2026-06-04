@@ -102,6 +102,7 @@ function connectWs(): Promise<WebSocket> {
 }
 
 let server: TestServerResult;
+const shouldRun = process.env.PI_E2E_LLM === "1" && !!process.env.PI_CLI_PATH;
 
 beforeAll(async () => {
   server = await startTestServer({ port: PORT, authToken: AUTH_TOKEN, projectPath: process.cwd() });
@@ -111,7 +112,7 @@ afterAll(async () => {
   await stopTestServer(server);
 }, 15_000);
 
-describe("Bug1+Bug2 RPC Live Verification", () => {
+describe.skipIf(shouldRun === false)("Bug1+Bug2 RPC Live Verification", () => {
   it("Bug2: subagent with agent=reviewer should activate reviewer identity", async () => {
     const ws = await connectWs();
     try {
