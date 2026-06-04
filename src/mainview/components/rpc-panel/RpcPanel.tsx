@@ -19,7 +19,7 @@ const DIR_COLORS = {
 
 function RpcEntry({ entry }: { entry: RpcLogEntry }) {
   const { t } = useTranslation("debug");
-  const { copied, copy } = useClipboard();
+  const { copied, copy } = useClipboard(2000, { showToast: true });
   const Icon = DIR_ICONS[entry.direction];
   const color = DIR_COLORS[entry.direction];
   const label = entry.method ?? entry.eventType ?? entry.direction;

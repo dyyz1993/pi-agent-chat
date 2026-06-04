@@ -87,6 +87,14 @@ export default {
         float: "var(--z-float)",
         header: "var(--z-header)",
         drawer: "var(--z-drawer)",
+        overlay: "var(--z-overlay)",
+        dropdown: "var(--z-dropdown)",
+        modal: "var(--z-modal)",
+        popover: "var(--z-popover)",
+        toast: "var(--z-toast)",
+        tooltip: "var(--z-tooltip)",
+        fullscreen: "var(--z-fullscreen)",
+        system: "var(--z-system)",
       },
       keyframes: {
         "slide-in-left": {

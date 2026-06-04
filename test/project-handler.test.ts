@@ -1,28 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-const {
-  mockScanSessions,
-  mockScanAllProjects,
-  mockListPiProjects,
-  mockListMerged,
-  mockFindSessionById,
-  mockAddRecent,
-  mockListRecent,
-  mockRemoveRecent,
-  mockListConfigured,
-  mockAddConfigured,
-  mockRemoveConfigured,
-  mockSyncOpenTabs,
-  mockRestoreOpenTabs,
-  mockListDirectory,
-  mockRemoveFavorite,
-  mockListFavorites,
-  mockToggleFavorite,
-  mockTogglePin,
-  mockLinkProject,
-  mockUnlinkProject,
-  mockGetLinkedProjects,
-} = vi.hoisted(() => ({
+const projectMocks = vi.hoisted(() => ({
   mockScanSessions: vi.fn(async () => []),
   mockScanAllProjects: vi.fn(async () => []),
   mockListPiProjects: vi.fn(async () => []),
@@ -45,29 +23,46 @@ const {
   mockUnlinkProject: vi.fn(async () => ({ ok: true })),
   mockGetLinkedProjects: vi.fn(async () => []),
 }));
+const {
+  mockScanSessions,
+  mockScanAllProjects,
+  mockListPiProjects,
+  mockListMerged,
+  mockFindSessionById,
+  mockAddRecent,
+  mockListRecent,
+  mockRemoveRecent,
+  mockSyncOpenTabs,
+  mockRestoreOpenTabs,
+  mockToggleFavorite,
+  mockTogglePin,
+  mockLinkProject,
+  mockUnlinkProject,
+  mockGetLinkedProjects,
+} = projectMocks;
 
 vi.mock("../src/shared/lib/session-scanner", () => ({
-  scanSessionsForProject: mockScanSessions,
-  scanAllProjects: mockScanAllProjects,
-  listPiProjects: mockListPiProjects,
-  listMergedProjects: mockListMerged,
-  findSessionById: mockFindSessionById,
+  scanSessionsForProject: projectMocks.mockScanSessions,
+  scanAllProjects: projectMocks.mockScanAllProjects,
+  listPiProjects: projectMocks.mockListPiProjects,
+  listMergedProjects: projectMocks.mockListMerged,
+  findSessionById: projectMocks.mockFindSessionById,
 }));
 
 vi.mock("../src/shared/lib/project-config", () => ({
-  addRecentProject: mockAddRecent,
-  listRecentProjects: mockListRecent,
-  removeRecentProject: mockRemoveRecent,
-  listConfiguredPaths: mockListConfigured,
-  addConfiguredPath: mockAddConfigured,
-  removeConfiguredPath: mockRemoveConfigured,
-  syncOpenTabs: mockSyncOpenTabs,
-  restoreOpenTabs: mockRestoreOpenTabs,
-  listDirectory: mockListDirectory,
-  removeFavoriteFolder: mockRemoveFavorite,
-  listFavoriteFolders: mockListFavorites,
-  toggleFavoriteFolder: mockToggleFavorite,
-  toggleProjectPin: mockTogglePin,
+  addRecentProject: projectMocks.mockAddRecent,
+  listRecentProjects: projectMocks.mockListRecent,
+  removeRecentProject: projectMocks.mockRemoveRecent,
+  listConfiguredPaths: projectMocks.mockListConfigured,
+  addConfiguredPath: projectMocks.mockAddConfigured,
+  removeConfiguredPath: projectMocks.mockRemoveConfigured,
+  syncOpenTabs: projectMocks.mockSyncOpenTabs,
+  restoreOpenTabs: projectMocks.mockRestoreOpenTabs,
+  listDirectory: projectMocks.mockListDirectory,
+  removeFavoriteFolder: projectMocks.mockRemoveFavorite,
+  listFavoriteFolders: projectMocks.mockListFavorites,
+  toggleFavoriteFolder: projectMocks.mockToggleFavorite,
+  toggleProjectPin: projectMocks.mockTogglePin,
 }));
 
 vi.mock("../src/shared/lib/native-dialog", () => ({
@@ -75,9 +70,9 @@ vi.mock("../src/shared/lib/native-dialog", () => ({
 }));
 
 vi.mock("../src/shared/lib/linked-projects-config", () => ({
-  linkProject: mockLinkProject,
-  unlinkProject: mockUnlinkProject,
-  getLinkedProjects: mockGetLinkedProjects,
+  linkProject: projectMocks.mockLinkProject,
+  unlinkProject: projectMocks.mockUnlinkProject,
+  getLinkedProjects: projectMocks.mockGetLinkedProjects,
 }));
 
 import { register } from "../src/shared/handlers/project";
@@ -102,9 +97,12 @@ describe("project handler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     server = createMockServer();
-    register(server as unknown as Parameters<typeof register>[0], {
-      platform: "desktop",
-    } as Parameters<typeof register>[1]);
+    register(
+      server as unknown as Parameters<typeof register>[0],
+      {
+        platform: "desktop",
+      } as Parameters<typeof register>[1],
+    );
   });
 
   describe("project.open", () => {
@@ -270,7 +268,14 @@ describe("project handler", () => {
   describe("project.linkProject", () => {
     it("delegates to linkProject lib", async () => {
       const handler = server.handlers.get("project.linkProject")!;
-      const project = { id: "dep", path: "/dep", description: "", relationship: "upstream" as const, keyPaths: [], readonly: true };
+      const project = {
+        id: "dep",
+        path: "/dep",
+        description: "",
+        relationship: "upstream" as const,
+        keyPaths: [],
+        readonly: true,
+      };
       mockLinkProject.mockResolvedValueOnce({ ok: true });
 
       const result = await handler({ projectRoot: "/root", project });

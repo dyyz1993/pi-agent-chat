@@ -31,7 +31,7 @@ function AttachmentPreview({ att, onRemove }: { att: AttachmentFile; onRemove: (
         </div>
         {expanded && (
           <div
-            className="fixed inset-0 z-[200] bg-black/70 flex items-center justify-center p-4"
+            className="fixed inset-0 z-fullscreen bg-black/70 flex items-center justify-center p-4"
             onClick={() => setExpanded(false)}
           >
             <img

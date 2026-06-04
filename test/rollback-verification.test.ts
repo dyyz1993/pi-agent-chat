@@ -37,6 +37,7 @@ vi.mock("../src/mainview/stores/use-session-store", () => ({
       sessionReady: { "sess-1": true },
       sessionStatusMap: {},
       sessionContextMap: {},
+      sessionStatusMap: {},
       restoreContextFromHistory: vi.fn(),
     })),
     setState: vi.fn(),
@@ -46,6 +47,7 @@ vi.mock("../src/mainview/stores/use-session-store", () => ({
 vi.mock("../src/mainview/stores/use-memory-store", () => ({
   useMemoryStore: {
     getState: vi.fn(() => ({
+      clearSession: vi.fn(),
       addEvent: vi.fn(),
       addInjected: vi.fn(),
       clearSession: vi.fn(),
@@ -73,6 +75,7 @@ beforeEach(() => {
     historyLoadVersion: 0,
     isLoadingMoreBySession: {},
     hasMoreMessagesBySession: {},
+    nextCursorBySession: {},
   });
 });
 

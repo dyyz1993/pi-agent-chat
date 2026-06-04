@@ -177,7 +177,7 @@ vi.mock("../src/mainview/stores/use-session-store", () => {
     },
     restoreContextFromHistory: () => {},
   }));
-  return { useSessionStore, clearAgentStarted: () => {} };
+  return { useSessionStore, clearAgentStarted: vi.fn() };
 });
 
 // ── Imports (after mocks) ──────────────────────────────────────────────

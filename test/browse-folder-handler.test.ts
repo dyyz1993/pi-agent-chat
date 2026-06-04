@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-const { mockOpenFolder } = vi.hoisted(() => ({
-  mockOpenFolder: vi.fn<(opts: { startingFolder?: string }) => Promise<string[]>>(),
-}));
+const mockOpenFolder = vi.hoisted(() =>
+  vi.fn<(opts: { startingFolder?: string }) => Promise<string[]>>(),
+);
 
 vi.mock("../src/shared/lib/native-dialog", () => ({
   openFolder: mockOpenFolder,

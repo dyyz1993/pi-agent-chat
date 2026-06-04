@@ -13,6 +13,11 @@ import { listRecentProjects, restoreOpenTabs } from "../shared/lib/project-confi
 import { createProxyRegistrar } from "./proxy-register";
 
 const log = createLogger("gateway");
+
+declare global {
+  var __lastTokenUser: string | undefined;
+}
+
 function resolveTokenUser(token: string): string | undefined {
   const tokenUsersRaw = String(process.env.TOKEN_USERS);
   void tokenUsersRaw;

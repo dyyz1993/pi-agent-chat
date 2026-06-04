@@ -18,6 +18,7 @@ import { useBashStore } from "../../stores/use-bash-store";
 import type { BashProcess } from "../../../shared/modules/bash";
 import { apiClient } from "../../lib/api-client";
 import { useFocusTrap } from "../../hooks/use-focus-trap";
+import { IconButton } from "../primitives";
 import { createLogger } from "../../../shared/lib/logger";
 
 const log = createLogger("bash");
@@ -186,14 +187,6 @@ function LogViewer({
 
   // Sync state → ref for use in callbacks/effects
   autoScrollRef.current = autoScroll;
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [onClose]);
 
   const virtualizer = useVirtualizer({
     count: lines.length,
@@ -378,8 +371,15 @@ function LogViewer({
   return (
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 sm:p-6"
+      className="fixed inset-0 z-modal flex items-center justify-center bg-black/60 sm:p-6"
       onClick={onClose}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation();
+          onClose();
+        }
+      }}
     >
       <div
         className="bg-surface-code border-t sm:border border-border-secondary sm:rounded-lg w-full sm:max-w-4xl flex flex-col h-full sm:h-[70vh] sm:max-h-[85vh]"
@@ -399,13 +399,9 @@ function LogViewer({
               {t("lineCountShort", { count: totalLines })}
             </span>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-md text-text-tertiary hover:text-text-primary dark:text-text-tertiary dark:hover:text-text-primary hover:bg-surface-hover dark:hover:bg-surface-hover transition-colors shrink-0"
-            aria-label={t("close")}
-          >
+          <IconButton label={t("close")} size="md" onClick={onClose}>
             <X className="w-4 h-4" />
-          </button>
+          </IconButton>
         </div>
 
         {/* Scrollable log area */}

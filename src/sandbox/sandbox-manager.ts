@@ -14,9 +14,13 @@
  */
 
 import { createLogger } from "../shared/lib/logger";
-import type { ISandboxProvider, SandboxInstance } from "./types";
+import type { ISandboxProvider, SandboxInstance, SandboxStatus } from "./types";
 
 const log = createLogger("sandbox-mgr");
+
+function isUsableSandboxStatus(status: SandboxStatus): boolean {
+  return status === "running" || status === "ready";
+}
 
 export interface SandboxManagerConfig {
   /** 空闲超时毫秒 */
@@ -40,7 +44,7 @@ export class SandboxManager {
   /** 获取用户的沙箱，没有则创建 */
   async getOrCreate(userId: string, projectPath?: string): Promise<SandboxInstance> {
     const existing = this.instances.get(userId);
-    if (existing && (existing.status === "running" || existing.status === "ready")) {
+    if (existing && isUsableSandboxStatus(existing.status)) {
       existing.lastActiveAt = Date.now();
       this.provider.keepAlive(userId);
       return existing;
@@ -95,6 +99,18 @@ export class SandboxManager {
   /** 获取所有沙箱信息 */
   getAll(): SandboxInstance[] {
     return Array.from(this.instances.values());
+  }
+
+  getEndpoint(userId: string): string | undefined {
+    return this.instances.get(userId)?.endpoint;
+  }
+
+  async execInSandbox(userId: string, cmd: string): Promise<string> {
+    if (!this.provider.execInSandbox) {
+      throw new Error("Current sandbox provider does not support execInSandbox");
+    }
+    this.keepAlive(userId);
+    return this.provider.execInSandbox(userId, cmd);
   }
 
   /** 停止所有 */

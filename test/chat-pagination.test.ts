@@ -85,6 +85,7 @@ const PAGE_SIZE = 50;
 function makeRawMessage(index: number, role: "user" | "assistant" = "user") {
   return {
     id: `msg-${index}`,
+    entryId: `entry-${index}`,
     role,
     content: [{ type: "text", text: `Message ${index}` }],
     timestamp: 1000 + index * 100,
@@ -113,6 +114,7 @@ describe("chat pagination", () => {
       historyLoadVersion: 0,
       hasMoreMessagesBySession: {},
       isLoadingMoreBySession: {},
+      nextCursorBySession: {},
     });
     useSessionStore.setState({
       activeSessionId: "test-session",
@@ -146,6 +148,7 @@ describe("chat pagination", () => {
       messages: allMessages.messages.slice(-PAGE_SIZE),
       customEntries: [],
       hasMore: true,
+      nextCursor: "entry-50",
     });
 
     await useChatStore.getState().loadSessionMessages("test-session");
@@ -154,14 +157,25 @@ describe("chat pagination", () => {
     expect(initialMsgs.length).toBe(PAGE_SIZE);
 
     expect(useChatStore.getState().hasMoreMessagesBySession!["test-session"]).toBe(true);
+    expect(useChatStore.getState().nextCursorBySession!["test-session"]).toBe("entry-50");
 
     (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
       messages: allMessages.messages,
       customEntries: [],
       hasMore: false,
+      nextCursor: null,
     });
 
     await useChatStore.getState().loadMoreMessages!("test-session");
+
+    expect(apiClient.call).toHaveBeenLastCalledWith(
+      "agent.getFullMessages",
+      expect.objectContaining({
+        sessionId: "test-session",
+        limit: PAGE_SIZE,
+        afterEntryId: "entry-50",
+      }),
+    );
 
     const afterLoadMore = useChatStore.getState().messagesBySession["test-session"]!;
     expect(afterLoadMore.length).toBe(100);

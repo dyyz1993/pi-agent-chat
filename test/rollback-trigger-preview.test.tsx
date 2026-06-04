@@ -18,10 +18,6 @@ vi.mock("../src/mainview/lib/api-client", () => ({
   },
 }));
 
-vi.mock("../src/mainview/hooks/use-focus-trap", () => ({
-  useFocusTrap: () => {},
-}));
-
 vi.mock("../src/mainview/stores/use-session-store", () => ({
   useSessionStore: Object.assign(
     (selector?: (s: Record<string, unknown>) => unknown) => {

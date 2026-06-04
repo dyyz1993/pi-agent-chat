@@ -16,6 +16,7 @@ import { apiClient } from "../src/mainview/lib/api-client";
 const mockCall = apiClient.call as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
+  mockCall.mockReset();
   mockCall.mockResolvedValue({});
   useStatusStore.setState({
     yoloEnabled: false,
@@ -43,7 +44,8 @@ describe("useStatusStore", () => {
   });
 
   it("toggleYolo sets yoloEnabled=true", async () => {
-    await useStatusStore.getState().toggleYolo();
+    useStatusStore.getState().toggleYolo();
+    await Promise.resolve();
     expect(useStatusStore.getState().yoloEnabled).toBe(true);
   });
 

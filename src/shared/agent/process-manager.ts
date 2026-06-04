@@ -249,6 +249,10 @@ export function initSandboxManager(projectsRoot: string): SandboxManager {
   globalSandboxManager = new SandboxManager(provider, {
     idleTimeoutMs: (config.sandboxIdleTimeout ?? 1800) * 1000,
     gcIntervalMs: 60_000,
+    providerConfig: {
+      idleTimeout: `${config.sandboxIdleTimeout ?? 1800}s`,
+      enableInternet: true,
+    },
   });
 
   if (providerType === "sandbox-box" && provider instanceof SandboxBoxProvider) {
@@ -466,12 +470,138 @@ export class AgentProcessManager {
       lineCount: number;
     }
   >();
+  private static SESSION_CACHE_MAX = 10;
+
+  /**
+   * Get cached session data. Three outcomes:
+   * 1. Exact match (file unchanged) → return cached data
+   * 2. File grew → return cached data + mark for incremental append
+   * 3. No cache / file shrunk / file gone → return null
+   */
+  getSessionCache(
+    sessionId: string,
+    sessionPath: string,
+  ): {
+    messages: Array<{ entryId: string; message: unknown }>;
+    customEntries: Array<{
+      id: string;
+      customType: string;
+      data: unknown;
+      timestamp: number;
+    }>;
+    parentById: Map<string, string | null>;
+    lineCount: number;
+    needsIncremental: boolean;
+  } | null {
+    const cached = this.sessionMsgCache.get(sessionId);
+    if (!cached) return null;
+    try {
+      const st = statSync(sessionPath);
+      if (st.size === cached.fileSize && st.mtimeMs === cached.mtimeMs) {
+        // Exact match — file unchanged
+        this.sessionMsgCache.delete(sessionId);
+        this.sessionMsgCache.set(sessionId, cached);
+        return { ...cached, needsIncremental: false };
+      }
+      if (st.size > cached.fileSize) {
+        // File grew — can do incremental append
+        this.sessionMsgCache.delete(sessionId);
+        this.sessionMsgCache.set(sessionId, cached);
+        return { ...cached, needsIncremental: true };
+      }
+      // File shrunk or changed drastically — invalidate
+    } catch {
+      // file gone or inaccessible
+    }
+    this.sessionMsgCache.delete(sessionId);
+    return null;
+  }
+
+  setSessionCache(
+    sessionId: string,
+    sessionPath: string,
+    data: {
+      messages: Array<{ entryId: string; message: unknown }>;
+      customEntries: Array<{
+        id: string;
+        customType: string;
+        data: unknown;
+        timestamp: number;
+      }>;
+      parentById: Map<string, string | null>;
+      lineCount: number;
+    },
+  ): void {
+    try {
+      const st = statSync(sessionPath);
+      if (this.sessionMsgCache.size >= AgentProcessManager.SESSION_CACHE_MAX) {
+        const oldest = this.sessionMsgCache.keys().next().value;
+        if (oldest) this.sessionMsgCache.delete(oldest);
+      }
+      this.sessionMsgCache.set(sessionId, {
+        ...data,
+        fileSize: st.size,
+        mtimeMs: st.mtimeMs,
+      });
+    } catch {
+      // file gone — don't cache
+    }
+  }
+
   clearSessionCache(sessionId?: string): void {
     if (sessionId) {
       this.sessionMsgCache.delete(sessionId);
     } else {
       this.sessionMsgCache.clear();
     }
+  }
+
+  /**
+   * Read JSONL from a specific physical line number onwards and append results.
+   * Returns { newEntries: number of new parsed entries, totalLines: total physical lines in file }
+   */
+  async readJsonlFromLine(
+    sessionPath: string,
+    startLine: number,
+    messages: Array<{ entryId: string; message: unknown }>,
+    customEntries: Array<{ id: string; customType: string; data: unknown; timestamp: number }>,
+    parentById: Map<string, string | null>,
+  ): Promise<{ newEntries: number; totalLines: number }> {
+    let lineIndex = 0;
+    let newEntries = 0;
+    const rl = readline.createInterface({
+      input: createReadStream(sessionPath, { encoding: "utf-8" }),
+      crlfDelay: Infinity,
+    });
+    for await (const line of rl) {
+      lineIndex++;
+      if (lineIndex <= startLine) continue; // skip already-parsed lines
+      if (!line.trim()) continue;
+      try {
+        const parsed = JSON.parse(line) as Record<string, unknown>;
+        const entryId = (parsed.id as string) ?? "";
+        const parentId = (parsed.parentId as string | null | undefined) ?? null;
+        if (entryId) {
+          parentById.set(entryId, parentId);
+        }
+        if (parsed.type === "message" && parsed.message) {
+          messages.push({ entryId, message: parsed.message });
+          newEntries++;
+        } else if (parsed.type === "custom") {
+          customEntries.push({
+            id: entryId || `custom-${Date.now()}`,
+            customType: (parsed.customType as string) ?? "unknown",
+            data: parsed.data,
+            timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
+          });
+          newEntries++;
+        }
+      } catch {
+        // skip malformed
+      }
+    }
+    rl.close();
+    return { newEntries, totalLines: lineIndex };
   }
 
   private async _drainPendingDelegates(): Promise<void> {
@@ -1153,6 +1283,9 @@ export class AgentProcessManager {
 
     try {
       const state = await withTimeout(managed.client.getState(), 10_000, "getState");
+      const stateWithStreaming = state as typeof state & {
+        streamingMessage?: AssistantMessage;
+      };
       const model = state.model;
       return {
         model: model
@@ -1169,7 +1302,7 @@ export class AgentProcessManager {
         isStreaming: Boolean(state.isStreaming),
         isCompacting: Boolean(state.isCompacting),
         messageCount: Number(state.messageCount ?? 0),
-        streamingMessage: state.streamingMessage as AssistantMessage | undefined,
+        streamingMessage: stateWithStreaming.streamingMessage,
       };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -1488,6 +1621,12 @@ export class AgentProcessManager {
       data: unknown;
       timestamp: number;
     }> = [];
+    const allCompactionEntries: Array<{
+      entryId: string;
+      summary: string;
+      tokensBefore?: number;
+      timestamp: number;
+    }> = [];
     const parentById: Map<string, string | null> = new Map();
     let lastJsonlLeafPointer: string | null = null;
     const isSandboxSessionPath = resolvedSessionPath?.startsWith("/root/workspace/sessions/");
@@ -1521,6 +1660,25 @@ export class AgentProcessManager {
                 allMessages.push({
                   entryId,
                   message: parsed.message,
+                });
+              } else if (parsed.type === "compaction") {
+                allCompactionEntries.push({
+                  entryId,
+                  summary: (parsed.summary as string) ?? "",
+                  tokensBefore: parsed.tokensBefore as number | undefined,
+                  timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
+                });
+                // Inject in-place to preserve JSONL chronological order
+                allMessages.push({
+                  entryId,
+                  message: {
+                    role: "compactionSummary",
+                    summary: (parsed.summary as string) ?? "",
+                    tokensBefore: parsed.tokensBefore as number | undefined,
+                    timestamp: new Date(
+                      (parsed.timestamp as string | number | Date) ?? 0,
+                    ).getTime(),
+                  },
                 });
               } else if (parsed.type === "leaf_pointer" && typeof parsed.leafId === "string") {
                 lastJsonlLeafPointer = parsed.leafId;
@@ -1565,6 +1723,23 @@ export class AgentProcessManager {
                 entryId,
                 message: parsed.message,
               });
+            } else if (parsed.type === "compaction") {
+              allCompactionEntries.push({
+                entryId,
+                summary: (parsed.summary as string) ?? "",
+                tokensBefore: parsed.tokensBefore as number | undefined,
+                timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
+              });
+              // Inject in-place to preserve JSONL chronological order
+              allMessages.push({
+                entryId,
+                message: {
+                  role: "compactionSummary",
+                  summary: (parsed.summary as string) ?? "",
+                  tokensBefore: parsed.tokensBefore as number | undefined,
+                  timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
+                },
+              });
             } else if (parsed.type === "leaf_pointer" && typeof parsed.leafId === "string") {
               lastJsonlLeafPointer = parsed.leafId;
             }
@@ -1581,6 +1756,10 @@ export class AgentProcessManager {
         });
       }
     }
+
+    // Compaction entries were injected into allMessages in-place during JSONL
+    // parsing above (preserving chronological order). allCompactionEntries is
+    // still used for the streaming merge dedup guard below.
 
     // Resolve leafId: prefer JSONL leaf_pointer (authoritative on-disk value),
     // fall back to in-memory cache (may be stale after process kill)
@@ -1610,9 +1789,12 @@ export class AgentProcessManager {
       });
     }
 
-    // Apply pagination to filtered results (take from the end)
+    // Apply pagination to filtered results. Without a cursor this returns the
+    // newest page. With afterEntryId, return the page immediately before that
+    // entry so the UI can prepend older history without loading the full JSONL.
     const totalCount = filteredMessages.length;
     const limit = options?.limit;
+    const afterEntryId = options?.afterEntryId;
     let hasMore = false;
     let nextCursor: string | null = null;
 
@@ -1624,10 +1806,24 @@ export class AgentProcessManager {
       }
       return msg;
     };
-    if (limit !== undefined && limit < totalCount) {
-      slicedMessages = filteredMessages.slice(totalCount - limit).map(injectEntryId);
-      hasMore = true;
-      nextCursor = filteredMessages[totalCount - limit]?.entryId ?? null;
+    const cursorIndex =
+      afterEntryId != null
+        ? filteredMessages.findIndex((entry) => entry.entryId === afterEntryId)
+        : -1;
+
+    if (afterEntryId != null && cursorIndex < 0) {
+      log.warn("[getFullMessages] afterEntryId not found, returning empty page", {
+        sessionId,
+        afterEntryId,
+        totalCount,
+      });
+      slicedMessages = [];
+    } else if (limit !== undefined) {
+      const endIndex = cursorIndex >= 0 ? cursorIndex : totalCount;
+      const startIndex = Math.max(0, endIndex - limit);
+      slicedMessages = filteredMessages.slice(startIndex, endIndex).map(injectEntryId);
+      hasMore = startIndex > 0;
+      nextCursor = hasMore ? (filteredMessages[startIndex]?.entryId ?? null) : null;
     } else {
       slicedMessages = filteredMessages.map(injectEntryId);
     }
@@ -1663,11 +1859,25 @@ export class AgentProcessManager {
               })
               .filter(Boolean),
           );
+          const compactionEntryIds = new Set(allCompactionEntries.map((c) => c.entryId));
+          const filteredHasCompaction = filteredMessages.some((fm) => {
+            const fmMsg = fm.message as Record<string, unknown>;
+            return fmMsg && (fmMsg.role as string) === "compactionSummary";
+          });
           for (const msg of memResult) {
             const m = msg as unknown as Record<string, unknown>;
             const eid = (m.entryId as string) ?? "";
             const role = (m.role as string) ?? "";
             if (eid && jsonlEntryIds.has(eid)) continue;
+            // compactionSummary is already injected from JSONL in-place; skip CLI
+            // memory duplicate. Use entryId-based dedup for precision: only skip
+            // if the compaction entry from JSONL is on the current branch.
+            if (role === "compactionSummary") {
+              if (eid && compactionEntryIds.has(eid)) continue;
+              // Also skip if no entryId (CLI-generated in-memory) but JSONL has any
+              // compaction on the current filtered branch.
+              if (!eid && filteredHasCompaction) continue;
+            }
             if (role === "user" && !eid) {
               const content = m.content as unknown[];
               const text = Array.isArray(content)
@@ -1725,19 +1935,17 @@ export class AgentProcessManager {
       managed = await this.ensureManagedClient(sessionId);
     }
     if (!managed) return [];
-    return (managed.client as unknown as SandboxRpcClient)
-      .getAvailableModels()
-      .catch(async (err: unknown) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        log.warn("getAvailableModels error, checking if CLI is alive", {
-          sessionId,
-          err: msg,
-        });
-        if (!(await this.isClientAlive(sessionId, managed))) {
-          this.cleanupDeadClient(sessionId, `getAvailableModels failed: ${msg}`);
-        }
-        return [];
+    return managed.client.getAvailableModels().catch(async (err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.warn("getAvailableModels error, checking if CLI is alive", {
+        sessionId,
+        err: msg,
       });
+      if (!(await this.isClientAlive(sessionId, managed))) {
+        this.cleanupDeadClient(sessionId, `getAvailableModels failed: ${msg}`);
+      }
+      return [];
+    });
   }
 
   async setModel(
@@ -3481,9 +3689,9 @@ export class AgentProcessManager {
       const preTimeout = setTimeout(() => {
         if (!this.syncDelegateResolvers.has(newSessionId)) return;
         log.info("[syncDelegate] pre-timeout summarize injection", { sessionId: newSessionId });
-        this.followUp(
+        this.steer(
           newSessionId,
-          "[系统指令] 即将超时，请立即停止当前操作，用几句话总结你到目前为止的工作成果和进展。",
+          `[系统指令] 任务已运行较长时间（${Math.round((timeoutMs - 60_000) / 60_000)} 分钟），请在 60 秒内汇报阶段性成果：已完成的工作、未完成的部分、以及下一步该怎么做，以便主任务可以恢复继续。`,
         );
       }, preTimeoutMs);
 

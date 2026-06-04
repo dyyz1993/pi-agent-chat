@@ -60,6 +60,12 @@ export const config = {
   sandboxBoxExtensionsPath: process.env.SANDBOX_BOX_EXTENSIONS_PATH ?? "",
   /** sandbox-box 域名后缀 */
   sandboxBoxDomainSuffix: process.env.SANDBOX_BOX_DOMAIN_SUFFIX ?? "sandbox.19930810.xyz",
+  /** sandbox-box 内注入的模型配置 */
+  sandboxBoxModelsJson: process.env.SANDBOX_BOX_MODELS_JSON || undefined,
+  /** sandbox-box 内注入的 settings 配置 */
+  sandboxBoxSettingsJson: process.env.SANDBOX_BOX_SETTINGS_JSON || undefined,
+  /** sandbox-box 内注入的扩展目录 */
+  sandboxBoxExtensionsPath: process.env.SANDBOX_BOX_EXTENSIONS_PATH || undefined,
   /** 沙箱空闲超时（秒） */
   sandboxIdleTimeout: parseInt(process.env.SANDBOX_IDLE_TIMEOUT ?? "1800", 10),
 } as const;

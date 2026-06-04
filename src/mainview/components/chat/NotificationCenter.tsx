@@ -102,7 +102,7 @@ export function NotificationCenter() {
 
       {panelOpen && (
         <div
-          className="absolute right-0 top-full mt-1 w-72 max-h-80 overflow-hidden flex flex-col bg-surface-dim border border-border-secondary rounded-lg shadow-xl z-50"
+          className="absolute right-0 top-full mt-1 w-72 max-h-80 overflow-hidden flex flex-col bg-surface-dim border border-border-secondary rounded-lg shadow-xl z-popover"
           role="log"
           aria-label={t("notification.list")}
         >

@@ -21,6 +21,7 @@ import { createLogger } from "../../../shared/lib/logger";
 import { apiClient } from "../../lib/api-client";
 import type { RecentProject, DirectoryEntry, FavoriteFolder } from "../../types";
 import { useFocusTrap } from "../../hooks/use-focus-trap";
+import { IconButton } from "../primitives";
 
 interface ProjectPickerDialogProps {
   open: boolean;
@@ -653,7 +654,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
       {/* Mobile view */}
       <div
         ref={mobileDialogRef}
-        className="md:hidden fixed inset-0 z-[100] bg-surface-code flex flex-col animate-slide-in-up"
+        className="md:hidden fixed inset-0 z-fullscreen bg-surface-code flex flex-col animate-slide-in-up"
         style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
         role="dialog"
         aria-modal="true"
@@ -664,13 +665,9 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
           style={{ paddingTop: "calc(0.75rem + env(safe-area-inset-top, 0px))" }}
         >
           <h2 className="text-sm font-semibold text-text-primary">{t("picker.title")}</h2>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-md hover:bg-surface-hover dark:hover:bg-surface-dim text-text-tertiary"
-            aria-label={t("picker.close")}
-          >
+          <IconButton label={t("picker.close")} size="md" onClick={onClose}>
             <X className="w-4 h-4" />
-          </button>
+          </IconButton>
         </div>
 
         <div className="flex bg-surface-code dark:bg-surface-dim/50 mx-3 mt-3 rounded-lg p-0.5 shrink-0">
@@ -946,7 +943,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
       </div>
 
       {/* Desktop view */}
-      <div className="hidden md:flex fixed inset-0 z-[100] items-center justify-center">
+      <div className="hidden md:flex fixed inset-0 z-modal items-center justify-center">
         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
         <div
@@ -958,13 +955,9 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
         >
           <div className="flex items-center justify-between px-5 py-3 border-b border-border-secondary dark:border-surface-code shrink-0">
             <h2 className="text-sm font-semibold text-text-primary">{t("picker.title")}</h2>
-            <button
-              onClick={onClose}
-              className="p-1.5 rounded-md hover:bg-surface-hover dark:hover:bg-surface-dim text-text-tertiary hover:text-text-secondary dark:hover:text-text-primary transition-colors"
-              aria-label={t("picker.close")}
-            >
+            <IconButton label={t("picker.close")} size="md" onClick={onClose}>
               <X className="w-4 h-4" />
-            </button>
+            </IconButton>
           </div>
 
           <div className="flex-1 flex overflow-hidden min-h-0">

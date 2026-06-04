@@ -19,10 +19,6 @@ vi.mock("../src/mainview/lib/api-client", () => ({
   },
 }));
 
-vi.mock("../src/mainview/hooks/use-focus-trap", () => ({
-  useFocusTrap: () => {},
-}));
-
 const mockScrollToIndex = vi.fn();
 
 vi.mock("@tanstack/react-virtual", () => ({

@@ -20,6 +20,11 @@ const log = createLogger("event-handler");
 
 export const toolCallNameMap: Record<string, string> = {};
 
+// Track sessions where compaction_end was deferred due to active streaming.
+// When agent_end fires for these sessions, a force reload is triggered to sync
+// messages with the compacted JSONL data.
+const compactionDeferredSessions = new Set<string>();
+
 const pendingPrefetchMap = new Map<
   string,
   Map<string, { agentEvent: AgentEvent; timer: ReturnType<typeof setTimeout> }>
@@ -29,6 +34,44 @@ const PREFETCH_FALLBACK_MS = 5000;
 export function buildTokenUsage(usage: Usage): { tokenUsage?: TokenUsage } {
   const result = extractTokenUsage(usage);
   return result ? { tokenUsage: result } : {};
+}
+
+function hasRenderableContent(msg: ChatMessage): boolean {
+  return msg.content.some(
+    (b) =>
+      (b.type === "text" && b.text.trim().length > 0) ||
+      b.type === "thinking" ||
+      b.type === "toolCall" ||
+      b.type === "toolResult" ||
+      b.type === "toolExecution" ||
+      b.type === "custom",
+  );
+}
+
+function scheduleEmptyStreamingReload(sessionId: string, messageId: string): void {
+  setTimeout(() => {
+    const chat = useChatStore.getState();
+    const current = chat.messagesBySession[sessionId] || [];
+    const last = current[current.length - 1];
+    if (
+      !last ||
+      last.id !== messageId ||
+      last.role !== "assistant" ||
+      last.isStreaming !== true ||
+      hasRenderableContent(last)
+    ) {
+      return;
+    }
+
+    chat
+      .loadSessionMessages(sessionId, { force: true, preserveStreaming: false })
+      .catch((err) => {
+        log.warn("empty streaming recovery reload failed", {
+          sessionId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      });
+  }, 750);
 }
 
 export function handleAgentEvent(sessionId: string, event: AgentEvent) {
@@ -71,6 +114,15 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         break;
       }
     }
+
+    // If compaction was deferred during streaming, force reload now that
+    // streaming has ended to sync the store with the compacted JSONL data.
+    if (compactionDeferredSessions.has(sessionId)) {
+      compactionDeferredSessions.delete(sessionId);
+      log.info("agent_end → deferred compaction reload", { sessionId });
+      useChatStore.getState().loadSessionMessages(sessionId, { force: true });
+    }
+
     const crashReason = (event as { reason?: string }).reason;
     if (crashReason) {
       notificationGateway.emit({
@@ -150,7 +202,9 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       (m) => m.role === "assistant" && m.isStreaming === true,
     );
     if (isActivelyStreaming) {
-      log.info("compaction_end → session streaming, skip force reload", { sessionId });
+      // Defer the reload: agent_end will trigger it once streaming finishes.
+      compactionDeferredSessions.add(sessionId);
+      log.info("compaction_end → session streaming, deferred reload to agent_end", { sessionId });
     } else {
       chatState.loadSessionMessages(sessionId, { force: true });
     }
@@ -472,7 +526,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       if (userMsg) {
         chat.setMessagesForSession(
           sessionId,
-          existing.map((m) => (m.id === userMsg.id ? { ...m, entryId } : m)),
+          existing.map((m) => (m.id === userMsg.id ? { ...m, entryId, _local: false } : m)),
         );
       }
       return;
@@ -505,19 +559,31 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
     flushNow();
 
-    const hasContent = lastMsg.content.some(
-      (b) =>
-        (b.type === "text" && b.text.trim().length > 0) ||
-        b.type === "thinking" ||
-        b.type === "toolCall" ||
-        b.type === "toolResult" ||
-        b.type === "toolExecution" ||
-        b.type === "custom",
-    );
+    const hasContent = hasRenderableContent(lastMsg);
 
     // During streaming, message_end may arrive before replayed message_update events
-    // populate the content. Skip the empty-content error check in this case.
+    // populate the content. Prefer the final message payload if it already has
+    // content; otherwise schedule a reload so the empty streaming bubble does
+    // not remain stuck forever.
     if (!hasContent && storeGet().sessionStatusMap[sessionId] === "streaming") {
+      const finalMsg = messageToChatMessage(message, entryId, toolCallNameMap);
+      if (finalMsg && hasRenderableContent(finalMsg)) {
+        chat.setMessagesForSession(sessionId, [
+          ...existing.slice(0, -1),
+          {
+            ...lastMsg,
+            content: finalMsg.content,
+            isStreaming: false,
+            stopReason: assistantMsg.stopReason ?? lastMsg.stopReason ?? null,
+            provider: assistantMsg.api ?? lastMsg.provider,
+            model: assistantMsg.model ?? lastMsg.model,
+            ...buildTokenUsage(assistantMsg.usage),
+            entryId,
+          },
+        ]);
+      } else {
+        scheduleEmptyStreamingReload(sessionId, lastMsg.id);
+      }
       return;
     }
 

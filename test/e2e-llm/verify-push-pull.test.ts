@@ -128,6 +128,7 @@ let server: TestServerResult;
 let ws: WebSocket;
 let sessionId: string;
 let sessionPath: string;
+const shouldRun = process.env.PI_E2E_LLM === "1";
 
 beforeAll(async () => {
   server = await startTestServer({ port: PORT, authToken: AUTH_TOKEN, projectPath: process.cwd() });
@@ -152,7 +153,7 @@ afterAll(async () => {
   await stopTestServer(server);
 }, 15_000);
 
-describe("MCP / LSP / Shell Event Push Verification", () => {
+describe.skipIf(shouldRun === false)("MCP / LSP / Shell Event Push Verification", () => {
   it("step 1: agent.start → session_status_changed push", async () => {
     subscribe(ws, "agent.session_status_changed", {});
     const statusPromise = waitForEvent(
@@ -245,7 +246,7 @@ describe("MCP / LSP / Shell Event Push Verification", () => {
   });
 });
 
-describe("Reconnect Data Pull Verification", () => {
+describe.skipIf(shouldRun === false)("Reconnect Data Pull Verification", () => {
   it("step 6: pull getState — should have data", async () => {
     const resp = await sendRPC(ws, "agent.getState", { sessionId });
     expect(resp.error).toBeUndefined();

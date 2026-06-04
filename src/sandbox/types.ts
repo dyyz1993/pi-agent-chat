@@ -16,6 +16,10 @@ export interface SandboxInstance {
   status: SandboxStatus;
   /** HTTP 端点，供 SandboxRpcClient 连接 */
   endpoint: string;
+  projectPath?: string;
+  sandboxName?: string;
+  sandboxPid?: number;
+  localPort?: number;
   /** 创建时间 */
   createdAt: number;
   /** 最后活跃时间 */
@@ -43,4 +47,7 @@ export interface ISandboxProvider {
 
   /** 关闭所有沙盒 */
   shutdown(): Promise<void>;
+
+  /** 可选：在沙盒命名空间内执行命令，仅部分 provider 支持 */
+  execInSandbox?(userId: string, cmd: string): Promise<string>;
 }

@@ -22,8 +22,8 @@ import { useAgentStore } from "../../stores/use-agent-store";
 import { useGitStore } from "../../stores/use-git-store";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import type { SessionMeta, SubagentSessionInfo } from "../../types";
-import { copyToClipboard } from "../../utils/clipboard";
 import { ConfirmDialog } from "../explorer/ConfirmDialog";
+import { useCopyFeedback } from "../primitives";
 
 const EMPTY: never[] = [];
 
@@ -428,6 +428,7 @@ function SessionItem({
   const [editName, setEditName] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const copyWithFeedback = useCopyFeedback();
   const hasPiChildren = !!(children && children.length > 0);
   const hasSubagents = !!(subsessions && subsessions.length > 0);
   const isDelegate = session.sessionId.startsWith("sess_coord_");
@@ -470,9 +471,9 @@ function SessionItem({
   const handleCopyId = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      copyToClipboard(session.sessionId);
+      copyWithFeedback(session.sessionId);
     },
-    [session.sessionId],
+    [copyWithFeedback, session.sessionId],
   );
 
   const handleStartRename = useCallback(
@@ -729,6 +730,7 @@ function SubagentItem({
   const [editName, setEditName] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const copyWithFeedback = useCopyFeedback();
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -749,9 +751,9 @@ function SubagentItem({
   const handleCopyId = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      copyToClipboard(sub.sessionId);
+      copyWithFeedback(sub.sessionId);
     },
-    [sub.sessionId],
+    [copyWithFeedback, sub.sessionId],
   );
 
   const handleStartRename = useCallback(

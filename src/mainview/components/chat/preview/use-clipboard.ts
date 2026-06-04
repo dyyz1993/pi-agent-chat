@@ -1,22 +1,26 @@
 import { useState, useCallback } from "react";
-import { copyToClipboard } from "../../../utils/clipboard";
+import { useCopyFeedback, type CopyFeedbackOptions } from "../../primitives";
 
-export function useClipboard(timeout = 2000): {
+export function useClipboard(
+  timeout = 2000,
+  options?: CopyFeedbackOptions,
+): {
   copied: boolean;
   copy: (text: string) => void;
 } {
   const [copied, setCopied] = useState(false);
+  const copyWithFeedback = useCopyFeedback({ showToast: false, ...options });
 
   const copy = useCallback(
     (text: string) => {
-      copyToClipboard(text).then((ok) => {
+      copyWithFeedback(text).then((ok) => {
         if (ok) {
           setCopied(true);
           setTimeout(() => setCopied(false), timeout);
         }
       });
     },
-    [timeout],
+    [copyWithFeedback, timeout],
   );
 
   return { copied, copy };

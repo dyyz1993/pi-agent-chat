@@ -10,7 +10,9 @@
  *   - rpc/require-api-client      : 前端必须通过 apiClient 调用 RPC
  *   - rpc/no-namespace-iterate    : 禁止 Object.values() 遍历 namespace import
  *   - rpc/no-component-rpc-fetch  : 禁止 UI 组件直接调用 apiClient.call() 获取共享数据
- *   - rpc/valid-channel-method    : callChannel() 方法名必须在已知 channel contract 中定义
+ *   - rpc/valid-channel-method      : callChannel() 方法名必须在已知 channel contract 中定义
+ *   - rpc/compaction-entries-sync   : JSONL 解析中 compaction 必须同时 push 到 allCompactionEntries + allMessages
+ *   - rpc/compaction-reload-pairing : compactionDeferredSessions.add() 必须有 agent_end 兜底 flush
  */
 "use strict";
 
@@ -23,6 +25,8 @@ const requireApiClient = require("./rules/require-api-client");
 const noNamespaceIterate = require("./rules/no-namespace-iterate");
 const noComponentRpcFetch = require("./rules/no-component-rpc-fetch");
 const validChannelMethod = require("./rules/valid-channel-method");
+const compactionEntriesSync = require("./rules/compaction-entries-sync");
+const compactionReloadPairing = require("./rules/compaction-reload-pairing");
 
 module.exports = {
   meta: {
@@ -39,6 +43,8 @@ module.exports = {
     "no-namespace-iterate": noNamespaceIterate,
     "no-component-rpc-fetch": noComponentRpcFetch,
     "valid-channel-method": validChannelMethod,
+    "compaction-entries-sync": compactionEntriesSync,
+    "compaction-reload-pairing": compactionReloadPairing,
   },
   configs: {
     recommended: {
@@ -53,6 +59,8 @@ module.exports = {
         "rpc/no-namespace-iterate": "error",
         "rpc/no-component-rpc-fetch": "warn",
         "rpc/valid-channel-method": "error",
+        "rpc/compaction-entries-sync": "error",
+        "rpc/compaction-reload-pairing": "error",
       },
     },
   },

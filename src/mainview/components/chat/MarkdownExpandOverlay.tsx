@@ -1,10 +1,10 @@
 import { memo, useCallback, useEffect, useRef } from "react";
-import { X, Copy, Check } from "lucide-react";
+import { Copy, Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { CachedReactMarkdown } from "./CachedReactMarkdown";
 import { useChatOverlayStore } from "../../stores/use-chat-overlay-store";
 import { useClipboard } from "./preview/use-clipboard";
-import { useFocusTrap } from "../../hooks/use-focus-trap";
+import { FullscreenOverlay, IconButton } from "../primitives";
 
 export const MarkdownExpandOverlay = memo(function MarkdownExpandOverlay() {
   const { t } = useTranslation("chat");
@@ -13,8 +13,6 @@ export const MarkdownExpandOverlay = memo(function MarkdownExpandOverlay() {
   const closeExpand = useChatOverlayStore((s) => s.close);
   const scrollRef = useRef<HTMLDivElement>(null);
   const prevContentRef = useRef<string | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(containerRef, { onEscape: closeExpand });
 
   useEffect(() => {
     if (expandedContent && expandedContent !== prevContentRef.current) {
@@ -25,15 +23,6 @@ export const MarkdownExpandOverlay = memo(function MarkdownExpandOverlay() {
     }
   }, [expandedContent]);
 
-  useEffect(() => {
-    if (!expandedContent) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeExpand();
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [expandedContent, closeExpand]);
-
   const { copied, copy } = useClipboard(2000);
 
   const handleCopy = useCallback(() => {
@@ -43,47 +32,26 @@ export const MarkdownExpandOverlay = memo(function MarkdownExpandOverlay() {
   if (!expandedContent) return null;
 
   return (
-    <div
-      ref={containerRef}
-      className="absolute inset-0 z-50 flex flex-col bg-bg-elevated/98 dark:bg-surface-code/98 backdrop-blur-sm"
+    <FullscreenOverlay
+      title={expandedTitle}
+      onClose={closeExpand}
+      closeLabel={t("markdownOverlay.closeEsc")}
+      position="absolute"
+      layer="modal"
+      bodyRef={scrollRef}
+      actions={
+        <IconButton label={t("copyContentTitle")} size="md" onClick={handleCopy}>
+          {copied ? (
+            <Check className="w-3.5 h-3.5 text-status-success" />
+          ) : (
+            <Copy className="w-3.5 h-3.5" />
+          )}
+        </IconButton>
+      }
     >
-      <div
-        className="flex items-center gap-2 px-4 py-2 bg-surface-dim/90 dark:bg-surface-code/90 border-b border-border-secondary flex-shrink-0"
-        style={{ paddingTop: "calc(0.5rem + env(safe-area-inset-top, 0px))" }}
-      >
-        <span className="text-xs text-text-tertiary font-medium truncate flex-1 min-w-0">
-          {expandedTitle}
-        </span>
-        <div className="flex items-center gap-1 shrink-0">
-          <button
-            onClick={handleCopy}
-            className="p-2 rounded text-text-tertiary hover:text-text-primary dark:hover:text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-dim transition-colors"
-            title={t("copyContentTitle")}
-          >
-            {copied ? (
-              <Check className="w-3.5 h-3.5 text-status-success" />
-            ) : (
-              <Copy className="w-3.5 h-3.5" />
-            )}
-          </button>
-          <button
-            onClick={closeExpand}
-            className="p-2 rounded text-text-tertiary hover:text-text-primary dark:hover:text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-dim transition-colors"
-            title={t("markdownOverlay.closeEsc")}
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+      <div className="max-w-4xl mx-auto px-6 py-6 prose dark:prose-invert prose-sm max-w-none prose-p:my-2 prose-pre:bg-surface-dim/80 dark:prose-pre:bg-surface-code/80 prose-pre:border prose-pre:border-border-secondary dark:prose-pre:border-border-secondary prose-code:text-emerald-700 dark:prose-code:text-emerald-300 prose-a:text-semantic-accent">
+        <CachedReactMarkdown>{expandedContent}</CachedReactMarkdown>
       </div>
-      <div
-        ref={scrollRef}
-        className="flex-1 overflow-y-auto overscroll-contain"
-        style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
-      >
-        <div className="max-w-4xl mx-auto px-6 py-6 prose dark:prose-invert prose-sm max-w-none prose-p:my-2 prose-pre:bg-surface-dim/80 dark:prose-pre:bg-surface-code/80 prose-pre:border prose-pre:border-border-secondary dark:prose-pre:border-border-secondary prose-code:text-emerald-700 dark:prose-code:text-emerald-300 prose-a:text-semantic-accent">
-          <CachedReactMarkdown>{expandedContent}</CachedReactMarkdown>
-        </div>
-      </div>
-    </div>
+    </FullscreenOverlay>
   );
 });

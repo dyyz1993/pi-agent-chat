@@ -1,7 +1,6 @@
 import { memo, useCallback, useRef, useState } from "react";
 import {
   AlertTriangle,
-  X,
   FilePlus,
   FileMinus,
   FileEdit,
@@ -17,12 +16,12 @@ import type { ModifiedFile } from "../../stores/use-rollback-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useChatStore } from "../../stores/use-chat-store";
 import { useNotificationStore } from "../../stores/use-notification-store";
-import { useFocusTrap } from "../../hooks/use-focus-trap";
 import { apiClient } from "../../lib/api-client";
 import { createLogger } from "../../../shared/lib/logger";
 import { InlineDiffViewer } from "./tool-renderers/InlineDiffViewer";
 import { useChatOverlayStore } from "../../stores/use-chat-overlay-store";
 import { formatFilePath } from "../../lib/format-path";
+import { Button, ModalDialog } from "../primitives";
 
 const log = createLogger("chat");
 
@@ -251,11 +250,8 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
   const preview = useRollbackStore((s) => s.preview);
   const loading = useRollbackStore((s) => s.loading);
   const closeRollback = useRollbackStore((s) => s.closeRollback);
-  const containerRef = useRef<HTMLDivElement>(null);
   const confirmingRef = useRef(false);
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
-
-  useFocusTrap(containerRef, { onEscape: closeRollback });
 
   const toggleFile = useCallback((filePath: string) => {
     setExpandedFiles((prev) => {
@@ -378,94 +374,66 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
   const hasFiles = files.length > 0;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-      onClick={closeRollback}
-    >
-      <div
-        ref={containerRef}
-        data-testid="rollback-overlay"
-        className="relative w-full max-w-xl mx-4 bg-bg-primary dark:bg-surface-code rounded-xl shadow-2xl border border-border-secondary flex flex-col overflow-hidden"
-        style={{ maxHeight: "min(80vh, 560px)" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-border-secondary flex-shrink-0">
-          <AlertTriangle className="w-4 h-4 text-status-warning shrink-0" />
-          <span className="text-sm font-medium text-text-primary truncate flex-1 min-w-0">
-            {isWithFiles ? t("rollbackOverlay.titleWithFiles") : t("rollbackOverlay.title")}
-          </span>
-          {hasFiles && (
-            <span className="text-xs text-text-tertiary">
-              {t("rollbackOverlay.fileCount", {
-                count: preview?.summary?.totalFiles ?? files.length,
-              })}
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={closeRollback}
-            className="p-1.5 rounded text-text-tertiary hover:text-text-primary dark:hover:text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-hover transition-colors"
-            title={t("rollbackOverlay.cancel")}
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto overscroll-contain min-h-0">
-          <div className="px-4 py-4">
-            <p className="text-sm text-text-secondary dark:text-text-tertiary mb-4">
-              {isWithFiles
-                ? t("rollbackOverlay.withFilesModeDesc")
-                : t("rollbackOverlay.messageModeDesc")}
-            </p>
-
-            {isWithFiles && hasFiles && (
-              <div className="mb-4 border border-border-secondary rounded-lg overflow-hidden">
-                {files.map((file) => (
-                  <FileItem
-                    key={`${file.status}-${file.path}`}
-                    filePath={file.path}
-                    status={file.status}
-                    details={file.details}
-                    oldContent={file.oldContent}
-                    newContent={file.newContent}
-                    addedLines={file.addedLines}
-                    removedLines={file.removedLines}
-                    expanded={expandedFiles.has(`${file.status}-${file.path}`)}
-                    onToggle={() => toggleFile(`${file.status}-${file.path}`)}
-                  />
-                ))}
-              </div>
-            )}
-
-            {isWithFiles && !hasFiles && (
-              <p className="text-xs text-text-tertiary mb-4">{t("rollbackOverlay.noFiles")}</p>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center justify-end gap-3 px-4 py-3 border-t border-border-secondary flex-shrink-0">
-          <button
-            type="button"
-            onClick={closeRollback}
-            disabled={loading}
-            className="px-4 py-1.5 text-sm rounded-lg border border-border-secondary text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
+    <ModalDialog
+      title={isWithFiles ? t("rollbackOverlay.titleWithFiles") : t("rollbackOverlay.title")}
+      icon={<AlertTriangle className="w-4 h-4 text-status-warning shrink-0" />}
+      onClose={closeRollback}
+      closeLabel={t("rollbackOverlay.cancel")}
+      size="md"
+      data-testid="rollback-overlay"
+      className="bg-bg-primary dark:bg-surface-code"
+      style={{ maxHeight: "min(80vh, 560px)" }}
+      headerClassName="py-2"
+      bodyClassName="overscroll-contain"
+      footer={
+        <>
+          <Button size="md" variant="secondary" onClick={closeRollback} disabled={loading}>
             {t("rollbackOverlay.cancel")}
-          </button>
-          <button
-            type="button"
-            onClick={confirmRollback}
-            disabled={loading}
-            className="px-4 py-1.5 text-sm rounded-lg bg-status-error hover:bg-status-error/80 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            {loading && (
-              <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            )}
+          </Button>
+          <Button size="md" variant="danger" onClick={confirmRollback} loading={loading}>
             {t("rollbackOverlay.confirm")}
-          </button>
-        </div>
+          </Button>
+        </>
+      }
+    >
+      <div className="px-4 py-4">
+        {hasFiles && (
+          <div className="mb-3 text-xs text-text-tertiary">
+            {t("rollbackOverlay.fileCount", {
+              count: preview?.summary?.totalFiles ?? files.length,
+            })}
+          </div>
+        )}
+
+        <p className="text-sm text-text-secondary dark:text-text-tertiary mb-4">
+          {isWithFiles
+            ? t("rollbackOverlay.withFilesModeDesc")
+            : t("rollbackOverlay.messageModeDesc")}
+        </p>
+
+        {isWithFiles && hasFiles && (
+          <div className="mb-4 border border-border-secondary rounded-lg overflow-hidden">
+            {files.map((file) => (
+              <FileItem
+                key={`${file.status}-${file.path}`}
+                filePath={file.path}
+                status={file.status}
+                details={file.details}
+                oldContent={file.oldContent}
+                newContent={file.newContent}
+                addedLines={file.addedLines}
+                removedLines={file.removedLines}
+                expanded={expandedFiles.has(`${file.status}-${file.path}`)}
+                onToggle={() => toggleFile(`${file.status}-${file.path}`)}
+              />
+            ))}
+          </div>
+        )}
+
+        {isWithFiles && !hasFiles && (
+          <p className="text-xs text-text-tertiary mb-4">{t("rollbackOverlay.noFiles")}</p>
+        )}
       </div>
-    </div>
+    </ModalDialog>
   );
 });

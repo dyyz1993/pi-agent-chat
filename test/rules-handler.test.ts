@@ -1,8 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-const { mockGetProcessManager } = vi.hoisted(() => ({
-  mockGetProcessManager: vi.fn(() => null),
-}));
+const mockGetProcessManager = vi.hoisted(() => vi.fn(() => null));
 
 vi.mock("../src/shared/handlers/agent", () => ({
   getProcessManager: mockGetProcessManager,
@@ -30,7 +28,10 @@ describe("rules handler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     server = createMockServer();
-    register(server as unknown as Parameters<typeof register>[0], {} as Parameters<typeof register>[1]);
+    register(
+      server as unknown as Parameters<typeof register>[0],
+      {} as Parameters<typeof register>[1],
+    );
   });
 
   describe("rules.list", () => {
@@ -69,9 +70,7 @@ describe("rules handler", () => {
       const handler = server.handlers.get("rules.requestSnapshot")!;
       const result = await handler({});
 
-      expect(result).toEqual(
-        expect.objectContaining({ type: "snapshot", totalRules: 0 }),
-      );
+      expect(result).toEqual(expect.objectContaining({ type: "snapshot", totalRules: 0 }));
     });
 
     it("returns empty snapshot when session not found", async () => {
@@ -81,9 +80,7 @@ describe("rules handler", () => {
       const handler = server.handlers.get("rules.requestSnapshot")!;
       const result = await handler({ sessionId: "ghost" });
 
-      expect(result).toEqual(
-        expect.objectContaining({ type: "snapshot", totalRules: 0 }),
-      );
+      expect(result).toEqual(expect.objectContaining({ type: "snapshot", totalRules: 0 }));
     });
 
     it("returns snapshot from channel call", async () => {
@@ -110,7 +107,9 @@ describe("rules handler", () => {
       const result = await handler({ sessionId: "s1" });
 
       expect(result).toEqual(snapshot);
-      expect(pm.callChannel).toHaveBeenCalledWith("s1", "rules-engine", "getSnapshot", { cwd: "/project" });
+      expect(pm.callChannel).toHaveBeenCalledWith("s1", "rules-engine", "getSnapshot", {
+        cwd: "/project",
+      });
     });
 
     it("returns empty snapshot when channel call fails", async () => {
@@ -126,9 +125,7 @@ describe("rules handler", () => {
       const handler = server.handlers.get("rules.requestSnapshot")!;
       const result = await handler({ sessionId: "s1" });
 
-      expect(result).toEqual(
-        expect.objectContaining({ type: "snapshot", totalRules: 0 }),
-      );
+      expect(result).toEqual(expect.objectContaining({ type: "snapshot", totalRules: 0 }));
     });
 
     it("returns empty snapshot when channel returns non-snapshot", async () => {
@@ -142,9 +139,7 @@ describe("rules handler", () => {
       const handler = server.handlers.get("rules.requestSnapshot")!;
       const result = await handler({ sessionId: "s1" });
 
-      expect(result).toEqual(
-        expect.objectContaining({ type: "snapshot", totalRules: 0 }),
-      );
+      expect(result).toEqual(expect.objectContaining({ type: "snapshot", totalRules: 0 }));
     });
   });
 });

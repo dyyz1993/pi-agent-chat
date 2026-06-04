@@ -102,6 +102,7 @@ function connectWs(): Promise<WebSocket> {
 }
 
 let server: TestServerResult;
+const shouldRun = process.env.PI_E2E_LLM === "1";
 
 beforeAll(async () => {
   server = await startTestServer({ port: PORT, authToken: AUTH_TOKEN, projectPath: process.cwd() });
@@ -111,7 +112,7 @@ afterAll(async () => {
   await stopTestServer(server);
 }, 15_000);
 
-describe("Subagent Timeout Verification", () => {
+describe.skipIf(shouldRun === false)("Subagent Timeout Verification", () => {
   it("step 1: create session and start agent", async () => {
     const ws = await connectWs();
     try {

@@ -74,7 +74,7 @@ export function GitBranchSelector({ onClose }: GitBranchSelectorProps) {
   return (
     <div
       ref={ref}
-      className="fixed z-50 w-56 max-h-64 overflow-y-auto bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl py-1"
+      className="fixed z-popover w-56 max-h-64 overflow-y-auto bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl py-1"
       style={
         {
           /* positioned by parent via absolute */

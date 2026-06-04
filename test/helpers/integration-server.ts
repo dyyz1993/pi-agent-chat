@@ -17,6 +17,14 @@ export interface TestServerResult {
   tmpDir: string;
 }
 
+export function resolvePiCliPath(): string {
+  return process.env.PI_CLI_PATH || join(process.cwd(), "node_modules", ".bin", "pi");
+}
+
+export function hasPiCliPath(): boolean {
+  return existsSync(resolvePiCliPath());
+}
+
 function killPort(port: number): void {
   try {
     execSync(`lsof -ti:${port} | xargs kill -9 2>/dev/null || true`, {
@@ -70,6 +78,7 @@ export async function startTestServer(config: TestServerConfig): Promise<TestSer
     AUTH_TOKEN: config.authToken,
     LOG_DIR: join(tmpDir, "logs"),
     HOME: isolatedHome,
+    PI_CLI_PATH: resolvePiCliPath(),
   };
 
   const proc = spawn("bun", ["src/server.ts"], {

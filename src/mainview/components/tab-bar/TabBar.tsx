@@ -7,6 +7,7 @@ import { useUIDialogStore } from "../../stores/use-ui-dialog-store";
 import { apiClient } from "../../lib/api-client";
 import { SettingsPanel } from "../settings/SettingsPanel";
 import type { SessionStatus } from "../../types";
+import { Button, ModalDialog } from "../primitives";
 
 const log = createLogger("tab-bar");
 
@@ -391,61 +392,40 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
       {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
 
       {closeConfirmTab && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-bg-overlay backdrop-blur-sm"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setCloseConfirmTab(null);
-          }}
+        <ModalDialog
+          title={t("closeProjectTitle")}
+          onClose={() => setCloseConfirmTab(null)}
+          closeLabel={t("cancel", { ns: "common" })}
+          size="sm"
+          bodyClassName="px-4 py-4"
+          footer={
+            closeConfirmTab.runningSessionIds.length > 0 ? (
+              <>
+                <Button size="md" variant="secondary" onClick={handleKeepRunning}>
+                  {t("closeProjectContinue")}
+                </Button>
+                <Button size="md" variant="danger" onClick={handleStopAndClose}>
+                  {t("closeProjectStop")}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button size="md" variant="secondary" onClick={() => setCloseConfirmTab(null)}>
+                  {t("cancel", { ns: "common" })}
+                </Button>
+                <Button size="md" variant="danger" onClick={handleKeepRunning}>
+                  {t("closeProjectClose")}
+                </Button>
+              </>
+            )
+          }
         >
-          <div
-            className="bg-bg-elevated border border-border-primary rounded-lg shadow-2xl p-4 min-w-[300px] max-w-[400px]"
-            role="dialog"
-            aria-modal="true"
-            aria-label={t("closeProjectTitle")}
-          >
-            <h3 className="text-sm font-semibold text-text-primary mb-2">
-              {t("closeProjectTitle")}
-            </h3>
-            <p className="text-xs text-text-secondary mb-4">
-              {closeConfirmTab.runningSessionIds.length > 0
-                ? t("closeProjectRunningMessage", { name: closeConfirmTab.name })
-                : t("closeProjectIdleMessage", { name: closeConfirmTab.name })}
-            </p>
-            <div className="flex justify-end gap-2">
-              {closeConfirmTab.runningSessionIds.length > 0 ? (
-                <>
-                  <button
-                    className="px-3 py-1.5 text-xs bg-surface-hover hover:bg-bg-tertiary rounded transition-colors text-text-primary"
-                    onClick={handleKeepRunning}
-                  >
-                    {t("closeProjectContinue")}
-                  </button>
-                  <button
-                    className="px-3 py-1.5 text-xs bg-status-error hover:bg-status-error/80 rounded transition-colors text-text-inverse"
-                    onClick={handleStopAndClose}
-                  >
-                    {t("closeProjectStop")}
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    className="px-3 py-1.5 text-xs bg-surface-hover hover:bg-bg-tertiary rounded transition-colors text-text-primary"
-                    onClick={() => setCloseConfirmTab(null)}
-                  >
-                    {t("cancel", { ns: "common" })}
-                  </button>
-                  <button
-                    className="px-3 py-1.5 text-xs bg-status-error hover:bg-status-error/80 rounded transition-colors text-text-inverse"
-                    onClick={handleKeepRunning}
-                  >
-                    {t("closeProjectClose")}
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
+          <p className="text-sm text-text-secondary">
+            {closeConfirmTab.runningSessionIds.length > 0
+              ? t("closeProjectRunningMessage", { name: closeConfirmTab.name })
+              : t("closeProjectIdleMessage", { name: closeConfirmTab.name })}
+          </p>
+        </ModalDialog>
       )}
     </div>
   );

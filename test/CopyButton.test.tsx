@@ -1,6 +1,8 @@
 import { render, screen, fireEvent, waitFor, cleanup, act } from "@testing-library/react";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { CopyButton } from "../src/mainview/components/chat/CopyButton";
+import { CopyAction } from "../src/mainview/components/primitives";
+import { useNotificationStore } from "../src/mainview/stores/use-notification-store";
 
 const mockCopy = vi.fn(() => Promise.resolve(true));
 
@@ -16,6 +18,10 @@ describe("CopyButton", () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    useNotificationStore.setState({
+      notifications: [],
+      panelOpen: false,
+    });
   });
 
   it("renders a button", () => {
@@ -23,9 +29,18 @@ describe("CopyButton", () => {
     expect(screen.getByRole("button")).toBeInTheDocument();
   });
 
-  it("click calls copyToClipboard with the text prop", () => {
+  it("uses custom title as accessible label before copied state", () => {
+    render(<CopyButton text="hello" title="Copy payload" />);
+    expect(screen.getByRole("button", { name: "Copy payload" })).toBeInTheDocument();
+    expect(screen.getByTitle("Copy payload")).toBeInTheDocument();
+  });
+
+  it("click calls copyToClipboard with the text prop", async () => {
     render(<CopyButton text="copy me" />);
-    fireEvent.click(screen.getByRole("button"));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button"));
+      await Promise.resolve();
+    });
     expect(mockCopy).toHaveBeenCalledWith("copy me");
   });
 
@@ -50,5 +65,45 @@ describe("CopyButton", () => {
     });
     expect(screen.getByTitle("copy")).toBeInTheDocument();
     vi.useRealTimers();
+  });
+});
+
+describe("CopyAction", () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+    useNotificationStore.setState({
+      notifications: [],
+      panelOpen: false,
+    });
+  });
+
+  it("pushes a success toast after copy", async () => {
+    render(<CopyAction text="copy me" />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button"));
+      await Promise.resolve();
+    });
+
+    expect(useNotificationStore.getState().notifications[0]).toMatchObject({
+      level: "info",
+      message: "copiedToClipboard",
+    });
+  });
+
+  it("pushes an error toast when copy fails", async () => {
+    mockCopy.mockResolvedValueOnce(false);
+    render(<CopyAction text="copy me" />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button"));
+      await Promise.resolve();
+    });
+
+    expect(useNotificationStore.getState().notifications[0]).toMatchObject({
+      level: "error",
+      message: "copyFailed",
+    });
   });
 });

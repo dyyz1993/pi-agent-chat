@@ -149,7 +149,8 @@ async function safeClose(ws: WebSocket | undefined) {
   }
 }
 
-const describe_ = describe;
+const shouldRun = process.env.PI_E2E_LLM === "1";
+const describe_ = shouldRun ? describe : describe.skip;
 
 let server: TestServerResult;
 

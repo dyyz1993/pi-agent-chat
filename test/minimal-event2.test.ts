@@ -108,7 +108,7 @@ vi.mock("../src/mainview/stores/use-session-store", () => {
     },
     restoreContextFromHistory: () => {},
   }));
-  return { useSessionStore, clearAgentStarted: () => {} };
+  return { useSessionStore, clearAgentStarted: vi.fn() };
 });
 
 vi.mock("../src/mainview/stores/use-chat-store", () => {
@@ -137,8 +137,6 @@ vi.mock("../src/mainview/stores/use-chat-store", () => {
   }));
   return { useChatStore };
 });
-
-console.log("about to import");
 
 import { handleAgentEvent, toolCallNameMap } from "../src/mainview/stores/agent-event-handler";
 import { useChatStore } from "../src/mainview/stores/use-chat-store";
