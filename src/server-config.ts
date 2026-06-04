@@ -52,6 +52,12 @@ export const config = {
   sandboxBoxSshUser: process.env.SANDBOX_BOX_SSH_USER ?? "root",
   /** sandbox-box SSH 密钥路径 */
   sandboxBoxSshKey: process.env.SANDBOX_BOX_SSH_KEY ?? "",
+  /** sandbox-box models.json 路径 */
+  sandboxBoxModelsJson: process.env.SANDBOX_BOX_MODELS_JSON ?? "",
+  /** sandbox-box settings.json 路径 */
+  sandboxBoxSettingsJson: process.env.SANDBOX_BOX_SETTINGS_JSON ?? "",
+  /** sandbox-box 扩展路径 */
+  sandboxBoxExtensionsPath: process.env.SANDBOX_BOX_EXTENSIONS_PATH ?? "",
   /** sandbox-box 域名后缀 */
   sandboxBoxDomainSuffix: process.env.SANDBOX_BOX_DOMAIN_SUFFIX ?? "sandbox.19930810.xyz",
   /** sandbox-box 内注入的模型配置 */

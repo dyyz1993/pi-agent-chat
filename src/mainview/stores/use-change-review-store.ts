@@ -61,6 +61,40 @@ export const useChangeReviewStore = create<ChangeReviewState>()((set, get) => ({
         ...(session?.sessionPath ? { sessionPath: session.sessionPath } : {}),
       });
       const changes = (Array.isArray(result) ? result : []) as PendingChange[];
+
+      // Enrich with file diff content via agent.getBatchDiffs
+      if (
+        changes.length > 0 &&
+        changes.every((c) => c.oldContent === null && c.newContent === null)
+      ) {
+        try {
+          const batchResult = await apiClient.call("agent.getBatchDiffs", { sessionId });
+          if (batchResult?.files) {
+            const diffMap = new Map<
+              string,
+              { oldContent: string | null; newContent: string | null }
+            >();
+            for (const f of batchResult.files as Array<{
+              path: string;
+              diff: { oldContent: string | null; newContent: string | null } | null;
+            }>) {
+              if (f.diff) diffMap.set(f.path, f.diff);
+            }
+            for (const c of changes) {
+              const d = diffMap.get(c.path);
+              if (d) {
+                c.oldContent = d.oldContent;
+                c.newContent = d.newContent;
+              } else if (c.fileStatus === "added") {
+                c.oldContent = "";
+              }
+            }
+          }
+        } catch {
+          // Non-critical: stats will be missing but list still shows
+        }
+      }
+
       set({ changes, loading: false });
     } catch {
       set({ loading: false });

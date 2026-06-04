@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 let _activeSessionId: string | null = "test-session";
 
 vi.mock("../src/mainview/stores/use-session-store", () => ({
+  clearAgentStarted: () => {},
   useSessionStore: {
     getState: () => ({ activeSessionId: _activeSessionId }),
     subscribe: vi.fn(),

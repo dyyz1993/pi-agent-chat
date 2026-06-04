@@ -18,7 +18,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { useChangeReviewStore } from "../../stores/use-change-review-store";
 import { useGitStore } from "../../stores/use-git-store";
-import { useChatOverlayStore } from "../../stores/use-chat-overlay-store";
+import { useSessionStore } from "../../stores/use-session-store";
 import type { FileStatus } from "../../../shared/modules/change-review";
 
 /* ── Git-style status helpers (reusing GitPanel patterns) ── */
@@ -185,6 +185,8 @@ const ChangeItem = memo(function ChangeItem({ change, isExpanded, onToggle }: Ch
   const { t } = useTranslation("changeReview");
   const approveChange = useChangeReviewStore((s) => s.approveChange);
   const rejectChange = useChangeReviewStore((s) => s.rejectChange);
+  const fetchAgentFileDiff = useGitStore((s) => s.fetchAgentFileDiff);
+  const activeSessionId = useSessionStore((s) => s.activeSessionId);
 
   const statusCfg = STATUS_CONFIG[change.status];
   const StatusIcon = statusCfg.Icon;
@@ -217,16 +219,9 @@ const ChangeItem = memo(function ChangeItem({ change, isExpanded, onToggle }: Ch
   }, [rejectChange, change.path]);
 
   const handleViewDiff = useCallback(() => {
-    useGitStore.setState({
-      currentDiff: {
-        filePath: change.path,
-        diff: "",
-        oldContent: change.oldContent ?? "",
-        newContent: change.newContent ?? "",
-      },
-    });
-    useChatOverlayStore.getState().openDiff();
-  }, [change.path, change.oldContent, change.newContent]);
+    if (!activeSessionId) return;
+    fetchAgentFileDiff(activeSessionId, change.path);
+  }, [activeSessionId, fetchAgentFileDiff, change.path]);
 
   const fileName = change.path.split("/").pop() ?? change.path;
   const dirPath = (() => {

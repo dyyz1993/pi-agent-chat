@@ -22,6 +22,7 @@ vi.mock("../src/mainview/stores/message-batcher", () => ({
 }));
 
 vi.mock("../src/mainview/stores/use-session-store", () => ({
+  clearAgentStarted: () => {},
   useSessionStore: {
     getState: vi.fn(() => ({
       sessionStatusMap: {},

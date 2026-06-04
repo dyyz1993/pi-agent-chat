@@ -147,7 +147,7 @@ describe.skipIf(shouldRun === false)("Group 1: Event Variables Propagation", () 
 
     const sendResp = await rpc(ctx.ws, "agent.send", {
       sessionId: ctx.sessionId,
-      content: "Run: echo hello-hooks-test",
+      content: "Use the bash tool to execute this shell command: echo hello-hooks-test",
     });
     expect((sendResp.result as Record<string, unknown>).ok).toBe(true);
 
@@ -156,7 +156,9 @@ describe.skipIf(shouldRun === false)("Group 1: Event Variables Propagation", () 
     await new Promise((r) => setTimeout(r, 2000));
 
     const log = await readLog(paths);
-    expect(log).toContain("EVENT=bash");
+    const lines = parseLogLines(log);
+    const hasPreToolUse = lines.some((l) => l.includes("HOOK_EVENT=PreToolUse"));
+    expect(hasPreToolUse).toBe(true);
   });
 
   it("V6: session_shutdown should trigger SessionEnd hook", async () => {

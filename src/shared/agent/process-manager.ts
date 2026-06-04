@@ -24,7 +24,8 @@ import type { TodoChannelEvent } from "../modules/todo";
 import type { BashChannelEvent } from "../modules/bash";
 import type { LspChannelEvent } from "../modules/lsp";
 import type { RulesChannelEvent } from "../modules/rules";
-import type { RpcClientAPI, TreeEntry, ChannelTypeRegistry } from "@dyyz1993/pi-coding-agent";
+import type { RpcClientAPI, ChannelTypeRegistry } from "@dyyz1993/pi-coding-agent";
+import type { TreeEntry } from "../modules/agent";
 import { performance } from "perf_hooks";
 
 // 沙箱模式
@@ -33,7 +34,7 @@ import { SandboxBoxProvider } from "../../sandbox/providers/sandbox-box";
 import type { ISandboxProvider } from "../../sandbox/types";
 import { SandboxRpcClient } from "../../sandbox/sandbox-rpc-client";
 
-type McpServerInfo = Awaited<ReturnType<RpcClientAPI["getMcpServers"]>>[number];
+type McpServerInfo = Awaited<ReturnType<RpcClientInstance["getMcpServers"]>>[number];
 
 type ChannelMethodKeys<CN extends keyof ChannelTypeRegistry> = keyof NonNullable<
   ChannelTypeRegistry[CN]["methods"]
@@ -690,7 +691,7 @@ export class AgentProcessManager {
     projectPath: string,
     sessionPath: string,
     options?: { forceNewProcess?: boolean; userId?: string },
-  ): Promise<{ agentId: string; status: "started" | "already_running" }> {
+  ): Promise<{ agentId: string; status: "started" | "already_running" | "switched" }> {
     const tStart = performance.now();
 
     if (this._startInProgress) {
@@ -712,8 +713,10 @@ export class AgentProcessManager {
     }
 
     // ── Process pool: reuse existing process for same cwd ──
-    const pooled = this.processByCwd.get(projectPath);
-    if (pooled) {
+    const reusePoolKey = this.getPoolKey(projectPath, options?.userId);
+    const pool = this.processByCwd.get(reusePoolKey);
+    if (pool && pool.size > 0) {
+      const pooled = [...pool][pool.size - 1];
       const oldSessionId = pooled._activeSessionId;
       const tSwitch = performance.now();
       try {
@@ -2072,7 +2075,13 @@ export class AgentProcessManager {
       managed = await this.ensureManagedClient(sessionId);
     }
     if (!managed) throw new Error("Client not found");
-    return withTimeout(managed.client.setPermissionMode(mode), 15_000, "setPermissionMode");
+    return withTimeout(
+      managed.client.setPermissionMode(
+        mode as Parameters<typeof managed.client.setPermissionMode>[0],
+      ),
+      15_000,
+      "setPermissionMode",
+    );
   }
 
   async getActiveTools(sessionId: string): Promise<{ toolNames: string[] }> {
@@ -2558,7 +2567,12 @@ export class AgentProcessManager {
   }> {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) throw new Error("Client not found");
-    const result = await withTimeout(managed.client.fork(entryId, options), 60_000, "fork");
+    const result = (await withTimeout(managed.client.fork(entryId, options), 60_000, "fork")) as {
+      text: string;
+      cancelled: boolean;
+      newSessionFile?: string;
+      newSessionId?: string;
+    };
     // Don't stop the original session — the process pool's switchSession
     // will handle the transition when the forked session is started.
     // The original session remains on disk and can be re-activated later.
@@ -2765,7 +2779,7 @@ export class AgentProcessManager {
     const managed = this.getActiveManaged(sessionId);
     if (managed) {
       try {
-        const result = await withTimeout(managed.client.getTree(), 15_000, "getTree");
+        const result = await withTimeout(managed.client.getTreeWithLeaf(), 15_000, "getTree");
         return {
           entries: Array.isArray(result.entries) ? (result.entries as TreeEntry[]) : [],
           leafId: result.leafId,
@@ -3434,7 +3448,7 @@ export class AgentProcessManager {
   private async handleCoordinatorDelegate(
     parentSessionId: string,
     msg: Extract<CoordinatorMethodCall, { __call: "session_delegate" }>,
-  ): Promise<{ sessionId: string; status: "started" | "already_running" }> {
+  ): Promise<{ sessionId: string; status: "started" | "already_running" | "switched" }> {
     const { task, projectPath: rawProjectPath } = msg;
     const parent = this.getActiveManaged(parentSessionId);
     if (!parent) throw new Error("Parent session not found");
@@ -3901,7 +3915,7 @@ export class AgentProcessManager {
   private async handleCoordinatorDelegateFork(
     parentSessionId: string,
     msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_fork" }>,
-  ): Promise<{ sessionId: string; status: "started" | "already_running" }> {
+  ): Promise<{ sessionId: string; status: "started" | "already_running" | "switched" }> {
     const { task, sessionId: targetSessionId } = msg;
     const base = this.clients.get(targetSessionId);
     if (!base) throw new Error(`Session not found: ${targetSessionId}`);

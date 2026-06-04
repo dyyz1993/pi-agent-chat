@@ -26,6 +26,7 @@ vi.mock("../src/mainview/stores/use-session-store", () => {
     activeSessionId: "test-session",
     sessionReady: { "test-session": true },
     sessionStatusMap: {},
+    clearAgentStarted: () => {},
     restoreContextFromHistory: vi.fn(),
   };
   return {

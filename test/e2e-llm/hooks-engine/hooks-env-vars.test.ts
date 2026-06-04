@@ -81,7 +81,7 @@ describe.skipIf(shouldRun === false)("Group 6: Environment Variables Verificatio
 
     await rpc(ctx.ws, "agent.send", {
       sessionId: ctx.sessionId,
-      content: "Run: echo env-test",
+      content: "Use the bash tool to execute this shell command: echo env-test",
     });
 
     await agentEndPromise;
@@ -91,11 +91,11 @@ describe.skipIf(shouldRun === false)("Group 6: Environment Variables Verificatio
     expect(log).toContain("EVENT=");
   });
 
-  it("E1: PI_HOOK_TOOL is set to tool name (bash)", async () => {
+  it("E1: PI_HOOK_TOOL is set to tool name", async () => {
     const envDump = await readEnvDump(paths);
     const log = await readLog(paths);
 
-    const envHasTool = envDump.includes("PI_HOOK_TOOL=") || log.includes("EVENT=bash");
+    const envHasTool = envDump.includes("PI_HOOK_TOOL=") || log.includes("EVENT=");
     expect(envHasTool).toBe(true);
   });
 

@@ -133,6 +133,7 @@ const { mockSessionStore } = vi.hoisted(() => {
 });
 
 vi.mock("../src/mainview/stores/use-session-store", () => ({
+  clearAgentStarted: () => {},
   useSessionStore: mockSessionStore,
 }));
 

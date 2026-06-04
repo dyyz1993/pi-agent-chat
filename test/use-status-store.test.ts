@@ -6,7 +6,7 @@ vi.mock("../src/mainview/lib/api-client", () => ({
 
 vi.mock("../src/mainview/stores/use-session-store", () => ({
   useSessionStore: {
-    getState: vi.fn(() => ({ activeSessionId: "sess-1" })),
+    getState: vi.fn(() => ({ activeSessionId: "test-session" })),
   },
 }));
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import type { ChatMessage, ContentBlock } from "../src/mainview/types";
-import { formatTokenCount, groupMessagesIntoTurns } from "../src/mainview/utils/turn-utils";
+import { formatTokenCount } from "../src/mainview/utils/turn-utils";
 
 vi.mock("../src/mainview/lib/api-client", () => ({
   apiClient: { call: vi.fn() },
@@ -12,6 +12,7 @@ vi.mock("../src/mainview/stores/use-app-store", () => ({
   useAppStore: { getState: () => ({ addLog: vi.fn() }) },
 }));
 vi.mock("../src/mainview/stores/use-session-store", () => ({
+  clearAgentStarted: () => {},
   useSessionStore: {
     getState: () => ({
       activeSessionId: "s1",
@@ -252,91 +253,5 @@ describe("formatTokenCount — correct behavior", () => {
 
   it("formats 999499 correctly", () => {
     expect(formatTokenCount(999499)).toBe("999.5K");
-  });
-});
-
-// ─── groupMessagesIntoTurns: correct behavior ───
-
-describe("groupMessagesIntoTurns — correct behavior", () => {
-  it("groups user + assistant into one turn", () => {
-    const msgs: ChatMessage[] = [makeUser("u1", "hello"), makeAssistant("a1", [textBlock("hi")])];
-    const turns = groupMessagesIntoTurns(msgs);
-    expect(turns.length).toBe(1);
-    expect(turns[0].userMessageId).toBe("u1");
-    expect(turns[0].assistantMessageIds).toEqual(["a1"]);
-  });
-
-  it("creates orphan turn for assistant with no preceding user", () => {
-    const msgs: ChatMessage[] = [makeAssistant("a1", [textBlock("hi")])];
-    const turns = groupMessagesIntoTurns(msgs);
-    expect(turns.length).toBe(1);
-    expect(turns[0].id).toContain("orphan");
-    expect(turns[0].userMessageId).toBeNull();
-    expect(turns[0].assistantMessageIds).toEqual(["a1"]);
-  });
-
-  it("groups consecutive assistants into same turn", () => {
-    const msgs: ChatMessage[] = [
-      makeUser("u1", "hello"),
-      makeAssistant("a1", [textBlock("part1")]),
-      makeAssistant("a2", [textBlock("part2")]),
-    ];
-    const turns = groupMessagesIntoTurns(msgs);
-    expect(turns.length).toBe(1);
-    expect(turns[0].assistantMessageIds).toEqual(["a1", "a2"]);
-  });
-
-  it("handles user → assistant → user → assistant", () => {
-    const msgs: ChatMessage[] = [
-      makeUser("u1", "hello"),
-      makeAssistant("a1", [textBlock("hi")]),
-      makeUser("u2", "bye"),
-      makeAssistant("a2", [textBlock("bye")]),
-    ];
-    const turns = groupMessagesIntoTurns(msgs);
-    expect(turns.length).toBe(2);
-    expect(turns[0].userMessageId).toBe("u1");
-    expect(turns[1].userMessageId).toBe("u2");
-  });
-
-  it("handles orphan assistant → user → assistant", () => {
-    const msgs: ChatMessage[] = [
-      makeAssistant("a0", [textBlock("orphan")]),
-      makeUser("u1", "hello"),
-      makeAssistant("a1", [textBlock("response")]),
-    ];
-    const turns = groupMessagesIntoTurns(msgs);
-    expect(turns.length).toBe(2);
-    expect(turns[0].id).toContain("orphan");
-    expect(turns[0].userMessageId).toBeNull();
-    expect(turns[0].assistantMessageIds).toEqual(["a0"]);
-    expect(turns[1].userMessageId).toBe("u1");
-    expect(turns[1].assistantMessageIds).toEqual(["a1"]);
-  });
-
-  it("BUG FIX: custom messages should not be silently dropped from turns", () => {
-    const customMsg: ChatMessage = {
-      id: "c1",
-      role: "custom",
-      content: [{ type: "custom", customType: "memory_prefetch", data: {} }],
-      timestamp: Date.now(),
-    };
-    const msgs: ChatMessage[] = [
-      makeUser("u1", "hello"),
-      customMsg,
-      makeAssistant("a1", [textBlock("hi")]),
-    ];
-    const turns = groupMessagesIntoTurns(msgs);
-    // FIX: custom messages should be attached to the current turn
-    // At minimum, they should not be silently lost
-    const allIds = turns
-      .flatMap((t) => [t.userMessageId, ...t.assistantMessageIds])
-      .filter((id): id is string => id != null);
-    // The custom message should appear somewhere in the turn structure
-    // For now, we verify it's not silently dropped by checking the turns contain all message roles
-    expect(turns.length).toBeGreaterThanOrEqual(1);
-    // Custom messages should be trackable — they're currently just dropped
-    // This is a known limitation documented by the test
-    expect(allIds).not.toContain("c1"); // Still documents the current limitation
   });
 });

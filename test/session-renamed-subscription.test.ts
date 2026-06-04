@@ -37,7 +37,7 @@ vi.mock("../src/mainview/stores/use-session-store", () => {
   const useSessionStore = create<MockSessionState>(() => ({
     sessionsByProject: {},
   }));
-  return { useSessionStore, insertAfterPinned: vi.fn() };
+  return { useSessionStore, insertAfterPinned: vi.fn(), clearAgentStarted: () => {} };
 });
 
 vi.mock("../src/mainview/stores/use-app-store", () => ({

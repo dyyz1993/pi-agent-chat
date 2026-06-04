@@ -53,6 +53,8 @@
     "test:failed": "bash run-tests.sh failed"
   },
   "dependencies": {
+    "@dyyz1993/pi-agent-core": "file:.yalc/@dyyz1993/pi-agent-core",
+    "@dyyz1993/pi-ai": "file:.yalc/@dyyz1993/pi-ai",
     "@dyyz1993/pi-coding-agent": "file:.yalc/@dyyz1993/pi-coding-agent",
     "@dyyz1993/pi-tui": "^0.74.8",
     "@dyyz1993/rpc-core": "^1.3.0",

@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
+import { readFile } from "fs/promises";
+import { existsSync } from "fs";
+import { join } from "path";
 import {
   ensureHooksTestDir,
   clearLog,
@@ -15,7 +18,6 @@ import {
   HOOK_BASE_PORT,
 } from "./helpers";
 
-const PORT = HOOK_BASE_PORT + 30;
 const AUTH_TOKEN = "hooks-test-token-g3";
 const paths = getHookPaths("g3");
 
@@ -51,7 +53,7 @@ describe.skipIf(shouldRun === false)("Group 3: Project-Level Settings Hooks", ()
     });
 
     const testCtx = await setupHookTest({
-      port: PORT,
+      port: HOOK_BASE_PORT + 31,
       authToken: AUTH_TOKEN,
       projectDir,
     });
@@ -73,6 +75,19 @@ describe.skipIf(shouldRun === false)("Group 3: Project-Level Settings Hooks", ()
       },
       isolatedHome,
     );
+
+    const settingsPath = join(isolatedHome, ".claude", "settings.json");
+    if (existsSync(settingsPath)) {
+      const content = await readFile(settingsPath, "utf-8");
+      const parsed = JSON.parse(content) as Record<string, unknown>;
+      if (!parsed.hooks) {
+        throw new Error(`Global settings missing hooks: ${content}`);
+      }
+    } else {
+      throw new Error(`Global settings file not found: ${settingsPath}`);
+    }
+
+    await new Promise((r) => setTimeout(r, 2000));
 
     try {
       const { sendRPC: rpc, subscribe: sub, waitForEvent: wait } = await import("./helpers");
@@ -98,7 +113,7 @@ describe.skipIf(shouldRun === false)("Group 3: Project-Level Settings Hooks", ()
 
       await rpc(testCtx.ws, "agent.send", {
         sessionId: testCtx.sessionId,
-        content: "Run: echo p1-test",
+        content: "Use the bash tool to execute this shell command: echo p1-test",
       });
 
       await agentEndPromise;
@@ -139,7 +154,7 @@ describe.skipIf(shouldRun === false)("Group 3: Project-Level Settings Hooks", ()
     });
 
     const testCtx = await setupHookTest({
-      port: PORT,
+      port: HOOK_BASE_PORT + 32,
       authToken: AUTH_TOKEN,
       projectDir,
     });
@@ -161,6 +176,19 @@ describe.skipIf(shouldRun === false)("Group 3: Project-Level Settings Hooks", ()
       },
       isolatedHome,
     );
+
+    const settingsPath = join(isolatedHome, ".claude", "settings.json");
+    if (existsSync(settingsPath)) {
+      const content = await readFile(settingsPath, "utf-8");
+      const parsed = JSON.parse(content) as Record<string, unknown>;
+      if (!parsed.hooks) {
+        throw new Error(`Global settings missing hooks: ${content}`);
+      }
+    } else {
+      throw new Error(`Global settings file not found: ${settingsPath}`);
+    }
+
+    await new Promise((r) => setTimeout(r, 2000));
 
     try {
       const { sendRPC: rpc, subscribe: sub, waitForEvent: wait } = await import("./helpers");
@@ -186,7 +214,7 @@ describe.skipIf(shouldRun === false)("Group 3: Project-Level Settings Hooks", ()
 
       await rpc(testCtx.ws, "agent.send", {
         sessionId: testCtx.sessionId,
-        content: "Run: echo p3-test",
+        content: "Use the bash tool to execute this shell command: echo p3-test",
       });
 
       await agentEndPromise;
