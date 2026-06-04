@@ -297,6 +297,18 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     return;
   }
 
+  if (event.type === "extension_ui_resolved") {
+    const id = (event as { id?: string }).id;
+    const reason = (event as { reason?: string }).reason ?? "responded";
+    if (id) {
+      useUIDialogStore.getState().resolveFromRemote(
+        id,
+        reason as "responded" | "timeout" | "aborted",
+      );
+    }
+    return;
+  }
+
   if (event.type === "message_start") {
     const raw = event.message;
     const msgObj = typeof raw === "object" && raw !== null ? raw : null;
