@@ -24,7 +24,7 @@ export interface AgentMethods {
       sessionPath: string;
       forceNewProcess?: boolean;
     };
-    result: { agentId: string; status: "started" | "already_running" };
+    result: { agentId: string; status: "started" | "already_running" | "switched" };
   };
   "agent.replayHoldEvents": {
     params: { sessionId: string };

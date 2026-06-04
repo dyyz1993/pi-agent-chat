@@ -30,10 +30,10 @@ export const useChatOverlayStore = create<ChatOverlayState>((set, get) => ({
   openDiff: () => {
     const layout = useLayoutStore.getState();
     const prev = get()._prevStatusPanel;
-    if (layout.statusPanel === "visible" && !prev) {
+    if (layout.statusPanel !== "hidden" && !prev) {
       set({
         overlay: "diff",
-        _prevStatusPanel: "visible",
+        _prevStatusPanel: layout.statusPanel,
         expandContent: null,
         markdownContent: null,
       });
@@ -46,10 +46,10 @@ export const useChatOverlayStore = create<ChatOverlayState>((set, get) => ({
   openFile: () => {
     const layout = useLayoutStore.getState();
     const prev = get()._prevStatusPanel;
-    if (layout.statusPanel === "visible" && !prev) {
+    if (layout.statusPanel !== "hidden" && !prev) {
       set({
         overlay: "file",
-        _prevStatusPanel: "visible",
+        _prevStatusPanel: layout.statusPanel,
         expandContent: null,
         markdownContent: null,
       });

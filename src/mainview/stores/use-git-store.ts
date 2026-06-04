@@ -71,6 +71,7 @@ interface GitState {
   pull: (repoPath: string) => Promise<void>;
   fetchWorktrees: (repoPath: string) => Promise<void>;
   addWorktree: (repoPath: string, branch: string, sourceBranch?: string) => Promise<GitWorktree>;
+  fetchAgentFileDiff: (sessionId: string, filePath: string) => Promise<void>;
 }
 
 export const useGitStore = create<GitState>((set, get) => ({
@@ -182,6 +183,33 @@ export const useGitStore = create<GitState>((set, get) => ({
   clearDiff: () => {
     useChatOverlayStore.getState().close();
     set({ currentDiff: null });
+  },
+
+  fetchAgentFileDiff: async (sessionId, filePath) => {
+    const addLog = useAppStore.getState().addLog;
+    addLog(`Agent file diff: ${filePath}`);
+    set({ loadingDiff: true });
+    try {
+      const res = await apiClient.call("agent.getFileDiff", { sessionId, filePath });
+      if (res) {
+        set({
+          currentDiff: {
+            filePath: res.path,
+            diff: res.unifiedDiff ?? "",
+            oldContent: res.oldContent ?? "",
+            newContent: res.newContent ?? "",
+          },
+          loadingDiff: false,
+        });
+        useChatOverlayStore.getState().openDiff();
+      } else {
+        addLog(`Agent file diff: no result for ${filePath}`);
+        set({ loadingDiff: false });
+      }
+    } catch (err) {
+      addLog(`Agent file diff error: ${err instanceof Error ? err.message : String(err)}`);
+      set({ loadingDiff: false });
+    }
   },
 
   toggleCommitExpand: async (repoPath, hash) => {
