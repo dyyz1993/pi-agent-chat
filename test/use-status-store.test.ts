@@ -1,7 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 vi.mock("../src/mainview/lib/api-client", () => ({
-  apiClient: { call: vi.fn() },
+  apiClient: { call: vi.fn().mockResolvedValue({}), onReconnect: vi.fn() },
+}));
+
+vi.mock("../src/mainview/stores/use-session-store", () => ({
+  useSessionStore: {
+    getState: vi.fn(() => ({ activeSessionId: "sess-1" })),
+  },
 }));
 
 import { useStatusStore, derivePluginScope } from "../src/mainview/stores/use-status-store";
@@ -11,6 +17,7 @@ const mockCall = apiClient.call as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   mockCall.mockReset();
+  mockCall.mockResolvedValue({});
   useStatusStore.setState({
     yoloEnabled: false,
     planMode: true,
@@ -36,8 +43,9 @@ describe("useStatusStore", () => {
     expect(s.skills).toEqual([]);
   });
 
-  it("toggleYolo sets yoloEnabled=true", () => {
+  it("toggleYolo sets yoloEnabled=true", async () => {
     useStatusStore.getState().toggleYolo();
+    await Promise.resolve();
     expect(useStatusStore.getState().yoloEnabled).toBe(true);
   });
 

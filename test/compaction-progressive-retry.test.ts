@@ -1,10 +1,23 @@
 import { describe, it, expect } from "vitest";
 import path from "node:path";
+import { existsSync } from "node:fs";
 
 const compactionPath = path.resolve(
   process.cwd(),
   ".yalc/@dyyz1993/pi-coding-agent/dist/core/compaction/compaction.js",
 );
+const piAiEntryPath = path.resolve(process.cwd(), "node_modules/@dyyz1993/pi-ai/dist/index.js");
+const HAS_COMPACTION_DEPS = existsSync(compactionPath) && existsSync(piAiEntryPath);
+const compactionModule = HAS_COMPACTION_DEPS
+  ? await import(`file://${compactionPath}`)
+  : {
+      findCutPoint: undefined,
+      prepareCompaction: undefined,
+      estimateTokens: undefined,
+      shouldCompact: undefined,
+      estimateContextTokens: undefined,
+      DEFAULT_COMPACTION_SETTINGS: undefined,
+    };
 const {
   findCutPoint,
   prepareCompaction,
@@ -12,7 +25,16 @@ const {
   shouldCompact,
   estimateContextTokens,
   DEFAULT_COMPACTION_SETTINGS,
-} = await import(`file://${compactionPath}`);
+} = compactionModule as {
+  findCutPoint: (entries: unknown[], start: number, end: number, keepTokens: number) => {
+    firstKeptEntryIndex: number;
+  };
+  prepareCompaction: (...args: unknown[]) => unknown;
+  estimateTokens: (message: unknown) => number;
+  shouldCompact: (...args: unknown[]) => boolean;
+  estimateContextTokens: (...args: unknown[]) => number;
+  DEFAULT_COMPACTION_SETTINGS: { keepRecentTokens: number };
+};
 
 function makeMessageEntry(role: string, text: string, id: string, parentId: string) {
   return {
@@ -84,7 +106,7 @@ function countKeptTokens(entries: Array<Record<string, unknown>>, fromIndex: num
   return total;
 }
 
-describe("findCutPoint progressive strategy", () => {
+(HAS_COMPACTION_DEPS ? describe : describe.skip)("findCutPoint progressive strategy", () => {
   it("should find cut point with default keepRecentTokens", () => {
     const entries = buildSession(20, 200);
     const result = findCutPoint(
@@ -139,7 +161,7 @@ describe("findCutPoint progressive strategy", () => {
   });
 });
 
-describe("progressive retry strategy simulation", () => {
+(HAS_COMPACTION_DEPS ? describe : describe.skip)("progressive retry strategy simulation", () => {
   it("simulates 3-level progressive compaction with decreasing kept tokens", () => {
     const entries = buildSession(30, 300);
     const strategy = [20000, 10000, 5000];
@@ -209,7 +231,7 @@ describe("progressive retry strategy simulation", () => {
   });
 });
 
-describe("shouldCompact threshold calculation", () => {
+(HAS_COMPACTION_DEPS ? describe : describe.skip)("shouldCompact threshold calculation", () => {
   it("triggers when context approaches window limit", () => {
     const settings = { ...DEFAULT_COMPACTION_SETTINGS, reserveTokens: 16384 };
 
@@ -225,7 +247,7 @@ describe("shouldCompact threshold calculation", () => {
   });
 });
 
-describe("estimateTokens accuracy", () => {
+(HAS_COMPACTION_DEPS ? describe : describe.skip)("estimateTokens accuracy", () => {
   it("estimates user message tokens", () => {
     const msg = {
       role: "user",

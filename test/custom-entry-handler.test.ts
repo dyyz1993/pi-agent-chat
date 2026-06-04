@@ -1,104 +1,108 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-type StorePatch<T extends object> = Partial<T> | ((state: T) => Partial<T>);
+const { mockMemoryStore, mockChatStore } = vi.hoisted(() => {
+  type StorePatch<T extends object> = Partial<T> | ((state: T) => Partial<T>);
 
-function createMockStore<T extends object>(initialState: T) {
-  let state = initialState;
-  return {
-    getState: () => state,
-    setState: (patch: StorePatch<T>) => {
-      const nextPatch = typeof patch === "function" ? patch(state) : patch;
-      state = { ...state, ...nextPatch };
-    },
-  };
-}
-
-interface MemoryEvent {
-  id: string;
-  customType: string;
-  data: unknown;
-  timestamp: number;
-}
-
-interface InjectedMemory {
-  summary: string;
-  snippet: string;
-}
-
-interface MemoryStoreState {
-  eventsBySession: Record<string, MemoryEvent[]>;
-  filesBySession: Record<string, unknown[]>;
-  entrypointBySession: Record<string, unknown>;
-  injectedBySession: Record<string, InjectedMemory[]>;
-  expandedFile: string | null;
-  collapsedSections: Set<string>;
-  addEvent: (sessionId: string, event: MemoryEvent) => void;
-  addInjected: (sessionId: string, injected: InjectedMemory) => void;
-}
-
-interface ChatTestMessage {
-  id: string;
-  role: string;
-  content: unknown[];
-  timestamp: number;
-}
-
-interface ChatStoreState {
-  messagesBySession: Record<string, ChatTestMessage[]>;
-  inputText: string;
-  isStreaming: boolean;
-  streamContentVersion: number;
-  loadingSessions: Set<string>;
-  historyLoadVersion: number;
-  setMessagesForSession: (sessionId: string, messages: ChatTestMessage[]) => void;
-}
-
-const mockMemoryStore = createMockStore<MemoryStoreState>({
-  eventsBySession: {},
-  filesBySession: {},
-  entrypointBySession: {},
-  injectedBySession: {},
-  expandedFile: null,
-  collapsedSections: new Set(["operations"]),
-  addEvent: (sessionId, event) => {
-    mockMemoryStore.setState((state) => {
-      const existing = state.eventsBySession[sessionId] ?? [];
-      return {
-        eventsBySession: {
-          ...state.eventsBySession,
-          [sessionId]: [...existing, event],
-        },
-      };
-    });
-  },
-  addInjected: (sessionId, injected) => {
-    mockMemoryStore.setState((state) => {
-      const existing = state.injectedBySession[sessionId] ?? [];
-      return {
-        injectedBySession: {
-          ...state.injectedBySession,
-          [sessionId]: [...existing, injected],
-        },
-      };
-    });
-  },
-});
-
-const mockChatStore = createMockStore<ChatStoreState>({
-  messagesBySession: {},
-  inputText: "",
-  isStreaming: false,
-  streamContentVersion: 0,
-  loadingSessions: new Set<string>(),
-  historyLoadVersion: 0,
-  setMessagesForSession: (sessionId, messages) => {
-    mockChatStore.setState((state) => ({
-      messagesBySession: {
-        ...state.messagesBySession,
-        [sessionId]: messages,
+  function createHoistedMockStore<T extends object>(initialState: T) {
+    let state = initialState;
+    return {
+      getState: () => state,
+      setState: (patch: StorePatch<T>) => {
+        const nextPatch = typeof patch === "function" ? patch(state) : patch;
+        state = { ...state, ...nextPatch };
       },
-    }));
-  },
+    };
+  }
+
+  interface HoistedMemoryEvent {
+    id: string;
+    customType: string;
+    data: unknown;
+    timestamp: number;
+  }
+
+  interface HoistedInjectedMemory {
+    summary: string;
+    snippet: string;
+  }
+
+  interface HoistedMemoryStoreState {
+    eventsBySession: Record<string, HoistedMemoryEvent[]>;
+    filesBySession: Record<string, unknown[]>;
+    entrypointBySession: Record<string, unknown>;
+    injectedBySession: Record<string, HoistedInjectedMemory[]>;
+    expandedFile: string | null;
+    collapsedSections: Set<string>;
+    addEvent: (sessionId: string, event: HoistedMemoryEvent) => void;
+    addInjected: (sessionId: string, injected: HoistedInjectedMemory) => void;
+  }
+
+  interface HoistedChatTestMessage {
+    id: string;
+    role: string;
+    content: unknown[];
+    timestamp: number;
+  }
+
+  interface HoistedChatStoreState {
+    messagesBySession: Record<string, HoistedChatTestMessage[]>;
+    inputText: string;
+    isStreaming: boolean;
+    streamContentVersion: number;
+    loadingSessions: Set<string>;
+    historyLoadVersion: number;
+    setMessagesForSession: (sessionId: string, messages: HoistedChatTestMessage[]) => void;
+  }
+
+  const memoryStore = createHoistedMockStore<HoistedMemoryStoreState>({
+    eventsBySession: {},
+    filesBySession: {},
+    entrypointBySession: {},
+    injectedBySession: {},
+    expandedFile: null,
+    collapsedSections: new Set(["operations"]),
+    addEvent: (sessionId, event) => {
+      memoryStore.setState((state) => {
+        const existing = state.eventsBySession[sessionId] ?? [];
+        return {
+          eventsBySession: {
+            ...state.eventsBySession,
+            [sessionId]: [...existing, event],
+          },
+        };
+      });
+    },
+    addInjected: (sessionId, injected) => {
+      memoryStore.setState((state) => {
+        const existing = state.injectedBySession[sessionId] ?? [];
+        return {
+          injectedBySession: {
+            ...state.injectedBySession,
+            [sessionId]: [...existing, injected],
+          },
+        };
+      });
+    },
+  });
+
+  const chatStore = createHoistedMockStore<HoistedChatStoreState>({
+    messagesBySession: {},
+    inputText: "",
+    isStreaming: false,
+    streamContentVersion: 0,
+    loadingSessions: new Set<string>(),
+    historyLoadVersion: 0,
+    setMessagesForSession: (sessionId, messages) => {
+      chatStore.setState((state) => ({
+        messagesBySession: {
+          ...state.messagesBySession,
+          [sessionId]: messages,
+        },
+      }));
+    },
+  });
+
+  return { mockMemoryStore: memoryStore, mockChatStore: chatStore };
 });
 
 vi.mock("../src/mainview/lib/api-client", () => ({

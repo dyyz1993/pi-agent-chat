@@ -4,12 +4,23 @@
  */
 import { describe, it, expect } from "vitest";
 import path from "node:path";
+import { existsSync } from "node:fs";
 
 const compactionPath = path.resolve(
   process.cwd(),
   ".yalc/@dyyz1993/pi-coding-agent/dist/core/compaction/compaction.js",
 );
-const { findCutPoint, estimateTokens } = await import(`file://${compactionPath}`);
+const piAiEntryPath = path.resolve(process.cwd(), "node_modules/@dyyz1993/pi-ai/dist/index.js");
+const HAS_COMPACTION_DEPS = existsSync(compactionPath) && existsSync(piAiEntryPath);
+const compactionModule = HAS_COMPACTION_DEPS
+  ? await import(`file://${compactionPath}`)
+  : { findCutPoint: undefined, estimateTokens: undefined };
+const { findCutPoint, estimateTokens } = compactionModule as {
+  findCutPoint: (entries: unknown[], start: number, end: number, keepTokens: number) => {
+    firstKeptEntryIndex: number;
+  };
+  estimateTokens: (message: unknown) => number;
+};
 
 function makeEntry(
   role: string,
@@ -102,7 +113,7 @@ function getToolResultIds(entries: Array<Record<string, unknown>>, startIndex: n
   return ids;
 }
 
-describe("compaction cut integrity", () => {
+(HAS_COMPACTION_DEPS ? describe : describe.skip)("compaction cut integrity", () => {
   it("never produces dangling toolCalls at any keepRecentTokens level", () => {
     const entries = buildTurnBasedSession(20);
     const levels = [20000, 10000, 5000, 2000, 1000];

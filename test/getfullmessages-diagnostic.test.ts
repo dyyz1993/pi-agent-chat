@@ -13,6 +13,7 @@ const AUTH_TOKEN = "pi-agent-chat-diag-token";
 const WS_URL = `ws://localhost:${TEST_PORT}/ws?token=${AUTH_TOKEN}`;
 const PROJECT_PATH = process.cwd();
 const RPC_TIMEOUT = 35000;
+const HAS_PI_CLI = !!process.env.PI_CLI_PATH;
 
 interface RPCMessage {
   id: string;
@@ -88,9 +89,10 @@ async function createSession(
   return resp.result as { sessionId: string; sessionPath: string };
 }
 
-let server: TestServerResult;
+let server: TestServerResult | undefined;
 
 beforeAll(async () => {
+  if (!HAS_PI_CLI) return;
   server = await startTestServer({
     port: TEST_PORT,
     authToken: AUTH_TOKEN,
@@ -99,10 +101,10 @@ beforeAll(async () => {
 }, 40000);
 
 afterAll(async () => {
-  await stopTestServer(server);
+  if (server) await stopTestServer(server);
 });
 
-describe("agent.getFullMessages Diagnostics", () => {
+(HAS_PI_CLI ? describe : describe.skip)("agent.getFullMessages Diagnostics", () => {
   it("should call getFullMessages successfully after agent.start", async () => {
     console.log("\n📝 Test: getFullMessages after agent.start");
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-const mockGetProcessManager = vi.fn(() => null);
+const mockGetProcessManager = vi.hoisted(() => vi.fn(() => null));
 
 vi.mock("../src/shared/handlers/agent", () => ({
   getProcessManager: mockGetProcessManager,

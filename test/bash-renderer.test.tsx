@@ -5,8 +5,11 @@ import type { BashProcess } from "../src/shared/modules/bash";
 
 type Block = Extract<ContentBlock, { type: "toolExecution" }>;
 
-const mockCall = vi.fn();
-let mockBashProcess: BashProcess | undefined = undefined;
+const bashMocks = vi.hoisted(() => ({
+  mockCall: vi.fn(),
+  state: { mockBashProcess: undefined as BashProcess | undefined },
+}));
+const { mockCall } = bashMocks;
 
 vi.mock("react-i18next", () => {
   return {
@@ -21,7 +24,7 @@ vi.mock("react-dom", () => ({
 
 vi.mock("../src/mainview/lib/api-client", () => ({
   apiClient: {
-    call: mockCall,
+    call: bashMocks.mockCall,
     subscribe: vi.fn(() => Promise.resolve("sub-id")),
     unsubscribe: vi.fn(),
     onReconnect: () => {},
@@ -42,7 +45,9 @@ vi.mock("../src/mainview/stores/use-bash-store", () => ({
   useBashStore: (selector: (s: Record<string, unknown>) => unknown) => {
     const state = {
       processesBySession: {
-        "test-session": mockBashProcess ? [mockBashProcess] : [],
+        "test-session": bashMocks.state.mockBashProcess
+          ? [bashMocks.state.mockBashProcess]
+          : [],
       },
       subscribedOutputs: new Set(),
       backgroundedIds: new Set(),
@@ -76,7 +81,7 @@ function makeBlock(overrides: Partial<Block> = {}): Block {
 
 beforeEach(() => {
   vi.useFakeTimers({ now: new Date("2025-01-01T00:00:00Z") });
-  mockBashProcess = undefined;
+  bashMocks.state.mockBashProcess = undefined;
   mockCall.mockReset();
   mockCall.mockImplementation((method: string) => {
     if (method === "bash.readLog") {
@@ -103,7 +108,7 @@ describe("BashExecutionCard state rendering", () => {
   });
 
   it("background state via store — warning border, backgroundRunning text, View Output button", () => {
-    mockBashProcess = {
+    bashMocks.state.mockBashProcess = {
       toolCallId: "tc-1",
       command: "sleep 10",
       cwd: "/tmp",
@@ -141,7 +146,7 @@ describe("BashExecutionCard state rendering", () => {
   });
 
   it("terminated state via store — error border, cancelled text", () => {
-    mockBashProcess = {
+    bashMocks.state.mockBashProcess = {
       toolCallId: "tc-1",
       command: "ls",
       cwd: "/tmp",
@@ -224,7 +229,7 @@ describe("BashExecutionCard interactions", () => {
   });
 
   it("click View Output on background — shows LogViewer", () => {
-    mockBashProcess = {
+    bashMocks.state.mockBashProcess = {
       toolCallId: "tc-1",
       command: "sleep 10",
       cwd: "/tmp",
@@ -250,7 +255,7 @@ describe("BashExecutionCard interactions", () => {
   });
 
   it("click close on LogViewer — hides LogViewer", () => {
-    mockBashProcess = {
+    bashMocks.state.mockBashProcess = {
       toolCallId: "tc-1",
       command: "sleep 10",
       cwd: "/tmp",

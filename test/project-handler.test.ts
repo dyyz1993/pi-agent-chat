@@ -1,49 +1,68 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-const mockScanSessions = vi.fn(async () => []);
-const mockScanAllProjects = vi.fn(async () => []);
-const mockListPiProjects = vi.fn(async () => []);
-const mockListMerged = vi.fn(async () => []);
-const mockFindSessionById = vi.fn(async () => null);
-const mockAddRecent = vi.fn(async () => {});
-const mockListRecent = vi.fn(async () => []);
-const mockRemoveRecent = vi.fn(async () => {});
-const mockListConfigured = vi.fn(async () => []);
-const mockAddConfigured = vi.fn(async () => {});
-const mockRemoveConfigured = vi.fn(async () => {});
-const mockSyncOpenTabs = vi.fn(async () => {});
-const mockRestoreOpenTabs = vi.fn(async () => ({ tabs: [], activeTabId: null }));
-const mockListDirectory = vi.fn(async () => []);
-const mockRemoveFavorite = vi.fn(async () => {});
-const mockListFavorites = vi.fn(async () => []);
-const mockToggleFavorite = vi.fn(async () => ({ added: true, favorites: [] }));
-const mockTogglePin = vi.fn(async () => false);
-const mockLinkProject = vi.fn(async () => ({ ok: true }));
-const mockUnlinkProject = vi.fn(async () => ({ ok: true }));
-const mockGetLinkedProjects = vi.fn(async () => []);
+const projectMocks = vi.hoisted(() => ({
+  mockScanSessions: vi.fn(async () => []),
+  mockScanAllProjects: vi.fn(async () => []),
+  mockListPiProjects: vi.fn(async () => []),
+  mockListMerged: vi.fn(async () => []),
+  mockFindSessionById: vi.fn(async () => null),
+  mockAddRecent: vi.fn(async () => {}),
+  mockListRecent: vi.fn(async () => []),
+  mockRemoveRecent: vi.fn(async () => {}),
+  mockListConfigured: vi.fn(async () => []),
+  mockAddConfigured: vi.fn(async () => {}),
+  mockRemoveConfigured: vi.fn(async () => {}),
+  mockSyncOpenTabs: vi.fn(async () => {}),
+  mockRestoreOpenTabs: vi.fn(async () => ({ tabs: [], activeTabId: null })),
+  mockListDirectory: vi.fn(async () => []),
+  mockRemoveFavorite: vi.fn(async () => {}),
+  mockListFavorites: vi.fn(async () => []),
+  mockToggleFavorite: vi.fn(async () => ({ added: true, favorites: [] })),
+  mockTogglePin: vi.fn(async () => false),
+  mockLinkProject: vi.fn(async () => ({ ok: true })),
+  mockUnlinkProject: vi.fn(async () => ({ ok: true })),
+  mockGetLinkedProjects: vi.fn(async () => []),
+}));
+const {
+  mockScanSessions,
+  mockScanAllProjects,
+  mockListPiProjects,
+  mockListMerged,
+  mockFindSessionById,
+  mockAddRecent,
+  mockListRecent,
+  mockRemoveRecent,
+  mockSyncOpenTabs,
+  mockRestoreOpenTabs,
+  mockToggleFavorite,
+  mockTogglePin,
+  mockLinkProject,
+  mockUnlinkProject,
+  mockGetLinkedProjects,
+} = projectMocks;
 
 vi.mock("../src/shared/lib/session-scanner", () => ({
-  scanSessionsForProject: mockScanSessions,
-  scanAllProjects: mockScanAllProjects,
-  listPiProjects: mockListPiProjects,
-  listMergedProjects: mockListMerged,
-  findSessionById: mockFindSessionById,
+  scanSessionsForProject: projectMocks.mockScanSessions,
+  scanAllProjects: projectMocks.mockScanAllProjects,
+  listPiProjects: projectMocks.mockListPiProjects,
+  listMergedProjects: projectMocks.mockListMerged,
+  findSessionById: projectMocks.mockFindSessionById,
 }));
 
 vi.mock("../src/shared/lib/project-config", () => ({
-  addRecentProject: mockAddRecent,
-  listRecentProjects: mockListRecent,
-  removeRecentProject: mockRemoveRecent,
-  listConfiguredPaths: mockListConfigured,
-  addConfiguredPath: mockAddConfigured,
-  removeConfiguredPath: mockRemoveConfigured,
-  syncOpenTabs: mockSyncOpenTabs,
-  restoreOpenTabs: mockRestoreOpenTabs,
-  listDirectory: mockListDirectory,
-  removeFavoriteFolder: mockRemoveFavorite,
-  listFavoriteFolders: mockListFavorites,
-  toggleFavoriteFolder: mockToggleFavorite,
-  toggleProjectPin: mockTogglePin,
+  addRecentProject: projectMocks.mockAddRecent,
+  listRecentProjects: projectMocks.mockListRecent,
+  removeRecentProject: projectMocks.mockRemoveRecent,
+  listConfiguredPaths: projectMocks.mockListConfigured,
+  addConfiguredPath: projectMocks.mockAddConfigured,
+  removeConfiguredPath: projectMocks.mockRemoveConfigured,
+  syncOpenTabs: projectMocks.mockSyncOpenTabs,
+  restoreOpenTabs: projectMocks.mockRestoreOpenTabs,
+  listDirectory: projectMocks.mockListDirectory,
+  removeFavoriteFolder: projectMocks.mockRemoveFavorite,
+  listFavoriteFolders: projectMocks.mockListFavorites,
+  toggleFavoriteFolder: projectMocks.mockToggleFavorite,
+  toggleProjectPin: projectMocks.mockTogglePin,
 }));
 
 vi.mock("../src/shared/lib/native-dialog", () => ({
@@ -51,9 +70,9 @@ vi.mock("../src/shared/lib/native-dialog", () => ({
 }));
 
 vi.mock("../src/shared/lib/linked-projects-config", () => ({
-  linkProject: mockLinkProject,
-  unlinkProject: mockUnlinkProject,
-  getLinkedProjects: mockGetLinkedProjects,
+  linkProject: projectMocks.mockLinkProject,
+  unlinkProject: projectMocks.mockUnlinkProject,
+  getLinkedProjects: projectMocks.mockGetLinkedProjects,
 }));
 
 import { register } from "../src/shared/handlers/project";

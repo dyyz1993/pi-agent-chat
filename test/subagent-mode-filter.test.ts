@@ -13,19 +13,20 @@
  * extension filters agents after discovery.
  */
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 
 const MONO_ROOT = join(__dirname, "../../pi-momo-fork/packages/coding-agent");
 const SUBAGENT_INDEX = join(MONO_ROOT, "extensions/subagent-v2/index.ts");
 const AGENT_TYPES = join(MONO_ROOT, "src/core/agent-types.ts");
+const HAS_MONO_ROOT = existsSync(MONO_ROOT);
 
 function read(relPath: string): string {
   return readFileSync(relPath, "utf-8");
 }
 
-describe("Bug1: subagent-v2 mode filtering (TDD Red)", () => {
-  const src = read(SUBAGENT_INDEX);
+(HAS_MONO_ROOT ? describe : describe.skip)("Bug1: subagent-v2 mode filtering (TDD Red)", () => {
+  const src = HAS_MONO_ROOT ? read(SUBAGENT_INDEX) : "";
 
   it("should filter agents by mode after discoverAgents()", () => {
     // Look for a filter on agents that excludes mode === "primary"
