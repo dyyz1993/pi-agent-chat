@@ -79,6 +79,10 @@ describe("useTierStore", () => {
   it("switchToTier success → getCurrentTier updated, switching=false", async () => {
     mockedCall.mockResolvedValueOnce({ provider: "anthropic", id: "claude-haiku" });
     await useTierStore.getState().switchToTier("fast", "sess-1");
+    expect(mockedCall).toHaveBeenCalledWith("agent.switchTier", {
+      sessionId: "sess-1",
+      tier: "fast",
+    });
     expect(useTierStore.getState().getCurrentTier("sess-1")).toBe("fast");
     expect(useTierStore.getState().switching).toBe(false);
   });

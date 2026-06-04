@@ -181,6 +181,25 @@ function discoverExtensionArgs(): string[] {
 }
 
 const EXTENSION_ARGS = ["--no-extensions", ...discoverExtensionArgs()];
+const TIER_KEYS = ["fast", "pro", "max"] as const;
+type TierKey = (typeof TIER_KEYS)[number];
+
+function parseTierModel(tier: TierKey, modelName: string | undefined): {
+  provider: string;
+  modelId: string;
+} {
+  if (!modelName) {
+    throw new Error(`Tier "${tier}" is not configured`);
+  }
+
+  const [provider, ...modelParts] = modelName.split("/");
+  const modelId = modelParts.join("/");
+  if (!provider || !modelId) {
+    throw new Error(`Invalid tier model mapping: ${tier} -> ${modelName}`);
+  }
+
+  return { provider, modelId };
+}
 
 type SanitizedMessageUpdate = Extract<AgentEvent, { type: "message_update" }> & {
   assistantMessageEvent: Omit<AssistantMessageEvent, "partial">;
@@ -1959,6 +1978,20 @@ export class AgentProcessManager {
     }
     if (!managed) throw new Error("Client not found");
     return withTimeout(managed.client.setModel(provider, modelId), 15_000, "setModel");
+  }
+
+  async switchTier(
+    sessionId: string,
+    tier: TierKey,
+  ): Promise<{ provider: string; id: string; tier: TierKey }> {
+    if (!TIER_KEYS.includes(tier)) {
+      throw new Error(`Invalid tier "${tier}". Valid tiers are: fast, pro, max`);
+    }
+
+    const { models } = await this.getTierModels(sessionId);
+    const { provider, modelId } = parseTierModel(tier, models[tier]);
+    const model = await this.setModel(sessionId, provider, modelId);
+    return { ...model, tier };
   }
 
   async cycleModel(sessionId: string): Promise<{

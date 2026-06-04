@@ -143,6 +143,10 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     >;
   });
 
+  r("agent.switchTier", async (params) => {
+    return m.switchTier(params.sessionId, params.tier) as Promise<R<"agent.switchTier">>;
+  });
+
   r("agent.cycleModel", async (params) => {
     return m.cycleModel(params.sessionId) as Promise<R<"agent.cycleModel">>;
   });
