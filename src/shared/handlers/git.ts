@@ -21,8 +21,18 @@ function hasGitDir(cwd: string): boolean {
   return existsSync(join(cwd, ".git"));
 }
 
-function execGit(args: string[], cwd: string, allowNonZero = false): string {
-  const proc = Bun.spawnSync(["git", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
+function execGit(
+  args: string[],
+  cwd: string,
+  allowNonZero = false,
+  extraEnv?: Record<string, string>,
+): string {
+  const proc = Bun.spawnSync(["git", ...args], {
+    cwd,
+    stdout: "pipe",
+    stderr: "pipe",
+    ...(extraEnv ? { env: { ...process.env, ...extraEnv } } : {}),
+  });
   if (proc.exitCode !== 0 && !allowNonZero) {
     throw new Error(proc.stderr.toString().trim() || `git ${args[0]} failed`);
   }
@@ -307,7 +317,12 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   r("git.commit", async (params) => {
     if (!hasGitDir(params.repoPath)) return { hash: "", shortHash: "" };
     const repoRoot = getRepoRoot(params.repoPath);
-    const output = execGit(["commit", "-m", params.message], repoRoot);
+    const args = ["commit"];
+    if (params.noVerify) {
+      args.push("--no-verify");
+    }
+    args.push("-m", params.message);
+    const output = execGit(args, repoRoot, false, params.noVerify ? { HUSKY: "0" } : undefined);
     // Extract hash from output like "[main abc1234] message"
     const hashMatch = output.match(/\[[\w\-/.]+\s+([0-9a-f]{7,40})\]/);
     const shortHash = hashMatch?.[1] ?? "";

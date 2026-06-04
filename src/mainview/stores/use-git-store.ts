@@ -324,7 +324,7 @@ export const useGitStore = create<GitState>((set, get) => ({
     const addLog = useAppStore.getState().addLog;
     set({ loadingAction: "commit" });
     try {
-      const res = await apiClient.call("git.commit", { repoPath, message });
+      const res = await apiClient.call("git.commit", { repoPath, message, noVerify: true });
       addLog(`Committed: ${res.shortHash}`);
       await get().refresh(repoPath);
     } catch (err) {
