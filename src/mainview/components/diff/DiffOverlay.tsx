@@ -53,7 +53,8 @@ export function DiffOverlay() {
 
   const rawPath = currentDiff?.filePath ?? "";
   const styles = useMemo(
-    () => createDiffStyles(isMobile ? DIFF_STYLE_PRESETS.overlayMobile : DIFF_STYLE_PRESETS.overlay),
+    () =>
+      createDiffStyles(isMobile ? DIFF_STYLE_PRESETS.overlayMobile : DIFF_STYLE_PRESETS.overlay),
     [isMobile],
   );
   const renderContent = useSyntaxRenderer(rawPath);

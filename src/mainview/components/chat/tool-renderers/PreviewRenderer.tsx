@@ -1,10 +1,13 @@
 import { memo } from "react";
+import { createLogger } from "../../../../shared/lib/logger";
 import type { ContentBlock } from "../../../types";
 import { PreviewCard, type PreviewDetails } from "../preview";
 import { ToolCardHeader } from "../primitives/ToolCardHeader";
 import { formatFilePath } from "../../../lib/format-path";
 
 type Block = Extract<ContentBlock, { type: "toolExecution" }>;
+
+const logger = createLogger("chat");
 
 export const PreviewRenderer = memo(function PreviewRenderer({
   block,
@@ -23,8 +26,8 @@ export const PreviewRenderer = memo(function PreviewRenderer({
     try {
       const parsed = JSON.parse(block.args ?? "{}") as { source?: string };
       filePath = parsed.source ?? "";
-    } catch {
-      /* args not valid JSON, use default */
+    } catch (e) {
+      logger.warn("Failed to parse preview args", { error: String(e) });
     }
 
     return (

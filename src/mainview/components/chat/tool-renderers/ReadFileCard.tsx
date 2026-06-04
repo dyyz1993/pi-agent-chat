@@ -1,6 +1,7 @@
 import { memo, useState, useEffect, useRef } from "react";
 import { Zap, CheckCircle2, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { createLogger } from "../../../../shared/lib/logger";
 import type { ContentBlock } from "../../../types";
 import { useSettingsStore } from "../../../stores/use-settings-store";
 import { ToolCardHeader } from "../primitives/ToolCardHeader";
@@ -8,6 +9,8 @@ import { InlineCodeViewer } from "./InlineCodeViewer";
 import { formatFilePath } from "../../../lib/format-path";
 
 type Block = Extract<ContentBlock, { type: "toolExecution" }>;
+
+const logger = createLogger("chat");
 
 type RuleMatchStatus = "loaded" | "already_loaded" | "reloaded";
 
@@ -63,8 +66,8 @@ export const ReadFileCard = memo(function ReadFileCard({
   try {
     const parsed = JSON.parse(block.args ?? "{}") as { path?: string };
     filePath = parsed.path ?? "";
-  } catch {
-    /* args not valid JSON, use default */
+  } catch (e) {
+    logger.warn("Failed to parse read file args", { error: String(e) });
   }
 
   const displayPath = filePath ? formatFilePath(filePath) : block.args?.slice(0, 80) || "";

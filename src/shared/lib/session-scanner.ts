@@ -4,8 +4,11 @@ import { existsSync } from "fs";
 import { createInterface } from "readline";
 import { join, basename } from "path";
 import { homedir } from "os";
+import { createLogger } from "./logger";
 import type { SessionMeta, PiProject, MergedProject } from "../modules/project";
 import { listRecentProjects, listPinnedSessionIds } from "./project-config";
+
+const log = createLogger("session");
 
 const SESSIONS_DIR = join(homedir(), ".pi", "agent", "sessions");
 
@@ -54,7 +57,8 @@ async function parseJsonlHeader(filePath: string): Promise<JsonlHeader | null> {
     )
       return null;
     return header as JsonlHeader;
-  } catch {
+  } catch (e) {
+    log.debug("parseJsonlHeader: failed to parse", { filePath, error: String(e) });
     return null;
   }
 }
@@ -177,7 +181,6 @@ async function scanSessionDir(sessionDir: string, pinnedIds?: Set<string>): Prom
   const files = await readdir(sessionDir);
   const jsonlFiles = files.filter((f) => f.endsWith(".jsonl"));
 
-  // Process in batches of 20 to avoid fd exhaustion with 400+ files
   const BATCH_SIZE = 20;
   const results: (SessionMeta | null)[] = [];
 
@@ -187,7 +190,6 @@ async function scanSessionDir(sessionDir: string, pinnedIds?: Set<string>): Prom
       batch.map(async (file) => {
         const filePath = join(sessionDir, file);
         try {
-          // Quick size check first — skip empty files to avoid createReadStream hang
           const fstat = await stat(filePath);
           if (fstat.size === 0) return null;
 
@@ -213,7 +215,11 @@ async function scanSessionDir(sessionDir: string, pinnedIds?: Set<string>): Prom
             pinned: pinnedIds ? pinnedIds.has(header.id) : false,
             tierConfig: meta?.tierConfig,
           };
-        } catch {
+        } catch (e) {
+          log.debug("scanSessionDir: skipping invalid session file", {
+            filePath,
+            error: String(e),
+          });
           return null;
         }
       }),
@@ -245,7 +251,8 @@ export async function findSessionById(
     try {
       const dirStat = await stat(fullPath);
       if (!dirStat.isDirectory()) continue;
-    } catch {
+    } catch (e) {
+      log.debug("findSessionById: skipping non-accessible dir", { fullPath, error: String(e) });
       continue;
     }
 
@@ -341,7 +348,8 @@ async function loadPinnedSet(): Promise<Set<string>> {
   try {
     const ids = await listPinnedSessionIds();
     return new Set(ids);
-  } catch {
+  } catch (e) {
+    log.debug("loadPinnedSet: failed to load pinned session ids", { error: String(e) });
     return new Set();
   }
 }
@@ -360,7 +368,8 @@ export async function scanAllProjects(): Promise<
       try {
         const dirStat = await stat(fullPath);
         if (!dirStat.isDirectory()) return null;
-      } catch {
+      } catch (e) {
+        log.debug("scanAllProjects: skipping inaccessible dir", { fullPath, error: String(e) });
         return null;
       }
 

@@ -72,7 +72,8 @@ export const InlineDiffViewer = memo(function InlineDiffViewer({
     [isMobile],
   );
   const overlayStyles = useMemo(
-    () => createDiffStyles(isMobile ? DIFF_STYLE_PRESETS.overlayMobile : DIFF_STYLE_PRESETS.overlay),
+    () =>
+      createDiffStyles(isMobile ? DIFF_STYLE_PRESETS.overlayMobile : DIFF_STYLE_PRESETS.overlay),
     [isMobile],
   );
 
@@ -92,11 +93,24 @@ export const InlineDiffViewer = memo(function InlineDiffViewer({
           hideLineNumbers={false}
           showDiffOnly
           renderContent={renderContent}
-          {...(splitView && { leftTitle: t("diffBefore", { defaultValue: "Before" }), rightTitle: t("diffAfter", { defaultValue: "After" }) })}
+          {...(splitView && {
+            leftTitle: t("diffBefore", { defaultValue: "Before" }),
+            rightTitle: t("diffAfter", { defaultValue: "After" }),
+          })}
         />
       </div>,
     );
-  }, [openNodeExpand, filePath, oldValue, newValue, splitView, isDark, overlayStyles, renderContent, t]);
+  }, [
+    openNodeExpand,
+    filePath,
+    oldValue,
+    newValue,
+    splitView,
+    isDark,
+    overlayStyles,
+    renderContent,
+    t,
+  ]);
 
   const expandInToolbar = expandable && showToggle;
   const expandFloating = expandable && !showToggle;

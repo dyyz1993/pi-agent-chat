@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { Folder, RefreshCw, File, FolderPlus, Pencil, Trash2, Copy, Plus } from "lucide-react";
+import { createLogger } from "../../../shared/lib/logger";
 import type { TreeNode, EditingNode } from "../../types";
 import type { DropEntry } from "../../utils/drop-handler";
 import { readDropItems } from "../../utils/drop-handler";
@@ -32,6 +33,8 @@ interface ContextMenuState {
   y: number;
   node: TreeNode | null;
 }
+
+const logger = createLogger("file");
 
 export function ExplorerSidebar({
   treeNodes,
@@ -85,8 +88,8 @@ export function ExplorerSidebar({
       if (entries.length > 0) {
         try {
           await onImportFiles(entries, currentPath);
-        } catch {
-          /* error logged in store */
+        } catch (e) {
+          logger.warn("Failed to import dropped files", { error: String(e) });
         }
       }
     },

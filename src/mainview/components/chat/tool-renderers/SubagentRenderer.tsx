@@ -1,6 +1,7 @@
 import { memo, useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { ExternalLink } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { createLogger } from "../../../../shared/lib/logger";
 import type { ContentBlock, SubagentSessionInfo } from "../../../types";
 import { useSubagentStore } from "../../../stores/use-subagent-store";
 import { useSessionStore } from "../../../stores/use-session-store";
@@ -11,6 +12,8 @@ import { AnsiText } from "../primitives/AnsiText";
 import { ToolCardHeader, type ToolCardStatus } from "../primitives/ToolCardHeader";
 
 type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
+
+const logger = createLogger("subagent");
 
 export const SubagentExecutionCard = memo(function SubagentExecutionCard({
   block,
@@ -41,8 +44,8 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
     const parsed = JSON.parse(block.args ?? "{}") as { description?: string; instruction?: string };
     description = parsed.description ?? "";
     instruction = parsed.instruction ?? "";
-  } catch {
-    /* args not valid JSON, use default */
+  } catch (e) {
+    logger.warn("Failed to parse subagent args", { error: String(e) });
   }
 
   const displayTitle = description || instruction.slice(0, 120) || t("subagent.subagentTask");

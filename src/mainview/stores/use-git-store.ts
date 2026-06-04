@@ -1,7 +1,10 @@
 import { create } from "zustand";
 import { apiClient } from "../lib/api-client";
 import { useAppStore } from "./use-app-store";
+import { createLogger } from "../../shared/lib/logger";
 import { useChatOverlayStore } from "./use-chat-overlay-store";
+
+const log = createLogger("git");
 
 export interface GitFileChange {
   path: string;
@@ -95,7 +98,8 @@ export const useGitStore = create<GitState>((set, get) => ({
       const res = await apiClient.call("git.checkRepo", { repoPath });
       set({ isGitRepo: res.isGitRepo });
       return res.isGitRepo;
-    } catch {
+    } catch (e) {
+      log.warn("Failed to check git repo", { repoPath, error: String(e) });
       set({ isGitRepo: false });
       return false;
     }

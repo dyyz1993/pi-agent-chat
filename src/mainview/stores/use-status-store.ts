@@ -1,6 +1,9 @@
 import { create } from "zustand";
 import { apiClient } from "../lib/api-client";
+import { createLogger } from "../../shared/lib/logger";
 import { useSessionStore } from "./use-session-store";
+
+const log = createLogger("settings");
 
 export type StatusSection =
   | "yolo"
@@ -162,7 +165,7 @@ export const useStatusStore = create<StatusState>((set) => ({
       apiClient
         .call("agent.setDisabledSkill", { skillName: name, disabled: !newEnabled })
         .catch((err) => {
-          console.warn("[status] setDisabledSkill failed:", err);
+          log.warn("setDisabledSkill failed", { error: String(err) });
         });
       return {
         skills: s.skills.map((sk) => (sk.name === name ? { ...sk, enabled: newEnabled } : sk)),
@@ -185,12 +188,12 @@ export const useStatusStore = create<StatusState>((set) => ({
         }
       })
       .catch((err) => {
-        console.warn("[status] toggleMcpServer failed:", err);
+        log.warn("toggleMcpServer failed", { error: String(err) });
       });
   },
   restartMcpServer: (sessionId, name) => {
     apiClient.call("agent.restartMcpServer", { sessionId, name }).catch((err) => {
-      console.warn("[status] restartMcpServer failed:", err);
+      log.warn("restartMcpServer failed", { error: String(err) });
     });
   },
   clearSessionData: () =>

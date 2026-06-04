@@ -19,6 +19,9 @@ import { useShallow } from "zustand/react/shallow";
 import { formatFilePath } from "../../lib/format-path";
 import { apiClient } from "../../lib/api-client";
 import type { RuleDetail, MatchRecord, LifecycleEntry } from "../../../shared/modules/rules";
+import { createLogger } from "../../../shared/lib/logger";
+
+const log = createLogger("config");
 
 const SCOPE_KEYS: Record<string, string> = {
   user: "scopeUser",
@@ -84,7 +87,7 @@ function useRuleContent(filePath: string | undefined, expanded: boolean) {
         }
       })
       .catch((err) => {
-        console.warn("[RulesPanel] load failed:", err);
+        log.warn("rules load failed", { error: String(err) });
         if (!cancelled) {
           setContent(null);
           setLoading(false);

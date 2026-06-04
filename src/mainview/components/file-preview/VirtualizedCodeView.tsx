@@ -1,6 +1,7 @@
 import { useRef, useMemo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Highlight, themes } from "prism-react-renderer";
+import { createLogger } from "../../../shared/lib/logger";
 import { getLanguage } from "../../utils/file-utils";
 import { useThemeStore, isDarkGroup } from "../../stores/use-theme-store";
 
@@ -16,6 +17,8 @@ const MAX_HIGHLIGHT_LINES = 5000;
 /** Max chars for JSON pretty-print; beyond this, skip formatting */
 const MAX_JSON_FORMAT_CHARS = 500_000;
 
+const logger = createLogger("file");
+
 export function VirtualizedCodeView({ code, filename }: VirtualizedCodeViewProps) {
   const parentRef = useRef<HTMLDivElement>(null);
   const language = getLanguage(filename);
@@ -26,7 +29,8 @@ export function VirtualizedCodeView({ code, filename }: VirtualizedCodeViewProps
       try {
         const parsed = JSON.parse(code) as unknown;
         return JSON.stringify(parsed, null, 2);
-      } catch {
+      } catch (e) {
+        logger.warn("Failed to format JSON for preview", { error: String(e) });
         return code;
       }
     }

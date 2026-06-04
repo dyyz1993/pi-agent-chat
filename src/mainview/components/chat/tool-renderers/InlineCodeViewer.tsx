@@ -63,7 +63,10 @@ export const InlineCodeViewer = memo(function InlineCodeViewer({
   const openNodeExpand = useChatOverlayStore((s) => s.openExpand);
 
   const handleExpand = useCallback(() => {
-    openNodeExpand(filename, <HighlightedCode code={code} prismTheme={prismTheme} language={language} />);
+    openNodeExpand(
+      filename,
+      <HighlightedCode code={code} prismTheme={prismTheme} language={language} />,
+    );
   }, [openNodeExpand, filename, code, prismTheme, language]);
 
   return (

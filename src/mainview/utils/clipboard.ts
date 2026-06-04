@@ -1,10 +1,14 @@
+import { createLogger } from "../../shared/lib/logger";
+
+const logger = createLogger("system");
+
 export async function copyToClipboard(text: string): Promise<boolean> {
   if (navigator.clipboard && window.isSecureContext) {
     try {
       await navigator.clipboard.writeText(text);
       return true;
-    } catch {
-      // fall through
+    } catch (e) {
+      logger.warn("Clipboard API write failed", { error: String(e) });
     }
   }
   return fallbackCopy(text);
@@ -22,7 +26,8 @@ function fallbackCopy(text: string): boolean {
   ta.select();
   try {
     return document.execCommand("copy");
-  } catch {
+  } catch (e) {
+    logger.warn("Fallback clipboard copy failed", { error: String(e) });
     return false;
   } finally {
     document.body.removeChild(ta);

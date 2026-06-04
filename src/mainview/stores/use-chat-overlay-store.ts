@@ -31,7 +31,12 @@ export const useChatOverlayStore = create<ChatOverlayState>((set, get) => ({
     const layout = useLayoutStore.getState();
     const prev = get()._prevStatusPanel;
     if (layout.statusPanel === "visible" && !prev) {
-      set({ overlay: "diff", _prevStatusPanel: "visible", expandContent: null, markdownContent: null });
+      set({
+        overlay: "diff",
+        _prevStatusPanel: "visible",
+        expandContent: null,
+        markdownContent: null,
+      });
       useLayoutStore.setState({ statusPanel: "hidden" });
     } else {
       set({ overlay: "diff", expandContent: null, markdownContent: null });
@@ -42,7 +47,12 @@ export const useChatOverlayStore = create<ChatOverlayState>((set, get) => ({
     const layout = useLayoutStore.getState();
     const prev = get()._prevStatusPanel;
     if (layout.statusPanel === "visible" && !prev) {
-      set({ overlay: "file", _prevStatusPanel: "visible", expandContent: null, markdownContent: null });
+      set({
+        overlay: "file",
+        _prevStatusPanel: "visible",
+        expandContent: null,
+        markdownContent: null,
+      });
       useLayoutStore.setState({ statusPanel: "hidden" });
     } else {
       set({ overlay: "file", expandContent: null, markdownContent: null });
@@ -54,7 +64,12 @@ export const useChatOverlayStore = create<ChatOverlayState>((set, get) => ({
   },
 
   openMarkdown: (title, content) => {
-    set({ overlay: "markdown", markdownTitle: title, markdownContent: content, expandContent: null });
+    set({
+      overlay: "markdown",
+      markdownTitle: title,
+      markdownContent: content,
+      expandContent: null,
+    });
   },
 
   close: () => {
@@ -62,6 +77,13 @@ export const useChatOverlayStore = create<ChatOverlayState>((set, get) => ({
     if (prev) {
       useLayoutStore.setState({ statusPanel: prev });
     }
-    set({ overlay: null, expandTitle: "", expandContent: null, _prevStatusPanel: null, markdownTitle: "", markdownContent: null });
+    set({
+      overlay: null,
+      expandTitle: "",
+      expandContent: null,
+      _prevStatusPanel: null,
+      markdownTitle: "",
+      markdownContent: null,
+    });
   },
 }));

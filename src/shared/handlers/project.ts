@@ -32,6 +32,8 @@ import {
 import { openFolder } from "../lib/native-dialog";
 import { linkProject, unlinkProject, getLinkedProjects } from "../lib/linked-projects-config";
 
+const log = createLogger("config");
+
 export function register(server: RPCServer, options: HandlerOptions): void {
   const r = createRegister(server);
 
@@ -128,7 +130,8 @@ export function register(server: RPCServer, options: HandlerOptions): void {
         return { cancelled: true } as { path: string } | { cancelled: true };
       }
       return { path: paths[0] } as { path: string } | { cancelled: true };
-    } catch {
+    } catch (e) {
+      log.debug("project.browseFolder: openFolder failed or cancelled", { error: String(e) });
       return { cancelled: true } as { path: string } | { cancelled: true };
     }
   });

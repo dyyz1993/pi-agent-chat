@@ -2,16 +2,15 @@ import { readFile, writeFile, mkdir, readdir, copyFile } from "fs/promises";
 import { existsSync, statSync } from "fs";
 import { join, dirname, basename } from "path";
 import { homedir } from "os";
-import { createLogger } from "../lib/logger";
+import { createLogger } from "./logger";
 import type { RecentProject, ConfiguredPath } from "../modules/project";
 
-const logger = createLogger("project-config");
+const log = createLogger("config");
 
 const CONFIG_DIR = join(homedir(), ".pi-agent-chat");
 const CONFIG_PATH = join(CONFIG_DIR, "config.json");
 const BACKUP_PATH = join(CONFIG_DIR, "config.json.bak");
 
-// Minimum file size (bytes) for a valid config — "{}" is 2 bytes, plus indentation
 const MIN_VALID_SIZE = 2;
 
 export interface PersistedTab {
@@ -94,7 +93,6 @@ function hasUserData(config: ProjectConfig): boolean {
 async function tryReadFile(filePath: string): Promise<ProjectConfig | null> {
   try {
     if (!existsSync(filePath)) return null;
-    // Quick sanity check: empty or tiny file is suspicious
     const stat = statSync(filePath);
     if (stat.size < MIN_VALID_SIZE) return null;
     const raw = await readFile(filePath, "utf-8");
@@ -123,13 +121,13 @@ async function load(): Promise<ProjectConfig> {
   // Step 2: Main is empty or corrupted — try backup
   const backupConfig = await tryReadFile(BACKUP_PATH);
   if (backupConfig && hasUserData(backupConfig)) {
-    logger.warn("Main config empty/corrupted, restored from backup");
+    log.warn("Main config empty/corrupted, restored from backup");
     // Restore: copy backup to main so subsequent reads work
     try {
       await copyFile(BACKUP_PATH, CONFIG_PATH);
-      logger.info("Backup restored to main config");
+      log.info("Backup restored to main config");
     } catch (err) {
-      logger.error("Failed to restore backup to main:", { error: String(err) });
+      log.error("Failed to restore backup to main:", { error: String(err) });
     }
     return backupConfig;
   }
@@ -140,7 +138,7 @@ async function load(): Promise<ProjectConfig> {
   }
 
   // Step 4: Neither file exists — first run or both truly gone
-  logger.info("No config or backup found, starting fresh");
+  log.info("No config or backup found, starting fresh");
   return emptyConfig();
 }
 
@@ -170,7 +168,7 @@ async function loadAndSave<T>(patcher: (config: ProjectConfig) => T): Promise<T>
     try {
       config = await load();
     } catch (err) {
-      logger.error("Failed to load config, aborting write to prevent data loss:", {
+      log.error("Failed to load config, aborting write to prevent data loss:", {
         error: String(err),
       });
       throw err;
@@ -190,7 +188,7 @@ async function loadAndSave<T>(patcher: (config: ProjectConfig) => T): Promise<T>
         await copyFile(CONFIG_PATH, BACKUP_PATH);
       } catch (err) {
         // Backup failure is non-fatal but log it
-        logger.warn("Failed to create backup before write:", { error: String(err) });
+        log.warn("Failed to create backup before write:", { error: String(err) });
       }
     }
 
@@ -238,11 +236,6 @@ export async function removeRecentProject(projectPath: string): Promise<void> {
       config.activeProject = config.recentProjects[0]?.path ?? null;
     }
   });
-}
-
-export async function getActiveProject(): Promise<string | null> {
-  const config = await load();
-  return config.activeProject;
 }
 
 export async function listConfiguredPaths(): Promise<ConfiguredPath[]> {
@@ -343,11 +336,6 @@ export async function removeFavoriteFolder(folderPath: string): Promise<void> {
   });
 }
 
-export async function isFavoriteFolder(folderPath: string): Promise<boolean> {
-  const config = await load();
-  return config.favoriteFolders.some((f) => f.path === folderPath);
-}
-
 export async function createDirectory(
   parentPath: string,
   folderName: string,
@@ -412,7 +400,8 @@ export async function listDirectory(
       results = results.filter((e) => e.name.toLowerCase().includes(q));
     }
     return results;
-  } catch {
+  } catch (e) {
+    log.warn("Failed to list directory", { dirPath, error: String(e) });
     return [];
   }
 }

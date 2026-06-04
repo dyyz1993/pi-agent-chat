@@ -1,6 +1,7 @@
 import { memo, useState, useMemo, useEffect, useRef, Fragment } from "react";
 import { CheckCircle, AlertCircle, AlertTriangle, Info } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { createLogger } from "../../../../shared/lib/logger";
 import type { ContentBlock } from "../../../types";
 import { CopyButton } from "../CopyButton";
 import { ToolCardHeader } from "../primitives/ToolCardHeader";
@@ -24,6 +25,8 @@ interface LspExecutionCardProps {
   blockId?: string;
 }
 
+const logger = createLogger("chat");
+
 function parseLspOutput(output: string): {
   action: string;
   diagnostics: LspDiagnostic[];
@@ -46,8 +49,8 @@ function parseLspOutput(output: string): {
   if (jsonStr.startsWith("[")) {
     try {
       diagnostics = JSON.parse(jsonStr) as LspDiagnostic[];
-    } catch {
-      // parse failed, keep empty
+    } catch (e) {
+      logger.warn("Failed to parse LSP diagnostics output", { error: String(e) });
     }
   }
 

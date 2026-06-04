@@ -4,6 +4,9 @@ import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { HandlerOptions } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
 import type { GitFileChange } from "../modules/git";
+import { createLogger } from "../lib/logger";
+
+const log = createLogger("git");
 
 const EMPTY_STATUS = {
   staged: [] as GitFileChange[],
@@ -93,8 +96,8 @@ function getNumStats(
         stats.set(path, { additions: add, deletions: del });
       }
     }
-  } catch {
-    // ignore errors
+  } catch (e) {
+    log.debug("getNumStats: git diff --numstat failed", { repoRoot, staged, error: String(e) });
   }
   return stats;
 }
@@ -159,8 +162,11 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       if (!diff) {
         try {
           diff = execGit(["diff", "--no-index", "/dev/null", params.filePath], repoRoot, true);
-        } catch {
-          // ignore
+        } catch (e) {
+          log.debug("git.diff: --no-index fallback failed", {
+            filePath: params.filePath,
+            error: String(e),
+          });
         }
       }
     }
@@ -171,14 +177,14 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     try {
       oldContent = execGit(["show", `HEAD:${params.filePath}`], repoRoot);
     } catch {
-      // New file — no old content
+      log.debug("git.diff: no old content (new file)", { filePath: params.filePath });
     }
     try {
       const { readFile } = await import("fs/promises");
       const { join } = await import("path");
       newContent = (await readFile(join(repoRoot, params.filePath))).toString();
     } catch {
-      // Deleted file — no new content
+      log.debug("git.diff: no new content (deleted file)", { filePath: params.filePath });
     }
 
     return { filePath: params.filePath, diff, oldContent, newContent };
@@ -247,7 +253,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     try {
       oldContent = execGit(["show", `${hash}^:${filePath}`], repoRoot);
     } catch {
-      // File was added in this commit — no old content
+      log.debug("git.commitFileDiff: no old content (file added in commit)", { hash, filePath });
     }
 
     // Get new content (this commit version)
@@ -255,7 +261,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     try {
       newContent = execGit(["show", `${hash}:${filePath}`], repoRoot);
     } catch {
-      // File was deleted in this commit — no new content
+      log.debug("git.commitFileDiff: no new content (file deleted in commit)", { hash, filePath });
     }
 
     return { filePath, diff, oldContent, newContent };

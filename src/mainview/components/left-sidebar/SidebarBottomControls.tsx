@@ -217,7 +217,7 @@ export function SidebarBottomControls() {
       setWorkspaceOpen(false);
       await useSessionStore.getState().createNewSession(wt.path);
     } catch (err) {
-      console.warn("[SidebarControls] worktree add failed:", err);
+      log.warn("worktree add failed", { error: String(err) });
     }
     setCreating(false);
   }, [newBranch, activeTabPath, sourceBranch, creating, addWorktreeAction, addProjectTab]);
@@ -280,7 +280,7 @@ export function SidebarBottomControls() {
         setCurrentModel(provider, modelId);
         useTierStore.getState().syncTierFromModel(activeSessionId ?? "", provider, modelId);
       } catch (err) {
-        console.warn("[SidebarControls] setModel failed:", err);
+        log.warn("setModel failed", { error: String(err) });
       }
       setSwitching(false);
     },
@@ -301,7 +301,7 @@ export function SidebarBottomControls() {
         });
         setThinkingLevel(level);
       } catch (err) {
-        console.warn("[SidebarControls] setThinkingLevel failed:", err);
+        log.warn("setThinkingLevel failed", { error: String(err) });
       }
       setSwitching(false);
       setThinkingOpen(false);

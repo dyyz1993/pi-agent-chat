@@ -1,5 +1,6 @@
 import { memo, useState, useEffect, useRef } from "react";
 import { CheckSquare, Square, TriangleAlert, Zap, Activity } from "lucide-react";
+import { createLogger } from "../../../../shared/lib/logger";
 import type { ToolRendererProps } from "./registry";
 import { ToolCardHeader, type ToolCardStatus } from "../primitives/ToolCardHeader";
 import { useSettingsStore } from "../../../stores/use-settings-store";
@@ -11,6 +12,8 @@ interface TodoItem {
   priority?: string;
   deleted?: boolean;
 }
+
+const logger = createLogger("chat");
 
 interface TodoDetails {
   action: string;
@@ -179,7 +182,8 @@ export const TodoExecRenderer = memo(function TodoExecRenderer({ block }: ToolRe
     try {
       const args = JSON.parse(block.args ?? "{}") as { action?: string };
       return args.action ?? details?.action ?? "";
-    } catch {
+    } catch (e) {
+      logger.warn("Failed to parse todo args", { error: String(e) });
       return details?.action ?? "";
     }
   })();

@@ -1,6 +1,9 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import i18n from "../lib/i18n";
+import { createLogger } from "../../shared/lib/logger";
+
+const log = createLogger("settings");
 
 export type Theme =
   | "light"
@@ -74,8 +77,8 @@ export const useThemeStore = create<ThemeState>()(
       setLanguage: (lang: string) => {
         try {
           void i18n.changeLanguage(lang);
-        } catch {
-          // ignore
+        } catch (e) {
+          log.warn("Failed to change language", { lang, error: String(e) });
         }
         set({ language: lang });
       },

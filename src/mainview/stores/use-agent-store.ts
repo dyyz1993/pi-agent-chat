@@ -93,12 +93,6 @@ interface AgentState {
 
 export type { AgentInfo, AgentSource, AgentDetail, AgentToolInfo, AgentHook };
 
-export const AGENT_ICONS: Record<string, string> = {
-  build: "🔧",
-  explore: "🔍",
-  plan: "📋",
-};
-
 const SOURCE_LABELS: Record<AgentSource, string> = {
   builtin: "内置",
   user: "全局",
@@ -267,8 +261,8 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
         },
       }));
       get().fetchSystemPrompt(sessionId);
-    } catch {
-      // silently fail - detail is optional
+    } catch (e) {
+      log.warn("Failed to fetch agent detail", { sessionId, error: String(e) });
     } finally {
       set({ loadingDetail: false });
     }
@@ -283,8 +277,8 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
           [sessionId]: result.tools as AgentToolInfo[],
         },
       }));
-    } catch {
-      // silently fail
+    } catch (e) {
+      log.warn("Failed to fetch all tools", { sessionId, error: String(e) });
     }
   },
 
@@ -297,8 +291,8 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
           [sessionId]: (result as { systemPrompt: string }).systemPrompt,
         },
       }));
-    } catch {
-      // silently fail
+    } catch (e) {
+      log.warn("Failed to fetch system prompt", { sessionId, error: String(e) });
     }
   },
 

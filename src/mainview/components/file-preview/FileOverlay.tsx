@@ -5,6 +5,9 @@ import type { FilePreview } from "../../types";
 import { formatSize } from "../../utils/file-utils";
 import { VirtualizedCodeView } from "./VirtualizedCodeView";
 import { apiClient } from "../../lib/api-client";
+import { createLogger } from "../../../shared/lib/logger";
+
+const log = createLogger("file");
 
 interface FileOverlayProps {
   preview: FilePreview;
@@ -42,13 +45,7 @@ function canUseFsRoute(): boolean {
   return apiClient.getTransport() === "websocket";
 }
 
-export function FileOverlay({
-  preview,
-  loading,
-  onClose,
-  onSave,
-  onToggleEdit,
-}: FileOverlayProps) {
+export function FileOverlay({ preview, loading, onClose, onSave, onToggleEdit }: FileOverlayProps) {
   const { t } = useTranslation("explorer");
   const [svgContent, setSvgContent] = useState<string | null>(null);
   const [svgLoading, setSvgLoading] = useState(false);
@@ -105,7 +102,7 @@ export function FileOverlay({
           setSvgContent(text);
         })
         .catch((err) => {
-          console.warn("[FilePreview] SVG fetch failed:", err);
+          log.warn("SVG fetch failed", { error: String(err) });
           setSvgContent(null);
         })
         .finally(() => setSvgLoading(false));
@@ -127,9 +124,8 @@ export function FileOverlay({
         <div
           className="flex items-center justify-center h-full p-4 bg-surface-code"
           dangerouslySetInnerHTML={{
-            __html: sanitizeSvg(svgContent).replace(
-              /<svg/,
-              '<svg style="max-width: 100%; max-height: 100%;"',
+            __html: sanitizeSvg(
+              svgContent.replace(/<svg/, '<svg style="max-width: 100%; max-height: 100%;"'),
             ),
           }}
         />

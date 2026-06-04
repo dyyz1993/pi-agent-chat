@@ -33,7 +33,7 @@ process.on("unhandledRejection", (reason) => {
 });
 
 log.info("=== 服务器环境变量诊断 ===");
-log.info("AUTH_TOKEN:", { value: process.env.AUTH_TOKEN });
+log.info("AUTH_TOKEN:", { configured: !!process.env.AUTH_TOKEN });
 log.info("PORT:", { value: process.env.PORT });
 log.info("LOG_DIR:", { value: process.env.LOG_DIR });
 log.info("PI_CLI_PATH:", { value: process.env.PI_CLI_PATH });
@@ -118,7 +118,7 @@ httpServer.on("request", (req, res) => {
 
 httpServer.listen(config.port, () => {
   log.info(`HTTP + WebSocket server running on http://localhost:${config.port}`);
-  log.info(`WebSocket: ws://localhost:${config.port}/ws?token=${config.authToken}`);
+  log.info(`WebSocket: ws://localhost:${config.port}/ws`);
   log.info(
     "Available RPC methods: system.ping, system.hello, system.echo, file.listDir, timer.start, timer.stop",
   );

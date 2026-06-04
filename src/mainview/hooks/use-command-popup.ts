@@ -5,6 +5,9 @@ import { useExplorerStore } from "../stores/use-explorer-store";
 import { useMemoryStore } from "../stores/use-memory-store";
 import { apiClient } from "../lib/api-client";
 import type { TreeNode } from "../types";
+import { createLogger } from "../../shared/lib/logger";
+
+const log = createLogger("chat");
 
 export type PopupMode = "at" | "slash" | null;
 export type AtTab = "agents" | "files" | "memory";
@@ -136,8 +139,8 @@ export function useCommandPopup(): CommandPopupState {
           insertText: `@${skill.name}`,
         });
       }
-    } catch {
-      /* ignore */
+    } catch (e) {
+      log.warn("Failed to fetch @agents", { error: String(e) });
     } finally {
       setLoading(false);
     }
@@ -218,8 +221,8 @@ export function useCommandPopup(): CommandPopupState {
           insertText: `@memory:${f.filename}`,
         });
       }
-    } catch {
-      /* ignore */
+    } catch (e) {
+      log.warn("Failed to fetch slash commands and skills", { error: String(e) });
     } finally {
       setLoading(false);
     }
@@ -267,8 +270,8 @@ export function useCommandPopup(): CommandPopupState {
           insertText: `/${skill.name}`,
         });
       }
-    } catch {
-      /* ignore */
+    } catch (e) {
+      log.warn("Failed to fetch @memory", { error: String(e) });
     } finally {
       setLoading(false);
     }

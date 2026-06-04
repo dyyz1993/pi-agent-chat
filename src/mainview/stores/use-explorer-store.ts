@@ -7,6 +7,9 @@ import { MAX_PREVIEW_SIZE } from "../utils/constants";
 import { useAppStore } from "./use-app-store";
 import { useChatOverlayStore } from "./use-chat-overlay-store";
 import { uploadEntriesWeb, importFilesDesktop, type DropEntry } from "../utils/drop-handler";
+import { createLogger } from "../../shared/lib/logger";
+
+const log = createLogger("file");
 
 interface ExplorerState {
   treeNodes: TreeNode[];
@@ -452,8 +455,8 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
         set({ _refreshDebounceTimer: timer });
       });
       set({ _fileWatchSubId: subId });
-    } catch {
-      // subscription failed silently
+    } catch (e) {
+      log.warn("Failed to subscribe to file watcher", { error: String(e) });
     }
   },
 

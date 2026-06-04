@@ -75,6 +75,7 @@ const FileItem = memo(function FileItem({
   const { t } = useTranslation("chat");
   const config = FILE_STATUS_CONFIG[status];
   const Icon = config.icon;
+
   const [splitView, setSplitView] = useState(false);
 
   return (

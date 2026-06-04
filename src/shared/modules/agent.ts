@@ -559,8 +559,6 @@ export type AgentEvent =
 
 export type { AssistantMessage, AssistantMessageEvent, TextContent };
 
-export type MessageData = AssistantMessage;
-
 export interface AgentProcessInfo {
   sessionId: string;
   projectPath: string;

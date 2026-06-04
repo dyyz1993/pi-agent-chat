@@ -143,6 +143,32 @@ export type CoordinatorEvent =
 
 export type CoordinatorChannelEvent = CoordinatorMethodCall | CoordinatorEvent;
 
+/** Method signatures for the coordinator module - required by module-file-naming rule */
+export interface CoordinatorMethods {
+  session_delegate(params: {
+    task: string;
+    title?: string;
+    invokeId?: string;
+  }): Promise<DelegateCreateResult>;
+  session_delegate_send(params: {
+    targetSessionId: string;
+    message: string;
+    invokeId?: string;
+  }): Promise<DelegateSendResult>;
+  session_delegate_status(params: {
+    sessionId: string;
+    invokeId?: string;
+  }): Promise<DelegateStatusExt>;
+  session_delegate_list(params: { invokeId?: string }): Promise<DelegateListResult>;
+  session_delegate_stop(params: { sessionId: string; invokeId?: string }): Promise<{ ok: boolean }>;
+  session_delegate_fork(params: {
+    sessionId: string;
+    task: string;
+    title?: string;
+    invokeId?: string;
+  }): Promise<DelegateCreateResult>;
+}
+
 export interface CoordinatorEvents {
   "coordinator.session_created": {
     parentSessionId: string;

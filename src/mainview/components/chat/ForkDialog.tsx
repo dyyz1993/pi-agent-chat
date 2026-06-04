@@ -2,7 +2,9 @@ import { memo, useCallback, useEffect, useState } from "react";
 import { GitFork, Zap, Sparkles, Brain } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useForkDialogStore } from "../../stores/use-fork-dialog-store";
-import { useAgentStore, AGENT_ICONS } from "../../stores/use-agent-store";
+import { useAgentStore } from "../../stores/use-agent-store";
+
+const AGENT_ICONS: Record<string, string> = { plan: "📋", build: "🔨", code: "💻" };
 import { useTierStore, TIER_KEYS } from "../../stores/use-tier-store";
 import type { TierKey } from "../../stores/use-tier-store";
 import { useSessionStore, insertAfterPinned } from "../../stores/use-session-store";

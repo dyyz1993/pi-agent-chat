@@ -7,6 +7,9 @@ import { statSync } from "node:fs";
 import { createReadStream } from "node:fs";
 import { createInterface } from "node:readline";
 import { spawn as spawnProc, type ChildProcess } from "child_process";
+import { createLogger } from "../lib/logger";
+
+const log = createLogger("bash");
 
 export function register(server: RPCServer, _options: HandlerOptions): void {
   const r = createRegister(server);
@@ -25,10 +28,13 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     if (!pm) return { processes: [] };
 
     try {
-      const result: unknown = await pm.callChannel(sessionId, "bash" as string, "list", {});
+      const rawResult: unknown = await pm.callChannel(sessionId, "bash", "list", {});
       const processes =
-        result != null && typeof result === "object" && "processes" in result
-          ? ((result as { processes: unknown[] }).processes as BashProcess[])
+        typeof rawResult === "object" &&
+        rawResult !== null &&
+        "processes" in rawResult &&
+        Array.isArray((rawResult as Record<string, unknown>).processes)
+          ? (rawResult as { processes: BashProcess[] }).processes
           : [];
       return { processes };
     } catch {
@@ -65,7 +71,8 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
     try {
       statSync(logPath);
-    } catch {
+    } catch (e) {
+      log.debug("bash.readLog: log file not accessible", { logPath, error: String(e) });
       return { lines: [], totalLines: 0, hasMore: false };
     }
 
@@ -104,7 +111,8 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     try {
       statSync(path);
       return true;
-    } catch {
+    } catch (e) {
+      log.debug("isValidLogPath: path not accessible", { path, error: String(e) });
       return false;
     }
   };

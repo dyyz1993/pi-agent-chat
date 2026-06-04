@@ -7,6 +7,9 @@ import { existsSync } from "fs";
 import { join, resolve } from "path";
 import { homedir } from "os";
 import { getProcessManager } from "./agent";
+import { createLogger } from "../lib/logger";
+
+const log = createLogger("mcp");
 
 function encodeCwd(cwd: string): string {
   return "--" + cwd.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-") + "--";
@@ -66,7 +69,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
           size: s.size,
         });
       } catch (err) {
-        console.warn("[memory] failed to parse memory file:", filePath, err);
+        log.warn("failed to parse memory file", { filePath, error: String(err) });
       }
     }
 
@@ -78,7 +81,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       try {
         entrypointContent = await readFile(entrypointPath, "utf-8");
       } catch (err) {
-        console.warn("[memory] failed to read MEMORY.md:", err);
+        log.warn("failed to read MEMORY.md", { error: String(err) });
       }
     }
 
@@ -100,7 +103,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
           } | null;
           if (result) return { ...result, memoryDir: result.memoryDir ?? "" };
         } catch (err) {
-          console.warn("[memory] channel call failed:", err);
+          log.warn("channel call failed", { error: String(err) });
         }
       }
     }

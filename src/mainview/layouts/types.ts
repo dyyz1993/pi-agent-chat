@@ -31,9 +31,3 @@ export const PANEL_TABS: PanelTab[] = [
   { id: "hooks", label: "Hooks" },
   { id: "snapshot", label: "快照" },
 ];
-
-export interface ActivityItem {
-  id: string;
-  icon: string;
-  label: string;
-}

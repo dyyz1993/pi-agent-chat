@@ -16,6 +16,9 @@ import { useShallow } from "zustand/react/shallow";
 import { apiClient } from "../../lib/api-client";
 import { ALL_MEMORY_TYPES, getMemorySummary } from "../chat/memory-config";
 import type { MemoryTypeConfig } from "../chat/memory-config";
+import { createLogger } from "../../../shared/lib/logger";
+
+const log = createLogger("memory");
 
 const TYPE_BADGES: Record<string, { labelKey: string; cls: string }> = {
   project: { labelKey: "typeProject", cls: "bg-status-success/15 text-status-success" },
@@ -81,7 +84,7 @@ function FileContentPreview({ filePath }: { filePath: string }) {
         }
       })
       .catch((err) => {
-        console.warn("[MemoryPanel] load failed:", err);
+        log.warn("memory file load failed", { error: String(err) });
         if (!cancelled) setLoading(false);
       });
     return () => {

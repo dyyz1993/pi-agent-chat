@@ -1,6 +1,7 @@
 import { memo, useMemo, useState, useEffect, useRef } from "react";
 import { AlertTriangle, FileText } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { createLogger } from "../../../../shared/lib/logger";
 import type { ContentBlock } from "../../../types";
 import { CachedReactMarkdown } from "../CachedReactMarkdown";
 import { CopyButton } from "../CopyButton";
@@ -11,6 +12,8 @@ import { useSettingsStore } from "../../../stores/use-settings-store";
 import { formatFilePath } from "../../../lib/format-path";
 
 type Block = Extract<ContentBlock, { type: "toolExecution" }>;
+
+const logger = createLogger("chat");
 
 interface WriteToolArgs {
   path: string;
@@ -76,8 +79,8 @@ function parseWriteArgs(args: string): WriteToolArgs {
         content: typeof obj.content === "string" ? obj.content : "",
       };
     }
-  } catch {
-    /* args not valid JSON */
+  } catch (e) {
+    logger.warn("Failed to parse write args", { error: String(e) });
   }
   return { path: "", content: "" };
 }
@@ -101,8 +104,8 @@ function parseEditArgs(args: string): EditToolArgs {
         edits,
       };
     }
-  } catch {
-    /* args not valid JSON */
+  } catch (e) {
+    logger.warn("Failed to parse edit args", { error: String(e) });
   }
   return { path: "", edits: [] };
 }

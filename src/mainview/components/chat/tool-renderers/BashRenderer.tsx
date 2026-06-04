@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { ArrowDownToLine, X, Eye, ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Highlight, themes } from "prism-react-renderer";
+import { createLogger } from "../../../../shared/lib/logger";
 import type { ContentBlock } from "../../../types";
 import { useSessionStore } from "../../../stores/use-session-store";
 import { useBashStore } from "../../../stores/use-bash-store";
@@ -16,6 +17,8 @@ import { LogViewer } from "../../bash-panel/BashPanel";
 
 type Block = Extract<ContentBlock, { type: "toolExecution" }>;
 const EMPTY_PROCS: never[] = [];
+
+const logger = createLogger("bash");
 
 interface BashDetails {
   background?: {
@@ -62,8 +65,8 @@ function detectOutputLanguage(text: string): {
     try {
       const parsed: unknown = JSON.parse(trimmed);
       return { language: "json", formatted: JSON.stringify(parsed, null, 2) };
-    } catch {
-      /* not valid JSON */
+    } catch (e) {
+      logger.warn("Failed to detect output language as JSON", { error: String(e) });
     }
   }
 
@@ -245,8 +248,8 @@ export const BashExecutionCard = memo(function BashExecutionCard({
                   summary = parsed.command.slice(0, 120);
                 }
               }
-            } catch {
-              /* not JSON, use raw */
+            } catch (e) {
+              logger.warn("Failed to parse bash args for summary", { error: String(e) });
             }
             summary ??= block.args.split("\n")[0]?.trim().slice(0, 120);
           }

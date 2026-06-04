@@ -83,7 +83,8 @@ export const useSubagentStore = create<SubagentState>()((set, get) => ({
         loadingByParent: { ...s.loadingByParent, [parentSessionPath]: false },
       }));
       return subs;
-    } catch {
+    } catch (e) {
+      log.warn("Failed to list subagents by session", { parentSessionPath, error: String(e) });
       set((s) => ({ loadingByParent: { ...s.loadingByParent, [parentSessionPath]: false } }));
       return [];
     }
@@ -134,9 +135,8 @@ export const useSubagentStore = create<SubagentState>()((set, get) => ({
           };
         });
       }
-    } catch {
-      // Subagent session file may not exist yet (still streaming via live events).
-      // This is expected — live messages are accumulated in handleSubagentEvent.
+    } catch (e) {
+      log.warn("Failed to load subagent history", { subSessionPath, subId, error: String(e) });
     }
   },
 
@@ -463,7 +463,7 @@ export function handleSubagentEvent(subId: string, event: SubagentEvent, parentS
         });
       } else if (event.type === "tool_execution_update") {
         let output = "";
-        const partial: unknown = event.partialResult;
+        const partial = event.partialResult as Record<string, unknown> | undefined;
         if (partial) {
           const partialObj = partial as Record<string, unknown>;
           const partialContent = partialObj.content as
@@ -482,7 +482,7 @@ export function handleSubagentEvent(subId: string, event: SubagentEvent, parentS
           blocks[targetIdx] = { ...prev, output: (prev.output ?? "") + output };
         }
       } else if (event.type === "tool_execution_end") {
-        const result: unknown = event.result;
+        const result = event.result as Record<string, unknown> | undefined;
         const isError = event.isError;
         let output = "";
         if (result) {

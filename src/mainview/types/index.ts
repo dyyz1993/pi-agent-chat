@@ -116,14 +116,6 @@ export type Turn = {
   tokenUsage?: TokenUsage;
 };
 
-export type TurnSelection = {
-  selectedTurnIds: Set<string>;
-  totalTokens: number;
-  messageCount: number;
-};
-
-export type CollapseState = Record<string, boolean>;
-
 export type EditingType = "rename" | "newFile" | "newDir";
 export type EditingNode = { path: string; type: EditingType };
 
@@ -225,11 +217,6 @@ export type SubagentSessionInfo = {
   contextUsage?: ContextUsage;
 };
 
-export type FileDiffEntry = {
-  path: string;
-  status: "added" | "modified" | "deleted";
-};
-
 export type SnapshotInfo = {
   id: string;
   stepIndex: number;
@@ -296,13 +283,6 @@ export type StandaloneEntry = {
   icon?: string;
   label?: string;
   color?: string;
-};
-
-/** Selection state for batch operations */
-export type SelectionState = {
-  selectedItems: Set<string>; // itemId keys
-  selectedTurns: Set<string>; // turnId keys
-  mode: "none" | "items" | "turns";
 };
 
 /** Batch operation types */

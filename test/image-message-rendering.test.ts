@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import { messageToChatMessage, extractContent } from "../src/mainview/lib/message-mapper";
 import type { UserMessage, ImageContent, TextContent } from "@dyyz1993/pi-ai";
 
-const FAKE_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+const FAKE_B64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 
 describe("Image rendering in messages", () => {
   describe("extractContent handles image blocks", () => {
@@ -46,9 +47,7 @@ describe("Image rendering in messages", () => {
     it("handles image-only user message", () => {
       const msg = {
         role: "user" as const,
-        content: [
-          { type: "image" as const, data: FAKE_B64, mimeType: "image/jpeg" },
-        ],
+        content: [{ type: "image" as const, data: FAKE_B64, mimeType: "image/jpeg" }],
         timestamp: Date.now(),
       };
 

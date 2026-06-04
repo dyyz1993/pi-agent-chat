@@ -19,6 +19,9 @@ import type { BashProcess } from "../../../shared/modules/bash";
 import { apiClient } from "../../lib/api-client";
 import { useFocusTrap } from "../../hooks/use-focus-trap";
 import { IconButton } from "../primitives";
+import { createLogger } from "../../../shared/lib/logger";
+
+const log = createLogger("bash");
 
 function formatDuration(ms: number): string {
   const s = Math.floor(ms / 1000);
@@ -260,7 +263,8 @@ function LogViewer({
           setTotalLines(result.totalLines);
           setHasMore(result.hasMore);
           offsetRef.current += result.lines.length;
-        } catch {
+        } catch (e) {
+          log.warn("Failed to read bash log", { logPath, error: String(e) });
         } finally {
           if (!cancelled && mountedRef.current) {
             setLoading(false);
@@ -271,7 +275,7 @@ function LogViewer({
         if (cancelled) return;
         await apiClient.call("bash.watchLog", { logPath, sessionId: sid ?? undefined });
       } catch (err) {
-        console.warn("[BashPanel] watchLog failed:", err);
+        log.warn("watchLog failed", { error: String(err) });
       }
     })();
 
@@ -281,7 +285,7 @@ function LogViewer({
       if (subIdRef.current) apiClient.unsubscribe(subIdRef.current);
       const sid = useSessionStore.getState().activeSessionId;
       apiClient.call("bash.unwatchLog", { logPath, sessionId: sid ?? undefined }).catch((err) => {
-        console.warn("[BashPanel] unwatchLog failed:", err);
+        log.warn("unwatchLog failed", { error: String(err) });
       });
     };
   }, [logPath]);
@@ -335,7 +339,7 @@ function LogViewer({
       setHasMore(result.hasMore);
       offsetRef.current += result.lines.length;
     } catch (err) {
-      console.warn("[BashPanel] loadMore failed:", err);
+      log.warn("loadMore failed", { error: String(err) });
     } finally {
       if (mountedRef.current) loadingRef.current = false;
     }

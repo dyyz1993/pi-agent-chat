@@ -6,6 +6,9 @@ import { useChatNavStore } from "./use-chat-nav-store";
 import { useMemoryStore } from "./use-memory-store";
 import { useRulesStore } from "./use-rules-store";
 import { useRpcDebugStore } from "./use-rpc-debug-store";
+import { createLogger } from "../../shared/lib/logger";
+
+const log = createLogger("system");
 
 export interface SubscriptionSnapshot {
   category: string;
@@ -75,7 +78,8 @@ function getSubscriptions(): SubscriptionSnapshot[] {
 function estimateBytes(obj: unknown): number {
   try {
     return JSON.stringify(obj).length * 2;
-  } catch {
+  } catch (e) {
+    log.warn("Failed to estimate object bytes", { error: String(e) });
     return 0;
   }
 }

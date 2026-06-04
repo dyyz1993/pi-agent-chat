@@ -115,7 +115,11 @@ function scanExtensionDir(dir: string, extensionPaths: string[]): void {
           const stats = statSync(path.join(dir, entry.name));
           isDir = stats.isDirectory();
           isFile = stats.isFile();
-        } catch {
+        } catch (e) {
+          log.debug("scanExtensions: skipping symlink target", {
+            name: entry.name,
+            error: String(e),
+          });
           continue;
         }
       }
@@ -707,6 +711,66 @@ export class AgentProcessManager {
       return { agentId: sessionId, status: "already_running" };
     }
 
+    // ── Process pool: reuse existing process for same cwd ──
+    const pooled = this.processByCwd.get(projectPath);
+    if (pooled) {
+      const oldSessionId = pooled._activeSessionId;
+      const tSwitch = performance.now();
+      try {
+        perfLog.info("[start] reusing pooled process", {
+          sessionId,
+          projectPath,
+          oldSessionId,
+        });
+        const result = await Promise.race([
+          pooled.client.switchSession(sessionPath),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("switchSession timed out after 15s")), 15000),
+          ),
+        ]);
+        if (!result.cancelled) {
+          this.clients.delete(oldSessionId);
+          pooled._activeSessionId = sessionId;
+          pooled.info = {
+            sessionId,
+            projectPath,
+            sessionPath,
+            status: "idle",
+            holdEvents: [],
+          };
+          this.clients.set(sessionId, pooled);
+          this.sessionPaths.set(sessionId, sessionPath);
+          this.sessionProjectPaths.set(sessionId, projectPath);
+          perfLog.info("[start] switchSession done", {
+            sessionId,
+            oldSessionId,
+            totalMs: Math.round(performance.now() - tSwitch),
+          });
+          return { agentId: sessionId, status: "switched" };
+        }
+        perfLog.info("[start] switchSession cancelled by extension, creating new process");
+      } catch (err: unknown) {
+        const switchMs = Math.round(performance.now() - tSwitch);
+        perfLog.info("[start] switchSession failed, killing pooled process", {
+          sessionId,
+          oldSessionId,
+          switchMs,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        this.processByCwd.delete(projectPath);
+        this.clients.delete(oldSessionId);
+        try {
+          pooled.unsubscribe();
+        } catch (e) {
+          log.debug("start: failed to unsubscribe old pooled process", { error: String(e) });
+        }
+        try {
+          await pooled.client.stop();
+        } catch (e) {
+          log.debug("start: failed to stop old pooled process client", { error: String(e) });
+        }
+      }
+    }
     const poolKey = this.getPoolKey(projectPath, options?.userId);
 
     perfLog.info("[start] begin (new process)", { sessionId, projectPath });

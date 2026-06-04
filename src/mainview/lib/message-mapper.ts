@@ -218,11 +218,4 @@ export function messageToChatMessage(
   return msg;
 }
 
-export function getTextContent(msg: ChatMessage): string {
-  return msg.content
-    .filter((b): b is { type: "text"; text: string } => b.type === "text")
-    .map((b) => b.text)
-    .join("");
-}
-
 export { extractTokenUsage, extractTimestamp, extractContent, extractToolCallNameMap };

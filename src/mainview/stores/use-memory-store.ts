@@ -1,7 +1,10 @@
 import { create } from "zustand";
 import { apiClient } from "../lib/api-client";
 import { useSessionStore } from "./use-session-store";
+import { createLogger } from "../../shared/lib/logger";
 import type { MemoryStatusResult } from "../../shared/modules/memory";
+
+const log = createLogger("memory");
 
 interface MemoryEvent {
   id: string;
@@ -112,7 +115,7 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
             },
           }));
         } catch (err) {
-          console.warn("[memory-store] loadFiles failed:", err);
+          log.warn("loadFiles failed", { error: String(err) });
         }
         resolve();
       }, 100);
@@ -208,7 +211,7 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
       });
       get().addIrrelevantMark(sessionId, blockId);
     } catch (err) {
-      console.warn("[memory-store] markIrrelevant failed:", err);
+      log.warn("markIrrelevant failed", { error: String(err) });
     }
   },
 

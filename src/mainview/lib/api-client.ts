@@ -9,6 +9,9 @@ import type {
 import type { RPCMethods, RPCEvents } from "../../shared/rpc-schema";
 import { useRpcDebugStore } from "../stores/use-rpc-debug-store";
 import { useAppStore } from "../stores/use-app-store";
+import { createLogger } from "../../shared/lib/logger";
+
+const log = createLogger("gateway");
 
 /**
  * Token 来源优先级：
@@ -188,8 +191,8 @@ class APIClientImpl {
         if (this.wsTransport) {
           try {
             this.wsTransport.close();
-          } catch {
-            /* ignore */
+          } catch (e) {
+            log.warn("Failed to close transport during reconnect", { error: String(e) });
           }
         }
 
@@ -211,7 +214,11 @@ class APIClientImpl {
         this.setConnectionStatus("connected");
         this.setupReconnectDetection();
         this._reconnectCallback?.();
-      } catch {
+      } catch (e) {
+        log.warn("Reconnect attempt failed", {
+          attempt: this._reconnectAttempts,
+          error: String(e),
+        });
         this._scheduleReconnect();
       }
     }, delay);
@@ -342,7 +349,7 @@ class APIClientImpl {
         payload,
       });
     } catch (err) {
-      console.warn("[api-client] emit failed:", err);
+      log.warn("emit failed", { error: String(err) });
     }
   }
 
@@ -371,8 +378,8 @@ class APIClientImpl {
     if (this.wsTransport) {
       try {
         this.wsTransport.close();
-      } catch {
-        /* ignore */
+      } catch (e) {
+        log.warn("Failed to close transport during destroy", { error: String(e) });
       }
       this.wsTransport = null;
     }

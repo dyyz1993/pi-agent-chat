@@ -20,6 +20,7 @@ import {
   Shield,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { createLogger } from "../../../shared/lib/logger";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import { useChatStore } from "../../stores/use-chat-store";
 import { useSessionStore } from "../../stores/use-session-store";
@@ -63,6 +64,8 @@ interface FileBreadcrumb {
   path: string;
   label: string;
 }
+
+const logger = createLogger("chat");
 
 export function QuickActionToolbar() {
   const { t } = useTranslation("chat");
@@ -182,8 +185,8 @@ export function QuickActionToolbar() {
           insertText: `@${skill.name}`,
         });
       }
-    } catch {
-      /* ignore */
+    } catch (e) {
+      logger.warn("Failed to fetch @ agents", { error: String(e) });
     } finally {
       setLoading(false);
     }
@@ -266,8 +269,8 @@ export function QuickActionToolbar() {
           insertText: `@memory:${f.filename}`,
         });
       }
-    } catch {
-      /* ignore */
+    } catch (e) {
+      logger.warn("Failed to fetch @ memory", { error: String(e) });
     } finally {
       setLoading(false);
     }
@@ -293,8 +296,8 @@ export function QuickActionToolbar() {
           insertText: `/${cmd.name}`,
         });
       }
-    } catch {
-      /* ignore */
+    } catch (e) {
+      logger.warn("Failed to fetch slash commands", { error: String(e) });
     } finally {
       setLoading(false);
     }
@@ -333,8 +336,8 @@ export function QuickActionToolbar() {
           insertText: `/${skill.name}`,
         });
       }
-    } catch {
-      /* ignore */
+    } catch (e) {
+      logger.warn("Failed to fetch slash skills", { error: String(e) });
     } finally {
       setLoading(false);
     }

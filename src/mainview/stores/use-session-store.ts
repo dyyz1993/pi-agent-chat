@@ -453,7 +453,8 @@ export const useSessionStore = create<SessionState>()(
             loading: false,
           }));
           return finalSessions;
-        } catch {
+        } catch (e) {
+          log.warn("Failed to fetch sessions", { error: String(e) });
           set({ loading: false });
           return [];
         }
@@ -1922,7 +1923,8 @@ export const useSessionStore = create<SessionState>()(
           }, 500);
 
           return true;
-        } catch {
+        } catch (e) {
+          log.warn("Failed to recover session", { error: String(e) });
           return false;
         }
       },

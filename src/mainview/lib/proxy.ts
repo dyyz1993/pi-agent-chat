@@ -15,6 +15,10 @@
 
 // ---- 内部状态 ----
 
+import { createLogger } from "../../shared/lib/logger";
+
+const logger = createLogger("proxy-register");
+
 let active = false;
 
 // ---- 公开 API ----
@@ -69,7 +73,8 @@ export async function tryEnable(serverHost: string): Promise<void> {
     if (!res.ok) {
       active = false;
     }
-  } catch {
+  } catch (e) {
+    logger.warn("Proxy registration failed", { serverHost, error: String(e) });
     active = false;
   }
 }
@@ -87,7 +92,8 @@ export function proxyUrlSync(originalUrl: string): string {
     if (parsed.protocol !== "http:") return originalUrl;
     if (!isLocalAddress(parsed.hostname)) return originalUrl;
     return `/__proxy__/${parsed.host}${parsed.pathname}${parsed.search}${parsed.hash}`;
-  } catch {
+  } catch (e) {
+    logger.warn("Failed to parse URL for proxy rewrite", { originalUrl, error: String(e) });
     return originalUrl;
   }
 }
@@ -131,7 +137,8 @@ export async function checkProxyUrl(originalUrl: string): Promise<ProxyCheckResu
     }
 
     return { url: `/__proxy__/${parsed.host}${parsed.pathname}${parsed.search}${parsed.hash}` };
-  } catch {
+  } catch (e) {
+    logger.warn("Proxy URL check failed", { originalUrl, error: String(e) });
     return { url: originalUrl };
   }
 }

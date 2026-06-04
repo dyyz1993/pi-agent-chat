@@ -474,7 +474,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     try {
       await apiClient.call("agent.clearQueue", { sessionId });
     } catch (err) {
-      console.warn("[chat] clearQueue failed:", err);
+      log.warn("clearQueue failed", { error: String(err) });
     }
   },
 

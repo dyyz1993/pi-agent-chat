@@ -17,6 +17,7 @@ import {
   Clock,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { createLogger } from "../../../shared/lib/logger";
 import { apiClient } from "../../lib/api-client";
 import type { RecentProject, DirectoryEntry, FavoriteFolder } from "../../types";
 import { useFocusTrap } from "../../hooks/use-focus-trap";
@@ -34,12 +35,15 @@ const CACHE_KEY_RECENTS = "pi-picker-recents";
 const CACHE_KEY_FAVORITES = "pi-picker-favorites";
 const CACHE_TTL = 5 * 60 * 1000;
 
+const logger = createLogger("session");
+
 function readCache<T>(key: string): { data: T; ts: number } | undefined {
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return undefined;
     return JSON.parse(raw) as { data: T; ts: number };
-  } catch {
+  } catch (e) {
+    logger.warn("Failed to read cache", { key, error: String(e) });
     return undefined;
   }
 }
@@ -47,8 +51,8 @@ function readCache<T>(key: string): { data: T; ts: number } | undefined {
 function writeCache<T>(key: string, data: T) {
   try {
     localStorage.setItem(key, JSON.stringify({ data, ts: Date.now() }));
-  } catch {
-    /* localStorage unavailable in some contexts */
+  } catch (e) {
+    logger.warn("Failed to write cache", { key, error: String(e) });
   }
 }
 
@@ -155,7 +159,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
         if (home) homePathRef.current = home.path;
       })
       .catch((err) => {
-        console.warn("[ProjectPicker] loadRecentProjects failed:", err);
+        logger.warn("loadRecentProjects failed", { error: String(err) });
         if (!cachedRecents || !isCacheValid(cachedRecents.ts)) setRecents([]);
         if (!cachedFavorites || !isCacheValid(cachedFavorites.ts)) setFavoriteFolders([]);
       })
@@ -197,7 +201,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
         if (!cancelled) setDirectoryEntries((result.entries as DirectoryEntry[]) || []);
       })
       .catch((err) => {
-        console.warn("[ProjectPicker] listDir failed:", err);
+        logger.warn("listDir failed", { error: String(err) });
         if (!cancelled) setDirectoryEntries([]);
       })
       .finally(() => {
@@ -253,8 +257,12 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
         setShowCreateFolder(false);
         setNewFolderName("");
       }
-    } catch {
-      /* error handled by empty catch */
+    } catch (e) {
+      logger.warn("Failed to create directory", {
+        parentPath: currentPath,
+        folderName: name,
+        error: String(e),
+      });
     } finally {
       setCreating(false);
     }
@@ -277,7 +285,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
         setFavoriteFolders(updated);
         writeCache(CACHE_KEY_FAVORITES, updated);
       } catch (err) {
-        console.warn("[ProjectPicker] toggleFavorite failed:", err);
+        logger.warn("toggleFavorite failed", { error: String(err) });
       }
     },
     [],
@@ -293,7 +301,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
         return updated;
       });
     } catch (err) {
-      console.warn("[ProjectPicker] togglePin failed:", err);
+      logger.warn("togglePin failed", { error: String(err) });
     }
   }, []);
 
@@ -315,7 +323,7 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
         return updated;
       });
     } catch (err) {
-      console.warn("[ProjectPicker] removeRecent failed:", err);
+      logger.warn("removeRecent failed", { error: String(err) });
     }
   }, []);
 

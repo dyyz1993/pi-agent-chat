@@ -1,4 +1,3 @@
-import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { SystemMethods } from "./modules/system";
 import type { FileMethods, FileEvents } from "./modules/file";
 import type { TimerMethods, TimerEvents } from "./modules/timer";
@@ -56,26 +55,6 @@ export interface RPCEvents
 export interface HandlerOptions {
   platform: "desktop" | "web";
   userId?: string;
-}
-
-export interface HandlerRegister {
-  (server: RPCServer, options: HandlerOptions): void;
-  readonly __handlerType: "register";
-}
-
-export interface HandlerCleanup {
-  (server: RPCServer): void;
-  readonly __handlerType: "cleanup";
-}
-
-export function asRegister(
-  fn: (server: RPCServer, options: HandlerOptions) => void,
-): HandlerRegister {
-  return fn as HandlerRegister;
-}
-
-export function asCleanup(fn: (server: RPCServer) => void): HandlerCleanup {
-  return fn as HandlerCleanup;
 }
 
 export type P<K extends keyof RPCMethods> = RPCMethods[K] extends { params: infer P } ? P : never;

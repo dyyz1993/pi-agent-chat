@@ -1,11 +1,11 @@
 import { Plus, X, Settings, MessageCircleQuestion } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { createLogger } from "../../../shared/lib/logger";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useUIDialogStore } from "../../stores/use-ui-dialog-store";
 import { apiClient } from "../../lib/api-client";
 import { SettingsPanel } from "../settings/SettingsPanel";
-import { createLogger } from "../../../shared/lib/logger";
 import type { SessionStatus } from "../../types";
 import { Button, ModalDialog } from "../primitives";
 
@@ -40,6 +40,8 @@ function getProjectPendingCount(
 
 const LONG_PRESS_MS = 800;
 const MOVE_THRESHOLD = 5;
+
+const logger = createLogger("session");
 
 export function TabBar({ onAddProject }: { onAddProject: () => void }) {
   const { t } = useTranslation("sidebar");
@@ -254,8 +256,8 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
     for (const sid of closeConfirmTab.runningSessionIds) {
       try {
         await apiClient.call("agent.stop", { sessionId: sid });
-      } catch {
-        /* ignore */
+      } catch (e) {
+        logger.warn("Failed to stop agent session", { sessionId: sid, error: String(e) });
       }
     }
     removeProjectTab(closeConfirmTab.id);

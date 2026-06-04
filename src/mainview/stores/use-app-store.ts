@@ -3,6 +3,9 @@ import { apiClient } from "../lib/api-client";
 import type { RPCMethods } from "../lib/api-client";
 import type { MethodResult } from "@dyyz1993/rpc-core";
 import type { DemoMethod } from "../types";
+import { createLogger } from "../../shared/lib/logger";
+
+const log = createLogger("system");
 
 type DemoResult =
   | MethodResult<RPCMethods, "system.ping">
@@ -60,7 +63,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         get().addLog(
           `${transport === "ipc" ? "Desktop" : "Web"} mode - ${transport.toUpperCase()}`,
         );
-      } catch {
+      } catch (e) {
+        log.warn("API client initialization failed", { retries, error: String(e) });
         retries++;
         if (retries < MAX_RETRIES) {
           setTimeout(init, 1000);

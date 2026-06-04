@@ -46,6 +46,34 @@ let mermaidModule: MermaidAPI | null = null;
 let initialized = false;
 let counter = 0;
 
+/**
+ * Sanitize SVG HTML to prevent XSS when using dangerouslySetInnerHTML.
+ * Removes <script>, event-handler attributes (on*), javascript: URLs,
+ * and <foreignObject> elements.
+ */
+function sanitizeSvgHtml(html: string): string {
+  let clean = html;
+  // Remove <script> blocks (open + close)
+  clean = clean.replace(/<script[\s\S]*?<\/script\s*>/gi, "");
+  // Remove self-closing <script ... />
+  clean = clean.replace(/<script[\s\S]*?\/>/gi, "");
+  // Remove event-handler attributes: onclick, onload, onerror, etc.
+  clean = clean.replace(/\son\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "");
+  // Remove javascript: / vbscript: URLs in href / xlink:href / src / action
+  clean = clean.replace(
+    /((?:href|xlink:href|src|action)\s*=\s*(?:")[^"]*(?:javascript|vbscript):[^"]*"|'[^']*(?:javascript|vbscript):[^']*')/gi,
+    "",
+  );
+  // Remove <foreignObject> blocks (can embed arbitrary HTML)
+  clean = clean.replace(/<foreignObject[\s\S]*?<\/foreignObject\s*>/gi, "");
+  // Remove data: URLs that carry text/html
+  clean = clean.replace(
+    /((?:href|xlink:href|src)\s*=\s*(?:"data:text\/html[^"]*"|'data:text\/html[^']*'))/gi,
+    "",
+  );
+  return clean;
+}
+
 async function loadMermaid(theme: "light" | "dark"): Promise<MermaidAPI> {
   if (mermaidModule) {
     mermaidModule.initialize({
@@ -161,7 +189,7 @@ export const MermaidBlock = memo(function MermaidBlock({ code, inline = true }: 
             transformOrigin: "top left",
             transition: "transform 0.15s ease",
           }}
-          dangerouslySetInnerHTML={svg ? { __html: svg } : undefined}
+          dangerouslySetInnerHTML={svg ? { __html: sanitizeSvgHtml(svg) } : undefined}
         />
       </div>
       <div className="absolute top-2 right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-bg-elevated/90 dark:bg-surface-dim/90 rounded-md border border-border-secondary p-0.5">

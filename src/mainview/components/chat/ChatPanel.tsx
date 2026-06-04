@@ -15,6 +15,7 @@ import {
   ClipboardCheck,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { createLogger } from "../../../shared/lib/logger";
 import { useChatStore } from "../../stores/use-chat-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useNotificationStore } from "../../stores/use-notification-store";
@@ -47,7 +48,6 @@ import { AttachmentButtons, AttachmentBar } from "./FileAttachment";
 import { useAttachmentStore } from "../../stores/use-attachment-store";
 import { useForkDialogStore } from "../../stores/use-fork-dialog-store";
 import type { ChatMessage } from "../../types";
-import { createLogger } from "../../../shared/lib/logger";
 import { useAgentStore } from "../../stores/use-agent-store";
 import { agentColorStyle } from "../../utils/agent-color";
 

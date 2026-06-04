@@ -85,7 +85,8 @@ async function getAllowedRoots(): Promise<string[]> {
     const tabPaths = tabs.map((t) => resolve(t.path));
     cachedAllowedRoots = [...ALLOWED_ROOTS, ...projects.map((p) => resolve(p.path)), ...tabPaths];
     rootsCacheTime = now;
-  } catch {
+  } catch (e) {
+    log.debug("getAllowedRoots: failed to load projects, using defaults", { error: String(e) });
     cachedAllowedRoots = [...ALLOWED_ROOTS];
   }
   return cachedAllowedRoots;
@@ -127,7 +128,7 @@ function verifyToken(req: IncomingMessage, authToken: string): boolean {
         }
       }
     } catch {
-      /* invalid URL */
+      log.debug("verifyToken: failed to parse request URL for token check");
     }
   }
   return false;
@@ -446,7 +447,7 @@ export function createHttpHandler(
         const content = await readFile("logs/debug.log", "utf-8").catch(() => "");
         res.writeHead(200, { "Content-Type": "text/plain" }).end(content);
       } catch (err) {
-        console.error("[http-routes] debug-log read failed:", err);
+        log.error("debug-log read failed", { error: String(err) });
         res.writeHead(200, { "Content-Type": "text/plain" }).end("");
       }
       return;
@@ -604,7 +605,8 @@ async function handleFsRoute(
       res.end(buffer);
     }
     log.info("FS served", { path: filePath });
-  } catch {
+  } catch (e) {
+    log.debug("handleFsRoute: failed to serve file", { filePath, error: String(e) });
     res.writeHead(500, { "Content-Type": "text/plain" }).end("Failed to read file");
   }
 }
@@ -631,7 +633,8 @@ async function handleFileInfo(encodedPath: string, res: ServerResponse): Promise
           : undefined,
       }),
     );
-  } catch {
+  } catch (e) {
+    log.debug("handleFileInfo: failed to stat file", { filePath, error: String(e) });
     res.writeHead(404, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "File not found" }));
   }
@@ -682,7 +685,8 @@ async function handleFileContent(
       res.end(buffer);
     }
     log.info("File served", { path: filePath });
-  } catch {
+  } catch (e) {
+    log.debug("handleFileContent: failed to serve file", { filePath, error: String(e) });
     res.writeHead(500, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Failed to read file" }));
   }

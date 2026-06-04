@@ -2,6 +2,9 @@ import { create } from "zustand";
 import { useMemo } from "react";
 import { apiClient } from "../lib/api-client";
 import { useSessionStore } from "./use-session-store";
+import { createLogger } from "../../shared/lib/logger";
+
+const log = createLogger("chat");
 import type { ContentBlock, UIInteractionBlock } from "../types";
 
 export interface UIPendingRequest {
@@ -122,7 +125,7 @@ export const useUIDialogStore = create<UIDialogState>((set, get) => ({
         response,
       })
       .catch((err) => {
-        console.warn("[ui-dialog] respondUI failed:", err);
+        log.warn("respondUI failed", { error: String(err) });
       });
 
     const newStates = new Map(requestStates);
@@ -148,7 +151,7 @@ export const useUIDialogStore = create<UIDialogState>((set, get) => ({
         response: { cancelled: true },
       })
       .catch((err) => {
-        console.warn("[ui-dialog] dismissUI failed:", err);
+        log.warn("dismissUI failed", { error: String(err) });
       });
 
     const newStates = new Map(requestStates);

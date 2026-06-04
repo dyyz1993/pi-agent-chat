@@ -8,6 +8,9 @@
 
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { createLogger } from "./shared/lib/logger";
+
+const log = createLogger("config");
 
 const MISSING_PI_VARS: string[] = [];
 
@@ -62,8 +65,8 @@ export const config = {
 } as const;
 
 if (MISSING_PI_VARS.length > 0) {
-  console.warn(
-    `[config] ⚠ 以下环境变量未设置，PI Agent 功能将无法正常工作:\n` +
+  log.warn(
+    `以下环境变量未设置，PI Agent 功能将无法正常工作:\n` +
       MISSING_PI_VARS.map((v) => `  - ${v}`).join("\n") +
       `\n请在 .env 文件中配置这些变量，参考 .env.example`,
   );

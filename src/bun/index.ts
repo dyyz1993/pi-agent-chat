@@ -37,8 +37,8 @@ async function getMainViewUrl(): Promise<string> {
       await fetch(DEV_SERVER_URL, { method: "HEAD" });
       log.info(`HMR enabled: Using Vite dev server at ${DEV_SERVER_URL}`);
       return DEV_SERVER_URL;
-    } catch {
-      log.info("Vite dev server not running.");
+    } catch (e) {
+      log.info("Vite dev server not running, falling back to bundled views.", { error: String(e) });
     }
   }
   return "views://mainview/index.html";
