@@ -3,6 +3,7 @@ import WebSocket from "ws";
 import { randomUUID } from "crypto";
 import { readFile } from "fs/promises";
 import {
+  hasPiCliPath,
   startTestServer,
   stopTestServer,
   type TestServerResult,
@@ -13,7 +14,7 @@ const AUTH_TOKEN = "pi-agent-chat-diag-token";
 const WS_URL = `ws://localhost:${TEST_PORT}/ws?token=${AUTH_TOKEN}`;
 const PROJECT_PATH = process.cwd();
 const RPC_TIMEOUT = 35000;
-const HAS_PI_CLI = !!process.env.PI_CLI_PATH;
+const HAS_PI_CLI = process.env.PI_E2E_LLM === "1" && hasPiCliPath();
 
 interface RPCMessage {
   id: string;

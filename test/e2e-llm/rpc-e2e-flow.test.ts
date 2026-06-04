@@ -140,7 +140,7 @@ afterAll(async () => {
   await stopTestServer(server);
 });
 
-const shouldRun = process.env.PI_E2E_LLM === "1" && !!process.env.PI_CLI_PATH;
+const shouldRun = process.env.PI_E2E_LLM === "1";
 
 describe.skipIf(shouldRun === false)(
   "E2E: 完整 RPC 流程测试 (创建项目 → 会话 → 发消息 → 收回复)",

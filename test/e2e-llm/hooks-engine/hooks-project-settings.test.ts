@@ -19,7 +19,7 @@ const PORT = HOOK_BASE_PORT + 30;
 const AUTH_TOKEN = "hooks-test-token-g3";
 const paths = getHookPaths("g3");
 
-const shouldRun = process.env.PI_E2E_LLM === "1" && !!process.env.PI_CLI_PATH;
+const shouldRun = process.env.PI_E2E_LLM === "1";
 
 describe.skipIf(shouldRun === false)("Group 3: Project-Level Settings Hooks", () => {
   let globalHookScript: string;

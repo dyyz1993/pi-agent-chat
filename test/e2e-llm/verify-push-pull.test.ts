@@ -128,7 +128,7 @@ let server: TestServerResult;
 let ws: WebSocket;
 let sessionId: string;
 let sessionPath: string;
-const shouldRun = process.env.PI_E2E_LLM === "1" && !!process.env.PI_CLI_PATH;
+const shouldRun = process.env.PI_E2E_LLM === "1";
 
 beforeAll(async () => {
   server = await startTestServer({ port: PORT, authToken: AUTH_TOKEN, projectPath: process.cwd() });

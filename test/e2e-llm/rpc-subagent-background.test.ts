@@ -143,7 +143,7 @@ function safeClose(ws: WebSocket | undefined) {
 }
 
 let server: TestServerResult;
-const shouldRun = process.env.PI_E2E_LLM === "1" && !!process.env.PI_CLI_PATH;
+const shouldRun = process.env.PI_E2E_LLM === "1";
 
 beforeAll(async () => {
   server = await startTestServer({

@@ -18,7 +18,7 @@ const PORT = HOOK_BASE_PORT + 10;
 const AUTH_TOKEN = "hooks-test-token-g1";
 const paths = getHookPaths("g1");
 
-const shouldRun = process.env.PI_E2E_LLM === "1" && !!process.env.PI_CLI_PATH;
+const shouldRun = process.env.PI_E2E_LLM === "1";
 
 describe.skipIf(shouldRun === false)("Group 1: Event Variables Propagation", () => {
   let ctx: HookTestContext;

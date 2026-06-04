@@ -138,7 +138,7 @@ afterAll(async () => {
   await stopTestServer(server);
 });
 
-const shouldRun = process.env.PI_E2E_LLM === "1" && !!process.env.PI_CLI_PATH;
+const shouldRun = process.env.PI_E2E_LLM === "1";
 
 describe.skipIf(shouldRun === false)("Fork 派发测试: 通过 RPC JSON 触发 agent 委派 fork", () => {
   let ws: WebSocket;
