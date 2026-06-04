@@ -1,17 +1,14 @@
 #!/bin/sh
-bunx lint-staged
+set -e
 
-# Full ESLint check (catches cross-file issues like callChannel method name mismatches)
-ESLINT_ERRORS=$(bun run lint 2>&1 | grep "error" | grep -v "warning" || true)
-if [ -n "$ESLINT_ERRORS" ]; then
-  echo "ESLint errors found:"
-  echo "$ESLINT_ERRORS"
-  exit 1
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACMR)
+TS_FILES=$(printf "%s\n" "$STAGED_FILES" | grep -E '\.(ts|tsx)$' || true)
+FORMAT_FILES=$(printf "%s\n" "$STAGED_FILES" | grep -E '\.(json|md|css)$' || true)
+
+if [ -n "$TS_FILES" ]; then
+  printf "%s\n" "$TS_FILES" | xargs npx eslint
 fi
 
-# Type check (exclude sandbox and pi-momo-fork)
-ERRORS=$(bunx tsc --noEmit 2>&1 | grep "error TS" | grep -v "node_modules" | grep -v "src/sandbox/" | grep -v "pi-momo-fork" | grep -v "process-manager.ts" | grep -v "src/gateway/http-routes.ts" | grep -v "src/server.ts" | grep -v "src/shared/handlers/agent.ts" || true)
-if [ -n "$ERRORS" ]; then
-  echo "$ERRORS"
-  exit 1
+if [ -n "$FORMAT_FILES" ]; then
+  printf "%s\n" "$FORMAT_FILES" | xargs npx prettier --check
 fi

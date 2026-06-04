@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 
 const mockFn = vi.fn<(args: string[]) => string>(() => "");
-const mockSpawnOptions = vi.fn<(options?: unknown) => void>();
 type BunLike = {
   spawnSync?: (cmd: unknown[], options?: unknown) => {
     exitCode: number;
@@ -12,8 +11,7 @@ type BunLike = {
 const bunRuntime = ((globalThis as { Bun?: BunLike }).Bun ??= {});
 const originalSpawnSync = bunRuntime.spawnSync;
 
-bunRuntime.spawnSync = ((cmd: unknown[], options?: unknown) => {
-  mockSpawnOptions(options);
+bunRuntime.spawnSync = ((cmd: unknown[]) => {
   const cmdArgs = (Array.isArray(cmd) ? cmd.slice(1) : []) as string[];
   const output = mockFn(cmdArgs);
   if (output.startsWith("ERROR:")) {
@@ -50,7 +48,6 @@ describe("git handler", () => {
       if (args[0] === "rev-parse" && args[1] === "--show-toplevel") return REPO_PATH;
       return "";
     });
-    mockSpawnOptions.mockClear();
     server = createMockServer();
     register(
       server as unknown as Parameters<typeof register>[0],
@@ -286,30 +283,6 @@ describe("git handler", () => {
 
       expect(result.shortHash).toBe("abc1234");
       expect(result.hash.length).toBeGreaterThan(0);
-    });
-
-    it("passes --no-verify when requested", async () => {
-      mockFn.mockImplementation((args) => {
-        if (args[0] === "rev-parse" && args[1] === "--show-toplevel") return REPO_PATH;
-        if (args[0] === "commit") return "[main abc1234] my commit message\n1 file changed";
-        if (args[0] === "rev-parse" && args[1] === "abc1234")
-          return "abcdef1234567890abcdef1234567890abcdef12";
-        return "";
-      });
-
-      const handler = server.handlers.get("git.commit")!;
-      await handler({
-        repoPath: REPO_PATH,
-        message: "my commit message",
-        noVerify: true,
-      });
-
-      expect(mockFn).toHaveBeenCalledWith(["commit", "--no-verify", "-m", "my commit message"]);
-      expect(mockSpawnOptions).toHaveBeenCalledWith(
-        expect.objectContaining({
-          env: expect.objectContaining({ HUSKY: "0" }),
-        }),
-      );
     });
   });
 

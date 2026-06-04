@@ -174,11 +174,7 @@ describe("useGitStore", () => {
       untracked: [],
     });
     await useGitStore.getState().commit(REPO, "msg");
-    expect(mockCall).toHaveBeenCalledWith("git.commit", {
-      repoPath: REPO,
-      message: "msg",
-      noVerify: true,
-    });
+    expect(mockCall).toHaveBeenCalledWith("git.commit", { repoPath: REPO, message: "msg" });
     expect(useGitStore.getState().loadingAction).toBeNull();
   });
 

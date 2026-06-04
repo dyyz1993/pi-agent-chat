@@ -60,7 +60,7 @@ export interface GitMethods {
     result: { ok: boolean };
   };
   "git.commit": {
-    params: { repoPath: string; message: string; noVerify?: boolean };
+    params: { repoPath: string; message: string };
     result: { hash: string; shortHash: string };
   };
   "git.push": {
