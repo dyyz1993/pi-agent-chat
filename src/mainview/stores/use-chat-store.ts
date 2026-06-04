@@ -830,6 +830,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           count: finalMsgs.length,
         });
         set((s) => ({
+          historyLoadVersion: options?.force ? s.historyLoadVersion + 1 : s.historyLoadVersion,
           hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: hasMore },
           nextCursorBySession: {
             ...s.nextCursorBySession,

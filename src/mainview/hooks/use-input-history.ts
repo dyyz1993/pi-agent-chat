@@ -30,6 +30,16 @@ function writeHistory(sessionId: string, items: string[]) {
   }
 }
 
+export function saveToInputHistory(sessionId: string, text: string): string[] | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+
+  const filtered = readHistory(sessionId).filter((item) => item !== trimmed);
+  const updated = [trimmed, ...filtered].slice(0, MAX_ITEMS);
+  writeHistory(sessionId, updated);
+  return updated;
+}
+
 export function useInputHistory(sessionId: string) {
   const historyRef = useRef<string[]>(readHistory(sessionId));
   const indexRef = useRef(-1);
@@ -40,13 +50,9 @@ export function useInputHistory(sessionId: string) {
 
   const saveToHistory = useCallback(
     (text: string) => {
-      const trimmed = text.trim();
-      if (!trimmed) return;
-      const h = historyRef.current;
-      const filtered = h.filter((item) => item !== trimmed);
-      const updated = [trimmed, ...filtered].slice(0, MAX_ITEMS);
+      const updated = saveToInputHistory(sessionId, text);
+      if (!updated) return;
       historyRef.current = updated;
-      writeHistory(sessionId, updated);
       indexRef.current = -1;
       forceUpdate((n) => n + 1);
     },

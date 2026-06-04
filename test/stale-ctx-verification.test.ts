@@ -8,6 +8,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 const ROOT = path.resolve(import.meta.dirname, "../../pi-momo-fork/packages/coding-agent");
+const HAS_ROOT = fs.existsSync(ROOT);
 
 function read(rel: string): string {
   return fs.readFileSync(path.join(ROOT, rel), "utf-8");
@@ -20,7 +21,7 @@ function hasStaleGuard(src: string, marker: string): boolean {
   return src.slice(idx, idx + 2000).includes("stale");
 }
 
-describe("Stale ctx fix verification — all fixes", () => {
+(HAS_ROOT ? describe : describe.skip)("Stale ctx fix verification — all fixes", () => {
   // ── Core infrastructure ──
 
   it("Fix 1: agent-session reload flushes channels", () => {

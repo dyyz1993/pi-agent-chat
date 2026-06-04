@@ -177,7 +177,7 @@ vi.mock("../src/mainview/stores/use-session-store", () => {
     },
     restoreContextFromHistory: () => {},
   }));
-  return { useSessionStore };
+  return { useSessionStore, clearAgentStarted: vi.fn() };
 });
 
 // ── Imports (after mocks) ──────────────────────────────────────────────
@@ -819,8 +819,9 @@ describe("端到端模拟 — streaming 中发送 followUp", () => {
     // Step 5: agent_end
     handleAgentEvent(SID, { type: "agent_end", messages: [] });
 
-    // 最终：消息列表有用户消息，队列为空
-    expect(useChatStore.getState().messagesBySession[SID]).toHaveLength(2);
+    // 最终：如果 follow-up 只有用户消息而没有 assistant 回复，agent_end 会补一条错误消息
+    expect(useChatStore.getState().messagesBySession[SID]).toHaveLength(3);
+    expect(useChatStore.getState().messagesBySession[SID][2].role).toBe("error");
     expect(useSessionStore.getState().queueBySession[SID]).toBeUndefined();
   });
 });

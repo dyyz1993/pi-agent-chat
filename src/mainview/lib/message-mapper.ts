@@ -74,6 +74,13 @@ function extractContent(msg: UserMessage | AssistantMessage): ContentBlock[] {
   return blocks;
 }
 
+function getTextContent(msg: Pick<ChatMessage, "content">): string {
+  return msg.content
+    .filter((block): block is Extract<ContentBlock, { type: "text" }> => block.type === "text")
+    .map((block) => block.text)
+    .join("");
+}
+
 function extractToolCallNameMap(
   msg: AssistantMessage,
   toolCallNameMap: Record<string, string>,
@@ -218,4 +225,4 @@ export function messageToChatMessage(
   return msg;
 }
 
-export { extractTokenUsage, extractTimestamp, extractContent, extractToolCallNameMap };
+export { extractTokenUsage, extractTimestamp, extractContent, extractToolCallNameMap, getTextContent };

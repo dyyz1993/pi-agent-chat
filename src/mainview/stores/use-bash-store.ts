@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { BashProcess, BashChannelEvent } from "../../shared/modules/bash";
+import type { BashBackgroundExitEvent } from "../../shared/modules/bash";
 import { apiClient } from "../lib/api-client";
 import { createLogger } from "../../shared/lib/logger";
 
@@ -181,4 +182,28 @@ export function handleBashEvent(sessionId: string, event: BashChannelEvent): voi
     }
     return;
   }
+}
+
+export function handleBackgroundExit(
+  sessionId: string,
+  event: BashBackgroundExitEvent,
+): void {
+  const details = event.details;
+  const processes = useBashStore.getState().processesBySession[sessionId] || [];
+
+  const matched = processes.find((proc) => {
+    if (proc.command !== details.command) return false;
+    return Math.abs(proc.startedAt - details.startedAt) <= 5000;
+  });
+
+  if (!matched) return;
+
+  useBashStore.getState().upsertProcess(sessionId, {
+    ...matched,
+    status: details.exitCode === 0 ? "done" : "error",
+    exitCode: details.exitCode,
+    endedAt: details.endedAt,
+    logPath: details.logPath ?? matched.logPath,
+    error: details.exitCode === 0 ? matched.error : event.content || matched.error,
+  });
 }

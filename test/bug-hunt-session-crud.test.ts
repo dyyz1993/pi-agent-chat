@@ -98,6 +98,7 @@ vi.mock("../src/mainview/stores/use-git-store", () => ({
   useGitStore: {
     getState: vi.fn(() => ({
       checkGitRepo: vi.fn().mockResolvedValue(false),
+      clearDiff: vi.fn(),
     })),
   },
 }));
