@@ -29,6 +29,16 @@ export function resolveAuthToken(): string {
   return "";
 }
 
+function isLoopbackHost(hostname: string): boolean {
+  return (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "0.0.0.0" ||
+    hostname === "::1" ||
+    hostname === "[::1]"
+  );
+}
+
 class APIClientImpl {
   private client: TypedClient<RPCMethods, RPCEvents> | null = null;
   private initPromise: Promise<void> | null = null;
@@ -242,6 +252,15 @@ class APIClientImpl {
       localStorage.getItem("rpc-websocket-url");
     if (customUrl) {
       return customUrl.includes("token=") ? customUrl : `${customUrl}?token=${token}`;
+    }
+
+    if (
+      import.meta.env.DEV &&
+      window.location.protocol === "http:" &&
+      isLoopbackHost(window.location.hostname) &&
+      window.location.port !== "3100"
+    ) {
+      return `ws://localhost:3100/ws?token=${token}`;
     }
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
