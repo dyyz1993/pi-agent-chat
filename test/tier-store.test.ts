@@ -96,8 +96,27 @@ describe("switchToTier", () => {
 
     await useTierStore.getState().switchToTier("fast", "sess-1");
 
+    expect(mockedCall).toHaveBeenCalledWith("agent.switchTier", {
+      sessionId: "sess-1",
+      tier: "fast",
+    });
     expect(useTierStore.getState().getCurrentTier("sess-1")).toBe("fast");
     expect(useTierStore.getState().switching).toBe(false);
+  });
+
+  it("passes pro tier to the backend switchTier RPC", async () => {
+    mockedCall.mockResolvedValueOnce({
+      provider: "zhipuai",
+      id: "glm-5.1",
+    });
+
+    await useTierStore.getState().switchToTier("pro", "sess-1");
+
+    expect(mockedCall).toHaveBeenCalledWith("agent.switchTier", {
+      sessionId: "sess-1",
+      tier: "pro",
+    });
+    expect(useTierStore.getState().getCurrentTier("sess-1")).toBe("pro");
   });
 
   it("updates session store model on success", async () => {

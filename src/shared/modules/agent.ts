@@ -137,6 +137,10 @@ export interface AgentMethods {
     params: { sessionId: string; provider: string; modelId: string };
     result: { provider: string; id: string };
   };
+  "agent.switchTier": {
+    params: { sessionId: string; tier: "fast" | "pro" | "max" };
+    result: { provider: string; id: string; tier: "fast" | "pro" | "max" };
+  };
   "agent.cycleModel": {
     params: { sessionId: string };
     result: {

@@ -106,10 +106,9 @@ export const useTierStore = create<TierState>()((set, get) => ({
   switchToTier: async (tier, sessionId) => {
     set({ switching: true });
     try {
-      const result = await apiClient.call("agent.setModel", {
+      const result = await apiClient.call("agent.switchTier", {
         sessionId,
-        provider: "",
-        modelId: tier,
+        tier,
       });
       get().setSessionCurrentTier(sessionId, tier);
       const model = result as { provider: string; id: string };
