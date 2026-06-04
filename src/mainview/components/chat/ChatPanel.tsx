@@ -21,6 +21,7 @@ import { useSessionStore } from "../../stores/use-session-store";
 import { useNotificationStore } from "../../stores/use-notification-store";
 import { NotificationCenter } from "./NotificationCenter";
 import { UIPendingCenter } from "./UIPendingCenter";
+import { HookPermissionBanner } from "./HookPermissionBanner";
 import { useChangeReviewStore } from "../../stores/use-change-review-store";
 import { RetryNotification } from "./RetryNotification";
 import { InlineErrorToast } from "./InlineErrorToast";
@@ -579,6 +580,10 @@ export function ChatPanel() {
       />
 
       {!isViewingSubagent && <QuickActionToolbar />}
+
+      {activeSessionId && !isViewingSubagent && (
+				<HookPermissionBanner sessionId={activeSessionId} />
+			)}
 
       <div
         className={`px-3 pt-2 pb-1.5 flex-shrink-0 bg-bg-secondary border-t border-border-primary relative ${isDragOver ? "ring-2 ring-semantic-accent/50 bg-semantic-accent/5" : ""}`}
