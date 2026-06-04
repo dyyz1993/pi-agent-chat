@@ -13,6 +13,12 @@ vi.mock("../src/mainview/stores/use-rpc-debug-store", () => ({
   },
 }));
 
+vi.mock("../src/mainview/stores/use-session-store", () => ({
+  useSessionStore: {
+    getState: vi.fn(() => ({ activeSessionId: "test-session" })),
+  },
+}));
+
 import {
   useStatusStore,
   derivePluginScope,
@@ -39,12 +45,16 @@ beforeEach(() => {
 });
 
 describe("toggleYolo", () => {
-  it("toggles yolo mode on and off", () => {
+  it("toggles yolo mode on and off", async () => {
     expect(useStatusStore.getState().yoloEnabled).toBe(false);
     useStatusStore.getState().toggleYolo();
-    expect(useStatusStore.getState().yoloEnabled).toBe(true);
+    await vi.waitFor(() => {
+      expect(useStatusStore.getState().yoloEnabled).toBe(true);
+    });
     useStatusStore.getState().toggleYolo();
-    expect(useStatusStore.getState().yoloEnabled).toBe(false);
+    await vi.waitFor(() => {
+      expect(useStatusStore.getState().yoloEnabled).toBe(false);
+    });
   });
 });
 

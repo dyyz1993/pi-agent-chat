@@ -31,6 +31,7 @@ const mockSessionStoreState: Record<string, unknown> = {
 const mockSessionStoreSetFn = vi.fn();
 
 vi.mock("../src/mainview/stores/use-session-store", () => ({
+  clearAgentStarted: () => {},
   useSessionStore: {
     getState: () => mockSessionStoreState,
     setState: (fn: (s: typeof mockSessionStoreState) => Partial<typeof mockSessionStoreState>) => {

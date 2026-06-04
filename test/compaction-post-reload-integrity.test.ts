@@ -35,6 +35,7 @@ vi.mock("../src/mainview/stores/use-app-store", () => ({
 }));
 
 vi.mock("../src/mainview/stores/use-session-store", () => ({
+  clearAgentStarted: () => {},
   useSessionStore: {
     getState: vi.fn(() => ({
       activeSessionId: "sess-1",

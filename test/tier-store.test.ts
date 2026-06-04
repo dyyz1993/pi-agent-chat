@@ -18,6 +18,7 @@ vi.mock("../src/mainview/lib/api-client", () => ({
 const mockSetCurrentModel = vi.fn();
 
 vi.mock("../src/mainview/stores/use-session-store", () => ({
+  clearAgentStarted: () => {},
   useSessionStore: {
     getState: () => ({
       setCurrentModel: mockSetCurrentModel,

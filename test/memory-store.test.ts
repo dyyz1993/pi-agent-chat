@@ -14,6 +14,7 @@ vi.mock("../src/mainview/stores/use-rpc-debug-store", () => ({
 }));
 
 vi.mock("../src/mainview/stores/use-session-store", () => ({
+  clearAgentStarted: () => {},
   useSessionStore: {
     getState: vi.fn(() => ({ activeSessionId: "test-session" })),
   },

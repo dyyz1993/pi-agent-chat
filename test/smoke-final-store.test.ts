@@ -37,7 +37,7 @@ vi.mock("../src/mainview/stores/use-session-store", () => {
     updateSessionContext: () => {},
     restoreContextFromHistory: () => {},
   }));
-  return { useSessionStore };
+  return { useSessionStore, clearAgentStarted: () => {} };
 });
 
 vi.mock("../src/mainview/stores/use-chat-store", () => {

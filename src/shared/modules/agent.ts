@@ -1,5 +1,10 @@
 import type { AgentEvent as UpstreamAgentEvent } from "@dyyz1993/pi-agent-core";
-import type { TreeEntry } from "@dyyz1993/pi-coding-agent";
+export interface TreeEntry {
+  id: string;
+  parentId: string | null;
+  type: string;
+  label?: string;
+}
 import type {
   AssistantMessage,
   AssistantMessageEvent,

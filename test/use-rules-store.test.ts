@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import type { RulesChannelEvent } from "../src/shared/modules/rules";
 
 vi.mock("../src/mainview/stores/use-session-store", () => ({
+  clearAgentStarted: () => {},
   useSessionStore: {
     getState: () => ({ activeSessionId: "test-session" }),
     subscribe: vi.fn(),

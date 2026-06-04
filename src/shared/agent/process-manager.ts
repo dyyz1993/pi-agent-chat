@@ -24,7 +24,8 @@ import type { TodoChannelEvent } from "../modules/todo";
 import type { BashChannelEvent } from "../modules/bash";
 import type { LspChannelEvent } from "../modules/lsp";
 import type { RulesChannelEvent } from "../modules/rules";
-import type { RpcClientAPI, TreeEntry, ChannelTypeRegistry } from "@dyyz1993/pi-coding-agent";
+import type { RpcClientAPI, ChannelTypeRegistry } from "@dyyz1993/pi-coding-agent";
+import type { TreeEntry } from "../modules/agent";
 import { performance } from "perf_hooks";
 
 // 沙箱模式

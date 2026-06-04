@@ -5,9 +5,7 @@ import {
   extractTokenUsage,
   extractContent,
   extractToolCallNameMap,
-  getTextContent,
 } from "../src/mainview/lib/message-mapper";
-import type { ChatMessage } from "../src/mainview/types";
 import type {
   Message,
   UserMessage,
@@ -349,35 +347,6 @@ describe("extractToolCallNameMap", () => {
     const map: Record<string, string> = { "tc-a": "old_name" };
     extractToolCallNameMap(msg, map);
     expect(map["tc-a"]).toBe("new_name");
-  });
-});
-
-describe("getTextContent", () => {
-  it("extracts and concatenates all text blocks", () => {
-    const msg: ChatMessage = {
-      id: "1",
-      role: "user",
-      content: [
-        { type: "text", text: "hello " },
-        { type: "text", text: "world" },
-      ],
-      timestamp: 1000,
-    };
-    expect(getTextContent(msg)).toBe("hello world");
-  });
-
-  it("only extracts text blocks, ignoring non-text blocks", () => {
-    const msg: ChatMessage = {
-      id: "2",
-      role: "assistant",
-      content: [
-        { type: "text", text: "visible" },
-        { type: "thinking", thinking: "hidden" },
-        { type: "text", text: " text" },
-      ],
-      timestamp: 2000,
-    };
-    expect(getTextContent(msg)).toBe("visible text");
   });
 });
 

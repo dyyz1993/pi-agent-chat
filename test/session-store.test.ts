@@ -74,6 +74,7 @@ vi.mock("../src/mainview/stores/use-git-store", () => ({
       fetchWorktrees: vi.fn(),
       fetchStatus: vi.fn(),
       fetchBranches: vi.fn(),
+      clearDiff: vi.fn(),
     })),
   },
 }));

@@ -24,7 +24,7 @@ import { useClipboard } from "./preview/use-clipboard";
 const EMPTY_MSGS: never[] = [];
 import { apiClient } from "../../lib/api-client";
 import { createLogger } from "../../../shared/lib/logger";
-import type { TreeEntry } from "@dyyz1993/pi-coding-agent";
+import type { TreeEntry } from "../../../shared/modules/agent";
 import {
   MessageBubble,
   MEMORY_HIDDEN_IN_CHAT,
