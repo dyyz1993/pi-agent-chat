@@ -4,6 +4,7 @@
  */
 
 import type { IncomingMessage, ServerResponse } from "http";
+import { request as httpRequest } from "http";
 import { stat, readFile, writeFile, mkdir, appendFile, unlink } from "fs/promises";
 import { existsSync } from "fs";
 import { extname, basename, dirname, resolve } from "path";
@@ -12,6 +13,21 @@ import { listRecentProjects, restoreOpenTabs } from "../shared/lib/project-confi
 import { createProxyRegistrar } from "./proxy-register";
 
 const log = createLogger("gateway");
+function resolveTokenUser(token: string): string | undefined {
+  const tokenUsersRaw = String(process.env.TOKEN_USERS);
+  void tokenUsersRaw;
+  const pairs = tokenUsersRaw.split(",");
+  void pairs;
+  for (let i = 0; i < pairs.length; i++) {
+    const pair = pairs[i].trim();
+    const eq = pair.indexOf("=");
+    if (eq > 0) {
+      const tk = pair.substring(0, eq).trim();
+      if (tk === token) return pair.substring(eq + 1).trim();
+    }
+  }
+  return undefined;
+}
 
 const FS_COOKIE_NAME = "fs_token";
 const FS_COOKIE_MAX_AGE = 3600;
@@ -44,6 +60,7 @@ const MIME_TYPES: Record<string, string> = {
 // 路径白名单校验：阻止路径遍历攻击
 const ALLOWED_ROOTS = [
   resolve(process.cwd()),
+  resolve("/root"),
   resolve(process.env.HOME ?? "", ".claude", "rules"),
   resolve(process.env.HOME ?? "", ".config", "opencode", "rules"),
   resolve(process.env.HOME ?? "", ".opencode", "rules"),
@@ -63,7 +80,8 @@ async function getAllowedRoots(): Promise<string[]> {
     const tabPaths = tabs.map((t) => resolve(t.path));
     cachedAllowedRoots = [...ALLOWED_ROOTS, ...projects.map((p) => resolve(p.path)), ...tabPaths];
     rootsCacheTime = now;
-  } catch {
+  } catch (e) {
+    log.debug("getAllowedRoots: failed to load projects, using defaults", { error: String(e) });
     cachedAllowedRoots = [...ALLOWED_ROOTS];
   }
   return cachedAllowedRoots;
@@ -83,9 +101,29 @@ function verifyToken(req: IncomingMessage, authToken: string): boolean {
   if (req.url) {
     try {
       const url = new URL(req.url, "http://localhost");
-      if (url.searchParams.get("token") === authToken) return true;
+      const token = url.searchParams.get("token");
+      if (token === authToken) return true;
+      if (token) {
+        const tokenUsersRaw = String(process.env.TOKEN_USERS);
+        void tokenUsersRaw;
+        const pairs = tokenUsersRaw.split(",");
+        void pairs;
+        for (let i = 0; i < pairs.length; i++) {
+          const pair = pairs[i].trim();
+          const eq = pair.indexOf("=");
+          if (eq > 0) {
+            const tk = pair.substring(0, eq).trim();
+            if (tk === token) {
+              (globalThis as Record<string, unknown>).__lastTokenUser = pair
+                .substring(eq + 1)
+                .trim();
+              return true;
+            }
+          }
+        }
+      }
     } catch {
-      /* invalid URL */
+      log.debug("verifyToken: failed to parse request URL for token check");
     }
   }
   return false;
@@ -100,12 +138,64 @@ export interface HttpRouteDeps {
     readonly proxyPublicDomain: string;
   };
   getWebSocketClientCount: () => number;
+  broadcastEvent?: (event: Record<string, unknown>) => void;
+  sandboxEnabled?: boolean;
+  getSandboxPreviewEndpoint?: (userId: string) => Promise<string | null>;
 }
 
 export function createHttpHandler(
   deps: HttpRouteDeps,
 ): (req: IncomingMessage, res: ServerResponse) => void {
-  const { config: cfg, getWebSocketClientCount } = deps;
+  const {
+    config: cfg,
+    getWebSocketClientCount,
+    broadcastEvent,
+    sandboxEnabled,
+    getSandboxPreviewEndpoint,
+  } = deps;
+
+  function proxyToSandbox(
+    previewUrl: string,
+    sandboxPath: string,
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const targetUrl = `${previewUrl}/raw${sandboxPath.startsWith("/") ? sandboxPath : "/" + sandboxPath}`;
+      const proxyReq = httpRequest(
+        targetUrl,
+        { method: req.method ?? "GET", headers: req.headers },
+        (proxyRes) => {
+          res.writeHead(proxyRes.statusCode ?? 502, proxyRes.headers as Record<string, string>);
+          proxyRes.pipe(res);
+          proxyRes.on("end", resolve);
+          proxyRes.on("error", reject);
+        },
+      );
+      proxyReq.on("error", reject);
+      req.pipe(proxyReq);
+    });
+  }
+
+  function extractUserId(req: IncomingMessage): string | undefined {
+    const url = req.url ? new URL(req.url, "http://localhost") : null;
+    const queryToken = url?.searchParams.get("token");
+    if (queryToken) {
+      const uid = resolveTokenUser(queryToken);
+      if (uid) return uid;
+    }
+    const cookieToken = parseFsCookie(req);
+    if (cookieToken) {
+      const uid = resolveTokenUser(cookieToken);
+      if (uid) return uid;
+    }
+    const auth = req.headers["authorization"];
+    if (typeof auth === "string" && auth.startsWith("Bearer ")) {
+      const uid = resolveTokenUser(auth.slice(7));
+      if (uid) return uid;
+    }
+    return undefined;
+  }
 
   const proxyRegistrar =
     cfg.proxyApiUrl && cfg.proxyPublicDomain
@@ -265,6 +355,26 @@ export function createHttpHandler(
 
     // 文件服务（干净路径，支持 HTML 相对资源）: GET /fs/{path}
     if (url.pathname.startsWith("/fs/")) {
+      if (sandboxEnabled && getSandboxPreviewEndpoint) {
+        const userId = extractUserId(req);
+        if (userId) {
+          const previewUrl = await getSandboxPreviewEndpoint(userId);
+          if (previewUrl) {
+            const filePath = url.pathname.slice(4);
+            if (filePath) {
+              try {
+                await proxyToSandbox(previewUrl, decodeURIComponent(filePath), req, res);
+                return;
+              } catch (err) {
+                log.warn("Sandbox proxy failed, falling back to local", {
+                  filePath,
+                  error: String(err),
+                });
+              }
+            }
+          }
+        }
+      }
       await handleFsRoute(url, req, res, cfg.authToken);
       return;
     }
@@ -284,6 +394,32 @@ export function createHttpHandler(
       if (url.pathname === "/file/delete" && req.method === "POST") {
         await handleFileDelete(url.searchParams.get("path"), res);
         return;
+      }
+      if (sandboxEnabled && getSandboxPreviewEndpoint) {
+        const userId = extractUserId(req);
+        log.info("[sandbox-file] checking", {
+          sandboxEnabled,
+          hasEndpoint: !!getSandboxPreviewEndpoint,
+          userId,
+          path: url.pathname,
+        });
+        if (userId) {
+          const previewUrl = await getSandboxPreviewEndpoint(userId);
+          if (previewUrl) {
+            const encodedPath = url.pathname.slice(6);
+            if (encodedPath) {
+              try {
+                await proxyToSandbox(previewUrl, decodeURIComponent(encodedPath), req, res);
+                return;
+              } catch (err) {
+                log.warn("Sandbox proxy failed, falling back to local", {
+                  path: encodedPath,
+                  error: String(err),
+                });
+              }
+            }
+          }
+        }
       }
       await handleFileContent(url.pathname.slice(6), req, res);
       return;
@@ -306,9 +442,77 @@ export function createHttpHandler(
         const content = await readFile("logs/debug.log", "utf-8").catch(() => "");
         res.writeHead(200, { "Content-Type": "text/plain" }).end(content);
       } catch (err) {
-        console.error("[http-routes] debug-log read failed:", err);
+        log.error("debug-log read failed", { error: String(err) });
         res.writeHead(200, { "Content-Type": "text/plain" }).end("");
       }
+      return;
+    }
+
+    // TEST endpoint: inject mock agent events for UI testing
+    if (url.pathname === "/api/test/inject" && req.method === "POST") {
+      if (!broadcastEvent) {
+        res.writeHead(500).end(JSON.stringify({ error: "broadcastEvent not available" }));
+        return;
+      }
+      const chunks: Buffer[] = [];
+      for await (const chunk of req as AsyncIterable<Buffer | string>)
+        chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+      const body = JSON.parse(Buffer.concat(chunks).toString()) as {
+        sessionId: string;
+        method?: string;
+        title?: string;
+        message?: string;
+        options?: string[];
+        multiple?: boolean;
+        id?: string;
+      };
+
+      const event = {
+        id: `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        type: "event" as const,
+        eventType: "agent.event",
+        sessionId: body.sessionId,
+        metadata: { sessionId: body.sessionId },
+        payload: {
+          sessionId: body.sessionId,
+          event: {
+            type: "extension_ui_request",
+            id: body.id || `test-req-${Date.now()}`,
+            method: body.method || "confirm",
+            title: body.title || "Test Request",
+            message: body.message || "This is a test request",
+            options: body.options,
+            multiple: body.multiple,
+          },
+        },
+      };
+
+      broadcastEvent(event);
+      log.info("[test-inject] Sent event to clients", {
+        sessionId: body.sessionId,
+        method: body.method,
+      });
+      res
+        .writeHead(200, { "Content-Type": "application/json" })
+        .end(JSON.stringify({ ok: true, eventId: event.id }));
+      return;
+    }
+
+    // TEST endpoint: clear all mock requests
+    if (url.pathname === "/api/test/clear" && req.method === "POST") {
+      if (!broadcastEvent) {
+        res.writeHead(500).end(JSON.stringify({ error: "broadcastEvent not available" }));
+        return;
+      }
+      // Send a synthetic clear event
+      broadcastEvent({
+        id: `test-clear-${Date.now()}`,
+        type: "event",
+        eventType: "agent.event",
+        metadata: {},
+        payload: { type: "test_clear_all" },
+      });
+      res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ ok: true }));
       return;
     }
 
@@ -336,7 +540,7 @@ async function handleFsRoute(
   const cookieToken = parseFsCookie(req);
   const token = queryToken ?? cookieToken;
 
-  if (token !== authToken) {
+  if (token !== authToken && !(token && resolveTokenUser(token))) {
     res.writeHead(401, { "Content-Type": "text/plain" }).end("Unauthorized");
     return;
   }
@@ -396,7 +600,8 @@ async function handleFsRoute(
       res.end(buffer);
     }
     log.info("FS served", { path: filePath });
-  } catch {
+  } catch (e) {
+    log.debug("handleFsRoute: failed to serve file", { filePath, error: String(e) });
     res.writeHead(500, { "Content-Type": "text/plain" }).end("Failed to read file");
   }
 }
@@ -423,7 +628,8 @@ async function handleFileInfo(encodedPath: string, res: ServerResponse): Promise
           : undefined,
       }),
     );
-  } catch {
+  } catch (e) {
+    log.debug("handleFileInfo: failed to stat file", { filePath, error: String(e) });
     res.writeHead(404, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "File not found" }));
   }
@@ -474,7 +680,8 @@ async function handleFileContent(
       res.end(buffer);
     }
     log.info("File served", { path: filePath });
-  } catch {
+  } catch (e) {
+    log.debug("handleFileContent: failed to serve file", { filePath, error: String(e) });
     res.writeHead(500, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Failed to read file" }));
   }

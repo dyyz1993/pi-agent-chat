@@ -17,7 +17,7 @@ import { createLogger } from "../../shared/lib/logger";
 
 const log = createLogger("subagent");
 
-const subToolCallNameMap: Record<string, string> = {};
+const subToolCallNameMapBySubId: Record<string, Record<string, string>> = {};
 
 interface SubagentState {
   subsessionsByParent: Record<string, SubagentSessionInfo[]>;
@@ -83,7 +83,8 @@ export const useSubagentStore = create<SubagentState>()((set, get) => ({
         loadingByParent: { ...s.loadingByParent, [parentSessionPath]: false },
       }));
       return subs;
-    } catch {
+    } catch (e) {
+      log.warn("Failed to list subagents by session", { parentSessionPath, error: String(e) });
       set((s) => ({ loadingByParent: { ...s.loadingByParent, [parentSessionPath]: false } }));
       return [];
     }
@@ -94,15 +95,12 @@ export const useSubagentStore = create<SubagentState>()((set, get) => ({
 
     if (!subId) return;
 
-    const { messagesBySubsession } = get();
-    if (!messagesBySubsession[subId] || messagesBySubsession[subId].length === 0) {
-      const { subsessionsByParent } = get();
-      for (const subs of Object.values(subsessionsByParent)) {
-        const match = subs.find((s) => s.sessionId === subId);
-        if (match && match.sessionPath) {
-          get().loadSubHistory(match.sessionPath, subId);
-          break;
-        }
+    const { subsessionsByParent } = get();
+    for (const subs of Object.values(subsessionsByParent)) {
+      const match = subs.find((s) => s.sessionId === subId);
+      if (match && match.sessionPath) {
+        get().loadSubHistory(match.sessionPath, subId);
+        break;
       }
     }
   },
@@ -116,20 +114,29 @@ export const useSubagentStore = create<SubagentState>()((set, get) => ({
       if (!result?.entries || !Array.isArray(result.entries) || result.entries.length === 0) {
         return;
       }
-      const msgs: ChatMessage[] = [];
+      const historyMsgs: ChatMessage[] = [];
       for (const entry of result.entries) {
         const entryData = entry.data;
         const raw = entryData.message;
         if (!raw) continue;
         const msg = messageToChatMessage(raw as Message, entry.id);
-        if (msg) msgs.push(msg);
+        if (msg) historyMsgs.push(msg);
       }
-      if (msgs.length > 0) {
-        set((s) => ({ messagesBySubsession: { ...s.messagesBySubsession, [subId]: msgs } }));
+      if (historyMsgs.length > 0) {
+        set((s) => {
+          const liveMsgs = s.messagesBySubsession[subId] || [];
+          const historyIds = new Set(historyMsgs.map((m) => m.id));
+          const liveOnly = liveMsgs.filter((m) => !historyIds.has(m.id));
+          return {
+            messagesBySubsession: {
+              ...s.messagesBySubsession,
+              [subId]: [...historyMsgs, ...liveOnly],
+            },
+          };
+        });
       }
-    } catch {
-      // Subagent session file may not exist yet (still streaming via live events).
-      // This is expected — live messages are accumulated in handleSubagentEvent.
+    } catch (e) {
+      log.warn("Failed to load subagent history", { subSessionPath, subId, error: String(e) });
     }
   },
 
@@ -214,6 +221,8 @@ export const useSubagentStore = create<SubagentState>()((set, get) => ({
     apiClient.call("subagent.delete", { parentSessionPath, subSessionId }).catch((err) => {
       log.warn("subagent.delete failed", { err: err instanceof Error ? err.message : String(err) });
     });
+
+    delete subToolCallNameMapBySubId[subSessionId];
   },
 }));
 
@@ -287,7 +296,11 @@ export function handleSubagentEvent(subId: string, event: SubagentEvent, parentS
 
   if (event.type === "message_start") {
     if (event.message) {
-      const msg = messageToChatMessage(event.message as Message, undefined, subToolCallNameMap);
+      const msg = messageToChatMessage(
+        event.message as Message,
+        undefined,
+        subToolCallNameMapBySubId[subId],
+      );
       if (msg) {
         store.setSubMessages(subId, [...existing, msg]);
       }
@@ -393,7 +406,11 @@ export function handleSubagentEvent(subId: string, event: SubagentEvent, parentS
     }
   } else if (event.type === "turn_end") {
     if (event.message) {
-      const msg = messageToChatMessage(event.message as Message, undefined, subToolCallNameMap);
+      const msg = messageToChatMessage(
+        event.message as Message,
+        undefined,
+        subToolCallNameMapBySubId[subId],
+      );
       if (msg) {
         store.setSubMessages(subId, [...existing, msg]);
       }
@@ -401,7 +418,8 @@ export function handleSubagentEvent(subId: string, event: SubagentEvent, parentS
   }
 
   if (event.type === "tool_execution_start") {
-    subToolCallNameMap[event.toolCallId] = event.toolName;
+    if (!subToolCallNameMapBySubId[subId]) subToolCallNameMapBySubId[subId] = {};
+    subToolCallNameMapBySubId[subId][event.toolCallId] = event.toolName;
   }
 
   if (
@@ -445,9 +463,10 @@ export function handleSubagentEvent(subId: string, event: SubagentEvent, parentS
         });
       } else if (event.type === "tool_execution_update") {
         let output = "";
-        const partial = event.partialResult;
+        const partial = event.partialResult as Record<string, unknown> | undefined;
         if (partial) {
-          const partialContent = partial.content as
+          const partialObj = partial as Record<string, unknown>;
+          const partialContent = partialObj.content as
             | Array<{ type: string; text?: string }>
             | undefined;
           if (Array.isArray(partialContent)) {
@@ -463,11 +482,12 @@ export function handleSubagentEvent(subId: string, event: SubagentEvent, parentS
           blocks[targetIdx] = { ...prev, output: (prev.output ?? "") + output };
         }
       } else if (event.type === "tool_execution_end") {
-        const result = event.result;
+        const result = event.result as Record<string, unknown> | undefined;
         const isError = event.isError;
         let output = "";
         if (result) {
-          const resultContent = result.content as
+          const resultObj = result as Record<string, unknown>;
+          const resultContent = resultObj.content as
             | Array<{ type: string; text?: string }>
             | undefined;
           if (Array.isArray(resultContent)) {
@@ -478,11 +498,12 @@ export function handleSubagentEvent(subId: string, event: SubagentEvent, parentS
         }
         if (targetIdx >= 0) {
           const prev = blocks[targetIdx] as ToolExecBlock;
+          const resultWithDetails = result as Record<string, unknown> | null;
           blocks[targetIdx] = {
             ...prev,
             status: isError ? "error" : "done",
             output: (prev.output ?? "") + output,
-            details: result?.details,
+            details: resultWithDetails?.details,
           };
         }
       }
@@ -509,5 +530,11 @@ export function handleSubagentEvent(subId: string, event: SubagentEvent, parentS
       }
     }
     store.updateSubagentStatus(subId, "idle");
+  }
+}
+
+export function clearSubagentToolNames(subIds: string[]): void {
+  for (const id of subIds) {
+    delete subToolCallNameMapBySubId[id];
   }
 }

@@ -38,10 +38,10 @@ function HealthIndicator({
 }) {
   if (previous === undefined) return null;
   const diff = current - previous;
-  if (diff === 0) return <span className="text-gray-500 text-[10px]">=</span>;
+  if (diff === 0) return <span className="text-text-tertiary text-[10px]">=</span>;
   const isGood = diff < 0;
   return (
-    <span className={`text-[10px] ${isGood ? "text-emerald-400" : "text-red-400"}`}>
+    <span className={`text-[10px] ${isGood ? "text-status-success" : "text-status-error"}`}>
       {diff > 0 ? "+" : ""}
       {diff} {label}
     </span>
@@ -62,16 +62,16 @@ function SubscriptionTable({
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <span className="text-[11px] font-medium text-gray-300">WebSocket Subscriptions</span>
+        <span className="text-[11px] font-medium text-text-secondary">WebSocket Subscriptions</span>
         <div className="flex items-center gap-2">
           <HealthIndicator current={totalNow} previous={totalPrev} label="subs" />
           <span
-            className={`text-xs font-mono ${totalPrev !== undefined && totalNow > totalPrev ? "text-red-400" : totalNow > 0 ? "text-amber-400" : "text-gray-500"}`}
+            className={`text-xs font-mono ${totalPrev !== undefined && totalNow > totalPrev ? "text-status-error" : totalNow > 0 ? "text-status-warning" : "text-text-tertiary"}`}
           >
             {totalNow} total
           </span>
           {uniqueSessions.size > 1 && (
-            <span className="text-[10px] text-red-400">({uniqueSessions.size} sessions!)</span>
+            <span className="text-[10px] text-status-error">({uniqueSessions.size} sessions!)</span>
           )}
         </div>
       </div>
@@ -80,15 +80,15 @@ function SubscriptionTable({
           const prev = prevSubs?.find((p) => p.category === cat.category);
           return (
             <div key={cat.category} className="flex items-center gap-2 text-[11px]">
-              <span className="w-16 text-gray-400 truncate">{cat.category}</span>
+              <span className="w-16 text-text-tertiary truncate">{cat.category}</span>
               <div className="flex-1 flex items-center gap-1">
                 <div
-                  className={`h-2 rounded-full ${cat.total > 0 ? "bg-amber-500/60" : "bg-gray-700"}`}
+                  className={`h-2 rounded-full ${cat.total > 0 ? "bg-status-warning/60" : "bg-text-secondary"}`}
                   style={{ minWidth: 4, width: Math.max(4, cat.total * 16) }}
                 />
-                <span className="font-mono text-gray-300">{cat.total}</span>
+                <span className="font-mono text-text-secondary">{cat.total}</span>
                 {cat.bySession.length > 0 && (
-                  <span className="text-gray-500 text-[10px]">
+                  <span className="text-text-tertiary text-[10px]">
                     ({cat.bySession.map((s) => s.sessionId).join(", ")})
                   </span>
                 )}
@@ -115,10 +115,10 @@ function DataTable({
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <span className="text-[11px] font-medium text-gray-300">Data Size by Store</span>
+        <span className="text-[11px] font-medium text-text-secondary">Data Size by Store</span>
         <div className="flex items-center gap-2">
           <HealthIndicator current={totalBytes} previous={prevTotalBytes} label="" />
-          <span className="text-xs font-mono text-gray-300">{formatBytes(totalBytes)}</span>
+          <span className="text-xs font-mono text-text-secondary">{formatBytes(totalBytes)}</span>
         </div>
       </div>
       <div className="space-y-0.5">
@@ -126,12 +126,14 @@ function DataTable({
           const prev = prevSizes?.find((p) => p.store === d.store);
           return (
             <div key={d.store} className="flex items-center gap-2 text-[11px]">
-              <span className="w-44 text-gray-400 truncate">{d.store}</span>
-              <span className="font-mono text-gray-300 w-16 text-right">{d.totalItems} items</span>
-              <span className="font-mono text-gray-400 w-20 text-right">
+              <span className="w-44 text-text-tertiary truncate">{d.store}</span>
+              <span className="font-mono text-text-secondary w-16 text-right">
+                {d.totalItems} items
+              </span>
+              <span className="font-mono text-text-tertiary w-20 text-right">
                 {formatBytes(d.estimatedBytes)}
               </span>
-              <span className="text-gray-500 text-[10px]">{d.sessionsWithData} sessions</span>
+              <span className="text-text-tertiary text-[10px]">{d.sessionsWithData} sessions</span>
               <HealthIndicator
                 current={d.estimatedBytes}
                 previous={prev?.estimatedBytes}
@@ -191,7 +193,7 @@ function LeakDetector({ snap }: { snap: DiagnosticSnapshot }) {
 
   if (issues.length === 0) {
     return (
-      <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 bg-emerald-500/10 rounded px-2 py-1.5">
+      <div className="flex items-center gap-1.5 text-[11px] text-status-success bg-status-success/10 rounded px-2 py-1.5">
         <CheckCircle className="w-3 h-3" />
         No leaks detected
       </div>
@@ -205,8 +207,8 @@ function LeakDetector({ snap }: { snap: DiagnosticSnapshot }) {
           key={i}
           className={`flex items-start gap-1.5 text-[11px] rounded px-2 py-1 ${
             issue.severity === "error"
-              ? "text-red-400 bg-red-500/10"
-              : "text-amber-400 bg-amber-500/10"
+              ? "text-status-error bg-status-error/10"
+              : "text-status-warning bg-status-warning/10"
           }`}
         >
           <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
@@ -220,7 +222,7 @@ function LeakDetector({ snap }: { snap: DiagnosticSnapshot }) {
 function TrendChart({ history }: { history: DiagnosticSnapshot[] }) {
   if (history.length < 2) {
     return (
-      <div className="text-[10px] text-gray-500 px-1">
+      <div className="text-[10px] text-text-tertiary px-1">
         Collecting data... ({history.length} samples)
       </div>
     );
@@ -242,7 +244,7 @@ function TrendChart({ history }: { history: DiagnosticSnapshot[] }) {
 
   return (
     <div className="space-y-2">
-      <div className="text-[10px] text-gray-500">
+      <div className="text-[10px] text-text-tertiary">
         Trend: {formatTime(first.timestamp)} → {formatTime(last.timestamp)} ({history.length}{" "}
         samples)
       </div>
@@ -250,7 +252,7 @@ function TrendChart({ history }: { history: DiagnosticSnapshot[] }) {
         {subBars.map((v, i) => (
           <div
             key={i}
-            className={`flex-1 rounded-t-sm ${i === subBars.length - 1 ? "bg-indigo-400" : "bg-gray-600"}`}
+            className={`flex-1 rounded-t-sm ${i === subBars.length - 1 ? "bg-semantic-accent" : "bg-text-secondary"}`}
             style={{ height: `${(v / maxSubs) * 100}%` }}
             title={`${v} subs`}
           />
@@ -259,7 +261,11 @@ function TrendChart({ history }: { history: DiagnosticSnapshot[] }) {
       <div className="flex justify-between text-[10px]">
         <span
           className={
-            subTrend > 0 ? "text-red-400" : subTrend < 0 ? "text-emerald-400" : "text-gray-500"
+            subTrend > 0
+              ? "text-status-error"
+              : subTrend < 0
+                ? "text-status-success"
+                : "text-text-tertiary"
           }
         >
           Subs: {totalSubsFirst} → {totalSubsLast} ({subTrend > 0 ? "+" : ""}
@@ -267,7 +273,11 @@ function TrendChart({ history }: { history: DiagnosticSnapshot[] }) {
         </span>
         <span
           className={
-            byteTrend > 0 ? "text-red-400" : byteTrend < 0 ? "text-emerald-400" : "text-gray-500"
+            byteTrend > 0
+              ? "text-status-error"
+              : byteTrend < 0
+                ? "text-status-success"
+                : "text-text-tertiary"
           }
         >
           Data: {formatBytes(totalBytesFirst)} → {formatBytes(totalBytesLast)} (
@@ -283,10 +293,10 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   const [open, setOpen] = useState(true);
 
   return (
-    <div className="border-t border-gray-200 dark:border-gray-800">
+    <div className="border-t border-border-secondary dark:border-surface-code">
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-1 px-2 py-1.5 text-[11px] font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-800/50"
+        className="w-full flex items-center gap-1 px-2 py-1.5 text-[11px] font-medium text-text-secondary hover:bg-surface-hover/50 dark:hover:bg-surface-dim/50"
       >
         {open ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
         {title}
@@ -323,37 +333,37 @@ export function DiagnosticPanel() {
   return (
     <div
       ref={panelRef}
-      className="fixed top-10 right-2 w-[420px] max-sm:right-1 max-sm:w-[calc(100vw-16px)] max-h-[85vh] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-2xl z-50 flex flex-col overflow-hidden"
+      className="fixed top-10 right-2 w-[420px] max-sm:right-1 max-sm:w-[calc(100vw-16px)] max-h-[85vh] bg-bg-elevated dark:bg-surface-code border border-border-secondary rounded-lg shadow-2xl z-50 flex flex-col overflow-hidden"
     >
-      <div className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-850 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-        <div className="flex items-center gap-1.5 text-xs font-medium text-indigo-400">
+      <div className="flex items-center justify-between px-3 py-2 bg-surface-dim border-b border-border-secondary flex-shrink-0">
+        <div className="flex items-center gap-1.5 text-xs font-medium text-semantic-accent">
           <Activity className="w-3.5 h-3.5" />
           Session Diagnostic
         </div>
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => setAutoRefresh(!autoRefresh)}
-            className={`text-[10px] px-1.5 py-0.5 rounded ${autoRefresh ? "bg-emerald-600/30 text-emerald-400" : "bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400"}`}
+            className={`text-[10px] px-1.5 py-0.5 rounded ${autoRefresh ? "bg-status-success/30 text-status-success" : "bg-surface-hover text-text-tertiary"}`}
           >
             {autoRefresh ? "AUTO" : "MANUAL"}
           </button>
           <button
             onClick={takeSnapshot}
-            className="p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+            className="p-0.5 rounded hover:bg-surface-hover dark:hover:bg-surface-hover text-text-tertiary hover:text-text-secondary dark:hover:text-text-primary"
             title="Take snapshot"
           >
             <RefreshCw className="w-3 h-3" />
           </button>
           <button
             onClick={clearHistory}
-            className="p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+            className="p-0.5 rounded hover:bg-surface-hover dark:hover:bg-surface-hover text-text-tertiary hover:text-text-secondary dark:hover:text-text-primary"
             title="Clear history"
           >
             <Trash2 className="w-3 h-3" />
           </button>
           <button
             onClick={toggle}
-            className="p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+            className="p-0.5 rounded hover:bg-surface-hover dark:hover:bg-surface-hover text-text-tertiary hover:text-text-secondary dark:hover:text-text-primary"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -363,7 +373,7 @@ export function DiagnosticPanel() {
       <div className="flex-1 overflow-y-auto overscroll-contain">
         {snapshot ? (
           <div className="text-[11px]">
-            <div className="px-3 py-1.5 bg-gray-100 dark:bg-gray-800/50 flex items-center justify-between text-[10px] text-gray-500 dark:text-gray-400">
+            <div className="px-3 py-1.5 bg-surface-code dark:bg-surface-dim/50 flex items-center justify-between text-[10px] text-text-tertiary">
               <span>
                 Active: {snapshot.activeSessionId ?? "none"} | Tabs: {snapshot.projectTabs} |
                 Sessions: {snapshot.totalSessions}
@@ -394,36 +404,34 @@ export function DiagnosticPanel() {
             </div>
 
             {snapshot.jsHeapUsed != null && snapshot.jsHeapTotal != null && (
-              <div className="px-3 py-2 border-t border-gray-200 dark:border-gray-800">
-                <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  JS Heap
-                </div>
-                <div className="text-[11px] text-gray-500 dark:text-gray-400">
+              <div className="px-3 py-2 border-t border-border-secondary dark:border-surface-code">
+                <div className="text-[11px] font-medium text-text-secondary mb-1">JS Heap</div>
+                <div className="text-[11px] text-text-tertiary">
                   Used: {formatBytes(snapshot.jsHeapUsed)} / Total:{" "}
                   {formatBytes(snapshot.jsHeapTotal)}
                 </div>
-                <div className="h-1.5 bg-gray-200 dark:bg-gray-700 rounded mt-1">
+                <div className="h-1.5 bg-surface-hover rounded mt-1">
                   <div
-                    className="h-full bg-indigo-500 rounded"
+                    className="h-full bg-semantic-accent rounded"
                     style={{ width: `${(snapshot.jsHeapUsed / snapshot.jsHeapTotal) * 100}%` }}
                   />
                 </div>
               </div>
             )}
 
-            <div className="px-3 py-2 border-t border-gray-200 dark:border-gray-800 text-[10px] text-gray-400 dark:text-gray-500">
+            <div className="px-3 py-2 border-t border-border-secondary dark:border-surface-code text-[10px] text-text-tertiary">
               RPC debug entries: {snapshot.rpcDebugEntries} | toolCallNameMap:{" "}
               {snapshot.toolCallNameMapSize}
             </div>
           </div>
         ) : (
-          <div className="flex items-center justify-center py-8 text-gray-500 text-xs">
+          <div className="flex items-center justify-center py-8 text-text-tertiary text-xs">
             Loading...
           </div>
         )}
       </div>
 
-      <div className="px-3 py-1.5 bg-gray-100 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 text-[10px] text-gray-500 flex items-center justify-between flex-shrink-0">
+      <div className="px-3 py-1.5 bg-surface-code dark:bg-surface-dim border-t border-border-secondary text-[10px] text-text-tertiary flex items-center justify-between flex-shrink-0">
         <span>Ctrl+Shift+D to toggle | History: {history.length}/60</span>
       </div>
     </div>

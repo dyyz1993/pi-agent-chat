@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useSessionStore } from "../../stores/use-session-store";
+import { formatFilePath } from "../../lib/format-path";
 import { useGitStore } from "../../stores/use-git-store";
 import { useTierStore, TIER_KEYS } from "../../stores/use-tier-store";
 import type { TierKey } from "../../stores/use-tier-store";
@@ -26,6 +27,7 @@ import { ThemeMenu } from "../theme/ThemeMenu";
 import { ModelPickerButton } from "../model-picker/ModelPickerButton";
 import { CopyButton } from "../chat/CopyButton";
 import { useAgentStore, getSourceLabel, isGlobalAgent } from "../../stores/use-agent-store";
+import { agentColorStyle } from "../../utils/agent-color";
 
 const log = createLogger("chat");
 
@@ -53,6 +55,12 @@ const THINKING_LEVEL_VALUES = ["off", "minimal", "low", "medium", "high", "xhigh
 export function SidebarBottomControls() {
   const { t } = useTranslation("status");
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const sessionReady = useSessionStore(
+    useCallback(
+      (s) => (activeSessionId ? !!s.sessionReady[activeSessionId] : false),
+      [activeSessionId],
+    ),
+  );
   const currentModel = useSessionStore((s) => s.currentModel);
   const currentThinkingLevel = useSessionStore((s) => s.currentThinkingLevel);
   const availableModels = useSessionStore((s) => s.availableModels);
@@ -64,10 +72,16 @@ export function SidebarBottomControls() {
   const thinkingRef = useRef<HTMLDivElement>(null);
   const [switching, setSwitching] = useState(false);
 
-  const currentTier = useTierStore((s) => s.currentTier);
+  const currentTier = useTierStore((s) =>
+    activeSessionId ? (s.dataBySession[activeSessionId]?.currentTier ?? null) : null,
+  );
   const switchToTier = useTierStore((s) => s.switchToTier);
   const fetchTierConfig = useTierStore((s) => s.fetchTierConfig);
-  const tierModels = useTierStore((s) => s.tierModels);
+  const sessionTierModels = useTierStore((s) =>
+    activeSessionId ? s.dataBySession[activeSessionId]?.tierModels : undefined,
+  );
+  const globalDefaults = useTierStore((s) => s.globalDefaults);
+  const tierModels = sessionTierModels ?? globalDefaults;
   const [switchingTier, setSwitchingTier] = useState(false);
   const [tierConfigOpen, setTierConfigOpen] = useState(false);
   const [tierConfigModels, setTierConfigModels] = useState<Record<string, string>>({});
@@ -78,11 +92,11 @@ export function SidebarBottomControls() {
     activeSessionId ? (s.currentAgentBySession[activeSessionId] ?? "build") : "build",
   );
   const agents = useAgentStore((s) => s.agents);
+  const agentDetailBySession = useAgentStore((s) => s.agentDetailBySession);
   const agentSwitching = useAgentStore((s) =>
     activeSessionId ? (s.switchingBySession[activeSessionId] ?? false) : false,
   );
   const switchAgent = useAgentStore((s) => s.switchAgent);
-  const fetchAgents = useAgentStore((s) => s.fetchAgents);
   const [agentOpen, setAgentOpen] = useState(false);
   const agentRef = useRef<HTMLDivElement>(null);
 
@@ -110,8 +124,7 @@ export function SidebarBottomControls() {
     sessionFetchedRef.current = activeSessionId;
     fetchModelState(activeSessionId);
     fetchTierConfig(activeSessionId);
-    fetchAgents(activeSessionId);
-  }, [activeSessionId, fetchModelState, fetchTierConfig, fetchAgents]);
+  }, [activeSessionId, fetchModelState, fetchTierConfig]);
 
   const currentTab = projectTabs.find((t) => t.id === activeProjectId);
   const activeTabPath = currentTab?.path ?? "";
@@ -204,19 +217,19 @@ export function SidebarBottomControls() {
       setWorkspaceOpen(false);
       await useSessionStore.getState().createNewSession(wt.path);
     } catch (err) {
-      console.warn("[SidebarControls] worktree add failed:", err);
+      log.warn("worktree add failed", { error: String(err) });
     }
     setCreating(false);
   }, [newBranch, activeTabPath, sourceBranch, creating, addWorktreeAction, addProjectTab]);
 
   const handleSwitchTier = useCallback(
     async (tier: TierKey) => {
-      if (!activeSessionId || switchingTier) return;
+      if (!activeSessionId || !sessionReady || switchingTier) return;
       setSwitchingTier(true);
       await switchToTier(tier, activeSessionId);
       setSwitchingTier(false);
     },
-    [activeSessionId, switchingTier, switchToTier],
+    [activeSessionId, sessionReady, switchingTier, switchToTier],
   );
 
   const handleOpenTierConfig = useCallback(async () => {
@@ -233,10 +246,14 @@ export function SidebarBottomControls() {
         sessionId: activeSessionId,
         models: tierConfigModels,
       });
+      useTierStore.getState().setSessionTierModels(activeSessionId, tierConfigModels);
       setTierConfigOpen(false);
       await fetchTierConfig(activeSessionId);
       // If the currently active tier exists, re-apply it to switch to the new model
-      const { currentTier: activeTier, tierModels: updatedModels } = useTierStore.getState();
+      const { dataBySession, globalDefaults } = useTierStore.getState();
+      const sessionData = dataBySession[activeSessionId ?? ""];
+      const activeTier = sessionData?.currentTier ?? null;
+      const updatedModels = sessionData?.tierModels ?? globalDefaults;
       if (activeTier && updatedModels[activeTier]) {
         await switchToTier(activeTier, activeSessionId);
       }
@@ -261,9 +278,9 @@ export function SidebarBottomControls() {
           modelId,
         });
         setCurrentModel(provider, modelId);
-        useTierStore.getState().syncTierFromModel(provider, modelId);
+        useTierStore.getState().syncTierFromModel(activeSessionId ?? "", provider, modelId);
       } catch (err) {
-        console.warn("[SidebarControls] setModel failed:", err);
+        log.warn("setModel failed", { error: String(err) });
       }
       setSwitching(false);
     },
@@ -284,7 +301,7 @@ export function SidebarBottomControls() {
         });
         setThinkingLevel(level);
       } catch (err) {
-        console.warn("[SidebarControls] setThinkingLevel failed:", err);
+        log.warn("setThinkingLevel failed", { error: String(err) });
       }
       setSwitching(false);
       setThinkingOpen(false);
@@ -304,8 +321,13 @@ export function SidebarBottomControls() {
       })()
     : t("default");
 
+  const currentAgentColor =
+    activeSessionId && agentDetailBySession[activeSessionId]?.color
+      ? agentColorStyle(agentDetailBySession[activeSessionId].color)
+      : null;
+
   return (
-    <div className="shrink-0 border-t border-gray-200/80 dark:border-gray-800/80 px-3 py-2 space-y-1.5">
+    <div className="shrink-0 border-t border-border-secondary/80 dark:border-surface-dim/80 px-3 py-2 space-y-1.5">
       <div className="relative" ref={agentRef}>
         <button
           onClick={() => {
@@ -314,12 +336,19 @@ export function SidebarBottomControls() {
             setWorkspaceOpen(false);
             setTierConfigOpen(false);
           }}
-          disabled={!activeSessionId || agentSwitching}
-          className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-100/60 dark:hover:bg-gray-800/60 hover:text-gray-700 dark:hover:text-gray-300 transition-colors disabled:opacity-40"
+          disabled={!activeSessionId || !sessionReady || agentSwitching}
+          className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-text-tertiary hover:bg-surface-hover/60 dark:hover:bg-surface-dim/60 hover:text-text-secondary dark:hover:text-text-secondary transition-colors disabled:opacity-40"
           aria-expanded={agentOpen}
           aria-label={t("agentSelect")}
         >
-          <Bot className="w-3 h-3 shrink-0 text-gray-400 dark:text-gray-500" />
+          {currentAgentColor ? (
+            <span
+              className="w-3 h-3 shrink-0 rounded-full"
+              style={{ backgroundColor: currentAgentColor.color }}
+            />
+          ) : (
+            <Bot className="w-3 h-3 shrink-0 text-text-tertiary" />
+          )}
           <span className="truncate flex-1 text-left">
             {currentAgent === "build"
               ? t("agentBuild")
@@ -334,7 +363,7 @@ export function SidebarBottomControls() {
           />
         </button>
         {agentOpen && (
-          <div className="absolute bottom-full left-0 right-0 mb-1 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md shadow-xl py-1">
+          <div className="absolute bottom-full left-0 right-0 mb-1 z-50 bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl py-1">
             <div className="overflow-y-auto max-h-[15rem]">
               {agents.map((agent) => {
                 const isActive = currentAgent === agent.name;
@@ -349,20 +378,20 @@ export function SidebarBottomControls() {
                     key={agent.name}
                     className={`w-full text-left px-3 py-2 text-xs flex items-start gap-2 transition-colors ${
                       isActive
-                        ? "bg-indigo-500/15 text-indigo-600 dark:text-indigo-300"
-                        : "text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                        ? "bg-semantic-accent/15 text-semantic-accent"
+                        : "text-text-secondary dark:text-text-primary hover:bg-surface-hover dark:hover:bg-surface-hover"
                     }`}
                     onClick={async () => {
-                      if (activeSessionId && !agentSwitching && !isActive) {
+                      if (activeSessionId && sessionReady && !agentSwitching && !isActive) {
                         await switchAgent(agent.name, activeSessionId);
                       }
                       setAgentOpen(false);
                     }}
                   >
                     {isActive ? (
-                      <Check className="w-3 h-3 shrink-0 text-indigo-400 mt-0.5" />
+                      <Check className="w-3 h-3 shrink-0 text-semantic-accent mt-0.5" />
                     ) : (
-                      <Icon className="w-3 h-3 shrink-0 text-gray-400 dark:text-gray-500 mt-0.5" />
+                      <Icon className="w-3 h-3 shrink-0 text-text-tertiary mt-0.5" />
                     )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
@@ -370,8 +399,8 @@ export function SidebarBottomControls() {
                         <span
                           className={`text-[9px] px-1 py-0.5 rounded shrink-0 font-mono ${
                             isGlobalAgent(agent.source)
-                              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                              : "bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                              ? "bg-status-success/10 text-status-success"
+                              : "bg-status-info/10 text-status-info"
                           }`}
                           title={getSourceLabel(agent.source)}
                         >
@@ -379,21 +408,29 @@ export function SidebarBottomControls() {
                         </span>
                       </div>
                       {agent.description && (
-                        <div className="text-gray-400 dark:text-gray-500 text-[10px] mt-0.5 truncate">
+                        <div className="text-text-tertiary text-[10px] mt-0.5 truncate">
                           {agent.description}
                         </div>
                       )}
                       {agent.filePath && (
-                        <CopyButton
-                          text={agent.filePath}
-                          size="xs"
-                          className="text-[9px] text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 mt-0.5 w-fit"
-                          title={agent.filePath}
-                        />
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <span
+                            className="text-[9px] text-text-tertiary truncate"
+                            title={agent.filePath}
+                          >
+                            {formatFilePath(agent.filePath)}
+                          </span>
+                          <CopyButton
+                            text={agent.filePath}
+                            size="xs"
+                            className="text-[9px] text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary"
+                            title={agent.filePath}
+                          />
+                        </div>
                       )}
                     </div>
                     {agent.tier && (
-                      <span className="text-[10px] text-gray-400 dark:text-gray-500 shrink-0 mt-0.5">
+                      <span className="text-[10px] text-text-tertiary shrink-0 mt-0.5">
                         {agent.tier}
                       </span>
                     )}
@@ -407,11 +444,11 @@ export function SidebarBottomControls() {
 
       <div className="relative" ref={workspaceRef}>
         {!isGitRepo ? (
-          <div className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-gray-400 dark:text-gray-600">
+          <div className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-text-tertiary">
             <FolderTree className="w-3 h-3 shrink-0" />
             <div className="flex flex-col min-w-0 flex-1 text-left">
               <span className="truncate">{t("notGitRepo")}</span>
-              <span className="text-[10px] text-gray-400 dark:text-gray-600 truncate">
+              <span className="text-[10px] text-text-tertiary truncate">
                 {activeTabPath.split("/").pop()}
               </span>
             </div>
@@ -422,17 +459,15 @@ export function SidebarBottomControls() {
               setWorkspaceOpen(!workspaceOpen);
               setThinkingOpen(false);
             }}
-            disabled={!activeSessionId}
-            className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-100/60 dark:hover:bg-gray-800/60 hover:text-gray-700 dark:hover:text-gray-300 transition-colors disabled:opacity-40"
+            disabled={!activeSessionId || !sessionReady}
+            className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-text-tertiary hover:bg-surface-hover/60 dark:hover:bg-surface-dim/60 hover:text-text-secondary dark:hover:text-text-secondary transition-colors disabled:opacity-40"
             aria-expanded={workspaceOpen}
             aria-label={t("workspaceSelect")}
           >
-            <FolderTree className="w-3 h-3 shrink-0 text-gray-400 dark:text-gray-500" />
+            <FolderTree className="w-3 h-3 shrink-0 text-text-tertiary" />
             <div className="flex flex-col min-w-0 flex-1 text-left">
               <span className="truncate">{workspaceName}</span>
-              <span className="text-[10px] text-gray-400 dark:text-gray-600 truncate">
-                {workspacePath}
-              </span>
+              <span className="text-[10px] text-text-tertiary truncate">{workspacePath}</span>
             </div>
             <ChevronDown
               className={`w-3 h-3 shrink-0 transition-transform ${workspaceOpen ? "rotate-180" : ""}`}
@@ -440,7 +475,7 @@ export function SidebarBottomControls() {
           </button>
         )}
         {isGitRepo && workspaceOpen && (
-          <div className="absolute bottom-full left-0 right-0 mb-1 z-50 max-h-64 overflow-hidden bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md shadow-xl flex flex-col">
+          <div className="absolute bottom-full left-0 right-0 mb-1 z-50 max-h-64 overflow-hidden bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl flex flex-col">
             <div className="overflow-y-auto flex-1 py-1">
               {worktrees.map((wt) => {
                 const isActive = currentWorkspace?.path === wt.path;
@@ -450,30 +485,28 @@ export function SidebarBottomControls() {
                     key={wt.path}
                     className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors ${
                       isActive
-                        ? "bg-indigo-500/15 text-indigo-600 dark:text-indigo-300"
-                        : "text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                        ? "bg-semantic-accent/15 text-semantic-accent"
+                        : "text-text-secondary dark:text-text-primary hover:bg-surface-hover dark:hover:bg-surface-hover"
                     }`}
                     onClick={() => handleSwitchWorkspace(wt)}
                   >
                     {isActive ? (
-                      <Check className="w-3 h-3 shrink-0 text-indigo-400" />
+                      <Check className="w-3 h-3 shrink-0 text-semantic-accent" />
                     ) : (
                       <span className="w-3 shrink-0" />
                     )}
                     <div className="flex flex-col min-w-0 flex-1">
                       <span className="truncate">{name}</span>
-                      <span className="text-[10px] text-gray-400 dark:text-gray-500 truncate">
-                        {wt.path}
-                      </span>
+                      <span className="text-[10px] text-text-tertiary truncate">{wt.path}</span>
                     </div>
-                    {!wt.isMain && <GitBranch className="w-3 h-3 shrink-0 text-cyan-500/60" />}
+                    {!wt.isMain && <GitBranch className="w-3 h-3 shrink-0 text-semantic-tool/60" />}
                   </button>
                 );
               })}
             </div>
-            <div className="border-t border-gray-200/60 dark:border-gray-700/60">
+            <div className="border-t border-border-secondary/60">
               <button
-                className="w-full text-left px-3 py-1.5 text-xs text-cyan-600 dark:text-cyan-400 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors"
+                className="w-full text-left px-3 py-1.5 text-xs text-semantic-tool hover:bg-surface-hover dark:hover:bg-surface-hover flex items-center gap-2 transition-colors"
                 onClick={() => {
                   setShowCreateDialog(true);
                   setSourceBranch(currentWorkspace?.branch ?? "");
@@ -486,19 +519,17 @@ export function SidebarBottomControls() {
           </div>
         )}
         {showCreateDialog && (
-          <div className="absolute bottom-full left-0 right-0 mb-1 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md shadow-xl p-3 space-y-2">
-            <div className="text-xs font-medium text-gray-800 dark:text-gray-200">
-              {t("newWorkspaceTitle")}
-            </div>
+          <div className="absolute bottom-full left-0 right-0 mb-1 z-50 bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl p-3 space-y-2">
+            <div className="text-xs font-medium text-text-primary">{t("newWorkspaceTitle")}</div>
             <div className="space-y-1.5">
               <div>
-                <label className="text-[10px] text-gray-400 dark:text-gray-500 block mb-0.5">
+                <label className="text-[10px] text-text-tertiary block mb-0.5">
                   {t("baseBranch")}
                 </label>
                 <select
                   value={sourceBranch}
                   onChange={(e) => setSourceBranch(e.target.value)}
-                  className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded px-2 py-1 text-xs text-gray-700 dark:text-gray-300 outline-none"
+                  className="w-full bg-bg-elevated dark:bg-surface-code border border-border-secondary rounded px-2 py-1 text-xs text-text-secondary outline-none"
                 >
                   {worktrees.map((wt) => (
                     <option key={wt.path} value={wt.branch}>
@@ -509,14 +540,14 @@ export function SidebarBottomControls() {
                 </select>
               </div>
               <div>
-                <label className="text-[10px] text-gray-400 dark:text-gray-500 block mb-0.5">
+                <label className="text-[10px] text-text-tertiary block mb-0.5">
                   {t("newBranchName")}
                 </label>
                 <input
                   value={newBranch}
                   onChange={(e) => setNewBranch(e.target.value)}
                   placeholder="feature-xxx"
-                  className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded px-2 py-1 text-xs text-gray-700 dark:text-gray-300 outline-none"
+                  className="w-full bg-bg-elevated dark:bg-surface-code border border-border-secondary rounded px-2 py-1 text-xs text-text-secondary outline-none"
                 />
               </div>
             </div>
@@ -526,14 +557,14 @@ export function SidebarBottomControls() {
                   setShowCreateDialog(false);
                   setNewBranch("");
                 }}
-                className="px-2 py-1 rounded text-xs text-gray-400 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                className="px-2 py-1 rounded text-xs text-text-tertiary hover:bg-surface-hover dark:hover:bg-surface-hover"
               >
                 {t("cancel", { ns: "common" })}
               </button>
               <button
                 onClick={handleCreateWorktree}
                 disabled={!newBranch.trim() || creating}
-                className="px-2 py-1 rounded text-xs bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-40"
+                className="px-2 py-1 rounded text-xs bg-semantic-accent text-white hover:bg-semantic-accent disabled:opacity-40"
               >
                 {creating ? t("creating") : t("create")}
               </button>
@@ -547,7 +578,7 @@ export function SidebarBottomControls() {
           models={availableModels}
           value={currentModel ? `${currentModel.provider}/${currentModel.id}` : ""}
           onChange={handleSelectModel}
-          disabled={!activeSessionId}
+          disabled={!activeSessionId || !sessionReady}
           placement="up"
           onOpenChange={(open) => {
             if (open) {
@@ -558,12 +589,12 @@ export function SidebarBottomControls() {
           }}
           renderTrigger={({ open }) => (
             <button
-              disabled={!activeSessionId}
-              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-100/60 dark:hover:bg-gray-800/60 hover:text-gray-700 dark:hover:text-gray-300 transition-colors disabled:opacity-40 ${open ? "bg-gray-100/60 dark:bg-gray-800/60" : ""}`}
+              disabled={!activeSessionId || !sessionReady}
+              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-text-tertiary hover:bg-surface-hover/60 dark:hover:bg-surface-dim/60 hover:text-text-secondary dark:hover:text-text-secondary transition-colors disabled:opacity-40 ${open ? "bg-surface-code/60 dark:bg-surface-dim/60" : ""}`}
               aria-expanded={open}
               aria-label={t("modelSelect")}
             >
-              <Cpu className="w-3 h-3 shrink-0 text-gray-400 dark:text-gray-500" />
+              <Cpu className="w-3 h-3 shrink-0 text-text-tertiary" />
               <span className="truncate flex-1 text-left">
                 {t("modelLabel", { model: modelDisplay })}
               </span>
@@ -594,17 +625,17 @@ export function SidebarBottomControls() {
             <button
               key={tier}
               onClick={() => {
-                if (!switchingTier && activeSessionId) {
+                if (!switchingTier && activeSessionId && sessionReady) {
                   handleSwitchTier(tier);
                 }
               }}
-              disabled={switchingTier || !activeSessionId}
+              disabled={switchingTier || !activeSessionId || !sessionReady}
               className={`
                 flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[11px] transition-all duration-150 flex-1 justify-center
                 ${
                   isActive
-                    ? "bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 font-medium ring-1 ring-indigo-500/30"
-                    : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                    ? "bg-semantic-accent/15 text-semantic-accent font-medium ring-1 ring-semantic-accent/30"
+                    : "text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-dim"
                 }
                 disabled:opacity-50 disabled:cursor-not-allowed
               `}
@@ -617,8 +648,8 @@ export function SidebarBottomControls() {
         })}
         <button
           onClick={handleOpenTierConfig}
-          disabled={!activeSessionId}
-          className="p-0.5 rounded text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-40 shrink-0"
+          disabled={!activeSessionId || !sessionReady}
+          className="p-0.5 rounded text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-dim transition-colors disabled:opacity-40 shrink-0"
           title={t("tierConfigTitle", "Configure tier models")}
           aria-label={t("tierConfigTitle", "Configure tier models")}
         >
@@ -628,9 +659,9 @@ export function SidebarBottomControls() {
         {tierConfigOpen && (
           <div
             ref={tierConfigRef}
-            className="absolute bottom-full left-0 right-0 mb-1 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md shadow-xl p-3 space-y-2"
+            className="absolute bottom-full left-0 right-0 mb-1 z-50 bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl p-3 space-y-2"
           >
-            <div className="text-xs font-medium text-gray-800 dark:text-gray-200">
+            <div className="text-xs font-medium text-text-primary">
               {t("tierConfigTitle", "Configure tier models")}
             </div>
             {TIER_KEYS.map((tier) => {
@@ -648,10 +679,8 @@ export function SidebarBottomControls() {
               return (
                 <div key={tier} className="flex items-center gap-2">
                   <div className="flex items-center gap-1 w-14 shrink-0">
-                    <Icon className="w-3 h-3 text-gray-400 dark:text-gray-500" />
-                    <span className="text-[11px] text-gray-600 dark:text-gray-300">
-                      {labels[tier]}
-                    </span>
+                    <Icon className="w-3 h-3 text-text-tertiary" />
+                    <span className="text-[11px] text-text-secondary">{labels[tier]}</span>
                   </div>
                   <div className="flex-1 min-w-0">
                     <ModelPickerButton
@@ -677,14 +706,14 @@ export function SidebarBottomControls() {
             <div className="flex items-center justify-end gap-2 pt-1">
               <button
                 onClick={() => setTierConfigOpen(false)}
-                className="px-2 py-1 rounded text-[11px] text-gray-400 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                className="px-2 py-1 rounded text-[11px] text-text-tertiary hover:bg-surface-hover dark:hover:bg-surface-hover"
               >
                 {t("cancel", { ns: "common" })}
               </button>
               <button
                 onClick={handleSaveTierConfig}
                 disabled={tierConfigSaving}
-                className="px-2 py-1 rounded text-[11px] bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-40"
+                className="px-2 py-1 rounded text-[11px] bg-semantic-accent text-white hover:bg-semantic-accent disabled:opacity-40"
               >
                 {tierConfigSaving ? t("saving", "Saving...") : t("save", "Save")}
               </button>
@@ -699,12 +728,12 @@ export function SidebarBottomControls() {
             setThinkingOpen(!thinkingOpen);
             setWorkspaceOpen(false);
           }}
-          disabled={!activeSessionId}
-          className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-100/60 dark:hover:bg-gray-800/60 hover:text-gray-700 dark:hover:text-gray-300 transition-colors disabled:opacity-40"
+          disabled={!activeSessionId || !sessionReady}
+          className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-text-tertiary hover:bg-surface-hover/60 dark:hover:bg-surface-dim/60 hover:text-text-secondary dark:hover:text-text-secondary transition-colors disabled:opacity-40"
           aria-expanded={thinkingOpen}
           aria-label={t("thinkingSelect")}
         >
-          <Brain className="w-3 h-3 shrink-0 text-gray-400 dark:text-gray-500" />
+          <Brain className="w-3 h-3 shrink-0 text-text-tertiary" />
           <span className="truncate flex-1 text-left">
             {t("thinkingLabel", { level: thinkingDisplay })}
           </span>
@@ -713,7 +742,7 @@ export function SidebarBottomControls() {
           />
         </button>
         {thinkingOpen && (
-          <div className="absolute bottom-full left-0 right-0 mb-1 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md shadow-xl py-1">
+          <div className="absolute bottom-full left-0 right-0 mb-1 z-50 bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl py-1">
             {THINKING_LEVEL_VALUES.map((value, idx) => {
               const isActive = currentThinkingLevel === value;
               return (
@@ -721,20 +750,18 @@ export function SidebarBottomControls() {
                   key={value}
                   className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors ${
                     isActive
-                      ? "bg-indigo-500/15 text-indigo-600 dark:text-indigo-300"
-                      : "text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      ? "bg-semantic-accent/15 text-semantic-accent"
+                      : "text-text-secondary dark:text-text-primary hover:bg-surface-hover dark:hover:bg-surface-hover"
                   }`}
                   onClick={() => handleSelectThinking(value)}
                 >
                   {isActive ? (
-                    <Check className="w-3 h-3 shrink-0 text-indigo-400" />
+                    <Check className="w-3 h-3 shrink-0 text-semantic-accent" />
                   ) : (
                     <span className="w-3 shrink-0" />
                   )}
                   <span>{t(THINKING_LEVEL_KEYS[idx])}</span>
-                  <span className="text-gray-400 dark:text-gray-500 ml-auto text-[10px] font-mono">
-                    {value}
-                  </span>
+                  <span className="text-text-tertiary ml-auto text-[10px] font-mono">{value}</span>
                 </button>
               );
             })}

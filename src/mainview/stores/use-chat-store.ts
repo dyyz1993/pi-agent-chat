@@ -1,8 +1,9 @@
 import { create } from "zustand";
-import type { Message } from "@dyyz1993/pi-ai";
+import type { Message, ImageContent } from "@dyyz1993/pi-ai";
 import type { ChatMessage, ContentBlock } from "../types";
 import { apiClient } from "../lib/api-client";
 import { useAppStore } from "./use-app-store";
+import { useNotificationStore } from "./use-notification-store";
 import { useSessionStore } from "./use-session-store";
 import { useMemoryStore } from "./use-memory-store";
 import { ALL_MEMORY_TYPE_KEYS } from "../components/chat/memory-config";
@@ -13,7 +14,11 @@ import { createLogger } from "../../shared/lib/logger";
 const log = createLogger("chat-store");
 const perfLog = createLogger("session-perf");
 
-export function normalizeToolBlocks(msgs: ChatMessage[]): void {
+export function normalizeToolBlocks(
+  msgs: ChatMessage[],
+  isHistorical = false,
+  isStreaming = false,
+): void {
   const toolCallById = new Map<
     string,
     { msgIndex: number; blockIndex: number; name: string; input: string }
@@ -129,7 +134,7 @@ export function normalizeToolBlocks(msgs: ChatMessage[]): void {
             toolCallId: b.id,
             toolName: b.name,
             args,
-            status: "running",
+            status: isStreaming ? "running" : isHistorical ? "unknown" : "running",
             description,
           });
         }
@@ -172,7 +177,7 @@ export function normalizeToolBlocks(msgs: ChatMessage[]): void {
           toolCallId: b.id,
           toolName: b.name,
           args,
-          status: "running",
+          status: isHistorical ? "unknown" : "running",
         });
       } else {
         newContent.push(b);
@@ -189,6 +194,7 @@ export function normalizeToolBlocks(msgs: ChatMessage[]): void {
 }
 
 const PAGE_SIZE = 50;
+const INPUT_DRAFT_KEY = "pi-input-draft";
 
 interface ChatState {
   messagesBySession: Record<string, ChatMessage[]>;
@@ -200,7 +206,9 @@ interface ChatState {
   hasMoreMessagesBySession: Record<string, boolean>;
   isLoadingMoreBySession: Record<string, boolean>;
 
+  pendingImages: ImageContent[];
   setInputText: (text: string) => void;
+  setPendingImages: (images: ImageContent[]) => void;
   sendMessage: () => Promise<void>;
   sendSteer: () => Promise<void>;
   sendFollowUp: () => Promise<void>;
@@ -212,14 +220,40 @@ interface ChatState {
     sessionId: string,
     options?: { force?: boolean; sessionPath?: string },
   ) => Promise<void>;
+  /** Background refresh: fetch latest messages and silently update store if different */
+  _backgroundRefreshMessages: (sessionId: string, sessionPath?: string) => void;
   loadMoreMessages: (sessionId: string) => Promise<void>;
   setIsStreaming: (v: boolean) => void;
   incrementStreamVersion: () => void;
+  saveInputDraft: (sessionId: string) => void;
+  restoreInputDraft: (sessionId: string) => void;
+  clearInputDraft: (sessionId: string) => void;
+}
+
+function readDraft(sessionId: string): string {
+  try {
+    return localStorage.getItem(`${INPUT_DRAFT_KEY}:${sessionId}`) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function writeDraft(sessionId: string, text: string): void {
+  try {
+    if (text) {
+      localStorage.setItem(`${INPUT_DRAFT_KEY}:${sessionId}`, text);
+    } else {
+      localStorage.removeItem(`${INPUT_DRAFT_KEY}:${sessionId}`);
+    }
+  } catch {
+    /* ignore quota */
+  }
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
   messagesBySession: {},
   inputText: "",
+  pendingImages: [],
   isStreaming: false,
   streamContentVersion: 0,
   loadingSessions: new Set<string>(),
@@ -228,6 +262,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   isLoadingMoreBySession: {},
 
   setInputText: (text) => set({ inputText: text }),
+  setPendingImages: (images) => set({ pendingImages: images }),
 
   sendMessage: async () => {
     const { inputText } = get();
@@ -237,6 +272,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const sessionId = useSessionStore.getState().activeSessionId;
     if (!sessionId) {
       useAppStore.getState().addLog("No active session");
+      useNotificationStore.getState().push({ message: "No active session", level: "warning" });
       return;
     }
 
@@ -244,23 +280,41 @@ export const useChatStore = create<ChatState>((set, get) => ({
       .activeSubsessionId;
     if (activeSubId) {
       useAppStore.getState().addLog("Cannot send to subagent session");
+      useNotificationStore
+        .getState()
+        .push({ message: "Cannot send to subagent session", level: "warning" });
       return;
     }
 
     set({ inputText: "" });
+    writeDraft(sessionId, "");
 
     try {
       const sessionReady = useSessionStore.getState().sessionReady[sessionId];
       if (!sessionReady) {
         useAppStore.getState().addLog("Session not ready, cannot send");
+        useNotificationStore
+          .getState()
+          .push({ message: "Session not ready, please wait", level: "warning" });
         set({ inputText: text });
         return;
+      }
+
+      const pendingImages = get().pendingImages;
+
+      const contentBlocks: ContentBlock[] = [{ type: "text", text }];
+      for (const img of pendingImages) {
+        contentBlocks.push({
+          type: "imageBlock",
+          url: `data:${img.mimeType};base64,${img.data}`,
+          alt: "uploaded image",
+        });
       }
 
       const userMsg: ChatMessage = {
         id: `user_${Date.now()}`,
         role: "user",
-        content: [{ type: "text", text }],
+        content: contentBlocks,
         timestamp: Date.now(),
         _local: true,
       };
@@ -274,15 +328,74 @@ export const useChatStore = create<ChatState>((set, get) => ({
         };
       });
 
-      set({ isStreaming: true });
+      set({ isStreaming: true, pendingImages: [] });
+      useSessionStore.getState().updateSessionStatus(sessionId, "streaming");
 
-      await apiClient.call("agent.send", { sessionId, content: text });
+      const SEND_TIMEOUT_MS = 60_000;
+      const sendT0 = performance.now();
+      perfLog.info("[send] begin", { sessionId });
+      const sendPromise = apiClient.call("agent.send", {
+        sessionId,
+        content: text,
+        images: pendingImages,
+      });
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Send timed out (60s)")), SEND_TIMEOUT_MS),
+      );
+      await Promise.race([sendPromise, timeoutPromise]);
+      perfLog.info("[send] done", { sessionId, sendMs: Math.round(performance.now() - sendT0) });
       set({ isStreaming: false });
+
+      const EMPTY_TURN_CHECK_MS = 30_000;
+      const checkSessionId = sessionId;
+      const checkUserMsgId = userMsg.id;
+      setTimeout(() => {
+        const chat = get();
+        const msgs = chat.messagesBySession[checkSessionId] || [];
+        const hasAssistant = msgs.some((m) => m.role === "assistant" && m.id !== checkUserMsgId);
+        if (!hasAssistant) {
+          const status = useSessionStore.getState().sessionStatusMap[checkSessionId];
+          const isStillStreaming =
+            status === "streaming" || status === "compacting" || status === "retrying";
+          if (!isStillStreaming) {
+            chat.setMessagesForSession(checkSessionId, [
+              ...msgs,
+              {
+                id: `error_${Date.now()}`,
+                role: "error" as const,
+                content: [
+                  {
+                    type: "text" as const,
+                    text: "Agent 未返回响应，可能是 LLM 服务异常或网络问题",
+                  },
+                ],
+                timestamp: Date.now(),
+              },
+            ]);
+            useNotificationStore.getState().push({
+              message: "Agent 未返回任何响应，请检查模型配置或重试",
+              level: "error",
+              sessionId: checkSessionId,
+            });
+          }
+        }
+      }, EMPTY_TURN_CHECK_MS);
     } catch (err) {
-      set({ isStreaming: false });
-      useAppStore
-        .getState()
-        .addLog(`Send error: ${err instanceof Error ? err.message : String(err)}`);
+      set((s) => {
+        const msgs = s.messagesBySession[sessionId] || [];
+        return {
+          isStreaming: false,
+          messagesBySession: {
+            ...s.messagesBySession,
+            [sessionId]: msgs.filter((m) => !m._local),
+          },
+        };
+      });
+      useSessionStore.getState().updateSessionStatus(sessionId, "idle");
+      const msg = err instanceof Error ? err.message : String(err);
+      useAppStore.getState().addLog(`Send error: ${msg}`);
+      useNotificationStore.getState().push({ message: `Send failed: ${msg}`, level: "error" });
+      set({ inputText: text });
     }
   },
 
@@ -293,13 +406,29 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const sessionId = useSessionStore.getState().activeSessionId;
     if (!sessionId) return;
     set({ inputText: "" });
+    writeDraft(sessionId, "");
 
     try {
-      await apiClient.call("agent.steer", { sessionId, content: text });
+      const STEER_TIMEOUT_MS = 15_000;
+      const steerT0 = performance.now();
+      perfLog.info("[steer] begin", { sessionId });
+      const pendingImages = get().pendingImages;
+      if (pendingImages.length > 0) {
+        set({ pendingImages: [] });
+      }
+      await Promise.race([
+        apiClient.call("agent.steer", { sessionId, content: text, images: pendingImages }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Steer timed out (15s)")), STEER_TIMEOUT_MS),
+        ),
+      ]);
+      perfLog.info("[steer] done", { sessionId, steerMs: Math.round(performance.now() - steerT0) });
     } catch (err) {
-      useAppStore
-        .getState()
-        .addLog(`Steer error: ${err instanceof Error ? err.message : String(err)}`);
+      set({ inputText: text });
+      const msg = err instanceof Error ? err.message : String(err);
+      perfLog.info("[steer] failed", { sessionId, msg });
+      useAppStore.getState().addLog(`Steer error: ${msg}`);
+      useNotificationStore.getState().push({ message: `Steer failed: ${msg}`, level: "error" });
     }
   },
 
@@ -310,13 +439,32 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const sessionId = useSessionStore.getState().activeSessionId;
     if (!sessionId) return;
     set({ inputText: "" });
+    writeDraft(sessionId, "");
 
     try {
-      await apiClient.call("agent.followUp", { sessionId, content: text });
+      const FOLLOWUP_TIMEOUT_MS = 15_000;
+      const followUpT0 = performance.now();
+      perfLog.info("[followUp] begin", { sessionId });
+      const pendingImages = get().pendingImages;
+      if (pendingImages.length > 0) {
+        set({ pendingImages: [] });
+      }
+      await Promise.race([
+        apiClient.call("agent.followUp", { sessionId, content: text, images: pendingImages }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("FollowUp timed out (15s)")), FOLLOWUP_TIMEOUT_MS),
+        ),
+      ]);
+      perfLog.info("[followUp] done", {
+        sessionId,
+        followUpMs: Math.round(performance.now() - followUpT0),
+      });
     } catch (err) {
-      useAppStore
-        .getState()
-        .addLog(`FollowUp error: ${err instanceof Error ? err.message : String(err)}`);
+      set({ inputText: text });
+      const msg = err instanceof Error ? err.message : String(err);
+      perfLog.info("[followUp] failed", { sessionId, msg });
+      useAppStore.getState().addLog(`FollowUp error: ${msg}`);
+      useNotificationStore.getState().push({ message: `Follow-up failed: ${msg}`, level: "error" });
     }
   },
 
@@ -326,7 +474,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     try {
       await apiClient.call("agent.clearQueue", { sessionId });
     } catch (err) {
-      console.warn("[chat] clearQueue failed:", err);
+      log.warn("clearQueue failed", { error: String(err) });
     }
   },
 
@@ -379,32 +527,41 @@ export const useChatStore = create<ChatState>((set, get) => ({
         (m) => m.role === "user" || (m.role === "assistant" && m.tokenUsage),
       );
       if (hasRealMessages) {
-        log.warn("GUARD-2: existing real messages, skip", {
+        // Optimistic render: cached messages are already in the store, user sees them instantly.
+        // Background refresh: fetch latest from server to guarantee completeness.
+        perfLog.info("[loadMessages] GUARD-2: cached messages exist, background refresh", {
           sessionId: sid,
-          count: preflight.length,
+          cachedCount: preflight.length,
         });
+        get()._backgroundRefreshMessages(sid, options?.sessionPath);
         return;
       }
-    }
-    if (options?.force) {
-      set((s) => {
-        const map = { ...s.messagesBySession };
-        delete map[sid];
-        return { messagesBySession: map };
-      });
     }
     set((s) => ({ loadingSessions: new Set(s.loadingSessions).add(sid) }));
 
     try {
       const { apiClient } = await import("../lib/api-client");
-      const result = await apiClient.call("agent.getFullMessages", {
-        sessionId: sid,
-        sessionPath: options?.sessionPath,
-      });
+      const GET_MESSAGES_TIMEOUT_MS = 30_000;
+      const result = (await Promise.race([
+        apiClient.call("agent.getFullMessages", {
+          sessionId: sid,
+          sessionPath: options?.sessionPath,
+          limit: PAGE_SIZE,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error("getFullMessages timed out (30s)")),
+            GET_MESSAGES_TIMEOUT_MS,
+          ),
+        ),
+      ])) as Awaited<ReturnType<typeof apiClient.call<"agent.getFullMessages">>>;
       perfLog.info("[loadMessages] RPC returned", {
         sessionId: sid,
         force: !!options?.force,
         rpcMs: Math.round(performance.now() - t0),
+        messageCount: result.messages?.length,
+        hasMore: result.hasMore,
+        totalCount: result.totalCount,
       });
 
       if (!options?.force) {
@@ -448,21 +605,40 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
 
       const msgs: ChatMessage[] = [];
+      const nullCount = { byRole: {} as Record<string, number>, total: 0 };
       for (const { raw, id } of rawMessages) {
-        const msg = messageToChatMessage(raw as unknown as Message, id, toolCallNameMap);
-        if (msg) msgs.push(msg);
+        const msg = messageToChatMessage(raw as unknown as unknown as Message, id, toolCallNameMap);
+        if (msg) {
+          msgs.push(msg);
+        } else {
+          const role = (raw as unknown as { role: string }).role as string;
+          nullCount.byRole[role] = (nullCount.byRole[role] || 0) + 1;
+          nullCount.total++;
+          log.warn("messageToChatMessage returned null", {
+            sessionId: sid,
+            id,
+            role,
+            rawKeys: Object.keys(raw),
+          });
+        }
       }
       log.info("After messageToChatMessage", {
         sessionId: sid,
         mapped: msgs.length,
         raw: rawMessages.length,
+        nullCount,
       });
 
-      normalizeToolBlocks(msgs);
+      normalizeToolBlocks(
+        msgs,
+        true,
+        useSessionStore.getState().sessionStatusMap[sid] === "streaming",
+      );
 
       const customEntries = result.customEntries;
       if (Array.isArray(customEntries) && customEntries.length > 0) {
         const memoryStore = useMemoryStore.getState();
+        memoryStore.clearSession(sid);
 
         const resultMap = new Map<string, (typeof customEntries)[0]>();
         const prefetchIds = new Set<string>();
@@ -545,14 +721,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
         });
       }
 
-      const hasMore = msgs.length > PAGE_SIZE;
-      const displayMsgs = hasMore ? msgs.slice(-PAGE_SIZE) : msgs;
+      const hasMore = result.hasMore === true || msgs.length > PAGE_SIZE;
+      const displayMsgs = msgs;
 
       log.info("SET messages", {
         sessionId: sid,
         total: msgs.length,
         displayed: displayMsgs.length,
         hasMore,
+        serverHasMore: result.hasMore,
+        serverTotalCount: result.totalCount,
       });
 
       perfLog.info("[loadMessages] done", {
@@ -562,11 +740,47 @@ export const useChatStore = create<ChatState>((set, get) => ({
         totalMs: Math.round(performance.now() - t0),
       });
 
-      set((s) => ({
-        messagesBySession: { ...s.messagesBySession, [sid]: displayMsgs },
-        historyLoadVersion: s.historyLoadVersion + 1,
-        hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: hasMore },
-      }));
+      const localMsgs = (get().messagesBySession[sid] || []).filter((m) => m._local);
+      const currentMsgs = get().messagesBySession[sid] || [];
+
+      // When streaming, preserve the last streaming assistant message from replay/events.
+      // loadSessionMessages reads JSONL which may be incomplete during streaming,
+      // and overwriting would lose toolExecution state populated by replayHoldEvents.
+      const lastCurrent = currentMsgs[currentMsgs.length - 1];
+      const isStreamingSession = useSessionStore.getState().sessionStatusMap[sid] === "streaming";
+      const preserveStreaming =
+        isStreamingSession &&
+        lastCurrent &&
+        lastCurrent.role === "assistant" &&
+        lastCurrent.isStreaming === true;
+
+      let finalMsgs = localMsgs.length > 0 ? [...displayMsgs, ...localMsgs] : displayMsgs;
+
+      if (preserveStreaming) {
+        const streamingInFinal = finalMsgs.findIndex(
+          (m) => m.role === "assistant" && m.isStreaming,
+        );
+        if (streamingInFinal === -1) {
+          finalMsgs = [...finalMsgs, lastCurrent];
+        }
+      }
+
+      const hasSameIds =
+        currentMsgs.length === finalMsgs.length &&
+        currentMsgs.every((m, i) => m.id === finalMsgs[i]?.id);
+
+      if (hasSameIds) {
+        perfLog.info("[loadMessages] content unchanged, skip update", {
+          sessionId: sid,
+          count: finalMsgs.length,
+        });
+      } else {
+        set((s) => ({
+          messagesBySession: { ...s.messagesBySession, [sid]: finalMsgs },
+          historyLoadVersion: s.historyLoadVersion + 1,
+          hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: hasMore },
+        }));
+      }
 
       useSessionStore.getState().restoreContextFromHistory(sid);
     } catch (err) {
@@ -583,6 +797,148 @@ export const useChatStore = create<ChatState>((set, get) => ({
         return { loadingSessions: next };
       });
     }
+  },
+
+  /** Background refresh: fetch latest messages from server and silently update store if different.
+   *  Used after optimistic render from cache to guarantee data completeness. */
+  _backgroundRefreshMessages: (sessionId: string, sessionPath?: string) => {
+    const sid = sessionId;
+    // Don't run if already loading (avoid competing with foreground load)
+    if (get().loadingSessions.has(sid)) return;
+
+    const t0 = performance.now();
+    perfLog.info("[bgRefresh] begin", { sessionId: sid });
+
+    set((s) => ({ loadingSessions: new Set(s.loadingSessions).add(sid) }));
+
+    (async () => {
+      try {
+        const { apiClient } = await import("../lib/api-client");
+        const BG_REFRESH_TIMEOUT_MS = 15_000;
+        const result = (await Promise.race([
+          apiClient.call("agent.getFullMessages", {
+            sessionId: sid,
+            sessionPath,
+            limit: PAGE_SIZE,
+          }),
+          new Promise<never>((_, reject) =>
+            setTimeout(
+              () => reject(new Error("bgRefresh getFullMessages timed out (15s)")),
+              BG_REFRESH_TIMEOUT_MS,
+            ),
+          ),
+        ])) as Awaited<ReturnType<typeof apiClient.call<"agent.getFullMessages">>>;
+
+        const rpcMs = Math.round(performance.now() - t0);
+        perfLog.info("[bgRefresh] RPC returned", {
+          sessionId: sid,
+          rpcMs,
+          messageCount: result.messages?.length,
+        });
+
+        const messages = result.messages;
+        if (!Array.isArray(messages)) return;
+
+        // Process messages the same way as loadSessionMessages
+        const toolCallNameMap: Record<string, string> = {};
+        const msgs: ChatMessage[] = [];
+        for (const msg of messages) {
+          const mapped = messageToChatMessage(
+            msg as unknown as unknown as Message,
+            msg.id,
+            toolCallNameMap,
+          );
+          if (mapped) msgs.push(mapped);
+        }
+        normalizeToolBlocks(msgs);
+
+        // Process custom entries (memory events)
+        const customEntries = result.customEntries;
+        if (Array.isArray(customEntries) && customEntries.length > 0) {
+          const memoryStore = useMemoryStore.getState();
+          for (const entry of customEntries) {
+            if (!ALL_MEMORY_TYPE_KEYS.has(entry.customType)) continue;
+            memoryStore.addEvent(sid, {
+              id: entry.id,
+              customType: entry.customType,
+              data: entry.data,
+              timestamp: entry.timestamp,
+            });
+            if (entry.customType === "memory_prefetch_result" && entry.data) {
+              const payload = entry.data as Record<string, unknown>;
+              memoryStore.addInjected(sid, {
+                summary: (payload.summary as string) ?? "",
+                snippet: (payload.snippet as string) ?? "",
+              });
+            }
+            msgs.push({
+              id: entry.id,
+              role: "custom",
+              content: [{ type: "custom", customType: entry.customType, data: entry.data }],
+              timestamp: entry.timestamp,
+            });
+          }
+          msgs.sort((a, b) => {
+            if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
+            return (a.id || "").localeCompare(b.id || "");
+          });
+        }
+
+        // Compare with current store: only update if different
+        const current = get().messagesBySession[sid] || [];
+
+        const streamingMsgs = current.filter(
+          (m) => m.role === "assistant" && m.isStreaming === true,
+        );
+        if (streamingMsgs.length > 0) {
+          perfLog.info("[bgRefresh] session is streaming, skip update", {
+            sessionId: sid,
+            streamingCount: streamingMsgs.length,
+          });
+        } else {
+          const isSame =
+            current.length === msgs.length && current.every((m, i) => m.id === msgs[i]?.id);
+
+          if (isSame) {
+            perfLog.info("[bgRefresh] data unchanged, skip update", {
+              sessionId: sid,
+              count: msgs.length,
+            });
+          } else {
+            perfLog.info("[bgRefresh] data changed, updating store", {
+              sessionId: sid,
+              oldCount: current.length,
+              newCount: msgs.length,
+            });
+            const serverIds = new Set(msgs.map((m) => m.id));
+            const localOnly = current.filter((m) => !serverIds.has(m.id));
+            const hasMore = result.hasMore === true || msgs.length > PAGE_SIZE;
+            const merged =
+              localOnly.length > 0
+                ? [...msgs, ...localOnly].sort((a, b) => a.timestamp - b.timestamp)
+                : msgs;
+            set((s) => ({
+              messagesBySession: { ...s.messagesBySession, [sid]: merged },
+              historyLoadVersion: s.historyLoadVersion + 1,
+              hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: hasMore },
+            }));
+            useSessionStore.getState().restoreContextFromHistory(sid);
+          }
+        }
+      } catch (err) {
+        perfLog.info("[bgRefresh] failed (non-critical)", {
+          sessionId: sid,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        // Background refresh failure is non-critical: cached messages are still visible
+      } finally {
+        set((s) => {
+          const next = new Set(s.loadingSessions);
+          next.delete(sid);
+          return { loadingSessions: next };
+        });
+      }
+    })();
   },
 
   loadMoreMessages: async (sessionId: string) => {
@@ -604,15 +960,25 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }));
 
     try {
-      const result = await apiClient.call("agent.getFullMessages", { sessionId: sid });
+      const LOAD_MORE_TIMEOUT_MS = 30_000;
+      const result = (await Promise.race([
+        apiClient.call("agent.getFullMessages", {
+          sessionId: sid,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error("loadMoreMessages timed out (30s)")),
+            LOAD_MORE_TIMEOUT_MS,
+          ),
+        ),
+      ])) as Awaited<ReturnType<typeof apiClient.call<"agent.getFullMessages">>>;
       const messages = result.messages;
       if (!Array.isArray(messages)) return;
 
       const toolCallNameMap: Record<string, string> = {};
-      const rawMessages: Array<{ raw: AgentMessageForUI; id?: string }> = [];
+      const allMsgs: ChatMessage[] = [];
 
       for (const msg of messages) {
-        rawMessages.push({ raw: msg, id: msg.id });
         const role = msg.role;
         if (role === "assistant") {
           const content = msg.content;
@@ -624,25 +990,110 @@ export const useChatStore = create<ChatState>((set, get) => ({
             }
           }
         }
-      }
-
-      const allMsgs: ChatMessage[] = [];
-      for (const { raw, id } of rawMessages) {
-        const msg = messageToChatMessage(raw as unknown as Message, id, toolCallNameMap);
-        if (msg) allMsgs.push(msg);
+        const chatMsg = messageToChatMessage(msg as unknown as Message, msg.id, toolCallNameMap);
+        if (chatMsg) allMsgs.push(chatMsg);
       }
       normalizeToolBlocks(allMsgs);
 
-      log.info("LOAD ALL messages (fill gap)", {
+      const customEntries = result.customEntries;
+      if (Array.isArray(customEntries) && customEntries.length > 0) {
+        const memoryStore = useMemoryStore.getState();
+
+        const resultMap = new Map<string, (typeof customEntries)[0]>();
+        const prefetchIds = new Set<string>();
+
+        for (const entry of customEntries) {
+          if (entry.customType === "memory_prefetch") {
+            prefetchIds.add(entry.id);
+          }
+          if (entry.customType === "memory_prefetch_result") {
+            resultMap.set(entry.id, entry);
+          }
+        }
+
+        const mergedResultIds = new Set<string>();
+
+        for (const entry of customEntries) {
+          if (entry.customType !== "memory_prefetch") continue;
+
+          let bestResult: (typeof customEntries)[0] | undefined;
+          for (const [, rentry] of resultMap) {
+            if (rentry.timestamp >= entry.timestamp && !mergedResultIds.has(rentry.id)) {
+              if (!bestResult || rentry.timestamp < bestResult.timestamp) {
+                bestResult = rentry;
+              }
+            }
+          }
+
+          if (bestResult) {
+            mergedResultIds.add(bestResult.id);
+            const prefData = entry.data as Record<string, unknown> | undefined;
+            const resData = bestResult.data as Record<string, unknown> | undefined;
+            bestResult.data = {
+              ...(resData ?? {}),
+              _prefetchQuery: typeof prefData?.query === "string" ? prefData.query : "",
+              _prefetchAvailableFiles:
+                typeof prefData?.availableFiles === "number" ? prefData.availableFiles : 0,
+            } as unknown;
+          }
+        }
+
+        for (const entry of customEntries) {
+          if (entry.customType === "memory_prefetch") {
+            const hasLaterMergedResult = Array.from(resultMap.values()).some(
+              (r) =>
+                r.customType === "memory_prefetch_result" &&
+                mergedResultIds.has(r.id) &&
+                r.timestamp >= entry.timestamp,
+            );
+            if (hasLaterMergedResult) continue;
+          }
+
+          if (!ALL_MEMORY_TYPE_KEYS.has(entry.customType)) continue;
+
+          memoryStore.addEvent(sid, {
+            id: entry.id,
+            customType: entry.customType,
+            data: entry.data,
+            timestamp: entry.timestamp,
+          });
+
+          if (entry.customType === "memory_prefetch_result" && entry.data) {
+            const payload = entry.data as Record<string, unknown>;
+            memoryStore.addInjected(sid, {
+              summary: (payload.summary as string) ?? "",
+              snippet: (payload.snippet as string) ?? "",
+            });
+          }
+
+          allMsgs.push({
+            id: entry.id,
+            role: "custom",
+            content: [{ type: "custom", customType: entry.customType, data: entry.data }],
+            timestamp: entry.timestamp,
+          });
+        }
+
+        allMsgs.sort((a, b) => {
+          if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
+          return (a.id || "").localeCompare(b.id || "");
+        });
+      }
+
+      const hasMore = result.hasMore === true;
+
+      log.info("LOAD ALL messages", {
         sessionId: sid,
         total: allMsgs.length,
+        hasMore,
       });
 
       set((s) => ({
         messagesBySession: { ...s.messagesBySession, [sid]: allMsgs },
+        historyLoadVersion: s.historyLoadVersion + 1,
         hasMoreMessagesBySession: {
           ...s.hasMoreMessagesBySession,
-          [sid]: false,
+          [sid]: hasMore,
         },
       }));
     } catch (err) {
@@ -653,6 +1104,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
       set((s) => ({
         isLoadingMoreBySession: { ...s.isLoadingMoreBySession, [sid]: false },
       }));
+    }
+  },
+
+  saveInputDraft: (sessionId: string) => {
+    const text = get().inputText;
+    writeDraft(sessionId, text);
+  },
+
+  restoreInputDraft: (sessionId: string) => {
+    const text = readDraft(sessionId);
+    set({ inputText: text });
+  },
+
+  clearInputDraft: (sessionId: string) => {
+    writeDraft(sessionId, "");
+    if (useSessionStore.getState().activeSessionId === sessionId) {
+      set({ inputText: "" });
     }
   },
 }));

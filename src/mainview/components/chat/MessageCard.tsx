@@ -1,13 +1,16 @@
-import { memo, useCallback, useRef } from "react";
+import { memo, useCallback, useRef, useState } from "react";
 import {
   ChevronDown,
   User,
   Bot,
   RotateCcw,
   Undo2,
-  GitBranch,
+  GitFork,
   Loader2,
   Archive,
+  AlertTriangle,
+  Copy,
+  Check,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useTurnStore, EMPTY_SET } from "../../stores/use-turn-store";
@@ -15,13 +18,12 @@ import { useSessionStore } from "../../stores/use-session-store";
 import { useChatStore } from "../../stores/use-chat-store";
 import { useNotificationStore } from "../../stores/use-notification-store";
 import { useRollbackStore } from "../../stores/use-rollback-store";
-import { useTierStore } from "../../stores/use-tier-store";
+import { useForkDialogStore } from "../../stores/use-fork-dialog-store";
+import { useClipboard } from "./preview/use-clipboard";
 
 const EMPTY_MSGS: never[] = [];
 import { apiClient } from "../../lib/api-client";
-import { insertAfterPinned } from "../../stores/use-session-store";
 import { createLogger } from "../../../shared/lib/logger";
-import type { SessionMeta } from "../../types";
 import type { TreeEntry } from "@dyyz1993/pi-coding-agent";
 import {
   MessageBubble,
@@ -33,87 +35,6 @@ import {
 import type { ChatMessage, ContentBlock } from "../../types";
 import type { ModifiedFile } from "../../stores/use-rollback-store";
 import { getCustomTypeIcon } from "./tool-icon-map";
-
-const FILE_TOOLS = new Set(["edit", "write", "Edit", "Write"]);
-
-function extractFileChanges(messages: ChatMessage[]): ModifiedFile[] {
-  const seen = new Map<
-    string,
-    { status: ModifiedFile["status"]; details: string; addedLines: number; removedLines: number }
-  >();
-
-  for (const msg of messages) {
-    for (const block of msg.content) {
-      if (block.type !== "toolExecution") continue;
-      const tb = block as Extract<ContentBlock, { type: "toolExecution" }>;
-      if (!FILE_TOOLS.has(tb.toolName)) continue;
-      try {
-        const args: unknown = JSON.parse(tb.args || "{}");
-        const filePath =
-          typeof args === "object" && args !== null && "path" in args
-            ? ((args as Record<string, unknown>).path as string | undefined)
-            : undefined;
-        if (!filePath || typeof filePath !== "string") continue;
-        const status = tb.toolName.toLowerCase() === "write" ? "added" : "modified";
-        let details = "";
-        let addedLines = 0;
-        let removedLines = 0;
-        if (status === "added" && typeof args === "object" && args !== null) {
-          const content = (args as Record<string, unknown>).content as string | undefined;
-          if (content) {
-            const lines = content.split("\n");
-            addedLines = lines.length;
-            const shown = lines
-              .slice(0, 30)
-              .map((l) => `+ ${l}`)
-              .join("\n");
-            details =
-              lines.length > 30 ? `${shown}\n... (+${lines.length - 30} more lines)` : shown;
-          }
-        } else if (status === "modified" && typeof args === "object" && args !== null) {
-          const oldContent = (args as Record<string, unknown>).oldContent as string | undefined;
-          const newContent = (args as Record<string, unknown>).newContent as string | undefined;
-          if (oldContent !== undefined && newContent !== undefined) {
-            const oldLines = oldContent.split("\n");
-            const newLines = newContent.split("\n");
-            removedLines = oldLines.length;
-            addedLines = newLines.length;
-            const maxOld = oldLines
-              .slice(0, 20)
-              .map((l) => `- ${l}`)
-              .join("\n");
-            const maxNew = newLines
-              .slice(0, 20)
-              .map((l) => `+ ${l}`)
-              .join("\n");
-            const oldTrunc =
-              oldLines.length > 20 ? `\n... (${oldLines.length - 20} more lines)` : "";
-            const newTrunc =
-              newLines.length > 20 ? `\n... (${newLines.length - 20} more lines)` : "";
-            details = `${maxOld}${oldTrunc}\n---\n${maxNew}${newTrunc}`;
-          } else {
-            details = `参数: ${JSON.stringify(args).slice(0, 500)}`;
-          }
-        }
-        if (!seen.has(filePath)) {
-          seen.set(filePath, { status, details, addedLines, removedLines });
-        }
-      } catch {
-        // args not valid JSON, skip
-      }
-    }
-  }
-
-  return Array.from(seen.entries()).map(([path, data], idx) => ({
-    path,
-    status: data.status,
-    turnIndex: idx,
-    entryId: "",
-    details: data.details || undefined,
-    addedLines: data.addedLines || undefined,
-    removedLines: data.removedLines || undefined,
-  }));
-}
 
 const log = createLogger("chat");
 
@@ -127,36 +48,36 @@ interface MessageCardProps {
 const ROLE_CONFIG = {
   user: {
     icon: User,
-    color: "text-blue-400/80",
-    barColor: "border-l-blue-500/60",
-    bgColor: "bg-blue-500/[0.03]",
-    altBarColor: "border-l-blue-400/45",
-    altBgColor: "bg-blue-400/[0.02]",
+    color: "text-status-info/80",
+    barColor: "border-l-status-info/60",
+    bgColor: "bg-status-info/[0.03]",
+    altBarColor: "border-l-status-info/40",
+    altBgColor: "bg-status-info/[0.02]",
   },
   assistant: {
     icon: Bot,
-    color: "text-emerald-400/70",
-    barColor: "border-l-emerald-500/50",
-    bgColor: "bg-emerald-500/[0.03]",
-    altBarColor: "border-l-emerald-400/35",
-    altBgColor: "bg-emerald-400/[0.02]",
+    color: "text-status-success/70",
+    barColor: "border-l-status-success/50",
+    bgColor: "bg-status-success/[0.03]",
+    altBarColor: "border-l-status-success/30",
+    altBgColor: "bg-status-success/[0.02]",
   },
   compactionSummary: {
     icon: Archive,
-    color: "text-cyan-400/70",
-    barColor: "border-l-cyan-500/50",
-    bgColor: "bg-cyan-500/[0.03]",
-    altBarColor: "border-l-cyan-400/35",
-    altBgColor: "bg-cyan-400/[0.02]",
+    color: "text-semantic-tool/70",
+    barColor: "border-l-semantic-tool/50",
+    bgColor: "bg-semantic-tool/[0.03]",
+    altBarColor: "border-l-semantic-tool/30",
+    altBgColor: "bg-semantic-tool/[0.02]",
   },
 };
 
 const ENTRY_DEFAULT = {
-  barColor: "border-l-yellow-500/50",
-  labelColor: "text-yellow-400/70",
-  bgColor: "bg-yellow-500/[0.04]",
-  altBarColor: "border-l-yellow-400/35",
-  altBgColor: "bg-yellow-400/[0.02]",
+  barColor: "border-l-status-warning/50",
+  labelColor: "text-status-warning/70",
+  bgColor: "bg-status-warning/[0.04]",
+  altBarColor: "border-l-status-warning/30",
+  altBgColor: "bg-status-warning/[0.02]",
 };
 
 function formatTime(ts: number): string {
@@ -237,6 +158,24 @@ export const MessageCard = memo(function MessageCard({
     );
   }
 
+  if (message.role === "error") {
+    const textBlock = message.content.find(
+      (b): b is Extract<typeof b, { type: "text" }> => b.type === "text",
+    );
+    const fullText = textBlock?.text ?? "Unknown error";
+    const lines = fullText.split("\n");
+    const title = lines[0];
+    const detail = lines.slice(1).join("\n").trim();
+    return (
+      <ErrorMessageCard
+        message={message}
+        title={title}
+        detail={detail}
+        stopReason={message.stopReason}
+      />
+    );
+  }
+
   if (isCompaction) {
     const compactionBlock = message.content.find(
       (b): b is Extract<typeof b, { type: "compactionSummary" }> => b.type === "compactionSummary",
@@ -262,7 +201,7 @@ export const MessageCard = memo(function MessageCard({
             {t("contextCompaction")}
           </span>
           {compactionBlock?.tokensBefore != null && (
-            <span className="text-[10px] text-gray-400 dark:text-gray-600">
+            <span className="text-[10px] text-text-tertiary dark:text-text-secondary">
               {Math.round(compactionBlock.tokensBefore / 1000)}k tokens
             </span>
           )}
@@ -272,19 +211,21 @@ export const MessageCard = memo(function MessageCard({
                 e.stopPropagation();
                 toggleCollapse(message.id);
               }}
-              className="p-0.5 text-gray-600 hover:text-gray-300 transition-colors"
+              className="p-0.5 text-text-secondary hover:text-text-secondary transition-colors"
               title={isCollapsed ? t("expand") : t("collapse")}
             >
               <ChevronDown
                 className={`w-3 h-3 transition-transform ${isCollapsed ? "" : "-rotate-90"}`}
               />
             </button>
-            <span className="text-[10px] text-gray-400 dark:text-gray-600">{timeStr}</span>
+            <span className="text-[10px] text-text-tertiary dark:text-text-secondary">
+              {timeStr}
+            </span>
           </div>
         </div>
         {isCollapsed ? (
           <div
-            className={`relative z-20 border-l-[3px] ${roleCfg.barColor} px-3 py-1 text-xs text-gray-400 dark:text-gray-500 italic leading-relaxed`}
+            className={`relative z-20 border-l-[3px] ${roleCfg.barColor} px-3 py-1 text-xs text-text-tertiary italic leading-relaxed`}
           >
             {firstLine}
           </div>
@@ -333,14 +274,14 @@ export const MessageCard = memo(function MessageCard({
   return (
     <div
       data-msg-card-id={message.id}
-      className={`group/msgcard relative w-full py-1.5 transition-colors overflow-hidden ${isSelected ? "bg-red-500/[0.06]" : bgColor}`}
+      className={`group/msgcard relative w-full py-1.5 transition-colors overflow-hidden ${isSelected ? "bg-status-error/[0.06]" : bgColor}`}
     >
       {isSelected && (
-        <div className="absolute inset-0 bg-red-500/15 pointer-events-none z-10 rounded-sm" />
+        <div className="absolute inset-0 bg-status-error/15 pointer-events-none z-10 rounded-sm" />
       )}
       {/* Header: checkbox + label + timestamp */}
       <div
-        className={`relative z-20 flex items-center gap-2 px-3 h-5 select-none border-l-[3px] ${isSelected ? "border-l-red-500" : barColor}`}
+        className={`relative z-20 flex items-center gap-2 px-3 h-5 select-none border-l-[3px] ${isSelected ? "border-l-status-error" : barColor}`}
       >
         {!isEntry && (
           <input
@@ -348,7 +289,7 @@ export const MessageCard = memo(function MessageCard({
             checked={isSelected}
             onChange={() => toggleMessageSelection(message.id)}
             onClick={(e) => e.stopPropagation()}
-            className="w-3 h-3 rounded border border-gray-400 dark:border-gray-600 accent-emerald-500 shrink-0 cursor-pointer"
+            className="w-3 h-3 rounded border border-border-secondary accent-status-success shrink-0 cursor-pointer"
           />
         )}
 
@@ -360,31 +301,28 @@ export const MessageCard = memo(function MessageCard({
         )}
 
         <div className="flex items-center gap-0.5 ml-auto shrink-0">
-          {(isAssistant || isUser) && !isEntry && (
-            <HeaderActions message={message} isUserCard={isUser} />
-          )}
+          {isUser && !isEntry && <HeaderActions message={message} isUserCard={isUser} />}
           {(isAssistant || isUser || isEntry) && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 handleToggleCollapse();
               }}
-              className="p-0.5 text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
-              title={isCollapsed ? t("expand") : t("collapse")}
+              className="p-0.5 text-text-tertiary dark:text-text-secondary hover:text-text-primary dark:hover:text-text-secondary transition-colors"
             >
               <ChevronDown
                 className={`w-3 h-3 transition-transform ${isCollapsed ? "" : "-rotate-90"}`}
               />
             </button>
           )}
-          <span className="text-[10px] text-gray-400 dark:text-gray-600">{timeStr}</span>
+          <span className="text-[10px] text-text-tertiary dark:text-text-secondary">{timeStr}</span>
         </div>
       </div>
 
       {/* Content */}
       {isCollapsed ? (
         <div
-          className={`relative z-20 border-l-[3px] ${isSelected ? "border-l-red-500" : barColor} px-3 py-1 text-xs text-gray-400 dark:text-gray-500 italic leading-relaxed`}
+          className={`relative z-20 border-l-[3px] ${isSelected ? "border-l-status-error" : barColor} px-3 py-1 text-xs text-text-tertiary italic leading-relaxed`}
         >
           {message.content
             .filter((b) => b.type === "text")
@@ -410,6 +348,15 @@ const HeaderActions = memo(function HeaderActions({
 }) {
   const { t } = useTranslation("chat");
   const sessionId = useSessionStore((s) => s.activeSessionId);
+  const isSessionStreaming = useSessionStore(
+    useCallback(
+      (s: { sessionStatusMap: Record<string, import("../../types").SessionStatus> }) => {
+        const status = sessionId ? s.sessionStatusMap[sessionId] : undefined;
+        return status === "streaming" || status === "compacting" || status === "retrying";
+      },
+      [sessionId],
+    ),
+  );
   const messages = useChatStore((s) =>
     sessionId ? s.messagesBySession[sessionId] || EMPTY_MSGS : EMPTY_MSGS,
   );
@@ -490,39 +437,19 @@ const HeaderActions = memo(function HeaderActions({
   );
 
   const findTurnBoundary = useCallback((entryId: string, entries: TreeEntry[]): string | null => {
-    const byId = new Map(entries.map((e) => [e.id, e]));
-
-    const findAncestorMessage = (start: TreeEntry): TreeEntry | null => {
-      let cur = start;
-      while (cur.parentId) {
-        const parent = byId.get(cur.parentId);
-        if (!parent) return null;
-        if (parent.type === "message") return parent;
-        cur = parent;
+    // The backend's navigateTree handles the parentId jump for all message types
+    // (user, assistant, etc.), so the frontend just passes the clicked entryId directly.
+    // However, if this is the FIRST user message entry in the tree, rolling back would
+    // navigate to before any conversation content exists, effectively clearing everything.
+    // Return null to trigger the first-message guard.
+    const entry = entries.find((e) => e.id === entryId);
+    if (entry && entry.type === "message" && entry.label === "user") {
+      const userEntries = entries.filter((e) => e.type === "message" && e.label === "user");
+      if (userEntries.length > 0 && userEntries[0].id === entryId) {
+        return null;
       }
-      return null;
-    };
-
-    const start = byId.get(entryId);
-    if (!start) return null;
-
-    const startMsg = start.type === "message" ? start : findAncestorMessage(start);
-    if (!startMsg) return null;
-
-    if (startMsg.label === "user") {
-      const gp = findAncestorMessage(startMsg);
-      return gp ? (gp.parentId ?? null) : (startMsg.parentId ?? null);
     }
-
-    if (startMsg.label === "assistant") {
-      const userMsg = findAncestorMessage(startMsg);
-      if (!userMsg || userMsg.label !== "user") return null;
-      const grandParent = findAncestorMessage(userMsg);
-      if (!grandParent) return null;
-      return grandParent.parentId ?? null;
-    }
-
-    return null;
+    return entryId;
   }, []);
 
   const resolveRollbackTarget = useCallback(async (): Promise<{
@@ -563,59 +490,12 @@ const HeaderActions = memo(function HeaderActions({
     const tree = await fetchTree();
     const entryId = await resolveEntryId(tree);
     if (!sessionId || !entryId) return;
-    const result = await apiClient
-      .call("agent.fork", { sessionId, entryId, position: "at" })
-      .catch((err) => {
-        console.warn("[MessageCard] fork failed:", err);
-        return undefined;
-      });
-    if (!result || result.cancelled || !result.newSessionId || !result.newSessionFile) return;
-    const state = useSessionStore.getState();
-    const activeTab = state.projectTabs.find((t: { id: string }) => t.id === state.activeProjectId);
-    if (!activeTab) return;
-
-    // Fetch original session name for the "fork:" prefix
-    const allSessions = state.sessionsByProject[activeTab.path] ?? [];
-    const originalSession = allSessions.find((s) => s.sessionId === sessionId);
-    const originalName = originalSession
-      ? originalSession.name || originalSession.firstMessage || ""
-      : "";
-
-    const now = Date.now();
-    const forkedSession: SessionMeta = {
-      sessionId: result.newSessionId,
-      name: originalName ? `fork: ${originalName}` : "",
-      sessionPath: result.newSessionFile,
-      projectPath: activeTab.path,
-      parentSessionPath: null,
-      messageCount: 0,
-      firstMessage: "",
-      createdAt: now,
-      updatedAt: now,
-      status: "idle",
-    };
-
-    useSessionStore.setState((s) => ({
-      sessionsByProject: {
-        ...s.sessionsByProject,
-        [activeTab.path]: insertAfterPinned(
-          s.sessionsByProject[activeTab.path] || [],
-          forkedSession,
-        ),
-      },
-    }));
-
-    state.setActiveSession(result.newSessionId);
-    useChatStore.getState().loadSessionMessages(result.newSessionId, { force: true });
-
-    // Inherit current tier config
-    const currentTier = useTierStore.getState().currentTier;
-    if (currentTier) {
-      useTierStore.getState().switchToTier(currentTier, result.newSessionId);
-    }
-
-    pushNotification({ message: t("messageCard.forked"), level: "info" });
-  }, [sessionId, fetchTree, resolveEntryId, pushNotification]);
+    useForkDialogStore.getState().openDialog({
+      sessionId,
+      entryId,
+      source: "messageCard",
+    });
+  }, [sessionId, fetchTree, resolveEntryId]);
 
   const requestRollback = useCallback(
     async (mode: "message" | "withFiles") => {
@@ -643,6 +523,26 @@ const HeaderActions = memo(function HeaderActions({
           });
           return;
         }
+        if (message.role === "user") {
+          const currentInput = useChatStore.getState().inputText;
+          if (currentInput.trim()) {
+            const sid = useSessionStore.getState().activeSessionId;
+            if (sid) {
+              try {
+                localStorage.setItem(`pi-draft:${sid}`, currentInput);
+              } catch {
+                /* ignore storage errors */
+              }
+            }
+          }
+          const userText = message.content
+            .filter((b): b is Extract<ContentBlock, { type: "text" }> => b.type === "text")
+            .map((b) => b.text)
+            .join("\n");
+          if (userText) {
+            useChatStore.getState().setInputText(userText);
+          }
+        }
         const emptyPreview = {
           restored: [] as string[],
           deleted: [] as string[],
@@ -651,33 +551,132 @@ const HeaderActions = memo(function HeaderActions({
         };
         const preview =
           mode === "withFiles"
-            ? (() => {
-                // 找到 targetId 对应的消息位置，从那里到当前消息
-                const targetIdx = result.targetId
-                  ? messages.findIndex((m) => m.entryId === result.targetId)
-                  : -1;
-                const currentIdx = messages.findIndex((m) => m.id === message.id);
-                // targetId 是回滚目标节点，它之后的消息到当前消息就是要被撤销的范围
-                const fromIdx = targetIdx >= 0 ? targetIdx + 1 : 0;
-                const toIdx = currentIdx >= 0 ? currentIdx + 1 : messages.length;
-                const slice = messages.slice(fromIdx, toIdx);
-                const fileOps = extractFileChanges(slice.length > 0 ? slice : messages);
-                log.info("extracted file changes", {
-                  fileCount: fileOps.length,
-                  fromIdx,
-                  toIdx,
-                  sliceLen: slice.length,
-                });
-                return {
-                  ...emptyPreview,
-                  files: fileOps,
-                  summary: {
-                    totalFiles: fileOps.length,
-                    added: fileOps.filter((f) => f.status === "added").length,
-                    modified: fileOps.filter((f) => f.status === "modified").length,
-                    deleted: 0,
-                  },
-                };
+            ? await (async () => {
+                try {
+                  // Let the backend resolve fromEntryId from toUserMsgEntryId.
+                  // Previously the frontend set fromEntryId to the snapshot
+                  // BEFORE the target turn, but getModifiedFiles uses inclusive
+                  // semantics for fromEntryId — this included one extra turn's
+                  // file changes.  By only passing toUserMsgEntryId the backend
+                  // correctly resolves fromEntryId to the target turn's own
+                  // snapshot.
+                  const modResponse = await apiClient.call("agent.getModifiedFiles", {
+                    sessionId,
+                    toUserMsgEntryId: result.targetId ?? message.entryId ?? undefined,
+                  });
+                  log.info("rollback getModifiedFiles", {
+                    sessionId,
+                    targetId: result.targetId,
+                    messageEntryId: message.entryId,
+                    fileCount: Array.isArray(modResponse)
+                      ? (modResponse as unknown[]).length
+                      : ((modResponse as { files?: unknown[] }).files ?? []).length,
+                    resolvedFromEntryId: Array.isArray(modResponse)
+                      ? null
+                      : (modResponse as { resolvedFromEntryId?: unknown }).resolvedFromEntryId,
+                  });
+                  // Defensive: handle both { files, resolvedFromEntryId } and raw array formats
+                  const isArray = Array.isArray(modResponse);
+                  const rawFiles = isArray
+                    ? (modResponse as unknown[])
+                    : ((modResponse as { files?: unknown[] }).files ?? []);
+                  const resolvedFromEntryId = isArray
+                    ? null
+                    : ((modResponse as { resolvedFromEntryId?: string | null })
+                        .resolvedFromEntryId ?? null);
+                  const files: ModifiedFile[] = await Promise.all(
+                    rawFiles.map(async (raw) => {
+                      const f = raw as {
+                        path: string;
+                        status: "added" | "modified" | "deleted";
+                        turnIndex: number;
+                        entryId: string;
+                      };
+                      try {
+                        // Compare rollback target (fromEntryId) against
+                        // the LATEST file state (no toEntryId → backend uses
+                        // lastCommittedTreeHash / working tree).
+                        const diffResult = await apiClient.call("agent.getFileDiff", {
+                          sessionId,
+                          filePath: f.path,
+                          fromEntryId: resolvedFromEntryId ?? undefined,
+                        });
+                        const diff = diffResult as {
+                          oldContent?: string | null;
+                          newContent?: string | null;
+                          unifiedDiff?: string;
+                        } | null;
+                        if (diff) {
+                          const oldLines = diff.oldContent?.split("\n").length ?? 0;
+                          const newLines = diff.newContent?.split("\n").length ?? 0;
+                          // Count actual added/removed lines from unifiedDiff for accuracy.
+                          // unifiedDiff is oldContent→newContent (rollback-target→current),
+                          // but rollback preview shows current→rollback-target (swapped),
+                          // so we swap the counts: "+" lines (current has) → "removed",
+                          // "-" lines (current lacks) → "added back".
+                          const diffStr = diff.unifiedDiff ?? "";
+                          const diffAdded = diffStr
+                            .split("\n")
+                            .filter((l) => l.startsWith("+") && !l.startsWith("++")).length;
+                          const diffRemoved = diffStr
+                            .split("\n")
+                            .filter((l) => l.startsWith("-") && !l.startsWith("--")).length;
+                          return {
+                            path: f.path,
+                            status: f.status,
+                            turnIndex: f.turnIndex,
+                            entryId: f.entryId,
+                            details: diff.unifiedDiff ?? undefined,
+                            oldContent: diff.oldContent,
+                            newContent: diff.newContent,
+                            // Rollback preview: "+" in unifiedDiff = lines in current
+                            // that will disappear (removed); "-" = lines to be restored (added).
+                            addedLines:
+                              f.status === "deleted"
+                                ? newLines
+                                : f.status === "added"
+                                  ? 0
+                                  : diffRemoved,
+                            removedLines:
+                              f.status === "added"
+                                ? newLines
+                                : f.status === "deleted"
+                                  ? oldLines
+                                  : diffAdded,
+                          };
+                        }
+                      } catch {
+                        /* skip diff */
+                      }
+                      return {
+                        path: f.path,
+                        status: f.status,
+                        turnIndex: f.turnIndex,
+                        entryId: f.entryId,
+                      };
+                    }),
+                  );
+                  const restored = files
+                    .filter((f) => f.status === "modified" || f.status === "added")
+                    .map((f) => f.path);
+                  const deleted = files.filter((f) => f.status === "deleted").map((f) => f.path);
+                  return {
+                    restored,
+                    deleted,
+                    files,
+                    summary: {
+                      totalFiles: files.length,
+                      added: files.filter((f) => f.status === "added").length,
+                      modified: files.filter((f) => f.status === "modified").length,
+                      deleted: deleted.length,
+                    },
+                  };
+                } catch (err) {
+                  log.warn("getModifiedFiles failed, using empty preview", {
+                    err: err instanceof Error ? err.message : String(err),
+                  });
+                  return emptyPreview;
+                }
               })()
             : emptyPreview;
         log.info("opening rollback overlay", {
@@ -708,18 +707,23 @@ const HeaderActions = memo(function HeaderActions({
 
   return (
     <>
-      <ActionBtn icon={GitBranch} title={t("fork")} onClick={handleFork} />
+      <ActionBtn
+        icon={GitFork}
+        title={t("fork")}
+        onClick={handleFork}
+        disabled={isSessionStreaming}
+      />
       <ActionBtn
         icon={Undo2}
         title={t("messageCard.rollbackMessage")}
         onClick={() => requestRollback("message")}
-        disabled={rollingBackRef.current}
+        disabled={rollingBackRef.current || isSessionStreaming}
       />
       <ActionBtn
         icon={RotateCcw}
         title={t("messageCard.rollbackMessageAndCode")}
         onClick={() => requestRollback("withFiles")}
-        disabled={rollingBackRef.current}
+        disabled={rollingBackRef.current || isSessionStreaming}
       />
     </>
   );
@@ -749,7 +753,7 @@ const ActionBtn = memo(function ActionBtn({
       }}
       title={title}
       disabled={disabled}
-      className={`p-1 rounded transition-colors ${disabled ? "text-gray-400 dark:text-gray-700 cursor-not-allowed" : active ? activeClassName : "text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50"}`}
+      className={`p-1 rounded transition-colors ${disabled ? "text-text-tertiary dark:text-text-secondary cursor-not-allowed" : active ? activeClassName : "text-text-tertiary dark:text-text-secondary hover:text-text-primary dark:hover:text-text-secondary hover:bg-surface-hover/50 dark:hover:bg-surface-hover/50"}`}
     >
       {disabled ? (
         <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -759,3 +763,73 @@ const ActionBtn = memo(function ActionBtn({
     </button>
   );
 });
+
+function ErrorMessageCard({
+  message,
+  title,
+  detail,
+  stopReason,
+}: {
+  message: ChatMessage;
+  title: string;
+  detail: string;
+  stopReason?: string | null;
+}) {
+  const { copied, copy } = useClipboard(2000);
+  const [expanded, setExpanded] = useState(false);
+  const hasDetail = detail.length > 0;
+
+  const handleCopy = useCallback(() => {
+    const copyText = [title, detail, stopReason ? `stopReason: ${stopReason}` : ""]
+      .filter(Boolean)
+      .join("\n");
+    copy(copyText);
+  }, [title, detail, stopReason, copy]);
+
+  return (
+    <div data-msg-card-id={message.id} className="relative w-full py-1.5">
+      <div className="mx-3 rounded-lg bg-status-error/10 border border-status-error/20">
+        <div className="flex items-start gap-2 px-3 py-2">
+          <AlertTriangle className="w-4 h-4 shrink-0 text-status-error mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-status-error font-medium">{title}</span>
+              {stopReason && (
+                <span className="text-[10px] text-status-error/60 bg-status-error/10 px-1.5 py-0.5 rounded">
+                  {stopReason}
+                </span>
+              )}
+            </div>
+            {hasDetail && (
+              <button
+                onClick={() => setExpanded(!expanded)}
+                className="text-xs text-status-error/70 hover:text-status-error mt-0.5 flex items-center gap-1 cursor-pointer"
+              >
+                <ChevronDown
+                  className={`w-3 h-3 transition-transform ${expanded ? "rotate-180" : ""}`}
+                />
+                {expanded ? "收起详情" : "查看详情"}
+              </button>
+            )}
+            {hasDetail && expanded && (
+              <pre className="mt-1.5 text-xs text-status-error/80 bg-status-error/5 rounded px-2 py-1.5 whitespace-pre-wrap break-all max-h-40 overflow-y-auto">
+                {detail}
+              </pre>
+            )}
+          </div>
+          <button
+            onClick={handleCopy}
+            className="shrink-0 p-1 hover:bg-status-error/20 rounded transition-colors"
+            title="复制错误信息"
+          >
+            {copied ? (
+              <Check className="w-3.5 h-3.5 text-status-success" />
+            ) : (
+              <Copy className="w-3.5 h-3.5 text-status-error/60" />
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

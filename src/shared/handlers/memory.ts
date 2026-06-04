@@ -1,12 +1,15 @@
 import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { HandlerOptions, R } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
-import type { MemoryFile } from "../modules/memory";
+import type { MemoryFile, MemoryStatusResult } from "../modules/memory";
 import { readdir, readFile, stat } from "fs/promises";
 import { existsSync } from "fs";
 import { join, resolve } from "path";
 import { homedir } from "os";
 import { getProcessManager } from "./agent";
+import { createLogger } from "../lib/logger";
+
+const log = createLogger("mcp");
 
 function encodeCwd(cwd: string): string {
   return "--" + cwd.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-") + "--";
@@ -66,7 +69,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
           size: s.size,
         });
       } catch (err) {
-        console.warn("[memory] failed to parse memory file:", filePath, err);
+        log.warn("failed to parse memory file", { filePath, error: String(err) });
       }
     }
 
@@ -78,7 +81,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       try {
         entrypointContent = await readFile(entrypointPath, "utf-8");
       } catch (err) {
-        console.warn("[memory] failed to read MEMORY.md:", err);
+        log.warn("failed to read MEMORY.md", { error: String(err) });
       }
     }
 
@@ -100,7 +103,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
           } | null;
           if (result) return { ...result, memoryDir: result.memoryDir ?? "" };
         } catch (err) {
-          console.warn("[memory] channel call failed:", err);
+          log.warn("channel call failed", { error: String(err) });
         }
       }
     }
@@ -136,15 +139,50 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     return { ok: true };
   });
 
-  r("memory.markIrrelevant", async (params) => {
+  r("memory.getStatus", async (params) => {
     const manager = getProcessManager();
-    if (manager && manager.hasSession(params.sessionId)) {
-      await manager.callChannel(params.sessionId, "memory", "memory.markIrrelevant", {
-        query: params.query,
-        selectedFiles: params.selectedFiles,
+    if (manager && params.sessionId && manager.hasSession(params.sessionId)) {
+      try {
+        const result = (await manager.callChannel(
+          params.sessionId,
+          "memory",
+          "memory.getStatus",
+          {},
+        )) as MemoryStatusResult | null;
+        if (result) return result;
+      } catch (err) {
+        console.warn("[memory] getStatus channel call failed:", err);
+      }
+    }
+    return {
+      skipRules: { builtin: [], custom: [] },
+      guardRules: { builtin: [], custom: [] },
+      excludeKeywords: [],
+      recentQueries: [],
+      dream: { lastRunAt: null },
+    };
+  });
+
+  r("memory.removeRule", async (params) => {
+    const manager = getProcessManager();
+    if (manager && params.sessionId && manager.hasSession(params.sessionId)) {
+      await manager.callChannel(params.sessionId, "memory", "memory.removeRule", {
+        rule: params.rule,
+        excludeKeyword: params.excludeKeyword,
       });
     }
+    return { ok: true };
+  });
 
+  r("memory.addRule", async (params) => {
+    const manager = getProcessManager();
+    if (manager && params.sessionId && manager.hasSession(params.sessionId)) {
+      await manager.callChannel(params.sessionId, "memory", "memory.addRule", {
+        pattern: params.pattern,
+        mode: params.mode,
+        action: params.action,
+      });
+    }
     return { ok: true };
   });
 }

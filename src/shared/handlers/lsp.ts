@@ -5,6 +5,9 @@ import { readFile } from "fs/promises";
 import { existsSync } from "fs";
 import { getProcessManager } from "./agent";
 import type { LspDiagnosticsMode, LspServerStatus } from "../modules/lsp";
+import { createLogger } from "../lib/logger";
+
+const log = createLogger("lsp");
 
 export function register(server: RPCServer, _options: HandlerOptions): void {
   const r = createRegister(server);
@@ -44,19 +47,30 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
       if (pm.hasSession(params.sessionId)) {
         try {
-          const result = await pm.callChannel(params.sessionId, "lsp", "getStatus", {});
-          const servers: LspServerStatus[] = result.servers.map(
-            (s: { name: string; fileTypes?: string[]; state: string; reason: string }) => ({
-              name: s.name,
-              fileTypes: s.fileTypes,
-              state: s.state as LspServerStatus["state"],
-              reason: s.reason,
-            }),
+          const raw: unknown = await pm.callChannel(
+            params.sessionId,
+            "lsp" as string,
+            "getStatus",
+            {},
           );
+          const result = raw as {
+            servers: Array<{ name: string; fileTypes?: string[]; state: string; reason: string }>;
+            state: string;
+            mode: string;
+          };
+          const servers: LspServerStatus[] = result.servers.map((s) => ({
+            name: s.name as string,
+            fileTypes: s.fileTypes as string[] | undefined,
+            state: s.state as LspServerStatus["state"],
+            reason: (s.reason as string) ?? "",
+          }));
           const state = result.state as "inactive" | "starting" | "ready" | "error";
           return { state, servers, mode: result.mode as LspDiagnosticsMode };
-        } catch {
-          // agent process alive but LSP channel not ready yet
+        } catch (e) {
+          log.debug("lsp.status: LSP channel not ready, falling back to JSONL", {
+            sessionId: params.sessionId,
+            error: String(e),
+          });
         }
       }
     }
@@ -97,6 +111,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
             }
           }
         } catch {
+          log.debug("lsp.status: skipping malformed JSONL line", { line });
           continue;
         }
         if (lastStatus) break;
@@ -107,7 +122,11 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
         servers: (lastStatus?.servers ?? []) as unknown as LspServerStatus[],
         mode: lastMode as LspDiagnosticsMode,
       };
-    } catch {
+    } catch (e) {
+      log.debug("lsp.status: failed to read session file, returning inactive", {
+        sessionPath,
+        error: String(e),
+      });
       return { state: "inactive" as const, servers: [], mode: "agent_end" as const };
     }
   });
@@ -116,6 +135,8 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const { sessionId, mode } = params as { sessionId: string; mode: LspDiagnosticsMode };
     const pm = getProcessManager();
     if (!pm) throw new Error("No process manager available");
-    return pm.callChannel(sessionId, "lsp", "lsp.setMode", { mode });
+    return pm.callChannel(sessionId, "lsp", "lsp.setMode", {
+      mode,
+    }) as Promise<{ ok: boolean; mode: LspDiagnosticsMode }>;
   });
 }

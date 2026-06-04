@@ -1,6 +1,12 @@
 {
   "light": "Light",
   "dark": "Dark",
+  "nord": "Nord",
+  "solarized": "Solarized",
+  "warmDark": "Warm Dark",
+  "rose": "Rosé Pine",
+  "latte": "Latte",
+  "sunset": "Sunset",
   "system": "System",
   "toggle": "Theme: {{theme}} (click to toggle)",
   "switchLabel": "Theme:",

@@ -24,20 +24,18 @@ export const UrlCard = memo(function UrlCard({ details }: { details: PreviewDeta
 
   if (!showIframe) {
     return (
-      <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700/40 bg-white dark:bg-gray-900/60">
-        <div className="px-3 py-1.5 flex items-center gap-2 text-xs border-b border-gray-200 dark:border-gray-700/30">
-          <Globe className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400 shrink-0" />
-          <span className="text-gray-800 dark:text-gray-300 truncate min-w-0">
-            {details.title ?? src}
-          </span>
+      <div className="rounded-lg overflow-hidden border border-border-secondary/40 bg-bg-elevated bg-surface-code/60">
+        <div className="px-3 py-1.5 flex items-center gap-2 text-xs border-b border-border-secondary/30">
+          <Globe className="w-3.5 h-3.5 text-status-info shrink-0" />
+          <span className="text-text-primary truncate min-w-0">{details.title ?? src}</span>
         </div>
         <button
           onClick={() => setShowIframe(true)}
-          className="w-full px-3 py-8 flex flex-col items-center gap-2 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors"
+          className="w-full px-3 py-8 flex flex-col items-center gap-2 text-xs text-text-tertiary hover:text-text-primary hover:bg-surface-dim transition-colors"
         >
-          <Globe className="w-6 h-6 text-blue-400/60 dark:text-blue-400/60" />
+          <Globe className="w-6 h-6 text-status-info/60" />
           <span>{t("clickToLoadPreview")}</span>
-          <span className="text-gray-400 dark:text-gray-600 font-mono text-[10px]">{src}</span>
+          <span className="text-text-tertiary font-mono text-[10px]">{src}</span>
         </button>
       </div>
     );
@@ -52,7 +50,7 @@ export const UrlCard = memo(function UrlCard({ details }: { details: PreviewDeta
           setShowIframe(false);
           setFullscreen(false);
         }}
-        className="p-0.5 rounded text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors"
+        className="p-0.5 rounded text-text-tertiary hover:text-text-primary dark:text-text-tertiary dark:hover:text-text-secondary hover:bg-surface-hover/50 dark:hover:bg-surface-hover/50 transition-colors"
         title={t("reloadTitle")}
       >
         <RefreshCw className="w-3 h-3" />
@@ -60,7 +58,7 @@ export const UrlCard = memo(function UrlCard({ details }: { details: PreviewDeta
       {!fullscreen && (
         <button
           onClick={() => setFullscreen(true)}
-          className="p-0.5 rounded text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors"
+          className="p-0.5 rounded text-text-tertiary hover:text-text-primary dark:text-text-tertiary dark:hover:text-text-secondary hover:bg-surface-hover/50 dark:hover:bg-surface-hover/50 transition-colors"
           title={t("fullscreenTitle")}
         >
           <Maximize2 className="w-3 h-3" />
@@ -68,7 +66,7 @@ export const UrlCard = memo(function UrlCard({ details }: { details: PreviewDeta
       )}
       <button
         onClick={() => copy(displayUrl)}
-        className="p-0.5 rounded text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors"
+        className="p-0.5 rounded text-text-tertiary hover:text-text-primary dark:text-text-tertiary dark:hover:text-text-secondary hover:bg-surface-hover/50 dark:hover:bg-surface-hover/50 transition-colors"
         title={t("copyLinkTitle")}
       >
         {copied ? (
@@ -79,7 +77,7 @@ export const UrlCard = memo(function UrlCard({ details }: { details: PreviewDeta
       </button>
       <button
         onClick={() => window.open(displayUrl, "_blank", "noopener,noreferrer")}
-        className="p-0.5 rounded text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 transition-colors"
+        className="p-0.5 rounded text-text-tertiary hover:text-text-primary dark:text-text-tertiary dark:hover:text-text-secondary hover:bg-surface-hover/50 dark:hover:bg-surface-hover/50 transition-colors"
         title={t("openInNewWindowTitle")}
       >
         <ExternalLink className="w-3 h-3" />
@@ -87,7 +85,7 @@ export const UrlCard = memo(function UrlCard({ details }: { details: PreviewDeta
       {fullscreen && (
         <button
           onClick={() => setFullscreen(false)}
-          className="p-2 rounded text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-gray-700/50 transition-colors ml-1"
+          className="p-2 rounded text-text-secondary hover:text-text-primary dark:text-text-tertiary dark:hover:text-text-primary hover:bg-surface-hover dark:hover:bg-surface-hover/50 transition-colors ml-1"
           title={t("closeEscTitle")}
         >
           <X className="w-4 h-4" />
@@ -98,13 +96,13 @@ export const UrlCard = memo(function UrlCard({ details }: { details: PreviewDeta
 
   const header = (
     <div
-      className="px-3 py-1.5 flex items-center gap-2 text-xs border-b border-gray-200 dark:border-gray-700/30"
+      className="px-3 py-1.5 flex items-center gap-2 text-xs border-b border-border-secondary dark:border-border-secondary/30"
       style={
         fullscreen ? { paddingTop: "calc(0.375rem + env(safe-area-inset-top, 0px))" } : undefined
       }
     >
       <Globe className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400 shrink-0" />
-      <span className="text-gray-800 dark:text-gray-300 truncate min-w-0">
+      <span className="text-text-primary dark:text-text-secondary truncate min-w-0">
         {details.title ?? src}
       </span>
       {headerButtons}
@@ -113,7 +111,7 @@ export const UrlCard = memo(function UrlCard({ details }: { details: PreviewDeta
 
   if (fullscreen) {
     return createPortal(
-      <div className="fixed inset-0 z-[200] bg-white dark:bg-black flex flex-col">
+      <div className="fixed inset-0 z-[200] bg-bg-elevated dark:bg-black flex flex-col">
         {header}
         <iframe
           src={displayUrl}
@@ -127,7 +125,7 @@ export const UrlCard = memo(function UrlCard({ details }: { details: PreviewDeta
   }
 
   return (
-    <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700/40 bg-white dark:bg-gray-900/60">
+    <div className="rounded-lg overflow-hidden border border-border-secondary dark:border-border-secondary/40 bg-bg-elevated dark:bg-surface-code/60">
       {header}
       <iframe
         src={displayUrl}

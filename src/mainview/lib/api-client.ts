@@ -9,6 +9,9 @@ import type {
 import type { RPCMethods, RPCEvents } from "../../shared/rpc-schema";
 import { useRpcDebugStore } from "../stores/use-rpc-debug-store";
 import { useAppStore } from "../stores/use-app-store";
+import { createLogger } from "../../shared/lib/logger";
+
+const log = createLogger("gateway");
 
 /**
  * Token 来源优先级：
@@ -91,7 +94,16 @@ class APIClientImpl {
         this._transport = "websocket";
         const wsUrl = this.getWebSocketUrl();
         this.wsTransport = new WebSocketTransport({ url: wsUrl, reconnect: false });
-        await this.wsTransport.connect();
+        const WS_CONNECT_TIMEOUT_MS = 5_000;
+        await Promise.race([
+          this.wsTransport.connect(),
+          new Promise<never>((_, reject) =>
+            setTimeout(
+              () => reject(new Error("WebSocket connect timed out (5s)")),
+              WS_CONNECT_TIMEOUT_MS,
+            ),
+          ),
+        ]);
         this.client = createTypedClient<RPCMethods, RPCEvents>(this.wsTransport);
         this._reconnectDetected = false;
         this._reconnectAttempts = 0;
@@ -144,7 +156,7 @@ class APIClientImpl {
       }
 
       wasConnected = connected;
-    }, 500);
+    }, 2000);
   }
 
   private _scheduleReconnect(): void {
@@ -179,13 +191,22 @@ class APIClientImpl {
         if (this.wsTransport) {
           try {
             this.wsTransport.close();
-          } catch {
-            /* ignore */
+          } catch (e) {
+            log.warn("Failed to close transport during reconnect", { error: String(e) });
           }
         }
 
         this.wsTransport = new WebSocketTransport({ url: freshUrl, reconnect: false });
-        await this.wsTransport.connect();
+        const WS_RECONNECT_TIMEOUT_MS = 5_000;
+        await Promise.race([
+          this.wsTransport.connect(),
+          new Promise<never>((_, reject) =>
+            setTimeout(
+              () => reject(new Error("WebSocket reconnect timed out (5s)")),
+              WS_RECONNECT_TIMEOUT_MS,
+            ),
+          ),
+        ]);
 
         this._reconnectAttempts = 0;
         this.client = createTypedClient<RPCMethods, RPCEvents>(this.wsTransport);
@@ -193,7 +214,11 @@ class APIClientImpl {
         this.setConnectionStatus("connected");
         this.setupReconnectDetection();
         this._reconnectCallback?.();
-      } catch {
+      } catch (e) {
+        log.warn("Reconnect attempt failed", {
+          attempt: this._reconnectAttempts,
+          error: String(e),
+        });
         this._scheduleReconnect();
       }
     }, delay);
@@ -324,7 +349,7 @@ class APIClientImpl {
         payload,
       });
     } catch (err) {
-      console.warn("[api-client] emit failed:", err);
+      log.warn("emit failed", { error: String(err) });
     }
   }
 
@@ -353,8 +378,8 @@ class APIClientImpl {
     if (this.wsTransport) {
       try {
         this.wsTransport.close();
-      } catch {
-        /* ignore */
+      } catch (e) {
+        log.warn("Failed to close transport during destroy", { error: String(e) });
       }
       this.wsTransport = null;
     }

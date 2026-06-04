@@ -22,20 +22,13 @@ import {
 import { useAgentStore, type AgentDetail, type AgentToolInfo } from "../../stores/use-agent-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useLayoutStore } from "../../layouts/use-layout-store";
-import { copyToClipboard } from "../../utils/clipboard";
+import { useClipboard } from "../chat/preview/use-clipboard";
+import { agentColorStyle } from "../../utils/agent-color";
+import { formatFilePath } from "../../lib/format-path";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-const AGENT_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
-  red: { bg: "bg-red-500/15", text: "text-red-400", dot: "bg-red-400" },
-  blue: { bg: "bg-blue-500/15", text: "text-blue-400", dot: "bg-blue-400" },
-  green: { bg: "bg-green-500/15", text: "text-green-400", dot: "bg-green-400" },
-  yellow: { bg: "bg-yellow-500/15", text: "text-yellow-400", dot: "bg-yellow-400" },
-  purple: { bg: "bg-purple-500/15", text: "text-purple-400", dot: "bg-purple-400" },
-  orange: { bg: "bg-orange-500/15", text: "text-orange-400", dot: "bg-orange-400" },
-};
 
 function fieldValue(value: unknown): string {
   if (value === undefined || value === null) return "\u2014";
@@ -137,7 +130,7 @@ function ToolList({ agent, allTools }: { agent: AgentDetail; allTools: AgentTool
               key={tool.name}
               className={`flex items-center gap-2 text-xs px-2 py-1.5 rounded ${
                 isDisallowed
-                  ? "bg-red-500/10 text-red-400"
+                  ? "bg-status-error/10 text-status-error"
                   : isAllowed
                     ? "text-[var(--color-text-primary)]"
                     : "text-[var(--color-text-secondary)] opacity-50"
@@ -146,7 +139,7 @@ function ToolList({ agent, allTools }: { agent: AgentDetail; allTools: AgentTool
               {isDisallowed ? (
                 <Lock className="w-3 h-3 flex-shrink-0" />
               ) : isAllowed ? (
-                <Unlock className="w-3 h-3 flex-shrink-0 text-green-400" />
+                <Unlock className="w-3 h-3 flex-shrink-0 text-status-success" />
               ) : (
                 <Lock className="w-3 h-3 flex-shrink-0 opacity-30" />
               )}
@@ -213,16 +206,11 @@ function HooksList({ agent }: { agent: AgentDetail }) {
 
 function PromptViewer({ agent }: { agent: AgentDetail }) {
   const [expanded, setExpanded] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useClipboard(1500);
 
   const handleCopy = useCallback(() => {
-    copyToClipboard(agent.systemPrompt).then((ok) => {
-      if (ok) {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      }
-    });
-  }, [agent.systemPrompt]);
+    copy(agent.systemPrompt);
+  }, [agent.systemPrompt, copy]);
 
   if (!agent.systemPrompt) {
     return <div className="text-xs text-[var(--color-text-secondary)] opacity-50">{"\u2014"}</div>;
@@ -238,7 +226,11 @@ function PromptViewer({ agent }: { agent: AgentDetail }) {
           onClick={handleCopy}
           className="flex items-center gap-1 text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
         >
-          {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+          {copied ? (
+            <Check className="w-3 h-3 text-status-success" />
+          ) : (
+            <Copy className="w-3 h-3" />
+          )}
           <span>{copied ? "Copied" : "Copy"}</span>
         </button>
         {isLong && (
@@ -403,7 +395,7 @@ export function AgentPanel() {
     );
   }
 
-  const colorStyle = AGENT_COLORS[agent.color ?? ""] ?? null;
+  const cs = agentColorStyle(agent.color);
 
   return (
     <div className="h-full overflow-y-auto">
@@ -427,11 +419,13 @@ export function AgentPanel() {
           <div className="flex items-center gap-2 text-xs">
             <span className="text-[var(--color-text-secondary)] min-w-[80px]">Name:</span>
             <span
-              className={`text-base font-semibold ${colorStyle ? colorStyle.text : "text-[var(--color-text-primary)]"}`}
+              className="text-base font-semibold text-[var(--color-text-primary)]"
+              style={cs ? { color: cs.color } : undefined}
             >
-              {colorStyle && (
+              {cs && (
                 <span
-                  className={`inline-block w-2.5 h-2.5 rounded-full ${colorStyle.dot} mr-1.5`}
+                  className="inline-block w-2.5 h-2.5 rounded-full mr-1.5"
+                  style={{ backgroundColor: cs.color }}
                 />
               )}
               {agent.name}
@@ -456,7 +450,7 @@ export function AgentPanel() {
                 className="text-[var(--color-text-primary)] font-mono text-[11px] truncate"
                 title={agent.filePath}
               >
-                {agent.filePath}
+                {formatFilePath(agent.filePath)}
               </span>
             ) : (
               <span className="text-[var(--color-text-primary)] opacity-50">{"\u2014"}</span>
@@ -473,7 +467,8 @@ export function AgentPanel() {
             {agent.color ? (
               <span className="flex items-center gap-1.5 text-[var(--color-text-primary)]">
                 <span
-                  className={`w-2.5 h-2.5 rounded-full ${colorStyle?.dot ?? "bg-[var(--color-text-secondary)]"}`}
+                  className="w-2.5 h-2.5 rounded-full"
+                  style={{ backgroundColor: cs?.color ?? "var(--color-text-secondary)" }}
                 />
                 {agent.color}
               </span>

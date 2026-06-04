@@ -3,6 +3,9 @@ import {
   type NotificationChannel,
   type GatewayEvent,
 } from "../notification-gateway";
+import { createLogger } from "../../../shared/lib/logger";
+
+const log = createLogger("system");
 
 function shouldShowPwa(event: GatewayEvent): boolean {
   if (!notificationGateway.appVisible) return true;
@@ -40,7 +43,7 @@ const PwaChannel: NotificationChannel = {
         n.close();
       };
     } catch (err) {
-      console.warn("[pwa-channel] notification failed:", err);
+      log.warn("notification failed", { error: String(err) });
     }
   },
 };

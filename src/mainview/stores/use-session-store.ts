@@ -3,6 +3,7 @@ import { persist } from "zustand/middleware";
 import type { SessionMeta, ProjectTab, ContextUsage, SessionStatus } from "../types";
 import { apiClient } from "../lib/api-client";
 import { createLogger } from "../../shared/lib/logger";
+import { useNotificationStore } from "./use-notification-store";
 import { useTierStore } from "./use-tier-store";
 import { useChatStore } from "./use-chat-store";
 import { useAppStore } from "./use-app-store";
@@ -17,10 +18,13 @@ import {
 import { useTurnStore } from "./use-turn-store";
 import { useChatNavStore } from "./use-chat-nav-store";
 import { useRetryStore } from "./use-retry-store";
-import { useSubagentStore } from "./use-subagent-store";
+import { useRetryConfigStore, RETRY_DEFAULTS } from "./use-settings-store";
+import { useSubagentStore, clearSubagentToolNames } from "./use-subagent-store";
+import { useAgentStore } from "./use-agent-store";
 import {
   setupSubscriptions,
   cleanupSession,
+  cleanupSessionLight,
   cleanupSessionData,
   clearSubscriptionState,
   syncTabsToBackend,
@@ -32,6 +36,41 @@ export type { TodoItem, TodoPriority } from "./session-subscriptions";
 
 const log = createLogger("session");
 const perfLog = createLogger("session-perf");
+
+const _statusWatchdogs = new Map<string, ReturnType<typeof setTimeout>>();
+const STATUS_STUCK_TIMEOUT_MS = 5 * 60 * 1000;
+
+function detectEmptyTurnAndInjectError(sessionId: string) {
+  const chat = useChatStore.getState();
+  const msgs = chat.messagesBySession[sessionId] || [];
+  const lastMsg = msgs[msgs.length - 1];
+  if (lastMsg && (lastMsg.role === "user" || lastMsg.role === "custom")) {
+    chat.setMessagesForSession(sessionId, [
+      ...msgs,
+      {
+        id: `error_${Date.now()}`,
+        role: "error" as const,
+        content: [
+          { type: "text" as const, text: "Agent 未返回响应，可能是 LLM 服务异常或网络问题" },
+        ],
+        timestamp: Date.now(),
+      },
+    ]);
+    useNotificationStore.getState().push({
+      message: "Agent 未返回任何响应，请检查模型配置或重试",
+      level: "error",
+      sessionId,
+    });
+  }
+}
+
+function clearStatusWatchdog(sessionId: string) {
+  const watchdog = _statusWatchdogs.get(sessionId);
+  if (watchdog) {
+    clearTimeout(watchdog);
+    _statusWatchdogs.delete(sessionId);
+  }
+}
 
 interface ExtensionEntry {
   path: string;
@@ -62,6 +101,7 @@ interface AgentStateResult {
   thinkingLevel?: string;
   isStreaming?: boolean;
   isCompacting?: boolean;
+  streamingMessage?: unknown;
 }
 
 export interface ModelInfo {
@@ -105,25 +145,33 @@ interface SessionState {
   sessionStatusMap: Record<string, SessionStatus>;
   queueBySession: Record<string, { steering: string[]; followUp: string[] }>;
   currentModel: ModelInfo | null;
+  modelManuallySet: boolean;
   currentThinkingLevel: string;
   availableModels: Array<{
     provider: string;
     id: string;
-    name?: string;
-    contextWindow?: number;
-    reasoning?: boolean;
+    name: string;
+    contextWindow: number;
+    reasoning: boolean;
+    input: ("text" | "image")[];
   }>;
   modelFavorites: Set<string>;
+  lastActiveSessionByProject: Record<string, string>;
   projectStartFailed: Record<string, boolean>;
   projectStartError: Record<string, string>;
   _projectVersion: number;
+  newSessionCreatedAt: number;
 
   addProjectTab: (tab: ProjectTab) => void;
   removeProjectTab: (id: string) => void;
   reorderProjectTabs: (fromIndex: number, toIndex: number) => void;
   setActiveProject: (id: string, options?: { skipAutoSession?: boolean }) => void;
   loadSessionsForProject: (projectPath: string) => Promise<SessionMeta[]>;
-  setActiveSession: (id: string | null, force?: boolean) => void;
+  setActiveSession: (
+    id: string | null,
+    force?: boolean,
+    options?: { skipCleanup?: boolean; forceNewProcess?: boolean },
+  ) => void;
   retryActiveProject: () => void;
   createNewSession: (projectPath?: string) => Promise<void>;
   updateSessionProjectPath: (sessionId: string, projectPath: string) => void;
@@ -143,6 +191,23 @@ interface SessionState {
   fetchModelFavorites: () => void;
   toggleModelFavorite: (modelKey: string) => void;
   cleanupActiveSession: (sessionId: string) => void;
+  fetchAllSessionStatuses: () => Promise<void>;
+  fetchProjectSessionStatuses: (projectPath: string) => Promise<void>;
+  refreshSessionsInBackground: (projectPath: string) => void;
+  fetchSessionsStatusBatch: (sessionIds: string[]) => Promise<void>;
+  fetchAllProjectsSessionsStatus: () => Promise<void>;
+}
+
+const _fetchInitPromiseMap = new Map<string, Promise<void>>();
+const _fetchInitTimestampMap = new Map<string, number>();
+const FETCH_INIT_TTL_MS = 30_000;
+const _agentStartedSessions = new Set<string>();
+
+export function markAgentStarted(sessionId: string) {
+  _agentStartedSessions.add(sessionId);
+}
+export function clearAgentStarted(sessionId: string) {
+  _agentStartedSessions.delete(sessionId);
 }
 
 export const useSessionStore = create<SessionState>()(
@@ -152,7 +217,7 @@ export const useSessionStore = create<SessionState>()(
       activeSessionId: null,
       projectTabs: [],
       activeProjectId: null,
-      loading: false,
+      loading: true,
       agentSubscriptions: {},
       subagentSubscriptions: {},
       todoSubscriptions: {},
@@ -169,12 +234,15 @@ export const useSessionStore = create<SessionState>()(
       sessionStatusMap: {},
       queueBySession: {},
       currentModel: null,
+      modelManuallySet: false,
       currentThinkingLevel: "medium",
       availableModels: [],
       modelFavorites: new Set<string>(),
+      lastActiveSessionByProject: {},
       projectStartFailed: {},
       projectStartError: {},
       _projectVersion: 0,
+      newSessionCreatedAt: 0,
 
       addProjectTab: (tab) =>
         set((s) => {
@@ -195,11 +263,13 @@ export const useSessionStore = create<SessionState>()(
         const state = get();
         if (state.activeProjectId === id && state.activeSessionId) {
           const sid = state.activeSessionId;
+          clearStatusWatchdog(sid);
           cleanupSession(state, sid);
           cleanupSessionData(sid);
           set((s) => clearSubscriptionState(s, sid));
         }
 
+        const wasActive = state.activeProjectId === id;
         set((s) => {
           const filtered = s.projectTabs.filter((t) => t.id !== id);
           const newActiveId =
@@ -212,6 +282,13 @@ export const useSessionStore = create<SessionState>()(
             activeProjectId: newActiveId,
           };
         });
+
+        if (wasActive) {
+          const newActiveId = get().activeProjectId;
+          if (newActiveId) {
+            get().setActiveProject(newActiveId);
+          }
+        }
       },
 
       reorderProjectTabs: (fromIndex: number, toIndex: number) => {
@@ -230,9 +307,11 @@ export const useSessionStore = create<SessionState>()(
         const skipAutoSession = options?.skipAutoSession ?? false;
 
         if (prevProjectId && prevProjectId !== id && prevSessionId) {
+          clearStatusWatchdog(prevSessionId);
           cleanupSession(get(), prevSessionId);
-          cleanupSessionData(prevSessionId);
+          cleanupSessionLight(prevSessionId);
           set((s) => clearSubscriptionState(s, prevSessionId));
+          useGitStore.getState().clearDiff();
         }
 
         const version = get()._projectVersion + 1;
@@ -255,22 +334,64 @@ export const useSessionStore = create<SessionState>()(
         });
 
         if (!skipAutoSession) {
-          get()
-            .loadSessionsForProject(tab.path)
-            .then(async (sessions) => {
-              if (version !== get()._projectVersion) return;
+          const cached = get().sessionsByProject[tab.path];
 
-              set((s) => ({
-                projectStartFailed: { ...s.projectStartFailed, [id]: false },
-                projectStartError: { ...s.projectStartError, [id]: "" },
-              }));
+          if (cached && cached.length > 0) {
+            // 有缓存：立即选中会话，后台刷新列表
+            const lastSid = get().lastActiveSessionByProject[tab.path];
+            const targetSession =
+              lastSid && cached.some((s) => s.sessionId === lastSid)
+                ? lastSid
+                : cached[0].sessionId;
+            set((s) => ({
+              activeSessionId: targetSession,
+              projectStartFailed: { ...s.projectStartFailed, [id]: false },
+              projectStartError: { ...s.projectStartError, [id]: "" },
+              lastActiveSessionByProject: {
+                ...s.lastActiveSessionByProject,
+                [tab.path]: targetSession,
+              },
+            }));
+            get().setActiveSession(targetSession, true);
 
-              if (sessions.length > 0) {
-                get().setActiveSession(sessions[0].sessionId);
-              } else {
-                await get().createNewSession();
-              }
-            });
+            // 后台轻量刷新会话列表（不阻塞 UI）
+            get().refreshSessionsInBackground(tab.path);
+
+            // 后台拉取当前项目其他会话状态
+            get().fetchProjectSessionStatuses(tab.path);
+          } else {
+            // 无缓存：走完整加载
+            get()
+              .loadSessionsForProject(tab.path)
+              .then(async (sessions) => {
+                if (version !== get()._projectVersion) return;
+
+                if (sessions.length > 0) {
+                  const lastSid = get().lastActiveSessionByProject[tab.path];
+                  const targetSession =
+                    lastSid && sessions.some((s) => s.sessionId === lastSid)
+                      ? lastSid
+                      : sessions[0].sessionId;
+                  set((s) => ({
+                    activeSessionId: targetSession,
+                    projectStartFailed: { ...s.projectStartFailed, [id]: false },
+                    projectStartError: { ...s.projectStartError, [id]: "" },
+                    lastActiveSessionByProject: {
+                      ...s.lastActiveSessionByProject,
+                      [tab.path]: targetSession,
+                    },
+                  }));
+                  get().setActiveSession(targetSession, true);
+                  await get().fetchAllSessionStatuses();
+                } else {
+                  set((s) => ({
+                    projectStartFailed: { ...s.projectStartFailed, [id]: false },
+                    projectStartError: { ...s.projectStartError, [id]: "" },
+                  }));
+                  await get().createNewSession();
+                }
+              });
+          }
         }
       },
 
@@ -281,17 +402,28 @@ export const useSessionStore = create<SessionState>()(
           let sessions = result.sessions as SessionMeta[];
 
           const seen = new Set<string>();
+          const seenPaths = new Set<string>();
           sessions = sessions.filter((s) => {
             if (seen.has(s.sessionId)) return false;
+            if (seenPaths.has(s.sessionPath)) return false;
             seen.add(s.sessionId);
+            seenPaths.add(s.sessionPath);
             return true;
           });
 
-          const blankSessions = sessions.filter((s) => s.messageCount === 0 && !s.firstMessage);
-          if (blankSessions.length > 1) {
-            const toRemove = blankSessions.slice(0, -1);
-            const removeIds = new Set(toRemove.map((s) => s.sessionId));
-            sessions = sessions.filter((s) => !removeIds.has(s.sessionId));
+          const existing = get().sessionsByProject[projectPath] || [];
+          const existingPaths = new Set(existing.map((s) => s.sessionPath));
+          const existingIds = new Set(existing.map((s) => s.sessionId));
+          const newFromDisk = sessions.filter((s) => !existingPaths.has(s.sessionPath));
+
+          // Merge: keep in-memory sessions + add new from disk, deduplicate
+          const allBlankSessions = [...existing, ...newFromDisk].filter(
+            (s) => s.messageCount === 0 && !s.firstMessage,
+          );
+          let blankToRemove: Set<string> | null = null;
+          if (allBlankSessions.length > 1) {
+            const toRemove = allBlankSessions.slice(0, -1);
+            blankToRemove = new Set(toRemove.map((s) => s.sessionId));
 
             for (const s of toRemove) {
               apiClient
@@ -300,44 +432,95 @@ export const useSessionStore = create<SessionState>()(
             }
           }
 
+          // Merge disk sessions into existing: only add new unique sessionPaths
+          const merged = [...existing];
+          for (const s of newFromDisk) {
+            if (!existingIds.has(s.sessionId)) {
+              merged.push(s);
+            }
+          }
+
+          // Remove excess blank sessions from merged result
+          const finalSessions = blankToRemove
+            ? merged.filter((s) => !blankToRemove.has(s.sessionId))
+            : merged.filter((s) => {
+                if (s.delegateParentSessionId) return true;
+                return sessions.some((disk) => disk.sessionPath === s.sessionPath);
+              });
+
           set((s) => ({
-            sessionsByProject: { ...s.sessionsByProject, [projectPath]: sessions },
+            sessionsByProject: { ...s.sessionsByProject, [projectPath]: finalSessions },
             loading: false,
           }));
-          return sessions;
-        } catch {
+          return finalSessions;
+        } catch (e) {
+          log.warn("Failed to fetch sessions", { error: String(e) });
           set({ loading: false });
           return [];
         }
       },
 
-      setActiveSession: (id, force) => {
+      setActiveSession: (id, force, options) => {
         const tSwitchStart = performance.now();
         const prevId = get().activeSessionId;
         if (!force && prevId === id) return;
+        const skipCleanup = options?.skipCleanup ?? false;
 
         perfLog.info("[switch] === SESSION SWITCH START ===", {
           from: prevId ?? "(none)",
           to: id,
           force: !!force,
+          skipCleanup,
         });
 
-        if (prevId && prevId !== id) {
+        if (prevId && prevId !== id && !skipCleanup) {
           const t0 = performance.now();
-          cleanupSession(get(), prevId);
-          cleanupSessionData(prevId);
-          set((s) => clearSubscriptionState(s, prevId));
-          perfLog.info("[switch] step-1 cleanup old session", {
+          clearStatusWatchdog(prevId);
+          useChatStore.getState().saveInputDraft(prevId);
+          cleanupSessionLight(prevId);
+          useGitStore.getState().clearDiff();
+          perfLog.info("[switch] step-1 light cleanup old session (keep-alive)", {
             prevId,
             ms: Math.round(performance.now() - t0),
           });
+        } else if (skipCleanup && prevId && prevId !== id) {
+          useChatStore.getState().saveInputDraft(prevId);
+          perfLog.info("[switch] step-1 SKIPPED cleanup (fork scenario)", {
+            prevId,
+          });
         }
+
+        const { projectTabs: curTabs, activeProjectId: curProjectId } = get();
+        const curTab = curTabs.find((t) => t.id === curProjectId);
+
+        const hasCachedMessages =
+          id &&
+          (useChatStore.getState().messagesBySession[id] || []).some(
+            (m: { role: string; tokenUsage?: unknown }) =>
+              m.role === "user" || (m.role === "assistant" && m.tokenUsage),
+          );
 
         set({
           activeSessionId: id,
-          sessionReady: id ? { ...get().sessionReady, [id]: false } : get().sessionReady,
+          sessionReady: id
+            ? {
+                ...get().sessionReady,
+                [id]: hasCachedMessages ? true : (get().sessionReady[id] ?? false),
+              }
+            : get().sessionReady,
+          ...(id && curTab
+            ? {
+                lastActiveSessionByProject: {
+                  ...get().lastActiveSessionByProject,
+                  [curTab.path]: id,
+                },
+              }
+            : {}),
         });
+
         if (!id) return;
+
+        useChatStore.getState().restoreInputDraft(id);
 
         const { projectTabs, activeProjectId } = get();
         const tab = projectTabs.find((t) => t.id === activeProjectId);
@@ -376,13 +559,52 @@ export const useSessionStore = create<SessionState>()(
               ms: Math.round(performance.now() - tSubs),
             });
 
-            perfLog.info("[switch] step-3 agent.start RPC begin", { sessionId: id });
+            const isAgentKnownRunning = _agentStartedSessions.has(id);
+
+            if (isAgentKnownRunning) {
+              perfLog.info("[switch] HOT (cached): agent.start SKIPPED", { sessionId: id });
+
+              set((s) => {
+                const projectId = s.activeProjectId;
+                if (!projectId) return {};
+                return {
+                  sessionReady: { ...s.sessionReady, [id]: true },
+                  projectStartFailed: { ...s.projectStartFailed, [projectId]: false },
+                  projectStartError: { ...s.projectStartError, [projectId]: "" },
+                };
+              });
+
+              requestRulesSnapshot(id);
+
+              const cachedMsgs = useChatStore.getState().messagesBySession[id] || [];
+              const hasCachedMsgs = cachedMsgs.some(
+                (m: { role: string; tokenUsage?: unknown }) =>
+                  m.role === "user" || (m.role === "assistant" && m.tokenUsage),
+              );
+              if (hasCachedMsgs) {
+                useChatStore.getState()._backgroundRefreshMessages(id, session.sessionPath);
+              } else {
+                useChatStore.getState().loadSessionMessages(id, {
+                  force: true,
+                  sessionPath: session.sessionPath,
+                });
+              }
+
+              perfLog.info("[switch] === HOT SWITCH COMPLETE (cached) ===", {
+                sessionId: id,
+                totalMs: Math.round(performance.now() - tSwitchStart),
+              });
+              return;
+            }
+
+            perfLog.info("[switch] agent.start begin", { sessionId: id });
             const tAgentStart = performance.now();
 
             const startPromise = apiClient.call("agent.start", {
               sessionId: id,
               projectPath: session.projectPath,
               sessionPath: session.sessionPath,
+              forceNewProcess: options?.forceNewProcess,
             });
 
             const timeoutPromise = new Promise<never>((_, reject) =>
@@ -391,9 +613,12 @@ export const useSessionStore = create<SessionState>()(
 
             Promise.race([startPromise, timeoutPromise])
               .then((result) => {
-                perfLog.info("[switch] step-3 agent.start RPC done", {
+                const isHot = result.status === "already_running";
+
+                perfLog.info("[switch] agent.start done", {
                   sessionId: id,
                   status: result.status,
+                  isHot,
                   ms: Math.round(performance.now() - tAgentStart),
                 });
 
@@ -406,64 +631,79 @@ export const useSessionStore = create<SessionState>()(
                     const projectId = s.activeProjectId;
                     if (!projectId) return {};
                     return {
+                      sessionReady: { ...s.sessionReady, [id]: true },
                       projectStartFailed: { ...s.projectStartFailed, [projectId]: false },
                       projectStartError: { ...s.projectStartError, [projectId]: "" },
                     };
                   });
-                  log.info("agent.start result", { status: result.status, sessionId: id });
-                  set((s) => ({ sessionReady: { ...s.sessionReady, [id]: true } }));
+                  _agentStartedSessions.add(id);
 
-                  // Request rules snapshot after session is confirmed started
                   requestRulesSnapshot(id);
-
-                  perfLog.info("[switch] step-4 fetchInitialState begin", { sessionId: id });
                   get().fetchInitialState(id);
 
-                  const tParallel = performance.now();
+                  if (isHot) {
+                    const cachedMsgs = useChatStore.getState().messagesBySession[id] || [];
+                    const hasCached = cachedMsgs.some(
+                      (m: { role: string; tokenUsage?: unknown }) =>
+                        m.role === "user" || (m.role === "assistant" && m.tokenUsage),
+                    );
+                    const loadPromise: Promise<void> = hasCached
+                      ? (useChatStore
+                          .getState()
+                          ._backgroundRefreshMessages(id, session.sessionPath) ?? Promise.resolve())
+                      : useChatStore.getState().loadSessionMessages(id, {
+                          force: true,
+                          sessionPath: session.sessionPath,
+                        });
 
-                  const replayPromise =
-                    result.status === "already_running"
-                      ? apiClient
-                          .call("agent.replayHoldEvents", { sessionId: id })
-                          .then((r) => {
-                            perfLog.info("[switch] step-5 replayHoldEvents done", {
-                              sessionId: id,
-                              replayed: r.replayed,
-                              ms: Math.round(performance.now() - tParallel),
-                            });
-                          })
-                          .catch((err) => {
-                            log.warn("replayHoldEvents failed", {
-                              sessionId: id,
-                              err: err instanceof Error ? err.message : String(err),
-                            });
-                          })
-                      : Promise.resolve();
-
-                  perfLog.info("[switch] step-6 loadSessionMessages begin", { sessionId: id });
-                  const tLoad = performance.now();
-                  const loadMessagesPromise = useChatStore
-                    .getState()
-                    .loadSessionMessages(id, { sessionPath: session.sessionPath })
-                    .then(() => {
-                      perfLog.info("[switch] step-6 loadSessionMessages done", {
-                        sessionId: id,
-                        count: useChatStore.getState().messagesBySession[id]?.length,
-                        ms: Math.round(performance.now() - tLoad),
+                    loadPromise
+                      .catch(() => {})
+                      .then(() => {
+                        return apiClient.call("agent.replayHoldEvents", { sessionId: id });
+                      })
+                      .then(() => {
+                        perfLog.info("[switch] === HOT SWITCH COMPLETE ===", {
+                          sessionId: id,
+                          totalMs: Math.round(performance.now() - tSwitchStart),
+                        });
+                      })
+                      .catch((err: unknown) => {
+                        log.warn("load+replay failed in hot switch", {
+                          sessionId: id,
+                          err: err instanceof Error ? err.message : String(err),
+                        });
                       });
-                    })
-                    .catch((e) => {
-                      log.error("loadSessionMessages FAILED", {
-                        error: e instanceof Error ? e.message : String(e),
-                      });
-                    });
-
-                  Promise.all([replayPromise, loadMessagesPromise]).then(() => {
-                    perfLog.info("[switch] === SESSION SWITCH COMPLETE ===", {
+                  } else {
+                    perfLog.info("[switch] COLD: loadSessionMessages begin", {
                       sessionId: id,
-                      totalMs: Math.round(performance.now() - tSwitchStart),
                     });
-                  });
+                    const tLoad = performance.now();
+                    useChatStore
+                      .getState()
+                      .loadSessionMessages(id, {
+                        force: true,
+                        sessionPath: session.sessionPath,
+                      })
+                      .then(() => {
+                        perfLog.info("[switch] COLD: loadSessionMessages done", {
+                          sessionId: id,
+                          count: useChatStore.getState().messagesBySession[id]?.length,
+                          ms: Math.round(performance.now() - tLoad),
+                        });
+                        return apiClient.call("agent.replayHoldEvents", { sessionId: id });
+                      })
+                      .then(() => {
+                        perfLog.info("[switch] === COLD SWITCH COMPLETE ===", {
+                          sessionId: id,
+                          totalMs: Math.round(performance.now() - tSwitchStart),
+                        });
+                      })
+                      .catch((e) => {
+                        log.error("COLD switch load+replay failed", {
+                          error: e instanceof Error ? e.message : String(e),
+                        });
+                      });
+                  }
                 } else {
                   const projectId = get().activeProjectId;
                   if (projectId) {
@@ -478,19 +718,21 @@ export const useSessionStore = create<SessionState>()(
                 }
               })
               .catch((err) => {
-                const errMsg = err instanceof Error ? err.message : String(err);
-                useAppStore.getState().addLog(`agent.start failed: ${errMsg}`);
-                perfLog.error("[switch] agent.start FAILED", {
+                _agentStartedSessions.delete(id);
+                log.error("agent.start failed", {
                   sessionId: id,
-                  error: errMsg,
-                  totalMs: Math.round(performance.now() - tSwitchStart),
+                  err: err instanceof Error ? err.message : String(err),
                 });
                 set((s) => {
                   const projectId = s.activeProjectId;
                   if (!projectId) return {};
                   return {
                     projectStartFailed: { ...s.projectStartFailed, [projectId]: true },
-                    projectStartError: { ...s.projectStartError, [projectId]: errMsg },
+                    projectStartError: {
+                      ...s.projectStartError,
+                      [projectId]: err instanceof Error ? err.message : String(err),
+                    },
+                    sessionReady: { ...s.sessionReady, [id]: false },
                   };
                 });
               });
@@ -507,6 +749,7 @@ export const useSessionStore = create<SessionState>()(
               const projectId = s.activeProjectId;
               if (!projectId) return {};
               return {
+                sessionReady: { ...s.sessionReady, [id]: false },
                 projectStartFailed: { ...s.projectStartFailed, [projectId]: true },
                 projectStartError: { ...s.projectStartError, [projectId]: errMsg },
               };
@@ -555,7 +798,7 @@ export const useSessionStore = create<SessionState>()(
         }
       },
 
-      createNewSession: async (projectPath?: string) => {
+      createNewSession: async (_projectPath?: string) => {
         const { projectTabs, activeProjectId } = get();
         const tab = projectTabs.find((t) => t.id === activeProjectId);
         if (!tab) {
@@ -563,13 +806,20 @@ export const useSessionStore = create<SessionState>()(
           return;
         }
 
-        const targetPath = projectPath ?? tab.path;
+        const targetPath = tab.path;
 
         const existing = get().sessionsByProject[tab.path];
-        const blankSession = existing?.find((s) => s.messageCount === 0 && !s.firstMessage);
+        const blankSession = existing?.find(
+          (s) =>
+            s.messageCount === 0 &&
+            !s.firstMessage &&
+            !s.parentSessionPath &&
+            !s.delegateParentSessionId,
+        );
         if (blankSession) {
           log.info("Reusing existing blank session", { sessionId: blankSession.sessionId });
           get().setActiveSession(blankSession.sessionId);
+          set({ newSessionCreatedAt: Date.now() });
           return;
         }
 
@@ -585,6 +835,8 @@ export const useSessionStore = create<SessionState>()(
             sessionPath: result.sessionPath,
             projectPath: targetPath,
             parentSessionPath: null,
+            delegateParentSessionId: null,
+            delegateType: null,
             messageCount: 0,
             firstMessage: "",
             createdAt: now,
@@ -604,10 +856,36 @@ export const useSessionStore = create<SessionState>()(
           });
 
           get().setActiveSession(result.sessionId);
+          set({ newSessionCreatedAt: Date.now() });
 
-          const currentTier = useTierStore.getState().currentTier;
-          if (currentTier) {
-            useTierStore.getState().switchToTier(currentTier, result.sessionId);
+          const prevSessionId = get().activeSessionId;
+          if (prevSessionId) {
+            const tierStore = useTierStore.getState();
+            const prevTierModels = tierStore.getTierModels(prevSessionId);
+            const prevTier = tierStore.getCurrentTier(prevSessionId);
+            const prevModel = get().currentModel;
+
+            useTierStore.getState().setSessionTierModels(result.sessionId, { ...prevTierModels });
+            useTierStore.getState().setSessionCurrentTier(result.sessionId, prevTier);
+
+            apiClient
+              .call("session.saveTierConfig", {
+                sessionPath: result.sessionPath,
+                tierModels: prevTierModels,
+                currentTier: prevTier,
+                currentModel: prevModel,
+              })
+              .catch(() => {});
+
+            if (prevTier) {
+              await useTierStore.getState().switchToTier(prevTier, result.sessionId);
+            } else if (prevModel) {
+              await apiClient.call("agent.setModel", {
+                sessionId: result.sessionId,
+                provider: prevModel.provider,
+                modelId: prevModel.id,
+              });
+            }
           }
         } catch (error) {
           const errMsg = error instanceof Error ? error.message : String(error);
@@ -675,6 +953,8 @@ export const useSessionStore = create<SessionState>()(
       },
 
       deleteSession: (sessionId) => {
+        _agentStartedSessions.delete(sessionId);
+        clearStatusWatchdog(sessionId);
         cleanupSession(get(), sessionId);
         cleanupSessionData(sessionId);
         set((s) => clearSubscriptionState(s, sessionId));
@@ -703,10 +983,16 @@ export const useSessionStore = create<SessionState>()(
 
         set({
           sessionsByProject: updated,
-          activeSessionId: nextActiveId,
         });
+
+        if (nextActiveId) {
+          get().setActiveSession(nextActiveId, true);
+        } else {
+          set({ activeSessionId: null });
+        }
         if (deletedPath) {
           useChatStore.getState().clearSessionMessages(sessionId);
+          useChatStore.getState().clearInputDraft(sessionId);
         }
         useTurnStore.getState().clearSessionUI(sessionId);
         useChatNavStore.getState().clearSessionUI(sessionId);
@@ -725,6 +1011,7 @@ export const useSessionStore = create<SessionState>()(
               delete newStatus[sub.sessionId];
               delete newContext[sub.sessionId];
             }
+            clearSubagentToolNames(subs.map((s) => s.sessionId));
             useSubagentStore.setState({
               subsessionsByParent: newSubsByParent,
               messagesBySubsession: newMessages,
@@ -738,8 +1025,18 @@ export const useSessionStore = create<SessionState>()(
         }
 
         if (deletedSessionPath) {
+          // Stop backend process first, then delete session file
           apiClient
-            .call("session.delete", { sessionId, sessionPath: deletedSessionPath })
+            .call("agent.stop", { sessionId })
+            .catch((err) => {
+              log.warn("agent.stop before delete failed", {
+                sessionId,
+                err: err instanceof Error ? err.message : String(err),
+              });
+            })
+            .then(() =>
+              apiClient.call("session.delete", { sessionId, sessionPath: deletedSessionPath }),
+            )
             .catch((err) => {
               log.warn("session.delete failed", {
                 err: err instanceof Error ? err.message : String(err),
@@ -798,6 +1095,28 @@ export const useSessionStore = create<SessionState>()(
         set((s) => ({
           sessionStatusMap: { ...s.sessionStatusMap, [sessionId]: status },
         }));
+
+        const existing = _statusWatchdogs.get(sessionId);
+        if (existing) {
+          clearTimeout(existing);
+          _statusWatchdogs.delete(sessionId);
+        }
+
+        if (status !== "idle") {
+          const timer = setTimeout(() => {
+            const current = get().sessionStatusMap[sessionId];
+            if (current && current !== "idle") {
+              useNotificationStore.getState().push({
+                message: `Session status recovered from stuck "${current}" state`,
+                level: "warning",
+              });
+              get().updateSessionStatus(sessionId, "idle");
+              detectEmptyTurnAndInjectError(sessionId);
+            }
+            _statusWatchdogs.delete(sessionId);
+          }, STATUS_STUCK_TIMEOUT_MS);
+          _statusWatchdogs.set(sessionId, timer);
+        }
       },
 
       restoreContextFromHistory: (sessionId) => {
@@ -817,257 +1136,538 @@ export const useSessionStore = create<SessionState>()(
       },
 
       fetchInitialState: (sessionId) => {
-        const t0 = performance.now();
-        perfLog.info("[fetchInit] begin (all-parallel)", { sessionId });
+        const existing = _fetchInitPromiseMap.get(sessionId);
+        if (existing) return existing;
 
-        const statePromise = apiClient.call("agent.getState", { sessionId });
-        const modelsPromise = apiClient.call("agent.getAvailableModels", { sessionId });
-        const contextPromise = apiClient.call("agent.getContextUsage", { sessionId });
-        const extensionsPromise = apiClient.call("agent.getExtensions", { sessionId });
-        const skillsPromise = apiClient.call("agent.getSkills", { sessionId });
-        const disabledSkillsPromise = apiClient.call("agent.getDisabledSkills", {});
-        const mcpPromise = apiClient.call("agent.getMcpServers", { sessionId });
-        const queuePromise = apiClient.call("agent.getQueue", { sessionId });
+        const lastFetch = _fetchInitTimestampMap.get(sessionId);
+        if (lastFetch && Date.now() - lastFetch < FETCH_INIT_TTL_MS) {
+          perfLog.info("[fetchInit] TTL cache hit, skipping", {
+            sessionId,
+            ageMs: Date.now() - lastFetch,
+          });
+          return Promise.resolve();
+        }
 
-        statePromise
-          .then((rawResult) => {
-            perfLog.info("[fetchInit] getState done", {
-              sessionId,
-              ms: Math.round(performance.now() - t0),
-            });
-            const result = rawResult as AgentStateResult;
-            if (!result) return;
+        const promise = (async () => {
+          try {
+            const t0 = performance.now();
+            perfLog.info("[fetchInit] begin (batched, maxConcurrency=3)", { sessionId });
 
-            const cw = result.model?.contextWindow ?? 0;
-            if (cw > 0) {
-              get().updateSessionContext(sessionId, { contextWindow: cw });
-            }
-            if (result.isStreaming) {
-              get().updateSessionStatus(sessionId, "streaming");
-            } else if (result.isCompacting) {
-              get().updateSessionStatus(sessionId, "compacting");
-            } else {
-              get().updateSessionStatus(sessionId, "idle");
-            }
+            // --- Priority 1: sequential, must complete first ---
+            const statePromise = apiClient.call("agent.getState", { sessionId });
 
-            if (result.model) {
-              set({
-                currentModel: {
-                  provider: result.model.provider ?? "",
-                  id: result.model.id,
-                  name: result.model.name,
-                },
-                currentThinkingLevel: result.thinkingLevel ?? "medium",
+            statePromise
+              .then(async (rawResult) => {
+                perfLog.info("[fetchInit] getState done", {
+                  sessionId,
+                  ms: Math.round(performance.now() - t0),
+                });
+                const result = rawResult as AgentStateResult;
+                if (!result) return;
+
+                const cw = result.model?.contextWindow ?? 0;
+                if (cw > 0) {
+                  get().updateSessionContext(sessionId, { contextWindow: cw });
+                }
+                if (result.isStreaming) {
+                  get().updateSessionStatus(sessionId, "streaming");
+                  if (
+                    result.streamingMessage &&
+                    typeof result.streamingMessage === "object" &&
+                    "role" in (result.streamingMessage as object)
+                  ) {
+                    const raw = result.streamingMessage as {
+                      role: string;
+                      content?: unknown;
+                      timestamp?: number;
+                    };
+                    if (raw.role === "assistant") {
+                      try {
+                        const { messageToChatMessage } = await import("../lib/message-mapper");
+                        const msg = messageToChatMessage(
+                          raw as Parameters<typeof messageToChatMessage>[0],
+                        );
+                        if (msg) {
+                          const chat = useChatStore.getState();
+                          const existing = chat.messagesBySession[sessionId] || [];
+                          const alreadyStreaming = existing.some(
+                            (m) => m.role === "assistant" && m.isStreaming,
+                          );
+                          const lastMsg = existing[existing.length - 1];
+                          const lastIsAssistant = lastMsg && lastMsg.role === "assistant";
+                          const lastHasContent =
+                            lastIsAssistant &&
+                            Array.isArray(lastMsg.content) &&
+                            lastMsg.content.length > 0;
+                          if (!alreadyStreaming && !lastHasContent) {
+                            chat.setMessagesForSession(sessionId, [
+                              ...existing,
+                              { ...msg, isStreaming: true },
+                            ]);
+                          } else if (lastIsAssistant && !alreadyStreaming) {
+                            chat.setMessagesForSession(sessionId, [
+                              ...existing.slice(0, -1),
+                              { ...lastMsg, isStreaming: true },
+                            ]);
+                          }
+                        }
+                      } catch {
+                        /* ignore */
+                      }
+                    }
+                  }
+                } else if (result.isCompacting) {
+                  get().updateSessionStatus(sessionId, "compacting");
+                } else {
+                  const currentStatus = get().sessionStatusMap[sessionId];
+                  if (
+                    currentStatus !== "streaming" &&
+                    currentStatus !== "compacting" &&
+                    currentStatus !== "retrying"
+                  ) {
+                    get().updateSessionStatus(sessionId, "idle");
+                  }
+                }
+
+                if (result.model) {
+                  const manuallySet = get().modelManuallySet;
+                  set({
+                    currentModel: {
+                      provider: result.model.provider ?? "",
+                      id: result.model.id,
+                      name: result.model.name,
+                    },
+                    modelManuallySet: false,
+                  });
+                  if (manuallySet) {
+                    log.info("skipped model overwrite (user manually switched)", {
+                      sessionId,
+                      manualModel: `${result.model.provider}/${result.model.id}`,
+                    });
+                  }
+                }
+
+                if (result.thinkingLevel) {
+                  set({ currentThinkingLevel: result.thinkingLevel });
+                }
+              })
+              .catch((err) => {
+                log.warn("agent.getState failed", {
+                  sessionId,
+                  err: err instanceof Error ? err.message : String(err),
+                });
               });
-            }
 
-            useTierStore
-              .getState()
-              .syncTierFromModel(result.model?.provider ?? "", result.model?.id ?? "");
-          })
-          .catch((err) => {
-            log.warn("agent.getState failed", {
-              sessionId,
-              err: err instanceof Error ? err.message : String(err),
-            });
-          });
-
-        modelsPromise
-          .then((modelsResult) => {
-            if (Array.isArray(modelsResult)) {
-              set({ availableModels: modelsResult });
-            }
-          })
-          .catch((err) => {
-            log.warn("agent.getAvailableModels failed", {
-              sessionId,
-              err: err instanceof Error ? err.message : String(err),
-            });
-          });
-
-        const handleContextRetry = (_attempt: number): void => {
-          apiClient
-            .call("agent.getContextUsage", { sessionId })
-            .then((r) => {
-              if (r && (r.contextWindow > 0 || r.tokens != null)) {
-                const update: Partial<ContextUsage> = {};
-                if (r.contextWindow > 0) update.contextWindow = r.contextWindow;
-                if (r.tokens != null) update.tokens = r.tokens;
-                get().updateSessionContext(sessionId, update);
-              }
-            })
-            .catch(() => {});
-        };
-
-        contextPromise
-          .then((r) => {
-            perfLog.info("[fetchInit] getContextUsage", {
-              sessionId,
-              attempt: 0,
-              ms: Math.round(performance.now() - t0),
-            });
-            if (!r) {
-              setTimeout(() => handleContextRetry(1), 1500);
-              return;
-            }
-            const update: Partial<ContextUsage> = {};
-            if (r.contextWindow > 0) update.contextWindow = r.contextWindow;
-            if (r.tokens != null) {
-              update.tokens = r.tokens;
-            } else {
-              setTimeout(() => handleContextRetry(1), 1500);
-              return;
-            }
-            if (update.contextWindow || update.tokens != null) {
-              get().updateSessionContext(sessionId, update);
-            }
-          })
-          .catch((err) => {
-            log.warn("agent.getContextUsage failed in fetchInitialState", {
-              sessionId,
-              attempt: 0,
-              err: err instanceof Error ? err.message : String(err),
-            });
-            setTimeout(() => handleContextRetry(1), 1500);
-          });
-
-        extensionsPromise
-          .then((res) => {
-            perfLog.info("[fetchInit] getExtensions done", {
-              sessionId,
-              ms: Math.round(performance.now() - t0),
-            });
-            const rawExts = Array.isArray(res)
-              ? res
-              : ((res as { extensions?: ExtensionEntry[] })?.extensions ?? []);
-            const exts = rawExts as ExtensionEntry[];
-            if (exts.length === 0) return;
-            const plugins = exts.map((e: ExtensionEntry) => {
-              const parts = e.path.split("/");
-              const fileName = parts.pop()?.replace(/\.(ts|js|tsx|jsx)$/, "") ?? "unknown";
-              const dirName = parts.pop() ?? fileName;
-              const name = fileName === "index" ? dirName : fileName;
-              return {
-                name,
-                path: e.path,
-                enabled: true,
-                toolNames: e.toolNames,
-                commandNames: e.commandNames,
-                scope: derivePluginScope(e.path),
-              };
-            });
-            useStatusStore.getState().setPlugins(plugins);
-          })
-          .catch((err) => {
-            log.warn("agent.getExtensions failed", {
-              sessionId,
-              err: err instanceof Error ? err.message : String(err),
-            });
-          });
-
-        Promise.all([skillsPromise, disabledSkillsPromise])
-          .then(([skillsRes, disabledRes]) => {
-            perfLog.info("[fetchInit] getSkills+getDisabledSkills done", {
-              sessionId,
-              ms: Math.round(performance.now() - t0),
-            });
-            const skillsArr = (
-              Array.isArray(skillsRes) ? skillsRes : ((skillsRes as SkillsResponse)?.skills ?? [])
-            ) as SkillEntry[];
-            if (skillsArr.length === 0) {
-              useAppStore
-                .getState()
-                .addLog(`[skills] non-array response, type=${typeof skillsRes}`);
-              return;
-            }
-            const disabled = disabledRes as DisabledSkillsResponse;
-            const disabledSet = new Set(disabled?.disabledSkills ?? []);
-            useAppStore
-              .getState()
-              .addLog(`[skills] loaded ${skillsArr.length} items, ${disabledSet.size} disabled`);
-            useStatusStore.getState().setSkills(
-              skillsArr.map((s: SkillEntry) => {
-                const fp: string = s.filePath;
-                const scope: "global" | "project" =
-                  s.sourceInfo?.scope === "user" ? "global" : deriveSkillScope(fp);
-                return {
-                  name: s.name,
-                  description: s.description,
-                  filePath: fp,
-                  baseDir: s.baseDir,
-                  disableModelInvocation: s.disableModelInvocation,
-                  enabled: !disabledSet.has(s.name),
-                  scope,
-                };
-              }),
-            );
-          })
-          .catch((err) => {
-            useAppStore
-              .getState()
-              .addLog(`[skills] call failed: ${err instanceof Error ? err.message : String(err)}`);
-          });
-
-        mcpPromise
-          .then((res) => {
-            perfLog.info("[fetchInit] getMcpServers done", {
-              sessionId,
-              ms: Math.round(performance.now() - t0),
-            });
-            const rawServers = res.servers ?? [];
-            const servers: MCPServerInfo[] = rawServers.map((s) => ({
-              name: s.name,
-              status: s.status,
-              error: s.error,
-              toolCount: s.tools.length,
-              tools: s.tools.map((t) => ({
-                name: t.originalName,
-                description: t.description,
-              })),
-              scope: (s.scope as "global" | "project") ?? "global",
-              disabled: s.disabled,
-            }));
-            log.info("[MCP] getMcpServers", {
-              sessionId,
-              count: servers.length,
-              names: servers.map((s) => s.name),
-            });
-            useStatusStore.getState().setMcpServers(servers);
-          })
-          .catch((err) => {
-            log.warn("agent.getMcpServers failed", {
-              sessionId,
-              err: err instanceof Error ? err.message : String(err),
-            });
-          });
-
-        queuePromise
-          .then((result) => {
-            perfLog.info("[fetchInit] getQueue done", {
-              sessionId,
-              ms: Math.round(performance.now() - t0),
-            });
-            perfLog.info("[fetchInit] ALL sub-calls dispatched", {
-              sessionId,
-              totalMs: Math.round(performance.now() - t0),
-            });
-            if (!result) return;
-            const { steering, followUp } = result;
-            if (steering.length > 0 || followUp.length > 0) {
-              useSessionStore.setState((s) => ({
-                queueBySession: {
-                  ...s.queueBySession,
-                  [sessionId]: { steering, followUp },
-                },
+            // P1 gate: if getState fails (CLI dead), abort the entire fetch chain
+            let p1Ok = false;
+            try {
+              await statePromise;
+              p1Ok = true;
+            } catch {
+              log.warn("[fetchInit] P1 getState failed — aborting fetch chain", { sessionId });
+              set((s) => ({
+                sessionReady: { ...s.sessionReady, [sessionId]: false },
               }));
             }
-          })
-          .catch((err) => {
-            log.warn("agent.getQueue failed", {
-              sessionId,
-              err: err instanceof Error ? err.message : String(err),
-            });
-          });
+            if (!p1Ok) return;
+
+            // --- Priority 2 (parallel, max 3) ---
+            const modelsPromise = apiClient.call("agent.getAvailableModels", { sessionId });
+            const contextPromise = apiClient.call("agent.getContextUsage", { sessionId });
+            const settingsPromise = apiClient.call("agent.getSettings", { sessionId });
+
+            modelsPromise
+              .then((modelsResult) => {
+                if (Array.isArray(modelsResult)) {
+                  set({ availableModels: modelsResult });
+                }
+              })
+              .catch((err) => {
+                log.warn("agent.getAvailableModels failed", {
+                  sessionId,
+                  err: err instanceof Error ? err.message : String(err),
+                });
+              });
+
+            settingsPromise
+              .then((raw) => {
+                const settings = raw as Record<string, unknown> | null;
+                if (!settings) return;
+                const retry = settings.retry as
+                  | {
+                      enabled?: boolean;
+                      maxRetries?: number;
+                      baseDelayMs?: number;
+                      maxDelayMs?: number;
+                    }
+                  | undefined;
+                if (retry) {
+                  useRetryConfigStore.getState().setRetryConfig({
+                    enabled: retry.enabled ?? RETRY_DEFAULTS.enabled,
+                    maxRetries: retry.maxRetries ?? RETRY_DEFAULTS.maxRetries,
+                    baseDelayMs: retry.baseDelayMs ?? RETRY_DEFAULTS.baseDelayMs,
+                    maxDelayMs: retry.maxDelayMs ?? RETRY_DEFAULTS.maxDelayMs,
+                  });
+                }
+              })
+              .catch(() => {});
+
+            const handleContextRetry = (_attempt: number): void => {
+              // Only retry once — avoid infinite retry loops when CLI is dead
+              apiClient
+                .call("agent.getContextUsage", { sessionId })
+                .then((r) => {
+                  if (r && (r.contextWindow > 0 || r.tokens != null)) {
+                    const update: Partial<ContextUsage> = {};
+                    if (r.contextWindow > 0) update.contextWindow = r.contextWindow;
+                    if (r.tokens != null) update.tokens = r.tokens;
+                    get().updateSessionContext(sessionId, update);
+                  }
+                })
+                .catch(() => {
+                  log.warn("agent.getContextUsage retry failed, giving up", {
+                    sessionId,
+                    attempt: _attempt,
+                  });
+                });
+            };
+
+            contextPromise
+              .then((r) => {
+                perfLog.info("[fetchInit] getContextUsage", {
+                  sessionId,
+                  attempt: 0,
+                  ms: Math.round(performance.now() - t0),
+                });
+                if (!r) {
+                  setTimeout(() => handleContextRetry(1), 1500);
+                  return;
+                }
+                const update: Partial<ContextUsage> = {};
+                if (r.contextWindow > 0) update.contextWindow = r.contextWindow;
+                if (r.tokens != null) {
+                  update.tokens = r.tokens;
+                } else {
+                  setTimeout(() => handleContextRetry(1), 1500);
+                  return;
+                }
+                if (update.contextWindow || update.tokens != null) {
+                  get().updateSessionContext(sessionId, update);
+                }
+              })
+              .catch((err) => {
+                log.warn("agent.getContextUsage failed in fetchInitialState", {
+                  sessionId,
+                  attempt: 0,
+                  err: err instanceof Error ? err.message : String(err),
+                });
+                setTimeout(() => handleContextRetry(1), 1500);
+              });
+
+            await Promise.allSettled([modelsPromise, contextPromise, settingsPromise]);
+
+            // --- Priority 3 (parallel, max 3) ---
+            const extensionsPromise = apiClient.call("agent.getExtensions", { sessionId });
+            const skillsPromise = apiClient.call("agent.getSkills", { sessionId });
+            const disabledSkillsPromise = apiClient.call("agent.getDisabledSkills", {});
+
+            extensionsPromise
+              .then((res) => {
+                perfLog.info("[fetchInit] getExtensions done", {
+                  sessionId,
+                  ms: Math.round(performance.now() - t0),
+                });
+                const rawExts = Array.isArray(res)
+                  ? res
+                  : ((res as { extensions?: ExtensionEntry[] })?.extensions ?? []);
+                const exts = rawExts as ExtensionEntry[];
+                if (exts.length === 0) return;
+                const plugins = exts.map((e: ExtensionEntry) => {
+                  const parts = e.path.split("/");
+                  const fileName = parts.pop()?.replace(/\.(ts|js|tsx|jsx)$/, "") ?? "unknown";
+                  const dirName = parts.pop() ?? fileName;
+                  const name = fileName === "index" ? dirName : fileName;
+                  return {
+                    name,
+                    path: e.path,
+                    enabled: true,
+                    toolNames: e.toolNames,
+                    commandNames: e.commandNames,
+                    scope: derivePluginScope(e.path),
+                  };
+                });
+                useStatusStore.getState().setPlugins(plugins);
+              })
+              .catch((err) => {
+                log.warn("agent.getExtensions failed", {
+                  sessionId,
+                  err: err instanceof Error ? err.message : String(err),
+                });
+              });
+
+            Promise.all([skillsPromise, disabledSkillsPromise])
+              .then(([skillsRes, disabledRes]) => {
+                perfLog.info("[fetchInit] getSkills+getDisabledSkills done", {
+                  sessionId,
+                  ms: Math.round(performance.now() - t0),
+                });
+                const skillsArr = (
+                  Array.isArray(skillsRes)
+                    ? skillsRes
+                    : ((skillsRes as SkillsResponse)?.skills ?? [])
+                ) as SkillEntry[];
+                if (skillsArr.length === 0) {
+                  useAppStore
+                    .getState()
+                    .addLog(`[skills] non-array response, type=${typeof skillsRes}`);
+                  return;
+                }
+                const disabled = disabledRes as DisabledSkillsResponse;
+                const disabledSet = new Set(disabled?.disabledSkills ?? []);
+                useAppStore
+                  .getState()
+                  .addLog(
+                    `[skills] loaded ${skillsArr.length} items, ${disabledSet.size} disabled`,
+                  );
+                useStatusStore.getState().setSkills(
+                  skillsArr.map((s: SkillEntry) => {
+                    const fp: string = s.filePath;
+                    const scope: "global" | "project" =
+                      s.sourceInfo?.scope === "user" ? "global" : deriveSkillScope(fp);
+                    return {
+                      name: s.name,
+                      description: s.description,
+                      filePath: fp,
+                      baseDir: s.baseDir,
+                      disableModelInvocation: s.disableModelInvocation,
+                      enabled: !disabledSet.has(s.name),
+                      scope,
+                    };
+                  }),
+                );
+              })
+              .catch((err) => {
+                useAppStore
+                  .getState()
+                  .addLog(
+                    `[skills] call failed: ${err instanceof Error ? err.message : String(err)}`,
+                  );
+              });
+
+            await Promise.allSettled([extensionsPromise, skillsPromise, disabledSkillsPromise]);
+
+            // --- Priority 4 (parallel, max 3) ---
+            const mcpPromise = apiClient.call("agent.getMcpServers", { sessionId });
+            const queuePromise = apiClient.call("agent.getQueue", { sessionId });
+            const agentChangePromise = apiClient.call("agent.getLatestAgentChange", { sessionId });
+
+            mcpPromise
+              .then((res) => {
+                perfLog.info("[fetchInit] getMcpServers done", {
+                  sessionId,
+                  ms: Math.round(performance.now() - t0),
+                });
+                const rawServers = res.servers ?? [];
+                const servers: MCPServerInfo[] = rawServers.map((s) => ({
+                  name: s.name,
+                  status: s.status,
+                  error: s.error,
+                  toolCount: s.tools.length,
+                  tools: s.tools.map((t) => ({
+                    name: t.originalName,
+                    description: t.description,
+                  })),
+                  scope: (s.scope as "global" | "project") ?? "global",
+                  disabled: s.disabled,
+                }));
+                log.info("[MCP] getMcpServers", {
+                  sessionId,
+                  count: servers.length,
+                  names: servers.map((s) => s.name),
+                });
+                useStatusStore.getState().setMcpServers(servers);
+              })
+              .catch((err) => {
+                log.warn("agent.getMcpServers failed", {
+                  sessionId,
+                  err: err instanceof Error ? err.message : String(err),
+                });
+              });
+
+            queuePromise
+              .then((result) => {
+                perfLog.info("[fetchInit] getQueue done", {
+                  sessionId,
+                  ms: Math.round(performance.now() - t0),
+                });
+                perfLog.info("[fetchInit] ALL sub-calls dispatched", {
+                  sessionId,
+                  totalMs: Math.round(performance.now() - t0),
+                });
+                if (!result) return;
+                const { steering, followUp } = result;
+                if (steering.length > 0 || followUp.length > 0) {
+                  useSessionStore.setState((s) => ({
+                    queueBySession: {
+                      ...s.queueBySession,
+                      [sessionId]: { steering, followUp },
+                    },
+                  }));
+                }
+              })
+              .catch((err) => {
+                log.warn("agent.getQueue failed", {
+                  sessionId,
+                  err: err instanceof Error ? err.message : String(err),
+                });
+              });
+
+            await Promise.allSettled([mcpPromise, queuePromise, agentChangePromise]);
+
+            // --- Priority 5 (parallel) ---
+            const agentsPromise = apiClient.call("agent.getAgents", { sessionId });
+            const currentAgentPromise = apiClient.call("agent.getCurrentAgent", { sessionId });
+            const tierPromise = apiClient.call("agent.getTierModels", { sessionId });
+            const favoritesPromise = apiClient.call("project.getModelFavorites", {});
+            const currentSessionMeta = (() => {
+              for (const sessions of Object.values(get().sessionsByProject)) {
+                const found = sessions.find((s) => s.sessionId === sessionId);
+                if (found) return found;
+              }
+              return null;
+            })();
+            const persistedTierPromise = currentSessionMeta
+              ? apiClient
+                  .call("session.loadTierConfig", { sessionPath: currentSessionMeta.sessionPath })
+                  .catch(() => ({ config: null }))
+              : Promise.resolve({ config: null as unknown });
+
+            Promise.all([statePromise, tierPromise, persistedTierPromise])
+              .then(([rawState, rawTier, rawPersisted]) => {
+                const tierResult = rawTier as { models: Record<string, string> };
+                if (tierResult?.models) {
+                  useTierStore.getState().setGlobalDefaults(tierResult.models);
+                }
+                const persisted = rawPersisted as {
+                  config: { tierModels: Record<string, string>; currentTier: string | null } | null;
+                };
+                if (persisted.config) {
+                  useTierStore
+                    .getState()
+                    .setSessionTierModels(sessionId, persisted.config.tierModels);
+                  useTierStore
+                    .getState()
+                    .setSessionCurrentTier(
+                      sessionId,
+                      persisted.config.currentTier as "fast" | "pro" | "max" | null,
+                    );
+                }
+                const stateResult = rawState as AgentStateResult;
+                if (stateResult?.model) {
+                  useTierStore
+                    .getState()
+                    .syncTierFromModel(
+                      sessionId,
+                      stateResult.model.provider ?? "",
+                      stateResult.model.id ?? "",
+                    );
+                }
+              })
+              .catch(() => {});
+
+            favoritesPromise
+              .then((res) => {
+                if (res) {
+                  set({ modelFavorites: new Set((res as { favorites: string[] }).favorites) });
+                }
+              })
+              .catch(() => {});
+
+            Promise.all([agentsPromise, currentAgentPromise, agentChangePromise])
+              .then(
+                ([agentsResult, currentResult, agentChangeResult]: [unknown, unknown, unknown]) => {
+                  perfLog.info("[fetchInit] getAgents done", {
+                    sessionId,
+                    ms: Math.round(performance.now() - t0),
+                  });
+                  const raw = agentsResult as {
+                    agents?: Array<{
+                      name: string;
+                      description?: string;
+                      tier?: string;
+                      tools?: string[];
+                      permissionMode?: string;
+                      source?: string;
+                      filePath?: string;
+                    }>;
+                  };
+                  const agentList = (raw.agents ?? []).map((a) => ({
+                    name: a.name,
+                    description: a.description,
+                    tier: a.tier,
+                    tools: a.tools,
+                    permissionMode: a.permissionMode,
+                    source: (a.source ?? "builtin") as "builtin" | "user" | "project",
+                    filePath: a.filePath ?? "",
+                  }));
+                  useAgentStore.getState().setAgents(agentList);
+
+                  perfLog.info("[fetchInit] getCurrentAgent done", {
+                    sessionId,
+                    ms: Math.round(performance.now() - t0),
+                  });
+                  const agentResult = currentResult as { agentName: string | null };
+                  const agentName = agentResult.agentName ?? "build";
+                  useAgentStore.getState().setCurrentAgent(sessionId, agentName);
+
+                  perfLog.info("[fetchInit] getLatestAgentChange done", {
+                    sessionId,
+                    ms: Math.round(performance.now() - t0),
+                  });
+                  const result = agentChangeResult;
+                  if (
+                    result &&
+                    typeof result === "object" &&
+                    "agentName" in result &&
+                    typeof result.agentName === "string"
+                  ) {
+                    const restoredName = result.agentName;
+                    log.info("[fetchInit] restoring agent from latest change", {
+                      sessionId,
+                      agentName: restoredName,
+                      timestamp:
+                        "timestamp" in result && typeof result.timestamp === "string"
+                          ? result.timestamp
+                          : undefined,
+                    });
+                    const { switchAgent } = useAgentStore.getState();
+                    void switchAgent(restoredName, sessionId).catch((err: unknown) => {
+                      log.warn("[fetchInit] failed to restore agent", {
+                        sessionId,
+                        agentName: restoredName,
+                        err: err instanceof Error ? err.message : String(err),
+                      });
+                    });
+                  } else {
+                    useAgentStore.getState().fetchAgentDetail(sessionId);
+                    useAgentStore.getState().fetchAllTools(sessionId);
+                  }
+                },
+              )
+              .catch((err: unknown) => {
+                log.warn("[fetchInit] agent restoration failed", {
+                  sessionId,
+                  err: err instanceof Error ? err.message : String(err),
+                });
+              });
+          } finally {
+            _fetchInitPromiseMap.delete(sessionId);
+            _fetchInitTimestampMap.set(sessionId, Date.now());
+          }
+        })();
+
+        _fetchInitPromiseMap.set(sessionId, promise);
+        return promise;
       },
 
       fetchModelState: (sessionId) => {
@@ -1089,7 +1689,8 @@ export const useSessionStore = create<SessionState>()(
         }
       },
 
-      setCurrentModel: (provider, modelId) => set({ currentModel: { provider, id: modelId } }),
+      setCurrentModel: (provider, modelId) =>
+        set({ currentModel: { provider, id: modelId }, modelManuallySet: true }),
       setThinkingLevel: (level) => set({ currentThinkingLevel: level }),
 
       fetchModelFavorites: () => {
@@ -1125,9 +1726,165 @@ export const useSessionStore = create<SessionState>()(
       },
 
       cleanupActiveSession: (sessionId) => {
+        clearStatusWatchdog(sessionId);
         cleanupSession(get(), sessionId);
         cleanupSessionData(sessionId);
         set((s) => clearSubscriptionState(s, sessionId));
+        useTierStore.getState().clearSession(sessionId);
+      },
+
+      fetchAllSessionStatuses: async () => {
+        // Delegate to project-scoped fetch for the active project
+        const { activeProjectId, projectTabs } = get();
+        const tab = projectTabs.find((t) => t.id === activeProjectId);
+        if (!tab) return;
+        await get().fetchProjectSessionStatuses(tab.path);
+      },
+
+      fetchProjectSessionStatuses: async (projectPath: string) => {
+        const sessions = get().sessionsByProject[projectPath];
+        if (!sessions || sessions.length === 0) return;
+
+        const sessionStatusMap = get().sessionStatusMap;
+        const { activeSessionId } = get();
+
+        let updated = 0;
+
+        for (const s of sessions) {
+          if (!sessionStatusMap[s.sessionId]) {
+            if (s.sessionId !== activeSessionId) {
+              get().updateSessionStatus(s.sessionId, "idle");
+            }
+            updated++;
+          }
+        }
+
+        log.info("fetchProjectSessionStatuses: set idle for non-active sessions", {
+          projectPath,
+          total: sessions.length,
+          updated,
+          activeSessionId,
+        });
+      },
+
+      /**
+       * 后台轻量刷新会话列表：调 scanSessions，与缓存做 diff，只更新变化部分。
+       * 不阻塞 UI，失败静默忽略。
+       */
+      refreshSessionsInBackground: (projectPath) => {
+        apiClient
+          .call("project.scanSessions", { projectPath })
+          .then((result) => {
+            let sessions = result.sessions as SessionMeta[];
+
+            const seen = new Set<string>();
+            const seenPaths = new Set<string>();
+            sessions = sessions.filter((s) => {
+              if (seen.has(s.sessionId)) return false;
+              if (seenPaths.has(s.sessionPath)) return false;
+              seen.add(s.sessionId);
+              seenPaths.add(s.sessionPath);
+              return true;
+            });
+
+            const cached = get().sessionsByProject[projectPath] ?? [];
+            const cachedIds = new Set(cached.map((s) => s.sessionId));
+            const freshIds = new Set(sessions.map((s) => s.sessionId));
+
+            const added = sessions.filter((s) => !cachedIds.has(s.sessionId));
+            const removedIds = new Set(
+              cached
+                .filter((s) => !freshIds.has(s.sessionId) && !s.delegateParentSessionId)
+                .map((s) => s.sessionId),
+            );
+
+            if (added.length > 0 || removedIds.size > 0) {
+              const updatedMap = new Map(cached.map((s) => [s.sessionId, s]));
+              for (const fresh of sessions) {
+                const existing = updatedMap.get(fresh.sessionId);
+                if (existing) {
+                  updatedMap.set(fresh.sessionId, {
+                    ...existing,
+                    messageCount: fresh.messageCount,
+                    firstMessage: fresh.firstMessage,
+                    updatedAt: fresh.updatedAt,
+                  });
+                }
+              }
+
+              const merged = cached.filter((s) => !removedIds.has(s.sessionId)).concat(added);
+
+              set((s) => ({
+                sessionsByProject: { ...s.sessionsByProject, [projectPath]: merged },
+              }));
+
+              log.info("refreshSessionsInBackground: updated", {
+                projectPath,
+                added: added.length,
+                removed: removedIds.size,
+              });
+            }
+          })
+          .catch(() => {
+            // 后台刷新失败不影响用户
+          });
+      },
+
+      /**
+       * 批量拉取多个 session 的运行状态（轻量）。
+       * 优先尝试 batchGetSessionsStatus RPC，fallback 到逐个 agent.getState。
+       */
+      fetchSessionsStatusBatch: async (sessionIds) => {
+        if (sessionIds.length === 0) return;
+
+        const { activeSessionId } = get();
+        const targetIds = sessionIds.filter((id) => id !== activeSessionId);
+        if (targetIds.length === 0) return;
+
+        try {
+          const results: Array<{ sessionId: string; status: SessionStatus }> = [];
+
+          const raw = await apiClient.call("agent.batchGetSessionsStatus", {
+            sessionIds: targetIds,
+          });
+          for (const r of raw) {
+            results.push({ sessionId: r.sessionId, status: r.status as SessionStatus });
+          }
+
+          const updates: Record<string, SessionStatus> = {};
+          for (const r of results) {
+            updates[r.sessionId] = r.status;
+          }
+
+          set((s) => ({
+            sessionStatusMap: { ...s.sessionStatusMap, ...updates },
+          }));
+
+          log.info("fetchSessionsStatusBatch: updated", {
+            count: results.length,
+          });
+        } catch {
+          // 失败不影响用户
+        }
+      },
+
+      /**
+       * 拉取所有项目的所有会话状态（后台异步）
+       */
+      fetchAllProjectsSessionsStatus: async () => {
+        const { sessionsByProject, activeSessionId } = get();
+        const allIds: string[] = [];
+
+        for (const sessions of Object.values(sessionsByProject)) {
+          for (const s of sessions) {
+            if (s.sessionId !== activeSessionId) {
+              allIds.push(s.sessionId);
+            }
+          }
+        }
+
+        if (allIds.length === 0) return;
+        await get().fetchSessionsStatusBatch(allIds);
       },
 
       restoreFromPersisted: async () => {
@@ -1157,8 +1914,17 @@ export const useSessionStore = create<SessionState>()(
           set({ activeSessionId: null });
           get().setActiveSession(targetId);
 
+          // 恢复成功后，拉取活跃项目的 session 状态（不阻塞）
+          get().fetchAllSessionStatuses();
+
+          // 后台拉取所有项目所有 session 的运行状态
+          setTimeout(() => {
+            get().fetchAllProjectsSessionsStatus();
+          }, 500);
+
           return true;
-        } catch {
+        } catch (e) {
+          log.warn("Failed to recover session", { error: String(e) });
           return false;
         }
       },
@@ -1166,10 +1932,8 @@ export const useSessionStore = create<SessionState>()(
     {
       name: "pi-agent-session",
       partialize: (state) => ({
-        projectTabs: state.projectTabs,
-        activeProjectId: state.activeProjectId,
-        activeSessionId: state.activeSessionId,
         modelFavorites: [...state.modelFavorites],
+        lastActiveSessionByProject: state.lastActiveSessionByProject,
       }),
       merge: (persisted, current) => {
         const p = persisted as Partial<SessionState> & { modelFavorites?: string[] };
@@ -1177,6 +1941,7 @@ export const useSessionStore = create<SessionState>()(
           ...current,
           ...(persisted as Partial<SessionState>),
           modelFavorites: new Set(p.modelFavorites ?? []),
+          lastActiveSessionByProject: p.lastActiveSessionByProject ?? {},
           projectStartFailed: current.projectStartFailed,
           projectStartError: current.projectStartError,
           _projectVersion: current._projectVersion,
@@ -1214,10 +1979,15 @@ apiClient.onReconnect(() => {
     useSessionStore.setState(fn(useSessionStore.getState()));
 
   for (const sid of Object.keys(state.agentSubscriptions)) {
-    cleanupSession(state, sid);
+    if (sid !== activeSessionId) {
+      clearStatusWatchdog(sid);
+      cleanupSession(state, sid);
+    }
   }
 
-  setupSubscriptions(useSessionStore.getState(), storeSet, activeSessionId, session);
+  if (!state.agentSubscriptions[activeSessionId]) {
+    setupSubscriptions(useSessionStore.getState(), storeSet, activeSessionId, session);
+  }
 
   apiClient
     .call("agent.start", {
@@ -1242,16 +2012,39 @@ apiClient.onReconnect(() => {
         useSessionStore.setState((s) => ({
           sessionReady: { ...s.sessionReady, [activeSessionId]: true },
         }));
-        // Request rules snapshot after session is confirmed started
         requestRulesSnapshot(activeSessionId);
         storeGet().fetchInitialState(activeSessionId);
+
         if (result.status === "already_running") {
-          apiClient.call("agent.replayHoldEvents", { sessionId: activeSessionId }).catch((err) => {
-            log.warn("agent.replayHoldEvents failed", {
-              sessionId: activeSessionId,
-              err: err instanceof Error ? err.message : String(err),
+          useChatStore
+            .getState()
+            .loadSessionMessages(activeSessionId, {
+              force: true,
+              sessionPath: session.sessionPath,
+            })
+            .catch(() => {})
+            .then(() => {
+              return apiClient.call("agent.replayHoldEvents", { sessionId: activeSessionId });
+            })
+            .catch((err) => {
+              log.warn("[onReconnect] load+replay failed", {
+                sessionId: activeSessionId,
+                err: err instanceof Error ? err.message : String(err),
+              });
             });
-          });
+        } else {
+          useChatStore
+            .getState()
+            .loadSessionMessages(activeSessionId, {
+              force: true,
+              sessionPath: session.sessionPath,
+            })
+            .catch((err) => {
+              log.warn("[onReconnect] loadSessionMessages failed", {
+                sessionId: activeSessionId,
+                err: err instanceof Error ? err.message : String(err),
+              });
+            });
         }
       }
     })
@@ -1267,4 +2060,17 @@ apiClient.onReconnect(() => {
         };
       });
     });
+
+  storeGet()
+    .loadSessionsForProject(tab.path)
+    .catch((err) => {
+      log.warn("[onReconnect] loadSessionsForProject failed", {
+        projectPath: tab.path,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    });
+
+  setTimeout(() => {
+    useSessionStore.getState().fetchAllProjectsSessionsStatus();
+  }, 3000);
 });

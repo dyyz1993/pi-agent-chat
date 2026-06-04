@@ -53,7 +53,7 @@ describe("bash.command kill idempotent logic", () => {
     });
   });
 
-  it("should deduplicate second kill call for same toolCallId", async () => {
+  it("should forward second kill call for same toolCallId (no dedup)", async () => {
     await bashCommand({
       sessionId: "sess-1",
       action: "kill",
@@ -67,7 +67,7 @@ describe("bash.command kill idempotent logic", () => {
     });
 
     expect(result).toEqual({ ok: true });
-    expect(mockCallChannel).toHaveBeenCalledTimes(1);
+    expect(mockCallChannel).toHaveBeenCalledTimes(2);
   });
 
   it("should forward kill for a different toolCallId", async () => {

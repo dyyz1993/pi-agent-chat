@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useAttachmentStore } from "../../stores/use-attachment-store";
+import { formatFilePath } from "../../lib/format-path";
 import {
   Paperclip,
   Image as ImageIcon,
@@ -18,29 +20,21 @@ import {
   Shield,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { createLogger } from "../../../shared/lib/logger";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import { useChatStore } from "../../stores/use-chat-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { apiClient } from "../../lib/api-client";
 import { useExplorerStore } from "../../stores/use-explorer-store";
 import { useMemoryStore } from "../../stores/use-memory-store";
+import { useStatusStore } from "../../stores/use-status-store";
 import { useSupervisorStore } from "../../stores/use-supervisor-store";
 import type { TreeNode } from "../../types";
+import { isVisionModel } from "../../lib/vision-detection";
 
 type PopupMode = "at" | "slash" | null;
 type AtTab = "agents" | "files" | "memory";
 type SlashCategory = "commands" | "skills";
-
-interface ExtensionInfo {
-  path: string;
-  toolNames: string[];
-}
-
-interface SkillInfo {
-  filePath: string;
-  name: string;
-  description?: string;
-}
 
 interface CommandInfo {
   name: string;
@@ -71,6 +65,8 @@ interface FileBreadcrumb {
   label: string;
 }
 
+const logger = createLogger("chat");
+
 export function QuickActionToolbar() {
   const { t } = useTranslation("chat");
   const breakpoint = useLayoutStore((s) => s.breakpoint);
@@ -93,6 +89,42 @@ export function QuickActionToolbar() {
   const setActivePanelTab = useLayoutStore((s) => s.setActivePanelTab);
   const supervisorStatus = useSupervisorStore(
     (s) => (activeSessionId ? s.bySession[activeSessionId]?.status : null) ?? null,
+  );
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const addFiles = useAttachmentStore((s) => s.addFiles);
+
+  const currentModel = useSessionStore((s) => s.currentModel);
+  const availableModels = useSessionStore((s) => s.availableModels);
+  const supportsVision = currentModel
+    ? isVisionModel(
+        availableModels.find(
+          (m) => m.provider === currentModel.provider && m.id === currentModel.id,
+        ) ?? {},
+      )
+    : false;
+
+  const handleFileSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if (files && files.length > 0) {
+        addFiles(Array.from(files));
+      }
+      e.target.value = "";
+    },
+    [addFiles],
+  );
+
+  const handleImageSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if (files && files.length > 0) {
+        addFiles(Array.from(files));
+      }
+      e.target.value = "";
+    },
+    [addFiles],
   );
 
   const query = useMemo(() => {
@@ -125,44 +157,36 @@ export function QuickActionToolbar() {
     setItems([]);
   }, []);
 
-  const fetchAtAgents = useCallback(async () => {
+  const fetchAtAgents = useCallback(() => {
     if (!activeSessionId) return;
     setLoading(true);
     const result: PopupItem[] = [];
     try {
-      const extRes = (await apiClient.call("agent.getExtensions", {
-        sessionId: activeSessionId,
-      })) as { extensions: ExtensionInfo[] };
-      for (const ext of extRes.extensions) {
+      const { plugins, skills } = useStatusStore.getState();
+      for (const ext of plugins) {
         for (const toolName of ext.toolNames) {
           result.push({
             id: `tool-${ext.path}-${toolName}`,
             label: toolName,
             description: ext.path,
             icon: "bot",
-            accentColor: "text-purple-400",
+            accentColor: "text-semantic-agent",
             insertText: `@${toolName}`,
           });
         }
       }
-      const skillsRaw = (await apiClient.call("agent.getSkills", {
-        sessionId: activeSessionId,
-      })) as SkillInfo[] | { skills: SkillInfo[] };
-      const skillsArr: SkillInfo[] = Array.isArray(skillsRaw)
-        ? skillsRaw
-        : (skillsRaw.skills ?? []);
-      for (const skill of skillsArr) {
+      for (const skill of skills) {
         result.push({
           id: `skill-${skill.filePath}`,
           label: skill.name,
           description: skill.description,
           icon: "sparkles",
-          accentColor: "text-cyan-400",
+          accentColor: "text-semantic-tool",
           insertText: `@${skill.name}`,
         });
       }
-    } catch {
-      /* ignore */
+    } catch (e) {
+      logger.warn("Failed to fetch @ agents", { error: String(e) });
     } finally {
       setLoading(false);
     }
@@ -182,9 +206,9 @@ export function QuickActionToolbar() {
           result.push({
             id: `file-${e.path}`,
             label: e.name,
-            description: e.path,
+            description: formatFilePath(e.path),
             icon: e.type === "directory" ? "folder" : "file",
-            accentColor: e.type === "directory" ? "text-amber-400" : "text-blue-400",
+            accentColor: e.type === "directory" ? "text-semantic-notify" : "text-status-info",
             insertText: e.type === "directory" ? "" : `@${e.path}`,
             isFolder: e.type === "directory",
             folderPath: e.path,
@@ -204,13 +228,15 @@ export function QuickActionToolbar() {
             label: n.name,
             description: n.path,
             icon: n.type === "directory" ? "folder" : "file",
-            accentColor: n.type === "directory" ? "text-amber-400" : "text-blue-400",
+            accentColor: n.type === "directory" ? "text-semantic-notify" : "text-status-info",
             insertText: n.type === "directory" ? "" : `@${n.path}`,
             isFolder: n.type === "directory",
             folderPath: n.path,
           });
         }
       }
+    } catch {
+      /* ignore */
     } finally {
       setLoading(false);
     }
@@ -239,12 +265,12 @@ export function QuickActionToolbar() {
           label: f.filename,
           description: f.description ?? f.type ?? undefined,
           icon: f.type === "bookmark" ? "book" : "brain",
-          accentColor: "text-teal-400",
+          accentColor: "text-semantic-memory",
           insertText: `@memory:${f.filename}`,
         });
       }
-    } catch {
-      /* ignore */
+    } catch (e) {
+      logger.warn("Failed to fetch @ memory", { error: String(e) });
     } finally {
       setLoading(false);
     }
@@ -266,12 +292,12 @@ export function QuickActionToolbar() {
           label: cmd.name,
           description: cmd.description,
           icon: cmd.source === "extension" ? "puzzle" : "filetext",
-          accentColor: "text-amber-400",
+          accentColor: "text-semantic-notify",
           insertText: `/${cmd.name}`,
         });
       }
-    } catch {
-      /* ignore */
+    } catch (e) {
+      logger.warn("Failed to fetch slash commands", { error: String(e) });
     } finally {
       setLoading(false);
     }
@@ -293,17 +319,12 @@ export function QuickActionToolbar() {
           label: cmd.name,
           description: cmd.description,
           icon: "sparkles",
-          accentColor: "text-cyan-400",
+          accentColor: "text-semantic-tool",
           insertText: `/${cmd.name}`,
         });
       }
-      const skillsRaw = (await apiClient.call("agent.getSkills", {
-        sessionId: activeSessionId,
-      })) as SkillInfo[] | { skills: SkillInfo[] };
-      const skillsArr: SkillInfo[] = Array.isArray(skillsRaw)
-        ? skillsRaw
-        : (skillsRaw.skills ?? []);
-      for (const skill of skillsArr) {
+      const { skills: storeSkills } = useStatusStore.getState();
+      for (const skill of storeSkills) {
         const exists = result.some((r) => r.label === skill.name);
         if (exists) continue;
         result.push({
@@ -311,12 +332,12 @@ export function QuickActionToolbar() {
           label: skill.name,
           description: skill.description,
           icon: "sparkles",
-          accentColor: "text-cyan-400",
+          accentColor: "text-semantic-tool",
           insertText: `/${skill.name}`,
         });
       }
-    } catch {
-      /* ignore */
+    } catch (e) {
+      logger.warn("Failed to fetch slash skills", { error: String(e) });
     } finally {
       setLoading(false);
     }
@@ -465,18 +486,39 @@ export function QuickActionToolbar() {
     <div className="relative px-3 pt-1">
       <div className="flex items-center gap-1 min-h-[40px]">
         <div className="flex items-center gap-0.5">
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={handleFileSelect}
+          />
           <button
-            className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+            onClick={() => fileInputRef.current?.click()}
+            className="p-1.5 rounded-md hover:bg-surface-dim dark:hover:bg-surface-dim text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary transition-colors"
             title={t("quickAction.attachment")}
           >
             <Paperclip className="w-4 h-4" />
           </button>
-          <button
-            className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
-            title={t("quickAction.image")}
-          >
-            <ImageIcon className="w-4 h-4" />
-          </button>
+          {supportsVision && (
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={handleImageSelect}
+            />
+          )}
+          {supportsVision && (
+            <button
+              onClick={() => imageInputRef.current?.click()}
+              className="p-1.5 rounded-md hover:bg-surface-dim dark:hover:bg-surface-dim text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary transition-colors"
+              title={t("quickAction.image")}
+            >
+              <ImageIcon className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
         <div className="ml-auto flex items-center gap-0.5">
@@ -484,8 +526,8 @@ export function QuickActionToolbar() {
             onClick={handleOpenAt}
             className={`px-2 py-1 rounded-md text-xs font-medium transition-colors ${
               popupMode === "at"
-                ? "bg-indigo-600/30 text-indigo-300 border border-indigo-500/50"
-                : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 border border-transparent"
+                ? "bg-semantic-accent/30 text-semantic-accent border border-semantic-accent/50"
+                : "hover:bg-surface-dim dark:hover:bg-surface-dim text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary border border-transparent"
             }`}
             title={t("quickAction.atMention")}
           >
@@ -498,8 +540,8 @@ export function QuickActionToolbar() {
             onClick={handleOpenSlash}
             className={`px-2 py-1 rounded-md text-xs font-medium transition-colors ${
               popupMode === "slash"
-                ? "bg-amber-600/30 text-amber-300 border border-amber-500/50"
-                : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 border border-transparent"
+                ? "bg-semantic-notify/30 text-semantic-notify border border-semantic-notify/50"
+                : "hover:bg-surface-dim dark:hover:bg-surface-dim text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary border border-transparent"
             }`}
             title={t("quickAction.commandsAndSkills")}
           >
@@ -513,14 +555,14 @@ export function QuickActionToolbar() {
               setActivePanelTab("status");
               showStatus();
             }}
-            className={`p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${
+            className={`p-1.5 rounded-md hover:bg-surface-dim dark:hover:bg-surface-dim transition-colors ${
               !supervisorStatus?.enabled
-                ? "text-gray-400 dark:text-gray-500"
+                ? "text-text-tertiary"
                 : supervisorStatus.state === "paused"
-                  ? "text-amber-500"
+                  ? "text-semantic-notify"
                   : supervisorStatus.state === "checking" || supervisorStatus.state === "continuing"
-                    ? "text-blue-500 animate-pulse"
-                    : "text-green-500"
+                    ? "text-status-info animate-pulse"
+                    : "text-status-success"
             }`}
             title="Supervisor"
           >
@@ -532,9 +574,9 @@ export function QuickActionToolbar() {
       {popupMode && (
         <div
           ref={panelRef}
-          className="absolute left-3 right-3 bottom-full mb-1 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg shadow-xl shadow-black/40 overflow-hidden z-50"
+          className="absolute left-3 right-3 bottom-full mb-1 bg-surface-dim dark:bg-surface-code border border-border-secondary rounded-lg shadow-xl shadow-black/40 overflow-hidden z-50"
         >
-          <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-gray-800">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-border-secondary">
             <div className="flex items-center gap-2 min-w-0">
               {popupMode === "at" ? (
                 <div className="flex gap-1 shrink-0">
@@ -550,8 +592,8 @@ export function QuickActionToolbar() {
                       }}
                       className={`px-2 py-0.5 rounded text-[11px] transition-colors whitespace-nowrap ${
                         atTab === tab.key
-                          ? "bg-indigo-600/30 text-indigo-300"
-                          : "text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                          ? "bg-semantic-accent/30 text-semantic-accent"
+                          : "text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary hover:bg-surface-dim dark:hover:bg-surface-dim"
                       }`}
                     >
                       {tab.label}
@@ -566,8 +608,8 @@ export function QuickActionToolbar() {
                       onClick={() => setSlashCategory(cat)}
                       className={`px-2 py-0.5 rounded text-[11px] transition-colors ${
                         slashCategory === cat
-                          ? "bg-amber-600/30 text-amber-300"
-                          : "text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                          ? "bg-semantic-notify/30 text-semantic-notify"
+                          : "text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary hover:bg-surface-dim dark:hover:bg-surface-dim"
                       }`}
                     >
                       {cat === "commands" ? t("quickAction.commands") : t("quickAction.skills")}
@@ -575,11 +617,11 @@ export function QuickActionToolbar() {
                   ))}
                 </div>
               )}
-              {loading && <Loader2 className="w-3 h-3 text-gray-500 animate-spin shrink-0" />}
+              {loading && <Loader2 className="w-3 h-3 text-text-tertiary animate-spin shrink-0" />}
             </div>
             <button
               onClick={closePopup}
-              className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors shrink-0 ml-1"
+              className="p-1 rounded hover:bg-surface-dim dark:hover:bg-surface-dim text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary transition-colors shrink-0 ml-1"
               title={t("common:close")}
             >
               <X className="w-3.5 h-3.5" />
@@ -587,19 +629,19 @@ export function QuickActionToolbar() {
           </div>
 
           {popupMode === "at" && atTab === "files" && fileBreadcrumbs.length > 0 && (
-            <div className="flex items-center gap-1 px-3 py-1 border-b border-gray-200/40 dark:border-gray-800/40 text-[11px] overflow-x-auto">
+            <div className="flex items-center gap-1 px-3 py-1 border-b border-border-secondary/40 text-[11px] overflow-x-auto">
               <button
                 onClick={() => handleBreadcrumb(-1)}
-                className="text-indigo-400 hover:text-indigo-300 shrink-0"
+                className="text-semantic-accent hover:text-semantic-accent shrink-0"
               >
                 {t("quickAction.rootDir")}
               </button>
               {fileBreadcrumbs.map((bc, i) => (
                 <span key={bc.path} className="flex items-center gap-1 shrink-0">
-                  <ChevronRight className="w-3 h-3 text-gray-400 dark:text-gray-600" />
+                  <ChevronRight className="w-3 h-3 text-text-tertiary" />
                   <button
                     onClick={() => handleBreadcrumb(i)}
-                    className={`${i === fileBreadcrumbs.length - 1 ? "text-gray-700 dark:text-gray-300" : "text-indigo-400 hover:text-indigo-300"}`}
+                    className={`${i === fileBreadcrumbs.length - 1 ? "text-text-secondary" : "text-semantic-accent hover:text-semantic-accent"}`}
                   >
                     {bc.label}
                   </button>
@@ -610,7 +652,7 @@ export function QuickActionToolbar() {
 
           <div className="max-h-[240px] min-h-[80px] overflow-y-auto" role="listbox">
             {items.length === 0 && !loading && (
-              <div className="px-3 py-6 text-center text-xs text-gray-400 dark:text-gray-600">
+              <div className="px-3 py-6 text-center text-xs text-text-tertiary">
                 {query ? t("quickAction.noMatchResults") : t("common:noData")}
               </div>
             )}
@@ -624,23 +666,21 @@ export function QuickActionToolbar() {
                 onKeyDown={handleListKeyDown}
                 className={`w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors ${
                   idx === activeIndex
-                    ? "bg-gray-100/80 dark:bg-gray-800/80"
-                    : "hover:bg-gray-100/50 dark:hover:bg-gray-800/50"
+                    ? "bg-surface-code/80 dark:bg-surface-dim/80"
+                    : "hover:bg-surface-code/50 dark:hover:bg-surface-dim/50"
                 }`}
               >
                 <div className={`shrink-0 ${item.accentColor}`}>{renderIcon(item.icon)}</div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm text-gray-800 dark:text-gray-200 truncate">
-                    {item.label}
-                  </div>
+                  <div className="text-sm text-text-primary truncate">{item.label}</div>
                   {item.description && !item.isFolder && (
-                    <div className="text-[11px] text-gray-400 dark:text-gray-600 truncate">
+                    <div className="text-[11px] text-text-tertiary truncate">
                       {item.description}
                     </div>
                   )}
                 </div>
                 {item.isFolder && (
-                  <ChevronRight className="w-3.5 h-3.5 text-gray-400 dark:text-gray-600 shrink-0" />
+                  <ChevronRight className="w-3.5 h-3.5 text-text-tertiary shrink-0" />
                 )}
               </button>
             ))}

@@ -35,29 +35,27 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     }
 
     return (
-      <div className="h-screen flex items-center justify-center bg-white dark:bg-gray-950">
+      <div className="h-screen flex items-center justify-center bg-bg-elevated dark:bg-surface-code">
         <div className="text-center max-w-md px-6">
-          <div className="text-2xl font-semibold text-gray-900 dark:text-white mb-2">
+          <div className="text-2xl font-semibold text-text-primary mb-2">
             {i18n.t("common:errorTitle")}
           </div>
-          <div className="text-gray-500 dark:text-gray-400 text-sm mb-6">
-            {i18n.t("common:errorDescription")}
-          </div>
+          <div className="text-text-tertiary text-sm mb-6">{i18n.t("common:errorDescription")}</div>
           <button
             onClick={this.handleRetry}
-            className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-sm rounded-lg transition-colors"
+            className="px-4 py-2 bg-semantic-accent hover:bg-semantic-accent/80 text-white text-sm rounded-lg transition-colors"
           >
             {i18n.t("common:retry")}
           </button>
           <div className="mt-6">
             <button
               onClick={this.toggleDetails}
-              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xs transition-colors"
+              className="text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary text-xs transition-colors"
             >
               {this.state.detailsOpen ? "▼" : "▶"} {i18n.t("common:errorDetail")}
             </button>
             {this.state.detailsOpen && this.state.error && (
-              <pre className="mt-2 text-left text-xs text-red-500 dark:text-red-400 bg-gray-100 dark:bg-[#111827] rounded-lg p-3 overflow-auto max-h-40 whitespace-pre-wrap break-all">
+              <pre className="mt-2 text-left text-xs text-status-error bg-surface-dim dark:bg-surface-code rounded-lg p-3 overflow-auto max-h-40 whitespace-pre-wrap break-all">
                 {this.state.error.message}
                 {this.state.error.stack && (
                   <>

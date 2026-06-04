@@ -2,6 +2,9 @@ import { create } from "zustand";
 import { useMemo } from "react";
 import { apiClient } from "../lib/api-client";
 import { useSessionStore } from "./use-session-store";
+import { createLogger } from "../../shared/lib/logger";
+
+const log = createLogger("chat");
 import type { ContentBlock, UIInteractionBlock } from "../types";
 
 export interface UIPendingRequest {
@@ -15,6 +18,13 @@ export interface UIPendingRequest {
   placeholder?: string;
   prefill?: string;
   timeout?: number;
+  toolCallId?: string;
+  hookMeta?: {
+    toolName: string;
+    matcher: string;
+    command?: string;
+    reason: string;
+  };
 }
 
 interface UIRequestState {
@@ -61,6 +71,7 @@ function toBlock(state: UIRequestState): UIInteractionBlock {
     prefill: request.prefill,
     response,
     respondedAt: status !== "pending" ? Date.now() : undefined,
+    hookMeta: request.hookMeta,
   };
 }
 
@@ -114,7 +125,7 @@ export const useUIDialogStore = create<UIDialogState>((set, get) => ({
         response,
       })
       .catch((err) => {
-        console.warn("[ui-dialog] respondUI failed:", err);
+        log.warn("respondUI failed", { error: String(err) });
       });
 
     const newStates = new Map(requestStates);
@@ -140,7 +151,7 @@ export const useUIDialogStore = create<UIDialogState>((set, get) => ({
         response: { cancelled: true },
       })
       .catch((err) => {
-        console.warn("[ui-dialog] dismissUI failed:", err);
+        log.warn("dismissUI failed", { error: String(err) });
       });
 
     const newStates = new Map(requestStates);
@@ -201,8 +212,28 @@ export function useUIBlockMap(
 
     const assigned = new Set<string>();
 
+    // Pass 1: toolCallId exact match (hooks ask etc.)
+    for (const req of storePending) {
+      if (req.sessionId !== sessionId || !req.toolCallId) continue;
+      const state = storeStates.get(req.requestId);
+      if (!state) continue;
+
+      for (const block of content) {
+        if (block.type !== "toolExecution") continue;
+        if (block.toolCallId === req.toolCallId) {
+          assigned.add(req.requestId);
+          const uiBlock = toBlock(state);
+          uiBlock.toolName = block.toolName;
+          result.set(block.toolCallId, uiBlock);
+          break;
+        }
+      }
+    }
+
+    // Pass 2: toolName match (ask-tools etc.)
     for (const block of content) {
       if (block.type !== "toolExecution" || block.status !== "running") continue;
+      if (result.has(block.toolCallId)) continue;
       const method = toolNameToMethod(block.toolName);
       if (!method) continue;
       const queue = pendingByMethod.get(method);

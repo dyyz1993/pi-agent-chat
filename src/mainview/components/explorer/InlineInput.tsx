@@ -48,7 +48,7 @@ export function InlineInput({ defaultValue = "", depth, onSubmit, onCancel }: In
         defaultValue={defaultValue}
         onKeyDown={handleKeyDown}
         onBlur={handleBlur}
-        className="w-full px-1 py-0.5 text-xs bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white border border-indigo-500 rounded outline-none"
+        className="w-full px-1 py-0.5 text-xs bg-surface-hover text-text-primary border border-semantic-accent rounded outline-none"
       />
     </div>
   );

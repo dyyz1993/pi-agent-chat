@@ -1,6 +1,10 @@
 import { create } from "zustand";
 import { apiClient } from "../lib/api-client";
 import { useAppStore } from "./use-app-store";
+import { createLogger } from "../../shared/lib/logger";
+import { useChatOverlayStore } from "./use-chat-overlay-store";
+
+const log = createLogger("git");
 
 export interface GitFileChange {
   path: string;
@@ -42,16 +46,18 @@ interface GitState {
   currentDiff: { filePath: string; diff: string; oldContent: string; newContent: string } | null;
   loadingDiff: boolean;
   expandedCommits: Set<string>;
-  commitFiles: Record<string, GitFileChange[]>;
+  commitFiles: Record<string, unknown[]>;
   loadingCommitFiles: Set<string>;
+
   branches: GitBranch[];
   loadingBranches: boolean;
   worktrees: GitWorktree[];
   loadingAction: string | null;
-
   checkGitRepo: (repoPath: string) => Promise<boolean>;
+  refresh: (repoPath: string) => Promise<void>;
+  refreshAll: (repoPath: string) => Promise<void>;
   fetchStatus: (repoPath: string) => Promise<void>;
-  fetchDiff: (repoPath: string, filePath: string, staged?: boolean) => Promise<void>;
+  fetchDiff: (repoPath: string, filePath: string, staged: boolean) => Promise<void>;
   fetchLog: (repoPath: string) => Promise<void>;
   clearDiff: () => void;
   toggleCommitExpand: (repoPath: string, hash: string) => Promise<void>;
@@ -65,7 +71,6 @@ interface GitState {
   pull: (repoPath: string) => Promise<void>;
   fetchWorktrees: (repoPath: string) => Promise<void>;
   addWorktree: (repoPath: string, branch: string, sourceBranch?: string) => Promise<GitWorktree>;
-  refresh: (repoPath: string) => Promise<void>;
 }
 
 export const useGitStore = create<GitState>((set, get) => ({
@@ -93,7 +98,8 @@ export const useGitStore = create<GitState>((set, get) => ({
       const res = await apiClient.call("git.checkRepo", { repoPath });
       set({ isGitRepo: res.isGitRepo });
       return res.isGitRepo;
-    } catch {
+    } catch (e) {
+      log.warn("Failed to check git repo", { repoPath, error: String(e) });
       set({ isGitRepo: false });
       return false;
     }
@@ -101,6 +107,15 @@ export const useGitStore = create<GitState>((set, get) => ({
 
   refresh: async (repoPath) => {
     await get().fetchStatus(repoPath);
+  },
+
+  refreshAll: async (repoPath) => {
+    if (!get().isGitRepo) return;
+    await Promise.all([
+      get().fetchStatus(repoPath),
+      get().fetchWorktrees(repoPath),
+      get().fetchBranches(repoPath),
+    ]);
   },
 
   fetchStatus: async (repoPath) => {
@@ -141,6 +156,7 @@ export const useGitStore = create<GitState>((set, get) => ({
       const res = await apiClient.call("git.diff", { repoPath, filePath, staged });
       addLog(`Git diff result: ${res.diff.length} chars`);
       set({ currentDiff: res, loadingDiff: false });
+      useChatOverlayStore.getState().openDiff();
     } catch (err) {
       addLog(`Git diff error: ${err instanceof Error ? err.message : String(err)}`);
       set({ loadingDiff: false });
@@ -163,7 +179,10 @@ export const useGitStore = create<GitState>((set, get) => ({
     }
   },
 
-  clearDiff: () => set({ currentDiff: null }),
+  clearDiff: () => {
+    useChatOverlayStore.getState().close();
+    set({ currentDiff: null });
+  },
 
   toggleCommitExpand: async (repoPath, hash) => {
     const { expandedCommits, commitFiles } = get();
@@ -204,6 +223,7 @@ export const useGitStore = create<GitState>((set, get) => ({
     try {
       const res = await apiClient.call("git.commitFileDiff", { repoPath, hash, filePath });
       set({ currentDiff: res, loadingDiff: false });
+      useChatOverlayStore.getState().openDiff();
     } catch (err) {
       addLog(`Git commitFileDiff error: ${err instanceof Error ? err.message : String(err)}`);
       set({ loadingDiff: false });
@@ -335,7 +355,7 @@ export const useGitStore = create<GitState>((set, get) => ({
     const addLog = useAppStore.getState().addLog;
     try {
       const res = await apiClient.call("git.worktreeAdd", { repoPath, branch, sourceBranch });
-      set((s) => ({ worktrees: [...s.worktrees, res.worktree] }));
+      await get().fetchWorktrees(repoPath);
       return res.worktree;
     } catch (err) {
       addLog(`Git worktreeAdd error: ${err instanceof Error ? err.message : String(err)}`);

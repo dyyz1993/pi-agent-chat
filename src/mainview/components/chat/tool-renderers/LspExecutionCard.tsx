@@ -1,16 +1,12 @@
-import { memo, useState, useMemo } from "react";
-import {
-  ChevronRight,
-  ChevronDown,
-  CheckCircle,
-  AlertCircle,
-  AlertTriangle,
-  Info,
-} from "lucide-react";
+import { memo, useState, useMemo, useEffect, useRef, Fragment } from "react";
+import { CheckCircle, AlertCircle, AlertTriangle, Info } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { createLogger } from "../../../../shared/lib/logger";
 import type { ContentBlock } from "../../../types";
-import { getToolIcon } from "../tool-icon-map";
 import { CopyButton } from "../CopyButton";
+import { ToolCardHeader } from "../primitives/ToolCardHeader";
+import type { ToolCardStatus } from "../primitives/ToolCardHeader";
+import { useSettingsStore } from "../../../stores/use-settings-store";
 
 interface LspDiagnostic {
   range?: {
@@ -28,6 +24,8 @@ interface LspExecutionCardProps {
   block: Extract<ContentBlock, { type: "toolExecution" }>;
   blockId?: string;
 }
+
+const logger = createLogger("chat");
 
 function parseLspOutput(output: string): {
   action: string;
@@ -51,8 +49,8 @@ function parseLspOutput(output: string): {
   if (jsonStr.startsWith("[")) {
     try {
       diagnostics = JSON.parse(jsonStr) as LspDiagnostic[];
-    } catch {
-      // parse failed, keep empty
+    } catch (e) {
+      logger.warn("Failed to parse LSP diagnostics output", { error: String(e) });
     }
   }
 
@@ -77,23 +75,69 @@ function getSeverityIcon(severity?: number) {
 function getSeverityColor(severity?: number): string {
   switch (severity) {
     case 1:
-      return "text-red-400";
+      return "text-status-error";
     case 2:
-      return "text-yellow-400";
+      return "text-status-warning";
     case 3:
-      return "text-blue-400";
+      return "text-status-info";
     case 4:
-      return "text-gray-400";
+      return "text-text-tertiary";
     default:
-      return "text-gray-400";
+      return "text-text-tertiary";
   }
+}
+
+function LspBadge({
+  hasDiagnostics,
+  errorCount,
+  warnCount,
+  totalIssues,
+  isError,
+  isRunning,
+  copyText,
+  copyTitle,
+}: {
+  hasDiagnostics: boolean;
+  errorCount: number;
+  warnCount: number;
+  totalIssues: number;
+  isError: boolean;
+  isRunning: boolean;
+  copyText: string;
+  copyTitle: string;
+}) {
+  return (
+    <Fragment>
+      {!isRunning && hasDiagnostics && (
+        <span className="text-[10px] flex items-center gap-1">
+          {errorCount > 0 && <span className="text-status-error">{errorCount}E</span>}
+          {warnCount > 0 && <span className="text-status-warning">{warnCount}W</span>}
+          <span className="text-text-tertiary">{totalIssues} issues</span>
+        </span>
+      )}
+      {!isRunning && !isError && (
+        <CheckCircle className="w-3.5 h-3.5 text-status-success shrink-0" />
+      )}
+      {isError && <span className="w-3.5 h-3.5 shrink-0 text-status-error">✕</span>}
+      <CopyButton text={copyText} size="xs" title={copyTitle} />
+    </Fragment>
+  );
 }
 
 export const LspExecutionCard = memo(function LspExecutionCard({ block }: LspExecutionCardProps) {
   const { t } = useTranslation("chat");
-  const [collapsed, setCollapsed] = useState(false);
-
+  const collapseToolCards = useSettingsStore((s) => s.collapseToolCards);
   const isRunning = block.status === "running";
+
+  const [collapsed, setCollapsed] = useState(() => !isRunning && collapseToolCards);
+  const wasRunningRef = useRef(isRunning);
+
+  useEffect(() => {
+    if (wasRunningRef.current && !isRunning && collapseToolCards) {
+      setCollapsed(true);
+    }
+    wasRunningRef.current = isRunning;
+  }, [isRunning, collapseToolCards]);
   const isError = block.status === "error";
 
   const parsed = useMemo(() => parseLspOutput(block.output ?? ""), [block.output]);
@@ -104,59 +148,42 @@ export const LspExecutionCard = memo(function LspExecutionCard({ block }: LspExe
 
   const copyText = `[lsp] ${parsed.action}\n${block.output ?? ""}`;
 
+  const status: ToolCardStatus = isRunning ? "running" : isError ? "error" : "done";
+
+  const description = parsed.action
+    ? parsed.action
+    : (block.output?.split("\n")[0]?.slice(0, 80) ?? t("waitingOutput"));
+
+  const badge = (
+    <LspBadge
+      hasDiagnostics={hasDiagnostics}
+      errorCount={errorCount}
+      warnCount={warnCount}
+      totalIssues={parsed.diagnostics.length}
+      isError={isError}
+      isRunning={isRunning}
+      copyText={copyText}
+      copyTitle={t("copyAllExecution")}
+    />
+  );
+
   let bgClass: string;
-  if (isRunning) bgClass = "bg-blue-950/15 dark:bg-blue-950/15";
-  else if (isError) bgClass = "bg-red-950/10 dark:bg-red-950/10";
-  else bgClass = "bg-amber-950/[0.06] dark:bg-gray-800/20";
+  if (isRunning) bgClass = "bg-status-info/10";
+  else if (isError) bgClass = "bg-status-error/5";
+  else bgClass = "bg-status-warning/[0.05] dark:bg-surface-dim/50";
 
   return (
     <div className={`overflow-hidden ${bgClass}`}>
-      <div className="px-3 py-1 flex items-center gap-2 text-xs">
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className="p-0.5 text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 transition-colors shrink-0"
-          title={collapsed ? t("expandToolCard") : t("collapseToolCard")}
-        >
-          {collapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-        </button>
-
-        {(() => {
-          const { icon: LspIcon } = getToolIcon("lsp_exec");
-          return <LspIcon className="w-3 h-3 shrink-0 text-cyan-400" />;
-        })()}
-
-        <span className="font-medium text-cyan-300/90">
-          lsp
-          {parsed.action && (
-            <span className="text-gray-500 font-normal ml-1">· {parsed.action}</span>
-          )}
-        </span>
-
-        {!isRunning && hasDiagnostics && !collapsed && (
-          <span className="ml-1.5 text-[10px] flex items-center gap-1">
-            {errorCount > 0 && <span className="text-red-400">{errorCount}E</span>}
-            {warnCount > 0 && <span className="text-yellow-400">{warnCount}W</span>}
-            <span className="text-gray-500">{parsed.diagnostics.length} issues</span>
-          </span>
-        )}
-
-        {isRunning && <span className="text-blue-400 animate-pulse text-[10px]">running</span>}
-
-        {!isRunning && !isError && (
-          <CheckCircle className="w-3.5 h-3.5 text-green-500 shrink-0 ml-auto" />
-        )}
-        {isError && <span className="w-3.5 h-3.5 shrink-0 ml-auto text-red-400">✕</span>}
-
-        <CopyButton text={copyText} size="xs" title={t("copyAllExecution")} />
-      </div>
-
-      {collapsed && (
-        <div className="px-3 pb-2 text-[11px] text-gray-400 dark:text-gray-500 truncate">
-          {hasDiagnostics
-            ? `${parsed.diagnostics.length} diagnostics (${errorCount} errors, ${warnCount} warnings)`
-            : (block.output?.split("\n")[0].slice(0, 80) ?? t("waitingOutput"))}
-        </div>
-      )}
+      <ToolCardHeader
+        toolName="lsp_exec"
+        status={status}
+        description={description}
+        collapsed={collapsed}
+        onClick={() => setCollapsed((c) => !c)}
+        startedAt={block.startedAt}
+        endedAt={block.endedAt}
+        badge={badge}
+      />
 
       {!collapsed && (
         <div className="pb-2">
@@ -171,7 +198,7 @@ export const LspExecutionCard = memo(function LspExecutionCard({ block }: LspExe
                 return (
                   <div
                     key={i}
-                    className="flex items-start gap-2 py-1 px-2 rounded hover:bg-white/5 dark:hover:bg-white/[0.03] group"
+                    className="flex items-start gap-2 py-1 px-2 rounded hover:bg-white/5 dark:hover:bg-white/5 group"
                   >
                     <Icon className={`w-3 h-3 mt-0.5 shrink-0 ${color}`} />
 
@@ -181,17 +208,17 @@ export const LspExecutionCard = memo(function LspExecutionCard({ block }: LspExe
                           L{line}:{char}
                         </span>
                         {diag.source && (
-                          <span className="text-gray-500 text-[10px] shrink-0">
+                          <span className="text-text-tertiary text-[10px] shrink-0">
                             [{diag.source}]
                           </span>
                         )}
                         {diag.code != null && (
-                          <span className="text-gray-600 dark:text-gray-400 text-[10px] shrink-0">
+                          <span className="text-text-secondary text-[10px] shrink-0">
                             ({String(diag.code)})
                           </span>
                         )}
                       </div>
-                      <span className="text-[11px] text-gray-300 dark:text-gray-400 break-words">
+                      <span className="text-[11px] text-text-secondary break-words">
                         {diag.message}
                       </span>
                     </div>
@@ -200,9 +227,9 @@ export const LspExecutionCard = memo(function LspExecutionCard({ block }: LspExe
               })}
             </div>
           ) : isRunning ? (
-            <div className="px-3 py-1 text-[11px] text-gray-400 italic">{t("waiting")}</div>
+            <div className="px-3 py-1 text-[11px] text-text-tertiary italic">{t("waiting")}</div>
           ) : block.output ? (
-            <pre className="mx-3 mt-0.5 text-[11px] text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-36 overflow-y-auto rounded px-2 py-1.5 bg-black/20">
+            <pre className="mx-3 mt-0.5 text-[11px] text-text-secondary overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-36 overflow-y-auto rounded px-2 py-1.5 bg-black/20">
               {block.output}
             </pre>
           ) : null}

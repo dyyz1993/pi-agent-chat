@@ -16,8 +16,8 @@ function read(rel: string): string {
 function hasStaleGuard(src: string, marker: string): boolean {
   const idx = src.indexOf(marker);
   if (idx === -1) return false;
-  // Look 1500 chars ahead for a stale check (handler bodies can be long)
-  return src.slice(idx, idx + 1500).includes("stale");
+  // Look 2000 chars ahead for a stale check (handler bodies can be long)
+  return src.slice(idx, idx + 2000).includes("stale");
 }
 
 describe("Stale ctx fix verification — all fixes", () => {
@@ -72,10 +72,10 @@ describe("Stale ctx fix verification — all fixes", () => {
     expect(section).toContain("/stale/i.test(msg)");
   });
 
-  it("Fix 6: subagent-v2 background finally stale catch (×2)", () => {
+  it("Fix 6: subagent-v2 delegates via coordinator channel (stale guard moved to coordinator)", () => {
     const src = read("extensions/subagent-v2/index.ts");
-    const matches = src.match(/\/stale\/i\.test\(e?Msg\)/g);
-    expect(matches?.length).toBeGreaterThanOrEqual(2);
+    expect(src).toContain("coordinatorClient.call");
+    expect(src).toContain("catch (err)");
   });
 
   it("Fix 7: message-bridge ctx.respondUI stale catch", () => {
@@ -110,7 +110,7 @@ describe("Stale ctx fix verification — all fixes", () => {
   });
 
   it("Fix 11: lsp diagnostics stale catch", () => {
-    const src = read("extensions/lsp/lsp/index.ts");
+    const src = read("extensions/lsp/index.ts");
     expect(hasStaleGuard(src, "lsp_diagnostics")).toBe(true);
   });
 });

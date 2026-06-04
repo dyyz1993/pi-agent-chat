@@ -1,4 +1,7 @@
 import { useState, useCallback, useRef } from "react";
+import { createLogger } from "../../shared/lib/logger";
+
+const log = createLogger("chat");
 
 const HISTORY_KEY = "pi-input-history";
 const MAX_ITEMS = 10;
@@ -13,8 +16,8 @@ function readHistory(sessionId: string): string[] {
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
     if (Array.isArray(parsed)) return (parsed as string[]).slice(0, MAX_ITEMS);
-  } catch {
-    /* ignore */
+  } catch (e) {
+    log.warn("Failed to read input history", { sessionId, error: String(e) });
   }
   return [];
 }
@@ -22,18 +25,9 @@ function readHistory(sessionId: string): string[] {
 function writeHistory(sessionId: string, items: string[]) {
   try {
     localStorage.setItem(getStorageKey(sessionId), JSON.stringify(items.slice(0, MAX_ITEMS)));
-  } catch {
-    /* ignore */
+  } catch (e) {
+    log.warn("Failed to write input history", { sessionId, error: String(e) });
   }
-}
-
-export function saveToInputHistory(sessionId: string, text: string): void {
-  const trimmed = text.trim();
-  if (!trimmed) return;
-  const h = readHistory(sessionId);
-  const filtered = h.filter((item) => item !== trimmed);
-  const updated = [trimmed, ...filtered].slice(0, MAX_ITEMS);
-  writeHistory(sessionId, updated);
 }
 
 export function useInputHistory(sessionId: string) {
@@ -87,15 +81,17 @@ export function useInputHistory(sessionId: string) {
     indexRef.current = -1;
     try {
       localStorage.removeItem(getStorageKey(sessionId));
-    } catch {
-      /* ignore */
+    } catch (e) {
+      log.warn("Failed to clear input history", { sessionId, error: String(e) });
     }
     forceUpdate((n) => n + 1);
   }, [sessionId]);
 
   const resetIndex = useCallback(() => {
-    indexRef.current = -1;
-    forceUpdate((n) => n + 1);
+    if (indexRef.current !== -1) {
+      indexRef.current = -1;
+      forceUpdate((n) => n + 1);
+    }
   }, []);
 
   return { saveToHistory, navigatePrev, navigateNext, clearHistory, resetIndex, hasPrev, hasNext };

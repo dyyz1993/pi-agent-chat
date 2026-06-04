@@ -8,6 +8,8 @@ import {
   writeFileSync,
 } from "fs";
 import { createReadStream } from "fs";
+
+import * as os from "os";
 import * as path from "path";
 import * as readline from "readline";
 import type { RPCServer } from "@dyyz1993/rpc-core";
@@ -23,6 +25,13 @@ import type { BashChannelEvent } from "../modules/bash";
 import type { LspChannelEvent } from "../modules/lsp";
 import type { RulesChannelEvent } from "../modules/rules";
 import type { RpcClientAPI, TreeEntry, ChannelTypeRegistry } from "@dyyz1993/pi-coding-agent";
+import { performance } from "perf_hooks";
+
+// 沙箱模式
+import { SandboxManager } from "../../sandbox/sandbox-manager";
+import { SandboxBoxProvider } from "../../sandbox/providers/sandbox-box";
+import type { ISandboxProvider } from "../../sandbox/types";
+import { SandboxRpcClient } from "../../sandbox/sandbox-rpc-client";
 
 type McpServerInfo = Awaited<ReturnType<RpcClientAPI["getMcpServers"]>>[number];
 
@@ -46,6 +55,19 @@ import { config } from "../../server-config";
 
 const log = createLogger("agent");
 const perfLog = createLogger("session-perf");
+
+/**
+ * Race a promise against a timeout. Rejects with a descriptive error if the
+ * promise does not settle within `ms` milliseconds.
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out (${ms}ms)`)), ms),
+    ),
+  ]);
+}
 
 /**
  * Strip parentSession from a JSONL session file's header entry.
@@ -78,31 +100,31 @@ function stripParentSessionFromHeader(filePath: string): void {
  * Layout: each subdirectory with an index.ts/js, or each .ts/.js file,
  * is treated as an extension. Symlinks are resolved.
  */
-function discoverExtensionArgs(): string[] {
-  const extDir = config.piExtensionsDir;
-  if (!existsSync(extDir)) {
-    log.warn("Global extensions directory not found", { extDir });
-    return [];
-  }
+function scanExtensionDir(dir: string, extensionPaths: string[]): void {
+  if (!existsSync(dir)) return;
 
-  const extensionPaths: string[] = [];
   try {
-    for (const entry of readdirSync(extDir, { withFileTypes: true })) {
-      if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name.startsWith(".") || entry.name === "node_modules" || entry.name === "__tests__")
+        continue;
 
       let isDir = entry.isDirectory();
       let isFile = entry.isFile();
       if (entry.isSymbolicLink()) {
         try {
-          const stats = statSync(path.join(extDir, entry.name));
+          const stats = statSync(path.join(dir, entry.name));
           isDir = stats.isDirectory();
           isFile = stats.isFile();
-        } catch {
+        } catch (e) {
+          log.debug("scanExtensions: skipping symlink target", {
+            name: entry.name,
+            error: String(e),
+          });
           continue;
         }
       }
 
-      const fullPath = path.join(extDir, entry.name);
+      const fullPath = path.join(dir, entry.name);
       if (isDir) {
         const indexTs = path.join(fullPath, "index.ts");
         const indexJs = path.join(fullPath, "index.js");
@@ -117,12 +139,40 @@ function discoverExtensionArgs(): string[] {
     }
   } catch (err: unknown) {
     log.warn("Failed to scan extensions directory", {
-      extDir,
+      dir,
       err: err instanceof Error ? err.message : String(err),
     });
   }
+}
 
-  log.info("Discovered extensions", { extDir, count: extensionPaths.length });
+function getBuiltinExtensionsDir(): string {
+  const cliPath = config.piCliPath;
+  const nmDir = path.resolve(cliPath, "..", "..");
+  const pkgDir = path.join(nmDir, "@dyyz1993", "pi-coding-agent");
+  const srcExists = existsSync(path.join(pkgDir, "src"));
+  return path.join(pkgDir, srcExists ? "src" : "dist", "extensions");
+}
+
+function discoverExtensionArgs(): string[] {
+  const extensionPaths: string[] = [];
+
+  const userExtDir = config.piExtensionsDir;
+  if (existsSync(userExtDir)) {
+    scanExtensionDir(userExtDir, extensionPaths);
+  } else {
+    log.warn("Global extensions directory not found", { extDir: userExtDir });
+  }
+
+  const builtinExtDir = getBuiltinExtensionsDir();
+  if (existsSync(builtinExtDir)) {
+    scanExtensionDir(builtinExtDir, extensionPaths);
+  }
+
+  log.info("Discovered extensions", {
+    userDir: userExtDir,
+    builtinDir: builtinExtDir,
+    count: extensionPaths.length,
+  });
   for (const p of extensionPaths) {
     log.info("  → extension:", { path: p });
   }
@@ -159,8 +209,9 @@ interface ManagedClient {
   client: RpcClientInstance;
   info: AgentProcessInfo;
   unsubscribe: () => void;
-  /** Mutable reference — updated on switchSession to reroute events */
   _activeSessionId: string;
+  lastActiveAt: number;
+  activeBackgroundTools: Set<string>;
 }
 
 import type { AgentProcessInfo } from "../modules/agent";
@@ -168,12 +219,72 @@ import type { AgentProcessInfo } from "../modules/agent";
 let cachedModule: { RpcClient: new (options?: Record<string, unknown>) => RpcClientAPI } | null =
   null;
 
+// 全局沙箱管理器（在 sandbox 模式下初始化）
+let globalSandboxManager: SandboxManager | null = null;
+
+export function initSandboxManager(projectsRoot: string): SandboxManager {
+  let provider: ISandboxProvider;
+  const providerType = config.sandboxProvider ?? "local";
+
+  if (providerType === "sandbox-box") {
+    provider = new SandboxBoxProvider({
+      sshHost: config.sandboxBoxSshHost ?? "192.168.0.29",
+      sshPort: config.sandboxBoxSshPort ?? 2201,
+      sshUser: config.sandboxBoxSshUser ?? "root",
+      sshKeyPath: config.sandboxBoxSshKey ?? "~/.ssh/id_rsa",
+      sandboxPort: 3200,
+      bridgePort: 3101,
+      baseLocalPort: config.sandboxBasePort,
+      piCliPath: config.piCliPath,
+      projectSourcePath: projectsRoot,
+      modelsJsonPath: config.sandboxBoxModelsJson,
+      settingsJsonPath: config.sandboxBoxSettingsJson,
+      extensionsPath: config.sandboxBoxExtensionsPath,
+    });
+  } else {
+    throw new Error(`Unknown sandbox provider: ${providerType}. Only "sandbox-box" is supported.`);
+  }
+
+  globalSandboxManager = new SandboxManager(provider, {
+    idleTimeoutMs: (config.sandboxIdleTimeout ?? 1800) * 1000,
+    gcIntervalMs: 60_000,
+  });
+
+  if (providerType === "sandbox-box" && provider instanceof SandboxBoxProvider) {
+    provider.cleanupStaleSandboxes([]).catch((err) => {
+      log.warn("startup sandbox cleanup failed (non-fatal)", { error: String(err) });
+    });
+  }
+
+  return globalSandboxManager;
+}
+
+export function getSandboxEndpoint(userId: string): string | null {
+  if (!globalSandboxManager) return null;
+  return globalSandboxManager.getEndpoint(userId) ?? null;
+}
+
+export function getSandboxManager(): SandboxManager | null {
+  return globalSandboxManager;
+}
+
 async function createRpcClient(
   cliPath: string,
   cwd: string,
   sessionPath: string | undefined,
+  userId?: string,
 ): Promise<{ client: RpcClientInstance; timings: { dynamicImport: number; construct: number } }> {
   const t0 = performance.now();
+
+  // 沙箱模式：通过 SandboxRpcClient 转发到沙箱容器
+  if (config.sandboxEnabled && globalSandboxManager && userId) {
+    const sandbox = await globalSandboxManager.getOrCreate(userId);
+    const client = new SandboxRpcClient(sandbox.endpoint) as unknown as RpcClientInstance;
+    const t1 = performance.now();
+    const timings = { dynamicImport: Math.round(t1 - t0), construct: 0 };
+    perfLog.info("[createRpcClient] sandbox mode", { userId, endpoint: sandbox.endpoint });
+    return { client, timings };
+  }
 
   cachedModule ??= (await import("@dyyz1993/pi-coding-agent")) as unknown as {
     RpcClient: new (options?: Record<string, unknown>) => RpcClientAPI;
@@ -195,9 +306,14 @@ async function createRpcClient(
     args,
     env: { ...process.env, NODE_OPTIONS: "--max-old-space-size=8192" },
   });
+  await client.start();
   const t2 = performance.now();
 
-  const timings = { dynamicImport: Math.round(t1 - t0), construct: Math.round(t2 - t1) };
+  const timings = {
+    dynamicImport: Math.round(t1 - t0),
+    construct: Math.round(t2 - t1),
+    start: Math.round(t2 - t1),
+  };
   perfLog.info("[createRpcClient] done", timings);
 
   return { client, timings };
@@ -205,9 +321,18 @@ async function createRpcClient(
 
 export class AgentProcessManager {
   private clients = new Map<string, ManagedClient>();
-  /** CWD-based process pool: projectPath → the ManagedClient running for that project */
-  private processByCwd = new Map<string, ManagedClient>();
+  /** CWD-based process tracking: projectPath → set of ManagedClients for that project */
+  private processByCwd = new Map<string, Set<ManagedClient>>();
   private servers = new Set<RPCServer>();
+  /** Guard: prevents recursive start() via coordinator session_delegate */
+  private _startInProgress = false;
+  /** Queued delegate requests received during start() */
+  private _pendingDelegateRequests: Array<{
+    sessionId: string;
+    msg: unknown;
+    channelName: string;
+    resolve: (result: unknown) => void;
+  }> = [];
   private sessionPaths = new Map<string, string>();
   /** Persistent projectPath per session — NOT cleaned on stop(), only on service restart.
       Allows restarting an inactive session when receiving delegate messages. */
@@ -220,6 +345,159 @@ export class AgentProcessManager {
   private parentChildMap = new Map<string, Set<string>>();
   private delegateReplyCount = new Map<string, number>();
   private delegateCreatedAt = new Map<string, number>();
+  private syncDelegateResolvers = new Map<
+    string,
+    {
+      resolve: (result: {
+        sessionId: string;
+        status: string;
+        exitCode: number;
+        finalText: string;
+        error?: string;
+      }) => void;
+      timeout: ReturnType<typeof setTimeout>;
+      parentSessionId: string;
+    }
+  >();
+  private subagentSyncChildren = new Set<string>();
+  private syncDelegateLastText = new Map<string, string>();
+
+  private static MAX_POOL_SIZE = 5;
+
+  private addToPool(poolKey: string, managed: ManagedClient): void {
+    let pool = this.processByCwd.get(poolKey);
+    if (!pool) {
+      pool = new Set();
+      this.processByCwd.set(poolKey, pool);
+    }
+    pool.add(managed);
+  }
+
+  private removeFromPool(poolKey: string, managed: ManagedClient): void {
+    const pool = this.processByCwd.get(poolKey);
+    if (pool) {
+      pool.delete(managed);
+      if (pool.size === 0) {
+        this.processByCwd.delete(poolKey);
+      }
+    }
+  }
+
+  private evictLRU(currentPoolKey: string): void {
+    const totalProcesses = [...this.processByCwd.values()].reduce(
+      (sum, pool) => sum + pool.size,
+      0,
+    );
+    if (totalProcesses < AgentProcessManager.MAX_POOL_SIZE) return;
+
+    let oldest: ManagedClient | null = null;
+    let oldestPoolKey: string | null = null;
+
+    const currentPool = this.processByCwd.get(currentPoolKey);
+    const currentPoolSize = currentPool?.size ?? 0;
+
+    for (const [poolKey, pool] of this.processByCwd) {
+      for (const mc of pool) {
+        if (mc.info.status === "streaming") continue;
+        if (mc.activeBackgroundTools.size > 0) continue;
+
+        const isCurrentProject = poolKey === currentPoolKey;
+
+        if (isCurrentProject && currentPoolSize <= 1) continue;
+
+        if (!oldest) {
+          oldest = mc;
+          oldestPoolKey = poolKey;
+        } else {
+          const oldestIsCurrent = oldestPoolKey === currentPoolKey;
+          if (!isCurrentProject && oldestIsCurrent) {
+            oldest = mc;
+            oldestPoolKey = poolKey;
+          } else if (
+            isCurrentProject === oldestIsCurrent &&
+            mc.lastActiveAt < oldest.lastActiveAt
+          ) {
+            oldest = mc;
+            oldestPoolKey = poolKey;
+          }
+        }
+      }
+    }
+
+    if (oldest && oldestPoolKey) {
+      const sid = oldest._activeSessionId;
+      log.info("[evictLRU] evicting idle process", {
+        totalBefore: totalProcesses,
+        poolKey: oldestPoolKey,
+        sessionId: sid,
+        isCurrentProject: oldestPoolKey === currentPoolKey,
+      });
+      oldest.unsubscribe();
+      oldest.client.stop().catch(() => {});
+      this.clients.delete(sid);
+      const pool = this.processByCwd.get(oldestPoolKey);
+      if (pool) {
+        pool.delete(oldest);
+        if (pool.size === 0) {
+          this.processByCwd.delete(oldestPoolKey);
+        }
+      }
+    }
+  }
+
+  private getPoolKey(projectPath: string, userId?: string): string {
+    return config.sandboxEnabled && userId ? `${projectPath}::${userId}` : projectPath;
+  }
+
+  private sessionMsgCache = new Map<
+    string,
+    {
+      messages: Array<{ entryId: string; message: unknown }>;
+      customEntries: Array<{
+        id: string;
+        customType: string;
+        data: unknown;
+        timestamp: number;
+      }>;
+      parentById: Map<string, string | null>;
+      fileSize: number;
+      mtimeMs: number;
+      lineCount: number;
+    }
+  >();
+  clearSessionCache(sessionId?: string): void {
+    if (sessionId) {
+      this.sessionMsgCache.delete(sessionId);
+    } else {
+      this.sessionMsgCache.clear();
+    }
+  }
+
+  private async _drainPendingDelegates(): Promise<void> {
+    while (this._pendingDelegateRequests.length > 0) {
+      const item = this._pendingDelegateRequests.shift();
+      if (!item) break;
+      const { sessionId, msg, resolve } = item;
+      try {
+        const call = msg as CoordinatorMethodCall;
+        let delegateResult: unknown;
+        if (call.__call === "session_delegate_sync") {
+          delegateResult = await this.handleCoordinatorDelegateSync(
+            sessionId,
+            call as Extract<CoordinatorMethodCall, { __call: "session_delegate_sync" }>,
+          );
+        } else {
+          delegateResult = await this.handleCoordinatorDelegate(
+            sessionId,
+            call as Extract<CoordinatorMethodCall, { __call: "session_delegate" }>,
+          );
+        }
+        resolve(delegateResult);
+      } catch (err: unknown) {
+        resolve({ error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+  }
 
   private findParentSession(childSessionId: string): string | null {
     for (const [parentId, children] of this.parentChildMap.entries()) {
@@ -263,7 +541,7 @@ export class AgentProcessManager {
   }
 
   private broadcastSessionStatus(sessionId: string, status: string): void {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     const projectPath = managed?.info.projectPath ?? "";
     this.broadcastEvent(
       "agent.session_status_changed",
@@ -281,15 +559,25 @@ export class AgentProcessManager {
     sessionId: string,
     projectPath: string,
     sessionPath: string,
-  ): Promise<{ agentId: string; status: "started" | "already_running" | "switched" }> {
+    options?: { forceNewProcess?: boolean; userId?: string },
+  ): Promise<{ agentId: string; status: "started" | "already_running" }> {
     const tStart = performance.now();
 
+    if (this._startInProgress) {
+      log.warn("[start] reentrant call blocked", { sessionId });
+      return { agentId: sessionId, status: "already_running" };
+    }
+    this._startInProgress = true;
+
     const existing = this.clients.get(sessionId);
-    if (existing) {
+    if (existing && existing._activeSessionId === sessionId) {
       perfLog.info("[start] already_running (cached hit)", {
         sessionId,
         totalMs: Math.round(performance.now() - tStart),
       });
+      existing.lastActiveAt = Date.now();
+      this._startInProgress = false;
+      this._drainPendingDelegates();
       return { agentId: sessionId, status: "already_running" };
     }
 
@@ -304,8 +592,6 @@ export class AgentProcessManager {
           projectPath,
           oldSessionId,
         });
-        // Race switchSession with a 15-second timeout.
-        // If the child process is busy (e.g. getFullMessages), don't queue behind it.
         const result = await Promise.race([
           pooled.client.switchSession(sessionPath),
           new Promise<never>((_, reject) =>
@@ -313,7 +599,6 @@ export class AgentProcessManager {
           ),
         ]);
         if (!result.cancelled) {
-          // Update mappings
           this.clients.delete(oldSessionId);
           pooled._activeSessionId = sessionId;
           pooled.info = {
@@ -333,41 +618,40 @@ export class AgentProcessManager {
           });
           return { agentId: sessionId, status: "switched" };
         }
-        // If cancelled by an extension, fall through to create new process
         perfLog.info("[start] switchSession cancelled by extension, creating new process");
       } catch (err: unknown) {
         const switchMs = Math.round(performance.now() - tSwitch);
-        // switchSession failed or timed out — kill the pooled process (it may be stuck)
-        // and fall through to create a fresh one.
         perfLog.info("[start] switchSession failed, killing pooled process", {
           sessionId,
           oldSessionId,
           switchMs,
           error: err instanceof Error ? err.message : String(err),
         });
-        // Remove from process pool so we don't try to reuse a stuck process
         this.processByCwd.delete(projectPath);
-        // Kill the old process entries but don't call full stop() to avoid cascading
         this.clients.delete(oldSessionId);
         try {
           pooled.unsubscribe();
-        } catch {
-          /* ignore */
+        } catch (e) {
+          log.debug("start: failed to unsubscribe old pooled process", { error: String(e) });
         }
         try {
           await pooled.client.stop();
-        } catch {
-          /* ignore */
+        } catch (e) {
+          log.debug("start: failed to stop old pooled process client", { error: String(e) });
         }
       }
     }
+    const poolKey = this.getPoolKey(projectPath, options?.userId);
 
     perfLog.info("[start] begin (new process)", { sessionId, projectPath });
+
+    this.evictLRU(poolKey);
 
     const { client, timings: createTimings } = await createRpcClient(
       config.piCliPath,
       projectPath,
       sessionPath,
+      config.sandboxEnabled ? (options?.userId ?? sessionId) : undefined,
     );
     const tAfterCreate = performance.now();
 
@@ -386,13 +670,20 @@ export class AgentProcessManager {
       info,
       unsubscribe: () => {},
       _activeSessionId: sessionId,
+      lastActiveAt: Date.now(),
+      activeBackgroundTools: new Set(),
     };
 
     const bridge = (event: unknown): void => {
       this.handleEvent(managed._activeSessionId, event as AgentEvent);
     };
-    managed.unsubscribe = client.onEvent(bridge);
+    try {
+      managed.unsubscribe = client.onEvent(bridge);
+    } catch {
+      managed.unsubscribe = () => {};
+    }
 
+    const coordinatorChannelNames = new Set(["coordinator", "coordinator_client"]);
     const channelNames = [
       "bash",
       "todo",
@@ -401,49 +692,36 @@ export class AgentProcessManager {
       "rules-engine",
       "memory",
       "coordinator",
+      "coordinator_client",
       "supervisor",
+      "file-snapshot",
+      "file-review",
     ] as const;
     for (const name of channelNames) {
-      client.channel(name).onReceive((data: unknown) => {
-        if (name === "coordinator") {
-          this.handleCoordinatorCall(managed._activeSessionId, data);
-          return;
-        }
-        this.handleEvent(managed._activeSessionId, {
-          type: "channel_data",
-          name,
-          data,
-        } as ChannelDataEvent);
-      });
+      try {
+        client.channel(name).onReceive((data: unknown) => {
+          if (coordinatorChannelNames.has(name)) {
+            this.handleCoordinatorCall(managed._activeSessionId, data, name);
+            return;
+          }
+          this.handleEvent(managed._activeSessionId, {
+            type: "channel_data",
+            name,
+            data,
+          } as ChannelDataEvent);
+        });
+      } catch {
+        // sandbox mode: channels not supported, skip
+      }
     }
 
-    this.clients.set(sessionId, managed);
-
-    try {
-      await client.start();
-    } catch (startErr: unknown) {
-      this.clients.delete(sessionId);
-      const msg = startErr instanceof Error ? startErr.message : String(startErr);
-      log.error("[start] RpcClient.start failed", {
-        sessionId,
-        projectPath,
-        error: msg,
-        createRpcMs: Math.round(performance.now() - tAfterCreate),
-      });
-      throw new Error(`Agent startup failed for ${projectPath}: ${msg}`);
-    }
-    const tAfterProcessStart = performance.now();
-
-    const totalMs = Math.round(tAfterProcessStart - tStart);
-    const createRpcMs = Math.round(tAfterCreate - tStart);
-    const processStartMs = Math.round(tAfterProcessStart - tAfterCreate);
-
-    perfLog.info("[start] completed", {
+    const processStartMs = Math.round(performance.now() - tAfterCreate);
+    perfLog.info("[start] RpcClient ready", {
       sessionId,
-      totalMs,
+      totalMs: Math.round(performance.now() - tStart),
       dynamicImportMs: createTimings.dynamicImport,
       constructMs: createTimings.construct,
-      createRpcTotalMs: createRpcMs,
+      createRpcTotalMs: Math.round(tAfterCreate - tStart),
       processStartMs,
       channelsRegistered: channelNames.length,
     });
@@ -451,13 +729,17 @@ export class AgentProcessManager {
     log.info("RpcClient started", { sessionId });
     this.sessionPaths.set(sessionId, sessionPath);
     this.sessionProjectPaths.set(sessionId, projectPath);
-    this.processByCwd.set(projectPath, managed);
+    this.clients.set(sessionId, managed);
+    this.addToPool(poolKey, managed);
+    this._startInProgress = false;
+    this._drainPendingDelegates();
+    this.broadcastSessionStatus(sessionId, "idle");
     return { agentId: sessionId, status: "started" };
   }
 
   async replayHoldEvents(sessionId: string): Promise<{ replayed: number }> {
     const t0 = performance.now();
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) {
       perfLog.info("[replayHoldEvents] no client", { sessionId, totalMs: 0 });
       return { replayed: 0 };
@@ -471,31 +753,58 @@ export class AgentProcessManager {
     return { replayed: events.length };
   }
 
-  send(sessionId: string, content: string): boolean {
-    const managed = this.clients.get(sessionId);
+  async send(
+    sessionId: string,
+    content: string,
+    images?: import("@dyyz1993/pi-ai").ImageContent[],
+  ): Promise<boolean> {
+    let managed = this.getActiveManaged(sessionId);
     if (!managed) {
-      log.warn("send: no client", { sessionId });
+      managed = await this.ensureManagedClient(sessionId);
+    }
+    if (!managed) {
+      log.warn("send: no client after ensure", { sessionId });
       return false;
     }
-    managed.client.prompt(content).catch((err: Error) => {
+    managed.lastActiveAt = Date.now();
+    managed.client.prompt(content, images).catch(async (err: Error) => {
       log.warn("prompt error", { err: err.message });
+      if (!(await this.isClientAlive(sessionId, managed!))) {
+        this.cleanupDeadClient(sessionId, `prompt failed: ${err.message}`);
+        return;
+      }
+      this.emitAgentEvent(sessionId, { type: "agent_end" } as SanitizedEvent).catch(
+        (emitErr: unknown) => {
+          log.warn("emitAgentEvent(agent_end) after prompt error", {
+            err: emitErr instanceof Error ? emitErr.message : String(emitErr),
+          });
+        },
+      );
     });
     return true;
   }
 
-  steer(sessionId: string, content: string): boolean {
-    const managed = this.clients.get(sessionId);
+  steer(
+    sessionId: string,
+    content: string,
+    images?: import("@dyyz1993/pi-ai").ImageContent[],
+  ): boolean {
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return false;
-    managed.client.steer(content).catch((err: unknown) => {
+    managed.client.steer(content, images).catch((err: unknown) => {
       log.warn("steer error", { sessionId, err: err instanceof Error ? err.message : String(err) });
     });
     return true;
   }
 
-  followUp(sessionId: string, content: string): boolean {
-    const managed = this.clients.get(sessionId);
+  followUp(
+    sessionId: string,
+    content: string,
+    images?: import("@dyyz1993/pi-ai").ImageContent[],
+  ): boolean {
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return false;
-    managed.client.followUp(content).catch((err: unknown) => {
+    managed.client.followUp(content, images).catch((err: unknown) => {
       log.warn("followUp error", {
         sessionId,
         err: err instanceof Error ? err.message : String(err),
@@ -505,16 +814,24 @@ export class AgentProcessManager {
   }
 
   async abort(sessionId: string): Promise<boolean> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return false;
     await managed.client.abort().catch((err: unknown) => {
       log.warn("abort error", { sessionId, err: err instanceof Error ? err.message : String(err) });
     });
+    this.emitAgentEvent(sessionId, { type: "agent_end" } as SanitizedEvent).catch(
+      (err: unknown) => {
+        log.warn("emitAgentEvent(agent_end) after abort error", {
+          sessionId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      },
+    );
     return true;
   }
 
   async setCwd(sessionId: string, cwd: string): Promise<boolean> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return false;
     await managed.client.setCwd(cwd).catch((err: unknown) => {
       log.warn("setCwd error", {
@@ -527,26 +844,27 @@ export class AgentProcessManager {
   }
 
   respondUI(sessionId: string, requestId: string, response: Record<string, unknown>): boolean {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return false;
 
     managed.client.respondUI(requestId, response);
     return true;
   }
 
-  stop(sessionId: string): boolean {
-    const managed = this.clients.get(sessionId);
+  async stop(sessionId: string, crashReason?: string): Promise<boolean> {
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return false;
 
     managed.info.status = "idle";
-    this.emitAgentEvent(sessionId, { type: "agent_end" } as SanitizedEvent).catch(
-      (err: unknown) => {
-        log.warn("emitAgentEvent(agent_end) error", {
-          sessionId,
-          err: err instanceof Error ? err.message : String(err),
-        });
-      },
-    );
+    const endEvent = crashReason
+      ? ({ type: "agent_end", reason: crashReason } as unknown as SanitizedEvent)
+      : ({ type: "agent_end" } as SanitizedEvent);
+    this.emitAgentEvent(sessionId, endEvent).catch((err: unknown) => {
+      log.warn("emitAgentEvent(agent_end) error", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    });
 
     // Cascade stop delegated children
     const children = this.parentChildMap.get(sessionId);
@@ -567,29 +885,67 @@ export class AgentProcessManager {
     this.delegateReplyCount.delete(sessionId);
     this.delegateCreatedAt.delete(sessionId);
 
+    const syncResolver = this.syncDelegateResolvers.get(sessionId);
+    if (syncResolver) {
+      clearTimeout(syncResolver.timeout);
+      this.syncDelegateResolvers.delete(sessionId);
+      this.subagentSyncChildren.delete(sessionId);
+      this.syncDelegateLastText.delete(sessionId);
+      syncResolver.resolve({
+        sessionId,
+        status: "aborted",
+        exitCode: 1,
+        finalText: "(stopped)",
+      });
+    }
+
+    // Sync leafId before unsubscribe closes the connection
+    try {
+      const treeResult = await withTimeout(
+        managed.client.getTreeWithLeaf(),
+        3_000,
+        "getTreeWithLeaf-stop",
+      );
+      if (treeResult.leafId) {
+        this.leafIds.set(sessionId, treeResult.leafId);
+      }
+    } catch {
+      // Best effort — process may already be unresponsive
+    }
     managed.unsubscribe();
     managed.client.stop().catch((err: unknown) => {
       log.warn("stop error", { sessionId, err: err instanceof Error ? err.message : String(err) });
     });
     this.clients.delete(sessionId);
-    // Clean up process pool if this was the pooled process for its cwd
-    const cwd = managed.info.projectPath;
-    if (this.processByCwd.get(cwd) === managed) {
-      this.processByCwd.delete(cwd);
+    const poolKey = this.getPoolKey(managed.info.projectPath);
+    this.removeFromPool(poolKey, managed);
+    const sandboxKey = this.getPoolKey(managed.info.projectPath, managed._activeSessionId);
+    if (sandboxKey !== poolKey) {
+      this.removeFromPool(sandboxKey, managed);
     }
-    // Note: sessionPaths and sessionProjectPaths are NOT cleared here.
-    // They persist for session restart support (coordinator delegate_send).
-    // The file path remains valid even after stop; session is re-activated
-    // on demand like clicking on a session in the UI.
+    // Note: sessionPaths, sessionProjectPaths, and leafIds are NOT cleared here.
+    // They persist for session restart support (coordinator delegate_send)
+    // and JSONL fallback navigateTree (rollback without active CLI process).
+    // When the CLI restarts, getTreeWithLeaf() will overwrite with the
+    // authoritative value, so stale data self-heals.
     this.lastLspState.delete(sessionId);
-    this.leafIds.delete(sessionId);
+    this.clearSessionCache(sessionId);
     return true;
   }
 
   getStatus(sessionId: string): { status: "idle" | "streaming" | "stopped"; pid?: number } {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return { status: "stopped" };
     return { status: managed.info.status };
+  }
+
+  batchGetSessionsStatus(
+    sessionIds: string[],
+  ): Array<{ sessionId: string; status: "idle" | "streaming" | "stopped" }> {
+    return sessionIds.map((sid) => {
+      const managed = this.getActiveManaged(sid);
+      return { sessionId: sid, status: managed?.info.status ?? "stopped" };
+    });
   }
 
   private async readJsonlEntries(sessionPath: string): Promise<
@@ -653,6 +1009,111 @@ export class AgentProcessManager {
     return entries;
   }
 
+  /**
+   * Get the managed client for a session.
+   * Each session now has its own dedicated CLI process.
+   */
+  private getActiveManaged(sessionId: string): ManagedClient | null {
+    const managed = this.clients.get(sessionId);
+    if (!managed) return null;
+    if (managed._activeSessionId === sessionId) return managed;
+    this.clients.delete(sessionId);
+    return null;
+  }
+
+  /**
+   * Ensure a managed client exists for the session.
+   * In sandbox mode, if the managed client was GC'd, this will rebuild it
+   * by calling start() with the persisted session/project metadata.
+   */
+  private async ensureManagedClient(sessionId: string): Promise<ManagedClient | null> {
+    const existing = this.getActiveManaged(sessionId);
+    if (existing) return existing;
+
+    if (!config.sandboxEnabled) return null;
+
+    const projectPath = this.sessionProjectPaths.get(sessionId);
+    const sessionPath = this.sessionPaths.get(sessionId);
+    if (!projectPath || !sessionPath) {
+      log.warn("[ensureManagedClient] no persisted session metadata", { sessionId });
+      return null;
+    }
+
+    const userId = this._getSandboxUserId(sessionId) ?? sessionId;
+
+    log.info("[ensureManagedClient] rebuilding GC'd sandbox", { sessionId, projectPath, userId });
+
+    try {
+      const result = await this.start(sessionId, projectPath, sessionPath, {
+        forceNewProcess: false,
+        userId,
+      });
+      log.info("[ensureManagedClient] rebuild complete", { sessionId, status: result.status });
+    } catch (err: unknown) {
+      log.error("[ensureManagedClient] rebuild failed", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return null;
+    }
+
+    return this.getActiveManaged(sessionId);
+  }
+
+  private _getSandboxUserId(sessionId: string): string | null {
+    if (!config.sandboxEnabled) return null;
+    for (const [key, pool] of this.processByCwd) {
+      for (const mc of pool) {
+        if (mc._activeSessionId === sessionId && key.includes("::")) {
+          return key.split("::")[1] ?? null;
+        }
+      }
+    }
+    for (const [, mc] of this.clients) {
+      if (mc._activeSessionId === sessionId) {
+        const projectPath = mc.info.projectPath;
+        for (const [key] of this.processByCwd) {
+          if (key.startsWith(`${projectPath}::`)) {
+            return key.split("::")[1] ?? null;
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Check if a managed client's CLI process is still alive.
+   * Uses a lightweight getState() probe — if it fails, the CLI likely OOM'd or crashed.
+   */
+  private async isClientAlive(sessionId: string, managed: ManagedClient): Promise<boolean> {
+    try {
+      // getState is cheap (scalar properties only, no serialization of messages)
+      await withTimeout(managed.client.getState(), 10_000, "getState");
+      return true;
+    } catch (probeErr: unknown) {
+      log.warn("CLI health check failed, process likely dead", {
+        sessionId,
+        probeErr: probeErr instanceof Error ? probeErr.message : String(probeErr),
+      });
+      return false;
+    }
+  }
+
+  /**
+   * Clean up a dead CLI client. Called when an RPC call fails and the CLI
+   * process is confirmed dead (OOM, crash, killed).
+   */
+  private cleanupDeadClient(sessionId: string, reason: string): void {
+    log.warn("[cleanupDeadClient] CLI process is dead, cleaning up", { sessionId, reason });
+    const shortReason = reason.includes("heap limit")
+      ? "Out of memory (OOM)"
+      : reason.includes("prompt failed")
+        ? "Agent process crashed"
+        : "Agent process died";
+    this.stop(sessionId, shortReason);
+  }
+
   private resolveSessionPath(sessionId: string): string {
     const managed = this.clients.get(sessionId);
     if (managed) return managed.info.sessionPath;
@@ -679,12 +1140,16 @@ export class AgentProcessManager {
     isStreaming: boolean;
     isCompacting: boolean;
     messageCount: number;
+    streamingMessage?: AssistantMessage;
   } | null> {
-    const managed = this.clients.get(sessionId);
+    let managed = this.getActiveManaged(sessionId);
+    if (!managed) {
+      managed = await this.ensureManagedClient(sessionId);
+    }
     if (!managed) return null;
 
     try {
-      const state = await managed.client.getState();
+      const state = await withTimeout(managed.client.getState(), 10_000, "getState");
       const model = state.model;
       return {
         model: model
@@ -701,8 +1166,14 @@ export class AgentProcessManager {
         isStreaming: Boolean(state.isStreaming),
         isCompacting: Boolean(state.isCompacting),
         messageCount: Number(state.messageCount ?? 0),
+        streamingMessage: state.streamingMessage as AssistantMessage | undefined,
       };
-    } catch {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.warn("getState RPC failed, checking if CLI is alive", { sessionId, error: msg });
+      if (!(await this.isClientAlive(sessionId, managed))) {
+        this.cleanupDeadClient(sessionId, `getState failed: ${msg}`);
+      }
       return null;
     }
   }
@@ -712,11 +1183,11 @@ export class AgentProcessManager {
   ): Promise<
     Array<{ name: string; description: string; source: "extension" | "prompt" | "skill" }>
   > {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return [];
 
     try {
-      const commands = await managed.client.getCommands();
+      const commands = await withTimeout(managed.client.getCommands(), 10_000, "getCommands");
       if (!commands) return [];
       return commands.map((c) => ({
         name: String(c.name ?? ""),
@@ -737,11 +1208,11 @@ export class AgentProcessManager {
     cost: number;
     contextUsage?: { tokens: number | null; contextWindow: number; percent: number | null };
   } | null> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return null;
 
     try {
-      const stats = await managed.client.getSessionStats();
+      const stats = await withTimeout(managed.client.getSessionStats(), 10_000, "getSessionStats");
       if (!stats) return null;
       const tokens = stats.tokens;
       const cu = stats.contextUsage;
@@ -763,10 +1234,14 @@ export class AgentProcessManager {
           : undefined,
       };
     } catch (err: unknown) {
-      log.warn("getSessionStats failed", {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.warn("getSessionStats failed, checking if CLI is alive", {
         sessionId,
-        err: err instanceof Error ? err.message : String(err),
+        err: msg,
       });
+      if (!(await this.isClientAlive(sessionId, managed))) {
+        this.cleanupDeadClient(sessionId, `getSessionStats failed: ${msg}`);
+      }
       return null;
     }
   }
@@ -778,7 +1253,7 @@ export class AgentProcessManager {
     messages: AgentMessageForUI[];
     customEntries: Array<{ id: string; customType: string; data: unknown; timestamp: number }>;
   }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
 
     let messages: unknown[] = [];
     let resolvedSessionPath = sessionPath ?? "";
@@ -787,7 +1262,11 @@ export class AgentProcessManager {
     if (managed) {
       resolvedSessionPath = managed.info.sessionPath;
       try {
-        const messagesResult = await managed.client.getMessages();
+        const messagesResult = await withTimeout(
+          managed.client.getMessages(),
+          15_000,
+          "getMessages",
+        );
         if (messagesResult) {
           messages = messagesResult;
         }
@@ -798,9 +1277,16 @@ export class AgentProcessManager {
         });
       }
       try {
-        const treeResult = await managed.client.getTreeWithLeaf();
+        const treeResult = await withTimeout(
+          managed.client.getTreeWithLeaf(),
+          10_000,
+          "getTreeWithLeaf",
+        );
         const entries = treeResult.entries;
         const leafId = treeResult.leafId;
+        if (leafId) {
+          this.leafIds.set(sessionId, leafId);
+        }
         if (Array.isArray(entries) && leafId) {
           const byId = new Map<
             string,
@@ -855,7 +1341,59 @@ export class AgentProcessManager {
       data: unknown;
       timestamp: number;
     }> = [];
-    if (resolvedSessionPath && existsSync(resolvedSessionPath)) {
+    const isSandboxSessionPath = resolvedSessionPath?.startsWith("/root/workspace/sessions/");
+
+    if (isSandboxSessionPath && globalSandboxManager && !managed) {
+      try {
+        const userId = this._getSandboxUserId(sessionId);
+        if (userId) {
+          const raw = await globalSandboxManager.execInSandbox(
+            userId,
+            `cat ${resolvedSessionPath}`,
+          );
+          const lines = raw.split("\n");
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+              const parsed = JSON.parse(line) as Record<string, unknown>;
+              if (parsed.type === "custom") {
+                if (activePathIds && typeof parsed.id === "string" && !activePathIds.has(parsed.id))
+                  continue;
+                customEntries.push({
+                  id: (parsed.id as string) ?? `custom-${Date.now()}`,
+                  customType: (parsed.customType as string) ?? "unknown",
+                  data: parsed.data,
+                  timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
+                });
+              } else if (parsed.type === "compaction") {
+                if (activePathIds && typeof parsed.id === "string" && !activePathIds.has(parsed.id))
+                  continue;
+                messages.push({
+                  id: parsed.id,
+                  role: "compactionSummary",
+                  summary: parsed.summary ?? "",
+                  tokensBefore: parsed.tokensBefore,
+                  timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
+                });
+              } else if (parsed.type === "message" && parsed.message) {
+                if (activePathIds && typeof parsed.id === "string" && !activePathIds.has(parsed.id))
+                  continue;
+                messages.push(parsed.message);
+              }
+            } catch (err: unknown) {
+              log.debug("skipping malformed JSONL entry (sandbox getMessages)", {
+                err: err instanceof Error ? err.message : String(err),
+              });
+            }
+          }
+        }
+      } catch (err: unknown) {
+        log.warn("Failed to read sandbox JSONL in getMessages", {
+          sessionPath: resolvedSessionPath,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
+    } else if (resolvedSessionPath && existsSync(resolvedSessionPath)) {
       try {
         const rl = readline.createInterface({
           input: createReadStream(resolvedSessionPath, { encoding: "utf-8" }),
@@ -921,155 +1459,83 @@ export class AgentProcessManager {
   async getFullMessages(
     sessionId: string,
     sessionPath?: string,
+    options?: { limit?: number; afterEntryId?: string },
   ): Promise<{
     messages: AgentMessageForUI[];
     customEntries: Array<{ id: string; customType: string; data: unknown; timestamp: number }>;
+    hasMore: boolean;
+    totalCount: number;
+    nextCursor: string | null;
   }> {
     const t0 = performance.now();
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
 
-    let messages: unknown[] = [];
-    let resolvedSessionPath = sessionPath ?? "";
-    let activePathIds: Set<string> | null = null;
-    const customEntries: Array<{
+    // Resolve session file path first
+    const resolvedSessionPath = managed
+      ? managed.info.sessionPath
+      : this.resolveSessionPath(sessionId) || sessionPath || "";
+
+    // JSONL-first: always read messages directly from the JSONL file.
+    // This avoids CLI OOM — CLI's get_full_messages handler uses readFile internally
+    // which can blow the heap on large sessions (>8MB JSONL).
+    const allMessages: Array<{ entryId: string; message: unknown }> = [];
+    const allCustomEntries: Array<{
       id: string;
       customType: string;
       data: unknown;
       timestamp: number;
     }> = [];
+    const parentById: Map<string, string | null> = new Map();
+    let lastJsonlLeafPointer: string | null = null;
+    const isSandboxSessionPath = resolvedSessionPath?.startsWith("/root/workspace/sessions/");
 
-    if (managed) {
-      resolvedSessionPath = managed.info.sessionPath;
+    if (isSandboxSessionPath && globalSandboxManager) {
       try {
-        const result = (await managed.client.getFullMessages()) as {
-          messages: unknown[];
-          hasMore: boolean;
-          totalCount: number;
-          nextCursor: string | null;
-          tree?: {
-            entries: Array<{ id: string; parentId: string | null; type: string; label?: string }>;
-            leafId: string | null;
-          };
-          customEntries?: Array<{
-            id: string;
-            customType: string;
-            data: unknown;
-            timestamp: number;
-          }>;
-          compactionEntries?: Array<{
-            id: string;
-            summary: string;
-            tokensBefore: number | undefined;
-            timestamp: number;
-          }>;
-        };
-        log.info("getFullMessages SDK result", {
-          count: result?.messages?.length ?? 0,
-          hasMore: result?.hasMore,
-          totalCount: result?.totalCount,
-        });
-        if (result?.messages) {
-          messages = result.messages;
-        }
-        if (result?.tree) {
-          const treeEntries = result.tree.entries;
-          const leafId = result.tree.leafId;
-          if (Array.isArray(treeEntries) && leafId) {
-            const byId = new Map<
-              string,
-              { id: string; parentId: string | null; type: string; label?: string }
-            >();
-            for (const e of treeEntries) byId.set(e.id, e);
-            activePathIds = new Set<string>();
-            let curId: string | null | undefined = leafId;
-            while (curId) {
-              activePathIds.add(curId);
-              const node = byId.get(curId);
-              curId =
-                node && typeof node.parentId === "string" && node.parentId
-                  ? node.parentId
-                  : undefined;
-            }
-            // Filter messages by active path: message entries in tree correspond 1:1 with messages array
-            const messageTreeEntries = treeEntries.filter((e) => e.type === "message");
-            if (activePathIds.size > 0 && messageTreeEntries.length > 0) {
-              const filtered: unknown[] = [];
-              for (let i = 0; i < messageTreeEntries.length && i < messages.length; i++) {
-                if (activePathIds.has(messageTreeEntries[i].id)) {
-                  filtered.push(messages[i]);
-                }
+        const userId = this._getSandboxUserId(sessionId);
+        if (userId) {
+          const raw = await globalSandboxManager.execInSandbox(
+            userId,
+            `cat ${resolvedSessionPath}`,
+          );
+          const lines = raw.split("\n");
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+              const parsed = JSON.parse(line) as Record<string, unknown>;
+              const entryId = (parsed.id as string) ?? "";
+              const parentId = (parsed.parentId as string | null | undefined) ?? null;
+              if (entryId) {
+                parentById.set(entryId, parentId);
               }
-              log.info("getMessages filtered by tree path", {
-                before: messages.length,
-                after: filtered.length,
-                treeMsgEntries: messageTreeEntries.length,
-                activePathSize: activePathIds.size,
+              if (parsed.type === "custom") {
+                allCustomEntries.push({
+                  id: entryId || `custom-${Date.now()}`,
+                  customType: (parsed.customType as string) ?? "unknown",
+                  data: parsed.data,
+                  timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
+                });
+              } else if (parsed.type === "message" && parsed.message) {
+                allMessages.push({
+                  entryId,
+                  message: parsed.message,
+                });
+              } else if (parsed.type === "leaf_pointer" && typeof parsed.leafId === "string") {
+                lastJsonlLeafPointer = parsed.leafId;
+              }
+            } catch (err: unknown) {
+              log.debug("skipping malformed JSONL entry (sandbox)", {
+                err: err instanceof Error ? err.message : String(err),
               });
-              messages = filtered;
             }
-          }
-        }
-        if (Array.isArray(result?.customEntries)) {
-          for (const ce of result.customEntries) {
-            if (activePathIds && !activePathIds.has(ce.id)) continue;
-            customEntries.push({
-              id: ce.id,
-              customType: ce.customType ?? "unknown",
-              data: ce.data,
-              timestamp: ce.timestamp,
-            });
-          }
-        }
-        if (Array.isArray(result?.compactionEntries)) {
-          for (const comp of result.compactionEntries) {
-            if (activePathIds && !activePathIds.has(comp.id)) continue;
-            messages.push({
-              id: comp.id,
-              role: "compactionSummary",
-              summary: comp.summary ?? "",
-              tokensBefore: comp.tokensBefore,
-              timestamp: comp.timestamp,
-            });
           }
         }
       } catch (err: unknown) {
-        log.error("getFullMessages SDK failed, falling back to getMessages", {
+        log.warn("Failed to read sandbox JSONL", {
+          sessionPath: resolvedSessionPath,
           err: err instanceof Error ? err.message : String(err),
         });
-        try {
-          const fallback = await managed.client.getMessages();
-          if (fallback) messages = fallback;
-        } catch (err: unknown) {
-          log.warn("getMessages fallback also failed", {
-            sessionId,
-            err: err instanceof Error ? err.message : String(err),
-          });
-        }
       }
-    } else {
-      resolvedSessionPath = this.resolveSessionPath(sessionId) ?? sessionPath ?? "";
-      const leafId = this.leafIds.get(sessionId) ?? null;
-      if (resolvedSessionPath && leafId !== undefined) {
-        const jsonlEntries = await this.readJsonlEntries(resolvedSessionPath);
-        if (jsonlEntries.length > 0 && leafId !== null) {
-          const byId = new Map<
-            string,
-            { id: string; parentId: string | null; type: string; customType?: string }
-          >();
-          for (const e of jsonlEntries) byId.set(e.id, e);
-          activePathIds = new Set<string>();
-          let curId: string | null = leafId;
-          while (curId) {
-            activePathIds.add(curId);
-            const node = byId.get(curId);
-            curId = node?.parentId ?? null;
-          }
-        }
-        messages = this.buildMessagesFromJsonl(jsonlEntries, leafId);
-      }
-    }
-
-    if (!managed && resolvedSessionPath && existsSync(resolvedSessionPath)) {
+    } else if (resolvedSessionPath && existsSync(resolvedSessionPath)) {
       try {
         const rl = readline.createInterface({
           input: createReadStream(resolvedSessionPath, { encoding: "utf-8" }),
@@ -1079,41 +1545,25 @@ export class AgentProcessManager {
           if (!line.trim()) continue;
           try {
             const parsed = JSON.parse(line) as Record<string, unknown>;
+            const entryId = (parsed.id as string) ?? "";
+            const parentId = (parsed.parentId as string | null | undefined) ?? null;
+            if (entryId) {
+              parentById.set(entryId, parentId);
+            }
             if (parsed.type === "custom") {
-              if (
-                activePathIds &&
-                typeof parsed.id === "string" &&
-                !activePathIds.has(parsed.id as string)
-              )
-                continue;
-              customEntries.push({
-                id: (parsed.id as string) ?? `custom-${Date.now()}`,
+              allCustomEntries.push({
+                id: entryId || `custom-${Date.now()}`,
                 customType: (parsed.customType as string) ?? "unknown",
                 data: parsed.data,
                 timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
               });
-            } else if (parsed.type === "compaction") {
-              if (
-                activePathIds &&
-                typeof parsed.id === "string" &&
-                !activePathIds.has(parsed.id as string)
-              )
-                continue;
-              messages.push({
-                id: parsed.id,
-                role: "compactionSummary",
-                summary: parsed.summary ?? "",
-                tokensBefore: parsed.tokensBefore,
-                timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
-              });
             } else if (parsed.type === "message" && parsed.message) {
-              if (
-                activePathIds &&
-                typeof parsed.id === "string" &&
-                !activePathIds.has(parsed.id as string)
-              )
-                continue;
-              messages.push(parsed.message);
+              allMessages.push({
+                entryId,
+                message: parsed.message,
+              });
+            } else if (parsed.type === "leaf_pointer" && typeof parsed.leafId === "string") {
+              lastJsonlLeafPointer = parsed.leafId;
             }
           } catch (err: unknown) {
             log.debug("skipping malformed JSONL entry", {
@@ -1129,29 +1579,162 @@ export class AgentProcessManager {
       }
     }
 
+    // Resolve leafId: prefer JSONL leaf_pointer (authoritative on-disk value),
+    // fall back to in-memory cache (may be stale after process kill)
+    const leafId = lastJsonlLeafPointer ?? this.leafIds.get(sessionId) ?? null;
+    if (leafId && leafId !== this.leafIds.get(sessionId)) {
+      this.leafIds.set(sessionId, leafId);
+    }
+
+    // Build leaf→root path set and filter messages to current branch only.
+    let filteredMessages = allMessages;
+    let customEntries = allCustomEntries;
+    if (leafId && parentById.size > 0 && parentById.has(leafId)) {
+      const pathIds = new Set<string>();
+      let curId: string | null = leafId;
+      while (curId) {
+        pathIds.add(curId);
+        const parent = parentById.get(curId);
+        curId = parent ?? null;
+      }
+      filteredMessages = allMessages.filter((m) => pathIds.has(m.entryId));
+      customEntries = allCustomEntries.filter((e) => pathIds.has(e.id));
+    } else if (leafId && parentById.size > 0 && !parentById.has(leafId)) {
+      log.warn("[getFullMessages] leafId not found in JSONL, skipping branch filter", {
+        sessionId,
+        leafId,
+        totalEntries: parentById.size,
+      });
+    }
+
+    // Apply pagination to filtered results (take from the end)
+    const totalCount = filteredMessages.length;
+    const limit = options?.limit;
+    let hasMore = false;
+    let nextCursor: string | null = null;
+
+    let slicedMessages: unknown[];
+    const injectEntryId = (e: { entryId: string; message: unknown }) => {
+      const msg = e.message as Record<string, unknown>;
+      if (msg && typeof msg === "object" && e.entryId) {
+        return { ...msg, entryId: e.entryId };
+      }
+      return msg;
+    };
+    if (limit !== undefined && limit < totalCount) {
+      slicedMessages = filteredMessages.slice(totalCount - limit).map(injectEntryId);
+      hasMore = true;
+      nextCursor = filteredMessages[totalCount - limit]?.entryId ?? null;
+    } else {
+      slicedMessages = filteredMessages.map(injectEntryId);
+    }
+
     const totalMs = Math.round(performance.now() - t0);
+
+    // When streaming, JSONL may be incomplete (e.g. toolResult not persisted yet).
+    // Merge in-memory messages from CLI to supplement the JSONL data.
+    if (managed && managed.info.status === "streaming") {
+      try {
+        const memResult = await withTimeout(
+          managed.client.getMessages(),
+          5_000,
+          "getMessages (streaming merge)",
+        );
+        if (Array.isArray(memResult) && memResult.length > 0) {
+          const jsonlEntryIds = new Set(allMessages.map((m) => m.entryId).filter(Boolean));
+          const jsonlUserTexts = new Set(
+            allMessages
+              .filter((m) => {
+                const msg = m.message as Record<string, unknown> | undefined;
+                return msg && (msg.role as string) === "user";
+              })
+              .map((m) => {
+                const msg = m.message as { content?: unknown[] };
+                if (Array.isArray(msg.content)) {
+                  return (msg.content as Array<Record<string, unknown>>)
+                    .filter((c) => c.type === "text")
+                    .map((c) => (c.text as string) ?? "")
+                    .join("");
+                }
+                return "";
+              })
+              .filter(Boolean),
+          );
+          for (const msg of memResult) {
+            const m = msg as unknown as Record<string, unknown>;
+            const eid = (m.entryId as string) ?? "";
+            const role = (m.role as string) ?? "";
+            if (eid && jsonlEntryIds.has(eid)) continue;
+            if (role === "user" && !eid) {
+              const content = m.content as unknown[];
+              const text = Array.isArray(content)
+                ? (content as Array<Record<string, unknown>>)
+                    .filter((c) => c.type === "text")
+                    .map((c) => (c.text as string) ?? "")
+                    .join("")
+                : "";
+              if (text && jsonlUserTexts.has(text)) continue;
+            }
+            slicedMessages.push(m as unknown as AgentMessageForUI);
+            if (eid) jsonlEntryIds.add(eid);
+          }
+          perfLog.info("[getFullMessages] streaming merge: added from CLI memory", {
+            sessionId,
+            mergedCount: slicedMessages.length,
+          });
+        }
+      } catch (err: unknown) {
+        log.debug("[getMessages] CLI memory merge skipped", {
+          sessionId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
     perfLog.info("[getFullMessages] done", {
       sessionId,
-      messageCount: messages.length,
-      customEntryCount: customEntries.length,
+      messageCount: slicedMessages.length,
+      totalCount,
+      hasMore,
+      leafId: leafId ?? "none",
       totalMs,
     });
 
-    return { messages: messages as AgentMessageForUI[], customEntries };
+    return {
+      messages: slicedMessages as AgentMessageForUI[],
+      customEntries,
+      hasMore,
+      totalCount,
+      nextCursor,
+    };
   }
 
   async getAvailableModels(
     sessionId: string,
   ): Promise<Array<{ provider: string; id: string; contextWindow: number; reasoning: boolean }>> {
-    const managed = this.clients.get(sessionId);
+    // Retry with short delay: session may be mid-switch (agent.start in progress)
+    let managed = this.getActiveManaged(sessionId);
+    if (!managed) {
+      await new Promise((r) => setTimeout(r, 200));
+      managed = this.getActiveManaged(sessionId);
+    }
+    if (!managed) {
+      managed = await this.ensureManagedClient(sessionId);
+    }
     if (!managed) return [];
-    return managed.client.getAvailableModels().catch((err: unknown) => {
-      log.warn("getAvailableModels error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
+    return (managed.client as unknown as SandboxRpcClient)
+      .getAvailableModels()
+      .catch(async (err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.warn("getAvailableModels error, checking if CLI is alive", {
+          sessionId,
+          err: msg,
+        });
+        if (!(await this.isClientAlive(sessionId, managed))) {
+          this.cleanupDeadClient(sessionId, `getAvailableModels failed: ${msg}`);
+        }
+        return [];
       });
-      return [];
-    });
   }
 
   async setModel(
@@ -1159,9 +1742,12 @@ export class AgentProcessManager {
     provider: string,
     modelId: string,
   ): Promise<{ provider: string; id: string }> {
-    const managed = this.clients.get(sessionId);
+    let managed = this.getActiveManaged(sessionId);
+    if (!managed) {
+      managed = await this.ensureManagedClient(sessionId);
+    }
     if (!managed) throw new Error("Client not found");
-    return managed.client.setModel(provider, modelId);
+    return withTimeout(managed.client.setModel(provider, modelId), 15_000, "setModel");
   }
 
   async cycleModel(sessionId: string): Promise<{
@@ -1169,7 +1755,10 @@ export class AgentProcessManager {
     thinkingLevel: string;
     isScoped: boolean;
   } | null> {
-    const managed = this.clients.get(sessionId);
+    let managed = this.getActiveManaged(sessionId);
+    if (!managed) {
+      managed = await this.ensureManagedClient(sessionId);
+    }
     if (!managed) return null;
     return managed.client.cycleModel().catch((err: unknown) => {
       log.warn("cycleModel error", {
@@ -1181,7 +1770,7 @@ export class AgentProcessManager {
   }
 
   async setThinkingLevel(sessionId: string, level: string): Promise<void> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return;
     await managed.client
       .setThinkingLevel(level as Parameters<typeof managed.client.setThinkingLevel>[0])
@@ -1194,7 +1783,7 @@ export class AgentProcessManager {
   }
 
   async cycleThinkingLevel(sessionId: string): Promise<{ level: string } | null> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return null;
     return managed.client.cycleThinkingLevel().catch((err: unknown) => {
       log.warn("cycleThinkingLevel error", {
@@ -1209,13 +1798,13 @@ export class AgentProcessManager {
     sessionId: string,
     customInstructions?: string,
   ): Promise<{ summary: string; tokensBefore: number }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) throw new Error("Client not found");
-    return managed.client.compact(customInstructions);
+    return withTimeout(managed.client.compact(customInstructions), 120_000, "compact");
   }
 
   async setAutoCompaction(sessionId: string, enabled: boolean): Promise<void> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return;
     await managed.client.setAutoCompaction(enabled).catch((err: unknown) => {
       log.warn("setAutoCompaction error", {
@@ -1226,7 +1815,7 @@ export class AgentProcessManager {
   }
 
   async setAutoRetry(sessionId: string, enabled: boolean): Promise<void> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return;
     await managed.client.setAutoRetry(enabled).catch((err: unknown) => {
       log.warn("setAutoRetry error", {
@@ -1237,7 +1826,7 @@ export class AgentProcessManager {
   }
 
   async abortRetry(sessionId: string): Promise<void> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return;
     await managed.client.abortRetry().catch((err: unknown) => {
       log.warn("abortRetry error", {
@@ -1248,7 +1837,7 @@ export class AgentProcessManager {
   }
 
   async setSteeringMode(sessionId: string, mode: string): Promise<void> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return;
     await managed.client.setSteeringMode(mode as "all" | "one-at-a-time").catch((err: unknown) => {
       log.warn("setSteeringMode error", {
@@ -1259,7 +1848,7 @@ export class AgentProcessManager {
   }
 
   async setFollowUpMode(sessionId: string, mode: string): Promise<void> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return;
     await managed.client.setFollowUpMode(mode as "all" | "one-at-a-time").catch((err: unknown) => {
       log.warn("setFollowUpMode error", {
@@ -1269,11 +1858,20 @@ export class AgentProcessManager {
     });
   }
 
+  async setPermissionMode(sessionId: string, mode: string): Promise<{ mode: string }> {
+    let managed = this.getActiveManaged(sessionId);
+    if (!managed) {
+      managed = await this.ensureManagedClient(sessionId);
+    }
+    if (!managed) throw new Error("Client not found");
+    return withTimeout(managed.client.setPermissionMode(mode), 15_000, "setPermissionMode");
+  }
+
   async getActiveTools(sessionId: string): Promise<{ toolNames: string[] }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return { toolNames: [] };
     try {
-      const result = await managed.client.getActiveTools();
+      const result = await withTimeout(managed.client.getActiveTools(), 10_000, "getActiveTools");
       return { toolNames: Array.isArray(result) ? result : [] };
     } catch (err: unknown) {
       log.warn("getActiveTools error", {
@@ -1285,7 +1883,7 @@ export class AgentProcessManager {
   }
 
   async setActiveTools(sessionId: string, toolNames: string[]): Promise<void> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return;
     await managed.client.setActiveTools(toolNames).catch((err: unknown) => {
       log.warn("setActiveTools error", {
@@ -1296,7 +1894,7 @@ export class AgentProcessManager {
   }
 
   async getQueue(sessionId: string): Promise<{ steering: string[]; followUp: string[] }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return { steering: [], followUp: [] };
     return managed.client.getQueue().catch((err: unknown) => {
       log.warn("getQueue error", {
@@ -1308,7 +1906,7 @@ export class AgentProcessManager {
   }
 
   async clearQueue(sessionId: string): Promise<{ steering: string[]; followUp: string[] }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return { steering: [], followUp: [] };
     return managed.client.clearQueue().catch((err: unknown) => {
       log.warn("clearQueue error", {
@@ -1327,10 +1925,10 @@ export class AgentProcessManager {
       commandNames: string[];
     }>;
   }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return { extensions: [] };
     try {
-      const result = await managed.client.getExtensions();
+      const result = await withTimeout(managed.client.getExtensions(), 10_000, "getExtensions");
       return { extensions: Array.isArray(result) ? result : [] };
     } catch (err: unknown) {
       log.warn("getExtensions error", {
@@ -1350,10 +1948,10 @@ export class AgentProcessManager {
       disableModelInvocation: boolean;
     }>;
   }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return { skills: [] };
     try {
-      const result = await managed.client.getSkills();
+      const result = await withTimeout(managed.client.getSkills(), 10_000, "getSkills");
       return { skills: Array.isArray(result) ? result : [] };
     } catch (err: unknown) {
       log.warn("getSkills error", {
@@ -1365,18 +1963,18 @@ export class AgentProcessManager {
   }
 
   async reload(sessionId: string): Promise<void> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return;
-    await managed.client.reload();
+    await withTimeout(managed.client.reload(), 30_000, "reload");
   }
 
   async getTools(
     sessionId: string,
   ): Promise<{ tools: Array<{ name: string; label: string; description: string }> }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return { tools: [] };
     try {
-      const result = await managed.client.getTools();
+      const result = await withTimeout(managed.client.getTools(), 10_000, "getTools");
       return { tools: Array.isArray(result) ? result : [] };
     } catch (err: unknown) {
       log.warn("getTools error", {
@@ -1388,10 +1986,10 @@ export class AgentProcessManager {
   }
 
   async getMcpServers(sessionId: string): Promise<{ servers: McpServerInfo[] }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return { servers: [] };
     try {
-      const servers = await managed.client.getMcpServers();
+      const servers = await withTimeout(managed.client.getMcpServers(), 10_000, "getMcpServers");
       return { servers: Array.isArray(servers) ? servers : [] };
     } catch (err) {
       log.warn("getMcpServers error", {
@@ -1407,7 +2005,7 @@ export class AgentProcessManager {
     name: string,
     enabled: boolean,
   ): Promise<{ success: boolean; error?: string }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return { success: false, error: "Client not found" };
     try {
       await managed.client.toggleMcpServer(name, enabled);
@@ -1423,7 +2021,7 @@ export class AgentProcessManager {
     sessionId: string,
     name: string,
   ): Promise<{ success: boolean; error?: string }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return { success: false, error: "Client not found" };
     try {
       await managed.client.restartMcpServer(name);
@@ -1438,19 +2036,33 @@ export class AgentProcessManager {
   async getContextUsage(
     sessionId: string,
   ): Promise<{ tokens: number | null; contextWindow: number; percent: number | null }> {
-    const managed = this.clients.get(sessionId);
+    let managed = this.getActiveManaged(sessionId);
+    if (!managed) {
+      managed = await this.ensureManagedClient(sessionId);
+    }
     if (!managed) return { tokens: null, contextWindow: 0, percent: null };
-    return managed.client.getContextUsage().catch((err: unknown) => {
-      log.warn("getContextUsage error", {
+    return managed.client.getContextUsage().catch(async (err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.warn("getContextUsage error, checking if CLI is alive", {
         sessionId,
-        err: err instanceof Error ? err.message : String(err),
+        err: msg,
       });
+      if (!(await this.isClientAlive(sessionId, managed))) {
+        this.cleanupDeadClient(sessionId, `getContextUsage failed: ${msg}`);
+      }
       return { tokens: null, contextWindow: 0, percent: null };
     });
   }
 
   async getTierModels(sessionId: string): Promise<{ models: Record<string, string> }> {
-    const managed = this.clients.get(sessionId);
+    let managed = this.getActiveManaged(sessionId);
+    if (!managed) {
+      await new Promise((r) => setTimeout(r, 200));
+      managed = this.getActiveManaged(sessionId);
+    }
+    if (!managed) {
+      managed = await this.ensureManagedClient(sessionId);
+    }
     if (!managed) return { models: {} };
     const response = await (
       managed.client as unknown as { send: (cmd: unknown) => Promise<unknown> }
@@ -1469,7 +2081,7 @@ export class AgentProcessManager {
   }
 
   async setTierModels(sessionId: string, models: Record<string, string>): Promise<{ ok: boolean }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return { ok: false };
     await (managed.client as unknown as { send: (cmd: unknown) => Promise<unknown> })
       .send({ type: "set_tier_models", models })
@@ -1493,7 +2105,10 @@ export class AgentProcessManager {
       filePath: string;
     }>;
   }> {
-    const managed = this.clients.get(sessionId);
+    let managed = this.getActiveManaged(sessionId);
+    if (!managed) {
+      managed = await this.ensureManagedClient(sessionId);
+    }
     if (!managed) return { agents: [] };
     try {
       const response = await (
@@ -1539,7 +2154,10 @@ export class AgentProcessManager {
     tier?: string;
     thinkingLevel?: string;
   }> {
-    const managed = this.clients.get(sessionId);
+    let managed = this.getActiveManaged(sessionId);
+    if (!managed) {
+      managed = await this.ensureManagedClient(sessionId);
+    }
     if (!managed) throw new Error("No agent process for session");
     const response = await (
       managed.client as unknown as { send: (cmd: unknown) => Promise<unknown> }
@@ -1554,7 +2172,10 @@ export class AgentProcessManager {
   }
 
   async getCurrentAgent(sessionId: string): Promise<{ agentName: string | null }> {
-    const managed = this.clients.get(sessionId);
+    let managed = this.getActiveManaged(sessionId);
+    if (!managed) {
+      managed = await this.ensureManagedClient(sessionId);
+    }
     if (!managed) return { agentName: null };
     try {
       const response = await (
@@ -1572,7 +2193,7 @@ export class AgentProcessManager {
   }
 
   async getAgentDetail(sessionId: string, agentName: string) {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) throw new Error("Client not found");
     return (
       managed.client as unknown as {
@@ -1582,7 +2203,7 @@ export class AgentProcessManager {
   }
 
   async getAllTools(sessionId: string) {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) throw new Error("Client not found");
     return (
       managed.client as unknown as {
@@ -1592,7 +2213,7 @@ export class AgentProcessManager {
   }
 
   async getSystemPrompt(sessionId: string) {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) throw new Error(`No client for session ${sessionId}`);
     return (
       managed.client as unknown as {
@@ -1601,8 +2222,34 @@ export class AgentProcessManager {
     ).getSystemPrompt();
   }
 
+  async getLatestAgentChange(sessionId: string) {
+    const managed = this.getActiveManaged(sessionId);
+    if (!managed) return null;
+    try {
+      const response = await (
+        managed.client as unknown as { send: (cmd: unknown) => Promise<unknown> }
+      ).send({ type: "get_latest_agent_change" });
+      const data = (
+        response as {
+          data?: {
+            agentName: string;
+            agentConfig?: Record<string, unknown>;
+            timestamp: string;
+          } | null;
+        }
+      ).data;
+      return data ?? null;
+    } catch (err: unknown) {
+      log.warn("getLatestAgentChange error", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return null;
+    }
+  }
+
   async getSettings(sessionId: string, scope?: string): Promise<Record<string, unknown>> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return {};
     return managed.client
       .getSettings(scope as "global" | "project" | undefined)
@@ -1621,7 +2268,7 @@ export class AgentProcessManager {
     settings: Record<string, unknown>,
     scope?: string,
   ): Promise<void> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return;
     await managed.client
       .setSettings(settings, scope as "global" | "project" | undefined)
@@ -1634,10 +2281,21 @@ export class AgentProcessManager {
   }
 
   async setSessionName(sessionId: string, name: string): Promise<void> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return;
+    const projectPath = managed.info.projectPath;
     await managed.client.setSessionName(name).catch((err: unknown) => {
       log.warn("setSessionName error", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    });
+    this.broadcastEvent(
+      "agent.session_renamed",
+      { sessionId, projectPath, newName: name },
+      {},
+    ).catch((err: unknown) => {
+      log.warn("broadcastEvent(session_renamed) error", {
         sessionId,
         err: err instanceof Error ? err.message : String(err),
       });
@@ -1645,10 +2303,14 @@ export class AgentProcessManager {
   }
 
   async getLastAssistantText(sessionId: string): Promise<{ text: string | null }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return { text: null };
     try {
-      const result = await managed.client.getLastAssistantText();
+      const result = await withTimeout(
+        managed.client.getLastAssistantText(),
+        10_000,
+        "getLastAssistantText",
+      );
       return { text: result };
     } catch (err: unknown) {
       log.warn("getLastAssistantText error", {
@@ -1662,10 +2324,10 @@ export class AgentProcessManager {
   async getForkMessages(
     sessionId: string,
   ): Promise<{ messages: Array<{ entryId: string; text: string }> }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return { messages: [] };
     try {
-      const result = await managed.client.getForkMessages();
+      const result = await withTimeout(managed.client.getForkMessages(), 10_000, "getForkMessages");
       return { messages: Array.isArray(result) ? result : [] };
     } catch (err: unknown) {
       log.warn("getForkMessages error", {
@@ -1686,12 +2348,12 @@ export class AgentProcessManager {
     newSessionFile?: string;
     newSessionId?: string;
   }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) throw new Error("Client not found");
-    const result = await managed.client.fork(entryId, options);
-    if (!result.cancelled) {
-      this.stop(sessionId);
-    }
+    const result = await withTimeout(managed.client.fork(entryId, options), 60_000, "fork");
+    // Don't stop the original session — the process pool's switchSession
+    // will handle the transition when the forked session is started.
+    // The original session remains on disk and can be re-activated later.
     // Strip parentSession from forked session so it's treated as independent on refresh
     if (result.newSessionFile && !result.cancelled) {
       stripParentSessionFromHeader(result.newSessionFile);
@@ -1703,30 +2365,109 @@ export class AgentProcessManager {
     sessionId: string,
     targetId: string,
     options?: { summarize?: boolean; skipFiles?: boolean },
-  ): Promise<{ cancelled: boolean }> {
-    const managed = this.clients.get(sessionId);
+  ): Promise<{ cancelled: boolean; reason?: string }> {
+    const managed = this.getActiveManaged(sessionId);
     if (managed) {
-      const result = await managed.client.navigateTree(targetId, options);
+      // Block rollback while agent is actively streaming
+      if (managed.info.status === "streaming") {
+        log.warn("navigateTree: blocked — agent is streaming", { sessionId, targetId });
+        return { cancelled: true, reason: "Agent is streaming" };
+      }
+      const result = await withTimeout(
+        managed.client.navigateTree(targetId, options),
+        30_000,
+        "navigateTree",
+      );
       if (!result.cancelled) {
         this.leafIds.set(sessionId, targetId);
         log.info("navigateTree updated leafId", { sessionId, targetId });
       }
       return result;
     }
-    log.warn("navigateTree: no managed client, rollback will not take effect", {
+    log.info("navigateTree: no managed client, applying JSONL fallback", {
       sessionId,
       targetId,
     });
-    return { cancelled: true };
+
+    const sessionPath = this.resolveSessionPath(sessionId);
+    if (!sessionPath) {
+      return { cancelled: true, reason: "No session path found" };
+    }
+
+    const entries = await this.readJsonlEntries(sessionPath);
+    const exists = entries.some((e) => e.id === targetId);
+    if (!exists) {
+      return { cancelled: true, reason: "Target entry not found in session" };
+    }
+
+    // Compute the actual branch point (skip metadata types, like findBranchPointAbove in CLI SDK).
+    // When rolling back a user message, the leaf should point to the ancestor, not the target itself.
+    const skipTypes = new Set([
+      "custom",
+      "agent_change",
+      "model_change",
+      "thinking_level_change",
+      "tier_models_change",
+      "custom_message",
+      "session_info",
+      "segment_summary",
+      "deletion",
+      "label",
+      "leaf_pointer",
+      "fold",
+    ]);
+    const entryById = new Map(entries.map((e: Record<string, unknown>) => [e.id, e]));
+    let branchPointId: string | null = targetId;
+    const targetEntry = entryById.get(targetId) as Record<string, unknown> | undefined;
+    if (targetEntry?.type === "message" && targetEntry?.label === "user") {
+      branchPointId = (targetEntry.parentId as string) ?? null;
+      while (branchPointId) {
+        const ancestor = entryById.get(branchPointId) as Record<string, unknown> | undefined;
+        if (!ancestor) break;
+        if (!skipTypes.has(ancestor.type as string)) break;
+        branchPointId = (ancestor.parentId as string) ?? null;
+      }
+    }
+
+    this.leafIds.set(sessionId, branchPointId);
+
+    // Write leaf_pointer to JSONL so it survives restart (without active CLI,
+    // the SDK's branch() is unavailable, so we append directly).
+    try {
+      const { appendFile: appendFileAsync } = await import("node:fs/promises");
+      const leafPointerEntry = JSON.stringify({
+        type: "leaf_pointer",
+        id: `fallback-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+        parentId: null,
+        timestamp: new Date().toISOString(),
+        leafId: branchPointId,
+      });
+      await appendFileAsync(sessionPath, `\n${leafPointerEntry}\n`, "utf-8");
+    } catch (leafErr: unknown) {
+      log.warn("navigateTree: failed to write leaf_pointer in fallback", {
+        sessionId,
+        err: leafErr instanceof Error ? leafErr.message : String(leafErr),
+      });
+    }
+
+    if (!options?.skipFiles) {
+      log.warn("navigateTree: file restore skipped (no active CLI process)", {
+        sessionId,
+        targetId,
+      });
+    }
+
+    log.info("navigateTree: JSONL fallback applied", { sessionId, targetId });
+    return { cancelled: false };
   }
 
   async previewRollback(
     sessionId: string,
     targetId: string,
   ): Promise<{ restored: string[]; deleted: string[] }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (managed) {
-      return managed.client.previewRollback(targetId);
+      return withTimeout(managed.client.previewRollback(targetId), 15_000, "previewRollback");
     }
     return { restored: [], deleted: [] };
   }
@@ -1735,19 +2476,53 @@ export class AgentProcessManager {
     sessionId: string,
     fromEntryId?: string,
     toEntryId?: string,
-  ): Promise<
-    Array<{
+    toUserMsgEntryId?: string,
+  ): Promise<{
+    files: Array<{
       path: string;
       status: "added" | "modified" | "deleted";
       turnIndex: number;
       entryId: string;
-    }>
-  > {
-    const managed = this.clients.get(sessionId);
+    }>;
+    resolvedFromEntryId: string | null;
+  }> {
+    const managed = this.getActiveManaged(sessionId);
     if (managed) {
-      return managed.client.getModifiedFiles({ fromEntryId, toEntryId });
+      const result = await withTimeout(
+        managed.client.getModifiedFiles({
+          fromEntryId,
+          toEntryId,
+          ...((toUserMsgEntryId ? { toUserMsgEntryId } : {}) as Record<string, string>),
+        }),
+        15_000,
+        "getModifiedFiles",
+      );
+      return result;
     }
-    return [];
+    return { files: [], resolvedFromEntryId: null };
+  }
+
+  async getFileDiff(
+    sessionId: string,
+    filePath: string,
+    fromEntryId?: string,
+    toEntryId?: string,
+  ): Promise<{
+    path: string;
+    oldContent: string | null;
+    newContent: string | null;
+    unifiedDiff: string;
+  } | null> {
+    const managed = this.getActiveManaged(sessionId);
+    if (managed) {
+      const result = await withTimeout(
+        managed.client.getFileDiff({ filePath, fromEntryId, toEntryId }),
+        15_000,
+        "getFileDiff",
+      );
+      return result;
+    }
+    return null;
   }
 
   async getBatchDiffs(
@@ -1767,18 +2542,22 @@ export class AgentProcessManager {
     }>;
     summary: { totalFiles: number; added: number; modified: number; deleted: number };
   }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (managed) {
-      return managed.client.getBatchDiffs({ fromEntryId, toEntryId });
+      return withTimeout(
+        managed.client.getBatchDiffs({ fromEntryId, toEntryId }),
+        30_000,
+        "getBatchDiffs",
+      );
     }
     return { files: [], summary: { totalFiles: 0, added: 0, modified: 0, deleted: 0 } };
   }
 
   async getTree(sessionId: string): Promise<{ entries: TreeEntry[]; leafId?: string | null }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (managed) {
       try {
-        const result = await managed.client.getTree();
+        const result = await withTimeout(managed.client.getTree(), 15_000, "getTree");
         return {
           entries: Array.isArray(result.entries) ? (result.entries as TreeEntry[]) : [],
           leafId: result.leafId,
@@ -1809,7 +2588,7 @@ export class AgentProcessManager {
     snapshotTreeHash: string,
     files?: string[],
   ): Promise<string[]> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) throw new Error("Client not found");
 
     const result = (await managed.client
@@ -1822,25 +2601,25 @@ export class AgentProcessManager {
   }
 
   async clone(sessionId: string): Promise<{ cancelled: boolean }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) throw new Error("Client not found");
-    return managed.client.clone();
+    return withTimeout(managed.client.clone(), 60_000, "clone");
   }
 
   async newSession(sessionId: string, parentSession?: string): Promise<{ cancelled: boolean }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) throw new Error("Client not found");
-    return managed.client.newSession(parentSession);
+    return withTimeout(managed.client.newSession(parentSession), 30_000, "newSession");
   }
 
   async exportHtml(sessionId: string, outputPath?: string): Promise<{ path: string }> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) throw new Error("Client not found");
-    return managed.client.exportHtml(outputPath);
+    return withTimeout(managed.client.exportHtml(outputPath), 60_000, "exportHtml");
   }
 
   sendChannelData(sessionId: string, channelName: string, data: unknown): void {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return;
     const ch = managed.client.channel(channelName);
     ch.send(data);
@@ -1866,14 +2645,21 @@ export class AgentProcessManager {
     method: string,
     params: Record<string, unknown>,
   ): Promise<unknown> {
-    const managed = this.clients.get(sessionId);
+    let managed = this.getActiveManaged(sessionId);
+    if (!managed) {
+      await new Promise((r) => setTimeout(r, 200));
+      managed = this.getActiveManaged(sessionId);
+    }
+    if (!managed) {
+      managed = await this.ensureManagedClient(sessionId);
+    }
     if (!managed) throw new Error("Client not found");
     const ch = managed.client.channel(channelName);
     return ch.call(method, params);
   }
 
   private handleEvent(sessionId: string, event: AgentEvent): void {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return;
 
     if (event.type === "channel_data") {
@@ -1940,18 +2726,91 @@ export class AgentProcessManager {
 
     if (event.type === "agent_start") {
       managed.info.status = "streaming";
+      managed.lastActiveAt = Date.now();
       managed.info.holdEvents = [];
       this.broadcastSessionStatus(sessionId, "streaming");
     }
 
     if (event.type === "agent_end") {
       managed.info.status = "idle";
+      managed.lastActiveAt = Date.now();
       managed.info.holdEvents = [];
       this.broadcastSessionStatus(sessionId, "idle");
+
+      // Sync leafId from CLI SDK after agent completes, so that subsequent
+      // getFullMessages calls (including page refreshes) see the latest leaf.
+      if (managed.client) {
+        managed.client
+          .getTreeWithLeaf()
+          .then((treeResult: { entries: unknown[]; leafId: string | null }) => {
+            if (treeResult.leafId) {
+              this.leafIds.set(sessionId, treeResult.leafId);
+            }
+          })
+          .catch(() => {});
+      }
+
+      if (config.sandboxEnabled && managed.info.projectPath) {
+        this.broadcastEvent(
+          "file.changed",
+          {
+            changedPath: managed.info.projectPath,
+            type: "create",
+          },
+          { sessionId },
+        ).catch(() => {});
+      }
+
+      const resolver = this.syncDelegateResolvers.get(sessionId);
+      if (resolver) {
+        clearTimeout(resolver.timeout);
+        this.syncDelegateResolvers.delete(sessionId);
+        this.subagentSyncChildren.delete(sessionId);
+        const finalText = this.syncDelegateLastText.get(sessionId) ?? "(completed)";
+        this.syncDelegateLastText.delete(sessionId);
+        resolver.resolve({
+          sessionId,
+          status: "completed",
+          exitCode: 0,
+          finalText: finalText || "(completed)",
+        });
+      }
+    }
+
+    if (event.type === "session_info_changed") {
+      const name = (event as Record<string, unknown>).name;
+      if (typeof name === "string" && name.length > 0) {
+        const projectPath = managed.info.projectPath;
+        this.broadcastEvent(
+          "agent.session_renamed",
+          { sessionId, projectPath, newName: name },
+          {},
+        ).catch((err: unknown) => {
+          log.warn("broadcastEvent(session_renamed from info_changed) error", {
+            sessionId,
+            err: err instanceof Error ? err.message : String(err),
+          });
+        });
+      }
+      return;
     }
 
     if (event.type === "message_end") {
-      managed.info.holdEvents = [];
+      if (this.subagentSyncChildren.has(sessionId)) {
+        const msgEvent = event as {
+          type: "message_end";
+          message: { content?: Array<{ type: string; text?: string }> };
+        };
+        const msg = msgEvent.message;
+        if (Array.isArray(msg?.content)) {
+          const text = msg.content
+            .filter((c) => c.type === "text")
+            .map((c) => c.text ?? "")
+            .join("")
+            .slice(0, 2000);
+          if (text) this.syncDelegateLastText.set(sessionId, text);
+        }
+      }
     }
 
     if (event.type === "message_update") {
@@ -1967,7 +2826,7 @@ export class AgentProcessManager {
     const parentId = this.findParentSession(sessionId);
     if (parentId) {
       this.broadcastEvent(
-        "coordinator.session.event",
+        "coordinator.session_event",
         {
           parentSessionId: parentId,
           childSessionId: sessionId,
@@ -1975,11 +2834,25 @@ export class AgentProcessManager {
         },
         { parentSessionId: parentId },
       ).catch((err: unknown) => {
-        log.warn("broadcastEvent(coordinator.session.event) error", {
+        log.warn("broadcastEvent(coordinator.session_event) error", {
           sessionId,
           err: err instanceof Error ? err.message : String(err),
         });
       });
+
+      if (this.subagentSyncChildren.has(sessionId) && event.type !== "channel_data") {
+        const parentManaged = this.clients.get(parentId);
+        this.broadcastEvent(
+          "subagent.event",
+          {
+            parentSessionId: parentId,
+            parentSessionPath: parentManaged?.info.sessionPath ?? "",
+            subSessionId: sessionId,
+            event: sanitized,
+          },
+          { parentSessionId: parentId },
+        ).catch(() => {});
+      }
     }
 
     this.emitAgentEvent(sessionId, sanitized);
@@ -2047,6 +2920,15 @@ export class AgentProcessManager {
     if (!data) return;
 
     log.info("Bash channel data", { sessionId, type: data.type, toolCallId: data.toolCallId });
+
+    const managed = this.clients.get(sessionId);
+    if (managed && data.toolCallId) {
+      if (data.type === "background") {
+        managed.activeBackgroundTools.add(data.toolCallId);
+      } else if (data.type === "end" || data.type === "error" || data.type === "terminated") {
+        managed.activeBackgroundTools.delete(data.toolCallId);
+      }
+    }
 
     await this.broadcastEvent("bash.event", { sessionId, event: data }, { sessionId });
   }
@@ -2195,7 +3077,11 @@ export class AgentProcessManager {
     }
   }
 
-  private async handleCoordinatorCall(sessionId: string, data: unknown): Promise<void> {
+  private async handleCoordinatorCall(
+    sessionId: string,
+    data: unknown,
+    channelName: string,
+  ): Promise<void> {
     const msg = data as CoordinatorChannelEvent;
 
     if (!("__call" in msg)) {
@@ -2215,10 +3101,30 @@ export class AgentProcessManager {
     try {
       switch (method) {
         case "session_delegate":
-          result = await this.handleCoordinatorDelegate(sessionId, msg);
+          if (this._startInProgress) {
+            // Queue the request — will be processed after current start() finishes
+            log.info("[coordinator] session_delegate queued (start in progress)", { sessionId });
+            result = await new Promise<unknown>((resolve) => {
+              this._pendingDelegateRequests.push({ sessionId, msg, channelName, resolve });
+            });
+          } else {
+            result = await this.handleCoordinatorDelegate(sessionId, msg);
+          }
           break;
         case "session_delegate_send":
           result = await this.handleCoordinatorDelegateSend(msg);
+          break;
+        case "session_delegate_sync":
+          if (this._startInProgress) {
+            log.info("[coordinator] session_delegate_sync queued (start in progress)", {
+              sessionId,
+            });
+            result = await new Promise<unknown>((resolve) => {
+              this._pendingDelegateRequests.push({ sessionId, msg, channelName, resolve });
+            });
+          } else {
+            result = await this.handleCoordinatorDelegateSync(sessionId, msg);
+          }
           break;
         case "session_delegate_status":
           result = await this.handleCoordinatorDelegateStatus(msg);
@@ -2233,51 +3139,140 @@ export class AgentProcessManager {
           result = await this.handleCoordinatorDelegateFork(sessionId, msg);
           break;
         default:
-          log.warn("Unknown coordinator method", { sessionId, method });
-          return;
+          if (method === "session_delegate_clear_stopped") {
+            result = this.handleCoordinatorClearStopped(msg);
+          } else if (method === "session_delegate_remove") {
+            result = this.handleCoordinatorRemove(sessionId, msg);
+          } else {
+            log.warn("Unknown coordinator method", { sessionId, method });
+            return;
+          }
       }
     } catch (err: unknown) {
       result = { error: err instanceof Error ? err.message : String(err) };
     }
 
     if (invokeId) {
-      let managed = this.clients.get(sessionId);
+      let managed = this.getActiveManaged(sessionId);
       // The session may have been evicted from clients during an async handler
-      // (e.g. delegate_send restarts the target, switching the pooled process).
+      // (e.g. delegate_send restarts the target).
       // Fall back to processByCwd via sessionProjectPaths to find the channel.
       if (!managed) {
         const projectPath = this.sessionProjectPaths.get(sessionId) ?? "";
         if (projectPath) {
-          managed = this.processByCwd.get(projectPath);
-          if (managed) {
-            log.info("handleCoordinatorCall: routed response via processByCwd fallback", {
-              sessionId,
-              projectPath,
-              activeSession: managed._activeSessionId,
-            });
+          const procSet = this.processByCwd.get(projectPath);
+          if (procSet) {
+            for (const mc of procSet) {
+              if (mc._activeSessionId === sessionId) {
+                managed = mc;
+                log.info("handleCoordinatorCall: routed response via processByCwd fallback", {
+                  sessionId,
+                  projectPath,
+                  activeSession: managed._activeSessionId,
+                });
+                break;
+              }
+            }
+          }
+          if (!managed) {
+            log.warn(
+              "handleCoordinatorCall: processByCwd fallback could not find matching process",
+              {
+                sessionId,
+                projectPath,
+                processCount: procSet?.size ?? 0,
+              },
+            );
           }
         }
       }
       if (managed) {
-        managed.client.channel("coordinator").send({ ...(result as object), invokeId });
+        managed.client.channel(channelName).send({ ...(result as object), invokeId });
       }
     }
+  }
+
+  private handleCoordinatorClearStopped(
+    msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_clear_stopped" }>,
+  ): { cleared: string[] } {
+    const targetSessionId = (msg as Record<string, unknown>).sessionId as string | undefined;
+    const cleared: string[] = [];
+    if (targetSessionId) {
+      this.delegateCreatedAt.delete(targetSessionId);
+      this.delegateReplyCount.delete(targetSessionId);
+      cleared.push(targetSessionId);
+    }
+    return { cleared };
+  }
+
+  private handleCoordinatorRemove(
+    parentSessionId: string,
+    msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_remove" }>,
+  ): { removed: boolean } {
+    const targetSessionId = (msg as Record<string, unknown>).targetSessionId as string | undefined;
+    if (!targetSessionId) return { removed: false };
+
+    const children = this.parentChildMap.get(parentSessionId);
+    if (children) {
+      children.delete(targetSessionId);
+      if (children.size === 0) this.parentChildMap.delete(parentSessionId);
+    }
+    this.delegateCreatedAt.delete(targetSessionId);
+    this.delegateReplyCount.delete(targetSessionId);
+    this.stop(targetSessionId);
+    return { removed: true };
   }
 
   private async handleCoordinatorDelegate(
     parentSessionId: string,
     msg: Extract<CoordinatorMethodCall, { __call: "session_delegate" }>,
-  ): Promise<{ sessionId: string; status: "started" | "already_running" | "switched" }> {
-    const { task } = msg;
-    const parent = this.clients.get(parentSessionId);
+  ): Promise<{ sessionId: string; status: "started" | "already_running" }> {
+    const { task, projectPath: rawProjectPath } = msg;
+    const parent = this.getActiveManaged(parentSessionId);
     if (!parent) throw new Error("Parent session not found");
 
-    const projectPath = parent.info.projectPath;
+    const projectPath = rawProjectPath ?? parent.info.projectPath;
     const newSessionId = `sess_coord_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const sessionDir = path.dirname(parent.info.sessionPath);
+    const isCrossProject = rawProjectPath && rawProjectPath !== parent.info.projectPath;
+    let sessionDir: string;
+    if (isCrossProject) {
+      // 跨项目：用目标项目路径编码，放到 ~/.pi/agent/sessions/ 下，扫描器才能找到
+      const encodedTarget = "--" + projectPath.replace(/^\//, "").replace(/\//g, "-") + "--";
+      sessionDir = path.join(os.homedir(), ".pi", "agent", "sessions", encodedTarget);
+      if (!existsSync(sessionDir)) mkdirSync(sessionDir, { recursive: true });
+    } else {
+      sessionDir = path.dirname(parent.info.sessionPath);
+    }
     const sessionPath = path.join(sessionDir, `${newSessionId}.jsonl`);
 
-    const result = await this.start(newSessionId, projectPath, sessionPath);
+    try {
+      const { writeFile } = await import("fs/promises");
+      const headerEntry = JSON.stringify({
+        type: "session",
+        version: 3,
+        id: newSessionId,
+        timestamp: new Date().toISOString(),
+        cwd: projectPath,
+        delegateParentSessionId: parentSessionId,
+      });
+      const delegateInfoEntry = JSON.stringify({
+        type: "delegate_info",
+        delegateParentSessionId: parentSessionId,
+        parentSessionPath: parent.info.sessionPath,
+        delegateType: "coordinator",
+        createdAt: Date.now(),
+      });
+      await writeFile(sessionPath, headerEntry + "\n" + delegateInfoEntry + "\n", "utf-8");
+    } catch (writeErr: unknown) {
+      log.warn("[handleCoordinatorDelegate] failed to write session header", {
+        sessionPath,
+        err: writeErr instanceof Error ? writeErr.message : String(writeErr),
+      });
+    }
+
+    const result = await this.start(newSessionId, projectPath, sessionPath, {
+      forceNewProcess: true,
+    });
 
     this.delegateCreatedAt.set(newSessionId, Date.now());
     this.delegateReplyCount.set(newSessionId, 0);
@@ -2293,6 +3288,7 @@ export class AgentProcessManager {
     const rawTitle = msg.title ?? task.slice(0, 60);
     const title = `指派: ${rawTitle}`;
     await this.setSessionName(newSessionId, title);
+    const projectName = projectPath.split("/").pop() ?? projectPath;
     const delegatePrompt = [
       `[系统提示] 你是一个被委派的后台任务会话。`,
       ``,
@@ -2301,6 +3297,7 @@ export class AgentProcessManager {
       `- 委派方（父会话）ID: ${parentSessionId}`,
       `- 任务: ${title}`,
       `- 项目路径: ${projectPath}`,
+      `- 项目名称: ${projectName}`,
       ``,
       `**要求：**`,
       `1. 你是独立执行任务的助手，专注于完成委派给你的任务`,
@@ -2326,7 +3323,9 @@ export class AgentProcessManager {
           name: title,
           sessionPath,
           projectPath,
-          parentSessionPath: null,
+          parentSessionPath: parent.info.sessionPath,
+          delegateParentSessionId: parentSessionId,
+          delegateType: "coordinator",
           messageCount: 0,
           firstMessage: task,
           createdAt: Date.now(),
@@ -2343,6 +3342,222 @@ export class AgentProcessManager {
     });
 
     return { sessionId: newSessionId, status: result.status };
+  }
+
+  private async handleCoordinatorDelegateSync(
+    parentSessionId: string,
+    msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_sync" }>,
+  ): Promise<{
+    sessionId: string;
+    status: string;
+    exitCode: number;
+    finalText: string;
+    error?: string;
+  }> {
+    const { task, title, agent, timeoutMs = 1800000, projectPath: rawProjectPath } = msg;
+    const parent = this.getActiveManaged(parentSessionId);
+    if (!parent) throw new Error("Parent session not found");
+
+    const projectPath = rawProjectPath ?? parent.info.projectPath;
+    const newSessionId = `sess_sub_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const isCrossProject = rawProjectPath && rawProjectPath !== parent.info.projectPath;
+    let sessionDir: string;
+    if (isCrossProject) {
+      // 跨项目：用目标项目路径编码，放到 ~/.pi/agent/sessions/ 下，扫描器才能找到
+      const encodedTarget = "--" + projectPath.replace(/^\//, "").replace(/\//g, "-") + "--";
+      sessionDir = path.join(os.homedir(), ".pi", "agent", "sessions", encodedTarget);
+      if (!existsSync(sessionDir)) mkdirSync(sessionDir, { recursive: true });
+    } else {
+      sessionDir = path.dirname(parent.info.sessionPath);
+    }
+    const sessionPath = path.join(sessionDir, `${newSessionId}.jsonl`);
+
+    try {
+      const { writeFile } = await import("fs/promises");
+      const headerEntry = JSON.stringify({
+        type: "session",
+        version: 3,
+        id: newSessionId,
+        timestamp: new Date().toISOString(),
+        cwd: projectPath,
+        delegateParentSessionId: parentSessionId,
+      });
+      const delegateInfoEntry = JSON.stringify({
+        type: "delegate_info",
+        delegateParentSessionId: parentSessionId,
+        parentSessionPath: parent.info.sessionPath,
+        delegateType: "subagent",
+        createdAt: Date.now(),
+      });
+      await writeFile(sessionPath, headerEntry + "\n" + delegateInfoEntry + "\n", "utf-8");
+    } catch (writeErr: unknown) {
+      log.warn("[handleCoordinatorDelegateSync] failed to write session header", {
+        sessionPath,
+        err: writeErr instanceof Error ? writeErr.message : String(writeErr),
+      });
+    }
+
+    await this.start(newSessionId, projectPath, sessionPath, { forceNewProcess: true });
+
+    if (agent) {
+      try {
+        await this.switchAgent(newSessionId, agent);
+        log.info("[handleCoordinatorDelegateSync] agent switched", {
+          newSessionId,
+          agent,
+        });
+      } catch (switchErr: unknown) {
+        log.warn("[handleCoordinatorDelegateSync] switchAgent failed, using default agent", {
+          newSessionId,
+          agent,
+          err: switchErr instanceof Error ? switchErr.message : String(switchErr),
+        });
+      }
+    }
+
+    this.delegateCreatedAt.set(newSessionId, Date.now());
+    this.delegateReplyCount.set(newSessionId, 0);
+
+    let children = this.parentChildMap.get(parentSessionId);
+    if (!children) {
+      children = new Set<string>();
+      this.parentChildMap.set(parentSessionId, children);
+    }
+    children.add(newSessionId);
+
+    const rawTitle = title ?? task.slice(0, 60);
+    const sessionTitle = `子代理: ${rawTitle}`;
+    await this.setSessionName(newSessionId, sessionTitle);
+
+    const projectName = projectPath.split("/").pop() ?? projectPath;
+    const delegatePrompt = [
+      `[系统提示] 你是一个子代理任务会话。`,
+      agent ? `**Agent 角色:** ${agent}` : "",
+      `**任务:** ${rawTitle}`,
+      `**项目:** ${projectName}`,
+      `**项目路径:** ${projectPath}`,
+      ``,
+      `要求：`,
+      `1. 专注于完成委派给你的任务`,
+      `2. 执行完毕后，明确总结你的工作成果`,
+      `3. 如果遇到问题无法继续，说明原因`,
+      ``,
+      `---`,
+      ``,
+      task,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    this.subagentSyncChildren.add(newSessionId);
+
+    const syncPromise = new Promise<{
+      sessionId: string;
+      status: string;
+      exitCode: number;
+      finalText: string;
+      error?: string;
+    }>((resolve) => {
+      // Pre-timeout: inject a "summarize now" instruction 60s before hard deadline
+      const preTimeoutMs = Math.max(timeoutMs - 60_000, 30_000);
+      const preTimeout = setTimeout(() => {
+        if (!this.syncDelegateResolvers.has(newSessionId)) return;
+        log.info("[syncDelegate] pre-timeout summarize injection", { sessionId: newSessionId });
+        this.followUp(
+          newSessionId,
+          "[系统指令] 即将超时，请立即停止当前操作，用几句话总结你到目前为止的工作成果和进展。",
+        );
+      }, preTimeoutMs);
+
+      const timeout = setTimeout(() => {
+        clearTimeout(preTimeout);
+        log.warn("[syncDelegate] timed out", {
+          sessionId: newSessionId,
+          parentSessionId,
+          timeoutMs,
+        });
+        const lastText = this.syncDelegateLastText.get(newSessionId) ?? "";
+        this.syncDelegateResolvers.delete(newSessionId);
+        this.subagentSyncChildren.delete(newSessionId);
+        this.syncDelegateLastText.delete(newSessionId);
+        resolve({
+          sessionId: newSessionId,
+          status: "timeout",
+          exitCode: 1,
+          finalText: lastText || "(timed out, no output captured)",
+        });
+      }, timeoutMs);
+
+      this.syncDelegateResolvers.set(newSessionId, {
+        resolve,
+        timeout,
+        parentSessionId,
+      });
+    });
+
+    this.send(newSessionId, delegatePrompt);
+
+    this.broadcastEvent(
+      "coordinator.session_created",
+      {
+        parentSessionId,
+        session: {
+          sessionId: newSessionId,
+          name: rawTitle,
+          sessionPath,
+          projectPath,
+          parentSessionPath: parent.info.sessionPath,
+          delegateParentSessionId: parentSessionId,
+          delegateType: "subagent",
+          messageCount: 0,
+          firstMessage: task,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          status: "running" as const,
+        },
+      },
+      { parentSessionId },
+    ).catch((err: unknown) => {
+      log.warn("broadcastEvent(coordinator.session_created) error", {
+        parentSessionId,
+        newSessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    });
+
+    this.broadcastEvent(
+      "subagent.event",
+      {
+        parentSessionId,
+        parentSessionPath: parent.info.sessionPath,
+        subSessionId: newSessionId,
+        event: {
+          type: "subagent_start",
+          toolCallId: "",
+          description: rawTitle,
+          instruction: task,
+        },
+      },
+      { parentSessionId },
+    ).catch((err: unknown) => {
+      log.warn("broadcastEvent(subagent_start) error", {
+        parentSessionId,
+        newSessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    });
+
+    const syncResult = await syncPromise;
+
+    this.stop(newSessionId);
+
+    const syncChildren = this.parentChildMap.get(parentSessionId);
+    if (syncChildren) {
+      syncChildren.delete(newSessionId);
+      if (syncChildren.size === 0) this.parentChildMap.delete(parentSessionId);
+    }
+
+    return syncResult;
   }
 
   private async handleCoordinatorDelegateSend(
@@ -2402,7 +3617,9 @@ export class AgentProcessManager {
       `</delegate-reply>`,
     ].join("\n");
 
-    if (target.info.status === "streaming") {
+    if (msg.mode === "steer") {
+      this.steer(targetSessionId, wrappedMessage);
+    } else if (msg.mode === "followUp" || target.info.status === "streaming") {
       this.followUp(targetSessionId, wrappedMessage);
     } else {
       this.send(targetSessionId, wrappedMessage);
@@ -2418,8 +3635,11 @@ export class AgentProcessManager {
 
     const status = this.getStatus(targetSessionId);
     if (status.status === "stopped") {
+      // Distinguish "session never existed" from "session existed but is inactive"
+      const hasRecord =
+        this.sessionPaths.has(targetSessionId) || this.sessionProjectPaths.has(targetSessionId);
       return {
-        status: "stopped",
+        status: hasRecord ? "stopped" : "not_found",
         isCompacting: false,
         contextUsage: { tokens: null, contextWindow: 0, percent: null },
       };
@@ -2466,17 +3686,17 @@ export class AgentProcessManager {
     if (!children || !children.has(targetSessionId)) {
       return { ok: false };
     }
-    const ok = this.stop(targetSessionId);
+    const ok = await this.stop(targetSessionId);
     return { ok };
   }
 
   private async handleCoordinatorDelegateFork(
     parentSessionId: string,
     msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_fork" }>,
-  ): Promise<{ sessionId: string; status: "started" | "already_running" | "switched" }> {
-    const { task } = msg;
-    const base = this.clients.get(parentSessionId);
-    if (!base) throw new Error("Base session not found");
+  ): Promise<{ sessionId: string; status: "started" | "already_running" }> {
+    const { task, sessionId: targetSessionId } = msg;
+    const base = this.clients.get(targetSessionId);
+    if (!base) throw new Error(`Session not found: ${targetSessionId}`);
 
     const sessionPath = base.info.sessionPath;
     const projectPath = base.info.projectPath;
@@ -2492,7 +3712,9 @@ export class AgentProcessManager {
     // Strip parentSession so the forked session is independent (not a child)
     stripParentSessionFromHeader(forkedPath);
 
-    const result = await this.start(forkedSessionId, projectPath, forkedPath);
+    const result = await this.start(forkedSessionId, projectPath, forkedPath, {
+      forceNewProcess: true,
+    });
 
     // Register parent-child relationship
     let children = this.parentChildMap.get(parentSessionId);
@@ -2506,6 +3728,33 @@ export class AgentProcessManager {
     await this.setSessionName(forkedSessionId, title);
     this.send(forkedSessionId, task);
 
+    this.broadcastEvent(
+      "coordinator.session_created",
+      {
+        parentSessionId,
+        session: {
+          sessionId: forkedSessionId,
+          name: title,
+          sessionPath: forkedPath,
+          projectPath,
+          parentSessionPath: sessionPath,
+          delegateParentSessionId: parentSessionId,
+          delegateType: "fork",
+          messageCount: 0,
+          firstMessage: task,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          status: "running" as const,
+        },
+      },
+      { parentSessionId },
+    ).catch((err: unknown) => {
+      log.warn("broadcastEvent(coordinator.session_created from fork) error", {
+        sessionId: forkedSessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    });
+
     return { sessionId: forkedSessionId, status: result.status };
   }
 
@@ -2518,7 +3767,7 @@ export class AgentProcessManager {
     channelName: string,
     data: unknown,
   ): Promise<unknown> {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (!managed) return null;
     try {
       const ch = managed.client.channel(channelName);
@@ -2534,17 +3783,17 @@ export class AgentProcessManager {
   }
 
   hasSession(sessionId: string): boolean {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     return managed !== undefined;
   }
 
   getProjectPath(sessionId: string): string | undefined {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     return managed?.info?.projectPath;
   }
 
   getSessionPath(sessionId: string): string {
-    const managed = this.clients.get(sessionId);
+    const managed = this.getActiveManaged(sessionId);
     if (managed) return managed.info.sessionPath;
     return this.sessionPaths.get(sessionId) ?? "";
   }

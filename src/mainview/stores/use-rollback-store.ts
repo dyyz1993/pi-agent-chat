@@ -6,6 +6,8 @@ export interface ModifiedFile {
   turnIndex: number;
   entryId: string;
   details?: string;
+  oldContent?: string | null;
+  newContent?: string | null;
   addedLines?: number;
   removedLines?: number;
 }

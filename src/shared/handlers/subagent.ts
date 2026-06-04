@@ -32,7 +32,8 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
             subsessions.push(data);
           }
         }
-      } catch {
+      } catch (e) {
+        log.debug("subagent.listBySession: skipping malformed entry", { error: String(e) });
         continue;
       }
     }
@@ -95,7 +96,8 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
           const data = entry.data as SubagentSessionInfo | undefined;
           return data?.sessionId !== subSessionId;
         }
-      } catch {
+      } catch (e) {
+        log.debug("subagent.delete: skipping malformed entry", { error: String(e) });
         return true;
       }
       return true;

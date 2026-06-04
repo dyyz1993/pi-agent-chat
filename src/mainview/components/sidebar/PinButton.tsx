@@ -16,7 +16,7 @@ export function PinButton() {
       onClick={() => setPinned(!isPinned)}
       title={isPinned ? t("unpinSidebar") : t("pinSidebar")}
       aria-label={isPinned ? t("unpinSidebar") : t("pinSidebar")}
-      className="text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors"
+      className="text-text-tertiary hover:text-text-primary transition-colors"
     >
       {isPinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
     </button>

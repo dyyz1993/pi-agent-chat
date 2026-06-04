@@ -1,5 +1,9 @@
 import { create } from "zustand";
 import { apiClient } from "../lib/api-client";
+import { createLogger } from "../../shared/lib/logger";
+import { useSessionStore } from "./use-session-store";
+
+const log = createLogger("settings");
 
 export type StatusSection =
   | "yolo"
@@ -77,6 +81,7 @@ export function deriveSkillScope(filePath: string): SkillScope {
 
 interface StatusState {
   yoloEnabled: boolean;
+  yoloLoading: boolean;
   planMode: boolean;
   shellActive: boolean;
   mcpServers: MCPServerInfo[];
@@ -101,10 +106,12 @@ interface StatusState {
   toggleMcpExpanded: (name: string) => void;
   toggleMcpServer: (sessionId: string, name: string, enabled: boolean) => void;
   restartMcpServer: (sessionId: string, name: string) => void;
+  clearSessionData: () => void;
 }
 
 export const useStatusStore = create<StatusState>((set) => ({
   yoloEnabled: false,
+  yoloLoading: false,
   planMode: true,
   shellActive: false,
   mcpServers: [],
@@ -116,7 +123,26 @@ export const useStatusStore = create<StatusState>((set) => ({
   expandedMcpServer: null,
   collapsedSections: new Set(),
 
-  toggleYolo: () => set((s) => ({ yoloEnabled: !s.yoloEnabled })),
+  toggleYolo: () => {
+    const s = useStatusStore.getState();
+    if (s.yoloLoading) return;
+    const next = !s.yoloEnabled;
+    const sessionId = useSessionStore.getState().activeSessionId;
+    if (!sessionId) return;
+    set({ yoloLoading: true });
+    apiClient
+      .call("agent.setPermissionMode", {
+        sessionId,
+        mode: next ? "dontAsk" : "auto",
+      })
+      .then(() => {
+        set({ yoloEnabled: next, yoloLoading: false });
+      })
+      .catch((err) => {
+        console.warn("[status] setPermissionMode failed:", err);
+        set({ yoloLoading: false });
+      });
+  },
   togglePlan: () => set((s) => ({ planMode: !s.planMode })),
   toggleSection: (section) =>
     set((s) => {
@@ -139,7 +165,7 @@ export const useStatusStore = create<StatusState>((set) => ({
       apiClient
         .call("agent.setDisabledSkill", { skillName: name, disabled: !newEnabled })
         .catch((err) => {
-          console.warn("[status] setDisabledSkill failed:", err);
+          log.warn("setDisabledSkill failed", { error: String(err) });
         });
       return {
         skills: s.skills.map((sk) => (sk.name === name ? { ...sk, enabled: newEnabled } : sk)),
@@ -162,12 +188,26 @@ export const useStatusStore = create<StatusState>((set) => ({
         }
       })
       .catch((err) => {
-        console.warn("[status] toggleMcpServer failed:", err);
+        log.warn("toggleMcpServer failed", { error: String(err) });
       });
   },
   restartMcpServer: (sessionId, name) => {
     apiClient.call("agent.restartMcpServer", { sessionId, name }).catch((err) => {
-      console.warn("[status] restartMcpServer failed:", err);
+      log.warn("restartMcpServer failed", { error: String(err) });
     });
   },
+  clearSessionData: () =>
+    set({
+      yoloEnabled: false,
+      yoloLoading: false,
+      planMode: true,
+      shellActive: false,
+      mcpServers: [],
+      lspStatus: "disconnected",
+      plugins: [],
+      skills: [],
+      expandedSkill: null,
+      expandedPlugin: null,
+      expandedMcpServer: null,
+    }),
 }));

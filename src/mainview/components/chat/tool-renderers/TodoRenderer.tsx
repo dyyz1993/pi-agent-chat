@@ -1,7 +1,9 @@
-import { memo } from "react";
+import { memo, useState, useEffect, useRef } from "react";
 import { CheckSquare, Square, TriangleAlert, Zap, Activity } from "lucide-react";
+import { createLogger } from "../../../../shared/lib/logger";
 import type { ToolRendererProps } from "./registry";
-import { getToolIcon } from "../tool-icon-map";
+import { ToolCardHeader, type ToolCardStatus } from "../primitives/ToolCardHeader";
+import { useSettingsStore } from "../../../stores/use-settings-store";
 
 interface TodoItem {
   id: number;
@@ -10,6 +12,8 @@ interface TodoItem {
   priority?: string;
   deleted?: boolean;
 }
+
+const logger = createLogger("chat");
 
 interface TodoDetails {
   action: string;
@@ -32,11 +36,11 @@ function isTodoDetails(d: unknown): d is TodoDetails {
 function getPriorityIcon(priority: string | undefined) {
   switch (priority) {
     case "high":
-      return <TriangleAlert className="w-3 h-3 shrink-0 text-red-500 dark:text-red-400" />;
+      return <TriangleAlert className="w-3 h-3 shrink-0 text-status-error" />;
     case "medium":
-      return <Zap className="w-3 h-3 shrink-0 text-amber-500 dark:text-amber-400" />;
+      return <Zap className="w-3 h-3 shrink-0 text-status-warning" />;
     case "low":
-      return <Activity className="w-3 h-3 shrink-0 text-gray-400 dark:text-gray-500" />;
+      return <Activity className="w-3 h-3 shrink-0 text-text-tertiary" />;
     default:
       return null;
   }
@@ -45,53 +49,59 @@ function getPriorityIcon(priority: string | undefined) {
 function ActionSummary({ details }: { details: TodoDetails }) {
   switch (details.action) {
     case "list": {
-      const count = details.totalActive ?? details.active?.length ?? 0;
+      const todos = (details.todos ?? []).filter((t) => !t.deleted);
+      const count = details.totalActive ?? todos.length;
+      const done = todos.filter((t) => t.done).length;
       return (
-        <span className="text-gray-500 dark:text-gray-400 font-normal">
-          {count > 0 ? `${count} 个任务` : "暂无待办事项"}
+        <span className="text-text-tertiary font-normal">
+          {count > 0
+            ? done > 0
+              ? `${count} 个任务 (${done} 已完成)`
+              : `${count} 个任务`
+            : "暂无待办事项"}
         </span>
       );
     }
     case "add": {
       const added = details.added ?? [];
-      if (added.length === 0)
-        return <span className="text-gray-400 dark:text-gray-500">添加失败</span>;
-      if (added.length === 1)
-        return (
-          <span className="text-emerald-600 dark:text-emerald-400">
-            ✓ #{added[0].id}: {added[0].text}
-          </span>
-        );
+      if (added.length === 0) return <span className="text-text-tertiary">添加失败</span>;
+      if (added.length === 1) {
+        const label = added[0].text || `#${added[0].id}`;
+        return <span className="text-status-success">✓ {label}</span>;
+      }
+      const first = added[0].text || `#${added[0].id}`;
       return (
-        <span className="text-emerald-600 dark:text-emerald-400">✓ 添加 {added.length} 个任务</span>
+        <span className="text-status-success">
+          ✓ {first} 等{added.length}项
+        </span>
       );
     }
     case "toggle": {
-      const todo = details.todos?.find((t) => t.id !== undefined);
-      if (!todo) return <span className="text-gray-400 dark:text-gray-500">切换状态</span>;
+      const todo = details.modified?.[0];
+      if (!todo) return <span className="text-text-tertiary">切换状态</span>;
+      const label = todo.text || `#${todo.id}`;
       return (
-        <span
-          className={
-            todo.done ? "text-gray-400 dark:text-gray-500" : "text-blue-500 dark:text-blue-400"
-          }
-        >
-          {todo.done ? `☑ #${todo.id} 已完成` : `☐ #${todo.id} 未完成`}
+        <span className={todo.done ? "text-text-tertiary" : "text-status-info"}>
+          {todo.done ? `☑ ${label} 已完成` : `☐ ${label} 未完成`}
         </span>
       );
     }
     case "remove": {
-      const count = (details.deleted ?? []).length;
-      return count > 0 ? (
-        <span className="text-gray-400 dark:text-gray-500">🗑 删除 {count} 个任务</span>
-      ) : (
-        <span className="text-gray-400 dark:text-gray-500">删除操作</span>
+      const deleted = details.deleted ?? [];
+      const count = deleted.length;
+      if (count === 0) return <span className="text-text-tertiary">删除操作</span>;
+      const first = deleted[0].text || `#${deleted[0].id}`;
+      return (
+        <span className="text-text-tertiary">
+          🗑 删除 "{first}"{count > 1 ? ` 等${count}项` : ""}
+        </span>
       );
     }
     case "clear": {
-      return <span className="text-gray-400 dark:text-gray-500">🗑 已清空</span>;
+      return <span className="text-text-tertiary">🗑 已清空</span>;
     }
     default:
-      return <span className="text-gray-400 dark:text-gray-500">{details.action}</span>;
+      return <span className="text-text-tertiary">{details.action}</span>;
   }
 }
 
@@ -106,9 +116,7 @@ function TodoList({ todos }: { todos: TodoItem[] }) {
   });
 
   if (unique.length === 0) {
-    return (
-      <div className="text-[11px] text-gray-400 dark:text-gray-500 italic py-1">暂无待办事项</div>
-    );
+    return <div className="text-[11px] text-text-tertiary italic py-1">暂无待办事项</div>;
   }
 
   return (
@@ -116,23 +124,21 @@ function TodoList({ todos }: { todos: TodoItem[] }) {
       {unique.map((todo) => (
         <div
           key={todo.id}
-          className="flex items-center gap-2 py-0.5 px-1 rounded-sm hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-colors"
+          className="flex items-center gap-2 py-0.5 px-1 rounded-sm hover:bg-surface-dim transition-colors"
         >
           {/* Status */}
           <span className="shrink-0">
             {todo.done ? (
-              <CheckSquare className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
+              <CheckSquare className="w-3.5 h-3.5 text-text-tertiary" />
             ) : (
-              <Square className="w-3.5 h-3.5 text-gray-300 dark:text-gray-600" />
+              <Square className="w-3.5 h-3.5 text-text-secondary" />
             )}
           </span>
 
           {/* Text */}
           <span
             className={`flex-1 min-w-0 text-[11px] truncate ${
-              todo.done
-                ? "line-through text-gray-400 dark:text-gray-500"
-                : "text-gray-700 dark:text-gray-300"
+              todo.done ? "line-through text-text-tertiary" : "text-text-primary"
             }`}
           >
             {todo.text}
@@ -149,14 +155,25 @@ function TodoList({ todos }: { todos: TodoItem[] }) {
 export const TodoExecRenderer = memo(function TodoExecRenderer({ block }: ToolRendererProps) {
   const isRunning = block.status === "running";
   const isError = block.status === "error";
+  const collapseToolCards = useSettingsStore((s) => s.collapseToolCards);
+
+  const [collapsed, setCollapsed] = useState(() => !isRunning && collapseToolCards);
+  const wasRunningRef = useRef(isRunning);
+
+  useEffect(() => {
+    if (wasRunningRef.current && !isRunning && collapseToolCards) {
+      setCollapsed(true);
+    }
+    wasRunningRef.current = isRunning;
+  }, [isRunning, collapseToolCards]);
 
   let borderBg: string;
   if (isRunning) {
-    borderBg = "border-blue-500/25 bg-blue-50 dark:bg-blue-950/20";
+    borderBg = "border-status-info/25 bg-status-info/5";
   } else if (isError) {
-    borderBg = "border-red-500/15 bg-red-50 dark:bg-red-950/15";
+    borderBg = "border-status-error/15 bg-status-error/5";
   } else {
-    borderBg = "border-gray-200 dark:border-gray-700/30 bg-gray-50 dark:bg-gray-800/25";
+    borderBg = "border-border-secondary/30 bg-surface-dim";
   }
 
   const details = block.details && isTodoDetails(block.details) ? block.details : null;
@@ -165,66 +182,47 @@ export const TodoExecRenderer = memo(function TodoExecRenderer({ block }: ToolRe
     try {
       const args = JSON.parse(block.args ?? "{}") as { action?: string };
       return args.action ?? details?.action ?? "";
-    } catch {
+    } catch (e) {
+      logger.warn("Failed to parse todo args", { error: String(e) });
       return details?.action ?? "";
     }
   })();
+
+  const status: ToolCardStatus = isRunning ? "running" : isError ? "error" : "done";
+
+  const description = operation || (details ? <ActionSummary details={details} /> : undefined);
+
+  const badge = isRunning ? (
+    <span className="shrink-0 text-[10px] text-status-info animate-pulse">执行中...</span>
+  ) : details ? (
+    <span className="text-[10px]">
+      <ActionSummary details={details} />
+    </span>
+  ) : undefined;
 
   return (
     <div
       data-toolcall-id={block.toolCallId}
       className={`rounded-none overflow-hidden border-x-0 border-t border-b ${borderBg}`}
     >
-      {/* Header */}
-      <div className="px-3 py-1.5 flex items-center gap-2 text-xs">
-        {(() => {
-          const { icon: TodoIcon } = getToolIcon("todo");
-          return (
-            <TodoIcon
-              className={`w-3.5 h-3.5 shrink-0 ${
-                isRunning
-                  ? "text-blue-500 dark:text-blue-400"
-                  : isError
-                    ? "text-red-500 dark:text-red-400"
-                    : "text-amber-500/70 dark:text-amber-400/60"
-              }`}
-            />
-          );
-        })()}
-        <span
-          className={`font-medium shrink-0 ${
-            isRunning
-              ? "text-blue-600 dark:text-blue-400"
-              : isError
-                ? "text-red-500 dark:text-red-400"
-                : "text-gray-800 dark:text-gray-300"
-          }`}
-        >
-          todo
-        </span>
+      <ToolCardHeader
+        toolName="todo"
+        status={status}
+        description={description}
+        collapsed={collapsed}
+        badge={badge}
+        onClick={() => setCollapsed((c) => !c)}
+        startedAt={block.startedAt}
+        endedAt={block.endedAt}
+      />
 
-        {operation && (
-          <span className="text-gray-500 dark:text-gray-400 text-[11px]">{operation}</span>
-        )}
-
-        <span className="flex-1 min-w-0" />
-
-        {isRunning && (
-          <span className="shrink-0 text-[10px] text-blue-500 dark:text-blue-400 animate-pulse">
-            执行中...
-          </span>
-        )}
-
-        {!isRunning && details && <ActionSummary details={details} />}
-      </div>
-
-      {/* Content - 始终展示当前任务列表 */}
-      {isRunning ? (
+      {/* Content */}
+      {collapsed ? null : isRunning ? (
         <div className="px-3 pb-2">
-          <div className="text-[11px] text-gray-400 dark:text-gray-600 italic py-1">执行中...</div>
+          <div className="text-[11px] text-text-tertiary italic py-1">执行中...</div>
         </div>
       ) : (
-        <div className="border-t border-gray-200 dark:border-gray-700/30">
+        <div className="border-t border-border-secondary/30">
           {details ? (
             <div className="px-3 pb-2">
               {details.action === "add" || details.action === "add_batch" ? (
@@ -234,7 +232,7 @@ export const TodoExecRenderer = memo(function TodoExecRenderer({ block }: ToolRe
               )}
             </div>
           ) : block.output ? (
-            <div className="px-3 pb-2 text-[11px] text-gray-500 dark:text-gray-400 font-mono whitespace-pre-wrap max-h-36 overflow-y-auto">
+            <div className="px-3 pb-2 text-[11px] text-text-tertiary font-mono whitespace-pre-wrap max-h-36 overflow-y-auto">
               {block.output}
             </div>
           ) : null}

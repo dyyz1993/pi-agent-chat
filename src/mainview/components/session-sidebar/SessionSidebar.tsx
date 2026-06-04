@@ -30,6 +30,9 @@ const EMPTY: never[] = [];
 export function groupSessions(
   rawSessions: SessionMeta[],
   searchQuery: string,
+  filterType?: "all" | "delegate" | "normal",
+  filterAgent?: string | null,
+  agentBySession?: Record<string, string>,
 ): { rootSessions: SessionMeta[]; childMap: Record<string, SessionMeta[]> } {
   const seen = new Set<string>();
   const deduped = rawSessions.filter((sess) => {
@@ -38,12 +41,26 @@ export function groupSessions(
     return true;
   });
 
+  const idToPath = new Map<string, string>();
+  for (const sess of deduped) {
+    idToPath.set(sess.sessionId, sess.sessionPath);
+  }
+
   const children: Record<string, SessionMeta[]> = {};
   const roots: SessionMeta[] = [];
   const q = searchQuery.trim().toLowerCase();
 
   for (const sess of deduped) {
-    if (sess.parentSessionPath) {
+    const isSubagent = sess.sessionId.startsWith("sess_sub_");
+    if (isSubagent && sess.delegateParentSessionId) {
+      const parentPath = idToPath.get(sess.delegateParentSessionId);
+      if (parentPath) {
+        if (!children[parentPath]) children[parentPath] = [];
+        children[parentPath].push(sess);
+      } else {
+        roots.push(sess);
+      }
+    } else if (!sess.delegateParentSessionId && sess.parentSessionPath) {
       if (!children[sess.parentSessionPath]) children[sess.parentSessionPath] = [];
       children[sess.parentSessionPath].push(sess);
     } else {
@@ -59,15 +76,21 @@ export function groupSessions(
           sess.sessionStatus === "streaming" ||
           sess.sessionStatus === "compacting" ||
           sess.sessionStatus === "retrying";
+        const isEmpty = sess.messageCount === 0 && !sess.firstMessage;
         if (isRunning) return 0;
         if (sess.pinned) return 1;
-        return 2;
+        if (isEmpty) return 2; // 空会话放在 pinned 之后
+        return 3;
       };
       const priorityA = getPriority(a);
       const priorityB = getPriority(b);
       if (priorityA !== priorityB) return priorityA - priorityB;
+      // 相同优先级按更新时间降序（最新的在上面）
       return b.updatedAt - a.updatedAt;
     });
+
+  let resultRoots: SessionMeta[];
+  let resultChildMap: Record<string, SessionMeta[]>;
 
   if (q) {
     const filter = (s: SessionMeta[]) =>
@@ -91,10 +114,24 @@ export function groupSessions(
         if (parentMatch) filteredChildren[parentPath] = filtered;
       }
     }
-    return { rootSessions: filteredRoots, childMap: filteredChildren };
+    resultRoots = filteredRoots;
+    resultChildMap = filteredChildren;
+  } else {
+    resultRoots = sortPinnedFirst(roots);
+    resultChildMap = children;
   }
 
-  return { rootSessions: sortPinnedFirst(roots), childMap: children };
+  if (filterType === "delegate") {
+    resultRoots = resultRoots.filter((r) => r.sessionId.startsWith("sess_coord_"));
+  } else if (filterType === "normal") {
+    resultRoots = resultRoots.filter((r) => !r.delegateParentSessionId);
+  }
+
+  if (filterAgent) {
+    resultRoots = resultRoots.filter((r) => agentBySession?.[r.sessionId] === filterAgent);
+  }
+
+  return { rootSessions: resultRoots, childMap: resultChildMap };
 }
 
 interface SessionSidebarProps {
@@ -105,6 +142,29 @@ export function SessionSidebar(_props: SessionSidebarProps) {
   const { t } = useTranslation("sidebar");
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [filterType, setFilterType] = useState<"all" | "delegate" | "normal">("all");
+  const [filterAgent, setFilterAgent] = useState<string | null>(null);
+
+  const newSessionCreatedAt = useSessionStore((s) => s.newSessionCreatedAt);
+  const activeProjectId = useSessionStore((s) => s.activeProjectId);
+  const projectTabs = useSessionStore((s) => s.projectTabs);
+  const fetchProjectSessionStatuses = useSessionStore((s) => s.fetchProjectSessionStatuses);
+
+  useEffect(() => {
+    if (newSessionCreatedAt > 0) {
+      setExpandedIds(new Set());
+    }
+  }, [newSessionCreatedAt]);
+
+  // Lazy fetch: only when sidebar is visible, fetch current project's session statuses
+  const fetchedRef = useRef(false);
+  useEffect(() => {
+    if (fetchedRef.current) return;
+    const tab = projectTabs.find((t) => t.id === activeProjectId);
+    if (!tab) return;
+    fetchedRef.current = true;
+    fetchProjectSessionStatuses(tab.path);
+  }, [activeProjectId, projectTabs, fetchProjectSessionStatuses]);
 
   const toggleExpand = useCallback((sessionId: string) => {
     setExpandedIds((prev) => {
@@ -115,35 +175,48 @@ export function SessionSidebar(_props: SessionSidebarProps) {
     });
   }, []);
 
-  const expandSession = useCallback((sessionId: string) => {
-    setExpandedIds((prev) => {
-      if (prev.has(sessionId)) return prev;
-      const next = new Set(prev);
-      next.add(sessionId);
-      return next;
-    });
-  }, []);
-
   return (
     <div className="flex flex-col h-full">
       <div className="px-2 py-1.5">
-        <div className="flex items-center gap-1.5 px-2 py-1 bg-gray-100/50 dark:bg-gray-800/50 rounded text-[11px] text-gray-400 dark:text-gray-500">
+        <div className="flex items-center gap-1.5 px-2 py-1.5 bg-bg-elevated/70 border border-border-primary/70 rounded-md text-[11px] text-text-tertiary">
           <Search className="w-3 h-3 shrink-0" />
           <input
             data-testid="session-search"
             placeholder={t("searchSessions")}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="bg-transparent outline-none flex-1 min-w-0 placeholder:text-gray-400 dark:placeholder:text-gray-600"
+            className="bg-transparent outline-none flex-1 min-w-0 placeholder:text-text-tertiary"
           />
         </div>
       </div>
 
+      <div className="px-2 py-0.5 flex items-center gap-1">
+        {(["all", "delegate", "normal"] as const).map((type) => (
+          <button
+            key={type}
+            onClick={() => setFilterType(type)}
+            className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
+              filterType === type
+                ? "bg-semantic-accent/15 text-accent-text"
+                : "text-text-tertiary hover:bg-surface-hover/40 hover:text-text-secondary"
+            }`}
+          >
+            {type === "all"
+              ? t("sidebar:filterAll", "全部")
+              : type === "delegate"
+                ? t("sidebar:filterDelegate", "委派")
+                : t("sidebar:filterNormal", "普通")}
+          </button>
+        ))}
+        <AgentFilterDropdown selectedAgent={filterAgent} onSelectAgent={setFilterAgent} />
+      </div>
+
       <SessionList
         searchQuery={searchQuery}
+        filterType={filterType}
+        filterAgent={filterAgent}
         expandedIds={expandedIds}
         onToggleExpand={toggleExpand}
-        onExpandSession={expandSession}
       />
     </div>
   );
@@ -151,14 +224,16 @@ export function SessionSidebar(_props: SessionSidebarProps) {
 
 function SessionList({
   searchQuery,
+  filterType,
+  filterAgent,
   expandedIds,
   onToggleExpand,
-  onExpandSession,
 }: {
   searchQuery: string;
+  filterType: "all" | "delegate" | "normal";
+  filterAgent: string | null;
   expandedIds: Set<string>;
   onToggleExpand: (id: string) => void;
-  onExpandSession: (id: string) => void;
 }) {
   const { t } = useTranslation(["sidebar", "common"]);
   const rawSessions = useSessionStore((s) => {
@@ -167,7 +242,9 @@ function SessionList({
     return s.sessionsByProject[tab.path] || EMPTY;
   });
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const activeSubId = useSubagentStore((s) => s.activeSubsessionId);
   const loading = useSessionStore((s) => s.loading);
+  const agentBySession = useAgentStore((s) => s.currentAgentBySession);
 
   const activeSessionPath = useMemo(() => {
     const sess = rawSessions.find((s) => s.sessionId === activeSessionId);
@@ -180,48 +257,51 @@ function SessionList({
   }, [activeSessionPath]);
 
   const subsessionsByParent = useSubagentStore((s) => s.subsessionsByParent);
-  const autoExpandedRef = useRef<Set<string>>(new Set());
-
-  useEffect(() => {
-    if (!activeSessionId) return;
-    if (autoExpandedRef.current.has(activeSessionId)) return;
-    const sessionPath = rawSessions.find((s) => s.sessionId === activeSessionId)?.sessionPath ?? "";
-    const subs = subsessionsByParent[sessionPath];
-    if (subs && subs.length > 0) {
-      autoExpandedRef.current.add(activeSessionId);
-      onExpandSession(activeSessionId);
-    }
-  }, [subsessionsByParent, activeSessionId, rawSessions, onExpandSession]);
 
   const { rootSessions, childMap } = useMemo(
-    () => groupSessions(rawSessions, searchQuery),
-    [rawSessions, searchQuery],
+    () => groupSessions(rawSessions, searchQuery, filterType, filterAgent, agentBySession),
+    [rawSessions, searchQuery, filterType, filterAgent, agentBySession],
   );
+
+  const filteredRoots = useMemo(() => {
+    if (filterType === "normal") {
+      return rootSessions.filter((r) => {
+        const hasSubChildren = childMap[r.sessionPath]?.some((c) =>
+          c.sessionId.startsWith("sess_sub_"),
+        );
+        const subs = subsessionsByParent[r.sessionPath];
+        return !hasSubChildren && (!subs || subs.length === 0) && !r.delegateParentSessionId;
+      });
+    }
+    return rootSessions;
+  }, [rootSessions, filterType, subsessionsByParent, childMap]);
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center text-gray-400 dark:text-gray-600 text-xs p-4">
-        <div className="w-3 h-3 border-2 border-gray-300 dark:border-gray-600 border-t-transparent rounded-full animate-spin mr-2" />
+      <div className="flex-1 flex items-center justify-center text-text-tertiary text-xs p-4">
+        <div className="w-3 h-3 border-2 border-border-secondary border-t-transparent rounded-full animate-spin mr-2" />
         {t("common:loading")}
       </div>
     );
   }
 
-  if (rootSessions.length === 0) {
+  if (filteredRoots.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-gray-400 dark:text-gray-600 text-xs p-4 text-center">
-        {searchQuery ? t("sidebar:noMatchingSessions") : t("sidebar:noSessions")}
+      <div className="flex-1 flex items-center justify-center text-text-tertiary text-xs p-4 text-center">
+        {searchQuery || filterType !== "all"
+          ? t("sidebar:noMatchingSessions")
+          : t("sidebar:noSessions")}
       </div>
     );
   }
 
   return (
-    <div className="flex-1 overflow-y-auto overscroll-contain px-2 py-0.5 divide-y divide-gray-200 dark:divide-gray-800/50">
-      {rootSessions.map((sess) => (
+    <div className="flex-1 overflow-y-auto overscroll-contain px-2 py-0.5 space-y-1">
+      {filteredRoots.map((sess) => (
         <SessionItem
           key={sess.sessionId}
           session={sess}
-          isActive={sess.sessionId === activeSessionId}
+          isActive={sess.sessionId === activeSessionId && !activeSubId}
           children={childMap[sess.sessionPath]}
           isExpanded={expandedIds.has(sess.sessionId)}
           onToggleExpand={() => onToggleExpand(sess.sessionId)}
@@ -237,31 +317,31 @@ function StatusBadge({ sessionId }: { sessionId: string }) {
 
   if (status === "streaming" || status === "compacting") {
     return (
-      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/15 text-amber-400 border border-amber-500/20">
-        <span className="w-1 h-1 rounded-full bg-amber-400 animate-pulse" />
+      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-warning/15 text-status-warning border border-status-warning/20 whitespace-nowrap">
+        <span className="w-1 h-1 rounded-full bg-status-warning animate-pulse" />
         {t("working")}
       </span>
     );
   }
   if (status === "permission") {
     return (
-      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-red-500/15 text-red-400 border border-red-500/20">
-        <span className="w-1 h-1 rounded-full bg-red-400" />
+      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-error/15 text-status-error border border-status-error/20 whitespace-nowrap">
+        <span className="w-1 h-1 rounded-full bg-status-error" />
         {t("needHelp")}
       </span>
     );
   }
   if (status === "retrying") {
     return (
-      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-red-500/15 text-red-400 border border-red-500/20">
-        <span className="w-1 h-1 rounded-full bg-red-400 animate-pulse" />
+      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-error/15 text-status-error border border-status-error/20 whitespace-nowrap">
+        <span className="w-1 h-1 rounded-full bg-status-error animate-pulse" />
         {t("retrying")}
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-400/80 border border-emerald-500/15">
-      <span className="w-1 h-1 rounded-full bg-emerald-500/60" />
+    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-success/15 text-status-success border border-status-success/25 whitespace-nowrap">
+      <span className="w-1 h-1 rounded-full bg-status-success" />
       {t("idle")}
     </span>
   );
@@ -274,7 +354,7 @@ function WorkspaceBadge({
 }) {
   const name = workspace.isMain ? workspace.path.split("/").pop() : workspace.branch;
   return (
-    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-cyan-500/15 text-cyan-400 border border-cyan-500/20">
+    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-semantic-tool/15 text-semantic-tool border border-semantic-tool/20">
       {!workspace.isMain && <GitBranch className="w-2.5 h-2.5" />}
       {name}
     </span>
@@ -285,24 +365,38 @@ function SubagentStatusBadge({ sub }: { sub: SubagentSessionInfo }) {
   const { t } = useTranslation("common");
   if (sub.exitCode === 0) {
     return (
-      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
-        <span className="w-1 h-1 rounded-full bg-emerald-400" />
+      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-success/15 text-status-success border border-status-success/20 whitespace-nowrap">
+        <span className="w-1 h-1 rounded-full bg-status-success" />
         {t("idle")}
       </span>
     );
   }
   if (sub.error || (sub.exitCode !== undefined && sub.exitCode !== 0)) {
     return (
-      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-red-500/15 text-red-400 border border-red-500/20">
+      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-error/15 text-status-error border border-status-error/20 whitespace-nowrap">
         {t("error")}
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/15 text-amber-400 border border-amber-500/20">
-      <span className="w-1 h-1 rounded-full bg-amber-400 animate-pulse" />
+    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-status-warning/15 text-status-warning border border-status-warning/20 whitespace-nowrap">
+      <span className="w-1 h-1 rounded-full bg-status-warning animate-pulse" />
       {t("running")}
     </span>
+  );
+}
+
+function DelegateChildItem({ session }: { session: SessionMeta }) {
+  const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  return (
+    <SessionItem
+      key={session.sessionId}
+      session={session}
+      isActive={session.sessionId === activeSessionId}
+      isExpanded={false}
+      onToggleExpand={() => {}}
+      isChild
+    />
   );
 }
 
@@ -312,12 +406,14 @@ function SessionItem({
   children,
   isExpanded,
   onToggleExpand,
+  isChild = false,
 }: {
   session: SessionMeta;
   isActive: boolean;
   children?: SessionMeta[];
   isExpanded: boolean;
   onToggleExpand: () => void;
+  isChild?: boolean;
 }) {
   const { t } = useTranslation(["sidebar", "common"]);
   const setActiveSession = useSessionStore((s) => s.setActiveSession);
@@ -334,6 +430,8 @@ function SessionItem({
   const inputRef = useRef<HTMLInputElement>(null);
   const hasPiChildren = !!(children && children.length > 0);
   const hasSubagents = !!(subsessions && subsessions.length > 0);
+  const isDelegate = session.sessionId.startsWith("sess_coord_");
+  const isSubtask = session.sessionId.startsWith("sess_sub_");
   const hasExpandableChildren = Boolean(hasPiChildren) || Boolean(hasSubagents);
   const workspaceInfo = useMemo(
     () =>
@@ -354,11 +452,15 @@ function SessionItem({
 
   const handleClick = () => {
     if (isEditing) return;
+
+    const { projectTabs, activeProjectId, setActiveProject } = useSessionStore.getState();
+    const targetTab = projectTabs.find((t) => t.path === session.projectPath);
+    if (targetTab && targetTab.id !== activeProjectId) {
+      setActiveProject(targetTab.id);
+    }
+
     setActiveSession(session.sessionId);
     useSubagentStore.getState().setActiveSubsession(session.sessionId, null);
-    if (hasExpandableChildren && !isExpanded) {
-      onToggleExpand();
-    }
     const layout = useLayoutStore.getState();
     if (layout.breakpoint === "mobile" && layout.sessionPanel === "visible") {
       layout.hideSession();
@@ -424,17 +526,17 @@ function SessionItem({
         data-testid={`session-item-${session.sessionId}`}
         className={`group w-full text-left px-2.5 py-2 rounded-lg text-[11px] transition-all duration-150 cursor-pointer ${
           isActive
-            ? "bg-[var(--color-accent)]/[0.15] text-[var(--color-accent-text)] shadow-sm shadow-[var(--color-accent)]/5 border border-[var(--color-accent)]/20"
-            : "text-gray-500 dark:text-gray-400 hover:bg-white/[0.04] dark:hover:bg-gray-800/50 hover:text-gray-200 dark:hover:text-gray-200 border border-transparent hover:border-gray-700/30 dark:hover:border-gray-700/30"
-        } ${isActive ? "ring-1 ring-[var(--color-accent)]/20" : ""}`}
+            ? "bg-semantic-accent/10 text-accent-text shadow-sm border border-semantic-accent/20 border-l-2 border-l-semantic-accent/50"
+            : "text-text-tertiary hover:bg-surface-hover/40 hover:text-text-primary border border-transparent hover:border-border-primary/80"
+        } ${isActive ? "ring-1 ring-semantic-accent/20" : ""}`}
         onClick={handleClick}
       >
         <div className="flex items-center gap-1.5">
           <div
             className={`flex items-center justify-center w-5 h-5 rounded-md shrink-0 transition-colors ${
               isActive
-                ? "bg-[var(--color-accent)]/20 text-[var(--color-accent-text)]"
-                : "bg-gray-200 text-gray-500 group-hover:bg-gray-300 dark:bg-gray-800/60 dark:group-hover:bg-gray-700/60 dark:group-hover:text-gray-400"
+                ? "bg-semantic-accent/20 text-accent-text"
+                : "bg-surface-hover/70 text-text-tertiary group-hover:bg-surface-hover"
             }`}
           >
             <User className="w-3 h-3" />
@@ -452,35 +554,45 @@ function SessionItem({
                   if (e.key === "Enter") handleConfirmRename();
                   if (e.key === "Escape") handleCancelRename();
                 }}
-                className="flex-1 bg-white dark:bg-gray-800 border border-indigo-500/50 rounded px-1.5 py-0.5 text-[11px] text-gray-800 dark:text-gray-200 outline-none"
+                className="flex-1 bg-bg-elevated border border-semantic-accent/50 rounded px-1.5 py-0.5 text-[11px] text-text-primary outline-none"
               />
               <button
                 onClick={handleConfirmRename}
-                className="p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-emerald-400"
+                className="p-0.5 rounded hover:bg-surface-hover text-status-success"
               >
                 <Check className="w-3 h-3" />
               </button>
               <button
                 onClick={handleCancelRename}
-                className="p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500"
+                className="p-0.5 rounded hover:bg-surface-hover text-text-tertiary"
               >
                 <X className="w-3 h-3" />
               </button>
             </div>
           ) : (
             <>
-              {session.pinned && <Pin className="w-3 h-3 shrink-0 text-indigo-400" />}
+              {session.pinned && <Pin className="w-3 h-3 shrink-0 text-semantic-accent" />}
               <span
-                className={`truncate font-medium leading-tight flex-1 min-w-0 ${isActive ? "text-[var(--color-accent-text)]" : ""}`}
+                className={`truncate font-medium leading-tight flex-1 min-w-0 ${isActive ? "text-accent-text" : ""}`}
               >
                 {displayName}
               </span>
               {currentAgentName && (
                 <span
-                  className="text-[9px] px-1 py-0.5 rounded font-mono shrink-0 ml-1 bg-[var(--color-accent)]/10 text-[var(--color-accent-text)]"
+                  className="text-[9px] px-1 py-0.5 rounded font-mono shrink-0 ml-1 bg-semantic-accent/10 text-accent-text"
                   title={t("sidebar:currentAgent", "Current Agent")}
                 >
                   {currentAgentName}
+                </span>
+              )}
+              {isDelegate && (
+                <span className="text-[9px] px-1 py-0.5 rounded font-medium shrink-0 ml-1 bg-semantic-notify/15 text-semantic-notify border border-semantic-notify/20">
+                  {t("sidebar:delegateTag", "委派")}
+                </span>
+              )}
+              {isSubtask && (
+                <span className="text-[9px] px-1 py-0.5 rounded font-medium shrink-0 ml-1 bg-semantic-agent/15 text-semantic-agent border border-semantic-agent/20">
+                  {t("sidebar:subtaskTag", "子任务")}
                 </span>
               )}
             </>
@@ -489,48 +601,52 @@ function SessionItem({
 
         {!isEditing && (
           <div className="flex items-center gap-1.5 mt-1.5">
-            {hasExpandableChildren && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleExpand();
-                }}
-                className="shrink-0 p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
-              >
-                {isExpanded ? (
-                  <ChevronDown className="w-3.5 h-3.5" />
-                ) : (
-                  <ChevronRight className="w-3.5 h-3.5" />
+            {!isChild && (
+              <div className="shrink-0 w-[18px]">
+                {hasExpandableChildren && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleExpand();
+                    }}
+                    className="p-0.5 rounded hover:bg-surface-hover text-text-tertiary hover:text-text-secondary transition-colors"
+                  >
+                    {isExpanded ? (
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    ) : (
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    )}
+                  </button>
                 )}
-              </button>
+              </div>
             )}
             <StatusBadge sessionId={session.sessionId} />
             {workspaceInfo && !workspaceInfo.isMain && <WorkspaceBadge workspace={workspaceInfo} />}
             <div className="ml-auto flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
               <button
                 onClick={handleTogglePin}
-                className={`p-1 rounded-md hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors ${session.pinned ? "text-indigo-400" : "text-gray-600 hover:text-gray-300"}`}
+                className={`p-1 rounded-md hover:bg-surface-hover/60 transition-colors ${session.pinned ? "text-semantic-accent" : "text-text-secondary hover:text-text-primary"}`}
                 title={session.pinned ? t("sidebar:unpin") : t("sidebar:pin")}
               >
                 {session.pinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
               </button>
               <button
                 onClick={handleCopyId}
-                className="p-1 rounded-md hover:bg-gray-200/60 dark:hover:bg-gray-700/60 text-gray-600 hover:text-gray-300 transition-colors"
+                className="p-1 rounded-md hover:bg-surface-hover/60 text-text-secondary hover:text-text-primary transition-colors"
                 title={t("sidebar:copyId")}
               >
                 <Copy className="w-3 h-3" />
               </button>
               <button
                 onClick={handleStartRename}
-                className="p-1 rounded-md hover:bg-gray-200/60 dark:hover:bg-gray-700/60 text-gray-600 hover:text-gray-300 transition-colors"
+                className="p-1 rounded-md hover:bg-surface-hover/60 text-text-secondary hover:text-text-primary transition-colors"
                 title={t("common:rename")}
               >
                 <Pencil className="w-3 h-3" />
               </button>
               <button
                 onClick={handleDelete}
-                className="p-1 rounded-md hover:bg-red-900/40 text-gray-600 hover:text-red-400 transition-colors"
+                className="p-1 rounded-md hover:bg-status-error/40 text-text-secondary hover:text-status-error transition-colors"
                 title={t("common:delete")}
               >
                 <Trash2 className="w-3 h-3" />
@@ -541,24 +657,16 @@ function SessionItem({
       </div>
 
       {isExpanded && hasExpandableChildren && (
-        <div className="ml-4 pl-3 border-l border-gray-200 dark:border-gray-800/60 mt-0.5 space-y-0">
+        <div className="ml-2 pl-2 border-l border-border-primary/50 mt-0.5 space-y-0">
           {loadingSubs && (
-            <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] text-gray-500 dark:text-gray-600">
+            <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] text-text-tertiary">
               <Loader2 className="w-3 h-3 animate-spin" />
               {t("sidebar:loadingSubagents")}
             </div>
           )}
           {!loadingSubs &&
             hasPiChildren &&
-            children?.map((child) => (
-              <SessionItem
-                key={child.sessionId}
-                session={child}
-                isActive={false}
-                isExpanded={false}
-                onToggleExpand={() => {}}
-              />
-            ))}
+            children?.map((child) => <DelegateChildItem key={child.sessionId} session={child} />)}
           {!loadingSubs &&
             hasSubagents &&
             subsessions?.map((sub) => (
@@ -579,6 +687,32 @@ function SessionItem({
       )}
     </div>
   );
+}
+
+function formatDuration(startMs: number, endMs: number): string {
+  const diffMs = endMs - startMs;
+  if (diffMs < 0) return "0s";
+  if (diffMs < 1000) return `${Math.round(diffMs)}ms`;
+  const sec = Math.floor(diffMs / 1000);
+  if (sec < 60) return `${sec}s`;
+  const min = Math.floor(sec / 60);
+  const remainSec = sec % 60;
+  return remainSec > 0 ? `${min}m${remainSec}s` : `${min}m`;
+}
+
+function SubagentDuration({ sub }: { sub: SubagentSessionInfo }) {
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    if (sub.completedAt) return;
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [sub.completedAt]);
+
+  const end = sub.completedAt ?? now;
+  const text = formatDuration(sub.startedAt, end);
+
+  return <span className="text-[9px] text-text-tertiary tabular-nums">{text}</span>;
 }
 
 function SubagentItem({
@@ -674,20 +808,25 @@ function SubagentItem({
       <div
         className={`group w-full text-left px-2.5 py-2 rounded-lg text-[11px] cursor-pointer transition-all duration-150 ${
           isActive
-            ? "border-l-2 border-l-[var(--color-accent)]/40 bg-[var(--color-accent)]/[0.08] text-[var(--color-accent-text)]"
-            : "text-gray-500 hover:bg-white/[0.04] dark:hover:bg-gray-800/50 hover:text-gray-300 border border-transparent hover:border-gray-700/30 dark:hover:border-gray-700/30"
+            ? "border-l-2 border-l-semantic-accent/40 bg-semantic-accent/10 text-accent-text"
+            : "text-text-tertiary hover:bg-surface-hover/40 hover:text-text-secondary border border-transparent hover:border-border-primary/80"
         }`}
         onClick={handleClick}
       >
         <div className="flex items-center gap-1.5">
-          <div
-            className={`flex items-center justify-center w-5 h-5 rounded-md shrink-0 transition-colors ${
-              isActive
-                ? "bg-[var(--color-accent)]/20 text-[var(--color-accent-text)]"
-                : "bg-gray-200 text-gray-500 group-hover:bg-gray-300 dark:bg-gray-800/60 group-hover:text-gray-400"
-            }`}
-          >
-            <Bot className="w-3 h-3" />
+          <div className="flex items-center gap-1 shrink-0">
+            <div
+              className={`flex items-center justify-center w-5 h-5 rounded-md transition-colors ${
+                isActive
+                  ? "bg-semantic-accent/20 text-accent-text"
+                  : "bg-surface-hover/70 text-text-tertiary group-hover:bg-surface-hover group-hover:text-text-tertiary"
+              }`}
+            >
+              <Bot className="w-3 h-3" />
+            </div>
+            <span className="text-[8px] font-medium leading-none px-1 py-0.5 rounded-sm bg-semantic-agent/10 text-text-tertiary select-none">
+              {t("toolLabels.subagent")}
+            </span>
           </div>
           {isEditing ? (
             <div
@@ -702,17 +841,17 @@ function SubagentItem({
                   if (e.key === "Enter") handleConfirmRename();
                   if (e.key === "Escape") handleCancelRename();
                 }}
-                className="flex-1 bg-white dark:bg-gray-800 border border-purple-500/50 rounded px-1.5 py-0.5 text-[11px] text-gray-800 dark:text-gray-200 outline-none"
+                className="flex-1 bg-bg-elevated border border-semantic-agent/50 rounded px-1.5 py-0.5 text-[11px] text-text-primary outline-none"
               />
               <button
                 onClick={handleConfirmRename}
-                className="p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-emerald-400"
+                className="p-0.5 rounded hover:bg-surface-hover text-status-success"
               >
                 <Check className="w-3 h-3" />
               </button>
               <button
                 onClick={handleCancelRename}
-                className="p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500"
+                className="p-0.5 rounded hover:bg-surface-hover text-text-tertiary"
               >
                 <X className="w-3 h-3" />
               </button>
@@ -720,13 +859,13 @@ function SubagentItem({
           ) : (
             <>
               <span
-                className={`truncate leading-tight flex-1 min-w-0 ${isActive ? "text-[var(--color-accent-text)]" : ""}`}
+                className={`truncate leading-tight flex-1 min-w-0 ${isActive ? "text-accent-text" : ""}`}
               >
                 {displayName}
               </span>
               {sub.agent && (
                 <span
-                  className="text-[9px] px-1 py-0.5 rounded font-mono shrink-0 ml-1 bg-[var(--color-accent)]/10 text-[var(--color-accent-text)]"
+                  className="text-[9px] px-1 py-0.5 rounded font-mono shrink-0 ml-1 bg-semantic-accent/10 text-accent-text"
                   title={sub.agent}
                 >
                   {sub.agent}
@@ -737,31 +876,32 @@ function SubagentItem({
         </div>
         <div className="flex items-center gap-1.5 mt-1.5">
           <SubagentStatusBadge sub={sub} />
+          <SubagentDuration sub={sub} />
           <div className="ml-auto flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
             <button
               onClick={handleCopyId}
-              className="p-1 rounded-md hover:bg-gray-200/60 dark:hover:bg-gray-700/60 text-gray-600 hover:text-gray-300 transition-colors"
+              className="p-1 rounded-md hover:bg-surface-hover/60 text-text-secondary hover:text-text-primary transition-colors"
               title={t("sidebar:copyId")}
             >
               <Copy className="w-3 h-3" />
             </button>
             <button
               onClick={handleStartRename}
-              className="p-1 rounded-md hover:bg-gray-200/60 dark:hover:bg-gray-700/60 text-gray-600 hover:text-gray-300 transition-colors"
+              className="p-1 rounded-md hover:bg-surface-hover/60 text-text-secondary hover:text-text-primary transition-colors"
               title={t("common:rename")}
             >
               <Copy className="w-3 h-3" />
             </button>
             <button
               onClick={handleStartRename}
-              className="p-1 rounded-md hover:bg-gray-700/60 text-gray-600 hover:text-gray-300 transition-colors"
+              className="p-1 rounded-md hover:bg-surface-hover/60 text-text-secondary hover:text-text-primary transition-colors"
               title={t("common:rename")}
             >
               <Pencil className="w-3 h-3" />
             </button>
             <button
               onClick={handleDelete}
-              className="p-1 rounded-md hover:bg-red-900/40 text-gray-600 hover:text-red-400 transition-colors"
+              className="p-1 rounded-md hover:bg-status-error/40 text-text-secondary hover:text-status-error transition-colors"
               title={t("common:delete")}
             >
               <Trash2 className="w-3 h-3" />
@@ -781,5 +921,37 @@ function SubagentItem({
         />
       )}
     </div>
+  );
+}
+
+function AgentFilterDropdown({
+  selectedAgent,
+  onSelectAgent,
+}: {
+  selectedAgent: string | null;
+  onSelectAgent: (agent: string | null) => void;
+}) {
+  const { t } = useTranslation("sidebar");
+  const agentBySession = useAgentStore((s) => s.currentAgentBySession);
+  const uniqueAgents = useMemo(() => {
+    const names = new Set(Object.values(agentBySession));
+    return [...names].filter(Boolean).sort();
+  }, [agentBySession]);
+
+  if (uniqueAgents.length === 0) return null;
+
+  return (
+    <select
+      value={selectedAgent ?? ""}
+      onChange={(e) => onSelectAgent(e.target.value || null)}
+      className="ml-auto text-[10px] bg-bg-elevated/70 border border-border-primary/70 rounded px-1.5 py-0.5 text-text-secondary outline-none cursor-pointer"
+    >
+      <option value="">{t("sidebar:filterAllAgents", "全部角色")}</option>
+      {uniqueAgents.map((agent) => (
+        <option key={agent} value={agent}>
+          {agent}
+        </option>
+      ))}
+    </select>
   );
 }

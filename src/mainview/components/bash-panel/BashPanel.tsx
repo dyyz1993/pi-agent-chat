@@ -18,6 +18,9 @@ import { useBashStore } from "../../stores/use-bash-store";
 import type { BashProcess } from "../../../shared/modules/bash";
 import { apiClient } from "../../lib/api-client";
 import { useFocusTrap } from "../../hooks/use-focus-trap";
+import { createLogger } from "../../../shared/lib/logger";
+
+const log = createLogger("bash");
 
 function formatDuration(ms: number): string {
   const s = Math.floor(ms / 1000);
@@ -62,12 +65,12 @@ function BashProcessCard({
   const isEnded = p.status === "done" || p.status === "error" || p.status === "terminated";
 
   const statusColor = isBackground
-    ? "text-yellow-400"
+    ? "text-status-warning"
     : p.status === "done"
-      ? "text-green-400"
+      ? "text-status-success"
       : p.status === "error" || p.status === "terminated"
-        ? "text-red-400"
-        : "text-blue-400";
+        ? "text-status-error"
+        : "text-status-info";
 
   const statusText = isBackground
     ? t("backgroundRunning")
@@ -80,16 +83,16 @@ function BashProcessCard({
           : t("executing");
 
   return (
-    <div className="rounded-lg bg-gray-100 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-800 px-3 py-2.5 space-y-1.5">
+    <div className="rounded-lg bg-surface-code border border-border-secondary/30 px-3 py-2.5 space-y-1.5">
       <div className="flex items-center gap-2">
         <span
-          className="text-[11px] font-medium text-gray-800 dark:text-gray-200 truncate font-mono flex-1"
+          className="text-[11px] font-medium text-text-primary truncate font-mono flex-1"
           title={p.command}
         >
           {p.command}
         </span>
       </div>
-      <div className="flex items-center gap-3 text-[9px] text-gray-500">
+      <div className="flex items-center gap-3 text-[9px] text-text-tertiary">
         <span className={statusColor}>{statusText}</span>
         {isActive ? (
           <span>
@@ -106,7 +109,7 @@ function BashProcessCard({
       <div className="flex items-center gap-1.5 pt-0.5">
         <button
           onClick={onOpenLog}
-          className="flex items-center justify-center w-8 h-7 rounded border border-gray-300 dark:border-gray-700/50 text-gray-500 hover:text-gray-800 dark:hover:text-white hover:border-gray-400 dark:hover:border-gray-600 transition-colors shrink-0"
+          className="flex items-center justify-center w-8 h-7 rounded border border-border-secondary/50 text-text-tertiary hover:text-text-primary hover:border-border-secondary transition-colors shrink-0"
           title={t("viewLog")}
         >
           <Terminal className="w-3.5 h-3.5" />
@@ -115,7 +118,7 @@ function BashProcessCard({
         {isActive && (
           <button
             onClick={() => sendAction("kill")}
-            className="flex items-center justify-center w-8 h-7 rounded border border-red-600/30 text-red-400 hover:bg-red-600/10 transition-colors shrink-0"
+            className="flex items-center justify-center w-8 h-7 rounded border border-status-error/30 text-status-error hover:bg-status-error/10 transition-colors shrink-0"
             title={isRunning ? t("cancelExecution") : t("terminateProcess")}
           >
             <X className="w-3.5 h-3.5" />
@@ -125,7 +128,7 @@ function BashProcessCard({
         {isRunning && !isBackground && elapsed > 5000 && (
           <button
             onClick={() => sendAction("background")}
-            className="flex items-center justify-center w-auto px-2 h-7 rounded border border-yellow-600/40 text-[10px] text-yellow-400 hover:bg-yellow-600/15 transition-colors shrink-0"
+            className="flex items-center justify-center w-auto px-2 h-7 rounded border border-status-warning/40 text-[10px] text-status-warning hover:bg-status-warning/15 transition-colors shrink-0"
             title={t("toBackground")}
           >
             <ArrowDownToLine className="w-3 h-3 mr-1" />
@@ -140,7 +143,7 @@ function BashProcessCard({
                 .getState()
                 .removeProcess(useSessionStore.getState().activeSessionId ?? "", p.toolCallId)
             }
-            className="flex items-center justify-center w-8 h-7 rounded border border-gray-300 dark:border-gray-700/50 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-400 dark:hover:border-gray-600 transition-colors shrink-0"
+            className="flex items-center justify-center w-8 h-7 rounded border border-border-secondary/50 text-text-tertiary hover:text-text-secondary hover:border-border-secondary transition-colors shrink-0"
             title={t("removeFromList")}
           >
             <Trash2 className="w-3.5 h-3.5" />
@@ -267,7 +270,8 @@ function LogViewer({
           setTotalLines(result.totalLines);
           setHasMore(result.hasMore);
           offsetRef.current += result.lines.length;
-        } catch {
+        } catch (e) {
+          log.warn("Failed to read bash log", { logPath, error: String(e) });
         } finally {
           if (!cancelled && mountedRef.current) {
             setLoading(false);
@@ -278,7 +282,7 @@ function LogViewer({
         if (cancelled) return;
         await apiClient.call("bash.watchLog", { logPath, sessionId: sid ?? undefined });
       } catch (err) {
-        console.warn("[BashPanel] watchLog failed:", err);
+        log.warn("watchLog failed", { error: String(err) });
       }
     })();
 
@@ -288,7 +292,7 @@ function LogViewer({
       if (subIdRef.current) apiClient.unsubscribe(subIdRef.current);
       const sid = useSessionStore.getState().activeSessionId;
       apiClient.call("bash.unwatchLog", { logPath, sessionId: sid ?? undefined }).catch((err) => {
-        console.warn("[BashPanel] unwatchLog failed:", err);
+        log.warn("unwatchLog failed", { error: String(err) });
       });
     };
   }, [logPath]);
@@ -342,7 +346,7 @@ function LogViewer({
       setHasMore(result.hasMore);
       offsetRef.current += result.lines.length;
     } catch (err) {
-      console.warn("[BashPanel] loadMore failed:", err);
+      log.warn("loadMore failed", { error: String(err) });
     } finally {
       if (mountedRef.current) loadingRef.current = false;
     }
@@ -378,26 +382,26 @@ function LogViewer({
       onClick={onClose}
     >
       <div
-        className="bg-white dark:bg-gray-900 border-t sm:border border-gray-200 dark:border-gray-700 sm:rounded-lg w-full sm:max-w-4xl flex flex-col h-full sm:h-[70vh] sm:max-h-[85vh]"
+        className="bg-surface-code border-t sm:border border-border-secondary sm:rounded-lg w-full sm:max-w-4xl flex flex-col h-full sm:h-[70vh] sm:max-h-[85vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div
-          className="flex items-center justify-between px-4 py-2.5 border-b border-gray-200 dark:border-gray-700 shrink-0"
+          className="flex items-center justify-between px-4 py-2.5 border-b border-border-secondary shrink-0"
           style={{ paddingTop: "calc(0.625rem + env(safe-area-inset-top, 0px))" }}
         >
           <div className="flex items-center gap-2 min-w-0">
-            <Terminal className="w-3.5 h-3.5 text-gray-500 shrink-0" />
-            <span className="text-xs text-gray-700 dark:text-gray-300 font-mono truncate">
+            <Terminal className="w-3.5 h-3.5 text-text-tertiary shrink-0" />
+            <span className="text-xs text-text-secondary font-mono truncate">
               {logPath.split("/").pop()}
             </span>
-            <span className="text-[9px] text-gray-400 dark:text-gray-600 shrink-0">
+            <span className="text-[9px] text-text-tertiary shrink-0">
               {t("lineCountShort", { count: totalLines })}
             </span>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-md text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors shrink-0"
+            className="p-2 rounded-md text-text-tertiary hover:text-text-primary dark:text-text-tertiary dark:hover:text-text-primary hover:bg-surface-hover dark:hover:bg-surface-hover transition-colors shrink-0"
             aria-label={t("close")}
           >
             <X className="w-4 h-4" />
@@ -409,13 +413,11 @@ function LogViewer({
           <div ref={scrollRef} onScroll={handleScroll} className="h-full overflow-auto p-3 sm:p-4">
             {loading ? (
               <div className="flex items-center justify-center py-12">
-                <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
-                <span className="ml-2 text-[11px] text-gray-500">{t("loadingDots")}</span>
+                <Loader2 className="w-4 h-4 animate-spin text-text-tertiary" />
+                <span className="ml-2 text-[11px] text-text-tertiary">{t("loadingDots")}</span>
               </div>
             ) : lines.length === 0 ? (
-              <div className="text-[11px] text-gray-400 dark:text-gray-600 italic">
-                {t("noOutput")}
-              </div>
+              <div className="text-[11px] text-text-tertiary italic">{t("noOutput")}</div>
             ) : (
               <div
                 style={{
@@ -431,7 +433,7 @@ function LogViewer({
                       key={virtualRow.index}
                       data-index={virtualRow.index}
                       ref={virtualizer.measureElement}
-                      className="text-[11px] text-gray-700 dark:text-gray-300 font-mono whitespace-pre-wrap break-all leading-relaxed absolute top-0 left-0 w-full"
+                      className="text-[11px] text-text-secondary font-mono whitespace-pre-wrap break-all leading-relaxed absolute top-0 left-0 w-full"
                       style={{
                         transform: `translateY(${virtualRow.start}px)`,
                       }}
@@ -448,7 +450,7 @@ function LogViewer({
           {!autoScroll && !loading && lines.length > 0 && (
             <button
               onClick={jumpToBottom}
-              className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-600 text-white text-[10px] font-medium shadow-lg hover:bg-blue-500 transition-all z-10"
+              className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-status-info text-white text-[10px] font-medium shadow-lg hover:bg-status-info/80 transition-all z-10"
             >
               <ArrowDownToLine className="w-3 h-3" />
               <span>{t("scrollToBottom")}</span>
@@ -458,10 +460,10 @@ function LogViewer({
 
         {/* Bottom bar: line count + stdin input */}
         <div
-          className="flex items-center gap-2 px-3 sm:px-4 py-2 border-t border-gray-200 dark:border-gray-700 shrink-0"
+          className="flex items-center gap-2 px-3 sm:px-4 py-2 border-t border-border-secondary shrink-0"
           style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
         >
-          <span className="text-[9px] text-gray-400 dark:text-gray-600 shrink-0">
+          <span className="text-[9px] text-text-tertiary shrink-0">
             {lines.length}/{totalLines}
           </span>
 
@@ -469,9 +471,7 @@ function LogViewer({
           <button
             onClick={jumpToBottom}
             className={`text-[9px] shrink-0 transition-colors ${
-              autoScroll
-                ? "text-blue-500 dark:text-blue-400"
-                : "text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400"
+              autoScroll ? "text-status-info" : "text-text-tertiary hover:text-text-secondary"
             }`}
           >
             {t("scrollToBottom")}
@@ -486,12 +486,12 @@ function LogViewer({
                 if (e.key === "Enter") sendStdin();
               }}
               placeholder={t("stdinPlaceholder")}
-              className="flex-1 h-7 px-2 rounded bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-[11px] text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-600 focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 font-mono"
+              className="flex-1 h-7 px-2 rounded bg-surface-dim border border-border-secondary text-[11px] text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-border-secondary font-mono"
             />
             <button
               onClick={sendStdin}
               disabled={!stdinInput.trim()}
-              className="h-7 w-7 flex items-center justify-center rounded bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 disabled:opacity-30 disabled:hover:bg-blue-600/20 transition-colors shrink-0"
+              className="h-7 w-7 flex items-center justify-center rounded bg-status-info/20 text-status-info hover:bg-status-info/30 disabled:opacity-30 disabled:hover:bg-status-info/20 transition-colors shrink-0"
               title={t("sendTitle")}
             >
               <Send className="w-3.5 h-3.5" />
@@ -520,12 +520,12 @@ export function BashPanel() {
     <div className="px-3 py-2 space-y-2">
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className="w-full flex items-center gap-1.5 text-[11px] font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
+        className="w-full flex items-center gap-1.5 text-[11px] font-medium text-text-secondary hover:text-text-primary transition-colors"
       >
         {collapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
         <Terminal className="w-3 h-3" />
         <span>SHELL</span>
-        <span className="ml-auto text-[9px] text-gray-600">{backgroundProcesses.length}</span>
+        <span className="ml-auto text-[9px] text-text-tertiary">{backgroundProcesses.length}</span>
       </button>
 
       {!collapsed && (

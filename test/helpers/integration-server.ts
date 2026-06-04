@@ -1,9 +1,10 @@
 import { spawn, type ChildProcess } from "child_process";
 import { execSync } from "child_process";
 import WebSocket from "ws";
-import { tmpdir } from "os";
+import { tmpdir, homedir } from "os";
 import { join } from "path";
-import { mkdir, rm } from "fs/promises";
+import { mkdir, rm, symlink } from "fs/promises";
+import { existsSync } from "fs";
 
 export interface TestServerConfig {
   port: number;
@@ -41,12 +42,26 @@ async function waitForPortFree(port: number, timeoutMs = 5000): Promise<void> {
 }
 
 export async function startTestServer(config: TestServerConfig): Promise<TestServerResult> {
-  const projectPath = config.projectPath ?? process.cwd();
   const tmpDir = join(tmpdir(), `pi-test-${config.port}-${Date.now()}`);
   await mkdir(tmpDir, { recursive: true });
 
   killPort(config.port);
   await waitForPortFree(config.port);
+
+  const isolatedHome = join(tmpDir, "home");
+  await mkdir(isolatedHome, { recursive: true });
+  await mkdir(join(isolatedHome, ".claude"), { recursive: true });
+
+  // Symlink .pi/agent/ from real home so pi CLI can find models.json, auth.json, extensions, etc.
+  const realPiAgent = join(homedir(), ".pi", "agent");
+  const isolatedPi = join(isolatedHome, ".pi");
+  if (existsSync(realPiAgent)) {
+    await mkdir(isolatedPi, { recursive: true });
+    const isolatedPiAgent = join(isolatedPi, "agent");
+    if (!existsSync(isolatedPiAgent)) {
+      await symlink(realPiAgent, isolatedPiAgent, "junction");
+    }
+  }
 
   const wsUrl = `ws://localhost:${config.port}/ws?token=${config.authToken}`;
   const env: Record<string, string> = {
@@ -54,10 +69,11 @@ export async function startTestServer(config: TestServerConfig): Promise<TestSer
     PORT: String(config.port),
     AUTH_TOKEN: config.authToken,
     LOG_DIR: join(tmpDir, "logs"),
+    HOME: isolatedHome,
   };
 
   const proc = spawn("bun", ["src/server.ts"], {
-    cwd: projectPath,
+    cwd: process.cwd(),
     env,
     stdio: ["pipe", "pipe", "pipe"],
   });

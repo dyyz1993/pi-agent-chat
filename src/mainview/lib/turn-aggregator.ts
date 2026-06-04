@@ -26,9 +26,11 @@ export function aggregateTurns(messages: ChatMessage[]): {
         currentTurn = {
           id: `turn_${msg.id}`,
           userMessageId: msg.id,
+          userEntryId: msg.entryId ?? null,
           userText: text,
           userTimestamp: msg.timestamp,
           assistantMessageId: null,
+          assistantEntryId: null,
           items: [],
           isStreaming: msg.isStreaming ?? false,
           collapsed: false,
@@ -41,9 +43,11 @@ export function aggregateTurns(messages: ChatMessage[]): {
           currentTurn = {
             id: `turn_orphan_${msg.id}`,
             userMessageId: null,
+            userEntryId: null,
             userText: "",
             userTimestamp: msg.timestamp,
             assistantMessageId: msg.id,
+            assistantEntryId: msg.entryId ?? null,
             items: [],
             model: msg.model,
             provider: msg.provider,
@@ -53,6 +57,7 @@ export function aggregateTurns(messages: ChatMessage[]): {
           };
         } else {
           currentTurn.assistantMessageId = msg.id;
+          currentTurn.assistantEntryId = msg.entryId ?? null;
           if (!currentTurn.model && msg.model) currentTurn.model = msg.model;
           if (!currentTurn.provider && msg.provider) currentTurn.provider = msg.provider;
           if (!currentTurn.tokenUsage && msg.tokenUsage) currentTurn.tokenUsage = msg.tokenUsage;
@@ -165,9 +170,11 @@ function finalizeTurn(partial: Partial<TimelineTurn>, index: number): TimelineTu
     id: partial.id ?? `turn_${index}`,
     index,
     userMessageId: partial.userMessageId ?? null,
+    userEntryId: partial.userEntryId ?? null,
     userText: partial.userText ?? "",
     userTimestamp: partial.userTimestamp ?? Date.now(),
     assistantMessageId: partial.assistantMessageId ?? null,
+    assistantEntryId: partial.assistantEntryId ?? null,
     items: partial.items ?? [],
     model: partial.model,
     provider: partial.provider,

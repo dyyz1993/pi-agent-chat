@@ -11,11 +11,11 @@ function formatTokens(tokens: number | null | undefined): string {
 }
 
 const STATUS_CONFIGS = {
-  streaming: { strokeClass: "text-yellow-400", animClass: "animate-pulse" },
-  compacting: { strokeClass: "text-yellow-400", animClass: "animate-pulse" },
-  permission: { strokeClass: "text-red-400", animClass: "" },
-  retrying: { strokeClass: "text-red-400", animClass: "animate-pulse" },
-  idle: { strokeClass: "text-green-400", animClass: "" },
+  streaming: { strokeClass: "text-status-warning", animClass: "animate-pulse" },
+  compacting: { strokeClass: "text-status-warning", animClass: "animate-pulse" },
+  permission: { strokeClass: "text-status-error", animClass: "" },
+  retrying: { strokeClass: "text-status-error", animClass: "animate-pulse" },
+  idle: { strokeClass: "text-status-success", animClass: "" },
 } as const;
 
 function statusConfig(status: SessionStatus | undefined) {
@@ -70,7 +70,7 @@ const ContextRing = memo(function ContextRing({
         fill="none"
         stroke="currentColor"
         strokeWidth={stroke}
-        className="text-gray-300 dark:text-gray-700"
+        className="text-text-secondary"
       />
       <circle
         cx={size / 2}
@@ -127,10 +127,10 @@ export const TokenStatusBar = memo(function TokenStatusBar({ sessionId }: { sess
         contextLabel={t("tokenStatus.contextUsage", { percent: Math.round(percent * 100) })}
       />
       <span>{activeSubId ? t("tokenStatus.subagent") : t("tokenStatus.used")}</span>
-      <span className="text-gray-500 dark:text-gray-400 font-medium">{used}</span>
+      <span className="text-text-tertiary font-medium">{used}</span>
       {contextUsage?.contextWindow ? (
         <>
-          <span className="text-gray-300 dark:text-gray-700">/</span>
+          <span className="text-text-secondary">/</span>
           <span>
             {t("tokenStatus.available")} {available}
           </span>

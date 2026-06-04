@@ -10,11 +10,12 @@ interface UseActiveScrollTrackerOptions {
   setActive: (id: string | null) => void;
   streamVersion: number;
   historyLoadVersion?: number;
+  onInitComplete?: () => void;
 }
 
 const BOTTOM_THRESHOLD_PX = 80;
 const TOP_THRESHOLD_PX = 80;
-const ACTIVE_THROTTLE_MS = 200;
+const ACTIVE_THROTTLE_MS = 50;
 
 export function useActiveScrollTracker({
   scrollRef,
@@ -24,6 +25,7 @@ export function useActiveScrollTracker({
   setActive,
   streamVersion,
   historyLoadVersion,
+  onInitComplete,
 }: UseActiveScrollTrackerOptions) {
   const userScrolledUpRef = useRef(false);
   const prevCountRef = useRef(0);
@@ -162,52 +164,6 @@ export function useActiveScrollTracker({
   }, [isNearBottom, syncToolbarState]);
 
   useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-
-    let scrollTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const onNativeScroll = () => {
-      const handle = vlistRef.current;
-      if (!handle) return;
-
-      const nearBottom =
-        handle.scrollSize - handle.scrollOffset - handle.viewportSize < BOTTOM_THRESHOLD_PX;
-      const nearTop = handle.scrollOffset < TOP_THRESHOLD_PX;
-      isAtTopRef.current = nearTop;
-      isAtBottomRef.current = nearBottom;
-
-      const delta = handle.scrollOffset - lastScrollTopRef.current;
-      lastScrollTopRef.current = handle.scrollOffset;
-      if (delta < -3 && autoScrollEnabledRef.current) {
-        autoScrollEnabledRef.current = false;
-        userScrolledUpRef.current = true;
-      } else if (nearBottom && !autoScrollEnabledRef.current && delta > 5) {
-        autoScrollEnabledRef.current = true;
-        userScrolledUpRef.current = false;
-      }
-
-      updateActiveFromScroll();
-      syncToolbarState();
-
-      if (scrollTimer) clearTimeout(scrollTimer);
-      scrollTimer = setTimeout(() => {
-        if (nearBottom) {
-          userScrolledUpRef.current = false;
-          autoScrollEnabledRef.current = true;
-        }
-        syncToolbarState();
-      }, 150);
-    };
-
-    el.addEventListener("scroll", onNativeScroll, { passive: true });
-    return () => {
-      el.removeEventListener("scroll", onNativeScroll);
-      if (scrollTimer) clearTimeout(scrollTimer);
-    };
-  }, [scrollRef, vlistRef, updateActiveFromScroll, syncToolbarState]);
-
-  useEffect(() => {
     if (prevSessionRef.current !== sessionId) {
       prevSessionRef.current = sessionId;
       didInitRef.current = false;
@@ -238,10 +194,12 @@ export function useActiveScrollTracker({
 
       attempts++;
       handle.scrollToIndex(messageIds.length - 1, { align: "end" });
-      setActive(messageIds[messageIds.length - 1]);
 
       const isAtBottom = handle.scrollSize - handle.scrollOffset - handle.viewportSize < 50;
-      if (!isAtBottom && attempts < MAX_ATTEMPTS) {
+      if (isAtBottom || attempts >= MAX_ATTEMPTS) {
+        setActive(messageIds[messageIds.length - 1]);
+        onInitComplete?.();
+      } else {
         rafId = requestAnimationFrame(tryScroll);
       }
     };
@@ -262,12 +220,23 @@ export function useActiveScrollTracker({
 
   useEffect(() => {
     if (historyLoadVersion === undefined || historyLoadVersion === 0) return;
+
     if (!userScrolledUpRef.current) {
+      const handle = vlistRef.current;
+      const isAlreadyAtBottom = handle
+        ? handle.scrollSize - handle.scrollOffset - handle.viewportSize < 50
+        : false;
+
+      if (isAlreadyAtBottom && didInitRef.current) {
+        prevCountRef.current = messageIds.length;
+        return;
+      }
+
       didInitRef.current = false;
     }
     prevCountRef.current = messageIds.length;
 
-    if (messageIds.length > 0) {
+    if (messageIds.length > 0 && !didInitRef.current) {
       setActive(messageIds[messageIds.length - 1]);
     }
 
@@ -281,15 +250,14 @@ export function useActiveScrollTracker({
         if (!handle || attempts >= MAX_ATTEMPTS) return;
         attempts++;
 
-        if (handle.scrollSize <= handle.viewportSize && attempts < MAX_ATTEMPTS) {
-          rafId = requestAnimationFrame(tryScroll);
-          return;
-        }
+        if (handle.scrollSize <= handle.viewportSize) return;
 
         handle.scrollToIndex(messageIds.length - 1, { align: "end" });
 
         const isAtBottom = handle.scrollSize - handle.scrollOffset - handle.viewportSize < 50;
-        if (!isAtBottom && attempts < MAX_ATTEMPTS) {
+        if (isAtBottom) {
+          didInitRef.current = true;
+        } else if (attempts < MAX_ATTEMPTS) {
           rafId = requestAnimationFrame(tryScroll);
         }
       };
@@ -354,6 +322,13 @@ export function useActiveScrollTracker({
     syncToolbarState();
   }, [syncToolbarState]);
 
+  const resumeAutoScroll = useCallback(() => {
+    userScrolledUpRef.current = false;
+    autoScrollEnabledRef.current = true;
+    doScrollToBottom();
+    syncToolbarState();
+  }, [doScrollToBottom, syncToolbarState]);
+
   return {
     handleScroll,
     handleScrollEnd,
@@ -365,5 +340,6 @@ export function useActiveScrollTracker({
     autoScrollEnabled: toolbarState.autoScrollEnabled,
     toggleAutoScroll,
     suspendAutoScroll,
+    resumeAutoScroll,
   };
 }

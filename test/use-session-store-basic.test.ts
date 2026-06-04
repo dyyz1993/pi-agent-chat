@@ -16,7 +16,17 @@ vi.mock("../src/shared/lib/logger", () => ({
 
 vi.mock("../src/mainview/stores/use-tier-store", () => ({
   useTierStore: {
-    getState: () => ({ currentTier: null, syncTierFromModel: vi.fn(), switchToTier: vi.fn() }),
+    getState: () => ({
+      getCurrentTier: vi.fn(() => null),
+      getTierModels: vi.fn(() => ({})),
+      syncTierFromModel: vi.fn(),
+      switchToTier: vi.fn(),
+      setGlobalDefaults: vi.fn(),
+      setSessionTierModels: vi.fn(),
+      setSessionCurrentTier: vi.fn(),
+      dataBySession: {},
+      globalDefaults: {},
+    }),
   },
 }));
 
@@ -68,6 +78,7 @@ vi.mock("../src/mainview/stores/session-subscriptions", () => ({
   setupSubscriptions: vi.fn(),
   cleanupSession: vi.fn(),
   cleanupSessionData: vi.fn(),
+  cleanupSessionLight: vi.fn(),
   clearSubscriptionState: (s: Record<string, unknown>) => s,
   syncTabsToBackend: vi.fn(),
 }));

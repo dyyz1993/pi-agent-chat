@@ -29,9 +29,15 @@ vi.mock("../src/shared/lib/logger", () => ({
 vi.mock("../src/mainview/stores/use-tier-store", () => ({
   useTierStore: {
     getState: vi.fn(() => ({
-      currentTier: null,
+      getCurrentTier: vi.fn(() => null),
+      getTierModels: vi.fn(() => ({})),
       syncTierFromModel: vi.fn(),
       switchToTier: vi.fn(),
+      setGlobalDefaults: vi.fn(),
+      setSessionTierModels: vi.fn(),
+      setSessionCurrentTier: vi.fn(),
+      dataBySession: {},
+      globalDefaults: {},
     })),
   },
 }));
@@ -42,6 +48,9 @@ vi.mock("../src/mainview/stores/use-chat-store", () => ({
       loadSessionMessages: vi.fn().mockResolvedValue(undefined),
       clearSessionMessages: vi.fn(),
       messagesBySession: {},
+      saveInputDraft: vi.fn(),
+      restoreInputDraft: vi.fn(),
+      clearInputDraft: vi.fn(),
     })),
     setState: vi.fn(),
   },
@@ -104,6 +113,7 @@ vi.mock("../src/mainview/stores/session-subscriptions", () => ({
   setupSubscriptions: vi.fn(),
   cleanupSession: vi.fn(),
   cleanupSessionData: vi.fn(),
+  cleanupSessionLight: vi.fn(),
   clearSubscriptionState: (s: Record<string, unknown>) => {
     delete (s as Record<string, unknown>).agentSubscriptions;
     return {};
@@ -228,8 +238,8 @@ describe("deleteSession flow", () => {
 
     expect(useSessionStore.getState().sessionsByProject["/project-a"]).toHaveLength(0);
     expect(mockedCall).toHaveBeenCalledWith(
-      "session.delete",
-      expect.objectContaining({ sessionId: "del-me", sessionPath: "/s/del" }),
+      "agent.stop",
+      expect.objectContaining({ sessionId: "del-me" }),
     );
   });
 

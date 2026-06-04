@@ -37,5 +37,15 @@
   "recentOperations": "最近操作",
   "noOperations": "暂无操作记录",
   "markedIrrelevant": "已标记不相关",
-  "markedIrrelevantDesc": "系统会从中学习，优化后续搜索"
+  "markedIrrelevantDesc": "系统会从中学习，优化后续搜索",
+  "searchHistory": "搜索历史",
+  "noSearchHistory": "暂无搜索记录",
+  "filterRules": "过滤规则",
+  "excludeKeywords": "排除关键词",
+  "customSkipRules": "自定义跳过规则",
+  "customGuardRules": "自定义保护规则",
+  "showBuiltin": "内置 {{skip}} 跳过 + {{guard}} 保护 ▸",
+  "hideBuiltin": "收起内置规则 ▾",
+  "noCustomRules": "暂无自定义规则",
+  "remove": "移除"
 }

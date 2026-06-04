@@ -1,4 +1,7 @@
 import { create } from "zustand";
+import { createLogger } from "../../shared/lib/logger";
+
+const log = createLogger("settings");
 
 export type SidebarPanelId = "explorer" | "git" | "search";
 export type Breakpoint = "mobile" | "tablet" | "desktop";
@@ -35,7 +38,8 @@ function readPinned(): boolean {
     if (stored !== null) return stored !== "false";
     // 首次加载：desktop 默认 pinned，tablet/mobile 默认 drawer
     return window.innerWidth >= 1024;
-  } catch {
+  } catch (e) {
+    log.warn("Failed to read sidebar pinned state", { error: String(e) });
     return true;
   }
 }
@@ -45,7 +49,8 @@ function readWidth(): number {
     const v = Number(localStorage.getItem(WIDTH_KEY));
     if (Number.isNaN(v) || v < SIDEBAR_MIN_WIDTH || v > SIDEBAR_MAX_WIDTH) return DEFAULT_WIDTH;
     return v;
-  } catch {
+  } catch (e) {
+    log.warn("Failed to read sidebar width", { error: String(e) });
     return DEFAULT_WIDTH;
   }
 }
@@ -73,8 +78,8 @@ export const useSidebarStore = create<SidebarState>((set, get) => ({
   setPinned: (pinned) => {
     try {
       localStorage.setItem(PINNED_KEY, String(pinned));
-    } catch {
-      /* ignore */
+    } catch (e) {
+      log.warn("Failed to persist sidebar pinned state", { error: String(e) });
     }
     set({ isPinned: pinned, drawerOpen: false });
   },
@@ -93,8 +98,8 @@ export const useSidebarStore = create<SidebarState>((set, get) => ({
     const clamped = Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, width));
     try {
       localStorage.setItem(WIDTH_KEY, String(clamped));
-    } catch {
-      /* ignore */
+    } catch (e) {
+      log.warn("Failed to persist sidebar width", { error: String(e) });
     }
     set({ sidebarWidth: clamped });
   },

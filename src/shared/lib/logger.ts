@@ -20,7 +20,21 @@ export type LogModule =
   | "tier"
   | "settings"
   | "proxy-register"
-  | "supervisor";
+  | "supervisor"
+  | "lsp"
+  | "memory"
+  | "fork-dialog"
+  | "tab-bar"
+  | "project"
+  | "sandbox-mgr"
+  | "sandbox-rpc"
+  | "sandbox-local"
+  | "sandbox-box"
+  | "sandbox-cf"
+  | "change-review"
+  | "sandbox-channel"
+  | "project-config"
+  | "render-cache";
 type LogLevel = "debug" | "info" | "warn" | "error";
 
 interface LogEntry {

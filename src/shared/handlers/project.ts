@@ -3,6 +3,7 @@ import type { HandlerOptions } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
 import { existsSync } from "fs";
 import { basename } from "path";
+import { createLogger } from "../lib/logger";
 import {
   addRecentProject,
   listRecentProjects,
@@ -30,6 +31,8 @@ import {
 } from "../lib/session-scanner";
 import { openFolder } from "../lib/native-dialog";
 import { linkProject, unlinkProject, getLinkedProjects } from "../lib/linked-projects-config";
+
+const log = createLogger("config");
 
 export function register(server: RPCServer, options: HandlerOptions): void {
   const r = createRegister(server);
@@ -74,8 +77,17 @@ export function register(server: RPCServer, options: HandlerOptions): void {
   });
 
   r("project.scanSessions", async (params) => {
-    const sessions = await scanSessionsForProject(params.projectPath);
-    return { sessions };
+    const log = createLogger("project");
+    const t0 = Date.now();
+    log.info("[scanSessions] handler begin", { projectPath: params.projectPath });
+    try {
+      const sessions = await scanSessionsForProject(params.projectPath);
+      log.info("[scanSessions] handler done", { count: sessions.length, ms: Date.now() - t0 });
+      return { sessions };
+    } catch (err) {
+      log.error("[scanSessions] handler FAILED", { error: String(err), ms: Date.now() - t0 });
+      throw err;
+    }
   });
 
   r("project.findSessionById", async (params) => {
@@ -118,7 +130,8 @@ export function register(server: RPCServer, options: HandlerOptions): void {
         return { cancelled: true } as { path: string } | { cancelled: true };
       }
       return { path: paths[0] } as { path: string } | { cancelled: true };
-    } catch {
+    } catch (e) {
+      log.debug("project.browseFolder: openFolder failed or cancelled", { error: String(e) });
       return { cancelled: true } as { path: string } | { cancelled: true };
     }
   });
@@ -133,7 +146,7 @@ export function register(server: RPCServer, options: HandlerOptions): void {
   });
 
   r("project.listDirectory", async (params) => {
-    const entries = await listDirectory(params.dirPath, params.searchQuery);
+    const entries = await listDirectory(params.dirPath, params.searchQuery, params.sortBy);
     return { entries };
   });
 

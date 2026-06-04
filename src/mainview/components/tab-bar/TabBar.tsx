@@ -1,10 +1,14 @@
-import { Plus, X, Settings } from "lucide-react";
+import { Plus, X, Settings, MessageCircleQuestion } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { createLogger } from "../../../shared/lib/logger";
 import { useSessionStore } from "../../stores/use-session-store";
+import { useUIDialogStore } from "../../stores/use-ui-dialog-store";
 import { apiClient } from "../../lib/api-client";
 import { SettingsPanel } from "../settings/SettingsPanel";
 import type { SessionStatus } from "../../types";
+
+const log = createLogger("tab-bar");
 
 function resolveDotClass(
   sessions: { sessionId: string }[],
@@ -12,14 +16,31 @@ function resolveDotClass(
 ): string {
   for (const s of sessions) {
     const st = statusMap[s.sessionId];
-    if (st === "permission" || st === "retrying") return "bg-red-400";
-    if (st === "streaming" || st === "compacting") return "bg-yellow-400 animate-pulse";
+    if (st === "permission" || st === "retrying") return "bg-status-error";
+    if (st === "streaming" || st === "compacting") return "bg-status-warning animate-pulse";
   }
-  return "bg-green-400";
+  return "bg-status-success";
+}
+
+function hasPermissionPending(
+  sessions: { sessionId: string }[],
+  statusMap: Record<string, SessionStatus | undefined>,
+): boolean {
+  return sessions.some((s) => statusMap[s.sessionId] === "permission");
+}
+
+function getProjectPendingCount(
+  sessions: { sessionId: string }[],
+  allPending: { sessionId: string }[],
+): number {
+  const sessionIds = new Set(sessions.map((s) => s.sessionId));
+  return allPending.filter((r) => sessionIds.has(r.sessionId)).length;
 }
 
 const LONG_PRESS_MS = 800;
 const MOVE_THRESHOLD = 5;
+
+const logger = createLogger("session");
 
 export function TabBar({ onAddProject }: { onAddProject: () => void }) {
   const { t } = useTranslation("sidebar");
@@ -36,6 +57,8 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
   const reorderProjectTabs = useSessionStore((s) => s.reorderProjectTabs);
   const sessionsByProject = useSessionStore((s) => s.sessionsByProject);
   const sessionStatusMap = useSessionStore((s) => s.sessionStatusMap);
+  const loadSessionsForProject = useSessionStore((s) => s.loadSessionsForProject);
+  const allPending = useUIDialogStore((s) => s.pending);
 
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
@@ -48,12 +71,35 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
   const pressStartPos = useRef({ x: 0, y: 0 });
   const tabRefs = useRef<(HTMLDivElement | null)[]>([]);
   const dragCleanup = useRef<(() => void) | null>(null);
+  const initializedRef = useRef(false);
 
   useEffect(() => {
     return () => {
       dragCleanup.current?.();
     };
   }, []);
+
+  // 初始化非活跃项目的 sessions 列表（仅列表，不拉状态）
+  useEffect(() => {
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+
+    const timer = setTimeout(async () => {
+      try {
+        const tabsToInit = projectTabs.filter((tab) => !sessionsByProject[tab.path]);
+        if (tabsToInit.length > 0) {
+          await Promise.all(tabsToInit.map((tab) => loadSessionsForProject(tab.path)));
+        }
+        // Session statuses are fetched lazily when SessionSidebar mounts
+      } catch (err) {
+        log.error("[TabBar] Failed to initialize projects:", {
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, [projectTabs, sessionsByProject, loadSessionsForProject]);
 
   useEffect(() => {
     if (!activeProjectId) return;
@@ -209,8 +255,8 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
     for (const sid of closeConfirmTab.runningSessionIds) {
       try {
         await apiClient.call("agent.stop", { sessionId: sid });
-      } catch {
-        /* ignore */
+      } catch (e) {
+        logger.warn("Failed to stop agent session", { sessionId: sid, error: String(e) });
       }
     }
     removeProjectTab(closeConfirmTab.id);
@@ -226,14 +272,14 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
   return (
     <div
       data-testid="tab-bar"
-      className="h-9 bg-gray-100 dark:bg-gray-900 border-b border-gray-300 dark:border-gray-800 flex items-center flex-shrink-0"
+      className="h-9 bg-bg-secondary border-b border-border-primary flex items-center flex-shrink-0"
       style={{
         paddingTop: "env(safe-area-inset-top)",
         height: "calc(2.25rem + env(safe-area-inset-top))",
       }}
     >
       <div
-        className={`flex-1 flex items-center gap-0.5 px-1 min-w-0 ${
+        className={`flex-1 flex items-center gap-1 px-1.5 min-w-0 ${
           dragIndex !== null ? "overflow-x-hidden" : "overflow-x-auto"
         }`}
       >
@@ -276,44 +322,57 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
               onPointerUp={handlePointerUp}
               onPointerCancel={handlePointerCancel}
               onContextMenu={(e) => e.preventDefault()}
-              className={`group flex items-center gap-1.5 px-3 py-1 text-xs rounded-t transition-all duration-150 relative cursor-pointer select-none shrink-0 ${
+              className={`group flex items-center gap-1.5 px-3 py-1 text-[13px] rounded-md transition-all duration-150 relative cursor-pointer select-none shrink-0 ${
                 isActive
-                  ? "bg-white dark:bg-gray-950 text-gray-900 dark:text-white border-t-2 border-t-indigo-500"
-                  : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-800/50"
+                  ? "bg-bg-elevated text-text-primary shadow-sm ring-1 ring-border-primary"
+                  : "text-text-secondary hover:text-text-primary hover:bg-surface-hover/60"
               } ${isPressing ? "scale-[0.97] opacity-90" : ""} ${
                 isDragSource
-                  ? "scale-105 shadow-lg ring-2 ring-indigo-400/50 bg-indigo-50 dark:bg-indigo-950/50 z-10"
+                  ? "scale-105 shadow-lg ring-2 ring-semantic-accent/50 bg-semantic-accent/10 dark:bg-semantic-accent/5 z-10"
                   : ""
               }`}
             >
               {showLeftIndicator && (
-                <span className="absolute left-0 top-1 bottom-1 w-0.5 bg-indigo-400 rounded-full" />
+                <span className="absolute left-0 top-1 bottom-1 w-0.5 bg-semantic-accent rounded-full" />
               )}
               <span className={`w-2 h-2 rounded-full ${dotClass} flex-shrink-0`} />
+              {hasPermissionPending(sessions, sessionStatusMap) && (
+                <span className="relative flex-shrink-0" title={t("hasPendingPermissions")}>
+                  <MessageCircleQuestion className="w-3 h-3 text-status-warning" />
+                  {(() => {
+                    const cnt = getProjectPendingCount(sessions, allPending);
+                    return cnt > 0 ? (
+                      <span className="absolute -top-1 -right-1 min-w-[8px] h-[8px] flex items-center justify-center bg-status-warning rounded-full text-[6px] leading-none text-white font-bold px-[1px]">
+                        {cnt > 9 ? "9+" : cnt}
+                      </span>
+                    ) : null;
+                  })()}
+                </span>
+              )}
               <span className="min-w-[60px] whitespace-nowrap">{tab.name}</span>
               <button
                 data-testid={`tab-close-${index}`}
                 onClick={(e) => handleCloseClick(e, tab.id)}
                 onMouseDown={(e) => e.stopPropagation()}
                 onPointerDown={(e) => e.stopPropagation()}
-                className="opacity-100 md:opacity-0 md:group-hover:opacity-100 p-1 rounded hover:bg-gray-300 dark:hover:bg-gray-700 transition-all pointer-events-auto"
+                className="opacity-100 md:opacity-0 md:group-hover:opacity-100 p-1 rounded hover:bg-surface-hover transition-all pointer-events-auto"
                 aria-label="Close tab"
               >
                 <X className="w-3 h-3" />
               </button>
               {(showRightIndicator || isLastDropTarget) && (
-                <span className="absolute right-0 top-1 bottom-1 w-0.5 bg-indigo-400 rounded-full" />
+                <span className="absolute right-0 top-1 bottom-1 w-0.5 bg-semantic-accent rounded-full" />
               )}
             </div>
           );
         })}
       </div>
 
-      <div className="flex items-center gap-0.5 px-2 shrink-0 border-l border-gray-200 dark:border-gray-700 h-full">
+      <div className="flex items-center gap-1 px-2 shrink-0 border-l border-border-primary h-full">
         <button
           data-testid="settings-open-btn"
           onClick={() => setSettingsOpen(true)}
-          className="p-1 rounded text-gray-500 hover:text-gray-800 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+          className="p-1.5 rounded-md text-text-tertiary hover:text-text-primary hover:bg-surface-hover transition-colors cursor-pointer"
           title={t("settings")}
           aria-label={t("settings")}
         >
@@ -321,7 +380,7 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
         </button>
         <button
           onClick={onAddProject}
-          className="p-1 rounded text-gray-500 hover:text-gray-800 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+          className="p-1.5 rounded-md text-text-tertiary hover:text-text-primary hover:bg-surface-hover transition-colors cursor-pointer"
           title={t("addProject")}
           aria-label={t("addProject")}
         >
@@ -333,21 +392,21 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
 
       {closeConfirmTab && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-bg-overlay backdrop-blur-sm"
           onClick={(e) => {
             if (e.target === e.currentTarget) setCloseConfirmTab(null);
           }}
         >
           <div
-            className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-2xl p-4 min-w-[300px] max-w-[400px]"
+            className="bg-bg-elevated border border-border-primary rounded-lg shadow-2xl p-4 min-w-[300px] max-w-[400px]"
             role="dialog"
             aria-modal="true"
             aria-label={t("closeProjectTitle")}
           >
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
+            <h3 className="text-sm font-semibold text-text-primary mb-2">
               {t("closeProjectTitle")}
             </h3>
-            <p className="text-xs text-gray-700 dark:text-gray-300 mb-4">
+            <p className="text-xs text-text-secondary mb-4">
               {closeConfirmTab.runningSessionIds.length > 0
                 ? t("closeProjectRunningMessage", { name: closeConfirmTab.name })
                 : t("closeProjectIdleMessage", { name: closeConfirmTab.name })}
@@ -356,13 +415,13 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
               {closeConfirmTab.runningSessionIds.length > 0 ? (
                 <>
                   <button
-                    className="px-3 py-1.5 text-xs bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded transition-colors text-gray-800 dark:text-gray-200"
+                    className="px-3 py-1.5 text-xs bg-surface-hover hover:bg-bg-tertiary rounded transition-colors text-text-primary"
                     onClick={handleKeepRunning}
                   >
                     {t("closeProjectContinue")}
                   </button>
                   <button
-                    className="px-3 py-1.5 text-xs bg-red-600 hover:bg-red-700 rounded transition-colors text-white"
+                    className="px-3 py-1.5 text-xs bg-status-error hover:bg-status-error/80 rounded transition-colors text-text-inverse"
                     onClick={handleStopAndClose}
                   >
                     {t("closeProjectStop")}
@@ -371,13 +430,13 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
               ) : (
                 <>
                   <button
-                    className="px-3 py-1.5 text-xs bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded transition-colors text-gray-800 dark:text-gray-200"
+                    className="px-3 py-1.5 text-xs bg-surface-hover hover:bg-bg-tertiary rounded transition-colors text-text-primary"
                     onClick={() => setCloseConfirmTab(null)}
                   >
                     {t("cancel", { ns: "common" })}
                   </button>
                   <button
-                    className="px-3 py-1.5 text-xs bg-red-600 hover:bg-red-700 rounded transition-colors text-white"
+                    className="px-3 py-1.5 text-xs bg-status-error hover:bg-status-error/80 rounded transition-colors text-text-inverse"
                     onClick={handleKeepRunning}
                   >
                     {t("closeProjectClose")}

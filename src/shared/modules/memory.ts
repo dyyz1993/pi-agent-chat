@@ -24,12 +24,53 @@ export interface MemoryMethods {
     params: { sessionId: string; query: string; selectedFiles: string[] };
     result: { ok: boolean };
   };
+  "memory.getStatus": {
+    params: { sessionId: string };
+    result: MemoryStatusResult;
+  };
+  "memory.removeRule": {
+    params: {
+      sessionId: string;
+      rule?: { pattern: string; mode: string };
+      excludeKeyword?: string;
+    };
+    result: { ok: boolean };
+  };
+  "memory.addRule": {
+    params: { sessionId: string; pattern: string; mode: string; action: string };
+    result: { ok: boolean };
+  };
 }
 
 export interface MemoryEventData {
   sessionId: string;
   timestamp: number;
   [key: string]: unknown;
+}
+
+export interface PrefetchHistoryEntry {
+  query: string;
+  selected: string[];
+  skipped: boolean;
+  skip_hits: string[];
+  guard_hits: string[];
+  timestamp: number;
+}
+
+export interface MemoryStatusResult {
+  skipRules: {
+    builtin: Array<{ pattern: string; mode: string }>;
+    custom: Array<{ pattern: string; mode: string }>;
+  };
+  guardRules: {
+    builtin: Array<{ pattern: string; mode: string }>;
+    custom: Array<{ pattern: string; mode: string }>;
+  };
+  excludeKeywords: string[];
+  recentQueries: PrefetchHistoryEntry[];
+  dream: {
+    lastRunAt: number | null;
+  };
 }
 
 export interface MemoryEvents {

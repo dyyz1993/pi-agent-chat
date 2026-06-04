@@ -1,7 +1,7 @@
 import type { ClassAttributes, HTMLAttributes, ReactNode } from "react";
 import { Highlight, themes } from "prism-react-renderer";
 import { MermaidBlock, isMermaidLang } from "./MermaidBlock";
-import { useThemeStore } from "../../../stores/use-theme-store";
+import { useThemeStore, isDarkGroup } from "../../../stores/use-theme-store";
 import { CopyButton } from "../CopyButton";
 
 interface HastNode {
@@ -41,7 +41,7 @@ function extractTextFromChildren(children: ReactNode): string {
 
 export function MermaidPreBlock({ children, node, ...rest }: PreBlockProps) {
   const resolvedTheme = useThemeStore((s) => s.resolvedTheme);
-  const prismTheme = resolvedTheme === "dark" ? themes.nightOwl : themes.github;
+  const prismTheme = isDarkGroup(resolvedTheme) ? themes.nightOwl : themes.github;
 
   if (node?.children) {
     const codeEl = node.children.find((c) => c.type === "element" && "tagName" in c);
@@ -61,12 +61,12 @@ export function MermaidPreBlock({ children, node, ...rest }: PreBlockProps) {
               <div className="relative group">
                 <pre
                   className={`${className} rounded-lg text-[13px] overflow-x-auto whitespace-pre`}
-                  style={{ ...style, background: "var(--tw-colors-gray-900)" }}
+                  style={{ ...style, background: "var(--color-surface-code)" }}
                   {...rest}
                 >
                   {tokens.map((line, i) => (
                     <div key={i} {...getLineProps({ line })} className="table-row">
-                      <span className="table-cell text-right pr-4 select-none text-gray-500/50 w-8 text-xs leading-6">
+                      <span className="table-cell text-right pr-4 select-none text-text-tertiary w-8 text-xs leading-6">
                         {i + 1}
                       </span>
                       <span className="table-cell whitespace-pre">
@@ -92,7 +92,11 @@ export function MermaidPreBlock({ children, node, ...rest }: PreBlockProps) {
 
   return (
     <div className="relative group">
-      <pre {...rest} className="overflow-x-auto whitespace-pre">
+      <pre
+        {...rest}
+        className="overflow-x-auto whitespace-pre rounded-lg text-[13px] p-3 text-text-primary"
+        style={{ background: "var(--color-surface-code)" }}
+      >
         {children}
       </pre>
       {fallbackText && (

@@ -25,19 +25,20 @@ import { ContextMenu, type MenuItem } from "../explorer/ContextMenu";
 import { GitCommitInput } from "./GitCommitInput";
 import { GitBranchSelector } from "./GitBranchSelector";
 import { PinButton } from "../sidebar/PinButton";
+import { formatFilePath } from "../../lib/format-path";
 
 /* ── Helpers ────────────────────────────────────────────── */
 
 function statusIcon(status: GitFileChange["status"]) {
   switch (status) {
     case "added":
-      return <Plus className="w-3 h-3 text-green-400" />;
+      return <Plus className="w-3 h-3 text-status-success" />;
     case "deleted":
-      return <Minus className="w-3 h-3 text-red-400" />;
+      return <Minus className="w-3 h-3 text-status-error" />;
     case "modified":
-      return <Pencil className="w-3 h-3 text-yellow-400" />;
+      return <Pencil className="w-3 h-3 text-status-warning" />;
     default:
-      return <FileQuestion className="w-3 h-3 text-gray-400" />;
+      return <FileQuestion className="w-3 h-3 text-text-tertiary" />;
   }
 }
 
@@ -59,15 +60,15 @@ function statusLabel(status: GitFileChange["status"]) {
 function statusColor(status: GitFileChange["status"]) {
   switch (status) {
     case "added":
-      return "text-green-400 bg-green-400/10";
+      return "text-status-success bg-status-success/10";
     case "deleted":
-      return "text-red-400 bg-red-400/10";
+      return "text-status-error bg-status-error/10";
     case "modified":
-      return "text-yellow-400 bg-yellow-400/10";
+      return "text-status-warning bg-status-warning/10";
     case "renamed":
-      return "text-blue-400 bg-blue-400/10";
+      return "text-status-info bg-status-info/10";
     case "copied":
-      return "text-cyan-400 bg-cyan-400/10";
+      return "text-semantic-tool bg-semantic-tool/10";
   }
 }
 
@@ -135,8 +136,8 @@ const FileItem = memo(function FileItem({
     <div
       className={`group flex items-center gap-1.5 px-2 py-0.5 text-xs rounded cursor-pointer transition-colors ${
         isSelected
-          ? "bg-indigo-600/30 text-white"
-          : "hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+          ? "bg-semantic-accent/30 text-white"
+          : "hover:bg-surface-hover dark:hover:bg-surface-hover text-text-secondary"
       }`}
       onClick={() => onClick(path, isStaged)}
       onContextMenu={(e) => {
@@ -145,19 +146,23 @@ const FileItem = memo(function FileItem({
       }}
     >
       {statusIcon(status)}
-      <span className="truncate flex-1">{path.split("/").pop()}</span>
+      <span className="truncate flex-1" title={path}>
+        {formatFilePath(path)}
+      </span>
       {showStats && (
         <span className="flex items-center gap-0.5 text-[10px] font-mono shrink-0">
-          {(additions ?? 0) > 0 && <span className="text-green-400">+{additions}</span>}
-          {(deletions ?? 0) > 0 && <span className="text-red-400">-{deletions}</span>}
+          {(additions ?? 0) > 0 && <span className="text-status-success">+{additions}</span>}
+          {(deletions ?? 0) > 0 && <span className="text-status-error">-{deletions}</span>}
         </span>
       )}
       <span className={`px-1.5 rounded text-[10px] font-medium ${statusColor(status)}`}>
         {statusLabel(status)}
       </span>
       <button
-        className={`opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-gray-300 dark:hover:bg-gray-600 ${
-          isStaged ? "text-orange-400 hover:text-orange-300" : "text-green-400 hover:text-green-300"
+        className={`opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-surface-hover dark:hover:bg-surface-hover ${
+          isStaged
+            ? "text-semantic-notify hover:text-semantic-notify"
+            : "text-status-success hover:text-status-success"
         }`}
         onClick={(e) => {
           e.stopPropagation();
@@ -191,8 +196,8 @@ const UntrackedItem = memo(function UntrackedItem({
     <div
       className={`group flex items-center gap-1.5 px-2 py-0.5 text-xs rounded cursor-pointer transition-colors ${
         isSelected
-          ? "bg-indigo-600/30 text-white"
-          : "hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
+          ? "bg-semantic-accent/30 text-white"
+          : "hover:bg-surface-hover dark:hover:bg-surface-hover text-text-tertiary"
       }`}
       onClick={() => onClick(path)}
       onContextMenu={(e) => {
@@ -200,11 +205,13 @@ const UntrackedItem = memo(function UntrackedItem({
         onContextMenu(e, path);
       }}
     >
-      <FileQuestion className="w-3 h-3 text-gray-500" />
+      <FileQuestion className="w-3 h-3 text-text-tertiary" />
       <span className="truncate flex-1">{path.split("/").pop()}</span>
-      <span className="px-1.5 rounded text-[10px] font-medium text-gray-400 bg-gray-400/10">U</span>
+      <span className="px-1.5 rounded text-[10px] font-medium text-text-tertiary bg-text-tertiary/10">
+        U
+      </span>
       <button
-        className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded text-green-400 hover:text-green-300 hover:bg-gray-300 dark:hover:bg-gray-600"
+        className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded text-status-success hover:text-status-success hover:bg-surface-hover dark:hover:bg-surface-hover"
         onClick={(e) => {
           e.stopPropagation();
           onStage(path);
@@ -235,13 +242,15 @@ const CommitFileItem = memo(function CommitFileItem({
     <div
       className={`flex items-center gap-1.5 pl-7 pr-2 py-0.5 text-xs rounded cursor-pointer transition-colors ${
         isSelected
-          ? "bg-indigo-600/30 text-white"
-          : "hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
+          ? "bg-semantic-accent/30 text-white"
+          : "hover:bg-surface-hover dark:hover:bg-surface-hover text-text-tertiary"
       }`}
       onClick={onClick}
     >
       {statusIcon(status)}
-      <span className="truncate flex-1">{path.split("/").pop()}</span>
+      <span className="truncate flex-1" title={path}>
+        {formatFilePath(path)}
+      </span>
       <span className={`px-1.5 rounded text-[10px] font-medium ${statusColor(status)}`}>
         {statusLabel(status)}
       </span>
@@ -274,7 +283,7 @@ const CommitItem = memo(function CommitItem({
   return (
     <div>
       <div
-        className="flex items-start gap-1.5 px-2 py-1 text-xs hover:bg-gray-200/50 dark:hover:bg-gray-700/50 rounded cursor-pointer"
+        className="flex items-start gap-1.5 px-2 py-1 text-xs hover:bg-surface-hover/50 dark:hover:bg-surface-hover/50 rounded cursor-pointer"
         onClick={onToggle}
         onContextMenu={(e) => {
           e.preventDefault();
@@ -282,14 +291,14 @@ const CommitItem = memo(function CommitItem({
         }}
       >
         {expanded ? (
-          <ChevronDown className="w-3 h-3 text-gray-500 mt-0.5 shrink-0" />
+          <ChevronDown className="w-3 h-3 text-text-tertiary mt-0.5 shrink-0" />
         ) : (
-          <ChevronRight className="w-3 h-3 text-gray-500 mt-0.5 shrink-0" />
+          <ChevronRight className="w-3 h-3 text-text-tertiary mt-0.5 shrink-0" />
         )}
         <div className="flex-1 min-w-0">
-          <div className="text-gray-700 dark:text-gray-300 truncate">{commit.message}</div>
-          <div className="text-gray-500 text-[10px] flex items-center gap-1.5 mt-0.5">
-            <span className="text-indigo-400 font-mono">{commit.shortHash}</span>
+          <div className="text-text-secondary truncate">{commit.message}</div>
+          <div className="text-text-tertiary text-[10px] flex items-center gap-1.5 mt-0.5">
+            <span className="text-semantic-accent font-mono">{commit.shortHash}</span>
             <span>{commit.author}</span>
             <span>{relativeTime(commit.date)}</span>
           </div>
@@ -298,9 +307,7 @@ const CommitItem = memo(function CommitItem({
       {expanded && (
         <div className="ml-1">
           {loading ? (
-            <div className="text-gray-400 dark:text-gray-600 text-[10px] pl-7 py-1">
-              Loading files...
-            </div>
+            <div className="text-text-tertiary text-[10px] pl-7 py-1">Loading files...</div>
           ) : files && files.length > 0 ? (
             files.map((f) => (
               <CommitFileItem
@@ -312,7 +319,7 @@ const CommitItem = memo(function CommitItem({
               />
             ))
           ) : (
-            <div className="text-gray-400 dark:text-gray-600 text-[10px] pl-7 py-1">No files</div>
+            <div className="text-text-tertiary text-[10px] pl-7 py-1">No files</div>
           )}
         </div>
       )}
@@ -390,7 +397,7 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
   /* File click handlers */
   const handleFileClick = useCallback(
     (filePath: string, staged?: boolean) => {
-      fetchDiff(currentPath, filePath, staged);
+      fetchDiff(currentPath, filePath, staged ?? false);
     },
     [fetchDiff, currentPath],
   );
@@ -426,7 +433,7 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
       {
         label: "Open Diff",
         icon: <Eye className="w-3 h-3" />,
-        onClick: () => fetchDiff(currentPath, filePath, isStaged),
+        onClick: () => fetchDiff(currentPath, filePath, isStaged ?? false),
       },
       {
         label: "Open File",
@@ -520,19 +527,17 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
   if (!isGitRepo) {
     const notGitContent = (
       <>
-        <div className="px-2 py-1.5 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5 border-b border-gray-200 dark:border-gray-700">
-          <GitBranch className="w-3.5 h-3.5 shrink-0 text-gray-400 dark:text-gray-500" />
-          <span className="font-medium text-gray-900 dark:text-white">Git</span>
+        <div className="px-2 py-1.5 text-xs text-text-tertiary flex items-center gap-1.5 border-b border-border-secondary">
+          <GitBranch className="w-3.5 h-3.5 shrink-0 text-text-tertiary" />
+          <span className="font-medium text-text-primary">Git</span>
           <span className="ml-auto">{pinButton}</span>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center px-4 py-8 text-center">
-          <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-3">
-            <FileQuestion className="w-5 h-5 text-gray-400 dark:text-gray-500" />
+          <div className="w-10 h-10 rounded-full bg-surface-code dark:bg-surface-dim flex items-center justify-center mb-3">
+            <FileQuestion className="w-5 h-5 text-text-tertiary" />
           </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mb-1">
-            Not a Git repository
-          </p>
-          <p className="text-[10px] text-gray-400 dark:text-gray-600 leading-relaxed">
+          <p className="text-xs text-text-tertiary font-medium mb-1">Not a Git repository</p>
+          <p className="text-[10px] text-text-tertiary leading-relaxed">
             Initialize a Git repository to enable version control features.
           </p>
         </div>
@@ -544,7 +549,7 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
     return (
       <div
         data-testid="git-panel"
-        className="w-60 bg-gray-50 dark:bg-gray-850 flex flex-col flex-shrink-0 overflow-hidden"
+        className="w-60 bg-surface-dim flex flex-col flex-shrink-0 overflow-hidden"
       >
         {notGitContent}
       </div>
@@ -554,29 +559,29 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
   const panelContent = (
     <>
       {/* Header: title + branch selector + actions in one row */}
-      <div className="px-2 py-1.5 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5 border-b border-gray-200 dark:border-gray-700">
-        <GitBranch className="w-3.5 h-3.5 shrink-0 text-gray-400 dark:text-gray-500" />
+      <div className="px-2 py-1.5 text-xs text-text-tertiary flex items-center gap-1.5 border-b border-border-secondary">
+        <GitBranch className="w-3.5 h-3.5 shrink-0 text-text-tertiary" />
         <button
           ref={branchBtnRef}
-          className="flex items-center gap-1 hover:text-gray-900 dark:hover:text-white transition-colors"
+          className="flex items-center gap-1 hover:text-text-primary dark:hover:text-white transition-colors"
           onClick={() => setShowBranches(!showBranches)}
         >
-          <span className="font-medium text-gray-900 dark:text-white">{branch}</span>
-          {ahead > 0 && <span className="text-green-400">↑{ahead}</span>}
-          {behind > 0 && <span className="text-orange-400">↓{behind}</span>}
-          <BranchChevron className="w-3 h-3 text-gray-400 dark:text-gray-500" />
+          <span className="font-medium text-text-primary">{branch}</span>
+          {ahead > 0 && <span className="text-status-success">↑{ahead}</span>}
+          {behind > 0 && <span className="text-semantic-notify">↓{behind}</span>}
+          <BranchChevron className="w-3 h-3 text-text-tertiary" />
         </button>
 
         <span className="ml-auto flex items-center gap-1">
           {totalChanges > 0 && (
-            <span className="bg-indigo-600 text-white px-1.5 py-0.5 rounded-full text-[10px] leading-none">
+            <span className="bg-semantic-accent text-white px-1.5 py-0.5 rounded-full text-[10px] leading-none">
               {totalChanges}
             </span>
           )}
           {pinButton}
           <button
             onClick={handlePull}
-            className="text-gray-500 hover:text-gray-800 dark:hover:text-white"
+            className="text-text-tertiary hover:text-text-primary dark:hover:text-white"
             disabled={loadingAction === "pull"}
             title="Pull"
           >
@@ -584,7 +589,7 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
           </button>
           <button
             onClick={handlePush}
-            className="text-gray-500 hover:text-gray-800 dark:hover:text-white"
+            className="text-text-tertiary hover:text-text-primary dark:hover:text-white"
             disabled={loadingAction === "push"}
             title="Push"
           >
@@ -592,7 +597,7 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
           </button>
           <button
             onClick={refresh}
-            className="text-gray-500 hover:text-gray-800 dark:hover:text-white"
+            className="text-text-tertiary hover:text-text-primary dark:hover:text-white"
             title="Refresh"
           >
             <RefreshCw className="w-3 h-3" />
@@ -607,15 +612,15 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
         {/* Staged */}
         {staged.length > 0 && (
           <div className="mt-1">
-            <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-gray-500 font-semibold flex items-center flex-wrap gap-x-2">
+            <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-text-tertiary font-semibold flex items-center flex-wrap gap-x-2">
               <span>Staged Changes ({staged.length})</span>
               {formatChangeSummary(staged) && (
-                <span className="text-gray-400 dark:text-gray-600 font-normal normal-case tracking-normal">
+                <span className="text-text-tertiary font-normal normal-case tracking-normal">
                   {formatChangeSummary(staged)}
                 </span>
               )}
               <button
-                className="ml-auto text-orange-400 hover:text-orange-300 shrink-0"
+                className="ml-auto text-semantic-notify hover:text-semantic-notify shrink-0"
                 onClick={handleUnstageAll}
                 title="Unstage all"
               >
@@ -642,15 +647,15 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
         {/* Changed */}
         {changed.length > 0 && (
           <div className="mt-2">
-            <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-gray-500 font-semibold flex items-center flex-wrap gap-x-2">
+            <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-text-tertiary font-semibold flex items-center flex-wrap gap-x-2">
               <span>Changes ({changed.length})</span>
               {formatChangeSummary(changed) && (
-                <span className="text-gray-400 dark:text-gray-600 font-normal normal-case tracking-normal">
+                <span className="text-text-tertiary font-normal normal-case tracking-normal">
                   {formatChangeSummary(changed)}
                 </span>
               )}
               <button
-                className="ml-auto text-green-400 hover:text-green-300 shrink-0"
+                className="ml-auto text-status-success hover:text-status-success shrink-0"
                 onClick={handleStageAll}
                 title="Stage all"
               >
@@ -676,7 +681,7 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
         {/* Untracked */}
         {untracked.length > 0 && (
           <div className="mt-2">
-            <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-gray-500 font-semibold">
+            <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-text-tertiary font-semibold">
               Untracked ({untracked.length})
             </div>
             {untracked.map((f) => (
@@ -693,15 +698,13 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
         )}
 
         {totalChanges === 0 && !commitsExpanded && (
-          <div className="text-gray-500 dark:text-gray-500 text-xs text-center py-8">
-            No changes detected
-          </div>
+          <div className="text-text-tertiary text-xs text-center py-8">No changes detected</div>
         )}
 
         {/* Commit History */}
-        <div className="mt-2 border-t border-gray-200 dark:border-gray-700 pt-1">
+        <div className="mt-2 border-t border-border-secondary pt-1">
           <button
-            className="w-full px-2 py-1 text-[10px] uppercase tracking-wide text-gray-500 font-semibold flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+            className="w-full px-2 py-1 text-[10px] uppercase tracking-wide text-text-tertiary font-semibold flex items-center gap-1 hover:text-text-secondary dark:hover:text-text-secondary transition-colors"
             onClick={toggleCommits}
           >
             {commitsExpanded ? (
@@ -711,24 +714,22 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
             )}
             Commits
             {commits.length > 0 && (
-              <span className="text-gray-400 dark:text-gray-600 ml-auto">{commits.length}</span>
+              <span className="text-text-tertiary ml-auto">{commits.length}</span>
             )}
           </button>
           {commitsExpanded && (
             <div className="mt-0.5">
               {loadingCommits ? (
-                <div className="text-gray-500 text-xs text-center py-4">Loading...</div>
+                <div className="text-text-tertiary text-xs text-center py-4">Loading...</div>
               ) : commits.length === 0 ? (
-                <div className="text-gray-400 dark:text-gray-600 text-xs text-center py-4">
-                  No commits
-                </div>
+                <div className="text-text-tertiary text-xs text-center py-4">No commits</div>
               ) : (
                 commits.map((c) => (
                   <CommitItem
                     key={c.hash}
                     commit={c}
                     expanded={expandedCommits.has(c.hash)}
-                    files={commitFiles[c.hash]}
+                    files={(commitFiles[c.hash] ?? []) as GitFileChange[]}
                     loading={loadingCommitFiles.has(c.hash)}
                     selectedFilePath={selectedFilePath}
                     onToggle={() => toggleCommitExpand(currentPath, c.hash)}
@@ -758,31 +759,29 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
       {/* Worktree popup */}
       {showWorktrees && worktrees.length > 1 && (
         <div
-          className="fixed z-50 min-w-[200px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md shadow-xl py-1"
+          className="fixed z-50 min-w-[200px] bg-bg-elevated dark:bg-surface-dim border border-border-secondary rounded-md shadow-xl py-1"
           style={{ top: 80, left: 48 }}
         >
-          <div className="px-3 py-1 text-[10px] uppercase tracking-wide text-gray-500 font-semibold">
+          <div className="px-3 py-1 text-[10px] uppercase tracking-wide text-text-tertiary font-semibold">
             Worktrees
           </div>
           {worktrees.map((wt) => (
             <div
               key={wt.path}
               className={`px-3 py-1.5 text-xs flex items-center gap-2 ${
-                wt.path === currentPath ? "text-indigo-400" : "text-gray-700 dark:text-gray-300"
+                wt.path === currentPath ? "text-semantic-accent" : "text-text-secondary"
               }`}
             >
               <FolderTree className="w-3 h-3 shrink-0" />
               <div className="min-w-0 flex-1">
                 <div className="truncate">{wt.branch}</div>
-                <div className="text-gray-500 text-[10px] truncate">{wt.path}</div>
+                <div className="text-text-tertiary text-[10px] truncate">{wt.path}</div>
               </div>
-              {wt.isMain && (
-                <span className="text-gray-400 dark:text-gray-600 text-[10px]">main</span>
-              )}
+              {wt.isMain && <span className="text-text-tertiary text-[10px]">main</span>}
             </div>
           ))}
           <button
-            className="w-full text-left px-3 py-1 text-[10px] text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 border-t border-gray-200 dark:border-gray-700 mt-1 pt-1"
+            className="w-full text-left px-3 py-1 text-[10px] text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary border-t border-border-secondary mt-1 pt-1"
             onClick={() => setShowWorktrees(false)}
           >
             Close
@@ -817,7 +816,7 @@ export function GitPanel({ hideOuterShell }: GitPanelProps) {
   return (
     <div
       data-testid="git-panel"
-      className="w-60 bg-gray-50 dark:bg-gray-850 flex flex-col flex-shrink-0 overflow-hidden"
+      className="w-60 bg-surface-dim flex flex-col flex-shrink-0 overflow-hidden"
     >
       {panelContent}
     </div>

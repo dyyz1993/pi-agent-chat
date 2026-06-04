@@ -9,18 +9,24 @@ import type {
   ToolCall,
   ThinkingContent,
 } from "@dyyz1993/pi-ai";
+import type { ImageContent } from "@dyyz1993/pi-ai";
 
 export interface AgentMethods {
   "agent.start": {
-    params: { sessionId: string; projectPath: string; sessionPath: string };
-    result: { agentId: string; status: "started" | "already_running" | "switched" };
+    params: {
+      sessionId: string;
+      projectPath: string;
+      sessionPath: string;
+      forceNewProcess?: boolean;
+    };
+    result: { agentId: string; status: "started" | "already_running" };
   };
   "agent.replayHoldEvents": {
     params: { sessionId: string };
     result: { replayed: number };
   };
   "agent.send": {
-    params: { sessionId: string; content: string };
+    params: { sessionId: string; content: string; images?: ImageContent[] };
     result: { ok: boolean };
   };
   "agent.stop": {
@@ -30,6 +36,10 @@ export interface AgentMethods {
   "agent.getStatus": {
     params: { sessionId: string };
     result: { status: "idle" | "streaming" | "stopped"; pid?: number };
+  };
+  "agent.batchGetSessionsStatus": {
+    params: { sessionIds: string[] };
+    result: Array<{ sessionId: string; status: "idle" | "streaming" | "stopped" }>;
   };
   "agent.respondUI": {
     params: { sessionId: string; requestId: string; response: Record<string, unknown> };
@@ -82,15 +92,21 @@ export interface AgentMethods {
     result: { messages: AgentMessageForUI[]; customEntries: CustomEntryForUI[] };
   };
   "agent.getFullMessages": {
-    params: { sessionId: string; sessionPath?: string };
-    result: { messages: AgentMessageForUI[]; customEntries: CustomEntryForUI[] };
+    params: { sessionId: string; sessionPath?: string; limit?: number; afterEntryId?: string };
+    result: {
+      messages: AgentMessageForUI[];
+      customEntries: CustomEntryForUI[];
+      hasMore: boolean;
+      totalCount: number;
+      nextCursor: string | null;
+    };
   };
   "agent.steer": {
-    params: { sessionId: string; content: string };
+    params: { sessionId: string; content: string; images?: ImageContent[] };
     result: { ok: boolean };
   };
   "agent.followUp": {
-    params: { sessionId: string; content: string };
+    params: { sessionId: string; content: string; images?: ImageContent[] };
     result: { ok: boolean };
   };
   "agent.abort": {
@@ -103,7 +119,14 @@ export interface AgentMethods {
   };
   "agent.getAvailableModels": {
     params: { sessionId: string };
-    result: Array<{ provider: string; id: string; contextWindow: number; reasoning: boolean }>;
+    result: Array<{
+      provider: string;
+      id: string;
+      name: string;
+      contextWindow: number;
+      reasoning: boolean;
+      input: ("text" | "image")[];
+    }>;
   };
   "agent.setModel": {
     params: { sessionId: string; provider: string; modelId: string };
@@ -144,6 +167,10 @@ export interface AgentMethods {
   "agent.setSteeringMode": {
     params: { sessionId: string; mode: string };
     result: { ok: boolean };
+  };
+  "agent.setPermissionMode": {
+    params: { sessionId: string; mode: string };
+    result: { mode: string };
   };
   "agent.setFollowUpMode": {
     params: { sessionId: string; mode: string };
@@ -267,20 +294,42 @@ export interface AgentMethods {
   };
   "agent.navigateTree": {
     params: { sessionId: string; targetId: string; summarize?: boolean; skipFiles?: boolean };
-    result: { cancelled: boolean };
+    result: { cancelled: boolean; reason?: string };
   };
   "agent.previewRollback": {
     params: { sessionId: string; targetId: string };
     result: { restored: string[]; deleted: string[] };
   };
   "agent.getModifiedFiles": {
-    params: { sessionId: string; fromEntryId?: string; toEntryId?: string };
-    result: Array<{
+    params: {
+      sessionId: string;
+      fromEntryId?: string;
+      toEntryId?: string;
+      toUserMsgEntryId?: string;
+    };
+    result: {
+      files: Array<{
+        path: string;
+        status: "added" | "modified" | "deleted";
+        turnIndex: number;
+        entryId: string;
+      }>;
+      resolvedFromEntryId: string | null;
+    };
+  };
+  "agent.getFileDiff": {
+    params: {
+      sessionId: string;
+      filePath: string;
+      fromEntryId?: string;
+      toEntryId?: string;
+    };
+    result: {
       path: string;
-      status: "added" | "modified" | "deleted";
-      turnIndex: number;
-      entryId: string;
-    }>;
+      oldContent: string | null;
+      newContent: string | null;
+      unifiedDiff: string;
+    } | null;
   };
   "agent.getBatchDiffs": {
     params: { sessionId: string; fromEntryId?: string; toEntryId?: string };
@@ -385,6 +434,21 @@ export interface AgentMethods {
     params: { sessionId: string };
     result: { systemPrompt: string; appendSystemPrompt?: string[] };
   };
+  "agent.getLatestAgentChange": {
+    params: { sessionId: string };
+    result: {
+      agentName: string;
+      agentConfig?: {
+        description?: string;
+        tools?: string[];
+        permissionMode?: string;
+        tier?: string;
+        thinkingLevel?: string;
+        model?: string;
+      };
+      timestamp: string;
+    } | null;
+  };
 }
 
 export interface AgentMessageForUI {
@@ -409,6 +473,7 @@ export interface AgentEvents {
   "agent.event": AgentEventPayload;
   "agent.notify": { sessionId: string; message: string; notifyType: "info" | "warning" | "error" };
   "agent.session_status_changed": { sessionId: string; projectPath: string; status: string };
+  "agent.session_renamed": { sessionId: string; projectPath: string; newName: string };
 }
 
 export interface AgentEventPayload {
@@ -420,6 +485,13 @@ export interface ChannelDataEvent {
   type: "channel_data";
   name: string;
   data: Record<string, unknown>;
+}
+
+export interface HookMeta {
+  toolName: string;
+  matcher: string;
+  command?: string;
+  reason: string;
 }
 
 export interface ExtensionUIRequestEvent {
@@ -442,6 +514,8 @@ export interface ExtensionUIRequestEvent {
   placeholder?: string;
   prefill?: string;
   timeout?: number;
+  toolCallId?: string;
+  hookMeta?: HookMeta;
   notifyType?: "info" | "warning" | "error";
   statusKey?: string;
   statusText?: string;
@@ -465,6 +539,7 @@ export type AgentEvent =
   | ChannelDataEvent
   | { type: "custom_entry"; customType: string; data: unknown; id: string; display?: boolean }
   | { type: "session_rename"; oldName: string | undefined; newName: string }
+  | { type: "session_info_changed"; name: string }
   | {
       type: "auto_retry_start";
       attempt: number;
@@ -473,6 +548,7 @@ export type AgentEvent =
       errorMessage: string;
     }
   | { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string }
+  | { type: "extension_llm_error"; error: string; source?: string }
   | {
       type: "mcp_connection_change";
       name: string;
@@ -482,8 +558,6 @@ export type AgentEvent =
     };
 
 export type { AssistantMessage, AssistantMessageEvent, TextContent };
-
-export type MessageData = AssistantMessage;
 
 export interface AgentProcessInfo {
   sessionId: string;

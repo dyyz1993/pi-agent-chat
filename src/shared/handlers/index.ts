@@ -13,7 +13,9 @@ import { register as bash } from "./bash";
 import { register as lsp } from "./lsp";
 import { register as memory } from "./memory";
 import { register as rules } from "./rules";
+import { register as hooks } from "./hooks";
 import { register as snapshot } from "./snapshot";
+import { register as changeReview } from "./change-review";
 import { register as supervisor } from "./supervisor";
 import { unregister as agentCleanup } from "./agent";
 
@@ -34,7 +36,9 @@ export const handlerMap: Record<string, RegisterFn> = {
   lsp,
   memory,
   rules,
+  hooks,
   snapshot,
+  changeReview,
   supervisor,
 };
 

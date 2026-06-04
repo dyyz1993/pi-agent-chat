@@ -4,6 +4,9 @@ import { createRegister } from "../rpc-schema";
 import type { TodoItem } from "../modules/todo";
 import { readFile } from "fs/promises";
 import { existsSync } from "fs";
+import { createLogger } from "../lib/logger";
+
+const log = createLogger("session");
 
 export function register(server: RPCServer, _options: HandlerOptions): void {
   const r = createRegister(server);
@@ -46,12 +49,14 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
             }
           }
         } catch {
+          log.debug("todo.list: skipping malformed JSONL line");
           continue;
         }
       }
 
       return { todos };
-    } catch {
+    } catch (e) {
+      log.debug("todo.list: failed to read session file", { sessionPath, error: String(e) });
       return { todos: [] };
     }
   });

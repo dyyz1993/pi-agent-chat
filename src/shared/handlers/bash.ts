@@ -1,12 +1,15 @@
 import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { HandlerOptions } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
-import type { BashChannelCommand } from "../modules/bash";
+import type { BashChannelCommand, BashProcess } from "../modules/bash";
 import { getProcessManager } from "./agent";
 import { statSync } from "node:fs";
 import { createReadStream } from "node:fs";
 import { createInterface } from "node:readline";
 import { spawn as spawnProc, type ChildProcess } from "child_process";
+import { createLogger } from "../lib/logger";
+
+const log = createLogger("bash");
 
 export function register(server: RPCServer, _options: HandlerOptions): void {
   const r = createRegister(server);
@@ -25,8 +28,15 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     if (!pm) return { processes: [] };
 
     try {
-      const result = await pm.callChannel(sessionId, "bash", "list", {});
-      return { processes: result?.processes ?? [] };
+      const rawResult: unknown = await pm.callChannel(sessionId, "bash", "list", {});
+      const processes =
+        typeof rawResult === "object" &&
+        rawResult !== null &&
+        "processes" in rawResult &&
+        Array.isArray((rawResult as Record<string, unknown>).processes)
+          ? (rawResult as { processes: BashProcess[] }).processes
+          : [];
+      return { processes };
     } catch {
       return { processes: [] };
     }
@@ -61,7 +71,8 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
     try {
       statSync(logPath);
-    } catch {
+    } catch (e) {
+      log.debug("bash.readLog: log file not accessible", { logPath, error: String(e) });
       return { lines: [], totalLines: 0, hasMore: false };
     }
 
@@ -100,7 +111,8 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     try {
       statSync(path);
       return true;
-    } catch {
+    } catch (e) {
+      log.debug("isValidLogPath: path not accessible", { path, error: String(e) });
       return false;
     }
   };

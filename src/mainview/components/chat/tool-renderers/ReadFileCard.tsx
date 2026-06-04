@@ -1,10 +1,16 @@
-import { memo } from "react";
+import { memo, useState, useEffect, useRef } from "react";
 import { Zap, CheckCircle2, RefreshCw } from "lucide-react";
-import { getToolIcon } from "../tool-icon-map";
 import { useTranslation } from "react-i18next";
+import { createLogger } from "../../../../shared/lib/logger";
 import type { ContentBlock } from "../../../types";
+import { useSettingsStore } from "../../../stores/use-settings-store";
+import { ToolCardHeader } from "../primitives/ToolCardHeader";
+import { InlineCodeViewer } from "./InlineCodeViewer";
+import { formatFilePath } from "../../../lib/format-path";
 
 type Block = Extract<ContentBlock, { type: "toolExecution" }>;
+
+const logger = createLogger("chat");
 
 type RuleMatchStatus = "loaded" | "already_loaded" | "reloaded";
 
@@ -46,15 +52,32 @@ export const ReadFileCard = memo(function ReadFileCard({
   const isError = block.status === "error";
   const { t } = useTranslation("chat");
 
+  const collapseToolCards = useSettingsStore((s) => s.collapseToolCards);
+  const [collapsed, setCollapsed] = useState(() => !isRunning && collapseToolCards);
+  const wasRunningRef = useRef(isRunning);
+  useEffect(() => {
+    if (wasRunningRef.current && !isRunning && collapseToolCards) {
+      setCollapsed(true);
+    }
+    wasRunningRef.current = isRunning;
+  }, [isRunning, collapseToolCards]);
+
   let filePath = "";
   try {
     const parsed = JSON.parse(block.args ?? "{}") as { path?: string };
     filePath = parsed.path ?? "";
-  } catch {
-    /* args not valid JSON, use default */
+  } catch (e) {
+    logger.warn("Failed to parse read file args", { error: String(e) });
   }
 
-  const displayPath = filePath || block.args?.slice(0, 80) || "";
+  const displayPath = filePath ? formatFilePath(filePath) : block.args?.slice(0, 80) || "";
+
+  const headerStatus = isRunning
+    ? ("running" as const)
+    : isError
+      ? ("error" as const)
+      : ("done" as const);
+
   const rulesData = isRulesMatchedData(block.details) ? block.details : null;
 
   // Compute overall status across all rules
@@ -68,118 +91,119 @@ export const ReadFileCard = memo(function ReadFileCard({
       data-block-id={blockId}
       className={`border-x-0 border-t border-b overflow-hidden ${
         isRunning
-          ? "border-blue-500/25 bg-blue-50 dark:bg-blue-950/20"
+          ? "border-status-info/25 bg-status-info/5"
           : isError
-            ? "border-red-500/15 bg-red-50 dark:bg-red-950/15"
-            : "border-gray-200 dark:border-gray-700/30 bg-gray-50 dark:bg-gray-800/25"
+            ? "border-status-error/15 bg-status-error/5"
+            : "border-border-secondary/30 bg-surface-dim"
       }`}
     >
-      <div className="px-3 py-1.5 flex items-center gap-2 text-xs">
-        {(() => {
-          const { icon: ReadIcon } = getToolIcon("read");
-          return (
-            <ReadIcon
-              className={`w-3.5 h-3.5 shrink-0 ${isRunning ? "text-blue-500 dark:text-blue-400" : isError ? "text-red-500 dark:text-red-400" : "text-blue-500/70 dark:text-blue-400/60"}`}
-            />
-          );
-        })()}
-        <span className="min-w-0 text-gray-800 dark:text-gray-300 font-mono" title={displayPath}>
-          <span className="block truncate rtl" style={{ direction: "rtl", textAlign: "left" }}>
-            <span style={{ direction: "ltr", display: "inline" }}>{displayPath}</span>
-          </span>
-        </span>
-        {isRunning && (
-          <span className="ml-auto text-[10px] text-blue-500 dark:text-blue-400 animate-pulse shrink-0">
-            {t("readFile.reading")}
-          </span>
-        )}
-      </div>
-
-      <details className="group" open>
-        <summary className="sr-only">{t("expand")}</summary>
-        <div className="px-3 pb-2">
-          {block.output ? (
-            <pre className="text-[11px] text-gray-800 dark:text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-36 overflow-y-auto bg-gray-100 dark:bg-gray-900/40 rounded px-2 py-1.5">
-              {block.output}
-            </pre>
-          ) : isRunning ? (
-            <div className="text-[11px] text-gray-400 dark:text-gray-600 italic py-1">
-              {t("readFile.readingProgress")}
-            </div>
-          ) : null}
-        </div>
-      </details>
-
-      {rulesData && rulesData.rulesMatched && rulesData.rulesMatched.length > 0 && (
-        <details className="group border-t border-indigo-300/30 dark:border-indigo-700/20">
-          <summary className="px-3 py-1 text-[11px] text-indigo-600 dark:text-indigo-400 cursor-pointer hover:text-indigo-500 dark:hover:text-indigo-300 select-none flex items-center gap-1.5">
-            <svg
-              className="w-3 h-3 transition-transform group-open:rotate-90 shrink-0"
-              viewBox="0 0 12 12"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-            >
-              <path d="M4.5 3l3 3-3 3" />
-            </svg>
-            {allAlreadyLoaded ? (
-              <>
-                <CheckCircle2 className="w-3 h-3 shrink-0" />
-                <span>{t("readFile.rulesAlreadyLoaded", "Rules already loaded")}</span>
-              </>
-            ) : anyReloaded ? (
-              <>
-                <RefreshCw className="w-3 h-3 shrink-0" />
-                <span>{t("readFile.rulesReloaded", "Rules reloaded")}</span>
-              </>
-            ) : (
-              <>
-                <Zap className="w-3 h-3 shrink-0" />
-                <span>{t("readFile.rulesLoaded")}</span>
-              </>
-            )}
-            <span className="text-indigo-500 dark:text-indigo-600 ml-1">
-              {rulesData.rulesMatched.length} rule{rulesData.rulesMatched.length !== 1 ? "s" : ""}
+      <ToolCardHeader
+        toolName="read"
+        status={headerStatus}
+        description={displayPath}
+        mono={true}
+        rtl={true}
+        collapsed={collapsed}
+        onClick={() => setCollapsed((c) => !c)}
+        startedAt={block.startedAt}
+        endedAt={block.endedAt}
+        badge={
+          isRunning ? (
+            <span className="ml-auto text-[10px] text-status-info animate-pulse shrink-0">
+              {t("readFile.reading")}
             </span>
-          </summary>
-          <div className="px-3 pb-2">
-            {rulesData.rulesMatched.map((rule) => {
-              const status = getRuleStatus(rule);
-              return (
-                <div
-                  key={rule.name}
-                  className="border-b last:border-b-0 border-indigo-200/20 dark:border-indigo-700/10 py-1 flex items-center gap-1.5"
-                >
-                  {status === "already_loaded" ? (
-                    <CheckCircle2 className="w-3 h-3 shrink-0 text-gray-400 dark:text-gray-500" />
-                  ) : status === "reloaded" ? (
-                    <RefreshCw className="w-3 h-3 shrink-0 text-amber-500 dark:text-amber-400" />
-                  ) : (
-                    <Zap className="w-3 h-3 shrink-0 text-indigo-500 dark:text-indigo-400" />
-                  )}
-                  <span
-                    className={`text-[11px] font-medium shrink-0 ${rule.severity === "critical" ? "text-red-500 dark:text-red-400" : rule.severity === "high" ? "text-amber-600 dark:text-amber-400" : status === "already_loaded" ? "text-gray-500 dark:text-gray-400" : "text-indigo-700 dark:text-indigo-300"}`}
-                  >
-                    {rule.title}
-                  </span>
-                  <span className="text-[11px] text-gray-400 dark:text-gray-600 font-mono">
-                    {rule.matchedGlob}
-                  </span>
-                  {status === "already_loaded" && (
-                    <span className="text-[10px] text-gray-400 dark:text-gray-600 italic ml-auto">
-                      {t("readFile.alreadyLoaded", "loaded")}
-                    </span>
-                  )}
-                  {status === "reloaded" && (
-                    <span className="text-[10px] text-amber-500 dark:text-amber-400 ml-auto">
-                      {t("readFile.reloaded", "reloaded")}
-                    </span>
-                  )}
+          ) : undefined
+        }
+      />
+
+      {collapsed ? null : (
+        <>
+          <details className="group" open>
+            <summary className="sr-only">{t("expand")}</summary>
+            <div className="px-3 pb-2">
+              {block.output ? (
+                <InlineCodeViewer code={block.output} filename={filePath} maxHeight="144px" />
+              ) : isRunning ? (
+                <div className="text-[11px] text-text-tertiary italic py-1">
+                  {t("readFile.readingProgress")}
                 </div>
-              );
-            })}
-          </div>
-        </details>
+              ) : null}
+            </div>
+          </details>
+
+          {rulesData && rulesData.rulesMatched && rulesData.rulesMatched.length > 0 && (
+            <details className="group border-t border-semantic-accent/30">
+              <summary className="px-3 py-1 text-[11px] text-semantic-accent cursor-pointer hover:text-semantic-accent select-none flex items-center gap-1.5">
+                <svg
+                  className="w-3 h-3 transition-transform group-open:rotate-90 shrink-0"
+                  viewBox="0 0 12 12"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                >
+                  <path d="M4.5 3l3 3-3 3" />
+                </svg>
+                {allAlreadyLoaded ? (
+                  <>
+                    <CheckCircle2 className="w-3 h-3 shrink-0" />
+                    <span>{t("readFile.rulesAlreadyLoaded", "Rules already loaded")}</span>
+                  </>
+                ) : anyReloaded ? (
+                  <>
+                    <RefreshCw className="w-3 h-3 shrink-0" />
+                    <span>{t("readFile.rulesReloaded", "Rules reloaded")}</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-3 h-3 shrink-0" />
+                    <span>{t("readFile.rulesLoaded")}</span>
+                  </>
+                )}
+                <span className="text-semantic-accent/80 ml-1">
+                  {rulesData.rulesMatched.length} rule
+                  {rulesData.rulesMatched.length !== 1 ? "s" : ""}
+                </span>
+              </summary>
+              <div className="px-3 pb-2">
+                {rulesData.rulesMatched.map((rule) => {
+                  const status = getRuleStatus(rule);
+                  return (
+                    <div
+                      key={rule.name}
+                      className="border-b last:border-b-0 border-semantic-accent/20 py-1 flex items-center gap-1.5"
+                    >
+                      {status === "already_loaded" ? (
+                        <CheckCircle2 className="w-3 h-3 shrink-0 text-text-tertiary" />
+                      ) : status === "reloaded" ? (
+                        <RefreshCw className="w-3 h-3 shrink-0 text-status-warning" />
+                      ) : (
+                        <Zap className="w-3 h-3 shrink-0 text-semantic-accent" />
+                      )}
+                      <span
+                        className={`text-[11px] font-medium shrink-0 ${rule.severity === "critical" ? "text-status-error" : rule.severity === "high" ? "text-status-warning" : status === "already_loaded" ? "text-text-tertiary" : "text-semantic-accent"}`}
+                      >
+                        {rule.title}
+                      </span>
+                      <span className="text-[11px] text-text-tertiary font-mono">
+                        {rule.matchedGlob}
+                      </span>
+                      {status === "already_loaded" && (
+                        <span className="text-[10px] text-text-tertiary italic ml-auto">
+                          {t("readFile.alreadyLoaded", "loaded")}
+                        </span>
+                      )}
+                      {status === "reloaded" && (
+                        <span className="text-[10px] text-status-warning ml-auto">
+                          {t("readFile.reloaded", "reloaded")}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </details>
+          )}
+        </>
       )}
     </div>
   );

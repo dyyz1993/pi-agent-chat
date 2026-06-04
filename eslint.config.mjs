@@ -2,6 +2,7 @@ import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import eslintConfigPrettier from 'eslint-config-prettier';
 import rpcPlugin from './eslint-plugin-rpc/index.js';
+import themePlugin from './eslint-plugin-theme/index.js';
 
 export default tseslint.config(
   js.configs.recommended,
@@ -12,16 +13,32 @@ export default tseslint.config(
       'build/**',
       'dist/**',
       'eslint-plugin-rpc/**',
+      'eslint-plugin-theme/**',
       'postcss.config.js',
       'tailwind.config.js',
       'scripts/**',
       'preview-test/**',
       '*.html',
       '.codenomad/**',
+      '.yalc/**',
 
       'src/electrobun-shim.d.ts',
       'eslint.config.mjs',
       'commitlint.config.js',
+      'dist-server/**',
+      'e2e-*.mjs',
+      'test-*.mjs',
+      'test/rollback-e2e-backtest.test.ts',
+      'test/rollback-leafid-persistence.test.ts',
+      'test/rollback-managed-restart.test.ts',
+      'test/rollback-scenarios.test.ts',
+      'test/status-visibility-harness.test.ts',
+      'test/streaming-status.test.ts',
+      'test/agent-config.test.ts',
+      'test/change-review-handler.test.ts',
+      'test/getfullmessages-cache.test.ts',
+      'test/process-manager-linecount.test.ts',
+      'test/rollback-toUserMsgEntryId.test.ts',
     ],
   },
   {
@@ -34,6 +51,7 @@ export default tseslint.config(
     },
     plugins: {
       rpc: rpcPlugin,
+      theme: themePlugin,
     },
     rules: {
       // TS 类型安全规则
@@ -70,6 +88,11 @@ export default tseslint.config(
       'rpc/require-typed-register': 'error',
       'rpc/require-api-client': 'error',
       'rpc/no-namespace-iterate': 'error',
+      'rpc/no-component-rpc-fetch': 'warn',
+      'rpc/valid-channel-method': 'error',
+
+      // 主题/颜色约束规则
+      'theme/color-pairing': 'error',
     },
   },
   {

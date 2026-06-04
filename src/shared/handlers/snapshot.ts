@@ -69,8 +69,8 @@ async function readStepSnapshots(sessionPath: string): Promise<StepSnapshotEntry
         if (entry.type === "custom" && entry.customType === "step-snapshot") {
           snapshots.push(entry as unknown as StepSnapshotEntry);
         }
-      } catch {
-        // skip malformed lines
+      } catch (e) {
+        log.debug("readStepSnapshots: skipping malformed line", { sessionPath, error: String(e) });
       }
     }
   } catch (err) {
@@ -96,12 +96,12 @@ async function readUnrevertPoints(sessionPath: string): Promise<UnrevertPointEnt
         if (entry.type === "custom" && entry.customType === "unrevert-point") {
           points.push(entry as unknown as UnrevertPointEntry);
         }
-      } catch {
-        // skip malformed lines
+      } catch (e) {
+        log.debug("readUnrevertPoints: skipping malformed line", { sessionPath, error: String(e) });
       }
     }
-  } catch {
-    // ignore read errors
+  } catch (e) {
+    log.debug("readUnrevertPoints: failed to read session file", { sessionPath, error: String(e) });
   }
   return points;
 }

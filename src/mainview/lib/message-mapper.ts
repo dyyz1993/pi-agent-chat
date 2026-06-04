@@ -7,6 +7,7 @@ import type {
   TextContent,
   ThinkingContent,
   ToolCall,
+  ImageContent,
   Usage,
 } from "@dyyz1993/pi-ai";
 
@@ -58,6 +59,15 @@ function extractContent(msg: UserMessage | AssistantMessage): ContentBlock[] {
       const toolCall = block as ToolCall;
       const input = JSON.stringify(toolCall.arguments, null, 2);
       blocks.push({ type: "toolCall", id: toolCall.id, name: toolCall.name, input });
+    } else if (block.type === "image") {
+      const imgBlock = block as ImageContent;
+      if (imgBlock.data && imgBlock.mimeType) {
+        blocks.push({
+          type: "imageBlock",
+          url: `data:${imgBlock.mimeType};base64,${imgBlock.data}`,
+          alt: "uploaded image",
+        });
+      }
     }
   }
 
@@ -105,6 +115,18 @@ export function parseToolResultBlock(
   };
 }
 
+function extractEntryId(raw: unknown): string | undefined {
+  if (raw && typeof raw === "object" && "entryId" in raw) {
+    const v = (raw as Record<string, unknown>).entryId;
+    return typeof v === "string" ? v : undefined;
+  }
+  return undefined;
+}
+
+function nextMsgId(): string {
+  return `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
 export function messageToChatMessage(
   message: Message,
   id?: string,
@@ -113,6 +135,8 @@ export function messageToChatMessage(
   if (!message || typeof message !== "object" || !("role" in message)) return null;
 
   const role = message.role as string;
+  const msgId = id ?? nextMsgId();
+  const entryId = extractEntryId(message);
 
   if (role === "custom") {
     const customMsg = message as unknown as {
@@ -123,22 +147,23 @@ export function messageToChatMessage(
     const customType = customMsg.customType ?? "unknown";
     const data = customMsg.details ?? customMsg.data ?? {};
     return {
-      id: id ?? `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      id: msgId,
       role: "custom",
       content: [{ type: "custom" as const, customType, data }],
       timestamp: extractTimestamp(message),
+      ...(entryId ? { entryId } : {}),
     };
   }
 
   if (role === "compactionSummary") {
     const raw = message as unknown as { summary?: string; tokensBefore?: number };
     const summary = raw.summary ?? "";
-    if (!summary) return null;
     return {
-      id: id ?? `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      id: msgId,
       role: "compactionSummary",
       content: [{ type: "compactionSummary" as const, summary, tokensBefore: raw.tokensBefore }],
       timestamp: extractTimestamp(message),
+      ...(entryId ? { entryId } : {}),
     };
   }
 
@@ -147,10 +172,11 @@ export function messageToChatMessage(
     const block = parseToolResultBlock(toolMsg, toolCallNameMap ?? {});
     if (!block) return null;
     return {
-      id: id ?? `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      id: msgId,
       role: "toolResult",
       content: [block],
       timestamp: extractTimestamp(message),
+      ...(entryId ? { entryId } : {}),
     };
   }
 
@@ -160,10 +186,11 @@ export function messageToChatMessage(
     if (content.length === 0) return null;
 
     return {
-      id: id ?? `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      id: msgId,
       role: "user",
       content,
       timestamp: extractTimestamp(message),
+      ...(entryId ? { entryId } : {}),
     };
   }
 
@@ -174,10 +201,11 @@ export function messageToChatMessage(
   if (content.length === 0) return null;
 
   const msg: ChatMessage = {
-    id: id ?? `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    id: msgId,
     role: "assistant",
     content,
     timestamp: extractTimestamp(message),
+    ...(entryId ? { entryId } : {}),
   };
 
   if (asstMsg.provider) msg.provider = asstMsg.provider;
@@ -188,13 +216,6 @@ export function messageToChatMessage(
   if (usage) msg.tokenUsage = usage;
 
   return msg;
-}
-
-export function getTextContent(msg: ChatMessage): string {
-  return msg.content
-    .filter((b): b is { type: "text"; text: string } => b.type === "text")
-    .map((b) => b.text)
-    .join("");
 }
 
 export { extractTokenUsage, extractTimestamp, extractContent, extractToolCallNameMap };

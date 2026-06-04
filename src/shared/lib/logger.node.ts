@@ -26,6 +26,7 @@ export function writeLogLine(line: string): void {
     const filePath = join(getLogDir(), `${date}.log`);
     appendFileSync(filePath, `${line}\n`);
   } catch {
-    /* logger write failed — must not recurse */
+    // Intentionally empty: logger write failed (e.g. disk full, permissions).
+    // Must not call createLogger here to avoid infinite recursion.
   }
 }

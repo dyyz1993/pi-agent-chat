@@ -32,56 +32,57 @@ const mockedCall = apiClient.call as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   vi.clearAllMocks();
-  useTierStore.setState({ currentTier: null, switching: false, tierModels: {} });
+  useTierStore.setState({ globalDefaults: {}, dataBySession: {}, switching: false });
 });
 
-describe("setCurrentTier", () => {
+describe("setSessionCurrentTier", () => {
   it("sets tier to fast", () => {
-    useTierStore.getState().setCurrentTier("fast");
-    expect(useTierStore.getState().currentTier).toBe("fast");
+    useTierStore.getState().setSessionCurrentTier("sess-1", "fast");
+    expect(useTierStore.getState().getCurrentTier("sess-1")).toBe("fast");
   });
 
   it("sets tier to null", () => {
-    useTierStore.getState().setCurrentTier("fast");
-    useTierStore.getState().setCurrentTier(null);
-    expect(useTierStore.getState().currentTier).toBeNull();
+    useTierStore.getState().setSessionCurrentTier("sess-1", "fast");
+    useTierStore.getState().setSessionCurrentTier("sess-1", null);
+    expect(useTierStore.getState().getCurrentTier("sess-1")).toBeNull();
   });
 });
 
 describe("syncTierFromModel", () => {
-  it("syncs fast tier for haiku models", () => {
-    useTierStore.getState().syncTierFromModel("anthropic", "claude-haiku-4");
-    expect(useTierStore.getState().currentTier).toBe("fast");
+  const TIER_FIXTURES = {
+    fast: "anthropic/claude-haiku-4",
+    pro: "anthropic/claude-sonnet-4",
+    max: "anthropic/claude-opus-4",
+  };
+
+  beforeEach(() => {
+    useTierStore.getState().setSessionTierModels("sess-1", TIER_FIXTURES);
   });
 
-  it("syncs fast tier for flash models", () => {
-    useTierStore.getState().syncTierFromModel("google", "gemini-2.0-flash");
-    expect(useTierStore.getState().currentTier).toBe("fast");
+  it("syncs fast tier when model matches tierModels.fast", () => {
+    useTierStore.getState().syncTierFromModel("sess-1", "anthropic", "claude-haiku-4");
+    expect(useTierStore.getState().getCurrentTier("sess-1")).toBe("fast");
   });
 
-  it("syncs fast tier for mini models", () => {
-    useTierStore.getState().syncTierFromModel("openai", "gpt-4o-mini");
-    expect(useTierStore.getState().currentTier).toBe("fast");
+  it("syncs max tier when model matches tierModels.max", () => {
+    useTierStore.getState().syncTierFromModel("sess-1", "anthropic", "claude-opus-4");
+    expect(useTierStore.getState().getCurrentTier("sess-1")).toBe("max");
   });
 
-  it("syncs max tier for opus models", () => {
-    useTierStore.getState().syncTierFromModel("anthropic", "claude-opus-4");
-    expect(useTierStore.getState().currentTier).toBe("max");
+  it("syncs pro tier when model matches tierModels.pro", () => {
+    useTierStore.getState().syncTierFromModel("sess-1", "anthropic", "claude-sonnet-4");
+    expect(useTierStore.getState().getCurrentTier("sess-1")).toBe("pro");
   });
 
-  it("syncs max tier for thinking models", () => {
-    useTierStore.getState().syncTierFromModel("openai", "o3-thinking");
-    expect(useTierStore.getState().currentTier).toBe("max");
+  it("sets null when model does not match any tier", () => {
+    useTierStore.getState().syncTierFromModel("sess-1", "zhipuai", "glm-4");
+    expect(useTierStore.getState().getCurrentTier("sess-1")).toBeNull();
   });
 
-  it("syncs pro tier for default models", () => {
-    useTierStore.getState().syncTierFromModel("anthropic", "claude-sonnet-4");
-    expect(useTierStore.getState().currentTier).toBe("pro");
-  });
-
-  it("syncs pro tier for unknown models", () => {
-    useTierStore.getState().syncTierFromModel("zhipuai", "glm-4");
-    expect(useTierStore.getState().currentTier).toBe("pro");
+  it("sets null when tierModels is empty", () => {
+    useTierStore.getState().setSessionTierModels("sess-1", {});
+    useTierStore.getState().syncTierFromModel("sess-1", "anthropic", "claude-haiku-4");
+    expect(useTierStore.getState().getCurrentTier("sess-1")).toBeNull();
   });
 });
 
@@ -94,7 +95,7 @@ describe("switchToTier", () => {
 
     await useTierStore.getState().switchToTier("fast", "sess-1");
 
-    expect(useTierStore.getState().currentTier).toBe("fast");
+    expect(useTierStore.getState().getCurrentTier("sess-1")).toBe("fast");
     expect(useTierStore.getState().switching).toBe(false);
   });
 
@@ -109,12 +110,13 @@ describe("switchToTier", () => {
     expect(mockSetCurrentModel).toHaveBeenCalledWith("anthropic", "claude-haiku-4");
   });
 
-  it("still sets tier on failure (fallback)", async () => {
+  it("does not change tier on failure", async () => {
+    useTierStore.getState().setSessionCurrentTier("sess-1", "pro");
     mockedCall.mockRejectedValueOnce(new Error("Model not found"));
 
     await useTierStore.getState().switchToTier("max", "sess-1");
 
-    expect(useTierStore.getState().currentTier).toBe("max");
+    expect(useTierStore.getState().getCurrentTier("sess-1")).toBe("pro");
     expect(useTierStore.getState().switching).toBe(false);
   });
 
@@ -131,26 +133,26 @@ describe("switchToTier", () => {
 });
 
 describe("fetchTierConfig", () => {
-  it("fetches tier models from backend", async () => {
+  it("fetches tier models from backend and sets globalDefaults", async () => {
     mockedCall.mockResolvedValueOnce({
       models: { fast: "a/haiku", pro: "a/sonnet", max: "a/opus" },
     });
 
     await useTierStore.getState().fetchTierConfig("sess-1");
 
-    expect(useTierStore.getState().tierModels).toEqual({
+    expect(useTierStore.getState().globalDefaults).toEqual({
       fast: "a/haiku",
       pro: "a/sonnet",
       max: "a/opus",
     });
   });
 
-  it("keeps tierModels unchanged on failure", async () => {
-    useTierStore.setState({ tierModels: { fast: "a/haiku" } });
+  it("keeps globalDefaults unchanged on failure", async () => {
+    useTierStore.setState({ globalDefaults: { fast: "a/haiku" } });
     mockedCall.mockRejectedValueOnce(new Error("network error"));
 
     await useTierStore.getState().fetchTierConfig("sess-1");
 
-    expect(useTierStore.getState().tierModels).toEqual({ fast: "a/haiku" });
+    expect(useTierStore.getState().globalDefaults).toEqual({ fast: "a/haiku" });
   });
 });

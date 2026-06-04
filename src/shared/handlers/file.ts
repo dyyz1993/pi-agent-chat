@@ -112,8 +112,12 @@ function parseGitignore(content: string): (path: string, isDir: boolean) => bool
         "^" + pattern.replace(/\./g, "\\.").replace(/\*/g, ".*").replace(/\?/g, ".") + "$";
       try {
         if (new RegExp(regexStr, "i").test(relativePath)) return !isNegated;
-      } catch {
-        /* skip invalid regex */
+      } catch (e) {
+        log.debug("parseGitignore: skipping invalid regex", {
+          pattern,
+          regexStr,
+          error: String(e),
+        });
       }
     }
     return false;
@@ -128,8 +132,11 @@ async function loadGitignoreRules(
     try {
       const content = await readFile(gitignorePath, "utf-8");
       return parseGitignore(content);
-    } catch {
-      /* ignore */
+    } catch (e) {
+      log.debug("loadGitignoreRules: failed to read .gitignore", {
+        gitignorePath,
+        error: String(e),
+      });
     }
   }
   return () => false;
@@ -186,7 +193,8 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
             size: s.size,
             isIgnored,
           });
-        } catch {
+        } catch (e) {
+          log.debug("file.listDir: stat failed for entry", { fullPath, error: String(e) });
           entries.push({ name: entry.name, path: fullPath, type: "file", isIgnored });
         }
       }

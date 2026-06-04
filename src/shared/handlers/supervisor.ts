@@ -1,12 +1,13 @@
 import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { HandlerOptions } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
+import type { SupervisorStatus, TaskReport } from "../modules/supervisor";
 import { getProcessManager } from "./agent";
 
 export function register(server: RPCServer, _options: HandlerOptions): void {
   const r = createRegister(server);
 
-  r("supervisor.getStatus", async (params) => {
+  r("supervisor.getStatus", async (params): Promise<SupervisorStatus> => {
     const { sessionId } = params as { sessionId: string };
     const pm = getProcessManager();
     if (!pm)
@@ -17,68 +18,83 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
         maxContinueCount: 0,
         activeGuards: [],
       };
-    return pm.callChannel(sessionId, "supervisor", "getStatus", {});
+    return pm.callChannel(sessionId, "supervisor", "getStatus", {}) as Promise<SupervisorStatus>;
   });
 
-  r("supervisor.requestPause", async (params) => {
-    const { sessionId, delayMs, reason } = params as {
-      sessionId: string;
-      delayMs?: number;
-      reason?: string;
-    };
-    const pm = getProcessManager();
-    if (!pm) return { scheduled: false };
-    return pm.callChannel(sessionId, "supervisor", "requestPause", { delayMs, reason });
-  });
+  r(
+    "supervisor.requestPause",
+    async (params): Promise<{ scheduled: boolean; scheduledAt?: number }> => {
+      const { sessionId, delayMs, reason } = params as {
+        sessionId: string;
+        delayMs?: number;
+        reason?: string;
+      };
+      const pm = getProcessManager();
+      if (!pm) return { scheduled: false };
+      return pm.callChannel(sessionId, "supervisor", "requestPause", {
+        delayMs,
+        reason,
+      }) as Promise<{ scheduled: boolean; scheduledAt?: number }>;
+    },
+  );
 
-  r("supervisor.cancelPause", async (params) => {
+  r("supervisor.cancelPause", async (params): Promise<{ cancelled: boolean }> => {
     const { sessionId } = params as { sessionId: string };
     const pm = getProcessManager();
     if (!pm) return { cancelled: false };
-    return pm.callChannel(sessionId, "supervisor", "cancelPause", {});
+    return pm.callChannel(sessionId, "supervisor", "cancelPause", {}) as Promise<{
+      cancelled: boolean;
+    }>;
   });
 
-  r("supervisor.forceContinue", async (params) => {
+  r("supervisor.forceContinue", async (params): Promise<{ triggered: boolean }> => {
     const { sessionId, reason } = params as { sessionId: string; reason?: string };
     const pm = getProcessManager();
     if (!pm) return { triggered: false };
-    return pm.callChannel(sessionId, "supervisor", "forceContinue", { reason });
+    return pm.callChannel(sessionId, "supervisor", "forceContinue", { reason }) as Promise<{
+      triggered: boolean;
+    }>;
   });
 
-  r("supervisor.disable", async (params) => {
+  r("supervisor.disable", async (params): Promise<{ disabled: boolean }> => {
     const { sessionId } = params as { sessionId: string };
     const pm = getProcessManager();
     if (!pm) return { disabled: false };
-    return pm.callChannel(sessionId, "supervisor", "disable", {});
+    return pm.callChannel(sessionId, "supervisor", "disable", {}) as Promise<{ disabled: boolean }>;
   });
 
-  r("supervisor.enable", async (params) => {
+  r("supervisor.enable", async (params): Promise<{ enabled: boolean }> => {
     const { sessionId } = params as { sessionId: string };
     const pm = getProcessManager();
     if (!pm) return { enabled: false };
-    return pm.callChannel(sessionId, "supervisor", "enable", {});
+    return pm.callChannel(sessionId, "supervisor", "enable", {}) as Promise<{ enabled: boolean }>;
   });
 
-  r("supervisor.getTaskReport", async (params) => {
+  r("supervisor.getTaskReport", async (params): Promise<{ tasks: TaskReport[] }> => {
     const { sessionId } = params as { sessionId: string };
     const pm = getProcessManager();
     if (!pm) return { tasks: [] };
-    return pm.callChannel(sessionId, "supervisor", "getTaskReport", {});
+    return pm.callChannel(sessionId, "supervisor", "getTaskReport", {}) as Promise<{
+      tasks: TaskReport[];
+    }>;
   });
 
-  r("supervisor.checkToolStatus", async (params) => {
-    const { sessionId, toolName, channelName, method } = params as {
-      sessionId: string;
-      toolName: string;
-      channelName?: string;
-      method?: string;
-    };
-    const pm = getProcessManager();
-    if (!pm) return { reachable: false, error: "No process manager" };
-    return pm.callChannel(sessionId, "supervisor", "checkToolStatus", {
-      toolName,
-      channelName,
-      method,
-    });
-  });
+  r(
+    "supervisor.checkToolStatus",
+    async (params): Promise<{ reachable: boolean; status?: string; error?: string }> => {
+      const { sessionId, toolName, channelName, method } = params as {
+        sessionId: string;
+        toolName: string;
+        channelName?: string;
+        method?: string;
+      };
+      const pm = getProcessManager();
+      if (!pm) return { reachable: false, error: "No process manager" };
+      return pm.callChannel(sessionId, "supervisor", "checkToolStatus", {
+        toolName,
+        channelName,
+        method,
+      }) as Promise<{ reachable: boolean; status?: string; error?: string }>;
+    },
+  );
 }

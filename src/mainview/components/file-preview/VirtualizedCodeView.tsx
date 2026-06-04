@@ -1,8 +1,9 @@
 import { useRef, useMemo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Highlight, themes } from "prism-react-renderer";
+import { createLogger } from "../../../shared/lib/logger";
 import { getLanguage } from "../../utils/file-utils";
-import { useThemeStore } from "../../stores/use-theme-store";
+import { useThemeStore, isDarkGroup } from "../../stores/use-theme-store";
 
 interface VirtualizedCodeViewProps {
   code: string;
@@ -11,6 +12,12 @@ interface VirtualizedCodeViewProps {
 
 /** Lines longer than this skip syntax highlighting (plain text instead) */
 const LONG_LINE_THRESHOLD = 5000;
+/** Max lines to attempt Prism tokenization; beyond this, plain text only */
+const MAX_HIGHLIGHT_LINES = 5000;
+/** Max chars for JSON pretty-print; beyond this, skip formatting */
+const MAX_JSON_FORMAT_CHARS = 500_000;
+
+const logger = createLogger("file");
 
 export function VirtualizedCodeView({ code, filename }: VirtualizedCodeViewProps) {
   const parentRef = useRef<HTMLDivElement>(null);
@@ -18,11 +25,12 @@ export function VirtualizedCodeView({ code, filename }: VirtualizedCodeViewProps
 
   const formattedCode = useMemo(() => {
     const ext = filename.split(".").pop()?.toLowerCase() ?? "";
-    if (ext === "json" || ext === "jsonc") {
+    if ((ext === "json" || ext === "jsonc") && code.length <= MAX_JSON_FORMAT_CHARS) {
       try {
         const parsed = JSON.parse(code) as unknown;
         return JSON.stringify(parsed, null, 2);
-      } catch {
+      } catch (e) {
+        logger.warn("Failed to format JSON for preview", { error: String(e) });
         return code;
       }
     }
@@ -31,12 +39,16 @@ export function VirtualizedCodeView({ code, filename }: VirtualizedCodeViewProps
 
   const lines = useMemo(() => formattedCode.split("\n"), [formattedCode]);
   const resolvedTheme = useThemeStore((s) => s.resolvedTheme);
-  const prismTheme = resolvedTheme === "dark" ? themes.nightOwl : themes.nightOwlLight;
+  const prismTheme = isDarkGroup(resolvedTheme) ? themes.nightOwl : themes.nightOwlLight;
 
   const avgLineLength = formattedCode.length / Math.max(lines.length, 1);
   const NO_HIGHLIGHT_EXTS = new Set(["lock", "map", "log", "csv"]);
   const ext = filename.split(".").pop()?.toLowerCase() ?? "";
-  const forcePlainText = !language || avgLineLength > 500 || NO_HIGHLIGHT_EXTS.has(ext);
+  const forcePlainText =
+    !language ||
+    avgLineLength > 500 ||
+    NO_HIGHLIGHT_EXTS.has(ext) ||
+    lines.length > MAX_HIGHLIGHT_LINES;
 
   const virtualizer = useVirtualizer({
     count: lines.length,
@@ -48,7 +60,10 @@ export function VirtualizedCodeView({ code, filename }: VirtualizedCodeViewProps
   // --- Plain text path: no Prism tokenization ---
   if (forcePlainText) {
     return (
-      <div ref={parentRef} className="flex-1 min-h-0 overflow-auto bg-white dark:bg-gray-900">
+      <div
+        ref={parentRef}
+        className="flex-1 min-h-0 overflow-auto bg-bg-elevated dark:bg-surface-code"
+      >
         <div
           style={{ height: `${virtualizer.getTotalSize()}px`, width: "100%", position: "relative" }}
         >
@@ -65,11 +80,11 @@ export function VirtualizedCodeView({ code, filename }: VirtualizedCodeViewProps
               }}
               className="flex text-xs leading-5 font-mono"
             >
-              <span className="inline-block w-10 text-right pr-4 text-gray-400 dark:text-gray-600 select-none shrink-0">
+              <span className="inline-block w-10 text-right pr-4 text-text-tertiary dark:text-text-secondary select-none shrink-0">
                 {vr.index + 1}
               </span>
               <span
-                className="flex-1 text-gray-800 dark:text-gray-300 whitespace-pre"
+                className="flex-1 text-text-primary dark:text-text-secondary whitespace-pre"
                 style={{ tabSize: 2 }}
               >
                 {lines[vr.index]}
@@ -87,7 +102,10 @@ export function VirtualizedCodeView({ code, filename }: VirtualizedCodeViewProps
       {({ tokens, getTokenProps }) => {
         const tokensValid = tokens.length === lines.length;
         return (
-          <div ref={parentRef} className="flex-1 min-h-0 overflow-auto bg-white dark:bg-gray-900">
+          <div
+            ref={parentRef}
+            className="flex-1 min-h-0 overflow-auto bg-bg-elevated dark:bg-surface-code"
+          >
             <div
               style={{
                 height: `${virtualizer.getTotalSize()}px`,
@@ -113,12 +131,12 @@ export function VirtualizedCodeView({ code, filename }: VirtualizedCodeViewProps
                     }}
                     className="flex text-xs leading-5 font-mono"
                   >
-                    <span className="inline-block w-10 text-right pr-4 text-gray-400 dark:text-gray-600 select-none shrink-0">
+                    <span className="inline-block w-10 text-right pr-4 text-text-tertiary dark:text-text-secondary select-none shrink-0">
                       {vr.index + 1}
                     </span>
-                    {isLongLine || !tokensValid || !lineTokens ? (
+                    {isLongLine || !tokensValid ? (
                       <span
-                        className="flex-1 text-gray-800 dark:text-gray-300 whitespace-pre"
+                        className="flex-1 whitespace-pre text-text-primary dark:text-text-secondary"
                         style={{ tabSize: 2 }}
                       >
                         {lineText}

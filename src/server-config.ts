@@ -8,6 +8,9 @@
 
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { createLogger } from "./shared/lib/logger";
+
+const log = createLogger("config");
 
 const MISSING_PI_VARS: string[] = [];
 
@@ -32,11 +35,32 @@ export const config = {
   proxyApiUrl: process.env.PROXY_API_URL ?? "",
   /** 代理服务的公网域名（如 shanbox.19930810.xyz:8443），用于构造公网 URL */
   proxyPublicDomain: process.env.PROXY_PUBLIC_DOMAIN ?? "",
+  /** 沙箱模式：启用后 agent 在隔离沙箱中运行 */
+  sandboxEnabled: process.env.SANDBOX_ENABLED === "true",
+  /** 沙盒后端类型: local | sandbox-box | cloudflare */
+  sandboxProvider: (process.env.SANDBOX_PROVIDER ?? "local") as
+    | "local"
+    | "sandbox-box"
+    | "cloudflare",
+  /** 沙箱基础端口（local provider） */
+  sandboxBasePort: parseInt(process.env.SANDBOX_BASE_PORT ?? "3200", 10),
+  /** sandbox-box SSH 连接地址 */
+  sandboxBoxSshHost: process.env.SANDBOX_BOX_SSH_HOST ?? "192.168.0.29",
+  /** sandbox-box SSH 端口 */
+  sandboxBoxSshPort: parseInt(process.env.SANDBOX_BOX_SSH_PORT ?? "2201", 10),
+  /** sandbox-box SSH 用户 */
+  sandboxBoxSshUser: process.env.SANDBOX_BOX_SSH_USER ?? "root",
+  /** sandbox-box SSH 密钥路径 */
+  sandboxBoxSshKey: process.env.SANDBOX_BOX_SSH_KEY ?? "",
+  /** sandbox-box 域名后缀 */
+  sandboxBoxDomainSuffix: process.env.SANDBOX_BOX_DOMAIN_SUFFIX ?? "sandbox.19930810.xyz",
+  /** 沙箱空闲超时（秒） */
+  sandboxIdleTimeout: parseInt(process.env.SANDBOX_IDLE_TIMEOUT ?? "1800", 10),
 } as const;
 
 if (MISSING_PI_VARS.length > 0) {
-  console.warn(
-    `[config] ⚠ 以下环境变量未设置，PI Agent 功能将无法正常工作:\n` +
+  log.warn(
+    `以下环境变量未设置，PI Agent 功能将无法正常工作:\n` +
       MISSING_PI_VARS.map((v) => `  - ${v}`).join("\n") +
       `\n请在 .env 文件中配置这些变量，参考 .env.example`,
   );

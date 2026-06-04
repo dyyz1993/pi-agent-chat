@@ -90,5 +90,51 @@ scripts/progress-monitor.sh
 scripts/track-progress.sh
 scripts/continue-expansion.sh
 
+# E2E test scripts (use console.log, setTimeout, etc.)
+test/rollback-e2e-backtest.test.ts
+test/rollback-leafid-persistence.test.ts
+test/rollback-managed-restart.test.ts
+test/rollback-scenarios.test.ts
+test/status-visibility-harness.test.ts
+test/streaming-status.test.ts
+test/agent-config.test.ts
+test/change-review-handler.test.ts
+test/getfullmessages-cache.test.ts
+test/process-manager-linecount.test.ts
+test/rollback-toUserMsgEntryId.test.ts
+
+# E2E temp scripts
+e2e-*.mjs
+
 # Tech report drafts (knowledge base preferred)
 *缓存原理*.md
+
+# TypeScript build info
+tsconfig.tsbuildinfo
+
+# Temporary intro pages
+intro.html
+introduction.html
+
+# Runtime session data
+.pi/sessions/
+
+# Yalc local dependency
+.yalc/
+yalc.lock
+
+# OpenCode session registry (runtime generated)
+.opencode/session-registry.json
+
+# Server distribution archives
+dist-server/
+dist-server.tar.gz
+
+# Debug/test temp scripts
+test-*-*.mjs
+
+# Promo drafts
+promo/
+
+# Temporary plan docs
+.compaction-verify-plan.md

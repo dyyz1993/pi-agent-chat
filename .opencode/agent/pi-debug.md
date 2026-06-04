@@ -26,10 +26,12 @@ knowledge-base_kb_search_semantic("pi-agent-chat debug 排查记录")
 
 **最近一次排查记录**（直接读取）：
 
-| KB ID        | 标题                                            |
-| ------------ | ----------------------------------------------- |
-| `6v0haai3hh` | 排查: 记忆模块噪点分析与 P0 Bug 修复            |
-| `gcqcf2m688` | 记忆模块噪点分析与 TDD 修复记录（详细技术文档） |
+| KB ID        | 标题                                                          |
+| ------------ | ------------------------------------------------------------- |
+| `0r1x3wsik6` | OOM Root Cause: InternalGit.scanWorkingDir reads binary files |
+| `zxyrhnf4k3` | 超时保护 + 日志完整性审查 (2026-05-22)                        |
+| `6v0haai3hh` | 排查: 记忆模块噪点分析与 P0 Bug 修复                          |
+| `gcqcf2m688` | 记忆模块噪点分析与 TDD 修复记录（详细技术文档）               |
 
 如果找到上次的记录，向用户摘要：
 
@@ -69,14 +71,16 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:3100/ 2>/dev/null || ech
 
 **已有文档**（优先检索）：
 
-| 搜索关键词                              | 对应文档                        |
-| --------------------------------------- | ------------------------------- |
-| `RPC, WebSocket, broadcast, singleton`  | RPC Server 单例广播模式         |
-| `Object.values, barrel export, handler` | Barrel Export 遍历陷阱          |
-| `RPC, handler, register, ESLint`        | RPC Handler 注册架构约束        |
-| `html-preview, iframe, cookie-auth`     | HTML 文件预览方案               |
-| `config, 数据存储, project-config`      | 数据存储配置与当前状态          |
-| `memory, prefetch, extract, dream`      | 记忆模块噪点分析与 TDD 修复记录 |
+| 搜索关键词                                | 对应文档                                    |
+| ----------------------------------------- | ------------------------------------------- |
+| `OOM, readFileSync, binary, internal-git` | OOM Root Cause: scanWorkingDir 读二进制文件 |
+| `timeout, withTimeout, hang, stuck`       | 超时保护 + 日志完整性审查                   |
+| `RPC, WebSocket, broadcast, singleton`    | RPC Server 单例广播模式                     |
+| `Object.values, barrel export, handler`   | Barrel Export 遍历陷阱                      |
+| `RPC, handler, register, ESLint`          | RPC Handler 注册架构约束                    |
+| `html-preview, iframe, cookie-auth`       | HTML 文件预览方案                           |
+| `config, 数据存储, project-config`        | 数据存储配置与当前状态                      |
+| `memory, prefetch, extract, dream`        | 记忆模块噪点分析与 TDD 修复记录             |
 
 ### 日志文件路径
 
@@ -200,6 +204,84 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:3100/ 2>/dev/null || ech
    → 是否有错误的 skip 规则导致有效查询被跳过
 ```
 
+#### 路径 E：OOM / 内存问题
+
+**症状**：CLI 进程反复崩溃、启动后几十秒就死、特定项目必崩
+
+```
+1. 统计 OOM 次数
+   rg -c "FATAL ERROR" logs/$(date +%Y-%m-%d).log
+
+2. 确认崩溃堆栈
+   rg "FATAL ERROR" logs/$(date +%Y-%m-%d).log -A 12 | rg "node::fs::ReadFileUtf8" | wc -l
+   # 如果是 ReadFileUtf8 → scanWorkingDir 读了大文件（已修复：v0.74.54）
+   # 如果是其他堆栈 → 新的 OOM 根因，需要重新排查
+
+3. 确认受影响的 session 和项目
+   rg "FATAL ERROR" logs/$(date +%Y-%m-%d).log | rg -o '"sessionId":"[^"]+' | sed 's/.*":"//' | sort | uniq -c | sort -rn
+   rg "Spawning pi via RpcClient" logs/$(date +%Y-%m-%d).log | rg "sessionId" | sed ...
+   # 交叉对比：OOM 集中的 session 对应哪个项目
+
+4. 检查 SPAWN → CRASH 间隔
+   # 如果是 30~60s 必崩 → 启动时 file-snapshot 扫描目录触发
+   # 如果是长时间运行后崩溃 → 消息/上下文累积导致
+
+5. 检查 --max-old-space-size 配置
+   grep "max-old-space-size" src/shared/agent/process-manager.ts
+   # 当前应为 8192（8GB）
+
+6. 检查上游版本
+   grep '"version"' node_modules/@dyyz1993/pi-coding-agent/package.json
+   # 必须 >= 0.74.54（包含二进制文件排除修复）
+```
+
+**已知根因（v0.74.54 已修复）**：
+
+- `InternalGit.scanWorkingDir()` 用 `readFileSync("utf-8")` 读所有文件
+- `DEFAULT_IGNORE_PATTERNS` 缺少二进制扩展名（png/jpg/mp4/zip 等）
+- 项目目录有 `frames/` 含 2881 个 PNG（4.5GB）→ 必定 OOM
+- 修复：38 个扩展名黑名单 + 1MB pre-read size check
+
+#### 路径 F：超时 / 卡住
+
+**症状**：操作无响应、永远转圈、UI 冻结
+
+```
+1. 搜索超时事件
+   rg "timed out" logs/$(date +%Y-%m-%d).log
+
+2. 搜索 RPC 耗时日志
+   rg "\[send\]|\[steer\]|\[followUp\]|\[start\]" logs/$(date +%Y-%m-%d).log
+
+3. 搜索慢 RPC（sandbox 模式）
+   rg "\[sandbox\] slow RPC" logs/$(date +%Y-%m-%d).log
+
+4. 搜索 subagent 同步超时
+   rg "\[syncDelegate\] timed out" logs/$(date +%Y-%m-%d).log
+
+5. 检查 WebSocket 重连状态
+   rg "disconnected\|reconnect" logs/$(date +%Y-%m-%d).log | tail -10
+```
+
+**超时保护清单（已加超时的操作）**：
+
+| 操作                  | 超时   | 位置                  |
+| --------------------- | ------ | --------------------- |
+| client.start()        | 60s    | process-manager.ts    |
+| switchSession         | 15s    | process-manager.ts    |
+| wsTransport.connect() | 15s    | api-client.ts         |
+| sandbox fetch()       | 30s    | sandbox-rpc-client.ts |
+| agent.send            | 60s    | use-chat-store.ts     |
+| agent.steer           | 15s    | use-chat-store.ts     |
+| agent.followUp        | 15s    | use-chat-store.ts     |
+| getFullMessages       | 30s    | use-chat-store.ts     |
+| setModel              | 15s    | process-manager.ts    |
+| compact               | 120s   | process-manager.ts    |
+| fork                  | 60s    | process-manager.ts    |
+| navigateTree          | 30s    | process-manager.ts    |
+| getState              | 10s    | process-manager.ts    |
+| 其他 ~20 个 RPC 方法  | 10-30s | process-manager.ts    |
+
 ### 第三层：验证假设
 
 定位到可能的根因后，**必须验证**：
@@ -264,7 +346,25 @@ tail -100 logs/$(date +%Y-%m-%d).log
 # 搜索错误
 grep -i "error\|warn\|fail\|crash" logs/$(date +%Y-%m-%d).log | tail -30
 # 搜索特定模块日志
-grep "\[memory\]\|\[session\]\|\[rpc\]\|\[agent\]" logs/$(date +%Y +%Y-%m-%d).log | tail -30
+grep "\[memory\]\|\[session\]\|\[rpc\]\|\[agent\]" logs/$(date +%Y-%m-%d).log | tail -30
+
+# === OOM 排查 ===
+# OOM 次数
+rg -c "FATAL ERROR" logs/$(date +%Y-%m-%d).log
+# 哪些 session OOM
+rg "FATAL ERROR" logs/$(date +%Y-%m-%d).log | rg -o '"sessionId":"[^"]+' | sed 's/.*":"//' | sort | uniq -c | sort -rn
+# 崩溃堆栈确认
+rg "FATAL ERROR" logs/$(date +%Y-%m-%d).log -A 12 | rg "ReadFileUtf8" | wc -l
+
+# === 超时排查 ===
+# 所有超时事件
+rg "timed out" logs/$(date +%Y-%m-%d).log
+# RPC 耗时日志
+rg "\[send\]|\[steer\]|\[followUp\]|\[start\]" logs/$(date +%Y-%m-%d).log
+# SPAWN → CRASH 循环
+rg "Spawning pi via RpcClient|cleanupDeadClient" logs/$(date +%Y-%m-%d).log | head -30
+# subagent sync 超时
+rg "\[syncDelegate\] timed out" logs/$(date +%Y-%m-%d).log
 
 # === 服务状态 ===
 curl http://localhost:3100/api/health
@@ -295,16 +395,17 @@ bun run lint 2>&1 | tail -20     # lint 检查
 
 ### 关键文件（按排查频率排序）
 
-| 文件                                            | 行数 | 常见问题                                   |
-| ----------------------------------------------- | ---- | ------------------------------------------ |
-| `src/shared/agent/process-manager.ts`           | 2020 | RPC 通信、进程管理、事件路由、channel 分发 |
-| `src/mainview/stores/session-subscriptions.ts`  | 653  | 订阅泄漏、事件丢失、重复订阅               |
-| `src/mainview/stores/agent-event-handler.ts`    | 725  | 事件路由、prefetch 配对、消息创建          |
-| `src/mainview/stores/use-session-store.ts`      | 1153 | 会话切换、状态恢复、Tab 管理               |
-| `src/mainview/stores/use-chat-store.ts`         | 652  | 消息分页、normalize、历史加载              |
-| `src/mainview/stores/use-memory-store.ts`       | 144  | 记忆事件去重、loadFiles 防抖               |
-| `src/shared/handlers/memory.ts`                 | 138  | 记忆文件读取、fallback 逻辑                |
-| `src/mainview/components/chat/memory-config.ts` | 222  | 记忆摘要生成                               |
+| 文件                                           | 行数 | 常见问题                                             |
+| ---------------------------------------------- | ---- | ---------------------------------------------------- |
+| `src/shared/agent/process-manager.ts`          | 3200 | RPC 通信、进程管理、事件路由、channel 分发、OOM 超时 |
+| `src/mainview/stores/session-subscriptions.ts` | 653  | 订阅泄漏、事件丢失、重复订阅                         |
+| `src/mainview/stores/agent-event-handler.ts`   | 725  | 事件路由、prefetch 配对、消息创建                    |
+| `src/mainview/stores/use-session-store.ts`     | 1153 | 会话切换、状态恢复、Tab 管理                         |
+| `src/mainview/stores/use-chat-store.ts`        | 688  | 消息分页、normalize、历史加载、send/steer 超时       |
+| `src/mainview/lib/api-client.ts`               | 365  | WebSocket 连接/重连、超时保护                        |
+| `src/sandbox/sandbox-rpc-client.ts`            | 528  | 沙箱 HTTP RPC、fetch 超时                            |
+| `src/mainview/stores/use-memory-store.ts`      | 144  | 记忆事件去重、loadFiles 防抖                         |
+| `src/shared/handlers/memory.ts`                | 138  | 记忆文件读取、fallback 逻辑                          |
 
 ### 消息数据流（完整链路）
 
@@ -347,3 +448,5 @@ Channel 事件（独立订阅）：
 4. **验证后交付** — 修复后必须运行相关测试确认
 5. **每次沉淀** — 排查结束必须写入 KB，下次不用重复踩坑
 6. **不说"应该没问题"** — 要么验证了确认没问题，要么继续排查
+7. **OOM 先查版本** — 确认 pi-coding-agent >= 0.74.54（含二进制文件排除修复）
+8. **卡住先查超时** — 确认操作是否有 withTimeout 保护，没有就加

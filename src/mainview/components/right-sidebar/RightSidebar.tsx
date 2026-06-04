@@ -1,6 +1,7 @@
 import {
   Pin,
   PanelRight,
+  PanelRightClose,
   GitBranch,
   FolderTree,
   Activity,
@@ -9,6 +10,8 @@ import {
   Shield,
   Camera,
   Bot,
+  ListChecks,
+  ClipboardCheck,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useLayoutStore } from "../../layouts/use-layout-store";
@@ -19,10 +22,15 @@ import { GitPanel } from "../git/GitPanel";
 import { RpcPanel } from "../rpc-panel/RpcPanel";
 import { MemoryPanel } from "../memory-panel/MemoryPanel";
 import { RulesPanel } from "../rules-panel/RulesPanel";
+import { HooksPanel } from "../hooks-panel/HooksPanel";
 import { SnapshotPanel } from "../snapshot-panel/SnapshotPanel";
 import { AgentPanel } from "../agent-panel/AgentPanel";
+import { ChangeReviewPanel } from "../change-review/ChangeReviewPanel";
+import { useChangeReviewStore } from "../../stores/use-change-review-store";
 import { useExplorerStore } from "../../stores/use-explorer-store";
-import { useEffect } from "react";
+import { useGitStore } from "../../stores/use-git-store";
+import { useSessionStore } from "../../stores/use-session-store";
+import { useEffect, useRef } from "react";
 
 const TAB_ICONS: Record<PanelTabId, React.ComponentType<{ className?: string }>> = {
   git: GitBranch,
@@ -32,7 +40,9 @@ const TAB_ICONS: Record<PanelTabId, React.ComponentType<{ className?: string }>>
   rpc: Terminal,
   memory: Brain,
   rules: Shield,
+  hooks: ListChecks,
   snapshot: Camera,
+  changeReview: ClipboardCheck,
 };
 
 interface RightSidebarProps {
@@ -48,8 +58,9 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
   const setActivePanelTab = useLayoutStore((s) => s.setActivePanelTab);
   const listRootDir = useExplorerStore((s) => s.listRootDir);
 
-  const treeNodes = useExplorerStore((s) => s.treeNodes);
   const currentPath = useExplorerStore((s) => s.currentPath);
+
+  const treeNodes = useExplorerStore((s) => s.treeNodes);
   const selectedPath = useExplorerStore((s) => s.selectedPath);
   const editingNode = useExplorerStore((s) => s.editingNode);
   const toggleNode = useExplorerStore((s) => s.toggleNode);
@@ -63,13 +74,43 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
   const importFiles = useExplorerStore((s) => s.importFiles);
 
   const isPinned = statusPanel === "pinned";
+  const pendingChanges = useChangeReviewStore((s) => s.changes);
+  const pendingCount = pendingChanges.filter((c) => c.status === "pending").length;
   const hideStatus = useLayoutStore((s) => s.hideStatus);
+  const refreshAll = useGitStore((s) => s.refreshAll);
+  const prevPanelVisible = useRef(statusPanel !== "hidden");
+  const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const fetchPending = useChangeReviewStore((s) => s.fetchPending);
+
+  useEffect(() => {
+    if (activeSessionId && activePanelTab === "changeReview") {
+      fetchPending();
+    }
+  }, [activeSessionId, activePanelTab, fetchPending]);
 
   useEffect(() => {
     if (activePanelTab === "files") {
       listRootDir();
     }
   }, [activePanelTab, listRootDir]);
+
+  useEffect(() => {
+    if (activePanelTab === "git" && currentPath) {
+      refreshAll(currentPath);
+    }
+  }, [activePanelTab, refreshAll, currentPath]);
+
+  useEffect(() => {
+    const isVisible = statusPanel !== "hidden";
+    if (isVisible && !prevPanelVisible.current) {
+      if (activePanelTab === "git" && currentPath) {
+        refreshAll(currentPath);
+      } else if (activePanelTab === "files") {
+        listRootDir();
+      }
+    }
+    prevPanelVisible.current = isVisible;
+  }, [statusPanel, activePanelTab, currentPath, listRootDir]);
 
   function renderContent() {
     switch (activePanelTab) {
@@ -105,8 +146,12 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
         return <MemoryPanel />;
       case "rules":
         return <RulesPanel />;
+      case "hooks":
+        return <HooksPanel />;
       case "snapshot":
         return <SnapshotPanel />;
+      case "changeReview":
+        return <ChangeReviewPanel />;
       default:
         return null;
     }
@@ -118,7 +163,7 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
     return (
       <div
         data-testid="right-sidebar"
-        className="flex flex-col items-center bg-white dark:bg-gray-900 border-l border-gray-300 dark:border-gray-800 overflow-hidden z-20 pt-1"
+        className="flex flex-col items-center bg-bg-secondary border-l border-border-primary overflow-hidden z-20 pt-1"
         style={{ width }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -131,14 +176,19 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
                 e.stopPropagation();
                 setActivePanelTab(tab.id);
               }}
-              className={`w-10 h-10 flex items-center justify-center rounded transition-colors ${
+              className={`relative w-10 h-10 flex items-center justify-center rounded transition-colors ${
                 activePanelTab === tab.id
-                  ? "text-indigo-500 dark:text-indigo-400 bg-indigo-500/10"
-                  : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                  ? "text-semantic-accent bg-semantic-accent/10"
+                  : "text-text-tertiary hover:text-text-primary hover:bg-surface-hover"
               }`}
               title={tab.label}
             >
               <Icon className="w-4 h-4" />
+              {tab.id === "changeReview" && pendingCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-status-warning text-status-warning-foreground text-[9px] min-w-[16px] h-[16px] flex items-center justify-center rounded-full font-bold">
+                  {pendingCount > 9 ? "9+" : pendingCount}
+                </span>
+              )}
             </button>
           );
         })}
@@ -149,36 +199,49 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
   return (
     <div
       data-testid="right-sidebar"
-      className={`flex flex-col bg-gray-50 dark:bg-gray-900 border-l border-gray-300 dark:border-gray-800 overflow-hidden z-20 ${
+      className={`flex flex-col bg-bg-secondary border-l border-border-primary overflow-hidden z-20 ${
         overlay ? "animate-slide-in-right shadow-xl shadow-black/10 dark:shadow-black/30" : ""
       }`}
       style={overlay ? { position: "absolute", right: 0, top: 0, bottom: 0, width } : { width }}
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="flex items-center border-b border-gray-300 dark:border-gray-800 shrink-0">
-        {overlay && (
+      <div className="flex items-center border-b border-border-primary shrink-0 bg-bg-secondary">
+        <div className="flex items-center gap-0.5 shrink-0 pl-1">
+          {overlay ? (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                hideStatus();
+              }}
+              className="p-1.5 rounded-md hover:bg-surface-hover text-text-tertiary hover:text-text-primary transition-colors"
+              title={t("closePanel")}
+            >
+              <PanelRight className="w-3.5 h-3.5" />
+            </button>
+          ) : (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                hideStatus();
+              }}
+              className="p-1.5 rounded-md hover:bg-surface-hover text-text-tertiary hover:text-text-primary transition-colors max-sm:hidden"
+              title={t("closePanel")}
+            >
+              <PanelRightClose className="w-3.5 h-3.5" />
+            </button>
+          )}
           <button
             onClick={(e) => {
               e.stopPropagation();
-              hideStatus();
+              toggleStatus();
             }}
-            className="p-1.5 mr-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors shrink-0"
-            title={t("closePanel")}
+            className={`p-1.5 rounded-md transition-colors max-sm:hidden ${isPinned ? "text-semantic-accent bg-semantic-accent/10" : "text-text-tertiary hover:text-text-primary hover:bg-surface-hover"}`}
+            title={isPinned ? t("unpinPanel") : t("pinPanel")}
           >
-            <PanelRight className="w-3.5 h-3.5" />
+            <Pin className="w-3.5 h-3.5" fill={isPinned ? "currentColor" : "none"} />
           </button>
-        )}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            toggleStatus();
-          }}
-          className={`p-1.5 mr-1 rounded transition-colors shrink-0 max-sm:hidden ${isPinned ? "text-indigo-400" : "text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400"}`}
-          title={isPinned ? t("unpinPanel") : t("pinPanel")}
-        >
-          <Pin className="w-3.5 h-3.5" fill={isPinned ? "currentColor" : "none"} />
-        </button>
-        <div className="flex items-center overflow-x-auto scrollbar-none">
+        </div>
+        <div className="flex items-center overflow-x-auto scrollbar-none flex-1">
           {PANEL_TABS.map((tab: { id: PanelTabId; label: string }) => (
             <button
               key={tab.id}
@@ -186,13 +249,18 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
                 e.stopPropagation();
                 setActivePanelTab(tab.id);
               }}
-              className={`px-2.5 py-1.5 text-[11px] font-medium transition-colors whitespace-nowrap shrink-0 ${
+              className={`px-2.5 py-1.5 text-[11px] font-medium transition-colors whitespace-nowrap shrink-0 border-b-2 ${
                 activePanelTab === tab.id
-                  ? "text-indigo-500 dark:text-indigo-400 border-b-2 border-indigo-500 dark:border-indigo-400"
-                  : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+                  ? "text-semantic-accent border-semantic-accent"
+                  : "text-text-tertiary border-transparent hover:text-text-primary hover:bg-surface-hover/60"
               }`}
             >
               {tab.label}
+              {tab.id === "changeReview" && pendingCount > 0 && (
+                <span className="bg-status-warning/20 text-status-warning text-[10px] px-1.5 py-0.5 rounded-full font-medium ml-1">
+                  {pendingCount}
+                </span>
+              )}
             </button>
           ))}
         </div>

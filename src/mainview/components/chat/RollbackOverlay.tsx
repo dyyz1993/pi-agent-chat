@@ -7,6 +7,9 @@ import {
   FileEdit,
   ChevronRight,
   ChevronDown,
+  Rows3,
+  Columns2,
+  Maximize2,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useRollbackStore } from "../../stores/use-rollback-store";
@@ -17,33 +20,33 @@ import { useNotificationStore } from "../../stores/use-notification-store";
 import { useFocusTrap } from "../../hooks/use-focus-trap";
 import { apiClient } from "../../lib/api-client";
 import { createLogger } from "../../../shared/lib/logger";
+import { InlineDiffViewer } from "./tool-renderers/InlineDiffViewer";
+import { useChatOverlayStore } from "../../stores/use-chat-overlay-store";
+import { formatFilePath } from "../../lib/format-path";
 
 const log = createLogger("chat");
 
-const STATUS_CONFIG: Record<
+const FILE_STATUS_CONFIG: Record<
   ModifiedFile["status"],
-  { icon: typeof FilePlus; label: string; colorClass: string; bgClass: string; badgeClass: string }
+  { icon: typeof FilePlus; label: string; color: string; bg: string }
 > = {
   added: {
     icon: FilePlus,
     label: "A",
-    colorClass: "text-green-600 dark:text-green-400",
-    bgClass: "hover:bg-green-50 dark:hover:bg-green-950/30",
-    badgeClass: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
+    color: "text-status-success",
+    bg: "bg-status-success/10",
   },
   modified: {
     icon: FileEdit,
     label: "M",
-    colorClass: "text-amber-600 dark:text-amber-400",
-    bgClass: "hover:bg-amber-50 dark:hover:bg-amber-950/30",
-    badgeClass: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
+    color: "text-status-warning",
+    bg: "bg-status-warning/10",
   },
   deleted: {
     icon: FileMinus,
     label: "D",
-    colorClass: "text-red-500 dark:text-red-400",
-    bgClass: "hover:bg-red-50 dark:hover:bg-red-950/30",
-    badgeClass: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
+    color: "text-status-error",
+    bg: "bg-status-error/10",
   },
 };
 
@@ -51,6 +54,8 @@ interface FileItemProps {
   filePath: string;
   status: ModifiedFile["status"];
   details?: string;
+  oldContent?: string | null;
+  newContent?: string | null;
   addedLines?: number;
   removedLines?: number;
   expanded: boolean;
@@ -61,120 +66,175 @@ const FileItem = memo(function FileItem({
   filePath,
   status,
   details,
+  oldContent,
+  newContent,
   addedLines,
   removedLines,
   expanded,
   onToggle,
 }: FileItemProps) {
-  const config = STATUS_CONFIG[status];
+  const { t } = useTranslation("chat");
+  const config = FILE_STATUS_CONFIG[status];
   const Icon = config.icon;
 
-  const fileName = filePath.split("/").pop() || filePath;
-  const dirPath = filePath.split("/").slice(0, -1).join("/");
+  const [splitView, setSplitView] = useState(false);
 
   return (
-    <div className="min-w-0">
-      <button
-        type="button"
-        onClick={onToggle}
-        className={`w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm ${config.bgClass} transition-colors`}
-      >
-        {expanded ? (
-          <ChevronDown className={`w-3.5 h-3.5 shrink-0 ${config.colorClass}`} />
-        ) : (
-          <ChevronRight className={`w-3.5 h-3.5 shrink-0 ${config.colorClass}`} />
-        )}
-        <Icon className={`w-3.5 h-3.5 shrink-0 ${config.colorClass}`} />
-        <span
-          className={`truncate font-mono text-xs flex-1 min-w-0 ${config.colorClass}`}
-          title={filePath}
+    <div className="border-b border-border-secondary/50 dark:border-surface-code/50">
+      <div className="px-3 py-2">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex items-start gap-1.5 text-left w-full"
         >
-          {dirPath ? <span className="opacity-60">{dirPath}/</span> : null}
-          <span className="font-semibold">{fileName}</span>
-        </span>
-        {(addedLines !== undefined || removedLines !== undefined) && (
-          <span className="shrink-0 flex items-center gap-1 text-[10px] font-mono">
-            {removedLines !== undefined && removedLines > 0 && (
-              <span className="text-red-500 dark:text-red-400">-{removedLines}</span>
-            )}
-            {addedLines !== undefined && addedLines > 0 && (
-              <span className="text-green-600 dark:text-green-400">+{addedLines}</span>
-            )}
+          <span className="text-text-tertiary shrink-0 mt-0.5">
+            {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
           </span>
-        )}
-        <span
-          className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold ${config.badgeClass}`}
-        >
-          {config.label}
-        </span>
-      </button>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className={`shrink-0 ${config.color}`}>
+                <Icon className="w-3 h-3" />
+              </span>
+              <span
+                className="text-[11px] font-mono text-semantic-accent truncate"
+                title={filePath}
+              >
+                {formatFilePath(filePath)}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className={`px-1 rounded text-[10px] font-medium ${config.color} ${config.bg}`}>
+                {config.label}
+              </span>
+              {(addedLines !== undefined || removedLines !== undefined) && (
+                <span className="flex items-center gap-0.5 text-[10px] font-mono">
+                  {removedLines !== undefined && removedLines > 0 && (
+                    <span className="text-status-error">-{removedLines}</span>
+                  )}
+                  {addedLines !== undefined && addedLines > 0 && (
+                    <span className="text-status-success">+{addedLines}</span>
+                  )}
+                </span>
+              )}
+            </div>
+          </div>
+        </button>
+      </div>
       {expanded && (
-        <div className="ml-4 sm:ml-8 mr-2 sm:mr-3 mb-2 mt-1">
-          {details ? (
-            <div className="rounded-md bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 overflow-hidden">
-              <div className="px-3 py-1.5 bg-gray-200/50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2">
-                <span className="text-[10px] text-gray-500 dark:text-gray-400 font-mono truncate">
-                  {filePath}
+        <div className="px-3 pb-2 ml-4">
+          {details != null && (oldContent != null || newContent != null) ? (
+            <div className="rounded-md bg-surface-dim dark:bg-surface-dim/60 border border-border-secondary overflow-hidden">
+              <div className="px-3 py-1.5 bg-surface-hover/50 border-b border-border-secondary flex items-center gap-2">
+                <span
+                  className="text-[10px] text-text-tertiary font-mono truncate"
+                  title={filePath}
+                >
+                  {formatFilePath(filePath)}
                 </span>
                 {(addedLines !== undefined || removedLines !== undefined) && (
                   <span className="shrink-0 flex items-center gap-1 text-[10px] font-mono">
                     {removedLines !== undefined && removedLines > 0 && (
-                      <span className="text-red-500 dark:text-red-400">-{removedLines}</span>
+                      <span className="text-status-error">-{removedLines}</span>
                     )}
                     {addedLines !== undefined && addedLines > 0 && (
-                      <span className="text-green-600 dark:text-green-400">+{addedLines}</span>
+                      <span className="text-status-success">+{addedLines}</span>
+                    )}
+                  </span>
+                )}
+                <div className="shrink-0 flex items-center gap-0.5 ml-1">
+                  <button
+                    type="button"
+                    onClick={() => setSplitView(false)}
+                    className={`p-1 rounded transition-colors ${
+                      !splitView
+                        ? "bg-text-tertiary dark:bg-text-secondary text-white"
+                        : "text-text-tertiary hover:text-text-primary dark:hover:text-text-primary"
+                    }`}
+                    title={t("diffLineByLine", { defaultValue: "Line by line" })}
+                    aria-label={t("diffLineByLine", { defaultValue: "Line by line" })}
+                  >
+                    <Rows3 className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSplitView(true)}
+                    className={`p-1 rounded transition-colors ${
+                      splitView
+                        ? "bg-text-tertiary dark:bg-text-secondary text-white"
+                        : "text-text-tertiary hover:text-text-primary dark:hover:text-text-primary"
+                    }`}
+                    title={t("diffSideBySide", { defaultValue: "Side by side" })}
+                    aria-label={t("diffSideBySide", { defaultValue: "Side by side" })}
+                  >
+                    <Columns2 className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      useChatOverlayStore
+                        .getState()
+                        .openExpand(
+                          filePath.split("/").pop() ?? "Diff",
+                          <InlineDiffViewer
+                            oldValue={newContent ?? ""}
+                            newValue={oldContent ?? ""}
+                            splitView={splitView}
+                            expandable={false}
+                            filePath={filePath}
+                            maxHeight="100%"
+                          />,
+                        )
+                    }
+                    className="p-1 rounded text-text-tertiary hover:text-text-primary dark:hover:text-text-primary hover:bg-surface-hover transition-colors"
+                    title={t("expand", { defaultValue: "Expand" })}
+                  >
+                    <Maximize2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+              <InlineDiffViewer
+                oldValue={newContent ?? ""}
+                newValue={oldContent ?? ""}
+                maxHeight="256px"
+                splitView={splitView}
+                expandable={false}
+                filePath={filePath}
+              />
+            </div>
+          ) : details != null ? (
+            <div className="rounded-md bg-surface-dim dark:bg-surface-dim/60 border border-border-secondary overflow-hidden">
+              <div className="px-3 py-1.5 bg-surface-hover/50 border-b border-border-secondary flex items-center gap-2">
+                <span
+                  className="text-[10px] text-text-tertiary font-mono truncate"
+                  title={filePath}
+                >
+                  {formatFilePath(filePath)}
+                </span>
+                {(addedLines !== undefined || removedLines !== undefined) && (
+                  <span className="shrink-0 flex items-center gap-1 text-[10px] font-mono">
+                    {removedLines !== undefined && removedLines > 0 && (
+                      <span className="text-status-error">-{removedLines}</span>
+                    )}
+                    {addedLines !== undefined && addedLines > 0 && (
+                      <span className="text-status-success">+{addedLines}</span>
                     )}
                   </span>
                 )}
               </div>
               <div className="overflow-x-auto overscroll-contain">
-                <pre className="px-3 py-2 text-xs leading-5 whitespace-pre font-mono max-h-64 overflow-y-auto">
-                  {details.split("\n").map((line, i) => {
-                    if (line.startsWith("+ ")) {
-                      return (
-                        <div
-                          key={i}
-                          className="bg-green-100/60 dark:bg-green-900/30 text-green-800 dark:text-green-300"
-                        >
-                          {line}
-                        </div>
-                      );
-                    }
-                    if (line.startsWith("- ")) {
-                      return (
-                        <div
-                          key={i}
-                          className="bg-red-100/60 dark:bg-red-900/30 text-red-800 dark:text-red-300"
-                        >
-                          {line}
-                        </div>
-                      );
-                    }
-                    if (line === "---") {
-                      return (
-                        <div
-                          key={i}
-                          className="text-gray-400 dark:text-gray-500 border-t border-dashed border-gray-300 dark:border-gray-600 my-1"
-                        />
-                      );
-                    }
-                    return (
-                      <div key={i} className="text-gray-700 dark:text-gray-300">
-                        {line}
-                      </div>
-                    );
-                  })}
+                <pre className="px-3 py-2 text-xs leading-5 whitespace-pre font-mono max-h-64 overflow-y-auto text-text-secondary">
+                  {details}
                 </pre>
               </div>
             </div>
           ) : (
-            <div className="px-3 py-2 rounded-md bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700">
-              <span className="text-xs text-gray-500 dark:text-gray-400">
+            <div className="px-3 py-2 rounded-md bg-surface-dim dark:bg-surface-dim/60 border border-border-secondary">
+              <span className="text-xs text-text-tertiary">
                 {status === "deleted"
-                  ? "文件将被删除"
+                  ? t("rollbackOverlay.fileWillBeRestored")
                   : status === "added"
-                    ? "文件将被移除（新建的内容将丢失）"
-                    : "文件将恢复到修改前的状态"}
+                    ? t("rollbackOverlay.fileWillBeRemoved")
+                    : t("rollbackOverlay.fileWillBeRestored")}
               </span>
             </div>
           )}
@@ -192,6 +252,7 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
   const loading = useRollbackStore((s) => s.loading);
   const closeRollback = useRollbackStore((s) => s.closeRollback);
   const containerRef = useRef<HTMLDivElement>(null);
+  const confirmingRef = useRef(false);
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
 
   useFocusTrap(containerRef, { onEscape: closeRollback });
@@ -209,14 +270,33 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
   }, []);
 
   const confirmRollback = useCallback(async () => {
+    if (confirmingRef.current) return;
+    confirmingRef.current = true;
     const state = useRollbackStore.getState();
     const currentTarget = state.target;
-    if (!currentTarget) return;
+    if (!currentTarget) {
+      confirmingRef.current = false;
+      return;
+    }
     state.setLoading(true);
     try {
       const sessionState = useSessionStore.getState();
       const sessionId = sessionState.activeSessionId;
       if (!sessionId) {
+        state.closeRollback();
+        return;
+      }
+
+      const sessionStatus = useSessionStore.getState().sessionStatusMap[sessionId];
+      if (
+        sessionStatus === "streaming" ||
+        sessionStatus === "compacting" ||
+        sessionStatus === "retrying"
+      ) {
+        useNotificationStore.getState().push({
+          message: "Cannot rollback while agent is streaming",
+          level: "warning",
+        });
         state.closeRollback();
         return;
       }
@@ -242,9 +322,12 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
         log.warn("rollback cancelled by backend", {
           sessionId,
           targetId: currentTarget.targetId,
+          reason: result.reason,
         });
         useNotificationStore.getState().push({
-          message: "回滚操作被取消",
+          message: result.reason
+            ? t("rollbackOverlay.rollbackCancelledReason", { reason: result.reason })
+            : t("rollbackOverlay.rollbackCancelled"),
           level: "warning",
         });
         return;
@@ -262,7 +345,7 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
           targetId: currentTarget.targetId,
         });
         useNotificationStore.getState().push({
-          message: "回滚未生效，消息数量未减少",
+          message: t("rollbackOverlay.rollbackIneffective"),
           level: "warning",
         });
       } else {
@@ -279,10 +362,11 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
         err: err instanceof Error ? err.message : String(err),
       });
       useNotificationStore.getState().push({
-        message: "回滚操作失败，请重试",
+        message: t("rollbackOverlay.rollbackFailed"),
         level: "error",
       });
     } finally {
+      confirmingRef.current = false;
       useRollbackStore.getState().closeRollback();
     }
   }, []);
@@ -295,89 +379,91 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
 
   return (
     <div
-      ref={containerRef}
-      className="fixed inset-0 z-50 flex flex-col bg-white/98 dark:bg-gray-950/98 backdrop-blur-sm overflow-hidden"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+      onClick={closeRollback}
     >
       <div
-        className="flex items-center gap-2 px-4 py-2 bg-gray-50/90 dark:bg-gray-900/90 border-b border-gray-200 dark:border-gray-800 flex-shrink-0"
-        style={{
-          paddingTop: "calc(0.5rem + env(safe-area-inset-top, 0px))",
-        }}
+        ref={containerRef}
+        data-testid="rollback-overlay"
+        className="relative w-full max-w-xl mx-4 bg-bg-primary dark:bg-surface-code rounded-xl shadow-2xl border border-border-secondary flex flex-col overflow-hidden"
+        style={{ maxHeight: "min(80vh, 560px)" }}
+        onClick={(e) => e.stopPropagation()}
       >
-        <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
-        <span className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate flex-1 min-w-0">
-          {isWithFiles ? t("rollbackOverlay.titleWithFiles") : t("rollbackOverlay.title")}
-        </span>
-        {hasFiles && (
-          <span className="text-xs text-gray-400 dark:text-gray-500">
-            {preview?.summary?.totalFiles ?? files.length} 文件
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-border-secondary flex-shrink-0">
+          <AlertTriangle className="w-4 h-4 text-status-warning shrink-0" />
+          <span className="text-sm font-medium text-text-primary truncate flex-1 min-w-0">
+            {isWithFiles ? t("rollbackOverlay.titleWithFiles") : t("rollbackOverlay.title")}
           </span>
-        )}
-        <button
-          type="button"
-          onClick={closeRollback}
-          className="p-2 rounded text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors"
-          title={t("rollbackOverlay.cancel")}
-        >
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-
-      <div
-        className="flex-1 overflow-y-auto overscroll-contain"
-        style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
-      >
-        <div className="max-w-2xl w-full mx-auto px-4 sm:px-6 py-6">
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-            {isWithFiles
-              ? t("rollbackOverlay.withFilesModeDesc")
-              : t("rollbackOverlay.messageModeDesc")}
-          </p>
-
-          {isWithFiles && hasFiles && (
-            <div className="space-y-1 mb-6">
-              {files.map((file) => (
-                <FileItem
-                  key={`${file.status}-${file.path}`}
-                  filePath={file.path}
-                  status={file.status}
-                  details={file.details}
-                  addedLines={file.addedLines}
-                  removedLines={file.removedLines}
-                  expanded={expandedFiles.has(`${file.status}-${file.path}`)}
-                  onToggle={() => toggleFile(`${file.status}-${file.path}`)}
-                />
-              ))}
-            </div>
+          {hasFiles && (
+            <span className="text-xs text-text-tertiary">
+              {t("rollbackOverlay.fileCount", {
+                count: preview?.summary?.totalFiles ?? files.length,
+              })}
+            </span>
           )}
+          <button
+            type="button"
+            onClick={closeRollback}
+            className="p-1.5 rounded text-text-tertiary hover:text-text-primary dark:hover:text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-hover transition-colors"
+            title={t("rollbackOverlay.cancel")}
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
 
-          {isWithFiles && !hasFiles && (
-            <p className="text-xs text-gray-400 dark:text-gray-500 mb-6">
-              {t("rollbackOverlay.noFiles")}
+        <div className="flex-1 overflow-y-auto overscroll-contain min-h-0">
+          <div className="px-4 py-4">
+            <p className="text-sm text-text-secondary dark:text-text-tertiary mb-4">
+              {isWithFiles
+                ? t("rollbackOverlay.withFilesModeDesc")
+                : t("rollbackOverlay.messageModeDesc")}
             </p>
-          )}
 
-          <div className="flex items-center justify-end gap-3 pt-2 flex-wrap">
-            <button
-              type="button"
-              onClick={closeRollback}
-              disabled={loading}
-              className="px-4 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {t("rollbackOverlay.cancel")}
-            </button>
-            <button
-              type="button"
-              onClick={confirmRollback}
-              disabled={loading}
-              className="px-4 py-2 text-sm rounded-lg bg-red-600 hover:bg-red-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {loading && (
-                <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              )}
-              {t("rollbackOverlay.confirm")}
-            </button>
+            {isWithFiles && hasFiles && (
+              <div className="mb-4 border border-border-secondary rounded-lg overflow-hidden">
+                {files.map((file) => (
+                  <FileItem
+                    key={`${file.status}-${file.path}`}
+                    filePath={file.path}
+                    status={file.status}
+                    details={file.details}
+                    oldContent={file.oldContent}
+                    newContent={file.newContent}
+                    addedLines={file.addedLines}
+                    removedLines={file.removedLines}
+                    expanded={expandedFiles.has(`${file.status}-${file.path}`)}
+                    onToggle={() => toggleFile(`${file.status}-${file.path}`)}
+                  />
+                ))}
+              </div>
+            )}
+
+            {isWithFiles && !hasFiles && (
+              <p className="text-xs text-text-tertiary mb-4">{t("rollbackOverlay.noFiles")}</p>
+            )}
           </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 px-4 py-3 border-t border-border-secondary flex-shrink-0">
+          <button
+            type="button"
+            onClick={closeRollback}
+            disabled={loading}
+            className="px-4 py-1.5 text-sm rounded-lg border border-border-secondary text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {t("rollbackOverlay.cancel")}
+          </button>
+          <button
+            type="button"
+            onClick={confirmRollback}
+            disabled={loading}
+            className="px-4 py-1.5 text-sm rounded-lg bg-status-error hover:bg-status-error/80 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {loading && (
+              <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            )}
+            {t("rollbackOverlay.confirm")}
+          </button>
         </div>
       </div>
     </div>

@@ -29,6 +29,7 @@ const TOGGLE_ITEMS: {
   { key: "showToolResults", labelKey: "showToolResults", descKey: "showToolResultsDesc" },
   { key: "showThinking", labelKey: "showThinking", descKey: "showThinkingDesc" },
   { key: "collapseThinking", labelKey: "collapseThinking", descKey: "collapseThinkingDesc" },
+  { key: "collapseToolCards", labelKey: "collapseToolCards", descKey: "collapseToolCardsDesc" },
   { key: "showTimeline", labelKey: "showTimeline", descKey: "showTimelineDesc" },
 ];
 
@@ -65,6 +66,8 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const settings = useSettingsStore();
   const toggle = useSettingsStore((s) => s.toggle);
   const reset = useSettingsStore((s) => s.reset);
+  const chatViewMode = useSettingsStore((s) => s.chatViewMode);
+  const setViewMode = useSettingsStore((s) => s.setViewMode);
 
   const retryConfig = useRetryConfigStore();
   const setRetryConfig = useRetryConfigStore((s) => s.setRetryConfig);
@@ -75,7 +78,11 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const fetchModelState = useSessionStore((s) => s.fetchModelState);
 
   // ---- Tier 模型配置 ----
-  const tierModels = useTierStore((s) => s.tierModels);
+  const tierModels = useTierStore((s) =>
+    sessionId ? s.dataBySession[sessionId]?.tierModels : undefined,
+  );
+  const globalDefaults = useTierStore((s) => s.globalDefaults);
+  const effectiveTierModels = tierModels ?? globalDefaults;
   const fetchTierConfig = useTierStore((s) => s.fetchTierConfig);
   const [localTierModels, setLocalTierModels] = useState<Record<string, string>>({});
   const [tierSaving, setTierSaving] = useState(false);
@@ -101,8 +108,8 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
 
   // 将 store 中的 tierModels 同步到本地编辑状态
   useEffect(() => {
-    setLocalTierModels({ ...tierModels });
-  }, [tierModels]);
+    setLocalTierModels({ ...effectiveTierModels });
+  }, [effectiveTierModels]);
 
   const handleSaveTierConfig = useCallback(async () => {
     if (!sessionId) return;
@@ -112,15 +119,14 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
         sessionId,
         models: localTierModels,
       });
+      useTierStore.getState().setSessionTierModels(sessionId, localTierModels);
       await fetchTierConfig(sessionId);
-      // If the currently active tier exists, re-apply it to switch to the new model
-      const {
-        currentTier: activeTier,
-        tierModels: updatedModels,
-        switchToTier,
-      } = useTierStore.getState();
+      const { dataBySession, globalDefaults } = useTierStore.getState();
+      const sessionData = dataBySession[sessionId];
+      const activeTier = sessionData?.currentTier ?? null;
+      const updatedModels = sessionData?.tierModels ?? globalDefaults;
       if (activeTier && updatedModels[activeTier]) {
-        await switchToTier(activeTier, sessionId);
+        await useTierStore.getState().switchToTier(activeTier, sessionId);
       }
     } catch (err) {
       log.warn("save tier config failed", {
@@ -128,7 +134,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
       });
     }
     setTierSaving(false);
-  }, [sessionId, localTierModels, fetchTierConfig]);
+  }, [sessionId, localTierModels, fetchTierConfig, effectiveTierModels]);
 
   // ---- 代理设置 ----
   const [proxyLocalEnabled, setProxyLocalEnabled] = useState(isProxyEnabled());
@@ -194,12 +200,12 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     >
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
 
-      <div className="relative w-[380px] max-w-[90vw] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200/80 dark:border-gray-800/80">
-          <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{t("title")}</h2>
+      <div className="relative w-[380px] max-w-[90vw] bg-bg-elevated dark:bg-surface-code border border-border-secondary rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border-secondary/80 dark:border-surface-dim/80">
+          <h2 className="text-sm font-semibold text-text-primary">{t("title")}</h2>
           <button
             onClick={onClose}
-            className="p-1 rounded text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            className="p-1 rounded text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-dim transition-colors"
             aria-label={t("close")}
           >
             <X className="w-4 h-4" />
@@ -209,35 +215,53 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
         <div className="px-4 py-3 space-y-3 max-h-[60vh] overflow-y-auto">
           <SectionHeader>{t("chatDisplay")}</SectionHeader>
 
+          <div className="py-1">
+            <div className="text-[13px] text-text-primary font-medium mb-1.5">
+              {t("chatViewMode")}
+            </div>
+            <div className="flex rounded-lg border border-border-secondary overflow-hidden">
+              {(["developer", "clean"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => setViewMode(mode)}
+                  className={`flex-1 py-1.5 text-[12px] font-medium transition-colors ${
+                    chatViewMode === mode
+                      ? "bg-semantic-accent text-white"
+                      : "bg-bg-elevated dark:bg-surface-dim text-text-secondary hover:bg-surface-dim dark:hover:bg-surface-hover/60"
+                  }`}
+                >
+                  {t(`chatViewMode${mode.charAt(0).toUpperCase() + mode.slice(1)}` as const)}
+                </button>
+              ))}
+            </div>
+            <div className="text-[11px] text-text-tertiary mt-1">
+              {chatViewMode === "developer"
+                ? t("chatViewModeDeveloperDesc")
+                : t("chatViewModeCleanDesc")}
+            </div>
+          </div>
+
           {TOGGLE_ITEMS.map(({ key, labelKey, descKey }) => (
             <label
               key={key}
-              className="flex items-start gap-3 py-2 px-1 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/40 cursor-pointer transition-colors group"
+              className="flex items-start gap-3 py-2 px-1 rounded-lg hover:bg-surface-dim dark:hover:bg-surface-dim/40 cursor-pointer transition-colors group"
             >
               <div className="flex-1 min-w-0">
-                <div className="text-[13px] text-gray-800 dark:text-gray-200 font-medium">
-                  {t(labelKey)}
-                </div>
-                <div className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">
-                  {t(descKey)}
-                </div>
+                <div className="text-[13px] text-text-primary font-medium">{t(labelKey)}</div>
+                <div className="text-[11px] text-text-tertiary mt-0.5">{t(descKey)}</div>
               </div>
-              <ToggleSwitch checked={settings[key]} onChange={() => toggle(key)} />
+              <ToggleSwitch checked={settings[key] as boolean} onChange={() => toggle(key)} />
             </label>
           ))}
 
-          <div className="border-t border-gray-200/60 dark:border-gray-800/60 my-2" />
+          <div className="border-t border-border-secondary/60 dark:border-surface-dim/60 my-2" />
 
           <SectionHeader>{t("retryTitle")}</SectionHeader>
 
-          <label className="flex items-start gap-3 py-2 px-1 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/40 cursor-pointer transition-colors">
+          <label className="flex items-start gap-3 py-2 px-1 rounded-lg hover:bg-surface-dim dark:hover:bg-surface-dim/40 cursor-pointer transition-colors">
             <div className="flex-1 min-w-0">
-              <div className="text-[13px] text-gray-800 dark:text-gray-200 font-medium">
-                {t("retryEnabled")}
-              </div>
-              <div className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">
-                {t("retryEnabledDesc")}
-              </div>
+              <div className="text-[13px] text-text-primary font-medium">{t("retryEnabled")}</div>
+              <div className="text-[11px] text-text-tertiary mt-0.5">{t("retryEnabledDesc")}</div>
             </div>
             <ToggleSwitch
               checked={retryConfig.enabled}
@@ -271,7 +295,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
 
           <BackoffPreview config={retryConfig} />
 
-          <div className="border-t border-gray-200/60 dark:border-gray-800/60 my-2" />
+          <div className="border-t border-border-secondary/60 dark:border-surface-dim/60 my-2" />
 
           <SectionHeader>{t("tierConfigTitle", "Tier 模型配置")}</SectionHeader>
 
@@ -280,10 +304,8 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             return (
               <div key={tier} className="flex items-center gap-3 py-2 px-1">
                 <div className="flex items-center gap-1 w-16 shrink-0">
-                  <Icon className="w-3 h-3 text-gray-400 dark:text-gray-500" />
-                  <span className="text-[13px] text-gray-600 dark:text-gray-300">
-                    {TIER_LABELS[tier]}
-                  </span>
+                  <Icon className="w-3 h-3 text-text-tertiary" />
+                  <span className="text-[13px] text-text-secondary">{TIER_LABELS[tier]}</span>
                 </div>
                 <div className="flex-1 min-w-0">
                   <ModelPickerButton
@@ -304,44 +326,40 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             <button
               onClick={handleSaveTierConfig}
               disabled={tierSaving}
-              className="px-4 py-1.5 rounded-md text-xs bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-40 transition-colors"
+              className="px-4 py-1.5 rounded-md text-xs bg-semantic-accent text-white hover:bg-semantic-accent/80 disabled:opacity-40 transition-colors"
             >
               {tierSaving ? t("saving", "Saving...") : t("saveTier", "保存")}
             </button>
           </div>
 
-          <div className="border-t border-gray-200/60 dark:border-gray-800/60 my-2" />
+          <div className="border-t border-border-secondary/60 dark:border-surface-dim/60 my-2" />
 
           <SectionHeader>{t("proxyTitle")}</SectionHeader>
 
-          <label className="flex items-start gap-3 py-2 px-1 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/40 cursor-pointer transition-colors">
+          <label className="flex items-start gap-3 py-2 px-1 rounded-lg hover:bg-surface-dim dark:hover:bg-surface-dim/40 cursor-pointer transition-colors">
             <div className="flex-1 min-w-0">
-              <div className="text-[13px] text-gray-800 dark:text-gray-200 font-medium">
-                {t("proxyEnabled")}
-              </div>
-              <div className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">
-                {t("proxyEnabledDesc")}
-              </div>
+              <div className="text-[13px] text-text-primary font-medium">{t("proxyEnabled")}</div>
+              <div className="text-[11px] text-text-tertiary mt-0.5">{t("proxyEnabledDesc")}</div>
             </div>
             <ToggleSwitch checked={proxyLocalEnabled} onChange={toggleProxy} />
           </label>
         </div>
 
-        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200/80 dark:border-gray-800/80 bg-gray-50/50 dark:bg-gray-800/30">
+        <div className="flex items-center justify-between px-4 py-3 border-t border-border-secondary/80 dark:border-surface-dim/80 bg-surface-dim/50 dark:bg-surface-dim/30">
           <button
             onClick={() => {
               reset();
               resetRetryConfig();
               persistRetry(RETRY_DEFAULTS);
             }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary hover:bg-surface-hover/60 dark:hover:bg-surface-hover/60 transition-colors"
           >
             <RotateCcw className="w-3 h-3" />
             <span>{t("reset")}</span>
           </button>
           <button
             onClick={onClose}
-            className="px-4 py-1.5 rounded-md text-xs bg-indigo-600 text-white hover:bg-indigo-500 transition-colors"
+            className="px-4 py-1.5 rounded-md text-xs bg-semantic-accent text-white hover:bg-semantic-accent/80 transition-colors"
           >
             {t("close")}
           </button>
@@ -353,7 +371,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
 
 function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
-    <div className="text-[11px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+    <div className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide">
       {children}
     </div>
   );
@@ -385,13 +403,13 @@ function SelectRow<T extends number>({
   return (
     <div className="flex items-center gap-3 py-2 px-1">
       <div className="flex-1 min-w-0">
-        <div className="text-[13px] text-gray-800 dark:text-gray-200 font-medium">{label}</div>
-        <div className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">{desc}</div>
+        <div className="text-[13px] text-text-primary font-medium">{label}</div>
+        <div className="text-[11px] text-text-tertiary mt-0.5">{desc}</div>
       </div>
       <select
         value={value}
         onChange={(e) => onChange(Number(e.target.value) as T)}
-        className="h-7 px-2 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-[12px] text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+        className="h-7 px-2 rounded-md border border-border-secondary bg-bg-elevated dark:bg-surface-dim text-[12px] text-text-secondary focus:outline-none focus:ring-1 focus:ring-semantic-accent cursor-pointer"
       >
         {options.map((opt) => (
           <option key={opt.value} value={opt.value}>
@@ -420,16 +438,16 @@ function BackoffPreview({
   }
 
   return (
-    <div className="mt-1 px-1 py-2 rounded-lg bg-gray-50 dark:bg-gray-800/40 border border-gray-100 dark:border-gray-800">
+    <div className="mt-1 px-1 py-2 rounded-lg bg-surface-dim dark:bg-surface-dim/40 border-border-secondary dark:border-surface-dim">
       <div className="flex items-center justify-between mb-1">
-        <div className="text-[11px] text-gray-400 dark:text-gray-500">{t("retryPreview")}</div>
+        <div className="text-[11px] text-text-tertiary">{t("retryPreview")}</div>
         <div
-          className={`text-[11px] font-medium ${totalMs >= 7200000 ? "text-green-500" : totalMs >= 3600000 ? "text-amber-500" : "text-gray-400 dark:text-gray-500"}`}
+          className={`text-[11px] font-medium ${totalMs >= 7200000 ? "text-status-success" : totalMs >= 3600000 ? "text-status-warning" : "text-text-tertiary"}`}
         >
           {t("retryTotal")}: {formatMs(totalMs)}
         </div>
       </div>
-      <div className="text-[11px] text-gray-500 dark:text-gray-400 font-mono flex flex-wrap gap-x-3 gap-y-0.5">
+      <div className="text-[11px] text-text-tertiary font-mono flex flex-wrap gap-x-3 gap-y-0.5">
         {steps.map((s) => (
           <span key={s}>{s}</span>
         ))}
@@ -449,7 +467,7 @@ function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: () =>
         onChange();
       }}
       className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-        checked ? "bg-indigo-500" : "bg-gray-300 dark:bg-gray-600"
+        checked ? "bg-semantic-accent" : "bg-surface-hover dark:bg-text-secondary"
       }`}
     >
       <span

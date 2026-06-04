@@ -117,9 +117,9 @@ export function CommandPopup({
   return (
     <div
       ref={panelRef}
-      className="absolute left-0 right-0 bottom-full mb-2 max-w-md mx-auto bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg shadow-xl shadow-black/40 overflow-hidden z-50"
+      className="absolute left-0 right-0 bottom-full mb-2 max-w-md mx-auto bg-surface-dim dark:bg-surface-code border border-border-secondary rounded-lg shadow-xl shadow-black/40 overflow-hidden z-50"
     >
-      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-gray-800">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-border-secondary">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           {popupMode === "at" ? (
             <div className="flex gap-1 shrink-0">
@@ -129,8 +129,8 @@ export function CommandPopup({
                   onClick={() => onSetAtTab(tab.key)}
                   className={`px-2.5 py-0.5 rounded text-xs transition-colors whitespace-nowrap ${
                     atTab === tab.key
-                      ? "bg-indigo-600/30 text-indigo-300"
-                      : "text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                      ? "bg-semantic-accent/30 text-semantic-accent"
+                      : "text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary hover:bg-surface-dim dark:hover:bg-surface-dim"
                   }`}
                 >
                   {t(tab.labelKey)}
@@ -139,22 +139,22 @@ export function CommandPopup({
             </div>
           ) : (
             <div className="flex items-center gap-2 flex-1 min-w-0">
-              <Search className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+              <Search className="w-3.5 h-3.5 text-text-tertiary shrink-0" />
               <input
                 ref={searchRef}
                 type="text"
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
                 placeholder={t("quickAction.searchPlaceholder")}
-                className="flex-1 bg-transparent text-sm text-gray-800 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-600 outline-none min-w-0"
+                className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-tertiary dark:placeholder:text-text-tertiary outline-none min-w-0"
               />
             </div>
           )}
-          {loading && <Loader2 className="w-3.5 h-3.5 text-gray-500 animate-spin shrink-0" />}
+          {loading && <Loader2 className="w-3.5 h-3.5 text-text-tertiary animate-spin shrink-0" />}
         </div>
         <button
           onClick={onClose}
-          className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors shrink-0 ml-1"
+          className="p-1 rounded hover:bg-surface-dim dark:hover:bg-surface-dim text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary transition-colors shrink-0 ml-1"
           title={t("common:close")}
         >
           <X className="w-3.5 h-3.5" />
@@ -162,22 +162,22 @@ export function CommandPopup({
       </div>
 
       {popupMode === "at" && atTab === "files" && fileBreadcrumbs.length > 0 && (
-        <div className="flex items-center gap-1 px-3 py-1.5 border-b border-gray-200/40 dark:border-gray-800/40 text-xs overflow-x-auto">
+        <div className="flex items-center gap-1 px-3 py-1.5 border-b border-border-secondary/40 text-xs overflow-x-auto">
           <button
             onClick={() => onBreadcrumb(-1)}
-            className="text-indigo-400 hover:text-indigo-300 shrink-0"
+            className="text-semantic-accent hover:text-semantic-accent shrink-0"
           >
             {t("quickAction.rootDir")}
           </button>
           {fileBreadcrumbs.map((bc, i) => (
             <span key={bc.path} className="flex items-center gap-1 shrink-0">
-              <ChevronRight className="w-3 h-3 text-gray-400 dark:text-gray-600" />
+              <ChevronRight className="w-3 h-3 text-text-tertiary" />
               <button
                 onClick={() => onBreadcrumb(i)}
                 className={`${
                   i === fileBreadcrumbs.length - 1
-                    ? "text-gray-700 dark:text-gray-300"
-                    : "text-indigo-400 hover:text-indigo-300"
+                    ? "text-text-secondary"
+                    : "text-semantic-accent hover:text-semantic-accent"
                 }`}
               >
                 {bc.label}
@@ -189,7 +189,7 @@ export function CommandPopup({
 
       <div className="max-h-[240px] min-h-[80px] overflow-y-auto" role="listbox">
         {filteredItems.length === 0 && !loading && (
-          <div className="px-3 py-6 text-center text-xs text-gray-400 dark:text-gray-600">
+          <div className="px-3 py-6 text-center text-xs text-text-tertiary">
             {searchText || query ? t("quickAction.noMatchResults") : t("common:noData")}
           </div>
         )}
@@ -204,22 +204,18 @@ export function CommandPopup({
             onMouseEnter={() => onSetActiveIndex(idx)}
             className={`w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors ${
               idx === activeIndex
-                ? "bg-gray-100/80 dark:bg-gray-800/80"
-                : "hover:bg-gray-100/50 dark:hover:bg-gray-800/50"
+                ? "bg-surface-code/80 dark:bg-surface-dim/80"
+                : "hover:bg-surface-code/50 dark:hover:bg-surface-dim/50"
             }`}
           >
             <div className={`shrink-0 ${item.accentColor}`}>{renderIcon(item.icon)}</div>
             <div className="min-w-0 flex-1">
-              <div className="text-sm text-gray-800 dark:text-gray-200 truncate">{item.label}</div>
+              <div className="text-sm text-text-primary truncate">{item.label}</div>
               {item.description && !item.isFolder && (
-                <div className="text-[11px] text-gray-400 dark:text-gray-600 truncate">
-                  {item.description}
-                </div>
+                <div className="text-[11px] text-text-tertiary truncate">{item.description}</div>
               )}
             </div>
-            {item.isFolder && (
-              <ChevronRight className="w-3.5 h-3.5 text-gray-400 dark:text-gray-600 shrink-0" />
-            )}
+            {item.isFolder && <ChevronRight className="w-3.5 h-3.5 text-text-tertiary shrink-0" />}
           </button>
         ))}
       </div>

@@ -27,6 +27,9 @@ vi.mock("../src/mainview/stores/use-chat-store", () => ({
       loadSessionMessages: vi.fn().mockResolvedValue(undefined),
       clearSessionMessages: mockClearSessionMessages,
       messagesBySession: mockMessagesBySession,
+      saveInputDraft: vi.fn(),
+      restoreInputDraft: vi.fn(),
+      clearInputDraft: vi.fn(),
     })),
     setState: vi.fn(),
   },
@@ -46,7 +49,7 @@ vi.mock("../src/mainview/stores/use-explorer-store", () => ({
 
 vi.mock("../src/mainview/stores/use-status-store", () => ({
   useStatusStore: {
-    getState: vi.fn(() => ({ setPlugins: vi.fn(), setSkills: vi.fn() })),
+    getState: vi.fn(() => ({ setPlugins: vi.fn(), setSkills: vi.fn(), clearSessionData: vi.fn() })),
   },
   deriveSkillScope: vi.fn(() => "project"),
   derivePluginScope: vi.fn(() => "project"),

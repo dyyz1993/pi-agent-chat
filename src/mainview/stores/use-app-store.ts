@@ -3,6 +3,9 @@ import { apiClient } from "../lib/api-client";
 import type { RPCMethods } from "../lib/api-client";
 import type { MethodResult } from "@dyyz1993/rpc-core";
 import type { DemoMethod } from "../types";
+import { createLogger } from "../../shared/lib/logger";
+
+const log = createLogger("system");
 
 type DemoResult =
   | MethodResult<RPCMethods, "system.ping">
@@ -12,6 +15,7 @@ type DemoResult =
 interface AppState {
   mode: "desktop" | "web";
   ready: boolean;
+  initError: string | null;
   restored: boolean;
   logs: string[];
   method: DemoMethod;
@@ -33,6 +37,7 @@ interface AppState {
 export const useAppStore = create<AppState>((set, get) => ({
   mode: "web",
   ready: false,
+  initError: null,
   restored: false,
   logs: [],
   method: "system.ping",
@@ -53,19 +58,23 @@ export const useAppStore = create<AppState>((set, get) => ({
         set({
           mode: transport === "ipc" ? "desktop" : "web",
           ready: true,
+          initError: null,
         });
         get().addLog(
           `${transport === "ipc" ? "Desktop" : "Web"} mode - ${transport.toUpperCase()}`,
         );
-      } catch {
+      } catch (e) {
+        log.warn("API client initialization failed", { retries, error: String(e) });
         retries++;
         if (retries < MAX_RETRIES) {
           setTimeout(init, 1000);
         } else {
+          set({ ready: false, initError: `Failed to connect after ${MAX_RETRIES} retries` });
           get().addLog(`Failed to connect after ${MAX_RETRIES} retries`);
         }
       }
     };
+    set({ initError: null });
     init();
 
     apiClient.onConnectionChange((status) => {

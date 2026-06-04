@@ -187,7 +187,9 @@ describe("useGitStore", () => {
 
   it("addWorktree success appends new worktree", async () => {
     const newWt = { path: "/wt2", branch: "feat2", isMain: false };
-    mockCall.mockResolvedValueOnce({ worktree: newWt });
+    mockCall
+      .mockResolvedValueOnce({ worktree: newWt })
+      .mockResolvedValueOnce({ worktrees: [newWt] });
     const result = await useGitStore.getState().addWorktree(REPO, "feat2");
     expect(result).toEqual(newWt);
     expect(useGitStore.getState().worktrees).toContainEqual(newWt);

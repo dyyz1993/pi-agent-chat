@@ -2,6 +2,7 @@ import type { SessionMeta, ProjectTab, SessionStatus } from "../types";
 import type { BashChannelEvent } from "../../shared/modules/bash";
 import type { LspChannelEvent } from "../../shared/modules/lsp";
 import type { RulesChannelEvent } from "../../shared/modules/rules";
+import type { SupervisorChannelEvent } from "../../shared/modules/supervisor";
 import { apiClient } from "../lib/api-client";
 import { useSessionStore, insertAfterPinned } from "./use-session-store";
 import { useChatStore } from "./use-chat-store";
@@ -13,6 +14,8 @@ import { useMemoryStore } from "./use-memory-store";
 import { useTurnStore } from "./use-turn-store";
 import { useChatNavStore } from "./use-chat-nav-store";
 import { useSupervisorStore } from "./use-supervisor-store";
+import { useStatusStore } from "./use-status-store";
+import { useChangeReviewStore } from "./use-change-review-store";
 import { handleAgentEvent, toolCallNameMap } from "./agent-event-handler";
 import { notificationGateway } from "../lib/notification-gateway";
 import { useAppStore } from "./use-app-store";
@@ -72,10 +75,14 @@ export function setupSubscriptions(
     }));
 
     apiClient
-      .subscribe("agent.event", (payload) => {
-        if (payload.sessionId !== id) return;
-        handleAgentEvent(id, payload.event);
-      })
+      .subscribe(
+        "agent.event",
+        (payload) => {
+          if (payload.sessionId !== id) return;
+          handleAgentEvent(id, payload.event);
+        },
+        { sessionId: id },
+      )
       .then((subId) => {
         set((s) => ({
           agentSubscriptions: { ...s.agentSubscriptions, [id]: subId },
@@ -476,10 +483,7 @@ export function setupSubscriptions(
     apiClient
       .subscribe(
         "supervisor.event",
-        (payload: {
-          sessionId: string;
-          event: import("../../shared/modules/supervisor").SupervisorChannelEvent;
-        }) => {
+        (payload: { sessionId: string; event: SupervisorChannelEvent }) => {
           if (payload.sessionId !== id) return;
           useSupervisorStore.getState().handleEvent(id, payload.event);
         },
@@ -516,18 +520,38 @@ export function setupSubscriptions(
         (payload: { parentSessionId: string; session: SessionMeta }) => {
           if (payload.parentSessionId !== id) return;
 
+          const projectPath = payload.session.projectPath;
+
           useSessionStore.setState((s) => {
-            const projectPath = payload.session.projectPath;
             const sessions = s.sessionsByProject[projectPath] || [];
             if (sessions.find((sess) => sess.sessionId === payload.session.sessionId)) {
               return {};
             }
-            return {
+            if (sessions.find((sess) => sess.sessionPath === payload.session.sessionPath)) {
+              return {};
+            }
+
+            const updates: Record<string, unknown> = {
               sessionsByProject: {
                 ...s.sessionsByProject,
                 [projectPath]: insertAfterPinned(sessions, payload.session),
               },
             };
+
+            const tabExists = s.projectTabs.find((t) => t.path === projectPath);
+            if (!tabExists) {
+              const projectName = projectPath.split("/").pop() ?? projectPath;
+              const newTab: ProjectTab = {
+                id: `tab-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                name: projectName,
+                path: projectPath,
+              };
+              const nextTabs = [...s.projectTabs, newTab];
+              syncTabsToBackend(nextTabs, s.activeProjectId);
+              updates.projectTabs = nextTabs;
+            }
+
+            return updates;
           });
         },
         { parentSessionId: id },
@@ -589,7 +613,33 @@ export function cleanupSession(state: SubscriptionMaps, sessionId: string): void
   }
 }
 
-export function cleanupSessionData(sessionId: string): void {
+/**
+ * Light cleanup: reset lightweight UI state while preserving status.
+ * Keeps heavy data (messages, bash logs, memory) in cache for fast tab-switch-back.
+ * Status is NOT reset here — the backend `agent.session_status_changed` subscription
+ * and `agent.event` subscription continue to push accurate status for background sessions.
+ * This ensures the TabBar and session list always reflect the true running state
+ * even when the user switches away from an active session.
+ */
+export function cleanupSessionLight(sessionId: string): void {
+  // Reset toolCallNameMap for this session (same as cleanupSession)
+  const msgs = useChatStore.getState().messagesBySession[sessionId] || [];
+  for (const msg of msgs) {
+    if (msg.role === "assistant") {
+      for (const block of msg.content) {
+        if (block.type === "toolExecution") {
+          delete toolCallNameMap[block.toolCallId];
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Heavy cleanup: remove all cached data from all stores (same as old cleanupSessionData).
+ * Used when LRU eviction kicks in, or when a session is deleted.
+ */
+export function cleanupSessionHeavy(sessionId: string): void {
   useChatStore.getState().clearSessionMessages(sessionId);
   useTurnStore.getState().clearSessionUI(sessionId);
   useChatNavStore.getState().clearSessionUI(sessionId);
@@ -598,6 +648,13 @@ export function cleanupSessionData(sessionId: string): void {
   useBashStore.getState().clearSession(sessionId);
   useLspStore.getState().clearSession(sessionId);
   useSupervisorStore.getState().clearSession(sessionId);
+  useStatusStore.getState().clearSessionData();
+  useChangeReviewStore.getState().clearAll();
+}
+
+/** @deprecated Use cleanupSessionLight or cleanupSessionHeavy instead */
+export function cleanupSessionData(sessionId: string): void {
+  cleanupSessionHeavy(sessionId);
 }
 
 export function clearSubscriptionState(
@@ -638,6 +695,35 @@ export function syncTabsToBackend(tabs: ProjectTab[], activeTabId: string | null
 }
 
 let projectStatusSubId: string | null = null;
+let sessionRenamedSubId: string | null = null;
+
+export function setupSessionRenamedSubscription(): void {
+  if (sessionRenamedSubId) return;
+
+  apiClient
+    .subscribe(
+      "agent.session_renamed",
+      (payload: { sessionId: string; projectPath: string; newName: string }) => {
+        const s = useSessionStore.getState();
+        const sessions = s.sessionsByProject[payload.projectPath];
+        if (!sessions) return;
+        const idx = sessions.findIndex((sess) => sess.sessionId === payload.sessionId);
+        if (idx === -1) return;
+        const updated = [...sessions];
+        updated[idx] = { ...updated[idx], name: payload.newName };
+        useSessionStore.setState({
+          sessionsByProject: { ...s.sessionsByProject, [payload.projectPath]: updated },
+        });
+      },
+      {},
+    )
+    .then((subId) => {
+      sessionRenamedSubId = subId;
+    })
+    .catch((err) => {
+      useAppStore.getState().addLog(`[sub] ${String(err)}`);
+    });
+}
 
 export function setupProjectStatusSubscription(): void {
   if (projectStatusSubId) return;

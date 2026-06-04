@@ -137,36 +137,6 @@ describe("MessageSelectionBar", () => {
     expect(onDeleteSelected).toHaveBeenCalledWith(["msg-1", "msg-2"]);
   });
 
-  it("click Remember calls apiClient.call with memory.remember", () => {
-    render(
-      <MessageSelectionBar
-        messageIds={["msg-1", "msg-2"]}
-        messages={[
-          makeMessage("msg-1", "user", "hello world"),
-          makeMessage("msg-2", "assistant", "hi there"),
-        ]}
-      />,
-    );
-    fireEvent.click(screen.getByTitle("saveAsMemory"));
-    expect(mockApiCall).toHaveBeenCalledWith("memory.remember", {
-      projectPath: "/test",
-      sessionId: "test-session",
-      messageIds: ["msg-1", "msg-2"],
-      content: "[user]: hello world\n\n[assistant]: hi there",
-    });
-  });
-
-  it("click Remember calls clear() after API call", () => {
-    render(
-      <MessageSelectionBar
-        messageIds={["msg-1"]}
-        messages={[makeMessage("msg-1", "user", "test")]}
-      />,
-    );
-    fireEvent.click(screen.getByTitle("saveAsMemory"));
-    expect(mockClearSelection).toHaveBeenCalled();
-  });
-
   it("click X (cancel) calls clear()", () => {
     render(
       <MessageSelectionBar

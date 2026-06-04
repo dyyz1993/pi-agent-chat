@@ -66,10 +66,10 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     }
 
     try {
-      const result = await Promise.race([
-        pm.callChannel(sid, "rules-engine", "getSnapshot", { cwd: cwd ?? "" }),
+      const result: unknown = (await Promise.race([
+        pm.callChannel(sid, "rules-engine", "getSnapshot", { cwd: cwd ?? "" }) as Promise<unknown>,
         new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
-      ]);
+      ])) as unknown;
 
       if (
         result &&

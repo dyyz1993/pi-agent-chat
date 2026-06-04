@@ -1,10 +1,69 @@
-import { useMemo, memo } from "react";
+import { useMemo, memo, useCallback } from "react";
 import { Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Virtualizer, type VirtualizerHandle } from "virtua";
 import { MessageCard } from "./MessageCard";
 import type { ChatMessage } from "../../types";
 import { ALL_MEMORY_TYPE_KEYS } from "./memory-config";
+import { useChatStore } from "../../stores/use-chat-store";
+import { useSubagentStore } from "../../stores/use-subagent-store";
+import { useSessionStore } from "../../stores/use-session-store";
+import { createLogger } from "../../../shared/lib/logger";
+
+const renderLog = createLogger("render-cache");
+
+const EMPTY_MSGS: ChatMessage[] = [];
+
+const MAX_CACHE_SIZE = 10;
+
+interface CacheEntry<T> {
+  ref: ChatMessage[];
+  result: T;
+}
+
+const _processedMessagesCache = new Map<string, CacheEntry<ProcessedMessage[]>>();
+
+interface CardMetaEntry {
+  cardLabel: string | undefined;
+  prevBarColor: string | undefined;
+}
+
+const _cardMetaCache = new Map<string, CacheEntry<Map<string, CardMetaEntry>>>();
+
+function evictIfNeeded<K, V>(cache: Map<K, V>): void {
+  if (cache.size > MAX_CACHE_SIZE) {
+    const firstKey = cache.keys().next().value;
+    if (firstKey !== undefined) cache.delete(firstKey);
+  }
+}
+
+/**
+ * Stable selector: only returns a new reference when message count or
+ * last message id actually changes. This prevents unnecessary re-renders
+ * when the array is replaced with identical content.
+ */
+function useStableMessages(source: "main" | "sub"): ChatMessage[] {
+  const sessionId = useSessionStore((s) => s.activeSessionId);
+  const activeSubId = useSubagentStore((s) => s.activeSubsessionId);
+
+  const selector = useCallback(
+    (s: { messagesBySession: Record<string, ChatMessage[]> }) => {
+      if (!sessionId) return EMPTY_MSGS;
+      return s.messagesBySession[sessionId] || EMPTY_MSGS;
+    },
+    [sessionId],
+  );
+
+  const subSelector = useCallback(
+    (s: { messagesBySubsession: Record<string, ChatMessage[]> }) => {
+      if (!activeSubId) return EMPTY_MSGS;
+      return s.messagesBySubsession[activeSubId] || EMPTY_MSGS;
+    },
+    [activeSubId],
+  );
+
+  return source === "sub" ? useSubagentStore(subSelector) : useChatStore(selector);
+}
 
 interface ProcessedMessage {
   msg: ChatMessage;
@@ -95,27 +154,64 @@ function buildCardMeta(
 }
 
 interface MessageListViewProps {
-  messages: ChatMessage[];
+  /** Which message source to read from store */
+  source: "main" | "sub";
   scrollRef?: React.RefObject<HTMLDivElement | null>;
   vlistRef?: React.RefObject<VirtualizerHandle> | React.Ref<VirtualizerHandle>;
   onScroll?: () => void;
   onScrollEnd?: () => void;
   isLoadingMore?: boolean;
   hasMoreMessages?: boolean;
+  activeSessionId?: string;
 }
 
 export const MessageListView = memo(function MessageListView({
-  messages,
+  source,
   scrollRef,
   vlistRef,
   onScroll,
   onScrollEnd,
   isLoadingMore,
   hasMoreMessages,
+  activeSessionId,
 }: MessageListViewProps) {
+  const messages = useStableMessages(source);
   const { t } = useTranslation("chat");
-  const cardMeta = useMemo(() => buildCardMeta(messages, t), [messages, t]);
-  const processedMessages = useMemo(() => buildProcessedMessages(messages), [messages]);
+  const cardMeta = useMemo(() => {
+    if (!activeSessionId) return buildCardMeta(messages, t);
+    const cached = _cardMetaCache.get(activeSessionId);
+    if (cached && cached.ref === messages) {
+      renderLog.info("cache HIT (cardMeta)", {
+        sessionId: activeSessionId,
+        count: messages.length,
+      });
+      return cached.result;
+    }
+    renderLog.info("cache MISS (cardMeta)", { sessionId: activeSessionId, count: messages.length });
+    const result = buildCardMeta(messages, t);
+    _cardMetaCache.set(activeSessionId, { ref: messages, result });
+    evictIfNeeded(_cardMetaCache);
+    return result;
+  }, [messages, t, activeSessionId]);
+  const processedMessages = useMemo(() => {
+    if (!activeSessionId) return buildProcessedMessages(messages);
+    const cached = _processedMessagesCache.get(activeSessionId);
+    if (cached && cached.ref === messages) {
+      renderLog.info("cache HIT (processedMessages)", {
+        sessionId: activeSessionId,
+        count: messages.length,
+      });
+      return cached.result;
+    }
+    renderLog.info("cache MISS (processedMessages)", {
+      sessionId: activeSessionId,
+      count: messages.length,
+    });
+    const result = buildProcessedMessages(messages);
+    _processedMessagesCache.set(activeSessionId, { ref: messages, result });
+    evictIfNeeded(_processedMessagesCache);
+    return result;
+  }, [messages, activeSessionId]);
 
   if (messages.length === 0 && scrollRef) {
     return (
@@ -124,7 +220,7 @@ export const MessageListView = memo(function MessageListView({
         className="h-full overflow-y-auto overflow-x-hidden overscroll-y-contain"
         style={{ overflowAnchor: "none" }}
       >
-        <div className="flex flex-col items-center justify-center h-full text-gray-600 text-sm gap-2">
+        <div className="flex flex-col items-center justify-center h-full text-text-secondary text-sm gap-2">
           <p>{t("startConversation")}</p>
         </div>
       </div>
@@ -139,11 +235,11 @@ export const MessageListView = memo(function MessageListView({
         scrollbarWidth: "thin",
         scrollbarColor: "transparent transparent",
         overflowAnchor: "none",
-        willChange: "scroll-position",
+        willChange: undefined,
       }}
       onMouseEnter={(e) => {
         (e.currentTarget as HTMLElement).style.scrollbarColor =
-          "rgba(55, 65, 81, 0.12) transparent";
+          "color-mix(in srgb, var(--color-text-tertiary) 28%, transparent) transparent";
       }}
       onMouseLeave={(e) => {
         (e.currentTarget as HTMLElement).style.scrollbarColor = "transparent transparent";
@@ -152,9 +248,9 @@ export const MessageListView = memo(function MessageListView({
       {(isLoadingMore ?? hasMoreMessages) && (
         <div className="flex items-center justify-center py-2">
           {isLoadingMore ? (
-            <Loader2 className="w-4 h-4 text-gray-500 animate-spin" />
+            <Loader2 className="w-4 h-4 text-text-tertiary animate-spin" />
           ) : hasMoreMessages ? (
-            <span className="text-[10px] text-gray-600">{t("scrollUpToLoadMore")}</span>
+            <span className="text-[10px] text-text-secondary">{t("scrollUpToLoadMore")}</span>
           ) : null}
         </div>
       )}
@@ -169,7 +265,7 @@ export const MessageListView = memo(function MessageListView({
           if (item.hide) return <div key={item.msg.id} style={{ height: 0 }} />;
           const meta = cardMeta.get(item.msg.id);
           return (
-            <div key={item.msg.id} data-msg-id={item.msg.id} className="py-0.5 pl-2 pr-3">
+            <div key={item.msg.id} data-msg-id={item.msg.id} className="py-0.5 pl-1 pr-1.5">
               <MessageCard
                 message={item.msg}
                 cardLabel={meta?.cardLabel}

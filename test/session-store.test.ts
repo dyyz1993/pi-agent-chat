@@ -27,6 +27,9 @@ vi.mock("../src/mainview/stores/use-chat-store", () => ({
       loadSessionMessages: vi.fn().mockResolvedValue(undefined),
       clearSessionMessages: vi.fn(),
       messagesBySession: {},
+      saveInputDraft: vi.fn(),
+      restoreInputDraft: vi.fn(),
+      clearInputDraft: vi.fn(),
     })),
     setState: vi.fn(),
   },
@@ -64,10 +67,52 @@ vi.mock("../src/mainview/stores/use-chat-nav-store", () => ({
   },
 }));
 
+vi.mock("../src/mainview/stores/use-git-store", () => ({
+  useGitStore: {
+    getState: vi.fn(() => ({
+      checkGitRepo: vi.fn().mockResolvedValue(false),
+      fetchWorktrees: vi.fn(),
+      fetchStatus: vi.fn(),
+      fetchBranches: vi.fn(),
+    })),
+  },
+}));
+
+vi.mock("../src/mainview/stores/use-memory-store", () => ({
+  useMemoryStore: {
+    getState: vi.fn(() => ({ clearSessionData: vi.fn() })),
+  },
+}));
+
+vi.mock("../src/mainview/stores/use-rules-store", () => ({
+  useRulesStore: {
+    getState: vi.fn(() => ({ clearSessionData: vi.fn() })),
+  },
+}));
+
+vi.mock("../src/mainview/stores/use-bash-store", () => ({
+  useBashStore: {
+    getState: vi.fn(() => ({ clearSessionData: vi.fn() })),
+  },
+}));
+
+vi.mock("../src/mainview/stores/use-lsp-store", () => ({
+  useLspStore: {
+    getState: vi.fn(() => ({ clearSessionData: vi.fn() })),
+  },
+}));
+
+vi.mock("../src/mainview/stores/use-supervisor-store", () => ({
+  useSupervisorStore: {
+    getState: vi.fn(() => ({ clearSessionData: vi.fn() })),
+  },
+}));
+
 vi.mock("../src/mainview/stores/session-subscriptions", () => ({
   setupSubscriptions: vi.fn(),
   cleanupSession: vi.fn(),
   cleanupSessionData: vi.fn(),
+  cleanupSessionLight: vi.fn(),
   clearSubscriptionState: (s: Record<string, unknown>) => {
     delete (s as Record<string, unknown>).agentSubscriptions;
     return {};
@@ -77,18 +122,20 @@ vi.mock("../src/mainview/stores/session-subscriptions", () => ({
 
 import { useSessionStore } from "../src/mainview/stores/use-session-store";
 import { apiClient } from "../src/mainview/lib/api-client";
+import { setupSubscriptions } from "../src/mainview/stores/session-subscriptions";
 import type { SessionMeta, ProjectTab } from "../src/mainview/types";
 
-const mockedCall = vi.mocked(apiClient.call);
+const mockedCall = apiClient.call as unknown as ReturnType<typeof vi.fn>;
 
 const TAB_A: ProjectTab = { id: "tab-a", name: "Project A", path: "/project-a" };
 const TAB_B: ProjectTab = { id: "tab-b", name: "Project B", path: "/project-b" };
 
 function makeSession(overrides: Partial<SessionMeta> = {}): SessionMeta {
+  const sid = overrides.sessionId ?? "sess-1";
   return {
-    sessionId: "sess-1",
+    sessionId: sid,
     name: "",
-    sessionPath: "/sessions/sess-1",
+    sessionPath: `/sessions/${sid}`,
     projectPath: "/project-a",
     parentSessionPath: null,
     messageCount: 0,
@@ -174,6 +221,63 @@ describe("removeProjectTab", () => {
     useSessionStore.getState().addProjectTab(TAB_B);
     useSessionStore.getState().removeProjectTab("tab-a");
     expect(useSessionStore.getState().projectTabs[0].id).toBe("tab-b");
+  });
+
+  it("calls setActiveProject for the new tab when closing the active project tab", async () => {
+    const sessions = [makeSession({ sessionId: "sess-b1", projectPath: "/project-b" })];
+    mockedCall.mockResolvedValueOnce({ sessions });
+
+    useSessionStore.setState({
+      projectTabs: [TAB_A, TAB_B],
+      activeProjectId: "tab-b",
+      activeSessionId: "sess-old",
+      sessionsByProject: {},
+    });
+
+    useSessionStore.getState().removeProjectTab("tab-b");
+
+    await vi.waitFor(() => {
+      const state = useSessionStore.getState();
+      expect(state.activeProjectId).toBe("tab-a");
+      expect(state._projectVersion).toBeGreaterThan(0);
+      expect(state.activeSessionId).not.toBe("sess-old");
+    });
+
+    expect(mockedCall).toHaveBeenCalledWith(
+      "project.scanSessions",
+      expect.objectContaining({ projectPath: "/project-a" }),
+    );
+  });
+
+  it("does not call setActiveProject when closing a non-active tab", () => {
+    const versionBefore = useSessionStore.getState()._projectVersion;
+
+    useSessionStore.setState({
+      projectTabs: [TAB_A, TAB_B],
+      activeProjectId: "tab-a",
+      activeSessionId: "sess-a",
+      sessionsByProject: { "/project-a": [makeSession({ sessionId: "sess-a" })] },
+    });
+
+    useSessionStore.getState().removeProjectTab("tab-b");
+
+    expect(useSessionStore.getState()._projectVersion).toBe(versionBefore);
+    expect(useSessionStore.getState().activeProjectId).toBe("tab-a");
+  });
+
+  it("does not call setActiveProject when closing the last remaining tab", () => {
+    const versionBefore = useSessionStore.getState()._projectVersion;
+
+    useSessionStore.setState({
+      projectTabs: [TAB_A],
+      activeProjectId: "tab-a",
+      activeSessionId: "sess-a",
+    });
+
+    useSessionStore.getState().removeProjectTab("tab-a");
+
+    expect(useSessionStore.getState().activeProjectId).toBeNull();
+    expect(useSessionStore.getState()._projectVersion).toBe(versionBefore);
   });
 });
 
@@ -367,6 +471,52 @@ describe("deleteSession", () => {
     useSessionStore.getState().deleteSession("sess-2");
 
     expect(useSessionStore.getState().activeSessionId).toBe("sess-1");
+  });
+
+  it("switches to next session via setActiveSession when deleting the active session and others remain", async () => {
+    const sessA = makeSession({ sessionId: "sess-a" });
+    const sessB = makeSession({ sessionId: "sess-b" });
+    useSessionStore.setState({
+      sessionsByProject: { "/project-a": [sessA, sessB] },
+      activeSessionId: "sess-a",
+      activeProjectId: "tab-a",
+      projectTabs: [TAB_A],
+    });
+
+    useSessionStore.getState().deleteSession("sess-a");
+
+    const state = useSessionStore.getState();
+    expect(state.sessionsByProject["/project-a"]).toHaveLength(1);
+    expect(state.sessionsByProject["/project-a"][0].sessionId).toBe("sess-b");
+    expect(state.activeSessionId).toBe("sess-b");
+
+    await vi.waitFor(() => {
+      expect(setupSubscriptions).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        "sess-b",
+        expect.objectContaining({ sessionId: "sess-b" }),
+      );
+    });
+
+    expect(apiClient.call).toHaveBeenCalledWith(
+      "agent.start",
+      expect.objectContaining({ sessionId: "sess-b" }),
+    );
+  });
+
+  it("sets activeSessionId to null when deleting the last session in project", () => {
+    const session = makeSession({ sessionId: "only-one" });
+    useSessionStore.setState({
+      sessionsByProject: { "/project-a": [session] },
+      activeSessionId: "only-one",
+      activeProjectId: "tab-a",
+      projectTabs: [TAB_A],
+    });
+
+    useSessionStore.getState().deleteSession("only-one");
+
+    expect(useSessionStore.getState().activeSessionId).toBeNull();
   });
 });
 

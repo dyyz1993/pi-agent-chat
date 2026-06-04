@@ -135,11 +135,17 @@
   "picker.newFolderName": "Folder name",
   "picker.createFolderError": "Failed to create folder",
   "picker.folderExists": "Folder already exists",
+  "picker.sortByModified": "Sort by modified time",
+  "picker.sortByName": "Sort by name",
+  "picker.sortModified": "Modified",
+  "picker.sortName": "Name",
   "currentAgent": "Current Agent",
   "closeProjectTitle": "Close Project",
   "closeProjectRunningMessage": "\"{{name}}\" has running sessions. What would you like to do?",
   "closeProjectIdleMessage": "Close project \"{{name}}\"?",
   "closeProjectContinue": "Keep Running",
   "closeProjectStop": "Stop",
-  "closeProjectClose": "Close"
+  "closeProjectClose": "Close",
+  "hasPendingPermissions": "Has pending permission requests",
+  "changeReview": "Change Review"
 }

@@ -40,8 +40,14 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   const m = getManager();
 
   r("agent.start", async (params) => {
-    log.info("start called", { sessionId: params.sessionId, projectPath: params.projectPath });
-    const result = await m.start(params.sessionId, params.projectPath, params.sessionPath);
+    log.info("start called", {
+      sessionId: params.sessionId,
+      projectPath: params.projectPath,
+      forceNewProcess: params.forceNewProcess,
+    });
+    const result = await m.start(params.sessionId, params.projectPath, params.sessionPath, {
+      forceNewProcess: params.forceNewProcess,
+    });
     log.info("start result", { result });
     return result;
   });
@@ -52,7 +58,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
   r("agent.send", async (params) => {
     log.info("send called", { sessionId: params.sessionId, content: params.content });
-    const ok = m.send(params.sessionId, params.content);
+    const ok = await m.send(params.sessionId, params.content, params.images);
     if (!ok) {
       throw new Error(`Agent not started for session ${params.sessionId}`);
     }
@@ -60,7 +66,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("agent.stop", async (params) => {
-    const ok = m.stop(params.sessionId);
+    const ok = await m.stop(params.sessionId);
     return { ok };
   });
 
@@ -94,20 +100,26 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("agent.getFullMessages", async (params) => {
-    const result = await m.getFullMessages(params.sessionId, params.sessionPath);
+    const result = await m.getFullMessages(params.sessionId, params.sessionPath, {
+      limit: params.limit,
+      afterEntryId: params.afterEntryId,
+    });
     return {
       messages: result.messages,
       customEntries: result.customEntries,
+      hasMore: result.hasMore,
+      totalCount: result.totalCount,
+      nextCursor: result.nextCursor,
     } as R<"agent.getFullMessages">;
   });
 
   r("agent.steer", async (params) => {
-    const ok = m.steer(params.sessionId, params.content);
+    const ok = m.steer(params.sessionId, params.content, params.images);
     return { ok };
   });
 
   r("agent.followUp", async (params) => {
-    const ok = m.followUp(params.sessionId, params.content);
+    const ok = m.followUp(params.sessionId, params.content, params.images);
     return { ok };
   });
 
@@ -171,6 +183,12 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   r("agent.setFollowUpMode", async (params) => {
     await m.setFollowUpMode(params.sessionId, params.mode);
     return { ok: true };
+  });
+
+  r("agent.setPermissionMode", async (params) => {
+    return m.setPermissionMode(params.sessionId, params.mode) as Promise<
+      R<"agent.setPermissionMode">
+    >;
   });
 
   r("agent.getActiveTools", async (params) => {
@@ -294,9 +312,21 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("agent.getModifiedFiles", async (params) => {
-    return m.getModifiedFiles(params.sessionId, params.fromEntryId, params.toEntryId) as Promise<
-      R<"agent.getModifiedFiles">
-    >;
+    return m.getModifiedFiles(
+      params.sessionId,
+      params.fromEntryId,
+      params.toEntryId,
+      params.toUserMsgEntryId,
+    ) as Promise<R<"agent.getModifiedFiles">>;
+  });
+
+  r("agent.getFileDiff", async (params) => {
+    return m.getFileDiff(
+      params.sessionId,
+      params.filePath,
+      params.fromEntryId,
+      params.toEntryId,
+    ) as Promise<R<"agent.getFileDiff">>;
   });
 
   r("agent.getBatchDiffs", async (params) => {
@@ -345,5 +375,14 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
   r("agent.getSystemPrompt", async (params) => {
     return m.getSystemPrompt(params.sessionId) as Promise<R<"agent.getSystemPrompt">>;
+  });
+
+  r("agent.getLatestAgentChange", async (params) => {
+    const result = await m.getLatestAgentChange(params.sessionId);
+    return result as unknown as Promise<R<"agent.getLatestAgentChange">>;
+  });
+
+  r("agent.batchGetSessionsStatus", async (params) => {
+    return m.batchGetSessionsStatus(params.sessionIds);
   });
 }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, memo, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Highlight, themes } from "prism-react-renderer";
-import { useThemeStore } from "../../stores/use-theme-store";
+import { useThemeStore, isDarkGroup } from "../../stores/use-theme-store";
 import {
   Brain,
   AlertTriangle,
@@ -16,6 +16,7 @@ import {
   Target,
   Loader2,
   ThumbsDown,
+  X,
 } from "lucide-react";
 import { CachedReactMarkdown } from "./CachedReactMarkdown";
 import { CopyButton } from "./CopyButton";
@@ -29,50 +30,82 @@ import { getToolRenderer } from "./tool-renderers";
 import { BlockErrorBoundary } from "./tool-renderers/BlockErrorBoundary";
 import { getCustomTypeIcon } from "./tool-icon-map";
 import { tryFormatAsYaml } from "../../../shared/lib/json-to-yaml";
-import { useExpandStore } from "../../stores/use-expand-store";
+import { useChatOverlayStore } from "../../stores/use-chat-overlay-store";
 import { useSettingsStore } from "../../stores/use-settings-store";
 import { useUIBlockMap } from "../../stores/use-ui-dialog-store";
 import { ENTRY_TYPE_KEYS, getMemoryConfig, getMemorySummary } from "./memory-config";
 import { useMemoryStore } from "../../stores/use-memory-store";
 import { SnapshotBadge } from "./snapshot/SnapshotBadge";
+import { formatFilePath } from "../../lib/format-path";
 import { formatTokenCount } from "../../utils/turn-utils";
+import { ToolCardHeader } from "./primitives/ToolCardHeader";
+import { parseSpecialBlocks, hasSpecialBlocks } from "./special-block-parser";
+import { getRegisteredTags, getRenderer } from "./special-block-registry";
+import "./special-block-renderers";
+
+function renderUserTextWithLinks(text: string, keyPrefix: number | string) {
+  const urlRegex = /(https?:\/\/[^\s<|」》)>]+)/g;
+  const parts = text.split(urlRegex);
+  if (parts.length === 1) {
+    return <span key={keyPrefix}>{text}</span>;
+  }
+  return (
+    <span key={keyPrefix}>
+      {parts.map((part, j) =>
+        urlRegex.test(part) ? (
+          <a
+            key={j}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-status-info hover:underline break-all"
+          >
+            {part}
+          </a>
+        ) : (
+          part
+        ),
+      )}
+    </span>
+  );
+}
 
 export function getBlockBorderColor(block: ContentBlock, role: "user" | "assistant"): string {
-  const roleDefault = role === "user" ? "border-l-blue-500/60" : "border-l-emerald-500/50";
+  const roleDefault = role === "user" ? "border-l-status-info/60" : "border-l-status-success/50";
 
   switch (block.type) {
     case "thinking":
-      return "border-l-purple-400/50";
+      return "border-l-semantic-agent/50";
     case "toolCall":
-      return "border-l-amber-500/40";
+      return "border-l-status-warning/50";
     case "toolResult":
-      return block.isError ? "border-l-red-400/50" : "border-l-amber-500/40";
+      return block.isError ? "border-l-status-error/50" : "border-l-status-warning/50";
     case "toolExecution": {
       if (block.toolName.toLowerCase() === "subagent") {
-        return block.status === "error" ? "border-l-red-400/50" : "border-l-purple-400/50";
+        return block.status === "error" ? "border-l-status-error/50" : "border-l-semantic-agent/50";
       }
-      if (block.status === "running") return "border-l-blue-400/50";
-      if (block.status === "error") return "border-l-red-400/50";
-      return "border-l-amber-500/40";
+      if (block.status === "running") return "border-l-status-info/60";
+      if (block.status === "error") return "border-l-status-error/60";
+      return "border-l-semantic-tool/50";
     }
     case "custom": {
       const ct = block.customType;
-      if (LSP_CUSTOM_TYPES_SET.has(ct)) return "border-l-yellow-400/40";
-      if (ct.startsWith("memory_prefetch")) return "border-l-blue-400/40";
-      if (ct.startsWith("memory_dream")) return "border-l-purple-400/40";
-      if (ct.startsWith("memory_extract")) return "border-l-green-400/40";
-      if (ct === "memory_created") return "border-l-teal-400/40";
-      if (ct === "memory_failed") return "border-l-red-400/40";
-      if (ct === "step_snapshot") return "border-l-indigo-400/40";
+      if (LSP_CUSTOM_TYPES_SET.has(ct)) return "border-l-status-warning/40";
+      if (ct.startsWith("memory_prefetch")) return "border-l-status-info/40";
+      if (ct.startsWith("memory_dream")) return "border-l-semantic-agent/40";
+      if (ct.startsWith("memory_extract")) return "border-l-status-success/40";
+      if (ct === "memory_created") return "border-l-semantic-memory/40";
+      if (ct === "memory_failed") return "border-l-status-error/40";
+      if (ct === "step_snapshot") return "border-l-semantic-accent/40";
       return roleDefault;
     }
     case "compactionSummary":
-      return "border-l-cyan-500/40";
+      return "border-l-semantic-tool/40";
     case "uiInteraction": {
-      if (block.status === "pending") return "border-l-amber-400/50";
-      if (block.status === "responded") return "border-l-emerald-400/50";
-      if (block.status === "dismissed") return "border-l-gray-500/40";
-      return "border-l-cyan-400/40";
+      if (block.status === "pending") return "border-l-status-warning/50";
+      if (block.status === "responded") return "border-l-status-success/50";
+      if (block.status === "dismissed") return "border-l-text-tertiary/40";
+      return "border-l-semantic-tool/40";
     }
     default:
       return roleDefault;
@@ -80,7 +113,7 @@ export function getBlockBorderColor(block: ContentBlock, role: "user" | "assista
 }
 
 function getDefaultBorderColor(role: "user" | "assistant"): string {
-  return role === "user" ? "border-l-blue-500/60" : "border-l-emerald-500/50";
+  return role === "user" ? "border-l-status-info/60" : "border-l-status-success/50";
 }
 
 interface MessageBubbleProps {
@@ -93,6 +126,7 @@ export const MessageBubble = memo(function MessageBubble({
   mergedResultData,
 }: MessageBubbleProps) {
   const isUser = message.role === "user";
+  const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const sessionId = useSessionStore((s) => s.activeSessionId);
   const uiBlockMap = useUIBlockMap(message.content, sessionId ?? "");
   const isActive = useChatNavStore(
@@ -112,9 +146,9 @@ export const MessageBubble = memo(function MessageBubble({
   const styleMemo = useMemo(() => {
     let bg = "";
     if (isSelected) {
-      bg = "bg-indigo-500/[0.06]";
+      bg = "bg-semantic-accent/[0.06]";
     } else if (isActive) {
-      bg = "bg-blue-500/[0.04]";
+      bg = "bg-status-info/[0.04]";
     }
     return { bg, isUser };
   }, [isSelected, isActive, isUser]);
@@ -148,49 +182,66 @@ export const MessageBubble = memo(function MessageBubble({
       className="group relative w-full min-w-0"
     >
       {isSelected && (
-        <div className="absolute inset-0 rounded-lg bg-indigo-500/[0.06] pointer-events-none" />
+        <div className="absolute inset-0 rounded-lg bg-semantic-accent/[0.06] pointer-events-none" />
       )}
       {isUser ? (
         <div
-          className={`relative my-0.5 mr-2 px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap break-words text-gray-800 dark:text-gray-100 bg-blue-500/[0.06] rounded-r-lg border-l-[3px] border-l-blue-500/60 ${styleMemo.bg} min-w-0`}
+          className={`relative my-0.5 mr-2 px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap break-words text-text-primary bg-status-info/[0.06] rounded-r-lg border-l-[3px] border-l-status-info/60 ${styleMemo.bg} min-w-0`}
         >
           <div className="absolute -top-0.5 right-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-10">
             <CopyButton text={fullTextForCopy} size="xs" />
           </div>
-          {message.content
-            .filter((b) => b.type === "text")
-            .map((b, i) => {
-              const text = (b as Extract<ContentBlock, { type: "text" }>).text;
-              const urlRegex = /(https?:\/\/[^\s<|」》)>]+)/g;
-              const parts = text.split(urlRegex);
-              if (parts.length === 1) {
-                return <span key={i}>{text}</span>;
+          {message.content.map((block, i) => {
+            if (block.type === "text") {
+              const text = (block as Extract<ContentBlock, { type: "text" }>).text;
+
+              try {
+                const tags = getRegisteredTags();
+                if (!hasSpecialBlocks(text, tags)) {
+                  return renderUserTextWithLinks(text, i);
+                }
+
+                const segments = parseSpecialBlocks(text, tags);
+                return (
+                  <span key={i}>
+                    {segments.map((seg, si) => {
+                      if (seg.type === "special-block") {
+                        const Renderer = getRenderer(seg.tag);
+                        if (Renderer) return <Renderer key={`sb-${si}`} block={seg} />;
+                        return renderUserTextWithLinks(seg.raw, `raw-${si}`);
+                      }
+                      return renderUserTextWithLinks(seg.text, `text-${si}`);
+                    })}
+                  </span>
+                );
+              } catch {
+                return renderUserTextWithLinks(text, i);
               }
+            }
+
+            if (block.type === "imageBlock") {
+              const imgBlock = block as Extract<ContentBlock, { type: "imageBlock" }>;
               return (
-                <span key={i}>
-                  {parts.map((part, j) =>
-                    urlRegex.test(part) ? (
-                      <a
-                        key={j}
-                        href={part}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-400 hover:underline break-all"
-                      >
-                        {part}
-                      </a>
-                    ) : (
-                      part
-                    ),
-                  )}
-                </span>
+                <div key={i} className="mt-1.5">
+                  <img
+                    src={imgBlock.url}
+                    alt={imgBlock.alt ?? ""}
+                    className="max-w-[240px] max-h-[180px] rounded-lg border border-border-secondary/50 cursor-pointer hover:opacity-90 transition-opacity"
+                    loading="lazy"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setExpandedImage(imgBlock.url);
+                    }}
+                  />
+                </div>
               );
-            })}
+            }
+
+            return null;
+          })}
         </div>
       ) : (
-        <div
-          className={`w-full text-gray-800 dark:text-gray-200 transition-colors ${styleMemo.bg} min-w-0`}
-        >
+        <div className={`w-full text-text-primary transition-colors ${styleMemo.bg} min-w-0`}>
           {message.content.map((block, i) => {
             const role = message.role as "user" | "assistant";
             const isEntryMsg = message.content.some((b) => b.type === "custom");
@@ -232,16 +283,45 @@ export const MessageBubble = memo(function MessageBubble({
             <div
               className={`border-l-[3px] ${getDefaultBorderColor(message.role as "user" | "assistant")}`}
             >
-              <span className="inline-block w-1.5 h-4 bg-indigo-400 animate-pulse ml-3 align-text-bottom" />
+              <span className="inline-block w-1.5 h-4 bg-semantic-accent animate-pulse ml-3 align-text-bottom" />
             </div>
           )}
-          {message.tokenUsage && (
-            <div
-              className={`border-l-[3px] ${getDefaultBorderColor(message.role as "user" | "assistant")}`}
-            >
-              <MessageMetaFooter message={message} />
-            </div>
-          )}
+          {message.tokenUsage &&
+            (() => {
+              const mode = useSettingsStore.getState().chatViewMode;
+              return mode !== "clean";
+            })() && (
+              <div
+                className={`border-l-[3px] ${getDefaultBorderColor(message.role as "user" | "assistant")}`}
+              >
+                <MessageMetaFooter message={message} />
+              </div>
+            )}
+        </div>
+      )}
+
+      {expandedImage && (
+        <div
+          className="fixed inset-0 z-[200] bg-black/70 flex items-center justify-center p-4"
+          style={{
+            paddingTop: "calc(1rem + env(safe-area-inset-top, 0px))",
+            paddingBottom: "env(safe-area-inset-bottom, 0px)",
+          }}
+          onClick={() => setExpandedImage(null)}
+        >
+          <img
+            src={expandedImage}
+            alt="preview"
+            className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            onClick={() => setExpandedImage(null)}
+            className="absolute top-4 right-4 p-2 rounded-full bg-white/20 hover:bg-white/30 text-white transition-colors"
+            style={{ top: "calc(1rem + env(safe-area-inset-top, 0px))" }}
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
       )}
     </div>
@@ -250,7 +330,7 @@ export const MessageBubble = memo(function MessageBubble({
 
 function StreamingMarkdown({ text }: { text: string }) {
   const resolvedTheme = useThemeStore((s) => s.resolvedTheme);
-  const prismTheme = resolvedTheme === "dark" ? themes.nightOwl : themes.nightOwlLight;
+  const prismTheme = isDarkGroup(resolvedTheme) ? themes.nightOwl : themes.nightOwlLight;
 
   const parts = useMemo(() => {
     const segments: Array<{
@@ -319,13 +399,13 @@ function StreamingMarkdown({ text }: { text: string }) {
             key={i}
             theme={prismTheme}
             code={part.content.trimEnd()}
-            language={part.language || "text"}
+            language={part.language ?? "text"}
           >
             {({ tokens, getLineProps, getTokenProps }) => (
-              <pre className="text-[11px] leading-relaxed font-mono p-2 my-1 overflow-x-auto bg-gray-100 dark:bg-gray-900/60 rounded whitespace-pre">
+              <pre className="text-[11px] leading-relaxed font-mono p-2 my-1 overflow-x-auto bg-surface-code dark:bg-surface-code/60 rounded whitespace-pre">
                 {tokens.map((line, j) => (
                   <div key={j} {...getLineProps({ line })}>
-                    <span className="inline-block w-5 text-right mr-2 select-none text-gray-400 dark:text-gray-600 text-[10px]">
+                    <span className="inline-block w-5 text-right mr-2 select-none text-text-tertiary text-[10px]">
                       {j + 1}
                     </span>
                     <span>
@@ -361,17 +441,17 @@ export const TextContentCard = memo(function TextContentCard({
   return (
     <div className="my-0.5 overflow-hidden" data-block-id={blockId}>
       <div
-        className={`flex items-center gap-2 px-3 py-1 text-[11px] ${!isStreaming ? "cursor-pointer hover:bg-gray-200/30 dark:hover:bg-gray-800/30" : ""}`}
+        className={`flex items-center gap-2 px-3 py-1 text-[11px] ${!isStreaming ? "cursor-pointer hover:bg-surface-hover/30 dark:hover:bg-surface-dim/30" : ""}`}
         onClick={() => !isStreaming && setIsOpen(!isOpen)}
       >
-        <Type className="w-3 h-3 text-gray-500 shrink-0" />
+        <Type className="w-3 h-3 text-text-tertiary shrink-0" />
         {!isStreaming && (
           <button
             onClick={(e) => {
               e.stopPropagation();
               setIsOpen(!isOpen);
             }}
-            className="p-0.5 text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 transition-colors ml-auto"
+            className="p-0.5 text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary transition-colors ml-auto"
             title={isOpen ? t("collapse") : t("expand")}
             aria-expanded={isOpen}
             aria-label={isOpen ? t("collapseText") : t("expandText")}
@@ -391,7 +471,7 @@ export const TextContentCard = memo(function TextContentCard({
           )}
         </div>
       ) : hasMore ? (
-        <div className="py-1 px-3 text-[11px] text-gray-400 dark:text-gray-500 truncate">
+        <div className="py-1 px-3 text-[11px] text-text-secondary truncate">
           {firstLine.length > 120 ? firstLine.slice(0, 120) + "..." : firstLine}
         </div>
       ) : null}
@@ -428,20 +508,20 @@ export const ThinkingCard = memo(function ThinkingCard({
     <div className="my-0.5 overflow-hidden" data-block-id={blockId}>
       {/* Header row — when collapsed, shows icon + truncated text + buttons all on one line */}
       <div
-        className={`px-3 py-1 text-[11px] flex items-center gap-2 ${!isStreaming ? "cursor-pointer hover:bg-gray-200/30 dark:hover:bg-gray-800/30" : ""}`}
+        className={`px-3 py-1 text-[11px] flex items-center gap-2 ${!isStreaming ? "cursor-pointer hover:bg-surface-hover/30 dark:hover:bg-surface-dim/30" : ""}`}
         onClick={() => !isStreaming && setIsOpen(!isOpen)}
       >
-        <Brain className="w-3 h-3 text-purple-400/60 shrink-0" />
+        <Brain className="w-3 h-3 text-semantic-agent/60 shrink-0" />
         {isOpen ? (
-          <span className="text-purple-300/70 font-medium">{t("thinkingLabel")}</span>
+          <span className="text-semantic-agent/70 font-medium">{t("thinkingLabel")}</span>
         ) : hasMore ? (
-          <span className="text-gray-400 dark:text-gray-500 truncate flex-1 min-w-0">
-            {collapsedText}
-          </span>
+          <span className="text-text-secondary truncate flex-1 min-w-0">{collapsedText}</span>
         ) : (
-          <span className="text-purple-300/70 font-medium">{t("thinkingLabel")}</span>
+          <span className="text-semantic-agent/70 font-medium">{t("thinkingLabel")}</span>
         )}
-        {isStreaming && <span className="text-purple-400/50 animate-pulse text-[10px]">...</span>}
+        {isStreaming && (
+          <span className="text-semantic-agent/50 animate-pulse text-[10px]">...</span>
+        )}
         {!isStreaming && (
           <div
             className="ml-auto flex items-center gap-0.5 shrink-0"
@@ -450,7 +530,7 @@ export const ThinkingCard = memo(function ThinkingCard({
             <button
               onClick={() => setIsOpen(!isOpen)}
               title={isOpen ? t("collapse") : t("expand")}
-              className="p-0.5 text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+              className="p-0.5 text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary transition-colors"
             >
               {isOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
             </button>
@@ -460,11 +540,9 @@ export const ThinkingCard = memo(function ThinkingCard({
       </div>
 
       {isOpen && (
-        <div className="px-3 pb-2 text-[11px] text-gray-500 dark:text-gray-400 whitespace-pre-wrap leading-relaxed">
+        <div className="px-3 pb-2 text-[11px] text-text-secondary whitespace-pre-wrap leading-relaxed">
           {thinking || (
-            <span className="text-gray-400 dark:text-gray-600 italic">
-              {t("thinkingPlaceholder")}
-            </span>
+            <span className="text-text-secondary italic">{t("thinkingPlaceholder")}</span>
           )}
         </div>
       )}
@@ -477,9 +555,9 @@ export const MEMORY_CUSTOM_TYPES = ENTRY_TYPE_KEYS;
 export const MEMORY_HIDDEN_IN_CHAT = new Set<string>([]);
 
 const LSP_CUSTOM_TYPES: Record<string, { label: string; color: string }> = {
-  lsp: { label: "LSP", color: "text-blue-400" },
-  lsp_notify: { label: "LSP Diagnostics", color: "text-yellow-400" },
-  lsp_diagnostics: { label: "LSP Diagnostics", color: "text-yellow-400" },
+  lsp: { label: "LSP", color: "text-status-info" },
+  lsp_notify: { label: "LSP Diagnostics", color: "text-status-warning" },
+  lsp_diagnostics: { label: "LSP Diagnostics", color: "text-status-warning" },
 };
 
 export const LSP_CUSTOM_TYPES_SET = new Set(Object.keys(LSP_CUSTOM_TYPES));
@@ -498,8 +576,8 @@ export const LspDiagnosticsCard = memo(function LspDiagnosticsCard({ data }: { d
   const { t } = useTranslation("chat");
   if (!data || typeof data !== "object") {
     return (
-      <div className="my-0.5 overflow-hidden bg-yellow-950/5">
-        <div className="px-4 py-1 text-[11px] font-medium text-yellow-400 flex items-center gap-1.5">
+      <div className="my-0.5 overflow-hidden bg-status-warning/5">
+        <div className="px-4 py-1 text-[11px] font-medium text-status-warning flex items-center gap-1.5">
           <AlertTriangle className="w-3 h-3 shrink-0" />
           <span>{t("lspDiagnostics")}</span>
         </div>
@@ -522,40 +600,40 @@ export const LspDiagnosticsCard = memo(function LspDiagnosticsCard({ data }: { d
   };
 
   return (
-    <div className="my-0.5 border border-yellow-700/30 rounded-lg overflow-hidden bg-yellow-50/50 dark:bg-yellow-900/10">
-      <div className="px-3 py-1.5 text-xs font-medium text-yellow-400 flex items-center gap-1.5">
+    <div className="my-0.5 border border-status-warning/30 rounded-lg overflow-hidden bg-status-warning/50 dark:bg-status-warning/10">
+      <div className="px-3 py-1.5 text-xs font-medium text-status-warning flex items-center gap-1.5">
         <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
         <span>{t("lspDiagnostics")}</span>
       </div>
-      <div className="border-t border-yellow-700/20">
+      <div className="border-t border-status-warning/20">
         {details.files?.map((f) => (
           <div
             key={f.filePath}
-            className="px-3 py-1.5 border-b last:border-b-0 border-yellow-700/10"
+            className="px-3 py-1.5 border-b last:border-b-0 border-status-warning/10"
           >
-            <div className="text-[11px] text-yellow-300 font-medium flex items-center gap-1">
+            <div className="text-[11px] text-status-warning font-medium flex items-center gap-1">
               <FileText className="w-3 h-3 shrink-0" />
-              <span>{f.filePath}</span>
-              <span className="text-yellow-500 ml-1">{f.summary}</span>
+              <span className="truncate" title={f.filePath}>
+                {formatFilePath(f.filePath)}
+              </span>
+              <span className="text-status-warning ml-1">{f.summary}</span>
             </div>
             {f.issues.map((issue, i) => (
-              <div key={i} className="text-[10px] text-gray-500 dark:text-gray-400 pl-4 pt-0.5">
+              <div key={i} className="text-[10px] text-text-tertiary pl-4 pt-0.5">
                 <span
                   className={
                     issue.severity === 1
-                      ? "text-red-400"
+                      ? "text-status-error"
                       : issue.severity === 2
-                        ? "text-yellow-400"
-                        : "text-gray-500"
+                        ? "text-status-warning"
+                        : "text-text-tertiary"
                   }
                 >
                   L{issue.line}
                 </span>
-                {issue.source && (
-                  <span className="text-gray-400 dark:text-gray-600"> [{issue.source}]</span>
-                )}
+                {issue.source && <span className="text-text-tertiary"> [{issue.source}]</span>}
                 {issue.code != null && (
-                  <span className="text-gray-400 dark:text-gray-600"> ({String(issue.code)})</span>
+                  <span className="text-text-tertiary"> ({String(issue.code)})</span>
                 )}
                 : {issue.message}
               </div>
@@ -567,9 +645,12 @@ export const LspDiagnosticsCard = memo(function LspDiagnosticsCard({ data }: { d
   );
 });
 
+import { formatDuration } from "./primitives/formatDuration";
+
 function getSearchingSummary(data: unknown): string | null {
   const d = data as Record<string, unknown> | undefined;
   if (!d) return "搜索中…";
+  if (d._timedOut) return "搜索超时";
   const q = typeof d.query === "string" ? d.query : "";
   if (!q) return "搜索中…";
   return `「${q.length > 40 ? q.slice(0, 40) + "…" : q}」搜索中…`;
@@ -591,15 +672,15 @@ function TierBadge({ tier }: { tier: string }) {
     { style: string; Icon: React.ComponentType<{ className?: string }> }
   > = {
     fast: {
-      style: "bg-amber-500/[0.12] text-amber-400 border-amber-500/25",
+      style: "bg-status-warning/[0.12] text-status-warning border-status-warning/25",
       Icon: Zap,
     },
     pro: {
-      style: "bg-indigo-500/[0.12] text-indigo-400 border-indigo-500/25",
+      style: "bg-semantic-accent/[0.12] text-semantic-accent border-semantic-accent/25",
       Icon: Target,
     },
     max: {
-      style: "bg-purple-500/[0.12] text-purple-400 border-purple-500/25",
+      style: "bg-semantic-agent/[0.12] text-semantic-agent border-semantic-agent/25",
       Icon: Brain,
     },
   };
@@ -626,20 +707,20 @@ function PrefetchSearchingDetail({ data }: { data: unknown }) {
 
   return (
     <div className="px-3 pb-2 text-[11px] space-y-2">
-      <div className="flex items-center gap-1.5 text-blue-400">
+      <div className="flex items-center gap-1.5 text-status-info">
         <Loader2 className="w-3 h-3 animate-spin shrink-0" />
         <span>{t("searchingMemory")}</span>
       </div>
       {query && (
         <div className="flex gap-1.5">
-          <span className="text-gray-500 shrink-0">{t("searchQuery")}</span>
-          <span className="text-gray-300">「{query}」</span>
+          <span className="text-text-tertiary shrink-0">{t("searchQuery")}</span>
+          <span className="text-text-secondary">「{query}」</span>
         </div>
       )}
       {availableFiles > 0 && (
         <div className="flex gap-1.5">
-          <span className="text-gray-500 shrink-0">{t("availableFilesLabel")}</span>
-          <span className="text-gray-300">{t("filesCount", { count: availableFiles })}</span>
+          <span className="text-text-tertiary shrink-0">{t("availableFilesLabel")}</span>
+          <span className="text-text-secondary">{t("filesCount", { count: availableFiles })}</span>
         </div>
       )}
     </div>
@@ -668,7 +749,10 @@ export const MemoryCard = memo(function MemoryCard({
   const displayType = isMerged ? "memory_prefetch_result" : customType;
   const displayData = isMerged ? mergedResultData : data;
 
-  const config = getMemoryConfig(displayType) ?? { label: displayType, color: "text-gray-400" };
+  const config = getMemoryConfig(displayType) ?? {
+    label: displayType,
+    color: "text-text-tertiary",
+  };
   const Icon = getCustomTypeIcon(displayType).icon;
 
   const summary = isSearching
@@ -708,14 +792,14 @@ export const MemoryCard = memo(function MemoryCard({
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
-        className={`w-full px-3 py-1 flex items-center gap-1.5 text-[11px] ${config.color} hover:bg-gray-200/15 dark:hover:bg-gray-800/15 rounded cursor-pointer select-none`}
+        className={`w-full px-3 py-1 flex items-center gap-1.5 text-[11px] ${config.color} hover:bg-surface-hover/15 dark:hover:bg-surface-dim/15 rounded cursor-pointer select-none`}
         aria-expanded={expanded}
         aria-label={`${config.label}${summary ? `: ${summary}` : ""}`}
       >
         <Icon className="w-3 h-3 shrink-0" />
         <span className="flex-1 min-w-0 flex items-center gap-1.5">
           <span className="font-medium whitespace-nowrap">{config.label}</span>
-          {summary && <span className="text-gray-400 dark:text-gray-500 truncate">{summary}</span>}
+          {summary && <span className="text-text-tertiary truncate">{summary}</span>}
         </span>
         {tierInfo && <TierBadge tier={tierInfo.tier} />}
         {canMarkIrrelevant && !isMarked && (
@@ -732,7 +816,7 @@ export const MemoryCard = memo(function MemoryCard({
                 handleMarkIrrelevant();
               }
             }}
-            className="shrink-0 flex items-center rounded hover:bg-orange-400/20 text-gray-400 hover:text-orange-400 transition-colors cursor-pointer"
+            className="shrink-0 flex items-center rounded hover:bg-semantic-notify/20 text-text-tertiary hover:text-semantic-notify transition-colors cursor-pointer"
             title={t("markIrrelevant")}
           >
             <ThumbsDown className="w-3 h-3" />
@@ -740,13 +824,19 @@ export const MemoryCard = memo(function MemoryCard({
         )}
         {isMarked && (
           <span
-            className="shrink-0 flex items-center text-orange-400/70"
+            className="shrink-0 flex items-center text-semantic-notify/70"
             title={t("alreadyMarkedIrrelevant")}
           >
             <ThumbsDown className="w-3 h-3" />
           </span>
         )}
-        <span className="text-gray-400 dark:text-gray-600 shrink-0">
+        {typeof (displayData as Record<string, unknown>)?.durationMs === "number" &&
+          ((displayData as Record<string, unknown>).durationMs as number) > 0 && (
+            <span className="shrink-0 text-[10px] text-text-tertiary/50 tabular-nums">
+              {formatDuration((displayData as Record<string, unknown>).durationMs as number)}
+            </span>
+          )}
+        <span className="text-text-tertiary shrink-0">
           {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
         </span>
       </button>
@@ -785,7 +875,7 @@ function MemoryExpandedContent({
   const dataStr = typeof data === "string" ? data : data ? JSON.stringify(data, null, 2) : "";
   if (!dataStr) return null;
   return (
-    <pre className="px-3 pb-1 text-[11px] text-gray-400 dark:text-gray-500 overflow-x-auto whitespace-pre-wrap max-h-40 overflow-y-auto">
+    <pre className="px-3 pb-1 text-[11px] text-text-tertiary overflow-x-auto whitespace-pre-wrap max-h-40 overflow-y-auto">
       {dataStr.length > 500 ? dataStr.slice(0, 500) + "…" : dataStr}
     </pre>
   );
@@ -805,7 +895,7 @@ function ExtractDetail({ data }: { data: unknown }) {
     const dataStr = data ? JSON.stringify(data, null, 2) : "";
     if (!dataStr) return null;
     return (
-      <pre className="px-3 pb-1 text-[11px] text-gray-400 dark:text-gray-500 overflow-x-auto whitespace-pre-wrap max-h-40 overflow-y-auto">
+      <pre className="px-3 pb-1 text-[11px] text-text-tertiary overflow-x-auto whitespace-pre-wrap max-h-40 overflow-y-auto">
         {dataStr.length > 500 ? dataStr.slice(0, 500) + "…" : dataStr}
       </pre>
     );
@@ -815,18 +905,13 @@ function ExtractDetail({ data }: { data: unknown }) {
     <div className="px-3 pb-1.5 flex flex-col gap-1">
       {(created as FileEntry[]).length > 0 && (
         <div>
-          <div className="text-[10px] font-medium text-green-400/80 mb-0.5">新建</div>
+          <div className="text-[10px] font-medium text-status-success/80 mb-0.5">新建</div>
           {(created as FileEntry[]).map((f, i) => (
-            <div
-              key={i}
-              className="text-[11px] text-gray-500 dark:text-gray-400 flex gap-1 items-start"
-            >
-              <FileText className="w-3 h-3 mt-0.5 shrink-0 text-green-400/60" />
+            <div key={i} className="text-[11px] text-text-tertiary flex gap-1 items-start">
+              <FileText className="w-3 h-3 mt-0.5 shrink-0 text-status-success/60" />
               <span className="min-w-0">
-                <span className="font-medium text-gray-300">{f.name}</span>
-                {f.description && (
-                  <span className="text-gray-500 dark:text-gray-500"> — {f.description}</span>
-                )}
+                <span className="font-medium text-text-secondary">{f.name}</span>
+                {f.description && <span className="text-text-tertiary"> — {f.description}</span>}
               </span>
             </div>
           ))}
@@ -834,18 +919,13 @@ function ExtractDetail({ data }: { data: unknown }) {
       )}
       {(updated as FileEntry[]).length > 0 && (
         <div>
-          <div className="text-[10px] font-medium text-amber-400/80 mb-0.5">更新</div>
+          <div className="text-[10px] font-medium text-status-warning/80 mb-0.5">更新</div>
           {(updated as FileEntry[]).map((f, i) => (
-            <div
-              key={i}
-              className="text-[11px] text-gray-500 dark:text-gray-400 flex gap-1 items-start"
-            >
-              <FileText className="w-3 h-3 mt-0.5 shrink-0 text-amber-400/60" />
+            <div key={i} className="text-[11px] text-text-tertiary flex gap-1 items-start">
+              <FileText className="w-3 h-3 mt-0.5 shrink-0 text-status-warning/60" />
               <span className="min-w-0">
-                <span className="font-medium text-gray-300">{f.name}</span>
-                {f.description && (
-                  <span className="text-gray-500 dark:text-gray-500"> — {f.description}</span>
-                )}
+                <span className="font-medium text-text-secondary">{f.name}</span>
+                {f.description && <span className="text-text-tertiary"> — {f.description}</span>}
               </span>
             </div>
           ))}
@@ -924,16 +1004,14 @@ function PrefetchResultDetail({
 
   return (
     <div className="px-3 pb-2 text-[11px] space-y-1.5">
-      {!hasMemory && (
-        <div className="text-gray-400 dark:text-gray-500 italic py-1">{t("noRelevantMemory")}</div>
-      )}
+      {!hasMemory && <div className="text-text-tertiary italic py-1">{t("noRelevantMemory")}</div>}
 
       {snippet && (
         <div className="space-y-0.5">
-          <div className="text-gray-500 dark:text-gray-400 flex items-center gap-1 font-medium">
-            <Brain className="w-3 h-3 text-blue-400/60 shrink-0" />
+          <div className="text-text-tertiary flex items-center gap-1 font-medium">
+            <Brain className="w-3 h-3 text-status-info/60 shrink-0" />
             <span>{t("relatedMemory")}</span>
-            <span className="text-gray-400 dark:text-gray-500 ml-auto">
+            <span className="text-text-tertiary ml-auto">
               {memoryCount}{" "}
               {t("memoryCountTokens", {
                 count: memoryCount,
@@ -942,17 +1020,17 @@ function PrefetchResultDetail({
               })}
             </span>
           </div>
-          <pre className="p-2 bg-gray-100/80 dark:bg-gray-800/40 rounded text-[11px] text-gray-700 dark:text-gray-300 overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap leading-relaxed border border-gray-200/50 dark:border-gray-700/30">
+          <pre className="p-2 bg-surface-code/80 dark:bg-surface-dim/40 rounded text-[11px] text-text-secondary overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap leading-relaxed border border-border-secondary/50 dark:border-border-secondary/30">
             {snippet}
           </pre>
         </div>
       )}
 
       {!snippet && selectedFiles.length > 0 && (
-        <div className="text-gray-400 dark:text-gray-500 italic py-0.5">
+        <div className="text-text-tertiary italic py-0.5">
           {t("retrievedMemoryFiles", { count: selectedFiles.length })}
           {injectedBytes > 0 && (
-            <span className="text-gray-400 dark:text-gray-600 ml-auto">
+            <span className="text-text-tertiary ml-auto">
               ~{Math.round(injectedBytes / 4)} tokens
             </span>
           )}
@@ -960,55 +1038,46 @@ function PrefetchResultDetail({
       )}
 
       <details className="group">
-        <summary className="cursor-pointer text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400 flex items-center gap-1 py-0.5 text-[10px]">
+        <summary className="cursor-pointer text-text-tertiary hover:text-text-secondary dark:hover:text-text-tertiary flex items-center gap-1 py-0.5 text-[10px]">
           <ChevronRight className="w-2.5 h-2.5 group-open:rotate-90 transition-transform" />
           {t("searchDetail")}
         </summary>
-        <div className="mt-1 space-y-1.5 pl-1 text-[10px] text-gray-400 dark:text-gray-500">
+        <div className="mt-1 space-y-1.5 pl-1 text-[10px] text-text-tertiary">
           {query && (
-            <div className="text-gray-500 dark:text-gray-400">
-              {t("searchQuery")}{" "}
-              <span className="text-gray-700 dark:text-gray-300">「{query}」</span>
+            <div className="text-text-tertiary">
+              {t("searchQuery")} <span className="text-text-secondary">「{query}」</span>
             </div>
           )}
 
           <div className="space-y-0.5">
             {layer === "not_triggered" && (
-              <div className="text-gray-400 dark:text-gray-500">{t("notTriggered")}</div>
+              <div className="text-text-tertiary">{t("notTriggered")}</div>
             )}
-            {layer === "skip" && <div className="text-yellow-500/80">{t("skipLayer")}</div>}
+            {layer === "skip" && <div className="text-status-warning/80">{t("skipLayer")}</div>}
             {layer === "llm" && isForce && (
-              <div className="text-red-400/80">{t("forceTrigger")}</div>
+              <div className="text-status-error/80">{t("forceTrigger")}</div>
             )}
             {layer === "llm" && !isForce && (
-              <div className="text-blue-400/80">{t("keywordTrigger")}</div>
+              <div className="text-status-info/80">{t("keywordTrigger")}</div>
             )}
-            {layer === "none" && (
-              <div className="text-gray-400 dark:text-gray-500">{t("noMemoryFiles")}</div>
-            )}
-            {layer === "error" && <div className="text-red-400/80">{t("searchError")}</div>}
+            {layer === "none" && <div className="text-text-tertiary">{t("noMemoryFiles")}</div>}
+            {layer === "error" && <div className="text-status-error/80">{t("searchError")}</div>}
             {layer !== "skip" &&
               layer !== "llm" &&
               layer !== "not_triggered" &&
               layer !== "none" && (
-                <div className="text-gray-500 dark:text-gray-400">
-                  {t("matchMethod", { method: layer })}
-                </div>
+                <div className="text-text-tertiary">{t("matchMethod", { method: layer })}</div>
               )}
           </div>
 
           {skipHits.length > 0 && (
             <div className="space-y-0.5">
-              <div className="text-yellow-600/80">{t("skipRuleHit")}</div>
+              <div className="text-status-warning/80">{t("skipRuleHit")}</div>
               {skipHits.map((h, i) => (
                 <div key={i} className="pl-2 flex items-center gap-1.5">
-                  <span className="text-yellow-500/60">•</span>
-                  <span className="text-gray-700 dark:text-gray-300 font-mono">
-                    「{h.pattern}」
-                  </span>
-                  {h.mode && (
-                    <span className="text-gray-400 dark:text-gray-600">({modeLabel(h.mode)})</span>
-                  )}
+                  <span className="text-status-warning/60">•</span>
+                  <span className="text-text-secondary font-mono">「{h.pattern}」</span>
+                  {h.mode && <span className="text-text-tertiary">({modeLabel(h.mode)})</span>}
                 </div>
               ))}
             </div>
@@ -1016,16 +1085,12 @@ function PrefetchResultDetail({
 
           {guardHits.length > 0 && (
             <div className="space-y-0.5">
-              <div className="text-green-600/80">{t("guardRuleHit")}</div>
+              <div className="text-status-success/80">{t("guardRuleHit")}</div>
               {guardHits.map((h, i) => (
                 <div key={i} className="pl-2 flex items-center gap-1.5">
-                  <span className="text-green-500/60">•</span>
-                  <span className="text-gray-700 dark:text-gray-300 font-mono">
-                    「{h.pattern}」
-                  </span>
-                  {h.mode && (
-                    <span className="text-gray-400 dark:text-gray-600">({modeLabel(h.mode)})</span>
-                  )}
+                  <span className="text-status-success/60">•</span>
+                  <span className="text-text-secondary font-mono">「{h.pattern}」</span>
+                  {h.mode && <span className="text-text-tertiary">({modeLabel(h.mode)})</span>}
                 </div>
               ))}
             </div>
@@ -1033,16 +1098,12 @@ function PrefetchResultDetail({
 
           {triggerHits.length > 0 && (
             <div className="space-y-0.5">
-              <div className="text-cyan-600/80">{t("triggerKeywords")}</div>
+              <div className="text-semantic-tool/80">{t("triggerKeywords")}</div>
               {triggerHits.map((h, i) => (
                 <div key={i} className="pl-2 flex items-center gap-1.5">
-                  <span className="text-cyan-500/60">•</span>
-                  <span className="text-gray-700 dark:text-gray-300 font-mono">
-                    「{h.pattern}」
-                  </span>
-                  {h.mode && (
-                    <span className="text-gray-400 dark:text-gray-600">({modeLabel(h.mode)})</span>
-                  )}
+                  <span className="text-semantic-tool/60">•</span>
+                  <span className="text-text-secondary font-mono">「{h.pattern}」</span>
+                  {h.mode && <span className="text-text-tertiary">({modeLabel(h.mode)})</span>}
                 </div>
               ))}
             </div>
@@ -1050,19 +1111,18 @@ function PrefetchResultDetail({
 
           {selectedFiles.length > 0 && (
             <div className="space-y-0.5">
-              <div className="text-gray-500 dark:text-gray-400 flex items-center gap-1">
+              <div className="text-text-tertiary flex items-center gap-1">
                 {t("sourceFiles", { count: selectedFiles.length })}
               </div>
               {selectedFiles.map((f) => {
-                const fileName = f.split("/").pop() ?? f;
                 return (
                   <div
                     key={f}
-                    className="flex items-center gap-1.5 pl-2 py-0.5 text-gray-400 dark:text-gray-500 truncate"
+                    className="flex items-center gap-1.5 pl-2 py-0.5 text-text-secondary truncate"
                   >
-                    <FileText className="w-2.5 h-2.5 text-blue-400/50 shrink-0" />
+                    <FileText className="w-2.5 h-2.5 text-status-info/70 shrink-0" />
                     <span className="truncate" title={f}>
-                      {fileName}
+                      {formatFilePath(f)}
                     </span>
                   </div>
                 );
@@ -1072,21 +1132,21 @@ function PrefetchResultDetail({
 
           <div className="space-y-0.5">
             {availableFiles > 0 && (
-              <div className="text-gray-400 dark:text-gray-600">
+              <div className="text-text-tertiary">
                 {t("availableFiles", { count: availableFiles })}
               </div>
             )}
             {durationMs > 0 && (
-              <div className="text-gray-400 dark:text-gray-600">
+              <div className="text-text-tertiary">
                 {t("searchDuration", { duration: durationMs })}
               </div>
             )}
             {tier && (
               <div className="flex items-center gap-1.5">
-                <Zap className="w-3 h-3 shrink-0 text-amber-400/70" />
-                <span className="text-gray-500">{t("usedModel")}</span>
-                <span className="text-gray-300">{modelLabel || tier}</span>
-                {tier && modelLabel && <span className="text-gray-600">({tier})</span>}
+                <Zap className="w-3 h-3 shrink-0 text-status-warning/70" />
+                <span className="text-text-tertiary">{t("usedModel")}</span>
+                <span className="text-text-secondary">{modelLabel || tier}</span>
+                {tier && modelLabel && <span className="text-text-secondary">({tier})</span>}
               </div>
             )}
           </div>
@@ -1094,7 +1154,7 @@ function PrefetchResultDetail({
       </details>
 
       {isMarkedIrrelevant && (
-        <div className="flex items-center gap-1.5 text-[10px] text-orange-400/80 py-1 px-1">
+        <div className="flex items-center gap-1.5 text-[10px] text-semantic-notify/80 py-1 px-1">
           <ThumbsDown className="w-3 h-3 shrink-0" />
           <span>{t("markedIrrelevantHint")}</span>
         </div>
@@ -1114,17 +1174,13 @@ function PrefetchStartDetail({ data }: { data: unknown }) {
     <div className="px-3 pb-2 text-[11px] space-y-1">
       {query && (
         <div className="flex gap-1.5">
-          <span className="text-gray-400 dark:text-gray-500 shrink-0">{t("queryLabel")}</span>
-          <span className="text-gray-700 dark:text-gray-300 truncate">{query}</span>
+          <span className="text-text-tertiary shrink-0">{t("queryLabel")}</span>
+          <span className="text-text-secondary truncate">{query}</span>
         </div>
       )}
       <div className="flex gap-1.5">
-        <span className="text-gray-400 dark:text-gray-500 shrink-0">
-          {t("availableFilesLabel")}
-        </span>
-        <span className="text-gray-700 dark:text-gray-300">
-          {t("filesCount", { count: availableFiles })}
-        </span>
+        <span className="text-text-tertiary shrink-0">{t("availableFilesLabel")}</span>
+        <span className="text-text-secondary">{t("filesCount", { count: availableFiles })}</span>
       </div>
     </div>
   );
@@ -1152,17 +1208,17 @@ const CompactionSummaryCard = memo(function CompactionSummaryCard({
 
   return (
     <div data-block-id={blockId} className="my-0.5">
-      <div className="px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+      <div className="px-3 py-1.5 text-sm text-text-secondary leading-relaxed">
         {isLong ? (
           <>
             <div className="flex items-start gap-1.5">
-              <span className="text-gray-400 dark:text-gray-500 flex-1">
+              <span className="text-text-tertiary flex-1">
                 {preview}
                 {firstMeaningfulLine.length > 120 ? "..." : ""}
               </span>
               <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="shrink-0 p-0.5 text-cyan-400/60 hover:text-cyan-300 transition-colors text-[11px] underline decoration-dotted underline-offset-2"
+                className="shrink-0 p-0.5 text-semantic-tool/60 hover:text-semantic-tool transition-colors text-[11px] underline decoration-dotted underline-offset-2"
                 aria-expanded={isOpen}
                 aria-label={isOpen ? t("collapseThinkingDetail") : t("expandThinkingDetail")}
               >
@@ -1170,7 +1226,7 @@ const CompactionSummaryCard = memo(function CompactionSummaryCard({
               </button>
             </div>
             {isOpen && (
-              <div className="mt-1.5 pl-0 border-l-2 border-cyan-500/20 prose dark:prose-invert prose-sm max-w-none prose-p:my-0.5 prose-headings:my-1">
+              <div className="mt-1.5 pl-0 border-l-2 border-semantic-tool/20 prose dark:prose-invert prose-sm max-w-none prose-p:my-0.5 prose-headings:my-1">
                 <CachedReactMarkdown>{summary}</CachedReactMarkdown>
               </div>
             )}
@@ -1204,7 +1260,7 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({
 }) {
   const blockId = `${msgId}-${blockIndex}`;
   const { t } = useTranslation("chat");
-  const openExpand = useExpandStore((s) => s.openExpand);
+  const openExpand = useChatOverlayStore((s) => s.openMarkdown);
   const showToolCalls = useSettingsStore((s) => s.showToolCalls);
   const showToolResults = useSettingsStore((s) => s.showToolResults);
   const showThinking = useSettingsStore((s) => s.showThinking);
@@ -1226,7 +1282,7 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({
         return (
           <div
             data-block-id={blockId}
-            className="my-0.5 group relative px-3 pr-10 text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words"
+            className="my-0.5 group relative px-3 pr-10 text-sm text-text-primary whitespace-pre-wrap break-words"
           >
             <div className="absolute top-2 right-2 z-10 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
               <CopyButton text={block.text} size="xs" />
@@ -1239,7 +1295,7 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({
       return (
         <div
           data-block-id={blockId}
-          className="my-0.5 group relative px-3 pr-10 prose dark:prose-invert prose-sm max-w-none prose-p:my-1 prose-pre:bg-transparent"
+          className="my-0.5 group relative px-3 prose dark:prose-invert prose-sm max-w-none prose-p:my-1 prose-pre:bg-transparent prose-hr:my-0.5"
         >
           <div className="absolute top-2 right-2 z-10 flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
             {shouldShowExpand && (
@@ -1250,7 +1306,7 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({
                     t("messageContentLineCount", { count: block.text.split("\n").length }),
                   )
                 }
-                className="p-1 rounded text-gray-400 dark:text-gray-600 hover:text-indigo-300 hover:bg-gray-200/60 dark:hover:bg-gray-800/60 transition-colors"
+                className="p-1 rounded text-text-tertiary hover:text-semantic-accent hover:bg-surface-hover/60 dark:hover:bg-surface-dim/60 transition-colors"
                 title={t("expandFullText")}
               >
                 <Maximize2 className="w-3.5 h-3.5" />
@@ -1346,10 +1402,38 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({
       );
     case "compactionSummary":
       return <CompactionSummaryCard summary={block.summary} blockId={blockId} />;
+    case "imageBlock":
+      return (
+        <div data-block-id={blockId} className="my-1 px-3">
+          <img
+            src={block.url}
+            alt={block.alt ?? ""}
+            className="max-w-full max-h-[400px] rounded-lg border border-border-secondary/50"
+            loading="lazy"
+          />
+        </div>
+      );
     case "uiInteraction":
       return <UIInteractionCard block={block} />;
   }
 });
+
+interface HookDenialDetails {
+  hookDenial: {
+    reason: string;
+    toolName: string;
+    timestamp: number;
+  };
+}
+
+function isHookDenial(details: unknown): details is HookDenialDetails {
+  return (
+    typeof details === "object" &&
+    details !== null &&
+    "hookDenial" in details &&
+    typeof (details as HookDenialDetails).hookDenial?.reason === "string"
+  );
+}
 
 export const ToolExecutionCard = memo(function ToolExecutionCard({
   block,
@@ -1365,16 +1449,24 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
   const isError = block.status === "error";
   const [inputOpen, setInputOpen] = useState(false);
   const [outputOpen, setOutputOpen] = useState(true);
-  const [collapsed, setCollapsed] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
+  const collapseToolCards = useSettingsStore((s) => s.collapseToolCards);
+  const [collapsed, setCollapsed] = useState(() => !isRunning && collapseToolCards);
+  const wasRunningRef = useRef(isRunning);
+  useEffect(() => {
+    if (wasRunningRef.current && !isRunning && collapseToolCards) {
+      setCollapsed(true);
+    }
+    wasRunningRef.current = isRunning;
+  }, [isRunning, collapseToolCards]);
 
   let bgOnly: string;
   if (isRunning) {
-    bgOnly = "bg-blue-950/15 dark:bg-blue-950/15";
+    bgOnly = "bg-status-info/[0.10]";
   } else if (isError) {
-    bgOnly = "bg-red-950/10 dark:bg-red-950/10";
+    bgOnly = "bg-status-error/[0.08]";
   } else {
-    bgOnly = "bg-amber-950/[0.06] dark:bg-gray-800/20";
+    bgOnly = "bg-surface-dim/60 dark:bg-surface-dim/20";
   }
 
   const fullExecutionText = useMemo(() => {
@@ -1392,37 +1484,31 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
 
   return (
     <div ref={cardRef} className={`overflow-hidden ${bgOnly}`} data-block-id={blockId}>
-      <div className="px-3 py-1 flex items-center gap-2 text-xs">
-        <button
-          onClick={handleToggleCollapse}
-          className="p-0.5 text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 transition-colors shrink-0"
-          title={collapsed ? t("expandToolCard") : t("collapseToolCard")}
-          aria-expanded={!collapsed}
-          aria-label={collapsed ? t("expandToolCard") : t("collapseToolCard")}
-        >
-          {collapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-        </button>
-        <span
-          className={`font-medium ${isRunning ? "text-blue-400" : isError ? "text-red-400" : "text-amber-300/80"}`}
-        >
-          {block.toolName}
-        </span>
-        {isRunning && <span className="text-blue-400 animate-pulse text-[10px]">running</span>}
-        {!isRunning && !isError && (
-          <CheckCircle className="w-3.5 h-3.5 text-green-500 shrink-0 ml-auto" />
-        )}
-        {isError && <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0 ml-auto" />}
-        <CopyButton text={fullExecutionText} size="xs" title={t("copyAllExecution")} />
-      </div>
+      <ToolCardHeader
+        toolName={block.toolName}
+        status={isRunning ? "running" : isError ? "error" : "done"}
+        description={
+          block.output && !isRunning
+            ? block.output.split("\n")[0].slice(0, 100)
+            : (block.description ?? block.toolName)
+        }
+        collapsed={collapsed}
+        onClick={handleToggleCollapse}
+        badge={
+          <>
+            {!isRunning && !isError && (
+              <CheckCircle className="w-3.5 h-3.5 text-status-success shrink-0" />
+            )}
+            {isError && <XCircle className="w-3.5 h-3.5 text-status-error shrink-0" />}
+            <CopyButton text={fullExecutionText} size="xs" title={t("copyAllExecution")} />
+          </>
+        }
+      />
 
-      {collapsed ? (
-        <div className="px-3 pb-2 text-[11px] text-gray-400 dark:text-gray-500 truncate">
-          {block.output ? block.output.split("\n")[0].slice(0, 100) : t("waitingOutput")}
-        </div>
-      ) : (
+      {!collapsed && (
         <>
           <div
-            className="px-3 py-1 text-[11px] text-gray-400 dark:text-gray-500 cursor-pointer hover:text-gray-600 dark:hover:text-gray-400 select-none flex items-center gap-1.5"
+            className="px-3 py-1 text-[11px] text-text-secondary cursor-pointer hover:text-text-primary dark:hover:text-text-primary select-none flex items-center gap-1.5"
             onClick={() => setInputOpen(!inputOpen)}
           >
             <svg
@@ -1446,14 +1532,14 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
           </div>
           {inputOpen && block.args && (
             <div className="px-3 pb-2 pt-0.5">
-              <pre className="text-[11px] text-yellow-300/60 overflow-x-auto whitespace-pre-wrap font-mono max-h-40 overflow-y-auto leading-relaxed">
+              <pre className="text-[11px] text-status-warning/60 overflow-x-auto whitespace-pre-wrap font-mono max-h-40 overflow-y-auto leading-relaxed">
                 {tryFormatAsYaml(block.args)}
               </pre>
             </div>
           )}
 
           <div
-            className="px-3 py-1 text-[11px] text-gray-400 dark:text-gray-500 cursor-pointer hover:text-gray-600 dark:hover:text-gray-400 select-none flex items-center gap-1.5"
+            className="px-3 py-1 text-[11px] text-text-secondary cursor-pointer hover:text-text-primary dark:hover:text-text-primary select-none flex items-center gap-1.5"
             onClick={() => setOutputOpen(!outputOpen)}
           >
             <svg
@@ -1467,7 +1553,9 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
             </svg>
             <span>Output</span>
             {isRunning && (
-              <span className="ml-auto text-blue-400/70 animate-pulse text-[10px]">streaming</span>
+              <span className="ml-auto text-status-info/70 animate-pulse text-[10px]">
+                streaming
+              </span>
             )}
             {block.output && !isRunning && (
               <CopyButton
@@ -1483,15 +1571,36 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
               {uiBlock && uiBlock.status === "pending" ? (
                 <UIInteractionCard block={uiBlock} />
               ) : block.output ? (
-                <pre className="text-[11px] text-gray-700 dark:text-gray-300 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-36 overflow-y-auto bg-gray-50 dark:bg-gray-900/30 rounded px-2 py-1.5">
+                <pre className="text-[11px] text-text-secondary overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-36 overflow-y-auto bg-surface-code/80 dark:bg-surface-code/30 rounded px-2 py-1.5">
                   {block.output}
                 </pre>
               ) : isRunning ? (
-                <div className="text-[11px] text-gray-400 dark:text-gray-600 italic py-1">
-                  {t("waiting")}
-                </div>
+                <div className="text-[11px] text-text-tertiary italic py-1">{t("waiting")}</div>
               ) : null}
             </div>
+          )}
+
+          {isError && isHookDenial(block.details) && (
+            <details className="group border-t border-status-error/20" open>
+              <summary className="px-3 py-1 text-[11px] text-status-error cursor-pointer hover:text-status-error select-none flex items-center gap-1.5">
+                <svg
+                  className="w-3 h-3 transition-transform group-open:rotate-90 shrink-0"
+                  viewBox="0 0 12 12"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                >
+                  <path d="M4.5 3l3 3-3 3" />
+                </svg>
+                <AlertTriangle className="w-3 h-3 shrink-0" />
+                <span>{t("hookDenied")}</span>
+              </summary>
+              <div className="px-3 pb-2">
+                <div className="text-[11px] text-status-error/90">
+                  {(block.details as HookDenialDetails).hookDenial.reason}
+                </div>
+              </div>
+            </details>
           )}
         </>
       )}
@@ -1501,9 +1610,9 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
 
 function Tag({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
-    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-gray-500/8 dark:bg-gray-500/10 font-mono">
-      <span className={`text-gray-400 dark:text-gray-500 ${color ?? ""}`}>{label}</span>
-      <span className="text-gray-300 dark:text-gray-400">{value}</span>
+    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-text-tertiary/10 font-mono">
+      <span className={`text-text-tertiary ${color ?? ""}`}>{label}</span>
+      <span className="text-text-secondary dark:text-text-tertiary">{value}</span>
     </span>
   );
 }
@@ -1521,7 +1630,7 @@ export const MessageMetaFooter = memo(function MessageMetaFooter({
   const modelLabel = provider && model ? `${provider}/${model}` : (model ?? provider ?? "");
 
   return (
-    <div className="mt-1.5 pt-1.5 pl-2 pb-0.5 border-t border-gray-200/20 dark:border-gray-800/20">
+    <div className="mt-1.5 pt-1.5 pl-2 pb-0.5 border-t border-border-secondary/20">
       <div className="flex items-center gap-1 text-[10px] flex-nowrap overflow-x-auto">
         <span className="inline-flex items-center gap-1 shrink-0">
           <Tag label={t("tokenInput")} value={formatTokenCount(tokenUsage.input)} />
@@ -1529,25 +1638,23 @@ export const MessageMetaFooter = memo(function MessageMetaFooter({
           <Tag
             label={t("tokenReasoning")}
             value={formatTokenCount(tokenUsage.reasoning ?? 0)}
-            color="text-purple-400 dark:text-purple-500"
+            color="text-semantic-agent"
           />
           <Tag
             label={t("tokenCacheRead")}
             value={formatTokenCount(tokenUsage.cacheRead ?? 0)}
-            color="text-emerald-400 dark:text-emerald-500"
+            color="text-status-success"
           />
           <Tag
             label={t("tokenCacheWrite")}
             value={formatTokenCount(tokenUsage.cacheWrite ?? 0)}
-            color="text-teal-400 dark:text-teal-500"
+            color="text-semantic-memory"
           />
-          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-mono">
+          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-status-warning/10 text-status-warning font-mono">
             ${(tokenUsage.cost ?? 0).toFixed(5)}
           </span>
         </span>
-        {modelLabel && (
-          <span className="text-gray-400 dark:text-gray-500 shrink-0">{modelLabel}</span>
-        )}
+        {modelLabel && <span className="text-text-tertiary shrink-0">{modelLabel}</span>}
       </div>
     </div>
   );

@@ -1,4 +1,3 @@
-import type { AnyMethods, RPCServer } from "@dyyz1993/rpc-core";
 import type { SystemMethods } from "./modules/system";
 import type { FileMethods, FileEvents } from "./modules/file";
 import type { TimerMethods, TimerEvents } from "./modules/timer";
@@ -12,13 +11,14 @@ import type { BashMethods, BashEvents } from "./modules/bash";
 import type { LspMethods, LspEvents } from "./modules/lsp";
 import type { MemoryMethods, MemoryEvents } from "./modules/memory";
 import type { RulesMethods, RulesEvents } from "./modules/rules";
+import type { HooksMethods, HooksEvents } from "./modules/hooks";
 import type { SnapshotMethods } from "./modules/snapshot";
+import type { ChangeReviewMethods } from "./modules/change-review";
 import type { CoordinatorEvents } from "./modules/coordinator";
 import type { SupervisorMethods, SupervisorEvents } from "./modules/supervisor";
 
 export interface RPCMethods
   extends
-    AnyMethods,
     SystemMethods,
     FileMethods,
     TimerMethods,
@@ -32,7 +32,9 @@ export interface RPCMethods
     LspMethods,
     MemoryMethods,
     RulesMethods,
+    HooksMethods,
     SnapshotMethods,
+    ChangeReviewMethods,
     SupervisorMethods {}
 
 export interface RPCEvents
@@ -44,6 +46,7 @@ export interface RPCEvents
     BashEvents,
     LspEvents,
     RulesEvents,
+    HooksEvents,
     MemoryEvents,
     FileEvents,
     CoordinatorEvents,
@@ -51,26 +54,7 @@ export interface RPCEvents
 
 export interface HandlerOptions {
   platform: "desktop" | "web";
-}
-
-export interface HandlerRegister {
-  (server: RPCServer, options: HandlerOptions): void;
-  readonly __handlerType: "register";
-}
-
-export interface HandlerCleanup {
-  (server: RPCServer): void;
-  readonly __handlerType: "cleanup";
-}
-
-export function asRegister(
-  fn: (server: RPCServer, options: HandlerOptions) => void,
-): HandlerRegister {
-  return fn as HandlerRegister;
-}
-
-export function asCleanup(fn: (server: RPCServer) => void): HandlerCleanup {
-  return fn as HandlerCleanup;
+  userId?: string;
 }
 
 export type P<K extends keyof RPCMethods> = RPCMethods[K] extends { params: infer P } ? P : never;

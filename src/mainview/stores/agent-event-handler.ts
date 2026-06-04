@@ -4,11 +4,12 @@ import type { AgentEvent } from "../../shared/modules/agent";
 import type { AssistantMessage, Message, Usage } from "@dyyz1993/pi-ai";
 import { apiClient } from "../lib/api-client";
 import { useChatStore } from "./use-chat-store";
-import { useSessionStore } from "./use-session-store";
+import { useSessionStore, clearAgentStarted } from "./use-session-store";
 import { useMemoryStore } from "./use-memory-store";
 import { useStatusStore, type MCPServerInfo } from "./use-status-store";
 import { useRetryStore } from "./use-retry-store";
 import { useUIDialogStore } from "./use-ui-dialog-store";
+import { useChangeReviewStore } from "./use-change-review-store";
 import { notificationGateway } from "../lib/notification-gateway";
 import { batchMessageUpdate, flushNow } from "./message-batcher";
 import { messageToChatMessage, extractTokenUsage } from "../lib/message-mapper";
@@ -35,12 +36,28 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
   if (event.type === "agent_start") {
     storeGet().updateSessionStatus(sessionId, "streaming");
+    // Bump updatedAt so the session bubbles to the top of the sidebar list
+    const now = Date.now();
+    const { sessionsByProject } = storeGet();
+    for (const [projectPath, sessions] of Object.entries(sessionsByProject)) {
+      const idx = sessions.findIndex((sess) => sess.sessionId === sessionId);
+      if (idx !== -1) {
+        const updated = [...sessions];
+        updated[idx] = { ...updated[idx], updatedAt: now };
+        useSessionStore.setState((prev) => ({
+          sessionsByProject: { ...prev.sessionsByProject, [projectPath]: updated },
+        }));
+        break;
+      }
+    }
     return;
   }
 
   if (event.type === "agent_end") {
+    clearAgentStarted(sessionId);
     storeGet().updateSessionStatus(sessionId, "idle");
     useUIDialogStore.getState().clearPendingBySession(sessionId);
+    useChangeReviewStore.getState().fetchPending();
     const currentQueue = storeGet().queueBySession;
     if (currentQueue[sessionId]) {
       const { [sessionId]: _removed, ...rest } = currentQueue;
@@ -54,13 +71,53 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         break;
       }
     }
-    notificationGateway.emit({
-      type: "session_complete",
-      sessionId,
-      title: "会话完成",
-      body: `会话 ${sessionId.slice(0, 8)}... 执行完毕`,
-      level: "info",
-    });
+    const crashReason = (event as { reason?: string }).reason;
+    if (crashReason) {
+      notificationGateway.emit({
+        type: "session_complete",
+        sessionId,
+        title: "Agent 进程异常退出",
+        body: crashReason,
+        level: "error",
+      });
+    } else {
+      const chat = useChatStore.getState();
+      const msgs = chat.messagesBySession[sessionId] || [];
+      const lastMsg = msgs[msgs.length - 1];
+      const lastIsUser = lastMsg && (lastMsg.role === "user" || lastMsg.role === "custom");
+
+      if (lastIsUser) {
+        chat.setMessagesForSession(sessionId, [
+          ...msgs,
+          {
+            id: `error_${Date.now()}`,
+            role: "error" as const,
+            content: [
+              {
+                type: "text" as const,
+                text: "Agent 未返回响应\nAgent 在处理你的消息后异常退出，可能是 LLM 服务异常或网络问题",
+              },
+            ],
+            timestamp: Date.now(),
+          },
+        ]);
+        notificationGateway.emit({
+          type: "session_error",
+          sessionId,
+          title: "响应失败",
+          body: "Agent 未返回任何响应，请检查模型配置或重试",
+          level: "error",
+        });
+      } else {
+        notificationGateway.emit({
+          type: "session_complete",
+          sessionId,
+          title: "会话完成",
+          body: `会话 ${sessionId.slice(0, 8)}... 执行完毕`,
+          level: "info",
+        });
+      }
+    }
     return;
   }
 
@@ -73,8 +130,30 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     log.info("compaction_end → force reload", { sessionId });
     const tokensAfter = event.result?.tokensAfter;
     storeGet().updateSessionContext(sessionId, { tokens: tokensAfter ?? null });
+
+    if (event.aborted || (event.reason && event.reason !== "success")) {
+      const errMsg = event.reason ?? "压缩失败";
+      notificationGateway.emit({
+        type: "session_error",
+        sessionId,
+        title: "上下文压缩失败",
+        body: errMsg,
+        level: "warning",
+      });
+    }
+
     storeGet().updateSessionStatus(sessionId, "idle");
-    useChatStore.getState().loadSessionMessages(sessionId, { force: true });
+
+    const chatState = useChatStore.getState();
+    const currentMsgs = chatState.messagesBySession[sessionId] || [];
+    const isActivelyStreaming = currentMsgs.some(
+      (m) => m.role === "assistant" && m.isStreaming === true,
+    );
+    if (isActivelyStreaming) {
+      log.info("compaction_end → session streaming, skip force reload", { sessionId });
+    } else {
+      chatState.loadSessionMessages(sessionId, { force: true });
+    }
     return;
   }
 
@@ -112,6 +191,18 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     return;
   }
 
+  if (event.type === "extension_llm_error") {
+    const errMsg = event.error || "Unknown error";
+    notificationGateway.emit({
+      type: "extension_llm_error",
+      sessionId,
+      title: "LLM 服务异常",
+      body: errMsg.length > 100 ? `${errMsg.slice(0, 100)}...` : errMsg,
+      level: "warning",
+    });
+    return;
+  }
+
   if (event.type === "extension_ui_request") {
     const INTERACTIVE = new Set(["confirm", "input", "select", "editor"]);
     const method = event.method;
@@ -130,6 +221,12 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         placeholder: event.placeholder,
         prefill: event.prefill,
         timeout: event.timeout,
+        toolCallId: event.toolCallId,
+        hookMeta: (
+          event as {
+            hookMeta?: { toolName: string; matcher: string; command?: string; reason: string };
+          }
+        ).hookMeta,
       });
 
       storeGet().updateSessionStatus(sessionId, "permission");
@@ -187,7 +284,16 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         const localIdx = existing.findIndex((m) => m.role === "user" && m._local);
         if (localIdx >= 0) {
           const updated = [...existing];
-          updated[localIdx] = { ...msg };
+          const localMsg = existing[localIdx];
+          const serverHasImages = msg.content.some((b) => b.type === "imageBlock");
+          const localHasImages = localMsg.content.some((b) => b.type === "imageBlock");
+          if (!serverHasImages && localHasImages) {
+            const textBlocks = msg.content.filter((b) => b.type !== "imageBlock");
+            const imageBlocks = localMsg.content.filter((b) => b.type === "imageBlock");
+            updated[localIdx] = { ...msg, content: [...textBlocks, ...imageBlocks] };
+          } else {
+            updated[localIdx] = { ...msg };
+          }
           chat.setMessagesForSession(sessionId, updated);
         } else {
           chat.setMessagesForSession(sessionId, [...existing, msg]);
@@ -265,6 +371,9 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
   }
 
   if (event.type === "message_update") {
+    if (storeGet().sessionStatusMap[sessionId] !== "streaming") {
+      storeGet().updateSessionStatus(sessionId, "streaming");
+    }
     batchMessageUpdate(sessionId, () => {
       const chat = useChatStore.getState();
       const existing = chat.messagesBySession[sessionId] || [];
@@ -406,8 +515,36 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         b.type === "custom",
     );
 
+    // During streaming, message_end may arrive before replayed message_update events
+    // populate the content. Skip the empty-content error check in this case.
+    if (!hasContent && storeGet().sessionStatusMap[sessionId] === "streaming") {
+      return;
+    }
+
     if (!hasContent) {
-      chat.setMessagesForSession(sessionId, existing.slice(0, -1));
+      const assistantMsg = message as AssistantMessage;
+      const errorDetail =
+        assistantMsg.errorMessage ??
+        (assistantMsg.stopReason === "error" ? "LLM 返回了错误响应" : undefined) ??
+        "LLM 返回了空响应";
+      const errorTitle = "LLM 未返回有效响应";
+      chat.setMessagesForSession(sessionId, [
+        ...existing.slice(0, -1),
+        {
+          ...lastMsg,
+          role: "error" as const,
+          content: [{ type: "text" as const, text: `${errorTitle}\n${errorDetail}` }],
+          stopReason: assistantMsg.stopReason ?? undefined,
+          isStreaming: false,
+        },
+      ]);
+      notificationGateway.emit({
+        type: "session_error",
+        sessionId,
+        title: "响应为空",
+        body: "LLM 返回了空响应，可能是模型配置问题或 API 错误",
+        level: "warning",
+      });
       return;
     }
 
@@ -548,6 +685,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         status: isError ? "error" : "done",
         output,
         details: result?.details,
+        endedAt: event.timestamp ?? Date.now(),
       };
 
       const updated = [...existing];
@@ -612,7 +750,8 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       if (!pendingPrefetchMap.has(sessionId)) {
         pendingPrefetchMap.set(sessionId, new Map());
       }
-      const sessionMap = pendingPrefetchMap.get(sessionId)!;
+      const sessionMap = pendingPrefetchMap.get(sessionId);
+      if (!sessionMap) return;
 
       const timer = setTimeout(() => {
         sessionMap.delete(eventId);
@@ -624,7 +763,13 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
           {
             id: eventId,
             role: "custom" as const,
-            content: [{ type: "custom" as const, customType: "memory_prefetch", data: event.data }],
+            content: [
+              {
+                type: "custom" as const,
+                customType: "memory_prefetch",
+                data: { ...(event.data as Record<string, unknown>), _timedOut: true },
+              },
+            ],
             timestamp: Date.now(),
           },
         ]);
@@ -639,8 +784,12 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       let resultData: unknown = event.data;
 
       if (sessionMap && sessionMap.size > 0) {
-        const entry = sessionMap.entries().next().value!;
-        const [firstKey, firstPending] = entry;
+        const entry = sessionMap.entries().next().value;
+        if (!Array.isArray(entry)) return;
+        const [firstKey, firstPending] = entry as [
+          string,
+          { agentEvent: typeof event; timer: ReturnType<typeof setTimeout> },
+        ];
         clearTimeout(firstPending.timer);
         sessionMap.delete(firstKey);
         if (sessionMap.size === 0) pendingPrefetchMap.delete(sessionId);
@@ -682,6 +831,11 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     };
     chat.setMessagesForSession(sessionId, [...existing, customMsg]);
 
+    return;
+  }
+
+  if (event.type === "turn_end") {
+    useChangeReviewStore.getState().fetchPending();
     return;
   }
 

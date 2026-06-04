@@ -5,7 +5,11 @@ import type { TreeNode, FilePreview, EditingNode } from "../types";
 import { isTextFile, isImageFile, formatSize } from "../utils/file-utils";
 import { MAX_PREVIEW_SIZE } from "../utils/constants";
 import { useAppStore } from "./use-app-store";
+import { useChatOverlayStore } from "./use-chat-overlay-store";
 import { uploadEntriesWeb, importFilesDesktop, type DropEntry } from "../utils/drop-handler";
+import { createLogger } from "../../shared/lib/logger";
+
+const log = createLogger("file");
 
 interface ExplorerState {
   treeNodes: TreeNode[];
@@ -258,7 +262,7 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
           preview.mimeType = res.headers.get("content-type") ?? "text/plain";
         }
         preview.content = text;
-        preview.totalLines = text.split("\n").length;
+        preview.totalLines = (text.match(/\n/g) || []).length + 1;
       } else {
         preview.content = `[Binary file: ${node.name} (${formatSize(preview.size)})]`;
         preview.isText = true;
@@ -271,9 +275,13 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
     }
 
     set({ filePreview: preview, loadingFile: false });
+    useChatOverlayStore.getState().openFile();
   },
 
-  closePreview: () => set({ filePreview: null, selectedPath: null }),
+  closePreview: () => {
+    useChatOverlayStore.getState().close();
+    set({ filePreview: null, selectedPath: null });
+  },
 
   createFile: async (dirPath: string, name: string) => {
     const addLog = useAppStore.getState().addLog;
@@ -447,8 +455,8 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
         set({ _refreshDebounceTimer: timer });
       });
       set({ _fileWatchSubId: subId });
-    } catch {
-      // subscription failed silently
+    } catch (e) {
+      log.warn("Failed to subscribe to file watcher", { error: String(e) });
     }
   },
 

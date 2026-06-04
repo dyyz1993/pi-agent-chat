@@ -5,6 +5,9 @@ import type {
   LspChannelEvent,
 } from "../../shared/modules/lsp";
 import { apiClient } from "../lib/api-client";
+import { createLogger } from "../../shared/lib/logger";
+
+const log = createLogger("lsp");
 
 interface RawLspServerFromChannel {
   name: string;
@@ -263,14 +266,14 @@ export const useLspStore = create<LspState>()((set, get) => ({
         activeLanguages,
       });
     } catch (err) {
-      console.warn("[lsp] loadHistory failed:", err);
+      log.warn("loadHistory failed", { error: String(err) });
     }
   },
 
   setMode: (sessionId, mode) => {
     get().updateStatus(sessionId, { mode });
     apiClient.call("lsp.setMode", { sessionId, mode }).catch((err) => {
-      console.warn("[lsp] setMode failed:", err);
+      log.warn("setMode failed", { error: String(err) });
     });
   },
 

@@ -1,3 +1,7 @@
+import { createLogger } from "./logger";
+
+const log = createLogger("config");
+
 function pad(n: number): string {
   return "  ".repeat(n);
 }
@@ -75,17 +79,6 @@ function inlineOrBlock(value: unknown, parentIndent: number): string {
   return toYamlValue(value, parentIndent + 1);
 }
 
-export function jsonToYaml(input: string): string {
-  if (!input || !input.trim()) return "";
-
-  try {
-    const parsed: unknown = JSON.parse(input);
-    return toYamlValue(parsed, 0).trimStart();
-  } catch {
-    return input;
-  }
-}
-
 export function tryFormatAsYaml(input: string): string {
   if (!input || !input.trim()) return "";
 
@@ -95,7 +88,8 @@ export function tryFormatAsYaml(input: string): string {
     try {
       const parsed: unknown = JSON.parse(trimmed);
       return toYamlValue(parsed, 0).trimStart();
-    } catch {
+    } catch (e) {
+      log.debug("tryFormatAsYaml: input is not valid JSON, returning as-is", { error: String(e) });
       return input;
     }
   }

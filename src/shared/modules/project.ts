@@ -58,7 +58,7 @@ export interface ProjectMethods {
     result: { tabs: PersistedTab[]; activeTabId: string | null };
   };
   "project.listDirectory": {
-    params: { dirPath: string; searchQuery?: string };
+    params: { dirPath: string; searchQuery?: string; sortBy?: "name" | "mtime" };
     result: { entries: DirectoryEntry[] };
   };
   "project.toggleFavoriteFolder": {
@@ -140,18 +140,25 @@ export interface SessionMeta {
   sessionPath: string;
   projectPath: string;
   parentSessionPath: string | null;
+  delegateParentSessionId: string | null;
+  delegateType: string | null;
   messageCount: number;
   firstMessage: string;
   createdAt: number;
   updatedAt: number;
   status: "idle" | "running";
   pinned?: boolean;
+  tierConfig?: {
+    tierModels: Record<string, string>;
+    currentTier: string | null;
+  };
 }
 
 export interface DirectoryEntry {
   name: string;
   path: string;
   isDirectory: boolean;
+  mtime?: number;
 }
 
 export interface FavoriteFolder {

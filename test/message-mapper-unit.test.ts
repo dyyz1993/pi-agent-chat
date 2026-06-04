@@ -291,13 +291,20 @@ describe("messageToChatMessage", () => {
     });
   });
 
-  it("returns null for compactionSummary with empty summary", () => {
+  it("preserves compactionSummary with empty summary", () => {
     const msg = {
       role: "compactionSummary",
       summary: "",
       timestamp: 16000,
     } as unknown as Message;
-    expect(messageToChatMessage(msg, "cs-2")).toBeNull();
+    const result = messageToChatMessage(msg, "cs-2");
+    expect(result).not.toBeNull();
+    expect(result!.role).toBe("compactionSummary");
+    expect(result!.content[0]).toEqual({
+      type: "compactionSummary",
+      summary: "",
+      tokensBefore: undefined,
+    });
   });
 
   it("returns null for unknown role", () => {

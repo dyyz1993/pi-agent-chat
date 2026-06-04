@@ -1,5 +1,8 @@
 import { create } from "zustand";
 import type { Breakpoint, PanelVisibility, PanelTabId } from "./types";
+import { createLogger } from "../../shared/lib/logger";
+
+const log = createLogger("settings");
 
 const V = "v1";
 const SESSION_WIDTH_KEY = `layout-session-width-${V}`;
@@ -13,6 +16,7 @@ const SESSION_MAX = 420;
 const STATUS_MIN = 220;
 
 function getStatusMax() {
+  if (typeof window === "undefined") return 1200;
   return Math.min(1200, Math.floor(window.innerWidth * 0.7));
 }
 
@@ -37,7 +41,8 @@ function readNum(key: string, fallback: number): number {
     if (v === null) return fallback;
     const n = Number(v);
     return Number.isNaN(n) ? fallback : n;
-  } catch {
+  } catch (e) {
+    log.warn("Failed to read layout number from localStorage", { key, error: String(e) });
     return fallback;
   }
 }
@@ -45,16 +50,16 @@ function readNum(key: string, fallback: number): number {
 function writeNum(key: string, v: number) {
   try {
     localStorage.setItem(key, String(v));
-  } catch {
-    /* storage unavailable */
+  } catch (e) {
+    log.warn("Failed to write layout number to localStorage", { key, error: String(e) });
   }
 }
 
 function writePanel(key: string, v: PanelVisibility) {
   try {
     localStorage.setItem(key, v);
-  } catch {
-    /* storage unavailable */
+  } catch (e) {
+    log.warn("Failed to write panel state to localStorage", { key, error: String(e) });
   }
 }
 
@@ -63,7 +68,8 @@ function readPanel(key: string, fallback: PanelVisibility): PanelVisibility {
     const v = localStorage.getItem(key);
     if (v === null || (v !== "pinned" && v !== "visible" && v !== "hidden")) return fallback;
     return v as PanelVisibility;
-  } catch {
+  } catch (e) {
+    log.warn("Failed to read panel state from localStorage", { key, error: String(e) });
     return fallback;
   }
 }
@@ -73,7 +79,8 @@ function readBool(key: string, fallback: boolean): boolean {
     const v = localStorage.getItem(key);
     if (v === null) return fallback;
     return v === "true";
-  } catch {
+  } catch (e) {
+    log.warn("Failed to read layout boolean from localStorage", { key, error: String(e) });
     return fallback;
   }
 }
@@ -81,8 +88,8 @@ function readBool(key: string, fallback: boolean): boolean {
 function writeBool(key: string, v: boolean) {
   try {
     localStorage.setItem(key, String(v));
-  } catch {
-    /* storage unavailable */
+  } catch (e) {
+    log.warn("Failed to write layout boolean to localStorage", { key, error: String(e) });
   }
 }
 
@@ -126,7 +133,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
 
   sessionWidth: clampSession(readNum(SESSION_WIDTH_KEY, 200)),
   statusWidth: clampStatus(readNum(STATUS_WIDTH_KEY, 300)),
-  activePanelTab: "status",
+  activePanelTab: "changeReview",
   sessionCollapsed: readBool(SESSION_COLLAPSED_KEY, false),
 
   setContentWidth: (w) => set({ contentWidth: w }),
@@ -241,7 +248,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
 
   isStatusVisible: () => {
     const bp = get().breakpoint;
-    if (bp === "mobile") return false;
+    if (bp === "mobile" || bp === "tablet") return false;
     return get().statusPanel !== "hidden";
   },
 }));

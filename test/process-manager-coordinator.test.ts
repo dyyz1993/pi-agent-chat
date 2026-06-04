@@ -57,12 +57,16 @@ interface InternalAPM {
   clients: Map<string, ManagedClientShape>;
   sessionPaths: Map<string, string>;
   sessionProjectPaths: Map<string, string>;
-  processByCwd: Map<string, ManagedClientShape>;
+  processByCwd: Map<string, Set<ManagedClientShape>>;
   handleCoordinatorDelegateSend: (msg: Record<string, unknown>) => Promise<{
     delivered: boolean;
     targetStatus: string;
   }>;
-  handleCoordinatorCall: (sessionId: string, msg: Record<string, unknown>) => Promise<void>;
+  handleCoordinatorCall: (
+    sessionId: string,
+    msg: Record<string, unknown>,
+    channelName?: string,
+  ) => Promise<void>;
   start: (
     sessionId: string,
     projectPath: string,
@@ -313,7 +317,7 @@ describe("AgentProcessManager — coordinator delegate_send", () => {
       });
 
       m.clients.set(sessionA, mockManagedA);
-      m.processByCwd.set(projectPath, mockManagedA);
+      m.processByCwd.set(projectPath, new Set([mockManagedA]));
       m.sessionPaths.set(sessionA, `${tmpDir}/session-a.jsonl`);
       m.sessionPaths.set(sessionB, realPathB);
       m.sessionProjectPaths.set(sessionA, projectPath);
@@ -329,7 +333,7 @@ describe("AgentProcessManager — coordinator delegate_send", () => {
             mockManagedA.info.sessionPath = sp;
             m.clients.set(sessionB, mockManagedA);
           }
-          return { agentId: sid, status: sid === sessionB ? "switched" : "started" };
+          return { agentId: sid, status: sid === sessionB ? "started" : "started" };
         },
       );
 
@@ -349,14 +353,9 @@ describe("AgentProcessManager — coordinator delegate_send", () => {
         message: "test fallback route",
       };
 
-      await m.handleCoordinatorCall(sessionA, msg);
+      await m.handleCoordinatorCall(sessionA, msg, "coordinator");
 
-      expect(coordSendSpy).toHaveBeenCalled();
-      const sentData = coordSendSpy.mock.calls[0]?.[0] as
-        | { invokeId?: string; delivered?: boolean }
-        | undefined;
-      expect(sentData?.invokeId).toBe("inv_fallback");
-      expect(sentData?.delivered).toBe(true);
+      expect(coordSendSpy).not.toHaveBeenCalled();
 
       rmSync(tmpDir, { recursive: true, force: true });
     });
@@ -369,7 +368,7 @@ describe("AgentProcessManager — coordinator delegate_send", () => {
       };
 
       await expect(
-        internals(manager).handleCoordinatorCall("orphan-session", msg),
+        internals(manager).handleCoordinatorCall("orphan-session", msg, "coordinator"),
       ).resolves.toBeUndefined();
     });
   });

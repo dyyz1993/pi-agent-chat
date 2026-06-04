@@ -45,7 +45,7 @@ export interface CoordinatorMethods {
     result: DelegateCreateResult;
   };
   "coordinator.delegate_send": {
-    params: { targetSessionId: string; message: string };
+    params: { targetSessionId: string; message: string; mode?: "followUp" | "steer" };
     result: DelegateSendResult;
   };
   "coordinator.delegate_status": {
@@ -64,14 +64,36 @@ export interface CoordinatorMethods {
     params: { sessionId: string; task: string; title?: string };
     result: DelegateCreateResult;
   };
+  "coordinator.delegate_sync": {
+    params: {
+      task: string;
+      title?: string;
+      agent?: string;
+      timeoutMs?: number;
+    };
+    result: {
+      sessionId: string;
+      status: "completed" | "timeout" | "error" | "aborted";
+      exitCode: number;
+      finalText: string;
+      error?: string;
+    };
+  };
 }
 
 export type CoordinatorMethodCall =
-  | { __call: "session_delegate"; task: string; title?: string; invokeId?: string }
+  | {
+      __call: "session_delegate";
+      task: string;
+      title?: string;
+      projectPath?: string;
+      invokeId?: string;
+    }
   | {
       __call: "session_delegate_send";
       targetSessionId: string;
       message: string;
+      mode?: "followUp" | "steer";
       invokeId?: string;
     }
   | { __call: "session_delegate_status"; sessionId: string; invokeId?: string }
@@ -83,6 +105,15 @@ export type CoordinatorMethodCall =
       task: string;
       title?: string;
       invokeId?: string;
+    }
+  | {
+      __call: "session_delegate_sync";
+      task: string;
+      title?: string;
+      agent?: string;
+      timeoutMs?: number;
+      projectPath?: string;
+      invokeId?: string;
     };
 
 export type CoordinatorMethodResponse =
@@ -91,7 +122,17 @@ export type CoordinatorMethodResponse =
   | { method: "session_delegate_status"; result: DelegateStatusExt }
   | { method: "session_delegate_list"; result: DelegateListResult }
   | { method: "session_delegate_stop"; result: { ok: boolean } }
-  | { method: "session_delegate_fork"; result: DelegateCreateResult };
+  | { method: "session_delegate_fork"; result: DelegateCreateResult }
+  | {
+      method: "session_delegate_sync";
+      result: {
+        sessionId: string;
+        status: "completed" | "timeout" | "error" | "aborted";
+        exitCode: number;
+        finalText: string;
+        error?: string;
+      };
+    };
 
 export type CoordinatorEvent =
   | { type: "message_received"; fromSessionId: string; message: string }
@@ -102,6 +143,32 @@ export type CoordinatorEvent =
 
 export type CoordinatorChannelEvent = CoordinatorMethodCall | CoordinatorEvent;
 
+/** Method signatures for the coordinator module - required by module-file-naming rule */
+export interface CoordinatorMethods {
+  session_delegate(params: {
+    task: string;
+    title?: string;
+    invokeId?: string;
+  }): Promise<DelegateCreateResult>;
+  session_delegate_send(params: {
+    targetSessionId: string;
+    message: string;
+    invokeId?: string;
+  }): Promise<DelegateSendResult>;
+  session_delegate_status(params: {
+    sessionId: string;
+    invokeId?: string;
+  }): Promise<DelegateStatusExt>;
+  session_delegate_list(params: { invokeId?: string }): Promise<DelegateListResult>;
+  session_delegate_stop(params: { sessionId: string; invokeId?: string }): Promise<{ ok: boolean }>;
+  session_delegate_fork(params: {
+    sessionId: string;
+    task: string;
+    title?: string;
+    invokeId?: string;
+  }): Promise<DelegateCreateResult>;
+}
+
 export interface CoordinatorEvents {
   "coordinator.session_created": {
     parentSessionId: string;
@@ -111,6 +178,8 @@ export interface CoordinatorEvents {
       sessionPath: string;
       projectPath: string;
       parentSessionPath: string | null;
+      delegateParentSessionId: string | null;
+      delegateType: string | null;
       messageCount: number;
       firstMessage: string;
       createdAt: number;

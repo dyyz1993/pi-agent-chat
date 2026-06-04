@@ -1,0 +1,14 @@
+{
+  "title": "变更审核",
+  "refresh": "刷新",
+  "approveAll": "全部通过",
+  "approve": "通过",
+  "reject": "拒绝",
+  "pending": "待审核",
+  "approved": "已通过",
+  "rejected": "已拒绝",
+  "noChanges": "暂无待审核变更",
+  "turn": "第 {{index}} 轮",
+  "fileCount": "{{count}} 个文件",
+  "approveConfirm": "确认通过全部 {{count}} 个待审核变更？"
+}

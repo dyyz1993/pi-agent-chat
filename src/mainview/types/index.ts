@@ -24,7 +24,7 @@ export type FilePreview = {
   editable?: boolean;
 };
 
-export type ToolExecutionStatus = "running" | "done" | "error" | "background";
+export type ToolExecutionStatus = "running" | "done" | "error" | "background" | "unknown";
 
 export type UIMethod = "confirm" | "select" | "input" | "editor" | "notify";
 
@@ -45,6 +45,12 @@ export type UIInteractionBlock = {
   notifyType?: "info" | "warning" | "error";
   response?: Record<string, unknown>;
   respondedAt?: number;
+  hookMeta?: {
+    toolName: string;
+    matcher: string;
+    command?: string;
+    reason: string;
+  };
 };
 
 export type ContentBlock =
@@ -70,10 +76,12 @@ export type ContentBlock =
       details?: unknown;
       timeout?: number;
       startedAt?: number;
+      endedAt?: number;
       description?: string;
     }
   | { type: "custom"; customType: string; data: unknown }
   | { type: "compactionSummary"; summary: string; tokensBefore?: number }
+  | { type: "imageBlock"; url: string; alt?: string }
   | UIInteractionBlock;
 
 export type TokenUsage = {
@@ -87,7 +95,7 @@ export type TokenUsage = {
 
 export type ChatMessage = {
   id: string;
-  role: "user" | "assistant" | "toolResult" | "custom" | "compactionSummary";
+  role: "user" | "assistant" | "toolResult" | "custom" | "compactionSummary" | "error";
   content: ContentBlock[];
   timestamp: number;
   provider?: string;
@@ -108,14 +116,6 @@ export type Turn = {
   tokenUsage?: TokenUsage;
 };
 
-export type TurnSelection = {
-  selectedTurnIds: Set<string>;
-  totalTokens: number;
-  messageCount: number;
-};
-
-export type CollapseState = Record<string, boolean>;
-
 export type EditingType = "rename" | "newFile" | "newDir";
 export type EditingNode = { path: string; type: EditingType };
 
@@ -132,6 +132,8 @@ export type SessionMeta = {
   sessionPath: string;
   projectPath: string;
   parentSessionPath: string | null;
+  delegateParentSessionId: string | null;
+  delegateType: string | null;
   messageCount: number;
   firstMessage: string;
   createdAt: number;
@@ -140,6 +142,10 @@ export type SessionMeta = {
   sessionStatus?: SessionStatus;
   contextUsage?: ContextUsage;
   pinned?: boolean;
+  tierConfig?: {
+    tierModels: Record<string, string>;
+    currentTier: string | null;
+  };
 };
 
 export type RecentProject = {
@@ -177,6 +183,7 @@ export type DirectoryEntry = {
   name: string;
   path: string;
   isDirectory: boolean;
+  mtime?: number;
 };
 
 export type FavoriteFolder = {
@@ -208,11 +215,6 @@ export type SubagentSessionInfo = {
   provider?: string;
   model?: string;
   contextUsage?: ContextUsage;
-};
-
-export type FileDiffEntry = {
-  path: string;
-  status: "added" | "modified" | "deleted";
 };
 
 export type SnapshotInfo = {
@@ -259,9 +261,11 @@ export type TimelineTurn = {
   id: string;
   index: number;
   userMessageId: string | null;
+  userEntryId: string | null;
   userText: string;
   userTimestamp: number;
   assistantMessageId: string | null;
+  assistantEntryId: string | null;
   items: TimelineItem[];
   model?: string;
   provider?: string;
@@ -279,13 +283,6 @@ export type StandaloneEntry = {
   icon?: string;
   label?: string;
   color?: string;
-};
-
-/** Selection state for batch operations */
-export type SelectionState = {
-  selectedItems: Set<string>; // itemId keys
-  selectedTurns: Set<string>; // turnId keys
-  mode: "none" | "items" | "turns";
 };
 
 /** Batch operation types */

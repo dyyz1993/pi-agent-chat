@@ -1,4 +1,4 @@
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useState } from "react";
 import { Paperclip, ImageIcon, X, Loader2, AlertCircle, Shield } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAttachmentStore, type AttachmentFile } from "../../stores/use-attachment-store";
@@ -6,35 +6,75 @@ import { formatFileSize } from "../chat/preview/types";
 import { useSupervisorStore } from "../../stores/use-supervisor-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useLayoutStore } from "../../layouts/use-layout-store";
+import { isVisionModel } from "../../lib/vision-detection";
 
 function AttachmentPreview({ att, onRemove }: { att: AttachmentFile; onRemove: () => void }) {
   const isImage = att.type.startsWith("image/");
+  const [expanded, setExpanded] = useState(false);
+
+  if (isImage && att.preview) {
+    return (
+      <>
+        <div className="group relative inline-block">
+          <img
+            src={att.preview}
+            alt={att.name}
+            className="h-16 max-w-[120px] rounded-lg border border-border-secondary/50 object-cover cursor-pointer hover:opacity-90 transition-opacity"
+            onClick={() => setExpanded(true)}
+          />
+          <button
+            onClick={onRemove}
+            className="absolute -top-1 -right-1 p-0.5 rounded-full bg-bg-elevated dark:bg-surface-dim border border-border-secondary text-text-tertiary hover:text-text-primary dark:hover:text-text-secondary opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+        {expanded && (
+          <div
+            className="fixed inset-0 z-[200] bg-black/70 flex items-center justify-center p-4"
+            onClick={() => setExpanded(false)}
+          >
+            <img
+              src={att.preview}
+              alt={att.name}
+              className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg"
+              onClick={(e) => e.stopPropagation()}
+            />
+            <button
+              onClick={() => setExpanded(false)}
+              className="absolute top-4 right-4 p-2 rounded-full bg-white/20 hover:bg-white/30 text-white transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        )}
+      </>
+    );
+  }
 
   return (
-    <div className="group relative flex items-center gap-1.5 px-2 py-1 rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-300/50 dark:border-gray-700/50 max-w-[200px]">
+    <div className="group relative flex items-center gap-1.5 px-2 py-1 rounded-md bg-surface-dim border border-border-secondary/50 max-w-[200px]">
       {att.status === "uploading" && (
-        <Loader2 className="w-3 h-3 text-indigo-400 animate-spin shrink-0" />
+        <Loader2 className="w-3 h-3 text-semantic-accent animate-spin shrink-0" />
       )}
-      {att.status === "error" && <AlertCircle className="w-3 h-3 text-red-400 shrink-0" />}
-      {att.status === "done" && <div className="w-3 h-3 rounded-full bg-green-500/80 shrink-0" />}
-      {att.status === "pending" && <div className="w-3 h-3 rounded-full bg-gray-600 shrink-0" />}
+      {att.status === "error" && <AlertCircle className="w-3 h-3 text-status-error shrink-0" />}
+      {att.status === "done" && (
+        <div className="w-3 h-3 rounded-full bg-status-success/80 shrink-0" />
+      )}
+      {att.status === "pending" && (
+        <div className="w-3 h-3 rounded-full bg-text-secondary shrink-0" />
+      )}
 
-      {isImage && att.preview ? (
-        <img src={att.preview} alt={att.name} className="w-6 h-6 rounded object-cover shrink-0" />
-      ) : (
-        <Paperclip className="w-3 h-3 text-gray-400 shrink-0" />
-      )}
+      <Paperclip className="w-3 h-3 text-text-tertiary shrink-0" />
 
       <div className="min-w-0 flex-1">
-        <div className="text-[10px] text-gray-700 dark:text-gray-300 truncate">{att.name}</div>
-        <div className="text-[9px] text-gray-400 dark:text-gray-500">
-          {formatFileSize(att.size)}
-        </div>
+        <div className="text-[10px] text-text-secondary truncate">{att.name}</div>
+        <div className="text-[9px] text-text-tertiary">{formatFileSize(att.size)}</div>
       </div>
 
       <button
         onClick={onRemove}
-        className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-all shrink-0"
+        className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-surface-hover dark:hover:bg-surface-hover text-text-tertiary hover:text-text-primary dark:hover:text-text-secondary transition-all shrink-0"
       >
         <X className="w-3 h-3" />
       </button>
@@ -49,7 +89,7 @@ export function AttachmentBar() {
   if (attachments.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap gap-1 px-1 pb-1">
+    <div className="flex flex-wrap gap-1.5 px-1 pb-1">
       {attachments.map((att) => (
         <AttachmentPreview key={att.id} att={att} onRemove={() => removeFile(att.id)} />
       ))}
@@ -63,6 +103,15 @@ export function AttachmentButtons() {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const addFiles = useAttachmentStore((s) => s.addFiles);
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const currentModel = useSessionStore((s) => s.currentModel);
+  const availableModels = useSessionStore((s) => s.availableModels);
+  const supportsVision = currentModel
+    ? isVisionModel(
+        availableModels.find(
+          (m) => m.provider === currentModel.provider && m.id === currentModel.id,
+        ) ?? {},
+      )
+    : false;
   const supervisorStatus = useSupervisorStore(
     (s) => (activeSessionId ? s.bySession[activeSessionId]?.status : null) ?? null,
   );
@@ -97,14 +146,14 @@ export function AttachmentButtons() {
   }, [setActivePanelTab, showStatus]);
 
   const shieldColor = !supervisorStatus?.enabled
-    ? "text-gray-400 dark:text-gray-500"
+    ? "text-text-tertiary"
     : supervisorStatus.state === "idle" || supervisorStatus.state === "checking"
-      ? "text-green-500"
+      ? "text-status-success"
       : supervisorStatus.state === "paused"
-        ? "text-amber-500"
+        ? "text-status-warning"
         : supervisorStatus.state === "continuing"
-          ? "text-blue-500"
-          : "text-gray-400 dark:text-gray-500";
+          ? "text-status-info"
+          : "text-text-tertiary";
 
   const isPulsing =
     supervisorStatus?.enabled === true &&
@@ -126,36 +175,40 @@ export function AttachmentButtons() {
       />
       <button
         onClick={() => fileInputRef.current?.click()}
-        className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+        className="p-1.5 rounded-md hover:bg-surface-hover dark:hover:bg-surface-dim text-text-tertiary hover:text-text-primary dark:hover:text-text-secondary transition-colors"
         title={t("fileAttachment.addAttachment")}
       >
         <Paperclip className="w-4 h-4" />
       </button>
 
-      <input
-        ref={imageInputRef}
-        type="file"
-        accept="image/*"
-        multiple
-        className="hidden"
-        onChange={handleImageSelect}
-      />
-      <button
-        onClick={() => imageInputRef.current?.click()}
-        className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
-        title={t("fileAttachment.addImage")}
-      >
-        <ImageIcon className="w-4 h-4" />
-      </button>
+      {supportsVision && (
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={handleImageSelect}
+        />
+      )}
+      {supportsVision && (
+        <button
+          onClick={() => imageInputRef.current?.click()}
+          className="p-1.5 rounded-md hover:bg-surface-hover dark:hover:bg-surface-dim text-text-tertiary hover:text-text-primary dark:hover:text-text-secondary transition-colors"
+          title={t("fileAttachment.addImage")}
+        >
+          <ImageIcon className="w-4 h-4" />
+        </button>
+      )}
 
       <button
         onClick={handleSupervisorClick}
-        className={`relative p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${shieldColor}`}
+        className={`relative p-1.5 rounded-md hover:bg-surface-hover dark:hover:bg-surface-dim transition-colors ${shieldColor}`}
         title="Supervisor"
       >
         <Shield className={`w-4 h-4 ${isPulsing ? "animate-pulse" : ""}`} />
         {pendingSeconds !== null && pendingSeconds < 60 && pendingSeconds > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] flex items-center justify-center rounded-full bg-amber-500 text-white text-[8px] font-bold leading-none px-0.5">
+          <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] flex items-center justify-center rounded-full bg-status-warning text-white text-[8px] font-bold leading-none px-0.5">
             {pendingSeconds}
           </span>
         )}

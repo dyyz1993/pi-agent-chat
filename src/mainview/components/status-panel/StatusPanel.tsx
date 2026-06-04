@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import type { SupervisorStatus, TaskReport } from "../../../shared/modules/supervisor";
 import {
   ChevronDown,
   ChevronRight,
@@ -34,18 +35,19 @@ import { BashProcessCard, LogViewer } from "../bash-panel/BashPanel";
 import type { LspDiagnosticsMode } from "../../../shared/modules/lsp";
 import type { StatusSection } from "../../stores/use-status-store";
 import type { TodoPriority } from "../../stores/use-session-store";
-import { copyToClipboard } from "../../utils/clipboard";
+import { useClipboard } from "../chat/preview/use-clipboard";
 import type { PluginInfo } from "../../stores/use-status-store";
+import { formatFilePath } from "../../lib/format-path";
 
 const PRIORITY_STYLES: Record<TodoPriority, { dot: string; label: string }> = {
-  high: { dot: "bg-red-400", label: "H" },
-  medium: { dot: "bg-yellow-400", label: "M" },
-  low: { dot: "bg-gray-500", label: "L" },
+  high: { dot: "bg-status-error", label: "H" },
+  medium: { dot: "bg-status-warning", label: "M" },
+  low: { dot: "bg-text-tertiary", label: "L" },
 };
 
 function PluginCopyButton({ plugin }: { plugin: PluginInfo }) {
   const { t } = useTranslation("status");
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useClipboard(1500);
   const handleCopy = useCallback(() => {
     const scopeLabel = plugin.scope === "global" ? t("global") : t("project");
     const lines = [
@@ -55,20 +57,15 @@ function PluginCopyButton({ plugin }: { plugin: PluginInfo }) {
       `${t("toolsFieldLabel", { count: plugin.toolNames.length })} ${plugin.toolNames.join(", ") || t("none")}`,
       `${t("commandsFieldLabel", { count: plugin.commandNames.length })} ${plugin.commandNames.join(", ") || t("none")}`,
     ];
-    copyToClipboard(lines.join("\n")).then((ok) => {
-      if (ok) {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      }
-    });
-  }, [plugin, t]);
+    copy(lines.join("\n"));
+  }, [plugin, t, copy]);
 
   return (
     <button
       onClick={handleCopy}
-      className="flex items-center gap-1 text-gray-500 hover:text-gray-300 transition-colors mt-0.5"
+      className="flex items-center gap-1 text-text-tertiary hover:text-text-secondary transition-colors mt-0.5"
     >
-      {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+      {copied ? <Check className="w-3 h-3 text-status-success" /> : <Copy className="w-3 h-3" />}
       <span>{copied ? t("copied") : t("copyInfo")}</span>
     </button>
   );
@@ -77,6 +74,7 @@ function PluginCopyButton({ plugin }: { plugin: PluginInfo }) {
 export function StatusPanel() {
   const { t } = useTranslation("status");
   const yoloEnabled = useStatusStore((s) => s.yoloEnabled);
+  const yoloLoading = useStatusStore((s) => s.yoloLoading);
   const plugins = useStatusStore((s) => s.plugins);
   const skills = useStatusStore((s) => s.skills);
   const expandedSkill = useStatusStore((s) => s.expandedSkill);
@@ -126,32 +124,29 @@ export function StatusPanel() {
 
   return (
     <>
-      <div className="py-1">
-        <div className="flex items-center justify-between px-2.5 py-1 border-b border-gray-200 dark:border-gray-800/50">
-          <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+      <div className="px-1.5 py-1.5 space-y-1">
+        <div className="flex items-center justify-between px-2 py-1">
+          <span className="text-[10px] font-medium text-text-tertiary uppercase tracking-wider">
             {t("status")}
           </span>
           <button
             onClick={handleRefresh}
             disabled={refreshing || !activeSessionId}
-            className="p-0.5 rounded hover:bg-gray-200/50 dark:hover:bg-gray-800/30 transition-colors disabled:opacity-30"
+            className="p-1 rounded-md hover:bg-surface-hover/60 transition-colors disabled:opacity-30"
             title={t("refreshResources")}
           >
             <RotateCw
-              className={`w-3 h-3 text-gray-400 dark:text-gray-500 ${refreshing ? "animate-spin" : ""}`}
+              className={`w-3 h-3 text-text-tertiary ${refreshing ? "animate-spin" : ""}`}
             />
           </button>
         </div>
         {SECTIONS.map(({ id, label, icon: Icon }) => {
           const collapsed = collapsedSections.has(id);
           return (
-            <div
-              key={id}
-              className="border-b border-gray-200 dark:border-gray-800/50 last:border-b-0"
-            >
+            <div key={id} className="rounded-md overflow-hidden">
               <button
                 onClick={() => toggleSection(id)}
-                className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-gray-800/30 transition-colors"
+                className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium text-text-secondary hover:bg-surface-hover/60 transition-colors rounded-md"
               >
                 {collapsed ? (
                   <ChevronRight className="w-3 h-3 shrink-0" />
@@ -162,13 +157,14 @@ export function StatusPanel() {
                 <span>{label}</span>
               </button>
               {!collapsed && (
-                <div className="px-2.5 pb-1.5 text-[10px] text-gray-500">
+                <div className="px-2.5 pb-2 text-[10px] text-text-tertiary">
                   {id === "yolo" && (
                     <button
                       onClick={toggleYolo}
-                      className={`px-2 py-0.5 rounded text-[10px] ${yoloEnabled ? "bg-yellow-600/30 text-yellow-400" : "bg-gray-200 dark:bg-gray-800 text-gray-500"}`}
+                      disabled={yoloLoading}
+                      className={`px-2 py-0.5 rounded text-[10px] ${yoloLoading ? "opacity-50 cursor-wait" : ""} ${yoloEnabled ? "bg-status-warning/30 text-status-warning" : "bg-surface-hover dark:bg-surface-code text-text-tertiary"}`}
                     >
-                      {yoloEnabled ? t("enabled") : t("disabled")}
+                      {yoloLoading ? "..." : yoloEnabled ? t("enabled") : t("disabled")}
                     </button>
                   )}
                   {id === "plan" && (
@@ -178,14 +174,14 @@ export function StatusPanel() {
                           {todos.map((todo) => (
                             <div
                               key={todo.id}
-                              className={`flex items-center gap-1.5 py-0.5 px-1 rounded hover:bg-gray-200/50 dark:hover:bg-gray-800/40 transition-colors${todo.deleted ? " opacity-40" : ""}`}
+                              className={`flex items-center gap-1.5 py-0.5 px-1 rounded bg-surface-hover/25 hover:bg-surface-hover/60 transition-colors${todo.deleted ? " opacity-40" : ""}`}
                             >
                               {todo.deleted ? (
-                                <Trash2 className="w-3 h-3 shrink-0 text-red-400" />
+                                <Trash2 className="w-3 h-3 shrink-0 text-status-error" />
                               ) : todo.done ? (
-                                <CheckCircle2 className="w-3 h-3 shrink-0 text-emerald-400" />
+                                <CheckCircle2 className="w-3 h-3 shrink-0 text-status-success" />
                               ) : (
-                                <Circle className="w-3 h-3 shrink-0 text-gray-500" />
+                                <Circle className="w-3 h-3 shrink-0 text-text-tertiary" />
                               )}
                               {todo.priority && !todo.deleted && (
                                 <span
@@ -195,7 +191,7 @@ export function StatusPanel() {
                                 </span>
                               )}
                               <span
-                                className={`${todo.deleted ? "text-red-400/60 line-through" : todo.done ? "text-gray-500 line-through" : "text-gray-700 dark:text-gray-300"} truncate`}
+                                className={`${todo.deleted ? "text-status-error/60 line-through" : todo.done ? "text-text-tertiary line-through" : "text-text-secondary"} truncate`}
                               >
                                 {todo.text}
                               </span>
@@ -228,7 +224,7 @@ export function StatusPanel() {
                         <div>
                           <div className="flex items-center gap-1">
                             <span
-                              className={`w-1.5 h-1.5 rounded-full ${lspData?.state === "ready" ? "bg-green-400" : lspData?.state === "error" ? "bg-red-400" : lspData?.state === "starting" ? "bg-yellow-400 animate-pulse" : "bg-gray-600"}`}
+                              className={`w-1.5 h-1.5 rounded-full ${lspData?.state === "ready" ? "bg-status-success" : lspData?.state === "error" ? "bg-status-error" : lspData?.state === "starting" ? "bg-status-warning animate-pulse" : "bg-text-secondary"}`}
                             />
                             <span>
                               {!lspData
@@ -250,7 +246,7 @@ export function StatusPanel() {
                               {lspData.activeLanguages.map((lang) => (
                                 <span
                                   key={lang}
-                                  className="px-1 py-px rounded text-[9px] bg-cyan-500/15 text-cyan-400"
+                                  className="px-1 py-px rounded text-[9px] bg-semantic-tool/15 text-semantic-tool"
                                 >
                                   {lang}
                                 </span>
@@ -259,7 +255,7 @@ export function StatusPanel() {
                           )}
                         </div>
                       ) : (
-                        <div className="flex items-center gap-1 text-[10px] text-gray-400">
+                        <div className="flex items-center gap-1 text-[10px] text-text-tertiary">
                           <span className="animate-pulse">
                             {t("lspStartingServers", {
                               count: lspData.totalServers ?? lspData.startupLog.length,
@@ -274,14 +270,14 @@ export function StatusPanel() {
                             {lspData.startupLog.map((log, i) => (
                               <div key={`${log.name}-${i}`} className="flex items-center gap-1">
                                 <span
-                                  className={`w-1 h-1 rounded-full ${log.state === "ready" ? "bg-green-400" : log.state === "error" ? "bg-red-400" : "bg-yellow-400 animate-pulse"}`}
+                                  className={`w-1 h-1 rounded-full ${log.state === "ready" ? "bg-status-success" : log.state === "error" ? "bg-status-error" : "bg-status-warning animate-pulse"}`}
                                 />
                                 <span
-                                  className={`truncate ${log.state === "error" ? "text-red-400/80" : log.state === "ready" ? "text-green-400/80" : "text-gray-500"}`}
+                                  className={`truncate ${log.state === "error" ? "text-status-error/80" : log.state === "ready" ? "text-status-success/80" : "text-text-tertiary"}`}
                                 >
                                   {log.name}
                                   {log.fileTypes && log.fileTypes.length > 0 ? (
-                                    <span className="text-gray-600">
+                                    <span className="text-text-secondary">
                                       {" "}
                                       ({log.fileTypes.join(",")})
                                     </span>
@@ -296,12 +292,12 @@ export function StatusPanel() {
                           {lspData.servers.map((srv, i) => (
                             <div key={`${srv.name}-${i}`} className="flex items-center gap-1">
                               <span
-                                className={`w-1 h-1 rounded-full ${srv.state === "ready" ? "bg-green-400" : srv.state === "error" ? "bg-red-400" : srv.state === "starting" ? "bg-yellow-400" : "bg-gray-600"}`}
+                                className={`w-1 h-1 rounded-full ${srv.state === "ready" ? "bg-status-success" : srv.state === "error" ? "bg-status-error" : srv.state === "starting" ? "bg-status-warning" : "bg-text-secondary"}`}
                               />
-                              <span className={`truncate text-gray-500`}>
+                              <span className={`truncate text-text-tertiary`}>
                                 {srv.name}
                                 {srv.fileTypes && srv.fileTypes.length > 0 ? (
-                                  <span className="text-gray-600">
+                                  <span className="text-text-secondary">
                                     {" "}
                                     ({srv.fileTypes.join(",")})
                                   </span>
@@ -320,7 +316,7 @@ export function StatusPanel() {
                                 if (activeSessionId && !activeSubId)
                                   useLspStore.getState().setMode(activeSessionId, m);
                               }}
-                              className={`px-1.5 py-0.5 rounded text-[9px] ${lspData?.mode === m ? "bg-blue-600/30 text-blue-400" : "bg-gray-200 dark:bg-gray-800 text-gray-500 hover:bg-gray-300/50 dark:hover:bg-gray-700/50"}`}
+                              className={`px-1.5 py-0.5 rounded text-[9px] ${lspData?.mode === m ? "bg-status-info/30 text-status-info" : "bg-surface-hover/30 text-text-tertiary hover:bg-surface-hover/60"}`}
                             >
                               {m === "agent_end"
                                 ? t("lspOnEnd")
@@ -334,10 +330,10 @@ export function StatusPanel() {
                       {lspData?.lastDiagnostics && (
                         <div className="flex items-center gap-1 text-[9px] pt-0.5">
                           <AlertTriangle
-                            className={`w-2.5 h-2.5 ${lspData.lastDiagnostics.count > 0 ? "text-yellow-400" : "text-green-400"}`}
+                            className={`w-2.5 h-2.5 ${lspData.lastDiagnostics.count > 0 ? "text-status-warning" : "text-status-success"}`}
                           />
-                          <span className="truncate">
-                            {lspData.lastDiagnostics.filePath}:{" "}
+                          <span className="truncate" title={lspData.lastDiagnostics.filePath}>
+                            {formatFilePath(lspData.lastDiagnostics.filePath)}:{" "}
                             {t("issues", {
                               count: lspData.lastDiagnostics.count,
                               plural: lspData.lastDiagnostics.count !== 1 ? "s" : "",
@@ -357,56 +353,54 @@ export function StatusPanel() {
                           return (
                             <div key={p.path}>
                               <div
-                                className="flex items-center gap-1 py-0.5 px-1 rounded hover:bg-gray-200/50 dark:hover:bg-gray-800/40 transition-colors cursor-pointer group"
+                                className="flex items-center gap-1 py-0.5 px-1 rounded bg-surface-hover/25 hover:bg-surface-hover/60 transition-colors cursor-pointer group"
                                 onClick={() => togglePluginExpanded(p.path)}
                               >
                                 <span
-                                  className={`w-1.5 h-1.5 rounded-full ${p.enabled ? "bg-green-400" : "bg-gray-400 dark:bg-gray-600"}`}
+                                  className={`w-1.5 h-1.5 rounded-full ${p.enabled ? "bg-status-success" : "bg-text-tertiary dark:bg-text-secondary"}`}
                                 />
                                 <span className={`shrink-0 ${isExpanded ? "" : ""}`}>
                                   {isExpanded ? (
-                                    <ChevronDown className="w-3 h-3 text-gray-500" />
+                                    <ChevronDown className="w-3 h-3 text-text-tertiary" />
                                   ) : (
-                                    <ChevronRight className="w-3 h-3 text-gray-500" />
+                                    <ChevronRight className="w-3 h-3 text-text-tertiary" />
                                   )}
                                 </span>
-                                <span className="truncate flex-1 text-gray-700 dark:text-gray-300">
+                                <span className="truncate flex-1 text-text-secondary">
                                   {p.name}
                                 </span>
                                 {p.toolNames.length > 0 && (
-                                  <span className="text-gray-400 dark:text-gray-600">
+                                  <span className="text-text-tertiary">
                                     {t("pluginTools", { count: p.toolNames.length })}
                                   </span>
                                 )}
                                 {p.commandNames.length > 0 && (
-                                  <span className="text-gray-400 dark:text-gray-600">
+                                  <span className="text-text-tertiary">
                                     {t("pluginCommands", { count: p.commandNames.length })}
                                   </span>
                                 )}
                                 <span
-                                  className={`text-[9px] px-1 py-px rounded shrink-0 max-w-[36px] truncate ${p.scope === "global" ? "bg-purple-500/15 text-purple-400" : "bg-blue-500/15 text-blue-400"}`}
+                                  className={`text-[9px] px-1 py-px rounded shrink-0 max-w-[36px] truncate ${p.scope === "global" ? "bg-semantic-agent/15 text-semantic-agent" : "bg-status-info/15 text-status-info"}`}
                                 >
                                   {p.scope === "global" ? t("global") : t("project")}
                                 </span>
                               </div>
                               {isExpanded && (
-                                <div className="ml-4 pl-2 border-l border-gray-200 dark:border-gray-800 space-y-1 pt-1 text-[10px]">
-                                  <div className="text-gray-500 dark:text-gray-400 break-all">
-                                    <span className="text-gray-400 dark:text-gray-600">
-                                      {t("pathLabel")}
-                                    </span>{" "}
+                                <div className="ml-4 pl-2 border-l border-border-primary/70 space-y-1 pt-1 text-[10px]">
+                                  <div className="text-text-tertiary break-all">
+                                    <span className="text-text-tertiary">{t("pathLabel")}</span>{" "}
                                     {p.path}
                                   </div>
                                   {p.toolNames.length > 0 && (
                                     <div>
-                                      <span className="text-gray-400 dark:text-gray-600 block mb-0.5">
+                                      <span className="text-text-tertiary block mb-0.5">
                                         {t("toolsLabel")}
                                       </span>
                                       <div className="space-y-px">
                                         {p.toolNames.map((tn) => (
                                           <div
                                             key={tn}
-                                            className="text-gray-500 dark:text-gray-400 pl-2 font-mono truncate"
+                                            className="text-text-tertiary pl-2 font-mono truncate"
                                           >
                                             {tn}
                                           </div>
@@ -416,14 +410,14 @@ export function StatusPanel() {
                                   )}
                                   {p.commandNames.length > 0 && (
                                     <div>
-                                      <span className="text-gray-400 dark:text-gray-600 block mb-0.5">
+                                      <span className="text-text-tertiary block mb-0.5">
                                         {t("commandsLabel")}
                                       </span>
                                       <div className="space-y-px">
                                         {p.commandNames.map((cn) => (
                                           <div
                                             key={cn}
-                                            className="text-gray-500 dark:text-gray-400 pl-2 font-mono truncate"
+                                            className="text-text-tertiary pl-2 font-mono truncate"
                                           >
                                             {cn}
                                           </div>
@@ -432,7 +426,7 @@ export function StatusPanel() {
                                     </div>
                                   )}
                                   {p.toolNames.length === 0 && p.commandNames.length === 0 && (
-                                    <div className="text-gray-400 dark:text-gray-600">
+                                    <div className="text-text-tertiary">
                                       {t("noToolsOrCommands")}
                                     </div>
                                   )}
@@ -455,17 +449,17 @@ export function StatusPanel() {
                           return (
                             <div key={sk.filePath}>
                               <div
-                                className="flex items-center gap-1 py-0.5 px-1 rounded hover:bg-gray-200/50 dark:hover:bg-gray-800/40 transition-colors cursor-pointer group"
+                                className="flex items-center gap-1 py-0.5 px-1 rounded bg-surface-hover/25 hover:bg-surface-hover/60 transition-colors cursor-pointer group"
                                 onClick={() => toggleSkillExpanded(sk.name)}
                               >
                                 <span
-                                  className={`w-1.5 h-1.5 rounded-full ${sk.enabled ? "bg-green-400" : "bg-gray-400 dark:bg-gray-600"}`}
+                                  className={`w-1.5 h-1.5 rounded-full ${sk.enabled ? "bg-status-success" : "bg-text-tertiary dark:bg-text-secondary"}`}
                                 />
-                                <span className="truncate flex-1 text-gray-700 dark:text-gray-300">
+                                <span className="truncate flex-1 text-text-secondary">
                                   {sk.name}
                                 </span>
                                 <span
-                                  className={`text-[9px] px-1 py-px rounded max-w-[36px] truncate ${sk.scope === "global" ? "bg-purple-500/15 text-purple-400" : "bg-blue-500/15 text-blue-400"}`}
+                                  className={`text-[9px] px-1 py-px rounded max-w-[36px] truncate ${sk.scope === "global" ? "bg-semantic-agent/15 text-semantic-agent" : "bg-status-info/15 text-status-info"}`}
                                 >
                                   {sk.scope === "global" ? t("global") : t("project")}
                                 </span>
@@ -474,41 +468,39 @@ export function StatusPanel() {
                                     e.stopPropagation();
                                     toggleSkillEnabled(sk.name);
                                   }}
-                                  className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-gray-300/50 dark:hover:bg-gray-700/50 rounded transition-opacity"
+                                  className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-surface-hover/60 rounded transition-opacity"
                                   title={sk.enabled ? t("disableSkill") : t("enableSkill")}
                                 >
                                   {sk.enabled ? (
-                                    <EyeOff className="w-3 h-3 text-gray-500" />
+                                    <EyeOff className="w-3 h-3 text-text-tertiary" />
                                   ) : (
-                                    <Eye className="w-3 h-3 text-gray-400" />
+                                    <Eye className="w-3 h-3 text-text-tertiary" />
                                   )}
                                 </button>
                               </div>
                               {isExpanded && (
-                                <div className="ml-4 pl-2 border-l border-gray-200 dark:border-gray-800 space-y-1 pt-1 text-[10px]">
-                                  <div className="text-gray-500 dark:text-gray-400 break-all">
+                                <div className="ml-4 pl-2 border-l border-border-primary/70 space-y-1 pt-1 text-[10px]">
+                                  <div className="text-text-tertiary break-all">
                                     {sk.description || t("noDescription")}
                                   </div>
-                                  <div className="space-y-0.5 text-gray-500">
+                                  <div className="space-y-0.5 text-text-tertiary">
                                     <div className="truncate" title={sk.filePath}>
-                                      <span className="text-gray-400 dark:text-gray-600">
-                                        {t("fileLabel")}
-                                      </span>{" "}
-                                      {sk.filePath.split("/").pop()}
+                                      <span className="text-text-tertiary">{t("fileLabel")}</span>{" "}
+                                      {formatFilePath(sk.filePath)}
                                     </div>
                                     <div>
-                                      <span className="text-gray-400 dark:text-gray-600">
-                                        {t("pathLabel")}
-                                      </span>
+                                      <span className="text-text-tertiary">{t("pathLabel")}</span>
                                       <span className="break-all">{sk.filePath}</span>
                                     </div>
                                     {sk.disableModelInvocation && (
-                                      <div className="text-amber-400/70">
+                                      <div className="text-status-warning/70">
                                         {t("disableModelInvocation")}
                                       </div>
                                     )}
                                     {!sk.enabled && (
-                                      <div className="text-red-400/70">{t("skillDisabled")}</div>
+                                      <div className="text-status-error/70">
+                                        {t("skillDisabled")}
+                                      </div>
                                     )}
                                   </div>
                                 </div>
@@ -572,36 +564,36 @@ function MCPToolsSection() {
         const isExpanded = expandedMcpServer === srv.name;
         const isDisabled = srv.disabled === true;
         const statusDot = isDisabled
-          ? "bg-gray-400 dark:bg-gray-600"
+          ? "bg-text-tertiary dark:bg-text-secondary"
           : srv.status === "connected"
-            ? "bg-green-400"
+            ? "bg-status-success"
             : srv.status === "error"
-              ? "bg-red-400"
+              ? "bg-status-error"
               : srv.status === "connecting"
-                ? "bg-yellow-400 animate-pulse"
-                : "bg-gray-400 dark:bg-gray-600";
+                ? "bg-status-warning animate-pulse"
+                : "bg-text-tertiary dark:bg-text-secondary";
         return (
           <div key={srv.name} className={isDisabled ? "opacity-50" : ""}>
             <div
-              className="flex items-center gap-1 py-0.5 px-1 rounded hover:bg-gray-200/50 dark:hover:bg-gray-800/40 transition-colors cursor-pointer group"
+              className="flex items-center gap-1 py-0.5 px-1 rounded bg-surface-hover/25 hover:bg-surface-hover/60 transition-colors cursor-pointer group"
               onClick={() => toggleMcpExpanded(srv.name)}
             >
               <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDot}`} />
               <span className="shrink-0">
                 {isExpanded ? (
-                  <ChevronDown className="w-3 h-3 text-gray-500" />
+                  <ChevronDown className="w-3 h-3 text-text-tertiary" />
                 ) : (
-                  <ChevronRight className="w-3 h-3 text-gray-500" />
+                  <ChevronRight className="w-3 h-3 text-text-tertiary" />
                 )}
               </span>
-              <span className="truncate flex-1 text-gray-700 dark:text-gray-300">{srv.name}</span>
+              <span className="truncate flex-1 text-text-secondary">{srv.name}</span>
               {srv.toolCount > 0 && (
-                <span className="text-gray-400 dark:text-gray-600">
+                <span className="text-text-tertiary">
                   {t("mcpToolCount", { count: srv.toolCount })}
                 </span>
               )}
               <span
-                className={`text-[9px] px-1 py-px rounded shrink-0 max-w-[36px] truncate ${srv.scope === "project" ? "bg-cyan-500/15 text-cyan-400" : "bg-purple-500/15 text-purple-400"}`}
+                className={`text-[9px] px-1 py-px rounded shrink-0 max-w-[36px] truncate ${srv.scope === "project" ? "bg-semantic-tool/15 text-semantic-tool" : "bg-semantic-agent/15 text-semantic-agent"}`}
               >
                 {srv.scope === "project" ? t("project") : t("global")}
               </span>
@@ -612,7 +604,7 @@ function MCPToolsSection() {
                     toggleMcpServer(activeSessionId, srv.name, !!isDisabled);
                   }
                 }}
-                className={`w-6 h-3 rounded-full shrink-0 transition-colors relative ${isDisabled ? "bg-gray-600" : "bg-green-500"}`}
+                className={`w-6 h-3 rounded-full shrink-0 transition-colors relative ${isDisabled ? "bg-text-secondary" : "bg-status-success"}`}
                 title={isDisabled ? t("enableMcpServer") : t("disableMcpServer")}
               >
                 <span
@@ -629,33 +621,31 @@ function MCPToolsSection() {
                   }
                 }}
                 disabled={isDisabled || srv.status !== "connected"}
-                className={`opacity-0 group-hover:opacity-100 p-0.5 rounded transition-opacity shrink-0 ${isDisabled || srv.status !== "connected" ? "text-gray-600 cursor-not-allowed" : "text-gray-400 hover:text-gray-300 hover:bg-gray-300/50 dark:hover:bg-gray-700/50 cursor-pointer"}`}
+                className={`opacity-0 group-hover:opacity-100 p-0.5 rounded transition-opacity shrink-0 ${isDisabled || srv.status !== "connected" ? "text-text-secondary cursor-not-allowed" : "text-text-tertiary hover:text-text-secondary hover:bg-surface-hover/60 cursor-pointer"}`}
                 title={t("restartMcpServer")}
               >
                 <RotateCw className={`w-3 h-3 ${restarting === srv.name ? "animate-spin" : ""}`} />
               </button>
             </div>
             {isExpanded && (
-              <div className="ml-4 pl-2 border-l border-gray-200 dark:border-gray-800 space-y-1 pt-1 text-[10px]">
-                {srv.error && <div className="text-red-400/80 break-all">{srv.error}</div>}
+              <div className="ml-4 pl-2 border-l border-border-primary/70 space-y-1 pt-1 text-[10px]">
+                {srv.error && <div className="text-status-error/80 break-all">{srv.error}</div>}
                 {srv.tools.length === 0 ? (
-                  <div className="text-gray-400 dark:text-gray-600">{t("noMcpTools")}</div>
+                  <div className="text-text-tertiary">{t("noMcpTools")}</div>
                 ) : (
                   <>
                     <div>
-                      <span className="text-gray-400 dark:text-gray-600 block mb-0.5">
-                        {t("toolsLabel")}
-                      </span>
+                      <span className="text-text-tertiary block mb-0.5">{t("toolsLabel")}</span>
                       <div className="space-y-px">
                         {srv.tools.map((tool) => (
                           <div
                             key={tool.name}
-                            className="text-gray-500 dark:text-gray-400 pl-2 font-mono truncate"
+                            className="text-text-tertiary pl-2 font-mono truncate"
                             title={tool.description || undefined}
                           >
                             {tool.name}
                             {tool.description && (
-                              <span className="text-gray-400 dark:text-gray-600 font-sans ml-1">
+                              <span className="text-text-tertiary font-sans ml-1">
                                 — {tool.description}
                               </span>
                             )}
@@ -677,35 +667,30 @@ function MCPToolsSection() {
 
 function MCPCopyButton({ server }: { server: MCPServerInfo }) {
   const { t } = useTranslation("status");
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useClipboard(1500);
   const handleCopy = useCallback(() => {
     const lines = [
       `${t("nameLabel")} ${server.name}`,
       `${t("locationLabel")} ${server.scope === "project" ? t("project") : t("global")}`,
       `${t("toolsFieldLabel", { count: server.toolCount })} ${server.tools.map((t) => t.name).join(", ") || t("none")}`,
     ];
-    copyToClipboard(lines.join("\n")).then((ok) => {
-      if (ok) {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      }
-    });
-  }, [server, t]);
+    copy(lines.join("\n"));
+  }, [server, t, copy]);
 
   return (
     <button
       onClick={handleCopy}
-      className="flex items-center gap-1 text-gray-500 hover:text-gray-300 transition-colors mt-0.5"
+      className="flex items-center gap-1 text-text-tertiary hover:text-text-secondary transition-colors mt-0.5"
     >
-      {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+      {copied ? <Check className="w-3 h-3 text-status-success" /> : <Copy className="w-3 h-3" />}
       <span>{copied ? t("copied") : t("copyInfo")}</span>
     </button>
   );
 }
 
 interface SupervisorSectionContentProps {
-  status: import("../../../shared/modules/supervisor").SupervisorStatus | null;
-  taskReports: import("../../../shared/modules/supervisor").TaskReport[];
+  status: SupervisorStatus | null;
+  taskReports: TaskReport[];
   sessionId: string | null;
   enable: (sessionId: string) => Promise<void>;
   disable: (sessionId: string) => Promise<void>;
@@ -715,11 +700,11 @@ interface SupervisorSectionContentProps {
 }
 
 const STATE_STYLES: Record<string, string> = {
-  idle: "bg-green-500/20 text-green-400",
-  checking: "bg-blue-500/20 text-blue-400",
-  paused: "bg-amber-500/20 text-amber-400",
-  continuing: "bg-blue-500/20 text-blue-400",
-  disabled: "bg-gray-500/20 text-gray-400",
+  idle: "bg-status-success/20 text-status-success",
+  checking: "bg-status-info/20 text-status-info",
+  paused: "bg-status-warning/20 text-status-warning",
+  continuing: "bg-status-info/20 text-status-info",
+  disabled: "bg-text-tertiary/20 text-text-tertiary",
 };
 
 function SupervisorSectionContent({
@@ -746,12 +731,12 @@ function SupervisorSectionContent({
   if (!status) {
     return (
       <div className="flex items-center gap-2">
-        <span className="text-gray-400">{t("supervisor.state.disabled")}</span>
+        <span className="text-text-tertiary">{t("supervisor.state.disabled")}</span>
         {sessionId && (
           <button
             onClick={() => handleEnable(sessionId)}
             disabled={loading}
-            className="px-1.5 py-0.5 rounded text-[9px] bg-green-500/20 text-green-400 disabled:opacity-50"
+            className="px-1.5 py-0.5 rounded text-[9px] bg-status-success/20 text-status-success disabled:opacity-50"
           >
             {loading ? "..." : t("supervisor.enabled")}
           </button>
@@ -766,27 +751,30 @@ function SupervisorSectionContent({
     <div className="space-y-1.5">
       <div className="flex items-center gap-1.5">
         <span
-          className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${STATE_STYLES[status.state] ?? "bg-gray-500/20 text-gray-400"}`}
+          className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${STATE_STYLES[status.state] ?? "bg-text-tertiary/20 text-text-tertiary"}`}
         >
           {stateLabel}
         </span>
-        <span className={`text-[9px] ${status.enabled ? "text-green-400" : "text-gray-500"}`}>
+        <span
+          className={`text-[9px] ${status.enabled ? "text-status-success" : "text-text-tertiary"}`}
+        >
           {status.enabled ? t("supervisor.enabled") : t("supervisor.disabled")}
         </span>
       </div>
 
-      <div className="text-gray-500">
+      <div className="text-text-tertiary">
         {t("supervisor.continueCount")}: {status.continueCount}/{status.maxContinueCount}
       </div>
 
       {status.activeGuards.length > 0 && (
         <div>
-          <span className="text-gray-400 dark:text-gray-600 block mb-0.5">
-            {t("supervisor.activeGuards")}
-          </span>
+          <span className="text-text-tertiary block mb-0.5">{t("supervisor.activeGuards")}</span>
           <div className="flex flex-wrap gap-1">
             {status.activeGuards.map((g) => (
-              <span key={g} className="px-1 py-px rounded text-[9px] bg-cyan-500/15 text-cyan-400">
+              <span
+                key={g}
+                className="px-1 py-px rounded text-[9px] bg-semantic-tool/15 text-semantic-tool"
+              >
                 {g}
               </span>
             ))}
@@ -796,25 +784,23 @@ function SupervisorSectionContent({
 
       {taskReports.length > 0 && (
         <div>
-          <span className="text-gray-400 dark:text-gray-600 block mb-0.5">
-            {t("supervisor.taskReport")}
-          </span>
+          <span className="text-text-tertiary block mb-0.5">{t("supervisor.taskReport")}</span>
           <div className="space-y-0.5">
             {taskReports.map((tr) => (
               <div key={tr.guardName} className="flex items-center gap-1">
                 <span
                   className={`w-1.5 h-1.5 rounded-full shrink-0 ${
                     tr.status === "completed"
-                      ? "bg-green-400"
+                      ? "bg-status-success"
                       : tr.status === "error"
-                        ? "bg-red-400"
+                        ? "bg-status-error"
                         : tr.status === "incomplete"
-                          ? "bg-amber-400"
-                          : "bg-gray-500"
+                          ? "bg-status-warning"
+                          : "bg-text-tertiary"
                   }`}
                 />
-                <span className="truncate text-gray-500">{tr.guardName}</span>
-                <span className="text-[9px] text-gray-400 shrink-0">{tr.status}</span>
+                <span className="truncate text-text-tertiary">{tr.guardName}</span>
+                <span className="text-[9px] text-text-tertiary shrink-0">{tr.status}</span>
               </div>
             ))}
           </div>
@@ -825,7 +811,7 @@ function SupervisorSectionContent({
         <div className="flex flex-wrap gap-1 pt-0.5">
           <button
             onClick={() => (status.enabled ? disable(sessionId) : enable(sessionId))}
-            className={`px-1.5 py-0.5 rounded text-[9px] ${status.enabled ? "bg-red-500/20 text-red-400" : "bg-green-500/20 text-green-400"}`}
+            className={`px-1.5 py-0.5 rounded text-[9px] ${status.enabled ? "bg-status-error/20 text-status-error" : "bg-status-success/20 text-status-success"}`}
           >
             {status.enabled ? t("supervisor.disabled") : t("supervisor.enabled")}
           </button>
@@ -833,7 +819,7 @@ function SupervisorSectionContent({
             <>
               <button
                 onClick={() => forceContinue(sessionId)}
-                className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] bg-blue-500/20 text-blue-400"
+                className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] bg-status-info/20 text-status-info"
               >
                 <Play className="w-2.5 h-2.5" />
                 {t("supervisor.forceContinue")}
@@ -841,14 +827,14 @@ function SupervisorSectionContent({
               {status.pendingPause ? (
                 <button
                   onClick={() => cancelPause(sessionId)}
-                  className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] bg-amber-500/20 text-amber-400"
+                  className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] bg-status-warning/20 text-status-warning"
                 >
                   {t("supervisor.cancelPause")}
                 </button>
               ) : (
                 <button
                   onClick={() => requestPause(sessionId, 5000)}
-                  className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] bg-amber-500/20 text-amber-400"
+                  className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] bg-status-warning/20 text-status-warning"
                 >
                   <Pause className="w-2.5 h-2.5" />
                   {t("supervisor.pause")}
@@ -860,7 +846,7 @@ function SupervisorSectionContent({
       )}
 
       {status.pendingPause && (
-        <div className="text-[9px] text-amber-400/80">
+        <div className="text-[9px] text-status-warning/80">
           {t("supervisor.pause")}:{" "}
           {Math.ceil((status.pendingPause.scheduledAt - Date.now()) / 1000)}s
           {status.pendingPause.reason ? ` — ${status.pendingPause.reason}` : ""}

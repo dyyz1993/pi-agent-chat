@@ -5,11 +5,14 @@ import { TabBar } from "../components/tab-bar/TabBar";
 import { ChatPanel } from "../components/chat/ChatPanel";
 import { LeftSidebar } from "../components/left-sidebar/LeftSidebar";
 import { RightSidebar } from "../components/right-sidebar/RightSidebar";
-import { FilePreviewOverlay } from "../components/file-preview/FilePreviewOverlay";
-import { DiffViewerPanel } from "../components/diff/DiffViewerPanel";
+import { FileOverlay } from "../components/file-preview/FileOverlay";
+import { DiffOverlay } from "../components/diff/DiffOverlay";
+import { CodeExpandOverlay } from "../components/chat/primitives/CodeExpandOverlay";
+import { MarkdownExpandOverlay } from "../components/chat/MarkdownExpandOverlay";
 import { ConnectionBanner } from "../components/ConnectionBanner";
 import { useExplorerStore } from "../stores/use-explorer-store";
 import { useGitStore } from "../stores/use-git-store";
+import { useChatOverlayStore } from "../stores/use-chat-overlay-store";
 
 interface MainLayoutProps {
   onAddProject: () => void;
@@ -135,7 +138,6 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
 
   const filePreview = useExplorerStore((s) => s.filePreview);
   const loadingFile = useExplorerStore((s) => s.loadingFile);
-  const closePreview = useExplorerStore((s) => s.closePreview);
   const saveFileContent = useExplorerStore((s) => s.saveFileContent);
   const setFileEditable = useExplorerStore((s) => s.setFileEditable);
   const handleSaveFile = useCallback(
@@ -147,9 +149,13 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
     [saveFileContent, filePreview?.path],
   );
   const currentDiff = useGitStore((s) => s.currentDiff);
+  const overlay = useChatOverlayStore((s) => s.overlay);
+  const expandTitle = useChatOverlayStore((s) => s.expandTitle);
+  const expandContent = useChatOverlayStore((s) => s.expandContent);
+  const closeOverlay = useChatOverlayStore((s) => s.close);
 
   return (
-    <div className="h-screen bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-white flex flex-col overflow-hidden">
+    <div className="h-screen bg-bg-primary text-text-primary flex flex-col overflow-hidden">
       <ConnectionBanner />
       {/* === ROW 1: Top Tab Bar === */}
       <TabBar onAddProject={onAddProject} />
@@ -159,7 +165,7 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
         {/* ---- Mobile drawer backdrop ---- */}
         {isMobile && (sessionPanel === "visible" || statusPanel === "visible") && (
           <div
-            className="absolute inset-0 bg-black/50 z-10 animate-in fade-in duration-150"
+            className="absolute inset-0 bg-bg-overlay backdrop-blur-[1px] z-10 animate-in fade-in duration-150"
             onClick={handleChatAreaClick}
           />
         )}
@@ -182,7 +188,7 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
             onMouseDown={handleLeftResize}
             onTouchStart={handleLeftResize}
           >
-            <div className="resize-handle-indicator w-0.5 h-8 rounded-full bg-gray-700 transition-all duration-150 mx-auto mt-[50vh] -translate-y-1/2" />
+            <div className="resize-handle-indicator w-0.5 h-8 rounded-full bg-border-secondary/70 transition-all duration-150 mx-auto mt-[50vh] -translate-y-1/2" />
           </div>
         )}
 
@@ -192,22 +198,28 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
           onClick={handleChatAreaClick}
         >
           <ChatPanel />
-          {filePreview && (
+          {overlay === "file" && filePreview && (
             <div onClick={(e) => e.stopPropagation()}>
-              <FilePreviewOverlay
+              <FileOverlay
                 preview={filePreview}
                 loading={loadingFile}
-                onClose={closePreview}
+                onClose={closeOverlay}
                 onSave={handleSaveFile}
                 onToggleEdit={setFileEditable}
               />
             </div>
           )}
-          {currentDiff && (
+          {overlay === "diff" && currentDiff && (
             <div onClick={(e) => e.stopPropagation()}>
-              <DiffViewerPanel />
+              <DiffOverlay />
             </div>
           )}
+          {overlay === "expand" && (
+            <CodeExpandOverlay open onClose={closeOverlay} title={expandTitle}>
+              {expandContent}
+            </CodeExpandOverlay>
+          )}
+          {overlay === "markdown" && <MarkdownExpandOverlay />}
         </div>
 
         {/* ---- Right Resize Handle ---- */}
@@ -218,25 +230,22 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
             onMouseDown={handleRightResize}
             onTouchStart={handleRightResize}
           >
-            <div className="resize-handle-indicator w-0.5 h-8 rounded-full bg-gray-700 transition-all duration-150 mx-auto mt-[50vh] -translate-y-1/2" />
+            <div className="resize-handle-indicator w-0.5 h-8 rounded-full bg-border-secondary/70 transition-all duration-150 mx-auto mt-[50vh] -translate-y-1/2" />
           </div>
         )}
 
         {/* ---- COL 3: Right Sidebar ---- */}
-        {statusPanel !== "hidden" && (
-          <RightSidebar
-            width={
-              isMobile
-                ? statusPanel === "visible"
-                  ? Math.min(320, Math.round(contentWidth * 0.8))
-                  : 48
-                : isTablet
-                  ? 48
-                  : statusWidth
-            }
-            overlay={statusPanel === "visible"}
-          />
-        )}
+        {statusPanel !== "hidden" &&
+          ((isTablet && statusPanel === "visible") ||
+            (!isMobile && !isTablet) ||
+            (isMobile && statusPanel === "visible")) && (
+            <RightSidebar
+              width={
+                isMobile || isTablet ? Math.min(320, Math.round(contentWidth * 0.8)) : statusWidth
+              }
+              overlay={statusPanel === "visible"}
+            />
+          )}
       </div>
     </div>
   );

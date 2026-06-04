@@ -109,7 +109,7 @@ vi.mock("../src/mainview/stores/use-session-store", () => {
     },
     restoreContextFromHistory: () => {},
   }));
-  return { useSessionStore };
+  return { useSessionStore, clearAgentStarted: () => {} };
 });
 
 vi.mock("../src/mainview/stores/use-chat-store", () => {
@@ -215,6 +215,39 @@ describe("agent_start / agent_end", () => {
     useSessionStore.setState({ sessionsByProject: { "/tmp": [] } });
     handleAgentEvent(SID, { type: "agent_end" } as Parameters<typeof handleAgentEvent>[1]);
     expect(useSessionStore.getState().sessionStatusMap[SID]).toBe("idle");
+  });
+
+  it("agent_start bumps SessionMeta.updatedAt so session bubbles to top of list", () => {
+    const oldTime = 1000;
+    const otherTime = 2000;
+    useSessionStore.setState({
+      sessionsByProject: {
+        "/proj": [
+          { sessionId: "other-session", updatedAt: otherTime, sessionPath: "/s/other" },
+          { sessionId: SID, updatedAt: oldTime, sessionPath: "/s/test" },
+        ],
+      },
+    });
+
+    const beforeEvent = Date.now();
+    handleAgentEvent(SID, { type: "agent_start" } as Parameters<typeof handleAgentEvent>[1]);
+
+    const sessions = useSessionStore.getState().sessionsByProject["/proj"];
+    const updated = sessions.find((s) => s.sessionId === SID);
+    expect(updated?.updatedAt).toBeGreaterThanOrEqual(beforeEvent);
+
+    // The previously-older session should now have a newer updatedAt than the other
+    const other = sessions.find((s) => s.sessionId === "other-session");
+    expect((updated as { updatedAt: number }).updatedAt).toBeGreaterThan(
+      (other as { updatedAt: number }).updatedAt,
+    );
+  });
+
+  it("agent_start does not crash when session is not in sessionsByProject", () => {
+    useSessionStore.setState({ sessionsByProject: {} });
+    expect(() =>
+      handleAgentEvent(SID, { type: "agent_start" } as Parameters<typeof handleAgentEvent>[1]),
+    ).not.toThrow();
   });
 });
 

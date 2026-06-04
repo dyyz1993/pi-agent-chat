@@ -1,9 +1,13 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { RefreshCw } from "lucide-react";
 import { apiClient, resolveAuthToken } from "./lib/api-client";
 import { useAppStore } from "./stores/use-app-store";
 import { useSessionStore } from "./stores/use-session-store";
-import { setupProjectStatusSubscription } from "./stores/session-subscriptions";
+import {
+  setupProjectStatusSubscription,
+  setupSessionRenamedSubscription,
+} from "./stores/session-subscriptions";
 import { useChatStore } from "./stores/use-chat-store";
 import { createLogger } from "../shared/lib/logger";
 import { MainLayout } from "./layouts/MainLayout";
@@ -16,6 +20,7 @@ import { LoginPage } from "./components/LoginPage";
 function App() {
   const { t } = useTranslation("common");
   const log = createLogger("chat");
+  const initError = useAppStore((s) => s.initError);
   const ready = useAppStore((s) => s.ready);
   const initializeConnection = useAppStore((s) => s.initializeConnection);
   const addLog = useAppStore((s) => s.addLog);
@@ -25,7 +30,7 @@ function App() {
   const [restoring, setRestoring] = useState(!useAppStore.getState().restored);
   const addProjectTab = useSessionStore((s) => s.addProjectTab);
   const loadSessionsForProject = useSessionStore((s) => s.loadSessionsForProject);
-  const restoreFromPersisted = useSessionStore((s) => s.restoreFromPersisted);
+
   const [hasToken, setHasToken] = useState(() => !!resolveAuthToken());
   const [loginError, setLoginError] = useState<string | null>(null);
   const loginTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -75,8 +80,11 @@ function App() {
 
     const doInit = async () => {
       if (cancelled) return;
-      initializeConnection();
-      setupProjectStatusSubscription();
+      await Promise.all([
+        initializeConnection(),
+        setupProjectStatusSubscription(),
+        setupSessionRenamedSubscription(),
+      ]);
     };
 
     doInit();
@@ -151,14 +159,6 @@ function App() {
         }
 
         if (cancelled) return;
-        const restored = await restoreFromPersisted();
-        if (restored) {
-          addLog("Restored last session from cache");
-          if (!cancelled) setRestoring(false);
-          return;
-        }
-
-        if (cancelled) return;
         const tabResult = await apiClient.call("project.restoreTabs", {});
         const savedTabs = tabResult.tabs as Array<{ id: string; name: string; path: string }>;
         const savedActiveId = tabResult.activeTabId as string | null;
@@ -178,19 +178,37 @@ function App() {
               : savedTabs[0].id;
           useSessionStore.getState().setActiveProject(targetId, { skipAutoSession: true });
 
+          if (!cancelled) setRestoring(false);
+
           const tab = savedTabs.find((t) => t.id === targetId);
           if (tab) {
-            const sessions = await loadSessionsForProject(tab.path);
+            const sessions = await Promise.race([
+              loadSessionsForProject(tab.path),
+              new Promise<never>((_, reject) =>
+                setTimeout(
+                  () => reject(new Error("loadSessionsForProject timed out (10s)")),
+                  10_000,
+                ),
+              ),
+            ]).catch((err) => {
+              addLog(`Session load failed: ${err instanceof Error ? err.message : String(err)}`);
+              return [] as Awaited<ReturnType<typeof loadSessionsForProject>>;
+            });
             addLog(
               `Restored ${savedTabs.length} tabs from server config (${sessions.length} sessions)`,
             );
             if (sessions.length > 0) {
-              useSessionStore.getState().setActiveSession(sessions[0].sessionId);
+              const { lastActiveSessionByProject } = useSessionStore.getState();
+              const lastSid = lastActiveSessionByProject[tab.path];
+              const targetSession =
+                lastSid && sessions.some((s) => s.sessionId === lastSid)
+                  ? lastSid
+                  : sessions[0].sessionId;
+              useSessionStore.getState().setActiveSession(targetSession);
             } else {
               await useSessionStore.getState().createNewSession();
             }
           }
-          if (!cancelled) setRestoring(false);
           return;
         }
 
@@ -208,16 +226,22 @@ function App() {
         addProjectTab({ id: tabId, name: first.name, path: first.path });
         useSessionStore.getState().setActiveProject(tabId, { skipAutoSession: true });
 
+        if (!cancelled) setRestoring(false);
+
         const sessions = await loadSessionsForProject(first.path);
         addLog(`Restored project: ${first.name} (${sessions.length} sessions)`);
 
         if (sessions.length > 0) {
-          const sid = sessions[0].sessionId;
+          const { lastActiveSessionByProject } = useSessionStore.getState();
+          const lastSid = lastActiveSessionByProject[first.path];
+          const sid =
+            lastSid && sessions.some((s) => s.sessionId === lastSid)
+              ? lastSid
+              : sessions[0].sessionId;
           useSessionStore.getState().setActiveSession(sid);
         } else {
           await useSessionStore.getState().createNewSession();
         }
-        if (!cancelled) setRestoring(false);
       } catch (err) {
         addLog(`Restore failed: ${err instanceof Error ? err.message : String(err)}`);
         if (!cancelled) setRestoring(false);
@@ -227,7 +251,14 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [ready, addLog, addProjectTab, loadSessionsForProject, restoreFromPersisted]);
+  }, [ready, addLog, addProjectTab, loadSessionsForProject]);
+
+  // 首次恢复完成后，后台拉取所有项目所有会话的运行状态
+  useEffect(() => {
+    if (!restoring && ready) {
+      useSessionStore.getState().fetchAllProjectsSessionsStatus();
+    }
+  }, [restoring, ready]);
 
   const handleSelectProject = async (path: string, name: string) => {
     setProjectLoading(true);
@@ -265,18 +296,37 @@ function App() {
   }
 
   if (!ready || restoring || projectLoading) {
+    const showRetry = initError && !restoring && !projectLoading;
     return (
       <ErrorBoundary>
-        <div className="h-screen flex items-center justify-center bg-white dark:bg-gray-950">
+        <div className="h-screen flex items-center justify-center bg-bg-primary">
           <div className="text-center">
-            <div className="inline-block w-8 h-8 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin mb-4" />
-            <div className="text-gray-500 dark:text-gray-400 text-sm">
-              {!ready
-                ? t("connectingRpc")
-                : projectLoading
-                  ? t("loadingProject")
-                  : t("restoringSession")}
-            </div>
+            {showRetry ? (
+              <>
+                <div className="text-status-error text-sm font-medium mb-2">
+                  {t("connectionFailed")}
+                </div>
+                <div className="text-text-tertiary text-xs mb-4 max-w-xs">{initError}</div>
+                <button
+                  onClick={initializeConnection}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-semantic-accent hover:bg-semantic-accent rounded-lg text-sm text-white transition-colors"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  {t("retry")}
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="inline-block w-8 h-8 border-2 border-semantic-accent border-t-transparent rounded-full animate-spin mb-4" />
+                <div className="text-text-secondary text-sm">
+                  {!ready
+                    ? t("connectingRpc")
+                    : projectLoading
+                      ? t("loadingProject")
+                      : t("restoringSession")}
+                </div>
+              </>
+            )}
           </div>
         </div>
       </ErrorBoundary>

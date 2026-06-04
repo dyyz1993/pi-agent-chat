@@ -1,4 +1,15 @@
 export interface SessionMethods {
+  "session.getMetadata": {
+    params: {};
+    result: {
+      sessionId: string;
+      sessionPath: string;
+      projectPath: string;
+      cwd: string;
+      delegateParentSessionId?: string;
+      createdAt?: string;
+    };
+  };
   "session.getEntries": {
     params: { sessionPath: string; limit?: number; cursor?: string };
     result: { entries: SessionEntry[]; hasMore: boolean };
@@ -30,6 +41,25 @@ export interface SessionMethods {
   "session.updateCwd": {
     params: { sessionPath: string; newCwd: string };
     result: { ok: boolean };
+  };
+  "session.saveTierConfig": {
+    params: {
+      sessionPath: string;
+      tierModels: Record<string, string>;
+      currentTier: string | null;
+      currentModel: { provider: string; id: string } | null;
+    };
+    result: { ok: boolean };
+  };
+  "session.loadTierConfig": {
+    params: { sessionPath: string };
+    result: {
+      config: {
+        tierModels: Record<string, string>;
+        currentTier: string | null;
+        currentModel: { provider: string; id: string } | null;
+      } | null;
+    };
   };
 }
 

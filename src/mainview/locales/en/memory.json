@@ -37,5 +37,15 @@
   "recentOperations": "Recent Operations",
   "noOperations": "No operations",
   "markedIrrelevant": "Marked Irrelevant",
-  "markedIrrelevantDesc": "System will learn from this to improve future searches"
+  "markedIrrelevantDesc": "System will learn from this to improve future searches",
+  "searchHistory": "Search History",
+  "noSearchHistory": "No search history",
+  "filterRules": "Filter Rules",
+  "excludeKeywords": "Exclude Keywords",
+  "customSkipRules": "Custom Skip Rules",
+  "customGuardRules": "Custom Guard Rules",
+  "showBuiltin": "{{skip}} skip + {{guard}} guard built-in ▸",
+  "hideBuiltin": "Hide built-in rules ▾",
+  "noCustomRules": "No custom rules",
+  "remove": "Remove"
 }
