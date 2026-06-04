@@ -130,6 +130,8 @@ function PanelCard({ req }: { req: UIPendingRequest }) {
   }
 
   if (isConfirm) {
+    const isHookConfirm = !!req.hookMeta;
+
     return (
       <div className="border border-border-secondary/40 rounded-xl overflow-hidden bg-surface-dim/50 dark:bg-surface-code/50">
         <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border-secondary/60">
@@ -140,12 +142,19 @@ function PanelCard({ req }: { req: UIPendingRequest }) {
           {req.message && (
             <p className="text-[11px] text-text-secondary mb-2.5 leading-relaxed">{req.message}</p>
           )}
+          {isHookConfirm && req.hookMeta?.command && (
+            <div className="mb-2.5 rounded-md bg-bg-primary/70 border border-border-secondary/40 px-2 py-1.5">
+              <code className="block text-[11px] text-text-primary font-mono break-all leading-relaxed">
+                {req.hookMeta.command}
+              </code>
+            </div>
+          )}
           <div className="flex gap-2">
             <button
               onClick={() => respondById(req.requestId, { confirmed: true })}
               className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md bg-status-success/20 text-status-success hover:bg-status-success/30 text-[11px] transition-colors"
             >
-              {t("uiPending.confirm")}
+              {isHookConfirm ? t("uiCard.allowOnce") : t("uiPending.confirm")}
             </button>
             <button
               onClick={() => dismissById(req.requestId)}
@@ -421,6 +430,72 @@ export function UIPendingCenter() {
         </ModalDialog>
       )}
     </>
+  );
+}
+
+export function ProjectRuntimePendingRequests({
+  activeSessionId,
+}: {
+  activeSessionId: string | null;
+}) {
+  const { t } = useTranslation("chat");
+  const allPending = useUIDialogStore((s) => s.pending);
+  const activeProjectId = useSessionStore((s) => s.activeProjectId);
+  const projectTabs = useSessionStore((s) => s.projectTabs);
+  const sessionsByProject = useSessionStore((s) => s.sessionsByProject);
+
+  const projectSessions = useMemo(() => {
+    if (!activeProjectId) return [];
+    const tab = projectTabs.find((t) => t.id === activeProjectId);
+    if (!tab) return [];
+    return sessionsByProject[tab.path] ?? [];
+  }, [activeProjectId, projectTabs, sessionsByProject]);
+
+  const sessionNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const s of projectSessions) {
+      map.set(s.sessionId, s.name || s.firstMessage?.slice(0, 30) || s.sessionId.slice(0, 8));
+    }
+    return map;
+  }, [projectSessions]);
+
+  const projectPending = useMemo(() => {
+    const projectSessionIds = new Set(projectSessions.map((s) => s.sessionId));
+    const scoped = allPending.filter((req) => projectSessionIds.has(req.sessionId));
+    return scoped.sort((a, b) => {
+      if (a.sessionId === activeSessionId && b.sessionId !== activeSessionId) return -1;
+      if (b.sessionId === activeSessionId && a.sessionId !== activeSessionId) return 1;
+      return 0;
+    });
+  }, [allPending, activeSessionId, projectSessions]);
+
+  if (projectPending.length === 0) return null;
+
+  const handleGotoSession = (sessionId: string) => {
+    useSessionStore.getState().setActiveSession(sessionId);
+  };
+
+  return (
+    <div className="px-3 py-1.5 flex-shrink-0 space-y-2" aria-live="polite">
+      {projectPending.map((req) => (
+        <div key={req.requestId} data-ui-request-id={req.requestId} className="space-y-1">
+          {req.sessionId !== activeSessionId && (
+            <div className="flex items-center gap-2 px-1 text-[10px] text-text-tertiary">
+              <span className="truncate">
+                {sessionNameMap.get(req.sessionId) ?? req.sessionId.slice(0, 8)}
+              </span>
+              <button
+                onClick={() => handleGotoSession(req.sessionId)}
+                className="ml-auto text-semantic-accent hover:text-semantic-accent/80 transition-colors"
+              >
+                {t("uiPending.gotoSession")}
+              </button>
+            </div>
+          )}
+          <PanelCard req={req} />
+        </div>
+      ))}
+    </div>
   );
 }
 

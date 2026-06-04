@@ -20,7 +20,7 @@ import { useChatStore } from "../../stores/use-chat-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useNotificationStore } from "../../stores/use-notification-store";
 import { NotificationCenter } from "./NotificationCenter";
-import { UIPendingCenter } from "./UIPendingCenter";
+import { ProjectRuntimePendingRequests, UIPendingCenter } from "./UIPendingCenter";
 import { useChangeReviewStore } from "../../stores/use-change-review-store";
 import { RetryNotification } from "./RetryNotification";
 import { InlineErrorToast } from "./InlineErrorToast";
@@ -563,7 +563,12 @@ export function ChatPanel() {
               />
             )}
           </div>
-          {activeSessionId && !isViewingSubagent && <QueueCards sessionId={activeSessionId} />}
+          {activeSessionId && !isViewingSubagent && (
+            <>
+              <QueueCards sessionId={activeSessionId} />
+              <ProjectRuntimePendingRequests activeSessionId={activeSessionId} />
+            </>
+          )}
         </div>
         <div className="w-12 shrink-0 overflow-hidden">
           <SideNav ref={sideNavRef} messages={messages} onNavDotClick={handleNavDotClick} />

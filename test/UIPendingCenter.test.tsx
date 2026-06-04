@@ -9,6 +9,7 @@ import {
 } from "@testing-library/react";
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import {
+  ProjectRuntimePendingRequests,
   UIPendingCenter,
   useProjectPendingCount,
 } from "../src/mainview/components/chat/UIPendingCenter";
@@ -377,6 +378,77 @@ describe("UIPendingCenter", () => {
       ];
       expect(() => render(<UIPendingCenter />)).not.toThrow();
     }
+  });
+});
+
+describe("ProjectRuntimePendingRequests", () => {
+  beforeEach(() => {
+    currentPending = [];
+    mockActiveProjectId = null;
+    mockProjectTabs = [];
+    mockSessionsByProject = {};
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("renders pending requests for the active session in the runtime action area", () => {
+    currentPending = [
+      makeRequest({
+        requestId: "r1",
+        sessionId: "sess-1",
+        method: "confirm",
+        title: "Hook permission",
+        message: "Allow this command?",
+        hookMeta: {
+          toolName: "bash",
+          matcher: "npm *",
+          command: "npm run build",
+          reason: "Needs approval",
+        },
+      }),
+      makeRequest({
+        requestId: "r2",
+        sessionId: "sess-2",
+        method: "confirm",
+        title: "Other session",
+        message: "Should stay hidden",
+      }),
+    ];
+
+    setupProject();
+    render(<ProjectRuntimePendingRequests activeSessionId="sess-1" />);
+
+    expect(screen.getByText("Hook permission")).toBeInTheDocument();
+    expect(screen.getByText("Allow this command?")).toBeInTheDocument();
+    expect(screen.getByText("npm run build")).toBeInTheDocument();
+    expect(screen.getByText("uiCard.allowOnce")).toBeInTheDocument();
+    expect(screen.getByText("Other session")).toBeInTheDocument();
+    expect(document.querySelector('[data-ui-request-id="r1"]')).toBeInTheDocument();
+  });
+
+  it("renders pending requests from other sessions in the current project", () => {
+    setupProject();
+    currentPending = [
+      makeRequest({ requestId: "r1", sessionId: "sess-2", title: "Other session permission" }),
+    ];
+
+    render(<ProjectRuntimePendingRequests activeSessionId="sess-1" />);
+
+    expect(screen.getByText("Other session permission")).toBeInTheDocument();
+    expect(screen.getByText("Session B")).toBeInTheDocument();
+    expect(screen.getByText("uiPending.gotoSession")).toBeInTheDocument();
+  });
+
+  it("renders nothing when the current project has no pending requests", () => {
+    setupProject();
+    currentPending = [makeRequest({ requestId: "r1", sessionId: "other-session" })];
+
+    const { container } = render(<ProjectRuntimePendingRequests activeSessionId="sess-1" />);
+
+    expect(container.innerHTML).toBe("");
   });
 });
 
