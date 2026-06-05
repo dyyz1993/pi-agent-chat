@@ -67,6 +67,10 @@ import {
   getSandboxManager,
   initSandboxManager,
 } from "./agent-runtime-client";
+import {
+  ensureManagedClientOperation,
+  findSandboxUserIdForSession,
+} from "./agent-managed-client-operations";
 import { startAgentClientOperation } from "./agent-start-operations";
 import { stopAgentClientOperation } from "./agent-stop-operations";
 import {
@@ -586,72 +590,26 @@ export class AgentProcessManager {
    * using persisted session/project metadata.
    */
   private async ensureManagedClient(sessionId: string): Promise<ManagedClient | null> {
-    const existing = this.getActiveManaged(sessionId);
-    if (existing) return existing;
-
-    let projectPath = this.sessionProjectPaths.get(sessionId);
-    let sessionPath = this.sessionPaths.get(sessionId);
-    if (!projectPath || !sessionPath) {
-      const session = await findSessionById(sessionId);
-      if (session) {
-        projectPath = session.projectPath;
-        sessionPath = session.sessionPath;
-        this.sessionProjectPaths.set(sessionId, projectPath);
-        this.sessionPaths.set(sessionId, sessionPath);
-      }
-    }
-
-    if (!projectPath || !sessionPath) {
-      log.warn("[ensureManagedClient] session metadata not found", { sessionId });
-      return null;
-    }
-
-    const userId = config.sandboxEnabled ? (this._getSandboxUserId(sessionId) ?? sessionId) : undefined;
-
-    log.info("[ensureManagedClient] rebuilding managed client", {
+    return ensureManagedClientOperation({
       sessionId,
-      projectPath,
-      sandbox: !!config.sandboxEnabled,
-      userId,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+      sessionProjectPaths: this.sessionProjectPaths,
+      sessionPaths: this.sessionPaths,
+      findSessionById,
+      sandboxEnabled: !!config.sandboxEnabled,
+      getSandboxUserId: (id) => this._getSandboxUserId(id),
+      start: (id, projectPath, sessionPath, startOptions) =>
+        this.start(id, projectPath, sessionPath, startOptions),
     });
-
-    try {
-      const result = await this.start(sessionId, projectPath, sessionPath, {
-        forceNewProcess: false,
-        userId,
-      });
-      log.info("[ensureManagedClient] rebuild complete", { sessionId, status: result.status });
-    } catch (err: unknown) {
-      log.error("[ensureManagedClient] rebuild failed", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return null;
-    }
-
-    return this.getActiveManaged(sessionId);
   }
 
   private _getSandboxUserId(sessionId: string): string | null {
-    if (!config.sandboxEnabled) return null;
-    for (const [key, pool] of this.processByCwd) {
-      for (const mc of pool) {
-        if (mc._activeSessionId === sessionId && key.includes("::")) {
-          return key.split("::")[1] ?? null;
-        }
-      }
-    }
-    for (const [, mc] of this.clients) {
-      if (mc._activeSessionId === sessionId) {
-        const projectPath = mc.info.projectPath;
-        for (const [key] of this.processByCwd) {
-          if (key.startsWith(`${projectPath}::`)) {
-            return key.split("::")[1] ?? null;
-          }
-        }
-      }
-    }
-    return null;
+    return findSandboxUserIdForSession({
+      sessionId,
+      sandboxEnabled: !!config.sandboxEnabled,
+      processByCwd: this.processByCwd,
+      clients: this.clients,
+    });
   }
 
   /**
