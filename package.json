@@ -54,7 +54,7 @@
     "test:failed": "bash run-tests.sh failed"
   },
   "dependencies": {
-    "@dyyz1993/pi-agent-core": "^0.78.2",
+    "@dyyz1993/pi-agent-core": "^0.78.3",
     "@dyyz1993/pi-ai": "^0.78.2",
     "@dyyz1993/pi-coding-agent": "^0.78.2",
     "@dyyz1993/pi-tui": "^0.74.8",
