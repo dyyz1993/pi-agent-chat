@@ -18,6 +18,23 @@ A full-stack AI coding assistant with desktop (Electrobun) and web support, buil
   <img src="screenshots/mobile-view.png" width="300" />
 </p>
 
+## Download
+
+Pre-built binaries are available on the [Releases page](https://github.com/dyyz1993/pi-agent-chat/releases).
+
+### macOS Installation
+
+Since the app is not code-signed with an Apple Developer certificate, macOS will show a "damaged" warning. Fix it with:
+
+```bash
+# Remove quarantine attribute from downloaded DMG
+xattr -cr ~/Downloads/PiAgentChat-*.dmg
+
+# Then double-click to open normally
+```
+
+Or right-click the DMG → "Open" → "Open" in the dialog.
+
 ## Features
 
 - **AI Chat Interface** - Real-time streaming conversations with AI coding agents

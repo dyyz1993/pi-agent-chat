@@ -52,12 +52,15 @@ jobs:
           echo "app_path=$APP_PATH" >> "$GITHUB_OUTPUT"
           echo "app_name=$APP_NAME" >> "$GITHUB_OUTPUT"
 
-      - name: Create DMG
+      - name: Ad-hoc sign and create DMG
         id: dmg
         run: |
           APP_PATH="${{ steps.locate.outputs.app_path }}"
           APP_NAME="${{ steps.locate.outputs.app_name }}"
           DMG_NAME="PiAgentChat-${GITHUB_REF_NAME}-macos-${{ matrix.arch }}.dmg"
+          
+          # Ad-hoc sign the app (removes "damaged" error on download)
+          codesign --force --deep --sign - "$APP_PATH"
           
           # Create a temporary DMG folder
           mkdir -p dmg-staging
