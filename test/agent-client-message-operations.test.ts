@@ -6,7 +6,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getFullMessagesOperation } from "../src/shared/agent/agent-client-message-operations";
+import {
+  getFullMessagesOperation,
+  getMessagesOperation,
+} from "../src/shared/agent/agent-client-message-operations";
 
 const TMP_ROOT = join(tmpdir(), "pi-agent-message-ops-test");
 
@@ -20,6 +23,16 @@ function messageEntry(id: string, parentId: string | null, role: string, text: s
     parentId,
     type: "message",
     message: { role, content: [{ type: "text", text }] },
+  });
+}
+
+function customEntry(id: string, parentId: string | null, customType: string): string {
+  return jsonlEntry({
+    id,
+    parentId,
+    type: "custom",
+    customType,
+    data: { ok: true },
   });
 }
 
@@ -92,5 +105,73 @@ describe("agent client message operations", () => {
       "user",
       "assistant",
     ]);
+  });
+
+  it("getMessages reads active SDK messages and filters JSONL custom entries by leaf path", async () => {
+    writeFileSync(
+      sessionPath,
+      [
+        customEntry("c1", "m1", "on-path"),
+        customEntry("c2", "other", "off-path"),
+      ].join("\n"),
+    );
+    const leafIds = new Map<string, string | null>();
+    const managed = {
+      client: {
+        getMessages: vi.fn().mockResolvedValue([{ role: "assistant", content: "live" }]),
+        getTreeWithLeaf: vi.fn().mockResolvedValue({
+          entries: [
+            { id: "m1", parentId: null, type: "message" },
+            { id: "c1", parentId: "m1", type: "custom" },
+          ],
+          leafId: "c1",
+        }),
+      },
+      info: {
+        status: "idle",
+        sessionPath,
+      },
+    };
+
+    const result = await getMessagesOperation({
+      sessionId: "sess-1",
+      getActiveManaged: () => managed,
+      resolveSessionPath: () => "",
+      readJsonlEntries: vi.fn(),
+      buildMessagesFromJsonl: vi.fn(),
+      leafIds,
+    });
+
+    expect(leafIds.get("sess-1")).toBe("c1");
+    expect(result.messages).toEqual([{ role: "assistant", content: "live" }]);
+    expect(result.customEntries.map((entry) => entry.customType)).toEqual(["on-path"]);
+  });
+
+  it("getMessages reads inactive JSONL messages and custom entries", async () => {
+    writeFileSync(
+      sessionPath,
+      [
+        messageEntry("m1", null, "user", "hello"),
+        customEntry("c1", "m1", "file-review-turn"),
+      ].join("\n"),
+    );
+
+    const result = await getMessagesOperation({
+      sessionId: "sess-1",
+      sessionPath,
+      getActiveManaged: () => null,
+      resolveSessionPath: () => sessionPath,
+      readJsonlEntries: vi.fn().mockResolvedValue([
+        { id: "m1", parentId: null, type: "message" },
+        { id: "c1", parentId: "m1", type: "custom", customType: "file-review-turn" },
+      ]),
+      buildMessagesFromJsonl: vi.fn().mockReturnValue([]),
+      leafIds: new Map([["sess-1", "c1"]]),
+    });
+
+    expect(result.messages.map((message) => (message as { role?: string }).role)).toEqual([
+      "user",
+    ]);
+    expect(result.customEntries.map((entry) => entry.customType)).toEqual(["file-review-turn"]);
   });
 });

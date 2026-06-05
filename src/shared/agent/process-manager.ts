@@ -143,9 +143,9 @@ import {
   restoreFilesFromSnapshotOperation,
 } from "./agent-client-history-operations";
 import {
-  appendUiJsonlEntriesFromPath,
-} from "./session-jsonl-messages";
-import { getFullMessagesOperation } from "./agent-client-message-operations";
+  getFullMessagesOperation,
+  getMessagesOperation,
+} from "./agent-client-message-operations";
 import {
   createLeafPointerEntry,
   mapJsonlEntriesToTreeEntries,
@@ -958,112 +958,23 @@ export class AgentProcessManager {
     messages: AgentMessageForUI[];
     customEntries: Array<{ id: string; customType: string; data: unknown; timestamp: number }>;
   }> {
-    const managed = this.getActiveManaged(sessionId);
-
-    let messages: unknown[] = [];
-    let resolvedSessionPath = sessionPath ?? "";
-    let activePathIds: Set<string> | null = null;
-
-    if (managed) {
-      resolvedSessionPath = managed.info.sessionPath;
-      try {
-        const messagesResult = await withTimeout(
-          managed.client.getMessages(),
-          15_000,
-          "getMessages",
-        );
-        if (messagesResult) {
-          messages = messagesResult;
-        }
-      } catch (err: unknown) {
-        log.warn("getMessages SDK failed", {
-          sessionId,
-          err: err instanceof Error ? err.message : String(err),
-        });
-      }
-      try {
-        const treeResult = await withTimeout(
-          managed.client.getTreeWithLeaf(),
-          10_000,
-          "getTreeWithLeaf",
-        );
-        const entries = treeResult.entries;
-        const leafId = treeResult.leafId;
-        if (leafId) {
-          this.leafIds.set(sessionId, leafId);
-        }
-        if (Array.isArray(entries) && leafId) {
-          const byId = new Map<
-            string,
-            { id: string; parentId: string | null; type: string; label?: string }
-          >();
-          for (const e of entries) {
-            byId.set(e.id, e);
-          }
-          activePathIds = new Set<string>();
-          let curId: string | null | undefined = leafId;
-          while (curId) {
-            activePathIds.add(curId);
-            const node = byId.get(curId);
-            curId =
-              node && typeof node.parentId === "string" && node.parentId
-                ? node.parentId
-                : undefined;
-          }
-        }
-      } catch (err: unknown) {
-        log.warn("getTreeWithLeaf failed in getMessages", {
-          sessionId,
-          err: err instanceof Error ? err.message : String(err),
-        });
-      }
-    } else {
-      resolvedSessionPath = this.resolveSessionPath(sessionId) ?? sessionPath ?? "";
-      const leafId = this.leafIds.get(sessionId) ?? null;
-      if (resolvedSessionPath && leafId !== undefined) {
-        const jsonlEntries = await this.readJsonlEntries(resolvedSessionPath);
-        if (jsonlEntries.length > 0 && leafId !== null) {
-          const byId = new Map<
-            string,
-            { id: string; parentId: string | null; type: string; customType?: string }
-          >();
-          for (const e of jsonlEntries) byId.set(e.id, e);
-          activePathIds = new Set<string>();
-          let curId: string | null = leafId;
-          while (curId) {
-            activePathIds.add(curId);
-            const node = byId.get(curId);
-            curId = node?.parentId ?? null;
-          }
-        }
-        messages = this.buildMessagesFromJsonl(jsonlEntries, leafId);
-      }
-    }
-
-    const customEntries: Array<{
-      id: string;
-      customType: string;
-      data: unknown;
-      timestamp: number;
-    }> = [];
-
     const sandboxManager = getSandboxManager();
-    await appendUiJsonlEntriesFromPath({
-      sessionPath: resolvedSessionPath,
-      messages,
-      customEntries,
-      activePathIds,
-      includeMessages: !managed,
+    return getMessagesOperation({
+      sessionId,
+      sessionPath,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+      resolveSessionPath: (id) => this.resolveSessionPath(id),
+      readJsonlEntries: (pathToRead) => this.readJsonlEntries(pathToRead),
+      buildMessagesFromJsonl: (entries, leafId) => this.buildMessagesFromJsonl(entries, leafId),
+      leafIds: this.leafIds,
       readSandboxFile:
-        sandboxManager && !managed
+        sandboxManager
           ? async (pathToRead) => {
               const userId = this._getSandboxUserId(sessionId);
               return userId ? sandboxManager.execInSandbox(userId, `cat ${pathToRead}`) : "";
             }
           : undefined,
     });
-
-    return { messages: messages as AgentMessageForUI[], customEntries };
   }
 
   async getFullMessages(

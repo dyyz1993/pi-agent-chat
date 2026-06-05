@@ -3,6 +3,7 @@ import { performance } from "perf_hooks";
 import type { AgentMessageForUI } from "../modules/agent";
 import { createLogger } from "../lib/logger";
 import {
+  appendUiJsonlEntriesFromPath,
   filterMessagesToBranch,
   paginateEntryMessages,
   readFullJsonlAccumulator,
@@ -15,11 +16,41 @@ const perfLog = createLogger("session-perf");
 interface ManagedFullMessagesLike {
   client: {
     getMessages(): Promise<unknown[]>;
+    getTreeWithLeaf(): Promise<{
+      entries: Array<{ id: string; parentId: string | null; type: string; label?: string }>;
+      leafId: string | null;
+    }>;
   };
   info: {
     status: string;
     sessionPath: string;
   };
+}
+
+interface JsonlMessageTreeEntry {
+  id: string;
+  parentId: string | null;
+  type: string;
+  customType?: string;
+}
+
+function buildActivePathIds(
+  entries: Array<{ id: string; parentId: string | null }>,
+  leafId: string | null,
+): Set<string> | null {
+  if (!leafId || entries.length === 0) return null;
+  const byId = new Map<string, { id: string; parentId: string | null }>();
+  for (const entry of entries) {
+    byId.set(entry.id, entry);
+  }
+  const activePathIds = new Set<string>();
+  let curId: string | null | undefined = leafId;
+  while (curId) {
+    activePathIds.add(curId);
+    const node = byId.get(curId);
+    curId = node && typeof node.parentId === "string" && node.parentId ? node.parentId : undefined;
+  }
+  return activePathIds;
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
@@ -178,4 +209,76 @@ export async function getFullMessagesOperation<TManaged extends ManagedFullMessa
     totalCount,
     nextCursor,
   };
+}
+
+export async function getMessagesOperation<TManaged extends ManagedFullMessagesLike>(options: {
+  sessionId: string;
+  sessionPath?: string;
+  getActiveManaged: (sessionId: string) => TManaged | null;
+  resolveSessionPath: (sessionId: string) => string;
+  readJsonlEntries: (sessionPath: string) => Promise<JsonlMessageTreeEntry[]>;
+  buildMessagesFromJsonl: (
+    entries: Array<{ id: string; parentId: string | null; type: string }>,
+    leafId: string | null,
+  ) => unknown[];
+  leafIds: Map<string, string | null>;
+  readSandboxFile?: (pathToRead: string) => Promise<string>;
+}): Promise<{
+  messages: AgentMessageForUI[];
+  customEntries: UiCustomEntry[];
+}> {
+  const managed = options.getActiveManaged(options.sessionId);
+  let messages: unknown[] = [];
+  let resolvedSessionPath = options.sessionPath ?? "";
+  let activePathIds: Set<string> | null = null;
+
+  if (managed) {
+    resolvedSessionPath = managed.info.sessionPath;
+    try {
+      const messagesResult = await withTimeout(managed.client.getMessages(), 15_000, "getMessages");
+      if (messagesResult) messages = messagesResult;
+    } catch (err: unknown) {
+      log.warn("getMessages SDK failed", {
+        sessionId: options.sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+    try {
+      const treeResult = await withTimeout(
+        managed.client.getTreeWithLeaf(),
+        10_000,
+        "getTreeWithLeaf",
+      );
+      if (treeResult.leafId) options.leafIds.set(options.sessionId, treeResult.leafId);
+      activePathIds = buildActivePathIds(treeResult.entries, treeResult.leafId);
+    } catch (err: unknown) {
+      log.warn("getTreeWithLeaf failed in getMessages", {
+        sessionId: options.sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+  } else {
+    const cachedSessionPath = options.resolveSessionPath(options.sessionId);
+    resolvedSessionPath = cachedSessionPath ? cachedSessionPath : (options.sessionPath ?? "");
+    const leafId = options.leafIds.get(options.sessionId) ?? null;
+    if (resolvedSessionPath && leafId !== undefined) {
+      const jsonlEntries = await options.readJsonlEntries(resolvedSessionPath);
+      if (jsonlEntries.length > 0 && leafId !== null) {
+        activePathIds = buildActivePathIds(jsonlEntries, leafId);
+      }
+      messages = options.buildMessagesFromJsonl(jsonlEntries, leafId);
+    }
+  }
+
+  const customEntries: UiCustomEntry[] = [];
+  await appendUiJsonlEntriesFromPath({
+    sessionPath: resolvedSessionPath,
+    messages,
+    customEntries,
+    activePathIds,
+    includeMessages: !managed,
+    readSandboxFile: !managed ? options.readSandboxFile : undefined,
+  });
+
+  return { messages: messages as AgentMessageForUI[], customEntries };
 }
