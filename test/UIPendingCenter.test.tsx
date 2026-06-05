@@ -13,7 +13,6 @@ import {
   UIPendingCenter,
   useProjectPendingCount,
 } from "../src/mainview/components/chat/UIPendingCenter";
-import { HookPermissionBanner } from "../src/mainview/components/chat/HookPermissionBanner";
 import type { UIPendingRequest } from "../src/mainview/stores/use-ui-dialog-store";
 
 let currentPending: UIPendingRequest[] = [];
@@ -443,58 +442,7 @@ describe("ProjectRuntimePendingRequests", () => {
     expect(screen.getByText("uiPending.gotoSession")).toBeInTheDocument();
   });
 
-  it("renders nothing when the current project has no pending requests", () => {
-    setupProject();
-    currentPending = [makeRequest({ requestId: "r1", sessionId: "other-session" })];
-
-    const { container } = render(<ProjectRuntimePendingRequests activeSessionId="sess-1" />);
-
-    expect(container.innerHTML).toBe("");
-  });
-});
-
-describe("HookPermissionBanner", () => {
-  beforeEach(() => {
-    currentPending = [];
-    mockActiveProjectId = null;
-    mockProjectTabs = [];
-    mockSessionsByProject = {};
-  });
-
-  afterEach(() => {
-    cleanup();
-    vi.clearAllMocks();
-  });
-
-  it("renders hook permission requests from other sessions in the current project", () => {
-    setupProject();
-    currentPending = [
-      makeRequest({
-        requestId: "r1",
-        sessionId: "sess-2",
-        title: "Other session permission",
-        message: "Allow build?",
-        hookMeta: {
-          toolName: "bash",
-          matcher: "npm *",
-          command: "npm run build",
-          reason: "Needs approval",
-        },
-      }),
-    ];
-
-    render(<HookPermissionBanner sessionId="sess-1" />);
-
-    expect(screen.getByText("Session B")).toBeInTheDocument();
-    expect(screen.getByText("uiPending.gotoSession")).toBeInTheDocument();
-    expect(screen.getByText("npm run build")).toBeInTheDocument();
-    expect(screen.getByText("uiCard.allowOnce")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByText("uiPending.gotoSession"));
-    expect(mockSetActiveSession).toHaveBeenCalledWith("sess-2");
-  });
-
-  it("renders bash command confirm requests without hook metadata", () => {
+  it("renders bash command confirm requests without hook metadata in the runtime action area", () => {
     setupProject();
     currentPending = [
       makeRequest({
@@ -505,21 +453,18 @@ describe("HookPermissionBanner", () => {
       }),
     ];
 
-    render(<HookPermissionBanner sessionId="sess-1" />);
+    render(<ProjectRuntimePendingRequests activeSessionId="sess-1" />);
 
-    expect(screen.getByText("Bash")).toBeInTheDocument();
     expect(screen.getByText("Bash 命令确认")).toBeInTheDocument();
     expect(screen.getByText("YOLO 跨项目写入测试")).toBeInTheDocument();
-    expect(screen.getByText("uiCard.allowOnce")).toBeInTheDocument();
+    expect(screen.getAllByText("uiPending.confirm").length).toBeGreaterThan(0);
   });
 
-  it("renders nothing for non-hook pending requests", () => {
+  it("renders nothing when the current project has no pending requests", () => {
     setupProject();
-    currentPending = [
-      makeRequest({ requestId: "r1", sessionId: "sess-1", title: "Generic confirm" }),
-    ];
+    currentPending = [makeRequest({ requestId: "r1", sessionId: "other-session" })];
 
-    const { container } = render(<HookPermissionBanner sessionId="sess-1" />);
+    const { container } = render(<ProjectRuntimePendingRequests activeSessionId="sess-1" />);
 
     expect(container.innerHTML).toBe("");
   });
