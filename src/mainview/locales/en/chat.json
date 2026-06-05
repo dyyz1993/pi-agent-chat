@@ -276,6 +276,11 @@
   "uiPending.inputLabel": "Input",
   "uiPending.editor": "Edit",
 
+  "hookPermission.allow": "Allow",
+  "hookPermission.deny": "Deny",
+  "hookPermission.multiplePending": "{{count}} permission requests pending",
+  "hookPermission.viewAll": "View all",
+
   "scroll.stopAutoScroll": "Stop auto-scroll",
   "scroll.startAutoScroll": "Start auto-scroll",
   "scroll.scrollToTop": "Scroll to top",

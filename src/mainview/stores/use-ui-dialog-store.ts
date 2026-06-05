@@ -81,6 +81,7 @@ interface UIDialogState {
   panelOpen: boolean;
 
   registerUIRequest: (req: UIPendingRequest) => void;
+  resolveFromRemote: (requestId: string, reason: "responded" | "timeout" | "aborted") => void;
   respondById: (requestId: string, response: Record<string, unknown>) => void;
   dismissById: (requestId: string) => void;
   clearPendingBySession: (sessionId: string) => void;
@@ -111,6 +112,27 @@ export const useUIDialogStore = create<UIDialogState>((set, get) => ({
       newStates.set(req.requestId, { request: req, status: "pending" });
       return { pending: [...s.pending, req], requestStates: newStates };
     });
+  },
+
+  resolveFromRemote: (requestId: string, reason: "responded" | "timeout" | "aborted") => {
+    const { requestStates } = get();
+    const state = requestStates.get(requestId);
+    if (!state) return;
+    if (state.status !== "pending") return;
+
+    const newStates = new Map(requestStates);
+    newStates.set(requestId, {
+      ...state,
+      status: reason === "responded" ? "responded" : "dismissed",
+      response: reason === "timeout" ? { cancelled: true, timedOut: true } : state.response,
+    });
+
+    set((s) => ({
+      pending: s.pending.filter((r) => r.requestId !== requestId),
+      requestStates: newStates,
+      panelOpen: s.pending.length <= 1 ? false : s.panelOpen,
+    }));
+    checkPermissionClear(state.request.sessionId);
   },
 
   respondById: (requestId: string, response: Record<string, unknown>) => {

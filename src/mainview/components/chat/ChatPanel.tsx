@@ -20,7 +20,8 @@ import { useChatStore } from "../../stores/use-chat-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useNotificationStore } from "../../stores/use-notification-store";
 import { NotificationCenter } from "./NotificationCenter";
-import { ProjectRuntimePendingRequests, UIPendingCenter } from "./UIPendingCenter";
+import { UIPendingCenter } from "./UIPendingCenter";
+import { HookPermissionBanner } from "./HookPermissionBanner";
 import { useChangeReviewStore } from "../../stores/use-change-review-store";
 import { RetryNotification } from "./RetryNotification";
 import { InlineErrorToast } from "./InlineErrorToast";
@@ -566,7 +567,7 @@ export function ChatPanel() {
           {activeSessionId && !isViewingSubagent && (
             <>
               <QueueCards sessionId={activeSessionId} />
-              <ProjectRuntimePendingRequests activeSessionId={activeSessionId} />
+              <HookPermissionBanner sessionId={activeSessionId} />
             </>
           )}
         </div>

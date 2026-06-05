@@ -276,6 +276,11 @@
   "uiPending.inputLabel": "输入",
   "uiPending.editor": "编辑",
 
+  "hookPermission.allow": "允许",
+  "hookPermission.deny": "拒绝",
+  "hookPermission.multiplePending": "{{count}} 个权限请求等待处理",
+  "hookPermission.viewAll": "查看全部",
+
   "scroll.stopAutoScroll": "停止自动滚动",
   "scroll.startAutoScroll": "开启自动滚动",
   "scroll.scrollToTop": "回到顶部",
