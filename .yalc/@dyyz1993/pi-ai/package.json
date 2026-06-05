@@ -1,0 +1,12 @@
+{
+  "name": "@dyyz1993/pi-ai",
+  "version": "0.0.0",
+  "description": "Stub - types provided by pi-coding-agent at runtime",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  }
+}
