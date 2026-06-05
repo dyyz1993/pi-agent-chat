@@ -72,6 +72,56 @@ function closeRunningToolExecutions(
   return changed ? next : content;
 }
 
+function formatToolArgs(rawArgs: unknown): {
+  args: string;
+  timeout?: number;
+  description?: string;
+} {
+  if (rawArgs && typeof rawArgs === "object" && rawArgs !== null) {
+    const obj = rawArgs as Record<string, unknown>;
+    const command = typeof obj.command === "string" ? obj.command : undefined;
+    const args = command ?? JSON.stringify(rawArgs, null, 2);
+    return {
+      args,
+      timeout: typeof obj.timeout === "number" ? obj.timeout : undefined,
+      description: typeof obj.description === "string" ? obj.description : undefined,
+    };
+  }
+  return {
+    args: typeof rawArgs === "string" ? rawArgs : rawArgs != null ? JSON.stringify(rawArgs, null, 2) : "",
+  };
+}
+
+function normalizeToolArgsForMatch(args: string | undefined): string {
+  if (!args) return "";
+  try {
+    const parsed = JSON.parse(args) as unknown;
+    if (parsed && typeof parsed === "object" && parsed !== null) {
+      const command = (parsed as Record<string, unknown>).command;
+      if (typeof command === "string") return command.trim();
+    }
+  } catch {
+    // Plain command strings are expected for live execution events.
+  }
+  return args.trim();
+}
+
+function findMatchingPendingToolExecution(
+  blocks: ContentBlock[],
+  toolName: string,
+  args: string,
+): number {
+  const targetArgs = normalizeToolArgsForMatch(args);
+  if (!targetArgs) return -1;
+  return blocks.findIndex(
+    (block): block is ToolExecBlock =>
+      block.type === "toolExecution" &&
+      block.toolName === toolName &&
+      !isTerminalToolStatus(block.status) &&
+      normalizeToolArgsForMatch(block.args) === targetArgs,
+  );
+}
+
 function extractIncomingToolCallIds(content: unknown): string[] {
   if (!Array.isArray(content)) return [];
   const ids: string[] = [];
@@ -454,12 +504,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       const content = msg
         ? msg.content.map((b) => {
             if (b.type === "toolCall") {
-              const args =
-                typeof b.input === "string"
-                  ? b.input
-                  : b.input != null
-                    ? JSON.stringify(b.input, null, 2)
-                    : "";
+              const { args } = formatToolArgs(b.input);
               return {
                 type: "toolExecution" as const,
                 toolCallId: b.id,
@@ -478,12 +523,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     } else if (msg) {
       msg.content = msg.content.map((b) => {
         if (b.type === "toolCall") {
-          const args =
-            typeof b.input === "string"
-              ? b.input
-              : b.input != null
-                ? JSON.stringify(b.input, null, 2)
-                : "";
+          const { args } = formatToolArgs(b.input);
           return {
             type: "toolExecution" as const,
             toolCallId: b.id,
@@ -553,28 +593,17 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       for (const block of incoming) {
         if (block.type === "toolCall" && block.id) {
           const exec = execByCallId.get(block.id);
+          const { args: newArgs } = formatToolArgs(block.arguments);
           if (exec) {
-            const newArgs =
-              typeof block.arguments === "string"
-                ? block.arguments
-                : block.arguments != null
-                  ? JSON.stringify(block.arguments, null, 2)
-                  : "";
             orderedBlocks.push({ ...exec, args: newArgs || exec.args });
             usedExecs.add(block.id);
           } else {
-            const args =
-              typeof block.arguments === "string"
-                ? block.arguments
-                : block.arguments != null
-                  ? JSON.stringify(block.arguments, null, 2)
-                  : "";
             const toolName = block.name;
             orderedBlocks.push({
               type: "toolExecution",
               toolCallId: block.id,
               toolName,
-              args,
+              args: newArgs,
               status: "running",
             });
             usedExecs.add(block.id);
@@ -743,36 +772,22 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       );
 
       if (event.type === "tool_execution_start") {
-        const rawArgs: unknown = event.args;
-        let argsStr = "";
-        let timeout: number | undefined;
-        let description: string | undefined;
-        if (rawArgs && typeof rawArgs === "object" && rawArgs !== null) {
-          const obj = rawArgs as Record<string, unknown>;
-          if ("command" in obj && typeof obj.command === "string") {
-            argsStr = obj.command;
-          } else {
-            argsStr = JSON.stringify(rawArgs, null, 2);
-          }
-          if ("timeout" in obj && typeof obj.timeout === "number") {
-            timeout = obj.timeout;
-          }
-          if ("description" in obj && typeof obj.description === "string") {
-            description = obj.description;
-          }
-        }
-        if (targetIdx >= 0) {
-          const prev = blocks[targetIdx] as ToolExecBlock;
+        const { args: argsStr, timeout, description } = formatToolArgs(event.args);
+        const resolvedTargetIdx =
+          targetIdx >= 0 ? targetIdx : findMatchingPendingToolExecution(blocks, toolName, argsStr);
+        if (resolvedTargetIdx >= 0) {
+          const prev = blocks[resolvedTargetIdx] as ToolExecBlock;
           if (isTerminalToolStatus(prev.status)) {
-            blocks[targetIdx] = {
+            blocks[resolvedTargetIdx] = {
               ...prev,
+              toolCallId,
               toolName: prev.toolName === "unknown" ? toolName : prev.toolName,
               args: argsStr || prev.args,
               timeout: timeout ?? prev.timeout,
               description: description ?? prev.description,
             };
           } else {
-            blocks[targetIdx] = {
+            blocks[resolvedTargetIdx] = {
               type: "toolExecution",
               toolCallId,
               toolName,

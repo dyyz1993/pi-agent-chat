@@ -561,6 +561,66 @@ describe("full streaming lifecycle", () => {
   });
 });
 
+describe("tool id reconciliation", () => {
+  it("reuses a pending message_update tool block when execution start uses a different id", () => {
+    setMessages([
+      {
+        id: "msg-1",
+        role: "assistant",
+        content: [],
+        timestamp: Date.now(),
+        isStreaming: true,
+      },
+    ]);
+
+    handleAgentEvent(SID, {
+      type: "message_update",
+      message: {
+        role: "assistant",
+        content: [
+          {
+            type: "toolCall",
+            id: "message-tool-id",
+            name: "bash",
+            arguments: { command: "ls now-mock", description: "查看 now-mock 项目" },
+          },
+        ],
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+    flushNow();
+
+    handleAgentEvent(SID, {
+      type: "tool_execution_start",
+      toolCallId: "execution-tool-id",
+      toolName: "bash",
+      args: { command: "ls now-mock", description: "查看 now-mock 项目" },
+      timestamp: Date.now(),
+    } as Parameters<typeof handleAgentEvent>[1]);
+    flushNow();
+
+    handleAgentEvent(SID, {
+      type: "tool_execution_end",
+      toolCallId: "execution-tool-id",
+      toolName: "bash",
+      result: { content: [{ type: "text", text: "now-mock\n" }] },
+      isError: false,
+      timestamp: Date.now(),
+      durationMs: 1000,
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    const msg = getLastAssistant();
+    const execBlocks =
+      msg?.content.filter(
+        (b): b is Extract<ContentBlock, { type: "toolExecution" }> =>
+          b.type === "toolExecution",
+      ) ?? [];
+    expect(execBlocks).toHaveLength(1);
+    expect(execBlocks[0].toolCallId).toBe("execution-tool-id");
+    expect(execBlocks[0].status).toBe("done");
+    expect(execBlocks[0].output).toBe("now-mock\n");
+  });
+});
+
 describe("message_end tool card closure", () => {
   it("closes running tool blocks when assistant message ends without a tool end event", () => {
     setMessages([
@@ -841,7 +901,7 @@ describe("message_update content block ordering", () => {
       (b): b is Extract<ContentBlock, { type: "toolExecution" }> =>
         b.type === "toolExecution" && b.toolCallId === TCID,
     );
-    expect(exec!.args).toBe(JSON.stringify({ command: "ls" }, null, 2));
+    expect(exec!.args).toBe("ls");
   });
 
   it("ignores delayed message_update for a tool call that is already terminal", () => {
