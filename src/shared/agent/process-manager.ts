@@ -1,7 +1,6 @@
 import {
   copyFileSync,
   existsSync,
-  mkdirSync,
 } from "fs";
 import { createReadStream } from "fs";
 
@@ -21,12 +20,6 @@ import type { RulesChannelEvent } from "../modules/rules";
 import type { RpcClientAPI, ChannelTypeRegistry } from "@dyyz1993/pi-coding-agent";
 import type { TreeEntry } from "../modules/agent";
 import { performance } from "perf_hooks";
-
-// 沙箱模式
-import { SandboxManager } from "../../sandbox/sandbox-manager";
-import { SandboxBoxProvider } from "../../sandbox/providers/sandbox-box";
-import type { ISandboxProvider } from "../../sandbox/types";
-import { SandboxRpcClient } from "../../sandbox/sandbox-rpc-client";
 
 type McpServerInfo = Awaited<ReturnType<RpcClientInstance["getMcpServers"]>>[number];
 
@@ -61,11 +54,16 @@ import {
   type SessionMessageEntry,
 } from "./session-message-cache";
 import {
-  discoverExtensionArgs,
   parseTierModel,
   TIER_KEYS,
   type TierKey,
 } from "./agent-runtime-config";
+import {
+  createRpcClient,
+  getSandboxEndpoint,
+  getSandboxManager,
+  initSandboxManager,
+} from "./agent-runtime-client";
 import {
   buildCoordinatorDelegatePrompt,
   buildCoordinatorSessionCreatedEvent,
@@ -130,6 +128,8 @@ import { findCoordinatorResponseManaged } from "./coordinator-response-routing";
 const log = createLogger("agent");
 const perfLog = createLogger("session-perf");
 
+export { getSandboxEndpoint, getSandboxManager, initSandboxManager };
+
 /**
  * Race a promise against a timeout. Rejects with a descriptive error if the
  * promise does not settle within `ms` milliseconds.
@@ -142,8 +142,6 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
     ),
   ]);
 }
-
-const EXTENSION_ARGS = ["--no-extensions", ...discoverExtensionArgs()];
 
 interface SubagentChannelPayload {
   sessionId: string;
@@ -162,113 +160,6 @@ interface ManagedClient {
 }
 
 import type { AgentProcessInfo } from "../modules/agent";
-
-let cachedModule: { RpcClient: new (options?: Record<string, unknown>) => RpcClientAPI } | null =
-  null;
-
-// 全局沙箱管理器（在 sandbox 模式下初始化）
-let globalSandboxManager: SandboxManager | null = null;
-
-export function initSandboxManager(projectsRoot: string): SandboxManager {
-  let provider: ISandboxProvider;
-  const providerType = config.sandboxProvider ?? "local";
-
-  if (providerType === "sandbox-box") {
-    provider = new SandboxBoxProvider({
-      sshHost: config.sandboxBoxSshHost ?? "192.168.0.29",
-      sshPort: config.sandboxBoxSshPort ?? 2201,
-      sshUser: config.sandboxBoxSshUser ?? "root",
-      sshKeyPath: config.sandboxBoxSshKey ?? "~/.ssh/id_rsa",
-      sandboxPort: 3200,
-      bridgePort: 3101,
-      baseLocalPort: config.sandboxBasePort,
-      piCliPath: config.piCliPath,
-      projectSourcePath: projectsRoot,
-      modelsJsonPath: config.sandboxBoxModelsJson,
-      settingsJsonPath: config.sandboxBoxSettingsJson,
-      extensionsPath: config.sandboxBoxExtensionsPath,
-    });
-  } else {
-    throw new Error(`Unknown sandbox provider: ${providerType}. Only "sandbox-box" is supported.`);
-  }
-
-  globalSandboxManager = new SandboxManager(provider, {
-    idleTimeoutMs: (config.sandboxIdleTimeout ?? 1800) * 1000,
-    gcIntervalMs: 60_000,
-    providerConfig: {
-      idleTimeout: `${config.sandboxIdleTimeout ?? 1800}s`,
-      enableInternet: true,
-    },
-  });
-
-  if (providerType === "sandbox-box" && provider instanceof SandboxBoxProvider) {
-    provider.cleanupStaleSandboxes([]).catch((err) => {
-      log.warn("startup sandbox cleanup failed (non-fatal)", { error: String(err) });
-    });
-  }
-
-  return globalSandboxManager;
-}
-
-export function getSandboxEndpoint(userId: string): string | null {
-  if (!globalSandboxManager) return null;
-  return globalSandboxManager.getEndpoint(userId) ?? null;
-}
-
-export function getSandboxManager(): SandboxManager | null {
-  return globalSandboxManager;
-}
-
-async function createRpcClient(
-  cliPath: string,
-  cwd: string,
-  sessionPath: string | undefined,
-  userId?: string,
-): Promise<{ client: RpcClientInstance; timings: { dynamicImport: number; construct: number } }> {
-  const t0 = performance.now();
-
-  // 沙箱模式：通过 SandboxRpcClient 转发到沙箱容器
-  if (config.sandboxEnabled && globalSandboxManager && userId) {
-    const sandbox = await globalSandboxManager.getOrCreate(userId);
-    const client = new SandboxRpcClient(sandbox.endpoint) as unknown as RpcClientInstance;
-    const t1 = performance.now();
-    const timings = { dynamicImport: Math.round(t1 - t0), construct: 0 };
-    perfLog.info("[createRpcClient] sandbox mode", { userId, endpoint: sandbox.endpoint });
-    return { client, timings };
-  }
-
-  cachedModule ??= (await import("@dyyz1993/pi-coding-agent")) as unknown as {
-    RpcClient: new (options?: Record<string, unknown>) => RpcClientAPI;
-  };
-  const t1 = performance.now();
-
-  if (!existsSync(cwd)) {
-    mkdirSync(cwd, { recursive: true });
-  }
-
-  const args = [...EXTENSION_ARGS];
-  if (sessionPath && existsSync(sessionPath)) {
-    args.push("--session", sessionPath);
-  }
-
-  const client = new cachedModule.RpcClient({
-    cliPath,
-    cwd,
-    args,
-    env: { ...process.env, NODE_OPTIONS: "--max-old-space-size=8192" },
-  });
-  await client.start();
-  const t2 = performance.now();
-
-  const timings = {
-    dynamicImport: Math.round(t1 - t0),
-    construct: Math.round(t2 - t1),
-    start: Math.round(t2 - t1),
-  };
-  perfLog.info("[createRpcClient] done", timings);
-
-  return { client, timings };
-}
 
 export class AgentProcessManager {
   private clients = new Map<string, ManagedClient>();
@@ -1229,14 +1120,12 @@ export class AgentProcessManager {
     }> = [];
     const isSandboxSessionPath = resolvedSessionPath?.startsWith("/root/workspace/sessions/");
 
-    if (isSandboxSessionPath && globalSandboxManager && !managed) {
+    const sandboxManager = getSandboxManager();
+    if (isSandboxSessionPath && sandboxManager && !managed) {
       try {
         const userId = this._getSandboxUserId(sessionId);
         if (userId) {
-          const raw = await globalSandboxManager.execInSandbox(
-            userId,
-            `cat ${resolvedSessionPath}`,
-          );
+          const raw = await sandboxManager.execInSandbox(userId, `cat ${resolvedSessionPath}`);
           const lines = raw.split("\n");
           for (const line of lines) {
             if (!line.trim()) continue;
@@ -1327,14 +1216,12 @@ export class AgentProcessManager {
     };
     const isSandboxSessionPath = resolvedSessionPath?.startsWith("/root/workspace/sessions/");
 
-    if (isSandboxSessionPath && globalSandboxManager) {
+    const sandboxManager = getSandboxManager();
+    if (isSandboxSessionPath && sandboxManager) {
       try {
         const userId = this._getSandboxUserId(sessionId);
         if (userId) {
-          const raw = await globalSandboxManager.execInSandbox(
-            userId,
-            `cat ${resolvedSessionPath}`,
-          );
+          const raw = await sandboxManager.execInSandbox(userId, `cat ${resolvedSessionPath}`);
           const lines = raw.split("\n");
           for (const line of lines) {
             if (!line.trim()) continue;
