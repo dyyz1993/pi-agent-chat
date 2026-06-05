@@ -1,12 +1,13 @@
 /**
  * @vitest-environment node
  */
-import { mkdtempSync, writeFileSync } from "fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  handleCoordinatorDelegateOperation,
   handleCoordinatorDelegateListOperation,
   handleCoordinatorDelegateSendOperation,
   handleCoordinatorDelegateSyncOperation,
@@ -25,6 +26,111 @@ function makeManaged(status = "idle", sessionPath = "/tmp/child.jsonl") {
 }
 
 describe("coordinator delegate operations", () => {
+  it("starts coordinator delegates, tracks parent child state, sends prompt, and broadcasts creation", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "pi-delegate-create-"));
+    const parentSessionPath = join(dir, "parent.jsonl");
+    writeFileSync(parentSessionPath, '{"type":"session"}\n', "utf-8");
+    const parentChildMap = new Map<string, Set<string>>();
+    const delegateCreatedAt = new Map<string, number>();
+    const delegateReplyCount = new Map<string, number>();
+    const start = vi.fn().mockResolvedValue({ status: "started" });
+    const setSessionName = vi.fn().mockResolvedValue(undefined);
+    const send = vi.fn();
+    const broadcastEvent = vi.fn().mockResolvedValue(undefined);
+
+    await expect(
+      handleCoordinatorDelegateOperation({
+        parentSessionId: "parent",
+        msg: {
+          __call: "session_delegate",
+          task: "inspect repo",
+          title: "Inspect",
+        },
+        getActiveManaged: () => makeManaged("idle", parentSessionPath),
+        start,
+        setSessionName,
+        send,
+        broadcastEvent,
+        parentChildMap,
+        delegateCreatedAt,
+        delegateReplyCount,
+        now: () => 1000,
+        sessionIdFactory: () => "child-delegate",
+      }),
+    ).resolves.toEqual({ sessionId: "child-delegate", status: "started" });
+
+    const childSessionPath = join(dir, "child-delegate.jsonl");
+    expect(start).toHaveBeenCalledWith("child-delegate", "/project", childSessionPath, {
+      forceNewProcess: true,
+    });
+    expect(setSessionName).toHaveBeenCalledWith("child-delegate", "指派: Inspect");
+    expect(send).toHaveBeenCalledWith("child-delegate", expect.stringContaining("inspect repo"));
+    expect(send).toHaveBeenCalledWith(
+      "child-delegate",
+      expect.stringContaining("你的会话 ID: child-delegate"),
+    );
+    expect(parentChildMap.get("parent")?.has("child-delegate")).toBe(true);
+    expect(delegateCreatedAt.get("child-delegate")).toBe(1000);
+    expect(delegateReplyCount.get("child-delegate")).toBe(0);
+    expect(broadcastEvent).toHaveBeenCalledWith(
+      "coordinator.session_created",
+      expect.objectContaining({
+        parentSessionId: "parent",
+        session: expect.objectContaining({
+          sessionId: "child-delegate",
+          delegateParentSessionId: "parent",
+          delegateType: "coordinator",
+          name: "指派: Inspect",
+          sessionPath: childSessionPath,
+          parentSessionPath,
+          firstMessage: "inspect repo",
+          createdAt: 1000,
+          updatedAt: 1000,
+        }),
+      }),
+      { parentSessionId: "parent" },
+    );
+
+    const childJsonl = readFileSync(childSessionPath, "utf-8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    expect(childJsonl).toEqual([
+      expect.objectContaining({
+        type: "session",
+        id: "child-delegate",
+        cwd: "/project",
+        delegateParentSessionId: "parent",
+      }),
+      expect.objectContaining({
+        type: "delegate_info",
+        delegateParentSessionId: "parent",
+        parentSessionPath,
+        delegateType: "coordinator",
+      }),
+    ]);
+  });
+
+  it("rejects coordinator delegates when the parent session is missing", async () => {
+    await expect(
+      handleCoordinatorDelegateOperation({
+        parentSessionId: "missing-parent",
+        msg: {
+          __call: "session_delegate",
+          task: "inspect repo",
+        },
+        getActiveManaged: () => null,
+        start: vi.fn(),
+        setSessionName: vi.fn(),
+        send: vi.fn(),
+        broadcastEvent: vi.fn(),
+        parentChildMap: new Map(),
+        delegateCreatedAt: new Map(),
+        delegateReplyCount: new Map(),
+      }),
+    ).rejects.toThrow("Parent session not found");
+  });
+
   it("wraps delegate sends and chooses follow-up when the target is streaming", async () => {
     const clients = new Map([
       ["parent", makeManaged("idle", "/tmp/parent.jsonl")],

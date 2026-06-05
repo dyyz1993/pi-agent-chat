@@ -13,6 +13,7 @@ import {
   type DelegateSessionList,
 } from "./coordinator-session-state";
 import {
+  buildCoordinatorDelegatePrompt,
   buildCoordinatorSessionCreatedEvent,
   buildSyncDelegatePrompt,
   formatDelegateElapsed,
@@ -38,12 +39,122 @@ interface DelegateSyncParentManaged {
   };
 }
 
+interface DelegateParentManaged {
+  info: {
+    projectPath: string;
+    sessionPath: string;
+  };
+}
+
 export interface DelegateSyncResult {
   sessionId: string;
   status: string;
   exitCode: number;
   finalText: string;
   error?: string;
+}
+
+export async function handleCoordinatorDelegateOperation<TManaged extends DelegateParentManaged>(
+  options: {
+    parentSessionId: string;
+    msg: Extract<CoordinatorMethodCall, { __call: "session_delegate" }>;
+    getActiveManaged: (sessionId: string) => TManaged | null;
+    start: (
+      sessionId: string,
+      projectPath: string,
+      sessionPath: string,
+      options: { forceNewProcess: true },
+    ) => Promise<{ status: "started" | "already_running" | "switched" }>;
+    setSessionName: (sessionId: string, name: string) => Promise<void>;
+    send: (sessionId: string, content: string) => void;
+    broadcastEvent: (
+      eventName: string,
+      data: Record<string, unknown>,
+      filter: Record<string, unknown>,
+    ) => Promise<void>;
+    parentChildMap: DelegateChildMap;
+    delegateCreatedAt: Map<string, number>;
+    delegateReplyCount: Map<string, number>;
+    now?: () => number;
+    sessionIdFactory?: () => string;
+  },
+): Promise<{ sessionId: string; status: "started" | "already_running" | "switched" }> {
+  const { task, projectPath: rawProjectPath } = options.msg;
+  const parent = options.getActiveManaged(options.parentSessionId);
+  if (!parent) throw new Error("Parent session not found");
+
+  const newSessionId =
+    options.sessionIdFactory?.() ??
+    `sess_coord_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const { projectPath, sessionPath } = resolveDelegateSessionPaths({
+    parentProjectPath: parent.info.projectPath,
+    parentSessionPath: parent.info.sessionPath,
+    newSessionId,
+    rawProjectPath,
+  });
+
+  try {
+    await writeDelegateSessionHeader({
+      sessionPath,
+      newSessionId,
+      projectPath,
+      parentSessionId: options.parentSessionId,
+      parentSessionPath: parent.info.sessionPath,
+      delegateType: "coordinator",
+    });
+  } catch (writeErr: unknown) {
+    log.warn("[handleCoordinatorDelegate] failed to write session header", {
+      sessionPath,
+      err: writeErr instanceof Error ? writeErr.message : String(writeErr),
+    });
+  }
+
+  const result = await options.start(newSessionId, projectPath, sessionPath, {
+    forceNewProcess: true,
+  });
+
+  const createdAt = (options.now ?? Date.now)();
+  options.delegateCreatedAt.set(newSessionId, createdAt);
+  options.delegateReplyCount.set(newSessionId, 0);
+  registerDelegateChild(options.parentChildMap, options.parentSessionId, newSessionId);
+
+  const rawTitle = options.msg.title ?? task.slice(0, 60);
+  const title = `指派: ${rawTitle}`;
+  await options.setSessionName(newSessionId, title);
+  const delegatePrompt = buildCoordinatorDelegatePrompt({
+    newSessionId,
+    parentSessionId: options.parentSessionId,
+    title,
+    task,
+    projectPath,
+  });
+
+  options.send(newSessionId, delegatePrompt);
+
+  options
+    .broadcastEvent(
+      "coordinator.session_created",
+      buildCoordinatorSessionCreatedEvent({
+        parentSessionId: options.parentSessionId,
+        sessionId: newSessionId,
+        name: title,
+        sessionPath,
+        projectPath,
+        parentSessionPath: parent.info.sessionPath,
+        delegateType: "coordinator",
+        firstMessage: task,
+        createdAt,
+      }),
+      { parentSessionId: options.parentSessionId },
+    )
+    .catch((err: unknown) => {
+      log.warn("broadcastEvent(coordinator.session_created) error", {
+        parentSessionId: options.parentSessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    });
+
+  return { sessionId: newSessionId, status: result.status };
 }
 
 export async function handleCoordinatorDelegateSendOperation<TManaged extends DelegateSendManaged>(

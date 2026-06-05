@@ -77,11 +77,8 @@ import {
 } from "./agent-runtime-client";
 import { startAgentClientOperation } from "./agent-start-operations";
 import {
-  buildCoordinatorDelegatePrompt,
   buildCoordinatorSessionCreatedEvent,
-  resolveDelegateSessionPaths,
   stripParentSessionFromHeader,
-  writeDelegateSessionHeader,
 } from "./coordinator-delegate-utils";
 import {
   type CachedLspState,
@@ -165,6 +162,7 @@ import {
 import { findCoordinatorResponseManaged } from "./coordinator-response-routing";
 import { handleCoordinatorCallOperation } from "./coordinator-call-dispatcher";
 import {
+  handleCoordinatorDelegateOperation,
   handleCoordinatorDelegateListOperation,
   handleCoordinatorDelegateSendOperation,
   handleCoordinatorDelegateSyncOperation,
@@ -1756,80 +1754,19 @@ export class AgentProcessManager {
     parentSessionId: string,
     msg: Extract<CoordinatorMethodCall, { __call: "session_delegate" }>,
   ): Promise<{ sessionId: string; status: "started" | "already_running" | "switched" }> {
-    const { task, projectPath: rawProjectPath } = msg;
-    const parent = this.getActiveManaged(parentSessionId);
-    if (!parent) throw new Error("Parent session not found");
-
-    const newSessionId = `sess_coord_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const { projectPath, sessionPath } = resolveDelegateSessionPaths({
-      parentProjectPath: parent.info.projectPath,
-      parentSessionPath: parent.info.sessionPath,
-      newSessionId,
-      rawProjectPath,
-    });
-
-    try {
-      await writeDelegateSessionHeader({
-        sessionPath,
-        newSessionId,
-        projectPath,
-        parentSessionId,
-        parentSessionPath: parent.info.sessionPath,
-        delegateType: "coordinator",
-      });
-    } catch (writeErr: unknown) {
-      log.warn("[handleCoordinatorDelegate] failed to write session header", {
-        sessionPath,
-        err: writeErr instanceof Error ? writeErr.message : String(writeErr),
-      });
-    }
-
-    const result = await this.start(newSessionId, projectPath, sessionPath, {
-      forceNewProcess: true,
-    });
-
-    const createdAt = Date.now();
-    this.delegateCreatedAt.set(newSessionId, createdAt);
-    this.delegateReplyCount.set(newSessionId, 0);
-
-    // Register parent-child relationship
-    registerDelegateChild(this.parentChildMap, parentSessionId, newSessionId);
-
-    const rawTitle = msg.title ?? task.slice(0, 60);
-    const title = `指派: ${rawTitle}`;
-    await this.setSessionName(newSessionId, title);
-    const delegatePrompt = buildCoordinatorDelegatePrompt({
-      newSessionId,
+    return handleCoordinatorDelegateOperation({
       parentSessionId,
-      title,
-      task,
-      projectPath,
+      msg,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+      start: (id, projectPath, sessionPath, startOptions) =>
+        this.start(id, projectPath, sessionPath, startOptions),
+      setSessionName: (id, name) => this.setSessionName(id, name),
+      send: (id, content) => this.send(id, content),
+      broadcastEvent: (eventName, data, filter) => this.broadcastEvent(eventName, data, filter),
+      parentChildMap: this.parentChildMap,
+      delegateCreatedAt: this.delegateCreatedAt,
+      delegateReplyCount: this.delegateReplyCount,
     });
-
-    this.send(newSessionId, delegatePrompt);
-
-    this.broadcastEvent(
-      "coordinator.session_created",
-      buildCoordinatorSessionCreatedEvent({
-        parentSessionId,
-        sessionId: newSessionId,
-        name: title,
-        sessionPath,
-        projectPath,
-        parentSessionPath: parent.info.sessionPath,
-        delegateType: "coordinator",
-        firstMessage: task,
-        createdAt,
-      }),
-      { parentSessionId },
-    ).catch((err: unknown) => {
-      log.warn("broadcastEvent(coordinator.session_created) error", {
-        parentSessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-    });
-
-    return { sessionId: newSessionId, status: result.status };
   }
 
   private async handleCoordinatorDelegateSync(
