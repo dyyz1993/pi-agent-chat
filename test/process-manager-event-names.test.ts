@@ -62,6 +62,26 @@ function internals(manager: APM): InternalAPM {
   return manager as unknown as InternalAPM;
 }
 
+async function waitForExpect(assertion: () => void, timeoutMs = 1000): Promise<void> {
+  const start = Date.now();
+  let lastError: unknown;
+
+  while (Date.now() - start < timeoutMs) {
+    try {
+      assertion();
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+
+  if (lastError instanceof Error) {
+    throw lastError;
+  }
+  throw new Error("waitForExpect timed out");
+}
+
 class MockRPCServer {
   emitEvent = vi.fn().mockResolvedValue(undefined);
 }
@@ -123,7 +143,7 @@ describe("AgentProcessManager — event name consistency", () => {
     const event = { type: "agent_start" };
     m.handleEvent(childId, event);
 
-    await vi.waitFor(() => {
+    await waitForExpect(() => {
       expect(mockServer.emitEvent).toHaveBeenCalled();
     });
 

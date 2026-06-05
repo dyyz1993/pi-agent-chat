@@ -20,11 +20,11 @@ vi.mock("../src/shared/lib/logger", () => ({
   }),
 }));
 
+import { AgentProcessManager } from "../src/shared/agent/process-manager";
 import {
-  AgentProcessManager,
   compactHoldEventsForReplay,
   type SanitizedEvent,
-} from "../src/shared/agent/process-manager";
+} from "../src/shared/agent/hold-events";
 
 interface ManagedClientShape {
   client: Record<string, unknown>;
