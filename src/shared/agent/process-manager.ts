@@ -59,6 +59,13 @@ import {
   sanitizeEvent,
   type SanitizedEvent,
 } from "./hold-events";
+import {
+  SessionMessageCache,
+  type SessionCacheData,
+  type SessionCacheHit,
+  type SessionCustomEntry,
+  type SessionMessageEntry,
+} from "./session-message-cache";
 
 const log = createLogger("agent");
 const perfLog = createLogger("session-perf");
@@ -464,23 +471,7 @@ export class AgentProcessManager {
     return config.sandboxEnabled && userId ? `${projectPath}::${userId}` : projectPath;
   }
 
-  private sessionMsgCache = new Map<
-    string,
-    {
-      messages: Array<{ entryId: string; message: unknown }>;
-      customEntries: Array<{
-        id: string;
-        customType: string;
-        data: unknown;
-        timestamp: number;
-      }>;
-      parentById: Map<string, string | null>;
-      fileSize: number;
-      mtimeMs: number;
-      lineCount: number;
-    }
-  >();
-  private static SESSION_CACHE_MAX = 10;
+  private sessionMessageCache = new SessionMessageCache();
 
   /**
    * Get cached session data. Three outcomes:
@@ -491,79 +482,16 @@ export class AgentProcessManager {
   getSessionCache(
     sessionId: string,
     sessionPath: string,
-  ): {
-    messages: Array<{ entryId: string; message: unknown }>;
-    customEntries: Array<{
-      id: string;
-      customType: string;
-      data: unknown;
-      timestamp: number;
-    }>;
-    parentById: Map<string, string | null>;
-    lineCount: number;
-    needsIncremental: boolean;
-  } | null {
-    const cached = this.sessionMsgCache.get(sessionId);
-    if (!cached) return null;
-    try {
-      const st = statSync(sessionPath);
-      if (st.size === cached.fileSize && st.mtimeMs === cached.mtimeMs) {
-        // Exact match — file unchanged
-        this.sessionMsgCache.delete(sessionId);
-        this.sessionMsgCache.set(sessionId, cached);
-        return { ...cached, needsIncremental: false };
-      }
-      if (st.size > cached.fileSize) {
-        // File grew — can do incremental append
-        this.sessionMsgCache.delete(sessionId);
-        this.sessionMsgCache.set(sessionId, cached);
-        return { ...cached, needsIncremental: true };
-      }
-      // File shrunk or changed drastically — invalidate
-    } catch {
-      // file gone or inaccessible
-    }
-    this.sessionMsgCache.delete(sessionId);
-    return null;
+  ): SessionCacheHit | null {
+    return this.sessionMessageCache.get(sessionId, sessionPath);
   }
 
-  setSessionCache(
-    sessionId: string,
-    sessionPath: string,
-    data: {
-      messages: Array<{ entryId: string; message: unknown }>;
-      customEntries: Array<{
-        id: string;
-        customType: string;
-        data: unknown;
-        timestamp: number;
-      }>;
-      parentById: Map<string, string | null>;
-      lineCount: number;
-    },
-  ): void {
-    try {
-      const st = statSync(sessionPath);
-      if (this.sessionMsgCache.size >= AgentProcessManager.SESSION_CACHE_MAX) {
-        const oldest = this.sessionMsgCache.keys().next().value;
-        if (oldest) this.sessionMsgCache.delete(oldest);
-      }
-      this.sessionMsgCache.set(sessionId, {
-        ...data,
-        fileSize: st.size,
-        mtimeMs: st.mtimeMs,
-      });
-    } catch {
-      // file gone — don't cache
-    }
+  setSessionCache(sessionId: string, sessionPath: string, data: SessionCacheData): void {
+    this.sessionMessageCache.set(sessionId, sessionPath, data);
   }
 
   clearSessionCache(sessionId?: string): void {
-    if (sessionId) {
-      this.sessionMsgCache.delete(sessionId);
-    } else {
-      this.sessionMsgCache.clear();
-    }
+    this.sessionMessageCache.clear(sessionId);
   }
 
   /**
@@ -573,45 +501,17 @@ export class AgentProcessManager {
   async readJsonlFromLine(
     sessionPath: string,
     startLine: number,
-    messages: Array<{ entryId: string; message: unknown }>,
-    customEntries: Array<{ id: string; customType: string; data: unknown; timestamp: number }>,
+    messages: SessionMessageEntry[],
+    customEntries: SessionCustomEntry[],
     parentById: Map<string, string | null>,
   ): Promise<{ newEntries: number; totalLines: number }> {
-    let lineIndex = 0;
-    let newEntries = 0;
-    const rl = readline.createInterface({
-      input: createReadStream(sessionPath, { encoding: "utf-8" }),
-      crlfDelay: Infinity,
-    });
-    for await (const line of rl) {
-      lineIndex++;
-      if (lineIndex <= startLine) continue; // skip already-parsed lines
-      if (!line.trim()) continue;
-      try {
-        const parsed = JSON.parse(line) as Record<string, unknown>;
-        const entryId = (parsed.id as string) ?? "";
-        const parentId = (parsed.parentId as string | null | undefined) ?? null;
-        if (entryId) {
-          parentById.set(entryId, parentId);
-        }
-        if (parsed.type === "message" && parsed.message) {
-          messages.push({ entryId, message: parsed.message });
-          newEntries++;
-        } else if (parsed.type === "custom") {
-          customEntries.push({
-            id: entryId || `custom-${Date.now()}`,
-            customType: (parsed.customType as string) ?? "unknown",
-            data: parsed.data,
-            timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
-          });
-          newEntries++;
-        }
-      } catch {
-        // skip malformed
-      }
-    }
-    rl.close();
-    return { newEntries, totalLines: lineIndex };
+    return this.sessionMessageCache.readJsonlFromLine(
+      sessionPath,
+      startLine,
+      messages,
+      customEntries,
+      parentById,
+    );
   }
 
   private async _drainPendingDelegates(): Promise<void> {
