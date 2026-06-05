@@ -121,6 +121,7 @@ import {
   removeDelegateChild,
   removeSessionFromAllParents,
 } from "./coordinator-session-state";
+import { findCoordinatorResponseManaged } from "./coordinator-response-routing";
 
 const log = createLogger("agent");
 const perfLog = createLogger("session-perf");
@@ -2836,38 +2837,25 @@ export class AgentProcessManager {
     }
 
     if (invokeId) {
-      let managed = this.getActiveManaged(sessionId);
-      // The session may have been evicted from clients during an async handler
-      // (e.g. delegate_send restarts the target).
-      // Fall back to processByCwd via sessionProjectPaths to find the channel.
-      if (!managed) {
-        const projectPath = this.sessionProjectPaths.get(sessionId) ?? "";
-        if (projectPath) {
-          const procSet = this.processByCwd.get(projectPath);
-          if (procSet) {
-            for (const mc of procSet) {
-              if (mc._activeSessionId === sessionId) {
-                managed = mc;
-                log.info("handleCoordinatorCall: routed response via processByCwd fallback", {
-                  sessionId,
-                  projectPath,
-                  activeSession: managed._activeSessionId,
-                });
-                break;
-              }
-            }
-          }
-          if (!managed) {
-            log.warn(
-              "handleCoordinatorCall: processByCwd fallback could not find matching process",
-              {
-                sessionId,
-                projectPath,
-                processCount: procSet?.size ?? 0,
-              },
-            );
-          }
-        }
+      const route = findCoordinatorResponseManaged({
+        active: this.getActiveManaged(sessionId) ?? undefined,
+        sessionId,
+        sessionProjectPaths: this.sessionProjectPaths,
+        processByCwd: this.processByCwd,
+      });
+      const managed = route.managed;
+      if (route.matchedViaFallback) {
+        log.info("handleCoordinatorCall: routed response via processByCwd fallback", {
+          sessionId,
+          projectPath: route.projectPath,
+          activeSession: managed?._activeSessionId,
+        });
+      } else if (!managed && route.projectPath) {
+        log.warn("handleCoordinatorCall: processByCwd fallback could not find matching process", {
+          sessionId,
+          projectPath: route.projectPath,
+          processCount: route.processCount ?? 0,
+        });
       }
       if (managed) {
         managed.client.channel(channelName).send({ ...(result as object), invokeId });
