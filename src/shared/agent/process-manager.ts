@@ -88,6 +88,12 @@ import {
   removeFromProcessPool,
   selectLruEvictionCandidate,
 } from "./agent-process-pool";
+import {
+  asAgentCommandClient,
+  getResponseData,
+  normalizeAgentList,
+  type AgentListItem,
+} from "./agent-command-response";
 
 const log = createLogger("agent");
 const perfLog = createLogger("session-perf");
@@ -2072,9 +2078,7 @@ export class AgentProcessManager {
       managed = await this.ensureManagedClient(sessionId);
     }
     if (!managed) return { models: {} };
-    const response = await (
-      managed.client as unknown as { send: (cmd: unknown) => Promise<unknown> }
-    )
+    const response = await asAgentCommandClient(managed.client)
       .send({ type: "get_tier_models" })
       .catch((err: unknown) => {
         log.warn("getTierModels error", {
@@ -2084,14 +2088,14 @@ export class AgentProcessManager {
         return null;
       });
     if (!response) return { models: {} };
-    const data = (response as { data?: { models: Record<string, string> } }).data;
+    const data = getResponseData<{ models: Record<string, string> }>(response);
     return { models: data?.models ?? {} };
   }
 
   async setTierModels(sessionId: string, models: Record<string, string>): Promise<{ ok: boolean }> {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) return { ok: false };
-    await (managed.client as unknown as { send: (cmd: unknown) => Promise<unknown> })
+    await asAgentCommandClient(managed.client)
       .send({ type: "set_tier_models", models })
       .catch((err: unknown) => {
         log.warn("setTierModels error", {
@@ -2119,31 +2123,9 @@ export class AgentProcessManager {
     }
     if (!managed) return { agents: [] };
     try {
-      const response = await (
-        managed.client as unknown as { send: (cmd: unknown) => Promise<unknown> }
-      ).send({ type: "get_agents" });
-      const data = (
-        response as {
-          data?: {
-            agents: Array<{
-              name: string;
-              description?: string;
-              tier?: string;
-              tools?: string[];
-              permissionMode?: string;
-              source?: string;
-              filePath?: string;
-            }>;
-          };
-        }
-      ).data;
-      return {
-        agents: (data?.agents ?? []).map((a) => ({
-          ...a,
-          source: a.source ?? "builtin",
-          filePath: a.filePath ?? "",
-        })),
-      };
+      const response = await asAgentCommandClient(managed.client).send({ type: "get_agents" });
+      const data = getResponseData<{ agents: AgentListItem[] }>(response);
+      return { agents: normalizeAgentList(data?.agents) };
     } catch (err: unknown) {
       log.warn("getAgents error", {
         sessionId,
@@ -2167,14 +2149,16 @@ export class AgentProcessManager {
       managed = await this.ensureManagedClient(sessionId);
     }
     if (!managed) throw new Error("No agent process for session");
-    const response = await (
-      managed.client as unknown as { send: (cmd: unknown) => Promise<unknown> }
-    ).send({ type: "switch_agent", agentName });
-    const data = (
-      response as {
-        data?: { agentName: string; tools: string[]; tier?: string; thinkingLevel?: string };
-      }
-    ).data;
+    const response = await asAgentCommandClient(managed.client).send({
+      type: "switch_agent",
+      agentName,
+    });
+    const data = getResponseData<{
+      agentName: string;
+      tools: string[];
+      tier?: string;
+      thinkingLevel?: string;
+    }>(response);
     if (!data) throw new Error("switch_agent returned no data");
     return data;
   }
@@ -2186,10 +2170,10 @@ export class AgentProcessManager {
     }
     if (!managed) return { agentName: null };
     try {
-      const response = await (
-        managed.client as unknown as { send: (cmd: unknown) => Promise<unknown> }
-      ).send({ type: "get_current_agent" });
-      const data = (response as { data?: { agentName: string | null } }).data;
+      const response = await asAgentCommandClient(managed.client).send({
+        type: "get_current_agent",
+      });
+      const data = getResponseData<{ agentName: string | null }>(response);
       return { agentName: data?.agentName ?? null };
     } catch (err: unknown) {
       log.warn("getCurrentAgent error", {
@@ -2234,18 +2218,14 @@ export class AgentProcessManager {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) return null;
     try {
-      const response = await (
-        managed.client as unknown as { send: (cmd: unknown) => Promise<unknown> }
-      ).send({ type: "get_latest_agent_change" });
-      const data = (
-        response as {
-          data?: {
-            agentName: string;
-            agentConfig?: Record<string, unknown>;
-            timestamp: string;
-          } | null;
-        }
-      ).data;
+      const response = await asAgentCommandClient(managed.client).send({
+        type: "get_latest_agent_change",
+      });
+      const data = getResponseData<{
+        agentName: string;
+        agentConfig?: Record<string, unknown>;
+        timestamp: string;
+      } | null>(response);
       return data ?? null;
     } catch (err: unknown) {
       log.warn("getLatestAgentChange error", {
