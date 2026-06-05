@@ -145,10 +145,8 @@ import {
 } from "./agent-client-history-operations";
 import {
   appendUiJsonlEntriesFromPath,
-  filterMessagesToBranch,
-  paginateEntryMessages,
-  readFullJsonlAccumulator,
 } from "./session-jsonl-messages";
+import { getFullMessagesOperation } from "./agent-client-message-operations";
 import {
   createLeafPointerEntry,
   mapJsonlEntriesToTreeEntries,
@@ -1079,20 +1077,14 @@ export class AgentProcessManager {
     totalCount: number;
     nextCursor: string | null;
   }> {
-    const t0 = performance.now();
-    const managed = this.getActiveManaged(sessionId);
-
-    // Resolve session file path first
-    const resolvedSessionPath = managed
-      ? managed.info.sessionPath
-      : this.resolveSessionPath(sessionId) || sessionPath || "";
-
-    // JSONL-first: always read messages directly from the JSONL file.
-    // This avoids CLI OOM — CLI's get_full_messages handler uses readFile internally
-    // which can blow the heap on large sessions (>8MB JSONL).
     const sandboxManager = getSandboxManager();
-    const accumulator = await readFullJsonlAccumulator({
-      sessionPath: resolvedSessionPath,
+    return getFullMessagesOperation({
+      sessionId,
+      sessionPath,
+      pagination: options,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+      resolveSessionPath: (id) => this.resolveSessionPath(id),
+      leafIds: this.leafIds,
       readSandboxFile: sandboxManager
         ? async (pathToRead) => {
             const userId = this._getSandboxUserId(sessionId);
@@ -1100,150 +1092,6 @@ export class AgentProcessManager {
           }
         : undefined,
     });
-
-    // Compaction entries were injected into allMessages in-place during JSONL
-    // parsing above (preserving chronological order). allCompactionEntries is
-    // still used for the streaming merge dedup guard below.
-
-    // Resolve leafId: prefer JSONL leaf_pointer (authoritative on-disk value),
-    // fall back to in-memory cache (may be stale after process kill)
-    const leafId = accumulator.lastJsonlLeafPointer ?? this.leafIds.get(sessionId) ?? null;
-    if (leafId && leafId !== this.leafIds.get(sessionId)) {
-      this.leafIds.set(sessionId, leafId);
-    }
-
-    // Build leaf→root path set and filter messages to current branch only.
-    const { filteredMessages, customEntries, leafFound } = filterMessagesToBranch({
-      allMessages: accumulator.allMessages,
-      allCustomEntries: accumulator.allCustomEntries,
-      parentById: accumulator.parentById,
-      leafId,
-    });
-    if (!leafFound && leafId) {
-      log.warn("[getFullMessages] leafId not found in JSONL, skipping branch filter", {
-        sessionId,
-        leafId,
-        totalEntries: accumulator.parentById.size,
-      });
-    }
-
-    // Apply pagination to filtered results. Without a cursor this returns the
-    // newest page. With afterEntryId, return the page immediately before that
-    // entry so the UI can prepend older history without loading the full JSONL.
-    const totalCount = filteredMessages.length;
-    const limit = options?.limit;
-    const afterEntryId = options?.afterEntryId;
-    const cursorMissing =
-      afterEntryId != null && !filteredMessages.some((entry) => entry.entryId === afterEntryId);
-    if (cursorMissing) {
-      log.warn("[getFullMessages] afterEntryId not found, returning empty page", {
-        sessionId,
-        afterEntryId,
-        totalCount,
-      });
-    }
-    const { slicedMessages, hasMore, nextCursor } = paginateEntryMessages({
-      filteredMessages,
-      limit,
-      afterEntryId,
-    });
-
-    const totalMs = Math.round(performance.now() - t0);
-
-    // When streaming, JSONL may be incomplete (e.g. toolResult not persisted yet).
-    // Merge in-memory messages from CLI to supplement the JSONL data.
-    if (managed && managed.info.status === "streaming") {
-      try {
-        const memResult = await withTimeout(
-          managed.client.getMessages(),
-          5_000,
-          "getMessages (streaming merge)",
-        );
-        if (Array.isArray(memResult) && memResult.length > 0) {
-          const jsonlEntryIds = new Set(
-            accumulator.allMessages.map((m) => m.entryId).filter(Boolean),
-          );
-          const jsonlUserTexts = new Set(
-            accumulator.allMessages
-              .filter((m) => {
-                const msg = m.message as Record<string, unknown> | undefined;
-                return msg && (msg.role as string) === "user";
-              })
-              .map((m) => {
-                const msg = m.message as { content?: unknown[] };
-                if (Array.isArray(msg.content)) {
-                  return (msg.content as Array<Record<string, unknown>>)
-                    .filter((c) => c.type === "text")
-                    .map((c) => (c.text as string) ?? "")
-                    .join("");
-                }
-                return "";
-              })
-              .filter(Boolean),
-          );
-          const compactionEntryIds = new Set(
-            accumulator.allCompactionEntries.map((c) => c.entryId),
-          );
-          const filteredHasCompaction = filteredMessages.some((fm) => {
-            const fmMsg = fm.message as Record<string, unknown>;
-            return fmMsg && (fmMsg.role as string) === "compactionSummary";
-          });
-          for (const msg of memResult) {
-            const m = msg as unknown as Record<string, unknown>;
-            const eid = (m.entryId as string) ?? "";
-            const role = (m.role as string) ?? "";
-            if (eid && jsonlEntryIds.has(eid)) continue;
-            // compactionSummary is already injected from JSONL in-place; skip CLI
-            // memory duplicate. Use entryId-based dedup for precision: only skip
-            // if the compaction entry from JSONL is on the current branch.
-            if (role === "compactionSummary") {
-              if (eid && compactionEntryIds.has(eid)) continue;
-              // Also skip if no entryId (CLI-generated in-memory) but JSONL has any
-              // compaction on the current filtered branch.
-              if (!eid && filteredHasCompaction) continue;
-            }
-            if (role === "user" && !eid) {
-              const content = m.content as unknown[];
-              const text = Array.isArray(content)
-                ? (content as Array<Record<string, unknown>>)
-                    .filter((c) => c.type === "text")
-                    .map((c) => (c.text as string) ?? "")
-                    .join("")
-                : "";
-              if (text && jsonlUserTexts.has(text)) continue;
-            }
-            slicedMessages.push(m as unknown as AgentMessageForUI);
-            if (eid) jsonlEntryIds.add(eid);
-          }
-          perfLog.info("[getFullMessages] streaming merge: added from CLI memory", {
-            sessionId,
-            mergedCount: slicedMessages.length,
-          });
-        }
-      } catch (err: unknown) {
-        log.debug("[getMessages] CLI memory merge skipped", {
-          sessionId,
-          err: err instanceof Error ? err.message : String(err),
-        });
-      }
-    }
-
-    perfLog.info("[getFullMessages] done", {
-      sessionId,
-      messageCount: slicedMessages.length,
-      totalCount,
-      hasMore,
-      leafId: leafId ?? "none",
-      totalMs,
-    });
-
-    return {
-      messages: slicedMessages as AgentMessageForUI[],
-      customEntries,
-      hasMore,
-      totalCount,
-      nextCursor,
-    };
   }
 
   async getAvailableModels(
