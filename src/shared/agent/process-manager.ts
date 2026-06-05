@@ -70,10 +70,8 @@ import {
   buildCoordinatorDelegatePrompt,
   buildCoordinatorSessionCreatedEvent,
   buildSyncDelegatePrompt,
-  formatDelegateElapsed,
   resolveDelegateSessionPaths,
   stripParentSessionFromHeader,
-  wrapDelegateReply,
   writeDelegateSessionHeader,
 } from "./coordinator-delegate-utils";
 import {
@@ -157,16 +155,20 @@ import {
   extractMessageEndText,
 } from "./agent-event-lifecycle";
 import {
-  canStopDelegateChild,
   clearDelegateTracking,
   findParentSession,
-  listDelegateChildSessions,
   popDelegateChildren,
   registerDelegateChild,
   removeDelegateChild,
   removeSessionFromAllParents,
 } from "./coordinator-session-state";
 import { findCoordinatorResponseManaged } from "./coordinator-response-routing";
+import {
+  handleCoordinatorDelegateListOperation,
+  handleCoordinatorDelegateSendOperation,
+  handleCoordinatorDelegateStatusOperation,
+  handleCoordinatorDelegateStopOperation,
+} from "./coordinator-delegate-operations";
 
 const log = createLogger("agent");
 const perfLog = createLogger("session-perf");
@@ -2790,116 +2792,60 @@ export class AgentProcessManager {
   private async handleCoordinatorDelegateSend(
     msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_send" }>,
   ): Promise<{ delivered: boolean; targetStatus: "active" | "started" | "not_found" }> {
-    const { targetSessionId, message } = msg;
-
-    let target = this.clients.get(targetSessionId);
-
-    // Not active — attempt restart, like clicking a session in the UI.
-    // Session truly "not found" only if the file was physically deleted.
-    if (!target) {
-      const sessionPath = this.sessionPaths.get(targetSessionId) ?? "";
-      const projectPath = this.sessionProjectPaths.get(targetSessionId) ?? "";
-      if (sessionPath && projectPath && existsSync(sessionPath)) {
-        try {
-          const result = await this.start(targetSessionId, projectPath, sessionPath);
-          target = this.clients.get(targetSessionId);
-          if (target) {
-            log.info("handleCoordinatorDelegateSend: restarted inactive session", {
-              targetSessionId,
-              status: result.status,
-            });
-          }
-        } catch (err: unknown) {
-          log.warn("handleCoordinatorDelegateSend: failed to restart session", {
-            targetSessionId,
-            err: err instanceof Error ? err.message : String(err),
-          });
-        }
-      }
-      if (!target) {
-        return { delivered: false, targetStatus: "not_found" };
-      }
-    }
-
-    const count = (this.delegateReplyCount.get(targetSessionId) ?? 0) + 1;
-    this.delegateReplyCount.set(targetSessionId, count);
-
-    const createdAt = this.delegateCreatedAt.get(targetSessionId) ?? Date.now();
-    const elapsed = formatDelegateElapsed(createdAt);
-
-    const parentSessionId = findParentSession(this.parentChildMap, targetSessionId);
-    let title = "";
-    if (parentSessionId) {
-      const parent = this.clients.get(parentSessionId);
-      if (parent) {
-        title = target.info.sessionPath.split("/").pop()?.replace(".jsonl", "") ?? "";
-      }
-    }
-
-    const wrappedMessage = wrapDelegateReply({
-      targetSessionId,
-      title,
-      sequence: count,
-      createdAt,
-      elapsed,
-      message,
+    return handleCoordinatorDelegateSendOperation({
+      msg,
+      clients: this.clients,
+      sessionPaths: this.sessionPaths,
+      sessionProjectPaths: this.sessionProjectPaths,
+      delegateReplyCount: this.delegateReplyCount,
+      delegateCreatedAt: this.delegateCreatedAt,
+      parentChildMap: this.parentChildMap,
+      start: (sessionId, projectPath, sessionPath) => this.start(sessionId, projectPath, sessionPath),
+      send: (sessionId, content) => {
+        this.send(sessionId, content);
+      },
+      steer: (sessionId, content) => {
+        this.steer(sessionId, content);
+      },
+      followUp: (sessionId, content) => {
+        this.followUp(sessionId, content);
+      },
     });
-
-    if (msg.mode === "steer") {
-      this.steer(targetSessionId, wrappedMessage);
-    } else if (msg.mode === "followUp" || target.info.status === "streaming") {
-      this.followUp(targetSessionId, wrappedMessage);
-    } else {
-      this.send(targetSessionId, wrappedMessage);
-    }
-
-    return { delivered: true, targetStatus: "active" };
   }
 
   private async handleCoordinatorDelegateStatus(
     msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_status" }>,
   ): Promise<{ status: string; isCompacting: boolean; contextUsage: unknown }> {
-    const { sessionId: targetSessionId } = msg;
-
-    const status = this.getStatus(targetSessionId);
-    if (status.status === "stopped") {
-      // Distinguish "session never existed" from "session existed but is inactive"
-      const hasRecord =
-        this.sessionPaths.has(targetSessionId) || this.sessionProjectPaths.has(targetSessionId);
-      return {
-        status: hasRecord ? "stopped" : "not_found",
-        isCompacting: false,
-        contextUsage: { tokens: null, contextWindow: 0, percent: null },
-      };
-    }
-
-    const state = await this.getState(targetSessionId);
-    const contextUsage = await this.getContextUsage(targetSessionId);
-
-    return {
-      status: state?.isStreaming ? "streaming" : "idle",
-      isCompacting: state?.isCompacting ?? false,
-      contextUsage,
-    };
+    return handleCoordinatorDelegateStatusOperation({
+      msg,
+      sessionPaths: this.sessionPaths,
+      sessionProjectPaths: this.sessionProjectPaths,
+      getStatus: (sessionId) => this.getStatus(sessionId),
+      getState: (sessionId) => this.getState(sessionId),
+      getContextUsage: (sessionId) => this.getContextUsage(sessionId),
+    });
   }
 
   private handleCoordinatorDelegateList(parentSessionId: string): {
     sessions: Array<{ sessionId: string; status: string; projectPath: string }>;
   } {
-    return listDelegateChildSessions(this.parentChildMap, this.clients, parentSessionId);
+    return handleCoordinatorDelegateListOperation({
+      parentSessionId,
+      parentChildMap: this.parentChildMap,
+      clients: this.clients,
+    });
   }
 
   private async handleCoordinatorDelegateStop(
     parentSessionId: string,
     msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_stop" }>,
   ): Promise<{ ok: boolean }> {
-    const { sessionId: targetSessionId } = msg;
-    // Only allow stopping own children
-    if (!canStopDelegateChild(this.parentChildMap, parentSessionId, targetSessionId)) {
-      return { ok: false };
-    }
-    const ok = await this.stop(targetSessionId);
-    return { ok };
+    return handleCoordinatorDelegateStopOperation({
+      parentSessionId,
+      msg,
+      parentChildMap: this.parentChildMap,
+      stop: (sessionId) => this.stop(sessionId),
+    });
   }
 
   private async handleCoordinatorDelegateFork(
