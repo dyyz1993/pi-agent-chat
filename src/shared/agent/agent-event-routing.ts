@@ -5,7 +5,7 @@ import type {
 } from "../modules/agent";
 import { createLogger } from "../lib/logger";
 import { appendStreamingHoldEvent, classifyExtensionUiRequest, extractMessageEndText } from "./agent-event-lifecycle";
-import type { SyncDelegateResolver } from "./coordinator-session-state";
+import type { SyncChildRegistry, SyncDelegateResolver } from "./coordinator-session-state";
 import { findParentSession } from "./coordinator-session-state";
 import { sanitizeEvent, type SanitizedEvent } from "./hold-events";
 
@@ -32,7 +32,7 @@ export function handleAgentEventOperation<TManaged extends ManagedEventClientLik
   parentChildMap: Map<string, Set<string>>;
   leafIds: Map<string, string | null>;
   syncDelegateResolvers: Map<string, SyncDelegateResolver>;
-  subagentSyncChildren: Map<string, string>;
+  subagentSyncChildren: SyncChildRegistry & { has(sessionId: string): boolean };
   syncDelegateLastText: Map<string, string>;
   sandboxEnabled: boolean;
   broadcastEvent: (

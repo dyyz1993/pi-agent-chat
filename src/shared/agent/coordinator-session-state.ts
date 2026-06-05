@@ -14,6 +14,10 @@ export interface SyncDelegateResolver {
   parentSessionId: string;
 }
 
+export interface SyncChildRegistry {
+  delete(sessionId: string): boolean;
+}
+
 export interface DelegateClientInfo {
   info: {
     status: string;
@@ -96,7 +100,7 @@ export function cleanupStoppedDelegateSession(options: {
   delegateCreatedAt: Map<string, number>;
   delegateReplyCount: Map<string, number>;
   syncDelegateResolvers: Map<string, SyncDelegateResolver>;
-  subagentSyncChildren: Map<string, string>;
+  subagentSyncChildren: SyncChildRegistry;
   syncDelegateLastText: Map<string, string>;
 }): { childSessionIds: string[]; resolvedSyncDelegate: boolean } {
   const childSessionIds = popDelegateChildren(options.parentChildMap, options.sessionId);

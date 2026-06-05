@@ -78,7 +78,6 @@ import {
 import {
   buildCoordinatorDelegatePrompt,
   buildCoordinatorSessionCreatedEvent,
-  buildSyncDelegatePrompt,
   resolveDelegateSessionPaths,
   stripParentSessionFromHeader,
   writeDelegateSessionHeader,
@@ -166,6 +165,7 @@ import { findCoordinatorResponseManaged } from "./coordinator-response-routing";
 import {
   handleCoordinatorDelegateListOperation,
   handleCoordinatorDelegateSendOperation,
+  handleCoordinatorDelegateSyncOperation,
   handleCoordinatorDelegateStatusOperation,
   handleCoordinatorDelegateStopOperation,
 } from "./coordinator-delegate-operations";
@@ -2117,168 +2117,25 @@ export class AgentProcessManager {
     finalText: string;
     error?: string;
   }> {
-    const { task, title, agent, timeoutMs = 1800000, projectPath: rawProjectPath } = msg;
-    const parent = this.getActiveManaged(parentSessionId);
-    if (!parent) throw new Error("Parent session not found");
-
-    const newSessionId = `sess_sub_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const { projectPath, sessionPath } = resolveDelegateSessionPaths({
-      parentProjectPath: parent.info.projectPath,
-      parentSessionPath: parent.info.sessionPath,
-      newSessionId,
-      rawProjectPath,
+    return handleCoordinatorDelegateSyncOperation({
+      parentSessionId,
+      msg,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+      start: (id, projectPath, sessionPath, startOptions) =>
+        this.start(id, projectPath, sessionPath, startOptions),
+      switchAgent: (id, agentName) => this.switchAgent(id, agentName),
+      setSessionName: (id, name) => this.setSessionName(id, name),
+      send: (id, content) => this.send(id, content),
+      steer: (id, content) => this.steer(id, content),
+      stop: (id) => this.stop(id),
+      broadcastEvent: (eventName, data, filter) => this.broadcastEvent(eventName, data, filter),
+      parentChildMap: this.parentChildMap,
+      delegateCreatedAt: this.delegateCreatedAt,
+      delegateReplyCount: this.delegateReplyCount,
+      syncDelegateResolvers: this.syncDelegateResolvers,
+      subagentSyncChildren: this.subagentSyncChildren,
+      syncDelegateLastText: this.syncDelegateLastText,
     });
-
-    try {
-      await writeDelegateSessionHeader({
-        sessionPath,
-        newSessionId,
-        projectPath,
-        parentSessionId,
-        parentSessionPath: parent.info.sessionPath,
-        delegateType: "subagent",
-      });
-    } catch (writeErr: unknown) {
-      log.warn("[handleCoordinatorDelegateSync] failed to write session header", {
-        sessionPath,
-        err: writeErr instanceof Error ? writeErr.message : String(writeErr),
-      });
-    }
-
-    await this.start(newSessionId, projectPath, sessionPath, { forceNewProcess: true });
-
-    if (agent) {
-      try {
-        await this.switchAgent(newSessionId, agent);
-        log.info("[handleCoordinatorDelegateSync] agent switched", {
-          newSessionId,
-          agent,
-        });
-      } catch (switchErr: unknown) {
-        log.warn("[handleCoordinatorDelegateSync] switchAgent failed, using default agent", {
-          newSessionId,
-          agent,
-          err: switchErr instanceof Error ? switchErr.message : String(switchErr),
-        });
-      }
-    }
-
-    const createdAt = Date.now();
-    this.delegateCreatedAt.set(newSessionId, createdAt);
-    this.delegateReplyCount.set(newSessionId, 0);
-
-    registerDelegateChild(this.parentChildMap, parentSessionId, newSessionId);
-
-    const rawTitle = title ?? task.slice(0, 60);
-    const sessionTitle = `子代理: ${rawTitle}`;
-    await this.setSessionName(newSessionId, sessionTitle);
-
-    const delegatePrompt = buildSyncDelegatePrompt({
-      task,
-      rawTitle,
-      agent,
-      projectPath,
-    });
-
-    this.subagentSyncChildren.add(newSessionId);
-
-    const syncPromise = new Promise<{
-      sessionId: string;
-      status: string;
-      exitCode: number;
-      finalText: string;
-      error?: string;
-    }>((resolve) => {
-      // Pre-timeout: inject a "summarize now" instruction 60s before hard deadline
-      const preTimeoutMs = Math.max(timeoutMs - 60_000, 30_000);
-      const preTimeout = setTimeout(() => {
-        if (!this.syncDelegateResolvers.has(newSessionId)) return;
-        log.info("[syncDelegate] pre-timeout summarize injection", { sessionId: newSessionId });
-        this.steer(
-          newSessionId,
-          `[系统指令] 任务已运行较长时间（${Math.round((timeoutMs - 60_000) / 60_000)} 分钟），请在 60 秒内汇报阶段性成果：已完成的工作、未完成的部分、以及下一步该怎么做，以便主任务可以恢复继续。`,
-        );
-      }, preTimeoutMs);
-
-      const timeout = setTimeout(() => {
-        clearTimeout(preTimeout);
-        log.warn("[syncDelegate] timed out", {
-          sessionId: newSessionId,
-          parentSessionId,
-          timeoutMs,
-        });
-        const lastText = this.syncDelegateLastText.get(newSessionId) ?? "";
-        this.syncDelegateResolvers.delete(newSessionId);
-        this.subagentSyncChildren.delete(newSessionId);
-        this.syncDelegateLastText.delete(newSessionId);
-        resolve({
-          sessionId: newSessionId,
-          status: "timeout",
-          exitCode: 1,
-          finalText: lastText || "(timed out, no output captured)",
-        });
-      }, timeoutMs);
-
-      this.syncDelegateResolvers.set(newSessionId, {
-        resolve,
-        timeout,
-        parentSessionId,
-      });
-    });
-
-    this.send(newSessionId, delegatePrompt);
-
-    this.broadcastEvent(
-      "coordinator.session_created",
-      buildCoordinatorSessionCreatedEvent({
-        parentSessionId,
-        sessionId: newSessionId,
-        name: rawTitle,
-        sessionPath,
-        projectPath,
-        parentSessionPath: parent.info.sessionPath,
-        delegateType: "subagent",
-        firstMessage: task,
-        createdAt,
-      }),
-      { parentSessionId },
-    ).catch((err: unknown) => {
-      log.warn("broadcastEvent(coordinator.session_created) error", {
-        parentSessionId,
-        newSessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-    });
-
-    this.broadcastEvent(
-      "subagent.event",
-      {
-        parentSessionId,
-        parentSessionPath: parent.info.sessionPath,
-        subSessionId: newSessionId,
-        event: {
-          type: "subagent_start",
-          toolCallId: "",
-          description: rawTitle,
-          instruction: task,
-        },
-      },
-      { parentSessionId },
-    ).catch((err: unknown) => {
-      log.warn("broadcastEvent(subagent_start) error", {
-        parentSessionId,
-        newSessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-    });
-
-    const syncResult = await syncPromise;
-
-    this.stop(newSessionId);
-
-    removeDelegateChild(this.parentChildMap, parentSessionId, newSessionId);
-
-    return syncResult;
   }
 
   private async handleCoordinatorDelegateSend(

@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   handleCoordinatorDelegateListOperation,
   handleCoordinatorDelegateSendOperation,
+  handleCoordinatorDelegateSyncOperation,
   handleCoordinatorDelegateStatusOperation,
   handleCoordinatorDelegateStopOperation,
 } from "../src/shared/agent/coordinator-delegate-operations";
@@ -134,5 +135,118 @@ describe("coordinator delegate operations", () => {
         stop: vi.fn(),
       }),
     ).resolves.toEqual({ ok: false });
+  });
+
+  it("starts sync delegates, broadcasts creation, and cleans parent links after completion", async () => {
+    const parentChildMap = new Map<string, Set<string>>();
+    const syncDelegateResolvers = new Map();
+    const send = vi.fn();
+    const stop = vi.fn().mockResolvedValue(true);
+    const broadcastEvent = vi.fn().mockResolvedValue(undefined);
+
+    const promise = handleCoordinatorDelegateSyncOperation({
+      parentSessionId: "parent",
+      msg: {
+        __call: "session_delegate_sync",
+        task: "inspect repo",
+        title: "Inspect",
+        timeoutMs: 300_000,
+      },
+      getActiveManaged: () => makeManaged("idle", "/tmp/parent.jsonl"),
+      start: vi.fn().mockResolvedValue({ status: "started" }),
+      switchAgent: vi.fn(),
+      setSessionName: vi.fn(),
+      send,
+      steer: vi.fn(),
+      stop,
+      broadcastEvent,
+      parentChildMap,
+      delegateCreatedAt: new Map(),
+      delegateReplyCount: new Map(),
+      syncDelegateResolvers,
+      subagentSyncChildren: new Set(),
+      syncDelegateLastText: new Map(),
+      now: () => 1000,
+      sessionIdFactory: () => "child-sync",
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(send).toHaveBeenCalledWith("child-sync", expect.stringContaining("inspect repo"));
+    expect(broadcastEvent).toHaveBeenCalledWith(
+      "coordinator.session_created",
+      expect.objectContaining({
+        session: expect.objectContaining({
+          sessionId: "child-sync",
+          delegateType: "subagent",
+        }),
+      }),
+      { parentSessionId: "parent" },
+    );
+    expect(broadcastEvent).toHaveBeenCalledWith(
+      "subagent.event",
+      expect.objectContaining({ subSessionId: "child-sync" }),
+      { parentSessionId: "parent" },
+    );
+    expect(parentChildMap.get("parent")?.has("child-sync")).toBe(true);
+
+    const resolver = syncDelegateResolvers.get("child-sync");
+    expect(resolver).toBeDefined();
+    clearTimeout(resolver.timeout);
+    syncDelegateResolvers.delete("child-sync");
+    resolver.resolve({
+      sessionId: "child-sync",
+      status: "completed",
+      exitCode: 0,
+      finalText: "done",
+    });
+
+    await expect(promise).resolves.toEqual({
+      sessionId: "child-sync",
+      status: "completed",
+      exitCode: 0,
+      finalText: "done",
+    });
+    expect(stop).toHaveBeenCalledWith("child-sync");
+    expect(parentChildMap.has("parent")).toBe(false);
+  });
+
+  it("times out sync delegates and clears pending state", async () => {
+    const syncDelegateResolvers = new Map();
+    const subagentSyncChildren = new Set<string>();
+    const syncDelegateLastText = new Map([["child-sync", "partial"]]);
+
+    const promise = handleCoordinatorDelegateSyncOperation({
+      parentSessionId: "parent",
+      msg: {
+        __call: "session_delegate_sync",
+        task: "slow task",
+        timeoutMs: 1,
+      },
+      getActiveManaged: () => makeManaged("idle", "/tmp/parent.jsonl"),
+      start: vi.fn().mockResolvedValue({ status: "started" }),
+      switchAgent: vi.fn(),
+      setSessionName: vi.fn(),
+      send: vi.fn(),
+      steer: vi.fn(),
+      stop: vi.fn().mockResolvedValue(true),
+      broadcastEvent: vi.fn().mockResolvedValue(undefined),
+      parentChildMap: new Map(),
+      delegateCreatedAt: new Map(),
+      delegateReplyCount: new Map(),
+      syncDelegateResolvers,
+      subagentSyncChildren,
+      syncDelegateLastText,
+      sessionIdFactory: () => "child-sync",
+    });
+
+    await expect(promise).resolves.toEqual({
+      sessionId: "child-sync",
+      status: "timeout",
+      exitCode: 1,
+      finalText: "partial",
+    });
+    expect(syncDelegateResolvers.has("child-sync")).toBe(false);
+    expect(subagentSyncChildren.has("child-sync")).toBe(false);
+    expect(syncDelegateLastText.has("child-sync")).toBe(false);
   });
 });
