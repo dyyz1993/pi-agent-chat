@@ -41,7 +41,7 @@ jobs:
           '
 
       - name: Install dependencies
-        run: bun install
+        run: rm -f bun.lockb && bun install
 
       - name: Build Vite frontend
         run: bun run build
