@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   canStopDelegateChild,
   clearDelegateTracking,
+  cleanupStoppedDelegateSession,
   findParentSession,
   listDelegateChildSessions,
   popDelegateChildren,
@@ -90,5 +91,83 @@ describe("coordinator session state helpers", () => {
     expect(canStopDelegateChild(parentChildMap, "parent-a", "child-active")).toBe(true);
     expect(canStopDelegateChild(parentChildMap, "parent-a", "child-missing")).toBe(true);
     expect(canStopDelegateChild(parentChildMap, "parent-b", "child-active")).toBe(false);
+  });
+
+  it("cleans stopped parent state and returns child sessions for cascade stop", () => {
+    const parentChildMap = new Map<string, Set<string>>([
+      ["parent-a", new Set(["child-1", "child-2"])],
+      ["other-parent", new Set(["parent-a", "child-3"])],
+    ]);
+    const delegateCreatedAt = new Map([
+      ["parent-a", 100],
+      ["child-1", 101],
+    ]);
+    const delegateReplyCount = new Map([
+      ["parent-a", 2],
+      ["child-1", 1],
+    ]);
+
+    const result = cleanupStoppedDelegateSession({
+      sessionId: "parent-a",
+      parentChildMap,
+      delegateCreatedAt,
+      delegateReplyCount,
+      syncDelegateResolvers: new Map(),
+      subagentSyncChildren: new Map(),
+      syncDelegateLastText: new Map(),
+    });
+
+    expect(result).toEqual({
+      childSessionIds: ["child-1", "child-2"],
+      resolvedSyncDelegate: false,
+    });
+    expect(parentChildMap.has("parent-a")).toBe(false);
+    expect([...parentChildMap.get("other-parent") ?? []]).toEqual(["child-3"]);
+    expect(delegateCreatedAt.has("parent-a")).toBe(false);
+    expect(delegateReplyCount.has("parent-a")).toBe(false);
+    expect(delegateCreatedAt.has("child-1")).toBe(true);
+  });
+
+  it("resolves and clears sync delegate state when a stopped session is pending", () => {
+    const resolved: unknown[] = [];
+    const timeout = setTimeout(() => undefined, 10_000);
+    const syncDelegateResolvers = new Map([
+      [
+        "child-1",
+        {
+          resolve: (value: unknown) => resolved.push(value),
+          timeout,
+          parentSessionId: "parent-a",
+        },
+      ],
+    ]);
+    const subagentSyncChildren = new Map([["child-1", "parent-a"]]);
+    const syncDelegateLastText = new Map([["child-1", "partial output"]]);
+
+    const result = cleanupStoppedDelegateSession({
+      sessionId: "child-1",
+      parentChildMap: new Map([["parent-a", new Set(["child-1"])]]),
+      delegateCreatedAt: new Map(),
+      delegateReplyCount: new Map(),
+      syncDelegateResolvers,
+      subagentSyncChildren,
+      syncDelegateLastText,
+    });
+
+    expect(result).toEqual({
+      childSessionIds: [],
+      resolvedSyncDelegate: true,
+    });
+    expect(syncDelegateResolvers.has("child-1")).toBe(false);
+    expect(subagentSyncChildren.has("child-1")).toBe(false);
+    expect(syncDelegateLastText.has("child-1")).toBe(false);
+    expect(resolved).toEqual([
+      {
+        sessionId: "child-1",
+        status: "aborted",
+        exitCode: 1,
+        finalText: "(stopped)",
+      },
+    ]);
   });
 });

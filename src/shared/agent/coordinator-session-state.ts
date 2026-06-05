@@ -1,5 +1,19 @@
 export type DelegateChildMap = Map<string, Set<string>>;
 
+export interface SyncDelegateResult {
+  sessionId: string;
+  status: string;
+  exitCode: number;
+  finalText: string;
+  error?: string;
+}
+
+export interface SyncDelegateResolver {
+  resolve: (value: SyncDelegateResult) => void;
+  timeout: ReturnType<typeof setTimeout>;
+  parentSessionId: string;
+}
+
 export interface DelegateClientInfo {
   info: {
     status: string;
@@ -74,6 +88,38 @@ export function clearDelegateTracking(
   const hadCreatedAt = delegateCreatedAt.delete(sessionId);
   const hadReplyCount = delegateReplyCount.delete(sessionId);
   return hadCreatedAt || hadReplyCount;
+}
+
+export function cleanupStoppedDelegateSession(options: {
+  sessionId: string;
+  parentChildMap: DelegateChildMap;
+  delegateCreatedAt: Map<string, number>;
+  delegateReplyCount: Map<string, number>;
+  syncDelegateResolvers: Map<string, SyncDelegateResolver>;
+  subagentSyncChildren: Map<string, string>;
+  syncDelegateLastText: Map<string, string>;
+}): { childSessionIds: string[]; resolvedSyncDelegate: boolean } {
+  const childSessionIds = popDelegateChildren(options.parentChildMap, options.sessionId);
+  removeSessionFromAllParents(options.parentChildMap, options.sessionId);
+  clearDelegateTracking(options.delegateCreatedAt, options.delegateReplyCount, options.sessionId);
+
+  const syncResolver = options.syncDelegateResolvers.get(options.sessionId);
+  if (!syncResolver) {
+    return { childSessionIds, resolvedSyncDelegate: false };
+  }
+
+  clearTimeout(syncResolver.timeout);
+  options.syncDelegateResolvers.delete(options.sessionId);
+  options.subagentSyncChildren.delete(options.sessionId);
+  options.syncDelegateLastText.delete(options.sessionId);
+  syncResolver.resolve({
+    sessionId: options.sessionId,
+    status: "aborted",
+    exitCode: 1,
+    finalText: "(stopped)",
+  });
+
+  return { childSessionIds, resolvedSyncDelegate: true };
 }
 
 export function listDelegateChildSessions<TClient extends DelegateClientInfo>(

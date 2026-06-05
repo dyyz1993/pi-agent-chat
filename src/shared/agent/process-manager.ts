@@ -166,11 +166,10 @@ import {
 } from "./agent-event-lifecycle";
 import {
   clearDelegateTracking,
+  cleanupStoppedDelegateSession,
   findParentSession,
-  popDelegateChildren,
   registerDelegateChild,
   removeDelegateChild,
-  removeSessionFromAllParents,
 } from "./coordinator-session-state";
 import { findCoordinatorResponseManaged } from "./coordinator-response-routing";
 import {
@@ -689,32 +688,19 @@ export class AgentProcessManager {
       });
     });
 
-    // Cascade stop delegated children
-    const children = popDelegateChildren(this.parentChildMap, sessionId);
-    if (children.length > 0) {
-      for (const childId of children) {
+    const stopCleanup = cleanupStoppedDelegateSession({
+      sessionId,
+      parentChildMap: this.parentChildMap,
+      delegateCreatedAt: this.delegateCreatedAt,
+      delegateReplyCount: this.delegateReplyCount,
+      syncDelegateResolvers: this.syncDelegateResolvers,
+      subagentSyncChildren: this.subagentSyncChildren,
+      syncDelegateLastText: this.syncDelegateLastText,
+    });
+    if (stopCleanup.childSessionIds.length > 0) {
+      for (const childId of stopCleanup.childSessionIds) {
         this.stop(childId);
       }
-      clearDelegateTracking(this.delegateCreatedAt, this.delegateReplyCount, sessionId);
-    }
-
-    // Remove from parent's children set if this is a delegated session
-    removeSessionFromAllParents(this.parentChildMap, sessionId);
-
-    clearDelegateTracking(this.delegateCreatedAt, this.delegateReplyCount, sessionId);
-
-    const syncResolver = this.syncDelegateResolvers.get(sessionId);
-    if (syncResolver) {
-      clearTimeout(syncResolver.timeout);
-      this.syncDelegateResolvers.delete(sessionId);
-      this.subagentSyncChildren.delete(sessionId);
-      this.syncDelegateLastText.delete(sessionId);
-      syncResolver.resolve({
-        sessionId,
-        status: "aborted",
-        exitCode: 1,
-        finalText: "(stopped)",
-      });
     }
 
     // Sync leafId before unsubscribe closes the connection
