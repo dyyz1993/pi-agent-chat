@@ -179,25 +179,27 @@ describe("sendFollowUp error notification", () => {
   });
 });
 
-describe("sendMessage session not ready", () => {
-  it("should push warning notification when session is not ready", async () => {
+describe("sendMessage session readiness", () => {
+  it("should still send when session messages are visible but readiness is not settled", async () => {
     mockedSessionGetState.mockReturnValue({
       activeSessionId: "sess-1",
       sessionReady: { "sess-1": false },
       sessionContextMap: {},
       restoreContextFromHistory: vi.fn(),
+      updateSessionStatus: vi.fn(),
     });
     useChatStore.getState().setInputText("test");
 
     await useChatStore.getState().sendMessage();
 
-    expect(pushMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        level: "warning",
-        message: expect.stringContaining("not ready"),
-      }),
+    expect(mockedCall).toHaveBeenCalledWith("agent.send", {
+      sessionId: "sess-1",
+      content: "test",
+      images: [],
+    });
+    expect(pushMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.stringContaining("not ready") }),
     );
-    expect(useChatStore.getState().inputText).toBe("test");
   });
 });
 

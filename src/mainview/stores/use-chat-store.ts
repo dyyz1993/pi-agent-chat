@@ -152,6 +152,32 @@ export function normalizeToolBlocks(
     const msg = msgs[mi];
     if (msg.role !== "assistant") continue;
 
+    const existingExecutionIds = new Set<string>();
+    const dedupedContent: ContentBlock[] = [];
+    for (let bi = msg.content.length - 1; bi >= 0; bi--) {
+      const block = msg.content[bi];
+      if (block.type === "toolExecution") {
+        if (existingExecutionIds.has(block.toolCallId)) continue;
+        existingExecutionIds.add(block.toolCallId);
+      }
+      dedupedContent.unshift(block);
+    }
+
+    if (dedupedContent.length !== msg.content.length) {
+      msgs[mi] = { ...msg, content: dedupedContent };
+    }
+  }
+
+  for (let mi = 0; mi < msgs.length; mi++) {
+    const msg = msgs[mi];
+    if (msg.role !== "assistant") continue;
+
+    const executionIds = new Set(
+      msg.content
+        .filter((b): b is Extract<ContentBlock, { type: "toolExecution" }> => b.type === "toolExecution")
+        .map((b) => b.toolCallId),
+    );
+
     let hasToolCall = false;
     for (const b of msg.content) {
       if (b.type === "toolCall") {
@@ -166,6 +192,7 @@ export function normalizeToolBlocks(
     const newContent: ContentBlock[] = [];
     for (const b of msg.content) {
       if (b.type === "toolCall") {
+        if (executionIds.has(b.id)) continue;
         const args =
           typeof b.input === "string"
             ? b.input
@@ -390,16 +417,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
     };
 
     try {
-      const sessionReady = useSessionStore.getState().sessionReady[sessionId];
-      if (!sessionReady) {
-        useAppStore.getState().addLog("Session not ready, cannot send");
-        useNotificationStore
-          .getState()
-          .push({ message: "Session not ready, please wait", level: "warning" });
-        set({ inputText: text });
-        return;
-      }
-
       sentImages = get().pendingImages;
 
       const contentBlocks: ContentBlock[] = [{ type: "text", text }];
@@ -1005,7 +1022,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
               newCount: msgs.length,
             });
             const serverIds = new Set(msgs.map((m) => m.id));
-            const localOnly = current.filter((m) => !serverIds.has(m.id));
+            const localOnly = current.filter((m) => m._local && !serverIds.has(m.id));
             const hasMore = result.hasMore === true || msgs.length > PAGE_SIZE;
             const merged =
               localOnly.length > 0

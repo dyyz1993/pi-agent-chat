@@ -316,6 +316,40 @@ describe("normalizeToolBlocks", () => {
 
     expect(msgs[0].content[0]).toEqual({ type: "text", text: "Hello" });
   });
+
+  it("deduplicates live toolExecution blocks against replayed toolCall blocks", () => {
+    const msgs: ChatMessage[] = [
+      {
+        id: "m1",
+        role: "assistant",
+        content: [
+          {
+            type: "toolExecution",
+            toolCallId: "tc-live",
+            toolName: "bash",
+            args: "cat .env.local",
+            status: "running",
+            output: "waiting...",
+          },
+          { type: "toolCall", id: "tc-live", name: "bash", input: "cat .env.local" },
+        ],
+        timestamp: 1,
+        isStreaming: true,
+      },
+    ];
+
+    normalizeToolBlocks(msgs, false, true);
+
+    const blocks = msgs[0].content.filter((b) => b.type === "toolExecution") as Extract<
+      ContentBlock,
+      { type: "toolExecution" }
+    >[];
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].toolCallId).toBe("tc-live");
+    expect(blocks[0].status).toBe("running");
+    expect(blocks[0].output).toBe("waiting...");
+    expect(msgs[0].content.some((b) => b.type === "toolCall")).toBe(false);
+  });
 });
 
 describe("session isolation", () => {

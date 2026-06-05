@@ -3,6 +3,54 @@ import type { HandlerOptions } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
 import type { SupervisorStatus, TaskReport } from "../modules/supervisor";
 import { getProcessManager } from "./agent";
+import { createLogger } from "../lib/logger";
+
+const log = createLogger("supervisor");
+const STATUS_TIMEOUT_MS = 2500;
+
+function disabledStatus(): SupervisorStatus {
+  return {
+    enabled: false,
+    state: "disabled",
+    continueCount: 0,
+    maxContinueCount: 0,
+    activeGuards: [],
+  };
+}
+
+async function getSupervisorStatus(
+  pm: NonNullable<ReturnType<typeof getProcessManager>>,
+  sessionId: string,
+): Promise<SupervisorStatus> {
+  let settled = false;
+  const status = pm
+    .callChannel(sessionId, "supervisor", "getStatus", {})
+    .then((result) => result as SupervisorStatus)
+    .catch((err: unknown) => {
+      log.warn("getStatus channel call failed", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return disabledStatus();
+    })
+    .finally(() => {
+      settled = true;
+    });
+
+  const timeout = new Promise<SupervisorStatus>((resolve) => {
+    setTimeout(() => {
+      if (!settled) {
+        log.warn("getStatus channel call timed out, returning disabled status", {
+          sessionId,
+          timeoutMs: STATUS_TIMEOUT_MS,
+        });
+      }
+      resolve(disabledStatus());
+    }, STATUS_TIMEOUT_MS);
+  });
+
+  return Promise.race([status, timeout]);
+}
 
 export function register(server: RPCServer, _options: HandlerOptions): void {
   const r = createRegister(server);
@@ -10,15 +58,8 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   r("supervisor.getStatus", async (params): Promise<SupervisorStatus> => {
     const { sessionId } = params as { sessionId: string };
     const pm = getProcessManager();
-    if (!pm)
-      return {
-        enabled: false,
-        state: "disabled" as const,
-        continueCount: 0,
-        maxContinueCount: 0,
-        activeGuards: [],
-      };
-    return pm.callChannel(sessionId, "supervisor", "getStatus", {}) as Promise<SupervisorStatus>;
+    if (!pm) return disabledStatus();
+    return getSupervisorStatus(pm, sessionId);
   });
 
   r(

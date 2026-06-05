@@ -102,6 +102,10 @@ function makeRpcResult(count: number, startIndex = 0) {
   return { messages, customEntries: [] };
 }
 
+async function flushBackgroundRefresh() {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 describe("chat pagination", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -225,6 +229,74 @@ describe("chat pagination", () => {
     expect(msgs.length).toBe(31);
     expect(msgs[msgs.length - 1].id).toBe("msg-new-1");
     expect(useChatStore.getState().hasMoreMessagesBySession!["test-session"]).toBe(false);
+  });
+
+  it("background refresh should replace non-local live duplicates with server messages", async () => {
+    useChatStore.getState().setMessagesForSession("test-session", [
+      {
+        id: "live-assistant-ok",
+        role: "assistant",
+        content: [{ type: "text", text: "OK" }],
+        timestamp: 2000,
+      },
+    ]);
+
+    (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
+      messages: [
+        {
+          id: "server-assistant-ok",
+          entryId: "entry-server-assistant-ok",
+          role: "assistant",
+          content: [{ type: "text", text: "OK" }],
+          timestamp: 2000,
+        },
+      ],
+      customEntries: [],
+      hasMore: false,
+      nextCursor: null,
+    });
+
+    useChatStore.getState()._backgroundRefreshMessages("test-session");
+
+    await flushBackgroundRefresh();
+
+    const msgs = useChatStore.getState().messagesBySession["test-session"]!;
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0].id).toBe("server-assistant-ok");
+  });
+
+  it("background refresh should preserve optimistic local user messages", async () => {
+    useChatStore.getState().setMessagesForSession("test-session", [
+      {
+        id: "local-user-msg",
+        role: "user",
+        content: [{ type: "text", text: "Pending local message" }],
+        timestamp: 3000,
+        _local: true,
+      },
+    ]);
+
+    (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
+      messages: [
+        {
+          id: "server-assistant-ok",
+          entryId: "entry-server-assistant-ok",
+          role: "assistant",
+          content: [{ type: "text", text: "OK" }],
+          timestamp: 2000,
+        },
+      ],
+      customEntries: [],
+      hasMore: false,
+      nextCursor: null,
+    });
+
+    useChatStore.getState()._backgroundRefreshMessages("test-session");
+
+    await flushBackgroundRefresh();
+
+    const msgs = useChatStore.getState().messagesBySession["test-session"]!;
+    expect(msgs.map((m) => m.id)).toEqual(["server-assistant-ok", "local-user-msg"]);
   });
 
   it("should track hasMoreMessages based on initial load result", async () => {

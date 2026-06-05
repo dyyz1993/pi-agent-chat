@@ -15,6 +15,7 @@ import {
   ClipboardCheck,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import type { ImageContent } from "@dyyz1993/pi-ai";
 import { createLogger } from "../../../shared/lib/logger";
 import { useChatStore } from "../../stores/use-chat-store";
 import { useSessionStore } from "../../stores/use-session-store";
@@ -23,7 +24,6 @@ import { NotificationCenter } from "./NotificationCenter";
 import { ProjectRuntimePendingRequests, UIPendingCenter } from "./UIPendingCenter";
 import { useChangeReviewStore } from "../../stores/use-change-review-store";
 import { RetryNotification } from "./RetryNotification";
-import { InlineErrorToast } from "./InlineErrorToast";
 import { useSubagentStore } from "../../stores/use-subagent-store";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import { useChatNavStore } from "../../stores/use-chat-nav-store";
@@ -348,10 +348,6 @@ export function ChatPanel() {
   );
 
   const handleSend = async () => {
-    if (!sessionReady) {
-      pushNotif({ message: "Session not ready, please wait", level: "warning" });
-      return;
-    }
     if (!inputText.trim() && useAttachmentStore.getState().attachments.length === 0) return;
 
     const attachmentStore = useAttachmentStore.getState();
@@ -362,7 +358,7 @@ export function ChatPanel() {
       const imageAttachments = attachments.filter((a) => a.type.startsWith("image/"));
       const fileAttachments = attachments.filter((a) => !a.type.startsWith("image/"));
 
-      const images: import("@dyyz1993/pi-ai").ImageContent[] = [];
+      const images: ImageContent[] = [];
       for (const att of imageAttachments) {
         try {
           const arrayBuffer = await att.file.arrayBuffer();
@@ -522,7 +518,6 @@ export function ChatPanel() {
       </div>
 
       <RetryNotification />
-      <InlineErrorToast />
 
       <div className="flex-1 flex overflow-hidden">
         <div className="flex-1 min-w-0 flex flex-col">
@@ -601,31 +596,30 @@ export function ChatPanel() {
       >
         {!isViewingSubagent && (
           <>
-            {!sessionReady && !projectFailed ? (
-              <div className="flex-1 flex items-center justify-center gap-2 py-2">
-                <Loader2 className="w-3.5 h-3.5 text-text-tertiary animate-spin" />
-                <span className="text-xs text-text-tertiary">{t("sessionStarting")}</span>
+            {!sessionReady && !projectFailed && (
+              <div className="flex items-center gap-2 px-1 pb-1 text-xs text-text-tertiary">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>{t("sessionStarting")}</span>
               </div>
-            ) : (
-              <>
-                <AttachmentBar />
-                <div className="flex items-stretch gap-1.5">
-                  {!isMobileOrTablet && <AttachmentButtons />}
+            )}
+            <AttachmentBar />
+            <div className="flex items-stretch gap-1.5">
+              {!isMobileOrTablet && <AttachmentButtons />}
 
-                  <InputBar
-                    ref={inputBarRef}
-                    onSend={handleSend}
-                    sessionId={activeSessionId ?? ""}
-                    disabled={!sessionReady}
-                    onTriggerPopup={!isMobileOrTablet ? commandPopup.openPopup : undefined}
-                    popupOpen={!isMobileOrTablet && !!commandPopup.popupMode}
-                    onPopupConfirm={commandPopup.confirmSelection}
-                    onPopupCancel={commandPopup.closePopup}
-                    onPopupArrowUp={commandPopup.navigateUp}
-                    onPopupArrowDown={commandPopup.navigateDown}
-                  />
+              <InputBar
+                ref={inputBarRef}
+                onSend={handleSend}
+                sessionId={activeSessionId ?? ""}
+                disabled={!activeSessionId}
+                onTriggerPopup={!isMobileOrTablet ? commandPopup.openPopup : undefined}
+                popupOpen={!isMobileOrTablet && !!commandPopup.popupMode}
+                onPopupConfirm={commandPopup.confirmSelection}
+                onPopupCancel={commandPopup.closePopup}
+                onPopupArrowUp={commandPopup.navigateUp}
+                onPopupArrowDown={commandPopup.navigateDown}
+              />
 
-                  <div className="flex flex-col gap-1.5 shrink-0 justify-between py-1">
+              <div className="flex flex-col gap-1.5 shrink-0 justify-between py-1">
                     {isStreaming && inputText.trim() ? (
                       <button
                         onClick={handleFollowUp}
@@ -666,10 +660,10 @@ export function ChatPanel() {
                         isPermissionPending ||
                         (!inputText.trim() &&
                           useAttachmentStore.getState().attachments.length === 0) ||
-                        !sessionReady ||
+                        !activeSessionId ||
                         hasNoModel
                       }
-                      className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${!isAborting && (inputText.trim() || useAttachmentStore.getState().attachments.length > 0) && sessionReady && !hasNoModel ? (isStreaming ? "bg-status-warning text-white hover:bg-status-warning shadow-sm shadow-status-warning/20" : "bg-semantic-accent text-white hover:bg-semantic-accent shadow-sm shadow-semantic-accent/20") : "bg-surface-dim text-text-tertiary cursor-not-allowed"}`}
+                      className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${!isAborting && (inputText.trim() || useAttachmentStore.getState().attachments.length > 0) && activeSessionId && !hasNoModel ? (isStreaming ? "bg-status-warning text-white hover:bg-status-warning shadow-sm shadow-status-warning/20" : "bg-semantic-accent text-white hover:bg-semantic-accent shadow-sm shadow-semantic-accent/20") : "bg-surface-dim text-text-tertiary cursor-not-allowed"}`}
                       title={
                         isPermissionPending
                           ? t("waitPermission")
@@ -691,10 +685,8 @@ export function ChatPanel() {
                     >
                       {isStreaming ? <Zap className="w-4 h-4" /> : <ArrowUp className="w-4 h-4" />}
                     </button>
-                  </div>
-                </div>
-              </>
-            )}
+              </div>
+            </div>
           </>
         )}
         {isViewingSubagent && (
