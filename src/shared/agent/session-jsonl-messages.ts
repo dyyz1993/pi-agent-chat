@@ -1,3 +1,10 @@
+import { createReadStream, existsSync } from "fs";
+import * as readline from "readline";
+
+import { createLogger } from "../lib/logger";
+
+const log = createLogger("agent");
+
 export interface UiCustomEntry {
   id: string;
   customType: string;
@@ -35,6 +42,16 @@ export interface PaginatedMessages {
   slicedMessages: unknown[];
   hasMore: boolean;
   nextCursor: string | null;
+}
+
+function createFullMessageAccumulator(): FullMessageAccumulator {
+  return {
+    allMessages: [],
+    allCustomEntries: [],
+    allCompactionEntries: [],
+    parentById: new Map(),
+    lastJsonlLeafPointer: null,
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -115,6 +132,111 @@ export function appendFullJsonlEntry(
     accumulator.allMessages.push({ entryId, message: compactionMessage });
   } else if (parsed.type === "leaf_pointer" && typeof parsed.leafId === "string") {
     accumulator.lastJsonlLeafPointer = parsed.leafId;
+  }
+}
+
+async function appendJsonlFromText(
+  text: string,
+  onParsed: (parsed: Record<string, unknown>) => void,
+  debugLabel: string,
+): Promise<void> {
+  const lines = text.split("\n");
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    try {
+      onParsed(JSON.parse(line) as Record<string, unknown>);
+    } catch (err: unknown) {
+      log.debug(`skipping malformed JSONL entry (${debugLabel})`, {
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+}
+
+async function appendJsonlFromFile(
+  sessionPath: string,
+  onParsed: (parsed: Record<string, unknown>) => void,
+): Promise<void> {
+  if (!sessionPath || !existsSync(sessionPath)) return;
+  const rl = readline.createInterface({
+    input: createReadStream(sessionPath, { encoding: "utf-8" }),
+    crlfDelay: Infinity,
+  });
+  try {
+    for await (const line of rl) {
+      if (!line.trim()) continue;
+      try {
+        onParsed(JSON.parse(line) as Record<string, unknown>);
+      } catch (err: unknown) {
+        log.debug("skipping malformed JSONL entry", {
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+  } finally {
+    rl.close();
+  }
+}
+
+export async function readFullJsonlAccumulator(options: {
+  sessionPath: string;
+  readSandboxFile?: (sessionPath: string) => Promise<string>;
+}): Promise<FullMessageAccumulator> {
+  const accumulator = createFullMessageAccumulator();
+  const isSandboxSessionPath = options.sessionPath.startsWith("/root/workspace/sessions/");
+
+  try {
+    if (isSandboxSessionPath && options.readSandboxFile) {
+      const raw = await options.readSandboxFile(options.sessionPath);
+      await appendJsonlFromText(raw, (parsed) => appendFullJsonlEntry(parsed, accumulator), "sandbox");
+    } else {
+      await appendJsonlFromFile(options.sessionPath, (parsed) =>
+        appendFullJsonlEntry(parsed, accumulator),
+      );
+    }
+  } catch (err: unknown) {
+    log.warn(isSandboxSessionPath ? "Failed to read sandbox JSONL" : "Failed to read entries from JSONL", {
+      sessionPath: options.sessionPath,
+      err: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  return accumulator;
+}
+
+export async function appendUiJsonlEntriesFromPath(options: {
+  sessionPath: string;
+  messages: unknown[];
+  customEntries: UiCustomEntry[];
+  activePathIds: Set<string> | null;
+  includeMessages: boolean;
+  readSandboxFile?: (sessionPath: string) => Promise<string>;
+}): Promise<void> {
+  const isSandboxSessionPath = options.sessionPath.startsWith("/root/workspace/sessions/");
+  const appendParsed = (parsed: Record<string, unknown>) =>
+    appendUiJsonlEntry({
+      parsed,
+      messages: options.messages,
+      customEntries: options.customEntries,
+      activePathIds: options.activePathIds,
+      includeMessages: options.includeMessages,
+    });
+
+  try {
+    if (isSandboxSessionPath && options.readSandboxFile) {
+      const raw = await options.readSandboxFile(options.sessionPath);
+      await appendJsonlFromText(raw, appendParsed, "sandbox getMessages");
+    } else {
+      await appendJsonlFromFile(options.sessionPath, appendParsed);
+    }
+  } catch (err: unknown) {
+    log.warn(
+      isSandboxSessionPath ? "Failed to read sandbox JSONL in getMessages" : "Failed to read entries from JSONL",
+      {
+        sessionPath: options.sessionPath,
+        err: err instanceof Error ? err.message : String(err),
+      },
+    );
   }
 }
 

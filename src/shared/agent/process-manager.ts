@@ -135,11 +135,10 @@ import {
   restoreFilesFromSnapshotOperation,
 } from "./agent-client-history-operations";
 import {
-  appendFullJsonlEntry,
-  appendUiJsonlEntry,
+  appendUiJsonlEntriesFromPath,
   filterMessagesToBranch,
   paginateEntryMessages,
-  type FullMessageAccumulator,
+  readFullJsonlAccumulator,
 } from "./session-jsonl-messages";
 import {
   createLeafPointerEntry,
@@ -1158,69 +1157,22 @@ export class AgentProcessManager {
       data: unknown;
       timestamp: number;
     }> = [];
-    const isSandboxSessionPath = resolvedSessionPath?.startsWith("/root/workspace/sessions/");
 
     const sandboxManager = getSandboxManager();
-    if (isSandboxSessionPath && sandboxManager && !managed) {
-      try {
-        const userId = this._getSandboxUserId(sessionId);
-        if (userId) {
-          const raw = await sandboxManager.execInSandbox(userId, `cat ${resolvedSessionPath}`);
-          const lines = raw.split("\n");
-          for (const line of lines) {
-            if (!line.trim()) continue;
-            try {
-              const parsed = JSON.parse(line) as Record<string, unknown>;
-              appendUiJsonlEntry({
-                parsed,
-                messages,
-                customEntries,
-                activePathIds,
-                includeMessages: true,
-              });
-            } catch (err: unknown) {
-              log.debug("skipping malformed JSONL entry (sandbox getMessages)", {
-                err: err instanceof Error ? err.message : String(err),
-              });
+    await appendUiJsonlEntriesFromPath({
+      sessionPath: resolvedSessionPath,
+      messages,
+      customEntries,
+      activePathIds,
+      includeMessages: !managed,
+      readSandboxFile:
+        sandboxManager && !managed
+          ? async (pathToRead) => {
+              const userId = this._getSandboxUserId(sessionId);
+              return userId ? sandboxManager.execInSandbox(userId, `cat ${pathToRead}`) : "";
             }
-          }
-        }
-      } catch (err: unknown) {
-        log.warn("Failed to read sandbox JSONL in getMessages", {
-          sessionPath: resolvedSessionPath,
-          err: err instanceof Error ? err.message : String(err),
-        });
-      }
-    } else if (resolvedSessionPath && existsSync(resolvedSessionPath)) {
-      try {
-        const rl = readline.createInterface({
-          input: createReadStream(resolvedSessionPath, { encoding: "utf-8" }),
-          crlfDelay: Infinity,
-        });
-        for await (const line of rl) {
-          if (!line.trim()) continue;
-          try {
-            const parsed = JSON.parse(line) as Record<string, unknown>;
-            appendUiJsonlEntry({
-              parsed,
-              messages,
-              customEntries,
-              activePathIds,
-              includeMessages: !managed,
-            });
-          } catch (err: unknown) {
-            log.debug("skipping malformed JSONL entry", {
-              err: err instanceof Error ? err.message : String(err),
-            });
-          }
-        }
-        rl.close();
-      } catch (err: unknown) {
-        log.warn("Failed to read entries from JSONL", {
-          err: err instanceof Error ? err.message : String(err),
-        });
-      }
-    }
+          : undefined,
+    });
 
     return { messages: messages as AgentMessageForUI[], customEntries };
   }
@@ -1247,64 +1199,16 @@ export class AgentProcessManager {
     // JSONL-first: always read messages directly from the JSONL file.
     // This avoids CLI OOM — CLI's get_full_messages handler uses readFile internally
     // which can blow the heap on large sessions (>8MB JSONL).
-    const accumulator: FullMessageAccumulator = {
-      allMessages: [],
-      allCustomEntries: [],
-      allCompactionEntries: [],
-      parentById: new Map(),
-      lastJsonlLeafPointer: null,
-    };
-    const isSandboxSessionPath = resolvedSessionPath?.startsWith("/root/workspace/sessions/");
-
     const sandboxManager = getSandboxManager();
-    if (isSandboxSessionPath && sandboxManager) {
-      try {
-        const userId = this._getSandboxUserId(sessionId);
-        if (userId) {
-          const raw = await sandboxManager.execInSandbox(userId, `cat ${resolvedSessionPath}`);
-          const lines = raw.split("\n");
-          for (const line of lines) {
-            if (!line.trim()) continue;
-            try {
-              const parsed = JSON.parse(line) as Record<string, unknown>;
-              appendFullJsonlEntry(parsed, accumulator);
-            } catch (err: unknown) {
-              log.debug("skipping malformed JSONL entry (sandbox)", {
-                err: err instanceof Error ? err.message : String(err),
-              });
-            }
+    const accumulator = await readFullJsonlAccumulator({
+      sessionPath: resolvedSessionPath,
+      readSandboxFile: sandboxManager
+        ? async (pathToRead) => {
+            const userId = this._getSandboxUserId(sessionId);
+            return userId ? sandboxManager.execInSandbox(userId, `cat ${pathToRead}`) : "";
           }
-        }
-      } catch (err: unknown) {
-        log.warn("Failed to read sandbox JSONL", {
-          sessionPath: resolvedSessionPath,
-          err: err instanceof Error ? err.message : String(err),
-        });
-      }
-    } else if (resolvedSessionPath && existsSync(resolvedSessionPath)) {
-      try {
-        const rl = readline.createInterface({
-          input: createReadStream(resolvedSessionPath, { encoding: "utf-8" }),
-          crlfDelay: Infinity,
-        });
-        for await (const line of rl) {
-          if (!line.trim()) continue;
-          try {
-            const parsed = JSON.parse(line) as Record<string, unknown>;
-            appendFullJsonlEntry(parsed, accumulator);
-          } catch (err: unknown) {
-            log.debug("skipping malformed JSONL entry", {
-              err: err instanceof Error ? err.message : String(err),
-            });
-          }
-        }
-        rl.close();
-      } catch (err: unknown) {
-        log.warn("Failed to read entries from JSONL", {
-          err: err instanceof Error ? err.message : String(err),
-        });
-      }
-    }
+        : undefined,
+    });
 
     // Compaction entries were injected into allMessages in-place during JSONL
     // parsing above (preserving chronological order). allCompactionEntries is
