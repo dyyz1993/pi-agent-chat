@@ -1,0 +1,101 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    name: Build macOS (${{ matrix.arch }})
+    strategy:
+      matrix:
+        include:
+          - runner: macos-latest
+            arch: arm64
+          - runner: macos-13
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.11"
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build Vite frontend
+        run: bun run build
+
+      - name: Build Electrobun desktop app
+        run: bunx electrobun build
+        env:
+          CI: true
+
+      - name: Locate .app bundle
+        id: locate
+        run: |
+          APP_PATH=$(find build -name "*.app" -type d | head -1)
+          if [ -z "$APP_PATH" ]; then
+            echo "No .app found in build/"
+            exit 1
+          fi
+          APP_NAME=$(basename "$APP_PATH" .app)
+          echo "app_path=$APP_PATH" >> "$GITHUB_OUTPUT"
+          echo "app_name=$APP_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Create DMG
+        id: dmg
+        run: |
+          APP_PATH="${{ steps.locate.outputs.app_path }}"
+          APP_NAME="${{ steps.locate.outputs.app_name }}"
+          DMG_NAME="PiAgentChat-${GITHUB_REF_NAME}-macos-${{ matrix.arch }}.dmg"
+          
+          # Create a temporary DMG folder
+          mkdir -p dmg-staging
+          cp -R "$APP_PATH" dmg-staging/
+          
+          # Create DMG
+          hdiutil create -volname "$APP_NAME" -srcfolder dmg-staging -ov -format UDZO "$DMG_NAME"
+          
+          echo "dmg_path=$DMG_NAME" >> "$GITHUB_OUTPUT"
+          
+          # Cleanup
+          rm -rf dmg-staging
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PiAgentChat-macos-${{ matrix.arch }}
+          path: ${{ steps.dmg.outputs.dmg_path }}
+          retention-days: 5
+
+  release:
+    name: Publish Release
+    needs: build-macos
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: find artifacts -type f | sort
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: PiAgentChat ${{ github.ref_name }}
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          files: artifacts/**/*.dmg
