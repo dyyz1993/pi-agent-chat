@@ -586,7 +586,7 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({
         const renderer = getToolRenderer(execBlock.toolName);
         if (renderer?.renderExecution) {
           const CustomCard = renderer.renderExecution;
-          return <CustomCard block={execBlock} blockId={blockId} />;
+          return <CustomCard block={execBlock} blockId={blockId} uiBlock={uiBlock} />;
         }
         return <ToolExecutionCard block={execBlock} blockId={blockId} uiBlock={uiBlock} />;
       }
@@ -605,23 +605,20 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({
         const renderer = getToolRenderer(execBlock.toolName);
         if (renderer?.renderExecution) {
           const CustomCard = renderer.renderExecution;
-          return <CustomCard block={execBlock} blockId={blockId} />;
+          return <CustomCard block={execBlock} blockId={blockId} uiBlock={uiBlock} />;
         }
-        return <ToolExecutionCard block={execBlock} blockId={blockId} />;
+        return <ToolExecutionCard block={execBlock} blockId={blockId} uiBlock={uiBlock} />;
       }
     case "toolExecution":
       if (!showToolCalls) return null;
       {
-        if (uiBlock) {
-          return <UIInteractionCard block={uiBlock} />;
-        }
         if (block.toolName.toLowerCase() === "subagent") {
           return <SubagentExecutionCard block={block} blockId={blockId} />;
         }
         const renderer = getToolRenderer(block.toolName);
         if (renderer?.renderExecution) {
           const CustomCard = renderer.renderExecution;
-          return <CustomCard block={block} blockId={blockId} />;
+          return <CustomCard block={block} blockId={blockId} uiBlock={uiBlock} />;
         }
         return <ToolExecutionCard block={block} blockId={blockId} uiBlock={uiBlock} />;
       }

@@ -7,7 +7,7 @@ const EMPTY_RESULT: R<"hooks.getLog"> = {
   entries: [],
   ruleStats: [],
   totalExecutions: 0,
-  configSnapshot: { sources: [], events: [] },
+  configSnapshot: { runtimeEnabled: true, sources: [], events: [] },
 };
 
 export function register(server: RPCServer, _options: HandlerOptions): void {
@@ -41,5 +41,25 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       return result as R<"hooks.clear">;
     }
     return { ok: false };
+  });
+
+  r("hooks.getStatus", async (params) => {
+    const manager = getProcessManager();
+    if (manager && params.sessionId && manager.hasSession(params.sessionId)) {
+      const result = await manager.callChannel(params.sessionId, "hooks", "hooks.getStatus", {});
+      return result as R<"hooks.getStatus">;
+    }
+    return { enabled: true };
+  });
+
+  r("hooks.setEnabled", async (params) => {
+    const manager = getProcessManager();
+    if (manager && params.sessionId && manager.hasSession(params.sessionId)) {
+      const result = await manager.callChannel(params.sessionId, "hooks", "hooks.setEnabled", {
+        enabled: params.enabled,
+      });
+      return result as R<"hooks.setEnabled">;
+    }
+    return { enabled: true };
   });
 }

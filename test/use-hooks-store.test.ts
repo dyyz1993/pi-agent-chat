@@ -106,6 +106,7 @@ describe("useHooksStore", () => {
 
   it("fetchConfig calls apiClient.call and updates ruleStats and configSnapshot", async () => {
     const configSnapshot: HookConfigSnapshot = {
+      runtimeEnabled: true,
       sources: [
         { path: "/project/.claude/settings.json", scope: "project", exists: true, disabled: false },
       ],
@@ -165,6 +166,30 @@ describe("useHooksStore", () => {
     const session = useHooksStore.getState().bySession[SID];
     expect(session?.entries).toEqual([]);
     expect(session?.totalExecutions).toBe(0);
+  });
+
+  it("setEnabled calls apiClient.call and updates runtimeEnabled", async () => {
+    useHooksStore.setState({
+      bySession: {
+        [SID]: {
+          entries: [],
+          ruleStats: [],
+          totalExecutions: 0,
+          configSnapshot: { runtimeEnabled: true, sources: [], events: [] },
+          loading: false,
+          expandedEntry: null,
+        },
+      },
+    });
+    mockCall.mockResolvedValue({ enabled: false });
+
+    await useHooksStore.getState().setEnabled(SID, false);
+
+    expect(mockCall).toHaveBeenCalledWith("hooks.setEnabled", {
+      sessionId: SID,
+      enabled: false,
+    });
+    expect(useHooksStore.getState().bySession[SID]?.configSnapshot?.runtimeEnabled).toBe(false);
   });
 
   it("addEntry appends to existing session entries", () => {

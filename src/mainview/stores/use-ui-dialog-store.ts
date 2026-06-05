@@ -23,6 +23,9 @@ export interface UIPendingRequest {
     toolName: string;
     matcher: string;
     command?: string;
+    hookCommand?: string;
+    eventName?: string;
+    source?: string;
     reason: string;
   };
 }
@@ -71,6 +74,7 @@ function toBlock(state: UIRequestState): UIInteractionBlock {
     prefill: request.prefill,
     response,
     respondedAt: status !== "pending" ? Date.now() : undefined,
+    sessionId: request.sessionId,
     hookMeta: request.hookMeta,
   };
 }

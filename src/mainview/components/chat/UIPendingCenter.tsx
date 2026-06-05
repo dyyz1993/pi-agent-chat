@@ -8,22 +8,28 @@ import {
   ChevronDown,
   ChevronRight,
   FileEdit,
+  ShieldOff,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useUIDialogStore, type UIPendingRequest } from "../../stores/use-ui-dialog-store";
 import { useSessionStore } from "../../stores/use-session-store";
+import { useHooksStore } from "../../stores/use-hooks-store";
+import { apiClient } from "../../lib/api-client";
 import { IconButton, ModalDialog } from "../primitives";
 
 function PanelCard({ req }: { req: UIPendingRequest }) {
   const { t } = useTranslation("chat");
   const respondById = useUIDialogStore((s) => s.respondById);
   const dismissById = useUIDialogStore((s) => s.dismissById);
+  const setHooksEnabled = useHooksStore((s) => s.setEnabled);
 
   // All hooks must be called unconditionally (React rules of hooks)
   const [checkedSet, setCheckedSet] = useState<Set<number>>(new Set());
   const [customValue, setCustomValue] = useState("");
   const [inputValue, setInputValue] = useState("");
   const [editorValue, setEditorValue] = useState(req.prefill ?? "");
+  const [isDisablingHooks, setIsDisablingHooks] = useState(false);
+  const [settingPermissionMode, setSettingPermissionMode] = useState<string | null>(null);
 
   const methodLabel: Record<string, string> = {
     confirm: t("uiPending.confirm"),
@@ -38,6 +44,27 @@ function PanelCard({ req }: { req: UIPendingRequest }) {
   const isEditor = req.method === "editor";
   const options = req.options ?? [];
   const isMulti = !!req.multiple;
+
+  async function disableHooksForSession() {
+    if (isDisablingHooks) return;
+    setIsDisablingHooks(true);
+    try {
+      await setHooksEnabled(req.sessionId, false);
+      dismissById(req.requestId);
+    } finally {
+      setIsDisablingHooks(false);
+    }
+  }
+
+  async function setPermissionMode(mode: string) {
+    if (settingPermissionMode) return;
+    setSettingPermissionMode(mode);
+    try {
+      await apiClient.call("agent.setPermissionMode", { sessionId: req.sessionId, mode });
+    } finally {
+      setSettingPermissionMode(null);
+    }
+  }
 
   if (isMulti || isSelect) {
     return (
@@ -144,9 +171,43 @@ function PanelCard({ req }: { req: UIPendingRequest }) {
           )}
           {isHookConfirm && req.hookMeta?.command && (
             <div className="mb-2.5 rounded-md bg-bg-primary/70 border border-border-secondary/40 px-2 py-1.5">
+              <div className="text-[10px] text-text-tertiary mb-0.5">目标操作</div>
               <code className="block text-[11px] text-text-primary font-mono break-all leading-relaxed">
                 {req.hookMeta.command}
               </code>
+            </div>
+          )}
+          {isHookConfirm && req.hookMeta?.hookCommand && (
+            <div className="mb-2.5 rounded-md bg-surface-dim/60 border border-border-secondary/40 px-2 py-1.5">
+              <div className="text-[10px] text-text-tertiary mb-0.5">
+                Hook 规则
+                {req.hookMeta.eventName ? ` · ${req.hookMeta.eventName}` : ""}
+                {req.hookMeta.source ? ` · ${req.hookMeta.source}` : ""}
+              </div>
+              <code className="block text-[10px] text-text-secondary font-mono break-all leading-relaxed">
+                {req.hookMeta.hookCommand}
+              </code>
+            </div>
+          )}
+          {isHookConfirm && (
+            <div className="mb-2.5 rounded-md border border-border-secondary/40 bg-surface-dim/50 px-2 py-1.5">
+              <div className="mb-1 text-[10px] text-text-tertiary">当前权限方式</div>
+              <div className="grid grid-cols-3 gap-1">
+                {[
+                  ["auto", "Auto"],
+                  ["dontAsk", "免询问"],
+                  ["always-deny", "全拒绝"],
+                ].map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    onClick={() => setPermissionMode(mode)}
+                    disabled={settingPermissionMode !== null}
+                    className="flex items-center justify-center rounded border border-border-secondary/40 px-2 py-1 text-[10px] text-text-secondary hover:bg-surface-hover/50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {settingPermissionMode === mode ? "..." : label}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
           <div className="flex gap-2">
@@ -163,6 +224,16 @@ function PanelCard({ req }: { req: UIPendingRequest }) {
               {t("common:cancel")}
             </button>
           </div>
+          {isHookConfirm && (
+            <button
+              onClick={disableHooksForSession}
+              disabled={isDisablingHooks}
+              className="mt-2 w-full flex items-center justify-center gap-1 py-1.5 rounded-md border border-border-secondary/50 text-text-secondary hover:bg-surface-hover/40 disabled:opacity-50 disabled:cursor-not-allowed text-[11px] transition-colors"
+            >
+              <ShieldOff className="w-3 h-3" />
+              {isDisablingHooks ? "正在关闭 Hooks..." : "临时关闭 Hooks"}
+            </button>
+          )}
         </div>
       </div>
     );

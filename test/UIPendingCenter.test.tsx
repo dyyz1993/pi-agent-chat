@@ -21,6 +21,8 @@ const mockSetPanelOpen = vi.fn();
 const mockTogglePanel = vi.fn();
 const mockRespondById = vi.fn();
 const mockDismissById = vi.fn();
+const mockSetHooksEnabled = vi.fn();
+const mockApiCall = vi.fn();
 
 let mockActiveProjectId: string | null = null;
 let mockProjectTabs: { id: string; name: string; path: string }[] = [];
@@ -73,6 +75,19 @@ vi.mock("../src/mainview/stores/use-session-store", () => ({
   ),
 }));
 
+vi.mock("../src/mainview/stores/use-hooks-store", () => ({
+  useHooksStore: (sel: (s: Record<string, unknown>) => unknown) =>
+    sel({
+      setEnabled: mockSetHooksEnabled,
+    }),
+}));
+
+vi.mock("../src/mainview/lib/api-client", () => ({
+  apiClient: {
+    call: mockApiCall,
+  },
+}));
+
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string, opts?: Record<string, unknown>) => {
@@ -116,6 +131,8 @@ describe("UIPendingCenter", () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    mockApiCall.mockResolvedValue(undefined);
+    mockSetHooksEnabled.mockResolvedValue(undefined);
   });
 
   it("renders nothing when no pending requests", () => {

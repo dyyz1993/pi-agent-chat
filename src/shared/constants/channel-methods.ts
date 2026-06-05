@@ -52,6 +52,8 @@ export const HOOKS_METHODS = {
   GET_LOG: "hooks.getLog",
   GET_CONFIG: "hooks.getConfig",
   CLEAR: "hooks.clear",
+  GET_STATUS: "hooks.getStatus",
+  SET_ENABLED: "hooks.setEnabled",
 } as const;
 
 // ---- lsp channel ----
@@ -120,6 +122,7 @@ export const CHANNEL_METHOD_MAP: Readonly<Record<string, ReadonlySet<string>>> =
   "file-snapshot": new Set(Object.values(FILE_SNAPSHOT_METHODS)),
   "bash-ext": new Set(Object.values(BASH_METHODS)),
   "hooks-engine": new Set(Object.values(HOOKS_METHODS)),
+  hooks: new Set(Object.values(HOOKS_METHODS)),
   lsp: new Set(Object.values(LSP_METHODS)),
   memory: new Set(Object.values(MEMORY_METHODS)),
   supervisor: new Set(Object.values(SUPERVISOR_METHODS)),

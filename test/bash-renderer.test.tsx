@@ -1,14 +1,15 @@
-import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, cleanup, act, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, afterEach, beforeEach, beforeAll } from "vitest";
+import { render, cleanup, act, fireEvent, screen } from "@testing-library/react";
 import type { ContentBlock } from "../src/mainview/types";
+import type { UIInteractionBlock } from "../src/mainview/types";
 import type { BashProcess } from "../src/shared/modules/bash";
 
 type Block = Extract<ContentBlock, { type: "toolExecution" }>;
 
-const bashMocks = vi.hoisted(() => ({
+const bashMocks = {
   mockCall: vi.fn(),
   state: { mockBashProcess: undefined as BashProcess | undefined },
-}));
+};
 const { mockCall } = bashMocks;
 
 vi.mock("react-i18next", () => {
@@ -17,10 +18,6 @@ vi.mock("react-i18next", () => {
     initReactI18next: { type: "3rdParty", init: vi.fn() },
   };
 });
-
-vi.mock("react-dom", () => ({
-  createPortal: (children: React.ReactNode) => children,
-}));
 
 vi.mock("../src/mainview/lib/api-client", () => ({
   apiClient: {
@@ -64,7 +61,13 @@ vi.mock("../src/shared/lib/json-to-yaml", () => ({
   tryFormatAsYaml: (input: string) => input,
 }));
 
-import { BashExecutionCard } from "../src/mainview/components/chat/tool-renderers/BashRenderer";
+let BashExecutionCard: typeof import("../src/mainview/components/chat/tool-renderers/BashRenderer").BashExecutionCard;
+
+beforeAll(async () => {
+  ({ BashExecutionCard } = await import(
+    "../src/mainview/components/chat/tool-renderers/BashRenderer"
+  ));
+});
 
 function makeBlock(overrides: Partial<Block> = {}): Block {
   return {
@@ -75,6 +78,28 @@ function makeBlock(overrides: Partial<Block> = {}): Block {
     output: "hello world",
     startedAt: Date.now() - 1000,
     args: 'command: "ls -la"',
+    ...overrides,
+  };
+}
+
+function makeUIBlock(overrides: Partial<UIInteractionBlock> = {}): UIInteractionBlock {
+  return {
+    type: "uiInteraction",
+    id: "ui-1",
+    method: "confirm",
+    status: "pending",
+    sessionId: "test-session",
+    title: "Bash 命令确认",
+    message: "需要审核",
+    hookMeta: {
+      toolName: "bash",
+      matcher: "Bash",
+      command: "rm -rf /tmp/demo",
+      hookCommand: "bash ~/.claude/hooks/pre-tool-use-write.sh",
+      eventName: "PreToolUse",
+      source: "project",
+      reason: "需要审核",
+    },
     ...overrides,
   };
 }
@@ -180,6 +205,24 @@ describe("BashExecutionCard state rendering", () => {
     expect(wrapper.textContent).not.toContain("common:cancel");
     expect(wrapper.textContent).not.toContain("bash.viewOutput");
   });
+
+  it("renders hook permission inline while keeping the bash card visible", () => {
+    const block = makeBlock({
+      args: JSON.stringify({ command: "rm -rf /tmp/demo", description: "危险命令" }),
+    });
+    const uiBlock = makeUIBlock();
+
+    const { container } = render(<BashExecutionCard block={block} uiBlock={uiBlock} />);
+
+    expect(container.textContent).toContain("危险命令");
+    expect(container.textContent).toContain("目标操作");
+    expect(container.textContent).toContain("rm -rf /tmp/demo");
+    expect(container.textContent).toContain("Hook 规则");
+    expect(container.textContent).toContain("bash ~/.claude/hooks/pre-tool-use-write.sh");
+    expect(container.textContent).toContain("当前权限方式");
+    expect(container.textContent).toContain("免询问");
+    expect(container.textContent).toContain("临时关闭 Hooks");
+  });
 });
 
 describe("BashExecutionCard interactions", () => {
@@ -228,6 +271,27 @@ describe("BashExecutionCard interactions", () => {
     });
   });
 
+  it("click hook permission mode — calls agent.setPermissionMode for the active session", async () => {
+    const block = makeBlock({
+      args: JSON.stringify({ command: "rm -rf /tmp/demo", description: "危险命令" }),
+    });
+    const uiBlock = makeUIBlock();
+    const { container } = render(<BashExecutionCard block={block} uiBlock={uiBlock} />);
+    const modeBtn = [...container.querySelectorAll("button")].find(
+      (b) => b.textContent === "免询问",
+    );
+    expect(modeBtn).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.click(modeBtn!);
+    });
+
+    expect(mockCall).toHaveBeenCalledWith("agent.setPermissionMode", {
+      sessionId: "test-session",
+      mode: "dontAsk",
+    });
+  });
+
   it("click View Output on background — shows LogViewer", () => {
     bashMocks.state.mockBashProcess = {
       toolCallId: "tc-1",
@@ -251,7 +315,7 @@ describe("BashExecutionCard interactions", () => {
       fireEvent.click(viewBtn!);
     });
 
-    expect(container.textContent).toContain("bash.log");
+    expect(screen.getByText("bash.log")).toBeTruthy();
   });
 
   it("click close on LogViewer — hides LogViewer", () => {
@@ -274,12 +338,12 @@ describe("BashExecutionCard interactions", () => {
     act(() => {
       fireEvent.click(viewBtn!);
     });
-    expect(container.textContent).toContain("bash.log");
+    expect(screen.getByText("bash.log")).toBeTruthy();
 
     act(() => {
-      fireEvent.click(container.querySelector('button[title="close"]')!);
+      fireEvent.click(document.body.querySelector('button[title="close"]')!);
     });
-    expect(container.textContent).not.toContain("bash.log");
+    expect(screen.queryByText("bash.log")).toBeNull();
   });
 });
 

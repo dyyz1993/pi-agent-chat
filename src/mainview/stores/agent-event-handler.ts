@@ -289,7 +289,15 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         toolCallId: event.toolCallId,
         hookMeta: (
           event as {
-            hookMeta?: { toolName: string; matcher: string; command?: string; reason: string };
+            hookMeta?: {
+              toolName: string;
+              matcher: string;
+              command?: string;
+              hookCommand?: string;
+              eventName?: string;
+              source?: string;
+              reason: string;
+            };
           }
         ).hookMeta,
       });

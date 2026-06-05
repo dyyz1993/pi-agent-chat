@@ -29,6 +29,7 @@ export interface HookRuleStats {
 }
 
 export interface HookConfigSnapshot {
+  runtimeEnabled: boolean;
   sources: Array<{
     path: string;
     scope: string;
@@ -71,6 +72,7 @@ interface HooksState {
   fetchLog: (sessionId: string, limit?: number, event?: string) => Promise<void>;
   fetchConfig: (sessionId: string) => Promise<void>;
   clearLog: (sessionId: string) => Promise<void>;
+  setEnabled: (sessionId: string, enabled: boolean) => Promise<void>;
   setExpandedEntry: (id: number | null) => void;
   addEntry: (sessionId: string, entry: HookLogEntry) => void;
   clearSession: (sessionId: string) => void;
@@ -163,6 +165,23 @@ export const useHooksStore = create<HooksState>()((set, get) => ({
     } catch (err) {
       console.warn("[hooks-store] clearLog failed:", err);
     }
+  },
+
+  setEnabled: async (sessionId, enabled) => {
+    const result = await apiClient.call("hooks.setEnabled", { sessionId, enabled });
+    set((s) => {
+      const prev = s.bySession[sessionId] || { ...EMPTY_SESSION };
+      const prevSnapshot = prev.configSnapshot ?? { runtimeEnabled: true, sources: [], events: [] };
+      return {
+        bySession: {
+          ...s.bySession,
+          [sessionId]: {
+            ...prev,
+            configSnapshot: { ...prevSnapshot, runtimeEnabled: result.enabled },
+          },
+        },
+      };
+    });
   },
 
   setExpandedEntry: (id) => {

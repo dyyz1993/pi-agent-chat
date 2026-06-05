@@ -4,7 +4,7 @@ import { ArrowDownToLine, X, Eye, ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Highlight, themes } from "prism-react-renderer";
 import { createLogger } from "../../../../shared/lib/logger";
-import type { ContentBlock } from "../../../types";
+import type { ContentBlock, UIInteractionBlock } from "../../../types";
 import { useSessionStore } from "../../../stores/use-session-store";
 import { useBashStore } from "../../../stores/use-bash-store";
 import { useSettingsStore } from "../../../stores/use-settings-store";
@@ -14,6 +14,7 @@ import { useThemeStore, isDarkGroup } from "../../../stores/use-theme-store";
 import { AnsiText } from "../primitives/AnsiText";
 import { ToolCardHeader } from "../primitives/ToolCardHeader";
 import { LogViewer } from "../../bash-panel/BashPanel";
+import { UIInteractionCard } from "./UICardRenderer";
 
 type Block = Extract<ContentBlock, { type: "toolExecution" }>;
 const EMPTY_PROCS: never[] = [];
@@ -120,9 +121,11 @@ function OutputHighlighter({ content, isRunning }: { content: string; isRunning:
 export const BashExecutionCard = memo(function BashExecutionCard({
   block,
   blockId,
+  uiBlock,
 }: {
   block: Block;
   blockId?: string;
+  uiBlock?: UIInteractionBlock;
 }) {
   const sid = useSessionStore((s) => s.activeSessionId);
   const { t } = useTranslation("chat");
@@ -355,7 +358,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
           </details>
 
           <details
-            open={outputOpen}
+            open={uiBlock?.status === "pending" ? true : outputOpen}
             onToggle={(e) => setOutputOpen(e.currentTarget.open)}
             className="group"
           >
@@ -377,7 +380,9 @@ export const BashExecutionCard = memo(function BashExecutionCard({
               )}
             </summary>
             <div className="px-3 pb-2 relative">
-              {block.output ? (
+              {uiBlock && uiBlock.status === "pending" ? (
+                <UIInteractionCard block={uiBlock} />
+              ) : block.output ? (
                 <div
                   ref={outputScrollRef}
                   onScroll={handleScroll}

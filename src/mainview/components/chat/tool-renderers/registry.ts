@@ -1,9 +1,10 @@
 import type { ComponentType } from "react";
-import type { ContentBlock } from "../../../types";
+import type { ContentBlock, UIInteractionBlock } from "../../../types";
 
 export interface ToolRendererProps {
   block: Extract<ContentBlock, { type: "toolExecution" }>;
   blockId?: string;
+  uiBlock?: UIInteractionBlock;
 }
 
 export interface ToolRenderer {

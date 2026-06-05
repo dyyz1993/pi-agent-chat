@@ -16,11 +16,15 @@ import {
   FolderOpen,
   FileText,
   Wrench,
+  ShieldOff,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { UIInteractionBlock } from "../../../types";
 import { getUIMethodIcon } from "../tool-icon-map";
 import { useUIDialogStore } from "../../../stores/use-ui-dialog-store";
+import { useSessionStore } from "../../../stores/use-session-store";
+import { useHooksStore } from "../../../stores/use-hooks-store";
+import { apiClient } from "../../../lib/api-client";
 
 type UIBlock = UIInteractionBlock;
 
@@ -82,6 +86,10 @@ export const ConfirmCard = memo(function ConfirmCard({ block }: { block: UIBlock
   const { t } = useTranslation("chat");
   const respondById = useUIDialogStore((s) => s.respondById);
   const dismissById = useUIDialogStore((s) => s.dismissById);
+  const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const setHooksEnabled = useHooksStore((s) => s.setEnabled);
+  const [isDisablingHooks, setIsDisablingHooks] = useState(false);
+  const [settingPermissionMode, setSettingPermissionMode] = useState<string | null>(null);
   const isPending = block.status === "pending";
 
   const hookMeta = block.hookMeta;
@@ -100,6 +108,28 @@ export const ConfirmCard = memo(function ConfirmCard({ block }: { block: UIBlock
       color: "text-gray-400",
     };
     const HookIcon = hookIcon.icon;
+    const sessionId = block.sessionId ?? activeSessionId;
+
+    async function disableHooksForSession() {
+      if (!sessionId || isDisablingHooks) return;
+      setIsDisablingHooks(true);
+      try {
+        await setHooksEnabled(sessionId, false);
+        dismissById(block.id);
+      } finally {
+        setIsDisablingHooks(false);
+      }
+    }
+
+    async function setPermissionMode(mode: string) {
+      if (!sessionId || settingPermissionMode) return;
+      setSettingPermissionMode(mode);
+      try {
+        await apiClient.call("agent.setPermissionMode", { sessionId, mode });
+      } finally {
+        setSettingPermissionMode(null);
+      }
+    }
 
     return (
       <CardShell block={block}>
@@ -108,11 +138,49 @@ export const ConfirmCard = memo(function ConfirmCard({ block }: { block: UIBlock
             {hookMeta.command && (
               <div className="flex items-start gap-1.5 bg-black/30 dark:bg-black/40 rounded px-2 py-1">
                 <HookIcon className={`w-3 h-3 mt-0.5 shrink-0 ${hookIcon.color}`} />
-                <code className="text-[11px] text-text-primary font-mono break-all leading-relaxed">
-                  {hookMeta.command}
+                <div className="min-w-0">
+                  <div className="text-[10px] text-text-tertiary mb-0.5">目标操作</div>
+                  <code className="text-[11px] text-text-primary font-mono break-all leading-relaxed">
+                    {hookMeta.command}
+                  </code>
+                </div>
+              </div>
+            )}
+            {hookMeta.hookCommand && (
+              <div className="rounded px-2 py-1 bg-surface-dim/60 dark:bg-surface-code/50 border border-border-secondary/30">
+                <div className="text-[10px] text-text-tertiary mb-0.5">
+                  Hook 规则
+                  {hookMeta.eventName ? ` · ${hookMeta.eventName}` : ""}
+                  {hookMeta.source ? ` · ${hookMeta.source}` : ""}
+                </div>
+                <code className="text-[10px] text-text-secondary font-mono break-all leading-relaxed">
+                  {hookMeta.hookCommand}
                 </code>
               </div>
             )}
+            <div className="rounded border border-border-secondary/30 bg-surface-dim/50 px-2 py-1.5">
+              <div className="mb-1 text-[10px] text-text-tertiary">当前权限方式</div>
+              <div className="grid grid-cols-3 gap-1">
+                {[
+                  ["auto", "Auto"],
+                  ["dontAsk", "免询问"],
+                  ["always-deny", "全拒绝"],
+                ].map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    onClick={() => setPermissionMode(mode)}
+                    disabled={!sessionId || settingPermissionMode !== null}
+                    className="flex items-center justify-center rounded border border-border-secondary/40 px-2 py-1 text-[10px] text-text-secondary hover:bg-surface-hover/50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {settingPermissionMode === mode ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      label
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="flex gap-1.5">
               <button
                 onClick={() => respondById(block.id, { confirmed: true })}
@@ -129,6 +197,14 @@ export const ConfirmCard = memo(function ConfirmCard({ block }: { block: UIBlock
                 {t("common:cancel")}
               </button>
             </div>
+            <button
+              onClick={disableHooksForSession}
+              disabled={!sessionId || isDisablingHooks}
+              className="w-full flex items-center justify-center gap-1 py-1 text-[11px] rounded border border-border-secondary/50 text-text-secondary hover:bg-surface-hover/40 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <ShieldOff className="w-3 h-3" />
+              {isDisablingHooks ? "正在关闭 Hooks..." : "临时关闭 Hooks"}
+            </button>
           </div>
         ) : responseText ? (
           <div className="px-3 pb-1.5">

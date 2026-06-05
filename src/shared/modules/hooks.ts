@@ -26,6 +26,7 @@ export interface HookRuleStats {
 }
 
 export interface HookConfigSnapshot {
+  runtimeEnabled: boolean;
   sources: Array<{
     path: string;
     scope: string;
@@ -70,6 +71,14 @@ export interface HooksMethods {
   "hooks.clear": {
     params: { sessionId: string };
     result: { ok: boolean };
+  };
+  "hooks.getStatus": {
+    params: { sessionId: string };
+    result: { enabled: boolean };
+  };
+  "hooks.setEnabled": {
+    params: { sessionId: string; enabled: boolean };
+    result: { enabled: boolean };
   };
 }
 
