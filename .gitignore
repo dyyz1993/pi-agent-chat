@@ -119,8 +119,10 @@ introduction.html
 # Runtime session data
 .pi/sessions/
 
-# Yalc local dependency
-.yalc/
+# Yalc local dependency (track @dyyz1993 builds for CI, ignore everything else)
+.yalc/*
+!.yalc/@dyyz1993/
+.yalc/pi-monorepo/
 yalc.lock
 
 # OpenCode session registry (runtime generated)

@@ -5,3 +5,4 @@ bun.lock
 package-lock.json
 *.min.js
 *.min.css
+.yalc/

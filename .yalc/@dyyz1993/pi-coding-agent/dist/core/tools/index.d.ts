@@ -1,0 +1,53 @@
+export { type BashOperations, type BashSpawnContext, type BashSpawnHook, type BashToolDetails, type BashToolInput, type BashToolOptions, createBashTool, createBashToolDefinition, createLocalBashOperations, } from "./bash.ts";
+export { createEditTool, createEditToolDefinition, type EditOperations, type EditToolDetails, type EditToolInput, type EditToolOptions, } from "./edit.ts";
+export { withFileMutationQueue } from "./file-mutation-queue.ts";
+export { createFindTool, createFindToolDefinition, type FindOperations, type FindToolDetails, type FindToolInput, type FindToolOptions, } from "./find.ts";
+export { createGrepTool, createGrepToolDefinition, type GrepOperations, type GrepToolDetails, type GrepToolInput, type GrepToolOptions, } from "./grep.ts";
+export { createLsTool, createLsToolDefinition, type LsOperations, type LsToolDetails, type LsToolInput, type LsToolOptions, } from "./ls.ts";
+export { OutputCollector } from "./output-collector.ts";
+export { createReadTool, createReadToolDefinition, type ReadOperations, type ReadToolDetails, type ReadToolInput, type ReadToolOptions, } from "./read.ts";
+export { type SpawnedProcess, type SpawnOptions, spawnManagedProcess } from "./spawn-managed.ts";
+export { stripMarkdownCodeBlock } from "./strip-markdown.ts";
+export { DEFAULT_INPUT_MAX_BYTES, DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, type TruncationOptions, type TruncationResult, truncateHead, truncateLine, truncateTail, } from "./truncate.ts";
+export { createWriteTool, createWriteToolDefinition, type WriteOperations, type WriteToolInput, type WriteToolOptions, } from "./write.ts";
+import type { AgentTool } from "@dyyz1993/pi-agent-core";
+import type { ToolDefinition } from "../extensions/types.ts";
+import { type BashOperations, type BashToolOptions } from "./bash.ts";
+import { type EditOperations, type EditToolOptions } from "./edit.ts";
+import { type FindOperations, type FindToolOptions } from "./find.ts";
+import { type GrepOperations, type GrepToolOptions } from "./grep.ts";
+import { type LsOperations, type LsToolOptions } from "./ls.ts";
+import { type ReadOperations, type ReadToolOptions } from "./read.ts";
+import { type WriteOperations, type WriteToolOptions } from "./write.ts";
+export type Tool = AgentTool<any>;
+export type ToolDef = ToolDefinition<any, any>;
+export type ToolName = "read" | "bash" | "edit" | "write" | "grep" | "find" | "ls";
+export declare const allToolNames: Set<ToolName>;
+export interface ToolsOptions {
+    read?: ReadToolOptions;
+    bash?: BashToolOptions;
+    write?: WriteToolOptions;
+    edit?: EditToolOptions;
+    grep?: GrepToolOptions;
+    find?: FindToolOptions;
+    ls?: LsToolOptions;
+}
+export interface ToolOperationsProvider {
+    bash?: BashOperations;
+    read?: ReadOperations;
+    write?: WriteOperations;
+    edit?: EditOperations;
+    grep?: GrepOperations;
+    find?: FindOperations;
+    ls?: LsOperations;
+}
+export declare function toolsOptionsFromProvider(provider: ToolOperationsProvider): ToolsOptions;
+export declare function createToolDefinition(toolName: ToolName, cwd: string, options?: ToolsOptions): ToolDef;
+export declare function createTool(toolName: ToolName, cwd: string, options?: ToolsOptions): Tool;
+export declare function createCodingToolDefinitions(cwd: string, options?: ToolsOptions): ToolDef[];
+export declare function createReadOnlyToolDefinitions(cwd: string, options?: ToolsOptions): ToolDef[];
+export declare function createAllToolDefinitions(cwd: string, options?: ToolsOptions): Record<ToolName, ToolDef>;
+export declare function createCodingTools(cwd: string, options?: ToolsOptions): Tool[];
+export declare function createReadOnlyTools(cwd: string, options?: ToolsOptions): Tool[];
+export declare function createAllTools(cwd: string, options?: ToolsOptions): Record<ToolName, Tool>;
+//# sourceMappingURL=index.d.ts.map

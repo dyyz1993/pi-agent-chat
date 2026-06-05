@@ -1,0 +1,1037 @@
+/**
+ * RPC protocol types for headless operation.
+ *
+ * Commands are sent as JSON lines on stdin.
+ * Responses and events are emitted as JSON lines on stdout.
+ */
+import type { AgentMessage, ThinkingLevel } from "@dyyz1993/pi-agent-core";
+import type { ImageContent, Model } from "@dyyz1993/pi-ai";
+import type { PermissionMode, SessionStats } from "../../core/agent-session.ts";
+import type { AgentConfig } from "../../core/agent-types.ts";
+import type { BashResult } from "../../core/bash-executor.ts";
+import type { CompactionResult } from "../../core/compaction/index.ts";
+import type { BatchDiffResult, FileDiffInfo, FileHistoryEntry, ModifiedFileInfo } from "../../core/file-store/index.ts";
+import type { AgentChangeEntry } from "../../core/session-manager.ts";
+import type { Settings } from "../../core/settings-manager.ts";
+import type { SourceInfo } from "../../core/source-info.ts";
+export type RpcCommand = {
+    id?: string;
+    type: "prompt";
+    message: string;
+    images?: ImageContent[];
+    streamingBehavior?: "steer" | "followUp";
+} | {
+    id?: string;
+    type: "steer";
+    message: string;
+    images?: ImageContent[];
+} | {
+    id?: string;
+    type: "follow_up";
+    message: string;
+    images?: ImageContent[];
+} | {
+    id?: string;
+    type: "abort";
+} | {
+    id?: string;
+    type: "new_session";
+    parentSession?: string;
+} | {
+    id?: string;
+    type: "get_state";
+} | {
+    id?: string;
+    type: "set_model";
+    provider: string;
+    modelId: string;
+} | {
+    id?: string;
+    type: "cycle_model";
+} | {
+    id?: string;
+    type: "get_available_models";
+} | {
+    id?: string;
+    type: "get_tier_models";
+} | {
+    id?: string;
+    type: "set_tier_models";
+    models: {
+        fast?: string;
+        pro?: string;
+        max?: string;
+    };
+} | {
+    id?: string;
+    type: "set_thinking_level";
+    level: ThinkingLevel;
+} | {
+    id?: string;
+    type: "cycle_thinking_level";
+} | {
+    id?: string;
+    type: "set_steering_mode";
+    mode: "all" | "one-at-a-time";
+} | {
+    id?: string;
+    type: "set_follow_up_mode";
+    mode: "all" | "one-at-a-time";
+} | {
+    id?: string;
+    type: "compact";
+    customInstructions?: string;
+} | {
+    id?: string;
+    type: "set_auto_compaction";
+    enabled: boolean;
+} | {
+    id?: string;
+    type: "set_auto_retry";
+    enabled: boolean;
+} | {
+    id?: string;
+    type: "abort_retry";
+} | {
+    id?: string;
+    type: "bash";
+    command: string;
+    excludeFromContext?: boolean;
+} | {
+    id?: string;
+    type: "abort_bash";
+} | {
+    id?: string;
+    type: "get_session_stats";
+} | {
+    id?: string;
+    type: "export_html";
+    outputPath?: string;
+} | {
+    id?: string;
+    type: "switch_session";
+    sessionPath: string;
+} | {
+    id?: string;
+    type: "fork";
+    entryId: string;
+    position?: "before" | "at";
+} | {
+    id?: string;
+    type: "navigate_tree";
+    targetId: string;
+    summarize?: boolean;
+    customInstructions?: string;
+    replaceInstructions?: boolean;
+    label?: string;
+    skipFiles?: boolean;
+} | {
+    id?: string;
+    type: "rollback_preview";
+    targetId: string;
+} | {
+    id?: string;
+    type: "delete_entries";
+    targetIds: string[];
+} | {
+    id?: string;
+    type: "summarize_entries";
+    targetIds: string[];
+    summary?: string;
+    model?: string;
+} | {
+    id?: string;
+    type: "clone";
+} | {
+    id?: string;
+    type: "get_fork_messages";
+} | {
+    id?: string;
+    type: "get_last_assistant_text";
+} | {
+    id?: string;
+    type: "set_session_name";
+    name: string;
+} | {
+    id?: string;
+    type: "get_messages";
+} | {
+    id?: string;
+    type: "get_full_messages";
+    afterEntryId?: string;
+    limit?: number;
+} | {
+    id?: string;
+    type: "get_tree";
+} | {
+    id?: string;
+    type: "get_tree_with_leaf";
+} | {
+    id?: string;
+    type: "get_modified_files";
+    fromEntryId?: string;
+    toEntryId?: string;
+    toTurnIndex?: number;
+    fromTurnIndex?: number;
+    toUserMsgEntryId?: string;
+} | {
+    id?: string;
+    type: "get_file_diff";
+    filePath: string;
+    fromEntryId?: string;
+    toEntryId?: string;
+    useBaselineHash?: boolean;
+} | {
+    id?: string;
+    type: "get_batch_diffs";
+    fromEntryId?: string;
+    toEntryId?: string;
+} | {
+    id?: string;
+    type: "get_file_history";
+    filePath: string;
+} | {
+    id?: string;
+    type: "get_commands";
+} | {
+    id?: string;
+    type: "get_skills";
+} | {
+    id?: string;
+    type: "get_extensions";
+} | {
+    id?: string;
+    type: "get_tools";
+} | {
+    id?: string;
+    type: "get_settings";
+    scope?: "global" | "project";
+} | {
+    id?: string;
+    type: "set_settings";
+    settings: Partial<Settings>;
+    scope?: "global" | "project";
+} | {
+    id?: string;
+    type: "get_context_usage";
+} | {
+    id?: string;
+    type: "get_system_prompt";
+} | {
+    id?: string;
+    type: "get_active_tools";
+} | {
+    id?: string;
+    type: "set_active_tools";
+    toolNames: string[];
+} | {
+    id?: string;
+    type: "get_queue";
+} | {
+    id?: string;
+    type: "clear_queue";
+} | {
+    id?: string;
+    type: "get_flags";
+} | {
+    id?: string;
+    type: "get_flag_values";
+} | {
+    id?: string;
+    type: "set_flag";
+    name: string;
+    value: boolean | string;
+} | {
+    id?: string;
+    type: "reload";
+} | {
+    id?: string;
+    type: "set_cwd";
+    cwd: string;
+} | {
+    id?: string;
+    type: "get_agents_files";
+} | {
+    id?: string;
+    type: "get_agents";
+} | {
+    id?: string;
+    type: "switch_agent";
+    agentName: string;
+} | {
+    id?: string;
+    type: "get_current_agent";
+} | {
+    id?: string;
+    type: "get_latest_agent_change";
+} | {
+    id?: string;
+    type: "get_agent_detail";
+    agentName: string;
+} | {
+    id?: string;
+    type: "get_all_tools";
+} | {
+    id?: string;
+    type: "set_permission_mode";
+    mode: PermissionMode;
+} | {
+    id?: string;
+    type: "get_mcp_servers";
+} | {
+    id?: string;
+    type: "mcp_toggle_server";
+    name: string;
+    enabled: boolean;
+} | {
+    id?: string;
+    type: "mcp_restart_server";
+    name: string;
+} | {
+    id?: string;
+    type: "register_remote_tool";
+    tool: {
+        name: string;
+        description: string;
+        parameters: object;
+    };
+} | {
+    id?: string;
+    type: "unregister_remote_tool";
+    name: string;
+} | {
+    id?: string;
+    type: "remote_tool_result";
+    toolCallId: string;
+    result: {
+        content: Array<{
+            type: string;
+            text: string;
+        }>;
+        isError: boolean;
+    };
+};
+/** A command available for invocation via prompt */
+export interface RpcSlashCommand {
+    /** Command name (without leading slash) */
+    name: string;
+    /** Human-readable description */
+    description?: string;
+    /** What kind of command this is */
+    source: "extension" | "prompt" | "skill";
+    /** Source metadata for the owning resource */
+    sourceInfo: SourceInfo;
+}
+/** A loaded skill */
+export interface RpcSkill {
+    name: string;
+    description: string;
+    filePath: string;
+    baseDir: string;
+    sourceInfo: SourceInfo;
+    disableModelInvocation: boolean;
+}
+/** A loaded extension */
+export interface RpcExtension {
+    path: string;
+    resolvedPath: string;
+    sourceInfo: SourceInfo;
+    toolNames: string[];
+    commandNames: string[];
+}
+/** A registered extension tool */
+export interface RpcTool {
+    name: string;
+    label: string;
+    description: string;
+    sourceInfo: SourceInfo;
+}
+export type RpcAgentMessage = AgentMessage & {
+    entryId?: string;
+};
+export interface RpcContextUsage {
+    tokens: number | null;
+    contextWindow: number;
+    percent: number | null;
+}
+export interface RpcExtensionFlag {
+    name: string;
+    description?: string;
+    type: "boolean" | "string";
+    default?: boolean | string;
+    extensionPath: string;
+}
+export interface RpcAgentSummary {
+    name: string;
+    description: string;
+    tier?: string;
+    tools?: string[];
+    disallowedTools?: string[];
+    permissionMode?: string;
+    source: string;
+    filePath: string;
+}
+export interface RpcAllTool {
+    name: string;
+    description: string;
+    sourceInfo: SourceInfo;
+}
+export interface RpcMcpServerTool {
+    originalName: string;
+    fullName: string;
+    description: string;
+}
+export interface RpcMcpServer {
+    name: string;
+    status: "connecting" | "connected" | "error" | "disconnected";
+    error?: string;
+    tools: RpcMcpServerTool[];
+    scope: "global" | "project";
+    disabled?: boolean;
+}
+export interface RpcRemoteToolCall {
+    type: "remote_tool_call";
+    toolCallId: string;
+    toolName: string;
+    args: Record<string, unknown>;
+}
+export interface TreeEntry {
+    id: string;
+    parentId: string | null;
+    type: string;
+    label?: string;
+}
+export interface RpcSessionState {
+    model?: Model<any>;
+    thinkingLevel: ThinkingLevel;
+    isStreaming: boolean;
+    isCompacting: boolean;
+    steeringMode: "all" | "one-at-a-time";
+    followUpMode: "all" | "one-at-a-time";
+    sessionFile?: string;
+    sessionId: string;
+    sessionName?: string;
+    autoCompactionEnabled: boolean;
+    messageCount: number;
+    pendingMessageCount: number;
+    streamingMessage?: AgentMessage;
+}
+export type RpcResponse = {
+    id?: string;
+    type: "response";
+    command: "prompt";
+    success: true;
+} | {
+    id?: string;
+    type: "response";
+    command: "steer";
+    success: true;
+} | {
+    id?: string;
+    type: "response";
+    command: "follow_up";
+    success: true;
+} | {
+    id?: string;
+    type: "response";
+    command: "abort";
+    success: true;
+} | {
+    id?: string;
+    type: "response";
+    command: "new_session";
+    success: true;
+    data: {
+        cancelled: boolean;
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "get_state";
+    success: true;
+    data: RpcSessionState;
+} | {
+    id?: string;
+    type: "response";
+    command: "set_model";
+    success: true;
+    data: Model<any>;
+} | {
+    id?: string;
+    type: "response";
+    command: "cycle_model";
+    success: true;
+    data: {
+        model: Model<any>;
+        thinkingLevel: ThinkingLevel;
+        isScoped: boolean;
+    } | null;
+} | {
+    id?: string;
+    type: "response";
+    command: "get_available_models";
+    success: true;
+    data: {
+        models: Model<any>[];
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "get_tier_models";
+    success: true;
+    data: {
+        models: Record<string, string>;
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "set_tier_models";
+    success: true;
+} | {
+    id?: string;
+    type: "response";
+    command: "set_thinking_level";
+    success: true;
+} | {
+    id?: string;
+    type: "response";
+    command: "cycle_thinking_level";
+    success: true;
+    data: {
+        level: ThinkingLevel;
+    } | null;
+} | {
+    id?: string;
+    type: "response";
+    command: "set_steering_mode";
+    success: true;
+} | {
+    id?: string;
+    type: "response";
+    command: "set_follow_up_mode";
+    success: true;
+} | {
+    id?: string;
+    type: "response";
+    command: "compact";
+    success: true;
+    data: CompactionResult;
+} | {
+    id?: string;
+    type: "response";
+    command: "set_auto_compaction";
+    success: true;
+} | {
+    id?: string;
+    type: "response";
+    command: "set_auto_retry";
+    success: true;
+} | {
+    id?: string;
+    type: "response";
+    command: "abort_retry";
+    success: true;
+} | {
+    id?: string;
+    type: "response";
+    command: "bash";
+    success: true;
+    data: BashResult;
+} | {
+    id?: string;
+    type: "response";
+    command: "abort_bash";
+    success: true;
+} | {
+    id?: string;
+    type: "response";
+    command: "get_session_stats";
+    success: true;
+    data: SessionStats;
+} | {
+    id?: string;
+    type: "response";
+    command: "export_html";
+    success: true;
+    data: {
+        path: string;
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "switch_session";
+    success: true;
+    data: {
+        cancelled: boolean;
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "fork";
+    success: true;
+    data: {
+        text: string;
+        cancelled: boolean;
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "navigate_tree";
+    success: true;
+    data: {
+        cancelled: boolean;
+        editorText?: string;
+        newLeafId: string | null;
+        reason?: string;
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "rollback_preview";
+    success: true;
+    data: {
+        restored: string[];
+        deleted: string[];
+        skipped: string[];
+        dirty: string[];
+        forceRestored: string[];
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "delete_entries";
+    success: true;
+    data: {
+        entryId: string;
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "summarize_entries";
+    success: true;
+    data: {
+        entryId: string;
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "clone";
+    success: true;
+    data: {
+        cancelled: boolean;
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "get_fork_messages";
+    success: true;
+    data: {
+        messages: Array<{
+            entryId: string;
+            text: string;
+        }>;
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "get_last_assistant_text";
+    success: true;
+    data: {
+        text: string | null;
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "set_session_name";
+    success: true;
+} | {
+    id?: string;
+    type: "response";
+    command: "get_messages";
+    success: true;
+    data: {
+        messages: AgentMessage[];
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "get_full_messages";
+    success: true;
+    data: {
+        messages: RpcAgentMessage[];
+        hasMore: boolean;
+        totalCount: number;
+        nextCursor: string | null;
+        tree: {
+            entries: TreeEntry[];
+            leafId: string | null;
+        };
+        customEntries: Array<{
+            id: string;
+            customType: string;
+            data: unknown;
+            timestamp: number;
+        }>;
+        compactionEntries: Array<{
+            id: string;
+            summary: string;
+            tokensBefore: number | undefined;
+            timestamp: number;
+        }>;
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "get_tree";
+    success: true;
+    data: {
+        entries: TreeEntry[];
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "get_tree_with_leaf";
+    success: true;
+    data: {
+        entries: TreeEntry[];
+        leafId: string | null;
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "get_modified_files";
+    success: true;
+    data: {
+        files: ModifiedFileInfo[];
+        resolvedFromEntryId: string | null;
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "get_file_diff";
+    success: true;
+    data: Pick<FileDiffInfo, "path" | "oldContent" | "newContent" | "unifiedDiff"> | null;
+} | {
+    id?: string;
+    type: "response";
+    command: "get_batch_diffs";
+    success: true;
+    data: BatchDiffResult;
+} | {
+    id?: string;
+    type: "response";
+    command: "get_file_history";
+    success: true;
+    data: {
+        history: FileHistoryEntry[];
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "get_commands";
+    success: true;
+    data: {
+        commands: RpcSlashCommand[];
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "get_skills";
+    success: true;
+    data: {
+        skills: RpcSkill[];
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "get_extensions";
+    success: true;
+    data: {
+        extensions: RpcExtension[];
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "get_tools";
+    success: true;
+    data: {
+        tools: RpcTool[];
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "get_settings";
+    success: true;
+    data: Settings;
+} | {
+    id?: string;
+    type: "response";
+    command: "set_settings";
+    success: true;
+} | {
+    id?: string;
+    type: "response";
+    command: "get_context_usage";
+    success: true;
+    data: RpcContextUsage;
+} | {
+    id?: string;
+    type: "response";
+    command: "get_system_prompt";
+    success: true;
+    data: {
+        systemPrompt: string;
+        appendSystemPrompt: string[];
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "get_active_tools";
+    success: true;
+    data: {
+        toolNames: string[];
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "set_active_tools";
+    success: true;
+} | {
+    id?: string;
+    type: "response";
+    command: "get_queue";
+    success: true;
+    data: {
+        steering: string[];
+        followUp: string[];
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "clear_queue";
+    success: true;
+    data: {
+        steering: string[];
+        followUp: string[];
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "get_flags";
+    success: true;
+    data: {
+        flags: RpcExtensionFlag[];
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "get_flag_values";
+    success: true;
+    data: {
+        values: Record<string, boolean | string>;
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "set_flag";
+    success: true;
+} | {
+    id?: string;
+    type: "response";
+    command: "reload";
+    success: true;
+} | {
+    id?: string;
+    type: "response";
+    command: "set_cwd";
+    success: true;
+    data: {
+        cancelled: boolean;
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "get_agents_files";
+    success: true;
+    data: {
+        agentsFiles: Array<{
+            path: string;
+            content: string;
+        }>;
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "get_agents";
+    success: true;
+    data: {
+        agents: RpcAgentSummary[];
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "switch_agent";
+    success: true;
+    data: {
+        agentName: string;
+        tools: string[];
+        tier?: string;
+        thinkingLevel?: string;
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "get_current_agent";
+    success: true;
+    data: {
+        agentName: string;
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "get_latest_agent_change";
+    success: true;
+    data: {
+        agentName: string;
+        agentConfig?: AgentChangeEntry["agentConfig"];
+        timestamp: string;
+    } | null;
+} | {
+    id?: string;
+    type: "response";
+    command: "get_agent_detail";
+    success: true;
+    data: {
+        agent: AgentConfig;
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "get_all_tools";
+    success: true;
+    data: {
+        tools: RpcAllTool[];
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "set_permission_mode";
+    success: true;
+    data: {
+        mode: PermissionMode;
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "get_mcp_servers";
+    success: true;
+    data: {
+        servers: RpcMcpServer[];
+    };
+} | {
+    id?: string;
+    type: "response";
+    command: "mcp_toggle_server";
+    success: true;
+} | {
+    id?: string;
+    type: "response";
+    command: "mcp_restart_server";
+    success: true;
+} | {
+    id?: string;
+    type: "response";
+    command: "register_remote_tool";
+    success: true;
+} | {
+    id?: string;
+    type: "response";
+    command: "unregister_remote_tool";
+    success: true;
+} | {
+    id?: string;
+    type: "response";
+    command: string;
+    success: false;
+    error: string;
+};
+/** Emitted when an extension needs user input */
+export type RpcExtensionUIRequest = {
+    type: "extension_ui_request";
+    id: string;
+    method: "select";
+    title: string;
+    options: string[];
+    timeout?: number;
+} | {
+    type: "extension_ui_request";
+    id: string;
+    method: "confirm";
+    title: string;
+    message: string;
+    timeout?: number;
+} | {
+    type: "extension_ui_request";
+    id: string;
+    method: "input";
+    title: string;
+    placeholder?: string;
+    timeout?: number;
+} | {
+    type: "extension_ui_request";
+    id: string;
+    method: "editor";
+    title: string;
+    prefill?: string;
+} | {
+    type: "extension_ui_request";
+    id: string;
+    method: "notify";
+    message: string;
+    notifyType?: "info" | "warning" | "error";
+} | {
+    type: "extension_ui_request";
+    id: string;
+    method: "setStatus";
+    statusKey: string;
+    statusText: string | undefined;
+} | {
+    type: "extension_ui_request";
+    id: string;
+    method: "setWidget";
+    widgetKey: string;
+    widgetLines: string[] | undefined;
+    widgetPlacement?: "aboveEditor" | "belowEditor";
+} | {
+    type: "extension_ui_request";
+    id: string;
+    method: "setTitle";
+    title: string;
+} | {
+    type: "extension_ui_request";
+    id: string;
+    method: "set_editor_text";
+    text: string;
+};
+/** Emitted when an extension UI request is resolved (response received, timeout, or aborted) */
+export type RpcExtensionUIResolved = {
+    type: "extension_ui_resolved";
+    id: string;
+    reason: "responded" | "timeout" | "aborted";
+};
+/** Response to an extension UI request */
+export type RpcExtensionUIResponse = {
+    type: "extension_ui_response";
+    id: string;
+    value: string;
+} | {
+    type: "extension_ui_response";
+    id: string;
+    confirmed: boolean;
+} | {
+    type: "extension_ui_response";
+    id: string;
+    cancelled: true;
+};
+export type RpcCommandType = RpcCommand["type"];
+//# sourceMappingURL=rpc-types.d.ts.map
