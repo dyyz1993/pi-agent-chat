@@ -77,7 +77,7 @@ export function aggregateTurns(messages: ChatMessage[]): {
             });
           } else if (block.type === "toolExecution") {
             currentTurn.items = currentTurn.items ?? [];
-            currentTurn.items.push({
+            const item = {
               itemType: "toolExecution",
               blockIndex: bi,
               toolCallId: block.toolCallId,
@@ -87,7 +87,17 @@ export function aggregateTurns(messages: ChatMessage[]): {
               output: block.output,
               details: block.details,
               messageId: msg.id,
-            });
+            } satisfies TimelineItem;
+            const existingIdx = currentTurn.items.findIndex(
+              (existing) =>
+                existing.itemType === "toolExecution" &&
+                existing.toolCallId === block.toolCallId,
+            );
+            if (existingIdx >= 0) {
+              currentTurn.items[existingIdx] = item;
+            } else {
+              currentTurn.items.push(item);
+            }
           } else if (block.type === "custom") {
             currentTurn.items = currentTurn.items ?? [];
             currentTurn.items.push({

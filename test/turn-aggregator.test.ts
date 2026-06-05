@@ -100,6 +100,98 @@ describe("aggregateTurns", () => {
     }
   });
 
+  it("deduplicates repeated toolExecution items by toolCallId within a turn", () => {
+    const result = aggregateTurns([
+      makeUserMsg(),
+      makeAssistantMsg(
+        { id: "a1" },
+        [
+          {
+            type: "toolExecution",
+            toolCallId: "call1",
+            toolName: "bash",
+            args: "git reset --hard",
+            status: "running",
+            output: "waiting...",
+          },
+        ],
+      ),
+      makeAssistantMsg(
+        { id: "a2" },
+        [
+          {
+            type: "toolExecution",
+            toolCallId: "call1",
+            toolName: "bash",
+            args: "git reset --hard",
+            status: "done",
+            output: "done",
+          },
+        ],
+      ),
+    ]);
+
+    expect(result.turns).toHaveLength(1);
+    const toolItems = result.turns[0].items.filter((item) => item.itemType === "toolExecution");
+    expect(toolItems).toHaveLength(1);
+    const item = toolItems[0];
+    if (item.itemType === "toolExecution") {
+      expect(item.messageId).toBe("a2");
+      expect(item.status).toBe("done");
+      expect(item.output).toBe("done");
+    }
+  });
+
+  it("does not deduplicate repeated toolCallIds across different turns", () => {
+    const result = aggregateTurns([
+      makeUserMsg({ id: "u1", content: [{ type: "text", text: "first" }] }),
+      makeAssistantMsg(
+        { id: "a1" },
+        [
+          {
+            type: "toolExecution",
+            toolCallId: "call1",
+            toolName: "bash",
+            args: "echo first",
+            status: "done",
+            output: "first",
+          },
+        ],
+      ),
+      makeUserMsg({ id: "u2", content: [{ type: "text", text: "second" }] }),
+      makeAssistantMsg(
+        { id: "a2" },
+        [
+          {
+            type: "toolExecution",
+            toolCallId: "call1",
+            toolName: "bash",
+            args: "echo second",
+            status: "done",
+            output: "second",
+          },
+        ],
+      ),
+    ]);
+
+    expect(result.turns).toHaveLength(2);
+    const firstTurnTools = result.turns[0].items.filter(
+      (item) => item.itemType === "toolExecution",
+    );
+    const secondTurnTools = result.turns[1].items.filter(
+      (item) => item.itemType === "toolExecution",
+    );
+    expect(firstTurnTools).toHaveLength(1);
+    expect(secondTurnTools).toHaveLength(1);
+    if (
+      firstTurnTools[0].itemType === "toolExecution" &&
+      secondTurnTools[0].itemType === "toolExecution"
+    ) {
+      expect(firstTurnTools[0].output).toBe("first");
+      expect(secondTurnTools[0].output).toBe("second");
+    }
+  });
+
   it("assistant with custom block produces customEntry item", () => {
     const result = aggregateTurns([
       makeUserMsg(),
