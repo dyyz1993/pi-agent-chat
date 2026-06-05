@@ -75,6 +75,13 @@ import {
   wrapDelegateReply,
   writeDelegateSessionHeader,
 } from "./coordinator-delegate-utils";
+import {
+  applyBashBackgroundToolState,
+  buildLspLogData,
+  createMemoryBroadcast,
+  deriveLspState,
+  type CachedLspState,
+} from "./agent-channel-state";
 
 const log = createLogger("agent");
 const perfLog = createLogger("session-perf");
@@ -240,10 +247,7 @@ export class AgentProcessManager {
       Allows restarting an inactive session when receiving delegate messages. */
   private sessionProjectPaths = new Map<string, string>();
   private leafIds = new Map<string, string | null>();
-  private lastLspState = new Map<
-    string,
-    { state: string; servers: unknown[]; mode?: string; activeLanguages?: string[] }
-  >();
+  private lastLspState = new Map<string, CachedLspState>();
   private parentChildMap = new Map<string, Set<string>>();
   private delegateReplyCount = new Map<string, number>();
   private delegateCreatedAt = new Map<string, number>();
@@ -2985,12 +2989,8 @@ export class AgentProcessManager {
     log.info("Bash channel data", { sessionId, type: data.type, toolCallId: data.toolCallId });
 
     const managed = this.clients.get(sessionId);
-    if (managed && data.toolCallId) {
-      if (data.type === "background") {
-        managed.activeBackgroundTools.add(data.toolCallId);
-      } else if (data.type === "end" || data.type === "error" || data.type === "terminated") {
-        managed.activeBackgroundTools.delete(data.toolCallId);
-      }
+    if (managed) {
+      applyBashBackgroundToolState(managed.activeBackgroundTools, data);
     }
 
     await this.broadcastEvent("bash.event", { sessionId, event: data }, { sessionId });
@@ -3015,59 +3015,11 @@ export class AgentProcessManager {
     const data = channelMsg.data as unknown as LspChannelEvent | undefined;
     if (!data) return;
 
-    // Enhanced LSP logging for diagnostics review
-    const lspLogData: Record<string, unknown> = {
-      sessionId,
-      event: data.event,
-    };
-    if (data.serverName) lspLogData.serverName = data.serverName;
-    if (data.totalServers != null) lspLogData.totalServers = data.totalServers;
-    if (data.servers?.length) lspLogData.serverCount = data.servers.length;
-    if (data.mode) lspLogData.mode = data.mode;
-    if (data.languages?.length) lspLogData.languages = data.languages;
-    if (data.filePath) lspLogData.filePath = data.filePath;
-    if (data.diagnostics)
-      lspLogData.diagnosticsCount = Array.isArray(data.diagnostics)
-        ? data.diagnostics.length
-        : Object.keys(data.diagnostics).length;
-    if (data.error) lspLogData.error = data.error;
-    // Derive aggregate state for startup/status events
-    if (data.servers?.length) {
-      const anyReady = data.servers.some((s: { state?: string }) => s.state === "ready");
-      const anyError = data.servers.some((s: { state?: string }) => s.state === "error");
-      lspLogData.aggregateState = anyReady ? "ready" : anyError ? "error" : "starting";
-    }
-    log.info("LSP channel data", lspLogData);
+    log.info("LSP channel data", buildLspLogData(sessionId, data));
 
-    if (data.event === "startup_complete" || data.event === "status_changed") {
-      const servers = (data.servers ?? []) as Array<{
-        state?: string;
-        status?: { state?: string };
-      }>;
-      const cached = this.lastLspState.get(sessionId);
-      this.lastLspState.set(sessionId, {
-        state: servers.some((s) => s.state === "ready" || s.status?.state === "ready")
-          ? "ready"
-          : servers.some((s) => s.state === "error" || s.status?.state === "error")
-            ? "error"
-            : servers.length > 0
-              ? "starting"
-              : "inactive",
-        servers: data.servers ?? [],
-        activeLanguages: cached?.activeLanguages ?? [],
-      });
-    }
-    if (data.event === "mode_changed" && data.mode) {
-      const cached = this.lastLspState.get(sessionId);
-      if (cached) cached.mode = data.mode;
-    }
-    if (data.event === "language_activated" && data.languages?.length) {
-      const cached = this.lastLspState.get(sessionId);
-      if (cached) {
-        cached.activeLanguages = Array.from(
-          new Set([...(cached.activeLanguages ?? []), ...data.languages]),
-        );
-      }
+    const nextState = deriveLspState(this.lastLspState.get(sessionId), data);
+    if (nextState) {
+      this.lastLspState.set(sessionId, nextState);
     }
   }
 
@@ -3093,50 +3045,9 @@ export class AgentProcessManager {
     const eventType = data.type as string;
     log.info("Memory channel data", { sessionId, type: eventType });
 
-    if (eventType === "bookmark_creating") {
-      await this.broadcastEvent(
-        "memory.bookmark_creating",
-        { sessionId, timestamp: Date.now() },
-        { sessionId },
-      );
-    } else if (eventType === "memory_updated") {
-      await this.broadcastEvent(
-        "memory.updated",
-        { sessionId, files: data.files, timestamp: Date.now() },
-        { sessionId },
-      );
-    } else if (eventType === "memory_update_failed") {
-      await this.broadcastEvent(
-        "memory.update_failed",
-        { sessionId, reason: data.reason, timestamp: Date.now() },
-        { sessionId },
-      );
-    } else if (eventType === "memory_irrelevant_marked") {
-      await this.broadcastEvent(
-        "memory.memory_irrelevant_marked",
-        { sessionId, ...data, timestamp: Date.now() },
-        { sessionId },
-      );
-    } else if (
-      eventType === "memory_prefetch" ||
-      eventType === "memory_extract" ||
-      eventType === "memory_dream"
-    ) {
-      await this.broadcastEvent(
-        `memory.${eventType}`,
-        { sessionId, ...data, timestamp: Date.now() },
-        { sessionId },
-      );
-    } else if (
-      eventType === "memory_prefetch_result" ||
-      eventType === "memory_extract_result" ||
-      eventType === "memory_dream_result"
-    ) {
-      await this.broadcastEvent(
-        `memory.${eventType}`,
-        { sessionId, ...data, timestamp: Date.now() },
-        { sessionId },
-      );
+    const broadcast = createMemoryBroadcast(sessionId, data, Date.now());
+    if (broadcast) {
+      await this.broadcastEvent(broadcast.name, broadcast.payload, { sessionId });
     }
   }
 
