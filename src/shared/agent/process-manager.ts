@@ -61,6 +61,11 @@ import {
   switchTierOperation,
 } from "./agent-client-model-operations";
 import {
+  getCommandsOperation,
+  getSessionStatsOperation,
+  getStateOperation,
+} from "./agent-client-state-operations";
+import {
   createRpcClient,
   getSandboxEndpoint,
   getSandboxManager,
@@ -953,45 +958,15 @@ export class AgentProcessManager {
     isStreaming: boolean;
     isCompacting: boolean;
     messageCount: number;
-    streamingMessage?: AssistantMessage;
+    streamingMessage?: unknown;
   } | null> {
-    let managed = this.getActiveManaged(sessionId);
-    if (!managed) {
-      managed = await this.ensureManagedClient(sessionId);
-    }
-    if (!managed) return null;
-
-    try {
-      const state = await withTimeout(managed.client.getState(), 10_000, "getState");
-      const stateWithStreaming = state as typeof state & {
-        streamingMessage?: AssistantMessage;
-      };
-      const model = state.model;
-      return {
-        model: model
-          ? {
-              id: String(model.id ?? ""),
-              name: model.name ? String(model.name) : undefined,
-              provider: model.provider ? String(model.provider) : undefined,
-              reasoning: Boolean(model.reasoning),
-              contextWindow: Number(model.contextWindow ?? 0),
-              maxTokens: Number(model.maxTokens ?? 0),
-            }
-          : undefined,
-        thinkingLevel: state.thinkingLevel ? String(state.thinkingLevel) : undefined,
-        isStreaming: Boolean(state.isStreaming),
-        isCompacting: Boolean(state.isCompacting),
-        messageCount: Number(state.messageCount ?? 0),
-        streamingMessage: stateWithStreaming.streamingMessage,
-      };
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.warn("getState RPC failed, checking if CLI is alive", { sessionId, error: msg });
-      if (!(await this.isClientAlive(sessionId, managed))) {
-        this.cleanupDeadClient(sessionId, `getState failed: ${msg}`);
-      }
-      return null;
-    }
+    return getStateOperation({
+      sessionId,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+      ensureManagedClient: (id) => this.ensureManagedClient(id),
+      isClientAlive: (id, managed) => this.isClientAlive(id, managed),
+      cleanupDeadClient: (id, reason) => this.cleanupDeadClient(id, reason),
+    });
   }
 
   async getCommands(
@@ -999,24 +974,10 @@ export class AgentProcessManager {
   ): Promise<
     Array<{ name: string; description: string; source: "extension" | "prompt" | "skill" }>
   > {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return [];
-
-    try {
-      const commands = await withTimeout(managed.client.getCommands(), 10_000, "getCommands");
-      if (!commands) return [];
-      return commands.map((c) => ({
-        name: String(c.name ?? ""),
-        description: String(c.description ?? ""),
-        source: (c.source as "extension" | "prompt" | "skill") ?? "extension",
-      }));
-    } catch (err: unknown) {
-      log.warn("getCommands failed", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return [];
-    }
+    return getCommandsOperation({
+      sessionId,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+    });
   }
 
   async getSessionStats(sessionId: string): Promise<{
@@ -1024,42 +985,12 @@ export class AgentProcessManager {
     cost: number;
     contextUsage?: { tokens: number | null; contextWindow: number; percent: number | null };
   } | null> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return null;
-
-    try {
-      const stats = await withTimeout(managed.client.getSessionStats(), 10_000, "getSessionStats");
-      if (!stats) return null;
-      const tokens = stats.tokens;
-      const cu = stats.contextUsage;
-      return {
-        tokens: {
-          input: Number(tokens?.input ?? 0),
-          output: Number(tokens?.output ?? 0),
-          cacheRead: Number(tokens?.cacheRead ?? 0),
-          cacheWrite: Number(tokens?.cacheWrite ?? 0),
-          total: Number(tokens?.total ?? 0),
-        },
-        cost: Number(stats.cost ?? 0),
-        contextUsage: cu
-          ? {
-              tokens: cu.tokens,
-              contextWindow: Number(cu.contextWindow ?? 0),
-              percent: cu.percent,
-            }
-          : undefined,
-      };
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.warn("getSessionStats failed, checking if CLI is alive", {
-        sessionId,
-        err: msg,
-      });
-      if (!(await this.isClientAlive(sessionId, managed))) {
-        this.cleanupDeadClient(sessionId, `getSessionStats failed: ${msg}`);
-      }
-      return null;
-    }
+    return getSessionStatsOperation({
+      sessionId,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+      isClientAlive: (id, managed) => this.isClientAlive(id, managed),
+      cleanupDeadClient: (id, reason) => this.cleanupDeadClient(id, reason),
+    });
   }
 
   async getMessages(
