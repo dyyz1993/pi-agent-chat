@@ -1,10 +1,8 @@
 import {
-  copyFileSync,
   existsSync,
 } from "fs";
 import { createReadStream } from "fs";
 
-import * as path from "path";
 import * as readline from "readline";
 import type { RPCServer } from "@dyyz1993/rpc-core";
 import type {
@@ -76,10 +74,6 @@ import {
   initSandboxManager,
 } from "./agent-runtime-client";
 import { startAgentClientOperation } from "./agent-start-operations";
-import {
-  buildCoordinatorSessionCreatedEvent,
-  stripParentSessionFromHeader,
-} from "./coordinator-delegate-utils";
 import {
   type CachedLspState,
 } from "./agent-channel-state";
@@ -156,13 +150,13 @@ import { handleAgentEventOperation } from "./agent-event-routing";
 import {
   clearDelegateTracking,
   cleanupStoppedDelegateSession,
-  registerDelegateChild,
   removeDelegateChild,
 } from "./coordinator-session-state";
 import { findCoordinatorResponseManaged } from "./coordinator-response-routing";
 import { handleCoordinatorCallOperation } from "./coordinator-call-dispatcher";
 import {
   handleCoordinatorDelegateOperation,
+  handleCoordinatorDelegateForkOperation,
   handleCoordinatorDelegateListOperation,
   handleCoordinatorDelegateSendOperation,
   handleCoordinatorDelegateSyncOperation,
@@ -1863,56 +1857,17 @@ export class AgentProcessManager {
     parentSessionId: string,
     msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_fork" }>,
   ): Promise<{ sessionId: string; status: "started" | "already_running" | "switched" }> {
-    const { task, sessionId: targetSessionId } = msg;
-    const base = this.clients.get(targetSessionId);
-    if (!base) throw new Error(`Session not found: ${targetSessionId}`);
-
-    const sessionPath = base.info.sessionPath;
-    const projectPath = base.info.projectPath;
-    const sessionDir = path.dirname(sessionPath);
-
-    const forkedSessionId = `sess_fork_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const forkedPath = path.join(sessionDir, `${forkedSessionId}.jsonl`);
-
-    if (existsSync(sessionPath)) {
-      copyFileSync(sessionPath, forkedPath);
-    }
-
-    // Strip parentSession so the forked session is independent (not a child)
-    stripParentSessionFromHeader(forkedPath);
-
-    const result = await this.start(forkedSessionId, projectPath, forkedPath, {
-      forceNewProcess: true,
+    return handleCoordinatorDelegateForkOperation({
+      parentSessionId,
+      msg,
+      clients: this.clients,
+      start: (id, projectPath, sessionPath, startOptions) =>
+        this.start(id, projectPath, sessionPath, startOptions),
+      setSessionName: (id, name) => this.setSessionName(id, name),
+      send: (id, content) => this.send(id, content),
+      broadcastEvent: (eventName, data, filter) => this.broadcastEvent(eventName, data, filter),
+      parentChildMap: this.parentChildMap,
     });
-
-    // Register parent-child relationship
-    registerDelegateChild(this.parentChildMap, parentSessionId, forkedSessionId);
-
-    const title = msg.title ?? task.slice(0, 60);
-    await this.setSessionName(forkedSessionId, title);
-    this.send(forkedSessionId, task);
-
-    this.broadcastEvent(
-      "coordinator.session_created",
-      buildCoordinatorSessionCreatedEvent({
-        parentSessionId,
-        sessionId: forkedSessionId,
-        name: title,
-        sessionPath: forkedPath,
-        projectPath,
-        parentSessionPath: sessionPath,
-        delegateType: "fork",
-        firstMessage: task,
-      }),
-      { parentSessionId },
-    ).catch((err: unknown) => {
-      log.warn("broadcastEvent(coordinator.session_created from fork) error", {
-        sessionId: forkedSessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-    });
-
-    return { sessionId: forkedSessionId, status: result.status };
   }
 
   private async emitAgentEvent(sessionId: string, event: SanitizedEvent): Promise<void> {

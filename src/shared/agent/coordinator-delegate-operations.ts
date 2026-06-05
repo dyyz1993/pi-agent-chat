@@ -1,4 +1,5 @@
-import { existsSync } from "fs";
+import { copyFileSync, existsSync } from "fs";
+import * as path from "path";
 
 import type { CoordinatorMethodCall } from "../modules/coordinator";
 import { createLogger } from "../lib/logger";
@@ -18,6 +19,7 @@ import {
   buildSyncDelegatePrompt,
   formatDelegateElapsed,
   resolveDelegateSessionPaths,
+  stripParentSessionFromHeader,
   wrapDelegateReply,
   writeDelegateSessionHeader,
 } from "./coordinator-delegate-utils";
@@ -424,6 +426,81 @@ export async function handleCoordinatorDelegateSyncOperation<
   removeDelegateChild(options.parentChildMap, options.parentSessionId, newSessionId);
 
   return syncResult;
+}
+
+export async function handleCoordinatorDelegateForkOperation<
+  TClient extends DelegateParentManaged,
+>(options: {
+  parentSessionId: string;
+  msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_fork" }>;
+  clients: Map<string, TClient>;
+  start: (
+    sessionId: string,
+    projectPath: string,
+    sessionPath: string,
+    options: { forceNewProcess: true },
+  ) => Promise<{ status: "started" | "already_running" | "switched" }>;
+  setSessionName: (sessionId: string, name: string) => Promise<void>;
+  send: (sessionId: string, content: string) => void;
+  broadcastEvent: (
+    eventName: string,
+    data: Record<string, unknown>,
+    filter: Record<string, unknown>,
+  ) => Promise<void>;
+  parentChildMap: DelegateChildMap;
+  sessionIdFactory?: () => string;
+}): Promise<{ sessionId: string; status: "started" | "already_running" | "switched" }> {
+  const { task, sessionId: targetSessionId } = options.msg;
+  const base = options.clients.get(targetSessionId);
+  if (!base) throw new Error(`Session not found: ${targetSessionId}`);
+
+  const sessionPath = base.info.sessionPath;
+  const projectPath = base.info.projectPath;
+  const sessionDir = path.dirname(sessionPath);
+  const forkedSessionId =
+    options.sessionIdFactory?.() ??
+    `sess_fork_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const forkedPath = path.join(sessionDir, `${forkedSessionId}.jsonl`);
+
+  if (existsSync(sessionPath)) {
+    copyFileSync(sessionPath, forkedPath);
+  }
+
+  stripParentSessionFromHeader(forkedPath);
+
+  const result = await options.start(forkedSessionId, projectPath, forkedPath, {
+    forceNewProcess: true,
+  });
+
+  registerDelegateChild(options.parentChildMap, options.parentSessionId, forkedSessionId);
+
+  const title = options.msg.title ?? task.slice(0, 60);
+  await options.setSessionName(forkedSessionId, title);
+  options.send(forkedSessionId, task);
+
+  options
+    .broadcastEvent(
+      "coordinator.session_created",
+      buildCoordinatorSessionCreatedEvent({
+        parentSessionId: options.parentSessionId,
+        sessionId: forkedSessionId,
+        name: title,
+        sessionPath: forkedPath,
+        projectPath,
+        parentSessionPath: sessionPath,
+        delegateType: "fork",
+        firstMessage: task,
+      }),
+      { parentSessionId: options.parentSessionId },
+    )
+    .catch((err: unknown) => {
+      log.warn("broadcastEvent(coordinator.session_created from fork) error", {
+        sessionId: forkedSessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    });
+
+  return { sessionId: forkedSessionId, status: result.status };
 }
 
 export async function handleCoordinatorDelegateStatusOperation(options: {

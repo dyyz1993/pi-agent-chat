@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   handleCoordinatorDelegateOperation,
+  handleCoordinatorDelegateForkOperation,
   handleCoordinatorDelegateListOperation,
   handleCoordinatorDelegateSendOperation,
   handleCoordinatorDelegateSyncOperation,
@@ -129,6 +130,90 @@ describe("coordinator delegate operations", () => {
         delegateReplyCount: new Map(),
       }),
     ).rejects.toThrow("Parent session not found");
+  });
+
+  it("forks delegate sessions, strips parent header state, and broadcasts the fork", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "pi-delegate-fork-"));
+    const sourcePath = join(dir, "source.jsonl");
+    writeFileSync(
+      sourcePath,
+      [
+        JSON.stringify({ type: "session", id: "source", parentSession: "old-parent" }),
+        JSON.stringify({ type: "message", role: "assistant" }),
+      ].join("\n") + "\n",
+      "utf-8",
+    );
+    const parentChildMap = new Map<string, Set<string>>();
+    const start = vi.fn().mockResolvedValue({ status: "started" });
+    const setSessionName = vi.fn().mockResolvedValue(undefined);
+    const send = vi.fn();
+    const broadcastEvent = vi.fn().mockResolvedValue(undefined);
+
+    await expect(
+      handleCoordinatorDelegateForkOperation({
+        parentSessionId: "parent",
+        msg: {
+          __call: "session_delegate_fork",
+          sessionId: "source",
+          task: "continue from here",
+          title: "Forked Task",
+        },
+        clients: new Map([["source", makeManaged("idle", sourcePath)]]),
+        start,
+        setSessionName,
+        send,
+        broadcastEvent,
+        parentChildMap,
+        sessionIdFactory: () => "forked-child",
+      }),
+    ).resolves.toEqual({ sessionId: "forked-child", status: "started" });
+
+    const forkedPath = join(dir, "forked-child.jsonl");
+    expect(start).toHaveBeenCalledWith("forked-child", "/project", forkedPath, {
+      forceNewProcess: true,
+    });
+    expect(setSessionName).toHaveBeenCalledWith("forked-child", "Forked Task");
+    expect(send).toHaveBeenCalledWith("forked-child", "continue from here");
+    expect(parentChildMap.get("parent")?.has("forked-child")).toBe(true);
+    expect(broadcastEvent).toHaveBeenCalledWith(
+      "coordinator.session_created",
+      expect.objectContaining({
+        session: expect.objectContaining({
+          sessionId: "forked-child",
+          delegateType: "fork",
+          sessionPath: forkedPath,
+          parentSessionPath: sourcePath,
+          name: "Forked Task",
+          firstMessage: "continue from here",
+        }),
+      }),
+      { parentSessionId: "parent" },
+    );
+
+    const header = JSON.parse(readFileSync(forkedPath, "utf-8").split("\n")[0]) as Record<
+      string,
+      unknown
+    >;
+    expect(header.parentSession).toBeUndefined();
+  });
+
+  it("rejects delegate forks when the source session is missing", async () => {
+    await expect(
+      handleCoordinatorDelegateForkOperation({
+        parentSessionId: "parent",
+        msg: {
+          __call: "session_delegate_fork",
+          sessionId: "missing",
+          task: "continue",
+        },
+        clients: new Map(),
+        start: vi.fn(),
+        setSessionName: vi.fn(),
+        send: vi.fn(),
+        broadcastEvent: vi.fn(),
+        parentChildMap: new Map(),
+      }),
+    ).rejects.toThrow("Session not found: missing");
   });
 
   it("wraps delegate sends and chooses follow-up when the target is streaming", async () => {
