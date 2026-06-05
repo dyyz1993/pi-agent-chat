@@ -101,6 +101,13 @@ import {
   paginateEntryMessages,
   type FullMessageAccumulator,
 } from "./session-jsonl-messages";
+import {
+  createLeafPointerEntry,
+  mapJsonlEntriesToTreeEntries,
+  parseJsonlTreeEntry,
+  resolveFallbackBranchPoint,
+  type JsonlTreeEntry,
+} from "./session-tree-navigation";
 
 const log = createLogger("agent");
 const perfLog = createLogger("session-perf");
@@ -858,22 +865,8 @@ export class AgentProcessManager {
     });
   }
 
-  private async readJsonlEntries(sessionPath: string): Promise<
-    Array<{
-      id: string;
-      parentId: string | null;
-      type: string;
-      customType?: string;
-      label?: string;
-    }>
-  > {
-    const entries: Array<{
-      id: string;
-      parentId: string | null;
-      type: string;
-      customType?: string;
-      label?: string;
-    }> = [];
+  private async readJsonlEntries(sessionPath: string): Promise<JsonlTreeEntry[]> {
+    const entries: JsonlTreeEntry[] = [];
     if (!sessionPath || !existsSync(sessionPath)) return entries;
     try {
       const rl = readline.createInterface({
@@ -884,26 +877,8 @@ export class AgentProcessManager {
         if (!line.trim()) continue;
         try {
           const parsed = JSON.parse(line) as Record<string, unknown>;
-          if (parsed.id && parsed.type) {
-            let label: string | undefined;
-            if (
-              parsed.type === "message" &&
-              parsed.message &&
-              typeof parsed.message === "object" &&
-              parsed.message !== null
-            ) {
-              label = (parsed.message as Record<string, unknown>).role as string | undefined;
-            } else if (parsed.customType) {
-              label = parsed.customType as string;
-            }
-            entries.push({
-              id: parsed.id as string,
-              parentId: (parsed.parentId as string | null | undefined) ?? null,
-              type: parsed.type as string,
-              customType: parsed.customType as string | undefined,
-              label,
-            });
-          }
+          const entry = parseJsonlTreeEntry(parsed);
+          if (entry) entries.push(entry);
         } catch (err: unknown) {
           log.warn("readJsonlEntries: skipping malformed entry", {
             err: err instanceof Error ? err.message : String(err),
@@ -2247,38 +2222,9 @@ export class AgentProcessManager {
     }
 
     const entries = await this.readJsonlEntries(sessionPath);
-    const exists = entries.some((e) => e.id === targetId);
+    const { exists, branchPointId } = resolveFallbackBranchPoint(entries, targetId);
     if (!exists) {
       return { cancelled: true, reason: "Target entry not found in session" };
-    }
-
-    // Compute the actual branch point (skip metadata types, like findBranchPointAbove in CLI SDK).
-    // When rolling back a user message, the leaf should point to the ancestor, not the target itself.
-    const skipTypes = new Set([
-      "custom",
-      "agent_change",
-      "model_change",
-      "thinking_level_change",
-      "tier_models_change",
-      "custom_message",
-      "session_info",
-      "segment_summary",
-      "deletion",
-      "label",
-      "leaf_pointer",
-      "fold",
-    ]);
-    const entryById = new Map(entries.map((e: Record<string, unknown>) => [e.id, e]));
-    let branchPointId: string | null = targetId;
-    const targetEntry = entryById.get(targetId) as Record<string, unknown> | undefined;
-    if (targetEntry?.type === "message" && targetEntry?.label === "user") {
-      branchPointId = (targetEntry.parentId as string) ?? null;
-      while (branchPointId) {
-        const ancestor = entryById.get(branchPointId) as Record<string, unknown> | undefined;
-        if (!ancestor) break;
-        if (!skipTypes.has(ancestor.type as string)) break;
-        branchPointId = (ancestor.parentId as string) ?? null;
-      }
     }
 
     this.leafIds.set(sessionId, branchPointId);
@@ -2287,13 +2233,7 @@ export class AgentProcessManager {
     // the SDK's branch() is unavailable, so we append directly).
     try {
       const { appendFile: appendFileAsync } = await import("node:fs/promises");
-      const leafPointerEntry = JSON.stringify({
-        type: "leaf_pointer",
-        id: `fallback-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
-        parentId: null,
-        timestamp: new Date().toISOString(),
-        leafId: branchPointId,
-      });
+      const leafPointerEntry = createLeafPointerEntry(branchPointId);
       await appendFileAsync(sessionPath, `\n${leafPointerEntry}\n`, "utf-8");
     } catch (leafErr: unknown) {
       log.warn("navigateTree: failed to write leaf_pointer in fallback", {
@@ -2425,12 +2365,7 @@ export class AgentProcessManager {
     if (!sessionPath) throw new Error("Client not found and no session path");
     const entries = await this.readJsonlEntries(sessionPath);
     return {
-      entries: entries.map((e) => ({
-        id: e.id,
-        parentId: e.parentId,
-        type: e.type,
-        label: e.label,
-      })),
+      entries: mapJsonlEntriesToTreeEntries(entries),
       leafId: this.leafIds.get(sessionId) ?? null,
     };
   }
