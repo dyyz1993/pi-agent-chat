@@ -631,14 +631,59 @@ export function ProjectPickerDialog({ open, onClose, onSelect }: ProjectPickerDi
         </div>
       </div>
       <div className="flex-1 overflow-y-auto px-2 py-1 space-y-0.5">{renderFolderList()}</div>
-      <div className="shrink-0 px-4 py-2.5 border-t border-border-secondary dark:border-surface-code">
-        <button
-          onClick={handleSelectCurrentFolder}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-semantic-accent hover:bg-semantic-accent rounded-lg text-xs font-medium text-white transition-colors"
-        >
-          <FolderOpen className="w-3.5 h-3.5" />
-          {t("picker.selectCurrentFolder")}
-        </button>
+      <div className="shrink-0 px-3 py-2 border-t border-border-secondary dark:border-surface-code space-y-2">
+        {showCreateFolder && (
+          <div className="flex items-center gap-1.5">
+            <input
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleCreateFolder();
+                if (e.key === "Escape") {
+                  setShowCreateFolder(false);
+                  setNewFolderName("");
+                }
+              }}
+              placeholder={t("picker.newFolderName")}
+              autoFocus
+              className="flex-1 px-2.5 py-1.5 bg-surface-code dark:bg-surface-dim/50 border border-border-secondary dark:border-border-secondary/50 rounded-md text-[11px] text-text-secondary placeholder:text-text-secondary outline-none focus:border-semantic-accent/50"
+            />
+            <button
+              onClick={handleCreateFolder}
+              disabled={!newFolderName.trim() || creating}
+              className="p-1.5 rounded-md bg-semantic-accent hover:bg-semantic-accent text-white disabled:opacity-40 shrink-0"
+            >
+              {creating ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Plus className="w-3.5 h-3.5" />
+              )}
+            </button>
+          </div>
+        )}
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              setShowCreateFolder((v) => !v);
+              setNewFolderName("");
+            }}
+            className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-medium transition-colors shrink-0 ${
+              showCreateFolder
+                ? "bg-surface-hover dark:bg-surface-dim text-text-secondary"
+                : "bg-surface-code dark:bg-surface-dim/60 text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-hover"
+            }`}
+          >
+            <FolderPlus className="w-3.5 h-3.5" />
+            {t("picker.createFolder")}
+          </button>
+          <button
+            onClick={handleSelectCurrentFolder}
+            className="flex-1 flex items-center justify-center gap-2 px-3 py-1.5 bg-semantic-accent hover:bg-semantic-accent rounded-md text-[11px] font-medium text-white transition-colors"
+          >
+            <FolderOpen className="w-3.5 h-3.5" />
+            {t("picker.selectCurrentFolder")}
+          </button>
+        </div>
       </div>
     </>
   );
