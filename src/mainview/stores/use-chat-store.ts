@@ -14,6 +14,19 @@ import { createLogger } from "../../shared/lib/logger";
 const log = createLogger("chat-store");
 const perfLog = createLogger("session-perf");
 
+type ToolExecutionBlock = Extract<ContentBlock, { type: "toolExecution" }>;
+
+function toolExecutionScore(block: ToolExecutionBlock): number {
+  let score = 0;
+  if (block.status === "done" || block.status === "error") score += 100;
+  if (block.status === "running") score += 50;
+  if (block.output) score += 10;
+  if (block.details) score += 10;
+  if (block.endedAt) score += 5;
+  if (block.startedAt) score += 1;
+  return score;
+}
+
 export function normalizeToolBlocks(
   msgs: ChatMessage[],
   isHistorical = false,
@@ -213,9 +226,48 @@ export function normalizeToolBlocks(
     msgs[mi] = { ...msg, content: newContent };
   }
 
+  const bestToolExecutionById = new Map<string, { msgIndex: number; block: ToolExecutionBlock }>();
+  for (let mi = 0; mi < msgs.length; mi++) {
+    const msg = msgs[mi];
+    if (msg.role !== "assistant") continue;
+    for (const block of msg.content) {
+      if (block.type !== "toolExecution") continue;
+      const previous = bestToolExecutionById.get(block.toolCallId);
+      if (!previous || toolExecutionScore(block) >= toolExecutionScore(previous.block)) {
+        bestToolExecutionById.set(block.toolCallId, { msgIndex: mi, block });
+      }
+    }
+  }
+
+  if (bestToolExecutionById.size > 0) {
+    for (let mi = 0; mi < msgs.length; mi++) {
+      const msg = msgs[mi];
+      if (msg.role !== "assistant") continue;
+
+      let changed = false;
+      const newContent = msg.content.filter((block) => {
+        if (block.type !== "toolExecution") return true;
+        const best = bestToolExecutionById.get(block.toolCallId);
+        const keep = best?.msgIndex === mi && best.block === block;
+        if (!keep) changed = true;
+        return keep;
+      });
+
+      if (changed) {
+        msgs[mi] = { ...msg, content: newContent };
+      }
+    }
+  }
+
   if (toRemove.size > 0) {
     for (let i = msgs.length - 1; i >= 0; i--) {
       if (toRemove.has(i)) msgs.splice(i, 1);
+    }
+  }
+
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    if (msgs[i].role === "assistant" && msgs[i].content.length === 0) {
+      msgs.splice(i, 1);
     }
   }
 }

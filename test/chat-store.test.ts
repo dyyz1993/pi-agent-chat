@@ -350,6 +350,129 @@ describe("normalizeToolBlocks", () => {
     expect(blocks[0].output).toBe("waiting...");
     expect(msgs[0].content.some((b) => b.type === "toolCall")).toBe(false);
   });
+
+  it("deduplicates replayed tool calls across messages after reconnect", () => {
+    const msgs: ChatMessage[] = [
+      {
+        id: "m1",
+        role: "assistant",
+        content: [{ type: "toolCall", id: "tc-reconnect", name: "bash", input: "npm run build" }],
+        timestamp: 1,
+      },
+      {
+        id: "m2",
+        role: "assistant",
+        content: [
+          {
+            type: "toolExecution",
+            toolCallId: "tc-reconnect",
+            toolName: "bash",
+            args: "npm run build",
+            status: "running",
+            output: "waiting...",
+          },
+        ],
+        timestamp: 2,
+        isStreaming: true,
+      },
+    ];
+
+    normalizeToolBlocks(msgs, false, true);
+
+    const blocks = msgs.flatMap((msg) =>
+      msg.content.filter((b): b is Extract<ContentBlock, { type: "toolExecution" }> => b.type === "toolExecution"),
+    );
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].toolCallId).toBe("tc-reconnect");
+    expect(blocks[0].status).toBe("running");
+    expect(blocks[0].output).toBe("waiting...");
+    expect(msgs.some((msg) => msg.content.some((b) => b.type === "toolCall"))).toBe(false);
+  });
+
+  it("keeps completed tool execution over stale running execution after refresh", () => {
+    const msgs: ChatMessage[] = [
+      {
+        id: "m1",
+        role: "assistant",
+        content: [
+          {
+            type: "toolExecution",
+            toolCallId: "tc-refresh",
+            toolName: "write",
+            args: JSON.stringify({ path: "tmp/oss-test/test.mjs", content: "old" }),
+            status: "running",
+            output: "writing...",
+          },
+        ],
+        timestamp: 1,
+        isStreaming: true,
+      },
+      {
+        id: "m2",
+        role: "assistant",
+        content: [
+          {
+            type: "toolExecution",
+            toolCallId: "tc-refresh",
+            toolName: "write",
+            args: JSON.stringify({ path: "tmp/oss-test/test.mjs", content: "new" }),
+            status: "done",
+            output: "ok",
+            details: { filePath: "tmp/oss-test/test.mjs" },
+          },
+        ],
+        timestamp: 2,
+      },
+    ];
+
+    normalizeToolBlocks(msgs, false, true);
+
+    const blocks = msgs.flatMap((msg) =>
+      msg.content.filter((b): b is Extract<ContentBlock, { type: "toolExecution" }> => b.type === "toolExecution"),
+    );
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].toolName).toBe("write");
+    expect(blocks[0].status).toBe("done");
+    expect(blocks[0].output).toBe("ok");
+  });
+
+  it("removes empty assistant messages left by cross-message tool dedupe", () => {
+    const msgs: ChatMessage[] = [
+      {
+        id: "m1",
+        role: "assistant",
+        content: [
+          {
+            type: "toolExecution",
+            toolCallId: "tc-empty",
+            toolName: "edit",
+            args: JSON.stringify({ path: "a.ts", edits: [] }),
+            status: "running",
+          },
+        ],
+        timestamp: 1,
+      },
+      {
+        id: "m2",
+        role: "assistant",
+        content: [
+          {
+            type: "toolExecution",
+            toolCallId: "tc-empty",
+            toolName: "edit",
+            args: JSON.stringify({ path: "a.ts", edits: [] }),
+            status: "done",
+          },
+        ],
+        timestamp: 2,
+      },
+    ];
+
+    normalizeToolBlocks(msgs);
+
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0].id).toBe("m2");
+  });
 });
 
 describe("session isolation", () => {
