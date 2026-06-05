@@ -4,7 +4,7 @@ import type { ChatMessage, ContentBlock } from "../types";
 import { apiClient } from "../lib/api-client";
 import { useAppStore } from "./use-app-store";
 import { useNotificationStore } from "./use-notification-store";
-import { useSessionStore } from "./use-session-store";
+import { clearAgentStarted, markAgentStarted, useSessionStore } from "./use-session-store";
 import { useMemoryStore } from "./use-memory-store";
 import { ALL_MEMORY_TYPE_KEYS } from "../components/chat/memory-config";
 import { messageToChatMessage } from "../lib/message-mapper";
@@ -195,6 +195,73 @@ export function normalizeToolBlocks(
 
 const PAGE_SIZE = 50;
 const INPUT_DRAFT_KEY = "pi-input-draft";
+const SEND_TIMEOUT_MS = 60_000;
+
+function isAgentNotStartedError(err: unknown, sessionId: string): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.includes(`Agent not started for session ${sessionId}`);
+}
+
+async function sendAgentMessageWithTimeout(
+  sessionId: string,
+  content: string,
+  images: ImageContent[],
+): Promise<void> {
+  const sendPromise = apiClient.call("agent.send", {
+    sessionId,
+    content,
+    images,
+  });
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error("Send timed out (60s)")), SEND_TIMEOUT_MS),
+  );
+  await Promise.race([sendPromise, timeoutPromise]);
+}
+
+function findSessionForRestart(sessionId: string): { projectPath: string; sessionPath: string } | null {
+  const { sessionsByProject } = useSessionStore.getState();
+  for (const sessions of Object.values(sessionsByProject)) {
+    const session = sessions.find((s) => s.sessionId === sessionId);
+    if (session) {
+      return { projectPath: session.projectPath, sessionPath: session.sessionPath };
+    }
+  }
+  return null;
+}
+
+async function restartAgentForSend(sessionId: string): Promise<boolean> {
+  clearAgentStarted(sessionId);
+  const session = findSessionForRestart(sessionId);
+  if (!session) {
+    perfLog.warn("[send] restart skipped: session metadata missing", { sessionId });
+    return false;
+  }
+
+  perfLog.info("[send] restarting agent before retry", { sessionId });
+  const result = await apiClient.call("agent.start", {
+    sessionId,
+    projectPath: session.projectPath,
+    sessionPath: session.sessionPath,
+  });
+
+  if (
+    result.status !== "started" &&
+    result.status !== "already_running" &&
+    result.status !== "switched"
+  ) {
+    perfLog.warn("[send] restart returned unexpected status", {
+      sessionId,
+      status: result.status,
+    });
+    return false;
+  }
+
+  markAgentStarted(sessionId);
+  useSessionStore.setState((s) => ({
+    sessionReady: { ...s.sessionReady, [sessionId]: true },
+  }));
+  return true;
+}
 
 function getMessageRevisionKey(msg: ChatMessage): string {
   const record = msg as unknown as Record<string, unknown>;
@@ -326,66 +393,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ inputText: "" });
     writeDraft(sessionId, "");
 
-    try {
-      const sessionReady = useSessionStore.getState().sessionReady[sessionId];
-      if (!sessionReady) {
-        useAppStore.getState().addLog("Session not ready, cannot send");
-        useNotificationStore
-          .getState()
-          .push({ message: "Session not ready, please wait", level: "warning" });
-        set({ inputText: text });
-        return;
-      }
+    let sentImages: ImageContent[] = [];
+    let userMsgId: string | null = null;
 
-      const pendingImages = get().pendingImages;
-
-      const contentBlocks: ContentBlock[] = [{ type: "text", text }];
-      for (const img of pendingImages) {
-        contentBlocks.push({
-          type: "imageBlock",
-          url: `data:${img.mimeType};base64,${img.data}`,
-          alt: "uploaded image",
-        });
-      }
-
-      const userMsg: ChatMessage = {
-        id: `user_${Date.now()}`,
-        role: "user",
-        content: contentBlocks,
-        timestamp: Date.now(),
-        _local: true,
-      };
-      set((s) => {
-        const existing = s.messagesBySession[sessionId] || [];
-        return {
-          messagesBySession: {
-            ...s.messagesBySession,
-            [sessionId]: [...existing, userMsg],
-          },
-        };
-      });
-
-      set({ isStreaming: true, pendingImages: [] });
-      useSessionStore.getState().updateSessionStatus(sessionId, "streaming");
-
-      const SEND_TIMEOUT_MS = 60_000;
-      const sendT0 = performance.now();
-      perfLog.info("[send] begin", { sessionId });
-      const sendPromise = apiClient.call("agent.send", {
-        sessionId,
-        content: text,
-        images: pendingImages,
-      });
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("Send timed out (60s)")), SEND_TIMEOUT_MS),
-      );
-      await Promise.race([sendPromise, timeoutPromise]);
-      perfLog.info("[send] done", { sessionId, sendMs: Math.round(performance.now() - sendT0) });
-      set({ isStreaming: false });
-
+    const scheduleEmptyTurnCheck = () => {
+      if (!userMsgId) return;
       const EMPTY_TURN_CHECK_MS = 30_000;
       const checkSessionId = sessionId;
-      const checkUserMsgId = userMsg.id;
+      const checkUserMsgId = userMsgId;
       setTimeout(() => {
         const chat = get();
         const msgs = chat.messagesBySession[checkSessionId] || [];
@@ -417,7 +432,79 @@ export const useChatStore = create<ChatState>((set, get) => ({
           }
         }
       }, EMPTY_TURN_CHECK_MS);
+    };
+
+    try {
+      const sessionReady = useSessionStore.getState().sessionReady[sessionId];
+      if (!sessionReady) {
+        useAppStore.getState().addLog("Session not ready, cannot send");
+        useNotificationStore
+          .getState()
+          .push({ message: "Session not ready, please wait", level: "warning" });
+        set({ inputText: text });
+        return;
+      }
+
+      sentImages = get().pendingImages;
+
+      const contentBlocks: ContentBlock[] = [{ type: "text", text }];
+      for (const img of sentImages) {
+        contentBlocks.push({
+          type: "imageBlock",
+          url: `data:${img.mimeType};base64,${img.data}`,
+          alt: "uploaded image",
+        });
+      }
+
+      const userMsg: ChatMessage = {
+        id: `user_${Date.now()}`,
+        role: "user",
+        content: contentBlocks,
+        timestamp: Date.now(),
+        _local: true,
+      };
+      userMsgId = userMsg.id;
+      set((s) => {
+        const existing = s.messagesBySession[sessionId] || [];
+        return {
+          messagesBySession: {
+            ...s.messagesBySession,
+            [sessionId]: [...existing, userMsg],
+          },
+        };
+      });
+
+      set({ isStreaming: true, pendingImages: [] });
+      useSessionStore.getState().updateSessionStatus(sessionId, "streaming");
+
+      const sendT0 = performance.now();
+      perfLog.info("[send] begin", { sessionId });
+      await sendAgentMessageWithTimeout(sessionId, text, sentImages);
+      perfLog.info("[send] done", { sessionId, sendMs: Math.round(performance.now() - sendT0) });
+      set({ isStreaming: false });
+      scheduleEmptyTurnCheck();
     } catch (err) {
+      let finalErr = err;
+      if (isAgentNotStartedError(err, sessionId)) {
+        try {
+          const restarted = await restartAgentForSend(sessionId);
+          if (restarted) {
+            const retryT0 = performance.now();
+            perfLog.info("[send] retry begin", { sessionId });
+            await sendAgentMessageWithTimeout(sessionId, text, sentImages);
+            perfLog.info("[send] retry done", {
+              sessionId,
+              retryMs: Math.round(performance.now() - retryT0),
+            });
+            set({ isStreaming: false });
+            scheduleEmptyTurnCheck();
+            return;
+          }
+        } catch (retryErr) {
+          finalErr = retryErr;
+        }
+      }
+
       set((s) => {
         const msgs = s.messagesBySession[sessionId] || [];
         return {
@@ -429,7 +516,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         };
       });
       useSessionStore.getState().updateSessionStatus(sessionId, "idle");
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = finalErr instanceof Error ? finalErr.message : String(finalErr);
       useAppStore.getState().addLog(`Send error: ${msg}`);
       useNotificationStore.getState().push({ message: `Send failed: ${msg}`, level: "error" });
       set({ inputText: text });
