@@ -13,10 +13,6 @@ import type {
   ChannelDataEvent,
   ExtensionUIRequestEvent,
 } from "../modules/agent";
-import type { TodoChannelEvent } from "../modules/todo";
-import type { BashChannelEvent } from "../modules/bash";
-import type { LspChannelEvent } from "../modules/lsp";
-import type { RulesChannelEvent } from "../modules/rules";
 import type { RpcClientAPI, ChannelTypeRegistry } from "@dyyz1993/pi-coding-agent";
 import type { TreeEntry } from "../modules/agent";
 import { performance } from "perf_hooks";
@@ -81,12 +77,17 @@ import {
   writeDelegateSessionHeader,
 } from "./coordinator-delegate-utils";
 import {
-  applyBashBackgroundToolState,
-  buildLspLogData,
-  createMemoryBroadcast,
-  deriveLspState,
   type CachedLspState,
 } from "./agent-channel-state";
+import {
+  handleBashChannelDataOperation,
+  handleLspChannelDataOperation,
+  handleMemoryChannelDataOperation,
+  handleRulesChannelDataOperation,
+  handleSubagentChannelDataOperation,
+  handleSupervisorChannelDataOperation,
+  handleTodoChannelDataOperation,
+} from "./agent-channel-handlers";
 import {
   addToProcessPool,
   makeProcessPoolKey,
@@ -183,11 +184,6 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
       setTimeout(() => reject(new Error(`${label} timed out (${ms}ms)`)), ms),
     ),
   ]);
-}
-
-interface SubagentChannelPayload {
-  sessionId: string;
-  event: Record<string, unknown>;
 }
 
 type RpcClientInstance = RpcClientAPI;
@@ -2320,126 +2316,94 @@ export class AgentProcessManager {
     parentSessionId: string,
     channelMsg: ChannelDataEvent,
   ): Promise<void> {
-    const data = channelMsg.data as unknown as SubagentChannelPayload | undefined;
-    if (!data) return;
-
-    const { event: subEvent, sessionId: subSessionId } = data;
-    if (!subEvent || !subSessionId) return;
-
-    const eventType = subEvent.type as string;
-    if (eventType === "response") return;
-
-    const managed = this.clients.get(parentSessionId);
-    const sessionPath = managed?.info.sessionPath ?? "";
-
-    if (eventType === "message_end" && subEvent.message) {
-      const msg = subEvent.message as { content?: Array<{ type: string; text?: string }> };
-      if (Array.isArray(msg.content)) {
-        for (const part of msg.content) {
-          if (part.type === "text") {
-            log.info("Subagent final text", {
-              parentSessionId,
-              subSessionId,
-              textLength: part.text?.length,
-            });
-          }
-        }
-      }
-    }
-
-    await this.broadcastEvent(
-      "subagent.event",
-      { parentSessionId, parentSessionPath: sessionPath, subSessionId, event: subEvent },
-      { parentSessionId },
-    );
+    await handleSubagentChannelDataOperation({
+      parentSessionId,
+      channelMsg,
+      getManagedState: (id) => {
+        const managed = this.clients.get(id);
+        if (!managed) return null;
+        return {
+          sessionPath: managed.info.sessionPath,
+          activeBackgroundTools: managed.activeBackgroundTools,
+        };
+      },
+      broadcastEvent: (name, payload, filter) => this.broadcastEvent(name, payload, filter),
+    });
   }
 
   private async handleTodoChannelData(
     sessionId: string,
     channelMsg: ChannelDataEvent,
   ): Promise<void> {
-    const data = channelMsg.data as unknown as TodoChannelEvent | undefined;
-    if (!data) return;
-
-    log.info("Todo channel data", { sessionId, action: data.action, count: data.todos?.length });
-
-    await this.broadcastEvent(
-      "todo.event",
-      { sessionId, action: data.action, todos: data.todos, timestamp: data.timestamp },
-      { sessionId },
-    );
+    await handleTodoChannelDataOperation({
+      sessionId,
+      channelMsg,
+      broadcastEvent: (name, payload, filter) => this.broadcastEvent(name, payload, filter),
+    });
   }
 
   private async handleBashChannelData(
     sessionId: string,
     channelMsg: ChannelDataEvent,
   ): Promise<void> {
-    const data = channelMsg.data as unknown as BashChannelEvent | undefined;
-    if (!data) return;
-
-    log.info("Bash channel data", { sessionId, type: data.type, toolCallId: data.toolCallId });
-
-    const managed = this.clients.get(sessionId);
-    if (managed) {
-      applyBashBackgroundToolState(managed.activeBackgroundTools, data);
-    }
-
-    await this.broadcastEvent("bash.event", { sessionId, event: data }, { sessionId });
+    await handleBashChannelDataOperation({
+      sessionId,
+      channelMsg,
+      getManagedState: (id) => {
+        const managed = this.clients.get(id);
+        if (!managed) return null;
+        return {
+          sessionPath: managed.info.sessionPath,
+          activeBackgroundTools: managed.activeBackgroundTools,
+        };
+      },
+      broadcastEvent: (name, payload, filter) => this.broadcastEvent(name, payload, filter),
+    });
   }
 
   private async handleSupervisorChannelData(
     sessionId: string,
     channelMsg: ChannelDataEvent,
   ): Promise<void> {
-    const data = channelMsg.data as Record<string, unknown> | undefined;
-    if (!data) return;
-
-    log.info("Supervisor channel data", { sessionId, type: data.type });
-
-    await this.broadcastEvent("supervisor.event", { sessionId, event: data }, { sessionId });
+    await handleSupervisorChannelDataOperation({
+      sessionId,
+      channelMsg,
+      broadcastEvent: (name, payload, filter) => this.broadcastEvent(name, payload, filter),
+    });
   }
 
   private async handleLspChannelData(
     sessionId: string,
     channelMsg: ChannelDataEvent,
   ): Promise<void> {
-    const data = channelMsg.data as unknown as LspChannelEvent | undefined;
-    if (!data) return;
-
-    log.info("LSP channel data", buildLspLogData(sessionId, data));
-
-    const nextState = deriveLspState(this.lastLspState.get(sessionId), data);
-    if (nextState) {
-      this.lastLspState.set(sessionId, nextState);
-    }
+    await handleLspChannelDataOperation({
+      sessionId,
+      channelMsg,
+      getCachedState: (id) => this.lastLspState.get(id),
+      setCachedState: (id, state) => this.lastLspState.set(id, state),
+    });
   }
 
   private async handleRulesChannelData(
     sessionId: string,
     channelMsg: ChannelDataEvent,
   ): Promise<void> {
-    const data = channelMsg.data as RulesChannelEvent;
-    if (!data) return;
-
-    log.info("Rules channel data", { sessionId, type: data.type });
-
-    await this.broadcastEvent("rules.event", { sessionId, event: data }, { sessionId });
+    await handleRulesChannelDataOperation({
+      sessionId,
+      channelMsg,
+      broadcastEvent: (name, payload, filter) => this.broadcastEvent(name, payload, filter),
+    });
   }
 
   private async handleMemoryChannelData(
     sessionId: string,
     channelMsg: ChannelDataEvent,
   ): Promise<void> {
-    const data = channelMsg.data as Record<string, unknown> | undefined;
-    if (!data) return;
-
-    const eventType = data.type as string;
-    log.info("Memory channel data", { sessionId, type: eventType });
-
-    const broadcast = createMemoryBroadcast(sessionId, data, Date.now());
-    if (broadcast) {
-      await this.broadcastEvent(broadcast.name, broadcast.payload, { sessionId });
-    }
+    await handleMemoryChannelDataOperation({
+      sessionId,
+      channelMsg,
+      broadcastEvent: (name, payload, filter) => this.broadcastEvent(name, payload, filter),
+    });
   }
 
   private async handleCoordinatorCall(
