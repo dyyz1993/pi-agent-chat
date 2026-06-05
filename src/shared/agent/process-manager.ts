@@ -66,6 +66,12 @@ import {
   getStateOperation,
 } from "./agent-client-state-operations";
 import {
+  abortOperation,
+  followUpOperation,
+  sendPromptOperation,
+  steerOperation,
+} from "./agent-client-lifecycle-operations";
+import {
   createRpcClient,
   getSandboxEndpoint,
   getSandboxManager,
@@ -600,30 +606,16 @@ export class AgentProcessManager {
     content: string,
     images?: import("@dyyz1993/pi-ai").ImageContent[],
   ): Promise<boolean> {
-    let managed = this.getActiveManaged(sessionId);
-    if (!managed) {
-      managed = await this.ensureManagedClient(sessionId);
-    }
-    if (!managed) {
-      log.warn("send: no client after ensure", { sessionId });
-      return false;
-    }
-    managed.lastActiveAt = Date.now();
-    managed.client.prompt(content, images).catch(async (err: Error) => {
-      log.warn("prompt error", { err: err.message });
-      if (!(await this.isClientAlive(sessionId, managed!))) {
-        this.cleanupDeadClient(sessionId, `prompt failed: ${err.message}`);
-        return;
-      }
-      this.emitAgentEvent(sessionId, { type: "agent_end" } as SanitizedEvent).catch(
-        (emitErr: unknown) => {
-          log.warn("emitAgentEvent(agent_end) after prompt error", {
-            err: emitErr instanceof Error ? emitErr.message : String(emitErr),
-          });
-        },
-      );
+    return sendPromptOperation({
+      sessionId,
+      content,
+      images,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+      ensureManagedClient: (id) => this.ensureManagedClient(id),
+      isClientAlive: (id, managed) => this.isClientAlive(id, managed),
+      cleanupDeadClient: (id, reason) => this.cleanupDeadClient(id, reason),
+      emitAgentEnd: (id) => this.emitAgentEvent(id, { type: "agent_end" } as SanitizedEvent),
     });
-    return true;
   }
 
   steer(
@@ -631,12 +623,12 @@ export class AgentProcessManager {
     content: string,
     images?: import("@dyyz1993/pi-ai").ImageContent[],
   ): boolean {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return false;
-    managed.client.steer(content, images).catch((err: unknown) => {
-      log.warn("steer error", { sessionId, err: err instanceof Error ? err.message : String(err) });
+    return steerOperation({
+      sessionId,
+      content,
+      images,
+      getActiveManaged: (id) => this.getActiveManaged(id),
     });
-    return true;
   }
 
   followUp(
@@ -644,32 +636,21 @@ export class AgentProcessManager {
     content: string,
     images?: import("@dyyz1993/pi-ai").ImageContent[],
   ): boolean {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return false;
-    managed.client.followUp(content, images).catch((err: unknown) => {
-      log.warn("followUp error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
+    return followUpOperation({
+      sessionId,
+      content,
+      images,
+      getActiveManaged: (id) => this.getActiveManaged(id),
     });
-    return true;
   }
 
   async abort(sessionId: string): Promise<boolean> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) {
-      this.broadcastSessionStatus(sessionId, "idle");
-      return false;
-    }
-    await managed.client.abort().catch((err: unknown) => {
-      log.warn("abort error", { sessionId, err: err instanceof Error ? err.message : String(err) });
+    return abortOperation({
+      sessionId,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+      broadcastIdle: (id) => this.broadcastSessionStatus(id, "idle"),
+      emitAgentEvent: (id, event) => this.emitAgentEvent(id, event),
     });
-    managed.info.status = "idle";
-    managed.lastActiveAt = Date.now();
-    managed.info.holdEvents = [];
-    this.broadcastSessionStatus(sessionId, "idle");
-    await this.emitAgentEvent(sessionId, { type: "agent_end" } as SanitizedEvent);
-    return true;
   }
 
   async setCwd(sessionId: string, cwd: string): Promise<boolean> {
