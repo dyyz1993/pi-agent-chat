@@ -102,6 +102,27 @@ import {
   switchAgentOperation,
 } from "./agent-client-command-operations";
 import {
+  abortRetryOperation,
+  clearQueueOperation,
+  compactOperation,
+  getActiveToolsOperation,
+  getContextUsageOperation,
+  getExtensionsOperation,
+  getMcpServersOperation,
+  getQueueOperation,
+  getSkillsOperation,
+  getToolsOperation,
+  reloadOperation,
+  restartMcpServerOperation,
+  setActiveToolsOperation,
+  setAutoCompactionOperation,
+  setAutoRetryOperation,
+  setFollowUpModeOperation,
+  setPermissionModeOperation,
+  setSteeringModeOperation,
+  toggleMcpServerOperation,
+} from "./agent-client-session-operations";
+import {
   appendFullJsonlEntry,
   appendUiJsonlEntry,
   filterMessagesToBranch,
@@ -1487,128 +1508,87 @@ export class AgentProcessManager {
     sessionId: string,
     customInstructions?: string,
   ): Promise<{ summary: string; tokensBefore: number }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) throw new Error("Client not found");
-    return withTimeout(managed.client.compact(customInstructions), 120_000, "compact");
+    return compactOperation({
+      sessionId,
+      customInstructions,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+    });
   }
 
   async setAutoCompaction(sessionId: string, enabled: boolean): Promise<void> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return;
-    await managed.client.setAutoCompaction(enabled).catch((err: unknown) => {
-      log.warn("setAutoCompaction error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
+    await setAutoCompactionOperation({
+      sessionId,
+      enabled,
+      getActiveManaged: (id) => this.getActiveManaged(id),
     });
   }
 
   async setAutoRetry(sessionId: string, enabled: boolean): Promise<void> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return;
-    await managed.client.setAutoRetry(enabled).catch((err: unknown) => {
-      log.warn("setAutoRetry error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
+    await setAutoRetryOperation({
+      sessionId,
+      enabled,
+      getActiveManaged: (id) => this.getActiveManaged(id),
     });
   }
 
   async abortRetry(sessionId: string): Promise<void> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return;
-    await managed.client.abortRetry().catch((err: unknown) => {
-      log.warn("abortRetry error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
+    await abortRetryOperation({
+      sessionId,
+      getActiveManaged: (id) => this.getActiveManaged(id),
     });
   }
 
   async setSteeringMode(sessionId: string, mode: string): Promise<void> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return;
-    await managed.client.setSteeringMode(mode as "all" | "one-at-a-time").catch((err: unknown) => {
-      log.warn("setSteeringMode error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
+    await setSteeringModeOperation({
+      sessionId,
+      mode,
+      getActiveManaged: (id) => this.getActiveManaged(id),
     });
   }
 
   async setFollowUpMode(sessionId: string, mode: string): Promise<void> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return;
-    await managed.client.setFollowUpMode(mode as "all" | "one-at-a-time").catch((err: unknown) => {
-      log.warn("setFollowUpMode error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
+    await setFollowUpModeOperation({
+      sessionId,
+      mode,
+      getActiveManaged: (id) => this.getActiveManaged(id),
     });
   }
 
   async setPermissionMode(sessionId: string, mode: string): Promise<{ mode: string }> {
-    let managed = this.getActiveManaged(sessionId);
-    if (!managed) {
-      managed = await this.ensureManagedClient(sessionId);
-    }
-    if (!managed) throw new Error("Client not found");
-    return withTimeout(
-      managed.client.setPermissionMode(
-        mode as Parameters<typeof managed.client.setPermissionMode>[0],
-      ),
-      15_000,
-      "setPermissionMode",
-    );
+    return setPermissionModeOperation({
+      sessionId,
+      mode,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+      ensureManagedClient: (id) => this.ensureManagedClient(id),
+    });
   }
 
   async getActiveTools(sessionId: string): Promise<{ toolNames: string[] }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return { toolNames: [] };
-    try {
-      const result = await withTimeout(managed.client.getActiveTools(), 10_000, "getActiveTools");
-      return { toolNames: Array.isArray(result) ? result : [] };
-    } catch (err: unknown) {
-      log.warn("getActiveTools error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return { toolNames: [] };
-    }
+    return getActiveToolsOperation({
+      sessionId,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+    });
   }
 
   async setActiveTools(sessionId: string, toolNames: string[]): Promise<void> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return;
-    await managed.client.setActiveTools(toolNames).catch((err: unknown) => {
-      log.warn("setActiveTools error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
+    await setActiveToolsOperation({
+      sessionId,
+      toolNames,
+      getActiveManaged: (id) => this.getActiveManaged(id),
     });
   }
 
   async getQueue(sessionId: string): Promise<{ steering: string[]; followUp: string[] }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return { steering: [], followUp: [] };
-    return managed.client.getQueue().catch((err: unknown) => {
-      log.warn("getQueue error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return { steering: [], followUp: [] };
+    return getQueueOperation({
+      sessionId,
+      getActiveManaged: (id) => this.getActiveManaged(id),
     });
   }
 
   async clearQueue(sessionId: string): Promise<{ steering: string[]; followUp: string[] }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return { steering: [], followUp: [] };
-    return managed.client.clearQueue().catch((err: unknown) => {
-      log.warn("clearQueue error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return { steering: [], followUp: [] };
+    return clearQueueOperation({
+      sessionId,
+      getActiveManaged: (id) => this.getActiveManaged(id),
     });
   }
 
@@ -1620,18 +1600,10 @@ export class AgentProcessManager {
       commandNames: string[];
     }>;
   }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return { extensions: [] };
-    try {
-      const result = await withTimeout(managed.client.getExtensions(), 10_000, "getExtensions");
-      return { extensions: Array.isArray(result) ? result : [] };
-    } catch (err: unknown) {
-      log.warn("getExtensions error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return { extensions: [] };
-    }
+    return getExtensionsOperation({
+      sessionId,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+    });
   }
 
   async getSkills(sessionId: string): Promise<{
@@ -1643,56 +1615,33 @@ export class AgentProcessManager {
       disableModelInvocation: boolean;
     }>;
   }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return { skills: [] };
-    try {
-      const result = await withTimeout(managed.client.getSkills(), 10_000, "getSkills");
-      return { skills: Array.isArray(result) ? result : [] };
-    } catch (err: unknown) {
-      log.warn("getSkills error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return { skills: [] };
-    }
+    return getSkillsOperation({
+      sessionId,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+    });
   }
 
   async reload(sessionId: string): Promise<void> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return;
-    await withTimeout(managed.client.reload(), 30_000, "reload");
+    await reloadOperation({
+      sessionId,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+    });
   }
 
   async getTools(
     sessionId: string,
   ): Promise<{ tools: Array<{ name: string; label: string; description: string }> }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return { tools: [] };
-    try {
-      const result = await withTimeout(managed.client.getTools(), 10_000, "getTools");
-      return { tools: Array.isArray(result) ? result : [] };
-    } catch (err: unknown) {
-      log.warn("getTools error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return { tools: [] };
-    }
+    return getToolsOperation({
+      sessionId,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+    });
   }
 
   async getMcpServers(sessionId: string): Promise<{ servers: McpServerInfo[] }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return { servers: [] };
-    try {
-      const servers = await withTimeout(managed.client.getMcpServers(), 10_000, "getMcpServers");
-      return { servers: Array.isArray(servers) ? servers : [] };
-    } catch (err) {
-      log.warn("getMcpServers error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return { servers: [] };
-    }
+    return getMcpServersOperation({
+      sessionId,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+    });
   }
 
   async toggleMcpServer(
@@ -1700,52 +1649,34 @@ export class AgentProcessManager {
     name: string,
     enabled: boolean,
   ): Promise<{ success: boolean; error?: string }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return { success: false, error: "Client not found" };
-    try {
-      await managed.client.toggleMcpServer(name, enabled);
-      return { success: true };
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.warn("toggleMcpServer error", { sessionId, err: msg });
-      return { success: false, error: msg };
-    }
+    return toggleMcpServerOperation({
+      sessionId,
+      name,
+      enabled,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+    });
   }
 
   async restartMcpServer(
     sessionId: string,
     name: string,
   ): Promise<{ success: boolean; error?: string }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return { success: false, error: "Client not found" };
-    try {
-      await managed.client.restartMcpServer(name);
-      return { success: true };
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.warn("restartMcpServer error", { sessionId, err: msg });
-      return { success: false, error: msg };
-    }
+    return restartMcpServerOperation({
+      sessionId,
+      name,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+    });
   }
 
   async getContextUsage(
     sessionId: string,
   ): Promise<{ tokens: number | null; contextWindow: number; percent: number | null }> {
-    let managed = this.getActiveManaged(sessionId);
-    if (!managed) {
-      managed = await this.ensureManagedClient(sessionId);
-    }
-    if (!managed) return { tokens: null, contextWindow: 0, percent: null };
-    return managed.client.getContextUsage().catch(async (err: unknown) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.warn("getContextUsage error, checking if CLI is alive", {
-        sessionId,
-        err: msg,
-      });
-      if (!(await this.isClientAlive(sessionId, managed))) {
-        this.cleanupDeadClient(sessionId, `getContextUsage failed: ${msg}`);
-      }
-      return { tokens: null, contextWindow: 0, percent: null };
+    return getContextUsageOperation({
+      sessionId,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+      ensureManagedClient: (id) => this.ensureManagedClient(id),
+      isClientAlive: (id, managed) => this.isClientAlive(id, managed),
+      cleanupDeadClient: (id, reason) => this.cleanupDeadClient(id, reason),
     });
   }
 
