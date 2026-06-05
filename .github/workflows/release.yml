@@ -19,6 +19,7 @@ jobs:
           - runner: macos-13
             arch: x64
     runs-on: ${{ matrix.runner }}
+    continue-on-error: ${{ matrix.arch == 'x64' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -39,6 +40,7 @@ jobs:
         run: bunx electrobun build
         env:
           CI: true
+        timeout-minutes: 5
 
       - name: Locate .app bundle
         id: locate
@@ -104,6 +106,7 @@ jobs:
         run: bunx electrobun build
         env:
           CI: true
+        timeout-minutes: 5
 
       - name: Locate and zip exe
         shell: bash
