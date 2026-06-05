@@ -1,14 +1,11 @@
 import type { RPCServer } from "@dyyz1993/rpc-core";
 import type {
   AgentEvent,
-  AgentMessageForUI,
   ChannelDataEvent,
 } from "../modules/agent";
 import type { RpcClientAPI, ChannelTypeRegistry } from "@dyyz1993/pi-coding-agent";
 import type { TreeEntry } from "../modules/agent";
 import { performance } from "perf_hooks";
-
-type McpServerInfo = Awaited<ReturnType<RpcClientInstance["getMcpServers"]>>[number];
 
 type ChannelMethodKeys<CN extends keyof ChannelTypeRegistry> = keyof NonNullable<
   ChannelTypeRegistry[CN]["methods"]
@@ -29,6 +26,10 @@ import { createLogger } from "../lib/logger";
 import { config } from "../../server-config";
 import { findSessionById } from "../lib/session-scanner";
 import {
+  createAgentClientApiAdapter,
+  type AgentClientApiAdapter,
+} from "./agent-client-api-adapter";
+import {
   compactHoldEventsForReplay,
   type SanitizedEvent,
 } from "./hold-events";
@@ -39,22 +40,7 @@ import {
   type SessionCustomEntry,
   type SessionMessageEntry,
 } from "./session-message-cache";
-import {
-  type TierKey,
-} from "./agent-runtime-config";
-import {
-  cycleModelOperation,
-  cycleThinkingLevelOperation,
-  getAvailableModelsOperation,
-  setModelOperation,
-  setThinkingLevelOperation,
-  switchTierOperation,
-} from "./agent-client-model-operations";
-import {
-  getCommandsOperation,
-  getSessionStatsOperation,
-  getStateOperation,
-} from "./agent-client-state-operations";
+import { getStateOperation } from "./agent-client-state-operations";
 import {
   abortOperation,
   followUpOperation,
@@ -92,51 +78,17 @@ import {
   selectLruEvictionCandidate,
 } from "./agent-process-pool";
 import {
-  getAgentsOperation,
-  getCurrentAgentOperation,
-  getLatestAgentChangeOperation,
-  getTierModelsOperation,
-  setTierModelsOperation,
-  switchAgentOperation,
-} from "./agent-client-command-operations";
-import {
-  abortRetryOperation,
-  clearQueueOperation,
-  compactOperation,
-  getActiveToolsOperation,
-  getContextUsageOperation,
-  getExtensionsOperation,
-  getMcpServersOperation,
-  getQueueOperation,
-  getSkillsOperation,
-  getToolsOperation,
-  reloadOperation,
-  restartMcpServerOperation,
-  setActiveToolsOperation,
-  setAutoCompactionOperation,
-  setAutoRetryOperation,
-  setFollowUpModeOperation,
-  setPermissionModeOperation,
-  setSteeringModeOperation,
-  toggleMcpServerOperation,
-} from "./agent-client-session-operations";
-import {
   cloneOperation,
   exportHtmlOperation,
   forkOperation,
   getBatchDiffsOperation,
   getFileDiffOperation,
   getForkMessagesOperation,
-  getLastAssistantTextOperation,
   getModifiedFilesOperation,
   newSessionOperation,
   previewRollbackOperation,
   restoreFilesFromSnapshotOperation,
 } from "./agent-client-history-operations";
-import {
-  getFullMessagesOperation,
-  getMessagesOperation,
-} from "./agent-client-message-operations";
 import { registerAgentChannels } from "./agent-channel-registration";
 import { handleAgentEventOperation } from "./agent-event-routing";
 import {
@@ -192,6 +144,49 @@ interface ManagedClient {
 import type { AgentProcessInfo } from "../modules/agent";
 
 export class AgentProcessManager {
+  declare getCommands: AgentClientApiAdapter["getCommands"];
+  declare getSessionStats: AgentClientApiAdapter["getSessionStats"];
+  declare getMessages: AgentClientApiAdapter["getMessages"];
+  declare getFullMessages: AgentClientApiAdapter["getFullMessages"];
+  declare getAvailableModels: AgentClientApiAdapter["getAvailableModels"];
+  declare setModel: AgentClientApiAdapter["setModel"];
+  declare switchTier: AgentClientApiAdapter["switchTier"];
+  declare cycleModel: AgentClientApiAdapter["cycleModel"];
+  declare setThinkingLevel: AgentClientApiAdapter["setThinkingLevel"];
+  declare cycleThinkingLevel: AgentClientApiAdapter["cycleThinkingLevel"];
+  declare compact: AgentClientApiAdapter["compact"];
+  declare setAutoCompaction: AgentClientApiAdapter["setAutoCompaction"];
+  declare setAutoRetry: AgentClientApiAdapter["setAutoRetry"];
+  declare abortRetry: AgentClientApiAdapter["abortRetry"];
+  declare setSteeringMode: AgentClientApiAdapter["setSteeringMode"];
+  declare setFollowUpMode: AgentClientApiAdapter["setFollowUpMode"];
+  declare setPermissionMode: AgentClientApiAdapter["setPermissionMode"];
+  declare getActiveTools: AgentClientApiAdapter["getActiveTools"];
+  declare setActiveTools: AgentClientApiAdapter["setActiveTools"];
+  declare getQueue: AgentClientApiAdapter["getQueue"];
+  declare clearQueue: AgentClientApiAdapter["clearQueue"];
+  declare getExtensions: AgentClientApiAdapter["getExtensions"];
+  declare getSkills: AgentClientApiAdapter["getSkills"];
+  declare reload: AgentClientApiAdapter["reload"];
+  declare getTools: AgentClientApiAdapter["getTools"];
+  declare getMcpServers: AgentClientApiAdapter["getMcpServers"];
+  declare toggleMcpServer: AgentClientApiAdapter["toggleMcpServer"];
+  declare restartMcpServer: AgentClientApiAdapter["restartMcpServer"];
+  declare getContextUsage: AgentClientApiAdapter["getContextUsage"];
+  declare getTierModels: AgentClientApiAdapter["getTierModels"];
+  declare setTierModels: AgentClientApiAdapter["setTierModels"];
+  declare getAgents: AgentClientApiAdapter["getAgents"];
+  declare switchAgent: AgentClientApiAdapter["switchAgent"];
+  declare getCurrentAgent: AgentClientApiAdapter["getCurrentAgent"];
+  declare getAgentDetail: AgentClientApiAdapter["getAgentDetail"];
+  declare getAllTools: AgentClientApiAdapter["getAllTools"];
+  declare getSystemPrompt: AgentClientApiAdapter["getSystemPrompt"];
+  declare getLatestAgentChange: AgentClientApiAdapter["getLatestAgentChange"];
+  declare getSettings: AgentClientApiAdapter["getSettings"];
+  declare setSettings: AgentClientApiAdapter["setSettings"];
+  declare setSessionName: AgentClientApiAdapter["setSessionName"];
+  declare getLastAssistantText: AgentClientApiAdapter["getLastAssistantText"];
+
   private clients = new Map<string, ManagedClient>();
   /** CWD-based process tracking: projectPath → set of ManagedClients for that project */
   private processByCwd = new Map<string, Set<ManagedClient>>();
@@ -340,6 +335,22 @@ export class AgentProcessManager {
 
   constructor(server: RPCServer) {
     this.servers.add(server);
+    Object.assign(
+      this,
+      createAgentClientApiAdapter({
+        getActiveManaged: (id) => this.getActiveManaged(id),
+        ensureManagedClient: (id) => this.ensureManagedClient(id),
+        isClientAlive: (id, managed) => this.isClientAlive(id, managed),
+        cleanupDeadClient: (id, reason) => this.cleanupDeadClient(id, reason),
+        resolveSessionPath: (id) => this.resolveSessionPath(id),
+        buildMessagesFromJsonl: (entries, leafId) =>
+          this.buildMessagesFromJsonl(entries, leafId),
+        leafIds: this.leafIds,
+        getSandboxUserId: (id) => this._getSandboxUserId(id),
+        broadcastEvent: (eventName, payload, metadata) =>
+          this.broadcastEvent(eventName, payload, metadata),
+      }),
+    );
   }
 
   updateServer(server: RPCServer): void {
@@ -678,481 +689,6 @@ export class AgentProcessManager {
       ensureManagedClient: (id) => this.ensureManagedClient(id),
       isClientAlive: (id, managed) => this.isClientAlive(id, managed),
       cleanupDeadClient: (id, reason) => this.cleanupDeadClient(id, reason),
-    });
-  }
-
-  async getCommands(
-    sessionId: string,
-  ): Promise<
-    Array<{ name: string; description: string; source: "extension" | "prompt" | "skill" }>
-  > {
-    return getCommandsOperation({
-      sessionId,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-    });
-  }
-
-  async getSessionStats(sessionId: string): Promise<{
-    tokens: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number };
-    cost: number;
-    contextUsage?: { tokens: number | null; contextWindow: number; percent: number | null };
-  } | null> {
-    return getSessionStatsOperation({
-      sessionId,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-      isClientAlive: (id, managed) => this.isClientAlive(id, managed),
-      cleanupDeadClient: (id, reason) => this.cleanupDeadClient(id, reason),
-    });
-  }
-
-  async getMessages(
-    sessionId: string,
-    sessionPath?: string,
-  ): Promise<{
-    messages: AgentMessageForUI[];
-    customEntries: Array<{ id: string; customType: string; data: unknown; timestamp: number }>;
-  }> {
-    const sandboxManager = getSandboxManager();
-    return getMessagesOperation({
-      sessionId,
-      sessionPath,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-      resolveSessionPath: (id) => this.resolveSessionPath(id),
-      readJsonlEntries: readJsonlTreeEntriesOperation,
-      buildMessagesFromJsonl: (entries, leafId) => this.buildMessagesFromJsonl(entries, leafId),
-      leafIds: this.leafIds,
-      readSandboxFile:
-        sandboxManager
-          ? async (pathToRead) => {
-              const userId = this._getSandboxUserId(sessionId);
-              return userId ? sandboxManager.execInSandbox(userId, `cat ${pathToRead}`) : "";
-            }
-          : undefined,
-    });
-  }
-
-  async getFullMessages(
-    sessionId: string,
-    sessionPath?: string,
-    options?: { limit?: number; afterEntryId?: string },
-  ): Promise<{
-    messages: AgentMessageForUI[];
-    customEntries: Array<{ id: string; customType: string; data: unknown; timestamp: number }>;
-    hasMore: boolean;
-    totalCount: number;
-    nextCursor: string | null;
-  }> {
-    const sandboxManager = getSandboxManager();
-    return getFullMessagesOperation({
-      sessionId,
-      sessionPath,
-      pagination: options,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-      resolveSessionPath: (id) => this.resolveSessionPath(id),
-      leafIds: this.leafIds,
-      readSandboxFile: sandboxManager
-        ? async (pathToRead) => {
-            const userId = this._getSandboxUserId(sessionId);
-            return userId ? sandboxManager.execInSandbox(userId, `cat ${pathToRead}`) : "";
-          }
-        : undefined,
-    });
-  }
-
-  async getAvailableModels(
-    sessionId: string,
-  ): Promise<Array<{ provider: string; id: string; contextWindow: number; reasoning: boolean }>> {
-    return getAvailableModelsOperation({
-      sessionId,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-      ensureManagedClient: (id) => this.ensureManagedClient(id),
-      isClientAlive: (id, managed) => this.isClientAlive(id, managed),
-      cleanupDeadClient: (id, reason) => this.cleanupDeadClient(id, reason),
-    });
-  }
-
-  async setModel(
-    sessionId: string,
-    provider: string,
-    modelId: string,
-  ): Promise<{ provider: string; id: string }> {
-    return setModelOperation({
-      sessionId,
-      provider,
-      modelId,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-      ensureManagedClient: (id) => this.ensureManagedClient(id),
-    });
-  }
-
-  async switchTier(
-    sessionId: string,
-    tier: TierKey,
-  ): Promise<{ provider: string; id: string; tier: TierKey }> {
-    return switchTierOperation({
-      tier,
-      getTierModels: () => this.getTierModels(sessionId),
-      setModel: (provider, modelId) => this.setModel(sessionId, provider, modelId),
-    });
-  }
-
-  async cycleModel(sessionId: string): Promise<{
-    model: { provider: string; id: string };
-    thinkingLevel: string;
-    isScoped: boolean;
-  } | null> {
-    return cycleModelOperation({
-      sessionId,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-      ensureManagedClient: (id) => this.ensureManagedClient(id),
-    });
-  }
-
-  async setThinkingLevel(sessionId: string, level: string): Promise<void> {
-    await setThinkingLevelOperation({
-      sessionId,
-      level,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-    });
-  }
-
-  async cycleThinkingLevel(sessionId: string): Promise<{ level: string } | null> {
-    return cycleThinkingLevelOperation({
-      sessionId,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-    });
-  }
-
-  async compact(
-    sessionId: string,
-    customInstructions?: string,
-  ): Promise<{ summary: string; tokensBefore: number }> {
-    return compactOperation({
-      sessionId,
-      customInstructions,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-    });
-  }
-
-  async setAutoCompaction(sessionId: string, enabled: boolean): Promise<void> {
-    await setAutoCompactionOperation({
-      sessionId,
-      enabled,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-    });
-  }
-
-  async setAutoRetry(sessionId: string, enabled: boolean): Promise<void> {
-    await setAutoRetryOperation({
-      sessionId,
-      enabled,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-    });
-  }
-
-  async abortRetry(sessionId: string): Promise<void> {
-    await abortRetryOperation({
-      sessionId,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-    });
-  }
-
-  async setSteeringMode(sessionId: string, mode: string): Promise<void> {
-    await setSteeringModeOperation({
-      sessionId,
-      mode,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-    });
-  }
-
-  async setFollowUpMode(sessionId: string, mode: string): Promise<void> {
-    await setFollowUpModeOperation({
-      sessionId,
-      mode,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-    });
-  }
-
-  async setPermissionMode(sessionId: string, mode: string): Promise<{ mode: string }> {
-    return setPermissionModeOperation({
-      sessionId,
-      mode,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-      ensureManagedClient: (id) => this.ensureManagedClient(id),
-    });
-  }
-
-  async getActiveTools(sessionId: string): Promise<{ toolNames: string[] }> {
-    return getActiveToolsOperation({
-      sessionId,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-    });
-  }
-
-  async setActiveTools(sessionId: string, toolNames: string[]): Promise<void> {
-    await setActiveToolsOperation({
-      sessionId,
-      toolNames,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-    });
-  }
-
-  async getQueue(sessionId: string): Promise<{ steering: string[]; followUp: string[] }> {
-    return getQueueOperation({
-      sessionId,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-    });
-  }
-
-  async clearQueue(sessionId: string): Promise<{ steering: string[]; followUp: string[] }> {
-    return clearQueueOperation({
-      sessionId,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-    });
-  }
-
-  async getExtensions(sessionId: string): Promise<{
-    extensions: Array<{
-      path: string;
-      resolvedPath: string;
-      toolNames: string[];
-      commandNames: string[];
-    }>;
-  }> {
-    return getExtensionsOperation({
-      sessionId,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-    });
-  }
-
-  async getSkills(sessionId: string): Promise<{
-    skills: Array<{
-      name: string;
-      description: string;
-      filePath: string;
-      baseDir: string;
-      disableModelInvocation: boolean;
-    }>;
-  }> {
-    return getSkillsOperation({
-      sessionId,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-    });
-  }
-
-  async reload(sessionId: string): Promise<void> {
-    await reloadOperation({
-      sessionId,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-    });
-  }
-
-  async getTools(
-    sessionId: string,
-  ): Promise<{ tools: Array<{ name: string; label: string; description: string }> }> {
-    return getToolsOperation({
-      sessionId,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-    });
-  }
-
-  async getMcpServers(sessionId: string): Promise<{ servers: McpServerInfo[] }> {
-    return getMcpServersOperation({
-      sessionId,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-    });
-  }
-
-  async toggleMcpServer(
-    sessionId: string,
-    name: string,
-    enabled: boolean,
-  ): Promise<{ success: boolean; error?: string }> {
-    return toggleMcpServerOperation({
-      sessionId,
-      name,
-      enabled,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-    });
-  }
-
-  async restartMcpServer(
-    sessionId: string,
-    name: string,
-  ): Promise<{ success: boolean; error?: string }> {
-    return restartMcpServerOperation({
-      sessionId,
-      name,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-    });
-  }
-
-  async getContextUsage(
-    sessionId: string,
-  ): Promise<{ tokens: number | null; contextWindow: number; percent: number | null }> {
-    return getContextUsageOperation({
-      sessionId,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-      ensureManagedClient: (id) => this.ensureManagedClient(id),
-      isClientAlive: (id, managed) => this.isClientAlive(id, managed),
-      cleanupDeadClient: (id, reason) => this.cleanupDeadClient(id, reason),
-    });
-  }
-
-  async getTierModels(sessionId: string): Promise<{ models: Record<string, string> }> {
-    return getTierModelsOperation({
-      sessionId,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-      ensureManagedClient: (id) => this.ensureManagedClient(id),
-    });
-  }
-
-  async setTierModels(sessionId: string, models: Record<string, string>): Promise<{ ok: boolean }> {
-    return setTierModelsOperation({
-      sessionId,
-      models,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-    });
-  }
-
-  async getAgents(sessionId: string): Promise<{
-    agents: Array<{
-      name: string;
-      description?: string;
-      tier?: string;
-      tools?: string[];
-      permissionMode?: string;
-      source: string;
-      filePath: string;
-    }>;
-  }> {
-    return getAgentsOperation({
-      sessionId,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-      ensureManagedClient: (id) => this.ensureManagedClient(id),
-    });
-  }
-
-  async switchAgent(
-    sessionId: string,
-    agentName: string,
-  ): Promise<{
-    agentName: string;
-    tools: string[];
-    tier?: string;
-    thinkingLevel?: string;
-  }> {
-    return switchAgentOperation({
-      sessionId,
-      agentName,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-      ensureManagedClient: (id) => this.ensureManagedClient(id),
-    });
-  }
-
-  async getCurrentAgent(sessionId: string): Promise<{ agentName: string | null }> {
-    return getCurrentAgentOperation({
-      sessionId,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-      ensureManagedClient: (id) => this.ensureManagedClient(id),
-    });
-  }
-
-  async getAgentDetail(sessionId: string, agentName: string) {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) throw new Error("Client not found");
-    return (
-      managed.client as unknown as {
-        getAgentDetail: (name: string) => Promise<unknown>;
-      }
-    ).getAgentDetail(agentName);
-  }
-
-  async getAllTools(sessionId: string) {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) throw new Error("Client not found");
-    return (
-      managed.client as unknown as {
-        getAllTools: () => Promise<unknown>;
-      }
-    ).getAllTools();
-  }
-
-  async getSystemPrompt(sessionId: string) {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) throw new Error(`No client for session ${sessionId}`);
-    return (
-      managed.client as unknown as {
-        getSystemPrompt: () => Promise<unknown>;
-      }
-    ).getSystemPrompt();
-  }
-
-  async getLatestAgentChange(sessionId: string) {
-    return getLatestAgentChangeOperation({
-      sessionId,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-    });
-  }
-
-  async getSettings(sessionId: string, scope?: string): Promise<Record<string, unknown>> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return {};
-    return managed.client
-      .getSettings(scope as "global" | "project" | undefined)
-      .then((s) => s as unknown as Record<string, unknown>)
-      .catch((err: unknown) => {
-        log.warn("getSettings error", {
-          sessionId,
-          err: err instanceof Error ? err.message : String(err),
-        });
-        return {};
-      });
-  }
-
-  async setSettings(
-    sessionId: string,
-    settings: Record<string, unknown>,
-    scope?: string,
-  ): Promise<void> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return;
-    await managed.client
-      .setSettings(settings, scope as "global" | "project" | undefined)
-      .catch((err: unknown) => {
-        log.warn("setSettings error", {
-          sessionId,
-          err: err instanceof Error ? err.message : String(err),
-        });
-      });
-  }
-
-  async setSessionName(sessionId: string, name: string): Promise<void> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return;
-    const projectPath = managed.info.projectPath;
-    await managed.client.setSessionName(name).catch((err: unknown) => {
-      log.warn("setSessionName error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-    });
-    this.broadcastEvent(
-      "agent.session_renamed",
-      { sessionId, projectPath, newName: name },
-      {},
-    ).catch((err: unknown) => {
-      log.warn("broadcastEvent(session_renamed) error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-    });
-  }
-
-  async getLastAssistantText(sessionId: string): Promise<{ text: string | null }> {
-    return getLastAssistantTextOperation({
-      sessionId,
-      getActiveManaged: (id) => this.getActiveManaged(id),
     });
   }
 
