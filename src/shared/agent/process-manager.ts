@@ -74,6 +74,7 @@ import {
   initSandboxManager,
 } from "./agent-runtime-client";
 import { startAgentClientOperation } from "./agent-start-operations";
+import { stopAgentClientOperation } from "./agent-stop-operations";
 import {
   type CachedLspState,
 } from "./agent-channel-state";
@@ -149,7 +150,6 @@ import { registerAgentChannels } from "./agent-channel-registration";
 import { handleAgentEventOperation } from "./agent-event-routing";
 import {
   clearDelegateTracking,
-  cleanupStoppedDelegateSession,
   removeDelegateChild,
 } from "./coordinator-session-state";
 import { findCoordinatorResponseManaged } from "./coordinator-response-routing";
@@ -538,67 +538,27 @@ export class AgentProcessManager {
   }
 
   async stop(sessionId: string, crashReason?: string): Promise<boolean> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return false;
-
-    managed.info.status = "idle";
-    const endEvent = crashReason
-      ? ({ type: "agent_end", reason: crashReason } as unknown as SanitizedEvent)
-      : ({ type: "agent_end" } as SanitizedEvent);
-    this.emitAgentEvent(sessionId, endEvent).catch((err: unknown) => {
-      log.warn("emitAgentEvent(agent_end) error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-    });
-
-    const stopCleanup = cleanupStoppedDelegateSession({
+    return stopAgentClientOperation({
       sessionId,
+      crashReason,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+      clients: this.clients,
       parentChildMap: this.parentChildMap,
       delegateCreatedAt: this.delegateCreatedAt,
       delegateReplyCount: this.delegateReplyCount,
       syncDelegateResolvers: this.syncDelegateResolvers,
       subagentSyncChildren: this.subagentSyncChildren,
       syncDelegateLastText: this.syncDelegateLastText,
+      leafIds: this.leafIds,
+      getPoolKey: (cwd, userId) => this.getPoolKey(cwd, userId),
+      removeFromPool: (poolKey, managed) => this.removeFromPool(poolKey, managed),
+      stopChild: (id) => this.stop(id),
+      emitAgentEvent: (id, event) => this.emitAgentEvent(id, event),
+      deleteLspState: (id) => {
+        this.lastLspState.delete(id);
+      },
+      clearSessionCache: (id) => this.clearSessionCache(id),
     });
-    if (stopCleanup.childSessionIds.length > 0) {
-      for (const childId of stopCleanup.childSessionIds) {
-        this.stop(childId);
-      }
-    }
-
-    // Sync leafId before unsubscribe closes the connection
-    try {
-      const treeResult = await withTimeout(
-        managed.client.getTreeWithLeaf(),
-        3_000,
-        "getTreeWithLeaf-stop",
-      );
-      if (treeResult.leafId) {
-        this.leafIds.set(sessionId, treeResult.leafId);
-      }
-    } catch {
-      // Best effort — process may already be unresponsive
-    }
-    managed.unsubscribe();
-    managed.client.stop().catch((err: unknown) => {
-      log.warn("stop error", { sessionId, err: err instanceof Error ? err.message : String(err) });
-    });
-    this.clients.delete(sessionId);
-    const poolKey = this.getPoolKey(managed.info.projectPath);
-    this.removeFromPool(poolKey, managed);
-    const sandboxKey = this.getPoolKey(managed.info.projectPath, managed._activeSessionId);
-    if (sandboxKey !== poolKey) {
-      this.removeFromPool(sandboxKey, managed);
-    }
-    // Note: sessionPaths, sessionProjectPaths, and leafIds are NOT cleared here.
-    // They persist for session restart support (coordinator delegate_send)
-    // and JSONL fallback navigateTree (rollback without active CLI process).
-    // When the CLI restarts, getTreeWithLeaf() will overwrite with the
-    // authoritative value, so stale data self-heals.
-    this.lastLspState.delete(sessionId);
-    this.clearSessionCache(sessionId);
-    return true;
   }
 
   getStatus(sessionId: string): { status: "idle" | "streaming" | "stopped"; pid?: number } {
