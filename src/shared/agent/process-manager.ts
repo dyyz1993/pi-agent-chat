@@ -2,14 +2,9 @@ import {
   copyFileSync,
   existsSync,
   mkdirSync,
-  readdirSync,
-  statSync,
-  readFileSync,
-  writeFileSync,
 } from "fs";
 import { createReadStream } from "fs";
 
-import * as os from "os";
 import * as path from "path";
 import * as readline from "readline";
 import type { RPCServer } from "@dyyz1993/rpc-core";
@@ -66,6 +61,20 @@ import {
   type SessionCustomEntry,
   type SessionMessageEntry,
 } from "./session-message-cache";
+import {
+  discoverExtensionArgs,
+  parseTierModel,
+  TIER_KEYS,
+  type TierKey,
+} from "./agent-runtime-config";
+import {
+  buildCoordinatorDelegatePrompt,
+  buildSyncDelegatePrompt,
+  resolveDelegateSessionPaths,
+  stripParentSessionFromHeader,
+  wrapDelegateReply,
+  writeDelegateSessionHeader,
+} from "./coordinator-delegate-utils";
 
 const log = createLogger("agent");
 const perfLog = createLogger("session-perf");
@@ -83,136 +92,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   ]);
 }
 
-/**
- * Strip parentSession from a JSONL session file's header entry.
- * Prevents forked sessions from being identified as subagent children on refresh.
- */
-function stripParentSessionFromHeader(filePath: string): void {
-  try {
-    const content = readFileSync(filePath, "utf-8");
-    const newlineIdx = content.indexOf("\n");
-    if (newlineIdx < 0) return;
-    const firstLine = content.slice(0, newlineIdx);
-    const rest = content.slice(newlineIdx + 1);
-    const header = JSON.parse(firstLine) as Record<string, unknown>;
-    if ("parentSession" in header) {
-      delete header.parentSession;
-      writeFileSync(filePath, JSON.stringify(header) + "\n" + rest, "utf-8");
-    }
-  } catch (err) {
-    log.warn("stripParentSessionFromHeader failed", {
-      filePath,
-      err: err instanceof Error ? err.message : String(err),
-    });
-  }
-}
-
-/**
- * Scan the global extensions directory (~/.pi/agent/extensions/) and
- * return `--extension <path>` args for each discovered entry.
- *
- * Layout: each subdirectory with an index.ts/js, or each .ts/.js file,
- * is treated as an extension. Symlinks are resolved.
- */
-function scanExtensionDir(dir: string, extensionPaths: string[]): void {
-  if (!existsSync(dir)) return;
-
-  try {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (entry.name.startsWith(".") || entry.name === "node_modules" || entry.name === "__tests__")
-        continue;
-
-      let isDir = entry.isDirectory();
-      let isFile = entry.isFile();
-      if (entry.isSymbolicLink()) {
-        try {
-          const stats = statSync(path.join(dir, entry.name));
-          isDir = stats.isDirectory();
-          isFile = stats.isFile();
-        } catch (e) {
-          log.debug("scanExtensions: skipping symlink target", {
-            name: entry.name,
-            error: String(e),
-          });
-          continue;
-        }
-      }
-
-      const fullPath = path.join(dir, entry.name);
-      if (isDir) {
-        const indexTs = path.join(fullPath, "index.ts");
-        const indexJs = path.join(fullPath, "index.js");
-        if (existsSync(indexTs)) {
-          extensionPaths.push(indexTs);
-        } else if (existsSync(indexJs)) {
-          extensionPaths.push(indexJs);
-        }
-      } else if (isFile && (entry.name.endsWith(".ts") || entry.name.endsWith(".js"))) {
-        extensionPaths.push(fullPath);
-      }
-    }
-  } catch (err: unknown) {
-    log.warn("Failed to scan extensions directory", {
-      dir,
-      err: err instanceof Error ? err.message : String(err),
-    });
-  }
-}
-
-function getBuiltinExtensionsDir(): string {
-  const cliPath = config.piCliPath;
-  const nmDir = path.resolve(cliPath, "..", "..");
-  const pkgDir = path.join(nmDir, "@dyyz1993", "pi-coding-agent");
-  const srcExists = existsSync(path.join(pkgDir, "src"));
-  return path.join(pkgDir, srcExists ? "src" : "dist", "extensions");
-}
-
-function discoverExtensionArgs(): string[] {
-  const extensionPaths: string[] = [];
-
-  const userExtDir = config.piExtensionsDir;
-  if (existsSync(userExtDir)) {
-    scanExtensionDir(userExtDir, extensionPaths);
-  } else {
-    log.warn("Global extensions directory not found", { extDir: userExtDir });
-  }
-
-  const builtinExtDir = getBuiltinExtensionsDir();
-  if (existsSync(builtinExtDir)) {
-    scanExtensionDir(builtinExtDir, extensionPaths);
-  }
-
-  log.info("Discovered extensions", {
-    userDir: userExtDir,
-    builtinDir: builtinExtDir,
-    count: extensionPaths.length,
-  });
-  for (const p of extensionPaths) {
-    log.info("  → extension:", { path: p });
-  }
-  return extensionPaths.flatMap((p) => ["--extension", p]);
-}
-
 const EXTENSION_ARGS = ["--no-extensions", ...discoverExtensionArgs()];
-const TIER_KEYS = ["fast", "pro", "max"] as const;
-type TierKey = (typeof TIER_KEYS)[number];
-
-function parseTierModel(tier: TierKey, modelName: string | undefined): {
-  provider: string;
-  modelId: string;
-} {
-  if (!modelName) {
-    throw new Error(`Tier "${tier}" is not configured`);
-  }
-
-  const [provider, ...modelParts] = modelName.split("/");
-  const modelId = modelParts.join("/");
-  if (!provider || !modelId) {
-    throw new Error(`Invalid tier model mapping: ${tier} -> ${modelName}`);
-  }
-
-  return { provider, modelId };
-}
 
 interface SubagentChannelPayload {
   sessionId: string;
@@ -3414,38 +3294,23 @@ export class AgentProcessManager {
     const parent = this.getActiveManaged(parentSessionId);
     if (!parent) throw new Error("Parent session not found");
 
-    const projectPath = rawProjectPath ?? parent.info.projectPath;
     const newSessionId = `sess_coord_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const isCrossProject = rawProjectPath && rawProjectPath !== parent.info.projectPath;
-    let sessionDir: string;
-    if (isCrossProject) {
-      // 跨项目：用目标项目路径编码，放到 ~/.pi/agent/sessions/ 下，扫描器才能找到
-      const encodedTarget = "--" + projectPath.replace(/^\//, "").replace(/\//g, "-") + "--";
-      sessionDir = path.join(os.homedir(), ".pi", "agent", "sessions", encodedTarget);
-      if (!existsSync(sessionDir)) mkdirSync(sessionDir, { recursive: true });
-    } else {
-      sessionDir = path.dirname(parent.info.sessionPath);
-    }
-    const sessionPath = path.join(sessionDir, `${newSessionId}.jsonl`);
+    const { projectPath, sessionPath } = resolveDelegateSessionPaths({
+      parentProjectPath: parent.info.projectPath,
+      parentSessionPath: parent.info.sessionPath,
+      newSessionId,
+      rawProjectPath,
+    });
 
     try {
-      const { writeFile } = await import("fs/promises");
-      const headerEntry = JSON.stringify({
-        type: "session",
-        version: 3,
-        id: newSessionId,
-        timestamp: new Date().toISOString(),
-        cwd: projectPath,
-        delegateParentSessionId: parentSessionId,
-      });
-      const delegateInfoEntry = JSON.stringify({
-        type: "delegate_info",
-        delegateParentSessionId: parentSessionId,
+      await writeDelegateSessionHeader({
+        sessionPath,
+        newSessionId,
+        projectPath,
+        parentSessionId,
         parentSessionPath: parent.info.sessionPath,
         delegateType: "coordinator",
-        createdAt: Date.now(),
       });
-      await writeFile(sessionPath, headerEntry + "\n" + delegateInfoEntry + "\n", "utf-8");
     } catch (writeErr: unknown) {
       log.warn("[handleCoordinatorDelegate] failed to write session header", {
         sessionPath,
@@ -3471,29 +3336,13 @@ export class AgentProcessManager {
     const rawTitle = msg.title ?? task.slice(0, 60);
     const title = `指派: ${rawTitle}`;
     await this.setSessionName(newSessionId, title);
-    const projectName = projectPath.split("/").pop() ?? projectPath;
-    const delegatePrompt = [
-      `[系统提示] 你是一个被委派的后台任务会话。`,
-      ``,
-      `**你的身份信息：**`,
-      `- 你的会话 ID: ${newSessionId}`,
-      `- 委派方（父会话）ID: ${parentSessionId}`,
-      `- 任务: ${title}`,
-      `- 项目路径: ${projectPath}`,
-      `- 项目名称: ${projectName}`,
-      ``,
-      `**要求：**`,
-      `1. 你是独立执行任务的助手，专注于完成委派给你的任务`,
-      `2. 执行完毕后，请明确总结你的工作成果`,
-      `3. 如果遇到问题无法继续，请说明原因`,
-      `4. 如需向委派方反馈中间进度或最终结果，请使用 session_delegate_send 工具：`,
-      `   - targetSessionId: ${parentSessionId}`,
-      `   - message: 你要反馈的内容`,
-      ``,
-      `---`,
-      ``,
+    const delegatePrompt = buildCoordinatorDelegatePrompt({
+      newSessionId,
+      parentSessionId,
+      title,
       task,
-    ].join("\n");
+      projectPath,
+    });
 
     this.send(newSessionId, delegatePrompt);
 
@@ -3541,38 +3390,23 @@ export class AgentProcessManager {
     const parent = this.getActiveManaged(parentSessionId);
     if (!parent) throw new Error("Parent session not found");
 
-    const projectPath = rawProjectPath ?? parent.info.projectPath;
     const newSessionId = `sess_sub_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const isCrossProject = rawProjectPath && rawProjectPath !== parent.info.projectPath;
-    let sessionDir: string;
-    if (isCrossProject) {
-      // 跨项目：用目标项目路径编码，放到 ~/.pi/agent/sessions/ 下，扫描器才能找到
-      const encodedTarget = "--" + projectPath.replace(/^\//, "").replace(/\//g, "-") + "--";
-      sessionDir = path.join(os.homedir(), ".pi", "agent", "sessions", encodedTarget);
-      if (!existsSync(sessionDir)) mkdirSync(sessionDir, { recursive: true });
-    } else {
-      sessionDir = path.dirname(parent.info.sessionPath);
-    }
-    const sessionPath = path.join(sessionDir, `${newSessionId}.jsonl`);
+    const { projectPath, sessionPath } = resolveDelegateSessionPaths({
+      parentProjectPath: parent.info.projectPath,
+      parentSessionPath: parent.info.sessionPath,
+      newSessionId,
+      rawProjectPath,
+    });
 
     try {
-      const { writeFile } = await import("fs/promises");
-      const headerEntry = JSON.stringify({
-        type: "session",
-        version: 3,
-        id: newSessionId,
-        timestamp: new Date().toISOString(),
-        cwd: projectPath,
-        delegateParentSessionId: parentSessionId,
-      });
-      const delegateInfoEntry = JSON.stringify({
-        type: "delegate_info",
-        delegateParentSessionId: parentSessionId,
+      await writeDelegateSessionHeader({
+        sessionPath,
+        newSessionId,
+        projectPath,
+        parentSessionId,
         parentSessionPath: parent.info.sessionPath,
         delegateType: "subagent",
-        createdAt: Date.now(),
       });
-      await writeFile(sessionPath, headerEntry + "\n" + delegateInfoEntry + "\n", "utf-8");
     } catch (writeErr: unknown) {
       log.warn("[handleCoordinatorDelegateSync] failed to write session header", {
         sessionPath,
@@ -3612,25 +3446,12 @@ export class AgentProcessManager {
     const sessionTitle = `子代理: ${rawTitle}`;
     await this.setSessionName(newSessionId, sessionTitle);
 
-    const projectName = projectPath.split("/").pop() ?? projectPath;
-    const delegatePrompt = [
-      `[系统提示] 你是一个子代理任务会话。`,
-      agent ? `**Agent 角色:** ${agent}` : "",
-      `**任务:** ${rawTitle}`,
-      `**项目:** ${projectName}`,
-      `**项目路径:** ${projectPath}`,
-      ``,
-      `要求：`,
-      `1. 专注于完成委派给你的任务`,
-      `2. 执行完毕后，明确总结你的工作成果`,
-      `3. 如果遇到问题无法继续，说明原因`,
-      ``,
-      `---`,
-      ``,
+    const delegatePrompt = buildSyncDelegatePrompt({
       task,
-    ]
-      .filter(Boolean)
-      .join("\n");
+      rawTitle,
+      agent,
+      projectPath,
+    });
 
     this.subagentSyncChildren.add(newSessionId);
 
@@ -3794,11 +3615,14 @@ export class AgentProcessManager {
       }
     }
 
-    const wrappedMessage = [
-      `<delegate-reply from="${targetSessionId}" title="${title}" sequence="${count}" createdAt="${createdAt}" elapsed="${elapsed}" historyCount="${count}">`,
+    const wrappedMessage = wrapDelegateReply({
+      targetSessionId,
+      title,
+      sequence: count,
+      createdAt,
+      elapsed,
       message,
-      `</delegate-reply>`,
-    ].join("\n");
+    });
 
     if (msg.mode === "steer") {
       this.steer(targetSessionId, wrappedMessage);
