@@ -82,6 +82,12 @@ import {
   deriveLspState,
   type CachedLspState,
 } from "./agent-channel-state";
+import {
+  addToProcessPool,
+  makeProcessPoolKey,
+  removeFromProcessPool,
+  selectLruEvictionCandidate,
+} from "./agent-process-pool";
 
 const log = createLogger("agent");
 const perfLog = createLogger("session-perf");
@@ -271,88 +277,37 @@ export class AgentProcessManager {
   private static MAX_POOL_SIZE = 5;
 
   private addToPool(poolKey: string, managed: ManagedClient): void {
-    let pool = this.processByCwd.get(poolKey);
-    if (!pool) {
-      pool = new Set();
-      this.processByCwd.set(poolKey, pool);
-    }
-    pool.add(managed);
+    addToProcessPool(this.processByCwd, poolKey, managed);
   }
 
   private removeFromPool(poolKey: string, managed: ManagedClient): void {
-    const pool = this.processByCwd.get(poolKey);
-    if (pool) {
-      pool.delete(managed);
-      if (pool.size === 0) {
-        this.processByCwd.delete(poolKey);
-      }
-    }
+    removeFromProcessPool(this.processByCwd, poolKey, managed);
   }
 
   private evictLRU(currentPoolKey: string): void {
-    const totalProcesses = [...this.processByCwd.values()].reduce(
-      (sum, pool) => sum + pool.size,
-      0,
+    const candidate = selectLruEvictionCandidate(
+      this.processByCwd,
+      currentPoolKey,
+      AgentProcessManager.MAX_POOL_SIZE,
     );
-    if (totalProcesses < AgentProcessManager.MAX_POOL_SIZE) return;
+    if (!candidate) return;
 
-    let oldest: ManagedClient | null = null;
-    let oldestPoolKey: string | null = null;
-
-    const currentPool = this.processByCwd.get(currentPoolKey);
-    const currentPoolSize = currentPool?.size ?? 0;
-
-    for (const [poolKey, pool] of this.processByCwd) {
-      for (const mc of pool) {
-        if (mc.info.status === "streaming") continue;
-        if (mc.activeBackgroundTools.size > 0) continue;
-
-        const isCurrentProject = poolKey === currentPoolKey;
-
-        if (isCurrentProject && currentPoolSize <= 1) continue;
-
-        if (!oldest) {
-          oldest = mc;
-          oldestPoolKey = poolKey;
-        } else {
-          const oldestIsCurrent = oldestPoolKey === currentPoolKey;
-          if (!isCurrentProject && oldestIsCurrent) {
-            oldest = mc;
-            oldestPoolKey = poolKey;
-          } else if (
-            isCurrentProject === oldestIsCurrent &&
-            mc.lastActiveAt < oldest.lastActiveAt
-          ) {
-            oldest = mc;
-            oldestPoolKey = poolKey;
-          }
-        }
-      }
-    }
-
-    if (oldest && oldestPoolKey) {
-      const sid = oldest._activeSessionId;
-      log.info("[evictLRU] evicting idle process", {
-        totalBefore: totalProcesses,
-        poolKey: oldestPoolKey,
-        sessionId: sid,
-        isCurrentProject: oldestPoolKey === currentPoolKey,
-      });
-      oldest.unsubscribe();
-      oldest.client.stop().catch(() => {});
-      this.clients.delete(sid);
-      const pool = this.processByCwd.get(oldestPoolKey);
-      if (pool) {
-        pool.delete(oldest);
-        if (pool.size === 0) {
-          this.processByCwd.delete(oldestPoolKey);
-        }
-      }
-    }
+    const { poolKey, managed, totalProcesses } = candidate;
+    const sid = managed._activeSessionId;
+    log.info("[evictLRU] evicting idle process", {
+      totalBefore: totalProcesses,
+      poolKey,
+      sessionId: sid,
+      isCurrentProject: poolKey === currentPoolKey,
+    });
+    managed.unsubscribe();
+    managed.client.stop().catch(() => {});
+    this.clients.delete(sid);
+    this.removeFromPool(poolKey, managed);
   }
 
   private getPoolKey(projectPath: string, userId?: string): string {
-    return config.sandboxEnabled && userId ? `${projectPath}::${userId}` : projectPath;
+    return makeProcessPoolKey(projectPath, userId, Boolean(config.sandboxEnabled));
   }
 
   private sessionMessageCache = new SessionMessageCache();

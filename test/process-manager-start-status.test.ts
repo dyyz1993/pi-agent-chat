@@ -24,85 +24,75 @@ vi.mock("../src/shared/lib/logger", () => ({
   }),
 }));
 
-// Mock createRpcClient to avoid real filesystem/child_process
-vi.mock("../src/shared/agent/process-manager", async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>;
-  const { AgentProcessManager: ActualAPM } = actual as {
-    AgentProcessManager: new (server: unknown) => unknown;
+import { AgentProcessManager as BaseAgentProcessManager } from "../src/shared/agent/process-manager";
+
+class TestAgentProcessManager extends BaseAgentProcessManager {
+  override start = async (
+    sessionId: string,
+    projectPath: string,
+    sessionPath: string,
+  ): Promise<{ agentId: string; status: "started" | "already_running" }> => {
+    type MockInternal = {
+      clients: Map<string, { _activeSessionId: string }>;
+      sessionPaths: Map<string, string>;
+      sessionProjectPaths: Map<string, string>;
+      processByCwd: Map<string, Set<unknown>>;
+      servers: Set<{ emitEvent: (...args: unknown[]) => void }>;
+    };
+    const self = this as unknown as MockInternal;
+
+    const existing = self.clients.get(sessionId);
+    if (existing && existing._activeSessionId === sessionId) {
+      return { agentId: sessionId, status: "already_running" };
+    }
+
+    const mockClient = {
+      channel: () => ({
+        send: vi.fn(),
+        onReceive: vi.fn(() => () => {}),
+      }),
+      start: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn().mockResolvedValue(undefined),
+      onEvent: vi.fn(() => () => {}),
+    };
+
+    const managed = {
+      client: mockClient,
+      info: {
+        sessionId,
+        projectPath,
+        sessionPath,
+        status: "idle",
+        holdEvents: [] as unknown[],
+      },
+      _activeSessionId: sessionId,
+      unsubscribe: () => {},
+    };
+
+    self.clients.set(sessionId, managed);
+    self.sessionPaths.set(sessionId, sessionPath);
+    self.sessionProjectPaths.set(sessionId, projectPath);
+
+    let procSet = self.processByCwd.get(projectPath);
+    if (!procSet) {
+      procSet = new Set();
+      self.processByCwd.set(projectPath, procSet);
+    }
+    procSet.add(managed);
+
+    for (const server of self.servers) {
+      server.emitEvent(
+        "agent.session_status_changed",
+        { sessionId, projectPath, status: "idle" },
+        {},
+      );
+    }
+
+    return { agentId: sessionId, status: "started" };
   };
+}
 
-  return {
-    ...actual,
-    AgentProcessManager: class TestAPM extends ActualAPM {
-      override start = async (
-        sessionId: string,
-        projectPath: string,
-        sessionPath: string,
-      ): Promise<{ agentId: string; status: "started" | "already_running" }> => {
-        type MockInternal = {
-          clients: Map<string, { _activeSessionId: string }>;
-          sessionPaths: Map<string, string>;
-          sessionProjectPaths: Map<string, string>;
-          processByCwd: Map<string, Set<unknown>>;
-          servers: Set<{ emitEvent: (...args: unknown[]) => void }>;
-        };
-        const self = this as unknown as MockInternal;
-
-        const existing = self.clients.get(sessionId);
-        if (existing && existing._activeSessionId === sessionId) {
-          return { agentId: sessionId, status: "already_running" };
-        }
-
-        const mockClient = {
-          channel: () => ({
-            send: vi.fn(),
-            onReceive: vi.fn(() => () => {}),
-          }),
-          start: vi.fn().mockResolvedValue(undefined),
-          stop: vi.fn().mockResolvedValue(undefined),
-          onEvent: vi.fn(() => () => {}),
-        };
-
-        const managed = {
-          client: mockClient,
-          info: {
-            sessionId,
-            projectPath,
-            sessionPath,
-            status: "idle",
-            holdEvents: [] as unknown[],
-          },
-          _activeSessionId: sessionId,
-          unsubscribe: () => {},
-        };
-
-        self.clients.set(sessionId, managed);
-        self.sessionPaths.set(sessionId, sessionPath);
-        self.sessionProjectPaths.set(sessionId, projectPath);
-
-        let procSet = self.processByCwd.get(projectPath);
-        if (!procSet) {
-          procSet = new Set();
-          self.processByCwd.set(projectPath, procSet);
-        }
-        procSet.add(managed);
-
-        for (const server of self.servers) {
-          server.emitEvent(
-            "agent.session_status_changed",
-            { sessionId, projectPath, status: "idle" },
-            {},
-          );
-        }
-
-        return { agentId: sessionId, status: "started" };
-      };
-    },
-  };
-});
-
-import type { AgentProcessManager as APM } from "../src/shared/agent/process-manager";
-import { AgentProcessManager } from "../src/shared/agent/process-manager";
+type APM = TestAgentProcessManager;
 
 interface ManagedClientShape {
   client: {
@@ -140,11 +130,11 @@ class MockRPCServer {
   emitEvent = vi.fn().mockResolvedValue(undefined);
 }
 
-type APMConstructorParam = ConstructorParameters<typeof AgentProcessManager>[0];
+type APMConstructorParam = ConstructorParameters<typeof BaseAgentProcessManager>[0];
 
 function createManager(): { manager: APM; server: MockRPCServer } {
   const server = new MockRPCServer();
-  const manager = new AgentProcessManager(server as unknown as APMConstructorParam);
+  const manager = new TestAgentProcessManager(server as unknown as APMConstructorParam);
   return { manager, server };
 }
 
