@@ -1,8 +1,4 @@
 import type { RPCServer } from "@dyyz1993/rpc-core";
-import type {
-  AgentEvent,
-  ChannelDataEvent,
-} from "../modules/agent";
 import type { RpcClientAPI, ChannelTypeRegistry } from "@dyyz1993/pi-coding-agent";
 import type { TreeEntry } from "../modules/agent";
 import { performance } from "perf_hooks";
@@ -29,6 +25,14 @@ import {
   createAgentClientApiAdapter,
   type AgentClientApiAdapter,
 } from "./agent-client-api-adapter";
+import {
+  createAgentChannelHandlerAdapter,
+  type AgentChannelHandlerAdapter,
+} from "./agent-channel-handler-adapter";
+import {
+  createCoordinatorHandlerAdapter,
+  type CoordinatorHandlerAdapter,
+} from "./agent-coordinator-handler-adapter";
 import {
   compactHoldEventsForReplay,
   type SanitizedEvent,
@@ -63,15 +67,6 @@ import {
   type CachedLspState,
 } from "./agent-channel-state";
 import {
-  handleBashChannelDataOperation,
-  handleLspChannelDataOperation,
-  handleMemoryChannelDataOperation,
-  handleRulesChannelDataOperation,
-  handleSubagentChannelDataOperation,
-  handleSupervisorChannelDataOperation,
-  handleTodoChannelDataOperation,
-} from "./agent-channel-handlers";
-import {
   addToProcessPool,
   makeProcessPoolKey,
   removeFromProcessPool,
@@ -90,30 +85,15 @@ import {
   restoreFilesFromSnapshotOperation,
 } from "./agent-client-history-operations";
 import { registerAgentChannels } from "./agent-channel-registration";
-import { handleAgentEventOperation } from "./agent-event-routing";
-import {
-  clearDelegateTracking,
-  removeDelegateChild,
-} from "./coordinator-session-state";
 import { findCoordinatorResponseManaged } from "./coordinator-response-routing";
 import { handleCoordinatorCallOperation } from "./coordinator-call-dispatcher";
-import {
-  handleCoordinatorDelegateOperation,
-  handleCoordinatorDelegateForkOperation,
-  handleCoordinatorDelegateListOperation,
-  handleCoordinatorDelegateSendOperation,
-  handleCoordinatorDelegateSyncOperation,
-  handleCoordinatorDelegateStatusOperation,
-  handleCoordinatorDelegateStopOperation,
-} from "./coordinator-delegate-operations";
 import {
   getTreeOperation,
   navigateTreeOperation,
   readJsonlTreeEntriesOperation,
 } from "./agent-tree-navigation-operations";
 
-const log = createLogger("agent");
-const perfLog = createLogger("session-perf");
+const log = createLogger("agent"); const perfLog = createLogger("session-perf");
 
 export { getSandboxEndpoint, getSandboxManager, initSandboxManager };
 
@@ -131,7 +111,6 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 }
 
 type RpcClientInstance = RpcClientAPI;
-
 interface ManagedClient {
   client: RpcClientInstance;
   info: AgentProcessInfo;
@@ -140,57 +119,29 @@ interface ManagedClient {
   lastActiveAt: number;
   activeBackgroundTools: Set<string>;
 }
-
 import type { AgentProcessInfo } from "../modules/agent";
-
 export class AgentProcessManager {
-  declare getCommands: AgentClientApiAdapter["getCommands"];
-  declare getSessionStats: AgentClientApiAdapter["getSessionStats"];
-  declare getMessages: AgentClientApiAdapter["getMessages"];
-  declare getFullMessages: AgentClientApiAdapter["getFullMessages"];
-  declare getAvailableModels: AgentClientApiAdapter["getAvailableModels"];
-  declare setModel: AgentClientApiAdapter["setModel"];
-  declare switchTier: AgentClientApiAdapter["switchTier"];
-  declare cycleModel: AgentClientApiAdapter["cycleModel"];
-  declare setThinkingLevel: AgentClientApiAdapter["setThinkingLevel"];
-  declare cycleThinkingLevel: AgentClientApiAdapter["cycleThinkingLevel"];
-  declare compact: AgentClientApiAdapter["compact"];
-  declare setAutoCompaction: AgentClientApiAdapter["setAutoCompaction"];
-  declare setAutoRetry: AgentClientApiAdapter["setAutoRetry"];
-  declare abortRetry: AgentClientApiAdapter["abortRetry"];
-  declare setSteeringMode: AgentClientApiAdapter["setSteeringMode"];
-  declare setFollowUpMode: AgentClientApiAdapter["setFollowUpMode"];
-  declare setPermissionMode: AgentClientApiAdapter["setPermissionMode"];
-  declare getActiveTools: AgentClientApiAdapter["getActiveTools"];
-  declare setActiveTools: AgentClientApiAdapter["setActiveTools"];
-  declare getQueue: AgentClientApiAdapter["getQueue"];
-  declare clearQueue: AgentClientApiAdapter["clearQueue"];
-  declare getExtensions: AgentClientApiAdapter["getExtensions"];
-  declare getSkills: AgentClientApiAdapter["getSkills"];
-  declare reload: AgentClientApiAdapter["reload"];
-  declare getTools: AgentClientApiAdapter["getTools"];
-  declare getMcpServers: AgentClientApiAdapter["getMcpServers"];
-  declare toggleMcpServer: AgentClientApiAdapter["toggleMcpServer"];
-  declare restartMcpServer: AgentClientApiAdapter["restartMcpServer"];
-  declare getContextUsage: AgentClientApiAdapter["getContextUsage"];
-  declare getTierModels: AgentClientApiAdapter["getTierModels"];
-  declare setTierModels: AgentClientApiAdapter["setTierModels"];
-  declare getAgents: AgentClientApiAdapter["getAgents"];
-  declare switchAgent: AgentClientApiAdapter["switchAgent"];
-  declare getCurrentAgent: AgentClientApiAdapter["getCurrentAgent"];
-  declare getAgentDetail: AgentClientApiAdapter["getAgentDetail"];
-  declare getAllTools: AgentClientApiAdapter["getAllTools"];
-  declare getSystemPrompt: AgentClientApiAdapter["getSystemPrompt"];
-  declare getLatestAgentChange: AgentClientApiAdapter["getLatestAgentChange"];
-  declare getSettings: AgentClientApiAdapter["getSettings"];
-  declare setSettings: AgentClientApiAdapter["setSettings"];
-  declare setSessionName: AgentClientApiAdapter["setSessionName"];
-  declare getLastAssistantText: AgentClientApiAdapter["getLastAssistantText"];
+  declare getCommands: AgentClientApiAdapter["getCommands"]; declare getSessionStats: AgentClientApiAdapter["getSessionStats"]; declare getMessages: AgentClientApiAdapter["getMessages"];
+  declare getFullMessages: AgentClientApiAdapter["getFullMessages"]; declare getAvailableModels: AgentClientApiAdapter["getAvailableModels"]; declare setModel: AgentClientApiAdapter["setModel"];
+  declare switchTier: AgentClientApiAdapter["switchTier"]; declare cycleModel: AgentClientApiAdapter["cycleModel"]; declare setThinkingLevel: AgentClientApiAdapter["setThinkingLevel"];
+  declare cycleThinkingLevel: AgentClientApiAdapter["cycleThinkingLevel"]; declare compact: AgentClientApiAdapter["compact"]; declare setAutoCompaction: AgentClientApiAdapter["setAutoCompaction"];
+  declare setAutoRetry: AgentClientApiAdapter["setAutoRetry"]; declare abortRetry: AgentClientApiAdapter["abortRetry"]; declare setSteeringMode: AgentClientApiAdapter["setSteeringMode"];
+  declare setFollowUpMode: AgentClientApiAdapter["setFollowUpMode"]; declare setPermissionMode: AgentClientApiAdapter["setPermissionMode"]; declare getActiveTools: AgentClientApiAdapter["getActiveTools"];
+  declare setActiveTools: AgentClientApiAdapter["setActiveTools"]; declare getQueue: AgentClientApiAdapter["getQueue"]; declare clearQueue: AgentClientApiAdapter["clearQueue"];
+  declare getExtensions: AgentClientApiAdapter["getExtensions"]; declare getSkills: AgentClientApiAdapter["getSkills"]; declare reload: AgentClientApiAdapter["reload"];
+  declare getTools: AgentClientApiAdapter["getTools"]; declare getMcpServers: AgentClientApiAdapter["getMcpServers"]; declare toggleMcpServer: AgentClientApiAdapter["toggleMcpServer"];
+  declare restartMcpServer: AgentClientApiAdapter["restartMcpServer"]; declare getContextUsage: AgentClientApiAdapter["getContextUsage"]; declare getTierModels: AgentClientApiAdapter["getTierModels"];
+  declare setTierModels: AgentClientApiAdapter["setTierModels"]; declare getAgents: AgentClientApiAdapter["getAgents"]; declare switchAgent: AgentClientApiAdapter["switchAgent"];
+  declare getCurrentAgent: AgentClientApiAdapter["getCurrentAgent"]; declare getAgentDetail: AgentClientApiAdapter["getAgentDetail"]; declare getAllTools: AgentClientApiAdapter["getAllTools"];
+  declare getSystemPrompt: AgentClientApiAdapter["getSystemPrompt"]; declare getLatestAgentChange: AgentClientApiAdapter["getLatestAgentChange"]; declare getSettings: AgentClientApiAdapter["getSettings"];
+  declare setSettings: AgentClientApiAdapter["setSettings"]; declare setSessionName: AgentClientApiAdapter["setSessionName"]; declare getLastAssistantText: AgentClientApiAdapter["getLastAssistantText"];
 
   private clients = new Map<string, ManagedClient>();
   /** CWD-based process tracking: projectPath → set of ManagedClients for that project */
   private processByCwd = new Map<string, Set<ManagedClient>>();
   private servers = new Set<RPCServer>();
+  private channelHandlers!: AgentChannelHandlerAdapter;
+  private coordinatorHandlers!: CoordinatorHandlerAdapter;
   /** Guard: prevents recursive start() via coordinator session_delegate */
   private _startInProgress = false;
   /** Serializes explicit start/switch operations so callers never observe a fake ready state. */
@@ -316,12 +267,12 @@ export class AgentProcessManager {
         const call = msg as CoordinatorMethodCall;
         let delegateResult: unknown;
         if (call.__call === "session_delegate_sync") {
-          delegateResult = await this.handleCoordinatorDelegateSync(
+          delegateResult = await this.coordinatorHandlers.handleDelegateSync(
             sessionId,
             call as Extract<CoordinatorMethodCall, { __call: "session_delegate_sync" }>,
           );
         } else {
-          delegateResult = await this.handleCoordinatorDelegate(
+          delegateResult = await this.coordinatorHandlers.handleDelegate(
             sessionId,
             call as Extract<CoordinatorMethodCall, { __call: "session_delegate" }>,
           );
@@ -351,6 +302,67 @@ export class AgentProcessManager {
           this.broadcastEvent(eventName, payload, metadata),
       }),
     );
+    this.coordinatorHandlers = createCoordinatorHandlerAdapter({
+      clients: this.clients,
+      sessionPaths: this.sessionPaths,
+      sessionProjectPaths: this.sessionProjectPaths,
+      parentChildMap: this.parentChildMap,
+      delegateCreatedAt: this.delegateCreatedAt,
+      delegateReplyCount: this.delegateReplyCount,
+      syncDelegateResolvers: this.syncDelegateResolvers,
+      subagentSyncChildren: this.subagentSyncChildren,
+      syncDelegateLastText: this.syncDelegateLastText,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+      start: (id, projectPath, sessionPath, startOptions) =>
+        startOptions
+          ? this.start(id, projectPath, sessionPath, startOptions)
+          : this.start(id, projectPath, sessionPath),
+      switchAgent: (id, agentName) => this.switchAgent(id, agentName),
+      setSessionName: (id, name) => this.setSessionName(id, name),
+      send: (id, content) => {
+        this.send(id, content);
+      },
+      steer: (id, content) => {
+        this.steer(id, content);
+      },
+      followUp: (id, content) => {
+        this.followUp(id, content);
+      },
+      stop: (id) => this.stop(id),
+      getStatus: (id) => this.getStatus(id),
+      getState: (id) => this.getState(id),
+      getContextUsage: (id) => this.getContextUsage(id),
+      broadcastEvent: (eventName, data, filter) => this.broadcastEvent(eventName, data, filter),
+    });
+    Object.assign(this, {
+      handleCoordinatorClearStopped: this.coordinatorHandlers.handleClearStopped,
+      handleCoordinatorRemove: this.coordinatorHandlers.handleRemove,
+      handleCoordinatorDelegate: this.coordinatorHandlers.handleDelegate,
+      handleCoordinatorDelegateSync: this.coordinatorHandlers.handleDelegateSync,
+      handleCoordinatorDelegateSend: this.coordinatorHandlers.handleDelegateSend,
+      handleCoordinatorDelegateStatus: this.coordinatorHandlers.handleDelegateStatus,
+      handleCoordinatorDelegateList: this.coordinatorHandlers.handleDelegateList,
+      handleCoordinatorDelegateStop: this.coordinatorHandlers.handleDelegateStop,
+      handleCoordinatorDelegateFork: this.coordinatorHandlers.handleDelegateFork,
+    });
+    this.channelHandlers = createAgentChannelHandlerAdapter({
+      clients: this.clients,
+      parentChildMap: this.parentChildMap,
+      leafIds: this.leafIds,
+      syncDelegateResolvers: this.syncDelegateResolvers,
+      subagentSyncChildren: this.subagentSyncChildren,
+      syncDelegateLastText: this.syncDelegateLastText,
+      sandboxEnabled: config.sandboxEnabled,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+      getCachedLspState: (id) => this.lastLspState.get(id),
+      setCachedLspState: (id, state) => {
+        this.lastLspState.set(id, state);
+      },
+      broadcastEvent: (eventName, payload, metadata) =>
+        this.broadcastEvent(eventName, payload, metadata),
+      broadcastSessionStatus: (id, status) => this.broadcastSessionStatus(id, status),
+      emitAgentEvent: (id, event) => this.emitAgentEvent(id, event),
+    });
   }
 
   updateServer(server: RPCServer): void {
@@ -429,7 +441,7 @@ export class AgentProcessManager {
         createRpcClient,
         registerAgentChannels,
         handleEvent: (activeSessionId, event) => {
-          this.handleEvent(activeSessionId, event);
+          this.channelHandlers.handleEvent(activeSessionId, event);
         },
         handleCoordinatorCall: (activeSessionId, data, channelName) => {
           this.handleCoordinatorCall(activeSessionId, data, channelName);
@@ -904,139 +916,6 @@ export class AgentProcessManager {
     return ch.call(method, params);
   }
 
-  private handleEvent(sessionId: string, event: AgentEvent): void {
-    handleAgentEventOperation({
-      sessionId,
-      event,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-      clients: this.clients,
-      parentChildMap: this.parentChildMap,
-      leafIds: this.leafIds,
-      syncDelegateResolvers: this.syncDelegateResolvers,
-      subagentSyncChildren: this.subagentSyncChildren,
-      syncDelegateLastText: this.syncDelegateLastText,
-      sandboxEnabled: config.sandboxEnabled,
-      broadcastEvent: (eventName, data, filter) => this.broadcastEvent(eventName, data, filter),
-      broadcastSessionStatus: (id, status) => this.broadcastSessionStatus(id, status),
-      emitAgentEvent: (id, sanitized) => this.emitAgentEvent(id, sanitized),
-      handleSubagentChannelData: (id, ch) => {
-        this.handleSubagentChannelData(id, ch);
-      },
-      handleTodoChannelData: (id, ch) => {
-        this.handleTodoChannelData(id, ch);
-      },
-      handleBashChannelData: (id, ch) => {
-        this.handleBashChannelData(id, ch);
-      },
-      handleLspChannelData: (id, ch) => {
-        this.handleLspChannelData(id, ch);
-      },
-      handleRulesChannelData: (id, ch) => {
-        this.handleRulesChannelData(id, ch);
-      },
-      handleMemoryChannelData: (id, ch) => {
-        this.handleMemoryChannelData(id, ch);
-      },
-      handleSupervisorChannelData: (id, ch) => {
-        this.handleSupervisorChannelData(id, ch);
-      },
-    });
-  }
-
-  private async handleSubagentChannelData(
-    parentSessionId: string,
-    channelMsg: ChannelDataEvent,
-  ): Promise<void> {
-    await handleSubagentChannelDataOperation({
-      parentSessionId,
-      channelMsg,
-      getManagedState: (id) => {
-        const managed = this.clients.get(id);
-        if (!managed) return null;
-        return {
-          sessionPath: managed.info.sessionPath,
-          activeBackgroundTools: managed.activeBackgroundTools,
-        };
-      },
-      broadcastEvent: (name, payload, filter) => this.broadcastEvent(name, payload, filter),
-    });
-  }
-
-  private async handleTodoChannelData(
-    sessionId: string,
-    channelMsg: ChannelDataEvent,
-  ): Promise<void> {
-    await handleTodoChannelDataOperation({
-      sessionId,
-      channelMsg,
-      broadcastEvent: (name, payload, filter) => this.broadcastEvent(name, payload, filter),
-    });
-  }
-
-  private async handleBashChannelData(
-    sessionId: string,
-    channelMsg: ChannelDataEvent,
-  ): Promise<void> {
-    await handleBashChannelDataOperation({
-      sessionId,
-      channelMsg,
-      getManagedState: (id) => {
-        const managed = this.clients.get(id);
-        if (!managed) return null;
-        return {
-          sessionPath: managed.info.sessionPath,
-          activeBackgroundTools: managed.activeBackgroundTools,
-        };
-      },
-      broadcastEvent: (name, payload, filter) => this.broadcastEvent(name, payload, filter),
-    });
-  }
-
-  private async handleSupervisorChannelData(
-    sessionId: string,
-    channelMsg: ChannelDataEvent,
-  ): Promise<void> {
-    await handleSupervisorChannelDataOperation({
-      sessionId,
-      channelMsg,
-      broadcastEvent: (name, payload, filter) => this.broadcastEvent(name, payload, filter),
-    });
-  }
-
-  private async handleLspChannelData(
-    sessionId: string,
-    channelMsg: ChannelDataEvent,
-  ): Promise<void> {
-    await handleLspChannelDataOperation({
-      sessionId,
-      channelMsg,
-      getCachedState: (id) => this.lastLspState.get(id),
-      setCachedState: (id, state) => this.lastLspState.set(id, state),
-    });
-  }
-
-  private async handleRulesChannelData(
-    sessionId: string,
-    channelMsg: ChannelDataEvent,
-  ): Promise<void> {
-    await handleRulesChannelDataOperation({
-      sessionId,
-      channelMsg,
-      broadcastEvent: (name, payload, filter) => this.broadcastEvent(name, payload, filter),
-    });
-  }
-
-  private async handleMemoryChannelData(
-    sessionId: string,
-    channelMsg: ChannelDataEvent,
-  ): Promise<void> {
-    await handleMemoryChannelDataOperation({
-      sessionId,
-      channelMsg,
-      broadcastEvent: (name, payload, filter) => this.broadcastEvent(name, payload, filter),
-    });
-  }
-
   private async handleCoordinatorCall(
     sessionId: string,
     data: unknown,
@@ -1053,15 +932,15 @@ export class AgentProcessManager {
         new Promise<unknown>((resolve) => {
           this._pendingDelegateRequests.push({ ...request, resolve });
         }),
-      handleDelegate: (id, msg) => this.handleCoordinatorDelegate(id, msg),
-      handleDelegateSend: (msg) => this.handleCoordinatorDelegateSend(msg),
-      handleDelegateSync: (id, msg) => this.handleCoordinatorDelegateSync(id, msg),
-      handleDelegateStatus: (msg) => this.handleCoordinatorDelegateStatus(msg),
-      handleDelegateList: (id) => this.handleCoordinatorDelegateList(id),
-      handleDelegateStop: (id, msg) => this.handleCoordinatorDelegateStop(id, msg),
-      handleDelegateFork: (id, msg) => this.handleCoordinatorDelegateFork(id, msg),
-      handleClearStopped: (msg) => this.handleCoordinatorClearStopped(msg),
-      handleRemove: (id, msg) => this.handleCoordinatorRemove(id, msg),
+      handleDelegate: (id, msg) => this.coordinatorHandlers.handleDelegate(id, msg),
+      handleDelegateSend: (msg) => this.coordinatorHandlers.handleDelegateSend(msg),
+      handleDelegateSync: (id, msg) => this.coordinatorHandlers.handleDelegateSync(id, msg),
+      handleDelegateStatus: (msg) => this.coordinatorHandlers.handleDelegateStatus(msg),
+      handleDelegateList: (id) => this.coordinatorHandlers.handleDelegateList(id),
+      handleDelegateStop: (id, msg) => this.coordinatorHandlers.handleDelegateStop(id, msg),
+      handleDelegateFork: (id, msg) => this.coordinatorHandlers.handleDelegateFork(id, msg),
+      handleClearStopped: (msg) => this.coordinatorHandlers.handleClearStopped(msg),
+      handleRemove: (id, msg) => this.coordinatorHandlers.handleRemove(id, msg),
       findResponseManaged: (id) =>
         findCoordinatorResponseManaged({
           active: this.getActiveManaged(id) ?? undefined,
@@ -1069,157 +948,6 @@ export class AgentProcessManager {
           sessionProjectPaths: this.sessionProjectPaths,
           processByCwd: this.processByCwd,
         }),
-    });
-  }
-
-  private handleCoordinatorClearStopped(
-    msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_clear_stopped" }>,
-  ): { cleared: string[] } {
-    const targetSessionId = (msg as Record<string, unknown>).sessionId as string | undefined;
-    const cleared: string[] = [];
-    if (targetSessionId) {
-      clearDelegateTracking(this.delegateCreatedAt, this.delegateReplyCount, targetSessionId);
-      cleared.push(targetSessionId);
-    }
-    return { cleared };
-  }
-
-  private handleCoordinatorRemove(
-    parentSessionId: string,
-    msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_remove" }>,
-  ): { removed: boolean } {
-    const targetSessionId = (msg as Record<string, unknown>).targetSessionId as string | undefined;
-    if (!targetSessionId) return { removed: false };
-
-    removeDelegateChild(this.parentChildMap, parentSessionId, targetSessionId);
-    clearDelegateTracking(this.delegateCreatedAt, this.delegateReplyCount, targetSessionId);
-    this.stop(targetSessionId);
-    return { removed: true };
-  }
-
-  private async handleCoordinatorDelegate(
-    parentSessionId: string,
-    msg: Extract<CoordinatorMethodCall, { __call: "session_delegate" }>,
-  ): Promise<{ sessionId: string; status: "started" | "already_running" | "switched" }> {
-    return handleCoordinatorDelegateOperation({
-      parentSessionId,
-      msg,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-      start: (id, projectPath, sessionPath, startOptions) =>
-        this.start(id, projectPath, sessionPath, startOptions),
-      setSessionName: (id, name) => this.setSessionName(id, name),
-      send: (id, content) => this.send(id, content),
-      broadcastEvent: (eventName, data, filter) => this.broadcastEvent(eventName, data, filter),
-      parentChildMap: this.parentChildMap,
-      delegateCreatedAt: this.delegateCreatedAt,
-      delegateReplyCount: this.delegateReplyCount,
-    });
-  }
-
-  private async handleCoordinatorDelegateSync(
-    parentSessionId: string,
-    msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_sync" }>,
-  ): Promise<{
-    sessionId: string;
-    status: string;
-    exitCode: number;
-    finalText: string;
-    error?: string;
-  }> {
-    return handleCoordinatorDelegateSyncOperation({
-      parentSessionId,
-      msg,
-      getActiveManaged: (id) => this.getActiveManaged(id),
-      start: (id, projectPath, sessionPath, startOptions) =>
-        this.start(id, projectPath, sessionPath, startOptions),
-      switchAgent: (id, agentName) => this.switchAgent(id, agentName),
-      setSessionName: (id, name) => this.setSessionName(id, name),
-      send: (id, content) => this.send(id, content),
-      steer: (id, content) => this.steer(id, content),
-      stop: (id) => this.stop(id),
-      broadcastEvent: (eventName, data, filter) => this.broadcastEvent(eventName, data, filter),
-      parentChildMap: this.parentChildMap,
-      delegateCreatedAt: this.delegateCreatedAt,
-      delegateReplyCount: this.delegateReplyCount,
-      syncDelegateResolvers: this.syncDelegateResolvers,
-      subagentSyncChildren: this.subagentSyncChildren,
-      syncDelegateLastText: this.syncDelegateLastText,
-    });
-  }
-
-  private async handleCoordinatorDelegateSend(
-    msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_send" }>,
-  ): Promise<{ delivered: boolean; targetStatus: "active" | "started" | "not_found" }> {
-    return handleCoordinatorDelegateSendOperation({
-      msg,
-      clients: this.clients,
-      sessionPaths: this.sessionPaths,
-      sessionProjectPaths: this.sessionProjectPaths,
-      delegateReplyCount: this.delegateReplyCount,
-      delegateCreatedAt: this.delegateCreatedAt,
-      parentChildMap: this.parentChildMap,
-      start: (sessionId, projectPath, sessionPath) => this.start(sessionId, projectPath, sessionPath),
-      send: (sessionId, content) => {
-        this.send(sessionId, content);
-      },
-      steer: (sessionId, content) => {
-        this.steer(sessionId, content);
-      },
-      followUp: (sessionId, content) => {
-        this.followUp(sessionId, content);
-      },
-    });
-  }
-
-  private async handleCoordinatorDelegateStatus(
-    msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_status" }>,
-  ): Promise<{ status: string; isCompacting: boolean; contextUsage: unknown }> {
-    return handleCoordinatorDelegateStatusOperation({
-      msg,
-      sessionPaths: this.sessionPaths,
-      sessionProjectPaths: this.sessionProjectPaths,
-      getStatus: (sessionId) => this.getStatus(sessionId),
-      getState: (sessionId) => this.getState(sessionId),
-      getContextUsage: (sessionId) => this.getContextUsage(sessionId),
-    });
-  }
-
-  private handleCoordinatorDelegateList(parentSessionId: string): {
-    sessions: Array<{ sessionId: string; status: string; projectPath: string }>;
-  } {
-    return handleCoordinatorDelegateListOperation({
-      parentSessionId,
-      parentChildMap: this.parentChildMap,
-      clients: this.clients,
-    });
-  }
-
-  private async handleCoordinatorDelegateStop(
-    parentSessionId: string,
-    msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_stop" }>,
-  ): Promise<{ ok: boolean }> {
-    return handleCoordinatorDelegateStopOperation({
-      parentSessionId,
-      msg,
-      parentChildMap: this.parentChildMap,
-      stop: (sessionId) => this.stop(sessionId),
-    });
-  }
-
-  private async handleCoordinatorDelegateFork(
-    parentSessionId: string,
-    msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_fork" }>,
-  ): Promise<{ sessionId: string; status: "started" | "already_running" | "switched" }> {
-    return handleCoordinatorDelegateForkOperation({
-      parentSessionId,
-      msg,
-      clients: this.clients,
-      start: (id, projectPath, sessionPath, startOptions) =>
-        this.start(id, projectPath, sessionPath, startOptions),
-      setSessionName: (id, name) => this.setSessionName(id, name),
-      send: (id, content) => this.send(id, content),
-      broadcastEvent: (eventName, data, filter) => this.broadcastEvent(eventName, data, filter),
-      parentChildMap: this.parentChildMap,
     });
   }
 
