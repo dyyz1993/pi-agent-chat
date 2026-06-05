@@ -4,7 +4,7 @@ import type { ChatMessage, ContentBlock } from "../types";
 import { apiClient } from "../lib/api-client";
 import { useAppStore } from "./use-app-store";
 import { useNotificationStore } from "./use-notification-store";
-import { clearAgentStarted, markAgentStarted, useSessionStore } from "./use-session-store";
+import { clearAgentStarted, useSessionStore } from "./use-session-store";
 import { useMemoryStore } from "./use-memory-store";
 import { ALL_MEMORY_TYPE_KEYS } from "../components/chat/memory-config";
 import { messageToChatMessage } from "../lib/message-mapper";
@@ -216,51 +216,6 @@ async function sendAgentMessageWithTimeout(
     setTimeout(() => reject(new Error("Send timed out (60s)")), SEND_TIMEOUT_MS),
   );
   await Promise.race([sendPromise, timeoutPromise]);
-}
-
-function findSessionForRestart(sessionId: string): { projectPath: string; sessionPath: string } | null {
-  const { sessionsByProject } = useSessionStore.getState();
-  for (const sessions of Object.values(sessionsByProject)) {
-    const session = sessions.find((s) => s.sessionId === sessionId);
-    if (session) {
-      return { projectPath: session.projectPath, sessionPath: session.sessionPath };
-    }
-  }
-  return null;
-}
-
-async function restartAgentForSend(sessionId: string): Promise<boolean> {
-  clearAgentStarted(sessionId);
-  const session = findSessionForRestart(sessionId);
-  if (!session) {
-    perfLog.warn("[send] restart skipped: session metadata missing", { sessionId });
-    return false;
-  }
-
-  perfLog.info("[send] restarting agent before retry", { sessionId });
-  const result = await apiClient.call("agent.start", {
-    sessionId,
-    projectPath: session.projectPath,
-    sessionPath: session.sessionPath,
-  });
-
-  if (
-    result.status !== "started" &&
-    result.status !== "already_running" &&
-    result.status !== "switched"
-  ) {
-    perfLog.warn("[send] restart returned unexpected status", {
-      sessionId,
-      status: result.status,
-    });
-    return false;
-  }
-
-  markAgentStarted(sessionId);
-  useSessionStore.setState((s) => ({
-    sessionReady: { ...s.sessionReady, [sessionId]: true },
-  }));
-  return true;
 }
 
 function getMessageRevisionKey(msg: ChatMessage): string {
@@ -485,24 +440,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
       scheduleEmptyTurnCheck();
     } catch (err) {
       let finalErr = err;
-      if (isAgentNotStartedError(err, sessionId)) {
-        try {
-          const restarted = await restartAgentForSend(sessionId);
-          if (restarted) {
-            const retryT0 = performance.now();
-            perfLog.info("[send] retry begin", { sessionId });
-            await sendAgentMessageWithTimeout(sessionId, text, sentImages);
-            perfLog.info("[send] retry done", {
-              sessionId,
-              retryMs: Math.round(performance.now() - retryT0),
-            });
-            set({ isStreaming: false });
-            scheduleEmptyTurnCheck();
-            return;
-          }
-        } catch (retryErr) {
-          finalErr = retryErr;
-        }
+      if (isAgentNotStartedError(finalErr, sessionId)) {
+        clearAgentStarted(sessionId);
+        useSessionStore.setState((s) => ({
+          sessionReady: { ...s.sessionReady, [sessionId]: false },
+        }));
+        finalErr = new Error("当前会话连接已断开，请刷新页面或重连后再发送。");
       }
 
       set((s) => {

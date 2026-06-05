@@ -180,7 +180,13 @@ export function ChatPanel() {
     if (isAborting) return;
     setIsAborting(true);
     try {
-      await apiClient.call("agent.abort", { sessionId: activeSessionId });
+      const result = await apiClient.call("agent.abort", { sessionId: activeSessionId });
+      if (!result.ok) {
+        useSessionStore.getState().updateSessionStatus(activeSessionId, "idle");
+        pushNotif({ message: "Agent already stopped", level: "info" });
+        setIsAborting(false);
+        return;
+      }
       pushNotif({ message: "Agent stopped", level: "info" });
       abortFallbackRef.current = setTimeout(() => {
         abortFallbackRef.current = undefined;
@@ -188,7 +194,7 @@ export function ChatPanel() {
         const status = useSessionStore.getState().sessionStatusMap[sessionId];
         if (status === "streaming" || status === "retrying") {
           useSessionStore.getState().updateSessionStatus(sessionId, "idle");
-          pushNotif({ message: "Session recovered after abort timeout", level: "warning" });
+          log.warn("Abort fallback forced session idle", { sessionId, status });
         }
         setIsAborting(false);
       }, 10000);

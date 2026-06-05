@@ -53,6 +53,7 @@ type ChannelMethodReturn<
 import type { CoordinatorMethodCall, CoordinatorChannelEvent } from "../modules/coordinator";
 import { createLogger } from "../lib/logger";
 import { config } from "../../server-config";
+import { findSessionById } from "../lib/session-scanner";
 
 const log = createLogger("agent");
 const perfLog = createLogger("session-perf");
@@ -967,18 +968,18 @@ export class AgentProcessManager {
 
   async abort(sessionId: string): Promise<boolean> {
     const managed = this.getActiveManaged(sessionId);
-    if (!managed) return false;
+    if (!managed) {
+      this.broadcastSessionStatus(sessionId, "idle");
+      return false;
+    }
     await managed.client.abort().catch((err: unknown) => {
       log.warn("abort error", { sessionId, err: err instanceof Error ? err.message : String(err) });
     });
-    this.emitAgentEvent(sessionId, { type: "agent_end" } as SanitizedEvent).catch(
-      (err: unknown) => {
-        log.warn("emitAgentEvent(agent_end) after abort error", {
-          sessionId,
-          err: err instanceof Error ? err.message : String(err),
-        });
-      },
-    );
+    managed.info.status = "idle";
+    managed.lastActiveAt = Date.now();
+    managed.info.holdEvents = [];
+    this.broadcastSessionStatus(sessionId, "idle");
+    await this.emitAgentEvent(sessionId, { type: "agent_end" } as SanitizedEvent);
     return true;
   }
 
@@ -1175,25 +1176,38 @@ export class AgentProcessManager {
 
   /**
    * Ensure a managed client exists for the session.
-   * In sandbox mode, if the managed client was GC'd, this will rebuild it
-   * by calling start() with the persisted session/project metadata.
+   * If the managed client was GC'd or the backend restarted, rebuild it
+   * using persisted session/project metadata.
    */
   private async ensureManagedClient(sessionId: string): Promise<ManagedClient | null> {
     const existing = this.getActiveManaged(sessionId);
     if (existing) return existing;
 
-    if (!config.sandboxEnabled) return null;
-
-    const projectPath = this.sessionProjectPaths.get(sessionId);
-    const sessionPath = this.sessionPaths.get(sessionId);
+    let projectPath = this.sessionProjectPaths.get(sessionId);
+    let sessionPath = this.sessionPaths.get(sessionId);
     if (!projectPath || !sessionPath) {
-      log.warn("[ensureManagedClient] no persisted session metadata", { sessionId });
+      const session = await findSessionById(sessionId);
+      if (session) {
+        projectPath = session.projectPath;
+        sessionPath = session.sessionPath;
+        this.sessionProjectPaths.set(sessionId, projectPath);
+        this.sessionPaths.set(sessionId, sessionPath);
+      }
+    }
+
+    if (!projectPath || !sessionPath) {
+      log.warn("[ensureManagedClient] session metadata not found", { sessionId });
       return null;
     }
 
-    const userId = this._getSandboxUserId(sessionId) ?? sessionId;
+    const userId = config.sandboxEnabled ? (this._getSandboxUserId(sessionId) ?? sessionId) : undefined;
 
-    log.info("[ensureManagedClient] rebuilding GC'd sandbox", { sessionId, projectPath, userId });
+    log.info("[ensureManagedClient] rebuilding managed client", {
+      sessionId,
+      projectPath,
+      sandbox: !!config.sandboxEnabled,
+      userId,
+    });
 
     try {
       const result = await this.start(sessionId, projectPath, sessionPath, {

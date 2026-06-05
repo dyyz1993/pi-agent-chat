@@ -27,14 +27,24 @@ describe("handleAbort fallback recovery", () => {
     if (isAborting) return;
     isAborting = true;
     try {
-      await apiCall("agent.abort", { sessionId });
+      const result = await apiCall("agent.abort", { sessionId });
+      if (
+        typeof result === "object" &&
+        result !== null &&
+        "ok" in result &&
+        result.ok === false
+      ) {
+        sessionStatusMap[sessionId] = "idle";
+        pushMock({ message: "Agent already stopped", level: "info" });
+        isAborting = false;
+        return;
+      }
       pushMock({ message: "Agent stopped", level: "info" });
       abortFallbackTimer = setTimeout(() => {
         abortFallbackTimer = undefined;
         const status = sessionStatusMap[sessionId];
         if (status === "streaming" || status === "retrying") {
           sessionStatusMap[sessionId] = "idle";
-          pushMock({ message: "Session recovered after abort timeout", level: "warning" });
         }
         isAborting = false;
       }, 10000);
@@ -94,7 +104,7 @@ describe("handleAbort fallback recovery", () => {
     );
   });
 
-  it("should force-reset session to idle after 10s if agent_end never arrives", async () => {
+  it("should silently force-reset session to idle after 10s if agent_end never arrives", async () => {
     const apiCall = vi.fn().mockResolvedValue({ ok: true });
 
     await handleAbort("sess-1", apiCall);
@@ -103,11 +113,8 @@ describe("handleAbort fallback recovery", () => {
     vi.advanceTimersByTime(10000);
 
     expect(sessionStatusMap["sess-1"]).toBe("idle");
-    expect(pushMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        message: "Session recovered after abort timeout",
-        level: "warning",
-      }),
+    expect(pushMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ level: "warning" }),
     );
     expect(isAborting).toBe(false);
   });
@@ -149,10 +156,20 @@ describe("handleAbort fallback recovery", () => {
 
     expect(sessionStatusMap["sess-1"]).toBe("idle");
     expect(pushMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        message: "Session recovered after abort timeout",
-        level: "warning",
-      }),
+      expect.objectContaining({ message: "Agent stopped", level: "info" }),
+    );
+  });
+
+  it("should handle ok:false as already stopped without scheduling fallback", async () => {
+    const apiCall = vi.fn().mockResolvedValue({ ok: false });
+
+    await handleAbort("sess-1", apiCall);
+
+    expect(sessionStatusMap["sess-1"]).toBe("idle");
+    expect(isAborting).toBe(false);
+    expect(abortFallbackTimer).toBeUndefined();
+    expect(pushMock).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "Agent already stopped", level: "info" }),
     );
   });
 });
