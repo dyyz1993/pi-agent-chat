@@ -32,7 +32,7 @@ type ChannelMethodReturn<
   CN extends keyof ChannelTypeRegistry,
   MN extends ChannelMethodKeys<CN>,
 > = NonNullable<ChannelTypeRegistry[CN]["methods"]>[MN] extends { return: infer R } ? R : unknown;
-import type { CoordinatorMethodCall, CoordinatorChannelEvent } from "../modules/coordinator";
+import type { CoordinatorMethodCall } from "../modules/coordinator";
 import { createLogger } from "../lib/logger";
 import { config } from "../../server-config";
 import { findSessionById } from "../lib/session-scanner";
@@ -163,6 +163,7 @@ import {
   removeDelegateChild,
 } from "./coordinator-session-state";
 import { findCoordinatorResponseManaged } from "./coordinator-response-routing";
+import { handleCoordinatorCallOperation } from "./coordinator-call-dispatcher";
 import {
   handleCoordinatorDelegateListOperation,
   handleCoordinatorDelegateSendOperation,
@@ -1696,101 +1697,34 @@ export class AgentProcessManager {
     data: unknown,
     channelName: string,
   ): Promise<void> {
-    const msg = data as CoordinatorChannelEvent;
-
-    if (!("__call" in msg)) {
-      this.broadcastEvent("coordinator.event", { sessionId, event: msg }, { sessionId }).catch(
-        (err: unknown) => {
-          log.warn("broadcastEvent(coordinator.event) error", {
-            sessionId,
-            err: err instanceof Error ? err.message : String(err),
-          });
-        },
-      );
-      return;
-    }
-
-    const { __call: method, invokeId } = msg;
-    let result: unknown;
-    try {
-      switch (method) {
-        case "session_delegate":
-          if (this._startInProgress) {
-            // Queue the request — will be processed after current start() finishes
-            log.info("[coordinator] session_delegate queued (start in progress)", { sessionId });
-            result = await new Promise<unknown>((resolve) => {
-              this._pendingDelegateRequests.push({ sessionId, msg, channelName, resolve });
-            });
-          } else {
-            result = await this.handleCoordinatorDelegate(sessionId, msg);
-          }
-          break;
-        case "session_delegate_send":
-          result = await this.handleCoordinatorDelegateSend(msg);
-          break;
-        case "session_delegate_sync":
-          if (this._startInProgress) {
-            log.info("[coordinator] session_delegate_sync queued (start in progress)", {
-              sessionId,
-            });
-            result = await new Promise<unknown>((resolve) => {
-              this._pendingDelegateRequests.push({ sessionId, msg, channelName, resolve });
-            });
-          } else {
-            result = await this.handleCoordinatorDelegateSync(sessionId, msg);
-          }
-          break;
-        case "session_delegate_status":
-          result = await this.handleCoordinatorDelegateStatus(msg);
-          break;
-        case "session_delegate_list":
-          result = this.handleCoordinatorDelegateList(sessionId);
-          break;
-        case "session_delegate_stop":
-          result = await this.handleCoordinatorDelegateStop(sessionId, msg);
-          break;
-        case "session_delegate_fork":
-          result = await this.handleCoordinatorDelegateFork(sessionId, msg);
-          break;
-        default:
-          if (method === "session_delegate_clear_stopped") {
-            result = this.handleCoordinatorClearStopped(msg);
-          } else if (method === "session_delegate_remove") {
-            result = this.handleCoordinatorRemove(sessionId, msg);
-          } else {
-            log.warn("Unknown coordinator method", { sessionId, method });
-            return;
-          }
-      }
-    } catch (err: unknown) {
-      result = { error: err instanceof Error ? err.message : String(err) };
-    }
-
-    if (invokeId) {
-      const route = findCoordinatorResponseManaged({
-        active: this.getActiveManaged(sessionId) ?? undefined,
-        sessionId,
-        sessionProjectPaths: this.sessionProjectPaths,
-        processByCwd: this.processByCwd,
-      });
-      const managed = route.managed;
-      if (route.matchedViaFallback) {
-        log.info("handleCoordinatorCall: routed response via processByCwd fallback", {
-          sessionId,
-          projectPath: route.projectPath,
-          activeSession: managed?._activeSessionId,
-        });
-      } else if (!managed && route.projectPath) {
-        log.warn("handleCoordinatorCall: processByCwd fallback could not find matching process", {
-          sessionId,
-          projectPath: route.projectPath,
-          processCount: route.processCount ?? 0,
-        });
-      }
-      if (managed) {
-        managed.client.channel(channelName).send({ ...(result as object), invokeId });
-      }
-    }
+    await handleCoordinatorCallOperation({
+      sessionId,
+      data,
+      channelName,
+      startInProgress: this._startInProgress,
+      broadcastEvent: (eventName, payload, filter) =>
+        this.broadcastEvent(eventName, payload, filter),
+      queueDelegateRequest: (request) =>
+        new Promise<unknown>((resolve) => {
+          this._pendingDelegateRequests.push({ ...request, resolve });
+        }),
+      handleDelegate: (id, msg) => this.handleCoordinatorDelegate(id, msg),
+      handleDelegateSend: (msg) => this.handleCoordinatorDelegateSend(msg),
+      handleDelegateSync: (id, msg) => this.handleCoordinatorDelegateSync(id, msg),
+      handleDelegateStatus: (msg) => this.handleCoordinatorDelegateStatus(msg),
+      handleDelegateList: (id) => this.handleCoordinatorDelegateList(id),
+      handleDelegateStop: (id, msg) => this.handleCoordinatorDelegateStop(id, msg),
+      handleDelegateFork: (id, msg) => this.handleCoordinatorDelegateFork(id, msg),
+      handleClearStopped: (msg) => this.handleCoordinatorClearStopped(msg),
+      handleRemove: (id, msg) => this.handleCoordinatorRemove(id, msg),
+      findResponseManaged: (id) =>
+        findCoordinatorResponseManaged({
+          active: this.getActiveManaged(id) ?? undefined,
+          sessionId: id,
+          sessionProjectPaths: this.sessionProjectPaths,
+          processByCwd: this.processByCwd,
+        }),
+    });
   }
 
   private handleCoordinatorClearStopped(
