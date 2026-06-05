@@ -4,6 +4,25 @@ import * as os from "os";
 import * as path from "path";
 
 export type DelegateSessionType = "coordinator" | "subagent";
+export type CoordinatorSessionCreatedDelegateType = DelegateSessionType | "fork";
+
+export interface CoordinatorSessionCreatedPayload {
+  parentSessionId: string;
+  session: {
+    sessionId: string;
+    name: string;
+    sessionPath: string;
+    projectPath: string;
+    parentSessionPath: string;
+    delegateParentSessionId: string;
+    delegateType: CoordinatorSessionCreatedDelegateType;
+    messageCount: 0;
+    firstMessage: string;
+    createdAt: number;
+    updatedAt: number;
+    status: "running";
+  };
+}
 
 export interface DelegateSessionPaths {
   projectPath: string;
@@ -144,6 +163,42 @@ export function buildSyncDelegatePrompt(options: {
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+export function buildCoordinatorSessionCreatedEvent(options: {
+  parentSessionId: string;
+  sessionId: string;
+  name: string;
+  sessionPath: string;
+  projectPath: string;
+  parentSessionPath: string;
+  delegateType: CoordinatorSessionCreatedDelegateType;
+  firstMessage: string;
+  createdAt?: number;
+}): CoordinatorSessionCreatedPayload {
+  const createdAt = options.createdAt ?? Date.now();
+  return {
+    parentSessionId: options.parentSessionId,
+    session: {
+      sessionId: options.sessionId,
+      name: options.name,
+      sessionPath: options.sessionPath,
+      projectPath: options.projectPath,
+      parentSessionPath: options.parentSessionPath,
+      delegateParentSessionId: options.parentSessionId,
+      delegateType: options.delegateType,
+      messageCount: 0,
+      firstMessage: options.firstMessage,
+      createdAt,
+      updatedAt: createdAt,
+      status: "running",
+    },
+  };
+}
+
+export function formatDelegateElapsed(createdAt: number, now = Date.now()): string {
+  const elapsedMs = Math.max(0, now - createdAt);
+  return elapsedMs < 60000 ? `${Math.round(elapsedMs / 1000)}s` : `${Math.round(elapsedMs / 60000)}m`;
 }
 
 export function wrapDelegateReply(options: {

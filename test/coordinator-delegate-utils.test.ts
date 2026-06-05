@@ -8,7 +8,9 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   buildCoordinatorDelegatePrompt,
+  buildCoordinatorSessionCreatedEvent,
   buildSyncDelegatePrompt,
+  formatDelegateElapsed,
   resolveDelegateSessionPaths,
   stripParentSessionFromHeader,
   wrapDelegateReply,
@@ -159,5 +161,43 @@ describe("coordinator delegate utils", () => {
         `</delegate-reply>`,
       ].join("\n"),
     );
+  });
+
+  it("builds coordinator session_created events with a stable payload shape", () => {
+    expect(
+      buildCoordinatorSessionCreatedEvent({
+        parentSessionId: "sess_parent",
+        sessionId: "sess_child",
+        name: "子代理: 测试",
+        sessionPath: "/tmp/sess_child.jsonl",
+        projectPath: "/repo/app",
+        parentSessionPath: "/tmp/sess_parent.jsonl",
+        delegateType: "subagent",
+        firstMessage: "运行测试",
+        createdAt: 456,
+      }),
+    ).toEqual({
+      parentSessionId: "sess_parent",
+      session: {
+        sessionId: "sess_child",
+        name: "子代理: 测试",
+        sessionPath: "/tmp/sess_child.jsonl",
+        projectPath: "/repo/app",
+        parentSessionPath: "/tmp/sess_parent.jsonl",
+        delegateParentSessionId: "sess_parent",
+        delegateType: "subagent",
+        messageCount: 0,
+        firstMessage: "运行测试",
+        createdAt: 456,
+        updatedAt: 456,
+        status: "running",
+      },
+    });
+  });
+
+  it("formats delegate reply elapsed time in seconds or minutes", () => {
+    expect(formatDelegateElapsed(1_000, 16_000)).toBe("15s");
+    expect(formatDelegateElapsed(1_000, 122_000)).toBe("2m");
+    expect(formatDelegateElapsed(20_000, 10_000)).toBe("0s");
   });
 });

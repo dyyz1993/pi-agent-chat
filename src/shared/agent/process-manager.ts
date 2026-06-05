@@ -69,7 +69,9 @@ import {
 } from "./agent-runtime-config";
 import {
   buildCoordinatorDelegatePrompt,
+  buildCoordinatorSessionCreatedEvent,
   buildSyncDelegatePrompt,
+  formatDelegateElapsed,
   resolveDelegateSessionPaths,
   stripParentSessionFromHeader,
   wrapDelegateReply,
@@ -109,6 +111,16 @@ import {
   type JsonlTreeEntry,
 } from "./session-tree-navigation";
 import { registerAgentChannels } from "./agent-channel-registration";
+import {
+  canStopDelegateChild,
+  clearDelegateTracking,
+  findParentSession,
+  listDelegateChildSessions,
+  popDelegateChildren,
+  registerDelegateChild,
+  removeDelegateChild,
+  removeSessionFromAllParents,
+} from "./coordinator-session-state";
 
 const log = createLogger("agent");
 const perfLog = createLogger("session-perf");
@@ -398,13 +410,6 @@ export class AgentProcessManager {
         resolve({ error: err instanceof Error ? err.message : String(err) });
       }
     }
-  }
-
-  private findParentSession(childSessionId: string): string | null {
-    for (const [parentId, children] of this.parentChildMap.entries()) {
-      if (children.has(childSessionId)) return parentId;
-    }
-    return null;
   }
 
   constructor(server: RPCServer) {
@@ -764,23 +769,18 @@ export class AgentProcessManager {
     });
 
     // Cascade stop delegated children
-    const children = this.parentChildMap.get(sessionId);
-    if (children) {
+    const children = popDelegateChildren(this.parentChildMap, sessionId);
+    if (children.length > 0) {
       for (const childId of children) {
         this.stop(childId);
       }
-      this.parentChildMap.delete(sessionId);
-      this.delegateReplyCount.delete(sessionId);
-      this.delegateCreatedAt.delete(sessionId);
+      clearDelegateTracking(this.delegateCreatedAt, this.delegateReplyCount, sessionId);
     }
 
     // Remove from parent's children set if this is a delegated session
-    for (const [, childSet] of this.parentChildMap) {
-      childSet.delete(sessionId);
-    }
+    removeSessionFromAllParents(this.parentChildMap, sessionId);
 
-    this.delegateReplyCount.delete(sessionId);
-    this.delegateCreatedAt.delete(sessionId);
+    clearDelegateTracking(this.delegateCreatedAt, this.delegateReplyCount, sessionId);
 
     const syncResolver = this.syncDelegateResolvers.get(sessionId);
     if (syncResolver) {
@@ -2599,7 +2599,7 @@ export class AgentProcessManager {
       }
     }
 
-    const parentId = this.findParentSession(sessionId);
+    const parentId = findParentSession(this.parentChildMap, sessionId);
     if (parentId) {
       this.broadcastEvent(
         "coordinator.session_event",
@@ -2881,8 +2881,7 @@ export class AgentProcessManager {
     const targetSessionId = (msg as Record<string, unknown>).sessionId as string | undefined;
     const cleared: string[] = [];
     if (targetSessionId) {
-      this.delegateCreatedAt.delete(targetSessionId);
-      this.delegateReplyCount.delete(targetSessionId);
+      clearDelegateTracking(this.delegateCreatedAt, this.delegateReplyCount, targetSessionId);
       cleared.push(targetSessionId);
     }
     return { cleared };
@@ -2895,13 +2894,8 @@ export class AgentProcessManager {
     const targetSessionId = (msg as Record<string, unknown>).targetSessionId as string | undefined;
     if (!targetSessionId) return { removed: false };
 
-    const children = this.parentChildMap.get(parentSessionId);
-    if (children) {
-      children.delete(targetSessionId);
-      if (children.size === 0) this.parentChildMap.delete(parentSessionId);
-    }
-    this.delegateCreatedAt.delete(targetSessionId);
-    this.delegateReplyCount.delete(targetSessionId);
+    removeDelegateChild(this.parentChildMap, parentSessionId, targetSessionId);
+    clearDelegateTracking(this.delegateCreatedAt, this.delegateReplyCount, targetSessionId);
     this.stop(targetSessionId);
     return { removed: true };
   }
@@ -2942,16 +2936,12 @@ export class AgentProcessManager {
       forceNewProcess: true,
     });
 
-    this.delegateCreatedAt.set(newSessionId, Date.now());
+    const createdAt = Date.now();
+    this.delegateCreatedAt.set(newSessionId, createdAt);
     this.delegateReplyCount.set(newSessionId, 0);
 
     // Register parent-child relationship
-    let children = this.parentChildMap.get(parentSessionId);
-    if (!children) {
-      children = new Set<string>();
-      this.parentChildMap.set(parentSessionId, children);
-    }
-    children.add(newSessionId);
+    registerDelegateChild(this.parentChildMap, parentSessionId, newSessionId);
 
     const rawTitle = msg.title ?? task.slice(0, 60);
     const title = `指派: ${rawTitle}`;
@@ -2968,23 +2958,17 @@ export class AgentProcessManager {
 
     this.broadcastEvent(
       "coordinator.session_created",
-      {
+      buildCoordinatorSessionCreatedEvent({
         parentSessionId,
-        session: {
-          sessionId: newSessionId,
-          name: title,
-          sessionPath,
-          projectPath,
-          parentSessionPath: parent.info.sessionPath,
-          delegateParentSessionId: parentSessionId,
-          delegateType: "coordinator",
-          messageCount: 0,
-          firstMessage: task,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          status: "running" as const,
-        },
-      },
+        sessionId: newSessionId,
+        name: title,
+        sessionPath,
+        projectPath,
+        parentSessionPath: parent.info.sessionPath,
+        delegateType: "coordinator",
+        firstMessage: task,
+        createdAt,
+      }),
       { parentSessionId },
     ).catch((err: unknown) => {
       log.warn("broadcastEvent(coordinator.session_created) error", {
@@ -3052,15 +3036,11 @@ export class AgentProcessManager {
       }
     }
 
-    this.delegateCreatedAt.set(newSessionId, Date.now());
+    const createdAt = Date.now();
+    this.delegateCreatedAt.set(newSessionId, createdAt);
     this.delegateReplyCount.set(newSessionId, 0);
 
-    let children = this.parentChildMap.get(parentSessionId);
-    if (!children) {
-      children = new Set<string>();
-      this.parentChildMap.set(parentSessionId, children);
-    }
-    children.add(newSessionId);
+    registerDelegateChild(this.parentChildMap, parentSessionId, newSessionId);
 
     const rawTitle = title ?? task.slice(0, 60);
     const sessionTitle = `子代理: ${rawTitle}`;
@@ -3123,23 +3103,17 @@ export class AgentProcessManager {
 
     this.broadcastEvent(
       "coordinator.session_created",
-      {
+      buildCoordinatorSessionCreatedEvent({
         parentSessionId,
-        session: {
-          sessionId: newSessionId,
-          name: rawTitle,
-          sessionPath,
-          projectPath,
-          parentSessionPath: parent.info.sessionPath,
-          delegateParentSessionId: parentSessionId,
-          delegateType: "subagent",
-          messageCount: 0,
-          firstMessage: task,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          status: "running" as const,
-        },
-      },
+        sessionId: newSessionId,
+        name: rawTitle,
+        sessionPath,
+        projectPath,
+        parentSessionPath: parent.info.sessionPath,
+        delegateType: "subagent",
+        firstMessage: task,
+        createdAt,
+      }),
       { parentSessionId },
     ).catch((err: unknown) => {
       log.warn("broadcastEvent(coordinator.session_created) error", {
@@ -3175,11 +3149,7 @@ export class AgentProcessManager {
 
     this.stop(newSessionId);
 
-    const syncChildren = this.parentChildMap.get(parentSessionId);
-    if (syncChildren) {
-      syncChildren.delete(newSessionId);
-      if (syncChildren.size === 0) this.parentChildMap.delete(parentSessionId);
-    }
+    removeDelegateChild(this.parentChildMap, parentSessionId, newSessionId);
 
     return syncResult;
   }
@@ -3222,11 +3192,9 @@ export class AgentProcessManager {
     this.delegateReplyCount.set(targetSessionId, count);
 
     const createdAt = this.delegateCreatedAt.get(targetSessionId) ?? Date.now();
-    const elapsedMs = Date.now() - createdAt;
-    const elapsed =
-      elapsedMs < 60000 ? `${Math.round(elapsedMs / 1000)}s` : `${Math.round(elapsedMs / 60000)}m`;
+    const elapsed = formatDelegateElapsed(createdAt);
 
-    const parentSessionId = this.findParentSession(targetSessionId);
+    const parentSessionId = findParentSession(this.parentChildMap, targetSessionId);
     let title = "";
     if (parentSessionId) {
       const parent = this.clients.get(parentSessionId);
@@ -3285,22 +3253,7 @@ export class AgentProcessManager {
   private handleCoordinatorDelegateList(parentSessionId: string): {
     sessions: Array<{ sessionId: string; status: string; projectPath: string }>;
   } {
-    const children = this.parentChildMap.get(parentSessionId);
-    if (!children) {
-      return { sessions: [] };
-    }
-    const sessions: Array<{ sessionId: string; status: string; projectPath: string }> = [];
-    for (const childId of children) {
-      const managed = this.clients.get(childId);
-      if (managed) {
-        sessions.push({
-          sessionId: childId,
-          status: managed.info.status,
-          projectPath: managed.info.projectPath,
-        });
-      }
-    }
-    return { sessions };
+    return listDelegateChildSessions(this.parentChildMap, this.clients, parentSessionId);
   }
 
   private async handleCoordinatorDelegateStop(
@@ -3309,8 +3262,7 @@ export class AgentProcessManager {
   ): Promise<{ ok: boolean }> {
     const { sessionId: targetSessionId } = msg;
     // Only allow stopping own children
-    const children = this.parentChildMap.get(parentSessionId);
-    if (!children || !children.has(targetSessionId)) {
+    if (!canStopDelegateChild(this.parentChildMap, parentSessionId, targetSessionId)) {
       return { ok: false };
     }
     const ok = await this.stop(targetSessionId);
@@ -3344,12 +3296,7 @@ export class AgentProcessManager {
     });
 
     // Register parent-child relationship
-    let children = this.parentChildMap.get(parentSessionId);
-    if (!children) {
-      children = new Set<string>();
-      this.parentChildMap.set(parentSessionId, children);
-    }
-    children.add(forkedSessionId);
+    registerDelegateChild(this.parentChildMap, parentSessionId, forkedSessionId);
 
     const title = msg.title ?? task.slice(0, 60);
     await this.setSessionName(forkedSessionId, title);
@@ -3357,23 +3304,16 @@ export class AgentProcessManager {
 
     this.broadcastEvent(
       "coordinator.session_created",
-      {
+      buildCoordinatorSessionCreatedEvent({
         parentSessionId,
-        session: {
-          sessionId: forkedSessionId,
-          name: title,
-          sessionPath: forkedPath,
-          projectPath,
-          parentSessionPath: sessionPath,
-          delegateParentSessionId: parentSessionId,
-          delegateType: "fork",
-          messageCount: 0,
-          firstMessage: task,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          status: "running" as const,
-        },
-      },
+        sessionId: forkedSessionId,
+        name: title,
+        sessionPath: forkedPath,
+        projectPath,
+        parentSessionPath: sessionPath,
+        delegateType: "fork",
+        firstMessage: task,
+      }),
       { parentSessionId },
     ).catch((err: unknown) => {
       log.warn("broadcastEvent(coordinator.session_created from fork) error", {
