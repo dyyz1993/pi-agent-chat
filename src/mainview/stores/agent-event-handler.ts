@@ -72,6 +72,42 @@ function closeRunningToolExecutions(
   return changed ? next : content;
 }
 
+function extractIncomingToolCallIds(content: unknown): string[] {
+  if (!Array.isArray(content)) return [];
+  const ids: string[] = [];
+  for (const block of content) {
+    if (
+      block &&
+      typeof block === "object" &&
+      (block as Record<string, unknown>).type === "toolCall" &&
+      typeof (block as Record<string, unknown>).id === "string"
+    ) {
+      ids.push((block as Record<string, unknown>).id as string);
+    }
+  }
+  return ids;
+}
+
+function isDelayedTerminalMessageUpdate(
+  messages: ChatMessage[],
+  incomingContent: unknown,
+): boolean {
+  const lastMsg = messages[messages.length - 1];
+  if (!lastMsg || lastMsg.role !== "assistant" || lastMsg.isStreaming === true) return false;
+
+  const incomingToolCallIds = extractIncomingToolCallIds(incomingContent);
+  if (incomingToolCallIds.length === 0) return false;
+
+  return incomingToolCallIds.every((toolCallId) =>
+    lastMsg.content.some(
+      (block): block is ToolExecBlock =>
+        block.type === "toolExecution" &&
+        block.toolCallId === toolCallId &&
+        isTerminalToolStatus(block.status),
+    ),
+  );
+}
+
 function scheduleEmptyStreamingReload(sessionId: string, messageId: string): void {
   setTimeout(() => {
     const chat = useChatStore.getState();
@@ -475,6 +511,11 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
   }
 
   if (event.type === "message_update") {
+    const message = event.message as AssistantMessage;
+    const incoming = message.content;
+    const existingBeforeUpdate = useChatStore.getState().messagesBySession[sessionId] || [];
+    if (isDelayedTerminalMessageUpdate(existingBeforeUpdate, incoming)) return;
+
     if (storeGet().sessionStatusMap[sessionId] !== "streaming") {
       storeGet().updateSessionStatus(sessionId, "streaming");
     }
@@ -482,9 +523,6 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       const chat = useChatStore.getState();
       const existing = chat.messagesBySession[sessionId] || [];
       const lastMsg = existing[existing.length - 1];
-
-      const message = event.message as AssistantMessage;
-      const incoming = message.content;
       if (!incoming || !Array.isArray(incoming)) return;
 
       if (!lastMsg || lastMsg.role !== "assistant" || !lastMsg.isStreaming) {

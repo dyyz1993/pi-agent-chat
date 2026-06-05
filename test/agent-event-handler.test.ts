@@ -843,4 +843,44 @@ describe("message_update content block ordering", () => {
     );
     expect(exec!.args).toBe(JSON.stringify({ command: "ls" }, null, 2));
   });
+
+  it("ignores delayed message_update for a tool call that is already terminal", () => {
+    setMessages([
+      {
+        id: "msg-1",
+        role: "assistant",
+        content: [
+          {
+            type: "toolExecution",
+            toolCallId: TCID,
+            toolName: "bash",
+            args: "ls",
+            status: "done",
+            output: "file.txt\n",
+          },
+        ],
+        timestamp: Date.now(),
+        isStreaming: false,
+      },
+    ]);
+    useSessionStore.setState({ sessionStatusMap: { [SID]: "idle" } });
+
+    handleAgentEvent(SID, {
+      type: "message_update",
+      message: {
+        role: "assistant",
+        content: [{ type: "toolCall", id: TCID, name: "bash", arguments: { command: "ls" } }],
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+    flushNow();
+
+    const messages = useChatStore.getState().messagesBySession[SID] || [];
+    expect(messages).toHaveLength(1);
+    const exec = messages[0].content.find(
+      (b): b is Extract<ContentBlock, { type: "toolExecution" }> =>
+        b.type === "toolExecution" && b.toolCallId === TCID,
+    );
+    expect(exec?.status).toBe("done");
+    expect(useSessionStore.getState().sessionStatusMap[SID]).toBe("idle");
+  });
 });
