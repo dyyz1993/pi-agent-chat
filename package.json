@@ -122,5 +122,8 @@
     "*.{json,md,css}": [
       "prettier --write"
     ]
+  },
+  "overrides": {
+    "@dyyz1993/pi-agent-core": "0.78.3"
   }
 }
