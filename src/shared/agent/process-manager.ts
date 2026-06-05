@@ -54,10 +54,16 @@ import {
   type SessionMessageEntry,
 } from "./session-message-cache";
 import {
-  parseTierModel,
-  TIER_KEYS,
   type TierKey,
 } from "./agent-runtime-config";
+import {
+  cycleModelOperation,
+  cycleThinkingLevelOperation,
+  getAvailableModelsOperation,
+  setModelOperation,
+  setThinkingLevelOperation,
+  switchTierOperation,
+} from "./agent-client-model-operations";
 import {
   createRpcClient,
   getSandboxEndpoint,
@@ -1414,26 +1420,12 @@ export class AgentProcessManager {
   async getAvailableModels(
     sessionId: string,
   ): Promise<Array<{ provider: string; id: string; contextWindow: number; reasoning: boolean }>> {
-    // Retry with short delay: session may be mid-switch (agent.start in progress)
-    let managed = this.getActiveManaged(sessionId);
-    if (!managed) {
-      await new Promise((r) => setTimeout(r, 200));
-      managed = this.getActiveManaged(sessionId);
-    }
-    if (!managed) {
-      managed = await this.ensureManagedClient(sessionId);
-    }
-    if (!managed) return [];
-    return managed.client.getAvailableModels().catch(async (err: unknown) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.warn("getAvailableModels error, checking if CLI is alive", {
-        sessionId,
-        err: msg,
-      });
-      if (!(await this.isClientAlive(sessionId, managed))) {
-        this.cleanupDeadClient(sessionId, `getAvailableModels failed: ${msg}`);
-      }
-      return [];
+    return getAvailableModelsOperation({
+      sessionId,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+      ensureManagedClient: (id) => this.ensureManagedClient(id),
+      isClientAlive: (id, managed) => this.isClientAlive(id, managed),
+      cleanupDeadClient: (id, reason) => this.cleanupDeadClient(id, reason),
     });
   }
 
@@ -1442,26 +1434,24 @@ export class AgentProcessManager {
     provider: string,
     modelId: string,
   ): Promise<{ provider: string; id: string }> {
-    let managed = this.getActiveManaged(sessionId);
-    if (!managed) {
-      managed = await this.ensureManagedClient(sessionId);
-    }
-    if (!managed) throw new Error("Client not found");
-    return withTimeout(managed.client.setModel(provider, modelId), 15_000, "setModel");
+    return setModelOperation({
+      sessionId,
+      provider,
+      modelId,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+      ensureManagedClient: (id) => this.ensureManagedClient(id),
+    });
   }
 
   async switchTier(
     sessionId: string,
     tier: TierKey,
   ): Promise<{ provider: string; id: string; tier: TierKey }> {
-    if (!TIER_KEYS.includes(tier)) {
-      throw new Error(`Invalid tier "${tier}". Valid tiers are: fast, pro, max`);
-    }
-
-    const { models } = await this.getTierModels(sessionId);
-    const { provider, modelId } = parseTierModel(tier, models[tier]);
-    const model = await this.setModel(sessionId, provider, modelId);
-    return { ...model, tier };
+    return switchTierOperation({
+      tier,
+      getTierModels: () => this.getTierModels(sessionId),
+      setModel: (provider, modelId) => this.setModel(sessionId, provider, modelId),
+    });
   }
 
   async cycleModel(sessionId: string): Promise<{
@@ -1469,42 +1459,25 @@ export class AgentProcessManager {
     thinkingLevel: string;
     isScoped: boolean;
   } | null> {
-    let managed = this.getActiveManaged(sessionId);
-    if (!managed) {
-      managed = await this.ensureManagedClient(sessionId);
-    }
-    if (!managed) return null;
-    return managed.client.cycleModel().catch((err: unknown) => {
-      log.warn("cycleModel error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return null;
+    return cycleModelOperation({
+      sessionId,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+      ensureManagedClient: (id) => this.ensureManagedClient(id),
     });
   }
 
   async setThinkingLevel(sessionId: string, level: string): Promise<void> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return;
-    await managed.client
-      .setThinkingLevel(level as Parameters<typeof managed.client.setThinkingLevel>[0])
-      .catch((err: unknown) => {
-        log.warn("setThinkingLevel error", {
-          sessionId,
-          err: err instanceof Error ? err.message : String(err),
-        });
-      });
+    await setThinkingLevelOperation({
+      sessionId,
+      level,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+    });
   }
 
   async cycleThinkingLevel(sessionId: string): Promise<{ level: string } | null> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return null;
-    return managed.client.cycleThinkingLevel().catch((err: unknown) => {
-      log.warn("cycleThinkingLevel error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return null;
+    return cycleThinkingLevelOperation({
+      sessionId,
+      getActiveManaged: (id) => this.getActiveManaged(id),
     });
   }
 
