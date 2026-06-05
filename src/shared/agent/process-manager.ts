@@ -206,7 +206,17 @@ type SanitizedMessageUpdate = Extract<AgentEvent, { type: "message_update" }> & 
   assistantMessageEvent: Omit<AssistantMessageEvent, "partial">;
 };
 
-type SanitizedEvent = SanitizedMessageUpdate | Exclude<AgentEvent, { type: "message_update" }>;
+export type SanitizedEvent =
+  | SanitizedMessageUpdate
+  | Exclude<AgentEvent, { type: "message_update" }>;
+
+const HOLD_EVENT_COMPACT_THRESHOLD = 200;
+const MESSAGE_UPDATE_REPLAY_KEY = "message_update:open";
+
+type ToolReplayEvent = Extract<
+  SanitizedEvent,
+  { type: "tool_execution_start" | "tool_execution_update" | "tool_execution_end" }
+>;
 
 function sanitizeEvent(event: AgentEvent): SanitizedEvent {
   if (event.type === "message_update") {
@@ -217,6 +227,112 @@ function sanitizeEvent(event: AgentEvent): SanitizedEvent {
     return { ...rest, assistantMessageEvent: ameRest } as SanitizedMessageUpdate;
   }
   return event as SanitizedEvent;
+}
+
+function removeAt<T>(items: T[], index: number): void {
+  items.splice(index, 1);
+}
+
+function decrementIndexes(indexes: Map<string, number>, removedIndex: number): void {
+  for (const [key, index] of indexes) {
+    if (index === removedIndex) {
+      indexes.delete(key);
+    } else if (index > removedIndex) {
+      indexes.set(key, index - 1);
+    }
+  }
+}
+
+function replaceOrAppendEvent(
+  result: SanitizedEvent[],
+  indexes: Map<string, number>,
+  key: string,
+  event: SanitizedEvent,
+): void {
+  const existingIndex = indexes.get(key);
+  if (existingIndex === undefined) {
+    indexes.set(key, result.length);
+    result.push(event);
+    return;
+  }
+  result[existingIndex] = event;
+}
+
+function removeIndexedEvent(
+  result: SanitizedEvent[],
+  indexes: Map<string, number>,
+  key: string,
+): void {
+  const index = indexes.get(key);
+  if (index === undefined) return;
+  removeAt(result, index);
+  decrementIndexes(indexes, index);
+}
+
+function getToolReplayKey(event: ToolReplayEvent): string {
+  return event.toolCallId;
+}
+
+/**
+ * `holdEvents` is replayed after tab switches and reconnects while an agent is
+ * still streaming. Treat it as a resumable state snapshot, not an append-only
+ * stream log, otherwise each replay can re-send thousands of stale updates.
+ */
+export function compactHoldEventsForReplay(events: SanitizedEvent[]): SanitizedEvent[] {
+  const result: SanitizedEvent[] = [];
+  const indexes = new Map<string, number>();
+
+  for (const event of events) {
+    if (event.type === "message_start") {
+      removeIndexedEvent(result, indexes, MESSAGE_UPDATE_REPLAY_KEY);
+      result.push(event);
+      continue;
+    }
+
+    if (event.type === "message_update") {
+      replaceOrAppendEvent(result, indexes, MESSAGE_UPDATE_REPLAY_KEY, event);
+      continue;
+    }
+
+    if (event.type === "message_end") {
+      removeIndexedEvent(result, indexes, MESSAGE_UPDATE_REPLAY_KEY);
+      result.push(event);
+      continue;
+    }
+
+    if (
+      event.type === "tool_execution_start" ||
+      event.type === "tool_execution_update" ||
+      event.type === "tool_execution_end"
+    ) {
+      const toolKey = getToolReplayKey(event);
+      const startKey = `tool:${toolKey}:start`;
+      const updateKey = `tool:${toolKey}:update`;
+      const endKey = `tool:${toolKey}:end`;
+
+      if (event.type === "tool_execution_start") {
+        if (!indexes.has(endKey)) {
+          replaceOrAppendEvent(result, indexes, startKey, event);
+        }
+        continue;
+      }
+
+      if (event.type === "tool_execution_update") {
+        if (!indexes.has(endKey)) {
+          replaceOrAppendEvent(result, indexes, updateKey, event);
+        }
+        continue;
+      }
+
+      removeIndexedEvent(result, indexes, updateKey);
+      replaceOrAppendEvent(result, indexes, endKey, event);
+      continue;
+    }
+
+    result.push(event);
+  }
+
+  return result;
 }
 
 interface SubagentChannelPayload {
@@ -904,12 +1020,22 @@ export class AgentProcessManager {
       perfLog.info("[replayHoldEvents] no client", { sessionId, totalMs: 0 });
       return { replayed: 0 };
     }
-    const events = managed.info.holdEvents;
+    const heldEvents = managed.info.holdEvents as SanitizedEvent[];
+    const events = compactHoldEventsForReplay(heldEvents);
+    if (events.length !== heldEvents.length) {
+      managed.info.holdEvents = events;
+    }
     for (const evt of events) {
-      await this.emitAgentEvent(sessionId, evt as SanitizedEvent);
+      await this.emitAgentEvent(sessionId, evt);
     }
     const totalMs = Math.round(performance.now() - t0);
-    perfLog.info("[replayHoldEvents] done", { sessionId, replayed: events.length, totalMs });
+    perfLog.info("[replayHoldEvents] done", {
+      sessionId,
+      held: heldEvents.length,
+      replayed: events.length,
+      compacted: heldEvents.length - events.length,
+      totalMs,
+    });
     return { replayed: events.length };
   }
 
@@ -3101,6 +3227,11 @@ export class AgentProcessManager {
 
     if (managed.info.status === "streaming") {
       managed.info.holdEvents.push(sanitized);
+      if (managed.info.holdEvents.length > HOLD_EVENT_COMPACT_THRESHOLD) {
+        managed.info.holdEvents = compactHoldEventsForReplay(
+          managed.info.holdEvents as SanitizedEvent[],
+        );
+      }
     }
 
     const parentId = this.findParentSession(sessionId);
