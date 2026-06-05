@@ -27,11 +27,6 @@ vi.mock("../src/shared/lib/logger", () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
 }));
 
-vi.mock("../src/mainview/lib/message-mapper", () => ({
-  messageToChatMessage: vi.fn(),
-  extractTokenUsage: vi.fn(() => null),
-}));
-
 vi.mock("../src/mainview/stores/use-memory-store", () => ({
   useMemoryStore: {
     getState: vi.fn(() => ({ loadFiles: vi.fn(), addEvent: vi.fn(), addInjected: vi.fn() })),
@@ -155,6 +150,7 @@ import { handleAgentEvent, toolCallNameMap } from "../src/mainview/stores/agent-
 import { useChatStore } from "../src/mainview/stores/use-chat-store";
 import { useSessionStore } from "../src/mainview/stores/use-session-store";
 import { useUIDialogStore } from "../src/mainview/stores/use-ui-dialog-store";
+import { apiClient } from "../src/mainview/lib/api-client";
 import { flushNow } from "../src/mainview/stores/message-batcher";
 
 const SID = "test-session-1";
@@ -188,6 +184,10 @@ function setMessages(msgs: unknown[]) {
 }
 
 beforeEach(() => {
+  (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
+    tokens: null,
+    contextWindow: 0,
+  });
   useChatStore.setState({
     messagesBySession: {},
     inputText: "",
@@ -344,7 +344,7 @@ describe("tool_execution_update", () => {
     expect(block!.status).toBe("running");
   });
 
-  it("restores status from done to running (Bug3 fix verification)", () => {
+  it("does not reopen a completed block when a delayed update arrives", () => {
     setMessages([
       {
         id: "msg-1",
@@ -372,7 +372,7 @@ describe("tool_execution_update", () => {
     flushNow();
 
     const block = getToolExecBlock();
-    expect(block!.status).toBe("running");
+    expect(block!.status).toBe("done");
     expect(block!.output).toBe("hello\n");
   });
 
@@ -412,6 +412,39 @@ describe("tool_execution_update", () => {
     const block = getToolExecBlock();
     expect(block!.output).toBe("1\n2\n");
     expect(block!.status).toBe("running");
+  });
+
+  it("does not reopen a completed block when a delayed start arrives", () => {
+    setMessages([
+      {
+        id: "msg-1",
+        role: "assistant",
+        content: [
+          {
+            type: "toolExecution",
+            toolCallId: TCID,
+            toolName: "bash",
+            args: "echo hello",
+            status: "done",
+            output: "hello\n",
+          },
+        ],
+        timestamp: Date.now(),
+        isStreaming: false,
+      },
+    ]);
+
+    handleAgentEvent(SID, {
+      type: "tool_execution_start",
+      toolCallId: TCID,
+      toolName: "bash",
+      args: { command: "echo hello" },
+    } as Parameters<typeof handleAgentEvent>[1]);
+    flushNow();
+
+    const block = getToolExecBlock();
+    expect(block!.status).toBe("done");
+    expect(block!.output).toBe("hello\n");
   });
 });
 
@@ -528,6 +561,45 @@ describe("full streaming lifecycle", () => {
   });
 });
 
+describe("message_end tool card closure", () => {
+  it("closes running tool blocks when assistant message ends without a tool end event", () => {
+    setMessages([
+      {
+        id: "msg-1",
+        role: "assistant",
+        content: [
+          {
+            type: "toolExecution",
+            toolCallId: TCID,
+            toolName: "bash",
+            args: "echo ok",
+            status: "running",
+            output: "ok\n",
+          },
+        ],
+        timestamp: Date.now(),
+        isStreaming: true,
+      },
+    ]);
+    useSessionStore.setState({ sessionStatusMap: { [SID]: "streaming" } });
+
+    handleAgentEvent(SID, {
+      type: "message_end",
+      entryId: "entry-1",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "done" }],
+        timestamp: Date.now(),
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    const msg = getLastAssistant();
+    const block = getToolExecBlock();
+    expect(msg!.isStreaming).toBe(false);
+    expect(block!.status).toBe("done");
+  });
+});
+
 describe("agent_end cleanup", () => {
   it("calls clearPendingBySession on agent_end", () => {
     useSessionStore.setState({ sessionsByProject: { "/tmp": [] } });
@@ -563,6 +635,35 @@ describe("agent_end cleanup", () => {
     handleAgentEvent(SID, { type: "agent_end" } as Parameters<typeof handleAgentEvent>[1]);
 
     expect(Object.keys(useSessionStore.getState().queueBySession)).toHaveLength(1);
+  });
+
+  it("closes running tool blocks when the agent ends without a tool end event", () => {
+    setMessages([
+      {
+        id: "msg-1",
+        role: "assistant",
+        content: [
+          {
+            type: "toolExecution",
+            toolCallId: TCID,
+            toolName: "bash",
+            args: "echo ok",
+            status: "running",
+            output: "ok\n",
+          },
+        ],
+        timestamp: Date.now(),
+        isStreaming: true,
+      },
+    ]);
+    useSessionStore.setState({ sessionsByProject: { "/tmp": [] } });
+
+    handleAgentEvent(SID, { type: "agent_end" } as Parameters<typeof handleAgentEvent>[1]);
+
+    const msg = getLastAssistant();
+    const block = getToolExecBlock();
+    expect(msg!.isStreaming).toBe(false);
+    expect(block!.status).toBe("done");
   });
 });
 

@@ -48,6 +48,30 @@ function hasRenderableContent(msg: ChatMessage): boolean {
   );
 }
 
+type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
+
+function isTerminalToolStatus(status: ToolExecBlock["status"]): boolean {
+  return status === "done" || status === "error";
+}
+
+function closeRunningToolExecutions(
+  content: ContentBlock[],
+  status: "done" | "error",
+): ContentBlock[] {
+  let changed = false;
+  const endedAt = Date.now();
+  const next = content.map((block) => {
+    if (block.type !== "toolExecution" || block.status !== "running") return block;
+    changed = true;
+    return {
+      ...block,
+      status,
+      endedAt,
+    };
+  });
+  return changed ? next : content;
+}
+
 function scheduleEmptyStreamingReload(sessionId: string, messageId: string): void {
   setTimeout(() => {
     const chat = useChatStore.getState();
@@ -124,6 +148,21 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     }
 
     const crashReason = (event as { reason?: string }).reason;
+    const chat = useChatStore.getState();
+    const msgs = chat.messagesBySession[sessionId] || [];
+    const fallbackToolStatus = crashReason ? "error" : "done";
+    let closedRunningTool = false;
+    const closedMsgs = msgs.map((msg) => {
+      if (msg.role !== "assistant") return msg;
+      const content = closeRunningToolExecutions(msg.content, fallbackToolStatus);
+      if (content === msg.content) return msg;
+      closedRunningTool = true;
+      return { ...msg, content, isStreaming: false };
+    });
+    if (closedRunningTool) {
+      chat.setMessagesForSession(sessionId, closedMsgs);
+    }
+
     if (crashReason) {
       notificationGateway.emit({
         type: "session_complete",
@@ -133,14 +172,13 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         level: "error",
       });
     } else {
-      const chat = useChatStore.getState();
-      const msgs = chat.messagesBySession[sessionId] || [];
-      const lastMsg = msgs[msgs.length - 1];
+      const currentMsgs = closedRunningTool ? closedMsgs : msgs;
+      const lastMsg = currentMsgs[currentMsgs.length - 1];
       const lastIsUser = lastMsg && (lastMsg.role === "user" || lastMsg.role === "custom");
 
       if (lastIsUser) {
         chat.setMessagesForSession(sessionId, [
-          ...msgs,
+          ...currentMsgs,
           {
             id: `error_${Date.now()}`,
             role: "error" as const,
@@ -626,10 +664,16 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       return;
     }
 
+    const closedContent = closeRunningToolExecutions(
+      lastMsg.content,
+      assistantMsg.stopReason === "error" ? "error" : "done",
+    );
+
     chat.setMessagesForSession(sessionId, [
       ...existing.slice(0, -1),
       {
         ...lastMsg,
+        content: closedContent,
         isStreaming: false,
         stopReason: assistantMsg.stopReason ?? lastMsg.stopReason ?? null,
         provider: assistantMsg.api ?? lastMsg.provider,
@@ -648,8 +692,6 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     if (event.type === "tool_execution_start") {
       toolCallNameMap[toolCallId] = toolName;
     }
-
-    type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
 
     batchMessageUpdate(sessionId, () => {
       const chat = useChatStore.getState();
@@ -682,16 +724,27 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
           }
         }
         if (targetIdx >= 0) {
-          blocks[targetIdx] = {
-            type: "toolExecution",
-            toolCallId,
-            toolName,
-            args: argsStr,
-            status: "running",
-            timeout,
-            startedAt: event.timestamp ?? Date.now(),
-            description,
-          };
+          const prev = blocks[targetIdx] as ToolExecBlock;
+          if (isTerminalToolStatus(prev.status)) {
+            blocks[targetIdx] = {
+              ...prev,
+              toolName: prev.toolName === "unknown" ? toolName : prev.toolName,
+              args: argsStr || prev.args,
+              timeout: timeout ?? prev.timeout,
+              description: description ?? prev.description,
+            };
+          } else {
+            blocks[targetIdx] = {
+              type: "toolExecution",
+              toolCallId,
+              toolName,
+              args: argsStr,
+              status: "running",
+              timeout,
+              startedAt: event.timestamp ?? Date.now(),
+              description,
+            };
+          }
         } else {
           blocks.push({
             type: "toolExecution",
@@ -716,7 +769,16 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         }
         if (targetIdx >= 0) {
           const prev = blocks[targetIdx] as ToolExecBlock;
-          blocks[targetIdx] = { ...prev, output, status: "running" };
+          const previousOutput = prev.output;
+          blocks[targetIdx] = {
+            ...prev,
+            output: isTerminalToolStatus(prev.status)
+              ? previousOutput && previousOutput.length > 0
+                ? previousOutput
+                : output
+              : output,
+            status: isTerminalToolStatus(prev.status) ? prev.status : "running",
+          };
         }
       }
 

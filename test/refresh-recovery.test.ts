@@ -159,8 +159,8 @@ describe("normalizeToolBlocks", () => {
   });
 });
 
-describe("tool_execution_update should restore running status", () => {
-  it("should restore status to 'running' when receiving update on a 'done' block", () => {
+describe("tool_execution_update terminal status", () => {
+  it("should keep terminal status when receiving delayed partial output", () => {
     const block: Extract<ContentBlock, { type: "toolExecution" }> = {
       type: "toolExecution",
       toolCallId: TCID,
@@ -174,10 +174,10 @@ describe("tool_execution_update should restore running status", () => {
     const updated: Extract<ContentBlock, { type: "toolExecution" }> = {
       ...block,
       output: newOutput,
-      status: "running",
+      status: block.status,
     };
 
-    expect(updated.status).toBe("running");
+    expect(updated.status).toBe("done");
     expect(updated.output).toBe(newOutput);
     expect(updated.toolCallId).toBe(TCID);
   });
