@@ -11,7 +11,6 @@ import type {
   AgentEvent,
   AgentMessageForUI,
   ChannelDataEvent,
-  ExtensionUIRequestEvent,
 } from "../modules/agent";
 import type { RpcClientAPI, ChannelTypeRegistry } from "@dyyz1993/pi-coding-agent";
 import type { TreeEntry } from "../modules/agent";
@@ -39,7 +38,6 @@ import { config } from "../../server-config";
 import { findSessionById } from "../lib/session-scanner";
 import {
   compactHoldEventsForReplay,
-  sanitizeEvent,
   type SanitizedEvent,
 } from "./hold-events";
 import {
@@ -159,15 +157,10 @@ import {
   type JsonlTreeEntry,
 } from "./session-tree-navigation";
 import { registerAgentChannels } from "./agent-channel-registration";
-import {
-  appendStreamingHoldEvent,
-  classifyExtensionUiRequest,
-  extractMessageEndText,
-} from "./agent-event-lifecycle";
+import { handleAgentEventOperation } from "./agent-event-routing";
 import {
   clearDelegateTracking,
   cleanupStoppedDelegateSession,
-  findParentSession,
   registerDelegateChild,
   removeDelegateChild,
 } from "./coordinator-session-state";
@@ -1927,193 +1920,42 @@ export class AgentProcessManager {
   }
 
   private handleEvent(sessionId: string, event: AgentEvent): void {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return;
-
-    if (event.type === "channel_data") {
-      const ch = event as ChannelDataEvent;
-      if (ch.name === "subagent") {
-        this.handleSubagentChannelData(sessionId, ch);
-        return;
-      }
-      if (ch.name === "todo") {
-        this.handleTodoChannelData(sessionId, ch);
-        return;
-      }
-      if (ch.name === "bash") {
-        this.handleBashChannelData(sessionId, ch);
-        return;
-      }
-      if (ch.name === "lsp") {
-        this.handleLspChannelData(sessionId, ch);
-        return;
-      }
-      if (ch.name === "rules-engine") {
-        this.handleRulesChannelData(sessionId, ch);
-        return;
-      }
-      if (ch.name === "memory") {
-        this.handleMemoryChannelData(sessionId, ch);
-        return;
-      }
-      if (ch.name === "supervisor") {
-        this.handleSupervisorChannelData(sessionId, ch);
-        return;
-      }
-      if (ch.name === "coordinator") {
-        log.warn(
-          "coordinator channel_data reached handleEvent — should have been intercepted in start()",
-          { sessionId },
-        );
-        return;
-      }
-    }
-
-    if (event.type === "extension_ui_request") {
-      const ui = event as ExtensionUIRequestEvent;
-      const action = classifyExtensionUiRequest(ui);
-      if (action.type === "notify") {
-        this.broadcastEvent(
-          "agent.notify",
-          {
-            sessionId,
-            ...action.payload,
-          },
-          { sessionId },
-        ).catch((err: unknown) => {
-          log.warn("broadcastEvent(agent.notify) error", {
-            sessionId,
-            err: err instanceof Error ? err.message : String(err),
-          });
-        });
-        return;
-      }
-      if (action.type === "ignore") return;
-    }
-
-    if (event.type === "agent_start") {
-      managed.info.status = "streaming";
-      managed.lastActiveAt = Date.now();
-      managed.info.holdEvents = [];
-      this.broadcastSessionStatus(sessionId, "streaming");
-    }
-
-    if (event.type === "agent_end") {
-      managed.info.status = "idle";
-      managed.lastActiveAt = Date.now();
-      managed.info.holdEvents = [];
-      this.broadcastSessionStatus(sessionId, "idle");
-
-      // Sync leafId from CLI SDK after agent completes, so that subsequent
-      // getFullMessages calls (including page refreshes) see the latest leaf.
-      if (managed.client) {
-        managed.client
-          .getTreeWithLeaf()
-          .then((treeResult: { entries: unknown[]; leafId: string | null }) => {
-            if (treeResult.leafId) {
-              this.leafIds.set(sessionId, treeResult.leafId);
-            }
-          })
-          .catch(() => {});
-      }
-
-      if (config.sandboxEnabled && managed.info.projectPath) {
-        this.broadcastEvent(
-          "file.changed",
-          {
-            changedPath: managed.info.projectPath,
-            type: "create",
-          },
-          { sessionId },
-        ).catch(() => {});
-      }
-
-      const resolver = this.syncDelegateResolvers.get(sessionId);
-      if (resolver) {
-        clearTimeout(resolver.timeout);
-        this.syncDelegateResolvers.delete(sessionId);
-        this.subagentSyncChildren.delete(sessionId);
-        const finalText = this.syncDelegateLastText.get(sessionId) ?? "(completed)";
-        this.syncDelegateLastText.delete(sessionId);
-        resolver.resolve({
-          sessionId,
-          status: "completed",
-          exitCode: 0,
-          finalText: finalText || "(completed)",
-        });
-      }
-    }
-
-    if (event.type === "session_info_changed") {
-      const name = (event as Record<string, unknown>).name;
-      if (typeof name === "string" && name.length > 0) {
-        const projectPath = managed.info.projectPath;
-        this.broadcastEvent(
-          "agent.session_renamed",
-          { sessionId, projectPath, newName: name },
-          {},
-        ).catch((err: unknown) => {
-          log.warn("broadcastEvent(session_renamed from info_changed) error", {
-            sessionId,
-            err: err instanceof Error ? err.message : String(err),
-          });
-        });
-      }
-      return;
-    }
-
-    if (event.type === "message_end") {
-      if (this.subagentSyncChildren.has(sessionId)) {
-        const text = extractMessageEndText(event);
-        if (text) this.syncDelegateLastText.set(sessionId, text);
-      }
-    }
-
-    if (event.type === "message_update") {
-      managed.info.status = "streaming";
-    }
-
-    const sanitized = sanitizeEvent(event);
-
-    managed.info.holdEvents = appendStreamingHoldEvent(
-      managed.info.status,
-      managed.info.holdEvents as SanitizedEvent[],
-      sanitized,
-    );
-
-    const parentId = findParentSession(this.parentChildMap, sessionId);
-    if (parentId) {
-      this.broadcastEvent(
-        "coordinator.session_event",
-        {
-          parentSessionId: parentId,
-          childSessionId: sessionId,
-          event: sanitized,
-        },
-        { parentSessionId: parentId },
-      ).catch((err: unknown) => {
-        log.warn("broadcastEvent(coordinator.session_event) error", {
-          sessionId,
-          err: err instanceof Error ? err.message : String(err),
-        });
-      });
-
-      if (this.subagentSyncChildren.has(sessionId) && event.type !== "channel_data") {
-        const parentManaged = this.clients.get(parentId);
-        this.broadcastEvent(
-          "subagent.event",
-          {
-            parentSessionId: parentId,
-            parentSessionPath: parentManaged?.info.sessionPath ?? "",
-            subSessionId: sessionId,
-            event: sanitized,
-          },
-          { parentSessionId: parentId },
-        ).catch(() => {});
-      }
-    }
-
-    this.emitAgentEvent(sessionId, sanitized);
+    handleAgentEventOperation({
+      sessionId,
+      event,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+      clients: this.clients,
+      parentChildMap: this.parentChildMap,
+      leafIds: this.leafIds,
+      syncDelegateResolvers: this.syncDelegateResolvers,
+      subagentSyncChildren: this.subagentSyncChildren,
+      syncDelegateLastText: this.syncDelegateLastText,
+      sandboxEnabled: config.sandboxEnabled,
+      broadcastEvent: (eventName, data, filter) => this.broadcastEvent(eventName, data, filter),
+      broadcastSessionStatus: (id, status) => this.broadcastSessionStatus(id, status),
+      emitAgentEvent: (id, sanitized) => this.emitAgentEvent(id, sanitized),
+      handleSubagentChannelData: (id, ch) => {
+        this.handleSubagentChannelData(id, ch);
+      },
+      handleTodoChannelData: (id, ch) => {
+        this.handleTodoChannelData(id, ch);
+      },
+      handleBashChannelData: (id, ch) => {
+        this.handleBashChannelData(id, ch);
+      },
+      handleLspChannelData: (id, ch) => {
+        this.handleLspChannelData(id, ch);
+      },
+      handleRulesChannelData: (id, ch) => {
+        this.handleRulesChannelData(id, ch);
+      },
+      handleMemoryChannelData: (id, ch) => {
+        this.handleMemoryChannelData(id, ch);
+      },
+      handleSupervisorChannelData: (id, ch) => {
+        this.handleSupervisorChannelData(id, ch);
+      },
+    });
   }
 
   private async handleSubagentChannelData(
