@@ -50,7 +50,6 @@ import { config } from "../../server-config";
 import { findSessionById } from "../lib/session-scanner";
 import {
   compactHoldEventsForReplay,
-  HOLD_EVENT_COMPACT_THRESHOLD,
   sanitizeEvent,
   type SanitizedEvent,
 } from "./hold-events";
@@ -111,6 +110,11 @@ import {
   type JsonlTreeEntry,
 } from "./session-tree-navigation";
 import { registerAgentChannels } from "./agent-channel-registration";
+import {
+  appendStreamingHoldEvent,
+  classifyExtensionUiRequest,
+  extractMessageEndText,
+} from "./agent-event-lifecycle";
 import {
   canStopDelegateChild,
   clearDelegateTracking,
@@ -2475,14 +2479,13 @@ export class AgentProcessManager {
 
     if (event.type === "extension_ui_request") {
       const ui = event as ExtensionUIRequestEvent;
-      const INTERACTIVE_METHODS = new Set(["confirm", "input", "select", "editor"]);
-      if (ui.method === "notify") {
+      const action = classifyExtensionUiRequest(ui);
+      if (action.type === "notify") {
         this.broadcastEvent(
           "agent.notify",
           {
             sessionId,
-            message: ui.message ?? "",
-            notifyType: ui.notifyType ?? "info",
+            ...action.payload,
           },
           { sessionId },
         ).catch((err: unknown) => {
@@ -2493,7 +2496,7 @@ export class AgentProcessManager {
         });
         return;
       }
-      if (!INTERACTIVE_METHODS.has(ui.method)) return;
+      if (action.type === "ignore") return;
     }
 
     if (event.type === "agent_start") {
@@ -2569,19 +2572,8 @@ export class AgentProcessManager {
 
     if (event.type === "message_end") {
       if (this.subagentSyncChildren.has(sessionId)) {
-        const msgEvent = event as {
-          type: "message_end";
-          message: { content?: Array<{ type: string; text?: string }> };
-        };
-        const msg = msgEvent.message;
-        if (Array.isArray(msg?.content)) {
-          const text = msg.content
-            .filter((c) => c.type === "text")
-            .map((c) => c.text ?? "")
-            .join("")
-            .slice(0, 2000);
-          if (text) this.syncDelegateLastText.set(sessionId, text);
-        }
+        const text = extractMessageEndText(event);
+        if (text) this.syncDelegateLastText.set(sessionId, text);
       }
     }
 
@@ -2591,14 +2583,11 @@ export class AgentProcessManager {
 
     const sanitized = sanitizeEvent(event);
 
-    if (managed.info.status === "streaming") {
-      managed.info.holdEvents.push(sanitized);
-      if (managed.info.holdEvents.length > HOLD_EVENT_COMPACT_THRESHOLD) {
-        managed.info.holdEvents = compactHoldEventsForReplay(
-          managed.info.holdEvents as SanitizedEvent[],
-        );
-      }
-    }
+    managed.info.holdEvents = appendStreamingHoldEvent(
+      managed.info.status,
+      managed.info.holdEvents as SanitizedEvent[],
+      sanitized,
+    );
 
     const parentId = findParentSession(this.parentChildMap, sessionId);
     if (parentId) {
