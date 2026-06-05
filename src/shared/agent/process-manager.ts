@@ -75,6 +75,7 @@ import {
   getSandboxManager,
   initSandboxManager,
 } from "./agent-runtime-client";
+import { startAgentClientOperation } from "./agent-start-operations";
 import {
   buildCoordinatorDelegatePrompt,
   buildCoordinatorSessionCreatedEvent,
@@ -403,8 +404,6 @@ export class AgentProcessManager {
     sessionPath: string,
     options?: { forceNewProcess?: boolean; userId?: string },
   ): Promise<{ agentId: string; status: "started" | "already_running" | "switched" }> {
-    const tStart = performance.now();
-
     const previousStart = this._startQueue;
     let releaseStart: () => void = () => {};
     this._startQueue = new Promise<void>((resolve) => {
@@ -415,149 +414,30 @@ export class AgentProcessManager {
     this._startInProgress = true;
 
     try {
-      const existing = this.clients.get(sessionId);
-      if (existing && existing._activeSessionId === sessionId) {
-        perfLog.info("[start] already_running (cached hit)", {
-          sessionId,
-          totalMs: Math.round(performance.now() - tStart),
-        });
-        existing.lastActiveAt = Date.now();
-        return { agentId: sessionId, status: "already_running" };
-      }
-
-      // ── Process pool: reuse existing process for same cwd ──
-      const reusePoolKey = this.getPoolKey(projectPath, options?.userId);
-      const pool = this.processByCwd.get(reusePoolKey);
-      if (pool && pool.size > 0) {
-        const pooled = [...pool][pool.size - 1];
-        const oldSessionId = pooled._activeSessionId;
-        const tSwitch = performance.now();
-        try {
-          perfLog.info("[start] reusing pooled process", {
-            sessionId,
-            projectPath,
-            oldSessionId,
-          });
-          const result = await Promise.race([
-            pooled.client.switchSession(sessionPath),
-            new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error("switchSession timed out after 15s")), 15000),
-            ),
-          ]);
-          if (!result.cancelled) {
-            this.clients.delete(oldSessionId);
-            pooled._activeSessionId = sessionId;
-            pooled.info = {
-              sessionId,
-              projectPath,
-              sessionPath,
-              status: "idle",
-              holdEvents: [],
-            };
-            this.clients.set(sessionId, pooled);
-            this.sessionPaths.set(sessionId, sessionPath);
-            this.sessionProjectPaths.set(sessionId, projectPath);
-            perfLog.info("[start] switchSession done", {
-              sessionId,
-              oldSessionId,
-              totalMs: Math.round(performance.now() - tSwitch),
-            });
-            return { agentId: sessionId, status: "switched" };
-          }
-          perfLog.info("[start] switchSession cancelled by extension, creating new process");
-        } catch (err: unknown) {
-          const switchMs = Math.round(performance.now() - tSwitch);
-          perfLog.info("[start] switchSession failed, killing pooled process", {
-            sessionId,
-            oldSessionId,
-            switchMs,
-            error: err instanceof Error ? err.message : String(err),
-          });
-          this.processByCwd.delete(projectPath);
-          this.clients.delete(oldSessionId);
-          try {
-            pooled.unsubscribe();
-          } catch (e) {
-            log.debug("start: failed to unsubscribe old pooled process", { error: String(e) });
-          }
-          try {
-            await pooled.client.stop();
-          } catch (e) {
-            log.debug("start: failed to stop old pooled process client", { error: String(e) });
-          }
-        }
-      }
-      const poolKey = this.getPoolKey(projectPath, options?.userId);
-
-      perfLog.info("[start] begin (new process)", { sessionId, projectPath });
-
-      this.evictLRU(poolKey);
-
-      const { client, timings: createTimings } = await createRpcClient(
-        config.piCliPath,
-        projectPath,
-        sessionPath,
-        config.sandboxEnabled ? (options?.userId ?? sessionId) : undefined,
-      );
-      const tAfterCreate = performance.now();
-
-      log.info("Spawning pi via RpcClient", { cwd: projectPath, sessionPath });
-
-      const info: AgentProcessInfo = {
+      return await startAgentClientOperation({
         sessionId,
         projectPath,
         sessionPath,
-        status: "idle",
-        holdEvents: [],
-      };
-
-      const managed: ManagedClient = {
-        client,
-        info,
-        unsubscribe: () => {},
-        _activeSessionId: sessionId,
-        lastActiveAt: Date.now(),
-        activeBackgroundTools: new Set(),
-      };
-
-      const bridge = (event: unknown): void => {
-        this.handleEvent(managed._activeSessionId, event as AgentEvent);
-      };
-      try {
-        managed.unsubscribe = client.onEvent(bridge);
-      } catch {
-        managed.unsubscribe = () => {};
-      }
-
-      const channelsRegistered = registerAgentChannels({
-        client,
-        getSessionId: () => managed._activeSessionId,
+        startOptions: options,
+        clients: this.clients,
+        processByCwd: this.processByCwd,
+        sessionPaths: this.sessionPaths,
+        sessionProjectPaths: this.sessionProjectPaths,
+        getPoolKey: (cwd, userId) => this.getPoolKey(cwd, userId),
+        evictLRU: (poolKey) => this.evictLRU(poolKey),
+        addToPool: (poolKey, managed) => this.addToPool(poolKey, managed),
+        createRpcClient,
+        registerAgentChannels,
+        handleEvent: (activeSessionId, event) => {
+          this.handleEvent(activeSessionId, event);
+        },
         handleCoordinatorCall: (activeSessionId, data, channelName) => {
           this.handleCoordinatorCall(activeSessionId, data, channelName);
         },
-        handleChannelData: (activeSessionId, event) => {
-          this.handleEvent(activeSessionId, event as AgentEvent);
+        broadcastSessionStatus: (activeSessionId, status) => {
+          this.broadcastSessionStatus(activeSessionId, status);
         },
       });
-
-      const processStartMs = Math.round(performance.now() - tAfterCreate);
-      perfLog.info("[start] RpcClient ready", {
-        sessionId,
-        totalMs: Math.round(performance.now() - tStart),
-        dynamicImportMs: createTimings.dynamicImport,
-        constructMs: createTimings.construct,
-        createRpcTotalMs: Math.round(tAfterCreate - tStart),
-        processStartMs,
-        channelsRegistered,
-      });
-
-      log.info("RpcClient started", { sessionId });
-      this.sessionPaths.set(sessionId, sessionPath);
-      this.sessionProjectPaths.set(sessionId, projectPath);
-      this.clients.set(sessionId, managed);
-      this.addToPool(poolKey, managed);
-      this.broadcastSessionStatus(sessionId, "idle");
-      return { agentId: sessionId, status: "started" };
     } finally {
       this._startInProgress = false;
       releaseStart();
