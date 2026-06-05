@@ -10,16 +10,8 @@ permissions:
 
 jobs:
   build-macos:
-    name: Build macOS (${{ matrix.arch }})
-    strategy:
-      matrix:
-        include:
-          - runner: macos-latest
-            arch: arm64
-          - runner: macos-13
-            arch: x64
-    runs-on: ${{ matrix.runner }}
-    continue-on-error: ${{ matrix.arch == 'x64' }}
+    name: Build macOS
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -59,7 +51,7 @@ jobs:
         run: |
           APP_PATH="${{ steps.locate.outputs.app_path }}"
           APP_NAME="${{ steps.locate.outputs.app_name }}"
-          DMG_NAME="PiAgentChat-${GITHUB_REF_NAME}-macos-${{ matrix.arch }}.dmg"
+          DMG_NAME="PiAgentChat-${GITHUB_REF_NAME}-macos-arm64.dmg"
           
           # Ad-hoc sign the app (removes "damaged" error on download)
           codesign --force --deep --sign - "$APP_PATH"
@@ -79,7 +71,7 @@ jobs:
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PiAgentChat-macos-${{ matrix.arch }}
+          name: PiAgentChat-macos-arm64
           path: ${{ steps.dmg.outputs.dmg_path }}
           retention-days: 5
 
