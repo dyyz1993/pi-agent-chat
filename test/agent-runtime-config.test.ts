@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { existsSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "fs";
 import * as os from "os";
 import * as path from "path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -22,7 +22,11 @@ vi.mock("../src/shared/lib/logger", () => ({
   }),
 }));
 
-import { parseTierModel, scanExtensionDir } from "../src/shared/agent/agent-runtime-config";
+import {
+  getBuiltinExtensionsDirForCliPath,
+  parseTierModel,
+  scanExtensionDir,
+} from "../src/shared/agent/agent-runtime-config";
 
 const tempDirs: string[] = [];
 
@@ -82,6 +86,31 @@ describe("agent runtime config", () => {
     scanExtensionDir(root, found);
 
     expect(found).toEqual([path.join(root, "linked-extension", "index.ts")]);
+  });
+
+  it("resolves builtin extensions from a yalc/node_modules package cli path", () => {
+    const root = makeTempDir();
+    const packageRoot = path.join(root, "node_modules", "@dyyz1993", "pi-coding-agent");
+    const cliPath = path.join(packageRoot, "dist", "cli.js");
+    const extensionsDir = path.join(packageRoot, "dist", "extensions");
+    touch(cliPath);
+    touch(path.join(extensionsDir, "file-review", "index.ts"));
+
+    expect(getBuiltinExtensionsDirForCliPath(cliPath)).toBe(realpathSync(extensionsDir));
+  });
+
+  it("resolves builtin extensions from a package bin symlink", () => {
+    const root = makeTempDir();
+    const packageRoot = path.join(root, "node_modules", "@dyyz1993", "pi-coding-agent");
+    const cliPath = path.join(packageRoot, "dist", "cli.js");
+    const binPath = path.join(root, "node_modules", ".bin", "pi");
+    const extensionsDir = path.join(packageRoot, "dist", "extensions");
+    touch(cliPath);
+    touch(path.join(extensionsDir, "file-review", "index.ts"));
+    mkdirSync(path.dirname(binPath), { recursive: true });
+    symlinkSync(cliPath, binPath);
+
+    expect(getBuiltinExtensionsDirForCliPath(binPath)).toBe(realpathSync(extensionsDir));
   });
 
   it("parses provider and nested model ids from tier mappings", () => {

@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, statSync } from "fs";
+import { existsSync, readdirSync, realpathSync, statSync } from "fs";
 import * as path from "path";
 
 import { config } from "../../server-config";
@@ -60,12 +60,31 @@ export function scanExtensionDir(dir: string, extensionPaths: string[]): void {
   }
 }
 
+function extensionDirForPackageRoot(pkgDir: string): string {
+  const srcDir = path.join(pkgDir, "src", "extensions");
+  if (existsSync(srcDir)) return srcDir;
+  return path.join(pkgDir, "dist", "extensions");
+}
+
+export function getBuiltinExtensionsDirForCliPath(cliPath: string): string {
+  const resolvedCliPath = existsSync(cliPath) ? realpathSync(cliPath) : cliPath;
+  const packageRootFromCli = path.resolve(resolvedCliPath, "..", "..");
+  const legacyPackageRoot = path.join(
+    path.resolve(resolvedCliPath, "..", ".."),
+    "@dyyz1993",
+    "pi-coding-agent",
+  );
+
+  for (const pkgDir of [packageRootFromCli, legacyPackageRoot]) {
+    const extDir = extensionDirForPackageRoot(pkgDir);
+    if (existsSync(extDir)) return extDir;
+  }
+
+  return extensionDirForPackageRoot(packageRootFromCli);
+}
+
 export function getBuiltinExtensionsDir(): string {
-  const cliPath = config.piCliPath;
-  const nmDir = path.resolve(cliPath, "..", "..");
-  const pkgDir = path.join(nmDir, "@dyyz1993", "pi-coding-agent");
-  const srcExists = existsSync(path.join(pkgDir, "src"));
-  return path.join(pkgDir, srcExists ? "src" : "dist", "extensions");
+  return getBuiltinExtensionsDirForCliPath(config.piCliPath);
 }
 
 export function discoverExtensionArgs(): string[] {
