@@ -94,6 +94,13 @@ import {
   normalizeAgentList,
   type AgentListItem,
 } from "./agent-command-response";
+import {
+  appendFullJsonlEntry,
+  appendUiJsonlEntry,
+  filterMessagesToBranch,
+  paginateEntryMessages,
+  type FullMessageAccumulator,
+} from "./session-jsonl-messages";
 
 const log = createLogger("agent");
 const perfLog = createLogger("session-perf");
@@ -1275,30 +1282,13 @@ export class AgentProcessManager {
             if (!line.trim()) continue;
             try {
               const parsed = JSON.parse(line) as Record<string, unknown>;
-              if (parsed.type === "custom") {
-                if (activePathIds && typeof parsed.id === "string" && !activePathIds.has(parsed.id))
-                  continue;
-                customEntries.push({
-                  id: (parsed.id as string) ?? `custom-${Date.now()}`,
-                  customType: (parsed.customType as string) ?? "unknown",
-                  data: parsed.data,
-                  timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
-                });
-              } else if (parsed.type === "compaction") {
-                if (activePathIds && typeof parsed.id === "string" && !activePathIds.has(parsed.id))
-                  continue;
-                messages.push({
-                  id: parsed.id,
-                  role: "compactionSummary",
-                  summary: parsed.summary ?? "",
-                  tokensBefore: parsed.tokensBefore,
-                  timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
-                });
-              } else if (parsed.type === "message" && parsed.message) {
-                if (activePathIds && typeof parsed.id === "string" && !activePathIds.has(parsed.id))
-                  continue;
-                messages.push(parsed.message);
-              }
+              appendUiJsonlEntry({
+                parsed,
+                messages,
+                customEntries,
+                activePathIds,
+                includeMessages: true,
+              });
             } catch (err: unknown) {
               log.debug("skipping malformed JSONL entry (sandbox getMessages)", {
                 err: err instanceof Error ? err.message : String(err),
@@ -1322,42 +1312,13 @@ export class AgentProcessManager {
           if (!line.trim()) continue;
           try {
             const parsed = JSON.parse(line) as Record<string, unknown>;
-            if (parsed.type === "custom") {
-              if (
-                activePathIds &&
-                typeof parsed.id === "string" &&
-                !activePathIds.has(parsed.id as string)
-              )
-                continue;
-              customEntries.push({
-                id: (parsed.id as string) ?? `custom-${Date.now()}`,
-                customType: (parsed.customType as string) ?? "unknown",
-                data: parsed.data,
-                timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
-              });
-            } else if (parsed.type === "compaction") {
-              if (
-                activePathIds &&
-                typeof parsed.id === "string" &&
-                !activePathIds.has(parsed.id as string)
-              )
-                continue;
-              messages.push({
-                id: parsed.id,
-                role: "compactionSummary",
-                summary: parsed.summary ?? "",
-                tokensBefore: parsed.tokensBefore,
-                timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
-              });
-            } else if (!managed && parsed.type === "message" && parsed.message) {
-              if (
-                activePathIds &&
-                typeof parsed.id === "string" &&
-                !activePathIds.has(parsed.id as string)
-              )
-                continue;
-              messages.push(parsed.message);
-            }
+            appendUiJsonlEntry({
+              parsed,
+              messages,
+              customEntries,
+              activePathIds,
+              includeMessages: !managed,
+            });
           } catch (err: unknown) {
             log.debug("skipping malformed JSONL entry", {
               err: err instanceof Error ? err.message : String(err),
@@ -1397,21 +1358,13 @@ export class AgentProcessManager {
     // JSONL-first: always read messages directly from the JSONL file.
     // This avoids CLI OOM — CLI's get_full_messages handler uses readFile internally
     // which can blow the heap on large sessions (>8MB JSONL).
-    const allMessages: Array<{ entryId: string; message: unknown }> = [];
-    const allCustomEntries: Array<{
-      id: string;
-      customType: string;
-      data: unknown;
-      timestamp: number;
-    }> = [];
-    const allCompactionEntries: Array<{
-      entryId: string;
-      summary: string;
-      tokensBefore?: number;
-      timestamp: number;
-    }> = [];
-    const parentById: Map<string, string | null> = new Map();
-    let lastJsonlLeafPointer: string | null = null;
+    const accumulator: FullMessageAccumulator = {
+      allMessages: [],
+      allCustomEntries: [],
+      allCompactionEntries: [],
+      parentById: new Map(),
+      lastJsonlLeafPointer: null,
+    };
     const isSandboxSessionPath = resolvedSessionPath?.startsWith("/root/workspace/sessions/");
 
     if (isSandboxSessionPath && globalSandboxManager) {
@@ -1427,45 +1380,7 @@ export class AgentProcessManager {
             if (!line.trim()) continue;
             try {
               const parsed = JSON.parse(line) as Record<string, unknown>;
-              const entryId = (parsed.id as string) ?? "";
-              const parentId = (parsed.parentId as string | null | undefined) ?? null;
-              if (entryId) {
-                parentById.set(entryId, parentId);
-              }
-              if (parsed.type === "custom") {
-                allCustomEntries.push({
-                  id: entryId || `custom-${Date.now()}`,
-                  customType: (parsed.customType as string) ?? "unknown",
-                  data: parsed.data,
-                  timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
-                });
-              } else if (parsed.type === "message" && parsed.message) {
-                allMessages.push({
-                  entryId,
-                  message: parsed.message,
-                });
-              } else if (parsed.type === "compaction") {
-                allCompactionEntries.push({
-                  entryId,
-                  summary: (parsed.summary as string) ?? "",
-                  tokensBefore: parsed.tokensBefore as number | undefined,
-                  timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
-                });
-                // Inject in-place to preserve JSONL chronological order
-                allMessages.push({
-                  entryId,
-                  message: {
-                    role: "compactionSummary",
-                    summary: (parsed.summary as string) ?? "",
-                    tokensBefore: parsed.tokensBefore as number | undefined,
-                    timestamp: new Date(
-                      (parsed.timestamp as string | number | Date) ?? 0,
-                    ).getTime(),
-                  },
-                });
-              } else if (parsed.type === "leaf_pointer" && typeof parsed.leafId === "string") {
-                lastJsonlLeafPointer = parsed.leafId;
-              }
+              appendFullJsonlEntry(parsed, accumulator);
             } catch (err: unknown) {
               log.debug("skipping malformed JSONL entry (sandbox)", {
                 err: err instanceof Error ? err.message : String(err),
@@ -1489,43 +1404,7 @@ export class AgentProcessManager {
           if (!line.trim()) continue;
           try {
             const parsed = JSON.parse(line) as Record<string, unknown>;
-            const entryId = (parsed.id as string) ?? "";
-            const parentId = (parsed.parentId as string | null | undefined) ?? null;
-            if (entryId) {
-              parentById.set(entryId, parentId);
-            }
-            if (parsed.type === "custom") {
-              allCustomEntries.push({
-                id: entryId || `custom-${Date.now()}`,
-                customType: (parsed.customType as string) ?? "unknown",
-                data: parsed.data,
-                timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
-              });
-            } else if (parsed.type === "message" && parsed.message) {
-              allMessages.push({
-                entryId,
-                message: parsed.message,
-              });
-            } else if (parsed.type === "compaction") {
-              allCompactionEntries.push({
-                entryId,
-                summary: (parsed.summary as string) ?? "",
-                tokensBefore: parsed.tokensBefore as number | undefined,
-                timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
-              });
-              // Inject in-place to preserve JSONL chronological order
-              allMessages.push({
-                entryId,
-                message: {
-                  role: "compactionSummary",
-                  summary: (parsed.summary as string) ?? "",
-                  tokensBefore: parsed.tokensBefore as number | undefined,
-                  timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
-                },
-              });
-            } else if (parsed.type === "leaf_pointer" && typeof parsed.leafId === "string") {
-              lastJsonlLeafPointer = parsed.leafId;
-            }
+            appendFullJsonlEntry(parsed, accumulator);
           } catch (err: unknown) {
             log.debug("skipping malformed JSONL entry", {
               err: err instanceof Error ? err.message : String(err),
@@ -1546,29 +1425,23 @@ export class AgentProcessManager {
 
     // Resolve leafId: prefer JSONL leaf_pointer (authoritative on-disk value),
     // fall back to in-memory cache (may be stale after process kill)
-    const leafId = lastJsonlLeafPointer ?? this.leafIds.get(sessionId) ?? null;
+    const leafId = accumulator.lastJsonlLeafPointer ?? this.leafIds.get(sessionId) ?? null;
     if (leafId && leafId !== this.leafIds.get(sessionId)) {
       this.leafIds.set(sessionId, leafId);
     }
 
     // Build leaf→root path set and filter messages to current branch only.
-    let filteredMessages = allMessages;
-    let customEntries = allCustomEntries;
-    if (leafId && parentById.size > 0 && parentById.has(leafId)) {
-      const pathIds = new Set<string>();
-      let curId: string | null = leafId;
-      while (curId) {
-        pathIds.add(curId);
-        const parent = parentById.get(curId);
-        curId = parent ?? null;
-      }
-      filteredMessages = allMessages.filter((m) => pathIds.has(m.entryId));
-      customEntries = allCustomEntries.filter((e) => pathIds.has(e.id));
-    } else if (leafId && parentById.size > 0 && !parentById.has(leafId)) {
+    const { filteredMessages, customEntries, leafFound } = filterMessagesToBranch({
+      allMessages: accumulator.allMessages,
+      allCustomEntries: accumulator.allCustomEntries,
+      parentById: accumulator.parentById,
+      leafId,
+    });
+    if (!leafFound && leafId) {
       log.warn("[getFullMessages] leafId not found in JSONL, skipping branch filter", {
         sessionId,
         leafId,
-        totalEntries: parentById.size,
+        totalEntries: accumulator.parentById.size,
       });
     }
 
@@ -1578,38 +1451,20 @@ export class AgentProcessManager {
     const totalCount = filteredMessages.length;
     const limit = options?.limit;
     const afterEntryId = options?.afterEntryId;
-    let hasMore = false;
-    let nextCursor: string | null = null;
-
-    let slicedMessages: unknown[];
-    const injectEntryId = (e: { entryId: string; message: unknown }) => {
-      const msg = e.message as Record<string, unknown>;
-      if (msg && typeof msg === "object" && e.entryId) {
-        return { ...msg, entryId: e.entryId };
-      }
-      return msg;
-    };
-    const cursorIndex =
-      afterEntryId != null
-        ? filteredMessages.findIndex((entry) => entry.entryId === afterEntryId)
-        : -1;
-
-    if (afterEntryId != null && cursorIndex < 0) {
+    const cursorMissing =
+      afterEntryId != null && !filteredMessages.some((entry) => entry.entryId === afterEntryId);
+    if (cursorMissing) {
       log.warn("[getFullMessages] afterEntryId not found, returning empty page", {
         sessionId,
         afterEntryId,
         totalCount,
       });
-      slicedMessages = [];
-    } else if (limit !== undefined) {
-      const endIndex = cursorIndex >= 0 ? cursorIndex : totalCount;
-      const startIndex = Math.max(0, endIndex - limit);
-      slicedMessages = filteredMessages.slice(startIndex, endIndex).map(injectEntryId);
-      hasMore = startIndex > 0;
-      nextCursor = hasMore ? (filteredMessages[startIndex]?.entryId ?? null) : null;
-    } else {
-      slicedMessages = filteredMessages.map(injectEntryId);
     }
+    const { slicedMessages, hasMore, nextCursor } = paginateEntryMessages({
+      filteredMessages,
+      limit,
+      afterEntryId,
+    });
 
     const totalMs = Math.round(performance.now() - t0);
 
@@ -1623,9 +1478,11 @@ export class AgentProcessManager {
           "getMessages (streaming merge)",
         );
         if (Array.isArray(memResult) && memResult.length > 0) {
-          const jsonlEntryIds = new Set(allMessages.map((m) => m.entryId).filter(Boolean));
+          const jsonlEntryIds = new Set(
+            accumulator.allMessages.map((m) => m.entryId).filter(Boolean),
+          );
           const jsonlUserTexts = new Set(
-            allMessages
+            accumulator.allMessages
               .filter((m) => {
                 const msg = m.message as Record<string, unknown> | undefined;
                 return msg && (msg.role as string) === "user";
@@ -1642,7 +1499,9 @@ export class AgentProcessManager {
               })
               .filter(Boolean),
           );
-          const compactionEntryIds = new Set(allCompactionEntries.map((c) => c.entryId));
+          const compactionEntryIds = new Set(
+            accumulator.allCompactionEntries.map((c) => c.entryId),
+          );
           const filteredHasCompaction = filteredMessages.some((fm) => {
             const fmMsg = fm.message as Record<string, unknown>;
             return fmMsg && (fmMsg.role as string) === "compactionSummary";
