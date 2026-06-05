@@ -494,6 +494,25 @@ describe("HookPermissionBanner", () => {
     expect(mockSetActiveSession).toHaveBeenCalledWith("sess-2");
   });
 
+  it("renders bash command confirm requests without hook metadata", () => {
+    setupProject();
+    currentPending = [
+      makeRequest({
+        requestId: "r1",
+        sessionId: "sess-1",
+        title: "Bash 命令确认",
+        message: "YOLO 跨项目写入测试",
+      }),
+    ];
+
+    render(<HookPermissionBanner sessionId="sess-1" />);
+
+    expect(screen.getByText("Bash")).toBeInTheDocument();
+    expect(screen.getByText("Bash 命令确认")).toBeInTheDocument();
+    expect(screen.getByText("YOLO 跨项目写入测试")).toBeInTheDocument();
+    expect(screen.getByText("uiCard.allowOnce")).toBeInTheDocument();
+  });
+
   it("renders nothing for non-hook pending requests", () => {
     setupProject();
     currentPending = [

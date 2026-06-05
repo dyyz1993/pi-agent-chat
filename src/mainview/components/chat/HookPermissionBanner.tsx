@@ -26,19 +26,43 @@ const HOOK_TOOL_ICONS: Record<string, { icon: typeof Terminal; color: string; la
 	ls: { icon: FolderOpen, color: "text-cyan-400", label: "Ls" },
 };
 
+function isCommandConfirm(req: UIPendingRequest): boolean {
+	if (req.method !== "confirm") return false;
+	if (req.hookMeta) return true;
+
+	const haystack = `${req.title ?? ""} ${req.message ?? ""}`.toLowerCase();
+	return (
+		haystack.includes("bash") ||
+		haystack.includes("command") ||
+		haystack.includes("命令") ||
+		haystack.includes("权限")
+	);
+}
+
+function getToolIcon(req: UIPendingRequest) {
+	const hookMeta = req.hookMeta;
+	if (hookMeta?.toolName) {
+		return (
+			HOOK_TOOL_ICONS[hookMeta.toolName.toLowerCase()] ?? {
+				icon: Wrench,
+				color: "text-gray-400",
+				label: hookMeta.toolName,
+			}
+		);
+	}
+
+	const haystack = `${req.title ?? ""} ${req.message ?? ""}`.toLowerCase();
+	if (haystack.includes("bash")) return HOOK_TOOL_ICONS.bash;
+	return { icon: Shield, color: "text-status-warning", label: "Permission" };
+}
+
 function SinglePermissionCard({ req }: { req: UIPendingRequest }) {
 	const { t } = useTranslation("chat");
 	const respondById = useUIDialogStore((s) => s.respondById);
 	const dismissById = useUIDialogStore((s) => s.dismissById);
 
 	const hookMeta = req.hookMeta;
-	const hookIcon = hookMeta?.toolName
-		? HOOK_TOOL_ICONS[hookMeta.toolName.toLowerCase()] ?? {
-				icon: Wrench,
-				color: "text-gray-400",
-				label: hookMeta.toolName,
-			}
-		: { icon: Shield, color: "text-status-warning", label: "Permission" };
+	const hookIcon = getToolIcon(req);
 
 	const Icon = hookIcon.icon;
 
@@ -49,6 +73,11 @@ function SinglePermissionCard({ req }: { req: UIPendingRequest }) {
 				<span className="text-[11px] font-semibold">{hookIcon.label}</span>
 			</div>
 			<div className="flex-1 min-w-0">
+				{req.title && (
+					<div className="text-[11px] font-medium text-text-primary leading-relaxed mb-1">
+						{req.title}
+					</div>
+				)}
 				{hookMeta?.reason && (
 					<p className="text-[11px] text-text-secondary leading-relaxed mb-1">
 						{hookMeta.reason}
@@ -90,14 +119,7 @@ function CollapsedSummary({ count, req }: { count: number; req: UIPendingRequest
 	const { t } = useTranslation("chat");
 	const togglePanel = useUIDialogStore((s) => s.togglePanel);
 
-	const hookMeta = req.hookMeta;
-	const hookIcon = hookMeta?.toolName
-		? HOOK_TOOL_ICONS[hookMeta.toolName.toLowerCase()] ?? {
-				icon: Wrench,
-				color: "text-gray-400",
-				label: hookMeta.toolName,
-			}
-		: { icon: Shield, color: "text-status-warning", label: "" };
+	const hookIcon = getToolIcon(req);
 
 	const Icon = hookIcon.icon;
 
@@ -154,8 +176,7 @@ export const HookPermissionBanner = memo(function HookPermissionBanner({
 			.filter(
 				(request) =>
 					projectSessionIds.has(request.sessionId) &&
-					request.hookMeta &&
-					request.method === "confirm",
+					isCommandConfirm(request),
 			)
 			.sort((a, b) => {
 				if (a.sessionId === sessionId && b.sessionId !== sessionId) return -1;
