@@ -123,6 +123,19 @@ import {
   toggleMcpServerOperation,
 } from "./agent-client-session-operations";
 import {
+  cloneOperation,
+  exportHtmlOperation,
+  forkOperation,
+  getBatchDiffsOperation,
+  getFileDiffOperation,
+  getForkMessagesOperation,
+  getLastAssistantTextOperation,
+  getModifiedFilesOperation,
+  newSessionOperation,
+  previewRollbackOperation,
+  restoreFilesFromSnapshotOperation,
+} from "./agent-client-history-operations";
+import {
   appendFullJsonlEntry,
   appendUiJsonlEntry,
   filterMessagesToBranch,
@@ -1831,39 +1844,19 @@ export class AgentProcessManager {
   }
 
   async getLastAssistantText(sessionId: string): Promise<{ text: string | null }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return { text: null };
-    try {
-      const result = await withTimeout(
-        managed.client.getLastAssistantText(),
-        10_000,
-        "getLastAssistantText",
-      );
-      return { text: result };
-    } catch (err: unknown) {
-      log.warn("getLastAssistantText error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return { text: null };
-    }
+    return getLastAssistantTextOperation({
+      sessionId,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+    });
   }
 
   async getForkMessages(
     sessionId: string,
   ): Promise<{ messages: Array<{ entryId: string; text: string }> }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return { messages: [] };
-    try {
-      const result = await withTimeout(managed.client.getForkMessages(), 10_000, "getForkMessages");
-      return { messages: Array.isArray(result) ? result : [] };
-    } catch (err: unknown) {
-      log.warn("getForkMessages error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return { messages: [] };
-    }
+    return getForkMessagesOperation({
+      sessionId,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+    });
   }
 
   async fork(
@@ -1876,22 +1869,12 @@ export class AgentProcessManager {
     newSessionFile?: string;
     newSessionId?: string;
   }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) throw new Error("Client not found");
-    const result = (await withTimeout(managed.client.fork(entryId, options), 60_000, "fork")) as {
-      text: string;
-      cancelled: boolean;
-      newSessionFile?: string;
-      newSessionId?: string;
-    };
-    // Don't stop the original session — the process pool's switchSession
-    // will handle the transition when the forked session is started.
-    // The original session remains on disk and can be re-activated later.
-    // Strip parentSession from forked session so it's treated as independent on refresh
-    if (result.newSessionFile && !result.cancelled) {
-      stripParentSessionFromHeader(result.newSessionFile);
-    }
-    return result;
+    return forkOperation({
+      sessionId,
+      entryId,
+      forkOptions: options,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+    });
   }
 
   async navigateTree(
@@ -1963,11 +1946,11 @@ export class AgentProcessManager {
     sessionId: string,
     targetId: string,
   ): Promise<{ restored: string[]; deleted: string[] }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (managed) {
-      return withTimeout(managed.client.previewRollback(targetId), 15_000, "previewRollback");
-    }
-    return { restored: [], deleted: [] };
+    return previewRollbackOperation({
+      sessionId,
+      targetId,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+    });
   }
 
   async getModifiedFiles(
@@ -1984,20 +1967,13 @@ export class AgentProcessManager {
     }>;
     resolvedFromEntryId: string | null;
   }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (managed) {
-      const result = await withTimeout(
-        managed.client.getModifiedFiles({
-          fromEntryId,
-          toEntryId,
-          ...((toUserMsgEntryId ? { toUserMsgEntryId } : {}) as Record<string, string>),
-        }),
-        15_000,
-        "getModifiedFiles",
-      );
-      return result;
-    }
-    return { files: [], resolvedFromEntryId: null };
+    return getModifiedFilesOperation({
+      sessionId,
+      fromEntryId,
+      toEntryId,
+      toUserMsgEntryId,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+    });
   }
 
   async getFileDiff(
@@ -2011,16 +1987,13 @@ export class AgentProcessManager {
     newContent: string | null;
     unifiedDiff: string;
   } | null> {
-    const managed = this.getActiveManaged(sessionId);
-    if (managed) {
-      const result = await withTimeout(
-        managed.client.getFileDiff({ filePath, fromEntryId, toEntryId }),
-        15_000,
-        "getFileDiff",
-      );
-      return result;
-    }
-    return null;
+    return getFileDiffOperation({
+      sessionId,
+      filePath,
+      fromEntryId,
+      toEntryId,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+    });
   }
 
   async getBatchDiffs(
@@ -2040,15 +2013,12 @@ export class AgentProcessManager {
     }>;
     summary: { totalFiles: number; added: number; modified: number; deleted: number };
   }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (managed) {
-      return withTimeout(
-        managed.client.getBatchDiffs({ fromEntryId, toEntryId }),
-        30_000,
-        "getBatchDiffs",
-      );
-    }
-    return { files: [], summary: { totalFiles: 0, added: 0, modified: 0, deleted: 0 } };
+    return getBatchDiffsOperation({
+      sessionId,
+      fromEntryId,
+      toEntryId,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+    });
   }
 
   async getTree(sessionId: string): Promise<{ entries: TreeEntry[]; leafId?: string | null }> {
@@ -2081,34 +2051,35 @@ export class AgentProcessManager {
     snapshotTreeHash: string,
     files?: string[],
   ): Promise<string[]> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) throw new Error("Client not found");
-
-    const result = (await managed.client
-      .channel("file-snapshot")
-      .call("snapshot.restoreByHash", { snapshotTreeHash, files })) as {
-      restored: string[];
-    } | null;
-
-    return result?.restored ?? [];
+    return restoreFilesFromSnapshotOperation({
+      sessionId,
+      snapshotTreeHash,
+      files,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+    });
   }
 
   async clone(sessionId: string): Promise<{ cancelled: boolean }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) throw new Error("Client not found");
-    return withTimeout(managed.client.clone(), 60_000, "clone");
+    return cloneOperation({
+      sessionId,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+    });
   }
 
   async newSession(sessionId: string, parentSession?: string): Promise<{ cancelled: boolean }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) throw new Error("Client not found");
-    return withTimeout(managed.client.newSession(parentSession), 30_000, "newSession");
+    return newSessionOperation({
+      sessionId,
+      parentSession,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+    });
   }
 
   async exportHtml(sessionId: string, outputPath?: string): Promise<{ path: string }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) throw new Error("Client not found");
-    return withTimeout(managed.client.exportHtml(outputPath), 60_000, "exportHtml");
+    return exportHtmlOperation({
+      sessionId,
+      outputPath,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+    });
   }
 
   sendChannelData(sessionId: string, channelName: string, data: unknown): void {
