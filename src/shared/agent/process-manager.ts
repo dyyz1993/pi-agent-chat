@@ -108,6 +108,7 @@ import {
   resolveFallbackBranchPoint,
   type JsonlTreeEntry,
 } from "./session-tree-navigation";
+import { registerAgentChannels } from "./agent-channel-registration";
 
 const log = createLogger("agent");
 const perfLog = createLogger("session-perf");
@@ -587,37 +588,16 @@ export class AgentProcessManager {
         managed.unsubscribe = () => {};
       }
 
-      const coordinatorChannelNames = new Set(["coordinator", "coordinator_client"]);
-      const channelNames = [
-        "bash",
-        "todo",
-        "subagent",
-        "lsp",
-        "rules-engine",
-        "memory",
-        "coordinator",
-        "coordinator_client",
-        "supervisor",
-        "file-snapshot",
-        "file-review",
-      ] as const;
-      for (const name of channelNames) {
-        try {
-          client.channel(name).onReceive((data: unknown) => {
-            if (coordinatorChannelNames.has(name)) {
-              this.handleCoordinatorCall(managed._activeSessionId, data, name);
-              return;
-            }
-            this.handleEvent(managed._activeSessionId, {
-              type: "channel_data",
-              name,
-              data,
-            } as ChannelDataEvent);
-          });
-        } catch {
-          // sandbox mode: channels not supported, skip
-        }
-      }
+      const channelsRegistered = registerAgentChannels({
+        client,
+        getSessionId: () => managed._activeSessionId,
+        handleCoordinatorCall: (activeSessionId, data, channelName) => {
+          this.handleCoordinatorCall(activeSessionId, data, channelName);
+        },
+        handleChannelData: (activeSessionId, event) => {
+          this.handleEvent(activeSessionId, event as AgentEvent);
+        },
+      });
 
       const processStartMs = Math.round(performance.now() - tAfterCreate);
       perfLog.info("[start] RpcClient ready", {
@@ -627,7 +607,7 @@ export class AgentProcessManager {
         constructMs: createTimings.construct,
         createRpcTotalMs: Math.round(tAfterCreate - tStart),
         processStartMs,
-        channelsRegistered: channelNames.length,
+        channelsRegistered,
       });
 
       log.info("RpcClient started", { sessionId });
