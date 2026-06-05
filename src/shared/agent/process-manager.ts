@@ -1,9 +1,3 @@
-import {
-  existsSync,
-} from "fs";
-import { createReadStream } from "fs";
-
-import * as readline from "readline";
 import type { RPCServer } from "@dyyz1993/rpc-core";
 import type {
   AgentEvent,
@@ -139,13 +133,6 @@ import {
   getFullMessagesOperation,
   getMessagesOperation,
 } from "./agent-client-message-operations";
-import {
-  createLeafPointerEntry,
-  mapJsonlEntriesToTreeEntries,
-  parseJsonlTreeEntry,
-  resolveFallbackBranchPoint,
-  type JsonlTreeEntry,
-} from "./session-tree-navigation";
 import { registerAgentChannels } from "./agent-channel-registration";
 import { handleAgentEventOperation } from "./agent-event-routing";
 import {
@@ -163,6 +150,11 @@ import {
   handleCoordinatorDelegateStatusOperation,
   handleCoordinatorDelegateStopOperation,
 } from "./coordinator-delegate-operations";
+import {
+  getTreeOperation,
+  navigateTreeOperation,
+  readJsonlTreeEntriesOperation,
+} from "./agent-tree-navigation-operations";
 
 const log = createLogger("agent");
 const perfLog = createLogger("session-perf");
@@ -576,35 +568,6 @@ export class AgentProcessManager {
     });
   }
 
-  private async readJsonlEntries(sessionPath: string): Promise<JsonlTreeEntry[]> {
-    const entries: JsonlTreeEntry[] = [];
-    if (!sessionPath || !existsSync(sessionPath)) return entries;
-    try {
-      const rl = readline.createInterface({
-        input: createReadStream(sessionPath, { encoding: "utf-8" }),
-        crlfDelay: Infinity,
-      });
-      for await (const line of rl) {
-        if (!line.trim()) continue;
-        try {
-          const parsed = JSON.parse(line) as Record<string, unknown>;
-          const entry = parseJsonlTreeEntry(parsed);
-          if (entry) entries.push(entry);
-        } catch (err: unknown) {
-          log.warn("readJsonlEntries: skipping malformed entry", {
-            err: err instanceof Error ? err.message : String(err),
-          });
-        }
-      }
-      rl.close();
-    } catch (err: unknown) {
-      log.warn("readJsonlEntries: failed to read file", {
-        err: err instanceof Error ? err.message : String(err),
-      });
-    }
-    return entries;
-  }
-
   /**
    * Get the managed client for a session.
    * Each session now has its own dedicated CLI process.
@@ -797,7 +760,7 @@ export class AgentProcessManager {
       sessionPath,
       getActiveManaged: (id) => this.getActiveManaged(id),
       resolveSessionPath: (id) => this.resolveSessionPath(id),
-      readJsonlEntries: (pathToRead) => this.readJsonlEntries(pathToRead),
+      readJsonlEntries: readJsonlTreeEntriesOperation,
       buildMessagesFromJsonl: (entries, leafId) => this.buildMessagesFromJsonl(entries, leafId),
       leafIds: this.leafIds,
       readSandboxFile:
@@ -1267,64 +1230,15 @@ export class AgentProcessManager {
     targetId: string,
     options?: { summarize?: boolean; skipFiles?: boolean },
   ): Promise<{ cancelled: boolean; reason?: string }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (managed) {
-      // Block rollback while agent is actively streaming
-      if (managed.info.status === "streaming") {
-        log.warn("navigateTree: blocked — agent is streaming", { sessionId, targetId });
-        return { cancelled: true, reason: "Agent is streaming" };
-      }
-      const result = await withTimeout(
-        managed.client.navigateTree(targetId, options),
-        30_000,
-        "navigateTree",
-      );
-      if (!result.cancelled) {
-        this.leafIds.set(sessionId, targetId);
-        log.info("navigateTree updated leafId", { sessionId, targetId });
-      }
-      return result;
-    }
-    log.info("navigateTree: no managed client, applying JSONL fallback", {
+    return navigateTreeOperation({
       sessionId,
       targetId,
+      navigateOptions: options,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+      resolveSessionPath: (id) => this.resolveSessionPath(id),
+      leafIds: this.leafIds,
+      readJsonlEntries: readJsonlTreeEntriesOperation,
     });
-
-    const sessionPath = this.resolveSessionPath(sessionId);
-    if (!sessionPath) {
-      return { cancelled: true, reason: "No session path found" };
-    }
-
-    const entries = await this.readJsonlEntries(sessionPath);
-    const { exists, branchPointId } = resolveFallbackBranchPoint(entries, targetId);
-    if (!exists) {
-      return { cancelled: true, reason: "Target entry not found in session" };
-    }
-
-    this.leafIds.set(sessionId, branchPointId);
-
-    // Write leaf_pointer to JSONL so it survives restart (without active CLI,
-    // the SDK's branch() is unavailable, so we append directly).
-    try {
-      const { appendFile: appendFileAsync } = await import("node:fs/promises");
-      const leafPointerEntry = createLeafPointerEntry(branchPointId);
-      await appendFileAsync(sessionPath, `\n${leafPointerEntry}\n`, "utf-8");
-    } catch (leafErr: unknown) {
-      log.warn("navigateTree: failed to write leaf_pointer in fallback", {
-        sessionId,
-        err: leafErr instanceof Error ? leafErr.message : String(leafErr),
-      });
-    }
-
-    if (!options?.skipFiles) {
-      log.warn("navigateTree: file restore skipped (no active CLI process)", {
-        sessionId,
-        targetId,
-      });
-    }
-
-    log.info("navigateTree: JSONL fallback applied", { sessionId, targetId });
-    return { cancelled: false };
   }
 
   async previewRollback(
@@ -1407,28 +1321,13 @@ export class AgentProcessManager {
   }
 
   async getTree(sessionId: string): Promise<{ entries: TreeEntry[]; leafId?: string | null }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (managed) {
-      try {
-        const result = await withTimeout(managed.client.getTreeWithLeaf(), 15_000, "getTree");
-        return {
-          entries: Array.isArray(result.entries) ? (result.entries as TreeEntry[]) : [],
-          leafId: result.leafId,
-        };
-      } catch (err: unknown) {
-        log.warn("getTree SDK failed, falling back to JSONL", {
-          sessionId,
-          err: err instanceof Error ? err.message : String(err),
-        });
-      }
-    }
-    const sessionPath = this.resolveSessionPath(sessionId);
-    if (!sessionPath) throw new Error("Client not found and no session path");
-    const entries = await this.readJsonlEntries(sessionPath);
-    return {
-      entries: mapJsonlEntriesToTreeEntries(entries),
-      leafId: this.leafIds.get(sessionId) ?? null,
-    };
+    return getTreeOperation({
+      sessionId,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+      resolveSessionPath: (id) => this.resolveSessionPath(id),
+      leafIds: this.leafIds,
+      readJsonlEntries: readJsonlTreeEntriesOperation,
+    });
   }
 
   async restoreFilesFromSnapshot(
