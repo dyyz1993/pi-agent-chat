@@ -94,11 +94,13 @@ import {
   selectLruEvictionCandidate,
 } from "./agent-process-pool";
 import {
-  asAgentCommandClient,
-  getResponseData,
-  normalizeAgentList,
-  type AgentListItem,
-} from "./agent-command-response";
+  getAgentsOperation,
+  getCurrentAgentOperation,
+  getLatestAgentChangeOperation,
+  getTierModelsOperation,
+  setTierModelsOperation,
+  switchAgentOperation,
+} from "./agent-client-command-operations";
 import {
   appendFullJsonlEntry,
   appendUiJsonlEntry,
@@ -1748,41 +1750,19 @@ export class AgentProcessManager {
   }
 
   async getTierModels(sessionId: string): Promise<{ models: Record<string, string> }> {
-    let managed = this.getActiveManaged(sessionId);
-    if (!managed) {
-      await new Promise((r) => setTimeout(r, 200));
-      managed = this.getActiveManaged(sessionId);
-    }
-    if (!managed) {
-      managed = await this.ensureManagedClient(sessionId);
-    }
-    if (!managed) return { models: {} };
-    const response = await asAgentCommandClient(managed.client)
-      .send({ type: "get_tier_models" })
-      .catch((err: unknown) => {
-        log.warn("getTierModels error", {
-          sessionId,
-          err: err instanceof Error ? err.message : String(err),
-        });
-        return null;
-      });
-    if (!response) return { models: {} };
-    const data = getResponseData<{ models: Record<string, string> }>(response);
-    return { models: data?.models ?? {} };
+    return getTierModelsOperation({
+      sessionId,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+      ensureManagedClient: (id) => this.ensureManagedClient(id),
+    });
   }
 
   async setTierModels(sessionId: string, models: Record<string, string>): Promise<{ ok: boolean }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return { ok: false };
-    await asAgentCommandClient(managed.client)
-      .send({ type: "set_tier_models", models })
-      .catch((err: unknown) => {
-        log.warn("setTierModels error", {
-          sessionId,
-          err: err instanceof Error ? err.message : String(err),
-        });
-      });
-    return { ok: true };
+    return setTierModelsOperation({
+      sessionId,
+      models,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+    });
   }
 
   async getAgents(sessionId: string): Promise<{
@@ -1796,22 +1776,11 @@ export class AgentProcessManager {
       filePath: string;
     }>;
   }> {
-    let managed = this.getActiveManaged(sessionId);
-    if (!managed) {
-      managed = await this.ensureManagedClient(sessionId);
-    }
-    if (!managed) return { agents: [] };
-    try {
-      const response = await asAgentCommandClient(managed.client).send({ type: "get_agents" });
-      const data = getResponseData<{ agents: AgentListItem[] }>(response);
-      return { agents: normalizeAgentList(data?.agents) };
-    } catch (err: unknown) {
-      log.warn("getAgents error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return { agents: [] };
-    }
+    return getAgentsOperation({
+      sessionId,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+      ensureManagedClient: (id) => this.ensureManagedClient(id),
+    });
   }
 
   async switchAgent(
@@ -1823,44 +1792,20 @@ export class AgentProcessManager {
     tier?: string;
     thinkingLevel?: string;
   }> {
-    let managed = this.getActiveManaged(sessionId);
-    if (!managed) {
-      managed = await this.ensureManagedClient(sessionId);
-    }
-    if (!managed) throw new Error("No agent process for session");
-    const response = await asAgentCommandClient(managed.client).send({
-      type: "switch_agent",
+    return switchAgentOperation({
+      sessionId,
       agentName,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+      ensureManagedClient: (id) => this.ensureManagedClient(id),
     });
-    const data = getResponseData<{
-      agentName: string;
-      tools: string[];
-      tier?: string;
-      thinkingLevel?: string;
-    }>(response);
-    if (!data) throw new Error("switch_agent returned no data");
-    return data;
   }
 
   async getCurrentAgent(sessionId: string): Promise<{ agentName: string | null }> {
-    let managed = this.getActiveManaged(sessionId);
-    if (!managed) {
-      managed = await this.ensureManagedClient(sessionId);
-    }
-    if (!managed) return { agentName: null };
-    try {
-      const response = await asAgentCommandClient(managed.client).send({
-        type: "get_current_agent",
-      });
-      const data = getResponseData<{ agentName: string | null }>(response);
-      return { agentName: data?.agentName ?? null };
-    } catch (err: unknown) {
-      log.warn("getCurrentAgent error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return { agentName: null };
-    }
+    return getCurrentAgentOperation({
+      sessionId,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+      ensureManagedClient: (id) => this.ensureManagedClient(id),
+    });
   }
 
   async getAgentDetail(sessionId: string, agentName: string) {
@@ -1894,25 +1839,10 @@ export class AgentProcessManager {
   }
 
   async getLatestAgentChange(sessionId: string) {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return null;
-    try {
-      const response = await asAgentCommandClient(managed.client).send({
-        type: "get_latest_agent_change",
-      });
-      const data = getResponseData<{
-        agentName: string;
-        agentConfig?: Record<string, unknown>;
-        timestamp: string;
-      } | null>(response);
-      return data ?? null;
-    } catch (err: unknown) {
-      log.warn("getLatestAgentChange error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return null;
-    }
+    return getLatestAgentChangeOperation({
+      sessionId,
+      getActiveManaged: (id) => this.getActiveManaged(id),
+    });
   }
 
   async getSettings(sessionId: string, scope?: string): Promise<Record<string, unknown>> {
