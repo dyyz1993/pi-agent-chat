@@ -2,6 +2,22 @@
 
 A full-stack AI coding assistant with desktop (Electrobun) and web support, built with React, TypeScript, and Tailwind CSS.
 
+## Screenshots
+
+### Desktop
+
+![Main Chat - Desktop](screenshots/main-desktop.png)
+
+### Settings Panel
+
+![Settings Panel](screenshots/settings-panel.png)
+
+### Mobile
+
+<p float="left">
+  <img src="screenshots/mobile-view.png" width="300" />
+</p>
+
 ## Features
 
 - **AI Chat Interface** - Real-time streaming conversations with AI coding agents

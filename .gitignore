@@ -74,10 +74,7 @@ diagnose-ws.ts
 
 # Screenshot outputs (binary, large)
 scripts/ui-screenshots/
-test-mobile-*.png
-test-report/
 test-screenshots/
-screenshots/
 preview-test/
 
 # Temporary/generated files
