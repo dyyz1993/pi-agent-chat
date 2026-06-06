@@ -3,7 +3,7 @@ import type { Dirent } from "fs";
 import type { HandlerOptions } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
 import { readdir, stat, writeFile, readFile, mkdir, rename, rm, cp } from "fs/promises";
-import { existsSync, watch } from "fs";
+import { existsSync, watch, statSync } from "fs";
 import { join, dirname, resolve } from "path";
 import { createLogger } from "../lib/logger";
 
@@ -18,6 +18,7 @@ const watcherState = new WeakMap<
     path: string | null;
     debounceTimer: ReturnType<typeof setTimeout> | null;
     pendingChanges: Map<string, "create" | "delete" | "rename">;
+    gitignoreFn: ((path: string, isDir: boolean) => boolean) | null;
   }
 >();
 
@@ -28,6 +29,7 @@ function getWatcherState(server: RPCServer) {
       path: null,
       debounceTimer: null,
       pendingChanges: new Map(),
+      gitignoreFn: null,
     });
   }
   return watcherState.get(server) as {
@@ -35,6 +37,7 @@ function getWatcherState(server: RPCServer) {
     path: string | null;
     debounceTimer: ReturnType<typeof setTimeout> | null;
     pendingChanges: Map<string, "create" | "delete" | "rename">;
+    gitignoreFn: ((path: string, isDir: boolean) => boolean) | null;
   };
 }
 
@@ -44,14 +47,42 @@ function startFileWatcher(server: RPCServer, projectPath: string): void {
   stopFileWatcher(server);
 
   state.path = projectPath;
+  state.gitignoreFn = null;
+
+  // Async-load .gitignore rules for one-level filtering
+  loadGitignoreRules(projectPath).then((fn) => {
+    const s = getWatcherState(server);
+    if (s.path === projectPath) {
+      s.gitignoreFn = fn;
+      log.debug("File watcher .gitignore rules loaded", { path: projectPath });
+    }
+  });
 
   try {
     state.watcher = watch(projectPath, { recursive: true }, (eventType, filename) => {
       if (!filename) return;
       const segments = filename.split(/[/\\]/);
+
+      // 1) Always exclude build artifacts & vcs dirs at any depth
       if (segments.includes("node_modules") || segments.includes(".git")) return;
 
+      // 2) Depth limit: only push top-level (depth === 1) changes.
+      //    Deeper changes are ignored — user can manually refresh the tree.
+      if (segments.length > 1) return;
+
       const changedPath = join(projectPath, filename);
+
+      // 3) .gitignore filter (skip top-level entries that are ignored)
+      if (state.gitignoreFn) {
+        let isDir = false;
+        try {
+          isDir = statSync(changedPath).isDirectory();
+        } catch {
+          // file may already be deleted — treat as file
+        }
+        if (state.gitignoreFn(filename, isDir)) return;
+      }
+
       const changeType: "create" | "delete" | "rename" =
         eventType === "rename" ? (existsSync(changedPath) ? "create" : "delete") : "create";
 
@@ -91,6 +122,7 @@ function stopFileWatcher(server: RPCServer): void {
     state.watcher = null;
   }
   state.path = null;
+  state.gitignoreFn = null;
 }
 
 function parseGitignore(content: string): (path: string, isDir: boolean) => boolean {
