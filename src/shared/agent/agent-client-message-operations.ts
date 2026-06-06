@@ -72,6 +72,37 @@ function messageText(message: Record<string, unknown>): string {
     .join("");
 }
 
+function normalizedMessageSignature(message: Record<string, unknown>): string {
+  const role = typeof message.role === "string" ? message.role : "";
+  const toolCallId = typeof message.toolCallId === "string" ? message.toolCallId : "";
+  const toolName = typeof message.toolName === "string" ? message.toolName : "";
+  const isError = typeof message.isError === "boolean" ? message.isError : undefined;
+  const content = Array.isArray(message.content)
+    ? message.content.map((block) => {
+        if (!block || typeof block !== "object") {
+          return typeof block === "string" || typeof block === "number" || typeof block === "boolean"
+            ? block
+            : null;
+        }
+        const b = block as Record<string, unknown>;
+        return {
+          type: b.type,
+          text: typeof b.text === "string" ? b.text : undefined,
+          thinking: typeof b.thinking === "string" ? b.thinking : undefined,
+          id: typeof b.id === "string" ? b.id : undefined,
+          name: typeof b.name === "string" ? b.name : undefined,
+          toolCallId: typeof b.toolCallId === "string" ? b.toolCallId : undefined,
+          toolName: typeof b.toolName === "string" ? b.toolName : undefined,
+          content: typeof b.content === "string" ? b.content : undefined,
+          input: b.input,
+          arguments: b.arguments,
+        };
+      })
+    : message.content;
+
+  return JSON.stringify({ role, toolCallId, toolName, isError, content });
+}
+
 export async function getFullMessagesOperation<TManaged extends ManagedFullMessagesLike>(options: {
   sessionId: string;
   sessionPath?: string;
@@ -152,6 +183,14 @@ export async function getFullMessagesOperation<TManaged extends ManagedFullMessa
       );
       if (Array.isArray(memResult) && memResult.length > 0) {
         const jsonlEntryIds = new Set(accumulator.allMessages.map((m) => m.entryId).filter(Boolean));
+        const jsonlMessageSignatures = new Set(
+          accumulator.allMessages
+            .map((m) => {
+              const msg = m.message as Record<string, unknown> | undefined;
+              return msg ? normalizedMessageSignature(msg) : "";
+            })
+            .filter(Boolean),
+        );
         const jsonlUserTexts = new Set(
           accumulator.allMessages
             .filter((m) => {
@@ -166,11 +205,13 @@ export async function getFullMessagesOperation<TManaged extends ManagedFullMessa
           const fmMsg = fm.message as Record<string, unknown>;
           return fmMsg && (fmMsg.role as string) === "compactionSummary";
         });
+        let addedFromMemory = 0;
         for (const msg of memResult) {
           const m = msg as Record<string, unknown>;
           const eid = (m.entryId as string) ?? "";
           const role = (m.role as string) ?? "";
           if (eid && jsonlEntryIds.has(eid)) continue;
+          if (!eid && jsonlMessageSignatures.has(normalizedMessageSignature(m))) continue;
           if (role === "compactionSummary") {
             if (eid && compactionEntryIds.has(eid)) continue;
             if (!eid && filteredHasCompaction) continue;
@@ -180,11 +221,14 @@ export async function getFullMessagesOperation<TManaged extends ManagedFullMessa
             if (text && jsonlUserTexts.has(text)) continue;
           }
           slicedMessages.push(m as unknown as AgentMessageForUI);
+          addedFromMemory++;
           if (eid) jsonlEntryIds.add(eid);
+          jsonlMessageSignatures.add(normalizedMessageSignature(m));
         }
         perfLog.info("[getFullMessages] streaming merge: added from CLI memory", {
           sessionId: options.sessionId,
-          mergedCount: slicedMessages.length,
+          addedCount: addedFromMemory,
+          messageCount: slicedMessages.length,
         });
       }
     } catch (err: unknown) {

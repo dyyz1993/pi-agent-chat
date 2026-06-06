@@ -26,6 +26,27 @@ function messageEntry(id: string, parentId: string | null, role: string, text: s
   });
 }
 
+function toolResultEntry(
+  id: string,
+  parentId: string | null,
+  toolCallId: string,
+  toolName: string,
+  text: string,
+): string {
+  return jsonlEntry({
+    id,
+    parentId,
+    type: "message",
+    message: {
+      role: "toolResult",
+      toolCallId,
+      toolName,
+      content: [{ type: "text", text }],
+      isError: false,
+    },
+  });
+}
+
 function customEntry(id: string, parentId: string | null, customType: string): string {
   return jsonlEntry({
     id,
@@ -105,6 +126,58 @@ describe("agent client message operations", () => {
       "user",
       "assistant",
     ]);
+  });
+
+  it("does not duplicate persisted assistant and tool results during streaming memory merge", async () => {
+    writeFileSync(
+      sessionPath,
+      [
+        messageEntry("m1", null, "user", "prompt"),
+        messageEntry("m2", "m1", "assistant", "I will read a file"),
+        toolResultEntry("m3", "m2", "tc-read", "read", "file content"),
+      ].join("\n"),
+    );
+    const managed = {
+      client: {
+        getMessages: vi.fn().mockResolvedValue([
+          { role: "user", content: [{ type: "text", text: "prompt" }] },
+          { role: "assistant", content: [{ type: "text", text: "I will read a file" }] },
+          {
+            role: "toolResult",
+            toolCallId: "tc-read",
+            toolName: "read",
+            content: [{ type: "text", text: "file content" }],
+            isError: false,
+          },
+          { role: "assistant", content: [{ type: "text", text: "still streaming" }] },
+        ]),
+      },
+      info: {
+        status: "streaming",
+        sessionPath,
+      },
+    };
+
+    const result = await getFullMessagesOperation({
+      sessionId: "sess-1",
+      getActiveManaged: () => managed,
+      resolveSessionPath: () => sessionPath,
+      leafIds: new Map(),
+    });
+
+    expect(result.totalCount).toBe(3);
+    expect(result.messages).toHaveLength(4);
+    expect(result.messages.map((m) => (m as { role?: string }).role)).toEqual([
+      "user",
+      "assistant",
+      "toolResult",
+      "assistant",
+    ]);
+    expect(
+      result.messages.filter(
+        (m) => (m as { role?: string; toolCallId?: string }).toolCallId === "tc-read",
+      ),
+    ).toHaveLength(1);
   });
 
   it("getMessages reads active SDK messages and filters JSONL custom entries by leaf path", async () => {
