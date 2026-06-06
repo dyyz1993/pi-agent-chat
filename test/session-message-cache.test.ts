@@ -27,7 +27,10 @@ function makeCacheData(overrides: Partial<SessionCacheData> = {}): SessionCacheD
   return {
     messages: overrides.messages ?? [{ entryId: "m1", message: { role: "user" } }],
     customEntries: overrides.customEntries ?? [],
+    compactionEntries: overrides.compactionEntries ?? [],
     parentById: overrides.parentById ?? new Map([["m1", null]]),
+    lastJsonlLeafPointer: overrides.lastJsonlLeafPointer ?? null,
+    activeJsonlLeafId: overrides.activeJsonlLeafId ?? "m1",
     lineCount: overrides.lineCount ?? 1,
   };
 }
@@ -65,7 +68,12 @@ describe("SessionMessageCache", () => {
       filePath,
       [
         JSON.stringify({ type: "message", id: "m1", message: { role: "user" } }),
-        JSON.stringify({ type: "message", id: "m2", parentId: "m1", message: { role: "assistant" } }),
+        JSON.stringify({
+          type: "message",
+          id: "m2",
+          parentId: "m1",
+          message: { role: "assistant" },
+        }),
         "",
       ].join("\n"),
       "utf-8",
@@ -81,7 +89,12 @@ describe("SessionMessageCache", () => {
     const filePath = makeTempFile(
       [
         JSON.stringify({ type: "message", id: "m1", message: { role: "user" } }),
-        JSON.stringify({ type: "message", id: "m2", parentId: "m1", message: { role: "assistant" } }),
+        JSON.stringify({
+          type: "message",
+          id: "m2",
+          parentId: "m1",
+          message: { role: "assistant" },
+        }),
         "",
       ].join("\n"),
     );

@@ -6,9 +6,10 @@ import {
   appendUiJsonlEntriesFromPath,
   filterMessagesToBranch,
   paginateEntryMessages,
-  readFullJsonlAccumulator,
+  readFullJsonlAccumulatorCached,
   type UiCustomEntry,
 } from "./session-jsonl-messages";
+import type { SessionCacheData, SessionCacheHit } from "./session-message-cache";
 
 const log = createLogger("agent");
 const perfLog = createLogger("session-perf");
@@ -207,6 +208,8 @@ export async function getFullMessagesOperation<TManaged extends ManagedFullMessa
   resolveSessionPath: (sessionId: string) => string;
   leafIds: Map<string, string | null>;
   readSandboxFile?: (pathToRead: string) => Promise<string>;
+  getSessionCache?: (sessionId: string, sessionPath: string) => SessionCacheHit | null;
+  setSessionCache?: (sessionId: string, sessionPath: string, data: SessionCacheData) => void;
 }): Promise<{
   messages: AgentMessageForUI[];
   customEntries: UiCustomEntry[];
@@ -223,9 +226,12 @@ export async function getFullMessagesOperation<TManaged extends ManagedFullMessa
       ? cachedSessionPath
       : (options.sessionPath ?? "");
 
-  const accumulator = await readFullJsonlAccumulator({
+  const accumulator = await readFullJsonlAccumulatorCached({
+    sessionId: options.sessionId,
     sessionPath: resolvedSessionPath,
     readSandboxFile: options.readSandboxFile,
+    getCache: options.getSessionCache,
+    setCache: options.setSessionCache,
   });
 
   const jsonlLeafId = accumulator.lastJsonlLeafPointer

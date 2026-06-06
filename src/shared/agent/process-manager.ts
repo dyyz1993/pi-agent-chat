@@ -318,6 +318,8 @@ export class AgentProcessManager {
         buildMessagesFromJsonl: (entries, leafId) => this.buildMessagesFromJsonl(entries, leafId),
         leafIds: this.leafIds,
         getSandboxUserId: (id) => this._getSandboxUserId(id),
+        getSessionCache: (id, sessionPath) => this.getSessionCache(id, sessionPath),
+        setSessionCache: (id, sessionPath, data) => this.setSessionCache(id, sessionPath, data),
         broadcastEvent: (eventName, payload, metadata) =>
           this.broadcastEvent(eventName, payload, metadata),
       }),

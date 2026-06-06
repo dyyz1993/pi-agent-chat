@@ -2,6 +2,7 @@ import type { AgentMessageForUI } from "../modules/agent";
 import type { RpcClientAPI } from "@dyyz1993/pi-coding-agent";
 import { createLogger } from "../lib/logger";
 import type { TierKey } from "./agent-runtime-config";
+import type { SessionCacheData, SessionCacheHit } from "./session-message-cache";
 import { getSandboxManager } from "./agent-runtime-client";
 import { getCommandsOperation, getSessionStatsOperation } from "./agent-client-state-operations";
 import {
@@ -210,6 +211,8 @@ export function createAgentClientApiAdapter<TManaged extends AgentApiManagedClie
   leafIds: Map<string, string | null>;
   getSandboxUserId: (sessionId: string) => string | null;
   broadcastEvent: (eventName: string, payload: unknown, metadata?: unknown) => Promise<void>;
+  getSessionCache?: (sessionId: string, sessionPath: string) => SessionCacheHit | null;
+  setSessionCache?: (sessionId: string, sessionPath: string, data: SessionCacheData) => void;
 }): AgentClientApiAdapter {
   const api: AgentClientApiAdapter = {
     getCommands(sessionId) {
@@ -250,6 +253,8 @@ export function createAgentClientApiAdapter<TManaged extends AgentApiManagedClie
         getActiveManaged: deps.getActiveManaged,
         resolveSessionPath: deps.resolveSessionPath,
         leafIds: deps.leafIds,
+        getSessionCache: deps.getSessionCache,
+        setSessionCache: deps.setSessionCache,
         readSandboxFile: sandboxManager
           ? async (pathToRead) => {
               const userId = deps.getSandboxUserId(sessionId);

@@ -13,10 +13,20 @@ export interface SessionCustomEntry {
   timestamp: number;
 }
 
+export interface SessionCompactionEntry {
+  entryId: string;
+  summary: string;
+  tokensBefore?: number;
+  timestamp: number;
+}
+
 export interface SessionCacheData {
   messages: SessionMessageEntry[];
   customEntries: SessionCustomEntry[];
+  compactionEntries: SessionCompactionEntry[];
   parentById: Map<string, string | null>;
+  lastJsonlLeafPointer: string | null;
+  activeJsonlLeafId: string | null;
   lineCount: number;
 }
 

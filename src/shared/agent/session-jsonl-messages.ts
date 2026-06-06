@@ -2,8 +2,10 @@ import { createReadStream, existsSync } from "fs";
 import * as readline from "readline";
 
 import { createLogger } from "../lib/logger";
+import type { SessionCacheData, SessionCacheHit } from "./session-message-cache";
 
 const log = createLogger("agent");
+const perfLog = createLogger("session-perf");
 
 export interface UiCustomEntry {
   id: string;
@@ -166,14 +168,18 @@ async function appendJsonlFromText(
 async function appendJsonlFromFile(
   sessionPath: string,
   onParsed: (parsed: Record<string, unknown>) => void,
-): Promise<void> {
-  if (!sessionPath || !existsSync(sessionPath)) return;
+  startLine = 0,
+): Promise<number> {
+  if (!sessionPath || !existsSync(sessionPath)) return 0;
+  let lineIndex = 0;
   const rl = readline.createInterface({
     input: createReadStream(sessionPath, { encoding: "utf-8" }),
     crlfDelay: Infinity,
   });
   try {
     for await (const line of rl) {
+      lineIndex++;
+      if (lineIndex <= startLine) continue;
       if (!line.trim()) continue;
       try {
         onParsed(JSON.parse(line) as Record<string, unknown>);
@@ -186,6 +192,33 @@ async function appendJsonlFromFile(
   } finally {
     rl.close();
   }
+  return lineIndex;
+}
+
+function accumulatorFromCache(hit: SessionCacheHit): FullMessageAccumulator {
+  return {
+    allMessages: [...hit.messages],
+    allCustomEntries: [...hit.customEntries],
+    allCompactionEntries: [...hit.compactionEntries],
+    parentById: new Map(hit.parentById),
+    lastJsonlLeafPointer: hit.lastJsonlLeafPointer,
+    activeJsonlLeafId: hit.activeJsonlLeafId,
+  };
+}
+
+function cacheDataFromAccumulator(
+  accumulator: FullMessageAccumulator,
+  lineCount: number,
+): SessionCacheData {
+  return {
+    messages: [...accumulator.allMessages],
+    customEntries: [...accumulator.allCustomEntries],
+    compactionEntries: [...accumulator.allCompactionEntries],
+    parentById: new Map(accumulator.parentById),
+    lastJsonlLeafPointer: accumulator.lastJsonlLeafPointer,
+    activeJsonlLeafId: accumulator.activeJsonlLeafId,
+    lineCount,
+  };
 }
 
 export async function readFullJsonlAccumulator(options: {
@@ -216,6 +249,63 @@ export async function readFullJsonlAccumulator(options: {
         err: err instanceof Error ? err.message : String(err),
       },
     );
+  }
+
+  return accumulator;
+}
+
+export async function readFullJsonlAccumulatorCached(options: {
+  sessionId: string;
+  sessionPath: string;
+  readSandboxFile?: (sessionPath: string) => Promise<string>;
+  getCache?: (sessionId: string, sessionPath: string) => SessionCacheHit | null;
+  setCache?: (sessionId: string, sessionPath: string, data: SessionCacheData) => void;
+}): Promise<FullMessageAccumulator> {
+  const isSandboxSessionPath = options.sessionPath.startsWith("/root/workspace/sessions/");
+  if (isSandboxSessionPath || !options.getCache || !options.setCache) {
+    return readFullJsonlAccumulator({
+      sessionPath: options.sessionPath,
+      readSandboxFile: options.readSandboxFile,
+    });
+  }
+
+  const t0 = Date.now();
+  const cached = options.getCache(options.sessionId, options.sessionPath);
+  if (cached && !cached.needsIncremental) {
+    perfLog.info("[jsonlCache] hit", {
+      sessionId: options.sessionId,
+      lineCount: cached.lineCount,
+      ms: Date.now() - t0,
+    });
+    return accumulatorFromCache(cached);
+  }
+
+  const accumulator = cached ? accumulatorFromCache(cached) : createFullMessageAccumulator();
+  const startLine = cached?.needsIncremental ? cached.lineCount : 0;
+  let lineCount = startLine;
+
+  try {
+    lineCount = await appendJsonlFromFile(
+      options.sessionPath,
+      (parsed) => appendFullJsonlEntry(parsed, accumulator),
+      startLine,
+    );
+    options.setCache(
+      options.sessionId,
+      options.sessionPath,
+      cacheDataFromAccumulator(accumulator, lineCount),
+    );
+    perfLog.info(cached ? "[jsonlCache] incremental" : "[jsonlCache] miss", {
+      sessionId: options.sessionId,
+      startLine,
+      lineCount,
+      ms: Date.now() - t0,
+    });
+  } catch (err: unknown) {
+    log.warn("Failed to read cached JSONL accumulator", {
+      sessionPath: options.sessionPath,
+      err: err instanceof Error ? err.message : String(err),
+    });
   }
 
   return accumulator;
