@@ -92,6 +92,23 @@ function makeRawMessage(index: number, role: "user" | "assistant" = "user") {
   };
 }
 
+function makeRawAssistantToolCallMessage(index: number, toolCallId: string) {
+  return {
+    id: `msg-${index}`,
+    entryId: `entry-${index}`,
+    role: "assistant",
+    content: [
+      {
+        type: "toolCall",
+        id: toolCallId,
+        name: "bash",
+        arguments: { command: "npm run build", description: "build" },
+      },
+    ],
+    timestamp: 1000 + index * 100,
+  };
+}
+
 function makeRpcResult(count: number, startIndex = 0) {
   const messages = [];
   for (let i = 0; i < count; i++) {
@@ -146,6 +163,28 @@ describe("chat pagination", () => {
     );
   });
 
+  it("initial historical load should not mark orphan tool calls as running while session streams", async () => {
+    useSessionStore.setState({
+      sessionStatusMap: { "test-session": "streaming" },
+    });
+    (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
+      messages: [makeRawAssistantToolCallMessage(1, "tc-historical-refresh")],
+      customEntries: [],
+      hasMore: false,
+      nextCursor: null,
+    });
+
+    await useChatStore.getState().loadSessionMessages("test-session", { force: true });
+
+    const msgs = useChatStore.getState().messagesBySession["test-session"]!;
+    const block = msgs[0].content[0];
+    expect(block.type).toBe("toolExecution");
+    if (block.type === "toolExecution") {
+      expect(block.toolCallId).toBe("tc-historical-refresh");
+      expect(block.status).toBe("unknown");
+    }
+  });
+
   it("loadMoreMessages should prepend older messages", async () => {
     const allMessages = makeRpcResult(100);
     (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
@@ -185,6 +224,33 @@ describe("chat pagination", () => {
     expect(afterLoadMore.length).toBe(100);
     expect(afterLoadMore[0].id).toBe("msg-0");
     expect(afterLoadMore[PAGE_SIZE].id).toBe(`msg-${PAGE_SIZE}`);
+  });
+
+  it("loadMoreMessages should not turn older orphan tool calls into running cards", async () => {
+    const currentMessage = makeRawMessage(10, "assistant");
+    useChatStore.setState({
+      messagesBySession: { "test-session": [currentMessage] },
+      hasMoreMessagesBySession: { "test-session": true },
+      nextCursorBySession: { "test-session": "entry-10" },
+    });
+    (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
+      messages: [makeRawAssistantToolCallMessage(1, "tc-load-more-orphan")],
+      customEntries: [],
+      hasMore: false,
+      nextCursor: null,
+    });
+
+    await useChatStore.getState().loadMoreMessages!("test-session");
+
+    const msgs = useChatStore.getState().messagesBySession["test-session"]!;
+    const loaded = msgs.find((msg) => msg.id === "msg-1");
+    expect(loaded).toBeDefined();
+    const block = loaded!.content[0];
+    expect(block.type).toBe("toolExecution");
+    if (block.type === "toolExecution") {
+      expect(block.toolCallId).toBe("tc-load-more-orphan");
+      expect(block.status).toBe("unknown");
+    }
   });
 
   it("should not request more when hasMoreMessages is false", async () => {

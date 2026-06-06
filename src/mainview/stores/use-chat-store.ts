@@ -443,11 +443,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         nullCount,
       });
 
-      normalizeToolBlocks(
-        msgs,
-        true,
-        useSessionStore.getState().sessionStatusMap[sid] === "streaming",
-      );
+      normalizeToolBlocks(msgs, true, false);
 
       const customEntries = result.customEntries;
       if (Array.isArray(customEntries) && customEntries.length > 0) {
@@ -696,7 +692,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           );
           if (mapped) msgs.push(mapped);
         }
-        normalizeToolBlocks(msgs);
+        normalizeToolBlocks(msgs, true, false);
 
         // Process custom entries (memory events)
         const customEntries = result.customEntries;
@@ -845,7 +841,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const chatMsg = messageToChatMessage(msg as unknown as Message, msg.id, toolCallNameMap);
         if (chatMsg) allMsgs.push(chatMsg);
       }
-      normalizeToolBlocks(allMsgs);
+      normalizeToolBlocks(allMsgs, true, false);
 
       const customEntries = result.customEntries;
       if (Array.isArray(customEntries) && customEntries.length > 0) {
