@@ -1,5 +1,8 @@
 import type { ChatMessage, ContentBlock } from "../types";
-import { hasOverlappingToolExecutionKeys } from "./chat-tool-normalizer";
+import {
+  findMatchingPendingToolExecution,
+  normalizeToolArgsForMatch,
+} from "../lib/tool-execution-reconciler";
 
 export type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
 
@@ -62,39 +65,7 @@ export function formatToolArgs(rawArgs: unknown): {
   };
 }
 
-export function normalizeToolArgsForMatch(args: string | undefined): string {
-  if (!args) return "";
-  try {
-    const parsed = JSON.parse(args) as unknown;
-    if (parsed && typeof parsed === "object" && parsed !== null) {
-      const command = (parsed as Record<string, unknown>).command;
-      if (typeof command === "string") return command.trim();
-    }
-  } catch {
-    // Plain command strings are expected for live execution events.
-  }
-  return args.trim();
-}
-
-export function findMatchingPendingToolExecution(
-  blocks: ContentBlock[],
-  toolName: string,
-  args: string,
-): number {
-  const targetArgs = normalizeToolArgsForMatch(args);
-  if (!targetArgs) return -1;
-  const incoming: ToolExecBlock = {
-    type: "toolExecution",
-    toolCallId: "__incoming__",
-    toolName,
-    args,
-    status: "running",
-  };
-  return blocks.findIndex((block): block is ToolExecBlock => {
-    if (block.type !== "toolExecution" || isTerminalToolStatus(block.status)) return false;
-    return hasOverlappingToolExecutionKeys(block, incoming);
-  });
-}
+export { findMatchingPendingToolExecution, normalizeToolArgsForMatch };
 
 export function extractIncomingToolCallIds(content: unknown): string[] {
   if (!Array.isArray(content)) return [];

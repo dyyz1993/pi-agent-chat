@@ -1,21 +1,8 @@
 import type { ChatMessage, TimelineTurn, TimelineItem, StandaloneEntry } from "../types";
-import type { ContentBlock } from "../types";
-import { hasOverlappingToolExecutionKeys } from "../stores/chat-tool-normalizer";
-
-type ToolExecutionBlock = Extract<ContentBlock, { type: "toolExecution" }>;
-type ToolExecutionItem = Extract<TimelineItem, { itemType: "toolExecution" }>;
-
-function itemToToolExecutionBlock(item: ToolExecutionItem): ToolExecutionBlock {
-  return {
-    type: "toolExecution",
-    toolCallId: item.toolCallId,
-    toolName: item.toolName,
-    args: item.args,
-    status: item.status,
-    output: item.output,
-    details: item.details,
-  };
-}
+import {
+  hasOverlappingToolExecutionKeys,
+  toolExecutionItemToBlock,
+} from "./tool-execution-reconciler";
 
 export function aggregateTurns(messages: ChatMessage[]): {
   turns: TimelineTurn[];
@@ -107,7 +94,7 @@ export function aggregateTurns(messages: ChatMessage[]): {
             } satisfies TimelineItem;
             const existingIdx = currentTurn.items.findIndex((existing) => {
               if (existing.itemType !== "toolExecution") return false;
-              return hasOverlappingToolExecutionKeys(itemToToolExecutionBlock(existing), block);
+              return hasOverlappingToolExecutionKeys(toolExecutionItemToBlock(existing), block);
             });
             if (existingIdx >= 0) {
               currentTurn.items[existingIdx] = item;
