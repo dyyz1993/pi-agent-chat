@@ -267,6 +267,56 @@ describe("chat pagination", () => {
     }
   });
 
+  it("loadMoreMessages should let server history replace stale running cards with the same message id", async () => {
+    useChatStore.setState({
+      messagesBySession: {
+        "test-session": [
+          {
+            id: "msg-1",
+            entryId: "entry-1",
+            role: "assistant",
+            content: [
+              {
+                type: "toolExecution",
+                toolCallId: "tc-overlap-commit",
+                toolName: "bash",
+                args: JSON.stringify({ command: "git commit", description: "commit" }),
+                status: "running",
+                output: "waiting...",
+              },
+            ],
+            timestamp: 1100,
+            isStreaming: true,
+          },
+        ],
+      },
+      hasMoreMessagesBySession: { "test-session": true },
+      nextCursorBySession: { "test-session": "entry-1" },
+    });
+    (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
+      messages: [
+        makeRawAssistantToolCallMessage(1, "tc-overlap-commit"),
+        makeRawToolResultMessage(1, "tc-overlap-commit", "[main f862e26] committed"),
+      ],
+      customEntries: [],
+      hasMore: false,
+      nextCursor: null,
+    });
+
+    await useChatStore.getState().loadMoreMessages!("test-session");
+
+    const msgs = useChatStore.getState().messagesBySession["test-session"]!;
+    const loaded = msgs.find((msg) => msg.id === "msg-1");
+    expect(loaded).toBeDefined();
+    const block = loaded!.content[0];
+    expect(block.type).toBe("toolExecution");
+    if (block.type === "toolExecution") {
+      expect(block.toolCallId).toBe("tc-overlap-commit");
+      expect(block.status).not.toBe("running");
+      expect(block.output).not.toBe("waiting...");
+    }
+  });
+
   it("should not request more when hasMoreMessages is false", async () => {
     const allMessages = makeRpcResult(30);
     (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({

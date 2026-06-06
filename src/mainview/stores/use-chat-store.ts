@@ -933,7 +933,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
         hasMore,
       });
 
-      const currentById = new Map(current.map((msg) => [msg.id, msg]));
       const loadedIds = new Set(allMsgs.map((msg) => msg.id));
       const mergedMsgs = [
         ...allMsgs,
@@ -942,7 +941,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
         return (a.entryId ?? a.id).localeCompare(b.entryId ?? b.id);
       });
-      const finalMsgs = mergedMsgs.map((msg) => currentById.get(msg.id) ?? msg);
+      const finalMsgs = mergedMsgs;
       dedupeToolExecutions(finalMsgs);
 
       set((s) => ({
