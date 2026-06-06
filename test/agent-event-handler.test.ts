@@ -941,6 +941,56 @@ describe("message_update content block ordering", () => {
     expect(exec!.args).toBe("ls");
   });
 
+  it("merges incoming toolCall by semantic command when the realtime execution id differs", () => {
+    setMessages([
+      {
+        id: "msg-1",
+        role: "assistant",
+        content: [
+          {
+            type: "toolExecution",
+            toolCallId: "tc-execution-start",
+            toolName: "bash",
+            args: "git commit -m M6.3",
+            status: "running",
+            output: "waiting...",
+          },
+        ],
+        timestamp: Date.now(),
+        isStreaming: true,
+      },
+    ]);
+
+    handleAgentEvent(SID, {
+      type: "message_update",
+      message: {
+        role: "assistant",
+        content: [
+          { type: "text", text: "183 tests, 0 clippy warnings. M6.3 commit:" },
+          {
+            type: "toolCall",
+            id: "tc-message-update",
+            name: "bash",
+            arguments: { command: "git commit -m M6.3", description: "commit M6.3" },
+          },
+        ],
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+    flushNow();
+
+    const msg = getLastAssistant();
+    expect(msg).not.toBeNull();
+    const execs = msg!.content.filter(
+      (b): b is Extract<ContentBlock, { type: "toolExecution" }> => b.type === "toolExecution",
+    );
+    expect(msg!.content.map((b) => b.type)).toEqual(["text", "toolExecution"]);
+    expect(execs).toHaveLength(1);
+    expect(execs[0].toolCallId).toBe("tc-execution-start");
+    expect(execs[0].status).toBe("running");
+    expect(execs[0].output).toBe("waiting...");
+    expect(execs[0].description).toBe("commit M6.3");
+  });
+
   it("ignores delayed message_update for a tool call that is already terminal", () => {
     setMessages([
       {

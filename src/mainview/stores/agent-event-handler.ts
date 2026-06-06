@@ -487,11 +487,20 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
       for (const block of incoming) {
         if (block.type === "toolCall" && block.id) {
-          const exec = execByCallId.get(block.id);
-          const { args: newArgs } = formatToolArgs(block.arguments);
+          const { args: newArgs, timeout, description } = formatToolArgs(block.arguments);
+          const semanticIdx = findMatchingToolExecution(preservedToolExecs, block.name, newArgs, {
+            includeTerminal: true,
+          });
+          const exec = execByCallId.get(block.id) ?? preservedToolExecs[semanticIdx];
           if (exec) {
-            orderedBlocks.push({ ...exec, args: newArgs || exec.args });
-            usedExecs.add(block.id);
+            orderedBlocks.push({
+              ...exec,
+              toolName: exec.toolName === "unknown" ? block.name : exec.toolName,
+              args: newArgs || exec.args,
+              timeout: timeout ?? exec.timeout,
+              description: description ?? exec.description,
+            });
+            usedExecs.add(exec.toolCallId);
           } else {
             const toolName = block.name;
             orderedBlocks.push({
