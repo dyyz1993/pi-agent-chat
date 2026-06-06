@@ -30,6 +30,7 @@ export interface FullMessageAccumulator {
   allCompactionEntries: CompactionEntry[];
   parentById: Map<string, string | null>;
   lastJsonlLeafPointer: string | null;
+  activeJsonlLeafId: string | null;
 }
 
 export interface BranchFilteredMessages {
@@ -51,6 +52,7 @@ function createFullMessageAccumulator(): FullMessageAccumulator {
     allCompactionEntries: [],
     parentById: new Map(),
     lastJsonlLeafPointer: null,
+    activeJsonlLeafId: null,
   };
 }
 
@@ -107,6 +109,16 @@ export function appendFullJsonlEntry(
     accumulator.parentById.set(entryId, parentId);
   }
 
+  if (parsed.type === "leaf_pointer" && typeof parsed.leafId === "string") {
+    accumulator.lastJsonlLeafPointer = parsed.leafId;
+    accumulator.activeJsonlLeafId = parsed.leafId;
+    return;
+  }
+
+  if (entryId) {
+    accumulator.activeJsonlLeafId = entryId;
+  }
+
   if (parsed.type === "custom") {
     accumulator.allCustomEntries.push({
       id: entryId || `custom-${Date.now()}`,
@@ -130,8 +142,6 @@ export function appendFullJsonlEntry(
       timestamp: compactionMessage.timestamp,
     });
     accumulator.allMessages.push({ entryId, message: compactionMessage });
-  } else if (parsed.type === "leaf_pointer" && typeof parsed.leafId === "string") {
-    accumulator.lastJsonlLeafPointer = parsed.leafId;
   }
 }
 

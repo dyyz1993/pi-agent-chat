@@ -67,6 +67,16 @@ function customEntry(
   });
 }
 
+function leafPointerEntry(leafId: string): string {
+  return JSON.stringify({
+    id: `leaf-${leafId}`,
+    parentId: null,
+    type: "leaf_pointer",
+    leafId,
+    timestamp: new Date().toISOString(),
+  });
+}
+
 describe("getFullMessages leaf→root path filtering", () => {
   let manager: APM;
   let sessionFile: string;
@@ -133,6 +143,53 @@ describe("getFullMessages leaf→root path filtering", () => {
     expect(result.totalCount).toBe(2);
     const roles = result.messages.map((m: Record<string, unknown>) => m.role);
     expect(roles).toEqual(["user", "assistant"]);
+  });
+
+  it("uses a JSONL leaf pointer at EOF as the active rollback leaf", async () => {
+    writeFileSync(
+      sessionFile,
+      [
+        msgEntry("e1", null, "user", "hello"),
+        msgEntry("e2", "e1", "assistant", "hi"),
+        msgEntry("e3", "e2", "user", "old branch"),
+        msgEntry("e4", "e3", "assistant", "old reply"),
+        leafPointerEntry("e2"),
+      ].join("\n"),
+    );
+
+    internals(manager).sessionPaths.set("s1", sessionFile);
+
+    const result = await manager.getFullMessages("s1", sessionFile);
+
+    expect(result.messages).toHaveLength(2);
+    expect(result.totalCount).toBe(2);
+    expect(result.messages.map((m) => (m as { entryId?: string }).entryId)).toEqual(["e1", "e2"]);
+  });
+
+  it("advances the active leaf when entries are appended after a JSONL leaf pointer", async () => {
+    writeFileSync(
+      sessionFile,
+      [
+        msgEntry("e1", null, "user", "hello"),
+        msgEntry("e2", "e1", "assistant", "hi"),
+        msgEntry("e3", "e2", "user", "old branch"),
+        msgEntry("e4", "e3", "assistant", "old reply"),
+        leafPointerEntry("e2"),
+        msgEntry("e5", "e2", "user", "new branch"),
+        msgEntry("e6", "e5", "assistant", "new reply"),
+      ].join("\n"),
+    );
+
+    internals(manager).sessionPaths.set("s1", sessionFile);
+
+    const result = await manager.getFullMessages("s1", sessionFile);
+
+    expect(result.messages).toHaveLength(4);
+    expect(result.totalCount).toBe(4);
+    const entryIds = result.messages.map((m) => (m as { entryId?: string }).entryId);
+    expect(entryIds).toEqual(["e1", "e2", "e5", "e6"]);
+    expect(entryIds).not.toContain("e3");
+    expect(entryIds).not.toContain("e4");
   });
 
   it("filters to a different branch", async () => {

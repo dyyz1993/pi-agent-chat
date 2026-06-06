@@ -101,8 +101,10 @@ export async function getFullMessagesOperation<TManaged extends ManagedFullMessa
     readSandboxFile: options.readSandboxFile,
   });
 
-  const leafId =
-    accumulator.lastJsonlLeafPointer ?? options.leafIds.get(options.sessionId) ?? null;
+  const jsonlLeafId = accumulator.lastJsonlLeafPointer
+    ? (accumulator.activeJsonlLeafId ?? accumulator.lastJsonlLeafPointer)
+    : null;
+  const leafId = jsonlLeafId ?? options.leafIds.get(options.sessionId) ?? null;
   if (leafId && leafId !== options.leafIds.get(options.sessionId)) {
     options.leafIds.set(options.sessionId, leafId);
   }
