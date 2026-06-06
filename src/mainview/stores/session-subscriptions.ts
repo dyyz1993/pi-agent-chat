@@ -1,5 +1,5 @@
-import type { SessionMeta, ProjectTab, SessionStatus } from "../types";
-import type { BashChannelEvent } from "../../shared/modules/bash";
+import type { ChatMessage, ContentBlock, SessionMeta, ProjectTab, SessionStatus } from "../types";
+import type { BashChannelEvent, BashProcess } from "../../shared/modules/bash";
 import type { LspChannelEvent } from "../../shared/modules/lsp";
 import type { RulesChannelEvent } from "../../shared/modules/rules";
 import type { SupervisorChannelEvent } from "../../shared/modules/supervisor";
@@ -22,6 +22,122 @@ import { useAppStore } from "./use-app-store";
 import { createLogger } from "../../shared/lib/logger";
 
 const perfLog = createLogger("session-perf");
+
+type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
+
+function normalizeBashCommand(args: string | undefined): string {
+  if (!args) return "";
+  try {
+    const parsed = JSON.parse(args) as unknown;
+    if (parsed && typeof parsed === "object" && parsed !== null) {
+      const command = (parsed as Record<string, unknown>).command;
+      if (typeof command === "string") return command.trim();
+    }
+  } catch {
+    // Plain command strings are expected for live bash cards.
+  }
+  return args.trim();
+}
+
+function findBashProcess(event: BashChannelEvent): BashProcess | undefined {
+  if (!event.toolCallId || !Array.isArray(event.processes)) return undefined;
+  return event.processes.find((proc) => proc.toolCallId === event.toolCallId);
+}
+
+function bashProcessToToolStatus(proc: BashProcess): ToolExecBlock["status"] {
+  if (proc.status === "done") return "done";
+  if (proc.status === "error" || proc.status === "terminated") return "error";
+  return "running";
+}
+
+function buildBashToolDetails(proc: BashProcess, previous: unknown): unknown {
+  const base = previous && typeof previous === "object" ? (previous as Record<string, unknown>) : {};
+  if (proc.status !== "terminated") return base;
+  return {
+    ...base,
+    terminated: {
+      reason: "terminated",
+      pid: proc.pid,
+      command: proc.command,
+      startedAt: proc.startedAt,
+      endedAt: proc.endedAt ?? Date.now(),
+      durationMs: (proc.endedAt ?? Date.now()) - proc.startedAt,
+      exitCode: proc.exitCode,
+      logPath: proc.logPath,
+    },
+  };
+}
+
+function findBashToolBlockByProcess(
+  messages: ChatMessage[],
+  proc: BashProcess,
+): { msgIndex: number; blockIndex: number; block: ToolExecBlock } | null {
+  let semanticMatch: { msgIndex: number; blockIndex: number; block: ToolExecBlock } | null = null;
+  let semanticMatches = 0;
+  const targetCommand = proc.command.trim();
+
+  for (let mi = messages.length - 1; mi >= 0; mi--) {
+    const msg = messages[mi];
+    if (msg.role !== "assistant") continue;
+    for (let bi = msg.content.length - 1; bi >= 0; bi--) {
+      const block = msg.content[bi];
+      if (block.type !== "toolExecution" || block.toolName.toLowerCase() !== "bash") continue;
+      if (block.toolCallId === proc.toolCallId) {
+        return { msgIndex: mi, blockIndex: bi, block };
+      }
+      if (block.status === "running" && normalizeBashCommand(block.args) === targetCommand) {
+        semanticMatches++;
+        semanticMatch = { msgIndex: mi, blockIndex: bi, block };
+      }
+    }
+  }
+
+  return semanticMatches === 1 ? semanticMatch : null;
+}
+
+export function reconcileChatToolFromBashEvent(
+  sessionId: string,
+  event: BashChannelEvent,
+): void {
+  if (event.type !== "end" && event.type !== "error" && event.type !== "terminated") return;
+  const proc = findBashProcess(event);
+  if (!proc) return;
+
+  const chat = useChatStore.getState();
+  const messages = chat.messagesBySession[sessionId] || [];
+  const match = findBashToolBlockByProcess(messages, proc);
+  if (!match) return;
+
+  const status = bashProcessToToolStatus(proc);
+  const output = proc.output.length > 0 ? proc.output : (proc.error ?? match.block.output);
+  const nextBlock: ToolExecBlock = {
+    ...match.block,
+    toolCallId: match.block.toolCallId,
+    toolName: "bash",
+    args: match.block.args || proc.command,
+    status,
+    output,
+    details: buildBashToolDetails(proc, match.block.details),
+    startedAt: match.block.startedAt ?? proc.startedAt,
+    endedAt: proc.endedAt ?? Date.now(),
+  };
+
+  if (
+    match.block.status === nextBlock.status &&
+    match.block.output === nextBlock.output &&
+    match.block.endedAt === nextBlock.endedAt
+  ) {
+    return;
+  }
+
+  const nextMessages = [...messages];
+  const msg = nextMessages[match.msgIndex];
+  const nextContent = [...msg.content];
+  nextContent[match.blockIndex] = nextBlock;
+  nextMessages[match.msgIndex] = { ...msg, content: nextContent };
+  chat.setMessagesForSession(sessionId, nextMessages);
+  chat.incrementStreamVersion();
+}
 
 export interface SubscriptionMaps {
   agentSubscriptions: Record<string, string>;
@@ -212,6 +328,7 @@ export function setupSubscriptions(
         (payload: { sessionId: string; event: BashChannelEvent }) => {
           if (payload.sessionId !== id) return;
           handleBashEvent(id, payload.event);
+          reconcileChatToolFromBashEvent(id, payload.event);
         },
         { sessionId: id },
       )
