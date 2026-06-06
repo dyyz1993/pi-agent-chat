@@ -13,6 +13,8 @@ import {
   AlertTriangle,
   GitFork,
   ClipboardCheck,
+  Target,
+  X,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { ImageContent } from "@dyyz1993/pi-ai";
@@ -41,6 +43,7 @@ import { CommandPopup } from "./CommandPopup";
 import { useCommandPopup } from "../../hooks/use-command-popup";
 import { ScrollToolbar } from "./ScrollToolbar";
 import { QueueCards } from "./QueueCards";
+import { GoalActionCard } from "./GoalActionCard";
 import { MermaidFullscreen } from "./mermaid";
 import { RollbackOverlay } from "./RollbackOverlay";
 import { ForkDialog } from "./ForkDialog";
@@ -50,6 +53,7 @@ import { useForkDialogStore } from "../../stores/use-fork-dialog-store";
 import type { ChatMessage } from "../../types";
 import { useAgentStore } from "../../stores/use-agent-store";
 import { agentColorStyle } from "../../utils/agent-color";
+import { useSupervisorStore } from "../../stores/use-supervisor-store";
 
 const log = createLogger("chat");
 
@@ -122,6 +126,7 @@ export function ChatPanel() {
   );
   const loadMoreMessages = useChatStore((s) => s.loadMoreMessages);
   const inputText = useChatStore((s) => s.inputText);
+  const setInputText = useChatStore((s) => s.setInputText);
   const sendMessage = useChatStore((s) => s.sendMessage);
   const sendSteer = useChatStore((s) => s.sendSteer);
   const sendFollowUp = useChatStore((s) => s.sendFollowUp);
@@ -151,6 +156,7 @@ export function ChatPanel() {
   const breakpoint = useLayoutStore((s) => s.breakpoint);
   const isMobileOrTablet = breakpoint === "mobile" || breakpoint === "tablet";
   const commandPopup = useCommandPopup();
+  const setGoal = useSupervisorStore((s) => s.setGoal);
 
   const streamVersion = useChatStore((s) => s.streamContentVersion);
   const historyLoadVersion = useChatStore((s) => s.historyLoadVersion);
@@ -162,6 +168,9 @@ export function ChatPanel() {
 
   const pushNotif = useNotificationStore((s) => s.push);
   const [isAborting, setIsAborting] = useState(false);
+  const [goalMode, setGoalMode] = useState(false);
+  const [isCreatingGoal, setIsCreatingGoal] = useState(false);
+  const preGoalInputRef = useRef("");
   const abortFallbackRef = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
@@ -414,6 +423,56 @@ export function ChatPanel() {
     }
   };
 
+  const startGoalMode = useCallback(
+    (objective?: string) => {
+      if (isViewingSubagent) return;
+      preGoalInputRef.current = goalMode ? preGoalInputRef.current : inputText;
+      setInputText(objective ?? inputText);
+      setGoalMode(true);
+      commandPopup.closePopup();
+      requestAnimationFrame(() => inputBarRef.current?.focus?.());
+    },
+    [commandPopup, goalMode, inputText, isViewingSubagent, setInputText],
+  );
+
+  const cancelGoalMode = useCallback(() => {
+    setGoalMode(false);
+    setInputText(preGoalInputRef.current);
+    preGoalInputRef.current = "";
+  }, [setInputText]);
+
+  const handleCreateGoal = useCallback(async () => {
+    const objective = inputText.trim();
+    if (!activeSessionId || !objective || isCreatingGoal) return;
+    setIsCreatingGoal(true);
+    try {
+      await setGoal(activeSessionId, objective);
+      if (isStreaming) {
+        await sendSteer();
+      } else {
+        await sendMessage();
+      }
+      setGoalMode(false);
+      preGoalInputRef.current = "";
+      resumeAutoScroll();
+      if (isMobileOrTablet) {
+        inputBarRef.current?.blur();
+      }
+    } finally {
+      setIsCreatingGoal(false);
+    }
+  }, [
+    activeSessionId,
+    inputText,
+    isCreatingGoal,
+    isMobileOrTablet,
+    isStreaming,
+    resumeAutoScroll,
+    sendMessage,
+    sendSteer,
+    setGoal,
+  ]);
+
   const handleFollowUp = async () => {
     if (!inputText.trim() || !isStreaming) return;
     await sendFollowUp();
@@ -566,6 +625,7 @@ export function ChatPanel() {
           </div>
           {activeSessionId && !isViewingSubagent && (
             <>
+              <GoalActionCard sessionId={activeSessionId} onEdit={startGoalMode} />
               <QueueCards sessionId={activeSessionId} />
               <ProjectRuntimePendingRequests activeSessionId={activeSessionId} />
             </>
@@ -584,7 +644,7 @@ export function ChatPanel() {
         }}
       />
 
-      {!isViewingSubagent && <QuickActionToolbar />}
+      {!isViewingSubagent && <QuickActionToolbar onGoalClick={() => startGoalMode()} />}
 
       <div
         className={`px-3 pt-2 pb-1.5 flex-shrink-0 bg-bg-secondary border-t border-border-primary relative ${isDragOver ? "ring-2 ring-semantic-accent/50 bg-semantic-accent/5" : ""}`}
@@ -602,17 +662,25 @@ export function ChatPanel() {
                 <span>{t("sessionStarting")}</span>
               </div>
             )}
-            <AttachmentBar />
+            {goalMode && (
+              <div className="flex items-center gap-2 px-1 pb-1 text-xs text-semantic-accent">
+                <Target className="w-3.5 h-3.5" />
+                <span>{t("goal.composerMode")}</span>
+              </div>
+            )}
+            {!goalMode && <AttachmentBar />}
             <div className="flex items-stretch gap-1.5">
-              {!isMobileOrTablet && <AttachmentButtons />}
+              {!isMobileOrTablet && <AttachmentButtons onGoalClick={() => startGoalMode()} />}
 
               <InputBar
                 ref={inputBarRef}
-                onSend={handleSend}
+                onSend={goalMode ? handleCreateGoal : handleSend}
                 sessionId={activeSessionId ?? ""}
-                disabled={!activeSessionId}
-                onTriggerPopup={!isMobileOrTablet ? commandPopup.openPopup : undefined}
-                popupOpen={!isMobileOrTablet && !!commandPopup.popupMode}
+                disabled={!activeSessionId || isCreatingGoal}
+                placeholder={goalMode ? t("goal.inputPlaceholder") : undefined}
+                historyEnabled={!goalMode}
+                onTriggerPopup={!goalMode && !isMobileOrTablet ? commandPopup.openPopup : undefined}
+                popupOpen={!goalMode && !isMobileOrTablet && !!commandPopup.popupMode}
                 onPopupConfirm={commandPopup.confirmSelection}
                 onPopupCancel={commandPopup.closePopup}
                 onPopupArrowUp={commandPopup.navigateUp}
@@ -620,71 +688,96 @@ export function ChatPanel() {
               />
 
               <div className="flex flex-col gap-1.5 shrink-0 justify-between py-1">
-                    {isStreaming && inputText.trim() ? (
-                      <button
-                        onClick={handleFollowUp}
-                        className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-status-info text-white hover:bg-status-info shadow-sm shadow-status-info/20"
-                        title={t("sendFollowUp")}
-                        aria-label={t("sendFollowUp")}
-                      >
-                        <Clock className="w-4 h-4" />
-                      </button>
-                    ) : isStreaming ? (
-                      <button
-                        onClick={handleAbort}
-                        disabled={isAborting}
-                        className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${isAborting ? "bg-status-error/40 text-white/70 cursor-wait" : "bg-status-error text-white hover:bg-status-error active:scale-90"}`}
-                        title={isAborting ? t("stopping") : t("stop")}
-                        aria-label={isAborting ? t("stopping") : t("stop")}
-                      >
-                        {isAborting ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Square className="w-4 h-4" />
-                        )}
-                      </button>
+                {goalMode ? (
+                  <button
+                    onClick={cancelGoalMode}
+                    disabled={isCreatingGoal}
+                    className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-surface-dim text-text-secondary hover:bg-surface-hover disabled:opacity-60 disabled:cursor-wait"
+                    title={t("goal.cancelCompose")}
+                    aria-label={t("goal.cancelCompose")}
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                ) : isStreaming && inputText.trim() ? (
+                  <button
+                    onClick={handleFollowUp}
+                    className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-status-info text-white hover:bg-status-info shadow-sm shadow-status-info/20"
+                    title={t("sendFollowUp")}
+                    aria-label={t("sendFollowUp")}
+                  >
+                    <Clock className="w-4 h-4" />
+                  </button>
+                ) : isStreaming ? (
+                  <button
+                    onClick={handleAbort}
+                    disabled={isAborting}
+                    className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${isAborting ? "bg-status-error/40 text-white/70 cursor-wait" : "bg-status-error text-white hover:bg-status-error active:scale-90"}`}
+                    title={isAborting ? t("stopping") : t("stop")}
+                    aria-label={isAborting ? t("stopping") : t("stop")}
+                  >
+                    {isAborting ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
-                      <button
-                        disabled
-                        className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-status-error/30 text-status-error/50 cursor-not-allowed"
-                        title={t("stop")}
-                        aria-label={t("stop")}
-                      >
-                        <Square className="w-4 h-4" />
-                      </button>
+                      <Square className="w-4 h-4" />
                     )}
-                    <button
-                      onClick={() => inputBarRef.current?.send()}
-                      disabled={
-                        isAborting ||
-                        isPermissionPending ||
-                        (!inputText.trim() &&
-                          useAttachmentStore.getState().attachments.length === 0) ||
-                        !activeSessionId ||
-                        hasNoModel
-                      }
-                      className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${!isAborting && (inputText.trim() || useAttachmentStore.getState().attachments.length > 0) && activeSessionId && !hasNoModel ? (isStreaming ? "bg-status-warning text-white hover:bg-status-warning shadow-sm shadow-status-warning/20" : "bg-semantic-accent text-white hover:bg-semantic-accent shadow-sm shadow-semantic-accent/20") : "bg-surface-dim text-text-tertiary cursor-not-allowed"}`}
-                      title={
-                        isPermissionPending
-                          ? t("waitPermission")
-                          : hasNoModel
-                            ? t("sendDisabledNoModel")
-                            : isStreaming
-                              ? t("steer")
-                              : t("send")
-                      }
-                      aria-label={
-                        isPermissionPending
-                          ? t("waitPermission")
-                          : hasNoModel
-                            ? t("sendDisabledNoModel")
-                            : isStreaming
-                              ? t("steer")
-                              : t("send")
-                      }
-                    >
-                      {isStreaming ? <Zap className="w-4 h-4" /> : <ArrowUp className="w-4 h-4" />}
-                    </button>
+                  </button>
+                ) : (
+                  <button
+                    disabled
+                    className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-status-error/30 text-status-error/50 cursor-not-allowed"
+                    title={t("stop")}
+                    aria-label={t("stop")}
+                  >
+                    <Square className="w-4 h-4" />
+                  </button>
+                )}
+                <button
+                  onClick={() => (goalMode ? void handleCreateGoal() : inputBarRef.current?.send())}
+                  disabled={
+                    isAborting ||
+                    isCreatingGoal ||
+                    isPermissionPending ||
+                    (goalMode
+                      ? !inputText.trim()
+                      : !inputText.trim() &&
+                        useAttachmentStore.getState().attachments.length === 0) ||
+                    !activeSessionId ||
+                    hasNoModel
+                  }
+                  className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${!isAborting && !isCreatingGoal && (inputText.trim() || (!goalMode && useAttachmentStore.getState().attachments.length > 0)) && activeSessionId && !hasNoModel ? (goalMode ? "bg-semantic-accent text-white hover:bg-semantic-accent shadow-sm shadow-semantic-accent/20" : isStreaming ? "bg-status-warning text-white hover:bg-status-warning shadow-sm shadow-status-warning/20" : "bg-semantic-accent text-white hover:bg-semantic-accent shadow-sm shadow-semantic-accent/20") : "bg-surface-dim text-text-tertiary cursor-not-allowed"}`}
+                  title={
+                    isPermissionPending
+                      ? t("waitPermission")
+                      : hasNoModel
+                        ? t("sendDisabledNoModel")
+                        : goalMode
+                          ? t("goal.create")
+                          : isStreaming
+                            ? t("steer")
+                            : t("send")
+                  }
+                  aria-label={
+                    isPermissionPending
+                      ? t("waitPermission")
+                      : hasNoModel
+                        ? t("sendDisabledNoModel")
+                        : goalMode
+                          ? t("goal.create")
+                          : isStreaming
+                            ? t("steer")
+                            : t("send")
+                  }
+                >
+                  {isCreatingGoal ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : goalMode ? (
+                    <Target className="w-4 h-4" />
+                  ) : isStreaming ? (
+                    <Zap className="w-4 h-4" />
+                  ) : (
+                    <ArrowUp className="w-4 h-4" />
+                  )}
+                </button>
               </div>
             </div>
           </>
@@ -822,10 +915,7 @@ function ChangeReviewBell() {
       onClick={(e) => {
         e.stopPropagation();
         const layout = useLayoutStore.getState();
-        layout.setActivePanelTab("changeReview");
-        if (layout.statusPanel === "hidden") {
-          layout.showStatus();
-        }
+        layout.openStatusPanel("changeReview");
         fetchPending();
       }}
       className="p-1 rounded transition-colors text-text-tertiary dark:text-text-secondary hover:text-text-primary dark:hover:text-text-secondary relative"

@@ -1,10 +1,10 @@
-import type {
-  AgentEvent,
-  ChannelDataEvent,
-  ExtensionUIRequestEvent,
-} from "../modules/agent";
+import type { AgentEvent, ChannelDataEvent, ExtensionUIRequestEvent } from "../modules/agent";
 import { createLogger } from "../lib/logger";
-import { appendStreamingHoldEvent, classifyExtensionUiRequest, extractMessageEndText } from "./agent-event-lifecycle";
+import {
+  appendStreamingHoldEvent,
+  classifyExtensionUiRequest,
+  extractMessageEndText,
+} from "./agent-event-lifecycle";
 import type { SyncChildRegistry, SyncDelegateResolver } from "./coordinator-session-state";
 import { findParentSession } from "./coordinator-session-state";
 import { sanitizeEvent, type SanitizedEvent } from "./hold-events";
@@ -20,6 +20,12 @@ interface ManagedEventClientLike {
     holdEvents: unknown[];
     projectPath: string;
     sessionPath?: string;
+    activeToolExecutions?: Array<{
+      toolCallId: string;
+      toolName: string;
+      args?: unknown;
+      startedAt?: number;
+    }>;
   };
   lastActiveAt: number;
 }
@@ -180,6 +186,43 @@ export function handleAgentEventOperation<TManaged extends ManagedEventClientLik
     managed.info.status = "streaming";
   }
 
+  const eventWithTool = options.event as {
+    type: string;
+    toolCallId?: string;
+    toolName?: string;
+    args?: unknown;
+    timestamp?: unknown;
+  };
+
+  if (
+    eventWithTool.type === "tool_execution_start" &&
+    typeof eventWithTool.toolCallId === "string"
+  ) {
+    const active = managed.info.activeToolExecutions ?? [];
+    const existingIndex = active.findIndex((tool) => tool.toolCallId === eventWithTool.toolCallId);
+    const startedAt =
+      typeof eventWithTool.timestamp === "number" ? eventWithTool.timestamp : Date.now();
+    const nextTool = {
+      toolCallId: eventWithTool.toolCallId,
+      toolName: eventWithTool.toolName ?? "unknown",
+      args: eventWithTool.args,
+      startedAt,
+    };
+    managed.info.activeToolExecutions =
+      existingIndex >= 0
+        ? active.map((tool, index) => (index === existingIndex ? nextTool : tool))
+        : [...active, nextTool];
+  } else if (
+    eventWithTool.type === "tool_execution_end" &&
+    typeof eventWithTool.toolCallId === "string"
+  ) {
+    managed.info.activeToolExecutions = (managed.info.activeToolExecutions ?? []).filter(
+      (tool) => tool.toolCallId !== eventWithTool.toolCallId,
+    );
+  } else if (options.event.type === "agent_end") {
+    managed.info.activeToolExecutions = [];
+  }
+
   const sanitized = sanitizeEvent(options.event);
 
   managed.info.holdEvents = appendStreamingHoldEvent(
@@ -207,7 +250,10 @@ export function handleAgentEventOperation<TManaged extends ManagedEventClientLik
         });
       });
 
-    if (options.subagentSyncChildren.has(options.sessionId) && options.event.type !== "channel_data") {
+    if (
+      options.subagentSyncChildren.has(options.sessionId) &&
+      options.event.type !== "channel_data"
+    ) {
       const parentManaged = options.clients.get(parentId);
       options
         .broadcastEvent(

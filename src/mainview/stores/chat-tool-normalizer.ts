@@ -155,7 +155,9 @@ export function normalizeToolBlocks(
 
     const executionIds = new Set(
       msg.content
-        .filter((b): b is Extract<ContentBlock, { type: "toolExecution" }> => b.type === "toolExecution")
+        .filter(
+          (b): b is Extract<ContentBlock, { type: "toolExecution" }> => b.type === "toolExecution",
+        )
         .map((b) => b.toolCallId),
     );
 

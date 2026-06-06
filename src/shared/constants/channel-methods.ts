@@ -83,6 +83,8 @@ export const SUPERVISOR_METHODS = {
   ENABLE: "enable",
   GET_TASK_REPORT: "getTaskReport",
   CHECK_TOOL_STATUS: "checkToolStatus",
+  SET_GOAL: "setGoal",
+  CLEAR_GOAL: "clearGoal",
 } as const;
 
 // ---- rules-engine channel ----

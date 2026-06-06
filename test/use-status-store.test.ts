@@ -10,7 +10,11 @@ vi.mock("../src/mainview/stores/use-session-store", () => ({
   },
 }));
 
-import { useStatusStore, derivePluginScope } from "../src/mainview/stores/use-status-store";
+import {
+  useStatusStore,
+  derivePluginScope,
+  derivePluginUsageNotice,
+} from "../src/mainview/stores/use-status-store";
 import { apiClient } from "../src/mainview/lib/api-client";
 
 const mockCall = apiClient.call as ReturnType<typeof vi.fn>;
@@ -97,6 +101,13 @@ describe("useStatusStore", () => {
     ];
     useStatusStore.getState().setPlugins(plugins);
     expect(useStatusStore.getState().plugins).toEqual(plugins);
+  });
+
+  it("marks hooks-engine as Pi Native Hooks notice", () => {
+    const notice = derivePluginUsageNotice("hooks-engine");
+    expect(notice?.label).toBe("Pi Native Hooks");
+    expect(notice?.message).toContain("claude-hooks-compat");
+    expect(derivePluginUsageNotice("claude-hooks-compat")).toBeUndefined();
   });
 
   it("setSkills sets skills", () => {

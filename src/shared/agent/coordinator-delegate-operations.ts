@@ -56,31 +56,31 @@ export interface DelegateSyncResult {
   error?: string;
 }
 
-export async function handleCoordinatorDelegateOperation<TManaged extends DelegateParentManaged>(
-  options: {
-    parentSessionId: string;
-    msg: Extract<CoordinatorMethodCall, { __call: "session_delegate" }>;
-    getActiveManaged: (sessionId: string) => TManaged | null;
-    start: (
-      sessionId: string,
-      projectPath: string,
-      sessionPath: string,
-      options: { forceNewProcess: true },
-    ) => Promise<{ status: "started" | "already_running" | "switched" }>;
-    setSessionName: (sessionId: string, name: string) => Promise<void>;
-    send: (sessionId: string, content: string) => void;
-    broadcastEvent: (
-      eventName: string,
-      data: Record<string, unknown>,
-      filter: Record<string, unknown>,
-    ) => Promise<void>;
-    parentChildMap: DelegateChildMap;
-    delegateCreatedAt: Map<string, number>;
-    delegateReplyCount: Map<string, number>;
-    now?: () => number;
-    sessionIdFactory?: () => string;
-  },
-): Promise<{ sessionId: string; status: "started" | "already_running" | "switched" }> {
+export async function handleCoordinatorDelegateOperation<
+  TManaged extends DelegateParentManaged,
+>(options: {
+  parentSessionId: string;
+  msg: Extract<CoordinatorMethodCall, { __call: "session_delegate" }>;
+  getActiveManaged: (sessionId: string) => TManaged | null;
+  start: (
+    sessionId: string,
+    projectPath: string,
+    sessionPath: string,
+    options: { forceNewProcess: true },
+  ) => Promise<{ status: "started" | "already_running" | "switched" }>;
+  setSessionName: (sessionId: string, name: string) => Promise<void>;
+  send: (sessionId: string, content: string) => void;
+  broadcastEvent: (
+    eventName: string,
+    data: Record<string, unknown>,
+    filter: Record<string, unknown>,
+  ) => Promise<void>;
+  parentChildMap: DelegateChildMap;
+  delegateCreatedAt: Map<string, number>;
+  delegateReplyCount: Map<string, number>;
+  now?: () => number;
+  sessionIdFactory?: () => string;
+}): Promise<{ sessionId: string; status: "started" | "already_running" | "switched" }> {
   const { task, projectPath: rawProjectPath } = options.msg;
   const parent = options.getActiveManaged(options.parentSessionId);
   if (!parent) throw new Error("Parent session not found");
@@ -159,26 +159,26 @@ export async function handleCoordinatorDelegateOperation<TManaged extends Delega
   return { sessionId: newSessionId, status: result.status };
 }
 
-export async function handleCoordinatorDelegateSendOperation<TManaged extends DelegateSendManaged>(
-  options: {
-    msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_send" }>;
-    clients: Map<string, TManaged>;
-    sessionPaths: Map<string, string>;
-    sessionProjectPaths: Map<string, string>;
-    delegateReplyCount: Map<string, number>;
-    delegateCreatedAt: Map<string, number>;
-    parentChildMap: DelegateChildMap;
-    start: (
-      sessionId: string,
-      projectPath: string,
-      sessionPath: string,
-    ) => Promise<{ status: "started" | "already_running" | "switched" }>;
-    send: (sessionId: string, content: string) => void;
-    steer: (sessionId: string, content: string) => void;
-    followUp: (sessionId: string, content: string) => void;
-    now?: () => number;
-  },
-): Promise<{ delivered: boolean; targetStatus: "active" | "started" | "not_found" }> {
+export async function handleCoordinatorDelegateSendOperation<
+  TManaged extends DelegateSendManaged,
+>(options: {
+  msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_send" }>;
+  clients: Map<string, TManaged>;
+  sessionPaths: Map<string, string>;
+  sessionProjectPaths: Map<string, string>;
+  delegateReplyCount: Map<string, number>;
+  delegateCreatedAt: Map<string, number>;
+  parentChildMap: DelegateChildMap;
+  start: (
+    sessionId: string,
+    projectPath: string,
+    sessionPath: string,
+  ) => Promise<{ status: "started" | "already_running" | "switched" }>;
+  send: (sessionId: string, content: string) => void;
+  steer: (sessionId: string, content: string) => void;
+  followUp: (sessionId: string, content: string) => void;
+  now?: () => number;
+}): Promise<{ delivered: boolean; targetStatus: "active" | "started" | "not_found" }> {
   const { targetSessionId, message } = options.msg;
 
   let target = options.clients.get(targetSessionId);
@@ -508,7 +508,9 @@ export async function handleCoordinatorDelegateStatusOperation(options: {
   sessionPaths: Map<string, string>;
   sessionProjectPaths: Map<string, string>;
   getStatus: (sessionId: string) => { status: "idle" | "streaming" | "stopped"; pid?: number };
-  getState: (sessionId: string) => Promise<{ isStreaming?: boolean; isCompacting?: boolean } | null>;
+  getState: (
+    sessionId: string,
+  ) => Promise<{ isStreaming?: boolean; isCompacting?: boolean } | null>;
   getContextUsage: (
     sessionId: string,
   ) => Promise<{ tokens: number | null; contextWindow: number; percent: number | null }>;
@@ -536,12 +538,18 @@ export async function handleCoordinatorDelegateStatusOperation(options: {
   };
 }
 
-export function handleCoordinatorDelegateListOperation<TClient extends DelegateClientInfo>(options: {
+export function handleCoordinatorDelegateListOperation<
+  TClient extends DelegateClientInfo,
+>(options: {
   parentSessionId: string;
   parentChildMap: DelegateChildMap;
   clients: Map<string, TClient>;
 }): DelegateSessionList {
-  return listDelegateChildSessions(options.parentChildMap, options.clients, options.parentSessionId);
+  return listDelegateChildSessions(
+    options.parentChildMap,
+    options.clients,
+    options.parentSessionId,
+  );
 }
 
 export async function handleCoordinatorDelegateStopOperation(options: {

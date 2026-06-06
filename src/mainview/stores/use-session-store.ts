@@ -42,11 +42,32 @@ const perfLog = createLogger("session-perf");
 const _statusWatchdogs = new Map<string, ReturnType<typeof setTimeout>>();
 const STATUS_STUCK_TIMEOUT_MS = 5 * 60 * 1000;
 
+function hasRenderableAssistantContentSinceLastUser(sessionId: string): boolean {
+  const msgs = useChatStore.getState().messagesBySession[sessionId] || [];
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const msg = msgs[i];
+    if (msg.role === "user") return false;
+    if (msg.role === "assistant") {
+      const hasContent = msg.content.some((block) => {
+        if (block.type === "text") return block.text.trim().length > 0;
+        if (block.type === "thinking") return block.thinking.trim().length > 0;
+        return true;
+      });
+      if (hasContent) return true;
+    }
+  }
+  return false;
+}
+
 function detectEmptyTurnAndInjectError(sessionId: string) {
   const chat = useChatStore.getState();
   const msgs = chat.messagesBySession[sessionId] || [];
   const lastMsg = msgs[msgs.length - 1];
-  if (lastMsg && (lastMsg.role === "user" || lastMsg.role === "custom")) {
+  if (
+    lastMsg &&
+    (lastMsg.role === "user" || lastMsg.role === "custom") &&
+    !hasRenderableAssistantContentSinceLastUser(sessionId)
+  ) {
     chat.setMessagesForSession(sessionId, [
       ...msgs,
       {

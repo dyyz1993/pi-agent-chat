@@ -104,7 +104,5 @@ export function isDelayedTerminalMessageUpdate(
   const incomingToolCallIds = extractIncomingToolCallIds(incomingContent);
   if (incomingToolCallIds.length === 0) return false;
 
-  return incomingToolCallIds.every((toolCallId) =>
-    hasTerminalToolExecution(messages, toolCallId),
-  );
+  return incomingToolCallIds.every((toolCallId) => hasTerminalToolExecution(messages, toolCallId));
 }

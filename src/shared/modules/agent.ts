@@ -68,6 +68,12 @@ export interface AgentMethods {
       steeringMode?: string;
       followUpMode?: string;
       messageCount: number;
+      activeToolExecutions: Array<{
+        toolCallId: string;
+        toolName: string;
+        args?: unknown;
+        startedAt?: number;
+      }>;
     } | null;
   };
   "agent.getCommands": {
@@ -577,4 +583,10 @@ export interface AgentProcessInfo {
   sessionPath: string;
   status: "idle" | "streaming";
   holdEvents: AgentEvent[];
+  activeToolExecutions?: Array<{
+    toolCallId: string;
+    toolName: string;
+    args?: unknown;
+    startedAt?: number;
+  }>;
 }

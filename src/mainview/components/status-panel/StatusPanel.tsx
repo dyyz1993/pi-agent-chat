@@ -57,6 +57,9 @@ function PluginCopyButton({ plugin }: { plugin: PluginInfo }) {
       `${t("toolsFieldLabel", { count: plugin.toolNames.length })} ${plugin.toolNames.join(", ") || t("none")}`,
       `${t("commandsFieldLabel", { count: plugin.commandNames.length })} ${plugin.commandNames.join(", ") || t("none")}`,
     ];
+    if (plugin.usageNotice) {
+      lines.push(`${t("usageNoticeLabel")} ${plugin.usageNotice.message}`);
+    }
     copy(lines.join("\n"));
   }, [plugin, t, copy]);
 
@@ -379,6 +382,14 @@ export function StatusPanel() {
                                     {t("pluginCommands", { count: p.commandNames.length })}
                                   </span>
                                 )}
+                                {p.usageNotice && (
+                                  <span
+                                    className="text-[9px] px-1 py-px rounded shrink-0 max-w-[72px] truncate bg-status-info/15 text-status-info"
+                                    title={p.usageNotice.message}
+                                  >
+                                    {p.usageNotice.label}
+                                  </span>
+                                )}
                                 <span
                                   className={`text-[9px] px-1 py-px rounded shrink-0 max-w-[36px] truncate ${p.scope === "global" ? "bg-semantic-agent/15 text-semantic-agent" : "bg-status-info/15 text-status-info"}`}
                                 >
@@ -391,6 +402,14 @@ export function StatusPanel() {
                                     <span className="text-text-tertiary">{t("pathLabel")}</span>{" "}
                                     {p.path}
                                   </div>
+                                  {p.usageNotice && (
+                                    <div className="rounded border border-status-info/25 bg-status-info/10 px-2 py-1 text-status-info">
+                                      <div className="font-medium">{p.usageNotice.label}</div>
+                                      <div className="text-text-secondary">
+                                        {p.usageNotice.message}
+                                      </div>
+                                    </div>
+                                  )}
                                   {p.toolNames.length > 0 && (
                                     <div>
                                       <span className="text-text-tertiary block mb-0.5">
@@ -764,6 +783,56 @@ function SupervisorSectionContent({
 
       <div className="text-text-tertiary">
         {t("supervisor.continueCount")}: {status.continueCount}/{status.maxContinueCount}
+      </div>
+
+      {status.goal && (
+        <div className="rounded border border-status-info/25 bg-status-info/10 px-2 py-1">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[9px] font-medium text-status-info">{t("supervisor.goal")}</span>
+            <span className="text-[9px] text-text-tertiary">
+              {t(`supervisor.goal.state.${status.goal.status}`)}
+            </span>
+          </div>
+          <div className="mt-0.5 break-words text-text-secondary">{status.goal.objective}</div>
+        </div>
+      )}
+
+      <div>
+        <span className="text-text-tertiary block mb-0.5">{t("supervisor.goldRecords")}</span>
+        {status.lastGoldResult ? (
+          <div className="rounded border border-border-primary/70 px-2 py-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[9px] font-medium text-text-secondary">
+                {t("supervisor.gold")}
+              </span>
+              <span
+                className={`text-[9px] ${
+                  status.lastGoldResult.verdict === "complete"
+                    ? "text-status-success"
+                    : status.lastGoldResult.verdict === "incomplete"
+                      ? "text-status-warning"
+                      : "text-status-error"
+                }`}
+              >
+                {t(`supervisor.gold.verdict.${status.lastGoldResult.verdict}`)}
+              </span>
+            </div>
+            <div className="mt-0.5 break-words text-text-tertiary">
+              {status.lastGoldResult.reason}
+            </div>
+            {status.lastGoldResult.evidence.length > 0 && (
+              <div className="mt-1 text-[9px] text-text-tertiary">
+                {t("supervisor.gold.evidenceCount", {
+                  count: status.lastGoldResult.evidence.length,
+                })}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="rounded border border-border-primary/50 px-2 py-1 text-text-tertiary">
+            {t("supervisor.gold.empty")}
+          </div>
+        )}
       </div>
 
       {status.activeGuards.length > 0 && (

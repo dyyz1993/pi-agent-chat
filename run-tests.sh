@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 SUITES="$ROOT/test-suites.json"
+VITEST="$ROOT/node_modules/.bin/vitest"
 COLOR_GREEN="\033[32m"
 COLOR_YELLOW="\033[33m"
 COLOR_RED="\033[31m"
@@ -126,7 +127,7 @@ do_run() {
     fi
   done
 
-  echo "$files" | xargs bun test --isolate 2>&1
+  echo "$files" | xargs "$VITEST" run --config "$ROOT/vitest.config.ts" 2>&1
 }
 
 do_smoke() {
@@ -135,7 +136,7 @@ do_smoke() {
   files=$(get_files "util")
   files="$files
 $(get_files "handler")"
-  echo "$files" | grep -v '^$' | xargs bun test --isolate 2>&1
+  echo "$files" | grep -v '^$' | xargs "$VITEST" run --config "$ROOT/vitest.config.ts" 2>&1
 }
 
 do_check() {
@@ -167,7 +168,7 @@ do_check() {
 do_failed() {
   log_header "重跑上次失败文件"
   local result
-  result=$(bun test --isolate 2>&1) || true
+  result=$("$VITEST" run --config "$ROOT/vitest.config.ts" 2>&1) || true
   echo "$result" | grep -oE 'test/[^ ]+\.test\.(ts|tsx)' | sort -u | while read -r f; do
     if [ -f "$ROOT/$f" ]; then
       echo -e "  ${COLOR_RED}→${COLOR_RESET} $f"
@@ -178,7 +179,7 @@ do_failed() {
   failed_files=$(echo "$result" | grep -oE 'test/[^ ]+\.test\.(ts|tsx)' | sort -u | tr '\n' ' ')
   if [ -n "$failed_files" ]; then
     log_header "重新运行失败文件..."
-    bun test --isolate $failed_files 2>&1
+    "$VITEST" run --config "$ROOT/vitest.config.ts" $failed_files 2>&1
   else
     log_ok "没有失败的测试文件"
   fi

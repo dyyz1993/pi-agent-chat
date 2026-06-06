@@ -72,7 +72,11 @@ export async function setModelOperation<TManaged extends ManagedClientLike>(opti
 }): Promise<{ provider: string; id: string }> {
   const managed = await resolveManagedClient(options);
   if (!managed) throw new Error("Client not found");
-  return withTimeout(managed.client.setModel(options.provider, options.modelId), 15_000, "setModel");
+  return withTimeout(
+    managed.client.setModel(options.provider, options.modelId),
+    15_000,
+    "setModel",
+  );
 }
 
 export async function switchTierOperation(options: {

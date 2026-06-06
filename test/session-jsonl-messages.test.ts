@@ -165,4 +165,59 @@ describe("session JSONL message helpers", () => {
       nextCursor: null,
     });
   });
+
+  it("expands a paginated toolCall window with its matching toolResult", () => {
+    const filteredMessages = [
+      { entryId: "u1", message: { role: "user" } },
+      {
+        entryId: "a1",
+        message: {
+          role: "assistant",
+          content: [{ type: "toolCall", id: "tool-1", name: "bash" }],
+        },
+      },
+      { entryId: "r1", message: { role: "toolResult", toolCallId: "tool-1" } },
+      { entryId: "a2", message: { role: "assistant", content: [{ type: "text", text: "done" }] } },
+    ];
+
+    expect(paginateEntryMessages({ filteredMessages, limit: 1, afterEntryId: "r1" })).toEqual({
+      slicedMessages: [
+        {
+          role: "assistant",
+          content: [{ type: "toolCall", id: "tool-1", name: "bash" }],
+          entryId: "a1",
+        },
+        { role: "toolResult", toolCallId: "tool-1", entryId: "r1" },
+      ],
+      hasMore: true,
+      nextCursor: "a1",
+    });
+  });
+
+  it("expands a paginated toolResult window with its matching toolCall", () => {
+    const filteredMessages = [
+      { entryId: "u1", message: { role: "user" } },
+      {
+        entryId: "a1",
+        message: {
+          role: "assistant",
+          content: [{ type: "toolCall", id: "tool-1", name: "bash" }],
+        },
+      },
+      { entryId: "r1", message: { role: "toolResult", toolCallId: "tool-1" } },
+    ];
+
+    expect(paginateEntryMessages({ filteredMessages, limit: 1 })).toEqual({
+      slicedMessages: [
+        {
+          role: "assistant",
+          content: [{ type: "toolCall", id: "tool-1", name: "bash" }],
+          entryId: "a1",
+        },
+        { role: "toolResult", toolCallId: "tool-1", entryId: "r1" },
+      ],
+      hasMore: true,
+      nextCursor: "r1",
+    });
+  });
 });

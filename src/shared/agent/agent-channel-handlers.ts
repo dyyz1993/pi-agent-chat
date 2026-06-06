@@ -88,7 +88,12 @@ export async function handleTodoChannelDataOperation(options: {
 
   await options.broadcastEvent(
     "todo.event",
-    { sessionId: options.sessionId, action: data.action, todos: data.todos, timestamp: data.timestamp },
+    {
+      sessionId: options.sessionId,
+      action: data.action,
+      todos: data.todos,
+      timestamp: data.timestamp,
+    },
     { sessionId: options.sessionId },
   );
 }
@@ -113,9 +118,13 @@ export async function handleBashChannelDataOperation(options: {
     applyBashBackgroundToolState(managed.activeBackgroundTools, data);
   }
 
-  await options.broadcastEvent("bash.event", { sessionId: options.sessionId, event: data }, {
-    sessionId: options.sessionId,
-  });
+  await options.broadcastEvent(
+    "bash.event",
+    { sessionId: options.sessionId, event: data },
+    {
+      sessionId: options.sessionId,
+    },
+  );
 }
 
 export async function handleSupervisorChannelDataOperation(options: {
@@ -162,9 +171,13 @@ export async function handleRulesChannelDataOperation(options: {
 
   log.info("Rules channel data", { sessionId: options.sessionId, type: data.type });
 
-  await options.broadcastEvent("rules.event", { sessionId: options.sessionId, event: data }, {
-    sessionId: options.sessionId,
-  });
+  await options.broadcastEvent(
+    "rules.event",
+    { sessionId: options.sessionId, event: data },
+    {
+      sessionId: options.sessionId,
+    },
+  );
 }
 
 export async function handleMemoryChannelDataOperation(options: {
@@ -181,6 +194,8 @@ export async function handleMemoryChannelDataOperation(options: {
 
   const broadcast = createMemoryBroadcast(options.sessionId, data, (options.now ?? Date.now)());
   if (broadcast) {
-    await options.broadcastEvent(broadcast.name, broadcast.payload, { sessionId: options.sessionId });
+    await options.broadcastEvent(broadcast.name, broadcast.payload, {
+      sessionId: options.sessionId,
+    });
   }
 }

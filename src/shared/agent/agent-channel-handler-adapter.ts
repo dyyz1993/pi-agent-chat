@@ -28,10 +28,7 @@ export interface AgentChannelHandlerAdapter {
   ) => Promise<void>;
   handleTodoChannelData: (sessionId: string, channelMsg: ChannelDataEvent) => Promise<void>;
   handleBashChannelData: (sessionId: string, channelMsg: ChannelDataEvent) => Promise<void>;
-  handleSupervisorChannelData: (
-    sessionId: string,
-    channelMsg: ChannelDataEvent,
-  ) => Promise<void>;
+  handleSupervisorChannelData: (sessionId: string, channelMsg: ChannelDataEvent) => Promise<void>;
   handleLspChannelData: (sessionId: string, channelMsg: ChannelDataEvent) => Promise<void>;
   handleRulesChannelData: (sessionId: string, channelMsg: ChannelDataEvent) => Promise<void>;
   handleMemoryChannelData: (sessionId: string, channelMsg: ChannelDataEvent) => Promise<void>;

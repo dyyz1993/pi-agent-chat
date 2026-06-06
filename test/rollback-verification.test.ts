@@ -10,6 +10,12 @@
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
+const memoryStoreMock = {
+  clearSession: vi.fn(),
+  addEvent: vi.fn(),
+  addInjected: vi.fn(),
+};
+
 vi.mock("../src/mainview/lib/api-client", () => ({
   apiClient: {
     call: vi.fn(),
@@ -46,12 +52,7 @@ vi.mock("../src/mainview/stores/use-session-store", () => ({
 
 vi.mock("../src/mainview/stores/use-memory-store", () => ({
   useMemoryStore: {
-    getState: vi.fn(() => ({
-      clearSession: vi.fn(),
-      addEvent: vi.fn(),
-      addInjected: vi.fn(),
-      clearSession: vi.fn(),
-    })),
+    getState: vi.fn(() => memoryStoreMock),
   },
 }));
 
@@ -77,6 +78,9 @@ beforeEach(() => {
     hasMoreMessagesBySession: {},
     nextCursorBySession: {},
   });
+  memoryStoreMock.clearSession.mockClear();
+  memoryStoreMock.addEvent.mockClear();
+  memoryStoreMock.addInjected.mockClear();
 });
 
 function makeMessages(
@@ -368,7 +372,7 @@ describe("回滚后 historyLoadVersion", () => {
 // 场景 6: 回滚后 customEntries 也正确过滤
 // ============================================================
 describe("回滚后 customEntries 过滤", () => {
-  it("回滚后只保留回滚点之前的 customEntries", async () => {
+  it("回滚后 memory customEntries 只同步当前分支，且不加入 chat messages", async () => {
     const sessionId = "sess-custom-rollback";
 
     mockedCall.mockResolvedValueOnce({
@@ -396,7 +400,9 @@ describe("回滚后 customEntries 过滤", () => {
     const customCount = allMsgs.filter(
       (m) => Array.isArray(m.content) && m.content.some((b) => b.type === "custom"),
     ).length;
-    expect(customCount).toBe(2);
+    expect(customCount).toBe(0);
+    expect(memoryStoreMock.clearSession).toHaveBeenCalledWith(sessionId);
+    expect(memoryStoreMock.addEvent).toHaveBeenCalledTimes(2);
 
     mockedCall.mockResolvedValueOnce({
       messages: makeMessages(3),
@@ -417,7 +423,12 @@ describe("回滚后 customEntries 过滤", () => {
     const customMsgs = msgs.filter(
       (m) => Array.isArray(m.content) && m.content.some((b) => b.type === "custom"),
     );
-    expect(customMsgs).toHaveLength(1);
+    expect(customMsgs).toHaveLength(0);
+    expect(memoryStoreMock.clearSession).toHaveBeenCalledTimes(2);
+    expect(memoryStoreMock.addEvent).toHaveBeenLastCalledWith(
+      sessionId,
+      expect.objectContaining({ id: "ce-1", customType: "memory_prefetch" }),
+    );
   });
 });
 

@@ -75,7 +75,6 @@ export function buildProcessedMessages(messages: ChatMessage[]): ProcessedMessag
   const result: ProcessedMessage[] = [];
 
   for (const msg of messages) {
-
     const customBlock = msg.content.find(
       (b): b is Extract<(typeof msg)["content"][number], { type: "custom" }> => b.type === "custom",
     );

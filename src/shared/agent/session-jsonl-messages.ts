@@ -198,17 +198,24 @@ export async function readFullJsonlAccumulator(options: {
   try {
     if (isSandboxSessionPath && options.readSandboxFile) {
       const raw = await options.readSandboxFile(options.sessionPath);
-      await appendJsonlFromText(raw, (parsed) => appendFullJsonlEntry(parsed, accumulator), "sandbox");
+      await appendJsonlFromText(
+        raw,
+        (parsed) => appendFullJsonlEntry(parsed, accumulator),
+        "sandbox",
+      );
     } else {
       await appendJsonlFromFile(options.sessionPath, (parsed) =>
         appendFullJsonlEntry(parsed, accumulator),
       );
     }
   } catch (err: unknown) {
-    log.warn(isSandboxSessionPath ? "Failed to read sandbox JSONL" : "Failed to read entries from JSONL", {
-      sessionPath: options.sessionPath,
-      err: err instanceof Error ? err.message : String(err),
-    });
+    log.warn(
+      isSandboxSessionPath ? "Failed to read sandbox JSONL" : "Failed to read entries from JSONL",
+      {
+        sessionPath: options.sessionPath,
+        err: err instanceof Error ? err.message : String(err),
+      },
+    );
   }
 
   return accumulator;
@@ -241,7 +248,9 @@ export async function appendUiJsonlEntriesFromPath(options: {
     }
   } catch (err: unknown) {
     log.warn(
-      isSandboxSessionPath ? "Failed to read sandbox JSONL in getMessages" : "Failed to read entries from JSONL",
+      isSandboxSessionPath
+        ? "Failed to read sandbox JSONL in getMessages"
+        : "Failed to read entries from JSONL",
       {
         sessionPath: options.sessionPath,
         err: err instanceof Error ? err.message : String(err),
@@ -293,6 +302,68 @@ export function injectEntryId(entry: EntryMessage): unknown {
   return entry.message;
 }
 
+function extractToolCallIds(message: unknown): string[] {
+  if (!isRecord(message) || message.role !== "assistant") return [];
+  const content = message.content;
+  if (!Array.isArray(content)) return [];
+  const ids: string[] = [];
+  for (const block of content) {
+    if (!isRecord(block) || block.type !== "toolCall") continue;
+    if (typeof block.id === "string" && block.id) ids.push(block.id);
+  }
+  return ids;
+}
+
+function extractToolResultId(message: unknown): string | null {
+  if (!isRecord(message) || message.role !== "toolResult") return null;
+  return typeof message.toolCallId === "string" && message.toolCallId ? message.toolCallId : null;
+}
+
+function expandToolPairWindow(
+  filteredMessages: EntryMessage[],
+  startIndex: number,
+  endIndex: number,
+): EntryMessage[] {
+  const includedIndexes = new Set<number>();
+  const toolCallIndexById = new Map<string, number>();
+  const toolResultIndexesById = new Map<string, number[]>();
+
+  for (let index = 0; index < filteredMessages.length; index++) {
+    const entry = filteredMessages[index];
+    for (const toolCallId of extractToolCallIds(entry.message)) {
+      toolCallIndexById.set(toolCallId, index);
+    }
+    const resultToolCallId = extractToolResultId(entry.message);
+    if (resultToolCallId) {
+      const indexes = toolResultIndexesById.get(resultToolCallId) ?? [];
+      indexes.push(index);
+      toolResultIndexesById.set(resultToolCallId, indexes);
+    }
+  }
+
+  for (let index = startIndex; index < endIndex; index++) {
+    includedIndexes.add(index);
+    const entry = filteredMessages[index];
+
+    for (const toolCallId of extractToolCallIds(entry.message)) {
+      for (const resultIndex of toolResultIndexesById.get(toolCallId) ?? []) {
+        includedIndexes.add(resultIndex);
+      }
+    }
+
+    const resultToolCallId = extractToolResultId(entry.message);
+    if (resultToolCallId) {
+      const callIndex = toolCallIndexById.get(resultToolCallId);
+      if (callIndex !== undefined) includedIndexes.add(callIndex);
+    }
+  }
+
+  return Array.from(includedIndexes)
+    .sort((a, b) => a - b)
+    .map((index) => filteredMessages[index])
+    .filter((entry): entry is EntryMessage => entry !== undefined);
+}
+
 export function paginateEntryMessages(options: {
   filteredMessages: EntryMessage[];
   limit?: number;
@@ -312,7 +383,9 @@ export function paginateEntryMessages(options: {
   if (limit !== undefined) {
     const endIndex = cursorIndex >= 0 ? cursorIndex : totalCount;
     const startIndex = Math.max(0, endIndex - limit);
-    const slicedMessages = filteredMessages.slice(startIndex, endIndex).map(injectEntryId);
+    const slicedMessages = expandToolPairWindow(filteredMessages, startIndex, endIndex).map(
+      injectEntryId,
+    );
     const hasMore = startIndex > 0;
     return {
       slicedMessages,

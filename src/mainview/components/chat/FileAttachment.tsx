@@ -1,5 +1,5 @@
 import { useRef, useCallback, useState } from "react";
-import { Paperclip, ImageIcon, X, Loader2, AlertCircle, Shield } from "lucide-react";
+import { Paperclip, ImageIcon, X, Loader2, AlertCircle, Target } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAttachmentStore, type AttachmentFile } from "../../stores/use-attachment-store";
 import { formatFileSize } from "../chat/preview/types";
@@ -97,7 +97,7 @@ export function AttachmentBar() {
   );
 }
 
-export function AttachmentButtons() {
+export function AttachmentButtons({ onGoalClick }: { onGoalClick?: () => void } = {}) {
   const { t } = useTranslation("chat");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -115,8 +115,7 @@ export function AttachmentButtons() {
   const supervisorStatus = useSupervisorStore(
     (s) => (activeSessionId ? s.bySession[activeSessionId]?.status : null) ?? null,
   );
-  const showStatus = useLayoutStore((s) => s.showStatus);
-  const setActivePanelTab = useLayoutStore((s) => s.setActivePanelTab);
+  const openStatusPanel = useLayoutStore((s) => s.openStatusPanel);
 
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -141,19 +140,24 @@ export function AttachmentButtons() {
   );
 
   const handleSupervisorClick = useCallback(() => {
-    setActivePanelTab("status");
-    showStatus();
-  }, [setActivePanelTab, showStatus]);
+    if (onGoalClick) {
+      onGoalClick();
+      return;
+    }
+    openStatusPanel("status");
+  }, [onGoalClick, openStatusPanel]);
 
-  const shieldColor = !supervisorStatus?.enabled
-    ? "text-text-tertiary"
-    : supervisorStatus.state === "idle" || supervisorStatus.state === "checking"
-      ? "text-status-success"
-      : supervisorStatus.state === "paused"
-        ? "text-status-warning"
-        : supervisorStatus.state === "continuing"
-          ? "text-status-info"
-          : "text-text-tertiary";
+  const goalColor = !supervisorStatus?.enabled
+    ? "text-semantic-accent"
+    : supervisorStatus.goal
+      ? "text-semantic-accent"
+      : supervisorStatus.state === "idle" || supervisorStatus.state === "checking"
+        ? "text-status-success"
+        : supervisorStatus.state === "paused"
+          ? "text-status-warning"
+          : supervisorStatus.state === "continuing"
+            ? "text-status-info"
+            : "text-text-tertiary";
 
   const isPulsing =
     supervisorStatus?.enabled === true &&
@@ -203,10 +207,11 @@ export function AttachmentButtons() {
 
       <button
         onClick={handleSupervisorClick}
-        className={`relative p-1.5 rounded-md hover:bg-surface-hover dark:hover:bg-surface-dim transition-colors ${shieldColor}`}
-        title="Supervisor"
+        className={`relative p-1.5 rounded-md hover:bg-surface-hover dark:hover:bg-surface-dim transition-colors ${goalColor}`}
+        title={t("goal.entry")}
+        aria-label={t("goal.entry")}
       >
-        <Shield className={`w-4 h-4 ${isPulsing ? "animate-pulse" : ""}`} />
+        <Target className={`w-4 h-4 ${isPulsing ? "animate-pulse" : ""}`} />
         {pendingSeconds !== null && pendingSeconds < 60 && pendingSeconds > 0 && (
           <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] flex items-center justify-center rounded-full bg-status-warning text-white text-[8px] font-bold leading-none px-0.5">
             {pendingSeconds}

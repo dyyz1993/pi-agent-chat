@@ -58,6 +58,10 @@ function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+function isTimeoutLikeError(message: string): boolean {
+  return /\btimeout\b|timed out|Timeout waiting for response/i.test(message);
+}
+
 export async function compactOperation<TManaged extends ManagedClientLike>(options: {
   sessionId: string;
   customInstructions?: string;
@@ -372,6 +376,12 @@ export async function getContextUsageOperation<TManaged extends ManagedClientLik
       sessionId: options.sessionId,
       err: msg,
     });
+    if (isTimeoutLikeError(msg)) {
+      log.warn("getContextUsage timed out; keeping CLI client registered", {
+        sessionId: options.sessionId,
+      });
+      return { tokens: null, contextWindow: 0, percent: null };
+    }
     if (!(await options.isClientAlive(options.sessionId, managed))) {
       options.cleanupDeadClient(options.sessionId, `getContextUsage failed: ${msg}`);
     }

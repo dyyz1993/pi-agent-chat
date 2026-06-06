@@ -80,7 +80,9 @@ function normalizedMessageSignature(message: Record<string, unknown>): string {
   const content = Array.isArray(message.content)
     ? message.content.map((block) => {
         if (!block || typeof block !== "object") {
-          return typeof block === "string" || typeof block === "number" || typeof block === "boolean"
+          return typeof block === "string" ||
+            typeof block === "number" ||
+            typeof block === "boolean"
             ? block
             : null;
         }
@@ -147,16 +149,12 @@ function extractToolCallBlocks(message: Record<string, unknown>): Record<string,
   if (!Array.isArray(content)) return [];
   return content.filter((block): block is Record<string, unknown> => {
     return (
-      !!block &&
-      typeof block === "object" &&
-      (block as Record<string, unknown>).type === "toolCall"
+      !!block && typeof block === "object" && (block as Record<string, unknown>).type === "toolCall"
     );
   });
 }
 
-function completedToolCallKeysFromMessages(
-  messages: Array<{ message: unknown }>,
-): Set<string> {
+function completedToolCallKeysFromMessages(messages: Array<{ message: unknown }>): Set<string> {
   const assistantToolKeysById = new Map<string, string[]>();
   const completedKeys = new Set<string>();
 
@@ -280,7 +278,9 @@ export async function getFullMessagesOperation<TManaged extends ManagedFullMessa
         "getMessages (streaming merge)",
       );
       if (Array.isArray(memResult) && memResult.length > 0) {
-        const jsonlEntryIds = new Set(accumulator.allMessages.map((m) => m.entryId).filter(Boolean));
+        const jsonlEntryIds = new Set(
+          accumulator.allMessages.map((m) => m.entryId).filter(Boolean),
+        );
         const jsonlMessageSignatures = new Set(
           accumulator.allMessages
             .map((m) => {

@@ -9,7 +9,9 @@ export interface CoordinatorResponseRoute<TManaged extends CoordinatorResponseMa
   processCount: number | undefined;
 }
 
-export function findCoordinatorResponseManaged<TManaged extends CoordinatorResponseManaged>(options: {
+export function findCoordinatorResponseManaged<
+  TManaged extends CoordinatorResponseManaged,
+>(options: {
   active: TManaged | undefined;
   sessionId: string;
   sessionProjectPaths: Map<string, string>;

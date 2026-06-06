@@ -2,12 +2,18 @@
  * 验证测试：历史消息加载 & 压缩标识显示
  *
  * 验证四个关键问题的修复：
- * 1. loadMoreMessages 正确处理 customEntries
+ * 1. memory customEntries 同步到 memory store，但不进入 chat messages
  * 2. loadMoreMessages 正确递增 historyLoadVersion
  * 3. compactionSummary 空 summary 不再被丢弃
  * 4. loadMoreMessages 使用服务端返回的 hasMore
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
+
+const memoryStoreMock = {
+  addEvent: vi.fn(),
+  addInjected: vi.fn(),
+  clearSession: vi.fn(),
+};
 
 vi.mock("../src/mainview/lib/api-client", () => ({
   apiClient: {
@@ -44,11 +50,7 @@ vi.mock("../src/mainview/stores/use-session-store", () => ({
 
 vi.mock("../src/mainview/stores/use-memory-store", () => ({
   useMemoryStore: {
-    getState: vi.fn(() => ({
-      addEvent: vi.fn(),
-      addInjected: vi.fn(),
-      clearSession: vi.fn(),
-    })),
+    getState: vi.fn(() => memoryStoreMock),
   },
 }));
 
@@ -74,13 +76,16 @@ beforeEach(() => {
     isLoadingMoreBySession: {},
     hasMoreMessagesBySession: {},
   });
+  memoryStoreMock.addEvent.mockClear();
+  memoryStoreMock.addInjected.mockClear();
+  memoryStoreMock.clearSession.mockClear();
 });
 
 // ============================================================
-// 修复 1: loadMoreMessages 正确处理 customEntries
+// 修复 1: memory customEntries 不污染 chat messages
 // ============================================================
 describe("FIX: loadMoreMessages 处理 customEntries", () => {
-  it("loadSessionMessages 正确处理 customEntries", async () => {
+  it("loadSessionMessages 同步 memory customEntries 到 memory store，不加入 chat messages", async () => {
     const sessionId = "sess-history";
 
     mockedCall.mockResolvedValue({
@@ -108,19 +113,16 @@ describe("FIX: loadMoreMessages 处理 customEntries", () => {
     await useChatStore.getState().loadSessionMessages(sessionId);
 
     const msgs = useChatStore.getState().messagesBySession[sessionId] ?? [];
-    const hasCustom = msgs.some((m) => {
-      if (!Array.isArray(m.content)) return false;
-      return m.content.some(
-        (b) =>
-          b.type === "custom" && (b as { customType?: string }).customType === "memory_prefetch",
-      );
-    });
-
-    expect(hasCustom).toBe(true);
-    expect(msgs.length).toBeGreaterThanOrEqual(3);
+    expect(msgs).toHaveLength(2);
+    expect(msgs.some((m) => m.role === "custom")).toBe(false);
+    expect(memoryStoreMock.clearSession).toHaveBeenCalledWith(sessionId);
+    expect(memoryStoreMock.addEvent).toHaveBeenCalledWith(
+      sessionId,
+      expect.objectContaining({ id: "ce-1", customType: "memory_prefetch" }),
+    );
   });
 
-  it("loadMoreMessages 也正确处理 customEntries", async () => {
+  it("loadMoreMessages 忽略全量 memory customEntries，避免历史分页重复塞隐藏消息", async () => {
     const sessionId = "sess-loadmore";
 
     useChatStore.setState({
@@ -151,16 +153,9 @@ describe("FIX: loadMoreMessages 处理 customEntries", () => {
 
     const msgs = useChatStore.getState().messagesBySession[sessionId] ?? [];
 
-    const hasCustom = msgs.some((m) => {
-      if (!Array.isArray(m.content)) return false;
-      return m.content.some(
-        (b) =>
-          b.type === "custom" && (b as { customType?: string }).customType === "memory_prefetch",
-      );
-    });
-
-    expect(hasCustom).toBe(true);
-    expect(msgs.length).toBeGreaterThanOrEqual(3);
+    expect(msgs).toHaveLength(2);
+    expect(msgs.some((m) => m.role === "custom")).toBe(false);
+    expect(memoryStoreMock.addEvent).not.toHaveBeenCalled();
   });
 });
 

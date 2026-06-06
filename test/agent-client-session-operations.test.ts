@@ -139,4 +139,28 @@ describe("agent client session operations", () => {
       "getContextUsage failed: socket closed",
     );
   });
+
+  it("does not cleanup when context usage query times out", async () => {
+    const client = {
+      getContextUsage: vi
+        .fn()
+        .mockRejectedValue(new Error("Timeout waiting for response to get_context_usage")),
+    };
+    const managed = makeManaged(client);
+    const cleanupDeadClient = vi.fn();
+    const isClientAlive = vi.fn();
+
+    await expect(
+      getContextUsageOperation({
+        sessionId: "sess-1",
+        getActiveManaged: () => managed,
+        ensureManagedClient: vi.fn(),
+        isClientAlive,
+        cleanupDeadClient,
+      }),
+    ).resolves.toEqual({ tokens: null, contextWindow: 0, percent: null });
+
+    expect(isClientAlive).not.toHaveBeenCalled();
+    expect(cleanupDeadClient).not.toHaveBeenCalled();
+  });
 });

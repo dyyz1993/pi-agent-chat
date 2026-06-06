@@ -19,62 +19,66 @@ interface CoordinatorResponseRoute<TManaged extends CoordinatorResponseManaged> 
   processCount?: number;
 }
 
-export async function handleCoordinatorCallOperation<TManaged extends CoordinatorResponseManaged>(
-  options: {
+export async function handleCoordinatorCallOperation<
+  TManaged extends CoordinatorResponseManaged,
+>(options: {
+  sessionId: string;
+  data: unknown;
+  channelName: string;
+  startInProgress: boolean;
+  broadcastEvent: (
+    eventName: string,
+    data: Record<string, unknown>,
+    filter: Record<string, unknown>,
+  ) => Promise<void>;
+  queueDelegateRequest: (args: {
     sessionId: string;
-    data: unknown;
+    msg: CoordinatorMethodCall;
     channelName: string;
-    startInProgress: boolean;
-    broadcastEvent: (
-      eventName: string,
-      data: Record<string, unknown>,
-      filter: Record<string, unknown>,
-    ) => Promise<void>;
-    queueDelegateRequest: (args: {
-      sessionId: string;
-      msg: CoordinatorMethodCall;
-      channelName: string;
-    }) => Promise<unknown>;
-    handleDelegate: (
-      sessionId: string,
-      msg: Extract<CoordinatorMethodCall, { __call: "session_delegate" }>,
-    ) => Promise<unknown>;
-    handleDelegateSend: (
-      msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_send" }>,
-    ) => Promise<unknown>;
-    handleDelegateSync: (
-      sessionId: string,
-      msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_sync" }>,
-    ) => Promise<unknown>;
-    handleDelegateStatus: (
-      msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_status" }>,
-    ) => Promise<unknown>;
-    handleDelegateList: (sessionId: string) => unknown;
-    handleDelegateStop: (
-      sessionId: string,
-      msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_stop" }>,
-    ) => Promise<unknown>;
-    handleDelegateFork: (
-      sessionId: string,
-      msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_fork" }>,
-    ) => Promise<unknown>;
-    handleClearStopped: (
-      msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_clear_stopped" }>,
-    ) => unknown;
-    handleRemove: (
-      sessionId: string,
-      msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_remove" }>,
-    ) => unknown;
-    findResponseManaged: (sessionId: string) => CoordinatorResponseRoute<TManaged>;
-  },
-): Promise<void> {
+  }) => Promise<unknown>;
+  handleDelegate: (
+    sessionId: string,
+    msg: Extract<CoordinatorMethodCall, { __call: "session_delegate" }>,
+  ) => Promise<unknown>;
+  handleDelegateSend: (
+    msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_send" }>,
+  ) => Promise<unknown>;
+  handleDelegateSync: (
+    sessionId: string,
+    msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_sync" }>,
+  ) => Promise<unknown>;
+  handleDelegateStatus: (
+    msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_status" }>,
+  ) => Promise<unknown>;
+  handleDelegateList: (sessionId: string) => unknown;
+  handleDelegateStop: (
+    sessionId: string,
+    msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_stop" }>,
+  ) => Promise<unknown>;
+  handleDelegateFork: (
+    sessionId: string,
+    msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_fork" }>,
+  ) => Promise<unknown>;
+  handleClearStopped: (
+    msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_clear_stopped" }>,
+  ) => unknown;
+  handleRemove: (
+    sessionId: string,
+    msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_remove" }>,
+  ) => unknown;
+  findResponseManaged: (sessionId: string) => CoordinatorResponseRoute<TManaged>;
+}): Promise<void> {
   const msg = options.data as CoordinatorChannelEvent;
 
   if (!("__call" in msg)) {
     options
-      .broadcastEvent("coordinator.event", { sessionId: options.sessionId, event: msg }, {
-        sessionId: options.sessionId,
-      })
+      .broadcastEvent(
+        "coordinator.event",
+        { sessionId: options.sessionId, event: msg },
+        {
+          sessionId: options.sessionId,
+        },
+      )
       .catch((err: unknown) => {
         log.warn("broadcastEvent(coordinator.event) error", {
           sessionId: options.sessionId,

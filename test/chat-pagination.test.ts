@@ -141,6 +141,10 @@ async function flushBackgroundRefresh() {
 describe("chat pagination", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    (apiClient.call as ReturnType<typeof vi.fn>).mockReset();
+    (apiClient.subscribe as ReturnType<typeof vi.fn>).mockReset().mockResolvedValue("sub-id");
+    (apiClient.unsubscribe as ReturnType<typeof vi.fn>).mockReset();
+    (apiClient.onReconnect as ReturnType<typeof vi.fn>).mockReset();
     useChatStore.setState({
       messagesBySession: {},
       inputText: "",
@@ -198,6 +202,74 @@ describe("chat pagination", () => {
       expect(block.toolCallId).toBe("tc-historical-refresh");
       expect(block.status).toBe("unknown");
     }
+  });
+
+  it("initial refresh should not preserve a replayed running tool when history has terminal output", async () => {
+    useSessionStore.setState({
+      sessionStatusMap: { "test-session": "streaming" },
+    });
+    useChatStore.setState({
+      messagesBySession: {
+        "test-session": [
+          {
+            id: "live-running-net-lib",
+            entryId: "live-running-net-lib-entry",
+            role: "assistant",
+            content: [
+              {
+                type: "toolExecution",
+                toolCallId: "tc-live-net-lib",
+                toolName: "bash",
+                args: "",
+                description: "看 net lib.rs",
+                status: "running",
+                output: "waiting...",
+              },
+            ],
+            timestamp: 3000,
+            isStreaming: true,
+          },
+        ],
+      },
+    });
+    (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
+      messages: [
+        {
+          id: "server-net-lib",
+          entryId: "server-net-lib-entry",
+          role: "assistant",
+          content: [
+            {
+              type: "toolCall",
+              id: "tc-server-net-lib",
+              name: "bash",
+              arguments: { description: "看 net lib.rs" },
+            },
+          ],
+          timestamp: 1000,
+        },
+        makeRawToolResultMessage(2, "tc-server-net-lib", "pub struct Client;"),
+      ],
+      customEntries: [],
+      hasMore: false,
+      nextCursor: null,
+    });
+
+    await useChatStore
+      .getState()
+      .loadSessionMessages("test-session", { force: true });
+
+    const msgs = useChatStore.getState().messagesBySession["test-session"]!;
+    const executions = msgs.flatMap((msg) =>
+      msg.content.filter(
+        (block): block is Extract<ContentBlock, { type: "toolExecution" }> =>
+          block.type === "toolExecution",
+      ),
+    );
+    expect(executions).toHaveLength(1);
+    expect(executions[0].toolCallId).toBe("tc-server-net-lib");
+    expect(executions[0].status).toBe("done");
+    expect(executions[0].output).toBe("pub struct Client;");
   });
 
   it("loadMoreMessages should prepend older messages", async () => {
@@ -316,6 +388,123 @@ describe("chat pagination", () => {
       expect(block.status).not.toBe("running");
       expect(block.output).not.toBe("waiting...");
     }
+  });
+
+  it("loadMoreMessages should close a running tool when its result arrives on the loaded page", async () => {
+    useChatStore.setState({
+      messagesBySession: {
+        "test-session": [
+          {
+            id: "msg-1",
+            entryId: "entry-1",
+            role: "assistant",
+            content: [
+              {
+                type: "toolExecution",
+                toolCallId: "tc-page-boundary",
+                toolName: "bash",
+                args: JSON.stringify({ command: "npm run build", description: "build" }),
+                description: "build",
+                status: "running",
+                output: "waiting...",
+              },
+            ],
+            timestamp: 1100,
+            isStreaming: true,
+          },
+        ],
+      },
+      hasMoreMessagesBySession: { "test-session": true },
+      nextCursorBySession: { "test-session": "entry-1" },
+    });
+    (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
+      messages: [makeRawToolResultMessage(1, "tc-page-boundary", "build completed")],
+      customEntries: [],
+      hasMore: false,
+      nextCursor: null,
+    });
+
+    await useChatStore.getState().loadMoreMessages!("test-session");
+
+    const msgs = useChatStore.getState().messagesBySession["test-session"]!;
+    const executions = msgs.flatMap((msg) =>
+      msg.content.filter(
+        (block): block is Extract<ContentBlock, { type: "toolExecution" }> =>
+          block.type === "toolExecution",
+      ),
+    );
+    expect(executions).toHaveLength(1);
+    expect(executions[0].toolCallId).toBe("tc-page-boundary");
+    expect(executions[0].status).toBe("done");
+    expect(executions[0].output).toBe("build completed");
+  });
+
+  it("loadMoreMessages should remove older running duplicates when only description matches terminal history", async () => {
+    useChatStore.setState({
+      messagesBySession: {
+        "test-session": [
+          {
+            id: "stale-running",
+            entryId: "stale-running-entry",
+            role: "assistant",
+            content: [
+              {
+                type: "toolExecution",
+                toolCallId: "tc-live-gui-check",
+                toolName: "bash",
+                args: "",
+                description: "M7.4.6 GUI 无显示器验证（--check flag）",
+                status: "running",
+                output: "waiting...",
+              },
+            ],
+            timestamp: 1000,
+            isStreaming: true,
+          },
+          makeRawMessage(20, "assistant"),
+        ],
+      },
+      hasMoreMessagesBySession: { "test-session": true },
+      nextCursorBySession: { "test-session": "entry-20" },
+    });
+    (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
+      messages: [
+        {
+          id: "server-gui-check",
+          entryId: "server-gui-check-entry",
+          role: "assistant",
+          content: [
+            {
+              type: "toolCall",
+              id: "tc-server-gui-check",
+              name: "bash",
+              arguments: {
+                description: "M7.4.6 GUI 无显示器验证（--check flag）",
+              },
+            },
+          ],
+          timestamp: 1200,
+        },
+        makeRawToolResultMessage(2, "tc-server-gui-check", "invalid URL"),
+      ],
+      customEntries: [],
+      hasMore: false,
+      nextCursor: null,
+    });
+
+    await useChatStore.getState().loadMoreMessages!("test-session");
+
+    const msgs = useChatStore.getState().messagesBySession["test-session"]!;
+    const executions = msgs.flatMap((msg) =>
+      msg.content.filter(
+        (block): block is Extract<ContentBlock, { type: "toolExecution" }> =>
+          block.type === "toolExecution",
+      ),
+    );
+    expect(executions).toHaveLength(1);
+    expect(executions[0].toolCallId).toBe("tc-server-gui-check");
+    expect(executions[0].status).toBe("done");
+    expect(executions[0].output).toBe("invalid URL");
   });
 
   it("should not request more when hasMoreMessages is false", async () => {

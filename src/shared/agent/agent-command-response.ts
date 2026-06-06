@@ -35,9 +35,7 @@ export function getResponseData<T>(response: unknown): T | undefined {
   return response.data as T | undefined;
 }
 
-export function normalizeAgentList(
-  agents: AgentListItem[] | undefined,
-): NormalizedAgentListItem[] {
+export function normalizeAgentList(agents: AgentListItem[] | undefined): NormalizedAgentListItem[] {
   return (agents ?? []).map((agent) => ({
     ...agent,
     source: agent.source ?? "builtin",

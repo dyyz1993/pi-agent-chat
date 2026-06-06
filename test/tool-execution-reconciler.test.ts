@@ -258,7 +258,7 @@ describe("tool execution reconciler", () => {
     expect(buildPreservedStreamingMessage(finalMessages, streaming)).toBeUndefined();
   });
 
-  it("preserves a newer streaming tool even when an older terminal has the same description", () => {
+  it("does not preserve replayed streaming tools when description matches older terminal history", () => {
     const finalMessages: ChatMessage[] = [
       {
         id: "history",
@@ -290,11 +290,81 @@ describe("tool execution reconciler", () => {
       isStreaming: true,
     };
 
-    const preserved = buildPreservedStreamingMessage(finalMessages, streaming);
-    expect(preserved?.content).toHaveLength(1);
-    expect(
-      preserved?.content[0].type === "toolExecution" ? preserved.content[0].toolCallId : "",
-    ).toBe("tc-live-running");
+    expect(buildPreservedStreamingMessage(finalMessages, streaming)).toBeUndefined();
+  });
+
+  it("deduplicates replayed running tools when description matches older terminal history", () => {
+    const messages: ChatMessage[] = [
+      assistant("history", [
+        toolExecution({
+          toolCallId: "tc-history-result",
+          args: "",
+          description: "看 net lib.rs",
+          status: "done",
+          output: "//! browser-net",
+        }),
+      ]),
+      {
+        id: "live",
+        role: "assistant",
+        content: [
+          toolExecution({
+            toolCallId: "tc-live-running",
+            args: "",
+            description: "看 net lib.rs",
+            status: "running",
+            output: "waiting...",
+          }),
+        ],
+        timestamp: 2,
+        isStreaming: true,
+      },
+    ];
+
+    dedupeToolExecutions(messages);
+
+    const blocks = messages.flatMap((msg) =>
+      msg.content.filter(
+        (block): block is Extract<ContentBlock, { type: "toolExecution" }> =>
+          block.type === "toolExecution",
+      ),
+    );
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].toolCallId).toBe("tc-history-result");
+    expect(blocks[0].status).toBe("done");
+  });
+
+  it("deduplicates running tools when matching description only exists inside args", () => {
+    const messages: ChatMessage[] = [
+      assistant("live", [
+        toolExecution({
+          toolCallId: "tc-live-sync-memory",
+          args: JSON.stringify({ command: "npm test", description: "同步 memory + 更新大纲 + commit" }),
+          status: "running",
+          output: "waiting...",
+        }),
+      ]),
+      assistant("history", [
+        toolExecution({
+          toolCallId: "tc-history-sync-memory",
+          args: JSON.stringify({ description: "同步 memory + 更新大纲 + commit" }),
+          status: "done",
+          output: "passed",
+        }),
+      ]),
+    ];
+
+    dedupeToolExecutions(messages);
+
+    const blocks = messages.flatMap((msg) =>
+      msg.content.filter(
+        (block): block is Extract<ContentBlock, { type: "toolExecution" }> =>
+          block.type === "toolExecution",
+      ),
+    );
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].toolCallId).toBe("tc-history-sync-memory");
+    expect(blocks[0].status).toBe("done");
   });
 
   it("preserves still-running streaming tools that history has not completed", () => {

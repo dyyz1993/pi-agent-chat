@@ -16,6 +16,12 @@ interface ManagedFixture {
     holdEvents: unknown[];
     projectPath: string;
     sessionPath?: string;
+    activeToolExecutions?: Array<{
+      toolCallId: string;
+      toolName: string;
+      args?: unknown;
+      startedAt?: number;
+    }>;
   };
   lastActiveAt: number;
 }
@@ -182,5 +188,63 @@ describe("agent event routing", () => {
       }),
       { parentSessionId: "parent-1" },
     );
+  });
+
+  it("tracks active tool executions and clears them on terminal events", () => {
+    const clients = new Map([["sess-1", makeManaged()]]);
+
+    handleAgentEventOperation(
+      makeOptions({
+        clients,
+        event: {
+          type: "tool_execution_start",
+          toolCallId: "tc-1",
+          toolName: "bash",
+          args: { command: "npm test" },
+          timestamp: 123,
+        } as unknown as AgentEvent,
+      }),
+    );
+
+    expect(clients.get("sess-1")?.info.activeToolExecutions).toEqual([
+      {
+        toolCallId: "tc-1",
+        toolName: "bash",
+        args: { command: "npm test" },
+        startedAt: 123,
+      },
+    ]);
+
+    handleAgentEventOperation(
+      makeOptions({
+        clients,
+        event: {
+          type: "tool_execution_end",
+          toolCallId: "tc-1",
+          result: { content: [{ type: "text", text: "ok" }] },
+        } as unknown as AgentEvent,
+      }),
+    );
+
+    expect(clients.get("sess-1")?.info.activeToolExecutions).toEqual([]);
+
+    handleAgentEventOperation(
+      makeOptions({
+        clients,
+        event: {
+          type: "tool_execution_start",
+          toolCallId: "tc-2",
+          toolName: "read",
+        } as unknown as AgentEvent,
+      }),
+    );
+    handleAgentEventOperation(
+      makeOptions({
+        clients,
+        event: { type: "agent_end" } as AgentEvent,
+      }),
+    );
+
+    expect(clients.get("sess-1")?.info.activeToolExecutions).toEqual([]);
   });
 });

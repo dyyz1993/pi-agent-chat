@@ -32,7 +32,7 @@ import {
   isLspCustomType,
   isLspVisibleInChat,
 } from "./MessageBubble";
-import type { ChatMessage, ContentBlock } from "../../types";
+import type { ChatMessage, ContentBlock, SessionStatus } from "../../types";
 import type { ModifiedFile } from "../../stores/use-rollback-store";
 import { getCustomTypeIcon } from "./tool-icon-map";
 
@@ -87,6 +87,10 @@ function formatTime(ts: number): string {
   return `${hh}:${mm}`;
 }
 
+function isToolUseStopReason(stopReason: string | null | undefined): boolean {
+  return stopReason === "toolUse" || stopReason === "tool_use";
+}
+
 export const MessageCard = memo(function MessageCard({
   message,
   cardLabel,
@@ -119,9 +123,17 @@ export const MessageCard = memo(function MessageCard({
     toggleCollapse(message.id);
   }, [message.id, toggleCollapse]);
 
-  const isUser = message.role === "user";
-  const isAssistant = message.role === "assistant";
-  const isCompaction = message.role === "compactionSummary";
+  const renderRole =
+    message.role === "error" && isToolUseStopReason(message.stopReason)
+      ? "assistant"
+      : message.role;
+  const displayMessage =
+    renderRole === "assistant" && message.role === "error"
+      ? ({ ...message, role: "assistant" as const } satisfies ChatMessage)
+      : message;
+  const isUser = renderRole === "user";
+  const isAssistant = renderRole === "assistant";
+  const isCompaction = renderRole === "compactionSummary";
   const timeStr = formatTime(message.timestamp);
 
   const hasCustomContent = message.content.some((b) => b.type === "custom");
@@ -158,7 +170,7 @@ export const MessageCard = memo(function MessageCard({
     );
   }
 
-  if (message.role === "error") {
+  if (renderRole === "error") {
     const textBlock = message.content.find(
       (b): b is Extract<typeof b, { type: "text" }> => b.type === "text",
     );
@@ -262,8 +274,8 @@ export const MessageCard = memo(function MessageCard({
     label = cardLabel ?? iconEntry.label;
   } else {
     const roleCfg =
-      (message.role in ROLE_CONFIG
-        ? ROLE_CONFIG[message.role as keyof typeof ROLE_CONFIG]
+      (renderRole in ROLE_CONFIG
+        ? ROLE_CONFIG[renderRole as keyof typeof ROLE_CONFIG]
         : ROLE_CONFIG.assistant) ?? ROLE_CONFIG.assistant;
     IconComp = roleCfg.icon;
     labelColor = roleCfg.color;
@@ -332,7 +344,7 @@ export const MessageCard = memo(function MessageCard({
         </div>
       ) : (
         <div className="relative z-20">
-          <MessageBubble message={message} mergedResultData={mergedResultData} />
+          <MessageBubble message={displayMessage} mergedResultData={mergedResultData} />
         </div>
       )}
     </div>
@@ -350,7 +362,7 @@ const HeaderActions = memo(function HeaderActions({
   const sessionId = useSessionStore((s) => s.activeSessionId);
   const isSessionStreaming = useSessionStore(
     useCallback(
-      (s: { sessionStatusMap: Record<string, import("../../types").SessionStatus> }) => {
+      (s: { sessionStatusMap: Record<string, SessionStatus> }) => {
         const status = sessionId ? s.sessionStatusMap[sessionId] : undefined;
         return status === "streaming" || status === "compacting" || status === "retrying";
       },

@@ -15,7 +15,10 @@ import type { ProjectTab, SessionMeta } from "../src/mainview/types";
 const apiCall = vi.fn();
 
 vi.mock("../src/mainview/lib/api-client", () => ({
-  apiClient: { call: (...args: unknown[]) => apiCall(...args) },
+  apiClient: {
+    call: (...args: unknown[]) => apiCall(...args),
+    onReconnect: vi.fn(),
+  },
 }));
 
 function makeSession(overrides: Partial<SessionMeta>): SessionMeta {

@@ -55,7 +55,9 @@ interface ManagedClientShape {
 interface InternalAPM {
   clients: Map<string, ManagedClientShape>;
   parentChildMap: Map<string, Set<string>>;
-  handleEvent: (sessionId: string, event: Record<string, unknown>) => void;
+  channelHandlers: {
+    handleEvent: (sessionId: string, event: Record<string, unknown>) => void;
+  };
 }
 
 function internals(manager: APM): InternalAPM {
@@ -141,7 +143,7 @@ describe("AgentProcessManager — event name consistency", () => {
     m.parentChildMap.set(parentId, new Set([childId]));
 
     const event = { type: "agent_start" };
-    m.handleEvent(childId, event);
+    m.channelHandlers.handleEvent(childId, event);
 
     await waitForExpect(() => {
       expect(mockServer.emitEvent).toHaveBeenCalled();

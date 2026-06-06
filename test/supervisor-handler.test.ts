@@ -75,6 +75,41 @@ describe("supervisor handler", () => {
     expect(callChannel).toHaveBeenCalledWith("session-ok", "supervisor", "getStatus", {});
   });
 
+  it("forwards setGoal to supervisor channel", async () => {
+    const goal = {
+      id: "goal-1",
+      objective: "finish the SPA renderer",
+      status: "running" as const,
+      startedAt: 1,
+      updatedAt: 1,
+      continuationCount: 0,
+      blockers: [],
+    };
+    const callChannel = vi.fn().mockResolvedValue({ goal });
+    supervisorTestGlobal().__supervisorProcessManager = { callChannel };
+    const setGoal = server.handlers.get("supervisor.setGoal")!;
+
+    await expect(
+      setGoal({ sessionId: "session-ok", objective: "finish the SPA renderer" }),
+    ).resolves.toEqual({ goal });
+    expect(callChannel).toHaveBeenCalledWith("session-ok", "supervisor", "setGoal", {
+      objective: "finish the SPA renderer",
+    });
+  });
+
+  it("forwards clearGoal to supervisor channel", async () => {
+    const callChannel = vi.fn().mockResolvedValue({ cleared: true });
+    supervisorTestGlobal().__supervisorProcessManager = { callChannel };
+    const clearGoal = server.handlers.get("supervisor.clearGoal")!;
+
+    await expect(clearGoal({ sessionId: "session-ok", reason: "done" })).resolves.toEqual({
+      cleared: true,
+    });
+    expect(callChannel).toHaveBeenCalledWith("session-ok", "supervisor", "clearGoal", {
+      reason: "done",
+    });
+  });
+
   it("does not block when supervisor channel does not respond", async () => {
     const callChannel = vi.fn().mockReturnValue(new Promise(() => {}));
     supervisorTestGlobal().__supervisorProcessManager = { callChannel };

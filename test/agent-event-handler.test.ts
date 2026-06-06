@@ -108,25 +108,35 @@ vi.mock("../src/mainview/stores/use-session-store", () => {
 });
 
 vi.mock("../src/mainview/stores/use-chat-store", () => {
+  const loadSessionMessages = vi.fn(() => Promise.resolve());
+
   interface ChatMessage {
     id: string;
     role: string;
     content: ContentBlock[];
     timestamp: number;
     isStreaming?: boolean;
+    stopReason?: string | null;
   }
   interface ChatState {
     messagesBySession: Record<string, ChatMessage[]>;
+    activeToolCallIdsBySession: Record<string, string[] | undefined>;
     inputText: string;
     isStreaming: boolean;
     streamContentVersion: number;
     loadingSessions: Set<string>;
     historyLoadVersion: number;
     setMessagesForSession: (sessionId: string, msgs: ChatMessage[]) => void;
+    setActiveToolCallIds: (sessionId: string, toolCallIds: string[] | undefined) => void;
+    loadSessionMessages: (
+      sessionId: string,
+      options?: { force?: boolean; preserveStreaming?: boolean },
+    ) => Promise<void>;
     incrementStreamVersion: () => void;
   }
   const useChatStore = create<ChatState>((set) => ({
     messagesBySession: {},
+    activeToolCallIdsBySession: {},
     inputText: "",
     isStreaming: false,
     streamContentVersion: 0,
@@ -134,6 +144,14 @@ vi.mock("../src/mainview/stores/use-chat-store", () => {
     historyLoadVersion: 0,
     setMessagesForSession: (sessionId, msgs) =>
       set((s) => ({ messagesBySession: { ...s.messagesBySession, [sessionId]: msgs } })),
+    setActiveToolCallIds: (sessionId, toolCallIds) =>
+      set((s) => ({
+        activeToolCallIdsBySession: {
+          ...s.activeToolCallIdsBySession,
+          [sessionId]: toolCallIds,
+        },
+      })),
+    loadSessionMessages,
     incrementStreamVersion: () =>
       set((s) => ({ streamContentVersion: s.streamContentVersion + 1 })),
   }));
@@ -190,12 +208,14 @@ beforeEach(() => {
   });
   useChatStore.setState({
     messagesBySession: {},
+    activeToolCallIdsBySession: {},
     inputText: "",
     isStreaming: false,
     streamContentVersion: 0,
     loadingSessions: new Set(),
     historyLoadVersion: 0,
   });
+  useChatStore.getState().loadSessionMessages = vi.fn(() => Promise.resolve());
   useSessionStore.setState({
     sessionStatusMap: {},
     sessionsByProject: {},
@@ -277,6 +297,7 @@ describe("tool_execution_start", () => {
     expect(block!.toolName).toBe("bash");
     expect(block!.args).toBe("echo hello");
     expect(toolCallNameMap[TCID]).toBe("bash");
+    expect(useChatStore.getState().activeToolCallIdsBySession[SID]).toEqual([TCID]);
   });
 
   it("updates existing block if toolCallId matches", () => {
@@ -594,6 +615,7 @@ describe("tool_execution_end", () => {
     const block = getToolExecBlock();
     expect(block!.status).toBe("error");
     expect(block!.output).toBe("failed");
+    expect(useChatStore.getState().activeToolCallIdsBySession[SID]).toEqual([]);
   });
 });
 
@@ -741,6 +763,136 @@ describe("message_end tool card closure", () => {
     const block = getToolExecBlock();
     expect(msg!.isStreaming).toBe(false);
     expect(block!.status).toBe("done");
+  });
+
+  it("does not turn an empty toolUse assistant boundary into an error card", () => {
+    setMessages([
+      {
+        id: "user-1",
+        role: "user",
+        content: [{ type: "text", text: "run tests" }],
+        timestamp: Date.now() - 2,
+      },
+      {
+        id: "assistant-1",
+        role: "assistant",
+        content: [{ type: "text", text: "I will run the tests." }],
+        timestamp: Date.now() - 1,
+      },
+      {
+        id: "assistant-empty",
+        role: "assistant",
+        content: [],
+        timestamp: Date.now(),
+        isStreaming: false,
+        stopReason: "toolUse",
+      },
+    ]);
+    useSessionStore.setState({ sessionStatusMap: { [SID]: "idle" } });
+
+    handleAgentEvent(SID, {
+      type: "message_end",
+      entryId: "entry-tool-use",
+      message: {
+        role: "assistant",
+        content: [],
+        stopReason: "toolUse",
+        timestamp: Date.now(),
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    const msgs = getMessages();
+    expect(msgs.map((m) => m.id)).toEqual(["user-1", "assistant-1"]);
+    expect(msgs.some((m) => m.role === "error")).toBe(false);
+    expect(useChatStore.getState().loadSessionMessages).toHaveBeenCalledWith(SID, {
+      force: true,
+      preserveStreaming: false,
+    });
+  });
+
+  it("does not reuse prior assistant text as an error when a later empty boundary arrives", () => {
+    setMessages([
+      {
+        id: "user-1",
+        role: "user",
+        content: [{ type: "text", text: "continue" }],
+        timestamp: Date.now() - 2,
+      },
+      {
+        id: "assistant-1",
+        role: "assistant",
+        content: [{ type: "text", text: "Already answered." }],
+        timestamp: Date.now() - 1,
+      },
+      {
+        id: "assistant-empty",
+        role: "assistant",
+        content: [],
+        timestamp: Date.now(),
+        isStreaming: false,
+        stopReason: "stop",
+      },
+    ]);
+    useSessionStore.setState({ sessionStatusMap: { [SID]: "idle" } });
+
+    handleAgentEvent(SID, {
+      type: "message_end",
+      entryId: "entry-stop",
+      message: {
+        role: "assistant",
+        content: [],
+        stopReason: "stop",
+        timestamp: Date.now(),
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    const msgs = getMessages();
+    expect(msgs).toHaveLength(2);
+    expect(msgs[1].role).toBe("assistant");
+    expect(msgs[1].content).toEqual([{ type: "text", text: "Already answered." }]);
+    expect(useChatStore.getState().loadSessionMessages).toHaveBeenCalledWith(SID, {
+      force: true,
+      preserveStreaming: false,
+    });
+  });
+
+  it("keeps the empty-response error only when the current turn has no assistant content", () => {
+    setMessages([
+      {
+        id: "user-1",
+        role: "user",
+        content: [{ type: "text", text: "hello" }],
+        timestamp: Date.now() - 1,
+      },
+      {
+        id: "assistant-empty",
+        role: "assistant",
+        content: [],
+        timestamp: Date.now(),
+        isStreaming: false,
+        stopReason: "error",
+      },
+    ]);
+    useSessionStore.setState({ sessionStatusMap: { [SID]: "idle" } });
+
+    handleAgentEvent(SID, {
+      type: "message_end",
+      entryId: "entry-error",
+      message: {
+        role: "assistant",
+        content: [],
+        stopReason: "error",
+        timestamp: Date.now(),
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    const msgs = getMessages();
+    expect(msgs).toHaveLength(2);
+    expect(msgs[1].role).toBe("error");
+    expect(msgs[1].content).toEqual([
+      { type: "text", text: "LLM 未返回有效响应\nLLM 返回了错误响应" },
+    ]);
+    expect(useChatStore.getState().loadSessionMessages).not.toHaveBeenCalled();
   });
 });
 

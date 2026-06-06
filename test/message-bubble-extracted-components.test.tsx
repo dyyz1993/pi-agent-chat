@@ -1,5 +1,5 @@
 /**
- * @vitest-environment jsdom
+ * @vitest-environment happy-dom
  */
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -11,6 +11,10 @@ import { useMemoryStore } from "../src/mainview/stores/use-memory-store";
 import { useSessionStore } from "../src/mainview/stores/use-session-store";
 
 vi.mock("react-i18next", () => ({
+  initReactI18next: {
+    type: "3rdParty",
+    init: vi.fn(),
+  },
   useTranslation: () => ({
     t: (key: string, opts?: Record<string, unknown>) => {
       if (!opts) return key;

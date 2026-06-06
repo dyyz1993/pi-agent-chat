@@ -4,7 +4,6 @@ import {
   PanelRightClose,
   GitBranch,
   FolderTree,
-  Activity,
   Terminal,
   Brain,
   Shield,
@@ -12,6 +11,7 @@ import {
   Bot,
   ListChecks,
   ClipboardCheck,
+  Target,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useLayoutStore } from "../../layouts/use-layout-store";
@@ -35,7 +35,7 @@ import { useEffect, useRef } from "react";
 const TAB_ICONS: Record<PanelTabId, React.ComponentType<{ className?: string }>> = {
   git: GitBranch,
   files: FolderTree,
-  status: Activity,
+  status: Target,
   agent: Bot,
   rpc: Terminal,
   memory: Brain,

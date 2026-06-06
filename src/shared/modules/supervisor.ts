@@ -5,7 +5,39 @@ export interface SupervisorStatus {
   maxContinueCount: number;
   activeGuards: string[];
   lastCheckResult?: CheckResult;
+  goal?: GoalState;
+  lastGoldResult?: GoldResult;
   pendingPause?: { scheduledAt: number; delayMs: number; reason?: string };
+}
+
+export interface GoalState {
+  id: string;
+  objective: string;
+  status: "running" | "checking" | "complete" | "blocked" | "needs_user" | "cancelled";
+  startedAt: number;
+  updatedAt: number;
+  currentMilestone?: string;
+  continuationCount: number;
+  blockers: Array<{
+    kind: "permission" | "choice" | "runtime" | "unsafe" | "unknown";
+    summary: string;
+  }>;
+}
+
+export interface GoldResult {
+  goalId?: string;
+  verdict: "complete" | "incomplete" | "blocked" | "unsafe";
+  confidence: number;
+  checkedAt: number;
+  durationMs?: number;
+  reason: string;
+  evidence: Array<{
+    kind: "test" | "command" | "diff" | "assistant_claim" | "runtime" | "guard" | "model";
+    summary: string;
+    passed?: boolean;
+  }>;
+  continueMessage?: string;
+  userQuestion?: string;
 }
 
 export interface CheckResult {
@@ -44,7 +76,9 @@ export type SupervisorChannelEvent =
   | { type: "pauseRequested"; delayMs: number; reason?: string }
   | { type: "pauseCancelled"; reason: string }
   | { type: "continueTriggered"; reason: string; delayMs: number }
-  | { type: "taskReport"; tasks: TaskReport[] };
+  | { type: "taskReport"; tasks: TaskReport[] }
+  | { type: "goalChanged"; goal?: GoalState; reason?: string }
+  | ({ type: "goldResult" } & GoldResult);
 
 export interface SupervisorMethods {
   "supervisor.getStatus": {
@@ -78,6 +112,14 @@ export interface SupervisorMethods {
   "supervisor.checkToolStatus": {
     params: { sessionId: string; toolName: string; channelName?: string; method?: string };
     result: { reachable: boolean; status?: string; error?: string };
+  };
+  "supervisor.setGoal": {
+    params: { sessionId: string; objective: string };
+    result: { goal: GoalState };
+  };
+  "supervisor.clearGoal": {
+    params: { sessionId: string; reason?: string };
+    result: { cleared: boolean };
   };
 }
 

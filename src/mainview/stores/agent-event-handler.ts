@@ -40,6 +40,25 @@ const pendingPrefetchMap = new Map<
 >();
 const PREFETCH_FALLBACK_MS = 5000;
 
+function setToolActive(sessionId: string, toolCallId: string, active: boolean): void {
+  const chat = useChatStore.getState();
+  if (typeof chat.setActiveToolCallIds !== "function") return;
+  const current = chat.activeToolCallIdsBySession?.[sessionId];
+  if (active) {
+    const next = Array.from(new Set([...(current ?? []), toolCallId]));
+    chat.setActiveToolCallIds(sessionId, next);
+    return;
+  }
+  if (current === undefined) {
+    chat.setActiveToolCallIds(sessionId, []);
+    return;
+  }
+  chat.setActiveToolCallIds(
+    sessionId,
+    current.filter((id) => id !== toolCallId),
+  );
+}
+
 export function buildTokenUsage(usage: Usage): { tokenUsage?: TokenUsage } {
   const result = extractTokenUsage(usage);
   return result ? { tokenUsage: result } : {};
@@ -60,15 +79,30 @@ function scheduleEmptyStreamingReload(sessionId: string, messageId: string): voi
       return;
     }
 
-    chat
-      .loadSessionMessages(sessionId, { force: true, preserveStreaming: false })
-      .catch((err) => {
-        log.warn("empty streaming recovery reload failed", {
-          sessionId,
-          err: err instanceof Error ? err.message : String(err),
-        });
+    chat.loadSessionMessages(sessionId, { force: true, preserveStreaming: false }).catch((err) => {
+      log.warn("empty streaming recovery reload failed", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
       });
+    });
   }, 750);
+}
+
+function isToolUseStopReason(stopReason: string | null | undefined): boolean {
+  return stopReason === "toolUse" || stopReason === "tool_use";
+}
+
+function isErrorStopReason(stopReason: string | null | undefined): boolean {
+  return stopReason === "error";
+}
+
+function hasAssistantContentSinceLastUser(messages: ChatMessage[]): boolean {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (msg.role === "user") return false;
+    if (msg.role === "assistant" && hasRenderableContent(msg)) return true;
+  }
+  return false;
 }
 
 function findToolExecutionPosition(
@@ -144,6 +178,9 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
     const crashReason = (event as { reason?: string }).reason;
     const chat = useChatStore.getState();
+    if (typeof chat.setActiveToolCallIds === "function") {
+      chat.setActiveToolCallIds(sessionId, []);
+    }
     const msgs = chat.messagesBySession[sessionId] || [];
     const fallbackToolStatus = crashReason ? "error" : "done";
     let closedRunningTool = false;
@@ -342,10 +379,9 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     const id = (event as { id?: string }).id;
     const reason = (event as { reason?: string }).reason ?? "responded";
     if (id) {
-      useUIDialogStore.getState().resolveFromRemote(
-        id,
-        reason as "responded" | "timeout" | "aborted",
-      );
+      useUIDialogStore
+        .getState()
+        .resolveFromRemote(id, reason as "responded" | "timeout" | "aborted");
     }
     return;
   }
@@ -631,19 +667,36 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     }
 
     if (!hasContent) {
-      const assistantMsg = message as AssistantMessage;
+      const priorMessages = existing.slice(0, -1);
+      const hasPriorAssistantContent = hasAssistantContentSinceLastUser(priorMessages);
+      const stopReason = assistantMsg.stopReason ?? lastMsg.stopReason ?? null;
+
+      if (hasPriorAssistantContent || isToolUseStopReason(stopReason)) {
+        chat.setMessagesForSession(sessionId, priorMessages);
+        chat
+          .loadSessionMessages(sessionId, { force: true, preserveStreaming: false })
+          .catch((err) => {
+            log.warn("empty assistant boundary reload failed", {
+              sessionId,
+              stopReason,
+              err: err instanceof Error ? err.message : String(err),
+            });
+          });
+        return;
+      }
+
       const errorDetail =
         assistantMsg.errorMessage ??
-        (assistantMsg.stopReason === "error" ? "LLM 返回了错误响应" : undefined) ??
+        (isErrorStopReason(stopReason) ? "LLM 返回了错误响应" : undefined) ??
         "LLM 返回了空响应";
       const errorTitle = "LLM 未返回有效响应";
       chat.setMessagesForSession(sessionId, [
-        ...existing.slice(0, -1),
+        ...priorMessages,
         {
           ...lastMsg,
           role: "error" as const,
           content: [{ type: "text" as const, text: `${errorTitle}\n${errorDetail}` }],
-          stopReason: assistantMsg.stopReason ?? undefined,
+          stopReason,
           isStreaming: false,
         },
       ]);
@@ -659,7 +712,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
     const closedContent = closeRunningToolExecutions(
       lastMsg.content,
-      assistantMsg.stopReason === "error" ? "error" : "done",
+      isErrorStopReason(assistantMsg.stopReason) ? "error" : "done",
     );
 
     chat.setMessagesForSession(sessionId, [
@@ -684,6 +737,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
     if (event.type === "tool_execution_start") {
       toolCallNameMap[toolCallId] = toolName;
+      setToolActive(sessionId, toolCallId, true);
     }
 
     batchMessageUpdate(sessionId, () => {
@@ -691,7 +745,10 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       const existing = chat.messagesBySession[sessionId] || [];
       const exactPosition = findToolExecutionPosition(existing, toolCallId);
       if (exactPosition && exactPosition.msgIndex !== existing.length - 1) {
-        if (event.type === "tool_execution_start" && isTerminalToolStatus(exactPosition.block.status)) {
+        if (
+          event.type === "tool_execution_start" &&
+          isTerminalToolStatus(exactPosition.block.status)
+        ) {
           return;
         }
         const msg = existing[exactPosition.msgIndex];
@@ -700,7 +757,8 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
           const { args: argsStr, timeout, description } = formatToolArgs(event.args);
           blocks[exactPosition.blockIndex] = {
             ...exactPosition.block,
-            toolName: exactPosition.block.toolName === "unknown" ? toolName : exactPosition.block.toolName,
+            toolName:
+              exactPosition.block.toolName === "unknown" ? toolName : exactPosition.block.toolName,
             args: argsStr || exactPosition.block.args,
             status: isTerminalToolStatus(exactPosition.block.status)
               ? exactPosition.block.status
@@ -747,10 +805,9 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       if (event.type === "tool_execution_start") {
         const { args: argsStr, timeout, description } = formatToolArgs(event.args);
         const matchedByExactId = targetIdx >= 0;
-        const resolvedTargetIdx =
-          matchedByExactId
-            ? targetIdx
-            : findMatchingToolExecution(blocks, toolName, argsStr, { includeTerminal: true });
+        const resolvedTargetIdx = matchedByExactId
+          ? targetIdx
+          : findMatchingToolExecution(blocks, toolName, argsStr, { includeTerminal: true });
         if (resolvedTargetIdx >= 0) {
           const prev = blocks[resolvedTargetIdx] as ToolExecBlock;
           if (isTerminalToolStatus(prev.status)) {
@@ -822,6 +879,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
   if (event.type === "tool_execution_end") {
     flushNow();
     const toolCallId = event.toolCallId;
+    setToolActive(sessionId, toolCallId, false);
     type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
     const chat = useChatStore.getState();
     const existing = chat.messagesBySession[sessionId] || [];

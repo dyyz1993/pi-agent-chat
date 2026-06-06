@@ -14,10 +14,13 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
 
-const PM_PATH = join(__dirname, "../src/shared/agent/process-manager.ts");
+const DELEGATE_OPERATIONS_PATH = join(
+  __dirname,
+  "../src/shared/agent/coordinator-delegate-operations.ts",
+);
 
 function read(): string {
-  return readFileSync(PM_PATH, "utf-8");
+  return readFileSync(DELEGATE_OPERATIONS_PATH, "utf-8");
 }
 
 describe("Bug2: delegate_sync agent activation (TDD Red)", () => {
@@ -25,12 +28,12 @@ describe("Bug2: delegate_sync agent activation (TDD Red)", () => {
 
   it("handleCoordinatorDelegateSync should call switchAgent when agent is set", () => {
     // Find the function body
-    const funcStart = src.indexOf("private async handleCoordinatorDelegateSync(");
+    const funcStart = src.indexOf("export async function handleCoordinatorDelegateSyncOperation");
     expect(funcStart).toBeGreaterThan(0);
 
     const funcBody = src.substring(
       funcStart,
-      src.indexOf("private async handleCoordinatorDelegateSend(", funcStart),
+      src.indexOf("export async function handleCoordinatorDelegateForkOperation", funcStart),
     );
 
     // Should contain switchAgent call guarded by agent check
@@ -40,15 +43,15 @@ describe("Bug2: delegate_sync agent activation (TDD Red)", () => {
   });
 
   it("switchAgent should be called AFTER this.start() and BEFORE this.send()", () => {
-    const funcStart = src.indexOf("private async handleCoordinatorDelegateSync(");
+    const funcStart = src.indexOf("export async function handleCoordinatorDelegateSyncOperation");
     const funcBody = src.substring(
       funcStart,
-      src.indexOf("private async handleCoordinatorDelegateSend(", funcStart),
+      src.indexOf("export async function handleCoordinatorDelegateForkOperation", funcStart),
     );
 
-    const startIdx = funcBody.indexOf("this.start(newSessionId");
-    const sendIdx = funcBody.indexOf("this.send(newSessionId");
-    const switchIdx = funcBody.indexOf("switchAgent");
+    const startIdx = funcBody.indexOf("await options.start(newSessionId");
+    const sendIdx = funcBody.indexOf("options.send(newSessionId");
+    const switchIdx = funcBody.indexOf("await options.switchAgent(newSessionId, agent)");
 
     expect(startIdx).toBeGreaterThan(0);
     expect(sendIdx).toBeGreaterThan(0);
@@ -60,13 +63,13 @@ describe("Bug2: delegate_sync agent activation (TDD Red)", () => {
   });
 
   it("switchAgent call should be wrapped in try/catch for graceful fallback", () => {
-    const funcStart = src.indexOf("private async handleCoordinatorDelegateSync(");
+    const funcStart = src.indexOf("export async function handleCoordinatorDelegateSyncOperation");
     const funcBody = src.substring(
       funcStart,
-      src.indexOf("private async handleCoordinatorDelegateSend(", funcStart),
+      src.indexOf("export async function handleCoordinatorDelegateForkOperation", funcStart),
     );
 
-    const switchIdx = funcBody.indexOf("switchAgent");
+    const switchIdx = funcBody.indexOf("await options.switchAgent(newSessionId, agent)");
     if (switchIdx < 0) {
       // Not yet implemented — this test will fail (Red phase)
       expect(funcBody).toContain("switchAgent");

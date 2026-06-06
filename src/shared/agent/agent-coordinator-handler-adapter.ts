@@ -83,7 +83,9 @@ export function createCoordinatorHandlerAdapter<TManaged extends CoordinatorMana
   followUp: (sessionId: string, content: string) => void;
   stop: (sessionId: string) => Promise<boolean>;
   getStatus: (sessionId: string) => { status: "idle" | "streaming" | "stopped"; pid?: number };
-  getState: (sessionId: string) => Promise<{ isStreaming?: boolean; isCompacting?: boolean } | null>;
+  getState: (
+    sessionId: string,
+  ) => Promise<{ isStreaming?: boolean; isCompacting?: boolean } | null>;
   getContextUsage: (
     sessionId: string,
   ) => Promise<{ tokens: number | null; contextWindow: number; percent: number | null }>;
@@ -104,7 +106,9 @@ export function createCoordinatorHandlerAdapter<TManaged extends CoordinatorMana
       return { cleared };
     },
     handleRemove(parentSessionId, msg) {
-      const targetSessionId = (msg as Record<string, unknown>).targetSessionId as string | undefined;
+      const targetSessionId = (msg as Record<string, unknown>).targetSessionId as
+        | string
+        | undefined;
       if (!targetSessionId) return { removed: false };
       removeDelegateChild(deps.parentChildMap, parentSessionId, targetSessionId);
       clearDelegateTracking(deps.delegateCreatedAt, deps.delegateReplyCount, targetSessionId);

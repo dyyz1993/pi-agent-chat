@@ -184,10 +184,7 @@ export function handleBashEvent(sessionId: string, event: BashChannelEvent): voi
   }
 }
 
-export function handleBackgroundExit(
-  sessionId: string,
-  event: BashBackgroundExitEvent,
-): void {
+export function handleBackgroundExit(sessionId: string, event: BashBackgroundExitEvent): void {
   const details = event.details;
   const processes = useBashStore.getState().processesBySession[sessionId] || [];
 

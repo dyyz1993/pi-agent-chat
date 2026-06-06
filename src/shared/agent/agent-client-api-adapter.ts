@@ -3,10 +3,7 @@ import type { RpcClientAPI } from "@dyyz1993/pi-coding-agent";
 import { createLogger } from "../lib/logger";
 import type { TierKey } from "./agent-runtime-config";
 import { getSandboxManager } from "./agent-runtime-client";
-import {
-  getCommandsOperation,
-  getSessionStatsOperation,
-} from "./agent-client-state-operations";
+import { getCommandsOperation, getSessionStatsOperation } from "./agent-client-state-operations";
 import {
   cycleModelOperation,
   cycleThinkingLevelOperation,
@@ -15,10 +12,7 @@ import {
   setThinkingLevelOperation,
   switchTierOperation,
 } from "./agent-client-model-operations";
-import {
-  getMessagesOperation,
-  getFullMessagesOperation,
-} from "./agent-client-message-operations";
+import { getMessagesOperation, getFullMessagesOperation } from "./agent-client-message-operations";
 import {
   abortRetryOperation,
   clearQueueOperation,
@@ -59,6 +53,14 @@ export interface AgentApiManagedClient {
   client: RpcClientAPI;
   info: {
     projectPath: string;
+    sessionPath: string;
+    status: string;
+    activeToolExecutions?: Array<{
+      toolCallId: string;
+      toolName: string;
+      args?: unknown;
+      startedAt?: number;
+    }>;
   };
 }
 
@@ -289,16 +291,28 @@ export function createAgentClientApiAdapter<TManaged extends AgentApiManagedClie
       });
     },
     async setThinkingLevel(sessionId, level) {
-      await setThinkingLevelOperation({ sessionId, level, getActiveManaged: deps.getActiveManaged });
+      await setThinkingLevelOperation({
+        sessionId,
+        level,
+        getActiveManaged: deps.getActiveManaged,
+      });
     },
     cycleThinkingLevel(sessionId) {
       return cycleThinkingLevelOperation({ sessionId, getActiveManaged: deps.getActiveManaged });
     },
     compact(sessionId, customInstructions) {
-      return compactOperation({ sessionId, customInstructions, getActiveManaged: deps.getActiveManaged });
+      return compactOperation({
+        sessionId,
+        customInstructions,
+        getActiveManaged: deps.getActiveManaged,
+      });
     },
     async setAutoCompaction(sessionId, enabled) {
-      await setAutoCompactionOperation({ sessionId, enabled, getActiveManaged: deps.getActiveManaged });
+      await setAutoCompactionOperation({
+        sessionId,
+        enabled,
+        getActiveManaged: deps.getActiveManaged,
+      });
     },
     async setAutoRetry(sessionId, enabled) {
       await setAutoRetryOperation({ sessionId, enabled, getActiveManaged: deps.getActiveManaged });
@@ -324,7 +338,11 @@ export function createAgentClientApiAdapter<TManaged extends AgentApiManagedClie
       return getActiveToolsOperation({ sessionId, getActiveManaged: deps.getActiveManaged });
     },
     async setActiveTools(sessionId, toolNames) {
-      await setActiveToolsOperation({ sessionId, toolNames, getActiveManaged: deps.getActiveManaged });
+      await setActiveToolsOperation({
+        sessionId,
+        toolNames,
+        getActiveManaged: deps.getActiveManaged,
+      });
     },
     getQueue(sessionId) {
       return getQueueOperation({ sessionId, getActiveManaged: deps.getActiveManaged });
@@ -348,10 +366,19 @@ export function createAgentClientApiAdapter<TManaged extends AgentApiManagedClie
       return getMcpServersOperation({ sessionId, getActiveManaged: deps.getActiveManaged });
     },
     toggleMcpServer(sessionId, name, enabled) {
-      return toggleMcpServerOperation({ sessionId, name, enabled, getActiveManaged: deps.getActiveManaged });
+      return toggleMcpServerOperation({
+        sessionId,
+        name,
+        enabled,
+        getActiveManaged: deps.getActiveManaged,
+      });
     },
     restartMcpServer(sessionId, name) {
-      return restartMcpServerOperation({ sessionId, name, getActiveManaged: deps.getActiveManaged });
+      return restartMcpServerOperation({
+        sessionId,
+        name,
+        getActiveManaged: deps.getActiveManaged,
+      });
     },
     getContextUsage(sessionId) {
       return getContextUsageOperation({

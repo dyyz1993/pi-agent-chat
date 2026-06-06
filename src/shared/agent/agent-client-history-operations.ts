@@ -111,11 +111,7 @@ export async function previewRollbackOperation<TManaged extends ManagedClientLik
 }): Promise<{ restored: string[]; deleted: string[] }> {
   const managed = options.getActiveManaged(options.sessionId);
   if (managed) {
-    return withTimeout(
-      managed.client.previewRollback(options.targetId),
-      15_000,
-      "previewRollback",
-    );
+    return withTimeout(managed.client.previewRollback(options.targetId), 15_000, "previewRollback");
   }
   return { restored: [], deleted: [] };
 }
@@ -141,10 +137,9 @@ export async function getModifiedFilesOperation<TManaged extends ManagedClientLi
       managed.client.getModifiedFiles({
         fromEntryId: options.fromEntryId,
         toEntryId: options.toEntryId,
-        ...((options.toUserMsgEntryId ? { toUserMsgEntryId: options.toUserMsgEntryId } : {}) as Record<
-          string,
-          string
-        >),
+        ...((options.toUserMsgEntryId
+          ? { toUserMsgEntryId: options.toUserMsgEntryId }
+          : {}) as Record<string, string>),
       }),
       15_000,
       "getModifiedFiles",
@@ -212,7 +207,9 @@ export async function getBatchDiffsOperation<TManaged extends ManagedClientLike>
   return { files: [], summary: { totalFiles: 0, added: 0, modified: 0, deleted: 0 } };
 }
 
-export async function restoreFilesFromSnapshotOperation<TManaged extends ManagedClientLike>(options: {
+export async function restoreFilesFromSnapshotOperation<
+  TManaged extends ManagedClientLike,
+>(options: {
   sessionId: string;
   snapshotTreeHash: string;
   files?: string[];

@@ -361,23 +361,24 @@ describe("coordinator delegate operations", () => {
       sessionIdFactory: () => "child-sync",
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(send).toHaveBeenCalledWith("child-sync", expect.stringContaining("inspect repo"));
-    expect(broadcastEvent).toHaveBeenCalledWith(
-      "coordinator.session_created",
-      expect.objectContaining({
-        session: expect.objectContaining({
-          sessionId: "child-sync",
-          delegateType: "subagent",
+    await vi.waitFor(() => {
+      expect(send).toHaveBeenCalledWith("child-sync", expect.stringContaining("inspect repo"));
+      expect(broadcastEvent).toHaveBeenCalledWith(
+        "coordinator.session_created",
+        expect.objectContaining({
+          session: expect.objectContaining({
+            sessionId: "child-sync",
+            delegateType: "subagent",
+          }),
         }),
-      }),
-      { parentSessionId: "parent" },
-    );
-    expect(broadcastEvent).toHaveBeenCalledWith(
-      "subagent.event",
-      expect.objectContaining({ subSessionId: "child-sync" }),
-      { parentSessionId: "parent" },
-    );
+        { parentSessionId: "parent" },
+      );
+      expect(broadcastEvent).toHaveBeenCalledWith(
+        "subagent.event",
+        expect.objectContaining({ subSessionId: "child-sync" }),
+        { parentSessionId: "parent" },
+      );
+    });
     expect(parentChildMap.get("parent")?.has("child-sync")).toBe(true);
 
     const resolver = syncDelegateResolvers.get("child-sync");

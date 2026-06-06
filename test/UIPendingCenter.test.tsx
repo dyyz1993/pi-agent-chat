@@ -15,14 +15,24 @@ import {
 } from "../src/mainview/components/chat/UIPendingCenter";
 import type { UIPendingRequest } from "../src/mainview/stores/use-ui-dialog-store";
 
+const mockFns = vi.hoisted(() => ({
+  setPanelOpen: vi.fn(),
+  togglePanel: vi.fn(),
+  respondById: vi.fn(),
+  dismissById: vi.fn(),
+  setHooksEnabled: vi.fn(),
+  apiCall: vi.fn(),
+  setActiveSession: vi.fn(),
+}));
+
 let currentPending: UIPendingRequest[] = [];
 let mockPanelOpen = false;
-const mockSetPanelOpen = vi.fn();
-const mockTogglePanel = vi.fn();
-const mockRespondById = vi.fn();
-const mockDismissById = vi.fn();
-const mockSetHooksEnabled = vi.fn();
-const mockApiCall = vi.fn();
+const mockSetPanelOpen = mockFns.setPanelOpen;
+const mockTogglePanel = mockFns.togglePanel;
+const mockRespondById = mockFns.respondById;
+const mockDismissById = mockFns.dismissById;
+const mockSetHooksEnabled = mockFns.setHooksEnabled;
+const mockApiCall = mockFns.apiCall;
 
 let mockActiveProjectId: string | null = null;
 let mockProjectTabs: { id: string; name: string; path: string }[] = [];
@@ -30,7 +40,7 @@ let mockSessionsByProject: Record<
   string,
   { sessionId: string; name: string; firstMessage?: string }[]
 > = {};
-const mockSetActiveSession = vi.fn();
+const mockSetActiveSession = mockFns.setActiveSession;
 
 vi.mock("../src/mainview/stores/use-ui-dialog-store", () => ({
   useUIDialogStore: Object.assign(
@@ -84,7 +94,7 @@ vi.mock("../src/mainview/stores/use-hooks-store", () => ({
 
 vi.mock("../src/mainview/lib/api-client", () => ({
   apiClient: {
-    call: mockApiCall,
+    call: mockFns.apiCall,
   },
 }));
 

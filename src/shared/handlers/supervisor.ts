@@ -1,7 +1,7 @@
 import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { HandlerOptions } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
-import type { SupervisorStatus, TaskReport } from "../modules/supervisor";
+import type { GoalState, SupervisorStatus, TaskReport } from "../modules/supervisor";
 import { getProcessManager } from "./agent";
 import { createLogger } from "../lib/logger";
 
@@ -138,4 +138,34 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       }) as Promise<{ reachable: boolean; status?: string; error?: string }>;
     },
   );
+
+  r("supervisor.setGoal", async (params): Promise<{ goal: GoalState }> => {
+    const { sessionId, objective } = params as { sessionId: string; objective: string };
+    const pm = getProcessManager();
+    if (!pm) {
+      return {
+        goal: {
+          id: "",
+          objective,
+          status: "blocked",
+          startedAt: Date.now(),
+          updatedAt: Date.now(),
+          continuationCount: 0,
+          blockers: [{ kind: "runtime", summary: "Agent process manager unavailable" }],
+        },
+      };
+    }
+    return pm.callChannel(sessionId, "supervisor", "setGoal", {
+      objective,
+    }) as Promise<{ goal: GoalState }>;
+  });
+
+  r("supervisor.clearGoal", async (params): Promise<{ cleared: boolean }> => {
+    const { sessionId, reason } = params as { sessionId: string; reason?: string };
+    const pm = getProcessManager();
+    if (!pm) return { cleared: false };
+    return pm.callChannel(sessionId, "supervisor", "clearGoal", {
+      reason,
+    }) as Promise<{ cleared: boolean }>;
+  });
 }

@@ -17,7 +17,7 @@ import {
   X,
   Brain,
   BookOpen,
-  Shield,
+  Target,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { createLogger } from "../../../shared/lib/logger";
@@ -67,7 +67,7 @@ interface FileBreadcrumb {
 
 const logger = createLogger("chat");
 
-export function QuickActionToolbar() {
+export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void } = {}) {
   const { t } = useTranslation("chat");
   const breakpoint = useLayoutStore((s) => s.breakpoint);
   const isMobileOrTablet = breakpoint === "mobile" || breakpoint === "tablet";
@@ -85,8 +85,7 @@ export function QuickActionToolbar() {
   const inputText = useChatStore((s) => s.inputText);
   const setInputText = useChatStore((s) => s.setInputText);
   const panelRef = useRef<HTMLDivElement>(null);
-  const showStatus = useLayoutStore((s) => s.showStatus);
-  const setActivePanelTab = useLayoutStore((s) => s.setActivePanelTab);
+  const openStatusPanel = useLayoutStore((s) => s.openStatusPanel);
   const supervisorStatus = useSupervisorStore(
     (s) => (activeSessionId ? s.bySession[activeSessionId]?.status : null) ?? null,
   );
@@ -552,21 +551,31 @@ export function QuickActionToolbar() {
           </button>
           <button
             onClick={() => {
-              setActivePanelTab("status");
-              showStatus();
+              if (onGoalClick) {
+                onGoalClick();
+                return;
+              }
+              openStatusPanel("status");
             }}
-            className={`p-1.5 rounded-md hover:bg-surface-dim dark:hover:bg-surface-dim transition-colors ${
+            className={`px-2 py-1 rounded-md text-xs font-medium hover:bg-surface-dim dark:hover:bg-surface-dim transition-colors ${
               !supervisorStatus?.enabled
-                ? "text-text-tertiary"
-                : supervisorStatus.state === "paused"
-                  ? "text-semantic-notify"
-                  : supervisorStatus.state === "checking" || supervisorStatus.state === "continuing"
-                    ? "text-status-info animate-pulse"
-                    : "text-status-success"
+                ? "text-semantic-accent border border-semantic-accent/30"
+                : supervisorStatus.goal
+                  ? "text-semantic-accent border border-semantic-accent/40 bg-semantic-accent/10"
+                  : supervisorStatus.state === "paused"
+                    ? "text-semantic-notify"
+                    : supervisorStatus.state === "checking" ||
+                        supervisorStatus.state === "continuing"
+                      ? "text-status-info animate-pulse"
+                      : "text-status-success"
             }`}
-            title="Supervisor"
+            title={t("goal.entry")}
+            aria-label={t("goal.entry")}
           >
-            <Shield className="w-4 h-4" />
+            <div className="flex items-center gap-1">
+              <Target className="w-3.5 h-3.5" />
+              <span>Goal</span>
+            </div>
           </button>
         </div>
       </div>

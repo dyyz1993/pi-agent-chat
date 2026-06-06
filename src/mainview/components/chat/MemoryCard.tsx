@@ -41,10 +41,7 @@ function extractTierInfo(data: unknown): { tier: string; model?: string } | null
 
 function TierBadge({ tier }: { tier: string }) {
   if (!tier) return null;
-  const config: Record<
-    string,
-    { style: string; Icon: ComponentType<{ className?: string }> }
-  > = {
+  const config: Record<string, { style: string; Icon: ComponentType<{ className?: string }> }> = {
     fast: {
       style: "bg-status-warning/[0.12] text-status-warning border-status-warning/25",
       Icon: Zap,

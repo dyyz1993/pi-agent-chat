@@ -16,12 +16,15 @@ import { useAttachmentStore } from "../../stores/use-attachment-store";
 export interface InputBarHandle {
   send: () => void;
   blur: () => void;
+  focus: () => void;
 }
 
 interface InputBarProps {
   onSend?: () => void;
   disabled?: boolean;
   sessionId?: string;
+  placeholder?: string;
+  historyEnabled?: boolean;
   onTriggerPopup?: (mode: "at" | "slash") => void;
   popupOpen?: boolean;
   onPopupConfirm?: () => void;
@@ -36,6 +39,8 @@ export const InputBar = memo(
       onSend,
       disabled = false,
       sessionId = "",
+      placeholder,
+      historyEnabled = true,
       onTriggerPopup,
       popupOpen = false,
       onPopupConfirm,
@@ -96,6 +101,7 @@ export const InputBar = memo(
           }
         }
         if (e.key === "ArrowUp" && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
+          if (!historyEnabled) return;
           const el = e.currentTarget as HTMLTextAreaElement;
           if (el.selectionStart === 0 && el.selectionEnd === 0) {
             e.preventDefault();
@@ -105,6 +111,7 @@ export const InputBar = memo(
           return;
         }
         if (e.key === "ArrowDown" && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
+          if (!historyEnabled) return;
           const el = e.currentTarget as HTMLTextAreaElement;
           const len = el.value.length;
           if (el.selectionStart === len && el.selectionEnd === len) {
@@ -118,7 +125,7 @@ export const InputBar = memo(
           e.preventDefault();
           const val = valueRef.current;
           if (!disabledRef.current && val.trim()) {
-            saveToHistory(val.trim());
+            if (historyEnabled) saveToHistory(val.trim());
             onSendRef.current?.();
           }
         }
@@ -133,6 +140,7 @@ export const InputBar = memo(
         navigatePrev,
         navigateNext,
         setInputText,
+        historyEnabled,
       ],
     );
 
@@ -196,15 +204,19 @@ export const InputBar = memo(
     const send = useCallback(() => {
       const val = valueRef.current;
       if (!val.trim()) return;
-      saveToHistory(val.trim());
+      if (historyEnabled) saveToHistory(val.trim());
       onSendRef.current?.();
-    }, [saveToHistory]);
+    }, [saveToHistory, historyEnabled]);
 
     const blur = useCallback(() => {
       textareaRef.current?.blur();
     }, []);
 
-    useImperativeHandle(ref, () => ({ send, blur }), [send, blur]);
+    const focus = useCallback(() => {
+      textareaRef.current?.focus();
+    }, []);
+
+    useImperativeHandle(ref, () => ({ send, blur, focus }), [send, blur, focus]);
 
     const maxHeight = expanded ? undefined : 120;
 
@@ -237,9 +249,10 @@ export const InputBar = memo(
             disabled={disabled}
             rows={1}
             placeholder={
-              attachmentCount > 0
+              placeholder ??
+              (attachmentCount > 0
                 ? t("inputPlaceholderWithAttachment", { count: attachmentCount })
-                : t("inputPlaceholder")
+                : t("inputPlaceholder"))
             }
             className="flex-1 px-3 py-2 text-sm bg-transparent text-text-primary resize-none outline-none placeholder:text-text-tertiary"
             style={{
@@ -276,8 +289,8 @@ export const InputBar = memo(
               </button>
               <button
                 onClick={handleNavPrev}
-                disabled={!hasPrev}
-                className={`w-7 h-7 md:w-5 md:h-5 rounded border flex items-center justify-center transition-colors ${hasPrev ? "border-border-primary/80 text-text-secondary hover:text-text-primary hover:border-border-secondary hover:bg-surface-hover" : "border-border-primary/50 text-text-tertiary pointer-events-none"}`}
+                disabled={!historyEnabled || !hasPrev}
+                className={`w-7 h-7 md:w-5 md:h-5 rounded border flex items-center justify-center transition-colors ${historyEnabled && hasPrev ? "border-border-primary/80 text-text-secondary hover:text-text-primary hover:border-border-secondary hover:bg-surface-hover" : "border-border-primary/50 text-text-tertiary pointer-events-none"}`}
                 title={t("collapse")}
                 aria-label={t("prevHistory")}
               >
@@ -285,8 +298,8 @@ export const InputBar = memo(
               </button>
               <button
                 onClick={handleNavNext}
-                disabled={!hasNext}
-                className={`w-7 h-7 md:w-5 md:h-5 rounded border flex items-center justify-center transition-colors ${hasNext ? "border-border-primary/80 text-text-secondary hover:text-text-primary hover:border-border-secondary hover:bg-surface-hover" : "border-border-primary/50 text-text-tertiary pointer-events-none"}`}
+                disabled={!historyEnabled || !hasNext}
+                className={`w-7 h-7 md:w-5 md:h-5 rounded border flex items-center justify-center transition-colors ${historyEnabled && hasNext ? "border-border-primary/80 text-text-secondary hover:text-text-primary hover:border-border-secondary hover:bg-surface-hover" : "border-border-primary/50 text-text-tertiary pointer-events-none"}`}
                 title={t("expand")}
                 aria-label={t("nextHistory")}
               >

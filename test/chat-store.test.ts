@@ -45,15 +45,6 @@ vi.mock("../src/mainview/components/chat/memory-config", () => ({
   ALL_MEMORY_TYPE_KEYS: new Set(["memory_prefetch_result"]),
 }));
 
-vi.mock("../src/mainview/lib/message-mapper", () => ({
-  messageToChatMessage: (raw: Record<string, unknown>) => ({
-    id: raw.id ?? `msg-${Date.now()}`,
-    role: raw.role ?? "user",
-    content: raw.content ?? [{ type: "text", text: raw.content ?? "" }],
-    timestamp: raw.timestamp ?? Date.now(),
-  }),
-}));
-
 import { useChatStore, normalizeToolBlocks } from "../src/mainview/stores/use-chat-store";
 import type { ChatMessage, ContentBlock } from "../src/mainview/types";
 
@@ -61,6 +52,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   useChatStore.setState({
     messagesBySession: {},
+    activeToolCallIdsBySession: {},
     inputText: "",
     isStreaming: false,
     streamContentVersion: 0,
@@ -142,6 +134,145 @@ describe("setMessagesForSession", () => {
 
     expect(useChatStore.getState().messagesBySession["sess-1"]).toHaveLength(1);
     expect(useChatStore.getState().messagesBySession["sess-1"][0].id).toBe("new");
+  });
+
+  it("normalizes toolCall and toolResult through the store write gateway", () => {
+    useChatStore.getState().setMessagesForSession("sess-1", [
+      {
+        id: "assistant-tool",
+        role: "assistant",
+        content: [{ type: "toolCall", id: "tc-1", name: "bash", input: "echo ok" }],
+        timestamp: 1,
+      },
+      {
+        id: "tool-result",
+        role: "toolResult",
+        content: [
+          { type: "toolResult", toolCallId: "tc-1", toolName: "bash", content: "ok" },
+        ],
+        timestamp: 2,
+      },
+    ]);
+
+    const messages = useChatStore.getState().messagesBySession["sess-1"];
+    expect(messages).toHaveLength(1);
+    const block = messages[0].content[0] as Extract<ContentBlock, { type: "toolExecution" }>;
+    expect(block.type).toBe("toolExecution");
+    expect(block.status).toBe("done");
+    expect(block.output).toBe("ok");
+  });
+
+  it("closes stale running tools that are no longer in the latest streaming assistant", () => {
+    useChatStore.getState().setMessagesForSession("sess-1", [
+      {
+        id: "old-assistant",
+        role: "assistant",
+        content: [
+          {
+            type: "toolExecution",
+            toolCallId: "stale-tool",
+            toolName: "bash",
+            args: "npm test",
+            status: "running",
+          },
+        ],
+        timestamp: 1,
+        isStreaming: true,
+      },
+      {
+        id: "new-assistant",
+        role: "assistant",
+        content: [{ type: "text", text: "next message" }],
+        timestamp: 2,
+        isStreaming: true,
+      },
+    ]);
+
+    const messages = useChatStore.getState().messagesBySession["sess-1"];
+    const oldBlock = messages[0].content[0] as Extract<ContentBlock, { type: "toolExecution" }>;
+    expect(oldBlock.status).toBe("done");
+    expect(messages[0].isStreaming).toBe(false);
+  });
+
+  it("keeps the latest streaming assistant tool running", () => {
+    useChatStore.getState().setMessagesForSession("sess-1", [
+      {
+        id: "current-assistant",
+        role: "assistant",
+        content: [
+          {
+            type: "toolExecution",
+            toolCallId: "active-tool",
+            toolName: "bash",
+            args: "npm test",
+            status: "running",
+          },
+        ],
+        timestamp: 1,
+        isStreaming: true,
+      },
+    ]);
+
+    const messages = useChatStore.getState().messagesBySession["sess-1"];
+    const block = messages[0].content[0] as Extract<ContentBlock, { type: "toolExecution" }>;
+    expect(block.status).toBe("running");
+    expect(messages[0].isStreaming).toBe(true);
+  });
+
+  it("closes latest streaming assistant tools when the active tool snapshot is empty", () => {
+    useChatStore.getState().setActiveToolCallIds("sess-1", []);
+    useChatStore.getState().setMessagesForSession("sess-1", [
+      {
+        id: "live-stale",
+        role: "assistant",
+        content: [
+          {
+            type: "toolExecution",
+            toolCallId: "stale-tool",
+            toolName: "bash",
+            args: "cargo test",
+            status: "running",
+          },
+        ],
+        timestamp: 1,
+        isStreaming: true,
+      },
+    ]);
+
+    const messages = useChatStore.getState().messagesBySession["sess-1"];
+    const block = messages[0].content[0] as Extract<ContentBlock, { type: "toolExecution" }>;
+    expect(block.status).toBe("done");
+  });
+
+  it("reprocesses existing messages when active tool snapshot arrives after messages", () => {
+    useChatStore.getState().setMessagesForSession("sess-1", [
+      {
+        id: "loaded-before-state",
+        role: "assistant",
+        content: [
+          {
+            type: "toolExecution",
+            toolCallId: "stale-tool",
+            toolName: "bash",
+            args: "cargo test",
+            status: "running",
+          },
+        ],
+        timestamp: 1,
+        isStreaming: true,
+      },
+    ]);
+
+    let messages = useChatStore.getState().messagesBySession["sess-1"];
+    let block = messages[0].content[0] as Extract<ContentBlock, { type: "toolExecution" }>;
+    expect(block.status).toBe("running");
+
+    useChatStore.getState().setActiveToolCallIds("sess-1", []);
+
+    messages = useChatStore.getState().messagesBySession["sess-1"];
+    block = messages[0].content[0] as Extract<ContentBlock, { type: "toolExecution" }>;
+    expect(block.status).toBe("done");
+    expect(messages[0].isStreaming).toBe(false);
   });
 });
 

@@ -18,6 +18,8 @@ interface SupervisorState {
   bySession: Record<string, SupervisorSessionState>;
 
   fetchStatus: (sessionId: string) => Promise<void>;
+  setGoal: (sessionId: string, objective: string) => Promise<void>;
+  clearGoal: (sessionId: string, reason?: string) => Promise<void>;
   forceContinue: (sessionId: string, reason?: string) => Promise<void>;
   requestPause: (sessionId: string, delayMs?: number, reason?: string) => Promise<void>;
   cancelPause: (sessionId: string) => Promise<void>;
@@ -58,6 +60,54 @@ export const useSupervisorStore = create<SupervisorState>()((set) => ({
       }));
     } catch (err) {
       log.warn("fetchStatus failed", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+  },
+
+  setGoal: async (sessionId: string, objective: string) => {
+    try {
+      const result = (await apiClient.call("supervisor.setGoal", {
+        sessionId,
+        objective,
+      })) as { goal: SupervisorStatus["goal"] };
+      set((s) => ({
+        bySession: updateSession(s.bySession, sessionId, (session) => ({
+          ...session,
+          status: session.status
+            ? { ...session.status, goal: result.goal }
+            : {
+                enabled: true,
+                state: "idle" as const,
+                continueCount: 0,
+                maxContinueCount: 0,
+                activeGuards: [],
+                goal: result.goal,
+              },
+        })),
+      }));
+    } catch (err) {
+      log.warn("setGoal failed", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+  },
+
+  clearGoal: async (sessionId: string, reason?: string) => {
+    try {
+      await apiClient.call("supervisor.clearGoal", { sessionId, reason });
+      set((s) => ({
+        bySession: updateSession(s.bySession, sessionId, (session) => ({
+          ...session,
+          status: session.status
+            ? { ...session.status, goal: undefined, lastGoldResult: undefined }
+            : session.status,
+        })),
+      }));
+    } catch (err) {
+      log.warn("clearGoal failed", {
         sessionId,
         err: err instanceof Error ? err.message : String(err),
       });
@@ -239,6 +289,42 @@ export const useSupervisorStore = create<SupervisorState>()((set) => ({
           bySession: updateSession(s.bySession, sessionId, (session) => ({
             ...session,
             taskReports: event.tasks,
+          })),
+        }));
+        break;
+      case "goalChanged":
+        set((s) => ({
+          bySession: updateSession(s.bySession, sessionId, (session) => ({
+            ...session,
+            status: session.status
+              ? { ...session.status, goal: event.goal }
+              : event.goal
+                ? {
+                    enabled: true,
+                    state: "idle" as const,
+                    continueCount: 0,
+                    maxContinueCount: 0,
+                    activeGuards: [],
+                    goal: event.goal,
+                  }
+                : null,
+          })),
+        }));
+        break;
+      case "goldResult":
+        set((s) => ({
+          bySession: updateSession(s.bySession, sessionId, (session) => ({
+            ...session,
+            status: session.status
+              ? { ...session.status, lastGoldResult: event }
+              : {
+                  enabled: true,
+                  state: "idle" as const,
+                  continueCount: 0,
+                  maxContinueCount: 0,
+                  activeGuards: [],
+                  lastGoldResult: event,
+                },
           })),
         }));
         break;

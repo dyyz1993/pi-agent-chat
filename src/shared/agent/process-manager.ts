@@ -33,10 +33,7 @@ import {
   createCoordinatorHandlerAdapter,
   type CoordinatorHandlerAdapter,
 } from "./agent-coordinator-handler-adapter";
-import {
-  compactHoldEventsForReplay,
-  type SanitizedEvent,
-} from "./hold-events";
+import { compactHoldEventsForReplay, type SanitizedEvent } from "./hold-events";
 import {
   SessionMessageCache,
   type SessionCacheData,
@@ -63,9 +60,7 @@ import {
 } from "./agent-managed-client-operations";
 import { startAgentClientOperation } from "./agent-start-operations";
 import { stopAgentClientOperation } from "./agent-stop-operations";
-import {
-  type CachedLspState,
-} from "./agent-channel-state";
+import { type CachedLspState } from "./agent-channel-state";
 import {
   addToProcessPool,
   makeProcessPoolKey,
@@ -93,7 +88,8 @@ import {
   readJsonlTreeEntriesOperation,
 } from "./agent-tree-navigation-operations";
 
-const log = createLogger("agent"); const perfLog = createLogger("session-perf");
+const log = createLogger("agent");
+const perfLog = createLogger("session-perf");
 
 export { getSandboxEndpoint, getSandboxManager, initSandboxManager };
 
@@ -121,20 +117,48 @@ interface ManagedClient {
 }
 import type { AgentProcessInfo } from "../modules/agent";
 export class AgentProcessManager {
-  declare getCommands: AgentClientApiAdapter["getCommands"]; declare getSessionStats: AgentClientApiAdapter["getSessionStats"]; declare getMessages: AgentClientApiAdapter["getMessages"];
-  declare getFullMessages: AgentClientApiAdapter["getFullMessages"]; declare getAvailableModels: AgentClientApiAdapter["getAvailableModels"]; declare setModel: AgentClientApiAdapter["setModel"];
-  declare switchTier: AgentClientApiAdapter["switchTier"]; declare cycleModel: AgentClientApiAdapter["cycleModel"]; declare setThinkingLevel: AgentClientApiAdapter["setThinkingLevel"];
-  declare cycleThinkingLevel: AgentClientApiAdapter["cycleThinkingLevel"]; declare compact: AgentClientApiAdapter["compact"]; declare setAutoCompaction: AgentClientApiAdapter["setAutoCompaction"];
-  declare setAutoRetry: AgentClientApiAdapter["setAutoRetry"]; declare abortRetry: AgentClientApiAdapter["abortRetry"]; declare setSteeringMode: AgentClientApiAdapter["setSteeringMode"];
-  declare setFollowUpMode: AgentClientApiAdapter["setFollowUpMode"]; declare setPermissionMode: AgentClientApiAdapter["setPermissionMode"]; declare getActiveTools: AgentClientApiAdapter["getActiveTools"];
-  declare setActiveTools: AgentClientApiAdapter["setActiveTools"]; declare getQueue: AgentClientApiAdapter["getQueue"]; declare clearQueue: AgentClientApiAdapter["clearQueue"];
-  declare getExtensions: AgentClientApiAdapter["getExtensions"]; declare getSkills: AgentClientApiAdapter["getSkills"]; declare reload: AgentClientApiAdapter["reload"];
-  declare getTools: AgentClientApiAdapter["getTools"]; declare getMcpServers: AgentClientApiAdapter["getMcpServers"]; declare toggleMcpServer: AgentClientApiAdapter["toggleMcpServer"];
-  declare restartMcpServer: AgentClientApiAdapter["restartMcpServer"]; declare getContextUsage: AgentClientApiAdapter["getContextUsage"]; declare getTierModels: AgentClientApiAdapter["getTierModels"];
-  declare setTierModels: AgentClientApiAdapter["setTierModels"]; declare getAgents: AgentClientApiAdapter["getAgents"]; declare switchAgent: AgentClientApiAdapter["switchAgent"];
-  declare getCurrentAgent: AgentClientApiAdapter["getCurrentAgent"]; declare getAgentDetail: AgentClientApiAdapter["getAgentDetail"]; declare getAllTools: AgentClientApiAdapter["getAllTools"];
-  declare getSystemPrompt: AgentClientApiAdapter["getSystemPrompt"]; declare getLatestAgentChange: AgentClientApiAdapter["getLatestAgentChange"]; declare getSettings: AgentClientApiAdapter["getSettings"];
-  declare setSettings: AgentClientApiAdapter["setSettings"]; declare setSessionName: AgentClientApiAdapter["setSessionName"]; declare getLastAssistantText: AgentClientApiAdapter["getLastAssistantText"];
+  declare getCommands: AgentClientApiAdapter["getCommands"];
+  declare getSessionStats: AgentClientApiAdapter["getSessionStats"];
+  declare getMessages: AgentClientApiAdapter["getMessages"];
+  declare getFullMessages: AgentClientApiAdapter["getFullMessages"];
+  declare getAvailableModels: AgentClientApiAdapter["getAvailableModels"];
+  declare setModel: AgentClientApiAdapter["setModel"];
+  declare switchTier: AgentClientApiAdapter["switchTier"];
+  declare cycleModel: AgentClientApiAdapter["cycleModel"];
+  declare setThinkingLevel: AgentClientApiAdapter["setThinkingLevel"];
+  declare cycleThinkingLevel: AgentClientApiAdapter["cycleThinkingLevel"];
+  declare compact: AgentClientApiAdapter["compact"];
+  declare setAutoCompaction: AgentClientApiAdapter["setAutoCompaction"];
+  declare setAutoRetry: AgentClientApiAdapter["setAutoRetry"];
+  declare abortRetry: AgentClientApiAdapter["abortRetry"];
+  declare setSteeringMode: AgentClientApiAdapter["setSteeringMode"];
+  declare setFollowUpMode: AgentClientApiAdapter["setFollowUpMode"];
+  declare setPermissionMode: AgentClientApiAdapter["setPermissionMode"];
+  declare getActiveTools: AgentClientApiAdapter["getActiveTools"];
+  declare setActiveTools: AgentClientApiAdapter["setActiveTools"];
+  declare getQueue: AgentClientApiAdapter["getQueue"];
+  declare clearQueue: AgentClientApiAdapter["clearQueue"];
+  declare getExtensions: AgentClientApiAdapter["getExtensions"];
+  declare getSkills: AgentClientApiAdapter["getSkills"];
+  declare reload: AgentClientApiAdapter["reload"];
+  declare getTools: AgentClientApiAdapter["getTools"];
+  declare getMcpServers: AgentClientApiAdapter["getMcpServers"];
+  declare toggleMcpServer: AgentClientApiAdapter["toggleMcpServer"];
+  declare restartMcpServer: AgentClientApiAdapter["restartMcpServer"];
+  declare getContextUsage: AgentClientApiAdapter["getContextUsage"];
+  declare getTierModels: AgentClientApiAdapter["getTierModels"];
+  declare setTierModels: AgentClientApiAdapter["setTierModels"];
+  declare getAgents: AgentClientApiAdapter["getAgents"];
+  declare switchAgent: AgentClientApiAdapter["switchAgent"];
+  declare getCurrentAgent: AgentClientApiAdapter["getCurrentAgent"];
+  declare getAgentDetail: AgentClientApiAdapter["getAgentDetail"];
+  declare getAllTools: AgentClientApiAdapter["getAllTools"];
+  declare getSystemPrompt: AgentClientApiAdapter["getSystemPrompt"];
+  declare getLatestAgentChange: AgentClientApiAdapter["getLatestAgentChange"];
+  declare getSettings: AgentClientApiAdapter["getSettings"];
+  declare setSettings: AgentClientApiAdapter["setSettings"];
+  declare setSessionName: AgentClientApiAdapter["setSessionName"];
+  declare getLastAssistantText: AgentClientApiAdapter["getLastAssistantText"];
 
   private clients = new Map<string, ManagedClient>();
   /** CWD-based process tracking: projectPath → set of ManagedClients for that project */
@@ -223,10 +247,7 @@ export class AgentProcessManager {
    * 2. File grew → return cached data + mark for incremental append
    * 3. No cache / file shrunk / file gone → return null
    */
-  getSessionCache(
-    sessionId: string,
-    sessionPath: string,
-  ): SessionCacheHit | null {
+  getSessionCache(sessionId: string, sessionPath: string): SessionCacheHit | null {
     return this.sessionMessageCache.get(sessionId, sessionPath);
   }
 
@@ -294,8 +315,7 @@ export class AgentProcessManager {
         isClientAlive: (id, managed) => this.isClientAlive(id, managed),
         cleanupDeadClient: (id, reason) => this.cleanupDeadClient(id, reason),
         resolveSessionPath: (id) => this.resolveSessionPath(id),
-        buildMessagesFromJsonl: (entries, leafId) =>
-          this.buildMessagesFromJsonl(entries, leafId),
+        buildMessagesFromJsonl: (entries, leafId) => this.buildMessagesFromJsonl(entries, leafId),
         leafIds: this.leafIds,
         getSandboxUserId: (id) => this._getSandboxUserId(id),
         broadcastEvent: (eventName, payload, metadata) =>
@@ -694,6 +714,12 @@ export class AgentProcessManager {
     isCompacting: boolean;
     messageCount: number;
     streamingMessage?: unknown;
+    activeToolExecutions: Array<{
+      toolCallId: string;
+      toolName: string;
+      args?: unknown;
+      startedAt?: number;
+    }>;
   } | null> {
     return getStateOperation({
       sessionId,

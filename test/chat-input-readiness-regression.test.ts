@@ -1,8 +1,9 @@
 import { readFileSync } from "fs";
-import { join } from "path";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
 import { describe, expect, it } from "vitest";
 
-const root = join(import.meta.dir, "..");
+const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 describe("chat input readiness", () => {
   it("keeps the composer usable while session startup is still settling", () => {

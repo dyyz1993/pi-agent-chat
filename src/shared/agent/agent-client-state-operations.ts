@@ -6,6 +6,14 @@ const log = createLogger("agent");
 
 interface ManagedClientLike {
   client: Pick<RpcClientAPI, "getState" | "getCommands" | "getSessionStats">;
+  info?: {
+    activeToolExecutions?: Array<{
+      toolCallId: string;
+      toolName: string;
+      args?: unknown;
+      startedAt?: number;
+    }>;
+  };
 }
 
 interface ManagedClientAccess<TManaged extends ManagedClientLike> {
@@ -35,6 +43,10 @@ function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+function isTimeoutLikeError(message: string): boolean {
+  return /\btimeout\b|timed out|Timeout waiting for response/i.test(message);
+}
+
 export async function getStateOperation<TManaged extends ManagedClientLike>(options: {
   sessionId: string;
   getActiveManaged: (sessionId: string) => TManaged | null;
@@ -55,6 +67,12 @@ export async function getStateOperation<TManaged extends ManagedClientLike>(opti
   isCompacting: boolean;
   messageCount: number;
   streamingMessage?: unknown;
+  activeToolExecutions: Array<{
+    toolCallId: string;
+    toolName: string;
+    args?: unknown;
+    startedAt?: number;
+  }>;
 } | null> {
   const managed = await resolveManagedClient(options);
   if (!managed) return null;
@@ -80,6 +98,7 @@ export async function getStateOperation<TManaged extends ManagedClientLike>(opti
       isCompacting: Boolean(state.isCompacting),
       messageCount: Number(state.messageCount ?? 0),
       streamingMessage,
+      activeToolExecutions: managed.info?.activeToolExecutions ?? [],
     };
   } catch (err: unknown) {
     const msg = errorMessage(err);
@@ -87,6 +106,12 @@ export async function getStateOperation<TManaged extends ManagedClientLike>(opti
       sessionId: options.sessionId,
       error: msg,
     });
+    if (isTimeoutLikeError(msg)) {
+      log.warn("getState RPC timed out; keeping CLI client registered", {
+        sessionId: options.sessionId,
+      });
+      return null;
+    }
     if (!(await options.isClientAlive(options.sessionId, managed))) {
       options.cleanupDeadClient(options.sessionId, `getState failed: ${msg}`);
     }
@@ -134,11 +159,7 @@ export async function getSessionStatsOperation<TManaged extends ManagedClientLik
   if (!managed) return null;
 
   try {
-    const stats = await withTimeout(
-      managed.client.getSessionStats(),
-      10_000,
-      "getSessionStats",
-    );
+    const stats = await withTimeout(managed.client.getSessionStats(), 10_000, "getSessionStats");
     if (!stats) return null;
     const tokens = stats.tokens;
     const cu = stats.contextUsage;
@@ -165,6 +186,12 @@ export async function getSessionStatsOperation<TManaged extends ManagedClientLik
       sessionId: options.sessionId,
       err: msg,
     });
+    if (isTimeoutLikeError(msg)) {
+      log.warn("getSessionStats timed out; keeping CLI client registered", {
+        sessionId: options.sessionId,
+      });
+      return null;
+    }
     if (!(await options.isClientAlive(options.sessionId, managed))) {
       options.cleanupDeadClient(options.sessionId, `getSessionStats failed: ${msg}`);
     }

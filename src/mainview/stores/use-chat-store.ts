@@ -27,8 +27,168 @@ const perfLog = createLogger("session-perf");
 const PAGE_SIZE = 50;
 const backgroundRefreshGenerationBySession = new Map<string, number>();
 
+function prepareMessagesForStore(
+  msgs: ChatMessage[],
+  options: { normalizeTools?: boolean; activeToolCallIds?: string[] } = {},
+): ChatMessage[] {
+  const nextMsgs = [...msgs];
+  const activeToolCallIds =
+    options.activeToolCallIds === undefined ? undefined : new Set(options.activeToolCallIds);
+  if (options.normalizeTools) {
+    normalizeToolBlocks(nextMsgs, false, false);
+  }
+
+  dedupeToolExecutions(nextMsgs);
+
+  const latestStreamingAssistantIndex = (() => {
+    for (let i = nextMsgs.length - 1; i >= 0; i--) {
+      const msg = nextMsgs[i];
+      if (msg.role === "assistant" && msg.isStreaming === true) return i;
+    }
+    return -1;
+  })();
+
+  for (let mi = 0; mi < nextMsgs.length; mi++) {
+    const msg = nextMsgs[mi];
+    if (msg.role !== "assistant") continue;
+
+    let changed = false;
+    const content = msg.content.map((block) => {
+      if (block.type !== "toolExecution" || block.status !== "running") return block;
+      const details = block.details;
+      const isBackground =
+        details &&
+        typeof details === "object" &&
+        "background" in (details as Record<string, unknown>);
+      if (isBackground) return block;
+      if (activeToolCallIds !== undefined) {
+        if (activeToolCallIds.has(block.toolCallId)) return block;
+        changed = true;
+        return {
+          ...block,
+          status: "done" as const,
+          endedAt: block.endedAt ?? Date.now(),
+        };
+      }
+      if (mi === latestStreamingAssistantIndex) return block;
+      changed = true;
+      return {
+        ...block,
+        status: "done" as const,
+        endedAt: block.endedAt ?? Date.now(),
+      };
+    });
+
+    if (changed) {
+      nextMsgs[mi] = { ...msg, content, isStreaming: false };
+    }
+  }
+
+  dedupeToolExecutions(nextMsgs);
+  return nextMsgs;
+}
+
+function hasRenderableMessageContent(message: ChatMessage): boolean {
+  return message.content.some((block) => {
+    if (block.type === "text") return block.text.trim().length > 0;
+    if (block.type === "thinking") return block.thinking.trim().length > 0;
+    return true;
+  });
+}
+
+function hasAssistantContentAfterMessage(messages: ChatMessage[], messageId: string): boolean {
+  const startIndex = messages.findIndex((msg) => msg.id === messageId);
+  if (startIndex < 0) return false;
+  return messages
+    .slice(startIndex + 1)
+    .some((msg) => msg.role === "assistant" && hasRenderableMessageContent(msg));
+}
+
+type MemoryCustomEntry = {
+  id: string;
+  customType: string;
+  data: unknown;
+  timestamp: number;
+};
+
+function syncMemoryCustomEntries(
+  sessionId: string,
+  customEntries: MemoryCustomEntry[],
+  options: { clearSession?: boolean } = {},
+) {
+  const memoryStore = useMemoryStore.getState();
+  if (options.clearSession && typeof memoryStore.clearSession === "function") {
+    memoryStore.clearSession(sessionId);
+  }
+
+  const resultMap = new Map<string, MemoryCustomEntry>();
+
+  for (const entry of customEntries) {
+    if (entry.customType === "memory_prefetch_result") {
+      resultMap.set(entry.id, entry);
+    }
+  }
+
+  const mergedResultIds = new Set<string>();
+
+  for (const entry of customEntries) {
+    if (entry.customType !== "memory_prefetch") continue;
+
+    let bestResult: MemoryCustomEntry | undefined;
+    for (const [, rentry] of resultMap) {
+      if (rentry.timestamp >= entry.timestamp && !mergedResultIds.has(rentry.id)) {
+        if (!bestResult || rentry.timestamp < bestResult.timestamp) {
+          bestResult = rentry;
+        }
+      }
+    }
+
+    if (bestResult) {
+      mergedResultIds.add(bestResult.id);
+      const prefData = entry.data as Record<string, unknown> | undefined;
+      const resData = bestResult.data as Record<string, unknown> | undefined;
+      bestResult.data = {
+        ...(resData ?? {}),
+        _prefetchQuery: typeof prefData?.query === "string" ? prefData.query : "",
+        _prefetchAvailableFiles:
+          typeof prefData?.availableFiles === "number" ? prefData.availableFiles : 0,
+      };
+    }
+  }
+
+  for (const entry of customEntries) {
+    if (entry.customType === "memory_prefetch") {
+      const hasLaterMergedResult = Array.from(resultMap.values()).some(
+        (r) =>
+          r.customType === "memory_prefetch_result" &&
+          mergedResultIds.has(r.id) &&
+          r.timestamp >= entry.timestamp,
+      );
+      if (hasLaterMergedResult) continue;
+    }
+
+    if (!ALL_MEMORY_TYPE_KEYS.has(entry.customType)) continue;
+
+    memoryStore.addEvent(sessionId, {
+      id: entry.id,
+      customType: entry.customType,
+      data: entry.data,
+      timestamp: entry.timestamp,
+    });
+
+    if (entry.customType === "memory_prefetch_result" && entry.data) {
+      const payload = entry.data as Record<string, unknown>;
+      memoryStore.addInjected(sessionId, {
+        summary: (payload.summary as string) ?? "",
+        snippet: (payload.snippet as string) ?? "",
+      });
+    }
+  }
+}
+
 interface ChatState {
   messagesBySession: Record<string, ChatMessage[]>;
+  activeToolCallIdsBySession: Record<string, string[] | undefined>;
   inputText: string;
   isStreaming: boolean;
   streamContentVersion: number;
@@ -48,6 +208,7 @@ interface ChatState {
   addMessage: (msg: ChatMessage) => void;
   setMessagesForSession: (sessionId: string, msgs: ChatMessage[]) => void;
   clearSessionMessages: (sessionId: string) => void;
+  setActiveToolCallIds: (sessionId: string, toolCallIds: string[] | undefined) => void;
   loadSessionMessages: (
     sessionId: string,
     options?: { force?: boolean; sessionPath?: string; preserveStreaming?: boolean },
@@ -64,6 +225,7 @@ interface ChatState {
 
 export const useChatStore = create<ChatState>((set, get) => ({
   messagesBySession: {},
+  activeToolCallIdsBySession: {},
   inputText: "",
   pendingImages: [],
   isStreaming: false,
@@ -113,7 +275,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       setTimeout(() => {
         const chat = get();
         const msgs = chat.messagesBySession[checkSessionId] || [];
-        const hasAssistant = msgs.some((m) => m.role === "assistant" && m.id !== checkUserMsgId);
+        const hasAssistant = hasAssistantContentAfterMessage(msgs, checkUserMsgId);
         if (!hasAssistant) {
           const status = useSessionStore.getState().sessionStatusMap[checkSessionId];
           const isStillStreaming =
@@ -305,8 +467,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   setMessagesForSession: (sessionId, msgs) =>
     set((s) => {
-      const nextMsgs = [...msgs];
-      dedupeToolExecutions(nextMsgs);
+      const nextMsgs = prepareMessagesForStore(msgs, {
+        normalizeTools: true,
+        activeToolCallIds: s.activeToolCallIdsBySession[sessionId],
+      });
       return {
         messagesBySession: { ...s.messagesBySession, [sessionId]: nextMsgs },
       };
@@ -316,6 +480,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((s) => {
       const { [sessionId]: _, ...rest } = s.messagesBySession;
       return { messagesBySession: rest };
+    }),
+
+  setActiveToolCallIds: (sessionId, toolCallIds) =>
+    set((s) => {
+      const activeToolCallIdsBySession = {
+        ...s.activeToolCallIdsBySession,
+        [sessionId]: toolCallIds,
+      };
+      const existing = s.messagesBySession[sessionId];
+      if (!existing) return { activeToolCallIdsBySession };
+
+      return {
+        activeToolCallIdsBySession,
+        messagesBySession: {
+          ...s.messagesBySession,
+          [sessionId]: prepareMessagesForStore(existing, { activeToolCallIds: toolCallIds }),
+        },
+      };
     }),
 
   setIsStreaming: (v) => set({ isStreaming: v }),
@@ -447,89 +629,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       normalizeToolBlocks(msgs, true, false);
 
       const customEntries = result.customEntries;
-      if (Array.isArray(customEntries) && customEntries.length > 0) {
-        const memoryStore = useMemoryStore.getState();
-        memoryStore.clearSession(sid);
-
-        const resultMap = new Map<string, (typeof customEntries)[0]>();
-        const prefetchIds = new Set<string>();
-
-        for (const entry of customEntries) {
-          if (entry.customType === "memory_prefetch") {
-            prefetchIds.add(entry.id);
-          }
-          if (entry.customType === "memory_prefetch_result") {
-            resultMap.set(entry.id, entry);
-          }
-        }
-
-        const mergedResultIds = new Set<string>();
-
-        for (const entry of customEntries) {
-          if (entry.customType !== "memory_prefetch") continue;
-
-          let bestResult: (typeof customEntries)[0] | undefined;
-          for (const [, rentry] of resultMap) {
-            if (rentry.timestamp >= entry.timestamp && !mergedResultIds.has(rentry.id)) {
-              if (!bestResult || rentry.timestamp < bestResult.timestamp) {
-                bestResult = rentry;
-              }
-            }
-          }
-
-          if (bestResult) {
-            mergedResultIds.add(bestResult.id);
-            const prefData = entry.data as Record<string, unknown> | undefined;
-            const resData = bestResult.data as Record<string, unknown> | undefined;
-            bestResult.data = {
-              ...(resData ?? {}),
-              _prefetchQuery: typeof prefData?.query === "string" ? prefData.query : "",
-              _prefetchAvailableFiles:
-                typeof prefData?.availableFiles === "number" ? prefData.availableFiles : 0,
-            } as unknown;
-          }
-        }
-
-        for (const entry of customEntries) {
-          if (entry.customType === "memory_prefetch") {
-            const hasLaterMergedResult = Array.from(resultMap.values()).some(
-              (r) =>
-                r.customType === "memory_prefetch_result" &&
-                mergedResultIds.has(r.id) &&
-                r.timestamp >= entry.timestamp,
-            );
-            if (hasLaterMergedResult) continue;
-          }
-
-          if (!ALL_MEMORY_TYPE_KEYS.has(entry.customType)) continue;
-
-          memoryStore.addEvent(sid, {
-            id: entry.id,
-            customType: entry.customType,
-            data: entry.data,
-            timestamp: entry.timestamp,
-          });
-
-          if (entry.customType === "memory_prefetch_result" && entry.data) {
-            const payload = entry.data as Record<string, unknown>;
-            memoryStore.addInjected(sid, {
-              summary: (payload.summary as string) ?? "",
-              snippet: (payload.snippet as string) ?? "",
-            });
-          }
-
-          msgs.push({
-            id: entry.id,
-            role: "custom",
-            content: [{ type: "custom", customType: entry.customType, data: entry.data }],
-            timestamp: entry.timestamp,
-          });
-        }
-
-        msgs.sort((a, b) => {
-          if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
-          return (a.id || "").localeCompare(b.id || "");
-        });
+      if (Array.isArray(customEntries)) {
+        syncMemoryCustomEntries(sid, customEntries, { clearSession: true });
       }
 
       const hasMore = result.hasMore === true || msgs.length > PAGE_SIZE;
@@ -598,7 +699,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
           finalMsgs = [...finalMsgs, preservedStreamingMsg];
         }
       }
+      normalizeToolBlocks(finalMsgs, true, false);
       dedupeToolExecutions(finalMsgs);
+      finalMsgs = prepareMessagesForStore(finalMsgs, {
+        activeToolCallIds: get().activeToolCallIdsBySession[sid],
+      });
 
       if (hasSameMessageSnapshots(currentMsgs, finalMsgs)) {
         perfLog.info("[loadMessages] content unchanged, skip update", {
@@ -701,36 +806,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
       normalizeToolBlocks(msgs, true, false);
 
-      // Process custom entries (memory events)
       const customEntries = result.customEntries;
-      if (Array.isArray(customEntries) && customEntries.length > 0) {
-        const memoryStore = useMemoryStore.getState();
-        for (const entry of customEntries) {
-          if (!ALL_MEMORY_TYPE_KEYS.has(entry.customType)) continue;
-          memoryStore.addEvent(sid, {
-            id: entry.id,
-            customType: entry.customType,
-            data: entry.data,
-            timestamp: entry.timestamp,
-          });
-          if (entry.customType === "memory_prefetch_result" && entry.data) {
-            const payload = entry.data as Record<string, unknown>;
-            memoryStore.addInjected(sid, {
-              summary: (payload.summary as string) ?? "",
-              snippet: (payload.snippet as string) ?? "",
-            });
-          }
-          msgs.push({
-            id: entry.id,
-            role: "custom",
-            content: [{ type: "custom", customType: entry.customType, data: entry.data }],
-            timestamp: entry.timestamp,
-          });
-        }
-        msgs.sort((a, b) => {
-          if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
-          return (a.id || "").localeCompare(b.id || "");
-        });
+      if (Array.isArray(customEntries)) {
+        syncMemoryCustomEntries(sid, customEntries, { clearSession: true });
       }
 
       // Compare with current store: only update if different
@@ -749,7 +827,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (preservedStreamingMsg) {
         finalMsgs = [...finalMsgs, preservedStreamingMsg];
       }
+      normalizeToolBlocks(finalMsgs, true, false);
       dedupeToolExecutions(finalMsgs);
+      finalMsgs = prepareMessagesForStore(finalMsgs, {
+        activeToolCallIds: get().activeToolCallIdsBySession[sid],
+      });
 
       if (hasSameMessageSnapshots(current, finalMsgs)) {
         perfLog.info("[bgRefresh] data unchanged, skip update", {
@@ -848,112 +930,30 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
       normalizeToolBlocks(allMsgs, true, false);
 
-      const customEntries = result.customEntries;
-      if (Array.isArray(customEntries) && customEntries.length > 0) {
-        const memoryStore = useMemoryStore.getState();
-
-        const resultMap = new Map<string, (typeof customEntries)[0]>();
-        const prefetchIds = new Set<string>();
-
-        for (const entry of customEntries) {
-          if (entry.customType === "memory_prefetch") {
-            prefetchIds.add(entry.id);
-          }
-          if (entry.customType === "memory_prefetch_result") {
-            resultMap.set(entry.id, entry);
-          }
-        }
-
-        const mergedResultIds = new Set<string>();
-
-        for (const entry of customEntries) {
-          if (entry.customType !== "memory_prefetch") continue;
-
-          let bestResult: (typeof customEntries)[0] | undefined;
-          for (const [, rentry] of resultMap) {
-            if (rentry.timestamp >= entry.timestamp && !mergedResultIds.has(rentry.id)) {
-              if (!bestResult || rentry.timestamp < bestResult.timestamp) {
-                bestResult = rentry;
-              }
-            }
-          }
-
-          if (bestResult) {
-            mergedResultIds.add(bestResult.id);
-            const prefData = entry.data as Record<string, unknown> | undefined;
-            const resData = bestResult.data as Record<string, unknown> | undefined;
-            bestResult.data = {
-              ...(resData ?? {}),
-              _prefetchQuery: typeof prefData?.query === "string" ? prefData.query : "",
-              _prefetchAvailableFiles:
-                typeof prefData?.availableFiles === "number" ? prefData.availableFiles : 0,
-            } as unknown;
-          }
-        }
-
-        for (const entry of customEntries) {
-          if (entry.customType === "memory_prefetch") {
-            const hasLaterMergedResult = Array.from(resultMap.values()).some(
-              (r) =>
-                r.customType === "memory_prefetch_result" &&
-                mergedResultIds.has(r.id) &&
-                r.timestamp >= entry.timestamp,
-            );
-            if (hasLaterMergedResult) continue;
-          }
-
-          if (!ALL_MEMORY_TYPE_KEYS.has(entry.customType)) continue;
-
-          memoryStore.addEvent(sid, {
-            id: entry.id,
-            customType: entry.customType,
-            data: entry.data,
-            timestamp: entry.timestamp,
-          });
-
-          if (entry.customType === "memory_prefetch_result" && entry.data) {
-            const payload = entry.data as Record<string, unknown>;
-            memoryStore.addInjected(sid, {
-              summary: (payload.summary as string) ?? "",
-              snippet: (payload.snippet as string) ?? "",
-            });
-          }
-
-          allMsgs.push({
-            id: entry.id,
-            role: "custom",
-            content: [{ type: "custom", customType: entry.customType, data: entry.data }],
-            timestamp: entry.timestamp,
-          });
-        }
-
-        allMsgs.sort((a, b) => {
-          if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
-          return (a.id || "").localeCompare(b.id || "");
-        });
-      }
-
       const hasMore = result.hasMore === true;
 
-      log.info("LOAD ALL messages", {
+      log.info("LOAD MORE messages", {
         sessionId: sid,
         total: allMsgs.length,
         hasMore,
       });
 
       const loadedIds = new Set(allMsgs.map((msg) => msg.id));
-      const mergedMsgs = [
-        ...allMsgs,
-        ...current.filter((msg) => !loadedIds.has(msg.id)),
-      ].sort((a, b) => {
-        if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
-        return (a.entryId ?? a.id).localeCompare(b.entryId ?? b.id);
-      });
+      const mergedMsgs = [...allMsgs, ...current.filter((msg) => !loadedIds.has(msg.id))].sort(
+        (a, b) => {
+          if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
+          return (a.entryId ?? a.id).localeCompare(b.entryId ?? b.id);
+        },
+      );
       const finalMsgs = mergedMsgs;
+      normalizeToolBlocks(finalMsgs, true, false);
       dedupeToolExecutions(finalMsgs);
+      const preparedMsgs = prepareMessagesForStore(finalMsgs, {
+        activeToolCallIds: get().activeToolCallIdsBySession[sid],
+      });
 
       set((s) => ({
-        messagesBySession: { ...s.messagesBySession, [sid]: finalMsgs },
+        messagesBySession: { ...s.messagesBySession, [sid]: preparedMsgs },
         historyLoadVersion: s.historyLoadVersion + 1,
         hasMoreMessagesBySession: {
           ...s.hasMoreMessagesBySession,

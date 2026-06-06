@@ -51,7 +51,8 @@ function bashProcessToToolStatus(proc: BashProcess): ToolExecBlock["status"] {
 }
 
 function buildBashToolDetails(proc: BashProcess, previous: unknown): unknown {
-  const base = previous && typeof previous === "object" ? (previous as Record<string, unknown>) : {};
+  const base =
+    previous && typeof previous === "object" ? (previous as Record<string, unknown>) : {};
   if (proc.status !== "terminated") return base;
   return {
     ...base,
@@ -95,10 +96,7 @@ function findBashToolBlockByProcess(
   return semanticMatches === 1 ? semanticMatch : null;
 }
 
-export function reconcileChatToolFromBashEvent(
-  sessionId: string,
-  event: BashChannelEvent,
-): void {
+export function reconcileChatToolFromBashEvent(sessionId: string, event: BashChannelEvent): void {
   if (event.type !== "end" && event.type !== "error" && event.type !== "terminated") return;
   const proc = findBashProcess(event);
   if (!proc) return;

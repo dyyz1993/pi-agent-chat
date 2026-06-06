@@ -21,11 +21,7 @@ export function makeProcessPoolKey(
   return sandboxEnabled && userId ? `${projectPath}::${userId}` : projectPath;
 }
 
-export function addToProcessPool<T>(
-  pools: Map<string, Set<T>>,
-  poolKey: string,
-  managed: T,
-): void {
+export function addToProcessPool<T>(pools: Map<string, Set<T>>, poolKey: string, managed: T): void {
   let pool = pools.get(poolKey);
   if (!pool) {
     pool = new Set();
@@ -82,7 +78,10 @@ export function selectLruEvictionCandidate<T extends ProcessPoolEntry>(
       if (!isCurrentProject && oldestIsCurrent) {
         oldest = managed;
         oldestPoolKey = poolKey;
-      } else if (isCurrentProject === oldestIsCurrent && managed.lastActiveAt < oldest.lastActiveAt) {
+      } else if (
+        isCurrentProject === oldestIsCurrent &&
+        managed.lastActiveAt < oldest.lastActiveAt
+      ) {
         oldest = managed;
         oldestPoolKey = poolKey;
       }

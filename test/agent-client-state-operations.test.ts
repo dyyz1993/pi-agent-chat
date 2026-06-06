@@ -9,8 +9,18 @@ import {
   getStateOperation,
 } from "../src/shared/agent/agent-client-state-operations";
 
-function makeManaged(client: Record<string, unknown>) {
-  return { client };
+function makeManaged(
+  client: Record<string, unknown>,
+  info?: {
+    activeToolExecutions?: Array<{
+      toolCallId: string;
+      toolName: string;
+      args?: unknown;
+      startedAt?: number;
+    }>;
+  },
+) {
+  return { client, info };
 }
 
 describe("agent client state operations", () => {
@@ -51,6 +61,7 @@ describe("agent client state operations", () => {
       isStreaming: true,
       isCompacting: false,
       messageCount: 12,
+      activeToolExecutions: [],
     });
     await expect(
       getCommandsOperation({ sessionId: "sess-1", getActiveManaged: () => managed }),
@@ -88,6 +99,68 @@ describe("agent client state operations", () => {
     expect(cleanupDeadClient).toHaveBeenCalledWith("sess-1", "getState failed: closed");
   });
 
+  it("does not cleanup when state query times out", async () => {
+    const managed = makeManaged({
+      getState: vi.fn().mockRejectedValue(new Error("getState timed out (10000ms)")),
+    });
+    const cleanupDeadClient = vi.fn();
+    const isClientAlive = vi.fn();
+
+    await expect(
+      getStateOperation({
+        sessionId: "sess-1",
+        getActiveManaged: () => managed,
+        ensureManagedClient: vi.fn(),
+        isClientAlive,
+        cleanupDeadClient,
+      }),
+    ).resolves.toBeNull();
+
+    expect(isClientAlive).not.toHaveBeenCalled();
+    expect(cleanupDeadClient).not.toHaveBeenCalled();
+  });
+
+  it("returns active tool executions from the managed client snapshot", async () => {
+    const managed = makeManaged(
+      {
+        getState: vi.fn().mockResolvedValue({
+          isStreaming: true,
+          isCompacting: false,
+          messageCount: 1,
+        }),
+      },
+      {
+        activeToolExecutions: [
+          {
+            toolCallId: "tc-1",
+            toolName: "bash",
+            args: { command: "npm test" },
+            startedAt: 123,
+          },
+        ],
+      },
+    );
+
+    await expect(
+      getStateOperation({
+        sessionId: "sess-1",
+        getActiveManaged: () => managed,
+        ensureManagedClient: vi.fn(),
+        isClientAlive: vi.fn(),
+        cleanupDeadClient: vi.fn(),
+      }),
+    ).resolves.toMatchObject({
+      activeToolExecutions: [
+        {
+          toolCallId: "tc-1",
+          toolName: "bash",
+          args: { command: "npm test" },
+          startedAt: 123,
+        },
+      ],
+    });
+  });
+
   it("does not cleanup when session stats fail but client is alive", async () => {
     const managed = makeManaged({
       getSessionStats: vi.fn().mockRejectedValue(new Error("busy")),
@@ -103,6 +176,26 @@ describe("agent client state operations", () => {
       }),
     ).resolves.toBeNull();
 
+    expect(cleanupDeadClient).not.toHaveBeenCalled();
+  });
+
+  it("does not cleanup when session stats query times out", async () => {
+    const managed = makeManaged({
+      getSessionStats: vi.fn().mockRejectedValue(new Error("getSessionStats timed out (10000ms)")),
+    });
+    const cleanupDeadClient = vi.fn();
+    const isClientAlive = vi.fn();
+
+    await expect(
+      getSessionStatsOperation({
+        sessionId: "sess-1",
+        getActiveManaged: () => managed,
+        isClientAlive,
+        cleanupDeadClient,
+      }),
+    ).resolves.toBeNull();
+
+    expect(isClientAlive).not.toHaveBeenCalled();
     expect(cleanupDeadClient).not.toHaveBeenCalled();
   });
 });

@@ -24,6 +24,11 @@ export interface PluginInfo {
   toolNames: string[];
   commandNames: string[];
   scope: PluginScope;
+  usageNotice?: {
+    level: "info" | "warning";
+    label: string;
+    message: string;
+  };
 }
 
 export type SkillScope = "global" | "project";
@@ -77,6 +82,15 @@ export function deriveSkillScope(filePath: string): SkillScope {
     `${home}/.nvm`,
   ];
   return globalPatterns.some((p) => filePath.startsWith(p)) ? "global" : "project";
+}
+
+export function derivePluginUsageNotice(name: string): PluginInfo["usageNotice"] | undefined {
+  if (name !== "hooks-engine") return undefined;
+  return {
+    level: "info",
+    label: "Pi Native Hooks",
+    message: "当前主路径不使用 Pi Native Hooks。Claude Code hooks 请使用 claude-hooks-compat。",
+  };
 }
 
 interface StatusState {

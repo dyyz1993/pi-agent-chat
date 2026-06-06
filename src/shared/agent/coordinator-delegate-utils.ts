@@ -44,7 +44,13 @@ export function resolveDelegateSessionPaths(options: {
 
   if (isCrossProject) {
     const encodedTarget = "--" + projectPath.replace(/^\//, "").replace(/\//g, "-") + "--";
-    sessionDir = path.join(options.homeDir ?? os.homedir(), ".pi", "agent", "sessions", encodedTarget);
+    sessionDir = path.join(
+      options.homeDir ?? os.homedir(),
+      ".pi",
+      "agent",
+      "sessions",
+      encodedTarget,
+    );
     if (!existsSync(sessionDir)) mkdirSync(sessionDir, { recursive: true });
   } else {
     sessionDir = path.dirname(options.parentSessionPath);
@@ -198,7 +204,9 @@ export function buildCoordinatorSessionCreatedEvent(options: {
 
 export function formatDelegateElapsed(createdAt: number, now = Date.now()): string {
   const elapsedMs = Math.max(0, now - createdAt);
-  return elapsedMs < 60000 ? `${Math.round(elapsedMs / 1000)}s` : `${Math.round(elapsedMs / 60000)}m`;
+  return elapsedMs < 60000
+    ? `${Math.round(elapsedMs / 1000)}s`
+    : `${Math.round(elapsedMs / 60000)}m`;
 }
 
 export function wrapDelegateReply(options: {
