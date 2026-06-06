@@ -103,6 +103,115 @@ function normalizedMessageSignature(message: Record<string, unknown>): string {
   return JSON.stringify({ role, toolCallId, toolName, isError, content });
 }
 
+function parseObjectish(value: unknown): Record<string, unknown> | null {
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      return parsed && typeof parsed === "object" && parsed !== null
+        ? (parsed as Record<string, unknown>)
+        : null;
+    } catch {
+      return null;
+    }
+  }
+  return value && typeof value === "object" && value !== null
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function normalizedToolName(name: unknown): string {
+  return typeof name === "string" ? name.trim().toLowerCase() : "";
+}
+
+function normalizedToolText(value: unknown): string {
+  return typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
+}
+
+function getToolCallMatchKeys(block: Record<string, unknown>): string[] {
+  const id = typeof block.id === "string" ? block.id : "";
+  const name = normalizedToolName(block.name);
+  const rawInput = block.input ?? block.arguments;
+  const inputObj = parseObjectish(rawInput);
+  const description = normalizedToolText(inputObj?.description);
+  const command = normalizedToolText(inputObj?.command);
+
+  const keys: string[] = [];
+  if (id) keys.push(`id:${id}`);
+  if (name && description) keys.push(`desc:${name}:${description}`);
+  if (name && command) keys.push(`command:${name}:${command}`);
+  return keys;
+}
+
+function extractToolCallBlocks(message: Record<string, unknown>): Record<string, unknown>[] {
+  const content = message.content;
+  if (!Array.isArray(content)) return [];
+  return content.filter((block): block is Record<string, unknown> => {
+    return (
+      !!block &&
+      typeof block === "object" &&
+      (block as Record<string, unknown>).type === "toolCall"
+    );
+  });
+}
+
+function hasMeaningfulNonToolCallContent(message: Record<string, unknown>): boolean {
+  const content = message.content;
+  if (!Array.isArray(content)) return false;
+  return content.some((block) => {
+    if (!block || typeof block !== "object") return false;
+    const b = block as Record<string, unknown>;
+    if (b.type === "toolCall") return false;
+    return normalizedToolText(b.text) !== "" || normalizedToolText(b.thinking) !== "";
+  });
+}
+
+function completedToolCallKeysFromMessages(
+  messages: Array<{ message: unknown }>,
+): Set<string> {
+  const assistantToolKeysById = new Map<string, string[]>();
+  const completedKeys = new Set<string>();
+
+  for (const entry of messages) {
+    const message =
+      entry.message && typeof entry.message === "object"
+        ? (entry.message as Record<string, unknown>)
+        : null;
+    if (!message) continue;
+
+    if (message.role === "assistant") {
+      for (const block of extractToolCallBlocks(message)) {
+        const id = typeof block.id === "string" ? block.id : "";
+        if (id) assistantToolKeysById.set(id, getToolCallMatchKeys(block));
+      }
+      continue;
+    }
+
+    if (message.role === "toolResult") {
+      const toolCallId = typeof message.toolCallId === "string" ? message.toolCallId : "";
+      if (!toolCallId) continue;
+      completedKeys.add(`id:${toolCallId}`);
+      for (const key of assistantToolKeysById.get(toolCallId) ?? []) {
+        completedKeys.add(key);
+      }
+    }
+  }
+
+  return completedKeys;
+}
+
+function isCompletedToolCallOnlyMessage(
+  message: Record<string, unknown>,
+  completedToolCallKeys: Set<string>,
+): boolean {
+  if (message.role !== "assistant" || hasMeaningfulNonToolCallContent(message)) return false;
+  const toolCalls = extractToolCallBlocks(message);
+  if (toolCalls.length === 0) return false;
+  return toolCalls.every((block) => {
+    const keys = getToolCallMatchKeys(block);
+    return keys.length > 0 && keys.some((key) => completedToolCallKeys.has(key));
+  });
+}
+
 export async function getFullMessagesOperation<TManaged extends ManagedFullMessagesLike>(options: {
   sessionId: string;
   sessionPath?: string;
@@ -200,6 +309,7 @@ export async function getFullMessagesOperation<TManaged extends ManagedFullMessa
             .map((m) => messageText(m.message as Record<string, unknown>))
             .filter(Boolean),
         );
+        const completedToolCallKeys = completedToolCallKeysFromMessages(filteredMessages);
         const compactionEntryIds = new Set(accumulator.allCompactionEntries.map((c) => c.entryId));
         const filteredHasCompaction = filteredMessages.some((fm) => {
           const fmMsg = fm.message as Record<string, unknown>;
@@ -212,6 +322,7 @@ export async function getFullMessagesOperation<TManaged extends ManagedFullMessa
           const role = (m.role as string) ?? "";
           if (eid && jsonlEntryIds.has(eid)) continue;
           if (!eid && jsonlMessageSignatures.has(normalizedMessageSignature(m))) continue;
+          if (!eid && isCompletedToolCallOnlyMessage(m, completedToolCallKeys)) continue;
           if (role === "compactionSummary") {
             if (eid && compactionEntryIds.has(eid)) continue;
             if (!eid && filteredHasCompaction) continue;

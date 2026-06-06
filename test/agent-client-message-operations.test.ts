@@ -180,6 +180,68 @@ describe("agent client message operations", () => {
     ).toHaveLength(1);
   });
 
+  it("does not merge stale in-memory assistant tool calls already completed in JSONL", async () => {
+    writeFileSync(
+      sessionPath,
+      [
+        messageEntry("m1", null, "user", "prompt"),
+        jsonlEntry({
+          id: "m2",
+          parentId: "m1",
+          type: "message",
+          message: {
+            role: "assistant",
+            content: [
+              {
+                type: "toolCall",
+                id: "tc-commit",
+                name: "bash",
+                arguments: { description: "commit M7.2.1" },
+              },
+            ],
+          },
+        }),
+        toolResultEntry("m3", "m2", "tc-commit", "bash", "syntax error"),
+      ].join("\n"),
+    );
+    const managed = {
+      client: {
+        getMessages: vi.fn().mockResolvedValue([
+          { role: "user", content: [{ type: "text", text: "prompt" }] },
+          {
+            role: "assistant",
+            content: [
+              {
+                type: "toolCall",
+                id: "tc-commit",
+                name: "bash",
+                input: JSON.stringify({ description: "commit M7.2.1" }),
+              },
+            ],
+          },
+        ]),
+      },
+      info: {
+        status: "streaming",
+        sessionPath,
+      },
+    };
+
+    const result = await getFullMessagesOperation({
+      sessionId: "sess-1",
+      getActiveManaged: () => managed,
+      resolveSessionPath: () => sessionPath,
+      leafIds: new Map(),
+    });
+
+    expect(result.messages).toHaveLength(3);
+    expect(result.messages.map((m) => (m as { role?: string }).role)).toEqual([
+      "user",
+      "assistant",
+      "toolResult",
+    ]);
+  });
+
   it("getMessages reads active SDK messages and filters JSONL custom entries by leaf path", async () => {
     writeFileSync(
       sessionPath,
