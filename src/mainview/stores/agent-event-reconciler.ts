@@ -84,22 +84,27 @@ export function extractIncomingToolCallIds(content: unknown): string[] {
   return ids;
 }
 
+export function hasTerminalToolExecution(messages: ChatMessage[], toolCallId: string): boolean {
+  return messages.some(
+    (msg) =>
+      msg.role === "assistant" &&
+      msg.content.some(
+        (block): block is ToolExecBlock =>
+          block.type === "toolExecution" &&
+          block.toolCallId === toolCallId &&
+          isTerminalToolStatus(block.status),
+      ),
+  );
+}
+
 export function isDelayedTerminalMessageUpdate(
   messages: ChatMessage[],
   incomingContent: unknown,
 ): boolean {
-  const lastMsg = messages[messages.length - 1];
-  if (!lastMsg || lastMsg.role !== "assistant" || lastMsg.isStreaming === true) return false;
-
   const incomingToolCallIds = extractIncomingToolCallIds(incomingContent);
   if (incomingToolCallIds.length === 0) return false;
 
   return incomingToolCallIds.every((toolCallId) =>
-    lastMsg.content.some(
-      (block): block is ToolExecBlock =>
-        block.type === "toolExecution" &&
-        block.toolCallId === toolCallId &&
-        isTerminalToolStatus(block.status),
-    ),
+    hasTerminalToolExecution(messages, toolCallId),
   );
 }

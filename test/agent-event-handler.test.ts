@@ -310,6 +310,53 @@ describe("tool_execution_start", () => {
     expect(block!.toolName).toBe("bash");
     expect(block!.args).toBe("ls");
   });
+
+  it("ignores replayed start when the same tool call already ended in an earlier message", () => {
+    setMessages([
+      {
+        id: "history-msg",
+        role: "assistant",
+        content: [
+          {
+            type: "toolExecution",
+            toolCallId: TCID,
+            toolName: "bash",
+            args: "cargo build",
+            status: "done",
+            output: "finished\n",
+          },
+        ],
+        timestamp: Date.now() - 10,
+        isStreaming: false,
+      },
+      {
+        id: "live-placeholder",
+        role: "assistant",
+        content: [],
+        timestamp: Date.now(),
+        isStreaming: true,
+      },
+    ]);
+
+    handleAgentEvent(SID, {
+      type: "tool_execution_start",
+      toolCallId: TCID,
+      toolName: "bash",
+      args: { command: "cargo build", description: "build" },
+    } as Parameters<typeof handleAgentEvent>[1]);
+    flushNow();
+
+    const messages = getMessages();
+    const blocks = messages.flatMap((msg) =>
+      msg.content.filter(
+        (b): b is Extract<ContentBlock, { type: "toolExecution" }> =>
+          b.type === "toolExecution" && b.toolCallId === TCID,
+      ),
+    );
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].status).toBe("done");
+    expect(messages[1].content).toHaveLength(0);
+  });
 });
 
 describe("tool_execution_update", () => {
@@ -1029,5 +1076,62 @@ describe("message_update content block ordering", () => {
     );
     expect(exec?.status).toBe("done");
     expect(useSessionStore.getState().sessionStatusMap[SID]).toBe("idle");
+  });
+
+  it("ignores delayed message_update when terminal tool is not the last assistant message", () => {
+    setMessages([
+      {
+        id: "history-msg",
+        role: "assistant",
+        content: [
+          {
+            type: "toolExecution",
+            toolCallId: TCID,
+            toolName: "bash",
+            args: "cargo build",
+            status: "done",
+            output: "finished\n",
+          },
+        ],
+        timestamp: Date.now() - 10,
+        isStreaming: false,
+      },
+      {
+        id: "live-placeholder",
+        role: "assistant",
+        content: [],
+        timestamp: Date.now(),
+        isStreaming: true,
+      },
+    ]);
+    useSessionStore.setState({ sessionStatusMap: { [SID]: "streaming" } });
+
+    handleAgentEvent(SID, {
+      type: "message_update",
+      message: {
+        role: "assistant",
+        content: [
+          { type: "text", text: "stale replay" },
+          {
+            type: "toolCall",
+            id: TCID,
+            name: "bash",
+            arguments: { command: "cargo build", description: "build" },
+          },
+        ],
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+    flushNow();
+
+    const messages = getMessages();
+    const blocks = messages.flatMap((msg) =>
+      msg.content.filter(
+        (b): b is Extract<ContentBlock, { type: "toolExecution" }> =>
+          b.type === "toolExecution" && b.toolCallId === TCID,
+      ),
+    );
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].status).toBe("done");
+    expect(messages[1].content).toHaveLength(0);
   });
 });

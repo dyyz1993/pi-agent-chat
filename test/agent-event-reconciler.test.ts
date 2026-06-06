@@ -121,19 +121,34 @@ describe("agent event reconciler", () => {
     expect(isDelayedTerminalMessageUpdate(messages, incomingContent)).toBe(true);
   });
 
-  it("does not treat updates for streaming messages as delayed terminal updates", () => {
+  it("treats terminal tool updates as delayed even while a placeholder is streaming", () => {
+    const messages = [
+      assistantMessage([
+        toolExecution({
+          toolCallId: "tc-terminal",
+          status: "done",
+        }),
+      ]),
+      assistantMessage([], true),
+    ];
+    const incomingContent = [{ type: "toolCall", id: "tc-terminal", name: "bash" }];
+
+    expect(isDelayedTerminalMessageUpdate(messages, incomingContent)).toBe(true);
+  });
+
+  it("does not treat updates for still-running tool calls as delayed terminal updates", () => {
     const messages = [
       assistantMessage(
         [
           toolExecution({
-            toolCallId: "tc-terminal",
-            status: "done",
+            toolCallId: "tc-running",
+            status: "running",
           }),
         ],
         true,
       ),
     ];
-    const incomingContent = [{ type: "toolCall", id: "tc-terminal", name: "bash" }];
+    const incomingContent = [{ type: "toolCall", id: "tc-running", name: "bash" }];
 
     expect(isDelayedTerminalMessageUpdate(messages, incomingContent)).toBe(false);
   });

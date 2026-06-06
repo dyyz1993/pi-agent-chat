@@ -71,6 +71,28 @@ function scheduleEmptyStreamingReload(sessionId: string, messageId: string): voi
   }, 750);
 }
 
+function findToolExecutionPosition(
+  messages: ChatMessage[],
+  toolCallId: string,
+): { msgIndex: number; blockIndex: number; block: ToolExecBlock } | null {
+  for (let mi = messages.length - 1; mi >= 0; mi--) {
+    const msg = messages[mi];
+    if (msg.role !== "assistant") continue;
+    const blockIndex = msg.content.findIndex(
+      (block): block is ToolExecBlock =>
+        block.type === "toolExecution" && block.toolCallId === toolCallId,
+    );
+    if (blockIndex >= 0) {
+      return {
+        msgIndex: mi,
+        blockIndex,
+        block: msg.content[blockIndex] as ToolExecBlock,
+      };
+    }
+  }
+  return null;
+}
+
 export function handleAgentEvent(sessionId: string, event: AgentEvent) {
   const storeGet = () => useSessionStore.getState();
 
@@ -667,6 +689,53 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     batchMessageUpdate(sessionId, () => {
       const chat = useChatStore.getState();
       const existing = chat.messagesBySession[sessionId] || [];
+      const exactPosition = findToolExecutionPosition(existing, toolCallId);
+      if (exactPosition && exactPosition.msgIndex !== existing.length - 1) {
+        if (event.type === "tool_execution_start" && isTerminalToolStatus(exactPosition.block.status)) {
+          return;
+        }
+        const msg = existing[exactPosition.msgIndex];
+        const blocks = [...msg.content];
+        if (event.type === "tool_execution_start") {
+          const { args: argsStr, timeout, description } = formatToolArgs(event.args);
+          blocks[exactPosition.blockIndex] = {
+            ...exactPosition.block,
+            toolName: exactPosition.block.toolName === "unknown" ? toolName : exactPosition.block.toolName,
+            args: argsStr || exactPosition.block.args,
+            status: isTerminalToolStatus(exactPosition.block.status)
+              ? exactPosition.block.status
+              : "running",
+            timeout: timeout ?? exactPosition.block.timeout,
+            description: description ?? exactPosition.block.description,
+            startedAt: exactPosition.block.startedAt ?? event.timestamp ?? Date.now(),
+          };
+        } else {
+          const partial = event.partialResult as
+            | { content?: Array<{ type: string; text?: string }> }
+            | undefined;
+          let output = "";
+          if (partial && Array.isArray(partial.content)) {
+            output = partial.content.map((c) => c.text ?? "").join("");
+          }
+          blocks[exactPosition.blockIndex] = {
+            ...exactPosition.block,
+            output: isTerminalToolStatus(exactPosition.block.status)
+              ? exactPosition.block.output && exactPosition.block.output.length > 0
+                ? exactPosition.block.output
+                : output
+              : output,
+            status: isTerminalToolStatus(exactPosition.block.status)
+              ? exactPosition.block.status
+              : "running",
+          };
+        }
+        const updated = [...existing];
+        updated[exactPosition.msgIndex] = { ...msg, content: blocks };
+        chat.setMessagesForSession(sessionId, updated);
+        chat.incrementStreamVersion();
+        return;
+      }
+
       const lastMsg = existing[existing.length - 1];
       if (!lastMsg || lastMsg.role !== "assistant") return;
 
