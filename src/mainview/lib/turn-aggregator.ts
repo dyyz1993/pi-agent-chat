@@ -1,4 +1,5 @@
 import type { ChatMessage, TimelineTurn, TimelineItem, StandaloneEntry } from "../types";
+import { ALL_MEMORY_TYPE_KEYS } from "../components/chat/memory-config";
 import {
   hasOverlappingToolExecutionKeys,
   toolExecutionItemToBlock,
@@ -102,6 +103,7 @@ export function aggregateTurns(messages: ChatMessage[]): {
               currentTurn.items.push(item);
             }
           } else if (block.type === "custom") {
+            if (ALL_MEMORY_TYPE_KEYS.has(block.customType)) continue;
             currentTurn.items = currentTurn.items ?? [];
             currentTurn.items.push({
               itemType: "customEntry",
@@ -120,6 +122,7 @@ export function aggregateTurns(messages: ChatMessage[]): {
           (b): b is Extract<typeof b, { type: "custom" }> => b.type === "custom",
         );
         if (!customBlock) break;
+        if (ALL_MEMORY_TYPE_KEYS.has(customBlock.customType)) break;
 
         const entry: StandaloneEntry = {
           id: msg.id,

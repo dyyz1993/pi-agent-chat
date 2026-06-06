@@ -71,31 +71,15 @@ interface ProcessedMessage {
   hide?: boolean;
 }
 
-function buildProcessedMessages(messages: ChatMessage[]): ProcessedMessage[] {
+export function buildProcessedMessages(messages: ChatMessage[]): ProcessedMessage[] {
   const result: ProcessedMessage[] = [];
-  const hideIds = new Set<string>();
 
-  for (let i = 0; i < messages.length; i++) {
-    const msg = messages[i];
-    if (hideIds.has(msg.id)) continue;
+  for (const msg of messages) {
 
     const customBlock = msg.content.find(
       (b): b is Extract<(typeof msg)["content"][number], { type: "custom" }> => b.type === "custom",
     );
-    if (customBlock?.customType === "memory_prefetch") {
-      if (i + 1 < messages.length) {
-        const nextMsg = messages[i + 1];
-        const nextBlock = nextMsg.content.find(
-          (b): b is Extract<(typeof nextMsg)["content"][number], { type: "custom" }> =>
-            b.type === "custom",
-        );
-        if (nextBlock?.customType === "memory_prefetch_result") {
-          result.push({ msg, mergedResultData: nextBlock.data });
-          hideIds.add(nextMsg.id);
-          continue;
-        }
-      }
-      result.push({ msg });
+    if (customBlock && ALL_MEMORY_TYPE_KEYS.has(customBlock.customType)) {
       continue;
     }
 

@@ -17,6 +17,7 @@ import { getToolIcon, getPreviewResourceIcon, getCustomTypeIcon } from "./tool-i
 import { useChatStore } from "../../stores/use-chat-store";
 import { useSettingsStore } from "../../stores/use-settings-store";
 import { createLogger } from "../../../shared/lib/logger";
+import { ALL_MEMORY_TYPE_KEYS } from "./memory-config";
 
 const renderLog = createLogger("render-cache");
 
@@ -47,7 +48,7 @@ export function clearSideNavCache(sessionId?: string): void {
   }
 }
 
-function buildFlatItems(messages: ChatMessage[], showThinking: boolean): FlatItem[] {
+export function buildFlatItems(messages: ChatMessage[], showThinking: boolean): FlatItem[] {
   const items: FlatItem[] = [];
   for (const msg of messages) {
     const id = msg.id;
@@ -62,6 +63,7 @@ function buildFlatItems(messages: ChatMessage[], showThinking: boolean): FlatIte
         | { type: "custom"; customType: string; data: unknown }
         | undefined;
       const ct = cb?.customType ?? "unknown";
+      if (ALL_MEMORY_TYPE_KEYS.has(ct)) continue;
       const ie = getCustomTypeIcon(ct);
       items.push({ key: id, navId: id, icon: ie.icon, color: ie.color });
       continue;
@@ -75,6 +77,9 @@ function buildFlatItems(messages: ChatMessage[], showThinking: boolean): FlatIte
     const customBlock = msg.content.find((b) => b.type === "custom") as
       | { type: "custom"; customType: string; data: unknown }
       | undefined;
+    if (customBlock && ALL_MEMORY_TYPE_KEYS.has(customBlock.customType)) {
+      continue;
+    }
     if (customBlock?.customType === "lsp_diagnostics") {
       items.push({ key: id, navId: id, icon: AlertTriangle, color: "text-status-warning" });
       continue;

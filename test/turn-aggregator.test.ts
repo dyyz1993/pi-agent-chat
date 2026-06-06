@@ -249,6 +249,32 @@ describe("aggregateTurns", () => {
     }
   });
 
+  it("skips memory custom blocks in chat turns", () => {
+    const result = aggregateTurns([
+      makeUserMsg(),
+      makeAssistantMsg({}, [
+        { type: "custom", customType: "memory_prefetch_result", data: { summary: "injected" } },
+        { type: "custom", customType: "memory_extract", data: { updated: 1 } },
+        { type: "custom", customType: "memory_dream", data: { updates: 1 } },
+      ]),
+    ]);
+    expect(result.turns).toHaveLength(1);
+    expect(result.turns[0].items).toHaveLength(0);
+  });
+
+  it("skips standalone memory custom messages", () => {
+    const result = aggregateTurns([
+      {
+        id: "mem1",
+        role: "custom",
+        content: [{ type: "custom", customType: "memory_prefetch", data: { query: "x" } }],
+        timestamp: 3000,
+      },
+    ]);
+    expect(result.turns).toHaveLength(0);
+    expect(result.standalone).toHaveLength(0);
+  });
+
   it("isStreaming propagates from user and assistant messages", () => {
     const result = aggregateTurns([
       makeUserMsg({ isStreaming: true }),
