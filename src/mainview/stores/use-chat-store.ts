@@ -1,7 +1,11 @@
 import { create } from "zustand";
 import type { Message, ImageContent } from "@dyyz1993/pi-ai";
 import type { ChatMessage, ContentBlock } from "../types";
-import { buildPreservedStreamingMessage, normalizeToolBlocks } from "./chat-tool-normalizer";
+import {
+  buildPreservedStreamingMessage,
+  dedupeToolExecutions,
+  normalizeToolBlocks,
+} from "./chat-tool-normalizer";
 import { hasSameMessageSnapshots } from "./chat-message-snapshot";
 import { isAgentNotStartedError, sendAgentMessageWithTimeout } from "./chat-send-utils";
 import { readDraft, writeDraft } from "./chat-input-draft";
@@ -299,9 +303,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   setMessagesForSession: (sessionId, msgs) =>
-    set((s) => ({
-      messagesBySession: { ...s.messagesBySession, [sessionId]: msgs },
-    })),
+    set((s) => {
+      const nextMsgs = [...msgs];
+      dedupeToolExecutions(nextMsgs);
+      return {
+        messagesBySession: { ...s.messagesBySession, [sessionId]: nextMsgs },
+      };
+    }),
 
   clearSessionMessages: (sessionId) =>
     set((s) => {

@@ -2,6 +2,51 @@ import type { ChatMessage, ContentBlock } from "../types";
 
 type ToolExecutionBlock = Extract<ContentBlock, { type: "toolExecution" }>;
 
+function normalizeToolName(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+function parseArgsObject(args: string | undefined): Record<string, unknown> | null {
+  if (!args) return null;
+  try {
+    const parsed = JSON.parse(args) as unknown;
+    return parsed && typeof parsed === "object" && parsed !== null
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function toolExecutionSemanticKey(block: ToolExecutionBlock): string | null {
+  const toolName = normalizeToolName(block.toolName);
+  const argsObj = parseArgsObject(block.args);
+  const path =
+    typeof argsObj?.path === "string"
+      ? argsObj.path
+      : typeof argsObj?.filePath === "string"
+        ? argsObj.filePath
+        : undefined;
+  if (path && ["edit", "write", "read", "readfile"].includes(toolName)) {
+    return `${toolName}:path:${path}`;
+  }
+
+  const command =
+    typeof argsObj?.command === "string" ? argsObj.command : toolName === "bash" ? block.args : "";
+  if (command && toolName === "bash") {
+    return `${toolName}:command:${command.trim()}`;
+  }
+
+  return null;
+}
+
+function toolExecutionDedupeKeys(block: ToolExecutionBlock): string[] {
+  const keys = [`id:${block.toolCallId}`];
+  const semanticKey = toolExecutionSemanticKey(block);
+  if (semanticKey) keys.push(`semantic:${semanticKey}`);
+  return keys;
+}
+
 function toolExecutionScore(block: ToolExecutionBlock): number {
   let score = 0;
   if (block.status === "done" || block.status === "error") score += 100;
@@ -11,6 +56,48 @@ function toolExecutionScore(block: ToolExecutionBlock): number {
   if (block.endedAt) score += 5;
   if (block.startedAt) score += 1;
   return score;
+}
+
+export function dedupeToolExecutions(msgs: ChatMessage[]): void {
+  const bestByKey = new Map<string, { msgIndex: number; block: ToolExecutionBlock }>();
+
+  for (let mi = 0; mi < msgs.length; mi++) {
+    const msg = msgs[mi];
+    if (msg.role !== "assistant") continue;
+    for (const block of msg.content) {
+      if (block.type !== "toolExecution") continue;
+      const keys = toolExecutionDedupeKeys(block);
+      const previous = keys.map((key) => bestByKey.get(key)).find((candidate) => candidate);
+      if (!previous || toolExecutionScore(block) >= toolExecutionScore(previous.block)) {
+        for (const key of keys) {
+          bestByKey.set(key, { msgIndex: mi, block });
+        }
+      }
+    }
+  }
+
+  if (bestByKey.size === 0) return;
+
+  for (let mi = 0; mi < msgs.length; mi++) {
+    const msg = msgs[mi];
+    if (msg.role !== "assistant") continue;
+
+    let changed = false;
+    const newContent = msg.content.filter((block) => {
+      if (block.type !== "toolExecution") return true;
+      const keys = toolExecutionDedupeKeys(block);
+      const keep = keys.every((key) => {
+        const best = bestByKey.get(key);
+        return best?.msgIndex === mi && best.block === block;
+      });
+      if (!keep) changed = true;
+      return keep;
+    });
+
+    if (changed) {
+      msgs[mi] = { ...msg, content: newContent };
+    }
+  }
 }
 
 export function normalizeToolBlocks(
@@ -212,38 +299,7 @@ export function normalizeToolBlocks(
     msgs[mi] = { ...msg, content: newContent };
   }
 
-  const bestToolExecutionById = new Map<string, { msgIndex: number; block: ToolExecutionBlock }>();
-  for (let mi = 0; mi < msgs.length; mi++) {
-    const msg = msgs[mi];
-    if (msg.role !== "assistant") continue;
-    for (const block of msg.content) {
-      if (block.type !== "toolExecution") continue;
-      const previous = bestToolExecutionById.get(block.toolCallId);
-      if (!previous || toolExecutionScore(block) >= toolExecutionScore(previous.block)) {
-        bestToolExecutionById.set(block.toolCallId, { msgIndex: mi, block });
-      }
-    }
-  }
-
-  if (bestToolExecutionById.size > 0) {
-    for (let mi = 0; mi < msgs.length; mi++) {
-      const msg = msgs[mi];
-      if (msg.role !== "assistant") continue;
-
-      let changed = false;
-      const newContent = msg.content.filter((block) => {
-        if (block.type !== "toolExecution") return true;
-        const best = bestToolExecutionById.get(block.toolCallId);
-        const keep = best?.msgIndex === mi && best.block === block;
-        if (!keep) changed = true;
-        return keep;
-      });
-
-      if (changed) {
-        msgs[mi] = { ...msg, content: newContent };
-      }
-    }
-  }
+  dedupeToolExecutions(msgs);
 
   if (toRemove.size > 0) {
     for (let i = msgs.length - 1; i >= 0; i--) {

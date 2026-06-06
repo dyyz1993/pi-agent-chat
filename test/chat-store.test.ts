@@ -436,6 +436,54 @@ describe("normalizeToolBlocks", () => {
     expect(blocks[0].output).toBe("ok");
   });
 
+  it("deduplicates stale running file tool against terminal execution with a different toolCallId", () => {
+    const msgs: ChatMessage[] = [
+      {
+        id: "m1",
+        role: "assistant",
+        content: [
+          {
+            type: "toolExecution",
+            toolCallId: "tc-live-write",
+            toolName: "edit",
+            args: JSON.stringify({ path: "crates/render/src/ascii.rs", edits: [] }),
+            status: "running",
+            output: "写入中...",
+          },
+        ],
+        timestamp: 1,
+        isStreaming: true,
+      },
+      {
+        id: "m2",
+        role: "assistant",
+        content: [
+          {
+            type: "toolExecution",
+            toolCallId: "tc-replay-write",
+            toolName: "edit",
+            args: JSON.stringify({ path: "crates/render/src/ascii.rs", edits: [] }),
+            status: "error",
+            output: "Could not find exact text",
+            details: {},
+            endedAt: 2,
+          },
+        ],
+        timestamp: 2,
+      },
+    ];
+
+    normalizeToolBlocks(msgs, false, true);
+
+    const blocks = msgs.flatMap((msg) =>
+      msg.content.filter((b): b is Extract<ContentBlock, { type: "toolExecution" }> => b.type === "toolExecution"),
+    );
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].toolCallId).toBe("tc-replay-write");
+    expect(blocks[0].status).toBe("error");
+    expect(blocks[0].output).toBe("Could not find exact text");
+  });
+
   it("removes empty assistant messages left by cross-message tool dedupe", () => {
     const msgs: ChatMessage[] = [
       {
