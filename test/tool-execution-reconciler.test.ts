@@ -70,6 +70,15 @@ describe("tool execution reconciler", () => {
     });
   });
 
+  it("extracts description metadata from raw JSON string args", () => {
+    const raw = JSON.stringify({ description: "commit M7.2.1" }, null, 2);
+
+    expect(formatArgsFromRawInput(raw)).toEqual({
+      args: raw,
+      description: "commit M7.2.1",
+    });
+  });
+
   it("normalizes bash command args from plain text and JSON", () => {
     expect(normalizeToolArgsForMatch("npm run build")).toBe("npm run build");
     expect(normalizeToolArgsForMatch(JSON.stringify({ command: "npm run build" }))).toBe(
@@ -173,6 +182,80 @@ describe("tool execution reconciler", () => {
     );
 
     expect(buildPreservedStreamingMessage(finalMessages, streaming)).toBeUndefined();
+  });
+
+  it("does not preserve stale streaming tools when terminal history only matches by description", () => {
+    const finalMessages: ChatMessage[] = [
+      {
+        id: "history",
+        role: "assistant",
+        content: [
+          toolExecution({
+            toolCallId: "tc-history-result",
+            args: "",
+            description: "commit M7.2.1",
+            status: "error",
+            output: "syntax error",
+          }),
+        ],
+        timestamp: 2,
+      },
+    ];
+    const streaming: ChatMessage = {
+      id: "live",
+      role: "assistant",
+      content: [
+        toolExecution({
+          toolCallId: "tc-live-running",
+          args: "",
+          description: "commit M7.2.1",
+          status: "running",
+        }),
+      ],
+      timestamp: 1,
+      isStreaming: true,
+    };
+
+    expect(buildPreservedStreamingMessage(finalMessages, streaming)).toBeUndefined();
+  });
+
+  it("preserves a newer streaming tool even when an older terminal has the same description", () => {
+    const finalMessages: ChatMessage[] = [
+      {
+        id: "history",
+        role: "assistant",
+        content: [
+          toolExecution({
+            toolCallId: "tc-history-result",
+            args: "",
+            description: "workspace 验收",
+            status: "done",
+            output: "passed",
+          }),
+        ],
+        timestamp: 1,
+      },
+    ];
+    const streaming: ChatMessage = {
+      id: "live",
+      role: "assistant",
+      content: [
+        toolExecution({
+          toolCallId: "tc-live-running",
+          args: "",
+          description: "workspace 验收",
+          status: "running",
+        }),
+      ],
+      timestamp: 2,
+      isStreaming: true,
+    };
+
+    const preserved = buildPreservedStreamingMessage(finalMessages, streaming);
+    expect(preserved?.content).toHaveLength(1);
+    expect(
+      preserved?.content[0].type === "toolExecution" ? preserved.content[0].toolCallId : "",
+    ).toBe("tc-live-running");
   });
 
   it("preserves still-running streaming tools that history has not completed", () => {

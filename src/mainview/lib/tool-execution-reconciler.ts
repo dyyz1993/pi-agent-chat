@@ -32,6 +32,18 @@ export function formatArgsFromRawInput(rawInput: unknown): {
   description?: string;
 } {
   if (typeof rawInput === "string") {
+    try {
+      const parsed = JSON.parse(rawInput) as unknown;
+      if (parsed && typeof parsed === "object" && parsed !== null) {
+        const obj = parsed as Record<string, unknown>;
+        return {
+          args: rawInput,
+          description: typeof obj.description === "string" ? obj.description : undefined,
+        };
+      }
+    } catch {
+      // Plain command strings are common for live tool events.
+    }
     return { args: rawInput };
   }
   if (rawInput != null) {
@@ -111,6 +123,17 @@ function toolExecutionScore(block: ToolExecutionBlock): number {
   return score;
 }
 
+function normalizeToolDescription(description: string | undefined): string {
+  return (description ?? "").trim().replace(/\s+/g, " ");
+}
+
+function isTerminalToolExecution(block: ContentBlock): block is ToolExecutionBlock {
+  return (
+    block.type === "toolExecution" &&
+    (block.status === "done" || block.status === "error")
+  );
+}
+
 export function dedupeToolExecutions(msgs: ChatMessage[]): void {
   const bestByKey = new Map<string, { msgIndex: number; block: ToolExecutionBlock }>();
 
@@ -169,13 +192,12 @@ export function buildPreservedStreamingMessage(
   }
 
   const terminalKeys = new Set<string>();
+  const terminalBlocks: Array<{ block: ToolExecutionBlock; timestamp: number }> = [];
   for (const msg of finalMsgs) {
     if (msg.role !== "assistant") continue;
     for (const block of msg.content) {
-      if (
-        block.type === "toolExecution" &&
-        (block.status === "done" || block.status === "error")
-      ) {
+      if (isTerminalToolExecution(block)) {
+        terminalBlocks.push({ block, timestamp: msg.timestamp });
         for (const key of getToolExecutionDedupeKeys(block)) {
           terminalKeys.add(key);
         }
@@ -183,12 +205,24 @@ export function buildPreservedStreamingMessage(
     }
   }
 
-  const preservedContent = streamingMsg.content.filter(
-    (block) =>
-      block.type === "toolExecution" &&
-      block.status === "running" &&
-      !getToolExecutionDedupeKeys(block).some((key) => terminalKeys.has(key)),
-  );
+  const preservedContent = streamingMsg.content.filter((block) => {
+    if (block.type !== "toolExecution" || block.status !== "running") return false;
+    if (getToolExecutionDedupeKeys(block).some((key) => terminalKeys.has(key))) return false;
+
+    const description = normalizeToolDescription(block.description);
+    if (!description) return true;
+
+    const toolName = normalizeToolName(block.toolName);
+    const hasLaterTerminalWithSameDescription = terminalBlocks.some(({ block: terminal, timestamp }) => {
+      if (timestamp < streamingMsg.timestamp) return false;
+      return (
+        normalizeToolName(terminal.toolName) === toolName &&
+        normalizeToolDescription(terminal.description) === description
+      );
+    });
+
+    return !hasLaterTerminalWithSameDescription;
+  });
 
   if (preservedContent.length === 0) return undefined;
   return { ...streamingMsg, content: preservedContent };

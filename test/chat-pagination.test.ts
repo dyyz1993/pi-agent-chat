@@ -526,6 +526,67 @@ describe("chat pagination", () => {
     expect(blocks[0].output).toBe("passed");
   });
 
+  it("background refresh should not preserve stale running bash card when only description matches terminal history", async () => {
+    useChatStore.getState().setMessagesForSession("test-session", [
+      {
+        id: "live-running-bash",
+        role: "assistant",
+        content: [
+          {
+            type: "toolExecution",
+            toolCallId: "tc-live-commit",
+            toolName: "bash",
+            args: "",
+            description: "commit M7.2.1",
+            status: "running",
+            output: "waiting...",
+          },
+        ],
+        timestamp: 1100,
+        isStreaming: true,
+      },
+    ]);
+
+    (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
+      messages: [
+        {
+          id: "server-assistant-commit",
+          entryId: "entry-server-assistant-commit",
+          role: "assistant",
+          content: [
+            {
+              type: "toolCall",
+              id: "tc-server-commit",
+              name: "bash",
+              arguments: { description: "commit M7.2.1" },
+            },
+          ],
+          timestamp: 1200,
+        },
+        makeRawToolResultMessage(13, "tc-server-commit", "syntax error"),
+      ],
+      customEntries: [],
+      hasMore: false,
+      nextCursor: null,
+    });
+
+    useChatStore.getState()._backgroundRefreshMessages("test-session");
+
+    await flushBackgroundRefresh();
+
+    const msgs = useChatStore.getState().messagesBySession["test-session"]!;
+    const blocks = msgs.flatMap((msg) =>
+      msg.content.filter(
+        (block): block is Extract<ContentBlock, { type: "toolExecution" }> =>
+          block.type === "toolExecution",
+      ),
+    );
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].toolCallId).toBe("tc-server-commit");
+    expect(blocks[0].status).toBe("done");
+    expect(blocks[0].output).toBe("syntax error");
+  });
+
   it("background refresh should preserve optimistic local user messages", async () => {
     useChatStore.getState().setMessagesForSession("test-session", [
       {
