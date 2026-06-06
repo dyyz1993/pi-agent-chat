@@ -601,6 +601,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           finalMsgs = [...finalMsgs, preservedStreamingMsg];
         }
       }
+      dedupeToolExecutions(finalMsgs);
 
       if (hasSameMessageSnapshots(currentMsgs, finalMsgs)) {
         perfLog.info("[loadMessages] content unchanged, skip update", {
@@ -759,6 +760,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
               localOnly.length > 0
                 ? [...msgs, ...localOnly].sort((a, b) => a.timestamp - b.timestamp)
                 : msgs;
+            dedupeToolExecutions(merged);
             set((s) => ({
               messagesBySession: { ...s.messagesBySession, [sid]: merged },
               historyLoadVersion: s.historyLoadVersion + 1,
@@ -948,6 +950,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         return (a.entryId ?? a.id).localeCompare(b.entryId ?? b.id);
       });
       const finalMsgs = mergedMsgs.map((msg) => currentById.get(msg.id) ?? msg);
+      dedupeToolExecutions(finalMsgs);
 
       set((s) => ({
         messagesBySession: { ...s.messagesBySession, [sid]: finalMsgs },
