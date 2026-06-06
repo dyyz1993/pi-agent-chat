@@ -587,6 +587,73 @@ describe("chat pagination", () => {
     expect(blocks[0].output).toBe("syntax error");
   });
 
+  it("background refresh should replace an older stale running tool with completed history", async () => {
+    const staleAssistant = {
+      id: "stale-live",
+      role: "assistant" as const,
+      content: [
+        {
+          type: "toolExecution" as const,
+          toolCallId: "tc-gui-build",
+          toolName: "bash",
+          args: "cargo build -p browser-gui",
+          status: "running" as const,
+          description: "看 gui 编译错",
+        },
+      ],
+      timestamp: 1500,
+      isStreaming: true,
+    };
+    const laterAssistant = {
+      id: "later",
+      role: "assistant" as const,
+      content: [{ type: "text" as const, text: "M7.5.1" }],
+      timestamp: 3000,
+    };
+    useChatStore.setState({
+      messagesBySession: { "test-session": [staleAssistant, laterAssistant] },
+      loadingSessions: new Set(),
+    });
+
+    (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
+      messages: [
+        {
+          id: "assistant-tool",
+          entryId: "assistant-tool-entry",
+          role: "assistant",
+          content: [
+            {
+              type: "toolCall",
+              id: "tc-gui-build",
+              name: "bash",
+              arguments: {
+                command: "cargo build -p browser-gui",
+                description: "看 gui 编译错",
+              },
+            },
+          ],
+          timestamp: 1000,
+        },
+        makeRawToolResultMessage(2, "tc-gui-build", "Finished dev profile"),
+        laterAssistant,
+      ],
+      customEntries: [],
+      hasMore: false,
+      nextCursor: null,
+    });
+
+    await useChatStore.getState()._backgroundRefreshMessages("test-session");
+
+    const msgs = useChatStore.getState().messagesBySession["test-session"]!;
+    const executions = msgs.flatMap((m) =>
+      m.content.filter((b): b is Extract<ContentBlock, { type: "toolExecution" }> => b.type === "toolExecution"),
+    );
+    expect(executions).toHaveLength(1);
+    expect(executions[0].toolCallId).toBe("tc-gui-build");
+    expect(executions[0].status).toBe("done");
+    expect(msgs.some((m) => m.id === "stale-live")).toBe(false);
+  });
+
   it("background refresh should preserve optimistic local user messages", async () => {
     useChatStore.getState().setMessagesForSession("test-session", [
       {

@@ -249,6 +249,9 @@ export function createSetActiveSessionAction({
                         return apiClient.call("agent.replayHoldEvents", { sessionId: id });
                       })
                       .then(() => {
+                        return useChatStore.getState()._backgroundRefreshMessages(id, session.sessionPath);
+                      })
+                      .then(() => {
                         perfLog.info("[switch] === HOT SWITCH COMPLETE ===", {
                           sessionId: id,
                           totalMs: Math.round(performance.now() - tSwitchStart),
@@ -278,6 +281,9 @@ export function createSetActiveSessionAction({
                           ms: Math.round(performance.now() - tLoad),
                         });
                         return apiClient.call("agent.replayHoldEvents", { sessionId: id });
+                      })
+                      .then(() => {
+                        return useChatStore.getState()._backgroundRefreshMessages(id, session.sessionPath);
                       })
                       .then(() => {
                         perfLog.info("[switch] === COLD SWITCH COMPLETE ===", {

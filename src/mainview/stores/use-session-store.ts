@@ -950,6 +950,11 @@ apiClient.onReconnect(() => {
             .then(() => {
               return apiClient.call("agent.replayHoldEvents", { sessionId: activeSessionId });
             })
+            .then(() => {
+              return useChatStore
+                .getState()
+                ._backgroundRefreshMessages(activeSessionId, session.sessionPath);
+            })
             .catch((err) => {
               log.warn("[onReconnect] load+replay failed", {
                 sessionId: activeSessionId,
