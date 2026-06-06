@@ -109,6 +109,18 @@ function makeRawAssistantToolCallMessage(index: number, toolCallId: string) {
   };
 }
 
+function makeRawToolResultMessage(index: number, toolCallId: string, content: string) {
+  return {
+    id: `tool-result-${index}`,
+    entryId: `tool-result-entry-${index}`,
+    role: "toolResult",
+    toolCallId,
+    toolName: "bash",
+    content: [{ type: "text", text: content }],
+    timestamp: 1000 + index * 100 + 1,
+  };
+}
+
 function makeRpcResult(count: number, startIndex = 0) {
   const messages = [];
   for (let i = 0; i < count; i++) {
@@ -120,7 +132,9 @@ function makeRpcResult(count: number, startIndex = 0) {
 }
 
 async function flushBackgroundRefresh() {
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  for (let i = 0; i < 5; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
 }
 
 describe("chat pagination", () => {
@@ -329,6 +343,76 @@ describe("chat pagination", () => {
     const msgs = useChatStore.getState().messagesBySession["test-session"]!;
     expect(msgs).toHaveLength(1);
     expect(msgs[0].id).toBe("server-assistant-ok");
+  });
+
+  it("background refresh should close stale running tool cards while preserving the latest live stream", async () => {
+    useChatStore.getState().setMessagesForSession("test-session", [
+      {
+        id: "stale-running-tool",
+        role: "assistant",
+        content: [
+          {
+            type: "toolExecution",
+            toolCallId: "tc-stale-commit",
+            toolName: "bash",
+            args: JSON.stringify({ command: "git commit -m M3.4", description: "commit M3.4" }),
+            status: "running",
+            output: "waiting...",
+          },
+        ],
+        timestamp: 1100,
+        isStreaming: true,
+      },
+      {
+        id: "latest-live-tool",
+        role: "assistant",
+        content: [
+          {
+            type: "toolExecution",
+            toolCallId: "tc-latest-read",
+            toolName: "read",
+            args: JSON.stringify({ path: "ROADMAP.md" }),
+            status: "running",
+          },
+        ],
+        timestamp: 2200,
+        isStreaming: true,
+      },
+    ]);
+
+    (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
+      messages: [
+        makeRawAssistantToolCallMessage(1, "tc-stale-commit"),
+        makeRawToolResultMessage(1, "tc-stale-commit", "[main f862e26] M3.4"),
+      ],
+      customEntries: [],
+      hasMore: false,
+      nextCursor: null,
+    });
+
+    useChatStore.getState()._backgroundRefreshMessages("test-session");
+
+    await flushBackgroundRefresh();
+
+    const msgs = useChatStore.getState().messagesBySession["test-session"]!;
+    const toolBlocks = msgs.flatMap((msg) =>
+      msg.content.filter((block) => block.type === "toolExecution"),
+    );
+    const staleBlocks = toolBlocks.filter(
+      (block) => block.type === "toolExecution" && block.toolCallId === "tc-stale-commit",
+    );
+    const liveBlock = toolBlocks.find(
+      (block) => block.type === "toolExecution" && block.toolCallId === "tc-latest-read",
+    );
+
+    expect(staleBlocks.length).toBeGreaterThan(0);
+    expect(liveBlock).toBeDefined();
+    expect(
+      staleBlocks.some((block) => block.type === "toolExecution" && block.status === "running"),
+    ).toBe(false);
+    if (liveBlock?.type === "toolExecution") {
+      expect(liveBlock.status).toBe("running");
+    }
   });
 
   it("background refresh should preserve optimistic local user messages", async () => {
