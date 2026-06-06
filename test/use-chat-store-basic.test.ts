@@ -60,6 +60,8 @@ beforeEach(() => {
     streamContentVersion: 0,
     loadingSessions: new Set<string>(),
     historyLoadVersion: 0,
+    historyLoadVersionBySession: {},
+    messageHydrationBySession: {},
     hasMoreMessagesBySession: {},
     isLoadingMoreBySession: {},
   });
@@ -88,6 +90,14 @@ describe("initial state", () => {
 
   it("has historyLoadVersion 0", () => {
     expect(useChatStore.getState().historyLoadVersion).toBe(0);
+  });
+
+  it("has empty historyLoadVersionBySession", () => {
+    expect(useChatStore.getState().historyLoadVersionBySession).toEqual({});
+  });
+
+  it("has empty messageHydrationBySession", () => {
+    expect(useChatStore.getState().messageHydrationBySession).toEqual({});
   });
 
   it("has empty hasMoreMessagesBySession", () => {

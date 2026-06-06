@@ -10,6 +10,7 @@ interface UseActiveScrollTrackerOptions {
   setActive: (id: string | null) => void;
   streamVersion: number;
   historyLoadVersion?: number;
+  initialScrollReady?: boolean;
   onInitComplete?: () => void;
 }
 
@@ -25,6 +26,7 @@ export function useActiveScrollTracker({
   setActive,
   streamVersion,
   historyLoadVersion,
+  initialScrollReady = true,
   onInitComplete,
 }: UseActiveScrollTrackerOptions) {
   const userScrolledUpRef = useRef(false);
@@ -180,6 +182,7 @@ export function useActiveScrollTracker({
   }, [sessionId, syncToolbarState]);
 
   useEffect(() => {
+    if (!initialScrollReady) return;
     if (didInitRef.current || messageIds.length === 0) return;
     didInitRef.current = true;
 
@@ -209,7 +212,7 @@ export function useActiveScrollTracker({
     return () => {
       if (rafId) cancelAnimationFrame(rafId);
     };
-  }, [messageIds, vlistRef, setActive]);
+  }, [initialScrollReady, messageIds, vlistRef, setActive, onInitComplete]);
 
   useEffect(() => {
     if (streamVersion === 0 || streamVersion === prevStreamRef.current) return;
@@ -219,6 +222,7 @@ export function useActiveScrollTracker({
   }, [streamVersion, doScrollToBottom]);
 
   useEffect(() => {
+    if (!initialScrollReady) return;
     if (historyLoadVersion === undefined || historyLoadVersion === 0) return;
 
     if (!userScrolledUpRef.current) {
@@ -268,7 +272,7 @@ export function useActiveScrollTracker({
         if (rafId) cancelAnimationFrame(rafId);
       };
     }
-  }, [historyLoadVersion, vlistRef, messageIds, setActive]);
+  }, [initialScrollReady, historyLoadVersion, vlistRef, messageIds, setActive]);
 
   const scrollToEdge = useCallback(
     (edge: "top" | "bottom") => {

@@ -159,7 +159,24 @@ export function ChatPanel() {
   const setGoal = useSupervisorStore((s) => s.setGoal);
 
   const streamVersion = useChatStore((s) => s.streamContentVersion);
-  const historyLoadVersion = useChatStore((s) => s.historyLoadVersion);
+  const historyLoadVersion = useChatStore(
+    useCallback(
+      (s) => (activeSessionId ? (s.historyLoadVersionBySession?.[activeSessionId] ?? 0) : 0),
+      [activeSessionId],
+    ),
+  );
+  const messageHydration = useChatStore(
+    useCallback(
+      (s) =>
+        activeSessionId ? (s.messageHydrationBySession?.[activeSessionId] ?? "idle") : "idle",
+      [activeSessionId],
+    ),
+  );
+  const initialScrollReady =
+    isViewingSubagent ||
+    !activeSessionId ||
+    messageHydration === "ready" ||
+    messageHydration === "error";
 
   const agentDetailBySession = useAgentStore((s) => s.agentDetailBySession);
   const agentBorderColor = activeSessionId
@@ -284,6 +301,7 @@ export function ChatPanel() {
     ),
     streamVersion,
     historyLoadVersion,
+    initialScrollReady,
   });
 
   const wrappedHandleScrollEnd = useCallback(() => {

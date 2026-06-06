@@ -27,6 +27,8 @@ const perfLog = createLogger("session-perf");
 const PAGE_SIZE = 50;
 const backgroundRefreshGenerationBySession = new Map<string, number>();
 
+export type MessageHydrationState = "idle" | "loading" | "ready" | "error";
+
 function prepareMessagesForStore(
   msgs: ChatMessage[],
   options: { normalizeTools?: boolean; activeToolCallIds?: string[] } = {},
@@ -201,6 +203,8 @@ interface ChatState {
   streamContentVersion: number;
   loadingSessions: Set<string>;
   historyLoadVersion: number;
+  historyLoadVersionBySession: Record<string, number>;
+  messageHydrationBySession: Record<string, MessageHydrationState>;
   hasMoreMessagesBySession: Record<string, boolean>;
   isLoadingMoreBySession: Record<string, boolean>;
   nextCursorBySession: Record<string, string | null>;
@@ -230,6 +234,20 @@ interface ChatState {
   clearInputDraft: (sessionId: string) => void;
 }
 
+function bumpHistoryLoadVersion(
+  s: ChatState,
+  sessionId: string,
+  bumpGlobal = true,
+): Pick<ChatState, "historyLoadVersion" | "historyLoadVersionBySession"> {
+  return {
+    historyLoadVersion: bumpGlobal ? s.historyLoadVersion + 1 : s.historyLoadVersion,
+    historyLoadVersionBySession: {
+      ...s.historyLoadVersionBySession,
+      [sessionId]: (s.historyLoadVersionBySession[sessionId] ?? 0) + 1,
+    },
+  };
+}
+
 export const useChatStore = create<ChatState>((set, get) => ({
   messagesBySession: {},
   activeToolCallIdsBySession: {},
@@ -239,6 +257,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   streamContentVersion: 0,
   loadingSessions: new Set<string>(),
   historyLoadVersion: 0,
+  historyLoadVersionBySession: {},
+  messageHydrationBySession: {},
   hasMoreMessagesBySession: {},
   isLoadingMoreBySession: {},
   nextCursorBySession: {},
@@ -544,7 +564,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
         return;
       }
     }
-    set((s) => ({ loadingSessions: new Set(s.loadingSessions).add(sid) }));
+    set((s) => ({
+      loadingSessions: new Set(s.loadingSessions).add(sid),
+      messageHydrationBySession: {
+        ...s.messageHydrationBySession,
+        [sid]: "loading",
+      },
+    }));
 
     try {
       const { apiClient } = await import("../lib/api-client");
@@ -582,6 +608,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
             count: current.length,
             roles: current.map((m) => m.role),
           });
+          set((s) => ({
+            messageHydrationBySession: {
+              ...s.messageHydrationBySession,
+              [sid]: "ready",
+            },
+          }));
           return;
         }
       }
@@ -591,6 +623,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const messages = result.messages;
       if (!Array.isArray(messages)) {
         log.warn("GUARD-4: messages is not array", { sessionId: sid, type: typeof messages });
+        set((s) => ({
+          messageHydrationBySession: {
+            ...s.messageHydrationBySession,
+            [sid]: "error",
+          },
+        }));
         return;
       }
       log.info("Raw messages count", { sessionId: sid, count: messages.length });
@@ -721,21 +759,29 @@ export const useChatStore = create<ChatState>((set, get) => ({
           count: finalMsgs.length,
         });
         set((s) => ({
-          historyLoadVersion: options?.force ? s.historyLoadVersion + 1 : s.historyLoadVersion,
+          ...(options?.force ? bumpHistoryLoadVersion(s, sid) : {}),
           hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: hasMore },
           nextCursorBySession: {
             ...s.nextCursorBySession,
             [sid]: result.nextCursor ?? null,
           },
+          messageHydrationBySession: {
+            ...s.messageHydrationBySession,
+            [sid]: "ready",
+          },
         }));
       } else {
         set((s) => ({
           messagesBySession: { ...s.messagesBySession, [sid]: finalMsgs },
-          historyLoadVersion: s.historyLoadVersion + 1,
+          ...bumpHistoryLoadVersion(s, sid),
           hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: hasMore },
           nextCursorBySession: {
             ...s.nextCursorBySession,
             [sid]: result.nextCursor ?? null,
+          },
+          messageHydrationBySession: {
+            ...s.messageHydrationBySession,
+            [sid]: "ready",
           },
         }));
       }
@@ -748,6 +794,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
       useAppStore
         .getState()
         .addLog(`Failed to load session: ${err instanceof Error ? err.message : String(err)}`);
+      set((s) => ({
+        messageHydrationBySession: {
+          ...s.messageHydrationBySession,
+          [sid]: "error",
+        },
+      }));
     } finally {
       set((s) => {
         const next = new Set(s.loadingSessions);
@@ -770,7 +822,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const t0 = performance.now();
     perfLog.info("[bgRefresh] begin", { sessionId: sid });
 
-    set((s) => ({ loadingSessions: new Set(s.loadingSessions).add(sid) }));
+    set((s) => ({
+      loadingSessions: new Set(s.loadingSessions).add(sid),
+      messageHydrationBySession: {
+        ...s.messageHydrationBySession,
+        [sid]: "loading",
+      },
+    }));
 
     try {
       const { apiClient } = await import("../lib/api-client");
@@ -797,7 +855,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
       });
 
       const messages = result.messages;
-      if (!Array.isArray(messages)) return;
+      if (!Array.isArray(messages)) {
+        set((s) => ({
+          messageHydrationBySession: {
+            ...s.messageHydrationBySession,
+            [sid]: "error",
+          },
+        }));
+        return;
+      }
       if (backgroundRefreshGenerationBySession.get(sid) !== refreshGeneration) {
         perfLog.info("[bgRefresh] stale response ignored", { sessionId: sid });
         return;
@@ -848,6 +914,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
           sessionId: sid,
           count: finalMsgs.length,
         });
+        set((s) => ({
+          hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: hasMore },
+          nextCursorBySession: {
+            ...s.nextCursorBySession,
+            [sid]: result.nextCursor ?? null,
+          },
+          messageHydrationBySession: {
+            ...s.messageHydrationBySession,
+            [sid]: "ready",
+          },
+        }));
       } else {
         perfLog.info("[bgRefresh] data changed, updating store", {
           sessionId: sid,
@@ -856,11 +933,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
         });
         set((s) => ({
           messagesBySession: { ...s.messagesBySession, [sid]: finalMsgs },
-          historyLoadVersion: s.historyLoadVersion + 1,
+          ...bumpHistoryLoadVersion(s, sid),
           hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: hasMore },
           nextCursorBySession: {
             ...s.nextCursorBySession,
             [sid]: result.nextCursor ?? null,
+          },
+          messageHydrationBySession: {
+            ...s.messageHydrationBySession,
+            [sid]: "ready",
           },
         }));
         useSessionStore.getState().restoreContextFromHistory(sid);
@@ -870,6 +951,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
         sessionId: sid,
         error: err instanceof Error ? err.message : String(err),
       });
+      set((s) => ({
+        messageHydrationBySession: {
+          ...s.messageHydrationBySession,
+          [sid]: "error",
+        },
+      }));
       // Background refresh failure is non-critical: cached messages are still visible
     } finally {
       if (backgroundRefreshGenerationBySession.get(sid) === refreshGeneration) {
@@ -964,7 +1051,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       set((s) => ({
         messagesBySession: { ...s.messagesBySession, [sid]: preparedMsgs },
-        historyLoadVersion: s.historyLoadVersion + 1,
+        ...bumpHistoryLoadVersion(s, sid),
         hasMoreMessagesBySession: {
           ...s.hasMoreMessagesBySession,
           [sid]: hasMore,

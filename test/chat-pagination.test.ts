@@ -152,6 +152,8 @@ describe("chat pagination", () => {
       streamContentVersion: 0,
       loadingSessions: new Set(),
       historyLoadVersion: 0,
+      historyLoadVersionBySession: {},
+      messageHydrationBySession: {},
       hasMoreMessagesBySession: {},
       isLoadingMoreBySession: {},
       nextCursorBySession: {},
@@ -180,6 +182,60 @@ describe("chat pagination", () => {
       "agent.getFullMessages",
       expect.objectContaining({ sessionId: "test-session" }),
     );
+  });
+
+  it("initial force load should mark session hydration ready and bump the session version", async () => {
+    (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
+      messages: [makeRawMessage(1, "user")],
+      customEntries: [],
+      hasMore: false,
+      nextCursor: null,
+    });
+
+    await useChatStore.getState().loadSessionMessages("test-session", { force: true });
+
+    const state = useChatStore.getState();
+    expect(state.messageHydrationBySession["test-session"]).toBe("ready");
+    expect(state.historyLoadVersion).toBe(1);
+    expect(state.historyLoadVersionBySession["test-session"]).toBe(1);
+  });
+
+  it("cached load should keep hydration loading until background refresh finishes", async () => {
+    let resolveRefresh: (value: unknown) => void = () => {};
+    (apiClient.call as ReturnType<typeof vi.fn>).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveRefresh = resolve;
+        }),
+    );
+    useChatStore.getState().setMessagesForSession("test-session", [
+      {
+        id: "cached-user",
+        role: "user",
+        content: [{ type: "text", text: "cached" }],
+        timestamp: 1000,
+      },
+    ]);
+
+    await useChatStore.getState().loadSessionMessages("test-session");
+
+    expect(useChatStore.getState().messageHydrationBySession["test-session"]).toBe("loading");
+    await vi.waitFor(() => {
+      expect(apiClient.call).toHaveBeenCalledWith(
+        "agent.getFullMessages",
+        expect.objectContaining({ sessionId: "test-session" }),
+      );
+    });
+    resolveRefresh({
+      messages: [makeRawMessage(1, "user")],
+      customEntries: [],
+      hasMore: false,
+      nextCursor: null,
+    });
+    await flushBackgroundRefresh();
+
+    expect(useChatStore.getState().messageHydrationBySession["test-session"]).toBe("ready");
+    expect(useChatStore.getState().historyLoadVersionBySession["test-session"]).toBe(1);
   });
 
   it("initial historical load should not mark orphan tool calls as running while session streams", async () => {
@@ -255,9 +311,7 @@ describe("chat pagination", () => {
       nextCursor: null,
     });
 
-    await useChatStore
-      .getState()
-      .loadSessionMessages("test-session", { force: true });
+    await useChatStore.getState().loadSessionMessages("test-session", { force: true });
 
     const msgs = useChatStore.getState().messagesBySession["test-session"]!;
     const executions = msgs.flatMap((msg) =>
@@ -835,7 +889,9 @@ describe("chat pagination", () => {
 
     const msgs = useChatStore.getState().messagesBySession["test-session"]!;
     const executions = msgs.flatMap((m) =>
-      m.content.filter((b): b is Extract<ContentBlock, { type: "toolExecution" }> => b.type === "toolExecution"),
+      m.content.filter(
+        (b): b is Extract<ContentBlock, { type: "toolExecution" }> => b.type === "toolExecution",
+      ),
     );
     expect(executions).toHaveLength(1);
     expect(executions[0].toolCallId).toBe("tc-gui-build");
