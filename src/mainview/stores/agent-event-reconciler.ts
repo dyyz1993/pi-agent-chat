@@ -1,6 +1,7 @@
 import type { ChatMessage, ContentBlock } from "../types";
 import {
   findMatchingPendingToolExecution,
+  findMatchingToolExecution,
   normalizeToolArgsForMatch,
 } from "../lib/tool-execution-reconciler";
 
@@ -65,7 +66,7 @@ export function formatToolArgs(rawArgs: unknown): {
   };
 }
 
-export { findMatchingPendingToolExecution, normalizeToolArgsForMatch };
+export { findMatchingPendingToolExecution, findMatchingToolExecution, normalizeToolArgsForMatch };
 
 export function extractIncomingToolCallIds(content: unknown): string[] {
   if (!Array.isArray(content)) return [];

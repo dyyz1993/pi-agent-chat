@@ -17,7 +17,7 @@ import { ALL_MEMORY_TYPE_KEYS } from "../components/chat/memory-config";
 import { createLogger } from "../../shared/lib/logger";
 import {
   closeRunningToolExecutions,
-  findMatchingPendingToolExecution,
+  findMatchingToolExecution,
   formatToolArgs,
   hasRenderableContent,
   isDelayedTerminalMessageUpdate,
@@ -668,14 +668,17 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
       if (event.type === "tool_execution_start") {
         const { args: argsStr, timeout, description } = formatToolArgs(event.args);
+        const matchedByExactId = targetIdx >= 0;
         const resolvedTargetIdx =
-          targetIdx >= 0 ? targetIdx : findMatchingPendingToolExecution(blocks, toolName, argsStr);
+          matchedByExactId
+            ? targetIdx
+            : findMatchingToolExecution(blocks, toolName, argsStr, { includeTerminal: true });
         if (resolvedTargetIdx >= 0) {
           const prev = blocks[resolvedTargetIdx] as ToolExecBlock;
           if (isTerminalToolStatus(prev.status)) {
             blocks[resolvedTargetIdx] = {
               ...prev,
-              toolCallId,
+              toolCallId: matchedByExactId ? toolCallId : prev.toolCallId,
               toolName: prev.toolName === "unknown" ? toolName : prev.toolName,
               args: argsStr || prev.args,
               timeout: timeout ?? prev.timeout,

@@ -237,9 +237,7 @@ export function createSetActiveSessionAction({
                         m.role === "user" || (m.role === "assistant" && m.tokenUsage),
                     );
                     const loadPromise: Promise<void> = hasCached
-                      ? (useChatStore
-                          .getState()
-                          ._backgroundRefreshMessages(id, session.sessionPath) ?? Promise.resolve())
+                      ? useChatStore.getState()._backgroundRefreshMessages(id, session.sessionPath)
                       : useChatStore.getState().loadSessionMessages(id, {
                           force: true,
                           sessionPath: session.sessionPath,

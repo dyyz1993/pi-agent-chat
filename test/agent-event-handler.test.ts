@@ -446,6 +446,43 @@ describe("tool_execution_update", () => {
     expect(block!.status).toBe("done");
     expect(block!.output).toBe("hello\n");
   });
+
+  it("does not append a replayed start when a terminal block with a different id has the same command", () => {
+    setMessages([
+      {
+        id: "msg-1",
+        role: "assistant",
+        content: [
+          {
+            type: "toolExecution",
+            toolCallId: "tc-history",
+            toolName: "bash",
+            args: JSON.stringify({ command: "echo hello", description: "say hello" }),
+            status: "done",
+            output: "hello\n",
+          },
+        ],
+        timestamp: Date.now(),
+        isStreaming: false,
+      },
+    ]);
+
+    handleAgentEvent(SID, {
+      type: "tool_execution_start",
+      toolCallId: "tc-replayed-stale",
+      toolName: "bash",
+      args: { command: "echo hello", description: "say hello" },
+    } as Parameters<typeof handleAgentEvent>[1]);
+    flushNow();
+
+    const blocks = getLastAssistant()!.content.filter(
+      (b): b is Extract<ContentBlock, { type: "toolExecution" }> => b.type === "toolExecution",
+    );
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].toolCallId).toBe("tc-history");
+    expect(blocks[0].status).toBe("done");
+    expect(blocks[0].output).toBe("hello\n");
+  });
 });
 
 describe("tool_execution_end", () => {

@@ -213,6 +213,15 @@ export function findMatchingPendingToolExecution(
   toolName: string,
   args: string,
 ): number {
+  return findMatchingToolExecution(blocks, toolName, args, { includeTerminal: false });
+}
+
+export function findMatchingToolExecution(
+  blocks: ContentBlock[],
+  toolName: string,
+  args: string,
+  options: { includeTerminal?: boolean } = {},
+): number {
   const targetArgs = normalizeToolArgsForMatch(args);
   if (!targetArgs) return -1;
   const incoming: ToolExecutionBlock = {
@@ -223,7 +232,10 @@ export function findMatchingPendingToolExecution(
     status: "running",
   };
   return blocks.findIndex((block): block is ToolExecutionBlock => {
-    if (block.type !== "toolExecution" || block.status === "done" || block.status === "error") {
+    if (block.type !== "toolExecution") {
+      return false;
+    }
+    if (!options.includeTerminal && (block.status === "done" || block.status === "error")) {
       return false;
     }
     return hasOverlappingToolExecutionKeys(block, incoming);

@@ -3,6 +3,7 @@ import type { ChatMessage, ContentBlock } from "../src/mainview/types";
 import {
   closeRunningToolExecutions,
   findMatchingPendingToolExecution,
+  findMatchingToolExecution,
   formatToolArgs,
   isDelayedTerminalMessageUpdate,
   isTerminalToolStatus,
@@ -75,6 +76,20 @@ describe("agent event reconciler", () => {
     ];
 
     expect(findMatchingPendingToolExecution(blocks, "bash", "ls now-mock")).toBe(-1);
+  });
+
+  it("can match terminal tool blocks when reconciling replayed starts", () => {
+    const blocks: ContentBlock[] = [
+      toolExecution({
+        toolCallId: "history-tool-id",
+        args: JSON.stringify({ command: "ls now-mock" }, null, 2),
+        status: "done",
+      }),
+    ];
+
+    expect(findMatchingToolExecution(blocks, "bash", "ls now-mock", { includeTerminal: true })).toBe(
+      0,
+    );
   });
 
   it("closes only running tool executions", () => {

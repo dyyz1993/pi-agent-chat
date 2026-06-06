@@ -53,7 +53,7 @@ interface ChatState {
     options?: { force?: boolean; sessionPath?: string; preserveStreaming?: boolean },
   ) => Promise<void>;
   /** Background refresh: fetch latest messages and silently update store if different */
-  _backgroundRefreshMessages: (sessionId: string, sessionPath?: string) => void;
+  _backgroundRefreshMessages: (sessionId: string, sessionPath?: string) => Promise<void>;
   loadMoreMessages: (sessionId: string) => Promise<void>;
   setIsStreaming: (v: boolean) => void;
   incrementStreamVersion: () => void;
@@ -644,7 +644,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   /** Background refresh: fetch latest messages from server and silently update store if different.
    *  Used after optimistic render from cache to guarantee data completeness. */
-  _backgroundRefreshMessages: (sessionId: string, sessionPath?: string) => {
+  _backgroundRefreshMessages: async (sessionId: string, sessionPath?: string) => {
     const sid = sessionId;
     // Don't run if already loading (avoid competing with foreground load)
     if (get().loadingSessions.has(sid)) return;
@@ -657,139 +657,137 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     set((s) => ({ loadingSessions: new Set(s.loadingSessions).add(sid) }));
 
-    (async () => {
-      try {
-        const { apiClient } = await import("../lib/api-client");
-        const BG_REFRESH_TIMEOUT_MS = 15_000;
-        const result = (await Promise.race([
-          apiClient.call("agent.getFullMessages", {
-            sessionId: sid,
-            sessionPath,
-            limit: PAGE_SIZE,
-          }),
-          new Promise<never>((_, reject) =>
-            setTimeout(
-              () => reject(new Error("bgRefresh getFullMessages timed out (15s)")),
-              BG_REFRESH_TIMEOUT_MS,
-            ),
-          ),
-        ])) as Awaited<ReturnType<typeof apiClient.call<"agent.getFullMessages">>>;
-
-        const rpcMs = Math.round(performance.now() - t0);
-        perfLog.info("[bgRefresh] RPC returned", {
+    try {
+      const { apiClient } = await import("../lib/api-client");
+      const BG_REFRESH_TIMEOUT_MS = 15_000;
+      const result = (await Promise.race([
+        apiClient.call("agent.getFullMessages", {
           sessionId: sid,
-          rpcMs,
-          messageCount: result.messages?.length,
-        });
+          sessionPath,
+          limit: PAGE_SIZE,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error("bgRefresh getFullMessages timed out (15s)")),
+            BG_REFRESH_TIMEOUT_MS,
+          ),
+        ),
+      ])) as Awaited<ReturnType<typeof apiClient.call<"agent.getFullMessages">>>;
 
-        const messages = result.messages;
-        if (!Array.isArray(messages)) return;
-        if (backgroundRefreshGenerationBySession.get(sid) !== refreshGeneration) {
-          perfLog.info("[bgRefresh] stale response ignored", { sessionId: sid });
-          return;
-        }
+      const rpcMs = Math.round(performance.now() - t0);
+      perfLog.info("[bgRefresh] RPC returned", {
+        sessionId: sid,
+        rpcMs,
+        messageCount: result.messages?.length,
+      });
 
-        // Process messages the same way as loadSessionMessages
-        const toolCallNameMap: Record<string, string> = {};
-        const msgs: ChatMessage[] = [];
-        for (const msg of messages) {
-          const mapped = messageToChatMessage(
-            msg as unknown as unknown as Message,
-            msg.id,
-            toolCallNameMap,
-          );
-          if (mapped) msgs.push(mapped);
-        }
-        normalizeToolBlocks(msgs, true, false);
+      const messages = result.messages;
+      if (!Array.isArray(messages)) return;
+      if (backgroundRefreshGenerationBySession.get(sid) !== refreshGeneration) {
+        perfLog.info("[bgRefresh] stale response ignored", { sessionId: sid });
+        return;
+      }
 
-        // Process custom entries (memory events)
-        const customEntries = result.customEntries;
-        if (Array.isArray(customEntries) && customEntries.length > 0) {
-          const memoryStore = useMemoryStore.getState();
-          for (const entry of customEntries) {
-            if (!ALL_MEMORY_TYPE_KEYS.has(entry.customType)) continue;
-            memoryStore.addEvent(sid, {
-              id: entry.id,
-              customType: entry.customType,
-              data: entry.data,
-              timestamp: entry.timestamp,
-            });
-            if (entry.customType === "memory_prefetch_result" && entry.data) {
-              const payload = entry.data as Record<string, unknown>;
-              memoryStore.addInjected(sid, {
-                summary: (payload.summary as string) ?? "",
-                snippet: (payload.snippet as string) ?? "",
-              });
-            }
-            msgs.push({
-              id: entry.id,
-              role: "custom",
-              content: [{ type: "custom", customType: entry.customType, data: entry.data }],
-              timestamp: entry.timestamp,
+      // Process messages the same way as loadSessionMessages
+      const toolCallNameMap: Record<string, string> = {};
+      const msgs: ChatMessage[] = [];
+      for (const msg of messages) {
+        const mapped = messageToChatMessage(
+          msg as unknown as unknown as Message,
+          msg.id,
+          toolCallNameMap,
+        );
+        if (mapped) msgs.push(mapped);
+      }
+      normalizeToolBlocks(msgs, true, false);
+
+      // Process custom entries (memory events)
+      const customEntries = result.customEntries;
+      if (Array.isArray(customEntries) && customEntries.length > 0) {
+        const memoryStore = useMemoryStore.getState();
+        for (const entry of customEntries) {
+          if (!ALL_MEMORY_TYPE_KEYS.has(entry.customType)) continue;
+          memoryStore.addEvent(sid, {
+            id: entry.id,
+            customType: entry.customType,
+            data: entry.data,
+            timestamp: entry.timestamp,
+          });
+          if (entry.customType === "memory_prefetch_result" && entry.data) {
+            const payload = entry.data as Record<string, unknown>;
+            memoryStore.addInjected(sid, {
+              summary: (payload.summary as string) ?? "",
+              snippet: (payload.snippet as string) ?? "",
             });
           }
-          msgs.sort((a, b) => {
-            if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
-            return (a.id || "").localeCompare(b.id || "");
+          msgs.push({
+            id: entry.id,
+            role: "custom",
+            content: [{ type: "custom", customType: entry.customType, data: entry.data }],
+            timestamp: entry.timestamp,
           });
         }
-
-        // Compare with current store: only update if different
-        const current = get().messagesBySession[sid] || [];
-
-        const serverIds = new Set(msgs.map((m) => m.id));
-        const localOnly = current.filter((m) => m._local && !serverIds.has(m.id));
-        const hasMore = result.hasMore === true || msgs.length > PAGE_SIZE;
-        let finalMsgs =
-          localOnly.length > 0
-            ? [...msgs, ...localOnly].sort((a, b) => a.timestamp - b.timestamp)
-            : msgs;
-
-        const lastCurrent = current[current.length - 1];
-        const preservedStreamingMsg = buildPreservedStreamingMessage(finalMsgs, lastCurrent);
-        if (preservedStreamingMsg) {
-          finalMsgs = [...finalMsgs, preservedStreamingMsg];
-        }
-        dedupeToolExecutions(finalMsgs);
-
-        if (hasSameMessageSnapshots(current, finalMsgs)) {
-          perfLog.info("[bgRefresh] data unchanged, skip update", {
-            sessionId: sid,
-            count: finalMsgs.length,
-          });
-        } else {
-          perfLog.info("[bgRefresh] data changed, updating store", {
-            sessionId: sid,
-            oldCount: current.length,
-            newCount: finalMsgs.length,
-          });
-          set((s) => ({
-            messagesBySession: { ...s.messagesBySession, [sid]: finalMsgs },
-            historyLoadVersion: s.historyLoadVersion + 1,
-            hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: hasMore },
-            nextCursorBySession: {
-              ...s.nextCursorBySession,
-              [sid]: result.nextCursor ?? null,
-            },
-          }));
-          useSessionStore.getState().restoreContextFromHistory(sid);
-        }
-      } catch (err) {
-        perfLog.info("[bgRefresh] failed (non-critical)", {
-          sessionId: sid,
-          error: err instanceof Error ? err.message : String(err),
+        msgs.sort((a, b) => {
+          if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
+          return (a.id || "").localeCompare(b.id || "");
         });
-        // Background refresh failure is non-critical: cached messages are still visible
-      } finally {
-        if (backgroundRefreshGenerationBySession.get(sid) === refreshGeneration) {
-          set((s) => {
-            const next = new Set(s.loadingSessions);
-            next.delete(sid);
-            return { loadingSessions: next };
-          });
-        }
       }
-    })();
+
+      // Compare with current store: only update if different
+      const current = get().messagesBySession[sid] || [];
+
+      const serverIds = new Set(msgs.map((m) => m.id));
+      const localOnly = current.filter((m) => m._local && !serverIds.has(m.id));
+      const hasMore = result.hasMore === true || msgs.length > PAGE_SIZE;
+      let finalMsgs =
+        localOnly.length > 0
+          ? [...msgs, ...localOnly].sort((a, b) => a.timestamp - b.timestamp)
+          : msgs;
+
+      const lastCurrent = current[current.length - 1];
+      const preservedStreamingMsg = buildPreservedStreamingMessage(finalMsgs, lastCurrent);
+      if (preservedStreamingMsg) {
+        finalMsgs = [...finalMsgs, preservedStreamingMsg];
+      }
+      dedupeToolExecutions(finalMsgs);
+
+      if (hasSameMessageSnapshots(current, finalMsgs)) {
+        perfLog.info("[bgRefresh] data unchanged, skip update", {
+          sessionId: sid,
+          count: finalMsgs.length,
+        });
+      } else {
+        perfLog.info("[bgRefresh] data changed, updating store", {
+          sessionId: sid,
+          oldCount: current.length,
+          newCount: finalMsgs.length,
+        });
+        set((s) => ({
+          messagesBySession: { ...s.messagesBySession, [sid]: finalMsgs },
+          historyLoadVersion: s.historyLoadVersion + 1,
+          hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: hasMore },
+          nextCursorBySession: {
+            ...s.nextCursorBySession,
+            [sid]: result.nextCursor ?? null,
+          },
+        }));
+        useSessionStore.getState().restoreContextFromHistory(sid);
+      }
+    } catch (err) {
+      perfLog.info("[bgRefresh] failed (non-critical)", {
+        sessionId: sid,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      // Background refresh failure is non-critical: cached messages are still visible
+    } finally {
+      if (backgroundRefreshGenerationBySession.get(sid) === refreshGeneration) {
+        set((s) => {
+          const next = new Set(s.loadingSessions);
+          next.delete(sid);
+          return { loadingSessions: next };
+        });
+      }
+    }
   },
 
   loadMoreMessages: async (sessionId: string) => {
