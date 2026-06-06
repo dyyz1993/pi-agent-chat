@@ -1,4 +1,5 @@
 import type { ChatMessage, ContentBlock } from "../types";
+import { hasOverlappingToolExecutionKeys } from "./chat-tool-normalizer";
 
 export type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
 
@@ -82,13 +83,17 @@ export function findMatchingPendingToolExecution(
 ): number {
   const targetArgs = normalizeToolArgsForMatch(args);
   if (!targetArgs) return -1;
-  return blocks.findIndex(
-    (block): block is ToolExecBlock =>
-      block.type === "toolExecution" &&
-      block.toolName === toolName &&
-      !isTerminalToolStatus(block.status) &&
-      normalizeToolArgsForMatch(block.args) === targetArgs,
-  );
+  const incoming: ToolExecBlock = {
+    type: "toolExecution",
+    toolCallId: "__incoming__",
+    toolName,
+    args,
+    status: "running",
+  };
+  return blocks.findIndex((block): block is ToolExecBlock => {
+    if (block.type !== "toolExecution" || isTerminalToolStatus(block.status)) return false;
+    return hasOverlappingToolExecutionKeys(block, incoming);
+  });
 }
 
 export function extractIncomingToolCallIds(content: unknown): string[] {

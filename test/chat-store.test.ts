@@ -537,6 +537,49 @@ describe("normalizeToolBlocks", () => {
     expect(blocks[0].status).toBe("done");
   });
 
+  it("normalizes raw SDK toolCall arguments shape before rendering", () => {
+    const msgs = [
+      {
+        id: "m1",
+        role: "assistant",
+        content: [
+          {
+            type: "toolCall",
+            id: "tc-raw-bash",
+            name: "bash",
+            arguments: { command: "npm run build", description: "workspace 全量测试" },
+          },
+        ],
+        timestamp: 1,
+      },
+      {
+        id: "m2",
+        role: "toolResult",
+        content: [
+          {
+            type: "toolResult",
+            toolCallId: "tc-raw-bash",
+            toolName: "bash",
+            content: "passed",
+          },
+        ],
+        timestamp: 2,
+      },
+    ] as ChatMessage[];
+
+    normalizeToolBlocks(msgs);
+
+    expect(msgs).toHaveLength(1);
+    const block = msgs[0].content[0];
+    expect(block.type).toBe("toolExecution");
+    if (block.type === "toolExecution") {
+      expect(block.toolCallId).toBe("tc-raw-bash");
+      expect(block.status).toBe("done");
+      expect(block.args).toContain("npm run build");
+      expect(block.description).toBe("workspace 全量测试");
+    }
+  });
+
   it("removes empty assistant messages left by cross-message tool dedupe", () => {
     const msgs: ChatMessage[] = [
       {

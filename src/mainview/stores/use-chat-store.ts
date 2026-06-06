@@ -25,6 +25,7 @@ const log = createLogger("chat-store");
 const perfLog = createLogger("session-perf");
 
 const PAGE_SIZE = 50;
+const backgroundRefreshGenerationBySession = new Map<string, number>();
 
 interface ChatState {
   messagesBySession: Record<string, ChatMessage[]>;
@@ -648,6 +649,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // Don't run if already loading (avoid competing with foreground load)
     if (get().loadingSessions.has(sid)) return;
 
+    const refreshGeneration = (backgroundRefreshGenerationBySession.get(sid) ?? 0) + 1;
+    backgroundRefreshGenerationBySession.set(sid, refreshGeneration);
+
     const t0 = performance.now();
     perfLog.info("[bgRefresh] begin", { sessionId: sid });
 
@@ -680,6 +684,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
         const messages = result.messages;
         if (!Array.isArray(messages)) return;
+        if (backgroundRefreshGenerationBySession.get(sid) !== refreshGeneration) {
+          perfLog.info("[bgRefresh] stale response ignored", { sessionId: sid });
+          return;
+        }
 
         // Process messages the same way as loadSessionMessages
         const toolCallNameMap: Record<string, string> = {};
@@ -773,11 +781,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
         });
         // Background refresh failure is non-critical: cached messages are still visible
       } finally {
-        set((s) => {
-          const next = new Set(s.loadingSessions);
-          next.delete(sid);
-          return { loadingSessions: next };
-        });
+        if (backgroundRefreshGenerationBySession.get(sid) === refreshGeneration) {
+          set((s) => {
+            const next = new Set(s.loadingSessions);
+            next.delete(sid);
+            return { loadingSessions: next };
+          });
+        }
       }
     })();
   },

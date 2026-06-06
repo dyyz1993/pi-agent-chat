@@ -142,6 +142,51 @@ describe("aggregateTurns", () => {
     }
   });
 
+  it("deduplicates repeated bash toolExecution items by command within a turn", () => {
+    const result = aggregateTurns([
+      makeUserMsg(),
+      makeAssistantMsg(
+        { id: "a1" },
+        [
+          {
+            type: "toolExecution",
+            toolCallId: "call-live",
+            toolName: "bash",
+            args: "cargo clippy --workspace",
+            status: "running",
+            output: "waiting...",
+          },
+        ],
+      ),
+      makeAssistantMsg(
+        { id: "a2" },
+        [
+          {
+            type: "toolExecution",
+            toolCallId: "call-history",
+            toolName: "bash",
+            args: JSON.stringify({
+              command: "cargo clippy --workspace",
+              description: "M5.2 clippy",
+            }),
+            status: "done",
+            output: "finished",
+          },
+        ],
+      ),
+    ]);
+
+    expect(result.turns).toHaveLength(1);
+    const toolItems = result.turns[0].items.filter((item) => item.itemType === "toolExecution");
+    expect(toolItems).toHaveLength(1);
+    const item = toolItems[0];
+    if (item.itemType === "toolExecution") {
+      expect(item.toolCallId).toBe("call-history");
+      expect(item.status).toBe("done");
+      expect(item.output).toBe("finished");
+    }
+  });
+
   it("does not deduplicate repeated toolCallIds across different turns", () => {
     const result = aggregateTurns([
       makeUserMsg({ id: "u1", content: [{ type: "text", text: "first" }] }),

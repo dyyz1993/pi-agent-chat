@@ -1,6 +1,7 @@
 import type { ChatMessage, ContentBlock } from "../types";
 
 type ToolExecutionBlock = Extract<ContentBlock, { type: "toolExecution" }>;
+type ToolCallBlock = Extract<ContentBlock, { type: "toolCall" }> & { arguments?: unknown };
 
 function normalizeToolName(name: string): string {
   return name.trim().toLowerCase();
@@ -16,6 +17,29 @@ function parseArgsObject(args: string | undefined): Record<string, unknown> | nu
   } catch {
     return null;
   }
+}
+
+function getToolCallInput(block: Extract<ContentBlock, { type: "toolCall" }>): unknown {
+  const rawBlock = block as ToolCallBlock;
+  return rawBlock.input ?? rawBlock.arguments;
+}
+
+function formatArgsFromRawInput(rawInput: unknown): {
+  args: string;
+  description?: string;
+} {
+  if (typeof rawInput === "string") {
+    return { args: rawInput };
+  }
+  if (rawInput != null) {
+    const inputObj =
+      typeof rawInput === "object" && rawInput !== null ? (rawInput as Record<string, unknown>) : null;
+    return {
+      args: JSON.stringify(rawInput, null, 2),
+      description: typeof inputObj?.description === "string" ? inputObj.description : undefined,
+    };
+  }
+  return { args: "" };
 }
 
 function filePathKeys(path: string): string[] {
@@ -56,11 +80,19 @@ function toolExecutionSemanticKeys(block: ToolExecutionBlock): string[] {
   return [];
 }
 
-function toolExecutionDedupeKeys(block: ToolExecutionBlock): string[] {
+export function getToolExecutionDedupeKeys(block: ToolExecutionBlock): string[] {
   const keys = [`id:${block.toolCallId}`];
   const semanticKeys = toolExecutionSemanticKeys(block);
   for (const semanticKey of semanticKeys) keys.push(`semantic:${semanticKey}`);
   return keys;
+}
+
+export function hasOverlappingToolExecutionKeys(
+  a: ToolExecutionBlock,
+  b: ToolExecutionBlock,
+): boolean {
+  const aKeys = new Set(getToolExecutionDedupeKeys(a));
+  return getToolExecutionDedupeKeys(b).some((key) => aKeys.has(key));
 }
 
 function toolExecutionScore(block: ToolExecutionBlock): number {
@@ -82,7 +114,7 @@ export function dedupeToolExecutions(msgs: ChatMessage[]): void {
     if (msg.role !== "assistant") continue;
     for (const block of msg.content) {
       if (block.type !== "toolExecution") continue;
-      const keys = toolExecutionDedupeKeys(block);
+      const keys = getToolExecutionDedupeKeys(block);
       const previous = keys.map((key) => bestByKey.get(key)).find((candidate) => candidate);
       if (!previous || toolExecutionScore(block) >= toolExecutionScore(previous.block)) {
         for (const key of keys) {
@@ -101,7 +133,7 @@ export function dedupeToolExecutions(msgs: ChatMessage[]): void {
     let changed = false;
     const newContent = msg.content.filter((block) => {
       if (block.type !== "toolExecution") return true;
-      const keys = toolExecutionDedupeKeys(block);
+      const keys = getToolExecutionDedupeKeys(block);
       const keep = keys.every((key) => {
         const best = bestByKey.get(key);
         return best?.msgIndex === mi && best.block === block;
@@ -123,7 +155,7 @@ export function normalizeToolBlocks(
 ): void {
   const toolCallById = new Map<
     string,
-    { msgIndex: number; blockIndex: number; name: string; input: string }
+    { msgIndex: number; blockIndex: number; name: string; input: unknown }
   >();
 
   for (let mi = 0; mi < msgs.length; mi++) {
@@ -132,7 +164,12 @@ export function normalizeToolBlocks(
     for (let bi = 0; bi < msg.content.length; bi++) {
       const b = msg.content[bi];
       if (b.type === "toolCall") {
-        toolCallById.set(b.id, { msgIndex: mi, blockIndex: bi, name: b.name, input: b.input });
+        toolCallById.set(b.id, {
+          msgIndex: mi,
+          blockIndex: bi,
+          name: b.name,
+          input: getToolCallInput(b),
+        });
       }
     }
   }
@@ -152,18 +189,7 @@ export function normalizeToolBlocks(
 
     const match = toolCallById.get(resultBlock.toolCallId);
     const rawInput = match?.input ?? resultBlock.args;
-    let args: string;
-    let description: string | undefined;
-    if (typeof rawInput === "string") {
-      args = rawInput;
-    } else if (rawInput != null) {
-      args = JSON.stringify(rawInput, null, 2);
-      if (typeof (rawInput as Record<string, unknown>).description === "string") {
-        description = (rawInput as Record<string, unknown>).description as string;
-      }
-    } else {
-      args = "";
-    }
+    const { args, description } = formatArgsFromRawInput(rawInput);
 
     const execBlock: Extract<ContentBlock, { type: "toolExecution" }> = {
       type: "toolExecution",
@@ -218,19 +244,7 @@ export function normalizeToolBlocks(
           newContent.push(orphanBlocks);
           orphanUsed = true;
         } else {
-          const rawInput = b.input;
-          let args: string;
-          let description: string | undefined;
-          if (typeof rawInput === "string") {
-            args = rawInput;
-          } else if (rawInput != null) {
-            args = JSON.stringify(rawInput, null, 2);
-            if (typeof (rawInput as Record<string, unknown>).description === "string") {
-              description = (rawInput as Record<string, unknown>).description as string;
-            }
-          } else {
-            args = "";
-          }
+          const { args, description } = formatArgsFromRawInput(getToolCallInput(b));
           newContent.push({
             type: "toolExecution",
             toolCallId: b.id,
@@ -295,12 +309,7 @@ export function normalizeToolBlocks(
     for (const b of msg.content) {
       if (b.type === "toolCall") {
         if (executionIds.has(b.id)) continue;
-        const args =
-          typeof b.input === "string"
-            ? b.input
-            : b.input != null
-              ? JSON.stringify(b.input, null, 2)
-              : "";
+        const { args } = formatArgsFromRawInput(getToolCallInput(b));
         newContent.push({
           type: "toolExecution",
           toolCallId: b.id,
@@ -345,7 +354,7 @@ export function buildPreservedStreamingMessage(
     return undefined;
   }
 
-  const terminalIds = new Set<string>();
+  const terminalKeys = new Set<string>();
   for (const msg of finalMsgs) {
     if (msg.role !== "assistant") continue;
     for (const block of msg.content) {
@@ -353,7 +362,9 @@ export function buildPreservedStreamingMessage(
         block.type === "toolExecution" &&
         (block.status === "done" || block.status === "error")
       ) {
-        terminalIds.add(block.toolCallId);
+        for (const key of getToolExecutionDedupeKeys(block)) {
+          terminalKeys.add(key);
+        }
       }
     }
   }
@@ -362,7 +373,7 @@ export function buildPreservedStreamingMessage(
     (block) =>
       block.type === "toolExecution" &&
       block.status === "running" &&
-      !terminalIds.has(block.toolCallId),
+      !getToolExecutionDedupeKeys(block).some((key) => terminalKeys.has(key)),
   );
 
   if (preservedContent.length === 0) return undefined;

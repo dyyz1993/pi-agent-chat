@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { ContentBlock } from "../src/mainview/types";
 
 vi.mock("../src/mainview/lib/api-client", () => ({
   apiClient: {
@@ -463,6 +464,66 @@ describe("chat pagination", () => {
     if (liveBlock?.type === "toolExecution") {
       expect(liveBlock.status).toBe("running");
     }
+  });
+
+  it("background refresh should not preserve stale running bash card when server has terminal command with a new id", async () => {
+    useChatStore.getState().setMessagesForSession("test-session", [
+      {
+        id: "live-running-bash",
+        role: "assistant",
+        content: [
+          {
+            type: "toolExecution",
+            toolCallId: "tc-live-workspace-test",
+            toolName: "bash",
+            args: "npm run build",
+            status: "running",
+            output: "waiting...",
+          },
+        ],
+        timestamp: 1100,
+        isStreaming: true,
+      },
+    ]);
+
+    (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
+      messages: [
+        {
+          id: "server-assistant-workspace-test",
+          entryId: "entry-server-assistant-workspace-test",
+          role: "assistant",
+          content: [
+            {
+              type: "toolCall",
+              id: "tc-server-workspace-test",
+              name: "bash",
+              arguments: { command: "npm run build", description: "workspace 全量测试" },
+            },
+          ],
+          timestamp: 1100,
+        },
+        makeRawToolResultMessage(11, "tc-server-workspace-test", "passed"),
+      ],
+      customEntries: [],
+      hasMore: false,
+      nextCursor: null,
+    });
+
+    useChatStore.getState()._backgroundRefreshMessages("test-session");
+
+    await flushBackgroundRefresh();
+
+    const msgs = useChatStore.getState().messagesBySession["test-session"]!;
+    const blocks = msgs.flatMap((msg) =>
+      msg.content.filter(
+        (block): block is Extract<ContentBlock, { type: "toolExecution" }> =>
+          block.type === "toolExecution",
+      ),
+    );
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].toolCallId).toBe("tc-server-workspace-test");
+    expect(blocks[0].status).toBe("done");
+    expect(blocks[0].output).toBe("passed");
   });
 
   it("background refresh should preserve optimistic local user messages", async () => {
