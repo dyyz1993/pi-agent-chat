@@ -484,6 +484,59 @@ describe("normalizeToolBlocks", () => {
     expect(blocks[0].output).toBe("Could not find exact text");
   });
 
+  it("deduplicates stale running file tools when paths differ by project prefix", () => {
+    const msgs: ChatMessage[] = [
+      {
+        id: "m1",
+        role: "assistant",
+        content: [
+          {
+            type: "toolExecution",
+            toolCallId: "tc-live-write-abs",
+            toolName: "write",
+            args: JSON.stringify({
+              path: "/Users/xuyingzhou/Project/study-rust/browser/crates/gui/Cargo.toml",
+              content: "old",
+            }),
+            status: "running",
+            output: "写入中...",
+          },
+        ],
+        timestamp: 1,
+        isStreaming: true,
+      },
+      {
+        id: "m2",
+        role: "assistant",
+        content: [
+          {
+            type: "toolExecution",
+            toolCallId: "tc-history-write-rel",
+            toolName: "write",
+            args: JSON.stringify({
+              path: "crates/gui/Cargo.toml",
+              content: "new",
+            }),
+            status: "done",
+            output: "Successfully wrote",
+          },
+        ],
+        timestamp: 2,
+      },
+    ];
+
+    normalizeToolBlocks(msgs, false, true);
+
+    const blocks = msgs.flatMap((msg) =>
+      msg.content.filter(
+        (b): b is Extract<ContentBlock, { type: "toolExecution" }> => b.type === "toolExecution",
+      ),
+    );
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].toolCallId).toBe("tc-history-write-rel");
+    expect(blocks[0].status).toBe("done");
+  });
+
   it("removes empty assistant messages left by cross-message tool dedupe", () => {
     const msgs: ChatMessage[] = [
       {

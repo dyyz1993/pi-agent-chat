@@ -18,7 +18,20 @@ function parseArgsObject(args: string | undefined): Record<string, unknown> | nu
   }
 }
 
-function toolExecutionSemanticKey(block: ToolExecutionBlock): string | null {
+function filePathKeys(path: string): string[] {
+  const normalized = path.replace(/\\/g, "/").replace(/\/+/g, "/").trim();
+  const keys = [`path:${normalized}`];
+  const projectRelativeMarkers = ["/crates/", "/src/", "/test/", "/tests/", "/docs/"];
+  for (const marker of projectRelativeMarkers) {
+    const idx = normalized.lastIndexOf(marker);
+    if (idx >= 0) {
+      keys.push(`path:${normalized.slice(idx + 1)}`);
+    }
+  }
+  return Array.from(new Set(keys));
+}
+
+function toolExecutionSemanticKeys(block: ToolExecutionBlock): string[] {
   const toolName = normalizeToolName(block.toolName);
   const argsObj = parseArgsObject(block.args);
   const path =
@@ -27,23 +40,26 @@ function toolExecutionSemanticKey(block: ToolExecutionBlock): string | null {
       : typeof argsObj?.filePath === "string"
         ? argsObj.filePath
         : undefined;
-  if (path && ["edit", "write", "read", "readfile"].includes(toolName)) {
-    return `${toolName}:path:${path}`;
+  if (path && (toolName === "edit" || toolName === "write")) {
+    return filePathKeys(path).map((key) => `file-mutation:${key}`);
+  }
+  if (path && (toolName === "read" || toolName === "readfile")) {
+    return filePathKeys(path).map((key) => `file-read:${key}`);
   }
 
   const command =
     typeof argsObj?.command === "string" ? argsObj.command : toolName === "bash" ? block.args : "";
   if (command && toolName === "bash") {
-    return `${toolName}:command:${command.trim()}`;
+    return [`${toolName}:command:${command.trim()}`];
   }
 
-  return null;
+  return [];
 }
 
 function toolExecutionDedupeKeys(block: ToolExecutionBlock): string[] {
   const keys = [`id:${block.toolCallId}`];
-  const semanticKey = toolExecutionSemanticKey(block);
-  if (semanticKey) keys.push(`semantic:${semanticKey}`);
+  const semanticKeys = toolExecutionSemanticKeys(block);
+  for (const semanticKey of semanticKeys) keys.push(`semantic:${semanticKey}`);
   return keys;
 }
 
