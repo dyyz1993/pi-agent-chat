@@ -116,6 +116,45 @@ describe("tool execution reconciler", () => {
     expect(hasOverlappingToolExecutionKeys(absolute, relative)).toBe(true);
   });
 
+  it("matches file mutation aliases across live and historical tool names", () => {
+    const live = toolExecution({
+      toolCallId: "tc-live-file-write",
+      toolName: "file_write",
+      args: JSON.stringify({ path: "crates/gui/Cargo.toml" }),
+    });
+    const history = toolExecution({
+      toolCallId: "tc-history-write-file",
+      toolName: "write_file",
+      args: JSON.stringify({ path: "/Users/me/project/crates/gui/Cargo.toml" }),
+      status: "done",
+    });
+
+    expect(hasOverlappingToolExecutionKeys(live, history)).toBe(true);
+  });
+
+  it("matches file read aliases without merging them with writes", () => {
+    const liveRead = toolExecution({
+      toolCallId: "tc-live-read",
+      toolName: "file_read",
+      args: JSON.stringify({ path: "src/main.ts" }),
+    });
+    const historyRead = toolExecution({
+      toolCallId: "tc-history-read",
+      toolName: "read_file",
+      args: JSON.stringify({ path: "/tmp/project/src/main.ts" }),
+      status: "done",
+    });
+    const write = toolExecution({
+      toolCallId: "tc-write",
+      toolName: "file_write",
+      args: JSON.stringify({ path: "src/main.ts" }),
+      status: "done",
+    });
+
+    expect(hasOverlappingToolExecutionKeys(liveRead, historyRead)).toBe(true);
+    expect(hasOverlappingToolExecutionKeys(liveRead, write)).toBe(false);
+  });
+
   it("does not merge read and write operations for the same path", () => {
     const read = toolExecution({
       toolCallId: "tc-read",

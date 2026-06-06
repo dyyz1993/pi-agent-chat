@@ -81,10 +81,22 @@ function toolExecutionSemanticKeys(block: ToolExecutionBlock): string[] {
       : typeof argsObj?.filePath === "string"
         ? argsObj.filePath
         : undefined;
-  if (path && (toolName === "edit" || toolName === "write")) {
+
+  const fileMutationTools = new Set([
+    "edit",
+    "write",
+    "file_edit",
+    "file_write",
+    "write_file",
+    "multiedit",
+    "multi_edit",
+  ]);
+  const fileReadTools = new Set(["read", "readfile", "read_file", "file_read"]);
+
+  if (path && fileMutationTools.has(toolName)) {
     return filePathKeys(path).map((key) => `file-mutation:${key}`);
   }
-  if (path && (toolName === "read" || toolName === "readfile")) {
+  if (path && fileReadTools.has(toolName)) {
     return filePathKeys(path).map((key) => `file-read:${key}`);
   }
 

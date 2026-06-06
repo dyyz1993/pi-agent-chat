@@ -242,6 +242,81 @@ describe("agent client message operations", () => {
     ]);
   });
 
+  it("does not merge stale in-memory assistant text plus completed tool call already completed in JSONL", async () => {
+    writeFileSync(
+      sessionPath,
+      [
+        messageEntry("m1", null, "user", "prompt"),
+        jsonlEntry({
+          id: "m2",
+          parentId: "m1",
+          type: "message",
+          message: {
+            role: "assistant",
+            content: [
+              { type: "text", text: "I will update the file" },
+              {
+                type: "toolCall",
+                id: "tc-write",
+                name: "write",
+                arguments: { path: "src/main.ts", content: "export {};" },
+              },
+            ],
+          },
+        }),
+        toolResultEntry("m3", "m2", "tc-write", "write", "file written"),
+      ].join("\n"),
+    );
+    const managed = {
+      client: {
+        getMessages: vi.fn().mockResolvedValue([
+          { role: "user", content: [{ type: "text", text: "prompt" }] },
+          {
+            role: "assistant",
+            content: [
+              { type: "text", text: "I will update the file" },
+              {
+                type: "toolCall",
+                id: "tc-write",
+                name: "write",
+                input: JSON.stringify({ path: "src/main.ts", content: "export {};" }),
+              },
+            ],
+          },
+          { role: "assistant", content: [{ type: "text", text: "continuing live response" }] },
+        ]),
+      },
+      info: {
+        status: "streaming",
+        sessionPath,
+      },
+    };
+
+    const result = await getFullMessagesOperation({
+      sessionId: "sess-1",
+      getActiveManaged: () => managed,
+      resolveSessionPath: () => sessionPath,
+      leafIds: new Map(),
+    });
+
+    expect(result.messages).toHaveLength(4);
+    expect(result.messages.map((m) => (m as { role?: string }).role)).toEqual([
+      "user",
+      "assistant",
+      "toolResult",
+      "assistant",
+    ]);
+    expect(
+      result.messages.filter((m) => {
+        const msg = m as { role?: string; content?: Array<{ type?: string; id?: string }> };
+        return (
+          msg.role === "assistant" &&
+          msg.content?.some((block) => block.type === "toolCall" && block.id === "tc-write")
+        );
+      }),
+    ).toHaveLength(1);
+  });
+
   it("getMessages reads active SDK messages and filters JSONL custom entries by leaf path", async () => {
     writeFileSync(
       sessionPath,

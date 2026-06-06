@@ -154,17 +154,6 @@ function extractToolCallBlocks(message: Record<string, unknown>): Record<string,
   });
 }
 
-function hasMeaningfulNonToolCallContent(message: Record<string, unknown>): boolean {
-  const content = message.content;
-  if (!Array.isArray(content)) return false;
-  return content.some((block) => {
-    if (!block || typeof block !== "object") return false;
-    const b = block as Record<string, unknown>;
-    if (b.type === "toolCall") return false;
-    return normalizedToolText(b.text) !== "" || normalizedToolText(b.thinking) !== "";
-  });
-}
-
 function completedToolCallKeysFromMessages(
   messages: Array<{ message: unknown }>,
 ): Set<string> {
@@ -199,11 +188,11 @@ function completedToolCallKeysFromMessages(
   return completedKeys;
 }
 
-function isCompletedToolCallOnlyMessage(
+function isCompletedToolCallMessage(
   message: Record<string, unknown>,
   completedToolCallKeys: Set<string>,
 ): boolean {
-  if (message.role !== "assistant" || hasMeaningfulNonToolCallContent(message)) return false;
+  if (message.role !== "assistant") return false;
   const toolCalls = extractToolCallBlocks(message);
   if (toolCalls.length === 0) return false;
   return toolCalls.every((block) => {
@@ -322,7 +311,7 @@ export async function getFullMessagesOperation<TManaged extends ManagedFullMessa
           const role = (m.role as string) ?? "";
           if (eid && jsonlEntryIds.has(eid)) continue;
           if (!eid && jsonlMessageSignatures.has(normalizedMessageSignature(m))) continue;
-          if (!eid && isCompletedToolCallOnlyMessage(m, completedToolCallKeys)) continue;
+          if (!eid && isCompletedToolCallMessage(m, completedToolCallKeys)) continue;
           if (role === "compactionSummary") {
             if (eid && compactionEntryIds.has(eid)) continue;
             if (!eid && filteredHasCompaction) continue;
