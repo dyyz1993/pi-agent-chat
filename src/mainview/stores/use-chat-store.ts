@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { Message, ImageContent } from "@dyyz1993/pi-ai";
 import type { ChatMessage, ContentBlock } from "../types";
-import { normalizeToolBlocks } from "./chat-tool-normalizer";
+import { buildPreservedStreamingMessage, normalizeToolBlocks } from "./chat-tool-normalizer";
 import { hasSameMessageSnapshots } from "./chat-message-snapshot";
 import { isAgentNotStartedError, sendAgentMessageWithTimeout } from "./chat-send-utils";
 import { readDraft, writeDraft } from "./chat-input-draft";
@@ -588,8 +588,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const streamingInFinal = finalMsgs.findIndex(
           (m) => m.role === "assistant" && m.isStreaming,
         );
-        if (streamingInFinal === -1) {
-          finalMsgs = [...finalMsgs, lastCurrent];
+        const preservedStreamingMsg = buildPreservedStreamingMessage(finalMsgs, lastCurrent);
+        if (streamingInFinal === -1 && preservedStreamingMsg) {
+          finalMsgs = [...finalMsgs, preservedStreamingMsg];
         }
       }
 

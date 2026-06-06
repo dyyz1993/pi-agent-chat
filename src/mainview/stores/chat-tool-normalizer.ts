@@ -258,3 +258,41 @@ export function normalizeToolBlocks(
   }
 }
 
+export function shouldAppendPreservedStreamingMessage(
+  finalMsgs: ChatMessage[],
+  streamingMsg: ChatMessage | undefined,
+): boolean {
+  return buildPreservedStreamingMessage(finalMsgs, streamingMsg) !== undefined;
+}
+
+export function buildPreservedStreamingMessage(
+  finalMsgs: ChatMessage[],
+  streamingMsg: ChatMessage | undefined,
+): ChatMessage | undefined {
+  if (!streamingMsg || streamingMsg.role !== "assistant" || streamingMsg.isStreaming !== true) {
+    return undefined;
+  }
+
+  const terminalIds = new Set<string>();
+  for (const msg of finalMsgs) {
+    if (msg.role !== "assistant") continue;
+    for (const block of msg.content) {
+      if (
+        block.type === "toolExecution" &&
+        (block.status === "done" || block.status === "error")
+      ) {
+        terminalIds.add(block.toolCallId);
+      }
+    }
+  }
+
+  const preservedContent = streamingMsg.content.filter(
+    (block) =>
+      block.type === "toolExecution" &&
+      block.status === "running" &&
+      !terminalIds.has(block.toolCallId),
+  );
+
+  if (preservedContent.length === 0) return undefined;
+  return { ...streamingMsg, content: preservedContent };
+}
