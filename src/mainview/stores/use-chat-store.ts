@@ -104,6 +104,13 @@ function hasAssistantContentAfterMessage(messages: ChatMessage[], messageId: str
     .some((msg) => msg.role === "assistant" && hasRenderableMessageContent(msg));
 }
 
+function sameToolCallIds(a: string[] | undefined, b: string[] | undefined): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (a.length !== b.length) return false;
+  return a.every((id, index) => id === b[index]);
+}
+
 type MemoryCustomEntry = {
   id: string;
   customType: string;
@@ -484,6 +491,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   setActiveToolCallIds: (sessionId, toolCallIds) =>
     set((s) => {
+      const current = s.activeToolCallIdsBySession[sessionId];
+      if (sameToolCallIds(current, toolCallIds)) return {};
+
       const activeToolCallIdsBySession = {
         ...s.activeToolCallIdsBySession,
         [sessionId]: toolCallIds,

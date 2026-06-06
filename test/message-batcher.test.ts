@@ -1,17 +1,26 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { batchMessageUpdate, flushNow } from "../src/mainview/stores/message-batcher";
 
 afterEach(() => {
   flushNow();
+  vi.useRealTimers();
 });
 
 describe("message-batcher", () => {
-  it("flushes message updates through microtasks instead of animation frames", async () => {
+  it("batches visible message updates through animation frames", () => {
     const originalRaf = globalThis.requestAnimationFrame;
     const originalCancelRaf = globalThis.cancelAnimationFrame;
-    globalThis.requestAnimationFrame = (() => {
-      throw new Error("requestAnimationFrame should not be used for message state flushing");
+    const originalDocument = globalThis.document;
+    let rafCallback: FrameRequestCallback | null = null;
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      rafCallback = cb;
+      return 1;
     }) as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = vi.fn() as typeof cancelAnimationFrame;
+    Object.defineProperty(globalThis, "document", {
+      configurable: true,
+      value: { visibilityState: "visible" },
+    });
 
     try {
       const calls: string[] = [];
@@ -20,11 +29,43 @@ describe("message-batcher", () => {
       batchMessageUpdate("sess-1", () => calls.push("second"));
 
       expect(calls).toEqual([]);
-      await Promise.resolve();
+      expect(rafCallback).not.toBeNull();
+      rafCallback?.(performance.now());
       expect(calls).toEqual(["first", "second"]);
     } finally {
       globalThis.requestAnimationFrame = originalRaf;
       globalThis.cancelAnimationFrame = originalCancelRaf;
+      Object.defineProperty(globalThis, "document", {
+        configurable: true,
+        value: originalDocument,
+      });
+    }
+  });
+
+  it("flushes hidden-tab updates through a timer fallback", () => {
+    vi.useFakeTimers();
+    const originalRaf = globalThis.requestAnimationFrame;
+    const originalDocument = globalThis.document;
+    globalThis.requestAnimationFrame = (() => {
+      throw new Error("hidden tabs should not wait for requestAnimationFrame");
+    }) as typeof requestAnimationFrame;
+    Object.defineProperty(globalThis, "document", {
+      configurable: true,
+      value: { visibilityState: "hidden" },
+    });
+
+    try {
+      const calls: string[] = [];
+      batchMessageUpdate("sess-1", () => calls.push("first"));
+      expect(calls).toEqual([]);
+      vi.advanceTimersByTime(16);
+      expect(calls).toEqual(["first"]);
+    } finally {
+      globalThis.requestAnimationFrame = originalRaf;
+      Object.defineProperty(globalThis, "document", {
+        configurable: true,
+        value: originalDocument,
+      });
     }
   });
 
