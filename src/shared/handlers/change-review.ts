@@ -11,7 +11,7 @@ import type { PendingChangeResult } from "../modules/change-review";
 
 const log = createLogger("change-review");
 
-const CHANNEL_TIMEOUT_MS = 5_000;
+const CHANNEL_TIMEOUT_MS = 1_000;
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
