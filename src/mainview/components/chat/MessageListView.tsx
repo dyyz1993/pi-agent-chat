@@ -22,21 +22,26 @@ interface CacheEntry<T> {
  * Lightweight structural revision key for message arrays.
  * Captures message count + last message id/content-length to detect
  * changes that would affect cardMeta/processedMessages caches.
- * During streaming, only the last message's content grows (text length),
- * which this key captures via the last content block's text length.
+ *
+ * IMPORTANT: sums ALL blocks' content sizes, not just the last block.
+ * During parallel tool execution, multiple blocks grow simultaneously
+ * (e.g. two bash commands streaming output). If we only checked the
+ * last block, updates to earlier blocks would be invisible (cache hit
+ * with stale data → "waiting" shown forever).
  */
-function computeMessagesRevision(messages: ChatMessage[]): string {
+export function computeMessagesRevision(messages: ChatMessage[]): string {
   const n = messages.length;
   if (n === 0) return "0";
   const last = messages[n - 1];
   const blocks = last.content;
   if (blocks.length === 0) return `${n}:${last.id}:0`;
-  const lastBlock = blocks[blocks.length - 1];
-  let lastSize = 0;
-  if (lastBlock.type === "text") lastSize = lastBlock.text.length;
-  else if (lastBlock.type === "thinking") lastSize = lastBlock.thinking.length;
-  else if (lastBlock.type === "toolExecution") lastSize = (lastBlock.output ?? "").length;
-  return `${n}:${last.id}:${blocks.length}:${lastSize}`;
+  let totalSize = 0;
+  for (const block of blocks) {
+    if (block.type === "text") totalSize += block.text.length;
+    else if (block.type === "thinking") totalSize += block.thinking.length;
+    else if (block.type === "toolExecution") totalSize += (block.output ?? "").length;
+  }
+  return `${n}:${last.id}:${blocks.length}:${totalSize}`;
 }
 
 const _processedMessagesCache = new Map<string, CacheEntry<ProcessedMessage[]>>();
