@@ -262,7 +262,7 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
           preview.mimeType = res.headers.get("content-type") ?? "text/plain";
         }
         preview.content = text;
-        preview.totalLines = (text.match(/\n/g) || []).length + 1;
+        preview.totalLines = (text.match(/\n/g) ?? []).length + 1;
       } else {
         preview.content = `[Binary file: ${node.name} (${formatSize(preview.size)})]`;
         preview.isText = true;

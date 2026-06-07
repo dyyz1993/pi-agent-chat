@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { createLogger } from "../../../../shared/lib/logger";
-import type { TimelineTurn as TTurn, TimelineItem } from "../../../types";
+import type { TimelineTurn as TTurn, TimelineItem, SessionStatus } from "../../../types";
 import { getItemId } from "../../../lib/turn-aggregator";
 import { useChatNavStore } from "../../../stores/use-chat-nav-store";
 import { useClipboard } from "../preview/use-clipboard";
@@ -57,7 +57,7 @@ export const TimelineTurn = memo(function TimelineTurn({
   const sessionId = useSessionStore.getState().activeSessionId;
   const isSessionStreaming = useSessionStore(
     useCallback(
-      (s: { sessionStatusMap: Record<string, import("../../../types").SessionStatus> }) => {
+      (s: { sessionStatusMap: Record<string, SessionStatus> }) => {
         const status = sessionId ? s.sessionStatusMap[sessionId] : undefined;
         return status === "streaming" || status === "compacting" || status === "retrying";
       },

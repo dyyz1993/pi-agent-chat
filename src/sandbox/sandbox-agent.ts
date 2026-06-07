@@ -96,14 +96,21 @@ function startPi(): Promise<void> {
     });
 
     let buffer = "";
-    piProcess.stdout!.on("data", (data: Buffer) => {
+    const stdout = piProcess.stdout;
+    const stderr = piProcess.stderr;
+    if (!stdout || !stderr) {
+      clearTimeout(timeout);
+      reject(new Error("Failed to access pi process stdio"));
+      return;
+    }
+    stdout.on("data", (data: Buffer) => {
       buffer += data.toString();
       const lines = buffer.split("\n");
       buffer = lines.pop() ?? "";
       for (const line of lines) {
         if (!line.trim()) continue;
         try {
-          const msg = JSON.parse(line);
+          const msg = JSON.parse(line) as Record<string, unknown>;
           handlePiMessage(msg);
         } catch {
           /* skip malformed */
@@ -111,7 +118,7 @@ function startPi(): Promise<void> {
       }
     });
 
-    piProcess.stderr!.on("data", (data: Buffer) => process.stderr.write(data));
+    stderr.on("data", (data: Buffer) => process.stderr.write(data));
 
     piProcess.on("error", (err) => {
       clearTimeout(timeout);
@@ -136,7 +143,8 @@ function handlePiMessage(msg: Record<string, unknown>): void {
   }
 
   if (msg.type === "response" && msg.id && pendingRequests.has(String(msg.id))) {
-    const pending = pendingRequests.get(String(msg.id))!;
+    const pending = pendingRequests.get(String(msg.id));
+    if (!pending) return;
     pendingRequests.delete(String(msg.id));
     clearTimeout(pending.timer);
     if (msg.success === false) {
@@ -168,9 +176,7 @@ function sendToPi(command: Record<string, unknown>): Promise<unknown> {
       reject(new Error("pi process not running"));
       return;
     }
-    if (!command.id) {
-      command.id = `req_${++requestId}`;
-    }
+    command.id ??= `req_${++requestId}`;
     const id = String(command.id);
     const timer = setTimeout(() => {
       if (pendingRequests.has(id)) {

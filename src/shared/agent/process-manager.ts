@@ -1,5 +1,6 @@
 import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { RpcClientAPI, ChannelTypeRegistry } from "@dyyz1993/pi-coding-agent";
+import type { ImageContent } from "@dyyz1993/pi-ai";
 import type { TreeEntry } from "../modules/agent";
 import { performance } from "perf_hooks";
 
@@ -527,7 +528,7 @@ export class AgentProcessManager {
   async send(
     sessionId: string,
     content: string,
-    images?: import("@dyyz1993/pi-ai").ImageContent[],
+    images?: ImageContent[],
   ): Promise<boolean> {
     return sendPromptOperation({
       sessionId,
@@ -544,7 +545,7 @@ export class AgentProcessManager {
   steer(
     sessionId: string,
     content: string,
-    images?: import("@dyyz1993/pi-ai").ImageContent[],
+    images?: ImageContent[],
   ): boolean {
     return steerOperation({
       sessionId,
@@ -557,7 +558,7 @@ export class AgentProcessManager {
   followUp(
     sessionId: string,
     content: string,
-    images?: import("@dyyz1993/pi-ai").ImageContent[],
+    images?: ImageContent[],
   ): boolean {
     return followUpOperation({
       sessionId,
@@ -955,9 +956,7 @@ export class AgentProcessManager {
         if (managed) break;
       }
     }
-    if (!managed) {
-      managed = await this.ensureManagedClient(sessionId);
-    }
+    managed ??= await this.ensureManagedClient(sessionId);
     if (!managed) throw new Error("Client not found");
     const ch = managed.client.channel(channelName);
     return ch.call(method, params);

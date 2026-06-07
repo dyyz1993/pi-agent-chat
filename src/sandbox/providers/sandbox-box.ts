@@ -273,8 +273,10 @@ export class SandboxBoxProvider implements ISandboxProvider {
 
     try {
       await this.ssh(`sandbox create ${name} --port ${this.config.sandboxPort} || true`).catch(
-        (err) => {
-          log.warn("sandbox create had errors (ignored)", { error: err.message });
+        (err: unknown) => {
+          log.warn("sandbox create had errors (ignored)", {
+            error: err instanceof Error ? err.message : String(err),
+          });
         },
       );
 

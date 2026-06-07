@@ -130,7 +130,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     // If session is live, try channel first (with timeout to prevent hanging)
     if (manager && manager.hasSession(params.sessionId)) {
       try {
-        const result = await withTimeout(
+        const result: unknown = await withTimeout(
           manager.callChannel(params.sessionId, "file-snapshot", "snapshot.list", {
             sessionId: params.sessionId,
           }),
@@ -163,7 +163,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const manager = getProcessManager();
     if (manager && manager.hasSession(params.sessionId)) {
       try {
-        const result = await withTimeout(
+        const result: unknown = await withTimeout(
           manager.callChannel(params.sessionId, "file-snapshot", "snapshot.get", {
             sessionId: params.sessionId,
             snapshotId: params.snapshotId,

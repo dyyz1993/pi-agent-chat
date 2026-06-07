@@ -46,7 +46,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     <button
       ref={ref}
       type={type}
-      disabled={disabled || loading}
+      disabled={disabled ?? loading}
       className={cx(
         "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-border-focus focus-visible:ring-offset-2 focus-visible:ring-offset-bg-primary",

@@ -20,7 +20,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const manager = getProcessManager();
     if (manager && params.sessionId && manager.hasSession(params.sessionId)) {
       try {
-        const result = await withTimeout(
+        const result: unknown = await withTimeout(
           manager.callChannel(params.sessionId, "hooks", "hooks.getLog", {
             limit: params.limit,
             event: params.event,
@@ -39,7 +39,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const manager = getProcessManager();
     if (manager && params.sessionId && manager.hasSession(params.sessionId)) {
       try {
-        const result = await withTimeout(
+        const result: unknown = await withTimeout(
           manager.callChannel(params.sessionId, "hooks", "hooks.getConfig", {}),
           CHANNEL_TIMEOUT_MS,
         );
@@ -55,7 +55,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const manager = getProcessManager();
     if (manager && params.sessionId && manager.hasSession(params.sessionId)) {
       try {
-        const result = await withTimeout(
+        const result: unknown = await withTimeout(
           manager.callChannel(params.sessionId, "hooks", "hooks.clear", {}),
           CHANNEL_TIMEOUT_MS,
         );
@@ -71,7 +71,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const manager = getProcessManager();
     if (manager && params.sessionId && manager.hasSession(params.sessionId)) {
       try {
-        const result = await withTimeout(
+        const result: unknown = await withTimeout(
           manager.callChannel(params.sessionId, "hooks", "hooks.getStatus", {}),
           CHANNEL_TIMEOUT_MS,
         );
@@ -87,7 +87,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const manager = getProcessManager();
     if (manager && params.sessionId && manager.hasSession(params.sessionId)) {
       try {
-        const result = await withTimeout(
+        const result: unknown = await withTimeout(
           manager.callChannel(params.sessionId, "hooks", "hooks.setEnabled", {
             enabled: params.enabled,
           }),
