@@ -13,7 +13,7 @@ export interface DiffStyleConfig {
 export const DIFF_STYLE_PRESETS = {
   overlay: {
     fontSize: 13,
-    gutterWidth: 40,
+    gutterWidth: 32,
     gutterFontSize: 12,
     lineHeight: 1.6,
     background: "var(--diff-bg)",
@@ -22,7 +22,7 @@ export const DIFF_STYLE_PRESETS = {
   },
   overlayMobile: {
     fontSize: 12,
-    gutterWidth: 28,
+    gutterWidth: 24,
     gutterFontSize: 11,
     lineHeight: 1.4,
     background: "var(--diff-bg)",
@@ -31,7 +31,7 @@ export const DIFF_STYLE_PRESETS = {
   },
   inline: {
     fontSize: 11,
-    gutterWidth: 32,
+    gutterWidth: 28,
     gutterFontSize: 10,
     lineHeight: 1.5,
     background: "transparent",
@@ -40,7 +40,7 @@ export const DIFF_STYLE_PRESETS = {
   },
   inlineMobile: {
     fontSize: 12,
-    gutterWidth: 28,
+    gutterWidth: 24,
     gutterFontSize: 11,
     lineHeight: 1.4,
     background: "transparent",
