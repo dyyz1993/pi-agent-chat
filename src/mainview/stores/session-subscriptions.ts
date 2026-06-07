@@ -75,10 +75,7 @@ function findBashToolBlockByProcess(
   messages: ChatMessage[],
   proc: BashProcess,
 ): { msgIndex: number; blockIndex: number; block: ToolExecBlock } | null {
-  let semanticMatch: { msgIndex: number; blockIndex: number; block: ToolExecBlock } | null = null;
-  let semanticMatches = 0;
-  const targetCommand = proc.command.trim();
-
+  // Phase 1: exact toolCallId match (always preferred)
   for (let mi = messages.length - 1; mi >= 0; mi--) {
     const msg = messages[mi];
     if (msg.role !== "assistant") continue;
@@ -88,18 +85,47 @@ function findBashToolBlockByProcess(
       if (block.toolCallId === proc.toolCallId) {
         return { msgIndex: mi, blockIndex: bi, block };
       }
-      if (block.status === "running" && normalizeBashCommand(block.args) === targetCommand) {
-        semanticMatches++;
-        semanticMatch = { msgIndex: mi, blockIndex: bi, block };
+    }
+  }
+
+  // Phase 2: semantic match by command text
+  const targetCommand = proc.command.trim();
+  let runningMatch: { msgIndex: number; blockIndex: number; block: ToolExecBlock } | null = null;
+  let doneMatch: { msgIndex: number; blockIndex: number; block: ToolExecBlock } | null = null;
+  let runningMatches = 0;
+
+  for (let mi = messages.length - 1; mi >= 0; mi--) {
+    const msg = messages[mi];
+    if (msg.role !== "assistant") continue;
+    for (let bi = msg.content.length - 1; bi >= 0; bi--) {
+      const block = msg.content[bi];
+      if (block.type !== "toolExecution" || block.toolName.toLowerCase() !== "bash") continue;
+      if (normalizeBashCommand(block.args) !== targetCommand) continue;
+      if (block.status === "running") {
+        runningMatches++;
+        runningMatch ??= { msgIndex: mi, blockIndex: bi, block };
+      } else {
+        doneMatch ??= { msgIndex: mi, blockIndex: bi, block };
       }
     }
   }
 
-  return semanticMatches === 1 ? semanticMatch : null;
+  // Prefer the running match (the command is actively executing)
+  if (runningMatches === 1) return runningMatch;
+  // Fallback to done block (output may arrive after the block was closed by message_end)
+  if (runningMatch) return runningMatch; // multiple running — take the most recent
+  return doneMatch;
 }
 
 export function reconcileChatToolFromBashEvent(sessionId: string, event: BashChannelEvent): void {
-  if (event.type !== "end" && event.type !== "error" && event.type !== "terminated") return;
+  // Handle output events for real-time streaming + terminal events for final status
+  if (
+    event.type !== "output" &&
+    event.type !== "end" &&
+    event.type !== "error" &&
+    event.type !== "terminated"
+  )
+    return;
   const proc = findBashProcess(event);
   if (!proc) return;
 
@@ -108,7 +134,8 @@ export function reconcileChatToolFromBashEvent(sessionId: string, event: BashCha
   const match = findBashToolBlockByProcess(messages, proc);
   if (!match) return;
 
-  const status = bashProcessToToolStatus(proc);
+  const isOutput = event.type === "output";
+  const status = isOutput ? "running" : bashProcessToToolStatus(proc);
   const output = proc.output.length > 0 ? proc.output : (proc.error ?? match.block.output);
   const nextBlock: ToolExecBlock = {
     ...match.block,
@@ -117,9 +144,9 @@ export function reconcileChatToolFromBashEvent(sessionId: string, event: BashCha
     args: match.block.args || proc.command,
     status,
     output,
-    details: buildBashToolDetails(proc, match.block.details),
+    details: isOutput ? match.block.details : buildBashToolDetails(proc, match.block.details),
     startedAt: match.block.startedAt ?? proc.startedAt,
-    endedAt: proc.endedAt ?? Date.now(),
+    endedAt: isOutput ? match.block.endedAt : (proc.endedAt ?? Date.now()),
   };
 
   if (
@@ -135,8 +162,14 @@ export function reconcileChatToolFromBashEvent(sessionId: string, event: BashCha
   const nextContent = [...msg.content];
   nextContent[match.blockIndex] = nextBlock;
   nextMessages[match.msgIndex] = { ...msg, content: nextContent };
-  chat.setMessagesForSession(sessionId, nextMessages);
-  chat.incrementStreamVersion();
+  // Use streamingFastPath to bypass prepareMessagesForStore, which would
+  // force-close running blocks when the assistant message isn't marked
+  // isStreaming (common after page refresh when messages are loaded from
+  // server without the streaming flag).
+  chat.setMessagesForSession(sessionId, nextMessages, {
+    streamingFastPath: true,
+    bumpStreamVersion: true,
+  });
 }
 
 export interface SubscriptionMaps {

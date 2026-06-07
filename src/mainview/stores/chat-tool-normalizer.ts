@@ -1,6 +1,5 @@
 import type { ChatMessage, ContentBlock } from "../types";
 import {
-  dedupeToolExecutions,
   formatArgsFromRawInput,
   getToolCallInput,
 } from "../lib/tool-execution-reconciler";
@@ -191,17 +190,17 @@ export function normalizeToolBlocks(
     msgs[mi] = { ...msg, content: newContent };
   }
 
-  dedupeToolExecutions(msgs);
+  // NOTE: dedupeToolExecutions and empty-assistant removal were previously
+  // called here but caused historical messages to disappear after page refresh.
+  // The semantic cross-message dedup (e.g. two reads of the same file) would
+  // strip toolExecution blocks from earlier messages, leaving them empty, and
+  // then the empty-message cleanup would delete them entirely. These steps
+  // should only be applied during active streaming, not during historical load.
+  // Callers that need dedup (streaming merges) invoke it explicitly.
 
   if (toRemove.size > 0) {
     for (let i = msgs.length - 1; i >= 0; i--) {
       if (toRemove.has(i)) msgs.splice(i, 1);
-    }
-  }
-
-  for (let i = msgs.length - 1; i >= 0; i--) {
-    if (msgs[i].role === "assistant" && msgs[i].content.length === 0) {
-      msgs.splice(i, 1);
     }
   }
 }

@@ -220,4 +220,51 @@ describe("session JSONL message helpers", () => {
       nextCursor: "r1",
     });
   });
+
+  it("transitively expands parallel tool calls when only one result is in window", () => {
+    // Reproduces the bug where an assistant message has 4 parallel bash
+    // tool calls. The pagination window includes only the last toolResult,
+    // which backward-expands to the assistant message. The assistant message
+    // must then forward-expand to include the other 3 toolResults.
+    const filteredMessages = [
+      { entryId: "u1", message: { role: "user", content: [{ type: "text", text: "run 4 commands" }] } },
+      {
+        entryId: "a1",
+        message: {
+          role: "assistant",
+          content: [
+            { type: "text", text: "Running 4 commands in parallel" },
+            { type: "toolCall", id: "tool-1", name: "bash" },
+            { type: "toolCall", id: "tool-2", name: "bash" },
+            { type: "toolCall", id: "tool-3", name: "bash" },
+            { type: "toolCall", id: "tool-4", name: "bash" },
+          ],
+        },
+      },
+      { entryId: "r1", message: { role: "toolResult", toolCallId: "tool-1" } },
+      { entryId: "r2", message: { role: "toolResult", toolCallId: "tool-2" } },
+      { entryId: "r3", message: { role: "toolResult", toolCallId: "tool-3" } },
+      { entryId: "r4", message: { role: "toolResult", toolCallId: "tool-4" } },
+      { entryId: "a2", message: { role: "assistant", content: [{ type: "text", text: "All done" }] } },
+    ];
+
+    // limit: 1 → window = [6, 7) = only a2 (index 6)
+    // a2 has no tool calls/results, so no expansion needed
+    // But with limit: 2 → window = [5, 7) = r4 (index 5) + a2 (index 6)
+    // r4 backward-expands to a1 (index 1), then a1 forward-expands to r1-r3 (indices 2-5)
+    const result = paginateEntryMessages({ filteredMessages, limit: 2 });
+
+    // All 7 entries should be included (a1, r1, r2, r3, r4, a2 + user message excluded since before window)
+    // Actually: window starts at index 5, so entries before that are NOT included
+    // unless expanded. r4 at index 5 is in window → backward expand a1 at index 1
+    // → a1 forward expand r1 (2), r2 (3), r3 (4), r4 (5 already included)
+    expect(result.slicedMessages).toHaveLength(6); // a1 + r1 + r2 + r3 + r4 + a2
+
+    // Verify all toolResults are present
+    const resultIds = result.slicedMessages.map((m: { toolCallId?: string }) => m.toolCallId).filter(Boolean);
+    expect(resultIds).toContain("tool-1");
+    expect(resultIds).toContain("tool-2");
+    expect(resultIds).toContain("tool-3");
+    expect(resultIds).toContain("tool-4");
+  });
 });

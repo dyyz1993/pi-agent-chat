@@ -99,7 +99,7 @@ describe("reconcileChatToolFromBashEvent", () => {
     expect(blocks[0].output).toBe("finished\n");
   });
 
-  it("prefers exact toolCallId when another running bash card has the same command", () => {
+  it("closes exact toolCallId match while leaving same-command sibling untouched", () => {
     useChatStore.getState().setMessagesForSession(SID, [
       assistant("msg-1", [
         bashBlock({ toolCallId: "message-update-id-1", args: "cargo test" }),
@@ -112,11 +112,17 @@ describe("reconcileChatToolFromBashEvent", () => {
       event(process({ toolCallId: "message-update-id-2", output: "exact done\n" })),
     );
 
+    // Both blocks survive — cross-message semantic dedup was removed.
+    // Only the exact toolCallId match is reconciled.
     const blocks = toolBlocks();
-    expect(blocks).toHaveLength(1);
-    expect(blocks[0].toolCallId).toBe("message-update-id-2");
-    expect(blocks[0].status).toBe("done");
-    expect(blocks[0].output).toBe("exact done\n");
+    expect(blocks).toHaveLength(2);
+    const closed = blocks.find((b) => b.toolCallId === "message-update-id-2");
+    const sibling = blocks.find((b) => b.toolCallId === "message-update-id-1");
+    expect(closed).toBeDefined();
+    expect(closed!.status).toBe("done");
+    expect(closed!.output).toBe("exact done\n");
+    expect(sibling).toBeDefined();
+    expect(sibling!.status).toBe("running");
   });
 
   it("marks terminated bash processes as error with terminated details", () => {

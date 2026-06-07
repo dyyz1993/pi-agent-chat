@@ -3,7 +3,6 @@ import type { Message, ImageContent } from "@dyyz1993/pi-ai";
 import type { ChatMessage, ContentBlock } from "../types";
 import {
   buildPreservedStreamingMessage,
-  dedupeToolExecutions,
   normalizeToolBlocks,
 } from "./chat-tool-normalizer";
 import { hasSameMessageSnapshots } from "./chat-message-snapshot";
@@ -43,8 +42,6 @@ function prepareMessagesForStore(
   if (options.normalizeTools) {
     normalizeToolBlocks(nextMsgs, false, false);
   }
-
-  dedupeToolExecutions(nextMsgs);
 
   const latestStreamingAssistantIndex = (() => {
     for (let i = nextMsgs.length - 1; i >= 0; i--) {
@@ -90,7 +87,6 @@ function prepareMessagesForStore(
     }
   }
 
-  dedupeToolExecutions(nextMsgs);
   return nextMsgs;
 }
 
@@ -749,7 +745,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
       }
       normalizeToolBlocks(finalMsgs, true, false);
-      dedupeToolExecutions(finalMsgs);
       finalMsgs = prepareMessagesForStore(finalMsgs, {
         activeToolCallIds: get().activeToolCallIdsBySession[sid],
       });
@@ -905,7 +900,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
         finalMsgs = [...finalMsgs, preservedStreamingMsg];
       }
       normalizeToolBlocks(finalMsgs, true, false);
-      dedupeToolExecutions(finalMsgs);
       finalMsgs = prepareMessagesForStore(finalMsgs, {
         activeToolCallIds: get().activeToolCallIdsBySession[sid],
       });
@@ -1045,7 +1039,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
       );
       const finalMsgs = mergedMsgs;
       normalizeToolBlocks(finalMsgs, true, false);
-      dedupeToolExecutions(finalMsgs);
       const preparedMsgs = prepareMessagesForStore(finalMsgs, {
         activeToolCallIds: get().activeToolCallIdsBySession[sid],
       });

@@ -431,20 +431,46 @@ function expandToolPairWindow(
     }
   }
 
+  // Iterative transitive-closure expansion: when a new entry is added by
+  // expansion (e.g. backward from toolResult to the assistant message that
+  // contains it), that entry must itself be processed to forward-expand
+  // any OTHER tool calls in the same assistant message. Without this,
+  // parallel tool calls whose results fall outside the pagination window
+  // are orphaned — the assistant message is included but 3 of its 4
+  // toolResult children are not, so normalizeToolBlocks can't find their
+  // output and the tool cards render empty.
+  const toProcess: number[] = [];
   for (let index = startIndex; index < endIndex; index++) {
-    includedIndexes.add(index);
-    const entry = filteredMessages[index];
+    if (!includedIndexes.has(index)) {
+      includedIndexes.add(index);
+      toProcess.push(index);
+    }
+  }
 
+  while (toProcess.length > 0) {
+    const index = toProcess.pop();
+    if (index === undefined) break;
+    const entry = filteredMessages[index];
+    if (!entry) continue;
+
+    // Forward expand: assistant toolCalls → matching toolResults
     for (const toolCallId of extractToolCallIds(entry.message)) {
       for (const resultIndex of toolResultIndexesById.get(toolCallId) ?? []) {
-        includedIndexes.add(resultIndex);
+        if (!includedIndexes.has(resultIndex)) {
+          includedIndexes.add(resultIndex);
+          toProcess.push(resultIndex);
+        }
       }
     }
 
+    // Backward expand: toolResult → matching assistant toolCall
     const resultToolCallId = extractToolResultId(entry.message);
     if (resultToolCallId) {
       const callIndex = toolCallIndexById.get(resultToolCallId);
-      if (callIndex !== undefined) includedIndexes.add(callIndex);
+      if (callIndex !== undefined && !includedIndexes.has(callIndex)) {
+        includedIndexes.add(callIndex);
+        toProcess.push(callIndex);
+      }
     }
   }
 
