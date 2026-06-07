@@ -205,6 +205,10 @@ export class AgentProcessManager {
 
   private static MAX_POOL_SIZE = 5;
 
+  /** Keep-alive: pings idle CLI processes every 3 min to prevent macOS memory compression. */
+  private _keepAliveTimer: ReturnType<typeof setInterval> | undefined;
+  private static KEEPALIVE_INTERVAL_MS = 3 * 60 * 1000;
+
   private addToPool(poolKey: string, managed: ManagedClient): void {
     addToProcessPool(this.processByCwd, poolKey, managed);
   }
@@ -385,6 +389,18 @@ export class AgentProcessManager {
       broadcastSessionStatus: (id, status) => this.broadcastSessionStatus(id, status),
       emitAgentEvent: (id, event) => this.emitAgentEvent(id, event),
     });
+
+    // Keep-alive: ping idle CLI processes to prevent macOS memory compression.
+    // After ~10 min idle, macOS compresses the process's memory pages, causing
+    // a 5-10s delay on the next RPC. A lightweight getState() every 3 min keeps
+    // pages resident without measurable CPU cost.
+    this._keepAliveTimer = setInterval(() => {
+      for (const [, managed] of this.clients) {
+        if (managed.info?.status === "streaming") continue;
+        managed.client.getState().catch(() => {});
+      }
+    }, AgentProcessManager.KEEPALIVE_INTERVAL_MS);
+    this._keepAliveTimer.unref();
   }
 
   updateServer(server: RPCServer): void {
