@@ -357,29 +357,6 @@ export function AgentPanel() {
     );
   }
 
-  if (!agent && !loadingDetail) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full gap-3 text-sm text-[var(--color-text-secondary)]">
-        <Bot className="w-8 h-8 opacity-30" />
-        <span>{currentAgentName ? `Loading "${currentAgentName}"...` : "No agent selected"}</span>
-        <button
-          onClick={handleRefresh}
-          className="text-xs text-[var(--color-accent)] hover:underline"
-        >
-          Refresh
-        </button>
-      </div>
-    );
-  }
-
-  if (loadingDetail && !agent) {
-    return (
-      <div className="flex items-center justify-center h-full text-sm text-[var(--color-text-secondary)]">
-        Loading agent details...
-      </div>
-    );
-  }
-
   if (!agent) {
     // Even without agent detail, show the system prompt section
     const livePrompt = liveSystemPromptBySession[sessionId];
