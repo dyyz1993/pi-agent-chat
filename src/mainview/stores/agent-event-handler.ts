@@ -871,6 +871,18 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
               : output,
             status: isTerminalToolStatus(prev.status) ? prev.status : "running",
           };
+        } else {
+          // Block not found — batcher may have swallowed the start event.
+          // Create a running block so streaming output is visible.
+          blocks.push({
+            type: "toolExecution",
+            toolCallId,
+            toolName,
+            args: toolCallArgsMap[toolCallId] || "",
+            status: "running",
+            output,
+            startedAt: Date.now(),
+          });
         }
       }
 
