@@ -19,6 +19,15 @@ interface RetryState {
 
 const cleanupTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
+export function clearRetrySession(sessionId: string): void {
+  const timer = cleanupTimers.get(sessionId);
+  if (timer) {
+    clearTimeout(timer);
+    cleanupTimers.delete(sessionId);
+  }
+  useRetryStore.getState().endRetry(sessionId);
+}
+
 function scheduleStaleCleanup(sessionId: string, delayMs: number) {
   const existingTimer = cleanupTimers.get(sessionId);
   if (existingTimer) {

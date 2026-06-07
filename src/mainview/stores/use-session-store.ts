@@ -87,7 +87,7 @@ function detectEmptyTurnAndInjectError(sessionId: string) {
   }
 }
 
-function clearStatusWatchdog(sessionId: string) {
+export function clearStatusWatchdog(sessionId: string) {
   const watchdog = _statusWatchdogs.get(sessionId);
   if (watchdog) {
     clearTimeout(watchdog);

@@ -27,6 +27,10 @@ const perfLog = createLogger("session-perf");
 const PAGE_SIZE = 50;
 const backgroundRefreshGenerationBySession = new Map<string, number>();
 
+export function clearBackgroundRefreshGeneration(sessionId: string): void {
+  backgroundRefreshGenerationBySession.delete(sessionId);
+}
+
 export type MessageHydrationState = "idle" | "loading" | "ready" | "error";
 
 function prepareMessagesForStore(

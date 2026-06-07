@@ -86,6 +86,10 @@ const fetchInitPromiseMap = new Map<string, Promise<void>>();
 const fetchInitTimestampMap = new Map<string, number>();
 const FETCH_INIT_TTL_MS = 30_000;
 
+export function clearSessionFetchInitCache(sessionId: string): void {
+  fetchInitTimestampMap.delete(sessionId);
+}
+
 export function createFetchInitialStateAction({
   get,
   set,

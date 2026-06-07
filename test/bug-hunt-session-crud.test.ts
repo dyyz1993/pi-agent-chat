@@ -33,6 +33,7 @@ vi.mock("../src/mainview/stores/use-chat-store", () => ({
     })),
     setState: vi.fn(),
   },
+  clearBackgroundRefreshGeneration: vi.fn(),
 }));
 
 vi.mock("../src/mainview/stores/use-app-store", () => ({

@@ -4,8 +4,8 @@ import type { LspChannelEvent } from "../../shared/modules/lsp";
 import type { RulesChannelEvent } from "../../shared/modules/rules";
 import type { SupervisorChannelEvent } from "../../shared/modules/supervisor";
 import { apiClient } from "../lib/api-client";
-import { useSessionStore, insertAfterPinned } from "./use-session-store";
-import { useChatStore } from "./use-chat-store";
+import { useSessionStore, insertAfterPinned, clearStatusWatchdog } from "./use-session-store";
+import { useChatStore, clearBackgroundRefreshGeneration } from "./use-chat-store";
 import { useSubagentStore, handleSubagentEvent } from "./use-subagent-store";
 import { useBashStore, handleBashEvent } from "./use-bash-store";
 import { useLspStore } from "./use-lsp-store";
@@ -16,6 +16,8 @@ import { useChatNavStore } from "./use-chat-nav-store";
 import { useSupervisorStore } from "./use-supervisor-store";
 import { useStatusStore } from "./use-status-store";
 import { useChangeReviewStore } from "./use-change-review-store";
+import { clearSessionFetchInitCache } from "./session-initial-state";
+import { clearRetrySession } from "./use-retry-store";
 import { handleAgentEvent, toolCallNameMap } from "./agent-event-handler";
 import { notificationGateway } from "../lib/notification-gateway";
 import { useAppStore } from "./use-app-store";
@@ -756,6 +758,10 @@ export function cleanupSessionLight(sessionId: string): void {
  */
 export function cleanupSessionHeavy(sessionId: string): void {
   useChatStore.getState().clearSessionMessages(sessionId);
+  clearBackgroundRefreshGeneration(sessionId);
+  clearSessionFetchInitCache(sessionId);
+  clearStatusWatchdog(sessionId);
+  clearRetrySession(sessionId);
   useTurnStore.getState().clearSessionUI(sessionId);
   useChatNavStore.getState().clearSessionUI(sessionId);
   useMemoryStore.getState().clearSession(sessionId);
