@@ -368,13 +368,15 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("agent.getAgentDetail", async (params) => {
-    return m.getAgentDetail(params.sessionId, params.agentName) as Promise<
-      R<"agent.getAgentDetail">
-    >;
+    // CLI returns AgentConfig directly; schema expects { agent: AgentConfig }
+    const agent = await m.getAgentDetail(params.sessionId, params.agentName);
+    return { agent } as R<"agent.getAgentDetail">;
   });
 
   r("agent.getAllTools", async (params) => {
-    return m.getAllTools(params.sessionId) as Promise<R<"agent.getAllTools">>;
+    // CLI returns tool[] directly; schema expects { tools: tool[] }
+    const tools = await m.getAllTools(params.sessionId);
+    return { tools } as R<"agent.getAllTools">;
   });
 
   r("agent.getSystemPrompt", async (params) => {
