@@ -7,6 +7,23 @@ import { createLogger } from "../lib/logger";
 
 const log = createLogger("supervisor");
 const STATUS_TIMEOUT_MS = 2500;
+const CHANNEL_TIMEOUT_MS = 1_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`channel call timed out (${ms}ms)`)), ms);
+    promise.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
+}
 
 function disabledStatus(): SupervisorStatus {
   return {
@@ -22,34 +39,19 @@ async function getSupervisorStatus(
   pm: NonNullable<ReturnType<typeof getProcessManager>>,
   sessionId: string,
 ): Promise<SupervisorStatus> {
-  let settled = false;
-  const status = pm
-    .callChannel(sessionId, "supervisor", "getStatus", {})
-    .then((result) => result as SupervisorStatus)
-    .catch((err: unknown) => {
-      log.warn("getStatus channel call failed", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return disabledStatus();
-    })
-    .finally(() => {
-      settled = true;
+  try {
+    const result: unknown = await withTimeout(
+      pm.callChannel(sessionId, "supervisor", "getStatus", {}),
+      STATUS_TIMEOUT_MS,
+    );
+    return result as SupervisorStatus;
+  } catch (err: unknown) {
+    log.warn("getStatus channel call failed", {
+      sessionId,
+      err: err instanceof Error ? err.message : String(err),
     });
-
-  const timeout = new Promise<SupervisorStatus>((resolve) => {
-    setTimeout(() => {
-      if (!settled) {
-        log.warn("getStatus channel call timed out, returning disabled status", {
-          sessionId,
-          timeoutMs: STATUS_TIMEOUT_MS,
-        });
-      }
-      resolve(disabledStatus());
-    }, STATUS_TIMEOUT_MS);
-  });
-
-  return Promise.race([status, timeout]);
+    return disabledStatus();
+  }
 }
 
 export function register(server: RPCServer, _options: HandlerOptions): void {
@@ -72,10 +74,21 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       };
       const pm = getProcessManager();
       if (!pm) return { scheduled: false };
-      return pm.callChannel(sessionId, "supervisor", "requestPause", {
-        delayMs,
-        reason,
-      }) as Promise<{ scheduled: boolean; scheduledAt?: number }>;
+      try {
+        return (await withTimeout(
+          pm.callChannel(sessionId, "supervisor", "requestPause", {
+            delayMs,
+            reason,
+          }),
+          CHANNEL_TIMEOUT_MS,
+        )) as { scheduled: boolean; scheduledAt?: number };
+      } catch (err) {
+        log.warn("supervisor.requestPause channel call failed", {
+          sessionId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+        return { scheduled: false };
+      }
     },
   );
 
@@ -83,41 +96,90 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const { sessionId } = params as { sessionId: string };
     const pm = getProcessManager();
     if (!pm) return { cancelled: false };
-    return pm.callChannel(sessionId, "supervisor", "cancelPause", {}) as Promise<{
-      cancelled: boolean;
-    }>;
+    try {
+      return (await withTimeout(
+        pm.callChannel(sessionId, "supervisor", "cancelPause", {}),
+        CHANNEL_TIMEOUT_MS,
+      )) as { cancelled: boolean };
+    } catch (err) {
+      log.warn("supervisor.cancelPause channel call failed", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return { cancelled: false };
+    }
   });
 
   r("supervisor.forceContinue", async (params): Promise<{ triggered: boolean }> => {
     const { sessionId, reason } = params as { sessionId: string; reason?: string };
     const pm = getProcessManager();
     if (!pm) return { triggered: false };
-    return pm.callChannel(sessionId, "supervisor", "forceContinue", { reason }) as Promise<{
-      triggered: boolean;
-    }>;
+    try {
+      return (await withTimeout(
+        pm.callChannel(sessionId, "supervisor", "forceContinue", { reason }),
+        CHANNEL_TIMEOUT_MS,
+      )) as { triggered: boolean };
+    } catch (err) {
+      log.warn("supervisor.forceContinue channel call failed", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return { triggered: false };
+    }
   });
 
   r("supervisor.disable", async (params): Promise<{ disabled: boolean }> => {
     const { sessionId } = params as { sessionId: string };
     const pm = getProcessManager();
     if (!pm) return { disabled: false };
-    return pm.callChannel(sessionId, "supervisor", "disable", {}) as Promise<{ disabled: boolean }>;
+    try {
+      return (await withTimeout(
+        pm.callChannel(sessionId, "supervisor", "disable", {}),
+        CHANNEL_TIMEOUT_MS,
+      )) as { disabled: boolean };
+    } catch (err) {
+      log.warn("supervisor.disable channel call failed", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return { disabled: false };
+    }
   });
 
   r("supervisor.enable", async (params): Promise<{ enabled: boolean }> => {
     const { sessionId } = params as { sessionId: string };
     const pm = getProcessManager();
     if (!pm) return { enabled: false };
-    return pm.callChannel(sessionId, "supervisor", "enable", {}) as Promise<{ enabled: boolean }>;
+    try {
+      return (await withTimeout(
+        pm.callChannel(sessionId, "supervisor", "enable", {}),
+        CHANNEL_TIMEOUT_MS,
+      )) as { enabled: boolean };
+    } catch (err) {
+      log.warn("supervisor.enable channel call failed", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return { enabled: false };
+    }
   });
 
   r("supervisor.getTaskReport", async (params): Promise<{ tasks: TaskReport[] }> => {
     const { sessionId } = params as { sessionId: string };
     const pm = getProcessManager();
     if (!pm) return { tasks: [] };
-    return pm.callChannel(sessionId, "supervisor", "getTaskReport", {}) as Promise<{
-      tasks: TaskReport[];
-    }>;
+    try {
+      return (await withTimeout(
+        pm.callChannel(sessionId, "supervisor", "getTaskReport", {}),
+        CHANNEL_TIMEOUT_MS,
+      )) as { tasks: TaskReport[] };
+    } catch (err) {
+      log.warn("supervisor.getTaskReport channel call failed", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return { tasks: [] };
+    }
   });
 
   r(
@@ -131,11 +193,22 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       };
       const pm = getProcessManager();
       if (!pm) return { reachable: false, error: "No process manager" };
-      return pm.callChannel(sessionId, "supervisor", "checkToolStatus", {
-        toolName,
-        channelName,
-        method,
-      }) as Promise<{ reachable: boolean; status?: string; error?: string }>;
+      try {
+        return (await withTimeout(
+          pm.callChannel(sessionId, "supervisor", "checkToolStatus", {
+            toolName,
+            channelName,
+            method,
+          }),
+          CHANNEL_TIMEOUT_MS,
+        )) as { reachable: boolean; status?: string; error?: string };
+      } catch (err) {
+        log.warn("supervisor.checkToolStatus channel call failed", {
+          sessionId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+        return { reachable: false, error: err instanceof Error ? err.message : String(err) };
+      }
     },
   );
 
@@ -155,17 +228,51 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
         },
       };
     }
-    return pm.callChannel(sessionId, "supervisor", "setGoal", {
-      objective,
-    }) as Promise<{ goal: GoalState }>;
+    try {
+      return (await withTimeout(
+        pm.callChannel(sessionId, "supervisor", "setGoal", {
+          objective,
+        }),
+        CHANNEL_TIMEOUT_MS,
+      )) as { goal: GoalState };
+    } catch (err) {
+      log.warn("supervisor.setGoal channel call failed", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return {
+        goal: {
+          id: "",
+          objective,
+          status: "blocked",
+          startedAt: Date.now(),
+          updatedAt: Date.now(),
+          continuationCount: 0,
+          blockers: [
+            { kind: "runtime", summary: err instanceof Error ? err.message : String(err) },
+          ],
+        },
+      };
+    }
   });
 
   r("supervisor.clearGoal", async (params): Promise<{ cleared: boolean }> => {
     const { sessionId, reason } = params as { sessionId: string; reason?: string };
     const pm = getProcessManager();
     if (!pm) return { cleared: false };
-    return pm.callChannel(sessionId, "supervisor", "clearGoal", {
-      reason,
-    }) as Promise<{ cleared: boolean }>;
+    try {
+      return (await withTimeout(
+        pm.callChannel(sessionId, "supervisor", "clearGoal", {
+          reason,
+        }),
+        CHANNEL_TIMEOUT_MS,
+      )) as { cleared: boolean };
+    } catch (err) {
+      log.warn("supervisor.clearGoal channel call failed", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return { cleared: false };
+    }
   });
 }

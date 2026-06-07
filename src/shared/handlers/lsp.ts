@@ -9,6 +9,24 @@ import { createLogger } from "../lib/logger";
 
 const log = createLogger("lsp");
 
+const CHANNEL_TIMEOUT_MS = 1_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`channel call timed out (${ms}ms)`)), ms);
+    promise.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
+}
+
 export function register(server: RPCServer, _options: HandlerOptions): void {
   const r = createRegister(server);
 
@@ -47,11 +65,14 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
       if (pm.hasSession(params.sessionId)) {
         try {
-          const raw: unknown = await pm.callChannel(
-            params.sessionId,
-            "lsp" as string,
-            "getStatus",
-            {},
+          const raw: unknown = await withTimeout(
+            pm.callChannel(
+              params.sessionId,
+              "lsp" as string,
+              "getStatus",
+              {},
+            ),
+            CHANNEL_TIMEOUT_MS,
           );
           const result = raw as {
             servers: Array<{ name: string; fileTypes?: string[]; state: string; reason: string }>;
@@ -135,8 +156,20 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const { sessionId, mode } = params as { sessionId: string; mode: LspDiagnosticsMode };
     const pm = getProcessManager();
     if (!pm) throw new Error("No process manager available");
-    return pm.callChannel(sessionId, "lsp", "lsp.setMode", {
-      mode,
-    }) as Promise<{ ok: boolean; mode: LspDiagnosticsMode }>;
+    try {
+      const result = (await withTimeout(
+        pm.callChannel(sessionId, "lsp", "lsp.setMode", {
+          mode,
+        }),
+        CHANNEL_TIMEOUT_MS,
+      )) as { ok: boolean; mode: LspDiagnosticsMode };
+      return result;
+    } catch (err) {
+      log.warn("lsp.setMode channel call failed", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return { ok: false, mode };
+    }
   });
 }

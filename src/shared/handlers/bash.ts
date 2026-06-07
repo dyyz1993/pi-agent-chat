@@ -11,6 +11,24 @@ import { createLogger } from "../lib/logger";
 
 const log = createLogger("bash");
 
+const CHANNEL_TIMEOUT_MS = 1_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`channel call timed out (${ms}ms)`)), ms);
+    promise.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
+}
+
 export function register(server: RPCServer, _options: HandlerOptions): void {
   const r = createRegister(server);
 
@@ -28,7 +46,10 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     if (!pm) return { processes: [] };
 
     try {
-      const rawResult: unknown = await pm.callChannel(sessionId, "bash", "list", {});
+      const rawResult: unknown = await withTimeout(
+        pm.callChannel(sessionId, "bash", "list", {}),
+        CHANNEL_TIMEOUT_MS,
+      );
       const processes =
         typeof rawResult === "object" &&
         rawResult !== null &&
@@ -49,7 +70,18 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
     const pm = getProcessManager();
     if (!pm) throw new Error("No process manager available");
-    await pm.callChannel(sessionId, "bash", action, { toolCallId, data });
+    try {
+      await withTimeout(
+        pm.callChannel(sessionId, "bash", action, { toolCallId, data }),
+        CHANNEL_TIMEOUT_MS,
+      );
+    } catch (err) {
+      log.warn("bash.command channel call failed", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      throw new Error("bash channel call failed");
+    }
 
     return { ok: true };
   });

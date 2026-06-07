@@ -5,6 +5,24 @@ import { createLogger } from "../lib/logger";
 
 const log = createLogger("agent");
 
+const CHANNEL_TIMEOUT_MS = 1_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`channel call timed out (${ms}ms)`)), ms);
+    promise.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
+}
+
 interface RulesSnapshot {
   type: "snapshot";
   rules: unknown[];
@@ -66,10 +84,10 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     }
 
     try {
-      const result: unknown = (await Promise.race([
+      const result = (await withTimeout(
         pm.callChannel(sid, "rules-engine", "getSnapshot", { cwd: cwd ?? "" }) as Promise<unknown>,
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
-      ])) as unknown;
+        CHANNEL_TIMEOUT_MS,
+      )) as unknown;
 
       if (
         result &&
