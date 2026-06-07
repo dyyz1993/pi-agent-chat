@@ -254,7 +254,11 @@ export function buildPreservedStreamingMessage(
   }
 
   const preservedContent = streamingMsg.content.filter((block) => {
-    if (block.type !== "toolExecution" || block.status !== "running") return false;
+    // Always preserve non-toolExecution blocks (text, thinking, images, custom).
+    // These are never in JSONL during streaming and must survive background refresh.
+    if (block.type !== "toolExecution") return true;
+
+    // For toolExecution blocks, skip if already present as a terminal block in JSONL
     if (getToolExecutionDedupeKeys(block).some((key) => terminalKeys.has(key))) return false;
 
     const description = normalizeToolDescription(getToolExecutionDescription(block));

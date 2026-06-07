@@ -192,8 +192,15 @@ describe("chat store helpers", () => {
 
     const preserved = buildPreservedStreamingMessage(finalMsgs, streamingMsg);
 
-    expect(preserved?.content).toHaveLength(1);
+    // Text block should be preserved (not in JSONL during streaming)
+    // tc-done (read "done.ts") is deduped against terminal in finalMsgs
+    // tc-running (write "pending.ts") is preserved (not in finalMsgs)
+    expect(preserved?.content).toHaveLength(2);
     expect(preserved?.content[0]).toMatchObject({
+      type: "text",
+      text: "duplicate text from live stream",
+    });
+    expect(preserved?.content[1]).toMatchObject({
       type: "toolExecution",
       toolCallId: "tc-running",
       status: "running",
