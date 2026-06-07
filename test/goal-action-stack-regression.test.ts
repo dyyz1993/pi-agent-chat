@@ -80,10 +80,25 @@ describe("Goal action stack regression", () => {
     const layoutTypes = readSource("src/mainview/layouts/types.ts");
     const rightSidebar = readSource("src/mainview/components/right-sidebar/RightSidebar.tsx");
     const statusPanel = readSource("src/mainview/components/status-panel/StatusPanel.tsx");
+    const goalCard = readSource("src/mainview/components/chat/GoalActionCard.tsx");
 
     expect(layoutTypes).toContain('{ id: "status", label: "Goal" }');
     expect(rightSidebar).toContain("status: Target");
     expect(statusPanel).toContain('t("supervisor.goldRecords")');
     expect(statusPanel).toContain('t("supervisor.gold.empty")');
+    expect(goalCard).toContain('openStatusPanel("status")');
+    expect(goalCard).toContain('expandStatusSection("supervisor")');
+  });
+
+  it("separates Goal status labels from enable and disable actions", () => {
+    const statusPanel = readSource("src/mainview/components/status-panel/StatusPanel.tsx");
+    const zh = readSource("src/mainview/locales/zh-CN/status.json");
+
+    expect(statusPanel).toContain('t("supervisor.runtimeState")');
+    expect(statusPanel).toContain('t("supervisor.switchState")');
+    expect(statusPanel).toContain('t("supervisor.action.enable")');
+    expect(statusPanel).toContain('t("supervisor.action.disable")');
+    expect(zh).toContain('"supervisor.action.enable": "启用 Goal"');
+    expect(zh).toContain('"supervisor.action.disable": "禁用 Goal"');
   });
 });

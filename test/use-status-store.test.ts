@@ -69,6 +69,17 @@ describe("useStatusStore", () => {
     expect(useStatusStore.getState().collapsedSections.has("mcp")).toBe(false);
   });
 
+  it("expandSection removes a collapsed section without toggling it closed again", () => {
+    useStatusStore.getState().toggleSection("supervisor");
+    expect(useStatusStore.getState().collapsedSections.has("supervisor")).toBe(true);
+
+    useStatusStore.getState().expandSection("supervisor");
+    expect(useStatusStore.getState().collapsedSections.has("supervisor")).toBe(false);
+
+    useStatusStore.getState().expandSection("supervisor");
+    expect(useStatusStore.getState().collapsedSections.has("supervisor")).toBe(false);
+  });
+
   it("setMcpServers sets mcpServers", () => {
     const servers = [
       {

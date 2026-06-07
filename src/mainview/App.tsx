@@ -16,6 +16,7 @@ import { DiagnosticPanel } from "./components/debug/DiagnosticPanel";
 import { useDiagnosticStore } from "./stores/use-diagnostic-store";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { LoginPage } from "./components/LoginPage";
+import { createStartupTrace } from "./lib/startup-monitor";
 
 function App() {
   const { t } = useTranslation("common");
@@ -98,6 +99,7 @@ function App() {
     if (!ready || restoredFlag) return;
 
     let cancelled = false;
+    const trace = createStartupTrace("app.restore");
     useAppStore.setState({ restored: true });
     setRestoring(true);
 
@@ -109,10 +111,12 @@ function App() {
         if (urlSessionId) {
           if (cancelled) return;
           addLog(`Loading session from URL: ${urlSessionId}`);
+          trace.mark("url-session.lookup.begin", { sessionId: urlSessionId });
           try {
             const lookup = await apiClient.call("project.findSessionById", {
               sessionId: urlSessionId,
             });
+            trace.mark("url-session.lookup.done", { sessionId: urlSessionId });
             const sessionInfo = lookup.session as {
               sessionPath: string;
               projectPath: string;
@@ -132,13 +136,20 @@ function App() {
             addProjectTab({ id: tabId, name: projectName, path: projectPath });
             useSessionStore.getState().setActiveProject(tabId, { skipAutoSession: true });
 
+            trace.mark("url-session.scan.begin", { projectPath });
             await loadSessionsForProject(projectPath);
+            trace.mark("url-session.scan.done", { projectPath });
 
             if (cancelled) return;
+            trace.mark("url-session.agent.start.begin", { sessionId: urlSessionId });
             const result = await apiClient.call("agent.start", {
               sessionId: urlSessionId,
               projectPath,
               sessionPath,
+            });
+            trace.mark("url-session.agent.start.done", {
+              sessionId: urlSessionId,
+              status: result.status,
             });
             log.info("agent.start for URL session", {
               status: result.status,
@@ -149,7 +160,9 @@ function App() {
             useChatStore.getState().loadSessionMessages(urlSessionId, { force: true, sessionPath });
 
             addLog(`URL session loaded: ${sessionName} (${projectName})`);
+            trace.done("url-session.ready", { sessionId: urlSessionId });
           } catch (err) {
+            trace.error("url-session.failed", err);
             addLog(
               `Failed to load URL session: ${err instanceof Error ? err.message : String(err)}`,
             );
@@ -159,9 +172,14 @@ function App() {
         }
 
         if (cancelled) return;
+        trace.mark("restore-tabs.begin");
         const tabResult = await apiClient.call("project.restoreTabs", {});
         const savedTabs = tabResult.tabs as Array<{ id: string; name: string; path: string }>;
         const savedActiveId = tabResult.activeTabId as string | null;
+        trace.mark("restore-tabs.done", {
+          tabCount: savedTabs?.length ?? 0,
+          savedActiveId,
+        });
 
         if (savedTabs && savedTabs.length > 0) {
           const { projectTabs } = useSessionStore.getState();
@@ -182,6 +200,7 @@ function App() {
 
           const tab = savedTabs.find((t) => t.id === targetId);
           if (tab) {
+            trace.mark("active-project.sessions.begin", { projectPath: tab.path });
             const sessions = await Promise.race([
               loadSessionsForProject(tab.path),
               new Promise<never>((_, reject) =>
@@ -191,8 +210,13 @@ function App() {
                 ),
               ),
             ]).catch((err) => {
+              trace.error("active-project.sessions.failed", err, { projectPath: tab.path });
               addLog(`Session load failed: ${err instanceof Error ? err.message : String(err)}`);
               return [] as Awaited<ReturnType<typeof loadSessionsForProject>>;
+            });
+            trace.mark("active-project.sessions.done", {
+              projectPath: tab.path,
+              sessionCount: sessions.length,
             });
             addLog(
               `Restored ${savedTabs.length} tabs from server config (${sessions.length} sessions)`,
@@ -205,19 +229,25 @@ function App() {
                   ? lastSid
                   : sessions[0].sessionId;
               useSessionStore.getState().setActiveSession(targetSession);
+              trace.done("active-session.selected", { sessionId: targetSession });
             } else {
+              trace.mark("empty-project.create-session.begin", { projectPath: tab.path });
               await useSessionStore.getState().createNewSession();
+              trace.done("empty-project.create-session.done", { projectPath: tab.path });
             }
           }
           return;
         }
 
         if (cancelled) return;
+        trace.mark("recent-projects.begin");
         const result = await apiClient.call("project.listRecent", {});
         const projects =
           (result.projects as Array<{ path: string; name: string; sessionCount: number }>) || [];
+        trace.mark("recent-projects.done", { projectCount: projects.length });
         if (projects.length === 0) {
           if (!cancelled) setRestoring(false);
+          trace.done("no-projects");
           return;
         }
 
@@ -228,7 +258,12 @@ function App() {
 
         if (!cancelled) setRestoring(false);
 
+        trace.mark("recent-project.sessions.begin", { projectPath: first.path });
         const sessions = await loadSessionsForProject(first.path);
+        trace.mark("recent-project.sessions.done", {
+          projectPath: first.path,
+          sessionCount: sessions.length,
+        });
         addLog(`Restored project: ${first.name} (${sessions.length} sessions)`);
 
         if (sessions.length > 0) {
@@ -239,10 +274,14 @@ function App() {
               ? lastSid
               : sessions[0].sessionId;
           useSessionStore.getState().setActiveSession(sid);
+          trace.done("recent-project.session.selected", { sessionId: sid });
         } else {
+          trace.mark("recent-project.create-session.begin", { projectPath: first.path });
           await useSessionStore.getState().createNewSession();
+          trace.done("recent-project.create-session.done", { projectPath: first.path });
         }
       } catch (err) {
+        trace.error("restore.failed", err);
         addLog(`Restore failed: ${err instanceof Error ? err.message : String(err)}`);
         if (!cancelled) setRestoring(false);
       }
@@ -255,9 +294,16 @@ function App() {
 
   // 首次恢复完成后，后台拉取所有项目所有会话的运行状态
   useEffect(() => {
-    if (!restoring && ready) {
-      useSessionStore.getState().fetchAllProjectsSessionsStatus();
-    }
+    if (restoring || !ready) return;
+    const timer = window.setTimeout(() => {
+      const trace = createStartupTrace("background.session-status");
+      useSessionStore
+        .getState()
+        .fetchAllProjectsSessionsStatus()
+        .then(() => trace.done("done"))
+        .catch((err: unknown) => trace.error("failed", err));
+    }, 1200);
+    return () => window.clearTimeout(timer);
   }, [restoring, ready]);
 
   const handleSelectProject = async (path: string, name: string) => {

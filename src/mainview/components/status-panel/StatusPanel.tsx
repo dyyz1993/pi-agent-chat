@@ -750,14 +750,16 @@ function SupervisorSectionContent({
   if (!status) {
     return (
       <div className="flex items-center gap-2">
-        <span className="text-text-tertiary">{t("supervisor.state.disabled")}</span>
+        <span className="text-text-tertiary">
+          {t("supervisor.runtimeState")}: {t("supervisor.state.disabled")}
+        </span>
         {sessionId && (
           <button
             onClick={() => handleEnable(sessionId)}
             disabled={loading}
             className="px-1.5 py-0.5 rounded text-[9px] bg-status-success/20 text-status-success disabled:opacity-50"
           >
-            {loading ? "..." : t("supervisor.enabled")}
+            {loading ? "..." : t("supervisor.action.enable")}
           </button>
         )}
       </div>
@@ -769,11 +771,13 @@ function SupervisorSectionContent({
   return (
     <div className="space-y-1.5">
       <div className="flex items-center gap-1.5">
+        <span className="text-[9px] text-text-tertiary">{t("supervisor.runtimeState")}</span>
         <span
           className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${STATE_STYLES[status.state] ?? "bg-text-tertiary/20 text-text-tertiary"}`}
         >
           {stateLabel}
         </span>
+        <span className="text-[9px] text-text-tertiary">{t("supervisor.switchState")}</span>
         <span
           className={`text-[9px] ${status.enabled ? "text-status-success" : "text-text-tertiary"}`}
         >
@@ -882,7 +886,7 @@ function SupervisorSectionContent({
             onClick={() => (status.enabled ? disable(sessionId) : enable(sessionId))}
             className={`px-1.5 py-0.5 rounded text-[9px] ${status.enabled ? "bg-status-error/20 text-status-error" : "bg-status-success/20 text-status-success"}`}
           >
-            {status.enabled ? t("supervisor.disabled") : t("supervisor.enabled")}
+            {status.enabled ? t("supervisor.action.disable") : t("supervisor.action.enable")}
           </button>
           {status.enabled && (
             <>

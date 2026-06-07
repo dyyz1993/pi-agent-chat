@@ -110,6 +110,7 @@ interface StatusState {
   toggleYolo: () => void;
   togglePlan: () => void;
   toggleSection: (section: StatusSection) => void;
+  expandSection: (section: StatusSection) => void;
   setMcpServers: (servers: StatusState["mcpServers"]) => void;
   setLspStatus: (status: StatusState["lspStatus"]) => void;
   setPlugins: (plugins: StatusState["plugins"]) => void;
@@ -163,6 +164,13 @@ export const useStatusStore = create<StatusState>((set) => ({
       const next = new Set(s.collapsedSections);
       if (next.has(section)) next.delete(section);
       else next.add(section);
+      return { collapsedSections: next };
+    }),
+  expandSection: (section) =>
+    set((s) => {
+      if (!s.collapsedSections.has(section)) return s;
+      const next = new Set(s.collapsedSections);
+      next.delete(section);
       return { collapsedSections: next };
     }),
   setMcpServers: (servers) => set({ mcpServers: servers }),

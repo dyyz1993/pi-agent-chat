@@ -95,6 +95,8 @@
   "agentPlan": "Plan",
   "supervisor": "Goal",
   "supervisor.description": "Goal monitoring and auto-continue",
+  "supervisor.runtimeState": "Runtime",
+  "supervisor.switchState": "Switch",
   "supervisor.enabled": "Enabled",
   "supervisor.disabled": "Disabled",
   "supervisor.state.idle": "Idle",
@@ -120,6 +122,8 @@
   "supervisor.gold.verdict.blocked": "Blocked",
   "supervisor.gold.verdict.unsafe": "Unsafe",
   "supervisor.gold.evidenceCount": "{{count}} evidence item(s)",
+  "supervisor.action.enable": "Enable Goal",
+  "supervisor.action.disable": "Disable Goal",
   "supervisor.forceContinue": "Force Continue",
   "supervisor.pause": "Pause",
   "supervisor.cancelPause": "Cancel Pause"

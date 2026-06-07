@@ -67,10 +67,12 @@ vi.mock("../src/mainview/stores/use-rpc-debug-store", () => ({
   useRpcDebugStore: mockStores.rpcDebug,
 }));
 
+import { clearStartupPerfEvents, createStartupTrace } from "../src/mainview/lib/startup-monitor";
 import { useDiagnosticStore } from "../src/mainview/stores/use-diagnostic-store";
 
 describe("useDiagnosticStore", () => {
   beforeEach(() => {
+    clearStartupPerfEvents();
     useDiagnosticStore.setState({
       open: false,
       snapshot: null,
@@ -126,5 +128,18 @@ describe("useDiagnosticStore", () => {
     expect(s.snapshot).not.toBeNull();
     expect(s.history.length).toBe(1);
     expect(s.history[0]).toEqual(s.snapshot);
+  });
+
+  it("takeSnapshot includes recent startup perf events", () => {
+    const trace = createStartupTrace("app.restore");
+    trace.done("active-session.selected", { sessionId: "sess_1" });
+
+    useDiagnosticStore.getState().takeSnapshot();
+
+    const snap = useDiagnosticStore.getState().snapshot;
+    expect(snap?.startupPerfEvents.map((event) => event.phase)).toEqual([
+      "begin",
+      "active-session.selected",
+    ]);
   });
 });

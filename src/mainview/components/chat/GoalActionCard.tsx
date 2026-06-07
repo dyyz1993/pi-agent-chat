@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { GoalState, GoldResult } from "../../../shared/modules/supervisor";
 import { useLayoutStore } from "../../layouts/use-layout-store";
+import { useStatusStore } from "../../stores/use-status-store";
 import { useSupervisorStore } from "../../stores/use-supervisor-store";
 
 type GoalCardState = GoalState["status"];
@@ -91,6 +92,7 @@ export function GoalActionCard({
   const status = useSupervisorStore((s) => s.bySession[sessionId]?.status ?? null);
   const clearGoal = useSupervisorStore((s) => s.clearGoal);
   const openStatusPanel = useLayoutStore((s) => s.openStatusPanel);
+  const expandStatusSection = useStatusStore((s) => s.expandSection);
   const [now, setNow] = useState(() => Date.now());
 
   const goal = status?.goal as GoalWithLegacyFields | undefined;
@@ -116,6 +118,7 @@ export function GoalActionCard({
 
   const openGoalPanel = () => {
     openStatusPanel("status");
+    expandStatusSection("supervisor");
   };
 
   return (

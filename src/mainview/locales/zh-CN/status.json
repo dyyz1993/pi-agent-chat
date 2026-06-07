@@ -95,6 +95,8 @@
   "agentPlan": "Plan",
   "supervisor": "Goal",
   "supervisor.description": "目标监控与自动续执行",
+  "supervisor.runtimeState": "运行状态",
+  "supervisor.switchState": "开关",
   "supervisor.enabled": "已启用",
   "supervisor.disabled": "已禁用",
   "supervisor.state.idle": "空闲",
@@ -120,6 +122,8 @@
   "supervisor.gold.verdict.blocked": "阻塞",
   "supervisor.gold.verdict.unsafe": "不安全",
   "supervisor.gold.evidenceCount": "{{count}} 条证据",
+  "supervisor.action.enable": "启用 Goal",
+  "supervisor.action.disable": "禁用 Goal",
   "supervisor.forceContinue": "强制续执行",
   "supervisor.pause": "暂停",
   "supervisor.cancelPause": "取消暂停"
