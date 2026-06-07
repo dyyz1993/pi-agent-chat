@@ -210,25 +210,36 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     try {
       const files = await readdir(basePath, { withFileTypes: true });
       const sorted = sortEntries(files);
-      const isIgnoredFn = await loadGitignoreRules(basePath);
-      for (const entry of sorted) {
-        if (entry.name === ".git") continue;
-        const fullPath = join(basePath, entry.name);
-        const relFromBase = entry.name;
-        const isIgnored = isIgnoredFn(relFromBase, entry.isDirectory());
-        try {
-          const s = await stat(fullPath);
-          entries.push({
-            name: entry.name,
-            path: fullPath,
-            type: entry.isDirectory() ? "directory" : "file",
-            size: s.size,
-            isIgnored,
-          });
-        } catch (e) {
-          log.debug("file.listDir: stat failed for entry", { fullPath, error: String(e) });
-          entries.push({ name: entry.name, path: fullPath, type: "file", isIgnored });
-        }
+      const watcherState = getWatcherState(server);
+      const isIgnoredFn =
+        watcherState.gitignoreFn ?? (await loadGitignoreRules(basePath));
+      const results = await Promise.all(
+        sorted.map(async (entry) => {
+          if (entry.name === ".git") return null;
+          const fullPath = join(basePath, entry.name);
+          const isIgnored = isIgnoredFn(entry.name, entry.isDirectory());
+          try {
+            const s = await stat(fullPath);
+            return {
+              name: entry.name,
+              path: fullPath,
+              type: (entry.isDirectory() ? "directory" : "file") as "file" | "directory",
+              size: s.size,
+              isIgnored,
+            };
+          } catch (e) {
+            log.debug("file.listDir: stat failed for entry", { fullPath, error: String(e) });
+            return {
+              name: entry.name,
+              path: fullPath,
+              type: "file" as "file" | "directory",
+              isIgnored,
+            };
+          }
+        }),
+      );
+      for (const r of results) {
+        if (r) entries.push(r);
       }
     } catch (err) {
       log.error("listDir error", { error: err });

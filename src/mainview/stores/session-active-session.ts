@@ -257,7 +257,8 @@ export function createSetActiveSessionAction({
                   .then(() => {
                     return apiClient.call("agent.replayHoldEvents", { sessionId: id });
                   })
-                  .then(() => {
+                  .then((replayResult: { replayed: number } | undefined) => {
+                    if (replayResult && replayResult.replayed === 0) return;
                     return useChatStore
                       .getState()
                       ._backgroundRefreshMessages(id, session.sessionPath);
@@ -293,7 +294,8 @@ export function createSetActiveSessionAction({
                     });
                     return apiClient.call("agent.replayHoldEvents", { sessionId: id });
                   })
-                  .then(() => {
+                  .then((replayResult: { replayed: number } | undefined) => {
+                    if (replayResult && replayResult.replayed === 0) return;
                     return useChatStore
                       .getState()
                       ._backgroundRefreshMessages(id, session.sessionPath);

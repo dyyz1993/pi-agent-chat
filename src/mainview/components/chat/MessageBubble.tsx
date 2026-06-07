@@ -145,14 +145,17 @@ export const MessageBubble = memo(function MessageBubble({
     return { bg, isUser };
   }, [isSelected, isActive, isUser]);
 
-  const fullTextForCopy = useMemo(() => {
+  const contentRef = useRef(message.content);
+  contentRef.current = message.content;
+  const fullTextGetter = useCallback(() => {
+    const content = contentRef.current;
     if (isUser) {
-      return message.content
+      return content
         .filter((b): b is Extract<ContentBlock, { type: "text" }> => b.type === "text")
         .map((b) => b.text)
         .join("\n");
     }
-    return message.content
+    return content
       .map((b) => {
         if (b.type === "text") return b.text;
         if (b.type === "thinking") return `Thinking:\n${b.thinking}`;
@@ -165,7 +168,7 @@ export const MessageBubble = memo(function MessageBubble({
       })
       .filter(Boolean)
       .join("\n\n");
-  }, [message.content, isUser]);
+  }, [isUser]);
 
   return (
     <div
@@ -181,7 +184,7 @@ export const MessageBubble = memo(function MessageBubble({
           className={`relative my-0.5 mr-2 px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap break-words text-text-primary bg-status-info/[0.06] rounded-r-lg border-l-[3px] border-l-status-info/60 ${styleMemo.bg} min-w-0`}
         >
           <div className="absolute -top-0.5 right-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-10">
-            <CopyButton text={fullTextForCopy} size="xs" />
+            <CopyButton textGetter={fullTextGetter} size="xs" />
           </div>
           {message.content.map((block, i) => {
             if (block.type === "text") {

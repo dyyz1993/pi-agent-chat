@@ -8,17 +8,35 @@ import { ALL_MEMORY_TYPE_KEYS } from "./memory-config";
 import { useChatStore } from "../../stores/use-chat-store";
 import { useSubagentStore } from "../../stores/use-subagent-store";
 import { useSessionStore } from "../../stores/use-session-store";
-import { createLogger } from "../../../shared/lib/logger";
-
-const renderLog = createLogger("render-cache");
 
 const EMPTY_MSGS: ChatMessage[] = [];
 
 const MAX_CACHE_SIZE = 10;
 
 interface CacheEntry<T> {
-  ref: ChatMessage[];
+  revision: string;
   result: T;
+}
+
+/**
+ * Lightweight structural revision key for message arrays.
+ * Captures message count + last message id/content-length to detect
+ * changes that would affect cardMeta/processedMessages caches.
+ * During streaming, only the last message's content grows (text length),
+ * which this key captures via the last content block's text length.
+ */
+function computeMessagesRevision(messages: ChatMessage[]): string {
+  const n = messages.length;
+  if (n === 0) return "0";
+  const last = messages[n - 1];
+  const blocks = last.content;
+  if (blocks.length === 0) return `${n}:${last.id}:0`;
+  const lastBlock = blocks[blocks.length - 1];
+  let lastSize = 0;
+  if (lastBlock.type === "text") lastSize = lastBlock.text.length;
+  else if (lastBlock.type === "thinking") lastSize = lastBlock.thinking.length;
+  else if (lastBlock.type === "toolExecution") lastSize = (lastBlock.output ?? "").length;
+  return `${n}:${last.id}:${blocks.length}:${lastSize}`;
 }
 
 const _processedMessagesCache = new Map<string, CacheEntry<ProcessedMessage[]>>();
@@ -162,36 +180,25 @@ export const MessageListView = memo(function MessageListView({
   const { t } = useTranslation("chat");
   const cardMeta = useMemo(() => {
     if (!activeSessionId) return buildCardMeta(messages, t);
+    const revision = computeMessagesRevision(messages);
     const cached = _cardMetaCache.get(activeSessionId);
-    if (cached && cached.ref === messages) {
-      renderLog.info("cache HIT (cardMeta)", {
-        sessionId: activeSessionId,
-        count: messages.length,
-      });
+    if (cached && cached.revision === revision) {
       return cached.result;
     }
-    renderLog.info("cache MISS (cardMeta)", { sessionId: activeSessionId, count: messages.length });
     const result = buildCardMeta(messages, t);
-    _cardMetaCache.set(activeSessionId, { ref: messages, result });
+    _cardMetaCache.set(activeSessionId, { revision, result });
     evictIfNeeded(_cardMetaCache);
     return result;
   }, [messages, t, activeSessionId]);
   const processedMessages = useMemo(() => {
     if (!activeSessionId) return buildProcessedMessages(messages);
+    const revision = computeMessagesRevision(messages);
     const cached = _processedMessagesCache.get(activeSessionId);
-    if (cached && cached.ref === messages) {
-      renderLog.info("cache HIT (processedMessages)", {
-        sessionId: activeSessionId,
-        count: messages.length,
-      });
+    if (cached && cached.revision === revision) {
       return cached.result;
     }
-    renderLog.info("cache MISS (processedMessages)", {
-      sessionId: activeSessionId,
-      count: messages.length,
-    });
     const result = buildProcessedMessages(messages);
-    _processedMessagesCache.set(activeSessionId, { ref: messages, result });
+    _processedMessagesCache.set(activeSessionId, { revision, result });
     evictIfNeeded(_processedMessagesCache);
     return result;
   }, [messages, activeSessionId]);
