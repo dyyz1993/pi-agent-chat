@@ -747,6 +747,9 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       setToolActive(sessionId, toolCallId, true);
     }
 
+    // Flush pending updates first so parallel tool events in the same tick
+    // don't replace each other in the batcher queue.
+    flushNow();
     batchMessageUpdate(sessionId, () => {
       const chat = useChatStore.getState();
       const existing = chat.messagesBySession[sessionId] || [];
@@ -811,9 +814,23 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       if (event.type === "tool_execution_start") {
         const { args: argsStr, timeout, description } = formatToolArgs(event.args);
         const matchedByExactId = targetIdx >= 0;
-        const resolvedTargetIdx = matchedByExactId
+        let resolvedTargetIdx = matchedByExactId
           ? targetIdx
           : findMatchingToolExecution(blocks, toolName, argsStr, { includeTerminal: true });
+
+        // Don't reuse a running block from a different tool_execution_start
+        // — that's a parallel execution, not a re-delivery. But DO allow
+        // matching blocks created by message_update (different ID source).
+        if (!matchedByExactId && resolvedTargetIdx >= 0) {
+          const matched = blocks[resolvedTargetIdx] as ToolExecBlock;
+          if (
+            matched.status === "running" &&
+            matched.toolCallId !== toolCallId &&
+            toolCallNameMap[matched.toolCallId]
+          ) {
+            resolvedTargetIdx = -1;
+          }
+        }
         if (resolvedTargetIdx >= 0) {
           const prev = blocks[resolvedTargetIdx] as ToolExecBlock;
           if (isTerminalToolStatus(prev.status)) {
