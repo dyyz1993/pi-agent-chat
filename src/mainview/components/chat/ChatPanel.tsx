@@ -672,22 +672,22 @@ export function ChatPanel() {
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        {!isViewingSubagent && (
-          <>
-            {!sessionReady && !projectFailed && (
-              <div className="flex items-center gap-2 px-1 pb-1 text-xs text-text-tertiary">
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>{t("sessionStarting")}</span>
-              </div>
-            )}
-            {goalMode && (
-              <div className="flex items-center gap-2 px-1 pb-1 text-xs text-semantic-accent">
-                <Target className="w-3.5 h-3.5" />
-                <span>{t("goal.composerMode")}</span>
-              </div>
-            )}
-            {!goalMode && <AttachmentBar />}
-            <div className="flex items-stretch gap-1.5">
+        {!isViewingSubagent &&
+          (!sessionReady && !projectFailed ? (
+            <div className="flex-1 flex items-center justify-center gap-2 py-2">
+              <Loader2 className="w-3.5 h-3.5 text-text-tertiary animate-spin" />
+              <span className="text-xs text-text-tertiary">{t("sessionStarting")}</span>
+            </div>
+          ) : (
+            <>
+              {goalMode && (
+                <div className="flex items-center gap-2 px-1 pb-1 text-xs text-semantic-accent">
+                  <Target className="w-3.5 h-3.5" />
+                  <span>{t("goal.composerMode")}</span>
+                </div>
+              )}
+              {!goalMode && <AttachmentBar />}
+              <div className="flex items-stretch gap-1.5">
               {!isMobileOrTablet && <AttachmentButtons onGoalClick={() => startGoalMode()} />}
 
               <InputBar
@@ -799,6 +799,7 @@ export function ChatPanel() {
               </div>
             </div>
           </>
+          )
         )}
         {isViewingSubagent && (
           <div className="flex-1 flex items-center justify-center gap-3 py-2">
