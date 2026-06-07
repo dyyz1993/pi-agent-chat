@@ -688,119 +688,122 @@ export function ChatPanel() {
               )}
               {!goalMode && <AttachmentBar />}
               <div className="flex items-stretch gap-1.5">
-              {!isMobileOrTablet && <AttachmentButtons onGoalClick={() => startGoalMode()} />}
+                {!isMobileOrTablet && <AttachmentButtons onGoalClick={() => startGoalMode()} />}
 
-              <InputBar
-                ref={inputBarRef}
-                onSend={goalMode ? handleCreateGoal : handleSend}
-                sessionId={activeSessionId ?? ""}
-                disabled={!activeSessionId || isCreatingGoal}
-                placeholder={goalMode ? t("goal.inputPlaceholder") : undefined}
-                historyEnabled={!goalMode}
-                onTriggerPopup={!goalMode && !isMobileOrTablet ? commandPopup.openPopup : undefined}
-                popupOpen={!goalMode && !isMobileOrTablet && !!commandPopup.popupMode}
-                onPopupConfirm={commandPopup.confirmSelection}
-                onPopupCancel={commandPopup.closePopup}
-                onPopupArrowUp={commandPopup.navigateUp}
-                onPopupArrowDown={commandPopup.navigateDown}
-              />
+                <InputBar
+                  ref={inputBarRef}
+                  onSend={goalMode ? handleCreateGoal : handleSend}
+                  sessionId={activeSessionId ?? ""}
+                  disabled={!activeSessionId || isCreatingGoal}
+                  placeholder={goalMode ? t("goal.inputPlaceholder") : undefined}
+                  historyEnabled={!goalMode}
+                  onTriggerPopup={
+                    !goalMode && !isMobileOrTablet ? commandPopup.openPopup : undefined
+                  }
+                  popupOpen={!goalMode && !isMobileOrTablet && !!commandPopup.popupMode}
+                  onPopupConfirm={commandPopup.confirmSelection}
+                  onPopupCancel={commandPopup.closePopup}
+                  onPopupArrowUp={commandPopup.navigateUp}
+                  onPopupArrowDown={commandPopup.navigateDown}
+                />
 
-              <div className="flex flex-col gap-1.5 shrink-0 justify-between py-1">
-                {goalMode ? (
-                  <button
-                    onClick={cancelGoalMode}
-                    disabled={isCreatingGoal}
-                    className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-surface-dim text-text-secondary hover:bg-surface-hover disabled:opacity-60 disabled:cursor-wait"
-                    title={t("goal.cancelCompose")}
-                    aria-label={t("goal.cancelCompose")}
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                ) : isStreaming && inputText.trim() ? (
-                  <button
-                    onClick={handleFollowUp}
-                    className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-status-info text-white hover:bg-status-info shadow-sm shadow-status-info/20"
-                    title={t("sendFollowUp")}
-                    aria-label={t("sendFollowUp")}
-                  >
-                    <Clock className="w-4 h-4" />
-                  </button>
-                ) : isStreaming ? (
-                  <button
-                    onClick={handleAbort}
-                    disabled={isAborting}
-                    className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${isAborting ? "bg-status-error/40 text-white/70 cursor-wait" : "bg-status-error text-white hover:bg-status-error active:scale-90"}`}
-                    title={isAborting ? t("stopping") : t("stop")}
-                    aria-label={isAborting ? t("stopping") : t("stop")}
-                  >
-                    {isAborting ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
+                <div className="flex flex-col gap-1.5 shrink-0 justify-between py-1">
+                  {goalMode ? (
+                    <button
+                      onClick={cancelGoalMode}
+                      disabled={isCreatingGoal}
+                      className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-surface-dim text-text-secondary hover:bg-surface-hover disabled:opacity-60 disabled:cursor-wait"
+                      title={t("goal.cancelCompose")}
+                      aria-label={t("goal.cancelCompose")}
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  ) : isStreaming && inputText.trim() ? (
+                    <button
+                      onClick={handleFollowUp}
+                      className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-status-info text-white hover:bg-status-info shadow-sm shadow-status-info/20"
+                      title={t("sendFollowUp")}
+                      aria-label={t("sendFollowUp")}
+                    >
+                      <Clock className="w-4 h-4" />
+                    </button>
+                  ) : isStreaming ? (
+                    <button
+                      onClick={handleAbort}
+                      disabled={isAborting}
+                      className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${isAborting ? "bg-status-error/40 text-white/70 cursor-wait" : "bg-status-error text-white hover:bg-status-error active:scale-90"}`}
+                      title={isAborting ? t("stopping") : t("stop")}
+                      aria-label={isAborting ? t("stopping") : t("stop")}
+                    >
+                      {isAborting ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Square className="w-4 h-4" />
+                      )}
+                    </button>
+                  ) : (
+                    <button
+                      disabled
+                      className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-status-error/30 text-status-error/50 cursor-not-allowed"
+                      title={t("stop")}
+                      aria-label={t("stop")}
+                    >
                       <Square className="w-4 h-4" />
+                    </button>
+                  )}
+                  <button
+                    onClick={() =>
+                      goalMode ? void handleCreateGoal() : inputBarRef.current?.send()
+                    }
+                    disabled={
+                      isAborting ||
+                      isCreatingGoal ||
+                      isPermissionPending ||
+                      (goalMode
+                        ? !inputText.trim()
+                        : !inputText.trim() &&
+                          useAttachmentStore.getState().attachments.length === 0) ||
+                      !activeSessionId ||
+                      hasNoModel
+                    }
+                    className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${!isAborting && !isCreatingGoal && (inputText.trim() || (!goalMode && useAttachmentStore.getState().attachments.length > 0)) && activeSessionId && !hasNoModel ? (goalMode ? "bg-semantic-accent text-white hover:bg-semantic-accent shadow-sm shadow-semantic-accent/20" : isStreaming ? "bg-status-warning text-white hover:bg-status-warning shadow-sm shadow-status-warning/20" : "bg-semantic-accent text-white hover:bg-semantic-accent shadow-sm shadow-semantic-accent/20") : "bg-surface-dim text-text-tertiary cursor-not-allowed"}`}
+                    title={
+                      isPermissionPending
+                        ? t("waitPermission")
+                        : hasNoModel
+                          ? t("sendDisabledNoModel")
+                          : goalMode
+                            ? t("goal.create")
+                            : isStreaming
+                              ? t("steer")
+                              : t("send")
+                    }
+                    aria-label={
+                      isPermissionPending
+                        ? t("waitPermission")
+                        : hasNoModel
+                          ? t("sendDisabledNoModel")
+                          : goalMode
+                            ? t("goal.create")
+                            : isStreaming
+                              ? t("steer")
+                              : t("send")
+                    }
+                  >
+                    {isCreatingGoal ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : goalMode ? (
+                      <Target className="w-4 h-4" />
+                    ) : isStreaming ? (
+                      <Zap className="w-4 h-4" />
+                    ) : (
+                      <ArrowUp className="w-4 h-4" />
                     )}
                   </button>
-                ) : (
-                  <button
-                    disabled
-                    className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-status-error/30 text-status-error/50 cursor-not-allowed"
-                    title={t("stop")}
-                    aria-label={t("stop")}
-                  >
-                    <Square className="w-4 h-4" />
-                  </button>
-                )}
-                <button
-                  onClick={() => (goalMode ? void handleCreateGoal() : inputBarRef.current?.send())}
-                  disabled={
-                    isAborting ||
-                    isCreatingGoal ||
-                    isPermissionPending ||
-                    (goalMode
-                      ? !inputText.trim()
-                      : !inputText.trim() &&
-                        useAttachmentStore.getState().attachments.length === 0) ||
-                    !activeSessionId ||
-                    hasNoModel
-                  }
-                  className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${!isAborting && !isCreatingGoal && (inputText.trim() || (!goalMode && useAttachmentStore.getState().attachments.length > 0)) && activeSessionId && !hasNoModel ? (goalMode ? "bg-semantic-accent text-white hover:bg-semantic-accent shadow-sm shadow-semantic-accent/20" : isStreaming ? "bg-status-warning text-white hover:bg-status-warning shadow-sm shadow-status-warning/20" : "bg-semantic-accent text-white hover:bg-semantic-accent shadow-sm shadow-semantic-accent/20") : "bg-surface-dim text-text-tertiary cursor-not-allowed"}`}
-                  title={
-                    isPermissionPending
-                      ? t("waitPermission")
-                      : hasNoModel
-                        ? t("sendDisabledNoModel")
-                        : goalMode
-                          ? t("goal.create")
-                          : isStreaming
-                            ? t("steer")
-                            : t("send")
-                  }
-                  aria-label={
-                    isPermissionPending
-                      ? t("waitPermission")
-                      : hasNoModel
-                        ? t("sendDisabledNoModel")
-                        : goalMode
-                          ? t("goal.create")
-                          : isStreaming
-                            ? t("steer")
-                            : t("send")
-                  }
-                >
-                  {isCreatingGoal ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : goalMode ? (
-                    <Target className="w-4 h-4" />
-                  ) : isStreaming ? (
-                    <Zap className="w-4 h-4" />
-                  ) : (
-                    <ArrowUp className="w-4 h-4" />
-                  )}
-                </button>
+                </div>
               </div>
-            </div>
-          </>
-          )
-        )}
+            </>
+          ))}
         {isViewingSubagent && (
           <div className="flex-1 flex items-center justify-center gap-3 py-2">
             <span className="text-[11px] text-text-tertiary">{t("subagentReadonly")}</span>

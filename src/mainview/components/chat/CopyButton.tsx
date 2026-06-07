@@ -17,6 +17,13 @@ export const CopyButton = memo(function CopyButton({
   title,
 }: CopyButtonProps) {
   return (
-    <CopyAction text={text} textGetter={textGetter} size={size} className={className} title={title} showToast={false} />
+    <CopyAction
+      text={text}
+      textGetter={textGetter}
+      size={size}
+      className={className}
+      title={title}
+      showToast={false}
+    />
   );
 });

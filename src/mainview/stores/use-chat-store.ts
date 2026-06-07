@@ -500,11 +500,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
   },
 
-  setMessagesForSession: (
-    sessionId,
-    msgs,
-    options = {},
-  ) => {
+  setMessagesForSession: (sessionId, msgs, options = {}) => {
     set((s) => {
       const nextMsgs = options.streamingFastPath
         ? msgs

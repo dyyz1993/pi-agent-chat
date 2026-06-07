@@ -211,8 +211,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       const files = await readdir(basePath, { withFileTypes: true });
       const sorted = sortEntries(files);
       const watcherState = getWatcherState(server);
-      const isIgnoredFn =
-        watcherState.gitignoreFn ?? (await loadGitignoreRules(basePath));
+      const isIgnoredFn = watcherState.gitignoreFn ?? (await loadGitignoreRules(basePath));
       const results = await Promise.all(
         sorted.map(async (entry) => {
           if (entry.name === ".git") return null;

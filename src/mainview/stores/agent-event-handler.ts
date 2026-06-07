@@ -92,6 +92,15 @@ function isToolUseStopReason(stopReason: string | null | undefined): boolean {
   return stopReason === "toolUse" || stopReason === "tool_use";
 }
 
+function isRecoverableBoundaryStopReason(stopReason: string | null | undefined): boolean {
+  return (
+    stopReason === "stop" ||
+    stopReason === "endTurn" ||
+    stopReason === "end_turn" ||
+    isToolUseStopReason(stopReason)
+  );
+}
+
 function isErrorStopReason(stopReason: string | null | undefined): boolean {
   return stopReason === "error";
 }
@@ -579,15 +588,19 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
       const preservedBlocks = preservedToolExecs.filter((exec) => !usedExecs.has(exec.toolCallId));
 
-      chat.setMessagesForSession(sessionId, [
-        ...currentMsgs.slice(0, -1),
-        {
-          ...currentLast,
-          content: [...preservedBlocks, ...orderedBlocks],
-          ...buildTokenUsage(message.usage),
-          ...(message.stopReason ? { stopReason: message.stopReason } : {}),
-        },
-      ], { bumpStreamVersion: true, streamingFastPath: true });
+      chat.setMessagesForSession(
+        sessionId,
+        [
+          ...currentMsgs.slice(0, -1),
+          {
+            ...currentLast,
+            content: [...preservedBlocks, ...orderedBlocks],
+            ...buildTokenUsage(message.usage),
+            ...(message.stopReason ? { stopReason: message.stopReason } : {}),
+          },
+        ],
+        { bumpStreamVersion: true, streamingFastPath: true },
+      );
     });
     return;
   }
@@ -670,7 +683,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       const hasPriorAssistantContent = hasAssistantContentSinceLastUser(priorMessages);
       const stopReason = assistantMsg.stopReason ?? lastMsg.stopReason ?? null;
 
-      if (hasPriorAssistantContent || isToolUseStopReason(stopReason)) {
+      if (hasPriorAssistantContent || isRecoverableBoundaryStopReason(stopReason)) {
         chat.setMessagesForSession(sessionId, priorMessages);
         chat
           .loadSessionMessages(sessionId, { force: true, preserveStreaming: false })

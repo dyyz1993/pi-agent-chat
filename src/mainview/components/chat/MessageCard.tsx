@@ -91,6 +91,15 @@ function isToolUseStopReason(stopReason: string | null | undefined): boolean {
   return stopReason === "toolUse" || stopReason === "tool_use";
 }
 
+function isRecoverableBoundaryStopReason(stopReason: string | null | undefined): boolean {
+  return (
+    stopReason === "stop" ||
+    stopReason === "endTurn" ||
+    stopReason === "end_turn" ||
+    isToolUseStopReason(stopReason)
+  );
+}
+
 export const MessageCard = memo(function MessageCard({
   message,
   cardLabel,
@@ -124,7 +133,7 @@ export const MessageCard = memo(function MessageCard({
   }, [message.id, toggleCollapse]);
 
   const renderRole =
-    message.role === "error" && isToolUseStopReason(message.stopReason)
+    message.role === "error" && isRecoverableBoundaryStopReason(message.stopReason)
       ? "assistant"
       : message.role;
   const displayMessage =
@@ -527,7 +536,8 @@ const HeaderActions = memo(function HeaderActions({
             mode,
             messageId: message.id,
             hasEntryId: !!message.entryId,
-            messagesCount: (useChatStore.getState().messagesBySession[sessionId ?? ""] ?? []).length,
+            messagesCount: (useChatStore.getState().messagesBySession[sessionId ?? ""] ?? [])
+              .length,
           });
           pushNotification({
             message: t("messageCard.rollbackFirstMessage"),
@@ -706,13 +716,7 @@ const HeaderActions = memo(function HeaderActions({
         rollingBackRef.current = false;
       }
     },
-    [
-      sessionId,
-      resolveRollbackTarget,
-      message.id,
-      message.role,
-      pushNotification,
-    ],
+    [sessionId, resolveRollbackTarget, message.id, message.role, pushNotification],
   );
 
   return (

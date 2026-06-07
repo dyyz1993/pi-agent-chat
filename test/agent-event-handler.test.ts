@@ -729,8 +729,7 @@ describe("tool id reconciliation", () => {
     const msg = getLastAssistant();
     const execBlocks =
       msg?.content.filter(
-        (b): b is Extract<ContentBlock, { type: "toolExecution" }> =>
-          b.type === "toolExecution",
+        (b): b is Extract<ContentBlock, { type: "toolExecution" }> => b.type === "toolExecution",
       ) ?? [];
     expect(execBlocks).toHaveLength(1);
     expect(execBlocks[0].toolCallId).toBe("execution-tool-id");
@@ -862,6 +861,45 @@ describe("message_end tool card closure", () => {
     expect(msgs).toHaveLength(2);
     expect(msgs[1].role).toBe("assistant");
     expect(msgs[1].content).toEqual([{ type: "text", text: "Already answered." }]);
+    expect(useChatStore.getState().loadSessionMessages).toHaveBeenCalledWith(SID, {
+      force: true,
+      preserveStreaming: false,
+    });
+  });
+
+  it("does not turn a normal stop boundary into an empty-response error", () => {
+    setMessages([
+      {
+        id: "user-1",
+        role: "user",
+        content: [{ type: "text", text: "continue" }],
+        timestamp: Date.now() - 1,
+      },
+      {
+        id: "assistant-empty",
+        role: "assistant",
+        content: [],
+        timestamp: Date.now(),
+        isStreaming: false,
+        stopReason: "stop",
+      },
+    ]);
+    useSessionStore.setState({ sessionStatusMap: { [SID]: "idle" } });
+
+    handleAgentEvent(SID, {
+      type: "message_end",
+      entryId: "entry-stop-empty",
+      message: {
+        role: "assistant",
+        content: [],
+        stopReason: "stop",
+        timestamp: Date.now(),
+      },
+    } as Parameters<typeof handleAgentEvent>[1]);
+
+    const msgs = getMessages();
+    expect(msgs.map((m) => m.id)).toEqual(["user-1"]);
+    expect(msgs.some((m) => m.role === "error")).toBe(false);
     expect(useChatStore.getState().loadSessionMessages).toHaveBeenCalledWith(SID, {
       force: true,
       preserveStreaming: false,
