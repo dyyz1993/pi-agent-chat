@@ -218,20 +218,6 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       const lastIsUser = lastMsg && (lastMsg.role === "user" || lastMsg.role === "custom");
 
       if (lastIsUser) {
-        chat.setMessagesForSession(sessionId, [
-          ...currentMsgs,
-          {
-            id: `error_${Date.now()}`,
-            role: "error" as const,
-            content: [
-              {
-                type: "text" as const,
-                text: "Agent 未返回响应\nAgent 在处理你的消息后异常退出，可能是 LLM 服务异常或网络问题",
-              },
-            ],
-            timestamp: Date.now(),
-          },
-        ]);
         notificationGateway.emit({
           type: "session_error",
           sessionId,

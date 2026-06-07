@@ -68,17 +68,6 @@ function detectEmptyTurnAndInjectError(sessionId: string) {
     (lastMsg.role === "user" || lastMsg.role === "custom") &&
     !hasRenderableAssistantContentSinceLastUser(sessionId)
   ) {
-    chat.setMessagesForSession(sessionId, [
-      ...msgs,
-      {
-        id: `error_${Date.now()}`,
-        role: "error" as const,
-        content: [
-          { type: "text" as const, text: "Agent 未返回响应，可能是 LLM 服务异常或网络问题" },
-        ],
-        timestamp: Date.now(),
-      },
-    ]);
     useNotificationStore.getState().push({
       message: "Agent 未返回任何响应，请检查模型配置或重试",
       level: "error",
