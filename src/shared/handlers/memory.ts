@@ -8,26 +8,11 @@ import { join, resolve } from "path";
 import { homedir } from "os";
 import { getProcessManager } from "./agent";
 import { createLogger } from "../lib/logger";
+import { withTimeout } from "../lib/with-timeout";
 
 const log = createLogger("mcp");
 
 const CHANNEL_TIMEOUT_MS = 1_000;
-
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`channel call timed out (${ms}ms)`)), ms);
-    promise.then(
-      (v) => {
-        clearTimeout(timer);
-        resolve(v);
-      },
-      (e) => {
-        clearTimeout(timer);
-        reject(e);
-      },
-    );
-  });
-}
 
 function encodeCwd(cwd: string): string {
   return "--" + cwd.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-") + "--";

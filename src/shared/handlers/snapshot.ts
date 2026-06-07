@@ -4,6 +4,7 @@ import { createRegister } from "../rpc-schema";
 import { createReadStream } from "fs";
 import { createInterface } from "readline";
 import { createLogger } from "../lib/logger";
+import { withTimeout } from "../lib/with-timeout";
 import { getProcessManager } from "./agent";
 import { findSessionById } from "../lib/session-scanner";
 import type { SnapshotInfo } from "../../mainview/types";
@@ -11,22 +12,6 @@ import type { SnapshotInfo } from "../../mainview/types";
 const log = createLogger("snapshot");
 
 const CHANNEL_TIMEOUT_MS = 1_000;
-
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`channel call timed out (${ms}ms)`)), ms);
-    promise.then(
-      (v) => {
-        clearTimeout(timer);
-        resolve(v);
-      },
-      (e) => {
-        clearTimeout(timer);
-        reject(e);
-      },
-    );
-  });
-}
 
 interface StepSnapshotEntry {
   type: "custom";

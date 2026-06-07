@@ -6,26 +6,11 @@ import { existsSync } from "fs";
 import { getProcessManager } from "./agent";
 import type { LspDiagnosticsMode, LspServerStatus } from "../modules/lsp";
 import { createLogger } from "../lib/logger";
+import { withTimeout } from "../lib/with-timeout";
 
 const log = createLogger("lsp");
 
 const CHANNEL_TIMEOUT_MS = 1_000;
-
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`channel call timed out (${ms}ms)`)), ms);
-    promise.then(
-      (v) => {
-        clearTimeout(timer);
-        resolve(v);
-      },
-      (e) => {
-        clearTimeout(timer);
-        reject(e);
-      },
-    );
-  });
-}
 
 export function register(server: RPCServer, _options: HandlerOptions): void {
   const r = createRegister(server);

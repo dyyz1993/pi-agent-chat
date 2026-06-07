@@ -2,6 +2,7 @@ import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { HandlerOptions, R } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
 import { getProcessManager } from "./agent";
+import { withTimeout } from "../lib/with-timeout";
 
 const EMPTY_RESULT: R<"hooks.getLog"> = {
   entries: [],
@@ -11,22 +12,6 @@ const EMPTY_RESULT: R<"hooks.getLog"> = {
 };
 
 const CHANNEL_TIMEOUT_MS = 1_000;
-
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`channel call timed out (${ms}ms)`)), ms);
-    promise.then(
-      (v) => {
-        clearTimeout(timer);
-        resolve(v);
-      },
-      (e) => {
-        clearTimeout(timer);
-        reject(e);
-      },
-    );
-  });
-}
 
 export function register(server: RPCServer, _options: HandlerOptions): void {
   const r = createRegister(server);

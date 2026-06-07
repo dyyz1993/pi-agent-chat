@@ -2,6 +2,7 @@ import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { HandlerOptions, R } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
 import { createLogger } from "../lib/logger";
+import { withTimeout } from "../lib/with-timeout";
 import { getProcessManager } from "./agent";
 import { FILE_REVIEW_METHODS } from "../constants/channel-methods";
 import { existsSync } from "fs";
@@ -12,22 +13,6 @@ import type { PendingChangeResult } from "../modules/change-review";
 const log = createLogger("change-review");
 
 const CHANNEL_TIMEOUT_MS = 1_000;
-
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`channel call timed out (${ms}ms)`)), ms);
-    promise.then(
-      (v) => {
-        clearTimeout(timer);
-        resolve(v);
-      },
-      (e) => {
-        clearTimeout(timer);
-        reject(e);
-      },
-    );
-  });
-}
 
 interface TurnChange {
   turnIndex: number;

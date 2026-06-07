@@ -2,26 +2,11 @@ import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { HandlerOptions } from "../rpc-schema";
 import { getProcessManager } from "./agent";
 import { createLogger } from "../lib/logger";
+import { withTimeout } from "../lib/with-timeout";
 
 const log = createLogger("agent");
 
 const CHANNEL_TIMEOUT_MS = 1_000;
-
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`channel call timed out (${ms}ms)`)), ms);
-    promise.then(
-      (v) => {
-        clearTimeout(timer);
-        resolve(v);
-      },
-      (e) => {
-        clearTimeout(timer);
-        reject(e);
-      },
-    );
-  });
-}
 
 interface RulesSnapshot {
   type: "snapshot";
