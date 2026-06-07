@@ -50,7 +50,12 @@ function scheduleFlush() {
 }
 
 export function batchMessageUpdate(sessionId: string, apply: () => void) {
-  queue.push({ sessionId, apply });
+  const existingIdx = queue.findIndex((u) => u.sessionId === sessionId);
+  if (existingIdx >= 0) {
+    queue[existingIdx] = { sessionId, apply };
+  } else {
+    queue.push({ sessionId, apply });
+  }
   if (!scheduled) scheduleFlush();
 }
 

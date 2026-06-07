@@ -27,11 +27,12 @@ describe("message-batcher", () => {
 
       batchMessageUpdate("sess-1", () => calls.push("first"));
       batchMessageUpdate("sess-1", () => calls.push("second"));
+      batchMessageUpdate("sess-2", () => calls.push("third"));
 
       expect(calls).toEqual([]);
       expect(rafCallback).not.toBeNull();
       rafCallback?.(performance.now());
-      expect(calls).toEqual(["first", "second"]);
+      expect(calls).toEqual(["second", "third"]);
     } finally {
       globalThis.requestAnimationFrame = originalRaf;
       globalThis.cancelAnimationFrame = originalCancelRaf;

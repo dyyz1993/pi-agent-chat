@@ -11,6 +11,48 @@ import { sanitizeEvent, type SanitizedEvent } from "./hold-events";
 
 const log = createLogger("agent");
 
+const MESSAGE_UPDATE_THROTTLE_MS = 50;
+const pendingMessageUpdates = new Map<
+  string,
+  { sanitized: SanitizedEvent; timer: ReturnType<typeof setTimeout> }
+>();
+
+function emitAgentEventThrottled(
+  sessionId: string,
+  sanitized: SanitizedEvent,
+  emitAgentEvent: (sessionId: string, event: SanitizedEvent) => Promise<void>,
+): void {
+  if (sanitized.type === "message_update") {
+    const pending = pendingMessageUpdates.get(sessionId);
+    if (pending) {
+      pending.sanitized = sanitized;
+      return;
+    }
+    const timer = setTimeout(() => {
+      const buf = pendingMessageUpdates.get(sessionId);
+      if (buf) {
+        pendingMessageUpdates.delete(sessionId);
+        emitAgentEvent(sessionId, buf.sanitized).catch((err: unknown) => {
+          log.warn("throttled emitAgentEvent failed", {
+            sessionId,
+            err: err instanceof Error ? err.message : String(err),
+          });
+        });
+      }
+    }, MESSAGE_UPDATE_THROTTLE_MS);
+    pendingMessageUpdates.set(sessionId, { sanitized, timer });
+    return;
+  }
+
+  const pending = pendingMessageUpdates.get(sessionId);
+  if (pending) {
+    clearTimeout(pending.timer);
+    pendingMessageUpdates.delete(sessionId);
+    emitAgentEvent(sessionId, pending.sanitized).catch(() => undefined);
+  }
+  emitAgentEvent(sessionId, sanitized).catch(() => undefined);
+}
+
 interface ManagedEventClientLike {
   client?: {
     getTreeWithLeaf(): Promise<{ entries: unknown[]; leafId: string | null }>;
@@ -270,5 +312,5 @@ export function handleAgentEventOperation<TManaged extends ManagedEventClientLik
     }
   }
 
-  options.emitAgentEvent(options.sessionId, sanitized);
+  emitAgentEventThrottled(options.sessionId, sanitized, options.emitAgentEvent);
 }

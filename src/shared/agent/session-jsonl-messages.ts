@@ -197,10 +197,10 @@ async function appendJsonlFromFile(
 
 function accumulatorFromCache(hit: SessionCacheHit): FullMessageAccumulator {
   return {
-    allMessages: [...hit.messages],
-    allCustomEntries: [...hit.customEntries],
-    allCompactionEntries: [...hit.compactionEntries],
-    parentById: new Map(hit.parentById),
+    allMessages: hit.messages,
+    allCustomEntries: hit.customEntries,
+    allCompactionEntries: hit.compactionEntries,
+    parentById: hit.parentById,
     lastJsonlLeafPointer: hit.lastJsonlLeafPointer,
     activeJsonlLeafId: hit.activeJsonlLeafId,
   };

@@ -369,9 +369,6 @@ const HeaderActions = memo(function HeaderActions({
       [sessionId],
     ),
   );
-  const messages = useChatStore((s) =>
-    sessionId ? s.messagesBySession[sessionId] || EMPTY_MSGS : EMPTY_MSGS,
-  );
   const pushNotification = useNotificationStore((s) => s.push);
   const rollingBackRef = useRef(false);
 
@@ -408,8 +405,11 @@ const HeaderActions = memo(function HeaderActions({
         });
         return null;
       }
+      const msgs = sessionId
+        ? useChatStore.getState().messagesBySession[sessionId] || EMPTY_MSGS
+        : EMPTY_MSGS;
       if (isUserCard) {
-        const allUserMsgs = messages.filter((m) => m.role === "user");
+        const allUserMsgs = msgs.filter((m) => m.role === "user");
         const userMsgIdx = allUserMsgs.findIndex((m) => m.id === message.id);
         const userTreeEntries = entries.filter((e) => e.type === "message" && e.label === "user");
         log.info("resolveEntryId: user card matching", {
@@ -426,7 +426,7 @@ const HeaderActions = memo(function HeaderActions({
         });
         return null;
       }
-      const allAssistantMsgs = messages.filter((m) => m.role === "assistant");
+      const allAssistantMsgs = msgs.filter((m) => m.role === "assistant");
       const assistantMsgIdx = allAssistantMsgs.findIndex((m) => m.id === message.id);
       const assistantTreeEntries = entries.filter(
         (e) => e.type === "message" && e.label === "assistant",
@@ -445,7 +445,7 @@ const HeaderActions = memo(function HeaderActions({
       });
       return null;
     },
-    [sessionId, message.id, message.entryId, messages, isUserCard, fetchTree],
+    [sessionId, message.id, message.entryId, isUserCard, fetchTree],
   );
 
   const findTurnBoundary = useCallback((entryId: string, entries: TreeEntry[]): string | null => {
@@ -527,7 +527,7 @@ const HeaderActions = memo(function HeaderActions({
             mode,
             messageId: message.id,
             hasEntryId: !!message.entryId,
-            messagesCount: messages.length,
+            messagesCount: (useChatStore.getState().messagesBySession[sessionId ?? ""] ?? []).length,
           });
           pushNotification({
             message: t("messageCard.rollbackFirstMessage"),
@@ -711,8 +711,6 @@ const HeaderActions = memo(function HeaderActions({
       resolveRollbackTarget,
       message.id,
       message.role,
-      messages.length,
-      messages,
       pushNotification,
     ],
   );

@@ -127,7 +127,11 @@ vi.mock("../src/mainview/stores/use-chat-store", () => {
     streamContentVersion: number;
     loadingSessions: Set<string>;
     historyLoadVersion: number;
-    setMessagesForSession: (sessionId: string, msgs: ChatMessage[]) => void;
+    setMessagesForSession: (
+      sessionId: string,
+      msgs: ChatMessage[],
+      options?: { bumpStreamVersion?: boolean; streamingFastPath?: boolean },
+    ) => void;
     incrementStreamVersion: () => void;
   }
   const useChatStore = create<ChatState>((set) => ({
@@ -137,8 +141,16 @@ vi.mock("../src/mainview/stores/use-chat-store", () => {
     streamContentVersion: 0,
     loadingSessions: new Set(),
     historyLoadVersion: 0,
-    setMessagesForSession: (sessionId, msgs) =>
-      set((s) => ({ messagesBySession: { ...s.messagesBySession, [sessionId]: msgs } })),
+    setMessagesForSession: (sessionId, msgs, options) =>
+      set((s) => {
+        const next: Record<string, unknown> = {
+          messagesBySession: { ...s.messagesBySession, [sessionId]: msgs },
+        };
+        if (options?.bumpStreamVersion) {
+          next.streamContentVersion = s.streamContentVersion + 1;
+        }
+        return next;
+      }),
     incrementStreamVersion: () =>
       set((s) => ({ streamContentVersion: s.streamContentVersion + 1 })),
   }));

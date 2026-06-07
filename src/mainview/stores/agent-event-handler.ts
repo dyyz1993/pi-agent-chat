@@ -587,8 +587,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
           ...buildTokenUsage(message.usage),
           ...(message.stopReason ? { stopReason: message.stopReason } : {}),
         },
-      ]);
-      chat.incrementStreamVersion();
+      ], { bumpStreamVersion: true, streamingFastPath: true });
     });
     return;
   }
@@ -789,8 +788,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         }
         const updated = [...existing];
         updated[exactPosition.msgIndex] = { ...msg, content: blocks };
-        chat.setMessagesForSession(sessionId, updated);
-        chat.incrementStreamVersion();
+        chat.setMessagesForSession(sessionId, updated, { bumpStreamVersion: true });
         return;
       }
 
@@ -870,8 +868,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
       const updated = [...existing];
       updated[existing.length - 1] = { ...lastMsg, content: blocks };
-      chat.setMessagesForSession(sessionId, updated);
-      chat.incrementStreamVersion();
+      chat.setMessagesForSession(sessionId, updated, { bumpStreamVersion: true });
     });
     return;
   }
@@ -917,8 +914,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
       const updated = [...existing];
       updated[i] = { ...msg, content: blocks };
-      chat.setMessagesForSession(sessionId, updated);
-      chat.incrementStreamVersion();
+      chat.setMessagesForSession(sessionId, updated, { bumpStreamVersion: true });
       return;
     }
 

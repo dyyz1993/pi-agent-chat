@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { useMemo } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { apiClient } from "../lib/api-client";
 import { useSessionStore } from "./use-session-store";
 import { createLogger } from "../../shared/lib/logger";
@@ -222,15 +223,16 @@ export function useUIBlockMap(
   content: ContentBlock[],
   sessionId: string,
 ): Map<string, UIInteractionBlock> {
-  const storePending = useUIDialogStore((s) => s.pending);
+  const sessionPending = useUIDialogStore(
+    useShallow((s: UIDialogState) => s.pending.filter((r) => r.sessionId === sessionId)),
+  );
   const storeStates = useUIDialogStore((s) => s.requestStates);
 
   return useMemo(() => {
     const result = new Map<string, UIInteractionBlock>();
 
     const pendingByMethod = new Map<UIPendingRequest["method"], UIPendingRequest[]>();
-    for (const req of storePending) {
-      if (req.sessionId !== sessionId) continue;
+    for (const req of sessionPending) {
       const list = pendingByMethod.get(req.method) ?? [];
       list.push(req);
       pendingByMethod.set(req.method, list);
@@ -239,8 +241,8 @@ export function useUIBlockMap(
     const assigned = new Set<string>();
 
     // Pass 1: toolCallId exact match (hooks ask etc.)
-    for (const req of storePending) {
-      if (req.sessionId !== sessionId || !req.toolCallId) continue;
+    for (const req of sessionPending) {
+      if (!req.toolCallId) continue;
       const state = storeStates.get(req.requestId);
       if (!state) continue;
 
@@ -280,5 +282,5 @@ export function useUIBlockMap(
     }
 
     return result;
-  }, [content, storePending, storeStates, sessionId]);
+  }, [content, sessionPending, storeStates, sessionId]);
 }

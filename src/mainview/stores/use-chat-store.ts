@@ -217,7 +217,11 @@ interface ChatState {
   sendFollowUp: () => Promise<void>;
   clearQueue: () => Promise<void>;
   addMessage: (msg: ChatMessage) => void;
-  setMessagesForSession: (sessionId: string, msgs: ChatMessage[]) => void;
+  setMessagesForSession: (
+    sessionId: string,
+    msgs: ChatMessage[],
+    options?: { bumpStreamVersion?: boolean; streamingFastPath?: boolean },
+  ) => void;
   clearSessionMessages: (sessionId: string) => void;
   setActiveToolCallIds: (sessionId: string, toolCallIds: string[] | undefined) => void;
   loadSessionMessages: (
@@ -492,16 +496,27 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
   },
 
-  setMessagesForSession: (sessionId, msgs) =>
+  setMessagesForSession: (
+    sessionId,
+    msgs,
+    options = {},
+  ) => {
     set((s) => {
-      const nextMsgs = prepareMessagesForStore(msgs, {
-        normalizeTools: true,
-        activeToolCallIds: s.activeToolCallIdsBySession[sessionId],
-      });
-      return {
+      const nextMsgs = options.streamingFastPath
+        ? msgs
+        : prepareMessagesForStore(msgs, {
+            normalizeTools: true,
+            activeToolCallIds: s.activeToolCallIdsBySession[sessionId],
+          });
+      const next: Partial<ChatState> = {
         messagesBySession: { ...s.messagesBySession, [sessionId]: nextMsgs },
       };
-    }),
+      if (options.bumpStreamVersion) {
+        next.streamContentVersion = s.streamContentVersion + 1;
+      }
+      return next;
+    });
+  },
 
   clearSessionMessages: (sessionId) =>
     set((s) => {

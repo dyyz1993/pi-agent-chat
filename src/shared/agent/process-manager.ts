@@ -404,17 +404,20 @@ export class AgentProcessManager {
     payload: unknown,
     metadata?: unknown,
   ): Promise<void> {
-    for (const server of this.servers) {
-      try {
-        await server.emitEvent(eventType, payload, metadata);
-      } catch (err: unknown) {
-        log.warn("broadcastEvent failed, removing server", {
-          eventType,
-          err: err instanceof Error ? err.message : String(err),
-        });
-        this.servers.delete(server);
-      }
-    }
+    const servers = [...this.servers];
+    await Promise.allSettled(
+      servers.map(async (server) => {
+        try {
+          await server.emitEvent(eventType, payload, metadata);
+        } catch (err: unknown) {
+          log.warn("broadcastEvent failed, removing server", {
+            eventType,
+            err: err instanceof Error ? err.message : String(err),
+          });
+          this.servers.delete(server);
+        }
+      }),
+    );
   }
 
   private broadcastSessionStatus(sessionId: string, status: string): void {

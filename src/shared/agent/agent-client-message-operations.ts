@@ -77,33 +77,28 @@ function normalizedMessageSignature(message: Record<string, unknown>): string {
   const role = typeof message.role === "string" ? message.role : "";
   const toolCallId = typeof message.toolCallId === "string" ? message.toolCallId : "";
   const toolName = typeof message.toolName === "string" ? message.toolName : "";
-  const isError = typeof message.isError === "boolean" ? message.isError : undefined;
-  const content = Array.isArray(message.content)
-    ? message.content.map((block) => {
-        if (!block || typeof block !== "object") {
-          return typeof block === "string" ||
-            typeof block === "number" ||
-            typeof block === "boolean"
-            ? block
-            : null;
-        }
-        const b = block as Record<string, unknown>;
-        return {
-          type: b.type,
-          text: typeof b.text === "string" ? b.text : undefined,
-          thinking: typeof b.thinking === "string" ? b.thinking : undefined,
-          id: typeof b.id === "string" ? b.id : undefined,
-          name: typeof b.name === "string" ? b.name : undefined,
-          toolCallId: typeof b.toolCallId === "string" ? b.toolCallId : undefined,
-          toolName: typeof b.toolName === "string" ? b.toolName : undefined,
-          content: typeof b.content === "string" ? b.content : undefined,
-          input: b.input,
-          arguments: b.arguments,
-        };
-      })
-    : message.content;
-
-  return JSON.stringify({ role, toolCallId, toolName, isError, content });
+  const content = Array.isArray(message.content) ? message.content : [];
+  let textHash = 0;
+  for (const block of content) {
+    if (!block) continue;
+    if (typeof block === "string") {
+      for (let i = 0; i < block.length; i++) {
+        textHash = ((textHash << 5) - textHash + block.charCodeAt(i)) | 0;
+      }
+      continue;
+    }
+    if (typeof block !== "object") continue;
+    const b = block as Record<string, unknown>;
+    const text = typeof b.text === "string" ? b.text : "";
+    for (let i = 0; i < text.length; i++) {
+      textHash = ((textHash << 5) - textHash + text.charCodeAt(i)) | 0;
+    }
+    const thinking = typeof b.thinking === "string" ? b.thinking : "";
+    for (let i = 0; i < thinking.length; i++) {
+      textHash = ((textHash << 5) - textHash + thinking.charCodeAt(i)) | 0;
+    }
+  }
+  return `${role}:${toolCallId}:${toolName}:${content.length}:${textHash}`;
 }
 
 function parseObjectish(value: unknown): Record<string, unknown> | null {
