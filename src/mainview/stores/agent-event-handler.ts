@@ -137,6 +137,180 @@ function findToolExecutionPosition(
   return null;
 }
 
+/**
+ * Process tool_execution_start / tool_execution_update events directly,
+ * bypassing the message batcher. The batcher coalesces by session which
+ * causes parallel tool events in the same frame to replace each other.
+ * Tool events are low-frequency, so processing them immediately has no
+ * performance impact and ensures no events are lost.
+ */
+function applyToolExecutionEvent(
+  sessionId: string,
+  event: AgentEvent,
+  toolCallId: string,
+  toolName: string,
+): void {
+  if (event.type !== "tool_execution_start" && event.type !== "tool_execution_update") return;
+  const chat = useChatStore.getState();
+  const existing = chat.messagesBySession[sessionId] || [];
+
+  // --- Branch 1: block found in a non-last message ---
+  const exactPosition = findToolExecutionPosition(existing, toolCallId);
+  if (exactPosition && exactPosition.msgIndex !== existing.length - 1) {
+    if (
+      event.type === "tool_execution_start" &&
+      isTerminalToolStatus(exactPosition.block.status)
+    ) {
+      return;
+    }
+    const msg = existing[exactPosition.msgIndex];
+    const blocks = [...msg.content];
+    if (event.type === "tool_execution_start") {
+      const { args: argsStr, timeout, description } = formatToolArgs(event.args);
+      blocks[exactPosition.blockIndex] = {
+        ...exactPosition.block,
+        toolName:
+          exactPosition.block.toolName === "unknown" ? toolName : exactPosition.block.toolName,
+        args: argsStr || exactPosition.block.args,
+        status: isTerminalToolStatus(exactPosition.block.status)
+          ? exactPosition.block.status
+          : "running",
+        timeout: timeout ?? exactPosition.block.timeout,
+        description: description ?? exactPosition.block.description,
+        startedAt: exactPosition.block.startedAt ?? event.timestamp ?? Date.now(),
+      };
+    } else {
+      const partial = event.partialResult as
+        | { content?: Array<{ type: string; text?: string }> }
+        | undefined;
+      let output = "";
+      if (partial && Array.isArray(partial.content)) {
+        output = partial.content.map((c) => c.text ?? "").join("");
+      }
+      blocks[exactPosition.blockIndex] = {
+        ...exactPosition.block,
+        output: isTerminalToolStatus(exactPosition.block.status)
+          ? exactPosition.block.output && exactPosition.block.output.length > 0
+            ? exactPosition.block.output
+            : output
+          : output,
+        status: isTerminalToolStatus(exactPosition.block.status)
+          ? exactPosition.block.status
+          : "running",
+      };
+    }
+    const updated = [...existing];
+    updated[exactPosition.msgIndex] = { ...msg, content: blocks };
+    chat.setMessagesForSession(sessionId, updated, { bumpStreamVersion: true });
+    return;
+  }
+
+  // --- Branch 2: operate on the last assistant message ---
+  const lastMsg = existing[existing.length - 1];
+  if (!lastMsg || lastMsg.role !== "assistant") return;
+
+  const blocks = [...lastMsg.content];
+  const targetIdx = blocks.findIndex(
+    (b): b is ToolExecBlock => b.type === "toolExecution" && b.toolCallId === toolCallId,
+  );
+
+  if (event.type === "tool_execution_start") {
+    const { args: argsStr, timeout, description } = formatToolArgs(event.args);
+    const matchedByExactId = targetIdx >= 0;
+    let resolvedTargetIdx = matchedByExactId
+      ? targetIdx
+      : findMatchingToolExecution(blocks, toolName, argsStr, { includeTerminal: true });
+
+    // Don't reuse a running block from a different tool_execution_start
+    // — that's a parallel execution, not a re-delivery. But DO allow
+    // matching blocks created by message_update (different ID source).
+    if (!matchedByExactId && resolvedTargetIdx >= 0) {
+      const matched = blocks[resolvedTargetIdx] as ToolExecBlock;
+      if (
+        matched.status === "running" &&
+        matched.toolCallId !== toolCallId &&
+        toolCallNameMap[matched.toolCallId]
+      ) {
+        resolvedTargetIdx = -1;
+      }
+    }
+    if (resolvedTargetIdx >= 0) {
+      const prev = blocks[resolvedTargetIdx] as ToolExecBlock;
+      if (isTerminalToolStatus(prev.status)) {
+        blocks[resolvedTargetIdx] = {
+          ...prev,
+          toolCallId: matchedByExactId ? toolCallId : prev.toolCallId,
+          toolName: prev.toolName === "unknown" ? toolName : prev.toolName,
+          args: argsStr || prev.args,
+          timeout: timeout ?? prev.timeout,
+          description: description ?? prev.description,
+        };
+      } else {
+        blocks[resolvedTargetIdx] = {
+          type: "toolExecution",
+          toolCallId,
+          toolName,
+          args: argsStr,
+          status: "running",
+          timeout,
+          startedAt: event.timestamp ?? Date.now(),
+          description,
+        };
+      }
+    } else {
+      blocks.push({
+        type: "toolExecution",
+        toolCallId,
+        toolName,
+        args: argsStr,
+        status: "running",
+        timeout,
+        startedAt: event.timestamp ?? Date.now(),
+        description,
+      });
+    }
+  } else if (event.type === "tool_execution_update") {
+    const partial = event.partialResult as
+      | { content?: Array<{ type: string; text?: string }> }
+      | undefined;
+    let output = "";
+    if (partial) {
+      if (Array.isArray(partial.content)) {
+        output = partial.content.map((c) => c.text ?? "").join("");
+      }
+    }
+    if (targetIdx >= 0) {
+      const prev = blocks[targetIdx] as ToolExecBlock;
+      const previousOutput = prev.output;
+      blocks[targetIdx] = {
+        ...prev,
+        output: isTerminalToolStatus(prev.status)
+          ? previousOutput && previousOutput.length > 0
+            ? previousOutput
+            : output
+          : output,
+        status: isTerminalToolStatus(prev.status) ? prev.status : "running",
+      };
+    } else {
+      // Block not found — batcher may have swallowed the start event.
+      // Create a running block so streaming output is visible.
+      blocks.push({
+        type: "toolExecution",
+        toolCallId,
+        toolName,
+        args: toolCallArgsMap[toolCallId] || "",
+        status: "running",
+        output,
+        startedAt: Date.now(),
+      });
+    }
+  }
+
+  const updated = [...existing];
+  updated[existing.length - 1] = { ...lastMsg, content: blocks };
+  chat.setMessagesForSession(sessionId, updated, { bumpStreamVersion: true });
+}
+
 export function handleAgentEvent(sessionId: string, event: AgentEvent) {
   const storeGet = () => useSessionStore.getState();
 
@@ -747,166 +921,9 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       setToolActive(sessionId, toolCallId, true);
     }
 
-    // Flush pending updates first so parallel tool events in the same tick
-    // don't replace each other in the batcher queue.
-    flushNow();
-    batchMessageUpdate(sessionId, () => {
-      const chat = useChatStore.getState();
-      const existing = chat.messagesBySession[sessionId] || [];
-      const exactPosition = findToolExecutionPosition(existing, toolCallId);
-      if (exactPosition && exactPosition.msgIndex !== existing.length - 1) {
-        if (
-          event.type === "tool_execution_start" &&
-          isTerminalToolStatus(exactPosition.block.status)
-        ) {
-          return;
-        }
-        const msg = existing[exactPosition.msgIndex];
-        const blocks = [...msg.content];
-        if (event.type === "tool_execution_start") {
-          const { args: argsStr, timeout, description } = formatToolArgs(event.args);
-          blocks[exactPosition.blockIndex] = {
-            ...exactPosition.block,
-            toolName:
-              exactPosition.block.toolName === "unknown" ? toolName : exactPosition.block.toolName,
-            args: argsStr || exactPosition.block.args,
-            status: isTerminalToolStatus(exactPosition.block.status)
-              ? exactPosition.block.status
-              : "running",
-            timeout: timeout ?? exactPosition.block.timeout,
-            description: description ?? exactPosition.block.description,
-            startedAt: exactPosition.block.startedAt ?? event.timestamp ?? Date.now(),
-          };
-        } else {
-          const partial = event.partialResult as
-            | { content?: Array<{ type: string; text?: string }> }
-            | undefined;
-          let output = "";
-          if (partial && Array.isArray(partial.content)) {
-            output = partial.content.map((c) => c.text ?? "").join("");
-          }
-          blocks[exactPosition.blockIndex] = {
-            ...exactPosition.block,
-            output: isTerminalToolStatus(exactPosition.block.status)
-              ? exactPosition.block.output && exactPosition.block.output.length > 0
-                ? exactPosition.block.output
-                : output
-              : output,
-            status: isTerminalToolStatus(exactPosition.block.status)
-              ? exactPosition.block.status
-              : "running",
-          };
-        }
-        const updated = [...existing];
-        updated[exactPosition.msgIndex] = { ...msg, content: blocks };
-        chat.setMessagesForSession(sessionId, updated, { bumpStreamVersion: true });
-        return;
-      }
-
-      const lastMsg = existing[existing.length - 1];
-      if (!lastMsg || lastMsg.role !== "assistant") return;
-
-      const blocks = [...lastMsg.content];
-      const targetIdx = blocks.findIndex(
-        (b): b is ToolExecBlock => b.type === "toolExecution" && b.toolCallId === toolCallId,
-      );
-
-      if (event.type === "tool_execution_start") {
-        const { args: argsStr, timeout, description } = formatToolArgs(event.args);
-        const matchedByExactId = targetIdx >= 0;
-        let resolvedTargetIdx = matchedByExactId
-          ? targetIdx
-          : findMatchingToolExecution(blocks, toolName, argsStr, { includeTerminal: true });
-
-        // Don't reuse a running block from a different tool_execution_start
-        // — that's a parallel execution, not a re-delivery. But DO allow
-        // matching blocks created by message_update (different ID source).
-        if (!matchedByExactId && resolvedTargetIdx >= 0) {
-          const matched = blocks[resolvedTargetIdx] as ToolExecBlock;
-          if (
-            matched.status === "running" &&
-            matched.toolCallId !== toolCallId &&
-            toolCallNameMap[matched.toolCallId]
-          ) {
-            resolvedTargetIdx = -1;
-          }
-        }
-        if (resolvedTargetIdx >= 0) {
-          const prev = blocks[resolvedTargetIdx] as ToolExecBlock;
-          if (isTerminalToolStatus(prev.status)) {
-            blocks[resolvedTargetIdx] = {
-              ...prev,
-              toolCallId: matchedByExactId ? toolCallId : prev.toolCallId,
-              toolName: prev.toolName === "unknown" ? toolName : prev.toolName,
-              args: argsStr || prev.args,
-              timeout: timeout ?? prev.timeout,
-              description: description ?? prev.description,
-            };
-          } else {
-            blocks[resolvedTargetIdx] = {
-              type: "toolExecution",
-              toolCallId,
-              toolName,
-              args: argsStr,
-              status: "running",
-              timeout,
-              startedAt: event.timestamp ?? Date.now(),
-              description,
-            };
-          }
-        } else {
-          blocks.push({
-            type: "toolExecution",
-            toolCallId,
-            toolName,
-            args: argsStr,
-            status: "running",
-            timeout,
-            startedAt: event.timestamp ?? Date.now(),
-            description,
-          });
-        }
-      } else if (event.type === "tool_execution_update") {
-        const partial = event.partialResult as
-          | { content?: Array<{ type: string; text?: string }> }
-          | undefined;
-        let output = "";
-        if (partial) {
-          if (Array.isArray(partial.content)) {
-            output = partial.content.map((c) => c.text ?? "").join("");
-          }
-        }
-        if (targetIdx >= 0) {
-          const prev = blocks[targetIdx] as ToolExecBlock;
-          const previousOutput = prev.output;
-          blocks[targetIdx] = {
-            ...prev,
-            output: isTerminalToolStatus(prev.status)
-              ? previousOutput && previousOutput.length > 0
-                ? previousOutput
-                : output
-              : output,
-            status: isTerminalToolStatus(prev.status) ? prev.status : "running",
-          };
-        } else {
-          // Block not found — batcher may have swallowed the start event.
-          // Create a running block so streaming output is visible.
-          blocks.push({
-            type: "toolExecution",
-            toolCallId,
-            toolName,
-            args: toolCallArgsMap[toolCallId] || "",
-            status: "running",
-            output,
-            startedAt: Date.now(),
-          });
-        }
-      }
-
-      const updated = [...existing];
-      updated[existing.length - 1] = { ...lastMsg, content: blocks };
-      chat.setMessagesForSession(sessionId, updated, { bumpStreamVersion: true });
-    });
+    // Tool events bypass the batcher — they're low-frequency and must not
+    // be coalesced (parallel tools would lose events). Process directly.
+    applyToolExecutionEvent(sessionId, event, toolCallId, toolName);
     return;
   }
 
