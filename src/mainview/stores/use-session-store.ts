@@ -136,6 +136,7 @@ interface SessionState {
   sessionStatusMap: Record<string, SessionStatus>;
   queueBySession: Record<string, { steering: string[]; followUp: string[] }>;
   currentModel: ModelInfo | null;
+  modelBySession: Record<string, ModelInfo>;
   modelStateLoading: boolean;
   modelManuallySet: boolean;
   currentThinkingLevel: string;
@@ -226,6 +227,7 @@ export const useSessionStore = create<SessionState>()(
       sessionStatusMap: {},
       queueBySession: {},
       currentModel: null,
+      modelBySession: {},
       modelStateLoading: false,
       modelManuallySet: false,
       currentThinkingLevel: "medium",
@@ -636,8 +638,15 @@ export const useSessionStore = create<SessionState>()(
         }
       },
 
-      setCurrentModel: (provider, modelId) =>
-        set({ currentModel: { provider, id: modelId }, modelManuallySet: true }),
+      setCurrentModel: (provider, modelId) => {
+        const sid = get().activeSessionId;
+        const model = { provider, id: modelId };
+        set({
+          currentModel: model,
+          modelManuallySet: true,
+          ...(sid ? { modelBySession: { ...get().modelBySession, [sid]: model } } : {}),
+        });
+      },
       setThinkingLevel: (level) => set({ currentThinkingLevel: level }),
 
       fetchModelFavorites: () => {

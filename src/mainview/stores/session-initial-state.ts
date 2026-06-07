@@ -55,6 +55,7 @@ interface AgentStateResult {
 
 interface InitialStateSessionState {
   currentModel: { provider: string; id: string; name?: string } | null;
+  modelBySession: Record<string, { provider: string; id: string; name?: string }>;
   modelStateLoading: boolean;
   currentThinkingLevel: string;
   availableModels: Array<{
@@ -210,13 +211,15 @@ export function createFetchInitialStateAction({
 
             if (result.model) {
               const manuallySet = get().modelManuallySet;
+              const resolvedModel = {
+                provider: result.model.provider ?? "",
+                id: result.model.id,
+                name: result.model.name,
+              };
               set({
-                currentModel: {
-                  provider: result.model.provider ?? "",
-                  id: result.model.id,
-                  name: result.model.name,
-                },
+                currentModel: resolvedModel,
                 modelManuallySet: false,
+                modelBySession: { ...get().modelBySession, [sessionId]: resolvedModel },
               });
               if (manuallySet) {
                 log.info("skipped model overwrite (user manually switched)", {

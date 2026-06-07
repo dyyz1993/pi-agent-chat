@@ -1,5 +1,6 @@
 import type { StoreApi } from "zustand";
 import { apiClient } from "../lib/api-client";
+import type { ModelInfo } from "./use-session-store";
 import type { ProjectTab, SessionMeta } from "../types";
 import { useAppStore } from "./use-app-store";
 import { useChatStore } from "./use-chat-store";
@@ -20,6 +21,8 @@ interface ActiveSessionState extends SubscriptionMaps {
   lastActiveSessionByProject: Record<string, string>;
   projectStartFailed: Record<string, boolean>;
   projectStartError: Record<string, string>;
+  currentModel: ModelInfo | null;
+  modelBySession: Record<string, ModelInfo>;
   loadSessionsForProject: (projectPath: string) => Promise<SessionMeta[]>;
   fetchInitialState: (sessionId: string) => void;
 }
@@ -106,6 +109,8 @@ export function createSetActiveSessionAction({
             [id]: hasCachedMessages ? true : (get().sessionReady[id] ?? false),
           }
         : get().sessionReady,
+      // Restore cached model immediately to avoid showing stale model from previous session
+      ...(id ? { currentModel: get().modelBySession[id] ?? null } : {}),
       ...(id && curTab
         ? {
             lastActiveSessionByProject: {
