@@ -41,7 +41,7 @@ export async function stopAgentClientOperation<TManaged extends StopManagedClien
   syncDelegateResolvers: Map<string, SyncDelegateResolver>;
   subagentSyncChildren: Set<string>;
   syncDelegateLastText: Map<string, string>;
-  leafIds: Map<string, string>;
+  leafIds: Map<string, string | null>;
   getPoolKey: (cwd: string, userId?: string) => string;
   removeFromPool: (poolKey: string, managed: TManaged) => void;
   stopChild: (sessionId: string) => Promise<boolean>;

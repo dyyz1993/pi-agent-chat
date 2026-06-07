@@ -72,7 +72,7 @@ export async function handleCoordinatorDelegateOperation<
   send: (sessionId: string, content: string) => void;
   broadcastEvent: (
     eventName: string,
-    data: Record<string, unknown>,
+    data: unknown,
     filter: Record<string, unknown>,
   ) => Promise<void>;
   parentChildMap: DelegateChildMap;
@@ -260,7 +260,7 @@ export async function handleCoordinatorDelegateSyncOperation<
   stop: (sessionId: string) => Promise<boolean>;
   broadcastEvent: (
     eventName: string,
-    data: Record<string, unknown>,
+    data: unknown,
     filter: Record<string, unknown>,
   ) => Promise<void>;
   parentChildMap: DelegateChildMap;
@@ -444,7 +444,7 @@ export async function handleCoordinatorDelegateForkOperation<
   send: (sessionId: string, content: string) => void;
   broadcastEvent: (
     eventName: string,
-    data: Record<string, unknown>,
+    data: unknown,
     filter: Record<string, unknown>,
   ) => Promise<void>;
   parentChildMap: DelegateChildMap;

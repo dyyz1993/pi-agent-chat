@@ -543,6 +543,12 @@ export interface ExtensionUIRequestEvent {
   text?: string;
 }
 
+export interface ExtensionUIResolvedEvent {
+  type: "extension_ui_resolved";
+  id: string;
+  reason: "responded" | "timeout" | "aborted";
+}
+
 export interface CompactionResult {
   tokensAfter?: number;
   tokensBefore?: number;
@@ -554,6 +560,7 @@ export type AgentEvent =
   | { type: "compaction_end"; reason: string; result: CompactionResult; aborted: boolean }
   | { type: "queue_update"; steering: string[]; followUp: string[] }
   | ExtensionUIRequestEvent
+  | ExtensionUIResolvedEvent
   | ChannelDataEvent
   | { type: "custom_entry"; customType: string; data: unknown; id: string; display?: boolean }
   | { type: "session_rename"; oldName: string | undefined; newName: string }

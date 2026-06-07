@@ -91,7 +91,7 @@ export function createCoordinatorHandlerAdapter<TManaged extends CoordinatorMana
   ) => Promise<{ tokens: number | null; contextWindow: number; percent: number | null }>;
   broadcastEvent: (
     eventName: string,
-    data: Record<string, unknown>,
+    data: unknown,
     filter: Record<string, unknown>,
   ) => Promise<void>;
 }): CoordinatorHandlerAdapter {

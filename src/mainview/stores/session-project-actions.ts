@@ -6,6 +6,8 @@ import { useTierStore } from "./use-tier-store";
 
 interface ProjectSessionState {
   activeProjectId: string | null;
+  activeSessionId: string | null;
+  loading: boolean;
   projectTabs: ProjectTab[];
   sessionsByProject: Record<string, SessionMeta[]>;
   currentModel: { provider: string; id: string; name?: string } | null;
@@ -21,9 +23,9 @@ type SetState = StoreApi<ProjectSessionState>["setState"];
 type GetState = StoreApi<ProjectSessionState>["getState"];
 
 interface ProjectActionLogger {
-  info: (message: string, data?: unknown) => void;
-  warn: (message: string, data?: unknown) => void;
-  error: (message: string, data?: unknown) => void;
+  info: (message: string, data?: Record<string, unknown>) => void;
+  warn: (message: string, data?: Record<string, unknown>) => void;
+  error: (message: string, data?: Record<string, unknown>) => void;
 }
 
 export function createLoadSessionsForProjectAction({

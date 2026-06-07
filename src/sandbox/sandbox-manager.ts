@@ -27,6 +27,8 @@ export interface SandboxManagerConfig {
   idleTimeoutMs: number;
   /** 回收检查间隔 */
   gcIntervalMs: number;
+  /** Provider 专属配置 */
+  providerConfig?: unknown;
 }
 
 export class SandboxManager {
@@ -99,18 +101,6 @@ export class SandboxManager {
   /** 获取所有沙箱信息 */
   getAll(): SandboxInstance[] {
     return Array.from(this.instances.values());
-  }
-
-  getEndpoint(userId: string): string | undefined {
-    return this.instances.get(userId)?.endpoint;
-  }
-
-  async execInSandbox(userId: string, cmd: string): Promise<string> {
-    if (!this.provider.execInSandbox) {
-      throw new Error("Current sandbox provider does not support execInSandbox");
-    }
-    this.keepAlive(userId);
-    return this.provider.execInSandbox(userId, cmd);
   }
 
   /** 停止所有 */

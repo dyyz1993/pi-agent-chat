@@ -164,7 +164,7 @@ export async function startAgentClientOperation<TManaged extends StartManagedCli
     _activeSessionId: options.sessionId,
     lastActiveAt: now(),
     activeBackgroundTools: new Set<string>(),
-  } as TManaged;
+  } as unknown as TManaged;
 
   const bridge = (event: unknown): void => {
     options.handleEvent(managed._activeSessionId, event as AgentEvent);

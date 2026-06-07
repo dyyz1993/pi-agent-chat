@@ -14,9 +14,16 @@ import {
 import type { DelegateChildMap, SyncDelegateResolver } from "./coordinator-session-state";
 
 interface ChannelManagedClient {
+  client?: {
+    getTreeWithLeaf(): Promise<{ entries: unknown[]; leafId: string | null }>;
+  };
   info: {
+    status: string;
+    holdEvents: unknown[];
+    projectPath: string;
     sessionPath: string;
   };
+  lastActiveAt: number;
   activeBackgroundTools: Set<string>;
 }
 

@@ -16,10 +16,6 @@ export interface SandboxInstance {
   status: SandboxStatus;
   /** HTTP 端点，供 SandboxRpcClient 连接 */
   endpoint: string;
-  projectPath?: string;
-  sandboxName?: string;
-  sandboxPid?: number;
-  localPort?: number;
   /** 创建时间 */
   createdAt: number;
   /** 最后活跃时间 */

@@ -8,9 +8,10 @@ import {
   requestRulesSnapshot,
   setupSubscriptions,
   cleanupSessionLight,
+  type SubscriptionMaps,
 } from "./session-subscriptions";
 
-interface ActiveSessionState {
+interface ActiveSessionState extends SubscriptionMaps {
   activeProjectId: string | null;
   activeSessionId: string | null;
   projectTabs: ProjectTab[];
@@ -27,9 +28,9 @@ type SetState = StoreApi<ActiveSessionState>["setState"];
 type GetState = StoreApi<ActiveSessionState>["getState"];
 
 interface ActiveSessionLogger {
-  info: (message: string, data?: unknown) => void;
-  warn: (message: string, data?: unknown) => void;
-  error: (message: string, data?: unknown) => void;
+  info: (message: string, data?: Record<string, unknown>) => void;
+  warn: (message: string, data?: Record<string, unknown>) => void;
+  error: (message: string, data?: Record<string, unknown>) => void;
 }
 
 export function createSetActiveSessionAction({

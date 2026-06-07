@@ -10,6 +10,8 @@ interface SimpleSessionState {
   sessionsByProject: Record<string, SessionMeta[]>;
   agentSubscriptions: Record<string, string>;
   subagentSubscriptions: Record<string, string>;
+  projectStartFailed: Record<string, boolean>;
+  projectStartError: Record<string, string>;
   setActiveSession: (
     id: string | null,
     force?: boolean,
@@ -21,7 +23,7 @@ type SetState = StoreApi<SimpleSessionState>["setState"];
 type GetState = StoreApi<SimpleSessionState>["getState"];
 
 interface SimpleActionLogger {
-  warn: (message: string, data?: unknown) => void;
+  warn: (message: string, data?: Record<string, unknown>) => void;
 }
 
 export function createRetryActiveProjectAction({

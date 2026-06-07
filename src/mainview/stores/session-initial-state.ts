@@ -78,8 +78,8 @@ type SetState = StoreApi<InitialStateSessionState>["setState"];
 type GetState = StoreApi<InitialStateSessionState>["getState"];
 
 interface InitialStateLogger {
-  info: (message: string, data?: unknown) => void;
-  warn: (message: string, data?: unknown) => void;
+  info: (message: string, data?: Record<string, unknown>) => void;
+  warn: (message: string, data?: Record<string, unknown>) => void;
 }
 
 const fetchInitPromiseMap = new Map<string, Promise<void>>();

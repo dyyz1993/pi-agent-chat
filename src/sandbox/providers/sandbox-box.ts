@@ -211,7 +211,7 @@ export class SandboxBoxProvider implements ISandboxProvider {
     }
   }
 
-  async getOrCreate(userId: string, _config: SandboxProviderConfig): Promise<SandboxInstance> {
+  async getOrCreate(userId: string, _projectPath: string): Promise<SandboxInstance> {
     const name = this.sandboxName(userId);
     const projectPath = this.config.projectSourcePath;
     const existing = this.sandboxes.get(userId);
