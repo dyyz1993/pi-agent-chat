@@ -136,6 +136,7 @@ interface SessionState {
   sessionStatusMap: Record<string, SessionStatus>;
   queueBySession: Record<string, { steering: string[]; followUp: string[] }>;
   currentModel: ModelInfo | null;
+  modelStateLoading: boolean;
   modelManuallySet: boolean;
   currentThinkingLevel: string;
   availableModels: Array<{
@@ -225,6 +226,7 @@ export const useSessionStore = create<SessionState>()(
       sessionStatusMap: {},
       queueBySession: {},
       currentModel: null,
+      modelStateLoading: false,
       modelManuallySet: false,
       currentThinkingLevel: "medium",
       availableModels: [],

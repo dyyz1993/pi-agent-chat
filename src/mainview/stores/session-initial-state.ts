@@ -55,6 +55,7 @@ interface AgentStateResult {
 
 interface InitialStateSessionState {
   currentModel: { provider: string; id: string; name?: string } | null;
+  modelStateLoading: boolean;
   currentThinkingLevel: string;
   availableModels: Array<{
     provider: string;
@@ -118,6 +119,8 @@ export function createFetchInitialStateAction({
       try {
         const t0 = performance.now();
         perfLog.info("[fetchInit] begin (batched, maxConcurrency=3)", { sessionId });
+
+        set({ modelStateLoading: true });
 
         // --- Priority 1: sequential, must complete first ---
         const statePromise = apiClient.call("agent.getState", { sessionId });
@@ -226,12 +229,14 @@ export function createFetchInitialStateAction({
             if (result.thinkingLevel) {
               set({ currentThinkingLevel: result.thinkingLevel });
             }
+            set({ modelStateLoading: false });
           })
           .catch((err) => {
             log.warn("agent.getState failed", {
               sessionId,
               err: err instanceof Error ? err.message : String(err),
             });
+            set({ modelStateLoading: false });
           });
 
         // P1 gate: if getState fails (CLI dead), abort the entire fetch chain
@@ -635,6 +640,7 @@ export function createFetchInitialStateAction({
       } finally {
         fetchInitPromiseMap.delete(sessionId);
         fetchInitTimestampMap.set(sessionId, Date.now());
+        set({ modelStateLoading: false });
       }
     })();
 

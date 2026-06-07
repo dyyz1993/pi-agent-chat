@@ -62,6 +62,7 @@ export function SidebarBottomControls() {
     ),
   );
   const currentModel = useSessionStore((s) => s.currentModel);
+  const modelStateLoading = useSessionStore((s) => s.modelStateLoading);
   const currentThinkingLevel = useSessionStore((s) => s.currentThinkingLevel);
   const availableModels = useSessionStore((s) => s.availableModels);
   const setCurrentModel = useSessionStore((s) => s.setCurrentModel);
@@ -311,7 +312,9 @@ export function SidebarBottomControls() {
 
   const modelDisplay = currentModel
     ? `${currentModel.provider}/${currentModel.name ?? formatModelName(currentModel.id)}`
-    : t("notLoaded");
+    : modelStateLoading
+      ? t("loading")
+      : t("notLoaded");
   const thinkingDisplay = currentThinkingLevel
     ? (() => {
         const idx = THINKING_LEVEL_VALUES.indexOf(
@@ -595,7 +598,7 @@ export function SidebarBottomControls() {
               aria-label={t("modelSelect")}
             >
               <Cpu className="w-3 h-3 shrink-0 text-text-tertiary" />
-              <span className="truncate flex-1 text-left">
+              <span className={`truncate flex-1 text-left${!currentModel && modelStateLoading ? " animate-pulse" : ""}`}>
                 {t("modelLabel", { model: modelDisplay })}
               </span>
               <ChevronDown
