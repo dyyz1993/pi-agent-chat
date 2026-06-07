@@ -28,6 +28,7 @@ import {
 const log = createLogger("event-handler");
 
 export const toolCallNameMap: Record<string, string> = {};
+export const toolCallArgsMap: Record<string, string> = {};
 
 // Track sessions where compaction_end was deferred due to active streaming.
 // When agent_end fires for these sessions, a force reload is triggered to sync
@@ -556,6 +557,13 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
             usedExecs.add(exec.toolCallId);
           } else {
             const toolName = block.name;
+            log.warn("[message_update] creating NEW running block (no existing match)", {
+              sessionId,
+              toolCallId: block.id,
+              toolName,
+              preservedCount: preservedToolExecs.length,
+              preservedIds: preservedToolExecs.map((e) => e.toolCallId),
+            });
             orderedBlocks.push({
               type: "toolExecution",
               toolCallId: block.id,
@@ -735,6 +743,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
     if (event.type === "tool_execution_start") {
       toolCallNameMap[toolCallId] = toolName;
+      toolCallArgsMap[toolCallId] = formatToolArgs(event.args).args;
       setToolActive(sessionId, toolCallId, true);
     }
 
@@ -914,6 +923,48 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       const updated = [...existing];
       updated[i] = { ...msg, content: blocks };
       chat.setMessagesForSession(sessionId, updated, { bumpStreamVersion: true });
+      return;
+    }
+
+    // BLOCK NOT FOUND — batcher coalescing may have swallowed the
+    // tool_execution_start that would have created this block.
+    // Create it directly as done/error so the card closes properly.
+    const isError = event.isError;
+    let output = "";
+    const result = event.result as
+      | { content?: Array<{ type: string; text?: string }>; details?: unknown }
+      | undefined;
+    if (result) {
+      if (Array.isArray(result.content)) {
+        output = result.content.map((c) => c.text ?? "").join("");
+      } else {
+        output = JSON.stringify(result, null, 2);
+      }
+    }
+    const argsStr = toolCallArgsMap[toolCallId] || "";
+    const fallbackBlock: ToolExecBlock = {
+      type: "toolExecution",
+      toolCallId,
+      toolName: event.toolName || toolCallNameMap[toolCallId] || "unknown",
+      args: argsStr,
+      status: isError ? "error" : "done",
+      output,
+      details: result?.details,
+      startedAt: event.timestamp ? event.timestamp - 1 : Date.now() - 1,
+      endedAt: event.timestamp ?? Date.now(),
+    };
+    for (let i = existing.length - 1; i >= 0; i--) {
+      const msg = existing[i];
+      if (msg.role !== "assistant") continue;
+      const blocks = [...msg.content, fallbackBlock];
+      const updated = [...existing];
+      updated[i] = { ...msg, content: blocks };
+      chat.setMessagesForSession(sessionId, updated, { bumpStreamVersion: true });
+      log.info("[tool_execution_end] created missing block as done", {
+        sessionId,
+        toolCallId,
+        toolName: fallbackBlock.toolName,
+      });
       return;
     }
 
@@ -1121,4 +1172,5 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
 if (typeof window !== "undefined") {
   (window as unknown as Record<string, unknown>).__toolCallNameMap = toolCallNameMap;
+  (window as unknown as Record<string, unknown>).__toolCallArgsMap = toolCallArgsMap;
 }
