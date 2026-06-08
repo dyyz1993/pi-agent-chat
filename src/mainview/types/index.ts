@@ -1,3 +1,8 @@
+// 权威定义在 src/shared/modules/project.ts，前端 re-export 保持单一来源。
+// RPC schema 与 store 共享同一个 SessionStatus，避免两端漂移。
+import type { SessionStatus as SharedSessionStatus } from "../../shared/modules/project";
+export type SessionStatus = SharedSessionStatus;
+
 export type TreeNode = {
   name: string;
   path: string;
@@ -30,6 +35,15 @@ export type UIMethod = "confirm" | "select" | "input" | "editor" | "notify";
 
 export type UIInteractionStatus = "pending" | "responded" | "dismissed" | "notified";
 
+export interface PermissionMeta {
+  type: "path_boundary" | "dangerous_bash" | "hook_approval";
+  path: string;
+  cwd: string;
+  toolName: string;
+  scope: "read" | "write";
+  relativeTo: string;
+}
+
 export type UIInteractionBlock = {
   type: "uiInteraction";
   id: string;
@@ -55,6 +69,8 @@ export type UIInteractionBlock = {
     source?: string;
     reason: string;
   };
+  permissionMeta?: PermissionMeta;
+  timeout?: number;
 };
 
 export type ContentBlock =
@@ -122,8 +138,6 @@ export type Turn = {
 
 export type EditingType = "rename" | "newFile" | "newDir";
 export type EditingNode = { path: string; type: EditingType };
-
-export type SessionStatus = "idle" | "streaming" | "compacting" | "permission" | "retrying";
 
 export type ContextUsage = {
   tokens: number | null;

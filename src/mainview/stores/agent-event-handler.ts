@@ -1,4 +1,4 @@
-import type { ContentBlock, ChatMessage, TokenUsage } from "../types";
+import type { ContentBlock, ChatMessage, TokenUsage, PermissionMeta } from "../types";
 import type { SessionMeta } from "../types";
 import type { AgentEvent } from "../../shared/modules/agent";
 import type { AssistantMessage, Message, Usage } from "@dyyz1993/pi-ai";
@@ -282,13 +282,21 @@ function applyToolExecutionEvent(
     if (targetIdx >= 0) {
       const prev = blocks[targetIdx] as ToolExecBlock;
       const previousOutput = prev.output;
+      // Preserve the bash-streamed output when the agent's tool_execution_update
+      // arrives with empty partialResult. This happens right after a page refresh
+      // while the agent process is still reconnecting — the bash process is
+      // already streaming output (visible in the bash sidebar), but the agent
+      // hasn't relayed any of it yet. Without this guard the chat's "Output"
+      // section would be wiped to empty on every agent update.
+      const preservedOutput =
+        output.length > 0 || !previousOutput ? output : previousOutput;
       blocks[targetIdx] = {
         ...prev,
         output: isTerminalToolStatus(prev.status)
           ? previousOutput && previousOutput.length > 0
             ? previousOutput
             : output
-          : output,
+          : preservedOutput,
         status: isTerminalToolStatus(prev.status) ? prev.status : "running",
       };
     } else {
@@ -361,21 +369,27 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     }
 
     const crashReason = (event as { reason?: string }).reason;
+    // 先 flush 批处理队列，确保待处理的 message_update 已写入 store。
+    // 若 agent 异常退出（crash）没有 message_end，最后一批 message_update
+    // 可能仍滞留在批处理队列中，否则下方读取的 msgs 会是过期数据。
+    flushNow();
     const chat = useChatStore.getState();
     if (typeof chat.setActiveToolCallIds === "function") {
       chat.setActiveToolCallIds(sessionId, []);
     }
     const msgs = chat.messagesBySession[sessionId] || [];
     const fallbackToolStatus = crashReason ? "error" : "done";
-    let closedRunningTool = false;
+    let changed = false;
     const closedMsgs = msgs.map((msg) => {
       if (msg.role !== "assistant") return msg;
       const content = closeRunningToolExecutions(msg.content, fallbackToolStatus);
-      if (content === msg.content) return msg;
-      closedRunningTool = true;
+      const contentChanged = content !== msg.content;
+      const wasStreaming = msg.isStreaming === true;
+      if (!contentChanged && !wasStreaming) return msg;
+      changed = true;
       return { ...msg, content, isStreaming: false };
     });
-    if (closedRunningTool) {
+    if (changed) {
       chat.setMessagesForSession(sessionId, closedMsgs);
     }
 
@@ -388,7 +402,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         level: "error",
       });
     } else {
-      const currentMsgs = closedRunningTool ? closedMsgs : msgs;
+      const currentMsgs = changed ? closedMsgs : msgs;
       const lastMsg = currentMsgs[currentMsgs.length - 1];
       const lastIsUser = lastMsg && (lastMsg.role === "user" || lastMsg.role === "custom");
 
@@ -434,8 +448,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       });
     }
 
-    storeGet().updateSessionStatus(sessionId, "idle");
-
+    // ❌ 不再强制切到 idle，保持当前状态（streaming 或其他）
     const chatState = useChatStore.getState();
     const currentMsgs = chatState.messagesBySession[sessionId] || [];
     const isActivelyStreaming = currentMsgs.some(
@@ -529,6 +542,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
             };
           }
         ).hookMeta,
+        permissionMeta: (event as { permissionMeta?: PermissionMeta }).permissionMeta,
       });
 
       storeGet().updateSessionStatus(sessionId, "permission");
@@ -792,6 +806,14 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     }
 
     if (role !== "assistant") return;
+
+    // 在读取 store 之前，先 flush 批处理队列中待处理的 message_update。
+    // 最后一批 message_update（携带最终累积内容）和 message_end 经常落在同一帧
+    // （~16ms）内到达。若不先 flush，下方捕获的 lastMsg/existing 会指向 flush
+    // 之前的状态，本处理器末尾的 setMessagesForSession 会用过期内容把刚 flush
+    // 进 store 的最终内容覆盖掉，导致助手消息显示不完整/被截断。
+    flushNow();
+
     const chat = useChatStore.getState();
     const existing = chat.messagesBySession[sessionId] || [];
     const lastMsg = existing[existing.length - 1];
@@ -815,8 +837,6 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
           err: err instanceof Error ? err.message : String(err),
         });
       });
-
-    flushNow();
 
     const hasContent = hasRenderableContent(lastMsg);
 

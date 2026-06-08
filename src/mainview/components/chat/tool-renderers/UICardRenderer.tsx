@@ -16,15 +16,17 @@ import {
   FolderOpen,
   FileText,
   Wrench,
-  ShieldOff,
+  ShieldAlert,
+  FileWarning,
+  Clock,
+  SkipForward,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { UIInteractionBlock } from "../../../types";
 import { getUIMethodIcon } from "../tool-icon-map";
 import { useUIDialogStore } from "../../../stores/use-ui-dialog-store";
-import { useSessionStore } from "../../../stores/use-session-store";
 import { useHooksStore } from "../../../stores/use-hooks-store";
-import { apiClient } from "../../../lib/api-client";
+import { useSessionStore } from "../../../stores/use-session-store";
 
 type UIBlock = UIInteractionBlock;
 
@@ -63,7 +65,7 @@ export function CardShell({ block, children }: { block: UIBlock; children: React
         {isDismissed && <XCircle className="w-3 h-3 text-text-tertiary" />}
       </div>
       {block.message && (
-        <div className="px-3 pb-2 text-[11px] text-text-secondary leading-relaxed">
+        <div className="px-3 pb-2 text-[11px] text-text-secondary leading-relaxed max-h-32 overflow-y-auto">
           {block.message}
         </div>
       )}
@@ -86,10 +88,8 @@ export const ConfirmCard = memo(function ConfirmCard({ block }: { block: UIBlock
   const { t } = useTranslation("chat");
   const respondById = useUIDialogStore((s) => s.respondById);
   const dismissById = useUIDialogStore((s) => s.dismissById);
+  const skipRule = useHooksStore((s) => s.skipRule);
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
-  const setHooksEnabled = useHooksStore((s) => s.setEnabled);
-  const [isDisablingHooks, setIsDisablingHooks] = useState(false);
-  const [settingPermissionMode, setSettingPermissionMode] = useState<string | null>(null);
   const isPending = block.status === "pending";
 
   const hookMeta = block.hookMeta;
@@ -108,35 +108,13 @@ export const ConfirmCard = memo(function ConfirmCard({ block }: { block: UIBlock
       color: "text-gray-400",
     };
     const HookIcon = hookIcon.icon;
-    const sessionId = block.sessionId ?? activeSessionId;
-
-    async function disableHooksForSession() {
-      if (!sessionId || isDisablingHooks) return;
-      setIsDisablingHooks(true);
-      try {
-        await setHooksEnabled(sessionId, false);
-        dismissById(block.id);
-      } finally {
-        setIsDisablingHooks(false);
-      }
-    }
-
-    async function setPermissionMode(mode: string) {
-      if (!sessionId || settingPermissionMode) return;
-      setSettingPermissionMode(mode);
-      try {
-        await apiClient.call("agent.setPermissionMode", { sessionId, mode });
-      } finally {
-        setSettingPermissionMode(null);
-      }
-    }
 
     return (
       <CardShell block={block}>
         {isPending ? (
           <div className="px-3 pb-2 space-y-2">
             {hookMeta.command && (
-              <div className="flex items-start gap-1.5 bg-black/30 dark:bg-black/40 rounded px-2 py-1">
+              <div className="flex items-start gap-1.5 bg-black/30 dark:bg-black/40 rounded px-2 py-1 max-h-32 overflow-y-auto">
                 <HookIcon className={`w-3 h-3 mt-0.5 shrink-0 ${hookIcon.color}`} />
                 <div className="min-w-0">
                   <div className="text-[10px] text-text-tertiary mb-0.5">目标操作</div>
@@ -158,29 +136,6 @@ export const ConfirmCard = memo(function ConfirmCard({ block }: { block: UIBlock
                 </code>
               </div>
             )}
-            <div className="rounded border border-border-secondary/30 bg-surface-dim/50 px-2 py-1.5">
-              <div className="mb-1 text-[10px] text-text-tertiary">当前权限方式</div>
-              <div className="grid grid-cols-3 gap-1">
-                {[
-                  ["auto", "Auto"],
-                  ["dontAsk", "免询问"],
-                  ["always-deny", "全拒绝"],
-                ].map(([mode, label]) => (
-                  <button
-                    key={mode}
-                    onClick={() => setPermissionMode(mode)}
-                    disabled={!sessionId || settingPermissionMode !== null}
-                    className="flex items-center justify-center rounded border border-border-secondary/40 px-2 py-1 text-[10px] text-text-secondary hover:bg-surface-hover/50 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {settingPermissionMode === mode ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                      label
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
             <div className="flex gap-1.5">
               <button
                 onClick={() => respondById(block.id, { confirmed: true })}
@@ -198,12 +153,17 @@ export const ConfirmCard = memo(function ConfirmCard({ block }: { block: UIBlock
               </button>
             </div>
             <button
-              onClick={disableHooksForSession}
-              disabled={!sessionId || isDisablingHooks}
+              onClick={() => {
+                if (activeSessionId && hookMeta) {
+                  skipRule(activeSessionId, hookMeta.eventName ?? "PreToolUse", hookMeta.matcher);
+                  dismissById(block.id);
+                }
+              }}
+              disabled={!activeSessionId || !hookMeta}
               className="w-full flex items-center justify-center gap-1 py-1 text-[11px] rounded border border-border-secondary/50 text-text-secondary hover:bg-surface-hover/40 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              <ShieldOff className="w-3 h-3" />
-              {isDisablingHooks ? "正在关闭 Hooks..." : "临时关闭 Hooks"}
+              <SkipForward className="w-3 h-3" />
+              {t("uiCard.skipThisHook")}
             </button>
           </div>
         ) : responseText ? (
@@ -247,6 +207,110 @@ export const ConfirmCard = memo(function ConfirmCard({ block }: { block: UIBlock
           </span>
         </div>
       ) : null}
+    </CardShell>
+  );
+});
+
+export const PathPermissionCard = memo(function PathPermissionCard({ block }: { block: UIBlock }) {
+  const { t } = useTranslation("chat");
+  const respondById = useUIDialogStore((s) => s.respondById);
+  const isPending = block.status === "pending";
+  const meta = block.permissionMeta;
+  const options = block.options ?? [];
+
+  const scopeIcon = meta?.scope === "write" ? Pencil : Eye;
+  const ScopeIcon = scopeIcon;
+
+  const responseValue =
+    block.status === "responded" && block.response
+      ? (block.response.value as string)
+      : null;
+
+  if (responseValue) {
+    return (
+      <CardShell block={block}>
+        <div className="px-3 pb-1.5">
+          <span className="text-[11px] text-status-info">{responseValue}</span>
+        </div>
+      </CardShell>
+    );
+  }
+
+  if (!isPending) {
+    return <CardShell block={block}>{null}</CardShell>;
+  }
+
+  return (
+    <CardShell block={block}>
+      <div className="px-3 py-2">
+        {meta && (
+          <div className="mb-2.5 rounded-md bg-surface-dim/60 border border-border-secondary/40 px-2.5 py-2 space-y-1">
+            <div className="flex items-center gap-1.5">
+              <ScopeIcon className="w-3 h-3 text-text-tertiary shrink-0" />
+              <span className="text-[10px] text-text-tertiary">Tool</span>
+              <span className="text-[11px] text-text-primary font-medium ml-auto capitalize">
+                {meta.toolName}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <FileWarning className="w-3 h-3 text-text-tertiary shrink-0" />
+              <span className="text-[10px] text-text-tertiary">Path</span>
+              <span
+                className="text-[11px] text-text-primary font-mono ml-auto truncate max-w-[60%]"
+                title={meta.path}
+              >
+                {meta.path}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <FolderOpen className="w-3 h-3 text-text-tertiary shrink-0" />
+              <span className="text-[10px] text-text-tertiary">Project</span>
+              <span
+                className="text-[11px] text-text-secondary font-mono ml-auto truncate max-w-[60%]"
+                title={meta.cwd}
+              >
+                {meta.cwd}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <ShieldAlert className="w-3 h-3 text-status-warning shrink-0" />
+              <span className="text-[10px] text-text-tertiary">Status</span>
+              <span className="text-[11px] text-status-warning ml-auto">
+                {meta.relativeTo}
+              </span>
+            </div>
+          </div>
+        )}
+        <div className="flex gap-1.5">
+          {options.map((opt, i) => {
+            const parts = opt.split(" ");
+            const label = parts.slice(1).join(" ") || opt;
+            const btnStyle =
+              i === 0
+                ? "bg-status-success/15 text-status-success hover:bg-status-success/25 border-status-success/30"
+                : i === 1
+                  ? "bg-status-info/15 text-status-info hover:bg-status-info/25 border-status-info/30"
+                  : "bg-status-error/10 text-status-error hover:bg-status-error/20 border-status-error/30";
+            return (
+              <button
+                key={i}
+                onClick={() => respondById(block.id, { value: opt })}
+                className={`flex-1 flex items-center justify-center py-1.5 rounded-md border text-[11px] font-medium transition-colors ${btnStyle}`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+        {block.timeout != null && block.timeout > 0 && (
+          <div className="flex items-center gap-1 mt-1.5 px-0.5">
+            <Clock className="w-3 h-3 text-text-tertiary" />
+            <span className="text-[10px] text-text-tertiary">
+              {t("uiCard.autoDeny", { seconds: Math.ceil(block.timeout / 1000) })}
+            </span>
+          </div>
+        )}
+      </div>
     </CardShell>
   );
 });
@@ -637,6 +701,9 @@ export const UIInteractionCard = memo(function UIInteractionCard({ block }: { bl
     case "confirm":
       return <ConfirmCard block={block} />;
     case "select":
+      if (block.permissionMeta?.type === "path_boundary") {
+        return <PathPermissionCard block={block} />;
+      }
       return <SelectCard block={block} />;
     case "input":
       return <InputCard block={block} />;

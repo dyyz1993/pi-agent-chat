@@ -54,6 +54,9 @@ export const HOOKS_METHODS = {
   CLEAR: "hooks.clear",
   GET_STATUS: "hooks.getStatus",
   SET_ENABLED: "hooks.setEnabled",
+  SKIP_RULE: "hooks.skipRule",
+  UNSKIP_RULE: "hooks.unskipRule",
+  GET_SKIPPED_RULES: "hooks.getSkippedRules",
 } as const;
 
 // ---- lsp channel ----
@@ -85,6 +88,7 @@ export const SUPERVISOR_METHODS = {
   CHECK_TOOL_STATUS: "checkToolStatus",
   SET_GOAL: "setGoal",
   CLEAR_GOAL: "clearGoal",
+  REFINE_GOAL: "refineGoal",
 } as const;
 
 // ---- rules-engine channel ----

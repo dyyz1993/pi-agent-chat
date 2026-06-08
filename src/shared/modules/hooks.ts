@@ -25,8 +25,14 @@ export interface HookRuleStats {
   askCount: number;
 }
 
+export interface SkippedRuleKey {
+  event: string;
+  matcher: string;
+}
+
 export interface HookConfigSnapshot {
   runtimeEnabled: boolean;
+  skippedRules: SkippedRuleKey[];
   sources: Array<{
     path: string;
     scope: string;
@@ -79,6 +85,18 @@ export interface HooksMethods {
   "hooks.setEnabled": {
     params: { sessionId: string; enabled: boolean };
     result: { enabled: boolean };
+  };
+  "hooks.skipRule": {
+    params: { sessionId: string; event: string; matcher: string };
+    result: { skipped: SkippedRuleKey[] };
+  };
+  "hooks.unskipRule": {
+    params: { sessionId: string; event: string; matcher: string };
+    result: { skipped: SkippedRuleKey[] };
+  };
+  "hooks.getSkippedRules": {
+    params: { sessionId: string };
+    result: { skipped: SkippedRuleKey[] };
   };
 }
 

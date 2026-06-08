@@ -12,6 +12,9 @@ import {
   RefreshCw,
   Loader2,
   FileText,
+  Power,
+  PowerOff,
+  SkipForward,
 } from "lucide-react";
 import { useHooksStore } from "../../stores/use-hooks-store";
 import { useSessionStore } from "../../stores/use-session-store";
@@ -129,11 +132,15 @@ function EntryRow({
   );
 }
 
-function RuleRow({ stat }: { stat: HookRuleStats }) {
+function RuleRow({ stat, isSkipped, onToggleSkip }: {
+  stat: HookRuleStats;
+  isSkipped?: boolean;
+  onToggleSkip?: () => void;
+}) {
   const total = stat.allowCount + stat.blockCount + stat.askCount;
   const sourceCls = SOURCE_STYLES[stat.source] ?? SOURCE_STYLES.unknown;
   return (
-    <div className="px-2.5 py-1.5 border-b border-border-secondary dark:border-surface-code/50 last:border-b-0">
+    <div className={`px-2.5 py-1.5 border-b border-border-secondary dark:border-surface-code/50 last:border-b-0 ${isSkipped ? "opacity-50" : ""}`}>
       <div className="flex items-center gap-1.5 min-w-0">
         <span className="text-[9px] px-1 py-0.5 rounded bg-surface-code dark:bg-surface-dim/60 text-text-secondary font-medium shrink-0">
           {EVENT_SHORT[stat.event] || stat.event}
@@ -141,9 +148,24 @@ function RuleRow({ stat }: { stat: HookRuleStats }) {
         <span className="text-[11px] text-text-primary truncate flex-1 min-w-0">
           {stat.matcher}
         </span>
+        {isSkipped && (
+          <span className="text-[9px] px-1 py-0.5 rounded bg-status-warning/10 text-status-warning font-medium shrink-0 flex items-center gap-0.5">
+            <SkipForward className="w-2.5 h-2.5" />
+            skipped
+          </span>
+        )}
         <span className={`text-[9px] px-1 py-0.5 rounded font-medium shrink-0 ${sourceCls}`}>
           {stat.source}
         </span>
+        {onToggleSkip && (
+          <button
+            onClick={onToggleSkip}
+            className="p-0.5 rounded hover:bg-surface-hover text-text-tertiary hover:text-text-primary transition-colors shrink-0"
+            title={isSkipped ? "Unskip this rule" : "Skip this rule"}
+          >
+            <SkipForward className={`w-3 h-3 ${isSkipped ? "text-status-warning" : ""}`} />
+          </button>
+        )}
       </div>
       <div className="flex items-center gap-2 mt-0.5 pl-5">
         <code className="text-[9px] text-semantic-accent/70 truncate min-w-0 flex-1">
@@ -238,6 +260,9 @@ export function HooksPanel() {
   const fetchConfig = useHooksStore((s) => s.fetchConfig);
   const clearLog = useHooksStore((s) => s.clearLog);
   const addEntry = useHooksStore((s) => s.addEntry);
+  const setEnabled = useHooksStore((s) => s.setEnabled);
+  const skipRule = useHooksStore((s) => s.skipRule);
+  const unskipRule = useHooksStore((s) => s.unskipRule);
 
   const [expandedEntry, setExpandedEntry] = useState<number | null>(null);
   const [filterEvent, setFilterEvent] = useState<string | undefined>(undefined);
@@ -292,6 +317,21 @@ export function HooksPanel() {
         <ListChecks className="w-3.5 h-3.5 text-semantic-accent" />
         <span className="text-[11px] font-medium text-text-secondary">Hooks</span>
         <span className="text-[9px] text-text-tertiary ml-auto">{totalExecutions} executions</span>
+        {configSnapshot && (
+          <button
+            onClick={() => {
+              if (activeSessionId) setEnabled(activeSessionId, !configSnapshot.runtimeEnabled);
+            }}
+            className={`p-1 rounded transition-colors ${
+              configSnapshot.runtimeEnabled
+                ? "text-status-success hover:bg-status-success/10"
+                : "text-status-error hover:bg-status-error/10"
+            }`}
+            title={configSnapshot.runtimeEnabled ? "Hooks enabled (click to disable)" : "Hooks disabled (click to enable)"}
+          >
+            {configSnapshot.runtimeEnabled ? <Power className="w-3 h-3" /> : <PowerOff className="w-3 h-3" />}
+          </button>
+        )}
       </div>
 
       <div className="flex items-center border-b border-border-secondary dark:border-surface-code shrink-0">
@@ -393,9 +433,25 @@ export function HooksPanel() {
                     <div className="px-2.5 py-1.5 text-[10px] font-medium text-text-secondary border-b border-border-secondary dark:border-surface-code/50">
                       Rule Stats
                     </div>
-                    {ruleStats.map((stat, i) => (
-                      <RuleRow key={`${stat.matcher}-${stat.event}-${i}`} stat={stat} />
-                    ))}
+                    {ruleStats.map((stat, i) => {
+                      const isSkipped = configSnapshot?.skippedRules?.some(
+                        (r) => r.event === stat.event && r.matcher === stat.matcher,
+                      ) ?? false;
+                      return (
+                        <RuleRow
+                          key={`${stat.matcher}-${stat.event}-${i}`}
+                          stat={stat}
+                          isSkipped={isSkipped}
+                          onToggleSkip={activeSessionId ? () => {
+                            if (isSkipped) {
+                              unskipRule(activeSessionId, stat.event, stat.matcher);
+                            } else {
+                              skipRule(activeSessionId, stat.event, stat.matcher);
+                            }
+                          } : undefined}
+                        />
+                      );
+                    })}
                   </div>
                 )}
                 {configSnapshot && <ConfigSources config={configSnapshot} />}

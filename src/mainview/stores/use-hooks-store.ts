@@ -28,8 +28,14 @@ export interface HookRuleStats {
   askCount: number;
 }
 
+export interface SkippedRuleKey {
+  event: string;
+  matcher: string;
+}
+
 export interface HookConfigSnapshot {
   runtimeEnabled: boolean;
+  skippedRules: SkippedRuleKey[];
   sources: Array<{
     path: string;
     scope: string;
@@ -73,6 +79,8 @@ interface HooksState {
   fetchConfig: (sessionId: string) => Promise<void>;
   clearLog: (sessionId: string) => Promise<void>;
   setEnabled: (sessionId: string, enabled: boolean) => Promise<void>;
+  skipRule: (sessionId: string, event: string, matcher: string) => Promise<void>;
+  unskipRule: (sessionId: string, event: string, matcher: string) => Promise<void>;
   setExpandedEntry: (id: number | null) => void;
   addEntry: (sessionId: string, entry: HookLogEntry) => void;
   clearSession: (sessionId: string) => void;
@@ -171,13 +179,47 @@ export const useHooksStore = create<HooksState>()((set, get) => ({
     const result = await apiClient.call("hooks.setEnabled", { sessionId, enabled });
     set((s) => {
       const prev = s.bySession[sessionId] || { ...EMPTY_SESSION };
-      const prevSnapshot = prev.configSnapshot ?? { runtimeEnabled: true, sources: [], events: [] };
+      const prevSnapshot = prev.configSnapshot ?? { runtimeEnabled: true, skippedRules: [], sources: [], events: [] };
       return {
         bySession: {
           ...s.bySession,
           [sessionId]: {
             ...prev,
             configSnapshot: { ...prevSnapshot, runtimeEnabled: result.enabled },
+          },
+        },
+      };
+    });
+  },
+
+  skipRule: async (sessionId, event, matcher) => {
+    const result = await apiClient.call("hooks.skipRule", { sessionId, event, matcher });
+    set((s) => {
+      const prev = s.bySession[sessionId] || { ...EMPTY_SESSION };
+      const prevSnapshot = prev.configSnapshot ?? { runtimeEnabled: true, skippedRules: [], sources: [], events: [] };
+      return {
+        bySession: {
+          ...s.bySession,
+          [sessionId]: {
+            ...prev,
+            configSnapshot: { ...prevSnapshot, skippedRules: result.skipped },
+          },
+        },
+      };
+    });
+  },
+
+  unskipRule: async (sessionId, event, matcher) => {
+    const result = await apiClient.call("hooks.unskipRule", { sessionId, event, matcher });
+    set((s) => {
+      const prev = s.bySession[sessionId] || { ...EMPTY_SESSION };
+      const prevSnapshot = prev.configSnapshot ?? { runtimeEnabled: true, skippedRules: [], sources: [], events: [] };
+      return {
+        bySession: {
+          ...s.bySession,
+          [sessionId]: {
+            ...prev,
+            configSnapshot: { ...prevSnapshot, skippedRules: result.skipped },
           },
         },
       };

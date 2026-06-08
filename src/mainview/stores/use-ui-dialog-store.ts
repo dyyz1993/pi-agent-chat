@@ -6,7 +6,7 @@ import { useSessionStore } from "./use-session-store";
 import { createLogger } from "../../shared/lib/logger";
 
 const log = createLogger("chat");
-import type { ContentBlock, UIInteractionBlock } from "../types";
+import type { ContentBlock, UIInteractionBlock, PermissionMeta } from "../types";
 
 export interface UIPendingRequest {
   requestId: string;
@@ -29,6 +29,7 @@ export interface UIPendingRequest {
     source?: string;
     reason: string;
   };
+  permissionMeta?: PermissionMeta;
 }
 
 interface UIRequestState {
@@ -77,6 +78,8 @@ function toBlock(state: UIRequestState): UIInteractionBlock {
     respondedAt: status !== "pending" ? Date.now() : undefined,
     sessionId: request.sessionId,
     hookMeta: request.hookMeta,
+    permissionMeta: request.permissionMeta,
+    timeout: request.timeout,
   };
 }
 

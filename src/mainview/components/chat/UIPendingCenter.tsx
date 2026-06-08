@@ -8,28 +8,28 @@ import {
   ChevronDown,
   ChevronRight,
   FileEdit,
-  ShieldOff,
+  ShieldAlert,
+  FileWarning,
+  FolderOpen,
+  Clock,
+  Eye,
+  Pencil,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useUIDialogStore, type UIPendingRequest } from "../../stores/use-ui-dialog-store";
 import { useSessionStore } from "../../stores/use-session-store";
-import { useHooksStore } from "../../stores/use-hooks-store";
-import { apiClient } from "../../lib/api-client";
 import { IconButton, ModalDialog } from "../primitives";
 
 function PanelCard({ req }: { req: UIPendingRequest }) {
   const { t } = useTranslation("chat");
   const respondById = useUIDialogStore((s) => s.respondById);
   const dismissById = useUIDialogStore((s) => s.dismissById);
-  const setHooksEnabled = useHooksStore((s) => s.setEnabled);
 
   // All hooks must be called unconditionally (React rules of hooks)
   const [checkedSet, setCheckedSet] = useState<Set<number>>(new Set());
   const [customValue, setCustomValue] = useState("");
   const [inputValue, setInputValue] = useState("");
   const [editorValue, setEditorValue] = useState(req.prefill ?? "");
-  const [isDisablingHooks, setIsDisablingHooks] = useState(false);
-  const [settingPermissionMode, setSettingPermissionMode] = useState<string | null>(null);
 
   const methodLabel: Record<string, string> = {
     confirm: t("uiPending.confirm"),
@@ -45,25 +45,82 @@ function PanelCard({ req }: { req: UIPendingRequest }) {
   const options = req.options ?? [];
   const isMulti = !!req.multiple;
 
-  async function disableHooksForSession() {
-    if (isDisablingHooks) return;
-    setIsDisablingHooks(true);
-    try {
-      await setHooksEnabled(req.sessionId, false);
-      dismissById(req.requestId);
-    } finally {
-      setIsDisablingHooks(false);
-    }
-  }
-
-  async function setPermissionMode(mode: string) {
-    if (settingPermissionMode) return;
-    setSettingPermissionMode(mode);
-    try {
-      await apiClient.call("agent.setPermissionMode", { sessionId: req.sessionId, mode });
-    } finally {
-      setSettingPermissionMode(null);
-    }
+  if (isSelect && req.permissionMeta?.type === "path_boundary") {
+    const meta = req.permissionMeta;
+    const ScopeIcon = meta.scope === "write" ? Pencil : Eye;
+    return (
+      <div className="border border-status-warning/30 rounded-xl overflow-hidden bg-surface-dim/50 dark:bg-surface-code/50">
+        <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border-secondary/50">
+          <ShieldAlert className="w-3.5 h-3.5 text-status-warning" />
+          <span className="text-[11px] font-medium text-status-warning">Path Access</span>
+        </div>
+        <div className="px-3 py-2">
+          <div className="mb-2.5 rounded-md bg-bg-primary/70 border border-border-secondary/40 px-2.5 py-2 space-y-1">
+            <div className="flex items-center gap-1.5">
+              <ScopeIcon className="w-3 h-3 text-text-tertiary shrink-0" />
+              <span className="text-[10px] text-text-tertiary">Tool</span>
+              <span className="text-[11px] text-text-primary font-medium ml-auto capitalize">
+                {meta.toolName}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <FileWarning className="w-3 h-3 text-text-tertiary shrink-0" />
+              <span className="text-[10px] text-text-tertiary">Path</span>
+              <span
+                className="text-[11px] text-text-primary font-mono ml-auto truncate max-w-[60%]"
+                title={meta.path}
+              >
+                {meta.path}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <FolderOpen className="w-3 h-3 text-text-tertiary shrink-0" />
+              <span className="text-[10px] text-text-tertiary">Project</span>
+              <span
+                className="text-[11px] text-text-secondary font-mono ml-auto truncate max-w-[60%]"
+                title={meta.cwd}
+              >
+                {meta.cwd}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <ShieldAlert className="w-3 h-3 text-status-warning shrink-0" />
+              <span className="text-[10px] text-text-tertiary">Status</span>
+              <span className="text-[11px] text-status-warning ml-auto">{meta.relativeTo}</span>
+            </div>
+          </div>
+          <div className="flex gap-1.5">
+            {options.map((opt, i) => {
+              const parts = opt.split(" ");
+              const label = parts.slice(1).join(" ") || opt;
+              const btnStyle =
+                i === 0
+                  ? "bg-status-success/15 text-status-success hover:bg-status-success/25 border-status-success/30"
+                  : i === 1
+                    ? "bg-status-info/15 text-status-info hover:bg-status-info/25 border-status-info/30"
+                    : "bg-status-error/10 text-status-error hover:bg-status-error/20 border-status-error/30";
+              return (
+                <button
+                  key={i}
+                  onClick={() => respondById(req.requestId, { value: opt })}
+                  className={`flex-1 flex items-center justify-center py-1.5 rounded-md border text-[11px] font-medium transition-colors ${btnStyle}`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          {req.timeout != null && req.timeout > 0 && (
+            <div className="flex items-center gap-1 mt-1.5 px-0.5">
+              <Clock className="w-3 h-3 text-text-tertiary" />
+              <span className="text-[10px] text-text-tertiary">
+                {t("uiCard.autoDeny", { seconds: Math.ceil(req.timeout / 1000) })}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+    );
   }
 
   if (isMulti || isSelect) {
@@ -189,27 +246,6 @@ function PanelCard({ req }: { req: UIPendingRequest }) {
               </code>
             </div>
           )}
-          {isHookConfirm && (
-            <div className="mb-2.5 rounded-md border border-border-secondary/40 bg-surface-dim/50 px-2 py-1.5">
-              <div className="mb-1 text-[10px] text-text-tertiary">当前权限方式</div>
-              <div className="grid grid-cols-3 gap-1">
-                {[
-                  ["auto", "Auto"],
-                  ["dontAsk", "免询问"],
-                  ["always-deny", "全拒绝"],
-                ].map(([mode, label]) => (
-                  <button
-                    key={mode}
-                    onClick={() => setPermissionMode(mode)}
-                    disabled={settingPermissionMode !== null}
-                    className="flex items-center justify-center rounded border border-border-secondary/40 px-2 py-1 text-[10px] text-text-secondary hover:bg-surface-hover/50 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {settingPermissionMode === mode ? "..." : label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
           <div className="flex gap-2">
             <button
               onClick={() => respondById(req.requestId, { confirmed: true })}
@@ -224,16 +260,6 @@ function PanelCard({ req }: { req: UIPendingRequest }) {
               {t("common:cancel")}
             </button>
           </div>
-          {isHookConfirm && (
-            <button
-              onClick={disableHooksForSession}
-              disabled={isDisablingHooks}
-              className="mt-2 w-full flex items-center justify-center gap-1 py-1.5 rounded-md border border-border-secondary/50 text-text-secondary hover:bg-surface-hover/40 disabled:opacity-50 disabled:cursor-not-allowed text-[11px] transition-colors"
-            >
-              <ShieldOff className="w-3 h-3" />
-              {isDisablingHooks ? "正在关闭 Hooks..." : "临时关闭 Hooks"}
-            </button>
-          )}
         </div>
       </div>
     );

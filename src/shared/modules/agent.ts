@@ -512,6 +512,15 @@ export interface HookMeta {
   reason: string;
 }
 
+export interface PermissionMeta {
+  type: "path_boundary" | "dangerous_bash" | "hook_approval";
+  path: string;
+  cwd: string;
+  toolName: string;
+  scope: "read" | "write";
+  relativeTo: string;
+}
+
 export interface ExtensionUIRequestEvent {
   type: "extension_ui_request";
   id: string;
@@ -541,6 +550,7 @@ export interface ExtensionUIRequestEvent {
   widgetLines?: string[];
   widgetPlacement?: "aboveEditor" | "belowEditor";
   text?: string;
+  permissionMeta?: PermissionMeta;
 }
 
 export interface ExtensionUIResolvedEvent {
