@@ -821,22 +821,15 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
     const assistantMsg = message as AssistantMessage;
 
-    apiClient
-      .call("agent.getContextUsage", { sessionId })
-      .then((cu) => {
-        if (cu && cu.tokens != null) {
-          storeGet().updateSessionContext(sessionId, {
-            tokens: cu.tokens,
-            ...(cu.contextWindow > 0 ? { contextWindow: cu.contextWindow } : {}),
-          });
-        }
-      })
-      .catch((err) => {
-        log.warn("agent.getContextUsage failed after message_end", {
-          sessionId,
-          err: err instanceof Error ? err.message : String(err),
-        });
+    // Accumulate tokens from message_end usage instead of calling getContextUsage RPC.
+    // contextWindow is fetched once during fetchInitialState and cached — it doesn't change.
+    if (assistantMsg.usage?.input) {
+      const prev = storeGet().sessionContextMap[sessionId];
+      const prevTokens = prev?.tokens ?? 0;
+      storeGet().updateSessionContext(sessionId, {
+        tokens: prevTokens + assistantMsg.usage.input,
       });
+    }
 
     const hasContent = hasRenderableContent(lastMsg);
 

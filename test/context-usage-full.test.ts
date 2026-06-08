@@ -204,61 +204,58 @@ beforeEach(() => {
 
 describe("context usage tracking", () => {
   describe("1. Initial load — empty context", () => {
-    it("sessionContextMap starts empty — tokens undefined", () => {
-      expect(getContextMap()).toBeUndefined();
-    });
-
-    it("message_end with null tokens from RPC keeps tokens null", async () => {
+    it("message_end accumulates usage.input as tokens", async () => {
       setupStreamingAssistant();
-      (mockedCall as ReturnType<typeof vi.fn>).mockResolvedValue({
-        tokens: null,
-        contextWindow: 0,
-      });
       fireMessageEnd();
       await flushPromises();
 
       const ctx = getContextMap();
-      expect(ctx).toBeUndefined();
+      expect(ctx).toBeDefined();
+      expect(ctx!.tokens).toBe(1000);
     });
 
-    it("message_end with null response keeps context empty", async () => {
+    it("message_end without usage does not set tokens", async () => {
       setupStreamingAssistant();
-      (mockedCall as ReturnType<typeof vi.fn>).mockResolvedValue(null);
-      fireMessageEnd();
+      handleAgentEvent(SID, {
+        type: "message_end",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "hello" }],
+          usage: undefined as unknown as Parameters<typeof handleAgentEvent>[1]["message"]["usage"],
+          stopReason: "end_turn",
+          model: "test-model",
+        },
+        entryId: "entry-no-usage",
+      } as Parameters<typeof handleAgentEvent>[1]);
       await flushPromises();
 
       expect(getContextMap()).toBeUndefined();
     });
   });
 
-  describe("2. After message_end — tokens update from RPC", () => {
-    it("sets tokens from agent.getContextUsage RPC response", async () => {
+  describe("2. After message_end — tokens accumulate from usage.input", () => {
+    it("accumulates usage.input from message_end event", async () => {
       setupStreamingAssistant();
-      (mockedCall as ReturnType<typeof vi.fn>).mockResolvedValue({
-        tokens: 5000,
-        contextWindow: 200000,
-      });
-      fireMessageEnd();
+      fireMessageEnd({ input: 5000, output: 2000 });
       await flushPromises();
 
       const ctx = getContextMap();
       expect(ctx).toBeDefined();
       expect(ctx!.tokens).toBe(5000);
-      expect(ctx!.contextWindow).toBe(200000);
     });
 
-    it("sets tokens even when contextWindow is 0", async () => {
+    it("accumulates across multiple message_end events", async () => {
       setupStreamingAssistant();
-      (mockedCall as ReturnType<typeof vi.fn>).mockResolvedValue({
-        tokens: 5000,
-        contextWindow: 0,
-      });
-      fireMessageEnd();
+      fireMessageEnd({ input: 3000, output: 1000 });
       await flushPromises();
 
-      const ctx = getContextMap();
-      expect(ctx).toBeDefined();
-      expect(ctx!.tokens).toBe(5000);
+      expect(getContextMap()!.tokens).toBe(3000);
+
+      setupStreamingAssistant();
+      fireMessageEnd({ input: 2000, output: 500 });
+      await flushPromises();
+
+      expect(getContextMap()!.tokens).toBe(5000);
     });
   });
 
@@ -300,32 +297,37 @@ describe("context usage tracking", () => {
     });
   });
 
-  describe("4. Existing value not overwritten by null", () => {
-    it("pre-existing tokens=8000 stays when RPC returns tokens=null", async () => {
+  describe("4. Existing value not overwritten by missing usage", () => {
+    it("pre-existing tokens=8000 stays when usage is undefined", async () => {
       useSessionStore.setState({
         sessionContextMap: { [SID]: { tokens: 8000, contextWindow: 200000 } },
       });
       setupStreamingAssistant();
-      (mockedCall as ReturnType<typeof vi.fn>).mockResolvedValue({
-        tokens: null,
-        contextWindow: 200000,
-      });
-      fireMessageEnd();
+      handleAgentEvent(SID, {
+        type: "message_end",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "hello" }],
+          usage: undefined as unknown as Parameters<typeof handleAgentEvent>[1]["message"]["usage"],
+          stopReason: "end_turn",
+          model: "test-model",
+        },
+        entryId: "entry-1",
+      } as Parameters<typeof handleAgentEvent>[1]);
       await flushPromises();
 
       expect(getContextMap()!.tokens).toBe(8000);
     });
 
-    it("pre-existing tokens=8000 stays when RPC returns null response", async () => {
+    it("pre-existing tokens accumulate when usage.input provided", async () => {
       useSessionStore.setState({
         sessionContextMap: { [SID]: { tokens: 8000, contextWindow: 200000 } },
       });
       setupStreamingAssistant();
-      (mockedCall as ReturnType<typeof vi.fn>).mockResolvedValue(null);
-      fireMessageEnd();
+      fireMessageEnd({ input: 2000, output: 500 });
       await flushPromises();
 
-      expect(getContextMap()!.tokens).toBe(8000);
+      expect(getContextMap()!.tokens).toBe(10000);
     });
   });
 
@@ -336,15 +338,10 @@ describe("context usage tracking", () => {
       expect(getContextMap()).toBeUndefined();
 
       setupStreamingAssistant();
-      (mockedCall as ReturnType<typeof vi.fn>).mockResolvedValue({
-        tokens: 15000,
-        contextWindow: 200000,
-      });
-      fireMessageEnd();
+      fireMessageEnd({ input: 15000, output: 5000 });
       await flushPromises();
 
       expect(getContextMap()!.tokens).toBe(15000);
-      expect(getContextMap()!.contextWindow).toBe(200000);
 
       handleAgentEvent(SID, {
         type: "compaction_end",
@@ -354,59 +351,54 @@ describe("context usage tracking", () => {
       expect(getContextMap()!.tokens).toBe(5000);
 
       setupStreamingAssistant();
-      (mockedCall as ReturnType<typeof vi.fn>).mockResolvedValue({
-        tokens: 8000,
-        contextWindow: 200000,
-      });
-      fireMessageEnd();
+      fireMessageEnd({ input: 3000, output: 1000 });
       await flushPromises();
 
       expect(getContextMap()!.tokens).toBe(8000);
-      expect(getContextMap()!.contextWindow).toBe(200000);
     });
   });
 
-  describe("6. contextWindow also updates", () => {
-    it("message_end updates both tokens and contextWindow", async () => {
+  describe("6. contextWindow preserved during accumulation", () => {
+    it("message_end accumulates tokens but preserves contextWindow", async () => {
       useSessionStore.setState({
         sessionContextMap: { [SID]: { tokens: 5000, contextWindow: 200000 } },
       });
       setupStreamingAssistant();
-      (mockedCall as ReturnType<typeof vi.fn>).mockResolvedValue({
-        tokens: 5000,
-        contextWindow: 128000,
-      });
-      fireMessageEnd();
-      await flushPromises();
-
-      const ctx = getContextMap();
-      expect(ctx!.tokens).toBe(5000);
-      expect(ctx!.contextWindow).toBe(128000);
-    });
-
-    it("contextWindow not overwritten when RPC returns contextWindow=0", async () => {
-      useSessionStore.setState({
-        sessionContextMap: { [SID]: { tokens: 5000, contextWindow: 200000 } },
-      });
-      setupStreamingAssistant();
-      (mockedCall as ReturnType<typeof vi.fn>).mockResolvedValue({
-        tokens: 6000,
-        contextWindow: 0,
-      });
-      fireMessageEnd();
+      fireMessageEnd({ input: 1000, output: 500 });
       await flushPromises();
 
       const ctx = getContextMap();
       expect(ctx!.tokens).toBe(6000);
       expect(ctx!.contextWindow).toBe(200000);
     });
+
+    it("contextWindow stays when usage.input is 0", async () => {
+      useSessionStore.setState({
+        sessionContextMap: { [SID]: { tokens: 5000, contextWindow: 200000 } },
+      });
+      setupStreamingAssistant();
+      fireMessageEnd({ input: 0, output: 500 });
+      await flushPromises();
+
+      const ctx = getContextMap();
+      expect(ctx!.tokens).toBe(5000);
+      expect(ctx!.contextWindow).toBe(200000);
+    });
   });
 
-  describe("7. RPC error does not break the flow", () => {
-    it("message still finalized when RPC rejects", async () => {
+  describe("7. Error handling", () => {
+    it("message still finalized even without usage", async () => {
       setupStreamingAssistant();
-      (mockedCall as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("RPC failed"));
-      fireMessageEnd();
+      handleAgentEvent(SID, {
+        type: "message_end",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "hello" }],
+          stopReason: "end_turn",
+          model: "test-model",
+        },
+        entryId: "entry-1",
+      } as Parameters<typeof handleAgentEvent>[1]);
       await flushPromises();
 
       const msgs = useChatStore.getState().messagesBySession[SID];
@@ -414,23 +406,30 @@ describe("context usage tracking", () => {
       expect(msgs![0].isStreaming).toBe(false);
     });
 
-    it("tokens stay unchanged when RPC rejects", async () => {
+    it("tokens stay unchanged when usage.input is 0", async () => {
       useSessionStore.setState({
         sessionContextMap: { [SID]: { tokens: 8000, contextWindow: 200000 } },
       });
       setupStreamingAssistant();
-      (mockedCall as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("RPC failed"));
-      fireMessageEnd();
+      fireMessageEnd({ input: 0, output: 0 });
       await flushPromises();
 
       expect(getContextMap()!.tokens).toBe(8000);
       expect(getContextMap()!.contextWindow).toBe(200000);
     });
 
-    it("tokens stay null on RPC reject with no prior value", async () => {
+    it("no prior value and no usage → contextMap stays undefined", async () => {
       setupStreamingAssistant();
-      (mockedCall as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("RPC failed"));
-      fireMessageEnd();
+      handleAgentEvent(SID, {
+        type: "message_end",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "hello" }],
+          stopReason: "end_turn",
+          model: "test-model",
+        },
+        entryId: "entry-1",
+      } as Parameters<typeof handleAgentEvent>[1]);
       await flushPromises();
 
       expect(getContextMap()).toBeUndefined();
