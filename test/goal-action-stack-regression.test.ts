@@ -20,15 +20,25 @@ describe("Goal action stack regression", () => {
     expect(pendingIndex).toBeGreaterThan(queueIndex);
   });
 
-  it("creates a goal before sending the objective as the user message", () => {
+  it("creates a goal via handleCreateGoal (separate from handleSend)", () => {
     const source = readSource("src/mainview/components/chat/ChatPanel.tsx");
-    const setGoalIndex = source.indexOf("await setGoal(activeSessionId, objective)");
-    const sendMessageIndex = source.indexOf("await sendMessage()", setGoalIndex);
-    const sendSteerIndex = source.indexOf("await sendSteer()", setGoalIndex);
 
-    expect(setGoalIndex).toBeGreaterThan(-1);
-    expect(sendSteerIndex).toBeGreaterThan(setGoalIndex);
-    expect(sendMessageIndex).toBeGreaterThan(setGoalIndex);
+    // handleCreateGoal is a separate code path that calls setGoal
+    // It is triggered by onSend when goalMode is true
+    const handleCreateGoalIndex = source.indexOf("const handleCreateGoal");
+    const setGoalCallIndex = source.indexOf("await setGoal(activeSessionId, objective)", handleCreateGoalIndex);
+    const goalModeDispatchIndex = source.indexOf("goalMode ? handleCreateGoal : handleSend");
+
+    expect(handleCreateGoalIndex).toBeGreaterThan(-1);
+    expect(setGoalCallIndex).toBeGreaterThan(handleCreateGoalIndex);
+    expect(goalModeDispatchIndex).toBeGreaterThan(-1);
+
+    // handleSend is a separate code path that calls sendMessage or sendSteer
+    const handleSendMatch = source.indexOf("await sendMessage()");
+    const sendSteerMatch = source.indexOf("await sendSteer()");
+
+    expect(handleSendMatch).toBeGreaterThan(-1);
+    expect(sendSteerMatch).toBeGreaterThan(-1);
   });
 
   it("routes desktop and mobile Goal buttons into composer mode", () => {

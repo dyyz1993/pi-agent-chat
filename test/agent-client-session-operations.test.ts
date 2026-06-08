@@ -148,7 +148,7 @@ describe("agent client session operations", () => {
     };
     const managed = makeManaged(client);
     const cleanupDeadClient = vi.fn();
-    const isClientAlive = vi.fn();
+    const isClientAlive = vi.fn().mockResolvedValue(true);
 
     await expect(
       getContextUsageOperation({
@@ -160,7 +160,7 @@ describe("agent client session operations", () => {
       }),
     ).resolves.toEqual({ tokens: null, contextWindow: 0, percent: null });
 
-    expect(isClientAlive).not.toHaveBeenCalled();
+    expect(isClientAlive).toHaveBeenCalledWith("sess-1", managed);
     expect(cleanupDeadClient).not.toHaveBeenCalled();
   });
 });

@@ -42,6 +42,7 @@ vi.mock("../src/mainview/stores/use-session-store", () => ({
       sessionReady: { "sess-1": true },
       sessionContextMap: {},
       sessionStatusMap: {},
+      sessionsByProject: {},
       restoreContextFromHistory: vi.fn(),
     })),
     setState: vi.fn(),

@@ -104,7 +104,7 @@ describe("agent client state operations", () => {
       getState: vi.fn().mockRejectedValue(new Error("getState timed out (10000ms)")),
     });
     const cleanupDeadClient = vi.fn();
-    const isClientAlive = vi.fn();
+    const isClientAlive = vi.fn().mockResolvedValue(true);
 
     await expect(
       getStateOperation({
@@ -116,7 +116,7 @@ describe("agent client state operations", () => {
       }),
     ).resolves.toBeNull();
 
-    expect(isClientAlive).not.toHaveBeenCalled();
+    expect(isClientAlive).toHaveBeenCalledWith("sess-1", managed);
     expect(cleanupDeadClient).not.toHaveBeenCalled();
   });
 
@@ -184,7 +184,7 @@ describe("agent client state operations", () => {
       getSessionStats: vi.fn().mockRejectedValue(new Error("getSessionStats timed out (10000ms)")),
     });
     const cleanupDeadClient = vi.fn();
-    const isClientAlive = vi.fn();
+    const isClientAlive = vi.fn().mockResolvedValue(true);
 
     await expect(
       getSessionStatsOperation({
@@ -195,7 +195,7 @@ describe("agent client state operations", () => {
       }),
     ).resolves.toBeNull();
 
-    expect(isClientAlive).not.toHaveBeenCalled();
+    expect(isClientAlive).toHaveBeenCalledWith("sess-1", managed);
     expect(cleanupDeadClient).not.toHaveBeenCalled();
   });
 });

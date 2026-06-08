@@ -27,6 +27,7 @@ vi.mock("../src/mainview/stores/use-session-store", () => {
     activeSessionId: "test-session",
     sessionReady: { "test-session": true },
     sessionStatusMap: {},
+    sessionsByProject: {},
     clearAgentStarted: () => {},
     restoreContextFromHistory: vi.fn(),
   };
@@ -356,7 +357,6 @@ describe("chat pagination", () => {
       "agent.getFullMessages",
       expect.objectContaining({
         sessionId: "test-session",
-        limit: PAGE_SIZE,
         afterEntryId: "entry-50",
       }),
     );

@@ -43,7 +43,7 @@ vi.mock("../src/mainview/stores/use-session-store", () => ({
       sessionReady: { "sess-1": true },
       sessionStatusMap: {},
       sessionContextMap: {},
-      sessionStatusMap: {},
+      sessionsByProject: {},
       restoreContextFromHistory: vi.fn(),
     })),
     setState: vi.fn(),
@@ -66,7 +66,7 @@ import { apiClient } from "../src/mainview/lib/api-client";
 const mockedCall = apiClient.call as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   useChatStore.setState({
     messagesBySession: {},
     inputText: "",

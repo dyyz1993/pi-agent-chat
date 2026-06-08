@@ -68,21 +68,20 @@ export async function sendPromptOperation<TManaged extends ManagedPromptLike>(op
   managed.lastActiveAt = (options.now ?? Date.now)();
   managed.client.prompt(options.content, options.images).catch(async (err: unknown) => {
     const msg = errorMessage(err);
-    log.error("prompt error - NOT sending agent_end to investigate idle issue", {
+    log.error("prompt error", {
       sessionId: options.sessionId,
       err: msg,
       errDetails: err instanceof Error ? err.stack : String(err),
     });
-    // ⚠️ 临时禁用 agent_end 发送，用于排查"最后一个方法还没结束就切到闲时"的问题
-    // if (!(await options.isClientAlive(options.sessionId, managed))) {
-    //   options.cleanupDeadClient(options.sessionId, `prompt failed: ${msg}`);
-    //   return;
-    // }
-    // options.emitAgentEnd(options.sessionId).catch((emitErr: unknown) => {
-    //   log.warn("emitAgentEvent(agent_end) after prompt error", {
-    //     err: errorMessage(emitErr),
-    //   });
-    // });
+    if (!(await options.isClientAlive(options.sessionId, managed))) {
+      options.cleanupDeadClient(options.sessionId, `prompt failed: ${msg}`);
+      return;
+    }
+    options.emitAgentEnd(options.sessionId).catch((emitErr: unknown) => {
+      log.warn("emitAgentEvent(agent_end) after prompt error", {
+        err: errorMessage(emitErr),
+      });
+    });
   });
   return true;
 }
