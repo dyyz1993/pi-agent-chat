@@ -27,6 +27,7 @@ import { useUIBlockMap } from "../../stores/use-ui-dialog-store";
 import { MEMORY_CUSTOM_TYPES, MemoryCard } from "./MemoryCard";
 import { SnapshotBadge } from "./snapshot/SnapshotBadge";
 import { formatFilePath } from "../../lib/format-path";
+import { getToolArgsDescription } from "../../lib/tool-args-description";
 import { formatTokenCount } from "../../utils/turn-utils";
 import { ToolCardHeader } from "./primitives/ToolCardHeader";
 import { parseSpecialBlocks, hasSpecialBlocks } from "./special-block-parser";
@@ -344,9 +345,9 @@ export const ThinkingCard = memo(function ThinkingCard({
     wasStreamingRef.current = isStreaming;
   }, [isStreaming, collapseThinking]);
 
-  const firstLine = thinking.split("\n")[0] || t("thinkingPlaceholder");
-  const hasMore = thinking.includes("\n") || thinking.length > 80;
-  const collapsedText = firstLine.length > 100 ? firstLine.slice(0, 100) + "..." : firstLine;
+  const trimmed = thinking.trim();
+  const firstLine = trimmed.split("\n")[0] || "";
+  const collapsedText = firstLine.length > 100 ? firstLine.slice(0, 100) + "…" : firstLine;
 
   return (
     <div className="my-0.5 overflow-hidden" data-block-id={blockId}>
@@ -358,10 +359,10 @@ export const ThinkingCard = memo(function ThinkingCard({
         <Brain className="w-3 h-3 text-semantic-agent/60 shrink-0" />
         {isOpen ? (
           <span className="text-semantic-agent/70 font-medium">{t("thinkingLabel")}</span>
-        ) : hasMore ? (
+        ) : collapsedText ? (
           <span className="text-text-secondary truncate flex-1 min-w-0">{collapsedText}</span>
         ) : (
-          <span className="text-semantic-agent/70 font-medium">{t("thinkingLabel")}</span>
+          <span className="text-semantic-agent/50 italic">{t("thinkingPlaceholder")}</span>
         )}
         {isStreaming && (
           <span className="text-semantic-agent/50 animate-pulse text-[10px]">...</span>
@@ -740,7 +741,9 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
         description={
           block.output && !isRunning
             ? block.output.split("\n")[0].slice(0, 100)
-            : (block.description ?? block.toolName)
+            : (block.description ??
+              getToolArgsDescription(block.toolName, block.args) ??
+              block.toolName)
         }
         collapsed={collapsed}
         onClick={handleToggleCollapse}

@@ -172,6 +172,41 @@ export function reconcileChatToolFromBashEvent(sessionId: string, event: BashCha
   });
 }
 
+/**
+ * Replay bash processes from the bash store into the chat tool blocks.
+ *
+ * Use this when the chat messages have just been loaded (or the bash store
+ * has just been populated) and bash events may have already been processed
+ * before the chat block existed. Without this, output streamed in the
+ * window between the bash subscription being set up and the chat messages
+ * being loaded would be lost from the chat panel — the user would see
+ * dynamic output in the bash panel sidebar but the chat's "Output" section
+ * would stay empty.
+ *
+ * Idempotent: calling multiple times has no effect once the chat block
+ * already reflects the latest bash state.
+ */
+export function syncBashStoreToChat(sessionId: string): void {
+  const procs = useBashStore.getState().processesBySession[sessionId] || [];
+  if (procs.length === 0) return;
+
+  for (const proc of procs) {
+    if (!proc.toolCallId) continue;
+    // Synthesize a "output" event so reconcileChatToolFromBashEvent treats
+    // this as live streaming. For processes that have already ended we use
+    // "end" so the chat block transitions to its final status.
+    const eventType: BashChannelEvent["type"] =
+      proc.status === "running" || proc.status === "background" ? "output" : "end";
+    const syntheticEvent: BashChannelEvent = {
+      type: eventType,
+      toolCallId: proc.toolCallId,
+      processes: [proc],
+      timestamp: proc.endedAt ?? Date.now(),
+    };
+    reconcileChatToolFromBashEvent(sessionId, syntheticEvent);
+  }
+}
+
 export interface SubscriptionMaps {
   agentSubscriptions: Record<string, string>;
   subagentSubscriptions: Record<string, string>;
@@ -372,6 +407,13 @@ export function setupSubscriptions(
         useBashStore
           .getState()
           .loadHistory(id)
+          .then(() => {
+            // Replay bash store into chat after history load — covers the case
+            // where chat messages are still being fetched when bash history
+            // arrives, or where the bash history itself has output we should
+            // fold into the chat block immediately.
+            syncBashStoreToChat(id);
+          })
           .catch((err) => {
             useAppStore.getState().addLog(`[sub] ${String(err)}`);
           });

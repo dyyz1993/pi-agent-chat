@@ -35,6 +35,7 @@ import {
 import type { ChatMessage, ContentBlock, SessionStatus } from "../../types";
 import type { ModifiedFile } from "../../stores/use-rollback-store";
 import { getCustomTypeIcon } from "./tool-icon-map";
+import { GoalCompleteCard } from "./GoalCompleteCard";
 
 const log = createLogger("chat");
 
@@ -159,12 +160,28 @@ export const MessageCard = memo(function MessageCard({
       if (
         !MEMORY_CUSTOM_TYPES.has(b.customType) &&
         !isLspCustomType(b.customType) &&
-        b.customType !== "step_snapshot"
+        b.customType !== "step_snapshot" &&
+        b.customType !== "supervisor_goal_complete"
       )
         return true;
       return false;
     });
     if (allHidden) return null;
+  }
+
+  if (
+    hasCustomContent &&
+    customBlock &&
+    customBlock.customType === "supervisor_goal_complete"
+  ) {
+    return (
+      <div data-msg-card-id={message.id} className="relative w-full py-1.5">
+        <GoalCompleteCard
+          data={(customBlock as { data?: unknown }).data}
+          blockId={message.id}
+        />
+      </div>
+    );
   }
 
   if (

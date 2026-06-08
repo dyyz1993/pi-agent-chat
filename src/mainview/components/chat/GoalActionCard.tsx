@@ -1,14 +1,17 @@
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   ListChecks,
   Loader2,
+  MoreHorizontal,
   Pencil,
   Target,
   X,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { GoalState, GoldResult } from "../../../shared/modules/supervisor";
 import { useLayoutStore } from "../../layouts/use-layout-store";
@@ -81,6 +84,66 @@ function goldSummary(result?: GoldResult): string | null {
   return result.verdict;
 }
 
+function ExpandableText({
+  text,
+  maxLines = 2,
+}: {
+  text: string;
+  maxLines?: number;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [overflows, setOverflows] = useState(false);
+
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    setOverflows(el.scrollHeight > el.clientHeight + 1);
+  }, [text]);
+
+  const lineClampClass = expanded ? "" : `line-clamp-${maxLines}`;
+
+  return (
+    <div>
+      <div
+        ref={contentRef}
+        className={`text-xs text-text-secondary break-words whitespace-pre-wrap ${expanded ? "max-h-40 overflow-y-auto" : lineClampClass}`}
+        style={
+          expanded
+            ? undefined
+            : {
+                display: "-webkit-box",
+                WebkitLineClamp: maxLines,
+                WebkitBoxOrient: "vertical",
+                overflow: "hidden",
+              }
+        }
+      >
+        {text}
+      </div>
+      {overflows && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-0.5 text-[11px] text-semantic-accent hover:underline inline-flex items-center gap-0.5"
+        >
+          {expanded ? (
+            <>
+              <ChevronUp className="w-3 h-3" />
+              <span>收起</span>
+            </>
+          ) : (
+            <>
+              <ChevronDown className="w-3 h-3" />
+              <span>展开</span>
+            </>
+          )}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function GoalActionCard({
   sessionId,
   onEdit,
@@ -123,31 +186,30 @@ export function GoalActionCard({
 
   return (
     <div className="px-3 py-1.5 flex-shrink-0">
+      {/* Mobile view — compact single row */}
       <div
         className={`sm:hidden flex items-center gap-2 px-2 py-1.5 rounded-lg border min-h-11 ${tone?.className ?? "border-border-secondary bg-surface-dim"}`}
       >
         <Icon
           className={`w-4 h-4 shrink-0 ${tone?.iconClassName ?? "text-text-tertiary"} ${isLive ? "animate-pulse" : ""}`}
         />
-        <div className="min-w-0 flex-1 flex items-baseline gap-1.5">
-          <span className="text-xs font-medium text-text-primary shrink-0">
-            {t("goal.cardTitle")}
-          </span>
+        <div className="min-w-0 flex-1 flex items-center gap-1.5">
           <span className="text-[11px] text-text-tertiary shrink-0">
-            {t(`goal.state.${goalStatus}`)} · {elapsed}
+            {elapsed} · #{goal.continuationCount}
           </span>
           <span className="text-xs text-text-secondary truncate min-w-0">{goal.objective}</span>
         </div>
         <button
           type="button"
-          onClick={() => void clearGoal(sessionId, "user_cancelled")}
-          className="w-11 h-11 -my-1.5 -mr-1.5 rounded-md text-text-tertiary hover:text-status-error hover:bg-status-error/10 transition-colors flex items-center justify-center shrink-0"
-          title={t("goal.cancel")}
-          aria-label={t("goal.cancel")}
+          onClick={openGoalPanel}
+          className="w-11 h-11 -my-1.5 -mr-1.5 rounded-md text-text-tertiary hover:text-text-primary hover:bg-surface-hover transition-colors flex items-center justify-center shrink-0"
+          title={t("goal.openPanel")}
+          aria-label={t("goal.openPanel")}
         >
-          <X className="w-4 h-4" />
+          <MoreHorizontal className="w-4 h-4" />
         </button>
       </div>
+      {/* Desktop view */}
       <div
         className={`hidden sm:flex items-start gap-2 p-2.5 rounded-lg border ${tone?.className ?? "border-border-secondary bg-surface-dim"}`}
       >
@@ -158,14 +220,12 @@ export function GoalActionCard({
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <span className="text-xs font-medium text-text-primary">{t("goal.cardTitle")}</span>
             <span className="text-[11px] text-text-tertiary">
-              {t(`goal.state.${goalStatus}`)} · {elapsed}
+              {t(`goal.state.${goalStatus}`)} · {elapsed} · #{goal.continuationCount}
             </span>
           </div>
-          <div className="text-xs text-text-secondary break-words max-h-9 overflow-hidden">
-            {goal.objective}
-          </div>
+          <ExpandableText text={goal.objective} maxLines={2} />
           {summary && (
-            <div className="text-[11px] text-text-tertiary break-words max-h-5 overflow-hidden">
+            <div className="text-[11px] text-text-tertiary break-words line-clamp-1">
               {t("goal.lastGold")}: {summary}
             </div>
           )}

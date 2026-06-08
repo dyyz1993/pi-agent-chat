@@ -6,29 +6,10 @@ import { useSessionStore } from "../../stores/use-session-store";
 import { useUIDialogStore } from "../../stores/use-ui-dialog-store";
 import { apiClient } from "../../lib/api-client";
 import { SettingsPanel } from "../settings/SettingsPanel";
-import type { SessionStatus } from "../../types";
 import { Button, ModalDialog } from "../primitives";
+import { resolveDotClass, hasPermissionPending } from "./tab-dot";
 
 const log = createLogger("tab-bar");
-
-function resolveDotClass(
-  sessions: { sessionId: string }[],
-  statusMap: Record<string, SessionStatus | undefined>,
-): string {
-  for (const s of sessions) {
-    const st = statusMap[s.sessionId];
-    if (st === "permission" || st === "retrying") return "bg-status-error";
-    if (st === "streaming" || st === "compacting") return "bg-status-warning animate-pulse";
-  }
-  return "bg-status-success";
-}
-
-function hasPermissionPending(
-  sessions: { sessionId: string }[],
-  statusMap: Record<string, SessionStatus | undefined>,
-): boolean {
-  return sessions.some((s) => statusMap[s.sessionId] === "permission");
-}
 
 function getProjectPendingCount(
   sessions: { sessionId: string }[],
@@ -80,26 +61,23 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
     };
   }, []);
 
-  // 初始化非活跃项目的 sessions 列表（仅列表，不拉状态）
+  // 初始化非活跃项目的 sessions 列表。
+  // 同一 RPC (project.scanSessions) 会顺带把每个 session 的实时 status 一起带回来，
+  // 写到 sessionStatusMap，所以 TabBar 一渲染就能拿到所有项目的运行/权限状态，
+  // 不需要再延迟 3s 调一次 fetchAllProjectsSessionsStatus。
+  // 后续状态变化由 setupProjectStatusSubscription 通过 agent.session_status_changed 推送。
   useEffect(() => {
     if (initializedRef.current) return;
     initializedRef.current = true;
 
-    const timer = setTimeout(async () => {
-      try {
-        const tabsToInit = projectTabs.filter((tab) => !sessionsByProject[tab.path]);
-        if (tabsToInit.length > 0) {
-          await Promise.all(tabsToInit.map((tab) => loadSessionsForProject(tab.path)));
-        }
-        // Session statuses are fetched lazily when SessionSidebar mounts
-      } catch (err) {
-        log.error("[TabBar] Failed to initialize projects:", {
-          err: err instanceof Error ? err.message : String(err),
-        });
-      }
-    }, 3000);
+    const tabsToInit = projectTabs.filter((tab) => !sessionsByProject[tab.path]);
+    if (tabsToInit.length === 0) return;
 
-    return () => clearTimeout(timer);
+    Promise.all(tabsToInit.map((tab) => loadSessionsForProject(tab.path))).catch((err) => {
+      log.error("[TabBar] Failed to initialize projects:", {
+        err: err instanceof Error ? err.message : String(err),
+      });
+    });
   }, [projectTabs, sessionsByProject, loadSessionsForProject]);
 
   useEffect(() => {
@@ -285,8 +263,14 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
         }`}
       >
         {projectTabs.map((tab, index) => {
-          const sessions = sessionsByProject[tab.path] || [];
-          const dotClass = resolveDotClass(sessions, sessionStatusMap);
+          // 区分"未加载"和"已加载但都 idle"：
+          //   - sessionsByProject[tab.path] === undefined → unknown → 中性色
+          //   - sessionsByProject[tab.path] === []       → loaded  → 按 session 计算颜色
+          // 这样首屏进入时不会从"绿点（误判为 idle）"跳到"其他色"。
+          const sessionsForTab = sessionsByProject[tab.path];
+          const knowledge: "unknown" | "loaded" = sessionsForTab === undefined ? "unknown" : "loaded";
+          const sessions = sessionsForTab ?? [];
+          const dotClass = resolveDotClass(knowledge, sessions, sessionStatusMap);
           const isActive = activeProjectId === tab.id;
           const isDragSource = dragIndex === index;
           const isPressing = pressingIndex === index;
@@ -337,7 +321,7 @@ export function TabBar({ onAddProject }: { onAddProject: () => void }) {
                 <span className="absolute left-0 top-1 bottom-1 w-0.5 bg-semantic-accent rounded-full" />
               )}
               <span className={`w-2 h-2 rounded-full ${dotClass} flex-shrink-0`} />
-              {hasPermissionPending(sessions, sessionStatusMap) && (
+              {hasPermissionPending(knowledge, sessions, sessionStatusMap) && (
                 <span className="relative flex-shrink-0" title={t("hasPendingPermissions")}>
                   <MessageCircleQuestion className="w-3 h-3 text-status-warning" />
                   {(() => {

@@ -40,41 +40,7 @@ const log = createLogger("session");
 const perfLog = createLogger("session-perf");
 
 const _statusWatchdogs = new Map<string, ReturnType<typeof setTimeout>>();
-const STATUS_STUCK_TIMEOUT_MS = 5 * 60 * 1000;
-
-function hasRenderableAssistantContentSinceLastUser(sessionId: string): boolean {
-  const msgs = useChatStore.getState().messagesBySession[sessionId] || [];
-  for (let i = msgs.length - 1; i >= 0; i--) {
-    const msg = msgs[i];
-    if (msg.role === "user") return false;
-    if (msg.role === "assistant") {
-      const hasContent = msg.content.some((block) => {
-        if (block.type === "text") return block.text.trim().length > 0;
-        if (block.type === "thinking") return block.thinking.trim().length > 0;
-        return true;
-      });
-      if (hasContent) return true;
-    }
-  }
-  return false;
-}
-
-function detectEmptyTurnAndInjectError(sessionId: string) {
-  const chat = useChatStore.getState();
-  const msgs = chat.messagesBySession[sessionId] || [];
-  const lastMsg = msgs[msgs.length - 1];
-  if (
-    lastMsg &&
-    (lastMsg.role === "user" || lastMsg.role === "custom") &&
-    !hasRenderableAssistantContentSinceLastUser(sessionId)
-  ) {
-    useNotificationStore.getState().push({
-      message: "Agent 未返回任何响应，请检查模型配置或重试",
-      level: "error",
-      sessionId,
-    });
-  }
-}
+const STATUS_STUCK_TIMEOUT_MS = 30 * 60 * 1000;
 
 export function clearStatusWatchdog(sessionId: string) {
   const watchdog = _statusWatchdogs.get(sessionId);
@@ -88,6 +54,7 @@ export interface ModelInfo {
   provider: string;
   id: string;
   name?: string;
+  reasoning?: boolean;
 }
 
 /**
@@ -573,11 +540,10 @@ export const useSessionStore = create<SessionState>()(
             const current = get().sessionStatusMap[sessionId];
             if (current && current !== "idle") {
               useNotificationStore.getState().push({
-                message: `Session status recovered from stuck "${current}" state`,
-                level: "warning",
+                message: `Session status stuck in "${current}" state for ${STATUS_STUCK_TIMEOUT_MS / 60000} minutes`,
+                level: "error",
               });
-              get().updateSessionStatus(sessionId, "idle");
-              detectEmptyTurnAndInjectError(sessionId);
+              // ❌ 不再强制切到 idle，只报警告
             }
             _statusWatchdogs.delete(sessionId);
           }, STATUS_STUCK_TIMEOUT_MS);
@@ -629,7 +595,15 @@ export const useSessionStore = create<SessionState>()(
 
       setCurrentModel: (provider, modelId) => {
         const sid = get().activeSessionId;
-        const model = { provider, id: modelId };
+        const match = get().availableModels.find(
+          (m) => m.provider === provider && m.id === modelId,
+        );
+        const model: ModelInfo = {
+          provider,
+          id: modelId,
+          ...(match?.name ? { name: match.name } : {}),
+          reasoning: match?.reasoning,
+        };
         set({
           currentModel: model,
           modelManuallySet: true,
@@ -859,13 +833,9 @@ export const useSessionStore = create<SessionState>()(
           set({ activeSessionId: null });
           get().setActiveSession(targetId);
 
-          // 恢复成功后，拉取活跃项目的 session 状态（不阻塞）
-          get().fetchAllSessionStatuses();
-
-          // 后台拉取所有项目所有 session 的运行状态
-          setTimeout(() => {
-            get().fetchAllProjectsSessionsStatus();
-          }, 500);
+          // 恢复成功后不需要再延迟 500ms 拉一次 fetchAllProjectsSessionsStatus：
+          // loadSessionsForProject → project.scanSessions 已经把该项目的状态带回；
+          // 非活跃项目由 TabBar 立刻拉。实时变化走 subscription 推送。
 
           return true;
         } catch (e) {
@@ -1019,8 +989,7 @@ apiClient.onReconnect(() => {
         err: err instanceof Error ? err.message : String(err),
       });
     });
-
-  setTimeout(() => {
-    useSessionStore.getState().fetchAllProjectsSessionsStatus();
-  }, 3000);
+  // 不再延迟 3s 调一次 fetchAllProjectsSessionsStatus：
+  // loadSessionsForProject → project.scanSessions 已经带回 session 状态；
+  // 实时变化走 subscription。
 });

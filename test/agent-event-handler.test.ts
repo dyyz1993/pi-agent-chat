@@ -1011,6 +1011,42 @@ describe("agent_end cleanup", () => {
     expect(msg!.isStreaming).toBe(false);
     expect(block!.status).toBe("done");
   });
+
+  it("clears isStreaming on text-only assistant message when agent ends", () => {
+    setMessages([
+      {
+        id: "msg-text",
+        role: "assistant",
+        content: [{ type: "text", text: "Hello!" }],
+        timestamp: Date.now(),
+        isStreaming: true,
+      },
+    ]);
+    useSessionStore.setState({ sessionsByProject: { "/tmp": [] } });
+
+    handleAgentEvent(SID, { type: "agent_end" } as Parameters<typeof handleAgentEvent>[1]);
+
+    const msg = getLastAssistant();
+    expect(msg!.isStreaming).toBe(false);
+  });
+
+  it("clears isStreaming on empty assistant message when agent ends", () => {
+    setMessages([
+      {
+        id: "msg-empty",
+        role: "assistant",
+        content: [],
+        timestamp: Date.now(),
+        isStreaming: true,
+      },
+    ]);
+    useSessionStore.setState({ sessionsByProject: { "/tmp": [] } });
+
+    handleAgentEvent(SID, { type: "agent_end" } as Parameters<typeof handleAgentEvent>[1]);
+
+    const msg = getLastAssistant();
+    expect(msg!.isStreaming).toBe(false);
+  });
 });
 
 describe("message_update content block ordering", () => {

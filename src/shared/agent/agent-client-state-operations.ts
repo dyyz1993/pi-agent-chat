@@ -107,9 +107,14 @@ export async function getStateOperation<TManaged extends ManagedClientLike>(opti
       error: msg,
     });
     if (isTimeoutLikeError(msg)) {
-      log.warn("getState RPC timed out; keeping CLI client registered", {
-        sessionId: options.sessionId,
-      });
+      // Timeout likely means CLI is dead or stuck — check before retrying
+      if (!(await options.isClientAlive(options.sessionId, managed))) {
+        options.cleanupDeadClient(options.sessionId, `getState timed out: ${msg}`);
+      } else {
+        log.warn("getState RPC timed out; CLI still alive, keeping registered", {
+          sessionId: options.sessionId,
+        });
+      }
       return null;
     }
     if (!(await options.isClientAlive(options.sessionId, managed))) {
@@ -187,9 +192,14 @@ export async function getSessionStatsOperation<TManaged extends ManagedClientLik
       err: msg,
     });
     if (isTimeoutLikeError(msg)) {
-      log.warn("getSessionStats timed out; keeping CLI client registered", {
-        sessionId: options.sessionId,
-      });
+      // Timeout likely means CLI is dead or stuck — check before retrying
+      if (!(await options.isClientAlive(options.sessionId, managed))) {
+        options.cleanupDeadClient(options.sessionId, `getSessionStats timed out: ${msg}`);
+      } else {
+        log.warn("getSessionStats timed out; CLI still alive, keeping registered", {
+          sessionId: options.sessionId,
+        });
+      }
       return null;
     }
     if (!(await options.isClientAlive(options.sessionId, managed))) {

@@ -201,6 +201,8 @@ interface ChatState {
   inputText: string;
   isStreaming: boolean;
   streamContentVersion: number;
+  /** Per-session stream version — only the active session's changes trigger ChatPanel re-render */
+  streamVersionBySession: Record<string, number>;
   loadingSessions: Set<string>;
   historyLoadVersion: number;
   historyLoadVersionBySession: Record<string, number>;
@@ -259,6 +261,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   pendingImages: [],
   isStreaming: false,
   streamContentVersion: 0,
+  streamVersionBySession: {},
   loadingSessions: new Set<string>(),
   historyLoadVersion: 0,
   historyLoadVersionBySession: {},
@@ -381,7 +384,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           },
         };
       });
-      useSessionStore.getState().updateSessionStatus(sessionId, "idle");
+      // ❌ 不再强制切到 idle，保持当前状态
       const msg = finalErr instanceof Error ? finalErr.message : String(finalErr);
       useAppStore.getState().addLog(`Send error: ${msg}`);
       useNotificationStore.getState().push({ message: `Send failed: ${msg}`, level: "error" });
@@ -399,7 +402,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     writeDraft(sessionId, "");
 
     try {
-      const STEER_TIMEOUT_MS = 15_000;
+      const STEER_TIMEOUT_MS = 60_000;
       const steerT0 = performance.now();
       perfLog.info("[steer] begin", { sessionId });
       const pendingImages = get().pendingImages;
@@ -409,7 +412,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       await Promise.race([
         apiClient.call("agent.steer", { sessionId, content: text, images: pendingImages }),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("Steer timed out (15s)")), STEER_TIMEOUT_MS),
+          setTimeout(() => reject(new Error("Steer timed out (60s)")), STEER_TIMEOUT_MS),
         ),
       ]);
       perfLog.info("[steer] done", { sessionId, steerMs: Math.round(performance.now() - steerT0) });
@@ -432,7 +435,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     writeDraft(sessionId, "");
 
     try {
-      const FOLLOWUP_TIMEOUT_MS = 15_000;
+      const FOLLOWUP_TIMEOUT_MS = 60_000;
       const followUpT0 = performance.now();
       perfLog.info("[followUp] begin", { sessionId });
       const pendingImages = get().pendingImages;
@@ -442,7 +445,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       await Promise.race([
         apiClient.call("agent.followUp", { sessionId, content: text, images: pendingImages }),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("FollowUp timed out (15s)")), FOLLOWUP_TIMEOUT_MS),
+          setTimeout(() => reject(new Error("FollowUp timed out (60s)")), FOLLOWUP_TIMEOUT_MS),
         ),
       ]);
       perfLog.info("[followUp] done", {
@@ -490,11 +493,30 @@ export const useChatStore = create<ChatState>((set, get) => ({
             normalizeTools: true,
             activeToolCallIds: s.activeToolCallIdsBySession[sessionId],
           });
+      // [DEBUG] detect user message loss
+      const prevMsgs = s.messagesBySession[sessionId] || [];
+      const prevUserCount = prevMsgs.filter((m) => m.role === "user").length;
+      const nextUserCount = nextMsgs.filter((m) => m.role === "user").length;
+      if (nextUserCount < prevUserCount) {
+        log.warn("[DEBUG-USERLOSS] setMessagesForSession dropped user message(s)", {
+          sessionId,
+          prevUserCount,
+          nextUserCount,
+          prevRoles: prevMsgs.map((m) => `${m.role}${m._local ? "_local" : ""}`),
+          nextRoles: nextMsgs.map((m) => `${m.role}${m._local ? "_local" : ""}`),
+          fastPath: !!options.streamingFastPath,
+          stack: new Error().stack?.split("\n").slice(1, 6).join(" | "),
+        });
+      }
       const next: Partial<ChatState> = {
         messagesBySession: { ...s.messagesBySession, [sessionId]: nextMsgs },
       };
       if (options.bumpStreamVersion) {
         next.streamContentVersion = s.streamContentVersion + 1;
+        next.streamVersionBySession = {
+          ...s.streamVersionBySession,
+          [sessionId]: (s.streamVersionBySession[sessionId] ?? 0) + 1,
+        };
       }
       return next;
     });
@@ -535,7 +557,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
     sessionId: string,
     options?: { force?: boolean; sessionPath?: string; preserveStreaming?: boolean },
   ) => {
-    const t0 = performance.now();
     const sid = sessionId;
     if (!sid) return;
 
@@ -571,7 +592,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     try {
       const { apiClient } = await import("../lib/api-client");
-      const GET_MESSAGES_TIMEOUT_MS = 30_000;
+      const GET_MESSAGES_TIMEOUT_MS = 60_000;
+      const t0 = performance.now();
+      perfLog.info("[loadSessionMessages] begin", { sessionId, force: !!options?.force });
       const result = (await Promise.race([
         apiClient.call("agent.getFullMessages", {
           sessionId: sid,
@@ -580,7 +603,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }),
         new Promise<never>((_, reject) =>
           setTimeout(
-            () => reject(new Error("getFullMessages timed out (30s)")),
+            () => reject(new Error("getFullMessages timed out (60s)")),
             GET_MESSAGES_TIMEOUT_MS,
           ),
         ),
@@ -767,6 +790,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
           },
         }));
       } else {
+        // [DEBUG] detect user message loss in loadSessionMessages
+        const _prevMsgs = get().messagesBySession[sid] || [];
+        const _prevUserCount = _prevMsgs.filter((m) => m.role === "user").length;
+        const _nextUserCount = finalMsgs.filter((m) => m.role === "user").length;
+        if (_nextUserCount < _prevUserCount) {
+          log.warn("[DEBUG-USERLOSS] loadSessionMessages dropped user message(s)", {
+            sessionId: sid,
+            rpcReturned: msgs.length,
+            afterMapping: finalMsgs.length,
+            prevUserCount: _prevUserCount,
+            nextUserCount: _nextUserCount,
+            rpcRoles: msgs.map((m: Record<string, unknown>) => m.role),
+            finalRoles: finalMsgs.map((m) => `${m.role}${m._local ? "_local" : ""}`),
+          });
+        }
         set((s) => ({
           messagesBySession: { ...s.messagesBySession, [sid]: finalMsgs },
           ...bumpHistoryLoadVersion(s, sid),
@@ -783,6 +821,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
 
       useSessionStore.getState().restoreContextFromHistory(sid);
+
+      // After messages are loaded, replay the bash store into the chat tool
+      // blocks. This covers the case where bash events arrived in the window
+      // between the bash subscription being set up and the messages being
+      // fetched — without this, the chat's "Output" section would stay empty
+      // until the next bash event triggers a fresh reconciliation.
+      try {
+        const { syncBashStoreToChat } = await import("./session-subscriptions");
+        syncBashStoreToChat(sid);
+      } catch (err) {
+        log.warn("syncBashStoreToChat failed after loadSessionMessages", {
+          sessionId: sid,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
     } catch (err) {
       log.error("Failed to load session", {
         error: err instanceof Error ? err.message : String(err),
@@ -921,6 +974,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
           },
         }));
       } else {
+        // [DEBUG] detect user message loss in _backgroundRefreshMessages
+        const _bgPrevUserCount = current.filter((m) => m.role === "user").length;
+        const _bgNextUserCount = finalMsgs.filter((m) => m.role === "user").length;
+        if (_bgNextUserCount < _bgPrevUserCount) {
+          log.warn("[DEBUG-USERLOSS] _backgroundRefreshMessages dropped user message(s)", {
+            sessionId: sid,
+            rpcReturned: msgs.length,
+            afterProcessing: finalMsgs.length,
+            prevUserCount: _bgPrevUserCount,
+            nextUserCount: _bgNextUserCount,
+            rpcRoles: msgs.map((m) => m.role),
+            currentRoles: current.map((m) => `${m.role}${m._local ? "_local" : ""}`),
+            finalRoles: finalMsgs.map((m) => `${m.role}${m._local ? "_local" : ""}`),
+          });
+        }
         perfLog.info("[bgRefresh] data changed, updating store", {
           sessionId: sid,
           oldCount: current.length,
@@ -983,18 +1051,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }));
 
     try {
-      const LOAD_MORE_TIMEOUT_MS = 30_000;
-      const current = get().messagesBySession[sid] || [];
-      const cursor = get().nextCursorBySession[sid] ?? current[0]?.entryId;
+      const LOAD_MORE_TIMEOUT_MS = 60_000;
+      const afterEntryId = get().nextCursorBySession[sid] ?? undefined;
+      // Look up sessionPath from session store
+      const ss = useSessionStore.getState();
+      const sessionMeta = Object.values(ss.sessionsByProject)
+        .flat()
+        .find((s) => s.sessionId === sid);
+      const sessionPath = sessionMeta?.sessionPath;
+      perfLog.info("[loadMoreMessages] begin", { sessionId, afterEntryId });
       const result = (await Promise.race([
         apiClient.call("agent.getFullMessages", {
-          sessionId: sid,
-          limit: PAGE_SIZE,
-          afterEntryId: cursor,
+          sessionId,
+          sessionPath,
+          afterEntryId,
         }),
         new Promise<never>((_, reject) =>
           setTimeout(
-            () => reject(new Error("loadMoreMessages timed out (30s)")),
+            () => reject(new Error("loadMoreMessages timed out (60s)")),
             LOAD_MORE_TIMEOUT_MS,
           ),
         ),
@@ -1031,7 +1105,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       });
 
       const loadedIds = new Set(allMsgs.map((msg) => msg.id));
-      const mergedMsgs = [...allMsgs, ...current.filter((msg) => !loadedIds.has(msg.id))].sort(
+      const current = get().messagesBySession[sid] || [];
+      const mergedMsgs = [...allMsgs, ...current.filter((m) => !loadedIds.has(m.id))].sort(
         (a, b) => {
           if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
           return (a.entryId ?? a.id).localeCompare(b.entryId ?? b.id);

@@ -369,3 +369,175 @@ describe("BashExecutionCard content", () => {
     expect(container.textContent).toContain('command: "ls -la"');
   });
 });
+
+describe("BashExecutionCard auto-scroll", () => {
+  // The auto-scroll logic keeps the user pinned to the bottom of the output
+  // panel while new output streams in, but yields to manual scrolling: as
+  // soon as the user scrolls up, autoScroll flips off, and a "jump to
+  // bottom" button appears. This is the behavior the user remembers.
+
+  function findOutputScroller(container: HTMLElement): HTMLElement {
+    const scroller = container.querySelector(".overflow-y-auto.max-h-36");
+    if (!scroller) throw new Error("output scroller not found");
+    return scroller as HTMLElement;
+  }
+
+  // Capture pending requestAnimationFrame callbacks so we can flush them
+  // deterministically in tests that use fake timers.
+  let rafQueue: Array<() => void> = [];
+  let originalRaf: typeof globalThis.requestAnimationFrame;
+  beforeEach(() => {
+    rafQueue = [];
+    originalRaf = globalThis.requestAnimationFrame;
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      rafQueue.push(() => cb(performance.now()));
+      return rafQueue.length;
+    }) as typeof globalThis.requestAnimationFrame;
+  });
+  afterEach(() => {
+    globalThis.requestAnimationFrame = originalRaf;
+    rafQueue = [];
+  });
+  function flushRaf() {
+    const queue = rafQueue;
+    rafQueue = [];
+    queue.forEach((cb) => cb());
+  }
+
+  it("scrolls to bottom when new output streams in while running", () => {
+    const block = makeBlock({ output: "line-1\n" });
+    const { container, rerender } = render(<BashExecutionCard block={block} />);
+
+    const scroller = findOutputScroller(container);
+    Object.defineProperty(scroller, "scrollHeight", { configurable: true, value: 1000 });
+    Object.defineProperty(scroller, "clientHeight", { configurable: true, value: 200 });
+    scroller.scrollTop = 0;
+
+    // New output arrives — should trigger scroll to bottom
+    const newBlock = makeBlock({ output: "line-1\nline-2\nline-3\n" });
+    act(() => {
+      rerender(<BashExecutionCard block={newBlock} />);
+    });
+    act(() => {
+      flushRaf();
+    });
+
+    expect(scroller.scrollTop).toBe(scroller.scrollHeight);
+  });
+
+  it("does not auto-scroll when the block is not running", () => {
+    const block = makeBlock({ status: "done", output: "line-1\n" });
+    const { container, rerender } = render(<BashExecutionCard block={block} />);
+
+    const scroller = findOutputScroller(container);
+    Object.defineProperty(scroller, "scrollHeight", { configurable: true, value: 1000 });
+    Object.defineProperty(scroller, "clientHeight", { configurable: true, value: 200 });
+    scroller.scrollTop = 100;
+
+    const newBlock = makeBlock({ status: "done", output: "line-1\nline-2\n" });
+    act(() => {
+      rerender(<BashExecutionCard block={newBlock} />);
+    });
+    act(() => {
+      flushRaf();
+    });
+
+    // The scroll position must not have been forced to the bottom when done.
+    expect(scroller.scrollTop).toBe(100);
+  });
+
+  it("flips autoScroll off when the user scrolls up (jump button appears)", () => {
+    const block = makeBlock({ output: "line-1\nline-2\nline-3\n" });
+    const { container } = render(<BashExecutionCard block={block} />);
+
+    const scroller = findOutputScroller(container);
+    Object.defineProperty(scroller, "scrollHeight", { configurable: true, value: 1000 });
+    Object.defineProperty(scroller, "clientHeight", { configurable: true, value: 200 });
+    // Simulate the user being at the top, far from the bottom
+    scroller.scrollTop = 0;
+
+    // User scrolls up — handleScroll should set autoScroll to false
+    act(() => {
+      fireEvent.scroll(scroller);
+    });
+
+    // Now a "jump to bottom" button should appear (which only renders when
+    // isRunning && !autoScroll)
+    const jumpBtn = container.querySelector('button[title="scroll.scrollToBottom"]');
+    expect(jumpBtn).toBeTruthy();
+  });
+
+  it("clicking the jump-to-bottom button pins back to the latest output", () => {
+    const block = makeBlock({ output: "line-1\nline-2\n" });
+    const { container } = render(<BashExecutionCard block={block} />);
+
+    const scroller = findOutputScroller(container);
+    Object.defineProperty(scroller, "scrollHeight", { configurable: true, value: 1000 });
+    Object.defineProperty(scroller, "clientHeight", { configurable: true, value: 200 });
+    scroller.scrollTop = 0;
+
+    // Trigger autoScroll=false
+    act(() => {
+      fireEvent.scroll(scroller);
+    });
+
+    const jumpBtn = container.querySelector(
+      'button[title="scroll.scrollToBottom"]',
+    ) as HTMLButtonElement;
+    expect(jumpBtn).toBeTruthy();
+
+    // Simulate that more content has arrived
+    Object.defineProperty(scroller, "scrollHeight", { configurable: true, value: 1500 });
+    scroller.scrollTop = 100;
+
+    act(() => {
+      fireEvent.click(jumpBtn);
+    });
+
+    // The button re-enables autoScroll and scrolls to bottom
+    expect(scroller.scrollTop).toBe(scroller.scrollHeight);
+    // The button disappears once autoScroll is back on
+    expect(container.querySelector('button[title="scroll.scrollToBottom"]')).toBeNull();
+  });
+
+  it("falls back to live bashProcess.output for auto-scroll and display", () => {
+    bashMocks.state.mockBashProcess = {
+      toolCallId: "tc-1",
+      command: "ls -la",
+      cwd: "/tmp",
+      startedAt: Date.now() - 1000,
+      output: "live-output-from-bash-store",
+      status: "running",
+    };
+    // Chat block has empty output (post-refresh scenario), but bash store
+    // has been streaming. The renderer should pick up the live output.
+    const block = makeBlock({
+      output: "",
+      args: JSON.stringify({ command: "ls -la", description: "list files" }),
+    });
+    const { getByTestId } = render(<BashExecutionCard block={block} />);
+
+    expect(getByTestId("ansi-text").textContent).toBe("live-output-from-bash-store");
+  });
+
+  it("matches the bash process by command when toolCallId differs", () => {
+    // Simulate the post-refresh scenario: the LLM's tool_use.id doesn't
+    // match the bash channel's toolCallId, but the command is the same.
+    bashMocks.state.mockBashProcess = {
+      toolCallId: "bash-channel-id-abc",
+      command: "ls -la",
+      cwd: "/tmp",
+      startedAt: Date.now() - 1000,
+      output: "matched-by-command",
+      status: "running",
+    };
+    const block = makeBlock({
+      toolCallId: "llm-id-xyz",
+      output: "",
+      args: JSON.stringify({ command: "ls -la", description: "list files" }),
+    });
+    const { getByTestId } = render(<BashExecutionCard block={block} />);
+
+    expect(getByTestId("ansi-text").textContent).toBe("matched-by-command");
+  });
+});

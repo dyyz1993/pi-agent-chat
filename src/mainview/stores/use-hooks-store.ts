@@ -81,7 +81,7 @@ interface HooksState {
   setEnabled: (sessionId: string, enabled: boolean) => Promise<void>;
   skipRule: (sessionId: string, event: string, matcher: string) => Promise<void>;
   unskipRule: (sessionId: string, event: string, matcher: string) => Promise<void>;
-  setExpandedEntry: (id: number | null) => void;
+  setExpandedEntry: (sessionId: string, id: number | null) => void;
   addEntry: (sessionId: string, entry: HookLogEntry) => void;
   clearSession: (sessionId: string) => void;
 }
@@ -95,7 +95,7 @@ const EMPTY_SESSION: HooksSessionState = {
   expandedEntry: null,
 };
 
-export const useHooksStore = create<HooksState>()((set, get) => ({
+export const useHooksStore = create<HooksState>()((set) => ({
   bySession: {},
   activeTab: "activity",
 
@@ -226,15 +226,12 @@ export const useHooksStore = create<HooksState>()((set, get) => ({
     });
   },
 
-  setExpandedEntry: (id) => {
-    const sessionId = get().bySession;
-    const activeKey = Object.keys(sessionId).pop();
-    if (!activeKey) return;
+  setExpandedEntry: (sessionId, id) => {
     set((s) => ({
       bySession: {
         ...s.bySession,
-        [activeKey]: {
-          ...(s.bySession[activeKey] || { ...EMPTY_SESSION }),
+        [sessionId]: {
+          ...(s.bySession[sessionId] || { ...EMPTY_SESSION }),
           expandedEntry: id,
         },
       },

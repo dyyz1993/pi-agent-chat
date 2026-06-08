@@ -146,6 +146,7 @@ const CUSTOM_TYPE_ICON_MAP: Record<string, ToolIconEntry> = {
   lsp_diagnostics: { icon: Network, color: "text-status-warning", label: "LSP Diagnostics" },
   bash_background_exit: { icon: Terminal, color: "text-semantic-tool", label: "Background Exit" },
   step_snapshot: { icon: Activity, color: "text-text-tertiary", label: "Step Snapshot" },
+  supervisor_goal_complete: { icon: CircleCheckBig, color: "text-status-success", label: "Goal Complete" },
 };
 
 const UI_METHOD_ICON_MAP: Record<string, ToolIconEntry> = {

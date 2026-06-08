@@ -40,7 +40,7 @@ interface DisabledSkillsResponse {
 }
 
 interface AgentStateResult {
-  model?: { provider?: string; id: string; name: string; contextWindow?: number };
+  model?: { provider?: string; id: string; name: string; reasoning?: boolean; contextWindow?: number };
   thinkingLevel?: string;
   isStreaming?: boolean;
   isCompacting?: boolean;
@@ -215,6 +215,7 @@ export function createFetchInitialStateAction({
                 provider: result.model.provider ?? "",
                 id: result.model.id,
                 name: result.model.name,
+                reasoning: result.model.reasoning,
               };
               set({
                 currentModel: resolvedModel,

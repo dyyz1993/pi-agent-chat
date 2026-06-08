@@ -1,6 +1,6 @@
 import type { StoreApi } from "zustand";
 import { apiClient } from "../lib/api-client";
-import type { ProjectTab, SessionMeta } from "../types";
+import type { ProjectTab, SessionMeta, SessionStatus } from "../types";
 import { useAppStore } from "./use-app-store";
 import { useTierStore } from "./use-tier-store";
 
@@ -10,6 +10,7 @@ interface ProjectSessionState {
   loading: boolean;
   projectTabs: ProjectTab[];
   sessionsByProject: Record<string, SessionMeta[]>;
+  sessionStatusMap: Record<string, SessionStatus>;
   currentModel: { provider: string; id: string; name?: string } | null;
   newSessionCreatedAt: number;
   setActiveSession: (
@@ -94,6 +95,23 @@ export function createLoadSessionsForProjectAction({
         sessionsByProject: { ...s.sessionsByProject, [projectPath]: finalSessions },
         loading: false,
       }));
+
+      // 同一 RPC 顺带带回 statuses，写入 sessionStatusMap，
+      // 跨项目指示器在 TabBar 加载完列表后立刻就有正确状态。
+      // 服务端在 RPC 边界已经把进程池的 "stopped" 映射成 "idle"，
+      // RPC schema 与 SessionStatus 共享同一个类型，所以这里可以直接写，
+      // 不需要再做白名单校验。
+      if (Array.isArray(result.statuses) && result.statuses.length > 0) {
+        const statusUpdates: Record<string, SessionStatus> = {};
+        for (const item of result.statuses) {
+          if (!item || typeof item.sessionId !== "string") continue;
+          statusUpdates[item.sessionId] = item.status;
+        }
+        set((s) => ({
+          sessionStatusMap: { ...s.sessionStatusMap, ...statusUpdates },
+        }));
+      }
+
       return finalSessions;
     } catch (e) {
       log.warn("Failed to fetch sessions", { error: String(e) });

@@ -311,6 +311,59 @@ describe("setIsStreaming / incrementStreamVersion", () => {
   });
 });
 
+describe("streamVersionBySession (per-session isolation)", () => {
+  beforeEach(() => {
+    useChatStore.setState({ streamVersionBySession: {} });
+  });
+
+  it("bumpStreamVersion increments only the target session's per-session version", () => {
+    useChatStore.getState().setMessagesForSession("sess-A", [
+      { id: "m1", role: "user", content: [{ type: "text", text: "hi" }], timestamp: 1 },
+    ], { bumpStreamVersion: true });
+
+    const state = useChatStore.getState();
+    expect(state.streamVersionBySession["sess-A"]).toBe(1);
+    expect(state.streamVersionBySession["sess-B"]).toBeUndefined();
+  });
+
+  it("updating sess-A does not change sess-B's per-session version", () => {
+    // Prime both sessions
+    useChatStore.getState().setMessagesForSession("sess-A", [
+      { id: "a1", role: "user", content: [{ type: "text", text: "A" }], timestamp: 1 },
+    ], { bumpStreamVersion: true });
+    useChatStore.getState().setMessagesForSession("sess-B", [
+      { id: "b1", role: "user", content: [{ type: "text", text: "B" }], timestamp: 2 },
+    ], { bumpStreamVersion: true });
+
+    expect(useChatStore.getState().streamVersionBySession["sess-A"]).toBe(1);
+    expect(useChatStore.getState().streamVersionBySession["sess-B"]).toBe(1);
+
+    // Update only sess-A again
+    useChatStore.getState().setMessagesForSession("sess-A", [
+      { id: "a2", role: "user", content: [{ type: "text", text: "A2" }], timestamp: 3 },
+    ], { bumpStreamVersion: true });
+
+    const map = useChatStore.getState().streamVersionBySession;
+    expect(map["sess-A"]).toBe(2);
+    expect(map["sess-B"]).toBe(1); // unchanged
+  });
+
+  it("setMessagesForSession without bumpStreamVersion does not touch per-session version", () => {
+    useChatStore.getState().setMessagesForSession("sess-A", [
+      { id: "a1", role: "user", content: [{ type: "text", text: "A" }], timestamp: 1 },
+    ]);
+    expect(useChatStore.getState().streamVersionBySession["sess-A"]).toBeUndefined();
+  });
+
+  it("global streamContentVersion still increments for backward compat", () => {
+    const v0 = useChatStore.getState().streamContentVersion;
+    useChatStore.getState().setMessagesForSession("sess-A", [
+      { id: "a1", role: "user", content: [{ type: "text", text: "A" }], timestamp: 1 },
+    ], { bumpStreamVersion: true });
+    expect(useChatStore.getState().streamContentVersion).toBe(v0 + 1);
+  });
+});
+
 describe("normalizeToolBlocks", () => {
   it("merges toolCall and toolResult into toolExecution (done)", () => {
     const msgs: ChatMessage[] = [

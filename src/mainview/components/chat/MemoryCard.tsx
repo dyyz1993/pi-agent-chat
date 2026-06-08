@@ -16,7 +16,7 @@ import { useSessionStore } from "../../stores/use-session-store";
 import { useMemoryStore } from "../../stores/use-memory-store";
 import { formatFilePath } from "../../lib/format-path";
 import { getCustomTypeIcon } from "./tool-icon-map";
-import { ENTRY_TYPE_KEYS, getMemoryConfig, getMemorySummary } from "./memory-config";
+import { ENTRY_TYPE_KEYS, getMemoryConfig, getMemorySummary, parseSnippetToEntries } from "./memory-config";
 import { formatDuration } from "./primitives/formatDuration";
 
 export const MEMORY_CUSTOM_TYPES = ENTRY_TYPE_KEYS;
@@ -391,9 +391,44 @@ function PrefetchResultDetail({
               })}
             </span>
           </div>
-          <pre className="p-2 bg-surface-code/80 dark:bg-surface-dim/40 rounded text-[11px] text-text-secondary overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap leading-relaxed border border-border-secondary/50 dark:border-border-secondary/30">
-            {snippet}
-          </pre>
+          {(() => {
+            const entries = parseSnippetToEntries(snippet);
+            if (entries.length > 0) {
+              return (
+                <div className="space-y-1 p-2 bg-surface-code/80 dark:bg-surface-dim/40 rounded border border-border-secondary/50 dark:border-border-secondary/30 max-h-48 overflow-y-auto">
+                  {entries.map((entry, i) => (
+                    <div key={i} className="flex gap-1.5 items-start">
+                      <FileText className="w-3 h-3 mt-0.5 shrink-0 text-status-info/60" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] font-medium text-text-primary truncate">
+                            {entry.name}
+                          </span>
+                          {entry.type && (
+                            <span className="text-[9px] px-1 rounded bg-status-info/10 text-status-info shrink-0">
+                              {entry.type}
+                            </span>
+                          )}
+                        </div>
+                        {entry.content && (
+                          <div className="text-[10px] text-text-secondary leading-relaxed mt-0.5 line-clamp-4 whitespace-pre-wrap">
+                            {entry.content.length > 200
+                              ? entry.content.slice(0, 200) + "..."
+                              : entry.content}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            }
+            return (
+              <pre className="p-2 bg-surface-code/80 dark:bg-surface-dim/40 rounded text-[11px] text-text-secondary overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap leading-relaxed border border-border-secondary/50 dark:border-border-secondary/30">
+                {snippet}
+              </pre>
+            );
+          })()}
         </div>
       )}
 

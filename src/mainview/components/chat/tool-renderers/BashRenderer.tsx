@@ -21,6 +21,23 @@ const EMPTY_PROCS: never[] = [];
 
 const logger = createLogger("bash");
 
+// Parse the tool block's args (which can be either a plain command string or
+// a JSON object containing a `command` field) into the canonical command text
+// we use to match against bash processes in useBashStore.
+function normalizeBashCommandForMatch(args: string | undefined): string {
+  if (!args) return "";
+  try {
+    const parsed = JSON.parse(args) as unknown;
+    if (parsed && typeof parsed === "object" && parsed !== null) {
+      const command = (parsed as Record<string, unknown>).command;
+      if (typeof command === "string") return command.trim();
+    }
+  } catch {
+    // Plain command strings are expected for live bash cards.
+  }
+  return args.trim();
+}
+
 interface BashDetails {
   background?: {
     pid: number;
@@ -132,7 +149,21 @@ export const BashExecutionCard = memo(function BashExecutionCard({
   const collapseToolCards = useSettingsStore((s) => s.collapseToolCards);
   const bashProcess = useBashStore((s) => {
     const procs = s.processesBySession[sid ?? ""] || EMPTY_PROCS;
-    return procs.find((p) => p.toolCallId === block.toolCallId);
+    // Try exact toolCallId match first (most common path during live streaming)
+    const exact = procs.find((p) => p.toolCallId === block.toolCallId);
+    if (exact) return exact;
+    // Fallback: semantic match by command. The bash channel's toolCallId may
+    // differ from the LLM's tool_use.id (especially after a page refresh),
+    // but the command text is the same. Without this, block.output falls
+    // back to whatever the chat store has — which is empty if the bash
+    // events arrived before the chat messages were loaded.
+    const target = normalizeBashCommandForMatch(block.args);
+    if (!target) return undefined;
+    // Prefer a running process; fall back to any process with the same command.
+    const running = procs.find(
+      (p) => p.command?.trim() === target && (p.status === "running" || p.status === "background"),
+    );
+    return running ?? procs.find((p) => p.command?.trim() === target);
   });
   const blockIsRunning = block.status === "running";
   const blockIsError = block.status === "error";
@@ -197,7 +228,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
         el.scrollTop = el.scrollHeight;
       });
     }
-  }, [block.output, autoScroll, isRunning]);
+  }, [block.output, bashProcess?.output, autoScroll, isRunning]);
 
   async function sendAction(action: "kill" | "background") {
     const sid = useSessionStore.getState().activeSessionId;
@@ -382,17 +413,25 @@ export const BashExecutionCard = memo(function BashExecutionCard({
             <div className="px-3 pb-2 relative">
               {uiBlock && uiBlock.status === "pending" ? (
                 <UIInteractionCard block={uiBlock} />
-              ) : block.output ? (
-                <div
-                  ref={outputScrollRef}
-                  onScroll={handleScroll}
-                  className="overflow-y-auto max-h-36"
-                >
-                  <OutputHighlighter content={block.output} isRunning={isRunning} />
-                </div>
-              ) : isRunning ? (
-                <div className="text-[11px] text-text-tertiary italic py-1">{t("waiting")}</div>
-              ) : null}
+              ) : (() => {
+                // Fall back to the live bash process output when the chat
+                // store hasn't picked it up yet (e.g., after a page refresh
+                // before reconcileChatToolFromBashEvent has run).
+                const liveOutput = !block.output && bashProcess?.output
+                  ? bashProcess.output
+                  : block.output;
+                return liveOutput ? (
+                  <div
+                    ref={outputScrollRef}
+                    onScroll={handleScroll}
+                    className="overflow-y-auto max-h-36"
+                  >
+                    <OutputHighlighter content={liveOutput} isRunning={isRunning} />
+                  </div>
+                ) : isRunning ? (
+                  <div className="text-[11px] text-text-tertiary italic py-1">{t("waiting")}</div>
+                ) : null;
+              })()}
               {isRunning && !autoScroll && (
                 <button
                   onClick={() => {

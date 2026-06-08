@@ -746,3 +746,126 @@ describe("Refresh — getFullMessages + real-time events", () => {
     expect(allDone).toBe(true);
   });
 });
+
+describe("Refresh — agent tool_execution_update must not wipe bash output", () => {
+  // Scenario: after page refresh, the chat's tool block has bash output
+  // (from syncBashStoreToChat). Then the agent's tool_execution_update
+  // arrives with empty partialResult (the agent hasn't received any
+  // output from the bash process yet, but the bash process is already
+  // streaming). The chat's "Output" section must not be wiped to empty.
+
+  beforeEach(() => {
+    resetStores();
+  });
+
+  afterEach(() => {
+    flushNow();
+  });
+
+  it("preserves bash-streamed output when agent update arrives with empty partialResult", () => {
+    // Set up: chat has a tool block with bash-streamed output
+    useChatStore.getState().setMessagesForSession(SID, [
+      {
+        id: "refreshed-msg",
+        role: "assistant",
+        content: [
+          {
+            type: "toolExecution",
+            toolCallId: "call_1",
+            toolName: "bash",
+            args: JSON.stringify({ command: "for i in $(seq 1 5); do echo $i; done" }),
+            status: "running",
+            output: "1\n2\n3\n",
+            startedAt: 1000,
+          },
+        ],
+        timestamp: 1,
+      },
+    ]);
+
+    // Agent's tool_execution_update arrives with NO partialResult
+    handleAgentEvent(SID, {
+      type: "tool_execution_update",
+      toolCallId: "call_1",
+      toolName: "bash",
+      args: {},
+      // partialResult: undefined — agent hasn't relayed any output yet
+      timestamp: 2000,
+    });
+    flushNow();
+
+    const blocks = getToolBlocks();
+    expect(blocks).toHaveLength(1);
+    // The bash-streamed output must NOT be wiped
+    expect(blocks[0].output).toBe("1\n2\n3\n");
+    expect(blocks[0].status).toBe("running");
+  });
+
+  it("preserves bash output when agent update has empty content array", () => {
+    useChatStore.getState().setMessagesForSession(SID, [
+      {
+        id: "refreshed-msg",
+        role: "assistant",
+        content: [
+          {
+            type: "toolExecution",
+            toolCallId: "call_1",
+            toolName: "bash",
+            args: JSON.stringify({ command: "for i in $(seq 1 5); do echo $i; done" }),
+            status: "running",
+            output: "1\n2\n",
+            startedAt: 1000,
+          },
+        ],
+        timestamp: 1,
+      },
+    ]);
+
+    handleAgentEvent(SID, {
+      type: "tool_execution_update",
+      toolCallId: "call_1",
+      toolName: "bash",
+      args: {},
+      partialResult: { content: [] }, // empty content array
+      timestamp: 2000,
+    });
+    flushNow();
+
+    const blocks = getToolBlocks();
+    expect(blocks[0].output).toBe("1\n2\n");
+  });
+
+  it("still uses agent's output when it is non-empty (regression check)", () => {
+    useChatStore.getState().setMessagesForSession(SID, [
+      {
+        id: "refreshed-msg",
+        role: "assistant",
+        content: [
+          {
+            type: "toolExecution",
+            toolCallId: "call_1",
+            toolName: "bash",
+            args: JSON.stringify({ command: "echo hi" }),
+            status: "running",
+            output: "",
+            startedAt: 1000,
+          },
+        ],
+        timestamp: 1,
+      },
+    ]);
+
+    handleAgentEvent(SID, {
+      type: "tool_execution_update",
+      toolCallId: "call_1",
+      toolName: "bash",
+      args: {},
+      partialResult: { content: [{ type: "text", text: "agent-output\n" }] },
+      timestamp: 2000,
+    });
+    flushNow();
+
+    const blocks = getToolBlocks();
+    expect(blocks[0].output).toBe("agent-output\n");
+  });
+});

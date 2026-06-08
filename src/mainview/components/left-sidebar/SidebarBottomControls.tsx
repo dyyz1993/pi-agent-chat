@@ -315,14 +315,16 @@ export function SidebarBottomControls() {
     : modelStateLoading
       ? t("loading")
       : t("notLoaded");
-  const thinkingDisplay = currentThinkingLevel
-    ? (() => {
-        const idx = THINKING_LEVEL_VALUES.indexOf(
-          currentThinkingLevel as (typeof THINKING_LEVEL_VALUES)[number],
-        );
-        return idx >= 0 ? t(THINKING_LEVEL_KEYS[idx]) : currentThinkingLevel;
-      })()
-    : t("default");
+  const thinkingDisplay = !currentModel?.reasoning
+    ? t("thinkingOff")
+    : currentThinkingLevel
+      ? (() => {
+          const idx = THINKING_LEVEL_VALUES.indexOf(
+            currentThinkingLevel as (typeof THINKING_LEVEL_VALUES)[number],
+          );
+          return idx >= 0 ? t(THINKING_LEVEL_KEYS[idx]) : currentThinkingLevel;
+        })()
+      : t("default");
 
   const currentAgentColor =
     activeSessionId && agentDetailBySession[activeSessionId]?.color
@@ -731,10 +733,11 @@ export function SidebarBottomControls() {
             setThinkingOpen(!thinkingOpen);
             setWorkspaceOpen(false);
           }}
-          disabled={!activeSessionId || !sessionReady}
+          disabled={!activeSessionId || !sessionReady || !currentModel?.reasoning}
           className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-text-tertiary hover:bg-surface-hover/60 dark:hover:bg-surface-dim/60 hover:text-text-secondary dark:hover:text-text-secondary transition-colors disabled:opacity-40"
           aria-expanded={thinkingOpen}
           aria-label={t("thinkingSelect")}
+          title={!currentModel?.reasoning ? t("thinkingNotSupported", "当前模型不支持思考模式") : t("thinkingSelect")}
         >
           <Brain className="w-3 h-3 shrink-0 text-text-tertiary" />
           <span className="truncate flex-1 text-left">

@@ -20,6 +20,7 @@ interface SupervisorState {
   fetchStatus: (sessionId: string) => Promise<void>;
   setGoal: (sessionId: string, objective: string) => Promise<void>;
   clearGoal: (sessionId: string, reason?: string) => Promise<void>;
+  refineGoal: (sessionId: string, objective: string) => Promise<{ success: boolean; objective?: string; error?: string }>;
   forceContinue: (sessionId: string, reason?: string) => Promise<void>;
   requestPause: (sessionId: string, delayMs?: number, reason?: string) => Promise<void>;
   cancelPause: (sessionId: string) => Promise<void>;
@@ -111,6 +112,29 @@ export const useSupervisorStore = create<SupervisorState>()((set) => ({
         sessionId,
         err: err instanceof Error ? err.message : String(err),
       });
+    }
+  },
+
+  refineGoal: async (sessionId: string, objective: string): Promise<{ success: boolean; objective?: string; error?: string }> => {
+    try {
+      const result = (await apiClient.call("supervisor.refineGoal", {
+        sessionId,
+        objective,
+      })) as { success: boolean; objective?: string; error?: string };
+
+      if (!result.success) {
+        log.warn("refineGoal returned error", {
+          sessionId,
+          error: result.error,
+        });
+      }
+      return result;
+    } catch (err) {
+      log.warn("refineGoal failed", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
     }
   },
 

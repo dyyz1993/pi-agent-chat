@@ -377,9 +377,14 @@ export async function getContextUsageOperation<TManaged extends ManagedClientLik
       err: msg,
     });
     if (isTimeoutLikeError(msg)) {
-      log.warn("getContextUsage timed out; keeping CLI client registered", {
-        sessionId: options.sessionId,
-      });
+      // Timeout likely means CLI is dead or stuck — check before retrying
+      if (!(await options.isClientAlive(options.sessionId, managed))) {
+        options.cleanupDeadClient(options.sessionId, `getContextUsage timed out: ${msg}`);
+      } else {
+        log.warn("getContextUsage timed out; CLI still alive, keeping registered", {
+          sessionId: options.sessionId,
+        });
+      }
       return { tokens: null, contextWindow: 0, percent: null };
     }
     if (!(await options.isClientAlive(options.sessionId, managed))) {

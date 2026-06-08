@@ -13,8 +13,10 @@ import {
   AlertTriangle,
   GitFork,
   ClipboardCheck,
+  Check,
+  FolderOpen,
+  Sparkles,
   Target,
-  X,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { ImageContent } from "@dyyz1993/pi-ai";
@@ -69,6 +71,49 @@ function evictMsgIdsIfNeeded(): void {
 }
 
 const EMPTY_MSGS: never[] = [];
+
+function RefineGoalOverlay({ step }: { step: number }) {
+  const { t } = useTranslation("chat");
+  const steps = [
+    { label: t("goal.refineStep.gather"), icon: FolderOpen },
+    { label: t("goal.refineStep.llm"), icon: Sparkles },
+    { label: t("goal.refineStep.done"), icon: Check },
+  ];
+  return (
+    <div className="absolute inset-0 z-10 flex items-center justify-center gap-3 px-4 bg-bg-secondary/90 backdrop-blur-sm rounded">
+      <Loader2 className="w-4 h-4 text-semantic-accent animate-spin shrink-0" />
+      <div className="flex items-center gap-2 min-w-0 flex-1">
+        {steps.map((s, i) => {
+          const isActive = i + 1 === step;
+          const isDone = i + 1 < step;
+          const IconComp = s.icon;
+          return (
+            <div
+              key={i}
+              className={`flex items-center gap-1 text-[11px] whitespace-nowrap transition-colors ${
+                isDone
+                  ? "text-status-success"
+                  : isActive
+                    ? "text-semantic-accent font-medium"
+                    : "text-text-tertiary/50"
+              }`}
+            >
+              {i > 0 && <span className="text-text-tertiary/30 mx-0.5">›</span>}
+              {isDone ? (
+                <Check className="w-3 h-3" />
+              ) : isActive ? (
+                <IconComp className="w-3 h-3" />
+              ) : (
+                <span className="w-3 h-3 rounded-full border border-current opacity-30" />
+              )}
+              <span>{s.label}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export function ChatPanel() {
   const { t } = useTranslation("chat");
@@ -157,8 +202,14 @@ export function ChatPanel() {
   const isMobileOrTablet = breakpoint === "mobile" || breakpoint === "tablet";
   const commandPopup = useCommandPopup();
   const setGoal = useSupervisorStore((s) => s.setGoal);
+  const refineGoal = useSupervisorStore((s) => s.refineGoal);
 
-  const streamVersion = useChatStore((s) => s.streamContentVersion);
+  const streamVersion = useChatStore(
+    useCallback(
+      (s) => (activeSessionId ? (s.streamVersionBySession[activeSessionId] ?? 0) : 0),
+      [activeSessionId],
+    ),
+  );
   const historyLoadVersion = useChatStore(
     useCallback(
       (s) => (activeSessionId ? (s.historyLoadVersionBySession?.[activeSessionId] ?? 0) : 0),
@@ -178,15 +229,20 @@ export function ChatPanel() {
     messageHydration === "ready" ||
     messageHydration === "error";
 
-  const agentDetailBySession = useAgentStore((s) => s.agentDetailBySession);
-  const agentBorderColor = activeSessionId
-    ? agentColorStyle(agentDetailBySession[activeSessionId]?.color)
-    : null;
+  const agentColor = useAgentStore(
+    useCallback(
+      (s) => (activeSessionId ? s.agentDetailBySession[activeSessionId]?.color : undefined),
+      [activeSessionId],
+    ),
+  );
+  const agentBorderColor = agentColor ? agentColorStyle(agentColor) : null;
 
   const pushNotif = useNotificationStore((s) => s.push);
   const [isAborting, setIsAborting] = useState(false);
   const [goalMode, setGoalMode] = useState(false);
   const [isCreatingGoal, setIsCreatingGoal] = useState(false);
+  const [isRefiningGoal, setIsRefiningGoal] = useState(false);
+  const [refineStep, setRefineStep] = useState(0); // 0=idle, 1=gathering, 2=calling LLM, 3=done
   const preGoalInputRef = useRef("");
   const abortFallbackRef = useRef<ReturnType<typeof setTimeout>>();
 
@@ -444,7 +500,14 @@ export function ChatPanel() {
   const startGoalMode = useCallback(
     (objective?: string) => {
       if (isViewingSubagent) return;
-      preGoalInputRef.current = goalMode ? preGoalInputRef.current : inputText;
+      if (goalMode) {
+        // Toggle off: exit goal mode
+        setGoalMode(false);
+        setInputText(preGoalInputRef.current);
+        preGoalInputRef.current = "";
+        return;
+      }
+      preGoalInputRef.current = inputText;
       setInputText(objective ?? inputText);
       setGoalMode(true);
       commandPopup.closePopup();
@@ -453,23 +516,13 @@ export function ChatPanel() {
     [commandPopup, goalMode, inputText, isViewingSubagent, setInputText],
   );
 
-  const cancelGoalMode = useCallback(() => {
-    setGoalMode(false);
-    setInputText(preGoalInputRef.current);
-    preGoalInputRef.current = "";
-  }, [setInputText]);
-
   const handleCreateGoal = useCallback(async () => {
     const objective = inputText.trim();
     if (!activeSessionId || !objective || isCreatingGoal) return;
     setIsCreatingGoal(true);
     try {
       await setGoal(activeSessionId, objective);
-      if (isStreaming) {
-        await sendSteer();
-      } else {
-        await sendMessage();
-      }
+      setInputText("");
       setGoalMode(false);
       preGoalInputRef.current = "";
       resumeAutoScroll();
@@ -484,12 +537,30 @@ export function ChatPanel() {
     inputText,
     isCreatingGoal,
     isMobileOrTablet,
-    isStreaming,
     resumeAutoScroll,
-    sendMessage,
-    sendSteer,
     setGoal,
   ]);
+
+  const handleRefineGoal = useCallback(async () => {
+    const objective = inputText.trim();
+    if (!activeSessionId || !objective || isRefiningGoal) return;
+    setIsRefiningGoal(true);
+    setRefineStep(1);
+    // Simulate the gathering step visible to user, then call LLM
+    await new Promise((r) => setTimeout(r, 300));
+    setRefineStep(2);
+    try {
+      const result = await refineGoal(activeSessionId, objective);
+      if (result.success && result.objective) {
+        setInputText(result.objective);
+      }
+      setRefineStep(3);
+      await new Promise((r) => setTimeout(r, 600));
+    } finally {
+      setIsRefiningGoal(false);
+      setRefineStep(0);
+    }
+  }, [activeSessionId, inputText, isRefiningGoal, refineGoal, setInputText]);
 
   const handleFollowUp = async () => {
     if (!inputText.trim() || !isStreaming) return;
@@ -643,7 +714,7 @@ export function ChatPanel() {
           </div>
           {activeSessionId && !isViewingSubagent && (
             <>
-              <GoalActionCard sessionId={activeSessionId} onEdit={startGoalMode} />
+              {!goalMode && <GoalActionCard sessionId={activeSessionId} onEdit={startGoalMode} />}
               <QueueCards sessionId={activeSessionId} />
               <ProjectRuntimePendingRequests activeSessionId={activeSessionId} />
             </>
@@ -680,7 +751,7 @@ export function ChatPanel() {
             </div>
           ) : (
             <>
-              {goalMode && (
+              {goalMode && !isRefiningGoal && (
                 <div className="flex items-center gap-2 px-1 pb-1 text-xs text-semantic-accent">
                   <Target className="w-3.5 h-3.5" />
                   <span>{t("goal.composerMode")}</span>
@@ -690,7 +761,11 @@ export function ChatPanel() {
               <div className="flex items-stretch gap-1.5">
                 {!isMobileOrTablet && <AttachmentButtons onGoalClick={() => startGoalMode()} />}
 
-                <InputBar
+                <div className="relative flex-1">
+                  {isRefiningGoal && (
+                    <RefineGoalOverlay step={refineStep} />
+                  )}
+                  <InputBar
                   ref={inputBarRef}
                   onSend={goalMode ? handleCreateGoal : handleSend}
                   sessionId={activeSessionId ?? ""}
@@ -706,17 +781,22 @@ export function ChatPanel() {
                   onPopupArrowUp={commandPopup.navigateUp}
                   onPopupArrowDown={commandPopup.navigateDown}
                 />
+                </div>
 
                 <div className="flex flex-col gap-1.5 shrink-0 justify-between py-1">
                   {goalMode ? (
                     <button
-                      onClick={cancelGoalMode}
-                      disabled={isCreatingGoal}
-                      className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-surface-dim text-text-secondary hover:bg-surface-hover disabled:opacity-60 disabled:cursor-wait"
-                      title={t("goal.cancelCompose")}
-                      aria-label={t("goal.cancelCompose")}
+                      onClick={() => void handleRefineGoal()}
+                      disabled={isCreatingGoal || isRefiningGoal || !inputText.trim()}
+                      className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${isRefiningGoal ? "bg-semantic-accent/20 text-semantic-accent" : "bg-surface-dim text-text-secondary hover:bg-surface-hover hover:text-semantic-accent"} disabled:opacity-50 disabled:cursor-not-allowed`}
+                      title={t("goal.refine")}
+                      aria-label={t("goal.refine")}
                     >
-                      <X className="w-4 h-4" />
+                      {isRefiningGoal ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="w-4 h-4" />
+                      )}
                     </button>
                   ) : isStreaming && inputText.trim() ? (
                     <button

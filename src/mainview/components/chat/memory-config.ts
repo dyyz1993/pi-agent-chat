@@ -100,6 +100,46 @@ export const ENTRY_TYPE_KEYS = new Set<string>([
 
 export const ALL_MEMORY_TYPE_KEYS = new Set<string>(Object.keys(ALL_MEMORY_TYPES));
 
+export interface ParsedMemoryEntry {
+  filename: string;
+  name: string;
+  description: string;
+  type: string | null;
+  content: string;
+}
+
+export function parseSnippetToEntries(snippet: string): ParsedMemoryEntry[] {
+  const entries: ParsedMemoryEntry[] = [];
+  const parts = snippet.split(/^### (.+\.md)\s*$/m).filter(Boolean);
+  for (let i = 0; i < parts.length - 1; i += 2) {
+    const filename = parts[i].trim();
+    const raw = parts[i + 1].trim();
+    let name = filename.replace(/\.md$/, "");
+    let description = "";
+    let type: string | null = null;
+    let content = raw;
+
+    const fmMatch = raw.match(/^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/);
+    if (fmMatch) {
+      const fm = fmMatch[1];
+      content = fmMatch[2].trim();
+      for (const line of fm.split("\n")) {
+        const kv = line.match(/^(\w+):\s*(.+)$/);
+        if (kv) {
+          const key = kv[1];
+          const val = kv[2].trim();
+          if (key === "name") name = val;
+          else if (key === "description") description = val;
+          else if (key === "type") type = val;
+        }
+      }
+    }
+
+    entries.push({ filename, name, description, type, content });
+  }
+  return entries;
+}
+
 export function getMemoryConfig(customType: string): MemoryTypeConfig | undefined {
   return ALL_MEMORY_TYPES[customType];
 }

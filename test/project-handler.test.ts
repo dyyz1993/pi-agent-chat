@@ -75,6 +75,15 @@ vi.mock("../src/shared/lib/linked-projects-config", () => ({
   getLinkedProjects: projectMocks.mockGetLinkedProjects,
 }));
 
+const fakeProcessManager = {
+  batchGetSessionsStatus: vi.fn((ids: string[]) =>
+    ids.map((sessionId) => ({ sessionId, status: "idle" as const })),
+  ),
+};
+vi.mock("../src/shared/handlers/agent", () => ({
+  getProcessManager: () => fakeProcessManager,
+}));
+
 import { register } from "../src/shared/handlers/project";
 
 function createMockServer() {
@@ -170,11 +179,55 @@ describe("project handler", () => {
   describe("project.scanSessions", () => {
     it("returns sessions for a project", async () => {
       const handler = server.handlers.get("project.scanSessions")!;
-      mockScanSessions.mockResolvedValueOnce([{ id: "s1" }]);
+      mockScanSessions.mockResolvedValueOnce([{ sessionId: "s1" }]);
+      // 当前 processManager mock 默认对所有 sessionId 返回 idle
+      // 第一个用例希望验证「有 sessions」+「有 statuses 返回」，不再覆盖空 statuses 路径
 
       const result = await handler({ projectPath: "/my/proj" });
 
-      expect(result).toEqual({ sessions: [{ id: "s1" }] });
+      expect(result).toEqual({
+        sessions: [{ sessionId: "s1" }],
+        statuses: [{ sessionId: "s1", status: "idle" }],
+      });
+    });
+
+    it("boundary：进程池的 stopped 必须在 server handler 映射成 idle，前端不会看到 stopped", async () => {
+      const handler = server.handlers.get("project.scanSessions")!;
+      mockScanSessions.mockResolvedValueOnce([
+        { sessionId: "s1" },
+        { sessionId: "s2" },
+        { sessionId: "s3" },
+        { sessionId: "s4" },
+      ]);
+      // 进程池返回的是内部 status：包含 "stopped"
+      fakeProcessManager.batchGetSessionsStatus.mockImplementationOnce((ids: string[]) =>
+        ids.map((sessionId) => {
+          if (sessionId === "s1") return { sessionId, status: "streaming" as const };
+          if (sessionId === "s2") return { sessionId, status: "stopped" as const };
+          if (sessionId === "s3") return { sessionId, status: "idle" as const };
+          return { sessionId, status: "stopped" as const };
+        }),
+      );
+
+      const result = (await handler({ projectPath: "/my/proj" })) as {
+        sessions: unknown[];
+        statuses: Array<{ sessionId: string; status: string }>;
+      };
+
+      // 关键：返回的 statuses 全部都是 SessionStatus，没有 "stopped"
+      const statusById: Record<string, string> = {};
+      for (const s of result.statuses) statusById[s.sessionId] = s.status;
+      expect(statusById["s1"]).toBe("streaming");
+      expect(statusById["s2"]).toBe("idle"); // stopped → idle
+      expect(statusById["s3"]).toBe("idle");
+      expect(statusById["s4"]).toBe("idle"); // stopped → idle
+      for (const s of result.statuses) {
+        expect(
+          ["idle", "streaming", "compacting", "permission", "retrying"],
+          `status for ${s.sessionId} must be SessionStatus`,
+        ).toContain(s.status);
+        expect(s.status).not.toBe("stopped");
+      }
     });
   });
 

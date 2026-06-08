@@ -121,6 +121,10 @@ export interface SupervisorMethods {
     params: { sessionId: string; reason?: string };
     result: { cleared: boolean };
   };
+  "supervisor.refineGoal": {
+    params: { sessionId: string; objective: string };
+    result: { success: boolean; objective?: string; error?: string };
+  };
 }
 
 export interface SupervisorEvents {

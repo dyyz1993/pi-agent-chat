@@ -9,6 +9,7 @@ import { withTimeout } from "../lib/with-timeout";
 const log = createLogger("supervisor");
 const STATUS_TIMEOUT_MS = 2500;
 const CHANNEL_TIMEOUT_MS = 1_000;
+const REFINE_TIMEOUT_MS = 60_000;
 
 function disabledStatus(): SupervisorStatus {
   return {
@@ -260,4 +261,35 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       return { cleared: false };
     }
   });
+
+  r(
+    "supervisor.refineGoal",
+    async (
+      params,
+    ): Promise<{ success: boolean; objective?: string; error?: string }> => {
+      const { sessionId, objective } = params as {
+        sessionId: string;
+        objective: string;
+      };
+      const pm = getProcessManager();
+      if (!pm) return { success: false, error: "Agent process manager unavailable" };
+      try {
+        return (await withTimeout(
+          pm.callChannel(sessionId, "supervisor", "refineGoal", {
+            objective,
+          }),
+          REFINE_TIMEOUT_MS,
+        )) as { success: boolean; objective?: string; error?: string };
+      } catch (err) {
+        log.warn("supervisor.refineGoal channel call failed", {
+          sessionId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+  );
 }

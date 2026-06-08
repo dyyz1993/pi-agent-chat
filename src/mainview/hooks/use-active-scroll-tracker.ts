@@ -145,8 +145,12 @@ export function useActiveScrollTracker({
       lastScrollTopRef.current = handle.scrollOffset;
 
       if (delta < -3 && autoScrollEnabledRef.current) {
-        autoScrollEnabledRef.current = false;
-        userScrolledUpRef.current = true;
+        // During init phase, Virtualizer layout corrections cause false-negative
+        // deltas that would mistakenly disable tracking. Only disable after init.
+        if (didInitRef.current) {
+          autoScrollEnabledRef.current = false;
+          userScrolledUpRef.current = true;
+        }
       } else if (nearBottom && !autoScrollEnabledRef.current && delta > 5) {
         autoScrollEnabledRef.current = true;
         userScrolledUpRef.current = false;
