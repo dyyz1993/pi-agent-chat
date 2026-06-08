@@ -285,7 +285,7 @@ describe("context usage tracking", () => {
       expect(ctx!.tokens).toBeNull();
     });
 
-    it("sets status back to idle after compaction", () => {
+    it("does not change status — compaction_end preserves current status", () => {
       useSessionStore.setState({ sessionStatusMap: { [SID]: "compacting" } });
 
       handleAgentEvent(SID, {
@@ -293,7 +293,9 @@ describe("context usage tracking", () => {
         result: { tokensAfter: 3000 },
       } as Parameters<typeof handleAgentEvent>[1]);
 
-      expect(useSessionStore.getState().sessionStatusMap[SID]).toBe("idle");
+      // compaction_end intentionally does NOT reset status to idle —
+      // status transitions are managed by agent_end / streaming lifecycle
+      expect(useSessionStore.getState().sessionStatusMap[SID]).toBe("compacting");
     });
   });
 
