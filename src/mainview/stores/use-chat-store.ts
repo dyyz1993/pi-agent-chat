@@ -493,21 +493,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
             normalizeTools: true,
             activeToolCallIds: s.activeToolCallIdsBySession[sessionId],
           });
-      // [DEBUG] detect user message loss
-      const prevMsgs = s.messagesBySession[sessionId] || [];
-      const prevUserCount = prevMsgs.filter((m) => m.role === "user").length;
-      const nextUserCount = nextMsgs.filter((m) => m.role === "user").length;
-      if (nextUserCount < prevUserCount) {
-        log.warn("[DEBUG-USERLOSS] setMessagesForSession dropped user message(s)", {
-          sessionId,
-          prevUserCount,
-          nextUserCount,
-          prevRoles: prevMsgs.map((m) => `${m.role}${m._local ? "_local" : ""}`),
-          nextRoles: nextMsgs.map((m) => `${m.role}${m._local ? "_local" : ""}`),
-          fastPath: !!options.streamingFastPath,
-          stack: new Error().stack?.split("\n").slice(1, 6).join(" | "),
-        });
-      }
       const next: Partial<ChatState> = {
         messagesBySession: { ...s.messagesBySession, [sessionId]: nextMsgs },
       };
@@ -790,21 +775,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
           },
         }));
       } else {
-        // [DEBUG] detect user message loss in loadSessionMessages
-        const _prevMsgs = get().messagesBySession[sid] || [];
-        const _prevUserCount = _prevMsgs.filter((m) => m.role === "user").length;
-        const _nextUserCount = finalMsgs.filter((m) => m.role === "user").length;
-        if (_nextUserCount < _prevUserCount) {
-          log.warn("[DEBUG-USERLOSS] loadSessionMessages dropped user message(s)", {
-            sessionId: sid,
-            rpcReturned: msgs.length,
-            afterMapping: finalMsgs.length,
-            prevUserCount: _prevUserCount,
-            nextUserCount: _nextUserCount,
-            rpcRoles: msgs.map((m: Record<string, unknown>) => m.role),
-            finalRoles: finalMsgs.map((m) => `${m.role}${m._local ? "_local" : ""}`),
-          });
-        }
         set((s) => ({
           messagesBySession: { ...s.messagesBySession, [sid]: finalMsgs },
           ...bumpHistoryLoadVersion(s, sid),
@@ -974,21 +944,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
           },
         }));
       } else {
-        // [DEBUG] detect user message loss in _backgroundRefreshMessages
-        const _bgPrevUserCount = current.filter((m) => m.role === "user").length;
-        const _bgNextUserCount = finalMsgs.filter((m) => m.role === "user").length;
-        if (_bgNextUserCount < _bgPrevUserCount) {
-          log.warn("[DEBUG-USERLOSS] _backgroundRefreshMessages dropped user message(s)", {
-            sessionId: sid,
-            rpcReturned: msgs.length,
-            afterProcessing: finalMsgs.length,
-            prevUserCount: _bgPrevUserCount,
-            nextUserCount: _bgNextUserCount,
-            rpcRoles: msgs.map((m) => m.role),
-            currentRoles: current.map((m) => `${m.role}${m._local ? "_local" : ""}`),
-            finalRoles: finalMsgs.map((m) => `${m.role}${m._local ? "_local" : ""}`),
-          });
-        }
         perfLog.info("[bgRefresh] data changed, updating store", {
           sessionId: sid,
           oldCount: current.length,

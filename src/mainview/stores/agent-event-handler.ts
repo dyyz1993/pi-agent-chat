@@ -2,7 +2,6 @@ import type { ContentBlock, ChatMessage, TokenUsage, PermissionMeta } from "../t
 import type { SessionMeta } from "../types";
 import type { AgentEvent } from "../../shared/modules/agent";
 import type { AssistantMessage, Message, Usage } from "@dyyz1993/pi-ai";
-import { apiClient } from "../lib/api-client";
 import { useChatStore } from "./use-chat-store";
 import { useSessionStore, clearAgentStarted } from "./use-session-store";
 import { useMemoryStore } from "./use-memory-store";
