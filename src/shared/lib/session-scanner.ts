@@ -175,33 +175,70 @@ async function parseJsonlMeta(filePath: string): Promise<{
   }
 }
 
-async function scanSessionDir(sessionDir: string, pinnedIds?: Set<string>): Promise<SessionMeta[]> {
+const PRE_SCAN_LIMIT = 120;
+
+export async function scanSessionDir(sessionDir: string, pinnedIds?: Set<string>): Promise<SessionMeta[]> {
   if (!existsSync(sessionDir)) return [];
 
   const files = await readdir(sessionDir);
   const jsonlFiles = files.filter((f) => f.endsWith(".jsonl"));
 
+  if (jsonlFiles.length === 0) return [];
+
+  // Phase 1: stat all files + sort by mtime descending
+  const fileStats = await Promise.all(
+    jsonlFiles.map(async (file) => {
+      const filePath = join(sessionDir, file);
+      try {
+        const fstat = await stat(filePath);
+        return { file, filePath, mtimeMs: fstat.mtimeMs, size: fstat.size };
+      } catch {
+        return null;
+      }
+    }),
+  );
+
+  const nonEmpty = fileStats
+    .filter((e): e is NonNullable<typeof e> => e !== null && e.size > 0);
+
+  // Sort by mtime descending (newest first)
+  nonEmpty.sort((a, b) => b.mtimeMs - a.mtimeMs);
+
+  // Promote pinned files to the front
+  if (pinnedIds && pinnedIds.size > 0) {
+    const pinned = nonEmpty.filter((e) => {
+      const id = e.file.replace(/\.jsonl$/, "");
+      return pinnedIds.has(id);
+    });
+    const unpinned = nonEmpty.filter((e) => {
+      const id = e.file.replace(/\.jsonl$/, "");
+      return !pinnedIds.has(id);
+    });
+    nonEmpty.length = 0;
+    nonEmpty.push(...pinned, ...unpinned);
+  }
+
+  // Pre-scan limit: only process top candidates
+  const candidates = nonEmpty.slice(0, PRE_SCAN_LIMIT);
+
+  // Phase 2: parse header + meta only for candidates
   const BATCH_SIZE = 20;
   const results: (SessionMeta | null)[] = [];
 
-  for (let i = 0; i < jsonlFiles.length; i += BATCH_SIZE) {
-    const batch = jsonlFiles.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < candidates.length; i += BATCH_SIZE) {
+    const batch = candidates.slice(i, i + BATCH_SIZE);
     const batchResults = await Promise.all(
-      batch.map(async (file) => {
-        const filePath = join(sessionDir, file);
+      batch.map(async (entry) => {
         try {
-          const fstat = await stat(filePath);
-          if (fstat.size === 0) return null;
-
           const [header, meta] = await Promise.all([
-            parseJsonlHeader(filePath),
-            parseJsonlMeta(filePath),
+            parseJsonlHeader(entry.filePath),
+            parseJsonlMeta(entry.filePath),
           ]);
           if (!header) return null;
           return {
             sessionId: header.id,
-            name: meta?.sessionName ?? basename(file, ".jsonl"),
-            sessionPath: filePath,
+            name: meta?.sessionName ?? basename(entry.file, ".jsonl"),
+            sessionPath: entry.filePath,
             projectPath: meta?.effectiveCwd ?? header.cwd,
             parentSessionPath: meta?.parentSessionPath ?? null,
             delegateParentSessionId:
@@ -210,14 +247,14 @@ async function scanSessionDir(sessionDir: string, pinnedIds?: Set<string>): Prom
             messageCount: meta?.messageCount ?? 0,
             firstMessage: meta?.firstMessage ?? "",
             createdAt: new Date(header.timestamp).getTime(),
-            updatedAt: fstat.mtimeMs,
+            updatedAt: entry.mtimeMs,
             status: "idle" as const,
             pinned: pinnedIds ? pinnedIds.has(header.id) : false,
             tierConfig: meta?.tierConfig,
           };
         } catch (e) {
           log.debug("scanSessionDir: skipping invalid session file", {
-            filePath,
+            filePath: entry.filePath,
             error: String(e),
           });
           return null;
@@ -230,11 +267,14 @@ async function scanSessionDir(sessionDir: string, pinnedIds?: Set<string>): Prom
   const filtered = results
     .filter((s): s is NonNullable<typeof s> => s !== null)
     .filter((s) => existsSync(s.projectPath));
+
+  // Re-sort: pinned first, then by updatedAt (already mostly sorted from phase 1,
+  // but header parse may produce null results that shift ordering)
   filtered.sort((a, b) => {
     if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
     return b.updatedAt - a.updatedAt;
   });
-  // Limit to 100 most recent sessions to keep WS response size manageable
+
   return filtered.slice(0, 100) as SessionMeta[];
 }
 
