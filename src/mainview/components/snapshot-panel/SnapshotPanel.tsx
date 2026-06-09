@@ -22,17 +22,6 @@ import { formatFilePath } from "../../lib/format-path";
 
 const log = createLogger("snapshot");
 
-interface DiffFileItem {
-  path: string;
-  status: "added" | "modified" | "deleted";
-  diff: {
-    path: string;
-    oldContent: string | null;
-    newContent: string | null;
-    unifiedDiff: string;
-  } | null;
-}
-
 export function SnapshotPanel() {
   const { t } = useTranslation("snapshot");
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
@@ -375,37 +364,50 @@ const ExpandedFileList = memo(function ExpandedFileList({
     ...deleted.map((f) => ({ path: f, status: "deleted" as const })),
   ];
 
-  const [diffData, setDiffData] = useState<DiffFileItem[] | null>(null);
-  const [diffLoading, setDiffLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [fileDiff, setFileDiff] = useState<{
+    path: string;
+    oldContent: string | null;
+    newContent: string | null;
+    unifiedDiff: string;
+  } | null>(null);
+  const [diffLoading, setDiffLoading] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    setDiffLoading(true);
-    apiClient
-      .call("agent.getBatchDiffs", { sessionId })
-      .then((result) => {
-        if (!cancelled && result?.files) {
-          setDiffData(result.files as DiffFileItem[]);
-        }
-      })
-      .catch((err) => {
-        log.warn("getBatchDiffs failed", { err: err instanceof Error ? err.message : String(err) });
-      })
-      .finally(() => {
-        if (!cancelled) setDiffLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [sessionId]);
-
-  const selectedDiff = diffData?.find((f) => f.path === selectedFile);
+  // Per-file lazy loading: only fetch diff when user clicks a specific file
+  const handleFileClick = useCallback(
+    (filePath: string) => {
+      if (selectedFile === filePath) {
+        setSelectedFile(null);
+        setFileDiff(null);
+        return;
+      }
+      setSelectedFile(filePath);
+      setFileDiff(null);
+      setDiffLoading(true);
+      apiClient
+        .call("agent.getFileDiff", { sessionId, filePath })
+        .then((result) => {
+          if (result) {
+            setFileDiff({
+              path: filePath,
+              oldContent: result.oldContent ?? null,
+              newContent: result.newContent ?? null,
+              unifiedDiff: result.unifiedDiff ?? "",
+            });
+          }
+        })
+        .catch((err) => {
+          log.warn("getFileDiff failed", { err: err instanceof Error ? err.message : String(err) });
+        })
+        .finally(() => setDiffLoading(false));
+    },
+    [sessionId, selectedFile],
+  );
 
   return (
     <div className="border-t border-border-secondary/30 dark:border-surface-dim/30">
       <div className="px-3 py-1 text-[10px] text-text-tertiary font-medium">
-        {diffLoading ? t("snapshot") + "..." : `${allFiles.length} ${t("filesChanged")}`}
+        {allFiles.length} {t("filesChanged")}
       </div>
 
       <div className="px-2 pb-2 space-y-px">
@@ -422,7 +424,7 @@ const ExpandedFileList = memo(function ExpandedFileList({
             <button
               key={file.path}
               type="button"
-              onClick={() => setSelectedFile(isSelected ? null : file.path)}
+              onClick={() => handleFileClick(file.path)}
               className={`w-full flex items-center gap-1.5 px-1.5 py-0.5 rounded text-[11px] transition-colors text-left ${
                 isSelected
                   ? "bg-semantic-accent/10 text-semantic-accent"
@@ -433,29 +435,32 @@ const ExpandedFileList = memo(function ExpandedFileList({
               <span className="truncate" title={file.path}>
                 {formatFilePath(file.path)}
               </span>
+              {isSelected && diffLoading && (
+                <Loader2 className="w-3 h-3 animate-spin shrink-0 ml-auto" />
+              )}
             </button>
           );
         })}
       </div>
 
-      {selectedFile && selectedDiff?.diff && (
+      {selectedFile && fileDiff && (
         <div className="border-t border-border-secondary/30 dark:border-surface-dim/30">
           <div className="px-3 py-1 text-[10px] text-text-tertiary font-medium flex items-center gap-1">
             <FileEdit className="w-2.5 h-2.5" />
             <span className="truncate">{selectedFile}</span>
           </div>
-          {selectedDiff.diff.oldContent !== null && selectedDiff.diff.newContent !== null ? (
+          {fileDiff.oldContent !== null && fileDiff.newContent !== null ? (
             <div className="px-2 pb-2">
               <InlineDiffViewer
-                oldValue={selectedDiff.diff.oldContent}
-                newValue={selectedDiff.diff.newContent}
+                oldValue={fileDiff.oldContent}
+                newValue={fileDiff.newContent}
                 maxHeight="192px"
-                filePath={selectedDiff.path}
+                filePath={fileDiff.path}
               />
             </div>
           ) : (
             <pre className="px-3 pb-2 text-[10px] text-text-tertiary overflow-x-auto whitespace-pre-wrap font-mono max-h-48 overflow-y-auto leading-relaxed">
-              {selectedDiff.diff.unifiedDiff}
+              {fileDiff.unifiedDiff}
             </pre>
           )}
         </div>

@@ -175,24 +175,54 @@ async function parseJsonlMeta(filePath: string): Promise<{
   }
 }
 
-async function scanSessionDir(sessionDir: string, pinnedIds?: Set<string>): Promise<SessionMeta[]> {
+export async function scanSessionDir(sessionDir: string, pinnedIds?: Set<string>): Promise<SessionMeta[]> {
   if (!existsSync(sessionDir)) return [];
 
   const files = await readdir(sessionDir);
   const jsonlFiles = files.filter((f) => f.endsWith(".jsonl"));
 
+  const PRE_SCAN_LIMIT = 120;
+
+  // Phase 1: stat all files in parallel to get mtime, then sort by mtime desc
+  const statted = await Promise.all(
+    jsonlFiles.map(async (file) => {
+      const filePath = join(sessionDir, file);
+      try {
+        const fstat = await stat(filePath);
+        return { file, filePath, mtimeMs: fstat.mtimeMs, size: fstat.size };
+      } catch {
+        return null;
+      }
+    }),
+  );
+  const validFiles = statted.filter((s): s is NonNullable<typeof s> => s !== null && s.size > 0);
+  validFiles.sort((a, b) => b.mtimeMs - a.mtimeMs);
+
+  // Promote pinned files to the front so they survive the PRE_SCAN_LIMIT slice
+  if (pinnedIds && pinnedIds.size > 0) {
+    const pinned = validFiles.filter((e) => {
+      const id = e.file.replace(/\.jsonl$/, "");
+      return pinnedIds.has(id);
+    });
+    const unpinned = validFiles.filter((e) => {
+      const id = e.file.replace(/\.jsonl$/, "");
+      return !pinnedIds.has(id);
+    });
+    validFiles.length = 0;
+    validFiles.push(...pinned, ...unpinned);
+  }
+
+  // Phase 2: only process the most recent files
+  const candidates = validFiles.slice(0, PRE_SCAN_LIMIT);
+
   const BATCH_SIZE = 20;
   const results: (SessionMeta | null)[] = [];
 
-  for (let i = 0; i < jsonlFiles.length; i += BATCH_SIZE) {
-    const batch = jsonlFiles.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < candidates.length; i += BATCH_SIZE) {
+    const batch = candidates.slice(i, i + BATCH_SIZE);
     const batchResults = await Promise.all(
-      batch.map(async (file) => {
-        const filePath = join(sessionDir, file);
+      batch.map(async ({ file, filePath, mtimeMs }) => {
         try {
-          const fstat = await stat(filePath);
-          if (fstat.size === 0) return null;
-
           const [header, meta] = await Promise.all([
             parseJsonlHeader(filePath),
             parseJsonlMeta(filePath),
@@ -210,7 +240,7 @@ async function scanSessionDir(sessionDir: string, pinnedIds?: Set<string>): Prom
             messageCount: meta?.messageCount ?? 0,
             firstMessage: meta?.firstMessage ?? "",
             createdAt: new Date(header.timestamp).getTime(),
-            updatedAt: fstat.mtimeMs,
+            updatedAt: mtimeMs,
             status: "idle" as const,
             pinned: pinnedIds ? pinnedIds.has(header.id) : false,
             tierConfig: meta?.tierConfig,

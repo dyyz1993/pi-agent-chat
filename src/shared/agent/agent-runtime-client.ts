@@ -123,7 +123,20 @@ export async function createRpcClient(
     args,
     env: { ...process.env, NODE_OPTIONS: "--max-old-space-size=4096" },
   });
-  await client.start();
+  const tBeforeStart = performance.now();
+  perfLog.info("[createRpcClient] calling client.start()", { sessionId: sessionPath?.split("/").pop(), cwd, argsCount: args.length });
+  try {
+    await client.start();
+  } catch (startErr) {
+    const startMs = Math.round(performance.now() - tBeforeStart);
+    perfLog.error("[createRpcClient] client.start() FAILED", {
+      startMs,
+      err: startErr instanceof Error ? startErr.message.split("\n")[0] : String(startErr),
+    });
+    throw startErr;
+  }
+  const startMs = Math.round(performance.now() - tBeforeStart);
+  perfLog.info("[createRpcClient] client.start() succeeded", { startMs });
   const t2 = performance.now();
 
   const timings = {

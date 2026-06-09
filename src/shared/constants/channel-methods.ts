@@ -89,6 +89,7 @@ export const SUPERVISOR_METHODS = {
   SET_GOAL: "setGoal",
   CLEAR_GOAL: "clearGoal",
   REFINE_GOAL: "refineGoal",
+  GET_TRIGGER_HISTORY: "getTriggerHistory",
 } as const;
 
 // ---- rules-engine channel ----

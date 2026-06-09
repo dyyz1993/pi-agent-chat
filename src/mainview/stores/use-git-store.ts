@@ -3,6 +3,7 @@ import { apiClient } from "../lib/api-client";
 import { useAppStore } from "./use-app-store";
 import { createLogger } from "../../shared/lib/logger";
 import { useChatOverlayStore } from "./use-chat-overlay-store";
+import { reconstructDiffContent } from "../lib/diff-utils";
 
 const log = createLogger("git");
 
@@ -152,15 +153,17 @@ export const useGitStore = create<GitState>((set, get) => ({
     if (!get().isGitRepo) return;
     const addLog = useAppStore.getState().addLog;
     addLog(`Git diff: ${filePath}`);
-    set({ loadingDiff: true });
+    // Show overlay immediately with loading state
+    set({ currentDiff: { filePath, diff: "", oldContent: "", newContent: "" }, loadingDiff: true });
+    useChatOverlayStore.getState().openDiff();
     try {
       const res = await apiClient.call("git.diff", { repoPath, filePath, staged });
       addLog(`Git diff result: ${res.diff.length} chars`);
       set({ currentDiff: res, loadingDiff: false });
-      useChatOverlayStore.getState().openDiff();
     } catch (err) {
       addLog(`Git diff error: ${err instanceof Error ? err.message : String(err)}`);
-      set({ loadingDiff: false });
+      set({ currentDiff: null, loadingDiff: false });
+      useChatOverlayStore.getState().close();
     }
   },
 
@@ -188,27 +191,35 @@ export const useGitStore = create<GitState>((set, get) => ({
   fetchAgentFileDiff: async (sessionId, filePath) => {
     const addLog = useAppStore.getState().addLog;
     addLog(`Agent file diff: ${filePath}`);
-    set({ loadingDiff: true });
+    // Show overlay immediately with loading state
+    set({ currentDiff: { filePath, diff: "", oldContent: "", newContent: "" }, loadingDiff: true });
+    useChatOverlayStore.getState().openDiff();
     try {
       const res = await apiClient.call("agent.getFileDiff", { sessionId, filePath });
       if (res) {
+        const reconstructed = reconstructDiffContent({
+          oldContent: res.oldContent ?? null,
+          newContent: res.newContent ?? null,
+          unifiedDiff: res.unifiedDiff ?? null,
+        });
         set({
           currentDiff: {
             filePath: res.path,
             diff: res.unifiedDiff ?? "",
-            oldContent: res.oldContent ?? "",
-            newContent: res.newContent ?? "",
+            oldContent: reconstructed.oldContent ?? "",
+            newContent: reconstructed.newContent ?? "",
           },
           loadingDiff: false,
         });
-        useChatOverlayStore.getState().openDiff();
       } else {
         addLog(`Agent file diff: no result for ${filePath}`);
-        set({ loadingDiff: false });
+        set({ currentDiff: null, loadingDiff: false });
+        useChatOverlayStore.getState().close();
       }
     } catch (err) {
       addLog(`Agent file diff error: ${err instanceof Error ? err.message : String(err)}`);
-      set({ loadingDiff: false });
+      set({ currentDiff: null, loadingDiff: false });
+      useChatOverlayStore.getState().close();
     }
   },
 
@@ -247,14 +258,16 @@ export const useGitStore = create<GitState>((set, get) => ({
   fetchCommitFileDiff: async (repoPath, hash, filePath) => {
     const addLog = useAppStore.getState().addLog;
     addLog(`Git commit diff: ${hash.slice(0, 7)} ${filePath}`);
-    set({ loadingDiff: true });
+    // Show overlay immediately with loading state
+    set({ currentDiff: { filePath, diff: "", oldContent: "", newContent: "" }, loadingDiff: true });
+    useChatOverlayStore.getState().openDiff();
     try {
       const res = await apiClient.call("git.commitFileDiff", { repoPath, hash, filePath });
       set({ currentDiff: res, loadingDiff: false });
-      useChatOverlayStore.getState().openDiff();
     } catch (err) {
       addLog(`Git commitFileDiff error: ${err instanceof Error ? err.message : String(err)}`);
-      set({ loadingDiff: false });
+      set({ currentDiff: null, loadingDiff: false });
+      useChatOverlayStore.getState().close();
     }
   },
 

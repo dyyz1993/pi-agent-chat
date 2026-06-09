@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import type { SupervisorStatus, TaskReport } from "../../../shared/modules/supervisor";
+import type { SupervisorStatus, TaskReport, TriggerRecord } from "../../../shared/modules/supervisor";
 import {
   ChevronDown,
   ChevronRight,
@@ -534,12 +534,14 @@ export function StatusPanel() {
                     <SupervisorSectionContent
                       status={supervisorStatus?.status ?? null}
                       taskReports={supervisorStatus?.taskReports ?? []}
+                      triggerRecords={supervisorStatus?.triggerRecords ?? []}
                       sessionId={activeSessionId}
                       enable={supervisorActions.enable}
                       disable={supervisorActions.disable}
                       forceContinue={supervisorActions.forceContinue}
                       requestPause={supervisorActions.requestPause}
                       cancelPause={supervisorActions.cancelPause}
+                      fetchTriggerHistory={supervisorActions.fetchTriggerHistory}
                     />
                   )}
                 </div>
@@ -710,12 +712,14 @@ function MCPCopyButton({ server }: { server: MCPServerInfo }) {
 interface SupervisorSectionContentProps {
   status: SupervisorStatus | null;
   taskReports: TaskReport[];
+  triggerRecords: TriggerRecord[];
   sessionId: string | null;
   enable: (sessionId: string) => Promise<void>;
   disable: (sessionId: string) => Promise<void>;
   forceContinue: (sessionId: string, reason?: string) => Promise<void>;
   requestPause: (sessionId: string, delayMs?: number, reason?: string) => Promise<void>;
   cancelPause: (sessionId: string) => Promise<void>;
+  fetchTriggerHistory: (sessionId: string, limit?: number) => Promise<void>;
 }
 
 const STATE_STYLES: Record<string, string> = {
@@ -729,12 +733,14 @@ const STATE_STYLES: Record<string, string> = {
 function SupervisorSectionContent({
   status,
   taskReports,
+  triggerRecords,
   sessionId,
   enable,
   disable,
   forceContinue,
   requestPause,
   cancelPause,
+  fetchTriggerHistory,
 }: SupervisorSectionContentProps) {
   const { t } = useTranslation("status");
   const [loading, setLoading] = useState(false);
@@ -835,6 +841,88 @@ function SupervisorSectionContent({
         ) : (
           <div className="rounded border border-border-primary/50 px-2 py-1 text-text-tertiary">
             {t("supervisor.gold.empty")}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-0.5">
+          <span className="text-text-tertiary">{t("supervisor.triggerHistory")}</span>
+          {sessionId && (
+            <button
+              type="button"
+              className="text-[9px] text-semantic-accent hover:underline"
+              onClick={() => fetchTriggerHistory(sessionId, 50)}
+            >
+              {t("supervisor.triggerHistory.refresh")}
+            </button>
+          )}
+        </div>
+        {triggerRecords.length > 0 ? (
+          <div className="space-y-1 max-h-48 overflow-y-auto">
+            {[...triggerRecords].reverse().map((rec) => (
+              <div
+                key={rec.seq}
+                className="rounded border border-border-primary/70 px-2 py-1"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[9px] font-medium text-text-secondary">
+                    #{rec.seq}
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {rec.durationMs != null && (
+                      <span className="text-[9px] text-text-tertiary">
+                        {(rec.durationMs / 1000).toFixed(1)}s
+                      </span>
+                    )}
+                    <span
+                      className={`text-[9px] font-medium ${
+                        rec.verdict === "complete"
+                          ? "text-status-success"
+                          : rec.verdict === "incomplete"
+                            ? "text-status-warning"
+                            : "text-status-error"
+                      }`}
+                    >
+                      {t(`supervisor.trigger.verdict.${rec.verdict}`)}
+                    </span>
+                    <span className="text-[9px] text-text-tertiary">
+                      {Math.round(rec.confidence * 100)}%
+                    </span>
+                  </div>
+                </div>
+                {rec.reason && (
+                  <div className="mt-0.5 break-words text-[9px] text-text-tertiary">
+                    {rec.reason}
+                  </div>
+                )}
+                {rec.guardResults.length > 0 && (
+                  <div className="mt-0.5 flex flex-wrap gap-0.5">
+                    {rec.guardResults.map((g, i) => (
+                      <span
+                        key={i}
+                        className={`px-1 py-px rounded text-[8px] ${
+                          g.passed
+                            ? "bg-status-success/15 text-status-success"
+                            : "bg-status-error/15 text-status-error"
+                        }`}
+                      >
+                        {g.guardName}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {rec.modelCheck && (
+                  <div className="mt-0.5 text-[9px] text-text-tertiary">
+                    {t("supervisor.trigger.modelCheck")}: {rec.modelCheck.passed ? "✓" : "✗"} ({(rec.modelCheck.durationMs ?? 0) / 1000}s)
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded border border-border-primary/50 px-2 py-1 text-text-tertiary">
+            {t("supervisor.triggerHistory.empty")}
           </div>
         )}
       </div>

@@ -202,4 +202,54 @@ describe("ToolExecutionCard", () => {
 
     expect(screen.getByText("my_custom_tool")).toBeInTheDocument();
   });
+
+  it("MCP tool with JSON output shows query from args, not raw brace", () => {
+    const block = makeBlock({
+      toolName: "mcp__websearch",
+      status: "done",
+      args: JSON.stringify({ query: "Rust 浏览器引擎 headless 爬虫", limit: 5 }),
+      output: '{ "matched_by": "keyword", "results": [] }',
+    });
+    render(<ToolExecutionCard block={block} blockId="blk-mcp-1" />);
+
+    // Should show query text, not raw JSON brace
+    expect(screen.getByText("Rust 浏览器引擎 headless 爬虫")).toBeInTheDocument();
+  });
+
+  it("MCP tool with multiline JSON output (first line is brace) shows toolName", () => {
+    const block = makeBlock({
+      toolName: "mcp__sometool",
+      status: "done",
+      args: '{',
+      output: '{\n  "results": []\n}',
+    });
+    render(<ToolExecutionCard block={block} blockId="blk-mcp-2" />);
+
+    // First line of output is "{", should fall back to toolName
+    expect(screen.getByText("mcp__sometool")).toBeInTheDocument();
+  });
+
+  it("MCP tool with no args and JSON output shows toolName", () => {
+    const block = makeBlock({
+      toolName: "mcp__sometool",
+      status: "done",
+      args: "",
+      output: '{"status": "ok"}',
+    });
+    render(<ToolExecutionCard block={block} blockId="blk-mcp-3" />);
+
+    expect(screen.getByText("mcp__sometool")).toBeInTheDocument();
+  });
+
+  it("tool with non-JSON output shows output first line", () => {
+    const block = makeBlock({
+      toolName: "bash",
+      status: "done",
+      args: JSON.stringify({ command: "echo hello" }),
+      output: "hello world",
+    });
+    render(<ToolExecutionCard block={block} blockId="blk-7" />);
+
+    expect(screen.getAllByText("hello world").length).toBeGreaterThanOrEqual(1);
+  });
 });

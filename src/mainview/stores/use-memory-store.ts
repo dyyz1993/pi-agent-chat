@@ -156,6 +156,14 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
   },
 
   clearSession: (sessionId) => {
+    // Clear any pending loadFiles timers for this session
+    for (const key of Object.keys(loadFilesTimers)) {
+      if (key.startsWith(`${sessionId}::`)) {
+        clearTimeout(loadFilesTimers[key]);
+        delete loadFilesTimers[key];
+      }
+    }
+
     set((s) => {
       const { [sessionId]: _e, ...restEvents } = s.eventsBySession;
       const { [sessionId]: _f, ...restFiles } = s.filesBySession;
@@ -164,6 +172,7 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
       const { [sessionId]: _b, ...restBookmark } = s.bookmarkCreatingBySession;
       const { [sessionId]: _m, ...restIrrelevant } = s.irrelevantMarkedBySession;
       const { [sessionId]: _s, ...restStatus } = s.statusBySession;
+      const { [sessionId]: _x, ...restExpanded } = s.expandedFileBySession;
       return {
         eventsBySession: restEvents,
         filesBySession: restFiles,
@@ -172,6 +181,7 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
         bookmarkCreatingBySession: restBookmark,
         irrelevantMarkedBySession: restIrrelevant,
         statusBySession: restStatus,
+        expandedFileBySession: restExpanded,
       };
     });
   },

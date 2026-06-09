@@ -1,14 +1,14 @@
 import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { HandlerOptions } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
-import type { GoalState, SupervisorStatus, TaskReport } from "../modules/supervisor";
+import type { GoalState, SupervisorStatus, TaskReport, TriggerRecord } from "../modules/supervisor";
 import { getProcessManager } from "./agent";
 import { createLogger } from "../lib/logger";
 import { withTimeout } from "../lib/with-timeout";
 
 const log = createLogger("supervisor");
 const STATUS_TIMEOUT_MS = 2500;
-const CHANNEL_TIMEOUT_MS = 1_000;
+const CHANNEL_TIMEOUT_MS = 5_000;
 const REFINE_TIMEOUT_MS = 60_000;
 
 function disabledStatus(): SupervisorStatus {
@@ -292,4 +292,22 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       }
     },
   );
+
+  r("supervisor.getTriggerHistory", async (params): Promise<{ triggers: TriggerRecord[] }> => {
+    const { sessionId, limit } = params as { sessionId: string; limit?: number };
+    const pm = getProcessManager();
+    if (!pm) return { triggers: [] };
+    try {
+      return (await withTimeout(
+        pm.callChannel(sessionId, "supervisor", "getTriggerHistory", { limit: limit ?? 50 }),
+        STATUS_TIMEOUT_MS,
+      )) as { triggers: TriggerRecord[] };
+    } catch (err) {
+      log.warn("supervisor.getTriggerHistory channel call failed", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return { triggers: [] };
+    }
+  });
 }

@@ -71,6 +71,36 @@ export interface TaskReport {
   remainingItems?: string[];
 }
 
+export interface TriggerGuardResult {
+  guardName: string;
+  guardType: string;
+  passed: boolean;
+  confidence: number;
+  remainingItems?: string[];
+  detail?: string;
+  durationMs?: number;
+}
+
+export interface TriggerModelCheck {
+  passed: boolean;
+  confidence: number;
+  response?: string;
+  durationMs?: number;
+}
+
+export interface TriggerRecord {
+  seq: number;
+  startedAt: number;
+  finishedAt?: number;
+  durationMs?: number;
+  verdict: "complete" | "incomplete" | "blocked" | "unsafe";
+  confidence: number;
+  guardResults: TriggerGuardResult[];
+  modelCheck?: TriggerModelCheck;
+  action: "continue" | "pause" | "complete" | "ask_user";
+  reason?: string;
+}
+
 export type SupervisorChannelEvent =
   | { type: "statusChanged"; status: SupervisorStatus }
   | { type: "pauseRequested"; delayMs: number; reason?: string }
@@ -78,7 +108,8 @@ export type SupervisorChannelEvent =
   | { type: "continueTriggered"; reason: string; delayMs: number }
   | { type: "taskReport"; tasks: TaskReport[] }
   | { type: "goalChanged"; goal?: GoalState; reason?: string }
-  | ({ type: "goldResult" } & GoldResult);
+  | ({ type: "goldResult" } & GoldResult)
+  | { type: "triggerRecord"; record: TriggerRecord };
 
 export interface SupervisorMethods {
   "supervisor.getStatus": {
@@ -124,6 +155,10 @@ export interface SupervisorMethods {
   "supervisor.refineGoal": {
     params: { sessionId: string; objective: string };
     result: { success: boolean; objective?: string; error?: string };
+  };
+  "supervisor.getTriggerHistory": {
+    params: { sessionId: string; limit?: number };
+    result: { triggers: TriggerRecord[] };
   };
 }
 

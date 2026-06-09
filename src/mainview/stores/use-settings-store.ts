@@ -11,6 +11,7 @@ export interface DisplaySettings {
   collapseThinking: boolean;
   collapseToolCards: boolean;
   showTimeline: boolean;
+  showMemoryEntries: boolean;
 }
 
 export interface RetryConfig {
@@ -40,6 +41,7 @@ const DEFAULTS: DisplaySettings = {
   collapseThinking: true,
   collapseToolCards: false,
   showTimeline: true,
+  showMemoryEntries: false,
 };
 
 const CLEAN_OVERRIDES: Partial<DisplaySettings> = {

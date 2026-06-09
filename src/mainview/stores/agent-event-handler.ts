@@ -64,6 +64,34 @@ export function buildTokenUsage(usage: Usage): { tokenUsage?: TokenUsage } {
   return result ? { tokenUsage: result } : {};
 }
 
+/** Clean up module-level maps (toolCallNameMap, toolCallArgsMap, pendingPrefetchMap, etc.) for a session. */
+export function cleanupEventHandlerMaps(sessionId: string): void {
+  // Reset toolCallNameMap & toolCallArgsMap for this session
+  const msgs = useChatStore.getState().messagesBySession[sessionId] || [];
+  for (const msg of msgs) {
+    if (msg.role === "assistant") {
+      for (const block of msg.content) {
+        if (block.type === "toolExecution") {
+          delete toolCallNameMap[block.toolCallId];
+          delete toolCallArgsMap[block.toolCallId];
+        }
+      }
+    }
+  }
+
+  // Clean up pending prefetch entries and timers for this session
+  const prefetchMap = pendingPrefetchMap.get(sessionId);
+  if (prefetchMap) {
+    for (const entry of prefetchMap.values()) {
+      clearTimeout(entry.timer);
+    }
+    pendingPrefetchMap.delete(sessionId);
+  }
+
+  // Remove from compaction deferred set
+  compactionDeferredSessions.delete(sessionId);
+}
+
 function scheduleEmptyStreamingReload(sessionId: string, messageId: string): void {
   setTimeout(() => {
     const chat = useChatStore.getState();
@@ -820,14 +848,15 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
     const assistantMsg = message as AssistantMessage;
 
-    // Accumulate tokens from message_end usage instead of calling getContextUsage RPC.
-    // contextWindow is fetched once during fetchInitialState and cached — it doesn't change.
-    if (assistantMsg.usage?.input) {
-      const prev = storeGet().sessionContextMap[sessionId];
-      const prevTokens = prev?.tokens ?? 0;
-      storeGet().updateSessionContext(sessionId, {
-        tokens: prevTokens + assistantMsg.usage.input,
-      });
+    // usage.input is the total prompt tokens for this LLM call (absolute value, not delta).
+    // Use calculateContextTokens to match the backend's getContextUsage logic.
+    const usage = assistantMsg.usage;
+    if (usage) {
+      const contextTokens =
+        usage.totalTokens || usage.input + usage.output + (usage.cacheRead ?? 0) + (usage.cacheWrite ?? 0);
+      if (contextTokens > 0) {
+        storeGet().updateSessionContext(sessionId, { tokens: contextTokens });
+      }
     }
 
     const hasContent = hasRenderableContent(lastMsg);

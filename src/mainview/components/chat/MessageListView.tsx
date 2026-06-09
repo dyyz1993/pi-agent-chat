@@ -8,6 +8,7 @@ import { ALL_MEMORY_TYPE_KEYS } from "./memory-config";
 import { useChatStore } from "../../stores/use-chat-store";
 import { useSubagentStore } from "../../stores/use-subagent-store";
 import { useSessionStore } from "../../stores/use-session-store";
+import { useSettingsStore } from "../../stores/use-settings-store";
 
 const EMPTY_MSGS: ChatMessage[] = [];
 
@@ -94,14 +95,17 @@ interface ProcessedMessage {
   hide?: boolean;
 }
 
-export function buildProcessedMessages(messages: ChatMessage[]): ProcessedMessage[] {
+export function buildProcessedMessages(
+  messages: ChatMessage[],
+  showMemoryEntries: boolean,
+): ProcessedMessage[] {
   const result: ProcessedMessage[] = [];
 
   for (const msg of messages) {
     const customBlock = msg.content.find(
       (b): b is Extract<(typeof msg)["content"][number], { type: "custom" }> => b.type === "custom",
     );
-    if (customBlock && ALL_MEMORY_TYPE_KEYS.has(customBlock.customType)) {
+    if (customBlock && ALL_MEMORY_TYPE_KEYS.has(customBlock.customType) && !showMemoryEntries) {
       continue;
     }
 
@@ -183,6 +187,7 @@ export const MessageListView = memo(function MessageListView({
 }: MessageListViewProps) {
   const messages = useStableMessages(source);
   const { t } = useTranslation("chat");
+  const showMemoryEntries = useSettingsStore((s) => s.showMemoryEntries);
   const cardMeta = useMemo(() => {
     if (!activeSessionId) return buildCardMeta(messages, t);
     const revision = computeMessagesRevision(messages);
@@ -196,17 +201,17 @@ export const MessageListView = memo(function MessageListView({
     return result;
   }, [messages, t, activeSessionId]);
   const processedMessages = useMemo(() => {
-    if (!activeSessionId) return buildProcessedMessages(messages);
+    if (!activeSessionId) return buildProcessedMessages(messages, showMemoryEntries);
     const revision = computeMessagesRevision(messages);
     const cached = _processedMessagesCache.get(activeSessionId);
     if (cached && cached.revision === revision) {
       return cached.result;
     }
-    const result = buildProcessedMessages(messages);
+    const result = buildProcessedMessages(messages, showMemoryEntries);
     _processedMessagesCache.set(activeSessionId, { revision, result });
     evictIfNeeded(_processedMessagesCache);
     return result;
-  }, [messages, activeSessionId]);
+  }, [messages, activeSessionId, showMemoryEntries]);
 
   if (messages.length === 0 && scrollRef) {
     return (

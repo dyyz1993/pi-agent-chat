@@ -240,7 +240,7 @@ beforeEach(() => {
 });
 
 describe("message_end context usage accumulation", () => {
-  it("accumulates tokens from message.usage.input into sessionContextMap", () => {
+  it("sets tokens to absolute context size from usage (input + output)", () => {
     useSessionStore.setState({
       sessionContextMap: { [SID]: { tokens: 0, contextWindow: 200000 } },
     });
@@ -249,10 +249,10 @@ describe("message_end context usage accumulation", () => {
     emitMessageEnd({ input: 1000, output: 500 });
 
     const ctx = useSessionStore.getState().sessionContextMap[SID];
-    expect(ctx.tokens).toBe(1000);
+    expect(ctx.tokens).toBe(1500);
   });
 
-  it("accumulates tokens cumulatively across multiple message_end events", () => {
+  it("replaces tokens with latest usage (not cumulative)", () => {
     useSessionStore.setState({
       sessionContextMap: { [SID]: { tokens: 0, contextWindow: 200000 } },
     });
@@ -264,10 +264,10 @@ describe("message_end context usage accumulation", () => {
     emitMessageEnd({ input: 2000, output: 800 });
 
     const ctx = useSessionStore.getState().sessionContextMap[SID];
-    expect(ctx.tokens).toBe(3000);
+    expect(ctx.tokens).toBe(2800);
   });
 
-  it("preserves contextWindow during token accumulation", () => {
+  it("replaces tokens with absolute value from usage", () => {
     useSessionStore.setState({
       sessionContextMap: { [SID]: { tokens: 5000, contextWindow: 200000 } },
     });
@@ -276,7 +276,7 @@ describe("message_end context usage accumulation", () => {
     emitMessageEnd({ input: 1000, output: 500 });
 
     const ctx = useSessionStore.getState().sessionContextMap[SID];
-    expect(ctx.tokens).toBe(6000);
+    expect(ctx.tokens).toBe(1500);
     expect(ctx.contextWindow).toBe(200000);
   });
 
@@ -315,7 +315,7 @@ describe("message_end context usage accumulation", () => {
     expect(ctx.contextWindow).toBe(128000);
   });
 
-  it("does not crash when sessionContextMap has no prior entry for session", () => {
+  it("sets tokens from usage when no prior entry", () => {
     useSessionStore.setState({ sessionContextMap: {} });
     setStreamingAssistant();
 
@@ -323,7 +323,7 @@ describe("message_end context usage accumulation", () => {
 
     const ctx = useSessionStore.getState().sessionContextMap[SID];
     expect(ctx).toBeDefined();
-    expect(ctx.tokens).toBe(500);
+    expect(ctx.tokens).toBe(700);
   });
 });
 
@@ -357,8 +357,8 @@ describe("message_end does NOT call agent.getContextUsage RPC", () => {
   });
 });
 
-describe("token accumulation with contextWindow preservation", () => {
-  it("preserves contextWindow across multiple accumulations", () => {
+describe("token replacement with contextWindow preservation", () => {
+  it("preserves contextWindow across multiple replacements", () => {
     useSessionStore.setState({
       sessionContextMap: { [SID]: { tokens: 0, contextWindow: 128000 } },
     });
@@ -369,7 +369,7 @@ describe("token accumulation with contextWindow preservation", () => {
     }
 
     const ctx = useSessionStore.getState().sessionContextMap[SID];
-    expect(ctx.tokens).toBe(5000);
+    expect(ctx.tokens).toBe(1500);
     expect(ctx.contextWindow).toBe(128000);
   });
 
@@ -382,7 +382,7 @@ describe("token accumulation with contextWindow preservation", () => {
     emitMessageEnd({ input: 5000, output: 2000 });
 
     const ctx = useSessionStore.getState().sessionContextMap[SID];
-    expect(ctx.tokens).toBe(5000);
+    expect(ctx.tokens).toBe(7000);
     expect(ctx.contextWindow).toBe(200000);
   });
 });

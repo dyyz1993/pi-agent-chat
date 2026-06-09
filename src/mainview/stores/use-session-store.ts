@@ -394,7 +394,24 @@ export const useSessionStore = create<SessionState>()(
         clearStatusWatchdog(sessionId);
         cleanupSession(get(), sessionId);
         cleanupSessionData(sessionId);
-        set((s) => clearSubscriptionState(s, sessionId));
+        set((s) => {
+          const subClean = clearSubscriptionState(s, sessionId);
+          const { [sessionId]: _ar, ...restAgentReady } = s.agentReady;
+          const { [sessionId]: _tb, ...restTodos } = s.todosBySession;
+          const { [sessionId]: _sc, ...restContext } = s.sessionContextMap;
+          const { [sessionId]: _ss, ...restStatus } = s.sessionStatusMap;
+          const { [sessionId]: _qs, ...restQueue } = s.queueBySession;
+          const { [sessionId]: _ms, ...restModel } = s.modelBySession;
+          return {
+            ...subClean,
+            agentReady: restAgentReady,
+            todosBySession: restTodos,
+            sessionContextMap: restContext,
+            sessionStatusMap: restStatus,
+            queueBySession: restQueue,
+            modelBySession: restModel,
+          };
+        });
 
         const { sessionsByProject, activeSessionId } = get();
         let deletedPath = "";
@@ -951,6 +968,23 @@ apiClient.onReconnect(() => {
               return useChatStore
                 .getState()
                 ._backgroundRefreshMessages(activeSessionId, session.sessionPath);
+            })
+            .then(() => {
+              // Replay may accumulate stale token counts via message_end events;
+              // fetch the authoritative value to correct any drift.
+              return apiClient
+                .call("agent.getContextUsage", { sessionId: activeSessionId })
+                .then((r) => {
+                  if (r && r.tokens != null) {
+                    useSessionStore
+                      .getState()
+                      .updateSessionContext(activeSessionId, {
+                        tokens: r.tokens,
+                        ...(r.contextWindow > 0 ? { contextWindow: r.contextWindow } : {}),
+                      });
+                  }
+                })
+                .catch(() => {});
             })
             .catch((err) => {
               log.warn("[onReconnect] load+replay failed", {

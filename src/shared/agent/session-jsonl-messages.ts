@@ -1,4 +1,4 @@
-import { createReadStream, existsSync } from "fs";
+import { createReadStream, existsSync, statSync } from "fs";
 import * as readline from "readline";
 
 import { createLogger } from "../lib/logger";
@@ -168,18 +168,20 @@ async function appendJsonlFromText(
 async function appendJsonlFromFile(
   sessionPath: string,
   onParsed: (parsed: Record<string, unknown>) => void,
-  startLine = 0,
-): Promise<number> {
-  if (!sessionPath || !existsSync(sessionPath)) return 0;
-  let lineIndex = 0;
+  startByteOffset = 0,
+): Promise<{ lineCount: number; byteOffset: number }> {
+  if (!sessionPath || !existsSync(sessionPath)) return { lineCount: 0, byteOffset: 0 };
+  let lineCount = 0;
+  let byteOffset = startByteOffset;
   const rl = readline.createInterface({
-    input: createReadStream(sessionPath, { encoding: "utf-8" }),
+    input: createReadStream(sessionPath, { encoding: "utf-8", start: startByteOffset }),
     crlfDelay: Infinity,
   });
   try {
     for await (const line of rl) {
-      lineIndex++;
-      if (lineIndex <= startLine) continue;
+      lineCount++;
+      // +1 for the newline byte (\n); JSONL files use \n line endings
+      byteOffset += Buffer.byteLength(line, "utf-8") + 1;
       if (!line.trim()) continue;
       try {
         onParsed(JSON.parse(line) as Record<string, unknown>);
@@ -192,7 +194,12 @@ async function appendJsonlFromFile(
   } finally {
     rl.close();
   }
-  return lineIndex;
+  try {
+    byteOffset = statSync(sessionPath).size;
+  } catch {
+    // file gone — keep tracked offset
+  }
+  return { lineCount, byteOffset };
 }
 
 function accumulatorFromCache(hit: SessionCacheHit): FullMessageAccumulator {
@@ -209,6 +216,7 @@ function accumulatorFromCache(hit: SessionCacheHit): FullMessageAccumulator {
 function cacheDataFromAccumulator(
   accumulator: FullMessageAccumulator,
   lineCount: number,
+  byteOffset: number,
 ): SessionCacheData {
   return {
     messages: [...accumulator.allMessages],
@@ -218,6 +226,7 @@ function cacheDataFromAccumulator(
     lastJsonlLeafPointer: accumulator.lastJsonlLeafPointer,
     activeJsonlLeafId: accumulator.activeJsonlLeafId,
     lineCount,
+    byteOffset,
   };
 }
 
@@ -281,24 +290,26 @@ export async function readFullJsonlAccumulatorCached(options: {
   }
 
   const accumulator = cached ? accumulatorFromCache(cached) : createFullMessageAccumulator();
-  const startLine = cached?.needsIncremental ? cached.lineCount : 0;
-  let lineCount = startLine;
+  const startByteOffset = cached?.needsIncremental ? cached.byteOffset : 0;
+  let totalLineCount = cached?.lineCount ?? 0;
 
   try {
-    lineCount = await appendJsonlFromFile(
+    const result = await appendJsonlFromFile(
       options.sessionPath,
       (parsed) => appendFullJsonlEntry(parsed, accumulator),
-      startLine,
+      startByteOffset,
     );
+    totalLineCount += result.lineCount;
     options.setCache(
       options.sessionId,
       options.sessionPath,
-      cacheDataFromAccumulator(accumulator, lineCount),
+      cacheDataFromAccumulator(accumulator, totalLineCount, result.byteOffset),
     );
     perfLog.info(cached ? "[jsonlCache] incremental" : "[jsonlCache] miss", {
       sessionId: options.sessionId,
-      startLine,
-      lineCount,
+      startByteOffset,
+      lineCount: result.lineCount,
+      byteOffset: result.byteOffset,
       ms: Date.now() - t0,
     });
   } catch (err: unknown) {
@@ -378,9 +389,12 @@ export function filterMessagesToBranch(options: {
         !options.leafId || options.parentById.size === 0 || options.parentById.has(options.leafId),
     };
   }
+  const COMPACTION_CUSTOM_TYPES = new Set(["compaction_fold", "compaction_snip"]);
   return {
     filteredMessages: options.allMessages.filter((message) => pathIds.has(message.entryId)),
-    customEntries: options.allCustomEntries.filter((entry) => pathIds.has(entry.id)),
+    customEntries: options.allCustomEntries.filter(
+      (entry) => pathIds.has(entry.id) && !COMPACTION_CUSTOM_TYPES.has(entry.customType),
+    ),
     leafFound: true,
   };
 }

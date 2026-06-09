@@ -17,6 +17,7 @@ interface UseActiveScrollTrackerOptions {
 const BOTTOM_THRESHOLD_PX = 80;
 const TOP_THRESHOLD_PX = 80;
 const ACTIVE_THROTTLE_MS = 50;
+const SCROLL_SETTLE_MAX_ATTEMPTS = 10;
 
 export function useActiveScrollTracker({
   scrollRef,
@@ -27,7 +28,7 @@ export function useActiveScrollTracker({
   streamVersion,
   historyLoadVersion,
   initialScrollReady = true,
-  onInitComplete,
+  onInitComplete: _onInitComplete,
 }: UseActiveScrollTrackerOptions) {
   const userScrolledUpRef = useRef(false);
   const prevCountRef = useRef(0);
@@ -43,6 +44,10 @@ export function useActiveScrollTracker({
   const autoScrollEnabledRef = useRef(true);
   const messageIdsRef = useRef(messageIds);
   messageIdsRef.current = messageIds;
+
+  // Unified scroll scheduler: single rAF slot for all scroll requests.
+  // Ensures at most one scrollToIndex per animation frame.
+  const scrollRafRef = useRef<number>(0);
 
   const [toolbarState, setToolbarState] = useState({
     isAtTop: false,
@@ -95,6 +100,16 @@ export function useActiveScrollTracker({
     const ids = messageIdsRef.current;
     if (ids.length === 0) return;
 
+    // 底部跟踪激活时，始终指向最后一条消息
+    if (autoScrollEnabledRef.current) {
+      const lastId = ids[ids.length - 1];
+      if (lastId !== lastActiveIdRef.current) {
+        lastActiveIdRef.current = lastId;
+        setActive(lastId);
+      }
+      return;
+    }
+
     const idx = findVisibleIndex();
     if (idx >= 0 && idx < ids.length) {
       const id = ids[idx];
@@ -104,6 +119,49 @@ export function useActiveScrollTracker({
       }
     }
   }, [findVisibleIndex, setActive]);
+
+  /**
+   * Unified scroll-to-bottom with settle retry.
+   * Cancels any previously scheduled scroll first, ensuring only one
+   * rAF callback is active at any time.
+   */
+  const scheduleScrollToBottom = useCallback(() => {
+    const ids = messageIdsRef.current;
+    if (ids.length === 0) return;
+    if (userScrolledUpRef.current) return;
+
+    // Cancel any pending scroll attempt
+    if (scrollRafRef.current) {
+      cancelAnimationFrame(scrollRafRef.current);
+      scrollRafRef.current = 0;
+    }
+
+    let attempts = 0;
+
+    const tryScroll = () => {
+      const handle = vlistRef.current;
+      if (!handle || attempts >= SCROLL_SETTLE_MAX_ATTEMPTS) {
+        scrollRafRef.current = 0;
+        return;
+      }
+
+      attempts++;
+      handle.scrollToIndex(ids.length - 1, { align: "end" });
+
+      const isAtBottom = handle.scrollSize - handle.scrollOffset - handle.viewportSize < 50;
+      if (isAtBottom) {
+        didInitRef.current = true;
+        setActive(ids[ids.length - 1]);
+        scrollRafRef.current = 0;
+      } else if (attempts < SCROLL_SETTLE_MAX_ATTEMPTS) {
+        scrollRafRef.current = requestAnimationFrame(tryScroll);
+      } else {
+        scrollRafRef.current = 0;
+      }
+    };
+
+    scrollRafRef.current = requestAnimationFrame(tryScroll);
+  }, [vlistRef, setActive]);
 
   const doScrollToBottom = useCallback(() => {
     const handle = vlistRef.current;
@@ -169,9 +227,15 @@ export function useActiveScrollTracker({
     syncToolbarState();
   }, [isNearBottom, syncToolbarState]);
 
+  // Reset state on session change
   useEffect(() => {
     if (prevSessionRef.current !== sessionId) {
       prevSessionRef.current = sessionId;
+      // Cancel any pending scroll from previous session
+      if (scrollRafRef.current) {
+        cancelAnimationFrame(scrollRafRef.current);
+        scrollRafRef.current = 0;
+      }
       didInitRef.current = false;
       userScrolledUpRef.current = false;
       prevCountRef.current = 0;
@@ -185,46 +249,29 @@ export function useActiveScrollTracker({
     }
   }, [sessionId, syncToolbarState]);
 
+  // Unified initial scroll: triggered once when messages are first ready.
+  // Uses scheduleScrollToBottom which cancels previous attempts, so
+  // loadSessionMessages → replayHoldEvents → _backgroundRefreshMessages
+  // don't create competing scroll chains.
   useEffect(() => {
     if (!initialScrollReady) return;
-    if (didInitRef.current || messageIds.length === 0) return;
-    didInitRef.current = true;
+    if (messageIds.length === 0) return;
+    // Only trigger if not yet initialized
+    if (didInitRef.current) return;
 
-    let attempts = 0;
-    const MAX_ATTEMPTS = 5;
-    let rafId: number;
-
-    const tryScroll = () => {
-      const handle = vlistRef.current;
-      if (!handle || attempts >= MAX_ATTEMPTS) return;
-      if (userScrolledUpRef.current) return;
-
-      attempts++;
-      handle.scrollToIndex(messageIds.length - 1, { align: "end" });
-
-      const isAtBottom = handle.scrollSize - handle.scrollOffset - handle.viewportSize < 50;
-      if (isAtBottom || attempts >= MAX_ATTEMPTS) {
-        setActive(messageIds[messageIds.length - 1]);
-        onInitComplete?.();
-      } else {
-        rafId = requestAnimationFrame(tryScroll);
-      }
-    };
-
-    rafId = requestAnimationFrame(tryScroll);
+    setActive(messageIds[messageIds.length - 1]);
+    scheduleScrollToBottom();
 
     return () => {
-      if (rafId) cancelAnimationFrame(rafId);
+      if (scrollRafRef.current) {
+        cancelAnimationFrame(scrollRafRef.current);
+        scrollRafRef.current = 0;
+      }
     };
-  }, [initialScrollReady, messageIds, vlistRef, setActive, onInitComplete]);
+  }, [initialScrollReady, messageIds, scheduleScrollToBottom, setActive]);
 
-  useEffect(() => {
-    if (streamVersion === 0 || streamVersion === prevStreamRef.current) return;
-    prevStreamRef.current = streamVersion;
-    if (userScrolledUpRef.current) return;
-    requestAnimationFrame(() => doScrollToBottom());
-  }, [streamVersion, doScrollToBottom]);
-
+  // historyLoadVersion effect: scroll to bottom when new messages are loaded
+  // (loadSessionMessages / _backgroundRefreshMessages), but don't reset didInitRef.
   useEffect(() => {
     if (!initialScrollReady) return;
     if (historyLoadVersion === undefined || historyLoadVersion === 0) return;
@@ -235,48 +282,50 @@ export function useActiveScrollTracker({
         ? handle.scrollSize - handle.scrollOffset - handle.viewportSize < 50
         : false;
 
+      // Already at bottom and init done — nothing to do
       if (isAlreadyAtBottom && didInitRef.current) {
         prevCountRef.current = messageIds.length;
         return;
       }
-
-      didInitRef.current = false;
     }
     prevCountRef.current = messageIds.length;
 
-    if (messageIds.length > 0 && !didInitRef.current) {
+    if (messageIds.length > 0) {
       setActive(messageIds[messageIds.length - 1]);
     }
 
     if (!userScrolledUpRef.current) {
-      let attempts = 0;
-      const MAX_ATTEMPTS = 10;
-      let rafId: number;
-
-      const tryScroll = () => {
-        const handle = vlistRef.current;
-        if (!handle || attempts >= MAX_ATTEMPTS) return;
-        attempts++;
-
-        if (handle.scrollSize <= handle.viewportSize) return;
-
-        handle.scrollToIndex(messageIds.length - 1, { align: "end" });
-
-        const isAtBottom = handle.scrollSize - handle.scrollOffset - handle.viewportSize < 50;
-        if (isAtBottom) {
-          didInitRef.current = true;
-        } else if (attempts < MAX_ATTEMPTS) {
-          rafId = requestAnimationFrame(tryScroll);
-        }
-      };
-
-      rafId = requestAnimationFrame(tryScroll);
-
-      return () => {
-        if (rafId) cancelAnimationFrame(rafId);
-      };
+      scheduleScrollToBottom();
     }
-  }, [initialScrollReady, historyLoadVersion, vlistRef, messageIds, setActive]);
+  }, [initialScrollReady, historyLoadVersion, vlistRef, messageIds, setActive, scheduleScrollToBottom]);
+
+  // Stream version effect: follow streaming updates with rAF dedup.
+  // Each streamVersion change cancels the previous rAF, so at most one
+  // scrollToIndex executes per frame regardless of how many events arrive.
+  useEffect(() => {
+    if (streamVersion === 0 || streamVersion === prevStreamRef.current) return;
+    prevStreamRef.current = streamVersion;
+    if (userScrolledUpRef.current) return;
+    if (!didInitRef.current) return; // Don't compete with initial scroll settle
+
+    // Dedup: cancel previous rAF, schedule new one
+    if (scrollRafRef.current) {
+      cancelAnimationFrame(scrollRafRef.current);
+    }
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = 0;
+      doScrollToBottom();
+    });
+  }, [streamVersion, doScrollToBottom]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (scrollRafRef.current) {
+        cancelAnimationFrame(scrollRafRef.current);
+      }
+    };
+  }, []);
 
   const scrollToEdge = useCallback(
     (edge: "top" | "bottom") => {
@@ -284,6 +333,12 @@ export function useActiveScrollTracker({
       if (!handle) return;
       const ids = messageIdsRef.current;
       if (ids.length === 0) return;
+
+      // Cancel any pending scroll
+      if (scrollRafRef.current) {
+        cancelAnimationFrame(scrollRafRef.current);
+        scrollRafRef.current = 0;
+      }
 
       if (edge === "top") {
         handle.scrollToIndex(0);

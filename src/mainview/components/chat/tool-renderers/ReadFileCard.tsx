@@ -70,7 +70,7 @@ export const ReadFileCard = memo(function ReadFileCard({
     logger.warn("Failed to parse read file args", { error: String(e) });
   }
 
-  const displayPath = filePath ? formatFilePath(filePath) : block.args?.slice(0, 80) || "";
+  const displayPath = filePath ? formatFilePath(filePath) : block.args?.slice(0, 80) || block.toolName;
 
   const headerStatus = isRunning
     ? ("running" as const)

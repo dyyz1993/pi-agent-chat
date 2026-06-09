@@ -740,13 +740,27 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
         status={isRunning ? "running" : isError ? "error" : "done"}
         description={
           block.output && !isRunning
-            ? block.output.split("\n")[0].slice(0, 100)
+            ? (() => {
+                const firstLine = block.output!.split("\n")[0].slice(0, 100);
+                const trimmed = firstLine.trim();
+                // If output starts with JSON brace, skip it — use args-based description instead.
+                if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+                  return (
+                    block.description ??
+                    getToolArgsDescription(block.toolName, block.args) ??
+                    block.toolName
+                  );
+                }
+                return firstLine;
+              })()
             : (block.description ??
               getToolArgsDescription(block.toolName, block.args) ??
               block.toolName)
         }
         collapsed={collapsed}
         onClick={handleToggleCollapse}
+        startedAt={block.startedAt}
+        endedAt={block.endedAt}
         badge={
           <>
             {!isRunning && !isError && (

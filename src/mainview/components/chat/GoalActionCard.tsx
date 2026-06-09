@@ -181,7 +181,10 @@ export function GoalActionCard({
 
   const openGoalPanel = () => {
     openStatusPanel("status");
-    expandStatusSection("supervisor");
+    // Defer expandSection to next frame so panel has rendered
+    requestAnimationFrame(() => {
+      expandStatusSection("supervisor");
+    });
   };
 
   return (
@@ -190,19 +193,23 @@ export function GoalActionCard({
       <div
         className={`sm:hidden flex items-center gap-2 px-2 py-1.5 rounded-lg border min-h-11 ${tone?.className ?? "border-border-secondary bg-surface-dim"}`}
       >
-        <Icon
-          className={`w-4 h-4 shrink-0 ${tone?.iconClassName ?? "text-text-tertiary"} ${isLive ? "animate-pulse" : ""}`}
-        />
-        <div className="min-w-0 flex-1 flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => onEdit(goal.objective)}
+          className="flex items-center gap-2 min-w-0 flex-1 text-left"
+        >
+          <Icon
+            className={`w-4 h-4 shrink-0 ${tone?.iconClassName ?? "text-text-tertiary"} ${isLive ? "animate-pulse" : ""}`}
+          />
           <span className="text-[11px] text-text-tertiary shrink-0">
             {elapsed} · #{goal.continuationCount}
           </span>
           <span className="text-xs text-text-secondary truncate min-w-0">{goal.objective}</span>
-        </div>
+        </button>
         <button
           type="button"
           onClick={openGoalPanel}
-          className="w-11 h-11 -my-1.5 -mr-1.5 rounded-md text-text-tertiary hover:text-text-primary hover:bg-surface-hover transition-colors flex items-center justify-center shrink-0"
+          className="w-8 h-8 -my-1 -mr-1 rounded-md text-text-tertiary hover:text-text-primary hover:bg-surface-hover transition-colors flex items-center justify-center shrink-0"
           title={t("goal.openPanel")}
           aria-label={t("goal.openPanel")}
         >

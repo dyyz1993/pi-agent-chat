@@ -18,9 +18,14 @@ import { useStatusStore } from "./use-status-store";
 import { useChangeReviewStore } from "./use-change-review-store";
 import { clearSessionFetchInitCache } from "./session-initial-state";
 import { clearRetrySession } from "./use-retry-store";
-import { handleAgentEvent, toolCallNameMap } from "./agent-event-handler";
+import { handleAgentEvent, toolCallNameMap, toolCallArgsMap, cleanupEventHandlerMaps } from "./agent-event-handler";
 import { notificationGateway } from "../lib/notification-gateway";
 import { useAppStore } from "./use-app-store";
+import { useHooksStore } from "./use-hooks-store";
+import { useSnapshotStore } from "./use-snapshot-store";
+import { useTierStore } from "./use-tier-store";
+import { useAgentStore } from "./use-agent-store";
+import { clearAgentStarted } from "./use-session-store";
 import { createLogger } from "../../shared/lib/logger";
 
 const perfLog = createLogger("session-perf");
@@ -827,6 +832,7 @@ export function cleanupSession(state: SubscriptionMaps, sessionId: string): void
       for (const block of msg.content) {
         if (block.type === "toolExecution") {
           delete toolCallNameMap[block.toolCallId];
+          delete toolCallArgsMap[block.toolCallId];
         }
       }
     }
@@ -842,17 +848,7 @@ export function cleanupSession(state: SubscriptionMaps, sessionId: string): void
  * even when the user switches away from an active session.
  */
 export function cleanupSessionLight(sessionId: string): void {
-  // Reset toolCallNameMap for this session (same as cleanupSession)
-  const msgs = useChatStore.getState().messagesBySession[sessionId] || [];
-  for (const msg of msgs) {
-    if (msg.role === "assistant") {
-      for (const block of msg.content) {
-        if (block.type === "toolExecution") {
-          delete toolCallNameMap[block.toolCallId];
-        }
-      }
-    }
-  }
+  cleanupEventHandlerMaps(sessionId);
 }
 
 /**
@@ -872,6 +868,15 @@ export function cleanupSessionHeavy(sessionId: string): void {
   useBashStore.getState().clearSession(sessionId);
   useLspStore.getState().clearSession(sessionId);
   useSupervisorStore.getState().clearSession(sessionId);
+  useHooksStore.getState().clearSession(sessionId);
+  useSnapshotStore.getState().clearSession(sessionId);
+  useTierStore.getState().clearSession(sessionId);
+  useAgentStore.getState().clearSession(sessionId);
+  clearAgentStarted(sessionId);
+
+  // Clean up module-level maps in agent-event-handler
+  cleanupEventHandlerMaps(sessionId);
+
   useStatusStore.getState().clearSessionData();
   useChangeReviewStore.getState().clearAll();
 }

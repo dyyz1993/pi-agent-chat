@@ -156,6 +156,9 @@ export function ChatPanel() {
   const sessionReady = useSessionStore(
     useCallback((s) => !!activeSessionId && s.sessionReady[activeSessionId], [activeSessionId]),
   );
+  const agentReady = useSessionStore(
+    useCallback((s) => !!activeSessionId && !!s.agentReady[activeSessionId], [activeSessionId]),
+  );
 
   const hasMoreMessages = useChatStore(
     useCallback(
@@ -312,10 +315,12 @@ export function ChatPanel() {
   const lastSetNavIdRef = useRef<string | null>(null);
   const navScrollingRef = useRef(false);
   const navScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initDoneRef = useRef(false);
 
   useEffect(() => {
     lastSetNavIdRef.current = null;
     navScrollingRef.current = false;
+    initDoneRef.current = false;
     if (navScrollTimerRef.current) {
       clearTimeout(navScrollTimerRef.current);
       navScrollTimerRef.current = null;
@@ -343,10 +348,12 @@ export function ChatPanel() {
         lastSetNavIdRef.current = lastIconId;
         setNavId(lastIconId);
       }
+      initDoneRef.current = true;
     }, [setNavId]),
     setActive: useCallback(
       (id: string | null) => {
         setActive(id);
+        if (!initDoneRef.current) return;
         if (navScrollingRef.current) return;
         if (id && id !== lastSetNavIdRef.current) {
           lastSetNavIdRef.current = id;
@@ -751,6 +758,12 @@ export function ChatPanel() {
             </div>
           ) : (
             <>
+              {!agentReady && (
+                <div className="flex items-center justify-center gap-1.5 pb-1">
+                  <Loader2 className="w-3 h-3 text-text-tertiary animate-spin" />
+                  <span className="text-[10px] text-text-tertiary">{t("sessionStarting")}</span>
+                </div>
+              )}
               {goalMode && !isRefiningGoal && (
                 <div className="flex items-center gap-2 px-1 pb-1 text-xs text-semantic-accent">
                   <Target className="w-3.5 h-3.5" />
@@ -836,6 +849,7 @@ export function ChatPanel() {
                       goalMode ? void handleCreateGoal() : inputBarRef.current?.send()
                     }
                     disabled={
+                      !agentReady ||
                       isAborting ||
                       isCreatingGoal ||
                       isPermissionPending ||

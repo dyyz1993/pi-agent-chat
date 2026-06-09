@@ -31,20 +31,20 @@ export const DIFF_STYLE_PRESETS = {
   },
   inline: {
     fontSize: 11,
-    gutterWidth: 28,
+    gutterWidth: 20,
     gutterFontSize: 10,
     lineHeight: 1.5,
     background: "transparent",
-    markerWidth: 16,
+    markerWidth: 12,
     markerFontSize: 11,
   },
   inlineMobile: {
     fontSize: 12,
-    gutterWidth: 24,
+    gutterWidth: 20,
     gutterFontSize: 11,
     lineHeight: 1.4,
     background: "transparent",
-    markerWidth: 14,
+    markerWidth: 12,
     markerFontSize: 11,
   },
 } as const;
@@ -92,7 +92,7 @@ export function createDiffStyles(config: DiffStyleConfig): DiffStyleOverride {
     gutter: {
       minWidth: config.gutterWidth,
       width: config.gutterWidth,
-      padding: "0 3px",
+      padding: "0 2px",
       fontSize: `${config.gutterFontSize}px`,
     },
     contentText: {
@@ -103,8 +103,8 @@ export function createDiffStyles(config: DiffStyleConfig): DiffStyleOverride {
     },
     marker: {
       width: config.markerWidth ?? 16,
-      paddingLeft: 2,
-      paddingRight: 2,
+      paddingLeft: 1,
+      paddingRight: 1,
       fontSize: `${config.markerFontSize ?? config.fontSize}px`,
     },
     emptyGutter: {

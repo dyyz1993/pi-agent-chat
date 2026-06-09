@@ -90,6 +90,7 @@ interface AgentState {
   fetchAllTools: (sessionId: string) => Promise<void>;
   fetchSystemPrompt: (sessionId: string) => Promise<void>;
   clearAgentDetail: (sessionId: string) => void;
+  clearSession: (sessionId: string) => void;
 }
 
 export type { AgentInfo, AgentSource, AgentDetail, AgentToolInfo, AgentHook };
@@ -310,6 +311,23 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     set((state) => {
       const { [sessionId]: _, ...rest } = state.agentDetailBySession;
       return { agentDetailBySession: rest };
+    });
+  },
+
+  clearSession: (sessionId) => {
+    set((state) => {
+      const { [sessionId]: _ad, ...restAgentDetail } = state.agentDetailBySession;
+      const { [sessionId]: _ca, ...restCurrentAgent } = state.currentAgentBySession;
+      const { [sessionId]: _sw, ...restSwitching } = state.switchingBySession;
+      const { [sessionId]: _at, ...restAllTools } = state.allToolsBySession;
+      const { [sessionId]: _sp, ...restSystemPrompt } = state.liveSystemPromptBySession;
+      return {
+        agentDetailBySession: restAgentDetail,
+        currentAgentBySession: restCurrentAgent,
+        switchingBySession: restSwitching,
+        allToolsBySession: restAllTools,
+        liveSystemPromptBySession: restSystemPrompt,
+      };
     });
   },
 

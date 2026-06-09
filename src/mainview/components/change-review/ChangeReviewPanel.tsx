@@ -20,6 +20,7 @@ import { useChangeReviewStore } from "../../stores/use-change-review-store";
 import { useGitStore } from "../../stores/use-git-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import type { FileStatus } from "../../../shared/modules/change-review";
+import { InlineDiffViewer } from "../chat/tool-renderers/InlineDiffViewer";
 
 /* ── Git-style status helpers (reusing GitPanel patterns) ── */
 
@@ -185,8 +186,16 @@ const ChangeItem = memo(function ChangeItem({ change, isExpanded, onToggle }: Ch
   const { t } = useTranslation("changeReview");
   const approveChange = useChangeReviewStore((s) => s.approveChange);
   const rejectChange = useChangeReviewStore((s) => s.rejectChange);
+  const fetchFileDiff = useChangeReviewStore((s) => s.fetchFileDiff);
   const fetchAgentFileDiff = useGitStore((s) => s.fetchAgentFileDiff);
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
+
+  // When expanded and content is missing, load diff on demand
+  useEffect(() => {
+    if (isExpanded && (change.oldContent === null || change.newContent === null)) {
+      fetchFileDiff(change.path);
+    }
+  }, [isExpanded, change.oldContent, change.newContent, change.path, fetchFileDiff]);
 
   const statusCfg = STATUS_CONFIG[change.status];
   const StatusIcon = statusCfg.Icon;
@@ -296,6 +305,17 @@ const ChangeItem = memo(function ChangeItem({ change, isExpanded, onToggle }: Ch
             )}
           </div>
         </div>
+
+        {isExpanded && change.oldContent !== null && change.newContent !== null && (
+          <div className="mt-1">
+            <InlineDiffViewer
+              oldValue={change.oldContent}
+              newValue={change.newContent}
+              filePath={change.path}
+              maxHeight="300px"
+            />
+          </div>
+        )}
       </div>
     </div>
   );

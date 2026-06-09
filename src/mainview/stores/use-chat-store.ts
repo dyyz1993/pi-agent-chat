@@ -509,8 +509,27 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   clearSessionMessages: (sessionId) =>
     set((s) => {
-      const { [sessionId]: _, ...rest } = s.messagesBySession;
-      return { messagesBySession: rest };
+      const { [sessionId]: _m, ...restMessages } = s.messagesBySession;
+      const { [sessionId]: _a, ...restActiveTools } = s.activeToolCallIdsBySession;
+      const { [sessionId]: _sv, ...restStreamVersion } = s.streamVersionBySession;
+      const { [sessionId]: _hlv, ...restHistoryLoadVersion } = s.historyLoadVersionBySession;
+      const { [sessionId]: _hy, ...restHydration } = s.messageHydrationBySession;
+      const { [sessionId]: _hm, ...restHasMore } = s.hasMoreMessagesBySession;
+      const { [sessionId]: _il, ...restIsLoading } = s.isLoadingMoreBySession;
+      const { [sessionId]: _nc, ...restNextCursor } = s.nextCursorBySession;
+      const loadingSessions = new Set(s.loadingSessions);
+      loadingSessions.delete(sessionId);
+      return {
+        messagesBySession: restMessages,
+        activeToolCallIdsBySession: restActiveTools,
+        streamVersionBySession: restStreamVersion,
+        historyLoadVersionBySession: restHistoryLoadVersion,
+        messageHydrationBySession: restHydration,
+        hasMoreMessagesBySession: restHasMore,
+        isLoadingMoreBySession: restIsLoading,
+        nextCursorBySession: restNextCursor,
+        loadingSessions,
+      };
     }),
 
   setActiveToolCallIds: (sessionId, toolCallIds) =>

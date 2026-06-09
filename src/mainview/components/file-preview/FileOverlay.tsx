@@ -1,4 +1,4 @@
-import { FileText, X, Code, Eye, Save, Pencil } from "lucide-react";
+import { FileText, X, Code, Eye, Save, Pencil, Check, Loader2 } from "lucide-react";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import type { FilePreview } from "../../types";
@@ -6,14 +6,17 @@ import { formatSize } from "../../utils/file-utils";
 import { VirtualizedCodeView } from "./VirtualizedCodeView";
 import { apiClient } from "../../lib/api-client";
 import { createLogger } from "../../../shared/lib/logger";
+import { IconButton } from "../primitives/IconButton";
 
 const log = createLogger("file");
+
+type SaveState = "idle" | "saving" | "saved" | "error";
 
 interface FileOverlayProps {
   preview: FilePreview;
   loading: boolean;
   onClose: () => void;
-  onSave?: (content: string) => void;
+  onSave?: (content: string) => Promise<void>;
   onToggleEdit?: (editable: boolean) => void;
 }
 
@@ -45,12 +48,17 @@ function canUseFsRoute(): boolean {
   return apiClient.getTransport() === "websocket";
 }
 
+const toolbarBtnBase =
+  "inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-xs font-medium transition-colors";
+
 export function FileOverlay({ preview, loading, onClose, onSave, onToggleEdit }: FileOverlayProps) {
   const { t } = useTranslation("explorer");
   const [svgContent, setSvgContent] = useState<string | null>(null);
   const [svgLoading, setSvgLoading] = useState(false);
   const [htmlSourceMode, setHtmlSourceMode] = useState(false);
   const [editContent, setEditContent] = useState(preview.content ?? "");
+  const [saveState, setSaveState] = useState<SaveState>("idle");
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Sync content when preview changes (e.g., new file opened)
@@ -77,11 +85,20 @@ export function FileOverlay({ preview, loading, onClose, onSave, onToggleEdit }:
   const isHtml = isHtmlFile(preview.name) && canUseFsRoute();
   const fsUrl = isHtml ? getFsUrl(preview.path) : "";
 
-  const handleSave = useCallback(() => {
-    if (onSave) {
-      onSave(editContent);
+  const handleSave = useCallback(async () => {
+    if (!onSave || saveState === "saving") return;
+    setSaveState("saving");
+    try {
+      await onSave(editContent);
+      setSaveState("saved");
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(() => setSaveState("idle"), 2000);
+    } catch {
+      setSaveState("error");
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(() => setSaveState("idle"), 3000);
     }
-  }, [editContent, onSave]);
+  }, [editContent, onSave, saveState]);
 
   const handleEditorKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -175,60 +192,84 @@ export function FileOverlay({ preview, loading, onClose, onSave, onToggleEdit }:
     return null;
   };
 
+  const hasToolbarButtons = isHtml || (preview.isText && !preview.editable && onToggleEdit) || preview.editable;
+
   return (
     <div className="absolute inset-0 z-10 bg-bg-elevated/95 dark:bg-surface-code/95 flex flex-col overflow-hidden">
       <div className="flex items-center justify-between px-4 py-2 bg-surface-dim border-b border-border-secondary flex-shrink-0">
-        <div className="flex items-center gap-2">
-          <FileText className="w-4 h-4 text-text-tertiary" />
-          <span className="text-sm font-medium text-text-primary">{preview.name}</span>
+        <div className="flex items-center gap-2 min-w-0">
+          <FileText className="w-4 h-4 text-text-tertiary shrink-0" />
+          <span className="text-sm font-medium text-text-primary truncate">{preview.name}</span>
           {preview.size > 0 && (
-            <span className="text-xs text-text-tertiary">{formatSize(preview.size)}</span>
+            <span className="text-xs text-text-tertiary shrink-0">{formatSize(preview.size)}</span>
           )}
           {preview.totalLines != null && (
-            <span className="text-xs text-text-tertiary">{preview.totalLines} lines</span>
+            <span className="text-xs text-text-tertiary shrink-0">{preview.totalLines} lines</span>
           )}
         </div>
-        <div className="flex items-center gap-1">
-          {isHtml && (
-            <button
-              onClick={() => setHtmlSourceMode((v) => !v)}
-              className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors ${
-                htmlSourceMode
-                  ? "text-semantic-accent bg-semantic-accent/10 hover:bg-semantic-accent/20"
-                  : "text-text-tertiary hover:text-text-primary dark:hover:text-text-primary hover:bg-surface-hover/50 dark:hover:bg-surface-hover/50"
-              }`}
-              title={htmlSourceMode ? t("switchPreview") : t("switchSource")}
-            >
-              {htmlSourceMode ? <Eye className="w-3.5 h-3.5" /> : <Code className="w-3.5 h-3.5" />}
-              <span>{htmlSourceMode ? t("preview") : t("source")}</span>
-            </button>
+        <div className="flex items-center gap-1 shrink-0">
+          {hasToolbarButtons && (
+            <div className="flex items-center gap-1 mr-1 pr-2 border-r border-border-secondary">
+              {isHtml && (
+                <button
+                  onClick={() => setHtmlSourceMode((v) => !v)}
+                  className={`${toolbarBtnBase} ${
+                    htmlSourceMode
+                      ? "text-semantic-accent bg-semantic-accent/10 hover:bg-semantic-accent/20"
+                      : "text-text-tertiary hover:text-text-primary hover:bg-surface-hover"
+                  }`}
+                  title={htmlSourceMode ? t("switchPreview") : t("switchSource")}
+                >
+                  {htmlSourceMode ? <Eye className="w-3.5 h-3.5" /> : <Code className="w-3.5 h-3.5" />}
+                  <span>{htmlSourceMode ? t("preview") : t("source")}</span>
+                </button>
+              )}
+              {preview.isText && !preview.editable && onToggleEdit && (
+                <button
+                  onClick={() => onToggleEdit(true)}
+                  className={`${toolbarBtnBase} text-text-tertiary hover:text-text-primary hover:bg-surface-hover`}
+                  title={t("edit", { ns: "explorer" })}
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  <span>{t("edit", { ns: "explorer" })}</span>
+                </button>
+              )}
+              {preview.editable && (
+                <button
+                  onClick={handleSave}
+                  disabled={saveState === "saving"}
+                  className={`${toolbarBtnBase} ${
+                    saveState === "saved"
+                      ? "bg-status-success/80 text-white hover:bg-status-success/80"
+                      : saveState === "error"
+                        ? "bg-status-error/80 text-white hover:bg-status-error/80"
+                        : "bg-semantic-accent text-white hover:bg-semantic-accent/85 disabled:opacity-70"
+                  }`}
+                  title={saveState === "saving" ? t("saving") : `${t("save")} (⌘↵)`}
+                >
+                  {saveState === "saving" ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : saveState === "saved" ? (
+                    <Check className="w-3.5 h-3.5" />
+                  ) : (
+                    <Save className="w-3.5 h-3.5" />
+                  )}
+                  <span>
+                    {saveState === "saving"
+                      ? t("saving")
+                      : saveState === "saved"
+                        ? t("saved")
+                        : saveState === "error"
+                          ? t("saveFailed")
+                          : t("save")}
+                  </span>
+                </button>
+              )}
+            </div>
           )}
-          {preview.isText && !preview.editable && onToggleEdit && (
-            <button
-              onClick={() => onToggleEdit(true)}
-              className="flex items-center gap-1 px-2 py-1 rounded text-xs text-text-tertiary hover:text-text-primary dark:hover:text-text-primary hover:bg-surface-hover/50 dark:hover:bg-surface-hover/50 transition-colors"
-              title="Edit"
-            >
-              <Pencil className="w-3.5 h-3.5" />
-              <span>Edit</span>
-            </button>
-          )}
-          {preview.editable && (
-            <button
-              onClick={handleSave}
-              className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-semantic-accent hover:bg-semantic-accent/80 text-white transition-colors"
-              title="Save (Ctrl+Enter)"
-            >
-              <Save className="w-3.5 h-3.5" />
-              <span>Save</span>
-            </button>
-          )}
-          <button
-            onClick={onClose}
-            className="p-2 rounded text-text-tertiary hover:text-text-primary dark:hover:text-text-primary hover:bg-surface-hover dark:hover:bg-surface-hover transition-colors"
-          >
+          <IconButton label={t("close", { ns: "common" })} variant="ghost" size="sm" onClick={onClose}>
             <X className="w-4 h-4" />
-          </button>
+          </IconButton>
         </div>
       </div>
 

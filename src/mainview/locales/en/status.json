@@ -126,5 +126,13 @@
   "supervisor.action.disable": "Disable Goal",
   "supervisor.forceContinue": "Force Continue",
   "supervisor.pause": "Pause",
-  "supervisor.cancelPause": "Cancel Pause"
+  "supervisor.cancelPause": "Cancel Pause",
+  "supervisor.triggerHistory": "Trigger History",
+  "supervisor.triggerHistory.refresh": "Refresh",
+  "supervisor.triggerHistory.empty": "No trigger records yet",
+  "supervisor.trigger.verdict.complete": "Complete",
+  "supervisor.trigger.verdict.incomplete": "Incomplete",
+  "supervisor.trigger.verdict.blocked": "Blocked",
+  "supervisor.trigger.verdict.unsafe": "Unsafe",
+  "supervisor.trigger.modelCheck": "Model Check"
 }

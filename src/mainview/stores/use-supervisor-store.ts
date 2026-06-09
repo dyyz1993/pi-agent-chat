@@ -3,6 +3,7 @@ import type {
   SupervisorStatus,
   SupervisorChannelEvent,
   TaskReport,
+  TriggerRecord,
 } from "../../shared/modules/supervisor";
 import { apiClient } from "../lib/api-client";
 import { createLogger } from "../../shared/lib/logger";
@@ -12,6 +13,7 @@ const log = createLogger("supervisor");
 export interface SupervisorSessionState {
   status: SupervisorStatus | null;
   taskReports: TaskReport[];
+  triggerRecords: TriggerRecord[];
 }
 
 interface SupervisorState {
@@ -27,6 +29,7 @@ interface SupervisorState {
   enable: (sessionId: string) => Promise<void>;
   disable: (sessionId: string) => Promise<void>;
   fetchTaskReport: (sessionId: string) => Promise<void>;
+  fetchTriggerHistory: (sessionId: string, limit?: number) => Promise<void>;
   handleEvent: (sessionId: string, event: SupervisorChannelEvent) => void;
   clearSession: (sessionId: string) => void;
 }
@@ -34,6 +37,7 @@ interface SupervisorState {
 const emptySession = (): SupervisorSessionState => ({
   status: null,
   taskReports: [],
+  triggerRecords: [],
 });
 
 function updateSession(
@@ -248,6 +252,26 @@ export const useSupervisorStore = create<SupervisorState>()((set) => ({
     }
   },
 
+  fetchTriggerHistory: async (sessionId: string, limit?: number) => {
+    try {
+      const result = (await apiClient.call("supervisor.getTriggerHistory", {
+        sessionId,
+        limit,
+      })) as { triggers: TriggerRecord[] };
+      set((s) => ({
+        bySession: updateSession(s.bySession, sessionId, (session) => ({
+          ...session,
+          triggerRecords: result.triggers,
+        })),
+      }));
+    } catch (err) {
+      log.warn("fetchTriggerHistory failed", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+  },
+
   handleEvent: (sessionId: string, event: SupervisorChannelEvent) => {
     switch (event.type) {
       case "statusChanged":
@@ -349,6 +373,14 @@ export const useSupervisorStore = create<SupervisorState>()((set) => ({
                   activeGuards: [],
                   lastGoldResult: event,
                 },
+          })),
+        }));
+        break;
+      case "triggerRecord":
+        set((s) => ({
+          bySession: updateSession(s.bySession, sessionId, (session) => ({
+            ...session,
+            triggerRecords: [...session.triggerRecords, event.record],
           })),
         }));
         break;

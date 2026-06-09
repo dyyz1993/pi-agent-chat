@@ -5,6 +5,7 @@
   "delete": "Delete",
   "copyPath": "Copy Path",
   "refresh": "Refresh",
+  "edit": "Edit",
   "confirmDelete": "Confirm Delete",
   "preview": "Preview",
   "source": "Source",
@@ -14,5 +15,9 @@
   "enterPathRefresh": "Enter path and click refresh",
   "confirmDeleteMessage": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone.",
   "contextMenu": "Context menu",
-  "loading": "Loading..."
+  "loading": "Loading...",
+  "saving": "Saving...",
+  "save": "Save",
+  "saved": "Saved",
+  "saveFailed": "Save failed"
 }

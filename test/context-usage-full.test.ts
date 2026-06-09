@@ -206,14 +206,14 @@ beforeEach(() => {
 
 describe("context usage tracking", () => {
   describe("1. Initial load — empty context", () => {
-    it("message_end accumulates usage.input as tokens", async () => {
+    it("message_end sets tokens from usage (input + output)", async () => {
       setupStreamingAssistant();
       fireMessageEnd();
       await flushPromises();
 
       const ctx = getContextMap();
       expect(ctx).toBeDefined();
-      expect(ctx!.tokens).toBe(1000);
+      expect(ctx!.tokens).toBe(1500);
     });
 
     it("message_end without usage does not set tokens", async () => {
@@ -235,29 +235,29 @@ describe("context usage tracking", () => {
     });
   });
 
-  describe("2. After message_end — tokens accumulate from usage.input", () => {
-    it("accumulates usage.input from message_end event", async () => {
+  describe("2. After message_end — tokens set from usage", () => {
+    it("sets tokens from usage (input + output)", async () => {
       setupStreamingAssistant();
       fireMessageEnd({ input: 5000, output: 2000 });
       await flushPromises();
 
       const ctx = getContextMap();
       expect(ctx).toBeDefined();
-      expect(ctx!.tokens).toBe(5000);
+      expect(ctx!.tokens).toBe(7000);
     });
 
-    it("accumulates across multiple message_end events", async () => {
+    it("replaces tokens with latest usage across multiple message_end events", async () => {
       setupStreamingAssistant();
       fireMessageEnd({ input: 3000, output: 1000 });
       await flushPromises();
 
-      expect(getContextMap()!.tokens).toBe(3000);
+      expect(getContextMap()!.tokens).toBe(4000);
 
       setupStreamingAssistant();
       fireMessageEnd({ input: 2000, output: 500 });
       await flushPromises();
 
-      expect(getContextMap()!.tokens).toBe(5000);
+      expect(getContextMap()!.tokens).toBe(2500);
     });
   });
 
@@ -323,7 +323,7 @@ describe("context usage tracking", () => {
       expect(getContextMap()!.tokens).toBe(8000);
     });
 
-    it("pre-existing tokens accumulate when usage.input provided", async () => {
+    it("pre-existing tokens replaced by usage from message_end", async () => {
       useSessionStore.setState({
         sessionContextMap: { [SID]: { tokens: 8000, contextWindow: 200000 } },
       });
@@ -331,7 +331,7 @@ describe("context usage tracking", () => {
       fireMessageEnd({ input: 2000, output: 500 });
       await flushPromises();
 
-      expect(getContextMap()!.tokens).toBe(10000);
+      expect(getContextMap()!.tokens).toBe(2500);
     });
   });
 
@@ -345,7 +345,7 @@ describe("context usage tracking", () => {
       fireMessageEnd({ input: 15000, output: 5000 });
       await flushPromises();
 
-      expect(getContextMap()!.tokens).toBe(15000);
+      expect(getContextMap()!.tokens).toBe(20000);
 
       handleAgentEvent(SID, {
         type: "compaction_end",
@@ -358,12 +358,12 @@ describe("context usage tracking", () => {
       fireMessageEnd({ input: 3000, output: 1000 });
       await flushPromises();
 
-      expect(getContextMap()!.tokens).toBe(8000);
+      expect(getContextMap()!.tokens).toBe(4000);
     });
   });
 
-  describe("6. contextWindow preserved during accumulation", () => {
-    it("message_end accumulates tokens but preserves contextWindow", async () => {
+  describe("6. contextWindow preserved during token update", () => {
+    it("message_end replaces tokens but preserves contextWindow", async () => {
       useSessionStore.setState({
         sessionContextMap: { [SID]: { tokens: 5000, contextWindow: 200000 } },
       });
@@ -372,11 +372,11 @@ describe("context usage tracking", () => {
       await flushPromises();
 
       const ctx = getContextMap();
-      expect(ctx!.tokens).toBe(6000);
+      expect(ctx!.tokens).toBe(1500);
       expect(ctx!.contextWindow).toBe(200000);
     });
 
-    it("contextWindow stays when usage.input is 0", async () => {
+    it("contextWindow stays when contextTokens is 0 (input=0, output=500)", async () => {
       useSessionStore.setState({
         sessionContextMap: { [SID]: { tokens: 5000, contextWindow: 200000 } },
       });
@@ -385,7 +385,7 @@ describe("context usage tracking", () => {
       await flushPromises();
 
       const ctx = getContextMap();
-      expect(ctx!.tokens).toBe(5000);
+      expect(ctx!.tokens).toBe(500);
       expect(ctx!.contextWindow).toBe(200000);
     });
   });

@@ -28,6 +28,8 @@ export interface SessionCacheData {
   lastJsonlLeafPointer: string | null;
   activeJsonlLeafId: string | null;
   lineCount: number;
+  /** Byte offset for incremental reads — avoids re-reading already-parsed lines. */
+  byteOffset: number;
 }
 
 interface CachedSessionData extends SessionCacheData {
@@ -143,6 +145,84 @@ export class SessionMessageCache {
     rl.close();
 
     return { newEntries, totalLines: lineIndex };
+  }
+
+  async readJsonlFromByteOffset(
+    sessionPath: string,
+    byteOffset: number,
+    messages: SessionMessageEntry[],
+    customEntries: SessionCustomEntry[],
+    parentById: Map<string, string | null>,
+  ): Promise<{
+    newEntries: number;
+    totalLines: number;
+    newByteOffset: number;
+    newCompactionEntries: SessionCompactionEntry[];
+    lastLeafPointer: string | null;
+  }> {
+    let lineIndex = 0;
+    let newEntries = 0;
+    const newCompactionEntries: SessionCompactionEntry[] = [];
+    let lastLeafPointer: string | null = null;
+
+    const rl = readline.createInterface({
+      input: createReadStream(sessionPath, { encoding: "utf-8", start: byteOffset }),
+      crlfDelay: Infinity,
+    });
+    for await (const line of rl) {
+      lineIndex++;
+      if (!line.trim()) continue;
+      try {
+        const parsed = JSON.parse(line) as Record<string, unknown>;
+        const entryId = (parsed.id as string) ?? "";
+        const parentId = (parsed.parentId as string | null | undefined) ?? null;
+        if (entryId) {
+          parentById.set(entryId, parentId);
+        }
+        if (parsed.type === "message" && parsed.message) {
+          messages.push({ entryId, message: parsed.message });
+          newEntries++;
+        } else if (parsed.type === "custom") {
+          customEntries.push({
+            id: entryId || `custom-${Date.now()}`,
+            customType: (parsed.customType as string) ?? "unknown",
+            data: parsed.data,
+            timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
+          });
+          newEntries++;
+        } else if (parsed.type === "compaction") {
+          const compEntry = {
+            entryId,
+            summary: (parsed.summary as string) ?? "",
+            tokensBefore: parsed.tokensBefore as number | undefined,
+            timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
+          };
+          newCompactionEntries.push(compEntry);
+          messages.push({
+            entryId,
+            message: {
+              role: "compactionSummary",
+              summary: compEntry.summary,
+              tokensBefore: compEntry.tokensBefore,
+              timestamp: compEntry.timestamp,
+            },
+          });
+          newEntries++;
+        } else if (parsed.type === "leaf_pointer" && typeof parsed.leafId === "string") {
+          lastLeafPointer = parsed.leafId;
+        }
+      } catch {
+        // skip malformed
+      }
+    }
+    rl.close();
+    let newByteOffset = byteOffset;
+    try {
+      newByteOffset = statSync(sessionPath).size;
+    } catch {
+      // file gone — keep original offset
+    }
+    return { newEntries, totalLines: lineIndex, newByteOffset, newCompactionEntries, lastLeafPointer };
   }
 
   private touch(sessionId: string, cached: CachedSessionData): void {

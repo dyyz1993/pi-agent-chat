@@ -32,9 +32,14 @@ export function getToolArgsDescription(
   const parsed = parseArgs(args);
 
   // Non-JSON args (plain command string): use first line
+  // Skip if it looks like broken JSON (starts with { or [) to avoid showing raw braces.
   if (!parsed) {
-    if (args && args.trim()) return truncate(args.split("\n")[0]);
-    return undefined;
+    if (args && args.trim()) {
+      const first = args.trim()[0];
+      if (first === "{" || first === "[") return toolName;
+      return truncate(args.split("\n")[0]);
+    }
+    return toolName;
   }
 
   // 1. Explicit description field always wins
@@ -83,5 +88,6 @@ export function getToolArgsDescription(
   if (pattern) return truncate(pattern);
   if (url) return truncate(url);
 
-  return undefined;
+  // 4. Last resort: surface the tool name itself so the header is never empty.
+  return toolName;
 }

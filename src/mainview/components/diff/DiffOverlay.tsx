@@ -106,7 +106,8 @@ export function DiffOverlay() {
 
       <div className="flex-1 overflow-auto">
         {loadingDiff ? (
-          <div className="flex items-center justify-center h-full text-text-tertiary">
+          <div className="flex items-center justify-center h-full text-text-tertiary text-sm">
+            <div className="w-5 h-5 border-2 border-semantic-accent border-t-transparent rounded-full animate-spin mr-2" />
             {t("loadingDiff")}
           </div>
         ) : currentDiff ? (

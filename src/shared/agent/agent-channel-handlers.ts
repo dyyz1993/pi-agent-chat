@@ -184,6 +184,10 @@ export async function handleBashChannelDataOperation(options: {
     const existing = pendingBashOutputs.get(key);
     if (existing) {
       existing.events.push(data);
+      if (existing.timer) clearTimeout(existing.timer);
+      existing.timer = setTimeout(() => {
+        flushBashOutput(key, options.sessionId, options.broadcastEvent);
+      }, BASH_FLUSH_MS);
       return;
     }
     const pending: PendingBashOutput = { events: [data], timer: null };

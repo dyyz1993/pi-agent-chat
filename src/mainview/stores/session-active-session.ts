@@ -1,6 +1,7 @@
 import type { StoreApi } from "zustand";
 import { apiClient } from "../lib/api-client";
 import type { ModelInfo } from "./use-session-store";
+import { useSessionStore } from "./use-session-store";
 import type { ProjectTab, SessionMeta } from "../types";
 import { useAppStore } from "./use-app-store";
 import { useChatStore } from "./use-chat-store";
@@ -18,6 +19,7 @@ interface ActiveSessionState extends SubscriptionMaps {
   projectTabs: ProjectTab[];
   sessionsByProject: Record<string, SessionMeta[]>;
   sessionReady: Record<string, boolean>;
+  agentReady: Record<string, boolean>;
   lastActiveSessionByProject: Record<string, string>;
   projectStartFailed: Record<string, boolean>;
   projectStartError: Record<string, string>;
@@ -172,6 +174,7 @@ export function createSetActiveSessionAction({
             if (!projectId) return {};
             return {
               sessionReady: { ...s.sessionReady, [id]: true },
+              agentReady: { ...s.agentReady, [id]: true },
               projectStartFailed: { ...s.projectStartFailed, [projectId]: false },
               projectStartError: { ...s.projectStartError, [projectId]: "" },
             };
@@ -202,6 +205,28 @@ export function createSetActiveSessionAction({
 
         perfLog.info("[switch] agent.start begin", { sessionId: id });
         const tAgentStart = performance.now();
+
+        // Start loading messages immediately — getFullMessages reads JSONL directly
+        // and does NOT need the CLI process to be running.
+        const preLoadPromise = useChatStore
+          .getState()
+          .loadSessionMessages(id, {
+            force: true,
+            sessionPath: session.sessionPath,
+          })
+          .then(() => {
+            perfLog.info("[switch] pre-loadSessionMessages done (parallel with agent.start)", {
+              sessionId: id,
+              count: useChatStore.getState().messagesBySession[id]?.length,
+              ms: Math.round(performance.now() - tAgentStart),
+            });
+            // Messages loaded from JSONL — session is ready for display.
+            // Input send button stays disabled until agentReady (agent.start completes).
+            set((s) => ({
+              sessionReady: { ...s.sessionReady, [id]: true },
+            }));
+          })
+          .catch(() => {});
 
         const startPromise = apiClient.call("agent.start", {
           sessionId: id,
@@ -235,6 +260,7 @@ export function createSetActiveSessionAction({
                 if (!projectId) return {};
                 return {
                   sessionReady: { ...s.sessionReady, [id]: true },
+                  agentReady: { ...s.agentReady, [id]: true },
                   projectStartFailed: { ...s.projectStartFailed, [projectId]: false },
                   projectStartError: { ...s.projectStartError, [projectId]: "" },
                 };
@@ -269,6 +295,21 @@ export function createSetActiveSessionAction({
                       ._backgroundRefreshMessages(id, session.sessionPath);
                   })
                   .then(() => {
+                    // Replay may accumulate stale token counts via message_end events;
+                    // fetch the authoritative value to correct any drift.
+                    return apiClient
+                      .call("agent.getContextUsage", { sessionId: id })
+                      .then((r) => {
+                        if (r && r.tokens != null) {
+                          useSessionStore.getState().updateSessionContext(id, {
+                            tokens: r.tokens,
+                            ...(r.contextWindow > 0 ? { contextWindow: r.contextWindow } : {}),
+                          });
+                        }
+                      })
+                      .catch(() => {});
+                  })
+                  .then(() => {
                     perfLog.info("[switch] === HOT SWITCH COMPLETE ===", {
                       sessionId: id,
                       totalMs: Math.round(performance.now() - tSwitchStart),
@@ -281,18 +322,15 @@ export function createSetActiveSessionAction({
                     });
                   });
               } else {
-                perfLog.info("[switch] COLD: loadSessionMessages begin", {
+                // COLD path: messages were pre-loaded in parallel with agent.start.
+                // Wait for pre-load to finish, then replay hold events.
+                perfLog.info("[switch] COLD: waiting for pre-loaded messages", {
                   sessionId: id,
                 });
                 const tLoad = performance.now();
-                useChatStore
-                  .getState()
-                  .loadSessionMessages(id, {
-                    force: true,
-                    sessionPath: session.sessionPath,
-                  })
+                preLoadPromise
                   .then(() => {
-                    perfLog.info("[switch] COLD: loadSessionMessages done", {
+                    perfLog.info("[switch] COLD: pre-load confirmed", {
                       sessionId: id,
                       count: useChatStore.getState().messagesBySession[id]?.length,
                       ms: Math.round(performance.now() - tLoad),
@@ -304,6 +342,21 @@ export function createSetActiveSessionAction({
                     return useChatStore
                       .getState()
                       ._backgroundRefreshMessages(id, session.sessionPath);
+                  })
+                  .then(() => {
+                    // Replay may accumulate stale token counts via message_end events;
+                    // fetch the authoritative value to correct any drift.
+                    return apiClient
+                      .call("agent.getContextUsage", { sessionId: id })
+                      .then((r) => {
+                        if (r && r.tokens != null) {
+                          useSessionStore.getState().updateSessionContext(id, {
+                            tokens: r.tokens,
+                            ...(r.contextWindow > 0 ? { contextWindow: r.contextWindow } : {}),
+                          });
+                        }
+                      })
+                      .catch(() => {});
                   })
                   .then(() => {
                     perfLog.info("[switch] === COLD SWITCH COMPLETE ===", {
@@ -346,6 +399,7 @@ export function createSetActiveSessionAction({
                   [projectId]: err instanceof Error ? err.message : String(err),
                 },
                 sessionReady: { ...s.sessionReady, [id]: false },
+                agentReady: { ...s.agentReady, [id]: false },
               };
             });
           });

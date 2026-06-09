@@ -287,7 +287,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
             }
             summary ??= block.args.split("\n")[0]?.trim().slice(0, 120);
           }
-          return summary ?? "";
+          return summary || block.toolName;
         })()}
         collapsed={collapsed}
         onClick={() => setCollapsed((c) => !c)}

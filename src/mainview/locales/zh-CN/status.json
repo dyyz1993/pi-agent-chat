@@ -126,5 +126,13 @@
   "supervisor.action.disable": "禁用 Goal",
   "supervisor.forceContinue": "强制续执行",
   "supervisor.pause": "暂停",
-  "supervisor.cancelPause": "取消暂停"
+  "supervisor.cancelPause": "取消暂停",
+  "supervisor.triggerHistory": "触发历史",
+  "supervisor.triggerHistory.refresh": "刷新",
+  "supervisor.triggerHistory.empty": "暂无触发记录",
+  "supervisor.trigger.verdict.complete": "完成",
+  "supervisor.trigger.verdict.incomplete": "未完成",
+  "supervisor.trigger.verdict.blocked": "阻塞",
+  "supervisor.trigger.verdict.unsafe": "不安全",
+  "supervisor.trigger.modelCheck": "模型检查"
 }

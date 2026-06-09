@@ -512,7 +512,7 @@ function AssistantTextBlock({ text, isStreaming }: { text: string; isStreaming?:
         className="absolute top-1.5 right-1.5 p-1 rounded opacity-0 group-hover/text:opacity-100 hover:bg-surface-hover dark:hover:bg-surface-hover transition-all"
         title={copied ? t("common:copied") : t("chat:copyText")}
       >
-        <Copy size={11} className={copied ? "text-status-success" : "text-text-tertiary"} />
+        {copied ? <Check size={11} className="text-status-success" /> : <Copy size={11} className="text-text-tertiary" />}
       </button>
     </div>
   );
