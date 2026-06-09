@@ -25,6 +25,54 @@ interface ManagedChannelState {
   activeBackgroundTools: Set<string>;
 }
 
+// ── Bash output throttle ───────────────────────────────────────────────
+// Bash tool output events arrive every ~5ms during compilation. Each one
+// triggers broadcastEvent → emitEvent → transport.send which blocks Bun's
+// single-threaded event loop. Throttle by buffering "output" events per
+// (sessionId, toolCallId) and flushing every BASH_FLUSH_MS milliseconds.
+const BASH_FLUSH_MS = 50;
+
+interface PendingBashOutput {
+  events: BashChannelEvent[];
+  timer: ReturnType<typeof setTimeout> | null;
+}
+
+const pendingBashOutputs = new Map<string, PendingBashOutput>();
+
+function bashOutputKey(sessionId: string, toolCallId: string): string {
+  return `${sessionId}:${toolCallId}`;
+}
+
+function flushBashOutput(
+  key: string,
+  sessionId: string,
+  broadcastEvent: BroadcastEvent,
+): void {
+  const pending = pendingBashOutputs.get(key);
+  if (!pending || pending.events.length === 0) {
+    pendingBashOutputs.delete(key);
+    return;
+  }
+  pendingBashOutputs.delete(key);
+  if (pending.timer) clearTimeout(pending.timer);
+
+  // Merge buffered output events into a single broadcast.
+  // Keep all fields from the last event but concatenate data text.
+  const events = pending.events;
+  if (events.length === 1) {
+    broadcastEvent("bash.event", { sessionId, event: events[0] }, { sessionId }).catch(
+      () => undefined,
+    );
+  } else {
+    const merged: BashChannelEvent = { ...events[events.length - 1] };
+    const allData = events.map((e) => e.data ?? "").join("");
+    if (allData) merged.data = allData;
+    broadcastEvent("bash.event", { sessionId, event: merged }, { sessionId }).catch(
+      () => undefined,
+    );
+  }
+}
+
 export async function handleSubagentChannelDataOperation(options: {
   parentSessionId: string;
   channelMsg: ChannelDataEvent;
@@ -107,15 +155,49 @@ export async function handleBashChannelDataOperation(options: {
   const data = options.channelMsg.data as unknown as BashChannelEvent | undefined;
   if (!data) return;
 
-  log.info("Bash channel data", {
-    sessionId: options.sessionId,
-    type: data.type,
-    toolCallId: data.toolCallId,
-  });
+  // Bash channel data is high-frequency (every ~5ms during compilation).
+  // Only log start/end events at info; output events at debug.
+  if (data.type === "output") {
+    log.debug("Bash channel data", {
+      sessionId: options.sessionId,
+      type: data.type,
+      toolCallId: data.toolCallId,
+    });
+  } else {
+    log.info("Bash channel data", {
+      sessionId: options.sessionId,
+      type: data.type,
+      toolCallId: data.toolCallId,
+    });
+  }
 
   const managed = options.getManagedState(options.sessionId);
   if (managed) {
     applyBashBackgroundToolState(managed.activeBackgroundTools, data);
+  }
+
+  // Throttle bash "output" events: buffer and flush every BASH_FLUSH_MS.
+  // Non-output events (start/end/error) are sent immediately.
+  const toolCallId = data.toolCallId;
+  if (data.type === "output" && typeof toolCallId === "string") {
+    const key = bashOutputKey(options.sessionId, toolCallId);
+    const existing = pendingBashOutputs.get(key);
+    if (existing) {
+      existing.events.push(data);
+      return;
+    }
+    const pending: PendingBashOutput = { events: [data], timer: null };
+    pending.timer = setTimeout(() => {
+      flushBashOutput(key, options.sessionId, options.broadcastEvent);
+    }, BASH_FLUSH_MS);
+    pendingBashOutputs.set(key, pending);
+    return;
+  }
+
+  // Flush any pending output for this tool before sending non-output event.
+  if (typeof toolCallId === "string") {
+    const key = bashOutputKey(options.sessionId, toolCallId);
+    flushBashOutput(key, options.sessionId, options.broadcastEvent);
   }
 
   await options.broadcastEvent(
