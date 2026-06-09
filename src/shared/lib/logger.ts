@@ -51,40 +51,34 @@ const LOG_LEVEL_PRIORITY: Record<LogLevel, number> = {
   error: 3,
 };
 
-/** Global minimum log level. Set via LOG_LEVEL env var or setMinLogLevel(). */
-const _minLevel: LogLevel = (() => {
-  const envLevel = process.env.LOG_LEVEL;
-
-  if (!envLevel) {
+/** Global minimum log level state (wrapped in object to allow mutation). */
+const _logLevelState: { level: LogLevel } = {
+  level: (() => {
+    const envLevel = process.env.LOG_LEVEL;
+    if (!envLevel) return "info";
+    if (isValidLogLevel(envLevel)) return envLevel;
+    console.warn(
+      `[logger] Invalid LOG_LEVEL value: "${envLevel}". ` +
+      `Valid values: ${VALID_LOG_LEVELS.join(", ")}. ` +
+      `Falling back to "info".`
+    );
     return "info";
-  }
-
-  if (isValidLogLevel(envLevel)) {
-    return envLevel;
-  }
-
-  console.warn(
-    `[logger] Invalid LOG_LEVEL value: "${envLevel}". ` +
-    `Valid values: ${VALID_LOG_LEVELS.join(", ")}. ` +
-    `Falling back to "info".`
-  );
-
-  return "info";
-})();
+  })(),
+};
 
 /** Returns true if the given level should be logged. */
 function shouldLog(level: LogLevel): boolean {
-  return LOG_LEVEL_PRIORITY[level] >= LOG_LEVEL_PRIORITY[_minLevel];
+  return LOG_LEVEL_PRIORITY[level] >= LOG_LEVEL_PRIORITY[_logLevelState.level];
 }
 
 /** Change minimum log level at runtime. */
 export function setMinLogLevel(level: LogLevel): void {
-  _minLevel = level;
+  _logLevelState.level = level;
 }
 
 /** Get current minimum log level. */
 export function getMinLogLevel(): LogLevel {
-  return _minLevel;
+  return _logLevelState.level;
 }
 
 interface LogEntry {
