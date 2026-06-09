@@ -45,6 +45,7 @@ interface TestState {
   projectTabs: ProjectTab[];
   sessionsByProject: Record<string, SessionMeta[]>;
   agentSubscriptions: Record<string, string>;
+  batchSubscriptions: Record<string, string>;
   subagentSubscriptions: Record<string, string>;
   projectStartFailed: Record<string, boolean>;
   projectStartError: Record<string, string>;
@@ -58,6 +59,7 @@ function createHarness(initial: Partial<TestState> = {}) {
     projectTabs: [{ id: "p1", name: "Project", path: "/tmp/project" }],
     sessionsByProject: {},
     agentSubscriptions: {},
+    batchSubscriptions: {},
     subagentSubscriptions: {},
     projectStartFailed: {},
     projectStartError: {},

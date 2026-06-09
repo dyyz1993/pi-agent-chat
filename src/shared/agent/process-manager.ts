@@ -284,6 +284,32 @@ export class AgentProcessManager {
     );
   }
 
+  /**
+   * Read JSONL from a specific byte offset onwards and append results.
+   * Uses createReadStream({ start: byteOffset }) for O(1) seek.
+   */
+  async readJsonlFromByteOffset(
+    sessionPath: string,
+    byteOffset: number,
+    messages: Parameters<SessionMessageCache["readJsonlFromByteOffset"]>[2],
+    customEntries: Parameters<SessionMessageCache["readJsonlFromByteOffset"]>[3],
+    parentById: Parameters<SessionMessageCache["readJsonlFromByteOffset"]>[4],
+  ): Promise<{
+    newEntries: number;
+    totalLines: number;
+    newByteOffset: number;
+    newCompactionEntries: import("./session-message-cache").SessionCompactionEntry[];
+    lastLeafPointer: string | null;
+  }> {
+    return this.sessionMessageCache.readJsonlFromByteOffset(
+      sessionPath,
+      byteOffset,
+      messages,
+      customEntries,
+      parentById,
+    );
+  }
+
   private async _drainPendingDelegates(): Promise<void> {
     while (this._pendingDelegateRequests.length > 0) {
       const item = this._pendingDelegateRequests.shift();
@@ -511,15 +537,40 @@ export class AgentProcessManager {
     if (events.length !== heldEvents.length) {
       managed.info.holdEvents = events;
     }
-    for (const evt of events) {
-      await this.emitAgentEvent(sessionId, evt);
+
+    if (events.length === 0) {
+      perfLog.info("[replayHoldEvents] done", {
+        sessionId,
+        held: heldEvents.length,
+        replayed: 0,
+        compacted: heldEvents.length,
+        totalMs: Math.round(performance.now() - t0),
+      });
+      return { replayed: 0 };
     }
+
+    // Batch broadcast: send events in chunks to avoid 34K+ individual
+    // broadcastEvent → emitEvent → transport.send roundtrips that block
+    // Bun's single-threaded event loop.
+    const BATCH_SIZE = 200;
+    let batchCount = 0;
+    for (let i = 0; i < events.length; i += BATCH_SIZE) {
+      const batch = events.slice(i, i + BATCH_SIZE);
+      await this.broadcastEvent(
+        "agent.batch_events",
+        { sessionId, events: batch },
+        { sessionId },
+      );
+      batchCount++;
+    }
+
     const totalMs = Math.round(performance.now() - t0);
     perfLog.info("[replayHoldEvents] done", {
       sessionId,
       held: heldEvents.length,
       replayed: events.length,
       compacted: heldEvents.length - events.length,
+      batchCount,
       totalMs,
     });
     return { replayed: events.length };
@@ -784,7 +835,7 @@ export class AgentProcessManager {
     targetId: string,
     options?: { summarize?: boolean; skipFiles?: boolean },
   ): Promise<{ cancelled: boolean; reason?: string }> {
-    return navigateTreeOperation({
+    const result = await navigateTreeOperation({
       sessionId,
       targetId,
       navigateOptions: options,
@@ -793,6 +844,10 @@ export class AgentProcessManager {
       leafIds: this.leafIds,
       readJsonlEntries: readJsonlTreeEntriesOperation,
     });
+    if (!result.cancelled) {
+      this.clearSessionCache(sessionId);
+    }
+    return result;
   }
 
   async previewRollback(

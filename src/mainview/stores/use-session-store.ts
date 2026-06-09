@@ -77,6 +77,7 @@ interface SessionState {
   activeProjectId: string | null;
   loading: boolean;
   agentSubscriptions: Record<string, string>;
+  batchSubscriptions: Record<string, string>;
   subagentSubscriptions: Record<string, string>;
   todoSubscriptions: Record<string, string>;
   bashSubscriptions: Record<string, string>;
@@ -87,6 +88,7 @@ interface SessionState {
   coordinatorSubscriptions: Record<string, string>;
   supervisorSubscriptions: Record<string, string>;
   sessionReady: Record<string, boolean>;
+  agentReady: Record<string, boolean>;
   todosBySession: Record<string, TodoItem[]>;
   sessionContextMap: Record<string, ContextUsage>;
   sessionStatusMap: Record<string, SessionStatus>;
@@ -168,6 +170,7 @@ export const useSessionStore = create<SessionState>()(
       activeProjectId: null,
       loading: true,
       agentSubscriptions: {},
+      batchSubscriptions: {},
       subagentSubscriptions: {},
       todoSubscriptions: {},
       bashSubscriptions: {},
@@ -178,6 +181,7 @@ export const useSessionStore = create<SessionState>()(
       coordinatorSubscriptions: {},
       supervisorSubscriptions: {},
       sessionReady: {},
+      agentReady: {},
       todosBySession: {},
       sessionContextMap: {},
       sessionStatusMap: {},
@@ -861,6 +865,7 @@ export const useSessionStore = create<SessionState>()(
           projectStartError: current.projectStartError,
           _projectVersion: current._projectVersion,
           agentSubscriptions: current.agentSubscriptions,
+          batchSubscriptions: current.batchSubscriptions,
           subagentSubscriptions: current.subagentSubscriptions,
           todoSubscriptions: current.todoSubscriptions,
           bashSubscriptions: current.bashSubscriptions,
@@ -869,6 +874,7 @@ export const useSessionStore = create<SessionState>()(
           notifySubscriptions: current.notifySubscriptions,
           memorySubscriptions: current.memorySubscriptions,
           sessionReady: current.sessionReady,
+          agentReady: current.agentReady,
         };
       },
       onRehydrateStorage: () => () => {},

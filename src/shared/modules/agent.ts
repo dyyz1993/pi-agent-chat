@@ -486,6 +486,7 @@ export interface CustomEntryForUI {
 
 export interface AgentEvents {
   "agent.event": AgentEventPayload;
+  "agent.batch_events": AgentBatchEventPayload;
   "agent.notify": { sessionId: string; message: string; notifyType: "info" | "warning" | "error" };
   "agent.session_status_changed": { sessionId: string; projectPath: string; status: string };
   "agent.session_renamed": { sessionId: string; projectPath: string; newName: string };
@@ -494,6 +495,12 @@ export interface AgentEvents {
 export interface AgentEventPayload {
   sessionId: string;
   event: AgentEvent;
+}
+
+/** Batch of agent events sent together to reduce broadcast overhead. */
+export interface AgentBatchEventPayload {
+  sessionId: string;
+  events: AgentEvent[];
 }
 
 export interface ChannelDataEvent {

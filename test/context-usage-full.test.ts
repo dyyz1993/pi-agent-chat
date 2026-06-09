@@ -57,6 +57,7 @@ const { mockSessionStore } = vi.hoisted(() => {
     activeProjectId: string | null;
     loading: boolean;
     agentSubscriptions: Record<string, string>;
+    batchSubscriptions: Record<string, string>;
     sessionReady: Record<string, boolean>;
     sessionContextMap: Record<string, { tokens: number | null; contextWindow: number }>;
     sessionStatusMap: Record<string, SessionStatus>;
@@ -79,6 +80,7 @@ const { mockSessionStore } = vi.hoisted(() => {
     activeProjectId: null,
     loading: false,
     agentSubscriptions: {},
+    batchSubscriptions: {},
     sessionReady: {},
     sessionContextMap: {},
     sessionStatusMap: {},

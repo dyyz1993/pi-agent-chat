@@ -37,6 +37,56 @@ export type LogModule =
   | "render-cache";
 type LogLevel = "debug" | "info" | "warn" | "error";
 
+const VALID_LOG_LEVELS: Readonly<LogLevel[]> = ["debug", "info", "warn", "error"] as const;
+
+/** 检查值是否为合法的 LogLevel */
+function isValidLogLevel(value: string | undefined): value is LogLevel {
+  return value !== undefined && VALID_LOG_LEVELS.includes(value as LogLevel);
+}
+
+const LOG_LEVEL_PRIORITY: Record<LogLevel, number> = {
+  debug: 0,
+  info: 1,
+  warn: 2,
+  error: 3,
+};
+
+/** Global minimum log level. Set via LOG_LEVEL env var or setMinLogLevel(). */
+const _minLevel: LogLevel = (() => {
+  const envLevel = process.env.LOG_LEVEL;
+
+  if (!envLevel) {
+    return "info";
+  }
+
+  if (isValidLogLevel(envLevel)) {
+    return envLevel;
+  }
+
+  console.warn(
+    `[logger] Invalid LOG_LEVEL value: "${envLevel}". ` +
+    `Valid values: ${VALID_LOG_LEVELS.join(", ")}. ` +
+    `Falling back to "info".`
+  );
+
+  return "info";
+})();
+
+/** Returns true if the given level should be logged. */
+function shouldLog(level: LogLevel): boolean {
+  return LOG_LEVEL_PRIORITY[level] >= LOG_LEVEL_PRIORITY[_minLevel];
+}
+
+/** Change minimum log level at runtime. */
+export function setMinLogLevel(level: LogLevel): void {
+  _minLevel = level;
+}
+
+/** Get current minimum log level. */
+export function getMinLogLevel(): LogLevel {
+  return _minLevel;
+}
+
 interface LogEntry {
   timestamp: string;
   level: LogLevel;
@@ -84,6 +134,8 @@ export class Logger {
   }
 
   private write(level: LogLevel, message: string, data?: Record<string, unknown>): void {
+    if (!shouldLog(level)) return;
+
     const entry: LogEntry = {
       timestamp: new Date().toISOString(),
       level,

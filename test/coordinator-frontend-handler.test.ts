@@ -17,6 +17,7 @@ const mockSessionStoreState: Record<string, unknown> = {
   sessionsByProject: {},
   coordinatorSubscriptions: {},
   agentSubscriptions: {},
+  batchSubscriptions: {},
   subagentSubscriptions: {},
   todoSubscriptions: {},
   bashSubscriptions: {},

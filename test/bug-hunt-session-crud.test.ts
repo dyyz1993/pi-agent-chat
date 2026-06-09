@@ -138,6 +138,7 @@ beforeEach(() => {
     activeProjectId: null,
     loading: false,
     agentSubscriptions: {},
+    batchSubscriptions: {},
     subagentSubscriptions: {},
     todoSubscriptions: {},
     bashSubscriptions: {},

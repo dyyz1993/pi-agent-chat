@@ -13,6 +13,7 @@ const { mockStores } = vi.hoisted(() => {
         projectTabs: [] as unknown[],
         sessionsByProject: {},
         agentSubscriptions: {},
+        batchSubscriptions: {},
         subagentSubscriptions: {},
         todoSubscriptions: {},
         bashSubscriptions: {},

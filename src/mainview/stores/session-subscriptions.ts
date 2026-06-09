@@ -209,6 +209,7 @@ export function syncBashStoreToChat(sessionId: string): void {
 
 export interface SubscriptionMaps {
   agentSubscriptions: Record<string, string>;
+  batchSubscriptions: Record<string, string>;
   subagentSubscriptions: Record<string, string>;
   todoSubscriptions: Record<string, string>;
   bashSubscriptions: Record<string, string>;
@@ -241,6 +242,7 @@ export function setupSubscriptions(
 
   const {
     agentSubscriptions,
+    batchSubscriptions,
     subagentSubscriptions,
     todoSubscriptions,
     bashSubscriptions,
@@ -279,6 +281,31 @@ export function setupSubscriptions(
         });
         useAppStore.getState().addLog(`[sub] ${String(err)}`);
       });
+
+    // Batch events: replayHoldEvents sends 200 events per message to reduce
+    // broadcast overhead (34K events × 3 ws → ~170 batch broadcasts instead of 102K).
+    if (!batchSubscriptions[id]) {
+      apiClient
+        .subscribe(
+          "agent.batch_events",
+          (payload) => {
+            if (payload.sessionId !== id) return;
+            const batch = payload.events as unknown[];
+            for (const evt of batch) {
+              handleAgentEvent(id, evt as Parameters<typeof handleAgentEvent>[1]);
+            }
+          },
+          { sessionId: id },
+        )
+        .then((subId) => {
+          set((s) => ({
+            batchSubscriptions: { ...s.batchSubscriptions, [id]: subId },
+          }));
+        })
+        .catch((err) => {
+          useAppStore.getState().addLog(`[sub:batch] ${String(err)}`);
+        });
+    }
   }
 
   if (!subagentSubscriptions[id]) {
@@ -771,6 +798,7 @@ export function setupSubscriptions(
 export function cleanupSession(state: SubscriptionMaps, sessionId: string): void {
   const singleSubMaps: Array<Record<string, string>> = [
     state.agentSubscriptions,
+    state.batchSubscriptions,
     state.subagentSubscriptions,
     state.todoSubscriptions,
     state.bashSubscriptions,

@@ -88,6 +88,7 @@ function createMockState() {
     projectTabs: [{ id: "proj-1", path: "/project" }],
     activeProjectId: "proj-1",
     agentSubscriptions: {} as Record<string, string>,
+    batchSubscriptions: {} as Record<string, string>,
     subagentSubscriptions: {} as Record<string, string>,
     todoSubscriptions: {} as Record<string, string>,
     bashSubscriptions: {} as Record<string, string>,

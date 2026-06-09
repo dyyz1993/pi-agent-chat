@@ -55,6 +55,7 @@ vi.mock("../src/mainview/stores/use-session-store", () => {
     activeProjectId: string | null;
     loading: boolean;
     agentSubscriptions: Record<string, string>;
+    batchSubscriptions: Record<string, string>;
     sessionReady: Record<string, boolean>;
     sessionContextMap: Record<string, unknown>;
     sessionStatusMap: Record<string, SessionStatus>;
@@ -76,6 +77,7 @@ vi.mock("../src/mainview/stores/use-session-store", () => {
     activeProjectId: null,
     loading: false,
     agentSubscriptions: {},
+    batchSubscriptions: {},
     sessionReady: {},
     sessionContextMap: {},
     sessionStatusMap: {},

@@ -134,6 +134,7 @@ vi.mock("../src/mainview/stores/session-subscriptions", () => ({
   cleanupSessionLight: vi.fn(),
   clearSubscriptionState: (s: Record<string, unknown>) => {
     delete (s as Record<string, unknown>).agentSubscriptions;
+    delete (s as Record<string, unknown>).batchSubscriptions;
     return {};
   },
   syncTabsToBackend: vi.fn(),
@@ -200,6 +201,7 @@ describe("onReconnect - session list refresh", () => {
       activeProjectId: null,
       loading: false,
       agentSubscriptions: {},
+      batchSubscriptions: {},
       subagentSubscriptions: {},
       todoSubscriptions: {},
       bashSubscriptions: {},
