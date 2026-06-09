@@ -93,6 +93,10 @@ function PanelCard({ req }: { req: UIPendingRequest }) {
             {options.map((opt, i) => {
               const parts = opt.split(" ");
               const label = parts.slice(1).join(" ") || opt;
+              const alwaysDir =
+                i === 1 && meta?.path
+                  ? `${meta.path.split("/").slice(0, -1).join("/") || "/"}/\u2217\u2217`
+                  : null;
               const btnStyle =
                 i === 0
                   ? "bg-status-success/15 text-status-success hover:bg-status-success/25 border-status-success/30"
@@ -103,9 +107,14 @@ function PanelCard({ req }: { req: UIPendingRequest }) {
                 <button
                   key={i}
                   onClick={() => respondById(req.requestId, { value: opt })}
-                  className={`flex-1 flex items-center justify-center py-1.5 rounded-md border text-[11px] font-medium transition-colors ${btnStyle}`}
+                  className={`flex-1 flex flex-col items-center justify-center py-1.5 rounded-md border text-[11px] font-medium transition-colors ${btnStyle}`}
                 >
-                  {label}
+                  <span>{label}</span>
+                  {alwaysDir && (
+                    <span className="text-[9px] opacity-70 font-mono truncate max-w-full">
+                      {alwaysDir}
+                    </span>
+                  )}
                 </button>
               );
             })}
