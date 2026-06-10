@@ -4,6 +4,7 @@ import { useAppStore } from "./use-app-store";
 import { createLogger } from "../../shared/lib/logger";
 import { useChatOverlayStore } from "./use-chat-overlay-store";
 import { reconstructDiffContent } from "../lib/diff-utils";
+import { useChangeReviewStore } from "./use-change-review-store";
 
 const log = createLogger("git");
 
@@ -212,9 +213,25 @@ export const useGitStore = create<GitState>((set, get) => ({
           loadingDiff: false,
         });
       } else {
-        addLog(`Agent file diff: no result for ${filePath}`);
-        set({ currentDiff: null, loadingDiff: false });
-        useChatOverlayStore.getState().close();
+        // Agent process exited — fall back to change-review store data
+        const pending = useChangeReviewStore.getState().changes.find(
+          (c) => c.path === filePath,
+        );
+        if (pending) {
+          set({
+            currentDiff: {
+              filePath: pending.path,
+              diff: pending.unifiedDiff ?? "",
+              oldContent: pending.oldContent ?? "",
+              newContent: pending.newContent ?? "",
+            },
+            loadingDiff: false,
+          });
+        } else {
+          addLog(`Agent file diff: no result for ${filePath}`);
+          set({ currentDiff: null, loadingDiff: false });
+          useChatOverlayStore.getState().close();
+        }
       }
     } catch (err) {
       addLog(`Agent file diff error: ${err instanceof Error ? err.message : String(err)}`);
