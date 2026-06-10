@@ -34,7 +34,8 @@ export type LogModule =
   | "change-review"
   | "sandbox-channel"
   | "project-config"
-  | "render-cache";
+  | "render-cache"
+  | "hooks";
 type LogLevel = "debug" | "info" | "warn" | "error";
 
 const VALID_LOG_LEVELS: Readonly<LogLevel[]> = ["debug", "info", "warn", "error"] as const;

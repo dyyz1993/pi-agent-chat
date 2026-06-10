@@ -1,5 +1,8 @@
 import { create } from "zustand";
 import { apiClient } from "../lib/api-client";
+import { createLogger } from "../../shared/lib/logger";
+
+const log = createLogger("hooks");
 
 export interface HookLogEntry {
   id: number;
@@ -128,7 +131,7 @@ export const useHooksStore = create<HooksState>()((set) => ({
         },
       }));
     } catch (err) {
-      console.warn("[hooks-store] fetchLog failed:", err);
+      log.warn("fetchLog failed:", { error: String(err) });
       set((s) => ({
         bySession: {
           ...s.bySession,
@@ -153,7 +156,7 @@ export const useHooksStore = create<HooksState>()((set) => ({
         },
       }));
     } catch (err) {
-      console.warn("[hooks-store] fetchConfig failed:", err);
+      log.warn("fetchConfig failed:", { error: String(err) });
     }
   },
 
@@ -171,7 +174,7 @@ export const useHooksStore = create<HooksState>()((set) => ({
         },
       }));
     } catch (err) {
-      console.warn("[hooks-store] clearLog failed:", err);
+      log.warn("clearLog failed:", { error: String(err) });
     }
   },
 

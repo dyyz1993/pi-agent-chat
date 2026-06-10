@@ -154,7 +154,7 @@ export const useStatusStore = create<StatusState>((set) => ({
         set({ yoloEnabled: next, yoloLoading: false });
       })
       .catch((err) => {
-        console.warn("[status] setPermissionMode failed:", err);
+        log.warn("setPermissionMode failed:", { error: String(err) });
         set({ yoloLoading: false });
       });
   },
