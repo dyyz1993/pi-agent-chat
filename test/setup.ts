@@ -1,4 +1,22 @@
 import "@testing-library/jest-dom/vitest";
+import { vi } from "vitest";
+
+// 全局 mock apiClient，避免所有测试单独处理 onReconnect/call
+vi.mock("../src/mainview/lib/api-client", () => {
+  const mockCall = vi.fn();
+  const mockOnReconnect = vi.fn();
+  const mockOn = vi.fn();
+  const mockOff = vi.fn();
+  return {
+    apiClient: {
+      call: mockCall,
+      onReconnect: mockOnReconnect,
+      on: mockOn,
+      off: mockOff,
+    },
+    resolveAuthToken: () => "",
+  };
+});
 
 if (typeof globalThis.localStorage?.setItem !== "function") {
   const store: Record<string, string> = {};

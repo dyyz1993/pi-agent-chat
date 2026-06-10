@@ -1,10 +1,10 @@
 import { defineConfig } from "vitest/config";
 
 /**
- * E2E test configuration — runs test files sequentially to avoid:
- * 1. Port conflicts (each test spawns a real server on a unique port)
- * 2. Shared ~/.claude/settings.json clobbering (global hooks)
- * 3. Resource contention (LLM API rate limits)
+ * E2E LLM 测试配置 — 跑需要真实 LLM API 的测试，顺序执行以避免:
+ * 1. 端口冲突 (每个测试在独立端口启动真实服务器)
+ * 2. 共享 ~/.claude/settings.json 互踩 (global hooks)
+ * 3. 资源竞争 (LLM API 限流)
  */
 export default defineConfig({
   test: {
