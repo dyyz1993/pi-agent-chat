@@ -12,7 +12,7 @@
  * - leaf_pointer preserved through cache
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdirSync, writeFileSync, rmSync, utimesSync, readFileSync, statSync, appendFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, rmSync, utimesSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { performance } from "perf_hooks";

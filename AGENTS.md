@@ -89,23 +89,118 @@ Files that implement this pattern:
 ## Project Structure
 
 ```
-src/mainview/
-  index.css              # Design tokens + global styles
-  layouts/               # MainLayout, breakpoint logic
-  components/
-    tab-bar/             # Top project tabs
-    chat/                # Chat UI, messages, previews
-    left-sidebar/        # Session list
-    right-sidebar/       # Status panel
-    project-picker/      # Project selection dialog
-    bash-panel/          # Terminal output
-    settings/            # Settings modal
-    diff/                # Diff viewer
-    file-preview/        # File preview overlay
-  stores/                # Zustand stores (28 files)
-  hooks/                 # Custom hooks
-  lib/                   # API client, i18n, logger
+src/
+  shared/                    # 前后端共享层（Electron main + renderer 共用）
+    modules/
+      agent.ts               # RPC 类型定义（所有 method 的 params/result 类型）
+      project.ts             # 项目管理 RPC 类型
+      supervisor.ts          # Supervisor 类型
+    handlers/
+      agent.ts               # RPC handler 注册（前端侧，调用 process-manager）
+      project.ts             # 项目管理 handler
+    agent/
+      process-manager.ts     # CLI 进程池管理（spawn/kill/restart agent 进程）
+    lib/
+      project-config.ts      # ~/.pi-agent-chat/config.json 读写（串行队列 + 备份保护）
+      logger.ts              # createLogger 工厂
+      rpc-schema.ts          # RPC Server/Client 创建工具
+  mainview/                  # 前端渲染层
+    index.css                # Design tokens + global styles
+    layouts/                 # MainLayout, breakpoint logic
+    components/
+      tab-bar/               # Top project tabs
+      chat/                  # Chat UI, messages, previews
+      left-sidebar/          # Session list
+      right-sidebar/         # Status panel
+      project-picker/        # Project selection dialog
+      bash-panel/            # Terminal output
+      settings/              # Settings modal
+      diff/                  # Diff viewer
+      file-preview/          # File preview overlay
+    stores/                  # Zustand stores (28 files)
+    hooks/                   # Custom hooks
+    lib/                     # API client, i18n, logger
 ```
+
+## RPC 架构
+
+前端通过 WebSocket 与 fork CLI 进程通信，分层如下：
+
+```
+前端 UI (StatusPanel, ChatPanel, ...)
+  │
+  ├─ apiClient.call("agent.xxx", params)        # src/mainview/lib/api-client.ts
+  │     │
+  │     ▼
+  ├─ RPC 类型检查                                # src/shared/modules/agent.ts (类型定义)
+  │     │
+  │     ▼
+  ├─ Handler 处理                                # src/shared/handlers/agent.ts
+  │     ├─ 前端逻辑（如 project-config 读写）
+  │     └─ 转发到 CLI 进程
+  │           │
+  │           ▼
+  └─ AgentProcessManager                        # src/shared/agent/process-manager.ts
+        ├─ spawn CLI 进程
+        ├─ 发送 RPC 请求到 CLI stdin
+        └─ 接收 CLI stdout 响应
+              │
+              ▼
+        fork CLI (pi-coding-agent)               # .yalc/@dyyz1993/pi-coding-agent/dist/
+          ├─ rpc-mode.ts                         #   RPC 命令路由（~50 个命令）
+          ├─ agent-session.ts                    #   Session 生命周期管理
+          ├─ resource-loader.ts                  #   Extension/Skill/Prompt 加载
+          ├─ package-manager.ts                  #   资源发现 + isEnabledByOverrides 过滤
+          └─ settings-manager.ts                 #   Settings 读写（global + project）
+```
+
+### 新增 RPC 命令的步骤
+
+1. **`src/shared/modules/agent.ts`** — 添加 RPC 类型定义（params + result）
+2. **`src/shared/handlers/agent.ts`** — 注册 handler（前端侧逻辑）
+3. 如果需要持久化 → **`src/shared/lib/project-config.ts`**（config.json 读写）
+4. 如果需要 CLI 侧逻辑 → 修改 fork 源码 → yalc push
+
+## 数据持久化
+
+### 前端持久化：`~/.pi-agent-chat/config.json`
+
+通过 `src/shared/lib/project-config.ts` 管理，使用串行队列（`loadAndSave`）防止并发写竞争，写入前自动备份到 `config.json.bak`。
+
+```jsonc
+{
+  "recentProjects": [...],        // 最近打开的项目
+  "activeProject": "...",         // 当前活跃项目路径
+  "openTabs": [...],              // 打开的 tab 列表
+  "pinnedSessionIds": [...],      // 固定的 session
+  "favoriteFolders": [...],       // 收藏文件夹
+  "disabledSkills": ["skill-a"],  // 全局禁用的 skill 名（不区分项目）
+  "disabledPlugins": {            // 按项目禁用的 plugin 路径
+    "/path/to/project-a": ["/plugins/x/index.ts"],
+    "/path/to/project-b": ["/plugins/y/index.ts"]
+  },
+  "modelFavorites": [...]         // 收藏的模型
+}
+```
+
+### 后端持久化：Settings（fork CLI 管理）
+
+- **全局**: `<agentDir>/settings.json` — 通过 `agent.getSettings` / `agent.setSettings`（scope="global"）
+- **项目**: `<cwd>/.pi/settings.json` — 通过 `agent.getSettings` / `agent.setSettings`（scope="project"）
+- Settings 中的 `extensions` 字段支持模式语法：`-path`（排除）、`+path`（强制包含）、`!pattern`（glob 排除）
+- Settings 修改后需调用 `agent.reload` 才能生效
+
+## Extension / Skill / MCP Toggle 机制对比
+
+| 特性 | Extension (Plugin) | Skill | MCP Server |
+|------|-------------------|-------|------------|
+| **Toggle UI** | StatusPanel Eye/EyeOff | StatusPanel Eye/EyeOff | StatusPanel 滑动开关 |
+| **RPC 命令** | `agent.setDisabledPlugin` + `agent.setSettings` + `agent.reload` | `agent.setDisabledSkill` | `agent.toggleMcpServer` |
+| **持久化** | `config.json` (disabledPlugins) + settings (extensions `-path`) | `config.json` (disabledSkills) | 内存（进程重启恢复） |
+| **生效方式** | reload CLI runtime | 即时（前端标记） | 即时（断开/重连） |
+| **真正禁用** | 是（extension 不加载） | 否（前端标记，Agent 仍可调用） | 是（MCP 连接断开） |
+| **粒度** | 按项目 | 全局 | 按会话 |
+| **乐观更新+回滚** | 有 | 无 | 无 |
 
 ## Testing
 
@@ -220,6 +315,7 @@ bunx playwright test        # e2e/*.spec.ts
 | `docs/plans/2026-06-01-process-per-session-design.md`       | Phase 1 已完成   | 每会话独立 CLI 进程，LRU 淘汰，全局进程池                                   |
 | `docs/plans/2026-06-01-session-switch-experience-design.md` | Phase 1-3 已实施 | 会话切换体验优化：热/冷切换分流、fetchInitialState 缓存、MessageList 无闪烁 |
 | `docs/plans/2026-06-01-render-cache-design.md`              | 已实施           | 渲染层按 session 缓存：processedMessages/cardMeta/flatItems/messageIds      |
+| `docs/plans/2026-06-10-plugin-toggle-design.md`             | 已实施           | Plugin 按项目 enable/disable，set_settings + reload，config.json 持久化    |
 | `docs/notification-interaction-manual.md`                   | 操作手册         | 通知、toast、retry、权限 pending 的 UI 分层与适用场景                       |
 
 ### WebSocket RPC 端到端测试方法
@@ -387,3 +483,10 @@ main().catch(console.error);
 - Use `createLogger` from `src/shared/lib/logger.ts` instead of `console.log`
 - Function components only, hooks prefixed with `use`
 - Tailwind utility classes for styling, design tokens for theming
+
+### Zustand Store 规范
+
+- **乐观更新 + 回滚**：涉及 RPC 调用的 toggle 操作应先乐观更新 UI，异步操作失败时回滚。参考 `use-status-store.ts` 中的 `togglePluginEnabled`
+- **异步操作不阻塞 UI**：store 方法用 `(async () => { ... })()` 模式，不返回 Promise，避免 UI 层需要 await
+- **避免循环依赖**：`session-initial-state.ts` 不能 import `use-session-store`（会被 use-session-store import），需要时通过 `get().sessionsByProject` 获取数据
+- **Store 职责单一**：每个 store 管理一个领域（status、chat、session、settings 等），跨 store 调用用 `xxxStore.getState().method()`

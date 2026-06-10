@@ -901,7 +901,6 @@ export class AgentProcessManager {
             projectPath,
             sessionPath,
             status: "idle",
-            holdEvents: [],
           };
           this.clients.set(sessionId, pooled);
           this.sessionPaths.set(sessionId, sessionPath);
@@ -957,7 +956,6 @@ export class AgentProcessManager {
       projectPath,
       sessionPath,
       status: "idle",
-      holdEvents: [],
     };
 
     const managed: ManagedClient = {
@@ -1030,22 +1028,6 @@ export class AgentProcessManager {
     this._drainPendingDelegates();
     this.broadcastSessionStatus(sessionId, "idle");
     return { agentId: sessionId, status: "started" };
-  }
-
-  async replayHoldEvents(sessionId: string): Promise<{ replayed: number }> {
-    const t0 = performance.now();
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) {
-      perfLog.info("[replayHoldEvents] no client", { sessionId, totalMs: 0 });
-      return { replayed: 0 };
-    }
-    const events = managed.info.holdEvents;
-    for (const evt of events) {
-      await this.emitAgentEvent(sessionId, evt as SanitizedEvent);
-    }
-    const totalMs = Math.round(performance.now() - t0);
-    perfLog.info("[replayHoldEvents] done", { sessionId, replayed: events.length, totalMs });
-    return { replayed: events.length };
   }
 
   async send(
@@ -1426,6 +1408,7 @@ export class AgentProcessManager {
     model?: {
       id: string;
       name?: string;
+      api?: string;
       provider?: string;
       reasoning?: boolean;
       contextWindow: number;
@@ -1434,8 +1417,16 @@ export class AgentProcessManager {
     thinkingLevel?: string;
     isStreaming: boolean;
     isCompacting: boolean;
+    steeringMode?: string;
+    followUpMode?: string;
     messageCount: number;
     streamingMessage?: AssistantMessage;
+    activeToolExecutions: Array<{
+      toolCallId: string;
+      toolName: string;
+      args?: unknown;
+      startedAt?: number;
+    }>;
   } | null> {
     let managed = this.getActiveManaged(sessionId);
     if (!managed) {
@@ -1447,13 +1438,21 @@ export class AgentProcessManager {
       const state = await withTimeout(managed.client.getState(), 10_000, "getState");
       const stateWithStreaming = state as typeof state & {
         streamingMessage?: AssistantMessage;
+        activeToolExecutions?: Array<{
+          toolCallId: string;
+          toolName: string;
+          args?: unknown;
+          startedAt?: number;
+        }>;
       };
       const model = state.model;
+      const stateAny = state as unknown as Record<string, unknown>;
       return {
         model: model
           ? {
               id: String(model.id ?? ""),
               name: model.name ? String(model.name) : undefined,
+              api: stateAny.api ? String(stateAny.api) : undefined,
               provider: model.provider ? String(model.provider) : undefined,
               reasoning: Boolean(model.reasoning),
               contextWindow: Number(model.contextWindow ?? 0),
@@ -1463,8 +1462,11 @@ export class AgentProcessManager {
         thinkingLevel: state.thinkingLevel ? String(state.thinkingLevel) : undefined,
         isStreaming: Boolean(state.isStreaming),
         isCompacting: Boolean(state.isCompacting),
+        steeringMode: stateAny.steeringMode ? String(stateAny.steeringMode) : undefined,
+        followUpMode: stateAny.followUpMode ? String(stateAny.followUpMode) : undefined,
         messageCount: Number(state.messageCount ?? 0),
         streamingMessage: stateWithStreaming.streamingMessage,
+        activeToolExecutions: stateWithStreaming.activeToolExecutions ?? [],
       };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -3201,14 +3203,12 @@ export class AgentProcessManager {
     if (event.type === "agent_start") {
       managed.info.status = "streaming";
       managed.lastActiveAt = Date.now();
-      managed.info.holdEvents = [];
       this.broadcastSessionStatus(sessionId, "streaming");
     }
 
     if (event.type === "agent_end") {
       managed.info.status = "idle";
       managed.lastActiveAt = Date.now();
-      managed.info.holdEvents = [];
       this.broadcastSessionStatus(sessionId, "idle");
 
       // Sync leafId from CLI SDK after agent completes, so that subsequent
@@ -3292,10 +3292,6 @@ export class AgentProcessManager {
     }
 
     const sanitized = sanitizeEvent(event);
-
-    if (managed.info.status === "streaming") {
-      managed.info.holdEvents.push(sanitized);
-    }
 
     const parentId = this.findParentSession(sessionId);
     if (parentId) {

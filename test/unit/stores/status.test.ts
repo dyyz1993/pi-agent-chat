@@ -238,6 +238,100 @@ describe("togglePluginExpanded", () => {
   });
 });
 
+describe("togglePluginEnabled", () => {
+  const testPlugin = {
+    name: "test-plugin",
+    path: "/plugins/test/index.ts",
+    enabled: true,
+    toolNames: ["tool1"],
+    commandNames: [],
+    scope: "project" as const,
+  };
+
+  it("optimistically disables a plugin and calls setDisabledPlugin + setSettings + reload", async () => {
+    useStatusStore.setState({ plugins: [{ ...testPlugin, enabled: true }] });
+
+    mockedCall.mockImplementation((method: string) => {
+      if (method === "agent.getSettings") return Promise.resolve({ extensions: [] });
+      if (method === "agent.setSettings") return Promise.resolve({ ok: true });
+      if (method === "agent.reload") return Promise.resolve();
+      if (method === "agent.setDisabledPlugin") return Promise.resolve({ disabledPlugins: [testPlugin.path] });
+      return Promise.resolve({});
+    });
+
+    useStatusStore.getState().togglePluginEnabled("session-1", "/project/a", testPlugin.path);
+
+    // 乐观更新
+    expect(useStatusStore.getState().plugins[0].enabled).toBe(false);
+
+    await vi.waitFor(() => {
+      expect(mockedCall).toHaveBeenCalledWith("agent.setDisabledPlugin", {
+        projectPath: "/project/a",
+        pluginPath: testPlugin.path,
+        disabled: true,
+      });
+      expect(mockedCall).toHaveBeenCalledWith("agent.getSettings", {
+        sessionId: "session-1",
+        scope: "project",
+      });
+      expect(mockedCall).toHaveBeenCalledWith("agent.setSettings", {
+        sessionId: "session-1",
+        settings: { extensions: [`-${testPlugin.path}`] },
+        scope: "project",
+      });
+      expect(mockedCall).toHaveBeenCalledWith("agent.reload", { sessionId: "session-1" });
+    });
+  });
+
+  it("optimistically enables a disabled plugin and removes exclude pattern", async () => {
+    useStatusStore.setState({ plugins: [{ ...testPlugin, enabled: false }] });
+
+    mockedCall.mockImplementation((method: string) => {
+      if (method === "agent.getSettings")
+        return Promise.resolve({ extensions: [`-${testPlugin.path}`] });
+      if (method === "agent.setSettings") return Promise.resolve({ ok: true });
+      if (method === "agent.reload") return Promise.resolve();
+      if (method === "agent.setDisabledPlugin") return Promise.resolve({ disabledPlugins: [] });
+      return Promise.resolve({});
+    });
+
+    useStatusStore.getState().togglePluginEnabled("session-1", "/project/a", testPlugin.path);
+
+    // 乐观更新
+    expect(useStatusStore.getState().plugins[0].enabled).toBe(true);
+
+    await vi.waitFor(() => {
+      expect(mockedCall).toHaveBeenCalledWith("agent.setSettings", {
+        sessionId: "session-1",
+        settings: { extensions: [] },
+        scope: "project",
+      });
+    });
+  });
+
+  it("rolls back on failure", async () => {
+    useStatusStore.setState({ plugins: [{ ...testPlugin, enabled: true }] });
+
+    mockedCall.mockRejectedValue(new Error("RPC failed"));
+
+    useStatusStore.getState().togglePluginEnabled("session-1", "/project/a", testPlugin.path);
+
+    // 乐观更新
+    expect(useStatusStore.getState().plugins[0].enabled).toBe(false);
+
+    // 等待回滚
+    await vi.waitFor(() => {
+      expect(useStatusStore.getState().plugins[0].enabled).toBe(true);
+    });
+  });
+
+  it("does nothing for unknown plugin", () => {
+    useStatusStore.setState({ plugins: [] });
+    useStatusStore.getState().togglePluginEnabled("session-1", "/project/a", "/nonexistent");
+    expect(mockedCall).not.toHaveBeenCalled();
+  });
+});
+
 describe("derivePluginScope", () => {
   it("returns 'global' for paths under ~/.claude", () => {
     const home = process.env.HOME ?? "";
