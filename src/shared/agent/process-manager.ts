@@ -2,7 +2,6 @@ import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { RpcClientAPI, ChannelTypeRegistry } from "@dyyz1993/pi-coding-agent";
 import type { ImageContent } from "@dyyz1993/pi-ai";
 import type { TreeEntry } from "../modules/agent";
-import { performance } from "perf_hooks";
 
 type ChannelMethodKeys<CN extends keyof ChannelTypeRegistry> = keyof NonNullable<
   ChannelTypeRegistry[CN]["methods"]
@@ -34,7 +33,7 @@ import {
   createCoordinatorHandlerAdapter,
   type CoordinatorHandlerAdapter,
 } from "./agent-coordinator-handler-adapter";
-import { compactHoldEventsForReplay, type SanitizedEvent } from "./hold-events";
+import { type SanitizedEvent } from "./hold-events";
 import {
   SessionMessageCache,
   type SessionCacheData,
@@ -90,7 +89,6 @@ import {
 } from "./agent-tree-navigation-operations";
 
 const log = createLogger("agent");
-const perfLog = createLogger("session-perf");
 
 export { getSandboxEndpoint, getSandboxManager, initSandboxManager };
 
@@ -523,57 +521,6 @@ export class AgentProcessManager {
       releaseStart();
       this._drainPendingDelegates();
     }
-  }
-
-  async replayHoldEvents(sessionId: string): Promise<{ replayed: number }> {
-    const t0 = performance.now();
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) {
-      perfLog.info("[replayHoldEvents] no client", { sessionId, totalMs: 0 });
-      return { replayed: 0 };
-    }
-    const heldEvents = managed.info.holdEvents as SanitizedEvent[];
-    const events = compactHoldEventsForReplay(heldEvents);
-    if (events.length !== heldEvents.length) {
-      managed.info.holdEvents = events;
-    }
-
-    if (events.length === 0) {
-      perfLog.info("[replayHoldEvents] done", {
-        sessionId,
-        held: heldEvents.length,
-        replayed: 0,
-        compacted: heldEvents.length,
-        totalMs: Math.round(performance.now() - t0),
-      });
-      return { replayed: 0 };
-    }
-
-    // Batch broadcast: send events in chunks to avoid 34K+ individual
-    // broadcastEvent → emitEvent → transport.send roundtrips that block
-    // Bun's single-threaded event loop.
-    const BATCH_SIZE = 200;
-    let batchCount = 0;
-    for (let i = 0; i < events.length; i += BATCH_SIZE) {
-      const batch = events.slice(i, i + BATCH_SIZE);
-      await this.broadcastEvent(
-        "agent.batch_events",
-        { sessionId, events: batch },
-        { sessionId },
-      );
-      batchCount++;
-    }
-
-    const totalMs = Math.round(performance.now() - t0);
-    perfLog.info("[replayHoldEvents] done", {
-      sessionId,
-      held: heldEvents.length,
-      replayed: events.length,
-      compacted: heldEvents.length - events.length,
-      batchCount,
-      totalMs,
-    });
-    return { replayed: events.length };
   }
 
   async send(
@@ -1083,7 +1030,7 @@ export class AgentProcessManager {
 
   getProjectPath(sessionId: string): string | undefined {
     const managed = this.getActiveManaged(sessionId);
-    return managed?.info?.projectPath;
+    return managed?.info?.projectPath ?? this.sessionProjectPaths.get(sessionId);
   }
 
   getSessionPath(sessionId: string): string {

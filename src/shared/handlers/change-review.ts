@@ -5,8 +5,9 @@ import { createLogger } from "../lib/logger";
 import { withTimeout } from "../lib/with-timeout";
 import { getProcessManager } from "./agent";
 import { FILE_REVIEW_METHODS } from "../constants/channel-methods";
-import { existsSync } from "fs";
+import { existsSync, readFileSync, statSync } from "fs";
 import { createReadStream } from "fs";
+import { join } from "path";
 import * as readline from "readline";
 import type { PendingChangeResult } from "../modules/change-review";
 
@@ -145,9 +146,29 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     if (!manager || !manager.hasSession(params.sessionId)) {
       if (params.sessionPath) {
         try {
-          return (await readPendingFromJsonl(
-            params.sessionPath,
-          )) as unknown as R<"change-review.pending">;
+          const items = await readPendingFromJsonl(params.sessionPath);
+          // JSONL fallback returns null content — enrich newContent from disk.
+          const projectPath = manager?.getProjectPath(params.sessionId);
+          if (projectPath) {
+            for (const item of items) {
+              if (item.fileStatus === "deleted") {
+                item.newContent = null;
+              } else {
+                const fullPath = join(projectPath, item.path);
+                try {
+                  if (existsSync(fullPath) && statSync(fullPath).isFile()) {
+                    item.newContent = readFileSync(fullPath, "utf-8");
+                  }
+                } catch {
+                  item.newContent = null;
+                }
+                if (item.fileStatus === "added") {
+                  item.oldContent = null;
+                }
+              }
+            }
+          }
+          return items as unknown as R<"change-review.pending">;
         } catch (err) {
           log.warn("review.pending JSONL fallback failed", {
             sessionId: params.sessionId,
