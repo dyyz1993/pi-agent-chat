@@ -10,10 +10,6 @@ export type PendingChange = PendingChangeResult;
 /** In-flight dedup promise for fetchPending — prevents triple-fire on session switch */
 let _fetchPendingPromise: Promise<void> | null = null;
 
-/** Debounce timer for fetchPending — coalesces rapid turn_end calls */
-let _fetchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-const FETCH_DEBOUNCE_MS = 2000;
-
 interface ChangeReviewState {
   open: boolean;
   changes: PendingChange[];
@@ -52,60 +48,46 @@ export const useChangeReviewStore = create<ChangeReviewState>()((set, get) => ({
       changes: s.changes.map((c) => (c.path === path ? { ...c, status } : c)),
     })),
 
-  fetchPending: (() => {
-    const doFetch = async () => {
-      if (_fetchPendingPromise) return _fetchPendingPromise;
-      const sessionState = useSessionStore.getState();
-      const sessionId = sessionState.activeSessionId;
-      if (!sessionId) return;
-      set({ loading: true });
+  fetchPending: async () => {
+    if (_fetchPendingPromise) return _fetchPendingPromise;
+    const sessionState = useSessionStore.getState();
+    const sessionId = sessionState.activeSessionId;
+    if (!sessionId) return;
+    set({ loading: true });
 
-      _fetchPendingPromise = (async () => {
-        try {
-          const session = sessionState.sessionsByProject
-            ? Object.values(sessionState.sessionsByProject)
-                .flat()
-                .find((s) => s.sessionId === sessionId)
-            : undefined;
-
-          const result = await apiClient.call("change-review.pending", {
-            sessionId,
-            ...(session?.sessionPath ? { sessionPath: session.sessionPath } : {}),
-          });
-          const changes = (Array.isArray(result) ? result : []) as PendingChange[];
-
-          // Apply "" fallback for null fields so InlineDiffViewer can render.
-          // When agent process has exited, JSONL fallback returns null for both fields.
-          const enriched = changes.map((c) => ({
-            ...c,
-            oldContent: c.oldContent ?? "",
-            newContent: c.newContent ?? "",
-          }));
-          set({ changes: enriched, loading: false });
-        } catch {
-          set({ loading: false });
-        }
-      })();
-
+    _fetchPendingPromise = (async () => {
       try {
-        await _fetchPendingPromise;
-      } finally {
-        _fetchPendingPromise = null;
-      }
-    };
+        const session = sessionState.sessionsByProject
+          ? Object.values(sessionState.sessionsByProject)
+              .flat()
+              .find((s) => s.sessionId === sessionId)
+          : undefined;
 
-    return () => {
-      if (_fetchDebounceTimer) {
-        clearTimeout(_fetchDebounceTimer);
+        const result = await apiClient.call("change-review.pending", {
+          sessionId,
+          ...(session?.sessionPath ? { sessionPath: session.sessionPath } : {}),
+        });
+        const changes = (Array.isArray(result) ? result : []) as PendingChange[];
+
+        // Apply "" fallback for null fields so InlineDiffViewer can render.
+        // JSONL fallback enriches newContent from disk but oldContent stays null.
+        const enriched = changes.map((c) => ({
+          ...c,
+          oldContent: c.oldContent ?? "",
+          newContent: c.newContent ?? "",
+        }));
+        set({ changes: enriched, loading: false });
+      } catch {
+        set({ loading: false });
       }
-      return new Promise<void>((resolve) => {
-        _fetchDebounceTimer = setTimeout(() => {
-          _fetchDebounceTimer = null;
-          doFetch().then(resolve);
-        }, FETCH_DEBOUNCE_MS);
-      });
-    };
-  })(),
+    })();
+
+    try {
+      await _fetchPendingPromise;
+    } finally {
+      _fetchPendingPromise = null;
+    }
+  },
 
   approveChange: async (path) => {
     const sessionId = useSessionStore.getState().activeSessionId;

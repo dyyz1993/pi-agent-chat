@@ -13,7 +13,7 @@ import type { PendingChangeResult } from "../modules/change-review";
 
 const log = createLogger("change-review");
 
-const CHANNEL_TIMEOUT_MS = 1_000;
+const CHANNEL_TIMEOUT_MS = 5_000;
 
 interface TurnChange {
   turnIndex: number;
