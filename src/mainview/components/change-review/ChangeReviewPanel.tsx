@@ -186,16 +186,8 @@ const ChangeItem = memo(function ChangeItem({ change, isExpanded, onToggle }: Ch
   const { t } = useTranslation("changeReview");
   const approveChange = useChangeReviewStore((s) => s.approveChange);
   const rejectChange = useChangeReviewStore((s) => s.rejectChange);
-  const fetchFileDiff = useChangeReviewStore((s) => s.fetchFileDiff);
   const fetchAgentFileDiff = useGitStore((s) => s.fetchAgentFileDiff);
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
-
-  // When expanded and content is missing, load diff on demand
-  useEffect(() => {
-    if (isExpanded && (change.oldContent === null || change.newContent === null)) {
-      fetchFileDiff(change.path);
-    }
-  }, [isExpanded, change.oldContent, change.newContent, change.path, fetchFileDiff]);
 
   const statusCfg = STATUS_CONFIG[change.status];
   const StatusIcon = statusCfg.Icon;

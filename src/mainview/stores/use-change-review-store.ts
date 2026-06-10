@@ -4,7 +4,6 @@ import { useSessionStore } from "./use-session-store";
 import { useNotificationStore } from "./use-notification-store";
 import { useGitStore } from "./use-git-store";
 import type { PendingChangeResult } from "../../shared/modules/change-review";
-import { reconstructDiffContent } from "../lib/diff-utils";
 
 export type PendingChange = PendingChangeResult;
 
@@ -27,8 +26,6 @@ interface ChangeReviewState {
   setSelectedPath: (path: string | null) => void;
   updateChangeStatus: (path: string, status: PendingChange["status"]) => void;
   fetchPending: () => Promise<void>;
-  /** Load diff content for a single file on demand (fallback when batch enrichment misses it) */
-  fetchFileDiff: (path: string) => Promise<void>;
   approveChange: (path: string) => Promise<void>;
   rejectChange: (path: string) => Promise<void>;
   approveAll: () => Promise<void>;
@@ -77,54 +74,14 @@ export const useChangeReviewStore = create<ChangeReviewState>()((set, get) => ({
           });
           const changes = (Array.isArray(result) ? result : []) as PendingChange[];
 
-          set({ changes, loading: false });
-
-          if (
-            changes.length > 0 &&
-            changes.every((c) => c.oldContent === null && c.newContent === null)
-          ) {
-            apiClient
-              .call("agent.getBatchDiffs", { sessionId })
-              .then((batchResult) => {
-                if (batchResult?.files) {
-                  const diffMap = new Map<
-                    string,
-                    { oldContent: string | null; newContent: string | null; unifiedDiff: string | null }
-                  >();
-                  for (const f of batchResult.files as Array<{
-                    path: string;
-                    diff: {
-                      oldContent: string | null;
-                      newContent: string | null;
-                      unifiedDiff: string;
-                    } | null;
-                  }>) {
-                    if (f.diff) {
-                      const reconstructed = reconstructDiffContent({
-                        oldContent: f.diff.oldContent,
-                        newContent: f.diff.newContent,
-                        unifiedDiff: f.diff.unifiedDiff,
-                      });
-                      diffMap.set(f.path, {
-                        oldContent: reconstructed.oldContent,
-                        newContent: reconstructed.newContent,
-                        unifiedDiff: f.diff.unifiedDiff,
-                      });
-                    }
-                  }
-                  set((s) => ({
-                    changes: s.changes.map((c) => {
-                      const d = diffMap.get(c.path);
-                      if (d) return { ...c, oldContent: d.oldContent, newContent: d.newContent };
-                      if (c.fileStatus === "added") return { ...c, oldContent: "" };
-                      if (c.fileStatus === "deleted") return { ...c, newContent: "" };
-                      return c;
-                    }),
-                  }));
-                }
-              })
-              .catch(() => {});
-            }
+          // Apply "" fallback for null fields so InlineDiffViewer can render.
+          // When agent process has exited, JSONL fallback returns null for both fields.
+          const enriched = changes.map((c) => ({
+            ...c,
+            oldContent: c.oldContent ?? "",
+            newContent: c.newContent ?? "",
+          }));
+          set({ changes: enriched, loading: false });
         } catch {
           set({ loading: false });
         }
@@ -149,31 +106,6 @@ export const useChangeReviewStore = create<ChangeReviewState>()((set, get) => ({
       });
     };
   })(),
-
-  fetchFileDiff: async (path) => {
-    const sessionId = useSessionStore.getState().activeSessionId;
-    if (!sessionId) return;
-    const change = get().changes.find((c) => c.path === path);
-    if (!change || (change.oldContent !== null && change.newContent !== null)) return;
-    try {
-      const res = await apiClient.call("agent.getFileDiff", { sessionId, filePath: path });
-      if (!res) return;
-      const reconstructed = reconstructDiffContent({
-        oldContent: res.oldContent ?? null,
-        newContent: res.newContent ?? null,
-        unifiedDiff: res.unifiedDiff ?? null,
-      });
-      set((s) => ({
-        changes: s.changes.map((c) =>
-          c.path === path
-            ? { ...c, oldContent: reconstructed.oldContent, newContent: reconstructed.newContent }
-            : c,
-        ),
-      }));
-    } catch {
-      // Non-critical
-    }
-  },
 
   approveChange: async (path) => {
     const sessionId = useSessionStore.getState().activeSessionId;
