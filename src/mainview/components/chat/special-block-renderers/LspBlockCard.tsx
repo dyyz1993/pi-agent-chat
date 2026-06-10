@@ -6,7 +6,7 @@ import { registerSpecialBlock } from "../special-block-registry";
 export const LspBlockCard = memo(function LspBlockCard({ block }: SpecialBlockRendererProps) {
   const [collapsed, setCollapsed] = useState(true);
   const hasBody = !!block.body;
-  const firstLine = block.body.split("\n")[0] ?? "";
+  const firstLine = block.body?.split("\n")[0] ?? "";
 
   const isError = /error/i.test(firstLine);
   const iconColor = isError ? "text-status-error" : "text-status-warning";
