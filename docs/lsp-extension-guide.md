@@ -30,11 +30,11 @@ servers:
 
 ## 三种诊断模式
 
-| 模式 | 按钮名 | 触发时机 | 数据呈现位置 |
-|------|--------|---------|-------------|
-| `agent_end` | On End | 整个对话回合结束后 | 聊天消息区 `[LSP]` 通知 + 状态面板 |
+| 模式         | 按钮名   | 触发时机                       | 数据呈现位置                                |
+| ------------ | -------- | ------------------------------ | ------------------------------------------- |
+| `agent_end`  | On End   | 整个对话回合结束后             | 聊天消息区 `<lsp>` 通知 + 状态面板          |
 | `edit_write` | On Write | 每次 write/edit 执行完立即触发 | 聊天消息区 + 注入 LLM 工具返回值 + 状态面板 |
-| `disabled` | Off | 不触发 | 无 |
+| `disabled`   | Off      | 不触发                         | 无                                          |
 
 默认模式：`agent_end`
 
@@ -65,7 +65,7 @@ pi 会话创建时，自动启动所有配置的 LSP 服务器。
           → LSP 收集本回合所有被编辑过的文件（不是整个项目）
           → 逐个文件：打开 → 等待 2 秒 → 拉取 diagnostics
           → 有问题时：
-             - 聊天消息区：出现 "[LSP] src/foo.ts: 2 errors, 1 warning"
+             - 聊天消息区：出现 "<lsp> src/foo.ts: 2 errors, 1 warning"
              - 状态面板：底部出现 "⚠️ src/foo.ts: 2 issues"
           → 没问题：静默，什么都不显示
 ```
@@ -78,7 +78,7 @@ pi 会话创建时，自动启动所有配置的 LSP 服务器。
 AI 调用 write/edit 修改 src/foo.ts → tool_result 事件触发
   → LSP 立即：打开文件 → 格式化（可选）→ 等待 2 秒 → 拉取 diagnostics
   → 有问题时：
-     - 聊天消息区：出现 "[LSP] src/foo.ts: ..."
+     - 聊天消息区：出现 "<lsp> src/foo.ts: ..."
      - LLM 工具返回值被注入诊断结果（LLM 下一轮能看到错误并尝试修复）
      - 状态面板：底部更新
   → 没问题：显示 "no diagnostics"
@@ -88,16 +88,16 @@ AI 调用 write/edit 修改 src/foo.ts → tool_result 事件触发
 
 LLM 可以调用 `lsp` 工具，支持 8 种 action：
 
-| Action | 用途 | 必须参数 |
-|--------|------|---------|
-| `diagnostics` | 获取文件诊断 | `path`（可选，不传=全部） |
-| `definition` | 跳转到定义 | `path` + `line` + `character` |
-| `references` | 查找所有引用 | `path` + `line` + `character` |
-| `hover` | 悬停信息 | `path` + `line` + `character` |
-| `symbols` | 搜索符号 | `query` 或 `path` |
-| `rename` | 重命名符号 | `path` + `line` + `character` + `newName` |
-| `status` | 查看服务器状态 | 无 |
-| `reload` | 重载配置 | 无 |
+| Action        | 用途           | 必须参数                                  |
+| ------------- | -------------- | ----------------------------------------- |
+| `diagnostics` | 获取文件诊断   | `path`（可选，不传=全部）                 |
+| `definition`  | 跳转到定义     | `path` + `line` + `character`             |
+| `references`  | 查找所有引用   | `path` + `line` + `character`             |
+| `hover`       | 悬停信息       | `path` + `line` + `character`             |
+| `symbols`     | 搜索符号       | `query` 或 `path`                         |
+| `rename`      | 重命名符号     | `path` + `line` + `character` + `newName` |
+| `status`      | 查看服务器状态 | 无                                        |
+| `reload`      | 重载配置       | 无                                        |
 
 LLM 还可以调用 `lsp_health` 工具（等价于 `lsp` 的 `status` action）。
 
@@ -135,13 +135,13 @@ severity 含义：`1 = Error` `2 = Warning` `3 = Info` `4 = Hint`
 
 ### UI 呈现
 
-| 位置 | 内容 | 数据来源 |
-|------|------|---------|
-| 聊天消息区 | `[LSP] src/foo.ts: 2 errors, 1 warning` | `ctx.ui.notify` 纯文本 |
-| 状态面板底部 | ⚠️ `src/foo.ts: 2 issues` | channel `diagnostics_update` → store `lastDiagnostics` |
-| 状态面板服务器列表 | 绿点/红点 + 服务器名 | channel `status_changed` / `startup_complete` |
-| 左侧 SideNav | 蓝色 Network 图标 | 仅 LLM 调用 `lsp`/`lsp_health` 工具时 |
-| 右侧 ToolIconList | 蓝色 Network 图标 | 仅 LLM 调用 `lsp`/`lsp_health` 工具时 |
+| 位置               | 内容                                    | 数据来源                                               |
+| ------------------ | --------------------------------------- | ------------------------------------------------------ |
+| 聊天消息区         | `<lsp>` src/foo.ts: 2 errors, 1 warning | `ctx.ui.notify` 纯文本                                 |
+| 状态面板底部       | ⚠️ `src/foo.ts: 2 issues`               | channel `diagnostics_update` → store `lastDiagnostics` |
+| 状态面板服务器列表 | 绿点/红点 + 服务器名                    | channel `status_changed` / `startup_complete`          |
+| 左侧 SideNav       | 蓝色 Network 图标                       | 仅 LLM 调用 `lsp`/`lsp_health` 工具时                  |
+| 右侧 ToolIconList  | 蓝色 Network 图标                       | 仅 LLM 调用 `lsp`/`lsp_health` 工具时                  |
 
 ---
 
@@ -163,7 +163,7 @@ severity 含义：`1 = Error` `2 = Warning` `3 = Info` `4 = Hint`
 1. 确认模式为 `On End`
 2. 让 AI 修改一个有 TypeScript 错误的文件
 3. 等待 AI 回复结束
-4. 预期：聊天消息区出现 `[LSP] xxx.ts: N errors` 通知
+4. 预期：聊天消息区出现 `<lsp>` xxx.ts: N errors 通知
 
 ### 测试 4：自动诊断（edit_write 模式）
 
