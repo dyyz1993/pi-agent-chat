@@ -3,7 +3,7 @@ import type { HandlerOptions, R } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
 import { AgentProcessManager } from "../agent/process-manager";
 import { createLogger } from "../lib/logger";
-import { listDisabledSkills, setDisabledSkill } from "../lib/project-config";
+import { listDisabledSkills, setDisabledSkill, listDisabledPlugins, setDisabledPlugin } from "../lib/project-config";
 
 const log = createLogger("agent");
 
@@ -228,6 +228,16 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   r("agent.setDisabledSkill", async (params) => {
     const disabledSkills = await setDisabledSkill(params.skillName, params.disabled);
     return { disabledSkills };
+  });
+
+  r("agent.getDisabledPlugins", async (params) => {
+    const disabledPlugins = await listDisabledPlugins(params.projectPath);
+    return { disabledPlugins };
+  });
+
+  r("agent.setDisabledPlugin", async (params) => {
+    const disabledPlugins = await setDisabledPlugin(params.projectPath, params.pluginPath, params.disabled);
+    return { disabledPlugins };
   });
 
   r("agent.getTools", async (params) => {

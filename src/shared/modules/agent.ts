@@ -238,6 +238,14 @@ export interface AgentMethods {
     params: { skillName: string; disabled: boolean };
     result: { disabledSkills: string[] };
   };
+  "agent.getDisabledPlugins": {
+    params: { projectPath: string };
+    result: { disabledPlugins: string[] };
+  };
+  "agent.setDisabledPlugin": {
+    params: { projectPath: string; pluginPath: string; disabled: boolean };
+    result: { disabledPlugins: string[] };
+  };
   "agent.getTools": {
     params: { sessionId: string };
     result: { tools: Array<{ name: string; label: string; description: string }> };

@@ -41,6 +41,8 @@ interface ProjectConfig {
   pinnedSessionIds: string[];
   favoriteFolders: FavoriteFolder[];
   disabledSkills: string[];
+  /** per-project disabled plugin paths */
+  disabledPlugins: Record<string, string[]>;
   /** app-level model favorites (global) */
   modelFavorites: string[];
 }
@@ -55,6 +57,7 @@ function emptyConfig(): ProjectConfig {
     pinnedSessionIds: [],
     favoriteFolders: [],
     disabledSkills: [],
+    disabledPlugins: {},
     modelFavorites: [],
   };
 }
@@ -70,6 +73,7 @@ function parseConfig(raw: string): ProjectConfig {
     pinnedSessionIds: parsed.pinnedSessionIds ?? [],
     favoriteFolders: parsed.favoriteFolders ?? [],
     disabledSkills: parsed.disabledSkills ?? [],
+    disabledPlugins: parsed.disabledPlugins ?? {},
     modelFavorites: parsed.modelFavorites ?? [],
   };
 }
@@ -85,6 +89,7 @@ function hasUserData(config: ProjectConfig): boolean {
     config.favoriteFolders.length > 0 ||
     config.modelFavorites.length > 0 ||
     config.disabledSkills.length > 0 ||
+    (config.disabledPlugins && Object.keys(config.disabledPlugins).length > 0) ||
     config.openTabs.length > 0 ||
     config.configuredPaths.length > 0
   );
@@ -421,6 +426,32 @@ export async function setDisabledSkill(skillName: string, disabled: boolean): Pr
       config.disabledSkills = config.disabledSkills.filter((n) => n !== skillName);
     }
     return config.disabledSkills;
+  });
+}
+
+export async function listDisabledPlugins(projectPath: string): Promise<string[]> {
+  const config = await load();
+  return config.disabledPlugins[projectPath] ?? [];
+}
+
+export async function setDisabledPlugin(
+  projectPath: string,
+  pluginPath: string,
+  disabled: boolean,
+): Promise<string[]> {
+  return loadAndSave((config) => {
+    if (!config.disabledPlugins[projectPath]) {
+      config.disabledPlugins[projectPath] = [];
+    }
+    const list = config.disabledPlugins[projectPath];
+    if (disabled) {
+      if (!list.includes(pluginPath)) {
+        list.push(pluginPath);
+      }
+    } else {
+      config.disabledPlugins[projectPath] = list.filter((p) => p !== pluginPath);
+    }
+    return config.disabledPlugins[projectPath];
   });
 }
 

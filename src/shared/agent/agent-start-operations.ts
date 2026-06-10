@@ -157,7 +157,6 @@ export async function startAgentClientOperation<TManaged extends StartManagedCli
       projectPath: options.projectPath,
       sessionPath: options.sessionPath,
       status: "idle",
-      holdEvents: [],
     },
     unsubscribe: () => undefined,
     _activeSessionId: options.sessionId,

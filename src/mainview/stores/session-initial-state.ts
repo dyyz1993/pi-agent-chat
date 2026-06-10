@@ -39,6 +39,10 @@ interface DisabledSkillsResponse {
   disabledSkills?: string[];
 }
 
+interface DisabledPluginsResponse {
+  disabledPlugins?: string[];
+}
+
 interface AgentStateResult {
   model?: { provider?: string; id: string; name: string; reasoning?: boolean; contextWindow?: number };
   thinkingLevel?: string;
@@ -364,17 +368,31 @@ export function createFetchInitialStateAction({
         const skillsPromise = apiClient.call("agent.getSkills", { sessionId });
         const disabledSkillsPromise = apiClient.call("agent.getDisabledSkills", {});
 
-        extensionsPromise
-          .then((res) => {
-            perfLog.info("[fetchInit] getExtensions done", {
+        // 查找当前 session 的 projectPath
+        const sessionMetaForPlugins = (() => {
+          for (const sessions of Object.values(get().sessionsByProject)) {
+            const found = sessions.find((s) => s.sessionId === sessionId);
+            if (found) return found;
+          }
+          return null;
+        })();
+        const disabledPluginsPromise = sessionMetaForPlugins?.projectPath
+          ? apiClient.call("agent.getDisabledPlugins", { projectPath: sessionMetaForPlugins.projectPath })
+          : Promise.resolve({ disabledPlugins: [] } as DisabledPluginsResponse);
+
+        Promise.all([extensionsPromise, disabledPluginsPromise])
+          .then(([extRes, disabledPluginsRes]) => {
+            perfLog.info("[fetchInit] getExtensions+getDisabledPlugins done", {
               sessionId,
               ms: Math.round(performance.now() - t0),
             });
-            const rawExts = Array.isArray(res)
-              ? res
-              : ((res as { extensions?: ExtensionEntry[] })?.extensions ?? []);
+            const rawExts = Array.isArray(extRes)
+              ? extRes
+              : ((extRes as { extensions?: ExtensionEntry[] })?.extensions ?? []);
             const exts = rawExts as ExtensionEntry[];
-            if (exts.length === 0) return;
+            if (exts.length === 0 && !(disabledPluginsRes as DisabledPluginsResponse)?.disabledPlugins?.length) return;
+            const dp = disabledPluginsRes as DisabledPluginsResponse;
+            const disabledPluginSet = new Set(dp?.disabledPlugins ?? []);
             const plugins = exts.map((e: ExtensionEntry) => {
               const parts = e.path.split("/");
               const fileName = parts.pop()?.replace(/\.(ts|js|tsx|jsx)$/, "") ?? "unknown";
@@ -383,7 +401,7 @@ export function createFetchInitialStateAction({
               return {
                 name,
                 path: e.path,
-                enabled: true,
+                enabled: !disabledPluginSet.has(e.path),
                 toolNames: e.toolNames,
                 commandNames: e.commandNames,
                 scope: derivePluginScope(e.path),
@@ -442,7 +460,7 @@ export function createFetchInitialStateAction({
               .addLog(`[skills] call failed: ${err instanceof Error ? err.message : String(err)}`);
           });
 
-        await Promise.allSettled([extensionsPromise, skillsPromise, disabledSkillsPromise]);
+        await Promise.allSettled([extensionsPromise, skillsPromise, disabledSkillsPromise, disabledPluginsPromise]);
 
         // --- Priority 4 (parallel, max 3) ---
         const mcpPromise = apiClient.call("agent.getMcpServers", { sessionId });

@@ -118,6 +118,7 @@ interface StatusState {
   toggleSkillExpanded: (name: string) => void;
   toggleSkillEnabled: (name: string) => void;
   togglePluginExpanded: (path: string) => void;
+  togglePluginEnabled: (sessionId: string, projectPath: string, pluginPath: string) => void;
   toggleMcpExpanded: (name: string) => void;
   toggleMcpServer: (sessionId: string, name: string, enabled: boolean) => void;
   restartMcpServer: (sessionId: string, name: string) => void;
@@ -195,6 +196,70 @@ export const useStatusStore = create<StatusState>((set) => ({
     }),
   togglePluginExpanded: (path) =>
     set((s) => ({ expandedPlugin: s.expandedPlugin === path ? null : path })),
+  togglePluginEnabled: (sessionId, projectPath, pluginPath) => {
+    const plugin = useStatusStore.getState().plugins.find((p) => p.path === pluginPath);
+    if (!plugin) return;
+    const newEnabled = !plugin.enabled;
+
+    // 乐观更新 UI
+    set((s) => ({
+      plugins: s.plugins.map((p) =>
+        p.path === pluginPath ? { ...p, enabled: newEnabled } : p,
+      ),
+    }));
+
+    // 异步执行：写 config → set_settings → reload → fetchInitialState
+    (async () => {
+      try {
+        // 1. 写入 config.json
+        await apiClient.call("agent.setDisabledPlugin", {
+          projectPath,
+          pluginPath,
+          disabled: !newEnabled,
+        });
+
+        // 2. 获取当前 project settings
+        const settingsRes = (await apiClient.call("agent.getSettings", {
+          sessionId,
+          scope: "project",
+        })) as Record<string, unknown>;
+        const currentExtensions = (settingsRes.extensions as string[]) ?? [];
+        const excludePattern = `-${pluginPath}`;
+
+        let newExtensions: string[];
+        if (!newEnabled) {
+          // 禁用：添加排除模式
+          newExtensions = currentExtensions.includes(excludePattern)
+            ? currentExtensions
+            : [...currentExtensions, excludePattern];
+        } else {
+          // 启用：移除排除模式
+          newExtensions = currentExtensions.filter((e) => e !== excludePattern);
+        }
+
+        // 3. 写入 settings
+        await apiClient.call("agent.setSettings", {
+          sessionId,
+          settings: { extensions: newExtensions },
+          scope: "project",
+        });
+
+        // 4. reload 让 settings 生效
+        await apiClient.call("agent.reload", { sessionId });
+
+        // 5. reload 完成后刷新 UI
+        useSessionStore.getState().fetchInitialState(sessionId);
+      } catch (err) {
+        log.warn("togglePluginEnabled failed, rolling back", { error: String(err) });
+        // 回滚乐观更新
+        set((s) => ({
+          plugins: s.plugins.map((p) =>
+            p.path === pluginPath ? { ...p, enabled: !newEnabled } : p,
+          ),
+        }));
+      }
+    })();
+  },
   toggleMcpExpanded: (name) =>
     set((s) => ({ expandedMcpServer: s.expandedMcpServer === name ? null : name })),
   toggleMcpServer: (sessionId, name, enabled) => {

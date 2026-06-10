@@ -97,6 +97,8 @@ export function StatusPanel() {
   const toggleSkillEnabled = useStatusStore((s) => s.toggleSkillEnabled);
   const expandedPlugin = useStatusStore((s) => s.expandedPlugin);
   const togglePluginExpanded = useStatusStore((s) => s.togglePluginExpanded);
+  const togglePluginEnabled = useStatusStore((s) => s.togglePluginEnabled);
+  const sessionsByProject = useSessionStore((s) => s.sessionsByProject);
   const supervisorStatus = useSupervisorStore(
     (s) => (activeSessionId ? s.bySession[activeSessionId] : null) ?? null,
   );
@@ -395,6 +397,27 @@ export function StatusPanel() {
                                 >
                                   {p.scope === "global" ? t("global") : t("project")}
                                 </span>
+                                {activeSessionId && (() => {
+                                  const projectPath = Object.values(sessionsByProject)
+                                    .flat()
+                                    .find((s) => s.sessionId === activeSessionId)?.projectPath;
+                                  return projectPath ? (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        togglePluginEnabled(activeSessionId, projectPath, p.path);
+                                      }}
+                                      className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-surface-hover/60 rounded transition-opacity"
+                                      title={p.enabled ? t("disablePlugin") : t("enablePlugin")}
+                                    >
+                                      {p.enabled ? (
+                                        <EyeOff className="w-3 h-3 text-text-tertiary" />
+                                      ) : (
+                                        <Eye className="w-3 h-3 text-text-tertiary" />
+                                      )}
+                                    </button>
+                                  ) : null;
+                                })()}
                               </div>
                               {isExpanded && (
                                 <div className="ml-4 pl-2 border-l border-border-primary/70 space-y-1 pt-1 text-[10px]">
@@ -450,6 +473,11 @@ export function StatusPanel() {
                                     </div>
                                   )}
                                   <PluginCopyButton plugin={p} />
+                                  {!p.enabled && (
+                                    <div className="text-status-warning/70">
+                                      {t("pluginDisabled")}
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </div>
