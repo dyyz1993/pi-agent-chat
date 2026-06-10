@@ -1,8 +1,7 @@
-import type { ContentBlock, ChatMessage, TokenUsage } from "../types";
+import type { ContentBlock, ChatMessage, TokenUsage, PermissionMeta } from "../types";
 import type { SessionMeta } from "../types";
 import type { AgentEvent } from "../../shared/modules/agent";
 import type { AssistantMessage, Message, Usage } from "@dyyz1993/pi-ai";
-import { apiClient } from "../lib/api-client";
 import { useChatStore } from "./use-chat-store";
 import { useSessionStore, clearAgentStarted } from "./use-session-store";
 import { useMemoryStore } from "./use-memory-store";
@@ -15,10 +14,20 @@ import { batchMessageUpdate, flushNow } from "./message-batcher";
 import { messageToChatMessage, extractTokenUsage } from "../lib/message-mapper";
 import { ALL_MEMORY_TYPE_KEYS } from "../components/chat/memory-config";
 import { createLogger } from "../../shared/lib/logger";
+import {
+  closeRunningToolExecutions,
+  findMatchingToolExecution,
+  formatToolArgs,
+  hasRenderableContent,
+  isDelayedTerminalMessageUpdate,
+  isTerminalToolStatus,
+  type ToolExecBlock,
+} from "./agent-event-reconciler";
 
 const log = createLogger("event-handler");
 
 export const toolCallNameMap: Record<string, string> = {};
+export const toolCallArgsMap: Record<string, string> = {};
 
 // Track sessions where compaction_end was deferred due to active streaming.
 // When agent_end fires for these sessions, a force reload is triggered to sync
@@ -31,21 +40,66 @@ const pendingPrefetchMap = new Map<
 >();
 const PREFETCH_FALLBACK_MS = 5000;
 
+function setToolActive(sessionId: string, toolCallId: string, active: boolean): void {
+  const chat = useChatStore.getState();
+  if (typeof chat.setActiveToolCallIds !== "function") return;
+  const current = chat.activeToolCallIdsBySession?.[sessionId];
+  if (active) {
+    const next = Array.from(new Set([...(current ?? []), toolCallId]));
+    chat.setActiveToolCallIds(sessionId, next);
+    return;
+  }
+  if (current === undefined) {
+    chat.setActiveToolCallIds(sessionId, []);
+    return;
+  }
+  chat.setActiveToolCallIds(
+    sessionId,
+    current.filter((id) => id !== toolCallId),
+  );
+}
+
 export function buildTokenUsage(usage: Usage): { tokenUsage?: TokenUsage } {
   const result = extractTokenUsage(usage);
   return result ? { tokenUsage: result } : {};
 }
 
-function hasRenderableContent(msg: ChatMessage): boolean {
-  return msg.content.some(
-    (b) =>
-      (b.type === "text" && b.text.trim().length > 0) ||
-      b.type === "thinking" ||
-      b.type === "toolCall" ||
-      b.type === "toolResult" ||
-      b.type === "toolExecution" ||
-      b.type === "custom",
-  );
+/** Clean up module-level maps (toolCallNameMap, toolCallArgsMap, pendingPrefetchMap, etc.) for a session. */
+export function cleanupEventHandlerMaps(sessionId: string): void {
+  // Reset toolCallNameMap & toolCallArgsMap for this session
+  const msgs = useChatStore.getState().messagesBySession[sessionId] || [];
+  for (const msg of msgs) {
+    if (msg.role === "assistant") {
+      for (const block of msg.content) {
+        if (block.type === "toolExecution") {
+          delete toolCallNameMap[block.toolCallId];
+          delete toolCallArgsMap[block.toolCallId];
+        }
+      }
+    }
+  }
+
+  // Clean up pending prefetch entries and timers for this session
+  const prefetchMap = pendingPrefetchMap.get(sessionId);
+  if (prefetchMap) {
+    for (const entry of prefetchMap.values()) {
+      clearTimeout(entry.timer);
+    }
+    pendingPrefetchMap.delete(sessionId);
+  }
+
+  // Remove from compaction deferred set
+  compactionDeferredSessions.delete(sessionId);
+}
+
+function replaceMsgAt(
+  msgs: ChatMessage[],
+  idx: number,
+  replacement: ChatMessage,
+): ChatMessage[] {
+  const next = [...msgs];
+  next[idx] = replacement;
+  return next;
 }
 
 function scheduleEmptyStreamingReload(sessionId: string, messageId: string): void {
@@ -63,15 +117,243 @@ function scheduleEmptyStreamingReload(sessionId: string, messageId: string): voi
       return;
     }
 
-    chat
-      .loadSessionMessages(sessionId, { force: true, preserveStreaming: false })
-      .catch((err) => {
-        log.warn("empty streaming recovery reload failed", {
-          sessionId,
-          err: err instanceof Error ? err.message : String(err),
-        });
+    chat.loadSessionMessages(sessionId, { force: true, preserveStreaming: false }).catch((err) => {
+      log.warn("empty streaming recovery reload failed", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
       });
+    });
   }, 750);
+}
+
+function isToolUseStopReason(stopReason: string | null | undefined): boolean {
+  return stopReason === "toolUse" || stopReason === "tool_use";
+}
+
+function isRecoverableBoundaryStopReason(stopReason: string | null | undefined): boolean {
+  return (
+    stopReason === "stop" ||
+    stopReason === "endTurn" ||
+    stopReason === "end_turn" ||
+    isToolUseStopReason(stopReason)
+  );
+}
+
+function isErrorStopReason(stopReason: string | null | undefined): boolean {
+  return stopReason === "error";
+}
+
+function hasAssistantContentSinceLastUser(messages: ChatMessage[]): boolean {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (msg.role === "user") return false;
+    if (msg.role === "assistant" && hasRenderableContent(msg)) return true;
+  }
+  return false;
+}
+
+function findToolExecutionPosition(
+  messages: ChatMessage[],
+  toolCallId: string,
+): { msgIndex: number; blockIndex: number; block: ToolExecBlock } | null {
+  for (let mi = messages.length - 1; mi >= 0; mi--) {
+    const msg = messages[mi];
+    if (msg.role !== "assistant") continue;
+    const blockIndex = msg.content.findIndex(
+      (block): block is ToolExecBlock =>
+        block.type === "toolExecution" && block.toolCallId === toolCallId,
+    );
+    if (blockIndex >= 0) {
+      return {
+        msgIndex: mi,
+        blockIndex,
+        block: msg.content[blockIndex] as ToolExecBlock,
+      };
+    }
+  }
+  return null;
+}
+
+/**
+ * Process tool_execution_start / tool_execution_update events directly,
+ * bypassing the message batcher. The batcher coalesces by session which
+ * causes parallel tool events in the same frame to replace each other.
+ * Tool events are low-frequency, so processing them immediately has no
+ * performance impact and ensures no events are lost.
+ */
+function applyToolExecutionEvent(
+  sessionId: string,
+  event: AgentEvent,
+  toolCallId: string,
+  toolName: string,
+): void {
+  if (event.type !== "tool_execution_start" && event.type !== "tool_execution_update") return;
+  const chat = useChatStore.getState();
+  const existing = chat.messagesBySession[sessionId] || [];
+
+  // --- Branch 1: block found in a non-last message ---
+  const exactPosition = findToolExecutionPosition(existing, toolCallId);
+  if (exactPosition && exactPosition.msgIndex !== existing.length - 1) {
+    if (
+      event.type === "tool_execution_start" &&
+      isTerminalToolStatus(exactPosition.block.status)
+    ) {
+      return;
+    }
+    const msg = existing[exactPosition.msgIndex];
+    const blocks = [...msg.content];
+    if (event.type === "tool_execution_start") {
+      const { args: argsStr, timeout, description } = formatToolArgs(event.args);
+      blocks[exactPosition.blockIndex] = {
+        ...exactPosition.block,
+        toolName:
+          exactPosition.block.toolName === "unknown" ? toolName : exactPosition.block.toolName,
+        args: argsStr || exactPosition.block.args,
+        status: isTerminalToolStatus(exactPosition.block.status)
+          ? exactPosition.block.status
+          : "running",
+        timeout: timeout ?? exactPosition.block.timeout,
+        description: description ?? exactPosition.block.description,
+        startedAt: exactPosition.block.startedAt ?? event.timestamp ?? Date.now(),
+      };
+    } else {
+      const partial = event.partialResult as
+        | { content?: Array<{ type: string; text?: string }> }
+        | undefined;
+      let output = "";
+      if (partial && Array.isArray(partial.content)) {
+        output = partial.content.map((c) => c.text ?? "").join("");
+      }
+      blocks[exactPosition.blockIndex] = {
+        ...exactPosition.block,
+        output: isTerminalToolStatus(exactPosition.block.status)
+          ? exactPosition.block.output && exactPosition.block.output.length > 0
+            ? exactPosition.block.output
+            : output
+          : output,
+        status: isTerminalToolStatus(exactPosition.block.status)
+          ? exactPosition.block.status
+          : "running",
+      };
+    }
+    const updated = [...existing];
+    updated[exactPosition.msgIndex] = { ...msg, content: blocks };
+    chat.setMessagesForSession(sessionId, updated, { bumpStreamVersion: true });
+    return;
+  }
+
+  // --- Branch 2: operate on the last assistant message ---
+  const lastMsg = existing[existing.length - 1];
+  if (!lastMsg || lastMsg.role !== "assistant") return;
+
+  const blocks = [...lastMsg.content];
+  const targetIdx = blocks.findIndex(
+    (b): b is ToolExecBlock => b.type === "toolExecution" && b.toolCallId === toolCallId,
+  );
+
+  if (event.type === "tool_execution_start") {
+    const { args: argsStr, timeout, description } = formatToolArgs(event.args);
+    const matchedByExactId = targetIdx >= 0;
+    let resolvedTargetIdx = matchedByExactId
+      ? targetIdx
+      : findMatchingToolExecution(blocks, toolName, argsStr, { includeTerminal: true });
+
+    // Don't reuse a running block from a different tool_execution_start
+    // — that's a parallel execution, not a re-delivery. But DO allow
+    // matching blocks created by message_update (different ID source).
+    if (!matchedByExactId && resolvedTargetIdx >= 0) {
+      const matched = blocks[resolvedTargetIdx] as ToolExecBlock;
+      if (
+        matched.status === "running" &&
+        matched.toolCallId !== toolCallId &&
+        toolCallNameMap[matched.toolCallId]
+      ) {
+        resolvedTargetIdx = -1;
+      }
+    }
+    if (resolvedTargetIdx >= 0) {
+      const prev = blocks[resolvedTargetIdx] as ToolExecBlock;
+      if (isTerminalToolStatus(prev.status)) {
+        blocks[resolvedTargetIdx] = {
+          ...prev,
+          toolCallId: matchedByExactId ? toolCallId : prev.toolCallId,
+          toolName: prev.toolName === "unknown" ? toolName : prev.toolName,
+          args: argsStr || prev.args,
+          timeout: timeout ?? prev.timeout,
+          description: description ?? prev.description,
+        };
+      } else {
+        blocks[resolvedTargetIdx] = {
+          type: "toolExecution",
+          toolCallId,
+          toolName,
+          args: argsStr,
+          status: "running",
+          timeout,
+          startedAt: event.timestamp ?? Date.now(),
+          description,
+        };
+      }
+    } else {
+      blocks.push({
+        type: "toolExecution",
+        toolCallId,
+        toolName,
+        args: argsStr,
+        status: "running",
+        timeout,
+        startedAt: event.timestamp ?? Date.now(),
+        description,
+      });
+    }
+  } else if (event.type === "tool_execution_update") {
+    const partial = event.partialResult as
+      | { content?: Array<{ type: string; text?: string }> }
+      | undefined;
+    let output = "";
+    if (partial) {
+      if (Array.isArray(partial.content)) {
+        output = partial.content.map((c) => c.text ?? "").join("");
+      }
+    }
+    if (targetIdx >= 0) {
+      const prev = blocks[targetIdx] as ToolExecBlock;
+      const previousOutput = prev.output;
+      // Preserve the bash-streamed output when the agent's tool_execution_update
+      // arrives with empty partialResult. This happens right after a page refresh
+      // while the agent process is still reconnecting — the bash process is
+      // already streaming output (visible in the bash sidebar), but the agent
+      // hasn't relayed any of it yet. Without this guard the chat's "Output"
+      // section would be wiped to empty on every agent update.
+      const preservedOutput =
+        output.length > 0 || !previousOutput ? output : previousOutput;
+      blocks[targetIdx] = {
+        ...prev,
+        output: isTerminalToolStatus(prev.status)
+          ? previousOutput && previousOutput.length > 0
+            ? previousOutput
+            : output
+          : preservedOutput,
+        status: isTerminalToolStatus(prev.status) ? prev.status : "running",
+      };
+    } else {
+      // Block not found — batcher may have swallowed the start event.
+      // Create a running block so streaming output is visible.
+      blocks.push({
+        type: "toolExecution",
+        toolCallId,
+        toolName,
+        args: toolCallArgsMap[toolCallId] || "",
+        status: "running",
+        output,
+        startedAt: Date.now(),
+      });
+    }
+  }
+
+  const updated = [...existing];
+  updated[existing.length - 1] = { ...lastMsg, content: blocks };
+  chat.setMessagesForSession(sessionId, updated, { bumpStreamVersion: true });
 }
 
 export function handleAgentEvent(sessionId: string, event: AgentEvent) {
@@ -124,6 +406,30 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     }
 
     const crashReason = (event as { reason?: string }).reason;
+    // 先 flush 批处理队列，确保待处理的 message_update 已写入 store。
+    // 若 agent 异常退出（crash）没有 message_end，最后一批 message_update
+    // 可能仍滞留在批处理队列中，否则下方读取的 msgs 会是过期数据。
+    flushNow();
+    const chat = useChatStore.getState();
+    if (typeof chat.setActiveToolCallIds === "function") {
+      chat.setActiveToolCallIds(sessionId, []);
+    }
+    const msgs = chat.messagesBySession[sessionId] || [];
+    const fallbackToolStatus = crashReason ? "error" : "done";
+    let changed = false;
+    const closedMsgs = msgs.map((msg) => {
+      if (msg.role !== "assistant") return msg;
+      const content = closeRunningToolExecutions(msg.content, fallbackToolStatus);
+      const contentChanged = content !== msg.content;
+      const wasStreaming = msg.isStreaming === true;
+      if (!contentChanged && !wasStreaming) return msg;
+      changed = true;
+      return { ...msg, content, isStreaming: false };
+    });
+    if (changed) {
+      chat.setMessagesForSession(sessionId, closedMsgs);
+    }
+
     if (crashReason) {
       notificationGateway.emit({
         type: "session_complete",
@@ -133,26 +439,11 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         level: "error",
       });
     } else {
-      const chat = useChatStore.getState();
-      const msgs = chat.messagesBySession[sessionId] || [];
-      const lastMsg = msgs[msgs.length - 1];
+      const currentMsgs = changed ? closedMsgs : msgs;
+      const lastMsg = currentMsgs[currentMsgs.length - 1];
       const lastIsUser = lastMsg && (lastMsg.role === "user" || lastMsg.role === "custom");
 
       if (lastIsUser) {
-        chat.setMessagesForSession(sessionId, [
-          ...msgs,
-          {
-            id: `error_${Date.now()}`,
-            role: "error" as const,
-            content: [
-              {
-                type: "text" as const,
-                text: "Agent 未返回响应\nAgent 在处理你的消息后异常退出，可能是 LLM 服务异常或网络问题",
-              },
-            ],
-            timestamp: Date.now(),
-          },
-        ]);
         notificationGateway.emit({
           type: "session_error",
           sessionId,
@@ -194,8 +485,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       });
     }
 
-    storeGet().updateSessionStatus(sessionId, "idle");
-
+    // ❌ 不再强制切到 idle，保持当前状态（streaming 或其他）
     const chatState = useChatStore.getState();
     const currentMsgs = chatState.messagesBySession[sessionId] || [];
     const isActivelyStreaming = currentMsgs.some(
@@ -278,9 +568,18 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         toolCallId: event.toolCallId,
         hookMeta: (
           event as {
-            hookMeta?: { toolName: string; matcher: string; command?: string; reason: string };
+            hookMeta?: {
+              toolName: string;
+              matcher: string;
+              command?: string;
+              hookCommand?: string;
+              eventName?: string;
+              source?: string;
+              reason: string;
+            };
           }
         ).hookMeta,
+        permissionMeta: (event as { permissionMeta?: PermissionMeta }).permissionMeta,
       });
 
       storeGet().updateSessionStatus(sessionId, "permission");
@@ -301,10 +600,9 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     const id = (event as { id?: string }).id;
     const reason = (event as { reason?: string }).reason ?? "responded";
     if (id) {
-      useUIDialogStore.getState().resolveFromRemote(
-        id,
-        reason as "responded" | "timeout" | "aborted",
-      );
+      useUIDialogStore
+        .getState()
+        .resolveFromRemote(id, reason as "responded" | "timeout" | "aborted");
     }
     return;
   }
@@ -380,12 +678,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       const content = msg
         ? msg.content.map((b) => {
             if (b.type === "toolCall") {
-              const args =
-                typeof b.input === "string"
-                  ? b.input
-                  : b.input != null
-                    ? JSON.stringify(b.input, null, 2)
-                    : "";
+              const { args } = formatToolArgs(b.input);
               return {
                 type: "toolExecution" as const,
                 toolCallId: b.id,
@@ -404,12 +697,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     } else if (msg) {
       msg.content = msg.content.map((b) => {
         if (b.type === "toolCall") {
-          const args =
-            typeof b.input === "string"
-              ? b.input
-              : b.input != null
-                ? JSON.stringify(b.input, null, 2)
-                : "";
+          const { args } = formatToolArgs(b.input);
           return {
             type: "toolExecution" as const,
             toolCallId: b.id,
@@ -437,19 +725,37 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
   }
 
   if (event.type === "message_update") {
+    const message = event.message as AssistantMessage;
+    const incoming = message.content;
+    const existingBeforeUpdate = useChatStore.getState().messagesBySession[sessionId] || [];
+    if (isDelayedTerminalMessageUpdate(existingBeforeUpdate, incoming)) return;
+
     if (storeGet().sessionStatusMap[sessionId] !== "streaming") {
       storeGet().updateSessionStatus(sessionId, "streaming");
     }
     batchMessageUpdate(sessionId, () => {
       const chat = useChatStore.getState();
       const existing = chat.messagesBySession[sessionId] || [];
-      const lastMsg = existing[existing.length - 1];
-
-      const message = event.message as AssistantMessage;
-      const incoming = message.content;
       if (!incoming || !Array.isArray(incoming)) return;
 
-      if (!lastMsg || lastMsg.role !== "assistant" || !lastMsg.isStreaming) {
+      // Search backwards for the last assistant message (step_snapshot and
+      // other custom entries may be appended after it).
+      let lastAssistantIdx = -1;
+      for (let i = existing.length - 1; i >= 0; i--) {
+        if (existing[i].role === "assistant") {
+          lastAssistantIdx = i;
+          break;
+        }
+      }
+      const lastAssistant = lastAssistantIdx >= 0 ? existing[lastAssistantIdx] : null;
+
+      if (!lastAssistant || !lastAssistant.isStreaming) {
+        // Session already ended – a late message_update should not
+        // re-introduce an isStreaming:true message.
+        const curStatus = useSessionStore.getState().sessionStatusMap[sessionId];
+        if (curStatus === "idle" || curStatus === "permission") {
+          return;
+        }
         const synthMsg: ChatMessage = {
           id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           role: "assistant",
@@ -461,9 +767,18 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       }
 
       const currentMsgs = chat.messagesBySession[sessionId] || [];
-      const currentLast = currentMsgs[currentMsgs.length - 1];
+      // Search backwards for the streaming assistant (same pattern as above).
+      let currentAssistant: ChatMessage | null = null;
+      let currentAssistantIdx = -1;
+      for (let i = currentMsgs.length - 1; i >= 0; i--) {
+        if (currentMsgs[i].role === "assistant") {
+          currentAssistant = currentMsgs[i];
+          currentAssistantIdx = i;
+          break;
+        }
+      }
 
-      const preservedToolExecs = (currentLast?.content || []).filter(
+      const preservedToolExecs = (currentAssistant?.content || []).filter(
         (b): b is Extract<ContentBlock, { type: "toolExecution" }> => b.type === "toolExecution",
       );
       const execByCallId = new Map<string, Extract<ContentBlock, { type: "toolExecution" }>>();
@@ -476,29 +791,34 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
       for (const block of incoming) {
         if (block.type === "toolCall" && block.id) {
-          const exec = execByCallId.get(block.id);
+          const { args: newArgs, timeout, description } = formatToolArgs(block.arguments);
+          const semanticIdx = findMatchingToolExecution(preservedToolExecs, block.name, newArgs, {
+            includeTerminal: true,
+          });
+          const exec = execByCallId.get(block.id) ?? preservedToolExecs[semanticIdx];
           if (exec) {
-            const newArgs =
-              typeof block.arguments === "string"
-                ? block.arguments
-                : block.arguments != null
-                  ? JSON.stringify(block.arguments, null, 2)
-                  : "";
-            orderedBlocks.push({ ...exec, args: newArgs || exec.args });
-            usedExecs.add(block.id);
+            orderedBlocks.push({
+              ...exec,
+              toolName: exec.toolName === "unknown" ? block.name : exec.toolName,
+              args: newArgs || exec.args,
+              timeout: timeout ?? exec.timeout,
+              description: description ?? exec.description,
+            });
+            usedExecs.add(exec.toolCallId);
           } else {
-            const args =
-              typeof block.arguments === "string"
-                ? block.arguments
-                : block.arguments != null
-                  ? JSON.stringify(block.arguments, null, 2)
-                  : "";
             const toolName = block.name;
+            log.warn("[message_update] creating NEW running block (no existing match)", {
+              sessionId,
+              toolCallId: block.id,
+              toolName,
+              preservedCount: preservedToolExecs.length,
+              preservedIds: preservedToolExecs.map((e) => e.toolCallId),
+            });
             orderedBlocks.push({
               type: "toolExecution",
               toolCallId: block.id,
               toolName,
-              args,
+              args: newArgs,
               status: "running",
             });
             usedExecs.add(block.id);
@@ -512,16 +832,16 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
       const preservedBlocks = preservedToolExecs.filter((exec) => !usedExecs.has(exec.toolCallId));
 
-      chat.setMessagesForSession(sessionId, [
-        ...currentMsgs.slice(0, -1),
-        {
-          ...currentLast,
+      chat.setMessagesForSession(
+        sessionId,
+        replaceMsgAt(currentMsgs, currentAssistantIdx, {
+          ...currentAssistant!,
           content: [...preservedBlocks, ...orderedBlocks],
           ...buildTokenUsage(message.usage),
           ...(message.stopReason ? { stopReason: message.stopReason } : {}),
-        },
-      ]);
-      chat.incrementStreamVersion();
+        }),
+        { bumpStreamVersion: true, streamingFastPath: true },
+      );
     });
     return;
   }
@@ -545,31 +865,41 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     }
 
     if (role !== "assistant") return;
+
+    // 在读取 store 之前，先 flush 批处理队列中待处理的 message_update。
+    // 最后一批 message_update（携带最终累积内容）和 message_end 经常落在同一帧
+    // （~16ms）内到达。若不先 flush，下方捕获的 lastMsg/existing 会指向 flush
+    // 之前的状态，本处理器末尾的 setMessagesForSession 会用过期内容把刚 flush
+    // 进 store 的最终内容覆盖掉，导致助手消息显示不完整/被截断。
+    flushNow();
+
     const chat = useChatStore.getState();
     const existing = chat.messagesBySession[sessionId] || [];
-    const lastMsg = existing[existing.length - 1];
-    if (!lastMsg || lastMsg.role !== "assistant") return;
+    // Find the last assistant message (may not be the array's last element if
+    // custom entries like step_snapshot were appended after it).
+    let lastMsg: ChatMessage | undefined;
+    let lastMsgIdx = -1;
+    for (let i = existing.length - 1; i >= 0; i--) {
+      if (existing[i].role === "assistant") {
+        lastMsg = existing[i];
+        lastMsgIdx = i;
+        break;
+      }
+    }
+    if (!lastMsg) return;
 
     const assistantMsg = message as AssistantMessage;
 
-    apiClient
-      .call("agent.getContextUsage", { sessionId })
-      .then((cu) => {
-        if (cu && cu.tokens != null) {
-          storeGet().updateSessionContext(sessionId, {
-            tokens: cu.tokens,
-            ...(cu.contextWindow > 0 ? { contextWindow: cu.contextWindow } : {}),
-          });
-        }
-      })
-      .catch((err) => {
-        log.warn("agent.getContextUsage failed after message_end", {
-          sessionId,
-          err: err instanceof Error ? err.message : String(err),
-        });
-      });
-
-    flushNow();
+    // usage.input is the total prompt tokens for this LLM call (absolute value, not delta).
+    // Use calculateContextTokens to match the backend's getContextUsage logic.
+    const usage = assistantMsg.usage;
+    if (usage) {
+      const contextTokens =
+        usage.totalTokens || usage.input + usage.output + (usage.cacheRead ?? 0) + (usage.cacheWrite ?? 0);
+      if (contextTokens > 0) {
+        storeGet().updateSessionContext(sessionId, { tokens: contextTokens });
+      }
+    }
 
     const hasContent = hasRenderableContent(lastMsg);
 
@@ -580,9 +910,9 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     if (!hasContent && storeGet().sessionStatusMap[sessionId] === "streaming") {
       const finalMsg = messageToChatMessage(message, entryId, toolCallNameMap);
       if (finalMsg && hasRenderableContent(finalMsg)) {
-        chat.setMessagesForSession(sessionId, [
-          ...existing.slice(0, -1),
-          {
+        chat.setMessagesForSession(
+          sessionId,
+          replaceMsgAt(existing, lastMsgIdx, {
             ...lastMsg,
             content: finalMsg.content,
             isStreaming: false,
@@ -591,8 +921,8 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
             model: assistantMsg.model ?? lastMsg.model,
             ...buildTokenUsage(assistantMsg.usage),
             entryId,
-          },
-        ]);
+          }),
+        );
       } else {
         scheduleEmptyStreamingReload(sessionId, lastMsg.id);
       }
@@ -600,22 +930,39 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     }
 
     if (!hasContent) {
-      const assistantMsg = message as AssistantMessage;
+      const priorMessages = [...existing.slice(0, lastMsgIdx), ...existing.slice(lastMsgIdx + 1)];
+      const hasPriorAssistantContent = hasAssistantContentSinceLastUser(priorMessages);
+      const stopReason = assistantMsg.stopReason ?? lastMsg.stopReason ?? null;
+
+      if (hasPriorAssistantContent || isRecoverableBoundaryStopReason(stopReason)) {
+        chat.setMessagesForSession(sessionId, priorMessages);
+        chat
+          .loadSessionMessages(sessionId, { force: true, preserveStreaming: false })
+          .catch((err) => {
+            log.warn("empty assistant boundary reload failed", {
+              sessionId,
+              stopReason,
+              err: err instanceof Error ? err.message : String(err),
+            });
+          });
+        return;
+      }
+
       const errorDetail =
         assistantMsg.errorMessage ??
-        (assistantMsg.stopReason === "error" ? "LLM 返回了错误响应" : undefined) ??
+        (isErrorStopReason(stopReason) ? "LLM 返回了错误响应" : undefined) ??
         "LLM 返回了空响应";
       const errorTitle = "LLM 未返回有效响应";
-      chat.setMessagesForSession(sessionId, [
-        ...existing.slice(0, -1),
-        {
+      chat.setMessagesForSession(
+        sessionId,
+        replaceMsgAt(existing, lastMsgIdx, {
           ...lastMsg,
           role: "error" as const,
           content: [{ type: "text" as const, text: `${errorTitle}\n${errorDetail}` }],
-          stopReason: assistantMsg.stopReason ?? undefined,
+          stopReason,
           isStreaming: false,
-        },
-      ]);
+        }),
+      );
       notificationGateway.emit({
         type: "session_error",
         sessionId,
@@ -626,18 +973,24 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       return;
     }
 
-    chat.setMessagesForSession(sessionId, [
-      ...existing.slice(0, -1),
-      {
+    const closedContent = closeRunningToolExecutions(
+      lastMsg.content,
+      isErrorStopReason(assistantMsg.stopReason) ? "error" : "done",
+    );
+
+    chat.setMessagesForSession(
+      sessionId,
+      replaceMsgAt(existing, lastMsgIdx, {
         ...lastMsg,
+        content: closedContent,
         isStreaming: false,
         stopReason: assistantMsg.stopReason ?? lastMsg.stopReason ?? null,
         provider: assistantMsg.api ?? lastMsg.provider,
         model: assistantMsg.model ?? lastMsg.model,
         ...buildTokenUsage(assistantMsg.usage),
         entryId,
-      },
-    ]);
+      }),
+    );
     return;
   }
 
@@ -647,90 +1000,20 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
     if (event.type === "tool_execution_start") {
       toolCallNameMap[toolCallId] = toolName;
+      toolCallArgsMap[toolCallId] = formatToolArgs(event.args).args;
+      setToolActive(sessionId, toolCallId, true);
     }
 
-    type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
-
-    batchMessageUpdate(sessionId, () => {
-      const chat = useChatStore.getState();
-      const existing = chat.messagesBySession[sessionId] || [];
-      const lastMsg = existing[existing.length - 1];
-      if (!lastMsg || lastMsg.role !== "assistant") return;
-
-      const blocks = [...lastMsg.content];
-      const targetIdx = blocks.findIndex(
-        (b): b is ToolExecBlock => b.type === "toolExecution" && b.toolCallId === toolCallId,
-      );
-
-      if (event.type === "tool_execution_start") {
-        const rawArgs: unknown = event.args;
-        let argsStr = "";
-        let timeout: number | undefined;
-        let description: string | undefined;
-        if (rawArgs && typeof rawArgs === "object" && rawArgs !== null) {
-          const obj = rawArgs as Record<string, unknown>;
-          if ("command" in obj && typeof obj.command === "string") {
-            argsStr = obj.command;
-          } else {
-            argsStr = JSON.stringify(rawArgs, null, 2);
-          }
-          if ("timeout" in obj && typeof obj.timeout === "number") {
-            timeout = obj.timeout;
-          }
-          if ("description" in obj && typeof obj.description === "string") {
-            description = obj.description;
-          }
-        }
-        if (targetIdx >= 0) {
-          blocks[targetIdx] = {
-            type: "toolExecution",
-            toolCallId,
-            toolName,
-            args: argsStr,
-            status: "running",
-            timeout,
-            startedAt: event.timestamp ?? Date.now(),
-            description,
-          };
-        } else {
-          blocks.push({
-            type: "toolExecution",
-            toolCallId,
-            toolName,
-            args: argsStr,
-            status: "running",
-            timeout,
-            startedAt: event.timestamp ?? Date.now(),
-            description,
-          });
-        }
-      } else if (event.type === "tool_execution_update") {
-        const partial = event.partialResult as
-          | { content?: Array<{ type: string; text?: string }> }
-          | undefined;
-        let output = "";
-        if (partial) {
-          if (Array.isArray(partial.content)) {
-            output = partial.content.map((c) => c.text ?? "").join("");
-          }
-        }
-        if (targetIdx >= 0) {
-          const prev = blocks[targetIdx] as ToolExecBlock;
-          blocks[targetIdx] = { ...prev, output, status: "running" };
-        }
-      }
-
-      const updated = [...existing];
-      updated[existing.length - 1] = { ...lastMsg, content: blocks };
-      chat.setMessagesForSession(sessionId, updated);
-      chat.incrementStreamVersion();
-    });
+    // Tool events bypass the batcher — they're low-frequency and must not
+    // be coalesced (parallel tools would lose events). Process directly.
+    applyToolExecutionEvent(sessionId, event, toolCallId, toolName);
     return;
   }
 
   if (event.type === "tool_execution_end") {
     flushNow();
     const toolCallId = event.toolCallId;
+    setToolActive(sessionId, toolCallId, false);
     type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
     const chat = useChatStore.getState();
     const existing = chat.messagesBySession[sessionId] || [];
@@ -768,8 +1051,49 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
       const updated = [...existing];
       updated[i] = { ...msg, content: blocks };
-      chat.setMessagesForSession(sessionId, updated);
-      chat.incrementStreamVersion();
+      chat.setMessagesForSession(sessionId, updated, { bumpStreamVersion: true });
+      return;
+    }
+
+    // BLOCK NOT FOUND — batcher coalescing may have swallowed the
+    // tool_execution_start that would have created this block.
+    // Create it directly as done/error so the card closes properly.
+    const isError = event.isError;
+    let output = "";
+    const result = event.result as
+      | { content?: Array<{ type: string; text?: string }>; details?: unknown }
+      | undefined;
+    if (result) {
+      if (Array.isArray(result.content)) {
+        output = result.content.map((c) => c.text ?? "").join("");
+      } else {
+        output = JSON.stringify(result, null, 2);
+      }
+    }
+    const argsStr = toolCallArgsMap[toolCallId] || "";
+    const fallbackBlock: ToolExecBlock = {
+      type: "toolExecution",
+      toolCallId,
+      toolName: event.toolName || toolCallNameMap[toolCallId] || "unknown",
+      args: argsStr,
+      status: isError ? "error" : "done",
+      output,
+      details: result?.details,
+      startedAt: event.timestamp ? event.timestamp - 1 : Date.now() - 1,
+      endedAt: event.timestamp ?? Date.now(),
+    };
+    for (let i = existing.length - 1; i >= 0; i--) {
+      const msg = existing[i];
+      if (msg.role !== "assistant") continue;
+      const blocks = [...msg.content, fallbackBlock];
+      const updated = [...existing];
+      updated[i] = { ...msg, content: blocks };
+      chat.setMessagesForSession(sessionId, updated, { bumpStreamVersion: true });
+      log.info("[tool_execution_end] created missing block as done", {
+        sessionId,
+        toolCallId,
+        toolName: fallbackBlock.toolName,
+      });
       return;
     }
 
@@ -977,4 +1301,5 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
 if (typeof window !== "undefined") {
   (window as unknown as Record<string, unknown>).__toolCallNameMap = toolCallNameMap;
+  (window as unknown as Record<string, unknown>).__toolCallArgsMap = toolCallArgsMap;
 }

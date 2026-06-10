@@ -120,6 +120,7 @@ export interface LayoutState {
   showStatus: () => void;
   hideStatus: () => void;
   setStatusWidth: (w: number) => void;
+  openStatusPanel: (tab?: PanelTabId) => void;
 
   setActivePanelTab: (tab: PanelTabId) => void;
 }
@@ -236,6 +237,12 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
     const clamped = clampStatus(w);
     set({ statusWidth: clamped });
     writeNum(STATUS_WIDTH_KEY, clamped);
+  },
+  openStatusPanel: (tab) => {
+    const patch: Partial<LayoutState> = { statusPanel: "visible" };
+    if (tab) patch.activePanelTab = tab;
+    set(patch);
+    writePanel(STATUS_PANEL_KEY, "visible");
   },
 
   setActivePanelTab: (tab) => set({ activePanelTab: tab }),

@@ -219,7 +219,6 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
   openFile: async (node: TreeNode, editable?: boolean) => {
     if (node.type === "directory") return;
     const addLog = useAppStore.getState().addLog;
-    set({ selectedPath: node.path, loadingFile: true });
 
     const fileSize = node.size ?? 0;
     const preview: FilePreview = {
@@ -234,6 +233,10 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
       editable,
     };
 
+    // Immediately show overlay with loading state
+    set({ selectedPath: node.path, loadingFile: true, filePreview: preview });
+    useChatOverlayStore.getState().openFile();
+
     try {
       const mode = useAppStore.getState().mode;
 
@@ -242,7 +245,7 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
       } else if (preview.isText) {
         if (fileSize > MAX_PREVIEW_SIZE) {
           preview.content = `[File too large to preview: ${formatSize(fileSize)}]\n\nThis file exceeds the 500KB preview limit.\nUse an external editor to view this file.`;
-          set({ filePreview: preview, loadingFile: false });
+          set({ filePreview: { ...preview }, loadingFile: false });
           addLog(`Skipped large file: ${node.name} (${formatSize(fileSize)})`);
           return;
         }
@@ -262,7 +265,7 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
           preview.mimeType = res.headers.get("content-type") ?? "text/plain";
         }
         preview.content = text;
-        preview.totalLines = (text.match(/\n/g) || []).length + 1;
+        preview.totalLines = (text.match(/\n/g) ?? []).length + 1;
       } else {
         preview.content = `[Binary file: ${node.name} (${formatSize(preview.size)})]`;
         preview.isText = true;
@@ -274,8 +277,7 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
       addLog(`Error opening ${node.name}: ${err instanceof Error ? err.message : String(err)}`);
     }
 
-    set({ filePreview: preview, loadingFile: false });
-    useChatOverlayStore.getState().openFile();
+    set({ filePreview: { ...preview }, loadingFile: false });
   },
 
   closePreview: () => {

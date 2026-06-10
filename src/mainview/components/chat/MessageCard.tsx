@@ -32,9 +32,10 @@ import {
   isLspCustomType,
   isLspVisibleInChat,
 } from "./MessageBubble";
-import type { ChatMessage, ContentBlock } from "../../types";
+import type { ChatMessage, ContentBlock, SessionStatus } from "../../types";
 import type { ModifiedFile } from "../../stores/use-rollback-store";
 import { getCustomTypeIcon } from "./tool-icon-map";
+import { GoalCompleteCard } from "./GoalCompleteCard";
 
 const log = createLogger("chat");
 
@@ -87,6 +88,19 @@ function formatTime(ts: number): string {
   return `${hh}:${mm}`;
 }
 
+function isToolUseStopReason(stopReason: string | null | undefined): boolean {
+  return stopReason === "toolUse" || stopReason === "tool_use";
+}
+
+function isRecoverableBoundaryStopReason(stopReason: string | null | undefined): boolean {
+  return (
+    stopReason === "stop" ||
+    stopReason === "endTurn" ||
+    stopReason === "end_turn" ||
+    isToolUseStopReason(stopReason)
+  );
+}
+
 export const MessageCard = memo(function MessageCard({
   message,
   cardLabel,
@@ -119,9 +133,17 @@ export const MessageCard = memo(function MessageCard({
     toggleCollapse(message.id);
   }, [message.id, toggleCollapse]);
 
-  const isUser = message.role === "user";
-  const isAssistant = message.role === "assistant";
-  const isCompaction = message.role === "compactionSummary";
+  const renderRole =
+    message.role === "error" && isRecoverableBoundaryStopReason(message.stopReason)
+      ? "assistant"
+      : message.role;
+  const displayMessage =
+    renderRole === "assistant" && message.role === "error"
+      ? ({ ...message, role: "assistant" as const } satisfies ChatMessage)
+      : message;
+  const isUser = renderRole === "user";
+  const isAssistant = renderRole === "assistant";
+  const isCompaction = renderRole === "compactionSummary";
   const timeStr = formatTime(message.timestamp);
 
   const hasCustomContent = message.content.some((b) => b.type === "custom");
@@ -138,12 +160,28 @@ export const MessageCard = memo(function MessageCard({
       if (
         !MEMORY_CUSTOM_TYPES.has(b.customType) &&
         !isLspCustomType(b.customType) &&
-        b.customType !== "step_snapshot"
+        b.customType !== "step_snapshot" &&
+        b.customType !== "supervisor_goal_complete"
       )
         return true;
       return false;
     });
     if (allHidden) return null;
+  }
+
+  if (
+    hasCustomContent &&
+    customBlock &&
+    customBlock.customType === "supervisor_goal_complete"
+  ) {
+    return (
+      <div data-msg-card-id={message.id} className="relative w-full py-1.5">
+        <GoalCompleteCard
+          data={(customBlock as { data?: unknown }).data}
+          blockId={message.id}
+        />
+      </div>
+    );
   }
 
   if (
@@ -158,7 +196,7 @@ export const MessageCard = memo(function MessageCard({
     );
   }
 
-  if (message.role === "error") {
+  if (renderRole === "error") {
     const textBlock = message.content.find(
       (b): b is Extract<typeof b, { type: "text" }> => b.type === "text",
     );
@@ -262,8 +300,8 @@ export const MessageCard = memo(function MessageCard({
     label = cardLabel ?? iconEntry.label;
   } else {
     const roleCfg =
-      (message.role in ROLE_CONFIG
-        ? ROLE_CONFIG[message.role as keyof typeof ROLE_CONFIG]
+      (renderRole in ROLE_CONFIG
+        ? ROLE_CONFIG[renderRole as keyof typeof ROLE_CONFIG]
         : ROLE_CONFIG.assistant) ?? ROLE_CONFIG.assistant;
     IconComp = roleCfg.icon;
     labelColor = roleCfg.color;
@@ -332,7 +370,7 @@ export const MessageCard = memo(function MessageCard({
         </div>
       ) : (
         <div className="relative z-20">
-          <MessageBubble message={message} mergedResultData={mergedResultData} />
+          <MessageBubble message={displayMessage} mergedResultData={mergedResultData} />
         </div>
       )}
     </div>
@@ -350,15 +388,12 @@ const HeaderActions = memo(function HeaderActions({
   const sessionId = useSessionStore((s) => s.activeSessionId);
   const isSessionStreaming = useSessionStore(
     useCallback(
-      (s: { sessionStatusMap: Record<string, import("../../types").SessionStatus> }) => {
+      (s: { sessionStatusMap: Record<string, SessionStatus> }) => {
         const status = sessionId ? s.sessionStatusMap[sessionId] : undefined;
         return status === "streaming" || status === "compacting" || status === "retrying";
       },
       [sessionId],
     ),
-  );
-  const messages = useChatStore((s) =>
-    sessionId ? s.messagesBySession[sessionId] || EMPTY_MSGS : EMPTY_MSGS,
   );
   const pushNotification = useNotificationStore((s) => s.push);
   const rollingBackRef = useRef(false);
@@ -396,8 +431,11 @@ const HeaderActions = memo(function HeaderActions({
         });
         return null;
       }
+      const msgs = sessionId
+        ? useChatStore.getState().messagesBySession[sessionId] || EMPTY_MSGS
+        : EMPTY_MSGS;
       if (isUserCard) {
-        const allUserMsgs = messages.filter((m) => m.role === "user");
+        const allUserMsgs = msgs.filter((m) => m.role === "user");
         const userMsgIdx = allUserMsgs.findIndex((m) => m.id === message.id);
         const userTreeEntries = entries.filter((e) => e.type === "message" && e.label === "user");
         log.info("resolveEntryId: user card matching", {
@@ -414,7 +452,7 @@ const HeaderActions = memo(function HeaderActions({
         });
         return null;
       }
-      const allAssistantMsgs = messages.filter((m) => m.role === "assistant");
+      const allAssistantMsgs = msgs.filter((m) => m.role === "assistant");
       const assistantMsgIdx = allAssistantMsgs.findIndex((m) => m.id === message.id);
       const assistantTreeEntries = entries.filter(
         (e) => e.type === "message" && e.label === "assistant",
@@ -433,7 +471,7 @@ const HeaderActions = memo(function HeaderActions({
       });
       return null;
     },
-    [sessionId, message.id, message.entryId, messages, isUserCard, fetchTree],
+    [sessionId, message.id, message.entryId, isUserCard, fetchTree],
   );
 
   const findTurnBoundary = useCallback((entryId: string, entries: TreeEntry[]): string | null => {
@@ -515,7 +553,8 @@ const HeaderActions = memo(function HeaderActions({
             mode,
             messageId: message.id,
             hasEntryId: !!message.entryId,
-            messagesCount: messages.length,
+            messagesCount: (useChatStore.getState().messagesBySession[sessionId ?? ""] ?? [])
+              .length,
           });
           pushNotification({
             message: t("messageCard.rollbackFirstMessage"),
@@ -694,15 +733,7 @@ const HeaderActions = memo(function HeaderActions({
         rollingBackRef.current = false;
       }
     },
-    [
-      sessionId,
-      resolveRollbackTarget,
-      message.id,
-      message.role,
-      messages.length,
-      messages,
-      pushNotification,
-    ],
+    [sessionId, resolveRollbackTarget, message.id, message.role, pushNotification],
   );
 
   return (

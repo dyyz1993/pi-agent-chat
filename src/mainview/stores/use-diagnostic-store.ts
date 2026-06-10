@@ -7,6 +7,7 @@ import { useMemoryStore } from "./use-memory-store";
 import { useRulesStore } from "./use-rules-store";
 import { useRpcDebugStore } from "./use-rpc-debug-store";
 import { createLogger } from "../../shared/lib/logger";
+import { getStartupPerfEvents, type StartupPerfEvent } from "../lib/startup-monitor";
 
 const log = createLogger("system");
 
@@ -38,6 +39,7 @@ export interface DiagnosticSnapshot {
   dataSizes: DataSizeSnapshot[];
   rpcDebugEntries: number;
   toolCallNameMapSize: number;
+  startupPerfEvents: StartupPerfEvent[];
   jsHeapUsed?: number;
   jsHeapTotal?: number;
   history: DiagnosticSnapshot[];
@@ -282,6 +284,7 @@ export const useDiagnosticStore = create<DiagnosticState>((set, get) => ({
       toolCallNameMapSize: Object.keys(
         (window as unknown as Record<string, unknown>).__toolCallNameMap ?? {},
       ).length,
+      startupPerfEvents: getStartupPerfEvents().slice(-20),
       jsHeapUsed: (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory
         ?.usedJSHeapSize,
       jsHeapTotal: (performance as unknown as { memory?: { totalJSHeapSize: number } }).memory

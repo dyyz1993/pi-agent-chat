@@ -225,4 +225,10 @@ export function messageToChatMessage(
   return msg;
 }
 
-export { extractTokenUsage, extractTimestamp, extractContent, extractToolCallNameMap, getTextContent };
+export {
+  extractTokenUsage,
+  extractTimestamp,
+  extractContent,
+  extractToolCallNameMap,
+  getTextContent,
+};

@@ -31,6 +31,8 @@ import {
 } from "../lib/session-scanner";
 import { openFolder } from "../lib/native-dialog";
 import { linkProject, unlinkProject, getLinkedProjects } from "../lib/linked-projects-config";
+import { getProcessManager } from "./agent";
+import type { SessionStatus } from "../modules/project";
 
 const log = createLogger("config");
 
@@ -82,8 +84,25 @@ export function register(server: RPCServer, options: HandlerOptions): void {
     log.info("[scanSessions] handler begin", { projectPath: params.projectPath });
     try {
       const sessions = await scanSessionsForProject(params.projectPath);
-      log.info("[scanSessions] handler done", { count: sessions.length, ms: Date.now() - t0 });
-      return { sessions };
+      // 同一 RPC 顺带把 session 状态带回来，
+      // 避免前端在加载完列表后再发一次 agent.batchGetSessionsStatus
+      const pm = getProcessManager();
+      const sessionIds = sessions.map((s) => s.sessionId);
+      // 进程池返回的是内部 status（idle/streaming/stopped）。
+      // 在 RPC 边界统一映射成前端 SessionStatus：stopped → idle（前端没有 stopped 概念）。
+      // 之后整条链路就是 SessionStatus，前端拿到直接写 store，不需要再做白名单校验。
+      const statuses: Array<{ sessionId: string; status: SessionStatus }> = pm
+        ? pm.batchGetSessionsStatus(sessionIds).map((s) => ({
+            sessionId: s.sessionId,
+            status: s.status === "stopped" ? "idle" : s.status,
+          }))
+        : [];
+      log.info("[scanSessions] handler done", {
+        count: sessions.length,
+        statusCount: statuses.length,
+        ms: Date.now() - t0,
+      });
+      return { sessions, statuses };
     } catch (err) {
       log.error("[scanSessions] handler FAILED", { error: String(err), ms: Date.now() - t0 });
       throw err;

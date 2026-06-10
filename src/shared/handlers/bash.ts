@@ -8,8 +8,11 @@ import { createReadStream } from "node:fs";
 import { createInterface } from "node:readline";
 import { spawn as spawnProc, type ChildProcess } from "child_process";
 import { createLogger } from "../lib/logger";
+import { withTimeout } from "../lib/with-timeout";
 
 const log = createLogger("bash");
+
+const CHANNEL_TIMEOUT_MS = 1_000;
 
 export function register(server: RPCServer, _options: HandlerOptions): void {
   const r = createRegister(server);
@@ -28,7 +31,10 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     if (!pm) return { processes: [] };
 
     try {
-      const rawResult: unknown = await pm.callChannel(sessionId, "bash", "list", {});
+      const rawResult: unknown = await withTimeout(
+        pm.callChannel(sessionId, "bash", "list", {}),
+        CHANNEL_TIMEOUT_MS,
+      );
       const processes =
         typeof rawResult === "object" &&
         rawResult !== null &&
@@ -49,7 +55,18 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
     const pm = getProcessManager();
     if (!pm) throw new Error("No process manager available");
-    await pm.callChannel(sessionId, "bash", action, { toolCallId, data });
+    try {
+      await withTimeout(
+        pm.callChannel(sessionId, "bash", action, { toolCallId, data }),
+        CHANNEL_TIMEOUT_MS,
+      );
+    } catch (err) {
+      log.warn("bash.command channel call failed", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      throw new Error("bash channel call failed");
+    }
 
     return { ok: true };
   });

@@ -4,6 +4,7 @@ import type { RPCMethods } from "../lib/api-client";
 import type { MethodResult } from "@dyyz1993/rpc-core";
 import type { DemoMethod } from "../types";
 import { createLogger } from "../../shared/lib/logger";
+import { createStartupTrace } from "../lib/startup-monitor";
 
 const log = createLogger("system");
 
@@ -51,10 +52,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   initializeConnection: () => {
     const MAX_RETRIES = 5;
     let retries = 0;
+    const trace = createStartupTrace("connection.initialize");
     const init = async () => {
       try {
+        trace.mark("api-client.initialize.begin", { attempt: retries + 1 });
         await apiClient.initialize();
         const transport = apiClient.getTransport();
+        trace.done("api-client.initialize.done", { transport });
         set({
           mode: transport === "ipc" ? "desktop" : "web",
           ready: true,
@@ -64,6 +68,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           `${transport === "ipc" ? "Desktop" : "Web"} mode - ${transport.toUpperCase()}`,
         );
       } catch (e) {
+        trace.error("api-client.initialize.failed", e, { attempt: retries + 1 });
         log.warn("API client initialization failed", { retries, error: String(e) });
         retries++;
         if (retries < MAX_RETRIES) {

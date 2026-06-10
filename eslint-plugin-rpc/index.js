@@ -13,6 +13,7 @@
  *   - rpc/valid-channel-method      : callChannel() 方法名必须在已知 channel contract 中定义
  *   - rpc/compaction-entries-sync   : JSONL 解析中 compaction 必须同时 push 到 allCompactionEntries + allMessages
  *   - rpc/compaction-reload-pairing : compactionDeferredSessions.add() 必须有 agent_end 兜底 flush
+ *   - rpc/require-channel-timeout   : callChannel() 必须包裹在 withTimeout() 中
  */
 "use strict";
 
@@ -27,6 +28,7 @@ const noComponentRpcFetch = require("./rules/no-component-rpc-fetch");
 const validChannelMethod = require("./rules/valid-channel-method");
 const compactionEntriesSync = require("./rules/compaction-entries-sync");
 const compactionReloadPairing = require("./rules/compaction-reload-pairing");
+const requireChannelTimeout = require("./rules/require-channel-timeout");
 
 module.exports = {
   meta: {
@@ -45,6 +47,7 @@ module.exports = {
     "valid-channel-method": validChannelMethod,
     "compaction-entries-sync": compactionEntriesSync,
     "compaction-reload-pairing": compactionReloadPairing,
+    "require-channel-timeout": requireChannelTimeout,
   },
   configs: {
     recommended: {
@@ -61,6 +64,7 @@ module.exports = {
         "rpc/valid-channel-method": "error",
         "rpc/compaction-entries-sync": "error",
         "rpc/compaction-reload-pairing": "error",
+        "rpc/require-channel-timeout": "warn",
       },
     },
   },

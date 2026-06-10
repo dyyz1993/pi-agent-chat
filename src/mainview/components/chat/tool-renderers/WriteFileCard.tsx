@@ -10,6 +10,7 @@ import { ToolCardHeader } from "../primitives/ToolCardHeader";
 import { InlineDiffViewer } from "./InlineDiffViewer";
 import { useSettingsStore } from "../../../stores/use-settings-store";
 import { formatFilePath } from "../../../lib/format-path";
+import { parseUnifiedDiff } from "../../../lib/diff-utils";
 
 type Block = Extract<ContentBlock, { type: "toolExecution" }>;
 
@@ -110,24 +111,6 @@ function parseEditArgs(args: string): EditToolArgs {
   return { path: "", edits: [] };
 }
 
-function parseUnifiedDiff(diff: string): { oldValue: string; newValue: string } | null {
-  if (!diff) return null;
-  const oldLines: string[] = [];
-  const newLines: string[] = [];
-  for (const line of diff.split("\n")) {
-    if (line.startsWith("+++") || line.startsWith("---") || line.startsWith("@@")) continue;
-    if (line.startsWith("-")) {
-      oldLines.push(line.slice(1));
-    } else if (line.startsWith("+")) {
-      newLines.push(line.slice(1));
-    } else if (line.startsWith(" ")) {
-      oldLines.push(line.slice(1));
-      newLines.push(line.slice(1));
-    }
-  }
-  return { oldValue: oldLines.join("\n"), newValue: newLines.join("\n") };
-}
-
 function isEditTool(block: Block): boolean {
   return block.toolName.toLowerCase() === "edit";
 }
@@ -166,7 +149,7 @@ export const WriteFileCard = memo(function WriteFileCard({
     }
   }, [fileContent, isRunning]);
 
-  const displayPath = filePath ? formatFilePath(filePath) : block.args?.slice(0, 80) || "";
+  const displayPath = filePath ? formatFilePath(filePath) : block.args?.slice(0, 80) || block.toolName;
   const isMd = isMarkdownFile(filePath);
   const hasContent = (fileContent ?? "").length > 0;
 

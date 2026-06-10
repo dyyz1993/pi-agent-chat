@@ -8,13 +8,15 @@ import {
   History,
   Shield,
   X,
+  Maximize2,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useMemoryStore } from "../../stores/use-memory-store";
 import { useSessionStore } from "../../stores/use-session-store";
+import { useChatOverlayStore } from "../../stores/use-chat-overlay-store";
 import { useShallow } from "zustand/react/shallow";
 import { apiClient } from "../../lib/api-client";
-import { ALL_MEMORY_TYPES, getMemorySummary } from "../chat/memory-config";
+import { ALL_MEMORY_TYPES, getMemorySummary, parseSnippetToEntries } from "../chat/memory-config";
 import type { MemoryTypeConfig } from "../chat/memory-config";
 import { createLogger } from "../../../shared/lib/logger";
 
@@ -71,6 +73,7 @@ function FileContentPreview({ filePath }: { filePath: string }) {
   const { t } = useTranslation("memory");
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const openExpand = useChatOverlayStore((s) => s.openExpand);
 
   useEffect(() => {
     let cancelled = false;
@@ -92,16 +95,41 @@ function FileContentPreview({ filePath }: { filePath: string }) {
     };
   }, [filePath]);
 
+  const handleExpand = useCallback(() => {
+    if (!content) return;
+    const fileName = filePath.split("/").pop() ?? filePath;
+    openExpand(
+      fileName,
+      <pre className="h-full overflow-auto p-4 text-xs font-mono text-text-primary whitespace-pre-wrap bg-surface-code">
+        {content}
+      </pre>,
+    );
+  }, [content, filePath, openExpand]);
+
   if (loading) {
-    return <div className="px-3 py-1.5 text-[10px] text-text-tertiary">{t("loading")}</div>;
+    return (
+      <div className="px-3 py-1.5 text-[10px] text-text-tertiary flex items-center gap-1.5">
+        <div className="w-3 h-3 border-2 border-semantic-accent border-t-transparent rounded-full animate-spin" />
+        {t("loading")}
+      </div>
+    );
   }
   if (!content) {
     return <div className="px-3 py-1.5 text-[10px] text-text-tertiary">{t("cannotRead")}</div>;
   }
   return (
-    <pre className="mx-2 mb-1.5 p-2 rounded bg-surface-code dark:bg-surface-code/80 border border-border-secondary dark:border-surface-code text-[10px] text-text-secondary overflow-x-auto whitespace-pre-wrap max-h-40 overflow-y-auto">
-      {content.length > 2000 ? content.slice(0, 2000) + "..." : content}
-    </pre>
+    <div className="relative mx-2 mb-1.5 rounded bg-surface-code dark:bg-surface-code/80 border border-border-secondary dark:border-surface-code">
+      <pre className="p-2 text-[10px] text-text-secondary overflow-x-auto whitespace-pre-wrap max-h-40 overflow-y-auto">
+        {content.length > 2000 ? content.slice(0, 2000) + "..." : content}
+      </pre>
+      <button
+        onClick={handleExpand}
+        className="absolute top-1 right-1 p-1 rounded bg-bg-elevated/80 text-text-tertiary hover:text-text-primary hover:bg-surface-hover transition-colors"
+        title={t("expand", { defaultValue: "Expand" })}
+      >
+        <Maximize2 className="w-3 h-3" />
+      </button>
+    </div>
   );
 }
 
@@ -298,28 +326,77 @@ export function MemoryPanel() {
             badge={injected.length}
           />
           {!collapsedSections.has("injected") && (
-            <div className="px-2.5 pb-1.5 space-y-1">
-              {injected.map((item, i) => (
-                <div
-                  key={i}
-                  className="flex items-start gap-1.5 px-1.5 py-1 rounded bg-status-info/5 border border-status-info/10"
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-status-info mt-1.5 shrink-0" />
-                  <div className="flex flex-col gap-0.5 min-w-0">
-                    <span className="text-[10px] text-status-info/80 leading-tight">
-                      {item.summary}
-                    </span>
-                    {item.snippet && (
-                      <span
-                        className="text-[9px] text-text-tertiary leading-tight truncate"
+            <div className="px-2.5 pb-1.5 space-y-1.5">
+              {injected.map((item, i) => {
+                const entries = item.snippet ? parseSnippetToEntries(item.snippet) : [];
+                return (
+                  <div key={i} className="space-y-1">
+                    <div className="flex items-center gap-1.5 px-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-status-info shrink-0" />
+                      <span className="text-[10px] font-medium text-status-info/80">
+                        {item.summary}
+                      </span>
+                      {entries.length > 0 && (
+                        <span className="text-[9px] text-text-tertiary ml-auto">
+                          {entries.length} {entries.length > 1 ? "files" : "file"}
+                        </span>
+                      )}
+                    </div>
+                    {entries.length > 0 ? (
+                      <div className="space-y-0.5 pl-1">
+                        {entries.map((entry, j) => {
+                          const badge = TYPE_BADGES[entry.type ?? ""];
+                          return (
+                            <div
+                              key={j}
+                              className="px-1.5 py-1 rounded bg-surface-hover/40 dark:bg-surface-code/30 border border-border-secondary/40"
+                            >
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                {badge ? (
+                                  <span
+                                    className={`px-1 py-px rounded text-[8px] font-medium shrink-0 ${badge.cls}`}
+                                  >
+                                    {getBadgeLabel(entry.type ?? "")}
+                                  </span>
+                                ) : (
+                                  <span className="px-1 py-px rounded text-[8px] font-medium shrink-0 bg-text-tertiary/15 text-text-tertiary">
+                                    {getBadgeLabel("")}
+                                  </span>
+                                )}
+                                <span className="text-[10px] font-medium text-text-primary truncate">
+                                  {entry.name}
+                                </span>
+                              </div>
+                              {entry.description && (
+                                <div className="text-[9px] text-text-tertiary mt-0.5 truncate">
+                                  {entry.description}
+                                </div>
+                              )}
+                              {entry.content && (
+                                <div
+                                  className="text-[9px] text-text-secondary/70 mt-0.5 leading-tight line-clamp-3 whitespace-pre-wrap"
+                                  title={entry.content}
+                                >
+                                  {entry.content.length > 150
+                                    ? entry.content.slice(0, 150) + "..."
+                                    : entry.content}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : item.snippet ? (
+                      <div
+                        className="pl-3 text-[9px] text-text-tertiary leading-tight whitespace-pre-wrap line-clamp-4"
                         title={item.snippet}
                       >
                         {item.snippet}
-                      </span>
-                    )}
+                      </div>
+                    ) : null}
                   </div>
-                </div>
-              ))}
+                );
+              })}
               {/* Debug info from latest prefetch */}
               {(() => {
                 const prefetchEvents = events.filter(
@@ -436,11 +513,29 @@ export function MemoryPanel() {
           />
           {!collapsedSections.has("entrypoint") && (
             <div className="px-2.5 pb-1.5">
-              <pre className="p-2 rounded bg-surface-code dark:bg-surface-code/80 border border-border-secondary dark:border-surface-code text-[10px] text-text-secondary overflow-x-auto whitespace-pre-wrap max-h-40 overflow-y-auto">
-                {(entrypoint || "").length > 2000
-                  ? (entrypoint || "").slice(0, 2000) + "..."
-                  : entrypoint}
-              </pre>
+              <div className="relative rounded bg-surface-code dark:bg-surface-code/80 border border-border-secondary dark:border-surface-code">
+                <pre className="p-2 text-[10px] text-text-secondary overflow-x-auto whitespace-pre-wrap max-h-40 overflow-y-auto">
+                  {(entrypoint || "").length > 2000
+                    ? (entrypoint || "").slice(0, 2000) + "..."
+                    : entrypoint}
+                </pre>
+                <button
+                  onClick={() => {
+                    useChatOverlayStore
+                      .getState()
+                      .openExpand(
+                        t("memoryIndex"),
+                        <pre className="h-full overflow-auto p-4 text-xs font-mono text-text-primary whitespace-pre-wrap bg-surface-code">
+                          {entrypoint}
+                        </pre>,
+                      );
+                  }}
+                  className="absolute top-1 right-1 p-1 rounded bg-bg-elevated/80 text-text-tertiary hover:text-text-primary hover:bg-surface-hover transition-colors"
+                  title={t("expand", { defaultValue: "Expand" })}
+                >
+                  <Maximize2 className="w-3 h-3" />
+                </button>
+              </div>
             </div>
           )}
         </div>

@@ -16,6 +16,8 @@ import { DiagnosticPanel } from "./components/debug/DiagnosticPanel";
 import { useDiagnosticStore } from "./stores/use-diagnostic-store";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { LoginPage } from "./components/LoginPage";
+import { createStartupTrace } from "./lib/startup-monitor";
+import { runRestoreFlow } from "./lib/restore-flow";
 
 function App() {
   const { t } = useTranslation("common");
@@ -98,167 +100,42 @@ function App() {
     if (!ready || restoredFlag) return;
 
     let cancelled = false;
+    const trace = createStartupTrace("app.restore");
     useAppStore.setState({ restored: true });
     setRestoring(true);
 
-    (async () => {
-      try {
-        const urlParams = new URLSearchParams(window.location.search);
-        const urlSessionId = urlParams.get("session");
-
-        if (urlSessionId) {
-          if (cancelled) return;
-          addLog(`Loading session from URL: ${urlSessionId}`);
-          try {
-            const lookup = await apiClient.call("project.findSessionById", {
-              sessionId: urlSessionId,
-            });
-            const sessionInfo = lookup.session as {
-              sessionPath: string;
-              projectPath: string;
-              name: string;
-            } | null;
-
-            if (!sessionInfo) {
-              addLog(`Session not found: ${urlSessionId}`);
-              setRestoring(false);
-              return;
-            }
-
-            const { projectPath, sessionPath, name: sessionName } = sessionInfo;
-            const projectName = projectPath.split("/").filter(Boolean).pop() ?? projectPath;
-            const tabId = `proj-${projectPath.replace(/\//g, "-")}`;
-
-            addProjectTab({ id: tabId, name: projectName, path: projectPath });
-            useSessionStore.getState().setActiveProject(tabId, { skipAutoSession: true });
-
-            await loadSessionsForProject(projectPath);
-
-            if (cancelled) return;
-            const result = await apiClient.call("agent.start", {
-              sessionId: urlSessionId,
-              projectPath,
-              sessionPath,
-            });
-            log.info("agent.start for URL session", {
-              status: result.status,
-              sessionId: urlSessionId,
-            });
-
-            useSessionStore.getState().setActiveSession(urlSessionId, true);
-            useChatStore.getState().loadSessionMessages(urlSessionId, { force: true, sessionPath });
-
-            addLog(`URL session loaded: ${sessionName} (${projectName})`);
-          } catch (err) {
-            addLog(
-              `Failed to load URL session: ${err instanceof Error ? err.message : String(err)}`,
-            );
-          }
-          if (!cancelled) setRestoring(false);
-          return;
-        }
-
-        if (cancelled) return;
-        const tabResult = await apiClient.call("project.restoreTabs", {});
-        const savedTabs = tabResult.tabs as Array<{ id: string; name: string; path: string }>;
-        const savedActiveId = tabResult.activeTabId as string | null;
-
-        if (savedTabs && savedTabs.length > 0) {
-          const { projectTabs } = useSessionStore.getState();
-          for (const t of savedTabs) {
-            const exists = projectTabs.find((pt) => pt.id === t.id);
-            if (!exists) {
-              addProjectTab({ id: t.id, name: t.name, path: t.path });
-            }
-          }
-
-          const targetId =
-            savedActiveId && savedTabs.some((t) => t.id === savedActiveId)
-              ? savedActiveId
-              : savedTabs[0].id;
-          useSessionStore.getState().setActiveProject(targetId, { skipAutoSession: true });
-
-          if (!cancelled) setRestoring(false);
-
-          const tab = savedTabs.find((t) => t.id === targetId);
-          if (tab) {
-            const sessions = await Promise.race([
-              loadSessionsForProject(tab.path),
-              new Promise<never>((_, reject) =>
-                setTimeout(
-                  () => reject(new Error("loadSessionsForProject timed out (10s)")),
-                  10_000,
-                ),
-              ),
-            ]).catch((err) => {
-              addLog(`Session load failed: ${err instanceof Error ? err.message : String(err)}`);
-              return [] as Awaited<ReturnType<typeof loadSessionsForProject>>;
-            });
-            addLog(
-              `Restored ${savedTabs.length} tabs from server config (${sessions.length} sessions)`,
-            );
-            if (sessions.length > 0) {
-              const { lastActiveSessionByProject } = useSessionStore.getState();
-              const lastSid = lastActiveSessionByProject[tab.path];
-              const targetSession =
-                lastSid && sessions.some((s) => s.sessionId === lastSid)
-                  ? lastSid
-                  : sessions[0].sessionId;
-              useSessionStore.getState().setActiveSession(targetSession);
-            } else {
-              await useSessionStore.getState().createNewSession();
-            }
-          }
-          return;
-        }
-
-        if (cancelled) return;
-        const result = await apiClient.call("project.listRecent", {});
-        const projects =
-          (result.projects as Array<{ path: string; name: string; sessionCount: number }>) || [];
-        if (projects.length === 0) {
-          if (!cancelled) setRestoring(false);
-          return;
-        }
-
-        const first = projects[0];
-        const tabId = `proj-${first.path.replace(/\//g, "-")}`;
-        addProjectTab({ id: tabId, name: first.name, path: first.path });
-        useSessionStore.getState().setActiveProject(tabId, { skipAutoSession: true });
-
-        if (!cancelled) setRestoring(false);
-
-        const sessions = await loadSessionsForProject(first.path);
-        addLog(`Restored project: ${first.name} (${sessions.length} sessions)`);
-
-        if (sessions.length > 0) {
-          const { lastActiveSessionByProject } = useSessionStore.getState();
-          const lastSid = lastActiveSessionByProject[first.path];
-          const sid =
-            lastSid && sessions.some((s) => s.sessionId === lastSid)
-              ? lastSid
-              : sessions[0].sessionId;
-          useSessionStore.getState().setActiveSession(sid);
-        } else {
-          await useSessionStore.getState().createNewSession();
-        }
-      } catch (err) {
-        addLog(`Restore failed: ${err instanceof Error ? err.message : String(err)}`);
-        if (!cancelled) setRestoring(false);
-      }
-    })();
+    runRestoreFlow({
+      isCancelled: () => cancelled,
+      setRestoring,
+      addLog,
+      callApi: (method, params) =>
+        apiClient.call(method as never, params as never),
+      loadSessionsForProject,
+      addProjectTab,
+      setActiveProject: (id, opts) =>
+        useSessionStore.getState().setActiveProject(id, opts),
+      setActiveSession: (id, skipFetch) =>
+        useSessionStore.getState().setActiveSession(id, skipFetch),
+      createNewSession: () => useSessionStore.getState().createNewSession(),
+      getProjectTabs: () => useSessionStore.getState().projectTabs,
+      getLastActiveSessionByProject: () =>
+        useSessionStore.getState().lastActiveSessionByProject,
+      loadSessionMessages: (sid, opts) =>
+        useChatStore.getState().loadSessionMessages(sid, opts),
+      log,
+      trace,
+    });
 
     return () => {
       cancelled = true;
     };
   }, [ready, addLog, addProjectTab, loadSessionsForProject]);
 
-  // 首次恢复完成后，后台拉取所有项目所有会话的运行状态
-  useEffect(() => {
-    if (!restoring && ready) {
-      useSessionStore.getState().fetchAllProjectsSessionsStatus();
-    }
-  }, [restoring, ready]);
+  // 启动期不再需要延迟 1.2s 再调一次 fetchAllProjectsSessionsStatus：
+  // project.scanSessions 在加载每个项目 sessions 列表时，会顺带把该 RPC 的 batch 状态
+  // 一起返回并写入 sessionStatusMap（见 session-project-actions.ts），
+  // 所以活跃项目一加载完就立即拥有正确状态；非活跃项目由 TabBar 立刻拉。
+  // 实时变化走 setupProjectStatusSubscription 推送。
 
   const handleSelectProject = async (path: string, name: string) => {
     setProjectLoading(true);

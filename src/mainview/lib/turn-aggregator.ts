@@ -1,4 +1,9 @@
 import type { ChatMessage, TimelineTurn, TimelineItem, StandaloneEntry } from "../types";
+import { ALL_MEMORY_TYPE_KEYS } from "../components/chat/memory-config";
+import {
+  hasOverlappingToolExecutionKeys,
+  toolExecutionItemToBlock,
+} from "./tool-execution-reconciler";
 
 export function aggregateTurns(messages: ChatMessage[]): {
   turns: TimelineTurn[];
@@ -77,7 +82,7 @@ export function aggregateTurns(messages: ChatMessage[]): {
             });
           } else if (block.type === "toolExecution") {
             currentTurn.items = currentTurn.items ?? [];
-            currentTurn.items.push({
+            const item = {
               itemType: "toolExecution",
               blockIndex: bi,
               toolCallId: block.toolCallId,
@@ -87,8 +92,18 @@ export function aggregateTurns(messages: ChatMessage[]): {
               output: block.output,
               details: block.details,
               messageId: msg.id,
+            } satisfies TimelineItem;
+            const existingIdx = currentTurn.items.findIndex((existing) => {
+              if (existing.itemType !== "toolExecution") return false;
+              return hasOverlappingToolExecutionKeys(toolExecutionItemToBlock(existing), block);
             });
+            if (existingIdx >= 0) {
+              currentTurn.items[existingIdx] = item;
+            } else {
+              currentTurn.items.push(item);
+            }
           } else if (block.type === "custom") {
+            if (ALL_MEMORY_TYPE_KEYS.has(block.customType)) continue;
             currentTurn.items = currentTurn.items ?? [];
             currentTurn.items.push({
               itemType: "customEntry",
@@ -107,6 +122,7 @@ export function aggregateTurns(messages: ChatMessage[]): {
           (b): b is Extract<typeof b, { type: "custom" }> => b.type === "custom",
         );
         if (!customBlock) break;
+        if (ALL_MEMORY_TYPE_KEYS.has(customBlock.customType)) break;
 
         const entry: StandaloneEntry = {
           id: msg.id,

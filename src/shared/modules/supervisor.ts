@@ -5,7 +5,39 @@ export interface SupervisorStatus {
   maxContinueCount: number;
   activeGuards: string[];
   lastCheckResult?: CheckResult;
+  goal?: GoalState;
+  lastGoldResult?: GoldResult;
   pendingPause?: { scheduledAt: number; delayMs: number; reason?: string };
+}
+
+export interface GoalState {
+  id: string;
+  objective: string;
+  status: "running" | "checking" | "complete" | "blocked" | "needs_user" | "cancelled";
+  startedAt: number;
+  updatedAt: number;
+  currentMilestone?: string;
+  continuationCount: number;
+  blockers: Array<{
+    kind: "permission" | "choice" | "runtime" | "unsafe" | "unknown";
+    summary: string;
+  }>;
+}
+
+export interface GoldResult {
+  goalId?: string;
+  verdict: "complete" | "incomplete" | "blocked" | "unsafe";
+  confidence: number;
+  checkedAt: number;
+  durationMs?: number;
+  reason: string;
+  evidence: Array<{
+    kind: "test" | "command" | "diff" | "assistant_claim" | "runtime" | "guard" | "model";
+    summary: string;
+    passed?: boolean;
+  }>;
+  continueMessage?: string;
+  userQuestion?: string;
 }
 
 export interface CheckResult {
@@ -39,12 +71,45 @@ export interface TaskReport {
   remainingItems?: string[];
 }
 
+export interface TriggerGuardResult {
+  guardName: string;
+  guardType: string;
+  passed: boolean;
+  confidence: number;
+  remainingItems?: string[];
+  detail?: string;
+  durationMs?: number;
+}
+
+export interface TriggerModelCheck {
+  passed: boolean;
+  confidence: number;
+  response?: string;
+  durationMs?: number;
+}
+
+export interface TriggerRecord {
+  seq: number;
+  startedAt: number;
+  finishedAt?: number;
+  durationMs?: number;
+  verdict: "complete" | "incomplete" | "blocked" | "unsafe";
+  confidence: number;
+  guardResults: TriggerGuardResult[];
+  modelCheck?: TriggerModelCheck;
+  action: "continue" | "pause" | "complete" | "ask_user";
+  reason?: string;
+}
+
 export type SupervisorChannelEvent =
   | { type: "statusChanged"; status: SupervisorStatus }
   | { type: "pauseRequested"; delayMs: number; reason?: string }
   | { type: "pauseCancelled"; reason: string }
   | { type: "continueTriggered"; reason: string; delayMs: number }
-  | { type: "taskReport"; tasks: TaskReport[] };
+  | { type: "taskReport"; tasks: TaskReport[] }
+  | { type: "goalChanged"; goal?: GoalState; reason?: string }
+  | ({ type: "goldResult" } & GoldResult)
+  | { type: "triggerRecord"; record: TriggerRecord };
 
 export interface SupervisorMethods {
   "supervisor.getStatus": {
@@ -78,6 +143,22 @@ export interface SupervisorMethods {
   "supervisor.checkToolStatus": {
     params: { sessionId: string; toolName: string; channelName?: string; method?: string };
     result: { reachable: boolean; status?: string; error?: string };
+  };
+  "supervisor.setGoal": {
+    params: { sessionId: string; objective: string };
+    result: { goal: GoalState };
+  };
+  "supervisor.clearGoal": {
+    params: { sessionId: string; reason?: string };
+    result: { cleared: boolean };
+  };
+  "supervisor.refineGoal": {
+    params: { sessionId: string; objective: string };
+    result: { success: boolean; objective?: string; error?: string };
+  };
+  "supervisor.getTriggerHistory": {
+    params: { sessionId: string; limit?: number };
+    result: { triggers: TriggerRecord[] };
   };
 }
 

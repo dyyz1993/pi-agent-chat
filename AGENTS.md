@@ -109,9 +109,109 @@ src/mainview/
 
 ## Testing
 
-- Unit: `vitest` + `@testing-library/react`
-- E2E: `@playwright/test` with `workers: 3`, `headless: true`
-- Config: `vitest.config.ts`, `playwright.config.ts`
+- Unit/Integration/Regression/Smoke: `vitest` + `@testing-library/react` (happy-dom)
+- E2E (real LLM): `vitest` + `ws` (sequentially, requires dev server + LLM API)
+- E2E (browser): `@playwright/test` with `workers: 3`, `headless: true`
+- Config: `vitest.config.ts` (default), `vitest.config.e2e.ts` (LLM), `vitest.config.integration.ts`, `playwright.config.ts`
+
+### Test Directory Structure (两层分类: test/{type}/{domain}/)
+
+```
+test/
+  unit/                   # 单元测试 — 隔离测试单一模块/函数/组件
+    stores/               #   Zustand store 状态管理 (50 文件)
+    handlers/             #   RPC Handler 请求处理 (17 文件)
+    utils/                #   工具函数 / 纯逻辑 (15 文件)
+    components/           #   React 组件渲染 / DOM 交互 (19 文件)
+  integration/            # 集成测试 — 跨模块/多组件协作
+    agent/                #   Agent 运行时 + 进程池
+    session/              #   Session 会话管理
+    chat/                 #   Chat 流式 + 渲染
+    coordinator/          #   Coordinator 协调层
+    compaction/           #   压缩与历史
+    render-cache/         #   渲染缓存
+    notification/         #   通知系统
+    git/                  #   Git 集成
+    memory/               #   Memory 集成
+    tabbar/               #   TabBar 集成
+    cross/                #   跨项目/跨模块
+  regression/             # 回归测试 — Bug 修复保护
+    agent/                #   Agent 相关 bug
+    rollback/             #   回滚相关 bug
+    chat/                 #   Chat 相关 bug
+    change-review/        #   ChangeReview 相关 bug
+  smoke/                  # 冒烟测试 — 快速健康检查
+    phase/                #   p0/p1/p2/p3/p4 阶段验证
+    batch/                #   3/6/7/8/12/45/next 批次验证
+  e2e-llm/                # 真实 LLM 端到端 (独立 vitest.config.e2e.ts)
+    rpc/                  #   RPC 端到端流程
+    verify/               #   验证类 (push/pull/mode-switch/timeout)
+    hooks/                #   Hooks 引擎
+    helpers.ts            #   E2E 辅助
+  helpers/                # 测试辅助工具 (event-fixtures/mock-llm/harness)
+  setup.ts                # vitest 全局 setup (localStorage + jest-dom)
+
+e2e/                      # Playwright 浏览器 E2E (17 文件, 独立运行)
+```
+
+### 测试类型识别规则
+
+| 路径前缀 | 测试类型 | 工具 | 速度 | 何时使用 |
+|----------|----------|------|------|----------|
+| `test/unit/stores/` | store 状态 | vitest (happy-dom) | 快 | 改动 Zustand store 时 |
+| `test/unit/handlers/` | RPC handler | vitest | 快 | 改动 RPC handler 时 |
+| `test/unit/utils/` | 纯函数 | vitest | 极快 | 改动工具函数时 |
+| `test/unit/components/` | React 组件 | vitest + RTL | 中 | 改动 UI 组件时 |
+| `test/integration/**` | 跨模块集成 | vitest | 慢 | 改动跨模块流程时 |
+| `test/regression/**` | Bug 回归 | vitest | 中 | 修复已知 bug 时 |
+| `test/smoke/**` | 健康检查 | vitest | 极快 | CI 冒烟 / 提交前 |
+| `test/e2e-llm/**` | 真实 LLM | vitest + ws | 极慢 | 验证真实 LLM 行为 |
+| `e2e/*.spec.ts` | 浏览器 | playwright | 慢 | 验证 UI 流程 |
+
+### 运行测试
+
+```bash
+# 默认 — 跑 vitest.config.ts 范围内的所有测试
+bun run test
+
+# 按类型
+bun run test:unit           # test/unit/**
+bun run test:integration    # test/integration/**
+bun run test:regression     # test/regression/**
+bun run test:smoke          # util + handler (最快)
+bun run test:e2e-llm        # 真实 LLM (需 dev server)
+
+# 按业务模块 (跨类型聚合)
+bun run test:chat           # 聊天相关
+bun run test:agent          # Agent 代理相关
+bun run test:rollback       # Rollback 相关
+bun run test:process-manager
+bun run test:compaction
+bun run test:coordinator
+bun run test:bash / session / git / memory / theme / settings
+
+# 高级
+bash run-tests.sh list      # 列出所有分类
+bash run-tests.sh check     # 检查文件完整性
+bash run-tests.sh failed    # 只重跑上次失败
+
+# 浏览器 E2E
+bunx playwright test        # e2e/*.spec.ts
+```
+
+### 编写新测试
+
+| 改动类型 | 应放在 | 命名建议 |
+|----------|--------|----------|
+| 新 Zustand store | `test/unit/stores/<name>.test.ts` | `chat.test.ts` / `use-<name>-store.test.ts` |
+| 新 RPC handler | `test/unit/handlers/<name>.test.ts` | `bash.test.ts` |
+| 新工具函数 | `test/unit/utils/<name>.test.ts` | `clipboard.test.ts` |
+| 新 React 组件 | `test/unit/components/<ComponentName>.test.tsx` | `MessageBubble.test.tsx` |
+| 跨 store+component+handler | `test/integration/<domain>/<feature>.test.ts` | `integration/chat/refresh-recovery.test.ts` |
+| Bug 修复保护 | `test/regression/<domain>/<bug-name>.test.ts` | `regression/rollback/targetid-resolution.test.ts` |
+| 快速冒烟 | `test/smoke/<phase\|batch>/<n>.test.ts` | `smoke/phase/p5.test.ts` |
+| 真实 LLM 验证 | `test/e2e-llm/<category>/<feature>.test.ts` | `e2e-llm/verify/auth-flow.test.ts` |
+| 浏览器交互 | `e2e/<feature>.spec.ts` | `e2e/chat-pagination.spec.ts` |
 
 ## Architecture Design Docs
 
@@ -120,6 +220,7 @@ src/mainview/
 | `docs/plans/2026-06-01-process-per-session-design.md`       | Phase 1 已完成   | 每会话独立 CLI 进程，LRU 淘汰，全局进程池                                   |
 | `docs/plans/2026-06-01-session-switch-experience-design.md` | Phase 1-3 已实施 | 会话切换体验优化：热/冷切换分流、fetchInitialState 缓存、MessageList 无闪烁 |
 | `docs/plans/2026-06-01-render-cache-design.md`              | 已实施           | 渲染层按 session 缓存：processedMessages/cardMeta/flatItems/messageIds      |
+| `docs/notification-interaction-manual.md`                   | 操作手册         | 通知、toast、retry、权限 pending 的 UI 分层与适用场景                       |
 
 ### WebSocket RPC 端到端测试方法
 

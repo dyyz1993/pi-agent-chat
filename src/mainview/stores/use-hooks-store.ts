@@ -1,5 +1,8 @@
 import { create } from "zustand";
 import { apiClient } from "../lib/api-client";
+import { createLogger } from "../../shared/lib/logger";
+
+const log = createLogger("hooks");
 
 export interface HookLogEntry {
   id: number;
@@ -28,7 +31,14 @@ export interface HookRuleStats {
   askCount: number;
 }
 
+export interface SkippedRuleKey {
+  event: string;
+  matcher: string;
+}
+
 export interface HookConfigSnapshot {
+  runtimeEnabled: boolean;
+  skippedRules: SkippedRuleKey[];
   sources: Array<{
     path: string;
     scope: string;
@@ -71,7 +81,10 @@ interface HooksState {
   fetchLog: (sessionId: string, limit?: number, event?: string) => Promise<void>;
   fetchConfig: (sessionId: string) => Promise<void>;
   clearLog: (sessionId: string) => Promise<void>;
-  setExpandedEntry: (id: number | null) => void;
+  setEnabled: (sessionId: string, enabled: boolean) => Promise<void>;
+  skipRule: (sessionId: string, event: string, matcher: string) => Promise<void>;
+  unskipRule: (sessionId: string, event: string, matcher: string) => Promise<void>;
+  setExpandedEntry: (sessionId: string, id: number | null) => void;
   addEntry: (sessionId: string, entry: HookLogEntry) => void;
   clearSession: (sessionId: string) => void;
 }
@@ -85,7 +98,7 @@ const EMPTY_SESSION: HooksSessionState = {
   expandedEntry: null,
 };
 
-export const useHooksStore = create<HooksState>()((set, get) => ({
+export const useHooksStore = create<HooksState>()((set) => ({
   bySession: {},
   activeTab: "activity",
 
@@ -118,7 +131,7 @@ export const useHooksStore = create<HooksState>()((set, get) => ({
         },
       }));
     } catch (err) {
-      console.warn("[hooks-store] fetchLog failed:", err);
+      log.warn("fetchLog failed:", { error: String(err) });
       set((s) => ({
         bySession: {
           ...s.bySession,
@@ -143,7 +156,7 @@ export const useHooksStore = create<HooksState>()((set, get) => ({
         },
       }));
     } catch (err) {
-      console.warn("[hooks-store] fetchConfig failed:", err);
+      log.warn("fetchConfig failed:", { error: String(err) });
     }
   },
 
@@ -161,19 +174,67 @@ export const useHooksStore = create<HooksState>()((set, get) => ({
         },
       }));
     } catch (err) {
-      console.warn("[hooks-store] clearLog failed:", err);
+      log.warn("clearLog failed:", { error: String(err) });
     }
   },
 
-  setExpandedEntry: (id) => {
-    const sessionId = get().bySession;
-    const activeKey = Object.keys(sessionId).pop();
-    if (!activeKey) return;
+  setEnabled: async (sessionId, enabled) => {
+    const result = await apiClient.call("hooks.setEnabled", { sessionId, enabled });
+    set((s) => {
+      const prev = s.bySession[sessionId] || { ...EMPTY_SESSION };
+      const prevSnapshot = prev.configSnapshot ?? { runtimeEnabled: true, skippedRules: [], sources: [], events: [] };
+      return {
+        bySession: {
+          ...s.bySession,
+          [sessionId]: {
+            ...prev,
+            configSnapshot: { ...prevSnapshot, runtimeEnabled: result.enabled },
+          },
+        },
+      };
+    });
+  },
+
+  skipRule: async (sessionId, event, matcher) => {
+    const result = await apiClient.call("hooks.skipRule", { sessionId, event, matcher });
+    set((s) => {
+      const prev = s.bySession[sessionId] || { ...EMPTY_SESSION };
+      const prevSnapshot = prev.configSnapshot ?? { runtimeEnabled: true, skippedRules: [], sources: [], events: [] };
+      return {
+        bySession: {
+          ...s.bySession,
+          [sessionId]: {
+            ...prev,
+            configSnapshot: { ...prevSnapshot, skippedRules: result.skipped },
+          },
+        },
+      };
+    });
+  },
+
+  unskipRule: async (sessionId, event, matcher) => {
+    const result = await apiClient.call("hooks.unskipRule", { sessionId, event, matcher });
+    set((s) => {
+      const prev = s.bySession[sessionId] || { ...EMPTY_SESSION };
+      const prevSnapshot = prev.configSnapshot ?? { runtimeEnabled: true, skippedRules: [], sources: [], events: [] };
+      return {
+        bySession: {
+          ...s.bySession,
+          [sessionId]: {
+            ...prev,
+            configSnapshot: { ...prevSnapshot, skippedRules: result.skipped },
+          },
+        },
+      };
+    });
+  },
+
+  setExpandedEntry: (sessionId, id) => {
     set((s) => ({
       bySession: {
         ...s.bySession,
-        [activeKey]: {
-          ...(s.bySession[activeKey] || { ...EMPTY_SESSION }),
+        [sessionId]: {
+          ...(s.bySession[sessionId] || { ...EMPTY_SESSION }),
           expandedEntry: id,
         },
       },

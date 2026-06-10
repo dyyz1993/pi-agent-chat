@@ -141,9 +141,9 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
   const saveFileContent = useExplorerStore((s) => s.saveFileContent);
   const setFileEditable = useExplorerStore((s) => s.setFileEditable);
   const handleSaveFile = useCallback(
-    (content: string) => {
+    async (content: string) => {
       if (filePreview?.path) {
-        saveFileContent(filePreview.path, content);
+        await saveFileContent(filePreview.path, content);
       }
     },
     [saveFileContent, filePreview?.path],

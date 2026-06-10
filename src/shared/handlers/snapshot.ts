@@ -1,32 +1,17 @@
 import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { HandlerOptions, R } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
-import { createReadStream } from "fs";
+import { createReadStream, promises as fsPromises } from "fs";
 import { createInterface } from "readline";
 import { createLogger } from "../lib/logger";
+import { withTimeout } from "../lib/with-timeout";
 import { getProcessManager } from "./agent";
 import { findSessionById } from "../lib/session-scanner";
 import type { SnapshotInfo } from "../../mainview/types";
 
 const log = createLogger("snapshot");
 
-const CHANNEL_TIMEOUT_MS = 5_000;
-
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`channel call timed out (${ms}ms)`)), ms);
-    promise.then(
-      (v) => {
-        clearTimeout(timer);
-        resolve(v);
-      },
-      (e) => {
-        clearTimeout(timer);
-        reject(e);
-      },
-    );
-  });
-}
+const CHANNEL_TIMEOUT_MS = 1_000;
 
 interface StepSnapshotEntry {
   type: "custom";
@@ -56,34 +41,38 @@ interface UnrevertPointEntry {
 }
 
 async function readStepSnapshots(sessionPath: string): Promise<StepSnapshotEntry[]> {
-  const snapshots: StepSnapshotEntry[] = [];
-  try {
-    const rl = createInterface({
-      input: createReadStream(sessionPath, { encoding: "utf-8" }),
-      crlfDelay: Infinity,
-    });
-    for await (const line of rl) {
-      if (!line.trim()) continue;
-      try {
-        const entry = JSON.parse(line) as Record<string, unknown>;
-        if (entry.type === "custom" && entry.customType === "step-snapshot") {
-          snapshots.push(entry as unknown as StepSnapshotEntry);
-        }
-      } catch (e) {
-        log.debug("readStepSnapshots: skipping malformed line", { sessionPath, error: String(e) });
-      }
-    }
-  } catch (err) {
-    log.warn("failed to read step-snapshots from JSONL", {
-      sessionPath,
-      err: err instanceof Error ? err.message : String(err),
-    });
-  }
+  const { snapshots } = await readSnapshotEntries(sessionPath);
   return snapshots;
 }
 
 async function readUnrevertPoints(sessionPath: string): Promise<UnrevertPointEntry[]> {
-  const points: UnrevertPointEntry[] = [];
+  const { unrevertPoints } = await readSnapshotEntries(sessionPath);
+  return unrevertPoints;
+}
+
+/** Single-pass read of both step-snapshot and unrevert-point entries from JSONL */
+const _entryCache = new Map<string, { result: SnapshotEntries; mtimeMs: number }>();
+
+interface SnapshotEntries {
+  snapshots: StepSnapshotEntry[];
+  unrevertPoints: UnrevertPointEntry[];
+}
+
+async function readSnapshotEntries(sessionPath: string): Promise<SnapshotEntries> {
+  // Cache by file mtime to avoid re-reading unchanged JSONL files
+  try {
+    const stat = await fsPromises.stat(sessionPath);
+    const cached = _entryCache.get(sessionPath);
+    if (cached && cached.mtimeMs === stat.mtimeMs) {
+      return cached.result;
+    }
+  } catch {
+    // stat failed, proceed without cache
+  }
+
+  const snapshots: StepSnapshotEntry[] = [];
+  const unrevertPoints: UnrevertPointEntry[] = [];
+
   try {
     const rl = createInterface({
       input: createReadStream(sessionPath, { encoding: "utf-8" }),
@@ -93,17 +82,35 @@ async function readUnrevertPoints(sessionPath: string): Promise<UnrevertPointEnt
       if (!line.trim()) continue;
       try {
         const entry = JSON.parse(line) as Record<string, unknown>;
-        if (entry.type === "custom" && entry.customType === "unrevert-point") {
-          points.push(entry as unknown as UnrevertPointEntry);
+        if (entry.type === "custom") {
+          if (entry.customType === "step-snapshot") {
+            snapshots.push(entry as unknown as StepSnapshotEntry);
+          } else if (entry.customType === "unrevert-point") {
+            unrevertPoints.push(entry as unknown as UnrevertPointEntry);
+          }
         }
       } catch (e) {
-        log.debug("readUnrevertPoints: skipping malformed line", { sessionPath, error: String(e) });
+        log.debug("readSnapshotEntries: skipping malformed line", { sessionPath, error: String(e) });
       }
     }
-  } catch (e) {
-    log.debug("readUnrevertPoints: failed to read session file", { sessionPath, error: String(e) });
+  } catch (err) {
+    log.warn("failed to read snapshot entries from JSONL", {
+      sessionPath,
+      err: err instanceof Error ? err.message : String(err),
+    });
   }
-  return points;
+
+  const result = { snapshots, unrevertPoints };
+
+  // Update cache
+  try {
+    const stat = await fsPromises.stat(sessionPath);
+    _entryCache.set(sessionPath, { result, mtimeMs: stat.mtimeMs });
+  } catch {
+    // ignore stat error
+  }
+
+  return result;
 }
 
 function toSnapshotInfo(snap: StepSnapshotEntry, rolledBack: boolean): SnapshotInfo {
@@ -145,7 +152,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     // If session is live, try channel first (with timeout to prevent hanging)
     if (manager && manager.hasSession(params.sessionId)) {
       try {
-        const result = await withTimeout(
+        const result: unknown = await withTimeout(
           manager.callChannel(params.sessionId, "file-snapshot", "snapshot.list", {
             sessionId: params.sessionId,
           }),
@@ -163,8 +170,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const sessionPath = await getSessionPath(params.sessionId);
     if (!sessionPath) return [] as unknown as R<"snapshot.list">;
 
-    const snapshots = await readStepSnapshots(sessionPath);
-    const unrevertPoints = await readUnrevertPoints(sessionPath);
+    const { snapshots, unrevertPoints } = await readSnapshotEntries(sessionPath);
 
     // Determine which snapshots have been rolled back
     const rolledBackIds = new Set(unrevertPoints.map((p) => p.data.rolledBackToLeaf));
@@ -178,7 +184,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const manager = getProcessManager();
     if (manager && manager.hasSession(params.sessionId)) {
       try {
-        const result = await withTimeout(
+        const result: unknown = await withTimeout(
           manager.callChannel(params.sessionId, "file-snapshot", "snapshot.get", {
             sessionId: params.sessionId,
             snapshotId: params.snapshotId,

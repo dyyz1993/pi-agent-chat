@@ -429,6 +429,7 @@ function SessionItem({
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const copyWithFeedback = useCopyFeedback();
+  const [copiedId, setCopiedId] = useState(false);
   const hasPiChildren = !!(children && children.length > 0);
   const hasSubagents = !!(subsessions && subsessions.length > 0);
   const isDelegate = session.sessionId.startsWith("sess_coord_");
@@ -472,6 +473,8 @@ function SessionItem({
     (e: React.MouseEvent) => {
       e.stopPropagation();
       copyWithFeedback(session.sessionId);
+      setCopiedId(true);
+      setTimeout(() => setCopiedId(false), 1500);
     },
     [copyWithFeedback, session.sessionId],
   );
@@ -636,7 +639,7 @@ function SessionItem({
                 className="p-1 rounded-md hover:bg-surface-hover/60 text-text-secondary hover:text-text-primary transition-colors"
                 title={t("sidebar:copyId")}
               >
-                <Copy className="w-3 h-3" />
+                {copiedId ? <Check className="w-3 h-3 text-status-success" /> : <Copy className="w-3 h-3" />}
               </button>
               <button
                 onClick={handleStartRename}
@@ -731,6 +734,7 @@ function SubagentItem({
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const copyWithFeedback = useCopyFeedback();
+  const [copiedId, setCopiedId] = useState(false);
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -752,6 +756,8 @@ function SubagentItem({
     (e: React.MouseEvent) => {
       e.stopPropagation();
       copyWithFeedback(sub.sessionId);
+      setCopiedId(true);
+      setTimeout(() => setCopiedId(false), 1500);
     },
     [copyWithFeedback, sub.sessionId],
   );
@@ -885,14 +891,14 @@ function SubagentItem({
               className="p-1 rounded-md hover:bg-surface-hover/60 text-text-secondary hover:text-text-primary transition-colors"
               title={t("sidebar:copyId")}
             >
-              <Copy className="w-3 h-3" />
+              {copiedId ? <Check className="w-3 h-3 text-status-success" /> : <Copy className="w-3 h-3" />}
             </button>
             <button
               onClick={handleStartRename}
               className="p-1 rounded-md hover:bg-surface-hover/60 text-text-secondary hover:text-text-primary transition-colors"
               title={t("common:rename")}
             >
-              <Copy className="w-3 h-3" />
+              <Pencil className="w-3 h-3" />
             </button>
             <button
               onClick={handleStartRename}

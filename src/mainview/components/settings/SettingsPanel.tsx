@@ -32,6 +32,7 @@ const TOGGLE_ITEMS: {
   { key: "collapseThinking", labelKey: "collapseThinking", descKey: "collapseThinkingDesc" },
   { key: "collapseToolCards", labelKey: "collapseToolCards", descKey: "collapseToolCardsDesc" },
   { key: "showTimeline", labelKey: "showTimeline", descKey: "showTimelineDesc" },
+  { key: "showMemoryEntries", labelKey: "showMemoryEntries", descKey: "showMemoryEntriesDesc" },
 ];
 
 const RETRY_OPTIONS = [

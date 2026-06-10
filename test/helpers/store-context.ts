@@ -23,6 +23,7 @@ const INITIAL_SESSION_STATE = {
   activeProjectId: null as string | null,
   loading: false,
   agentSubscriptions: {} as Record<string, string>,
+  batchSubscriptions: {} as Record<string, string>,
   sessionReady: {} as Record<string, boolean>,
   sessionContextMap: {} as Record<string, unknown>,
   sessionStatusMap: {} as Record<string, string>,

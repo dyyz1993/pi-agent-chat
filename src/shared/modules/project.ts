@@ -4,6 +4,18 @@ export interface PersistedTab {
   path: string;
 }
 
+/**
+ * 前端展示用的 session 状态。RPC schema 与前端 store 共用此类型，
+ * server handler 负责把进程池内部的 "stopped" 映射成 "idle" 再返回。
+ * 不允许 "stopped" 出现在前端（前端用颜色/角标区分 idle/stopped 没意义）。
+ */
+export type SessionStatus =
+  | "idle"
+  | "streaming"
+  | "compacting"
+  | "permission"
+  | "retrying";
+
 export interface ProjectMethods {
   "project.open": {
     params: { path: string };
@@ -19,7 +31,13 @@ export interface ProjectMethods {
   };
   "project.scanSessions": {
     params: { projectPath: string };
-    result: { sessions: SessionMeta[] };
+    result: {
+      sessions: SessionMeta[];
+      // 与 sessions 同一 RPC 返回，避免前端再发一次 batchGetSessionsStatus。
+      // status 已经是 SessionStatus（server handler 在边界做 "stopped"→"idle" 映射），
+      // 前端拿到后可以直接写 store，不需要再做白名单校验。
+      statuses: Array<{ sessionId: string; status: SessionStatus }>;
+    };
   };
   "project.findSessionById": {
     params: { sessionId: string };

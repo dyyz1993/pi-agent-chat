@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import type { SupervisorStatus, TaskReport } from "../../../shared/modules/supervisor";
+import type { SupervisorStatus, TaskReport, TriggerRecord } from "../../../shared/modules/supervisor";
 import {
   ChevronDown,
   ChevronRight,
@@ -57,6 +57,9 @@ function PluginCopyButton({ plugin }: { plugin: PluginInfo }) {
       `${t("toolsFieldLabel", { count: plugin.toolNames.length })} ${plugin.toolNames.join(", ") || t("none")}`,
       `${t("commandsFieldLabel", { count: plugin.commandNames.length })} ${plugin.commandNames.join(", ") || t("none")}`,
     ];
+    if (plugin.usageNotice) {
+      lines.push(`${t("usageNoticeLabel")} ${plugin.usageNotice.message}`);
+    }
     copy(lines.join("\n"));
   }, [plugin, t, copy]);
 
@@ -94,6 +97,8 @@ export function StatusPanel() {
   const toggleSkillEnabled = useStatusStore((s) => s.toggleSkillEnabled);
   const expandedPlugin = useStatusStore((s) => s.expandedPlugin);
   const togglePluginExpanded = useStatusStore((s) => s.togglePluginExpanded);
+  const togglePluginEnabled = useStatusStore((s) => s.togglePluginEnabled);
+  const sessionsByProject = useSessionStore((s) => s.sessionsByProject);
   const supervisorStatus = useSupervisorStore(
     (s) => (activeSessionId ? s.bySession[activeSessionId] : null) ?? null,
   );
@@ -379,11 +384,40 @@ export function StatusPanel() {
                                     {t("pluginCommands", { count: p.commandNames.length })}
                                   </span>
                                 )}
+                                {p.usageNotice && (
+                                  <span
+                                    className="text-[9px] px-1 py-px rounded shrink-0 max-w-[72px] truncate bg-status-info/15 text-status-info"
+                                    title={p.usageNotice.message}
+                                  >
+                                    {p.usageNotice.label}
+                                  </span>
+                                )}
                                 <span
                                   className={`text-[9px] px-1 py-px rounded shrink-0 max-w-[36px] truncate ${p.scope === "global" ? "bg-semantic-agent/15 text-semantic-agent" : "bg-status-info/15 text-status-info"}`}
                                 >
                                   {p.scope === "global" ? t("global") : t("project")}
                                 </span>
+                                {activeSessionId && (() => {
+                                  const projectPath = Object.values(sessionsByProject)
+                                    .flat()
+                                    .find((s) => s.sessionId === activeSessionId)?.projectPath;
+                                  return projectPath ? (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        togglePluginEnabled(activeSessionId, projectPath, p.path);
+                                      }}
+                                      className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-surface-hover/60 rounded transition-opacity"
+                                      title={p.enabled ? t("disablePlugin") : t("enablePlugin")}
+                                    >
+                                      {p.enabled ? (
+                                        <EyeOff className="w-3 h-3 text-text-tertiary" />
+                                      ) : (
+                                        <Eye className="w-3 h-3 text-text-tertiary" />
+                                      )}
+                                    </button>
+                                  ) : null;
+                                })()}
                               </div>
                               {isExpanded && (
                                 <div className="ml-4 pl-2 border-l border-border-primary/70 space-y-1 pt-1 text-[10px]">
@@ -391,6 +425,14 @@ export function StatusPanel() {
                                     <span className="text-text-tertiary">{t("pathLabel")}</span>{" "}
                                     {p.path}
                                   </div>
+                                  {p.usageNotice && (
+                                    <div className="rounded border border-status-info/25 bg-status-info/10 px-2 py-1 text-status-info">
+                                      <div className="font-medium">{p.usageNotice.label}</div>
+                                      <div className="text-text-secondary">
+                                        {p.usageNotice.message}
+                                      </div>
+                                    </div>
+                                  )}
                                   {p.toolNames.length > 0 && (
                                     <div>
                                       <span className="text-text-tertiary block mb-0.5">
@@ -431,6 +473,11 @@ export function StatusPanel() {
                                     </div>
                                   )}
                                   <PluginCopyButton plugin={p} />
+                                  {!p.enabled && (
+                                    <div className="text-status-warning/70">
+                                      {t("pluginDisabled")}
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -515,12 +562,14 @@ export function StatusPanel() {
                     <SupervisorSectionContent
                       status={supervisorStatus?.status ?? null}
                       taskReports={supervisorStatus?.taskReports ?? []}
+                      triggerRecords={supervisorStatus?.triggerRecords ?? []}
                       sessionId={activeSessionId}
                       enable={supervisorActions.enable}
                       disable={supervisorActions.disable}
                       forceContinue={supervisorActions.forceContinue}
                       requestPause={supervisorActions.requestPause}
                       cancelPause={supervisorActions.cancelPause}
+                      fetchTriggerHistory={supervisorActions.fetchTriggerHistory}
                     />
                   )}
                 </div>
@@ -691,12 +740,14 @@ function MCPCopyButton({ server }: { server: MCPServerInfo }) {
 interface SupervisorSectionContentProps {
   status: SupervisorStatus | null;
   taskReports: TaskReport[];
+  triggerRecords: TriggerRecord[];
   sessionId: string | null;
   enable: (sessionId: string) => Promise<void>;
   disable: (sessionId: string) => Promise<void>;
   forceContinue: (sessionId: string, reason?: string) => Promise<void>;
   requestPause: (sessionId: string, delayMs?: number, reason?: string) => Promise<void>;
   cancelPause: (sessionId: string) => Promise<void>;
+  fetchTriggerHistory: (sessionId: string, limit?: number) => Promise<void>;
 }
 
 const STATE_STYLES: Record<string, string> = {
@@ -710,12 +761,14 @@ const STATE_STYLES: Record<string, string> = {
 function SupervisorSectionContent({
   status,
   taskReports,
+  triggerRecords,
   sessionId,
   enable,
   disable,
   forceContinue,
   requestPause,
   cancelPause,
+  fetchTriggerHistory,
 }: SupervisorSectionContentProps) {
   const { t } = useTranslation("status");
   const [loading, setLoading] = useState(false);
@@ -731,14 +784,16 @@ function SupervisorSectionContent({
   if (!status) {
     return (
       <div className="flex items-center gap-2">
-        <span className="text-text-tertiary">{t("supervisor.state.disabled")}</span>
+        <span className="text-text-tertiary">
+          {t("supervisor.runtimeState")}: {t("supervisor.state.disabled")}
+        </span>
         {sessionId && (
           <button
             onClick={() => handleEnable(sessionId)}
             disabled={loading}
             className="px-1.5 py-0.5 rounded text-[9px] bg-status-success/20 text-status-success disabled:opacity-50"
           >
-            {loading ? "..." : t("supervisor.enabled")}
+            {loading ? "..." : t("supervisor.action.enable")}
           </button>
         )}
       </div>
@@ -750,11 +805,13 @@ function SupervisorSectionContent({
   return (
     <div className="space-y-1.5">
       <div className="flex items-center gap-1.5">
+        <span className="text-[9px] text-text-tertiary">{t("supervisor.runtimeState")}</span>
         <span
           className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${STATE_STYLES[status.state] ?? "bg-text-tertiary/20 text-text-tertiary"}`}
         >
           {stateLabel}
         </span>
+        <span className="text-[9px] text-text-tertiary">{t("supervisor.switchState")}</span>
         <span
           className={`text-[9px] ${status.enabled ? "text-status-success" : "text-text-tertiary"}`}
         >
@@ -764,6 +821,138 @@ function SupervisorSectionContent({
 
       <div className="text-text-tertiary">
         {t("supervisor.continueCount")}: {status.continueCount}/{status.maxContinueCount}
+      </div>
+
+      {status.goal && (
+        <div className="rounded border border-status-info/25 bg-status-info/10 px-2 py-1">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[9px] font-medium text-status-info">{t("supervisor.goal")}</span>
+            <span className="text-[9px] text-text-tertiary">
+              {t(`supervisor.goal.state.${status.goal.status}`)}
+            </span>
+          </div>
+          <div className="mt-0.5 break-words text-text-secondary">{status.goal.objective}</div>
+        </div>
+      )}
+
+      <div>
+        <span className="text-text-tertiary block mb-0.5">{t("supervisor.goldRecords")}</span>
+        {status.lastGoldResult ? (
+          <div className="rounded border border-border-primary/70 px-2 py-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[9px] font-medium text-text-secondary">
+                {t("supervisor.gold")}
+              </span>
+              <span
+                className={`text-[9px] ${
+                  status.lastGoldResult.verdict === "complete"
+                    ? "text-status-success"
+                    : status.lastGoldResult.verdict === "incomplete"
+                      ? "text-status-warning"
+                      : "text-status-error"
+                }`}
+              >
+                {t(`supervisor.gold.verdict.${status.lastGoldResult.verdict}`)}
+              </span>
+            </div>
+            <div className="mt-0.5 break-words text-text-tertiary">
+              {status.lastGoldResult.reason}
+            </div>
+            {status.lastGoldResult.evidence.length > 0 && (
+              <div className="mt-1 text-[9px] text-text-tertiary">
+                {t("supervisor.gold.evidenceCount", {
+                  count: status.lastGoldResult.evidence.length,
+                })}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="rounded border border-border-primary/50 px-2 py-1 text-text-tertiary">
+            {t("supervisor.gold.empty")}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-0.5">
+          <span className="text-text-tertiary">{t("supervisor.triggerHistory")}</span>
+          {sessionId && (
+            <button
+              type="button"
+              className="text-[9px] text-semantic-accent hover:underline"
+              onClick={() => fetchTriggerHistory(sessionId, 50)}
+            >
+              {t("supervisor.triggerHistory.refresh")}
+            </button>
+          )}
+        </div>
+        {triggerRecords.length > 0 ? (
+          <div className="space-y-1 max-h-48 overflow-y-auto">
+            {[...triggerRecords].reverse().map((rec) => (
+              <div
+                key={rec.seq}
+                className="rounded border border-border-primary/70 px-2 py-1"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[9px] font-medium text-text-secondary">
+                    #{rec.seq}
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {rec.durationMs != null && (
+                      <span className="text-[9px] text-text-tertiary">
+                        {(rec.durationMs / 1000).toFixed(1)}s
+                      </span>
+                    )}
+                    <span
+                      className={`text-[9px] font-medium ${
+                        rec.verdict === "complete"
+                          ? "text-status-success"
+                          : rec.verdict === "incomplete"
+                            ? "text-status-warning"
+                            : "text-status-error"
+                      }`}
+                    >
+                      {t(`supervisor.trigger.verdict.${rec.verdict}`)}
+                    </span>
+                    <span className="text-[9px] text-text-tertiary">
+                      {Math.round(rec.confidence * 100)}%
+                    </span>
+                  </div>
+                </div>
+                {rec.reason && (
+                  <div className="mt-0.5 break-words text-[9px] text-text-tertiary">
+                    {rec.reason}
+                  </div>
+                )}
+                {rec.guardResults.length > 0 && (
+                  <div className="mt-0.5 flex flex-wrap gap-0.5">
+                    {rec.guardResults.map((g, i) => (
+                      <span
+                        key={i}
+                        className={`px-1 py-px rounded text-[8px] ${
+                          g.passed
+                            ? "bg-status-success/15 text-status-success"
+                            : "bg-status-error/15 text-status-error"
+                        }`}
+                      >
+                        {g.guardName}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {rec.modelCheck && (
+                  <div className="mt-0.5 text-[9px] text-text-tertiary">
+                    {t("supervisor.trigger.modelCheck")}: {rec.modelCheck.passed ? "✓" : "✗"} ({(rec.modelCheck.durationMs ?? 0) / 1000}s)
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded border border-border-primary/50 px-2 py-1 text-text-tertiary">
+            {t("supervisor.triggerHistory.empty")}
+          </div>
+        )}
       </div>
 
       {status.activeGuards.length > 0 && (
@@ -813,7 +1002,7 @@ function SupervisorSectionContent({
             onClick={() => (status.enabled ? disable(sessionId) : enable(sessionId))}
             className={`px-1.5 py-0.5 rounded text-[9px] ${status.enabled ? "bg-status-error/20 text-status-error" : "bg-status-success/20 text-status-success"}`}
           >
-            {status.enabled ? t("supervisor.disabled") : t("supervisor.enabled")}
+            {status.enabled ? t("supervisor.action.disable") : t("supervisor.action.enable")}
           </button>
           {status.enabled && (
             <>

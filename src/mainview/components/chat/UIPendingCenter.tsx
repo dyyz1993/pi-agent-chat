@@ -8,6 +8,12 @@ import {
   ChevronDown,
   ChevronRight,
   FileEdit,
+  ShieldAlert,
+  FileWarning,
+  FolderOpen,
+  Clock,
+  Eye,
+  Pencil,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useUIDialogStore, type UIPendingRequest } from "../../stores/use-ui-dialog-store";
@@ -38,6 +44,93 @@ function PanelCard({ req }: { req: UIPendingRequest }) {
   const isEditor = req.method === "editor";
   const options = req.options ?? [];
   const isMulti = !!req.multiple;
+
+  if (isSelect && req.permissionMeta?.type === "path_boundary") {
+    const meta = req.permissionMeta;
+    const ScopeIcon = meta.scope === "write" ? Pencil : Eye;
+    return (
+      <div className="border border-status-warning/30 rounded-xl overflow-hidden bg-surface-dim/50 dark:bg-surface-code/50">
+        <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border-secondary/50">
+          <ShieldAlert className="w-3.5 h-3.5 text-status-warning" />
+          <span className="text-[11px] font-medium text-status-warning">Path Access</span>
+        </div>
+        <div className="px-3 py-2">
+          <div className="mb-2.5 rounded-md bg-bg-primary/70 border border-border-secondary/40 px-2.5 py-2 space-y-1">
+            <div className="flex items-center gap-1.5">
+              <ScopeIcon className="w-3 h-3 text-text-tertiary shrink-0" />
+              <span className="text-[10px] text-text-tertiary">Tool</span>
+              <span className="text-[11px] text-text-primary font-medium ml-auto capitalize">
+                {meta.toolName}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <FileWarning className="w-3 h-3 text-text-tertiary shrink-0" />
+              <span className="text-[10px] text-text-tertiary">Path</span>
+              <span
+                className="text-[11px] text-text-primary font-mono ml-auto truncate max-w-[60%]"
+                title={meta.path}
+              >
+                {meta.path}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <FolderOpen className="w-3 h-3 text-text-tertiary shrink-0" />
+              <span className="text-[10px] text-text-tertiary">Project</span>
+              <span
+                className="text-[11px] text-text-secondary font-mono ml-auto truncate max-w-[60%]"
+                title={meta.cwd}
+              >
+                {meta.cwd}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <ShieldAlert className="w-3 h-3 text-status-warning shrink-0" />
+              <span className="text-[10px] text-text-tertiary">Status</span>
+              <span className="text-[11px] text-status-warning ml-auto">{meta.relativeTo}</span>
+            </div>
+          </div>
+          <div className="flex gap-1.5">
+            {options.map((opt, i) => {
+              const parts = opt.split(" ");
+              const label = parts.slice(1).join(" ") || opt;
+              const alwaysDir =
+                i === 1 && meta?.path
+                  ? `${meta.path.split("/").slice(0, -1).join("/") || "/"}/\u2217\u2217`
+                  : null;
+              const btnStyle =
+                i === 0
+                  ? "bg-status-success/15 text-status-success hover:bg-status-success/25 border-status-success/30"
+                  : i === 1
+                    ? "bg-status-info/15 text-status-info hover:bg-status-info/25 border-status-info/30"
+                    : "bg-status-error/10 text-status-error hover:bg-status-error/20 border-status-error/30";
+              return (
+                <button
+                  key={i}
+                  onClick={() => respondById(req.requestId, { value: opt })}
+                  className={`flex-1 flex flex-col items-center justify-center py-1.5 rounded-md border text-[11px] font-medium transition-colors ${btnStyle}`}
+                >
+                  <span>{label}</span>
+                  {alwaysDir && (
+                    <span className="text-[9px] opacity-70 font-mono truncate max-w-full">
+                      {alwaysDir}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          {req.timeout != null && req.timeout > 0 && (
+            <div className="flex items-center gap-1 mt-1.5 px-0.5">
+              <Clock className="w-3 h-3 text-text-tertiary" />
+              <span className="text-[10px] text-text-tertiary">
+                {t("uiCard.autoDeny", { seconds: Math.ceil(req.timeout / 1000) })}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   if (isMulti || isSelect) {
     return (
@@ -130,6 +223,8 @@ function PanelCard({ req }: { req: UIPendingRequest }) {
   }
 
   if (isConfirm) {
+    const isHookConfirm = !!req.hookMeta;
+
     return (
       <div className="border border-border-secondary/40 rounded-xl overflow-hidden bg-surface-dim/50 dark:bg-surface-code/50">
         <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border-secondary/60">
@@ -140,12 +235,32 @@ function PanelCard({ req }: { req: UIPendingRequest }) {
           {req.message && (
             <p className="text-[11px] text-text-secondary mb-2.5 leading-relaxed">{req.message}</p>
           )}
+          {isHookConfirm && req.hookMeta?.command && (
+            <div className="mb-2.5 rounded-md bg-bg-primary/70 border border-border-secondary/40 px-2 py-1.5">
+              <div className="text-[10px] text-text-tertiary mb-0.5">目标操作</div>
+              <code className="block text-[11px] text-text-primary font-mono break-all leading-relaxed">
+                {req.hookMeta.command}
+              </code>
+            </div>
+          )}
+          {isHookConfirm && req.hookMeta?.hookCommand && (
+            <div className="mb-2.5 rounded-md bg-surface-dim/60 border border-border-secondary/40 px-2 py-1.5">
+              <div className="text-[10px] text-text-tertiary mb-0.5">
+                Hook 规则
+                {req.hookMeta.eventName ? ` · ${req.hookMeta.eventName}` : ""}
+                {req.hookMeta.source ? ` · ${req.hookMeta.source}` : ""}
+              </div>
+              <code className="block text-[10px] text-text-secondary font-mono break-all leading-relaxed">
+                {req.hookMeta.hookCommand}
+              </code>
+            </div>
+          )}
           <div className="flex gap-2">
             <button
               onClick={() => respondById(req.requestId, { confirmed: true })}
               className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md bg-status-success/20 text-status-success hover:bg-status-success/30 text-[11px] transition-colors"
             >
-              {t("uiPending.confirm")}
+              {isHookConfirm ? t("uiCard.allowOnce") : t("uiPending.confirm")}
             </button>
             <button
               onClick={() => dismissById(req.requestId)}
@@ -421,6 +536,72 @@ export function UIPendingCenter() {
         </ModalDialog>
       )}
     </>
+  );
+}
+
+export function ProjectRuntimePendingRequests({
+  activeSessionId,
+}: {
+  activeSessionId: string | null;
+}) {
+  const { t } = useTranslation("chat");
+  const allPending = useUIDialogStore((s) => s.pending);
+  const activeProjectId = useSessionStore((s) => s.activeProjectId);
+  const projectTabs = useSessionStore((s) => s.projectTabs);
+  const sessionsByProject = useSessionStore((s) => s.sessionsByProject);
+
+  const projectSessions = useMemo(() => {
+    if (!activeProjectId) return [];
+    const tab = projectTabs.find((t) => t.id === activeProjectId);
+    if (!tab) return [];
+    return sessionsByProject[tab.path] ?? [];
+  }, [activeProjectId, projectTabs, sessionsByProject]);
+
+  const sessionNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const s of projectSessions) {
+      map.set(s.sessionId, s.name || s.firstMessage?.slice(0, 30) || s.sessionId.slice(0, 8));
+    }
+    return map;
+  }, [projectSessions]);
+
+  const projectPending = useMemo(() => {
+    const projectSessionIds = new Set(projectSessions.map((s) => s.sessionId));
+    const scoped = allPending.filter((req) => projectSessionIds.has(req.sessionId));
+    return scoped.sort((a, b) => {
+      if (a.sessionId === activeSessionId && b.sessionId !== activeSessionId) return -1;
+      if (b.sessionId === activeSessionId && a.sessionId !== activeSessionId) return 1;
+      return 0;
+    });
+  }, [allPending, activeSessionId, projectSessions]);
+
+  if (projectPending.length === 0) return null;
+
+  const handleGotoSession = (sessionId: string) => {
+    useSessionStore.getState().setActiveSession(sessionId);
+  };
+
+  return (
+    <div className="px-3 py-1.5 flex-shrink-0 space-y-2" aria-live="polite">
+      {projectPending.map((req) => (
+        <div key={req.requestId} data-ui-request-id={req.requestId} className="space-y-1">
+          {req.sessionId !== activeSessionId && (
+            <div className="flex items-center gap-2 px-1 text-[10px] text-text-tertiary">
+              <span className="truncate">
+                {sessionNameMap.get(req.sessionId) ?? req.sessionId.slice(0, 8)}
+              </span>
+              <button
+                onClick={() => handleGotoSession(req.sessionId)}
+                className="ml-auto text-semantic-accent hover:text-semantic-accent/80 transition-colors"
+              >
+                {t("uiPending.gotoSession")}
+              </button>
+            </div>
+          )}
+          <PanelCard req={req} />
+        </div>
+      ))}
+    </div>
   );
 }
 

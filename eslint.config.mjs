@@ -92,6 +92,7 @@ export default tseslint.config(
       'rpc/valid-channel-method': 'error',
       'rpc/compaction-entries-sync': 'error',
       'rpc/compaction-reload-pairing': 'error',
+      'rpc/require-channel-timeout': 'warn',
 
       // 主题/颜色约束规则
       'theme/color-pairing': 'error',

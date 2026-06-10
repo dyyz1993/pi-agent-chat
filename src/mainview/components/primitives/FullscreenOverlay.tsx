@@ -61,8 +61,8 @@ export const FullscreenOverlay = memo(function FullscreenOverlay({
       aria-modal="true"
       aria-labelledby={titleId}
       className={cx(
-        "inset-0 flex flex-col overflow-hidden bg-bg-elevated/98 backdrop-blur-sm",
-        "dark:bg-surface-code/98",
+        "inset-0 flex flex-col overflow-hidden bg-bg-elevated",
+        "dark:bg-surface-code",
         positionClasses[position],
         layerClasses[layer],
         className,
@@ -70,8 +70,8 @@ export const FullscreenOverlay = memo(function FullscreenOverlay({
     >
       <div
         className={cx(
-          "flex shrink-0 items-center gap-2 border-b border-border-secondary bg-surface-dim/90 px-4 py-2",
-          "dark:bg-surface-code/90",
+          "flex shrink-0 items-center gap-2 border-b border-border-secondary bg-surface-dim px-4 py-2",
+          "dark:bg-surface-code",
           headerClassName,
         )}
         style={{ paddingTop: "calc(0.5rem + env(safe-area-inset-top, 0px))" }}

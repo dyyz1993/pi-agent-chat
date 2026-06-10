@@ -19,6 +19,8 @@
   "collapseToolCardsDesc": "Bash 等工具卡片默认折叠为标题行，点击展开查看详情",
   "showTimeline": "显示时间线",
   "showTimelineDesc": "在消息区域展示活动时间线",
+  "showMemoryEntries": "显示记忆卡片",
+  "showMemoryEntriesDesc": "在聊天中展示记忆搜索、保存、整理等内部流程（调试用）",
   "reset": "恢复默认设置",
   "retryTitle": "自动重试",
   "retryEnabled": "启用自动重试",

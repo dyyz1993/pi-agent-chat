@@ -211,7 +211,7 @@ export class SandboxBoxProvider implements ISandboxProvider {
     }
   }
 
-  async getOrCreate(userId: string, _config: SandboxProviderConfig): Promise<SandboxInstance> {
+  async getOrCreate(userId: string, _projectPath: string): Promise<SandboxInstance> {
     const name = this.sandboxName(userId);
     const projectPath = this.config.projectSourcePath;
     const existing = this.sandboxes.get(userId);
@@ -273,8 +273,10 @@ export class SandboxBoxProvider implements ISandboxProvider {
 
     try {
       await this.ssh(`sandbox create ${name} --port ${this.config.sandboxPort} || true`).catch(
-        (err) => {
-          log.warn("sandbox create had errors (ignored)", { error: err.message });
+        (err: unknown) => {
+          log.warn("sandbox create had errors (ignored)", {
+            error: err instanceof Error ? err.message : String(err),
+          });
         },
       );
 

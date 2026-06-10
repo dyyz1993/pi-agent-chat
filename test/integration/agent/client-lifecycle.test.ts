@@ -1,0 +1,138 @@
+/**
+ * @vitest-environment node
+ */
+import { describe, expect, it, vi } from "vitest";
+
+import {
+  abortOperation,
+  followUpOperation,
+  sendPromptOperation,
+  steerOperation,
+} from "../../../src/shared/agent/agent-client-lifecycle-operations";
+
+function flushMicrotasks(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+describe("agent client lifecycle operations", () => {
+  it("sends prompts after ensuring a managed client", async () => {
+    const managed = {
+      client: { prompt: vi.fn().mockResolvedValue(undefined) },
+      lastActiveAt: 0,
+    };
+
+    await expect(
+      sendPromptOperation({
+        sessionId: "sess-1",
+        content: "hello",
+        getActiveManaged: () => null,
+        ensureManagedClient: vi.fn().mockResolvedValue(managed),
+        isClientAlive: vi.fn(),
+        cleanupDeadClient: vi.fn(),
+        emitAgentEnd: vi.fn(),
+        now: () => 123,
+      }),
+    ).resolves.toBe(true);
+
+    expect(managed.client.prompt).toHaveBeenCalledWith("hello", undefined);
+    expect(managed.lastActiveAt).toBe(123);
+  });
+
+  it("cleans up dead clients when prompt rejects and health check fails", async () => {
+    const managed = {
+      client: { prompt: vi.fn().mockRejectedValue(new Error("provider timeout")) },
+      lastActiveAt: 0,
+    };
+    const cleanupDeadClient = vi.fn();
+    const emitAgentEnd = vi.fn();
+
+    await sendPromptOperation({
+      sessionId: "sess-1",
+      content: "hello",
+      getActiveManaged: () => managed,
+      ensureManagedClient: vi.fn(),
+      isClientAlive: vi.fn().mockResolvedValue(false),
+      cleanupDeadClient,
+      emitAgentEnd,
+    });
+    await flushMicrotasks();
+
+    expect(cleanupDeadClient).toHaveBeenCalledWith(
+      "sess-1",
+      "prompt failed: provider timeout",
+    );
+    expect(emitAgentEnd).not.toHaveBeenCalled();
+  });
+
+  it("emits agent_end after prompt rejects when the client is still alive", async () => {
+    const managed = {
+      client: { prompt: vi.fn().mockRejectedValue(new Error("transient")) },
+      lastActiveAt: 0,
+    };
+    const emitAgentEnd = vi.fn().mockResolvedValue(undefined);
+
+    await sendPromptOperation({
+      sessionId: "sess-1",
+      content: "hello",
+      getActiveManaged: () => managed,
+      ensureManagedClient: vi.fn(),
+      isClientAlive: vi.fn().mockResolvedValue(true),
+      cleanupDeadClient: vi.fn(),
+      emitAgentEnd,
+    });
+    await flushMicrotasks();
+
+    expect(emitAgentEnd).toHaveBeenCalledWith("sess-1");
+  });
+
+  it("routes steer and follow-up calls without creating a client", () => {
+    const managed = {
+      client: {
+        steer: vi.fn().mockResolvedValue(undefined),
+        followUp: vi.fn().mockResolvedValue(undefined),
+      },
+    };
+
+    expect(
+      steerOperation({
+        sessionId: "sess-1",
+        content: "steer",
+        getActiveManaged: () => managed,
+      }),
+    ).toBe(true);
+    expect(
+      followUpOperation({
+        sessionId: "sess-1",
+        content: "next",
+        getActiveManaged: () => managed,
+      }),
+    ).toBe(true);
+    expect(managed.client.steer).toHaveBeenCalledWith("steer", undefined);
+    expect(managed.client.followUp).toHaveBeenCalledWith("next", undefined);
+  });
+
+  it("aborts, clears streaming state, and emits agent_end", async () => {
+    const managed = {
+      client: { abort: vi.fn().mockRejectedValue(new Error("already ended")) },
+      info: { status: "streaming" },
+      lastActiveAt: 0,
+    };
+    const broadcastIdle = vi.fn();
+    const emitAgentEvent = vi.fn().mockResolvedValue(undefined);
+
+    await expect(
+      abortOperation({
+        sessionId: "sess-1",
+        getActiveManaged: () => managed,
+        broadcastIdle,
+        emitAgentEvent,
+        now: () => 456,
+      }),
+    ).resolves.toBe(true);
+
+    expect(managed.info.status).toBe("idle");
+    expect(managed.lastActiveAt).toBe(456);
+    expect(broadcastIdle).toHaveBeenCalledWith("sess-1");
+    expect(emitAgentEvent).toHaveBeenCalledWith("sess-1", { type: "agent_end" });
+  });
+});

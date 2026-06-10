@@ -7,6 +7,9 @@ import type { PendingChangeResult } from "../../shared/modules/change-review";
 
 export type PendingChange = PendingChangeResult;
 
+/** In-flight dedup promise for fetchPending — prevents triple-fire on session switch */
+let _fetchPendingPromise: Promise<void> | null = null;
+
 interface ChangeReviewState {
   open: boolean;
   changes: PendingChange[];
@@ -38,7 +41,7 @@ export const useChangeReviewStore = create<ChangeReviewState>()((set, get) => ({
 
   setLoading: (loading) => set({ loading }),
 
-  setSelectedPath: (path) => set({ selectedPath: path }),
+  setSelectedPath: (selectedPath) => set({ selectedPath }),
 
   updateChangeStatus: (path, status) =>
     set((s) => ({
@@ -46,58 +49,43 @@ export const useChangeReviewStore = create<ChangeReviewState>()((set, get) => ({
     })),
 
   fetchPending: async () => {
+    if (_fetchPendingPromise) return _fetchPendingPromise;
     const sessionState = useSessionStore.getState();
     const sessionId = sessionState.activeSessionId;
     if (!sessionId) return;
     set({ loading: true });
-    try {
-      const session = sessionState.sessionsByProject
-        ? Object.values(sessionState.sessionsByProject)
-            .flat()
-            .find((s) => s.sessionId === sessionId)
-        : undefined;
-      const result = await apiClient.call("change-review.pending", {
-        sessionId,
-        ...(session?.sessionPath ? { sessionPath: session.sessionPath } : {}),
-      });
-      const changes = (Array.isArray(result) ? result : []) as PendingChange[];
 
-      // Enrich with file diff content via agent.getBatchDiffs
-      if (
-        changes.length > 0 &&
-        changes.every((c) => c.oldContent === null && c.newContent === null)
-      ) {
-        try {
-          const batchResult = await apiClient.call("agent.getBatchDiffs", { sessionId });
-          if (batchResult?.files) {
-            const diffMap = new Map<
-              string,
-              { oldContent: string | null; newContent: string | null }
-            >();
-            for (const f of batchResult.files as Array<{
-              path: string;
-              diff: { oldContent: string | null; newContent: string | null } | null;
-            }>) {
-              if (f.diff) diffMap.set(f.path, f.diff);
-            }
-            for (const c of changes) {
-              const d = diffMap.get(c.path);
-              if (d) {
-                c.oldContent = d.oldContent;
-                c.newContent = d.newContent;
-              } else if (c.fileStatus === "added") {
-                c.oldContent = "";
-              }
-            }
-          }
-        } catch {
-          // Non-critical: stats will be missing but list still shows
-        }
+    _fetchPendingPromise = (async () => {
+      try {
+        const session = sessionState.sessionsByProject
+          ? Object.values(sessionState.sessionsByProject)
+              .flat()
+              .find((s) => s.sessionId === sessionId)
+          : undefined;
+
+        const result = await apiClient.call("change-review.pending", {
+          sessionId,
+          ...(session?.sessionPath ? { sessionPath: session.sessionPath } : {}),
+        });
+        const changes = (Array.isArray(result) ? result : []) as PendingChange[];
+
+        // Apply "" fallback for null fields so InlineDiffViewer can render.
+        // JSONL fallback enriches newContent from disk but oldContent stays null.
+        const enriched = changes.map((c) => ({
+          ...c,
+          oldContent: c.oldContent ?? "",
+          newContent: c.newContent ?? "",
+        }));
+        set({ changes: enriched, loading: false });
+      } catch {
+        set({ loading: false });
       }
+    })();
 
-      set({ changes, loading: false });
-    } catch {
-      set({ loading: false });
+    try {
+      await _fetchPendingPromise;
+    } finally {
+      _fetchPendingPromise = null;
     }
   },
 

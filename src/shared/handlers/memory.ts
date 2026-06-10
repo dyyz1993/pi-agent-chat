@@ -8,8 +8,11 @@ import { join, resolve } from "path";
 import { homedir } from "os";
 import { getProcessManager } from "./agent";
 import { createLogger } from "../lib/logger";
+import { withTimeout } from "../lib/with-timeout";
 
 const log = createLogger("mcp");
+
+const CHANNEL_TIMEOUT_MS = 1_000;
 
 function encodeCwd(cwd: string): string {
   return "--" + cwd.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-") + "--";
@@ -94,9 +97,12 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       const sessionId = params.sessionId;
       if (sessionId && manager.hasSession(sessionId)) {
         try {
-          const result = (await manager.callChannel(sessionId, "memory", "memory.list", {
-            projectPath: params.projectPath,
-          })) as {
+          const result = (await withTimeout(
+            manager.callChannel(sessionId, "memory", "memory.list", {
+              projectPath: params.projectPath,
+            }),
+            CHANNEL_TIMEOUT_MS,
+          )) as {
             files: MemoryFile[];
             entrypointContent: string | null;
             memoryDir?: string;
@@ -129,11 +135,21 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   r("memory.remember", async (params) => {
     const manager = getProcessManager();
     if (manager && manager.hasSession(params.sessionId)) {
-      await manager.callChannel(params.sessionId, "memory", "memory.userRemember", {
-        sourceSessionId: params.sessionId,
-        sourceMessageIds: params.messageIds,
-        content: params.content,
-      });
+      try {
+        await withTimeout(
+          manager.callChannel(params.sessionId, "memory", "memory.userRemember", {
+            sourceSessionId: params.sessionId,
+            sourceMessageIds: params.messageIds,
+            content: params.content,
+          }),
+          CHANNEL_TIMEOUT_MS,
+        );
+      } catch (err) {
+        log.warn("memory.remember channel call failed", {
+          sessionId: params.sessionId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
 
     return { ok: true };
@@ -143,15 +159,18 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const manager = getProcessManager();
     if (manager && params.sessionId && manager.hasSession(params.sessionId)) {
       try {
-        const result = (await manager.callChannel(
-          params.sessionId,
-          "memory",
-          "memory.getStatus",
-          {},
+        const result = (await withTimeout(
+          manager.callChannel(
+            params.sessionId,
+            "memory",
+            "memory.getStatus",
+            {},
+          ),
+          CHANNEL_TIMEOUT_MS,
         )) as MemoryStatusResult | null;
         if (result) return result;
       } catch (err) {
-        console.warn("[memory] getStatus channel call failed:", err);
+        log.warn("memory.getStatus channel call failed", { error: String(err) });
       }
     }
     return {
@@ -166,10 +185,20 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   r("memory.removeRule", async (params) => {
     const manager = getProcessManager();
     if (manager && params.sessionId && manager.hasSession(params.sessionId)) {
-      await manager.callChannel(params.sessionId, "memory", "memory.removeRule", {
-        rule: params.rule,
-        excludeKeyword: params.excludeKeyword,
-      });
+      try {
+        await withTimeout(
+          manager.callChannel(params.sessionId, "memory", "memory.removeRule", {
+            rule: params.rule,
+            excludeKeyword: params.excludeKeyword,
+          }),
+          CHANNEL_TIMEOUT_MS,
+        );
+      } catch (err) {
+        log.warn("memory.removeRule channel call failed", {
+          sessionId: params.sessionId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
     return { ok: true };
   });
@@ -177,11 +206,21 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   r("memory.addRule", async (params) => {
     const manager = getProcessManager();
     if (manager && params.sessionId && manager.hasSession(params.sessionId)) {
-      await manager.callChannel(params.sessionId, "memory", "memory.addRule", {
-        pattern: params.pattern,
-        mode: params.mode,
-        action: params.action,
-      });
+      try {
+        await withTimeout(
+          manager.callChannel(params.sessionId, "memory", "memory.addRule", {
+            pattern: params.pattern,
+            mode: params.mode,
+            action: params.action,
+          }),
+          CHANNEL_TIMEOUT_MS,
+        );
+      } catch (err) {
+        log.warn("memory.addRule channel call failed", {
+          sessionId: params.sessionId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
     return { ok: true };
   });

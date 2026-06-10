@@ -1,243 +1,212 @@
 import { create } from "zustand";
 import type { Message, ImageContent } from "@dyyz1993/pi-ai";
 import type { ChatMessage, ContentBlock } from "../types";
+import {
+  buildPreservedStreamingMessage,
+  normalizeToolBlocks,
+} from "./chat-tool-normalizer";
+import { hasSameMessageSnapshots } from "./chat-message-snapshot";
+import { isAgentNotStartedError, sendAgentMessageWithTimeout } from "./chat-send-utils";
+import { readDraft, writeDraft } from "./chat-input-draft";
 import { apiClient } from "../lib/api-client";
 import { useAppStore } from "./use-app-store";
 import { useNotificationStore } from "./use-notification-store";
-import { useSessionStore } from "./use-session-store";
+import { clearAgentStarted, useSessionStore } from "./use-session-store";
 import { useMemoryStore } from "./use-memory-store";
 import { ALL_MEMORY_TYPE_KEYS } from "../components/chat/memory-config";
 import { messageToChatMessage } from "../lib/message-mapper";
 import type { AgentMessageForUI } from "../../shared/modules/agent";
 import { createLogger } from "../../shared/lib/logger";
 
+export { normalizeToolBlocks } from "./chat-tool-normalizer";
+
 const log = createLogger("chat-store");
 const perfLog = createLogger("session-perf");
 
-export function normalizeToolBlocks(
-  msgs: ChatMessage[],
-  isHistorical = false,
-  isStreaming = false,
-): void {
-  const toolCallById = new Map<
-    string,
-    { msgIndex: number; blockIndex: number; name: string; input: string }
-  >();
-
-  for (let mi = 0; mi < msgs.length; mi++) {
-    const msg = msgs[mi];
-    if (msg.role !== "assistant") continue;
-    for (let bi = 0; bi < msg.content.length; bi++) {
-      const b = msg.content[bi];
-      if (b.type === "toolCall") {
-        toolCallById.set(b.id, { msgIndex: mi, blockIndex: bi, name: b.name, input: b.input });
-      }
-    }
-  }
-
-  const execByMsg = new Map<number, Map<number, ContentBlock>>();
-  const toRemove = new Set<number>();
-
-  for (let ti = 0; ti < msgs.length; ti++) {
-    const trMsg = msgs[ti];
-    if (trMsg.role !== "toolResult") continue;
-    const resultBlock = trMsg.content.find(
-      (b): b is Extract<ContentBlock, { type: "toolResult" }> => b.type === "toolResult",
-    );
-    if (!resultBlock) continue;
-
-    toRemove.add(ti);
-
-    const match = toolCallById.get(resultBlock.toolCallId);
-    const rawInput = match?.input ?? resultBlock.args;
-    let args: string;
-    let description: string | undefined;
-    if (typeof rawInput === "string") {
-      args = rawInput;
-    } else if (rawInput != null) {
-      args = JSON.stringify(rawInput, null, 2);
-      if (typeof (rawInput as Record<string, unknown>).description === "string") {
-        description = (rawInput as Record<string, unknown>).description as string;
-      }
-    } else {
-      args = "";
-    }
-
-    const execBlock: Extract<ContentBlock, { type: "toolExecution" }> = {
-      type: "toolExecution",
-      toolCallId: resultBlock.toolCallId,
-      toolName: resultBlock.toolName ?? match?.name ?? "unknown",
-      args,
-      status: resultBlock.isError ? "error" : "done",
-      output: resultBlock.content || undefined,
-      details: resultBlock.details,
-      description,
-    };
-
-    let targetMi: number;
-    let targetBi: number;
-    if (match) {
-      targetMi = match.msgIndex;
-      targetBi = match.blockIndex;
-    } else {
-      targetMi = ti - 1;
-      while (targetMi >= 0 && msgs[targetMi].role !== "assistant") targetMi--;
-      targetBi = -1;
-    }
-
-    if (targetMi < 0) {
-      const syntheticMsg: ChatMessage = {
-        id: `synthetic-${trMsg.id}`,
-        role: "assistant",
-        content: [execBlock],
-        timestamp: trMsg.timestamp,
-      };
-      msgs[ti] = syntheticMsg;
-      toRemove.delete(ti);
-      continue;
-    }
-
-    if (!execByMsg.has(targetMi)) execByMsg.set(targetMi, new Map());
-    execByMsg.get(targetMi)?.set(targetBi, execBlock);
-  }
-
-  for (const [mi, biToBlock] of execByMsg) {
-    const msg = msgs[mi];
-    const newContent: ContentBlock[] = [];
-    const orphanBlocks = biToBlock.get(-1);
-    let orphanUsed = false;
-    for (let bi = 0; bi < msg.content.length; bi++) {
-      const b = msg.content[bi];
-      if (b.type === "toolCall") {
-        const exec = biToBlock.get(bi);
-        if (exec) {
-          newContent.push(exec);
-        } else if (orphanBlocks && !orphanUsed) {
-          newContent.push(orphanBlocks);
-          orphanUsed = true;
-        } else {
-          const rawInput = b.input;
-          let args: string;
-          let description: string | undefined;
-          if (typeof rawInput === "string") {
-            args = rawInput;
-          } else if (rawInput != null) {
-            args = JSON.stringify(rawInput, null, 2);
-            if (typeof (rawInput as Record<string, unknown>).description === "string") {
-              description = (rawInput as Record<string, unknown>).description as string;
-            }
-          } else {
-            args = "";
-          }
-          newContent.push({
-            type: "toolExecution",
-            toolCallId: b.id,
-            toolName: b.name,
-            args,
-            status: isStreaming ? "running" : isHistorical ? "unknown" : "running",
-            description,
-          });
-        }
-      } else {
-        newContent.push(b);
-      }
-    }
-    if (orphanBlocks && !orphanUsed) {
-      newContent.push(orphanBlocks);
-    }
-    msgs[mi] = { ...msg, content: newContent };
-  }
-
-  for (let mi = 0; mi < msgs.length; mi++) {
-    const msg = msgs[mi];
-    if (msg.role !== "assistant") continue;
-
-    let hasToolCall = false;
-    for (const b of msg.content) {
-      if (b.type === "toolCall") {
-        hasToolCall = true;
-        break;
-      }
-    }
-    if (!hasToolCall) continue;
-
-    if (execByMsg.has(mi)) continue;
-
-    const newContent: ContentBlock[] = [];
-    for (const b of msg.content) {
-      if (b.type === "toolCall") {
-        const args =
-          typeof b.input === "string"
-            ? b.input
-            : b.input != null
-              ? JSON.stringify(b.input, null, 2)
-              : "";
-        newContent.push({
-          type: "toolExecution",
-          toolCallId: b.id,
-          toolName: b.name,
-          args,
-          status: isHistorical ? "unknown" : "running",
-        });
-      } else {
-        newContent.push(b);
-      }
-    }
-    msgs[mi] = { ...msg, content: newContent };
-  }
-
-  if (toRemove.size > 0) {
-    for (let i = msgs.length - 1; i >= 0; i--) {
-      if (toRemove.has(i)) msgs.splice(i, 1);
-    }
-  }
-}
-
 const PAGE_SIZE = 50;
-const INPUT_DRAFT_KEY = "pi-input-draft";
+const backgroundRefreshGenerationBySession = new Map<string, number>();
 
-function getMessageRevisionKey(msg: ChatMessage): string {
-  const record = msg as unknown as Record<string, unknown>;
-  try {
-    return JSON.stringify({
-      id: msg.id,
-      role: msg.role,
-      entryId: record.entryId,
-      timestamp: msg.timestamp,
-      isStreaming: record.isStreaming,
-      stopReason: record.stopReason,
-      provider: record.provider,
-      model: record.model,
-      tokenUsage: record.tokenUsage,
-      content: msg.content,
-    });
-  } catch {
-    return [
-      msg.id,
-      msg.role,
-      String(msg.timestamp),
-      String(record.entryId ?? ""),
-      String(record.isStreaming ?? ""),
-      String(record.stopReason ?? ""),
-      String(msg.content.length),
-    ].join("|");
-  }
+export function clearBackgroundRefreshGeneration(sessionId: string): void {
+  backgroundRefreshGenerationBySession.delete(sessionId);
 }
 
-function hasSameMessageSnapshots(current: ChatMessage[], next: ChatMessage[]): boolean {
-  return (
-    current.length === next.length &&
-    current.every((msg, index) => getMessageRevisionKey(msg) === getMessageRevisionKey(next[index]))
-  );
+export type MessageHydrationState = "idle" | "loading" | "ready" | "error";
+
+function prepareMessagesForStore(
+  msgs: ChatMessage[],
+  options: { normalizeTools?: boolean; activeToolCallIds?: string[] } = {},
+): ChatMessage[] {
+  const nextMsgs = [...msgs];
+  const activeToolCallIds =
+    options.activeToolCallIds === undefined ? undefined : new Set(options.activeToolCallIds);
+  if (options.normalizeTools) {
+    normalizeToolBlocks(nextMsgs, false, false);
+  }
+
+  const latestStreamingAssistantIndex = (() => {
+    for (let i = nextMsgs.length - 1; i >= 0; i--) {
+      const msg = nextMsgs[i];
+      if (msg.role === "assistant" && msg.isStreaming === true) return i;
+    }
+    return -1;
+  })();
+
+  for (let mi = 0; mi < nextMsgs.length; mi++) {
+    const msg = nextMsgs[mi];
+    if (msg.role !== "assistant") continue;
+
+    let changed = false;
+    const content = msg.content.map((block) => {
+      if (block.type !== "toolExecution" || block.status !== "running") return block;
+      const details = block.details;
+      const isBackground =
+        details &&
+        typeof details === "object" &&
+        "background" in (details as Record<string, unknown>);
+      if (isBackground) return block;
+      if (activeToolCallIds !== undefined) {
+        if (activeToolCallIds.has(block.toolCallId)) return block;
+        changed = true;
+        return {
+          ...block,
+          status: "done" as const,
+          endedAt: block.endedAt ?? Date.now(),
+        };
+      }
+      if (mi === latestStreamingAssistantIndex) return block;
+      changed = true;
+      return {
+        ...block,
+        status: "done" as const,
+        endedAt: block.endedAt ?? Date.now(),
+      };
+    });
+
+    if (changed) {
+      nextMsgs[mi] = { ...msg, content, isStreaming: false };
+    }
+  }
+
+  return nextMsgs;
+}
+
+function hasRenderableMessageContent(message: ChatMessage): boolean {
+  return message.content.some((block) => {
+    if (block.type === "text") return block.text.trim().length > 0;
+    if (block.type === "thinking") return block.thinking.trim().length > 0;
+    return true;
+  });
+}
+
+function hasAssistantContentAfterMessage(messages: ChatMessage[], messageId: string): boolean {
+  const startIndex = messages.findIndex((msg) => msg.id === messageId);
+  if (startIndex < 0) return false;
+  return messages
+    .slice(startIndex + 1)
+    .some((msg) => msg.role === "assistant" && hasRenderableMessageContent(msg));
+}
+
+function sameToolCallIds(a: string[] | undefined, b: string[] | undefined): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (a.length !== b.length) return false;
+  return a.every((id, index) => id === b[index]);
+}
+
+type MemoryCustomEntry = {
+  id: string;
+  customType: string;
+  data: unknown;
+  timestamp: number;
+};
+
+function syncMemoryCustomEntries(
+  sessionId: string,
+  customEntries: MemoryCustomEntry[],
+  options: { clearSession?: boolean } = {},
+) {
+  const memoryStore = useMemoryStore.getState();
+  if (options.clearSession && typeof memoryStore.clearSession === "function") {
+    memoryStore.clearSession(sessionId);
+  }
+
+  const resultMap = new Map<string, MemoryCustomEntry>();
+
+  for (const entry of customEntries) {
+    if (entry.customType === "memory_prefetch_result") {
+      resultMap.set(entry.id, entry);
+    }
+  }
+
+  const mergedResultIds = new Set<string>();
+
+  for (const entry of customEntries) {
+    if (entry.customType !== "memory_prefetch") continue;
+
+    let bestResult: MemoryCustomEntry | undefined;
+    for (const [, rentry] of resultMap) {
+      if (rentry.timestamp >= entry.timestamp && !mergedResultIds.has(rentry.id)) {
+        if (!bestResult || rentry.timestamp < bestResult.timestamp) {
+          bestResult = rentry;
+        }
+      }
+    }
+
+    if (bestResult) {
+      mergedResultIds.add(bestResult.id);
+      const prefData = entry.data as Record<string, unknown> | undefined;
+      const resData = bestResult.data as Record<string, unknown> | undefined;
+      bestResult.data = {
+        ...(resData ?? {}),
+        _prefetchQuery: typeof prefData?.query === "string" ? prefData.query : "",
+        _prefetchAvailableFiles:
+          typeof prefData?.availableFiles === "number" ? prefData.availableFiles : 0,
+      };
+    }
+  }
+
+  for (const entry of customEntries) {
+    if (entry.customType === "memory_prefetch") {
+      const hasLaterMergedResult = Array.from(resultMap.values()).some(
+        (r) =>
+          r.customType === "memory_prefetch_result" &&
+          mergedResultIds.has(r.id) &&
+          r.timestamp >= entry.timestamp,
+      );
+      if (hasLaterMergedResult) continue;
+    }
+
+    if (!ALL_MEMORY_TYPE_KEYS.has(entry.customType)) continue;
+
+    memoryStore.addEvent(sessionId, {
+      id: entry.id,
+      customType: entry.customType,
+      data: entry.data,
+      timestamp: entry.timestamp,
+    });
+
+    if (entry.customType === "memory_prefetch_result" && entry.data) {
+      const payload = entry.data as Record<string, unknown>;
+      memoryStore.addInjected(sessionId, {
+        summary: (payload.summary as string) ?? "",
+        snippet: (payload.snippet as string) ?? "",
+      });
+    }
+  }
 }
 
 interface ChatState {
   messagesBySession: Record<string, ChatMessage[]>;
+  activeToolCallIdsBySession: Record<string, string[] | undefined>;
   inputText: string;
   isStreaming: boolean;
   streamContentVersion: number;
+  /** Per-session stream version — only the active session's changes trigger ChatPanel re-render */
+  streamVersionBySession: Record<string, number>;
   loadingSessions: Set<string>;
   historyLoadVersion: number;
+  historyLoadVersionBySession: Record<string, number>;
+  messageHydrationBySession: Record<string, MessageHydrationState>;
   hasMoreMessagesBySession: Record<string, boolean>;
   isLoadingMoreBySession: Record<string, boolean>;
   nextCursorBySession: Record<string, string | null>;
@@ -250,14 +219,19 @@ interface ChatState {
   sendFollowUp: () => Promise<void>;
   clearQueue: () => Promise<void>;
   addMessage: (msg: ChatMessage) => void;
-  setMessagesForSession: (sessionId: string, msgs: ChatMessage[]) => void;
+  setMessagesForSession: (
+    sessionId: string,
+    msgs: ChatMessage[],
+    options?: { bumpStreamVersion?: boolean; streamingFastPath?: boolean },
+  ) => void;
   clearSessionMessages: (sessionId: string) => void;
+  setActiveToolCallIds: (sessionId: string, toolCallIds: string[] | undefined) => void;
   loadSessionMessages: (
     sessionId: string,
     options?: { force?: boolean; sessionPath?: string; preserveStreaming?: boolean },
   ) => Promise<void>;
   /** Background refresh: fetch latest messages and silently update store if different */
-  _backgroundRefreshMessages: (sessionId: string, sessionPath?: string) => void;
+  _backgroundRefreshMessages: (sessionId: string, sessionPath?: string) => Promise<void>;
   loadMoreMessages: (sessionId: string) => Promise<void>;
   setIsStreaming: (v: boolean) => void;
   incrementStreamVersion: () => void;
@@ -266,34 +240,32 @@ interface ChatState {
   clearInputDraft: (sessionId: string) => void;
 }
 
-function readDraft(sessionId: string): string {
-  try {
-    return localStorage.getItem(`${INPUT_DRAFT_KEY}:${sessionId}`) ?? "";
-  } catch {
-    return "";
-  }
-}
-
-function writeDraft(sessionId: string, text: string): void {
-  try {
-    if (text) {
-      localStorage.setItem(`${INPUT_DRAFT_KEY}:${sessionId}`, text);
-    } else {
-      localStorage.removeItem(`${INPUT_DRAFT_KEY}:${sessionId}`);
-    }
-  } catch {
-    /* ignore quota */
-  }
+function bumpHistoryLoadVersion(
+  s: ChatState,
+  sessionId: string,
+  bumpGlobal = true,
+): Pick<ChatState, "historyLoadVersion" | "historyLoadVersionBySession"> {
+  return {
+    historyLoadVersion: bumpGlobal ? s.historyLoadVersion + 1 : s.historyLoadVersion,
+    historyLoadVersionBySession: {
+      ...s.historyLoadVersionBySession,
+      [sessionId]: (s.historyLoadVersionBySession[sessionId] ?? 0) + 1,
+    },
+  };
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
   messagesBySession: {},
+  activeToolCallIdsBySession: {},
   inputText: "",
   pendingImages: [],
   isStreaming: false,
   streamContentVersion: 0,
+  streamVersionBySession: {},
   loadingSessions: new Set<string>(),
   historyLoadVersion: 0,
+  historyLoadVersionBySession: {},
+  messageHydrationBySession: {},
   hasMoreMessagesBySession: {},
   isLoadingMoreBySession: {},
   nextCursorBySession: {},
@@ -326,21 +298,38 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ inputText: "" });
     writeDraft(sessionId, "");
 
-    try {
-      const sessionReady = useSessionStore.getState().sessionReady[sessionId];
-      if (!sessionReady) {
-        useAppStore.getState().addLog("Session not ready, cannot send");
-        useNotificationStore
-          .getState()
-          .push({ message: "Session not ready, please wait", level: "warning" });
-        set({ inputText: text });
-        return;
-      }
+    let sentImages: ImageContent[] = [];
+    let userMsgId: string | null = null;
 
-      const pendingImages = get().pendingImages;
+    const scheduleEmptyTurnCheck = () => {
+      if (!userMsgId) return;
+      const EMPTY_TURN_CHECK_MS = 30_000;
+      const checkSessionId = sessionId;
+      const checkUserMsgId = userMsgId;
+      setTimeout(() => {
+        const chat = get();
+        const msgs = chat.messagesBySession[checkSessionId] || [];
+        const hasAssistant = hasAssistantContentAfterMessage(msgs, checkUserMsgId);
+        if (!hasAssistant) {
+          const status = useSessionStore.getState().sessionStatusMap[checkSessionId];
+          const isStillStreaming =
+            status === "streaming" || status === "compacting" || status === "retrying";
+          if (!isStillStreaming) {
+            useNotificationStore.getState().push({
+              message: "Agent 未返回任何响应，请检查模型配置或重试",
+              level: "error",
+              sessionId: checkSessionId,
+            });
+          }
+        }
+      }, EMPTY_TURN_CHECK_MS);
+    };
+
+    try {
+      sentImages = get().pendingImages;
 
       const contentBlocks: ContentBlock[] = [{ type: "text", text }];
-      for (const img of pendingImages) {
+      for (const img of sentImages) {
         contentBlocks.push({
           type: "imageBlock",
           url: `data:${img.mimeType};base64,${img.data}`,
@@ -355,6 +344,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         timestamp: Date.now(),
         _local: true,
       };
+      userMsgId = userMsg.id;
       set((s) => {
         const existing = s.messagesBySession[sessionId] || [];
         return {
@@ -368,56 +358,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
       set({ isStreaming: true, pendingImages: [] });
       useSessionStore.getState().updateSessionStatus(sessionId, "streaming");
 
-      const SEND_TIMEOUT_MS = 60_000;
       const sendT0 = performance.now();
       perfLog.info("[send] begin", { sessionId });
-      const sendPromise = apiClient.call("agent.send", {
-        sessionId,
-        content: text,
-        images: pendingImages,
-      });
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("Send timed out (60s)")), SEND_TIMEOUT_MS),
-      );
-      await Promise.race([sendPromise, timeoutPromise]);
+      await sendAgentMessageWithTimeout(sessionId, text, sentImages);
       perfLog.info("[send] done", { sessionId, sendMs: Math.round(performance.now() - sendT0) });
       set({ isStreaming: false });
-
-      const EMPTY_TURN_CHECK_MS = 30_000;
-      const checkSessionId = sessionId;
-      const checkUserMsgId = userMsg.id;
-      setTimeout(() => {
-        const chat = get();
-        const msgs = chat.messagesBySession[checkSessionId] || [];
-        const hasAssistant = msgs.some((m) => m.role === "assistant" && m.id !== checkUserMsgId);
-        if (!hasAssistant) {
-          const status = useSessionStore.getState().sessionStatusMap[checkSessionId];
-          const isStillStreaming =
-            status === "streaming" || status === "compacting" || status === "retrying";
-          if (!isStillStreaming) {
-            chat.setMessagesForSession(checkSessionId, [
-              ...msgs,
-              {
-                id: `error_${Date.now()}`,
-                role: "error" as const,
-                content: [
-                  {
-                    type: "text" as const,
-                    text: "Agent 未返回响应，可能是 LLM 服务异常或网络问题",
-                  },
-                ],
-                timestamp: Date.now(),
-              },
-            ]);
-            useNotificationStore.getState().push({
-              message: "Agent 未返回任何响应，请检查模型配置或重试",
-              level: "error",
-              sessionId: checkSessionId,
-            });
-          }
-        }
-      }, EMPTY_TURN_CHECK_MS);
+      scheduleEmptyTurnCheck();
     } catch (err) {
+      let finalErr = err;
+      if (isAgentNotStartedError(finalErr, sessionId)) {
+        clearAgentStarted(sessionId);
+        useSessionStore.setState((s) => ({
+          sessionReady: { ...s.sessionReady, [sessionId]: false },
+        }));
+        finalErr = new Error("当前会话连接已断开，请刷新页面或重连后再发送。");
+      }
+
       set((s) => {
         const msgs = s.messagesBySession[sessionId] || [];
         return {
@@ -428,8 +384,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
           },
         };
       });
-      useSessionStore.getState().updateSessionStatus(sessionId, "idle");
-      const msg = err instanceof Error ? err.message : String(err);
+      // ❌ 不再强制切到 idle，保持当前状态
+      const msg = finalErr instanceof Error ? finalErr.message : String(finalErr);
       useAppStore.getState().addLog(`Send error: ${msg}`);
       useNotificationStore.getState().push({ message: `Send failed: ${msg}`, level: "error" });
       set({ inputText: text });
@@ -446,7 +402,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     writeDraft(sessionId, "");
 
     try {
-      const STEER_TIMEOUT_MS = 15_000;
+      const STEER_TIMEOUT_MS = 60_000;
       const steerT0 = performance.now();
       perfLog.info("[steer] begin", { sessionId });
       const pendingImages = get().pendingImages;
@@ -456,7 +412,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       await Promise.race([
         apiClient.call("agent.steer", { sessionId, content: text, images: pendingImages }),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("Steer timed out (15s)")), STEER_TIMEOUT_MS),
+          setTimeout(() => reject(new Error("Steer timed out (60s)")), STEER_TIMEOUT_MS),
         ),
       ]);
       perfLog.info("[steer] done", { sessionId, steerMs: Math.round(performance.now() - steerT0) });
@@ -479,7 +435,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     writeDraft(sessionId, "");
 
     try {
-      const FOLLOWUP_TIMEOUT_MS = 15_000;
+      const FOLLOWUP_TIMEOUT_MS = 60_000;
       const followUpT0 = performance.now();
       perfLog.info("[followUp] begin", { sessionId });
       const pendingImages = get().pendingImages;
@@ -489,7 +445,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       await Promise.race([
         apiClient.call("agent.followUp", { sessionId, content: text, images: pendingImages }),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("FollowUp timed out (15s)")), FOLLOWUP_TIMEOUT_MS),
+          setTimeout(() => reject(new Error("FollowUp timed out (60s)")), FOLLOWUP_TIMEOUT_MS),
         ),
       ]);
       perfLog.info("[followUp] done", {
@@ -529,15 +485,72 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
   },
 
-  setMessagesForSession: (sessionId, msgs) =>
-    set((s) => ({
-      messagesBySession: { ...s.messagesBySession, [sessionId]: msgs },
-    })),
+  setMessagesForSession: (sessionId, msgs, options = {}) => {
+    set((s) => {
+      const nextMsgs = options.streamingFastPath
+        ? msgs
+        : prepareMessagesForStore(msgs, {
+            normalizeTools: true,
+            activeToolCallIds: s.activeToolCallIdsBySession[sessionId],
+          });
+      const next: Partial<ChatState> = {
+        messagesBySession: { ...s.messagesBySession, [sessionId]: nextMsgs },
+      };
+      if (options.bumpStreamVersion) {
+        next.streamContentVersion = s.streamContentVersion + 1;
+        next.streamVersionBySession = {
+          ...s.streamVersionBySession,
+          [sessionId]: (s.streamVersionBySession[sessionId] ?? 0) + 1,
+        };
+      }
+      return next;
+    });
+  },
 
   clearSessionMessages: (sessionId) =>
     set((s) => {
-      const { [sessionId]: _, ...rest } = s.messagesBySession;
-      return { messagesBySession: rest };
+      const { [sessionId]: _m, ...restMessages } = s.messagesBySession;
+      const { [sessionId]: _a, ...restActiveTools } = s.activeToolCallIdsBySession;
+      const { [sessionId]: _sv, ...restStreamVersion } = s.streamVersionBySession;
+      const { [sessionId]: _hlv, ...restHistoryLoadVersion } = s.historyLoadVersionBySession;
+      const { [sessionId]: _hy, ...restHydration } = s.messageHydrationBySession;
+      const { [sessionId]: _hm, ...restHasMore } = s.hasMoreMessagesBySession;
+      const { [sessionId]: _il, ...restIsLoading } = s.isLoadingMoreBySession;
+      const { [sessionId]: _nc, ...restNextCursor } = s.nextCursorBySession;
+      const loadingSessions = new Set(s.loadingSessions);
+      loadingSessions.delete(sessionId);
+      return {
+        messagesBySession: restMessages,
+        activeToolCallIdsBySession: restActiveTools,
+        streamVersionBySession: restStreamVersion,
+        historyLoadVersionBySession: restHistoryLoadVersion,
+        messageHydrationBySession: restHydration,
+        hasMoreMessagesBySession: restHasMore,
+        isLoadingMoreBySession: restIsLoading,
+        nextCursorBySession: restNextCursor,
+        loadingSessions,
+      };
+    }),
+
+  setActiveToolCallIds: (sessionId, toolCallIds) =>
+    set((s) => {
+      const current = s.activeToolCallIdsBySession[sessionId];
+      if (sameToolCallIds(current, toolCallIds)) return {};
+
+      const activeToolCallIdsBySession = {
+        ...s.activeToolCallIdsBySession,
+        [sessionId]: toolCallIds,
+      };
+      const existing = s.messagesBySession[sessionId];
+      if (!existing) return { activeToolCallIdsBySession };
+
+      return {
+        activeToolCallIdsBySession,
+        messagesBySession: {
+          ...s.messagesBySession,
+          [sessionId]: prepareMessagesForStore(existing, { activeToolCallIds: toolCallIds }),
+        },
+      };
     }),
 
   setIsStreaming: (v) => set({ isStreaming: v }),
@@ -548,7 +561,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
     sessionId: string,
     options?: { force?: boolean; sessionPath?: string; preserveStreaming?: boolean },
   ) => {
-    const t0 = performance.now();
     const sid = sessionId;
     if (!sid) return;
 
@@ -574,11 +586,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
         return;
       }
     }
-    set((s) => ({ loadingSessions: new Set(s.loadingSessions).add(sid) }));
+    set((s) => ({
+      loadingSessions: new Set(s.loadingSessions).add(sid),
+      messageHydrationBySession: {
+        ...s.messageHydrationBySession,
+        [sid]: "loading",
+      },
+    }));
 
     try {
       const { apiClient } = await import("../lib/api-client");
-      const GET_MESSAGES_TIMEOUT_MS = 30_000;
+      const GET_MESSAGES_TIMEOUT_MS = 60_000;
+      const t0 = performance.now();
+      perfLog.info("[loadSessionMessages] begin", { sessionId, force: !!options?.force });
+
+      // Use getFullMessages which already handles streaming merge + dedup
+      // (entryId, message signature, user text, completed toolCall, compaction).
+      // During streaming, it auto-merges in-memory messages from the CLI process.
       const result = (await Promise.race([
         apiClient.call("agent.getFullMessages", {
           sessionId: sid,
@@ -587,11 +611,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }),
         new Promise<never>((_, reject) =>
           setTimeout(
-            () => reject(new Error("getFullMessages timed out (30s)")),
+            () => reject(new Error("getFullMessages timed out (60s)")),
             GET_MESSAGES_TIMEOUT_MS,
           ),
         ),
       ])) as Awaited<ReturnType<typeof apiClient.call<"agent.getFullMessages">>>;
+
       perfLog.info("[loadMessages] RPC returned", {
         sessionId: sid,
         force: !!options?.force,
@@ -612,6 +637,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
             count: current.length,
             roles: current.map((m) => m.role),
           });
+          set((s) => ({
+            messageHydrationBySession: {
+              ...s.messageHydrationBySession,
+              [sid]: "ready",
+            },
+          }));
           return;
         }
       }
@@ -621,16 +652,39 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const messages = result.messages;
       if (!Array.isArray(messages)) {
         log.warn("GUARD-4: messages is not array", { sessionId: sid, type: typeof messages });
+        set((s) => ({
+          messageHydrationBySession: {
+            ...s.messageHydrationBySession,
+            [sid]: "error",
+          },
+        }));
         return;
       }
       log.info("Raw messages count", { sessionId: sid, count: messages.length });
 
+      // Deduplicate by message ID — getFullMessages may return duplicates when
+      // JSONL has entries from multiple compaction cycles or when the streaming
+      // merge cannot fully eliminate overlaps. Keep the last occurrence (latest).
+      const seenIds = new Set<string>();
       const rawMessages: Array<{ raw: AgentMessageForUI; id?: string }> = [];
-      for (const msg of messages) {
-        rawMessages.push({ raw: msg, id: msg.id });
-        const role = msg.role;
+      for (let i = messages.length - 1; i >= 0; i--) {
+        const msg = messages[i];
+        const msgId = msg.id;
+        if (msgId && seenIds.has(msgId)) continue;
+        if (msgId) seenIds.add(msgId);
+        rawMessages.unshift({ raw: msg, id: msgId });
+      }
+      if (rawMessages.length < messages.length) {
+        log.info("Dedup removed duplicates", {
+          sessionId: sid,
+          before: messages.length,
+          after: rawMessages.length,
+        });
+      }
+      for (const { raw } of rawMessages) {
+        const role = raw.role;
         if (role === "assistant") {
-          const content = msg.content;
+          const content = raw.content;
           if (Array.isArray(content)) {
             for (const block of content) {
               if (block.type === "toolCall" && block.id && block.name) {
@@ -666,96 +720,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
         nullCount,
       });
 
-      normalizeToolBlocks(
-        msgs,
-        true,
-        useSessionStore.getState().sessionStatusMap[sid] === "streaming",
-      );
+      normalizeToolBlocks(msgs, true, false);
 
       const customEntries = result.customEntries;
-      if (Array.isArray(customEntries) && customEntries.length > 0) {
-        const memoryStore = useMemoryStore.getState();
-        memoryStore.clearSession(sid);
-
-        const resultMap = new Map<string, (typeof customEntries)[0]>();
-        const prefetchIds = new Set<string>();
-
-        for (const entry of customEntries) {
-          if (entry.customType === "memory_prefetch") {
-            prefetchIds.add(entry.id);
-          }
-          if (entry.customType === "memory_prefetch_result") {
-            resultMap.set(entry.id, entry);
-          }
-        }
-
-        const mergedResultIds = new Set<string>();
-
-        for (const entry of customEntries) {
-          if (entry.customType !== "memory_prefetch") continue;
-
-          let bestResult: (typeof customEntries)[0] | undefined;
-          for (const [, rentry] of resultMap) {
-            if (rentry.timestamp >= entry.timestamp && !mergedResultIds.has(rentry.id)) {
-              if (!bestResult || rentry.timestamp < bestResult.timestamp) {
-                bestResult = rentry;
-              }
-            }
-          }
-
-          if (bestResult) {
-            mergedResultIds.add(bestResult.id);
-            const prefData = entry.data as Record<string, unknown> | undefined;
-            const resData = bestResult.data as Record<string, unknown> | undefined;
-            bestResult.data = {
-              ...(resData ?? {}),
-              _prefetchQuery: typeof prefData?.query === "string" ? prefData.query : "",
-              _prefetchAvailableFiles:
-                typeof prefData?.availableFiles === "number" ? prefData.availableFiles : 0,
-            } as unknown;
-          }
-        }
-
-        for (const entry of customEntries) {
-          if (entry.customType === "memory_prefetch") {
-            const hasLaterMergedResult = Array.from(resultMap.values()).some(
-              (r) =>
-                r.customType === "memory_prefetch_result" &&
-                mergedResultIds.has(r.id) &&
-                r.timestamp >= entry.timestamp,
-            );
-            if (hasLaterMergedResult) continue;
-          }
-
-          if (!ALL_MEMORY_TYPE_KEYS.has(entry.customType)) continue;
-
-          memoryStore.addEvent(sid, {
-            id: entry.id,
-            customType: entry.customType,
-            data: entry.data,
-            timestamp: entry.timestamp,
-          });
-
-          if (entry.customType === "memory_prefetch_result" && entry.data) {
-            const payload = entry.data as Record<string, unknown>;
-            memoryStore.addInjected(sid, {
-              summary: (payload.summary as string) ?? "",
-              snippet: (payload.snippet as string) ?? "",
-            });
-          }
-
-          msgs.push({
-            id: entry.id,
-            role: "custom",
-            content: [{ type: "custom", customType: entry.customType, data: entry.data }],
-            timestamp: entry.timestamp,
-          });
-        }
-
-        msgs.sort((a, b) => {
-          if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
-          return (a.id || "").localeCompare(b.id || "");
-        });
+      if (Array.isArray(customEntries)) {
+        syncMemoryCustomEntries(sid, customEntries, { clearSession: true });
       }
 
       const hasMore = result.hasMore === true || msgs.length > PAGE_SIZE;
@@ -780,18 +749,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const localMsgs = (get().messagesBySession[sid] || []).filter((m) => m._local);
       const currentMsgs = get().messagesBySession[sid] || [];
 
-      // When streaming, preserve the last streaming assistant message from replay/events.
-      // loadSessionMessages reads JSONL which may be incomplete during streaming,
-      // and overwriting would lose toolExecution state populated by replayHoldEvents.
-      const lastCurrent = currentMsgs[currentMsgs.length - 1];
-      const isStreamingSession = useSessionStore.getState().sessionStatusMap[sid] === "streaming";
-      const preserveStreaming =
-        options?.preserveStreaming !== false &&
-        isStreamingSession &&
-        lastCurrent &&
-        lastCurrent.role === "assistant" &&
-        lastCurrent.isStreaming === true;
-
       // Dedup _local messages against server messages to prevent duplicates.
       // The server returns user messages from JSONL; if a _local user message
       // has matching text content with a server message, the server version wins.
@@ -815,14 +772,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
       let finalMsgs =
         nonDupLocalMsgs.length > 0 ? [...displayMsgs, ...nonDupLocalMsgs] : displayMsgs;
 
-      if (preserveStreaming) {
-        const streamingInFinal = finalMsgs.findIndex(
-          (m) => m.role === "assistant" && m.isStreaming,
-        );
-        if (streamingInFinal === -1) {
-          finalMsgs = [...finalMsgs, lastCurrent];
-        }
-      }
+      normalizeToolBlocks(finalMsgs, true, false);
+      finalMsgs = prepareMessagesForStore(finalMsgs, {
+        activeToolCallIds: get().activeToolCallIdsBySession[sid],
+      });
 
       if (hasSameMessageSnapshots(currentMsgs, finalMsgs)) {
         perfLog.info("[loadMessages] content unchanged, skip update", {
@@ -830,26 +783,49 @@ export const useChatStore = create<ChatState>((set, get) => ({
           count: finalMsgs.length,
         });
         set((s) => ({
-          historyLoadVersion: options?.force ? s.historyLoadVersion + 1 : s.historyLoadVersion,
+          ...(options?.force ? bumpHistoryLoadVersion(s, sid) : {}),
           hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: hasMore },
           nextCursorBySession: {
             ...s.nextCursorBySession,
             [sid]: result.nextCursor ?? null,
+          },
+          messageHydrationBySession: {
+            ...s.messageHydrationBySession,
+            [sid]: "ready",
           },
         }));
       } else {
         set((s) => ({
           messagesBySession: { ...s.messagesBySession, [sid]: finalMsgs },
-          historyLoadVersion: s.historyLoadVersion + 1,
+          ...bumpHistoryLoadVersion(s, sid),
           hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: hasMore },
           nextCursorBySession: {
             ...s.nextCursorBySession,
             [sid]: result.nextCursor ?? null,
           },
+          messageHydrationBySession: {
+            ...s.messageHydrationBySession,
+            [sid]: "ready",
+          },
         }));
       }
 
       useSessionStore.getState().restoreContextFromHistory(sid);
+
+      // After messages are loaded, replay the bash store into the chat tool
+      // blocks. This covers the case where bash events arrived in the window
+      // between the bash subscription being set up and the messages being
+      // fetched — without this, the chat's "Output" section would stay empty
+      // until the next bash event triggers a fresh reconciliation.
+      try {
+        const { syncBashStoreToChat } = await import("./session-subscriptions");
+        syncBashStoreToChat(sid);
+      } catch (err) {
+        log.warn("syncBashStoreToChat failed after loadSessionMessages", {
+          sessionId: sid,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
     } catch (err) {
       log.error("Failed to load session", {
         error: err instanceof Error ? err.message : String(err),
@@ -857,6 +833,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
       useAppStore
         .getState()
         .addLog(`Failed to load session: ${err instanceof Error ? err.message : String(err)}`);
+      set((s) => ({
+        messageHydrationBySession: {
+          ...s.messageHydrationBySession,
+          [sid]: "error",
+        },
+      }));
     } finally {
       set((s) => {
         const next = new Set(s.loadingSessions);
@@ -868,145 +850,161 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   /** Background refresh: fetch latest messages from server and silently update store if different.
    *  Used after optimistic render from cache to guarantee data completeness. */
-  _backgroundRefreshMessages: (sessionId: string, sessionPath?: string) => {
+  _backgroundRefreshMessages: async (sessionId: string, sessionPath?: string) => {
     const sid = sessionId;
     // Don't run if already loading (avoid competing with foreground load)
     if (get().loadingSessions.has(sid)) return;
 
+    const refreshGeneration = (backgroundRefreshGenerationBySession.get(sid) ?? 0) + 1;
+    backgroundRefreshGenerationBySession.set(sid, refreshGeneration);
+
     const t0 = performance.now();
     perfLog.info("[bgRefresh] begin", { sessionId: sid });
 
-    set((s) => ({ loadingSessions: new Set(s.loadingSessions).add(sid) }));
+    set((s) => ({
+      loadingSessions: new Set(s.loadingSessions).add(sid),
+      messageHydrationBySession: {
+        ...s.messageHydrationBySession,
+        [sid]: "loading",
+      },
+    }));
 
-    (async () => {
-      try {
-        const { apiClient } = await import("../lib/api-client");
-        const BG_REFRESH_TIMEOUT_MS = 15_000;
-        const result = (await Promise.race([
-          apiClient.call("agent.getFullMessages", {
-            sessionId: sid,
-            sessionPath,
-            limit: PAGE_SIZE,
-          }),
-          new Promise<never>((_, reject) =>
-            setTimeout(
-              () => reject(new Error("bgRefresh getFullMessages timed out (15s)")),
-              BG_REFRESH_TIMEOUT_MS,
-            ),
+    try {
+      const { apiClient } = await import("../lib/api-client");
+      const BG_REFRESH_TIMEOUT_MS = 15_000;
+      const result = (await Promise.race([
+        apiClient.call("agent.getFullMessages", {
+          sessionId: sid,
+          sessionPath,
+          limit: PAGE_SIZE,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error("bgRefresh getFullMessages timed out (15s)")),
+            BG_REFRESH_TIMEOUT_MS,
           ),
-        ])) as Awaited<ReturnType<typeof apiClient.call<"agent.getFullMessages">>>;
+        ),
+      ])) as Awaited<ReturnType<typeof apiClient.call<"agent.getFullMessages">>>;
 
-        const rpcMs = Math.round(performance.now() - t0);
-        perfLog.info("[bgRefresh] RPC returned", {
-          sessionId: sid,
-          rpcMs,
-          messageCount: result.messages?.length,
-        });
+      const rpcMs = Math.round(performance.now() - t0);
+      perfLog.info("[bgRefresh] RPC returned", {
+        sessionId: sid,
+        rpcMs,
+        messageCount: result.messages?.length,
+      });
 
-        const messages = result.messages;
-        if (!Array.isArray(messages)) return;
+      const messages = result.messages;
+      if (!Array.isArray(messages)) {
+        set((s) => ({
+          messageHydrationBySession: {
+            ...s.messageHydrationBySession,
+            [sid]: "error",
+          },
+        }));
+        return;
+      }
+      if (backgroundRefreshGenerationBySession.get(sid) !== refreshGeneration) {
+        perfLog.info("[bgRefresh] stale response ignored", { sessionId: sid });
+        return;
+      }
 
-        // Process messages the same way as loadSessionMessages
-        const toolCallNameMap: Record<string, string> = {};
-        const msgs: ChatMessage[] = [];
-        for (const msg of messages) {
-          const mapped = messageToChatMessage(
-            msg as unknown as unknown as Message,
-            msg.id,
-            toolCallNameMap,
-          );
-          if (mapped) msgs.push(mapped);
-        }
-        normalizeToolBlocks(msgs);
-
-        // Process custom entries (memory events)
-        const customEntries = result.customEntries;
-        if (Array.isArray(customEntries) && customEntries.length > 0) {
-          const memoryStore = useMemoryStore.getState();
-          for (const entry of customEntries) {
-            if (!ALL_MEMORY_TYPE_KEYS.has(entry.customType)) continue;
-            memoryStore.addEvent(sid, {
-              id: entry.id,
-              customType: entry.customType,
-              data: entry.data,
-              timestamp: entry.timestamp,
-            });
-            if (entry.customType === "memory_prefetch_result" && entry.data) {
-              const payload = entry.data as Record<string, unknown>;
-              memoryStore.addInjected(sid, {
-                summary: (payload.summary as string) ?? "",
-                snippet: (payload.snippet as string) ?? "",
-              });
-            }
-            msgs.push({
-              id: entry.id,
-              role: "custom",
-              content: [{ type: "custom", customType: entry.customType, data: entry.data }],
-              timestamp: entry.timestamp,
-            });
-          }
-          msgs.sort((a, b) => {
-            if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
-            return (a.id || "").localeCompare(b.id || "");
-          });
-        }
-
-        // Compare with current store: only update if different
-        const current = get().messagesBySession[sid] || [];
-
-        const streamingMsgs = current.filter(
-          (m) => m.role === "assistant" && m.isStreaming === true,
+      // Process messages the same way as loadSessionMessages
+      const toolCallNameMap: Record<string, string> = {};
+      const msgs: ChatMessage[] = [];
+      for (const msg of messages) {
+        const mapped = messageToChatMessage(
+          msg as unknown as unknown as Message,
+          msg.id,
+          toolCallNameMap,
         );
-        if (streamingMsgs.length > 0) {
-          perfLog.info("[bgRefresh] session is streaming, skip update", {
-            sessionId: sid,
-            streamingCount: streamingMsgs.length,
-          });
-        } else {
-          if (hasSameMessageSnapshots(current, msgs)) {
-            perfLog.info("[bgRefresh] data unchanged, skip update", {
-              sessionId: sid,
-              count: msgs.length,
-            });
-          } else {
-            perfLog.info("[bgRefresh] data changed, updating store", {
-              sessionId: sid,
-              oldCount: current.length,
-              newCount: msgs.length,
-            });
-            const serverIds = new Set(msgs.map((m) => m.id));
-            const localOnly = current.filter((m) => !serverIds.has(m.id));
-            const hasMore = result.hasMore === true || msgs.length > PAGE_SIZE;
-            const merged =
-              localOnly.length > 0
-                ? [...msgs, ...localOnly].sort((a, b) => a.timestamp - b.timestamp)
-                : msgs;
-            set((s) => ({
-              messagesBySession: { ...s.messagesBySession, [sid]: merged },
-              historyLoadVersion: s.historyLoadVersion + 1,
-              hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: hasMore },
-              nextCursorBySession: {
-                ...s.nextCursorBySession,
-                [sid]: result.nextCursor ?? null,
-              },
-            }));
-            useSessionStore.getState().restoreContextFromHistory(sid);
-          }
-        }
-      } catch (err) {
-        perfLog.info("[bgRefresh] failed (non-critical)", {
+        if (mapped) msgs.push(mapped);
+      }
+      normalizeToolBlocks(msgs, true, false);
+
+      const customEntries = result.customEntries;
+      if (Array.isArray(customEntries)) {
+        syncMemoryCustomEntries(sid, customEntries, { clearSession: true });
+      }
+
+      // Compare with current store: only update if different
+      const current = get().messagesBySession[sid] || [];
+
+      const serverIds = new Set(msgs.map((m) => m.id));
+      const localOnly = current.filter((m) => m._local && !serverIds.has(m.id));
+      const hasMore = result.hasMore === true || msgs.length > PAGE_SIZE;
+      let finalMsgs =
+        localOnly.length > 0
+          ? [...msgs, ...localOnly].sort((a, b) => a.timestamp - b.timestamp)
+          : msgs;
+
+      const lastCurrent = current[current.length - 1];
+      const preservedStreamingMsg = buildPreservedStreamingMessage(finalMsgs, lastCurrent);
+      if (preservedStreamingMsg) {
+        finalMsgs = [...finalMsgs, preservedStreamingMsg];
+      }
+      normalizeToolBlocks(finalMsgs, true, false);
+      finalMsgs = prepareMessagesForStore(finalMsgs, {
+        activeToolCallIds: get().activeToolCallIdsBySession[sid],
+      });
+
+      if (hasSameMessageSnapshots(current, finalMsgs)) {
+        perfLog.info("[bgRefresh] data unchanged, skip update", {
           sessionId: sid,
-          error: err instanceof Error ? err.message : String(err),
+          count: finalMsgs.length,
         });
-        // Background refresh failure is non-critical: cached messages are still visible
-      } finally {
+        set((s) => ({
+          hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: hasMore },
+          nextCursorBySession: {
+            ...s.nextCursorBySession,
+            [sid]: result.nextCursor ?? null,
+          },
+          messageHydrationBySession: {
+            ...s.messageHydrationBySession,
+            [sid]: "ready",
+          },
+        }));
+      } else {
+        perfLog.info("[bgRefresh] data changed, updating store", {
+          sessionId: sid,
+          oldCount: current.length,
+          newCount: finalMsgs.length,
+        });
+        set((s) => ({
+          messagesBySession: { ...s.messagesBySession, [sid]: finalMsgs },
+          ...bumpHistoryLoadVersion(s, sid),
+          hasMoreMessagesBySession: { ...s.hasMoreMessagesBySession, [sid]: hasMore },
+          nextCursorBySession: {
+            ...s.nextCursorBySession,
+            [sid]: result.nextCursor ?? null,
+          },
+          messageHydrationBySession: {
+            ...s.messageHydrationBySession,
+            [sid]: "ready",
+          },
+        }));
+        useSessionStore.getState().restoreContextFromHistory(sid);
+      }
+    } catch (err) {
+      perfLog.info("[bgRefresh] failed (non-critical)", {
+        sessionId: sid,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      set((s) => ({
+        messageHydrationBySession: {
+          ...s.messageHydrationBySession,
+          [sid]: "error",
+        },
+      }));
+      // Background refresh failure is non-critical: cached messages are still visible
+    } finally {
+      if (backgroundRefreshGenerationBySession.get(sid) === refreshGeneration) {
         set((s) => {
           const next = new Set(s.loadingSessions);
           next.delete(sid);
           return { loadingSessions: next };
         });
       }
-    })();
+    }
   },
 
   loadMoreMessages: async (sessionId: string) => {
@@ -1028,18 +1026,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }));
 
     try {
-      const LOAD_MORE_TIMEOUT_MS = 30_000;
-      const current = get().messagesBySession[sid] || [];
-      const cursor = get().nextCursorBySession[sid] ?? current[0]?.entryId;
+      const LOAD_MORE_TIMEOUT_MS = 60_000;
+      const afterEntryId = get().nextCursorBySession[sid] ?? undefined;
+      // Look up sessionPath from session store
+      const ss = useSessionStore.getState();
+      const sessionMeta = Object.values(ss.sessionsByProject)
+        .flat()
+        .find((s) => s.sessionId === sid);
+      const sessionPath = sessionMeta?.sessionPath;
+      perfLog.info("[loadMoreMessages] begin", { sessionId, afterEntryId });
       const result = (await Promise.race([
         apiClient.call("agent.getFullMessages", {
-          sessionId: sid,
-          limit: PAGE_SIZE,
-          afterEntryId: cursor,
+          sessionId,
+          sessionPath,
+          afterEntryId,
         }),
         new Promise<never>((_, reject) =>
           setTimeout(
-            () => reject(new Error("loadMoreMessages timed out (30s)")),
+            () => reject(new Error("loadMoreMessages timed out (60s)")),
             LOAD_MORE_TIMEOUT_MS,
           ),
         ),
@@ -1065,115 +1069,33 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const chatMsg = messageToChatMessage(msg as unknown as Message, msg.id, toolCallNameMap);
         if (chatMsg) allMsgs.push(chatMsg);
       }
-      normalizeToolBlocks(allMsgs);
-
-      const customEntries = result.customEntries;
-      if (Array.isArray(customEntries) && customEntries.length > 0) {
-        const memoryStore = useMemoryStore.getState();
-
-        const resultMap = new Map<string, (typeof customEntries)[0]>();
-        const prefetchIds = new Set<string>();
-
-        for (const entry of customEntries) {
-          if (entry.customType === "memory_prefetch") {
-            prefetchIds.add(entry.id);
-          }
-          if (entry.customType === "memory_prefetch_result") {
-            resultMap.set(entry.id, entry);
-          }
-        }
-
-        const mergedResultIds = new Set<string>();
-
-        for (const entry of customEntries) {
-          if (entry.customType !== "memory_prefetch") continue;
-
-          let bestResult: (typeof customEntries)[0] | undefined;
-          for (const [, rentry] of resultMap) {
-            if (rentry.timestamp >= entry.timestamp && !mergedResultIds.has(rentry.id)) {
-              if (!bestResult || rentry.timestamp < bestResult.timestamp) {
-                bestResult = rentry;
-              }
-            }
-          }
-
-          if (bestResult) {
-            mergedResultIds.add(bestResult.id);
-            const prefData = entry.data as Record<string, unknown> | undefined;
-            const resData = bestResult.data as Record<string, unknown> | undefined;
-            bestResult.data = {
-              ...(resData ?? {}),
-              _prefetchQuery: typeof prefData?.query === "string" ? prefData.query : "",
-              _prefetchAvailableFiles:
-                typeof prefData?.availableFiles === "number" ? prefData.availableFiles : 0,
-            } as unknown;
-          }
-        }
-
-        for (const entry of customEntries) {
-          if (entry.customType === "memory_prefetch") {
-            const hasLaterMergedResult = Array.from(resultMap.values()).some(
-              (r) =>
-                r.customType === "memory_prefetch_result" &&
-                mergedResultIds.has(r.id) &&
-                r.timestamp >= entry.timestamp,
-            );
-            if (hasLaterMergedResult) continue;
-          }
-
-          if (!ALL_MEMORY_TYPE_KEYS.has(entry.customType)) continue;
-
-          memoryStore.addEvent(sid, {
-            id: entry.id,
-            customType: entry.customType,
-            data: entry.data,
-            timestamp: entry.timestamp,
-          });
-
-          if (entry.customType === "memory_prefetch_result" && entry.data) {
-            const payload = entry.data as Record<string, unknown>;
-            memoryStore.addInjected(sid, {
-              summary: (payload.summary as string) ?? "",
-              snippet: (payload.snippet as string) ?? "",
-            });
-          }
-
-          allMsgs.push({
-            id: entry.id,
-            role: "custom",
-            content: [{ type: "custom", customType: entry.customType, data: entry.data }],
-            timestamp: entry.timestamp,
-          });
-        }
-
-        allMsgs.sort((a, b) => {
-          if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
-          return (a.id || "").localeCompare(b.id || "");
-        });
-      }
+      normalizeToolBlocks(allMsgs, true, false);
 
       const hasMore = result.hasMore === true;
 
-      log.info("LOAD ALL messages", {
+      log.info("LOAD MORE messages", {
         sessionId: sid,
         total: allMsgs.length,
         hasMore,
       });
 
-      const currentById = new Map(current.map((msg) => [msg.id, msg]));
       const loadedIds = new Set(allMsgs.map((msg) => msg.id));
-      const mergedMsgs = [
-        ...allMsgs,
-        ...current.filter((msg) => !loadedIds.has(msg.id)),
-      ].sort((a, b) => {
-        if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
-        return (a.entryId ?? a.id).localeCompare(b.entryId ?? b.id);
+      const current = get().messagesBySession[sid] || [];
+      const mergedMsgs = [...allMsgs, ...current.filter((m) => !loadedIds.has(m.id))].sort(
+        (a, b) => {
+          if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
+          return (a.entryId ?? a.id).localeCompare(b.entryId ?? b.id);
+        },
+      );
+      const finalMsgs = mergedMsgs;
+      normalizeToolBlocks(finalMsgs, true, false);
+      const preparedMsgs = prepareMessagesForStore(finalMsgs, {
+        activeToolCallIds: get().activeToolCallIdsBySession[sid],
       });
-      const finalMsgs = mergedMsgs.map((msg) => currentById.get(msg.id) ?? msg);
 
       set((s) => ({
-        messagesBySession: { ...s.messagesBySession, [sid]: finalMsgs },
-        historyLoadVersion: s.historyLoadVersion + 1,
+        messagesBySession: { ...s.messagesBySession, [sid]: preparedMsgs },
+        ...bumpHistoryLoadVersion(s, sid),
         hasMoreMessagesBySession: {
           ...s.hasMoreMessagesBySession,
           [sid]: hasMore,

@@ -6,8 +6,11 @@ import { existsSync } from "fs";
 import { getProcessManager } from "./agent";
 import type { LspDiagnosticsMode, LspServerStatus } from "../modules/lsp";
 import { createLogger } from "../lib/logger";
+import { withTimeout } from "../lib/with-timeout";
 
 const log = createLogger("lsp");
+
+const CHANNEL_TIMEOUT_MS = 1_000;
 
 export function register(server: RPCServer, _options: HandlerOptions): void {
   const r = createRegister(server);
@@ -47,11 +50,14 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
       if (pm.hasSession(params.sessionId)) {
         try {
-          const raw: unknown = await pm.callChannel(
-            params.sessionId,
-            "lsp" as string,
-            "getStatus",
-            {},
+          const raw: unknown = await withTimeout(
+            pm.callChannel(
+              params.sessionId,
+              "lsp" as string,
+              "getStatus",
+              {},
+            ),
+            CHANNEL_TIMEOUT_MS,
           );
           const result = raw as {
             servers: Array<{ name: string; fileTypes?: string[]; state: string; reason: string }>;
@@ -135,8 +141,20 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const { sessionId, mode } = params as { sessionId: string; mode: LspDiagnosticsMode };
     const pm = getProcessManager();
     if (!pm) throw new Error("No process manager available");
-    return pm.callChannel(sessionId, "lsp", "lsp.setMode", {
-      mode,
-    }) as Promise<{ ok: boolean; mode: LspDiagnosticsMode }>;
+    try {
+      const result = (await withTimeout(
+        pm.callChannel(sessionId, "lsp", "lsp.setMode", {
+          mode,
+        }),
+        CHANNEL_TIMEOUT_MS,
+      )) as { ok: boolean; mode: LspDiagnosticsMode };
+      return result;
+    } catch (err) {
+      log.warn("lsp.setMode channel call failed", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return { ok: false, mode };
+    }
   });
 }

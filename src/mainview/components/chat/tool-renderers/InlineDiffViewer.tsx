@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { useThemeStore, isDarkGroup } from "../../../stores/use-theme-store";
 import { useLayoutStore } from "../../../layouts/use-layout-store";
 import { useChatOverlayStore } from "../../../stores/use-chat-overlay-store";
+import { useGitStore } from "../../../stores/use-git-store";
 import { getLanguage } from "../../../utils/file-utils";
 import { createDiffStyles, DIFF_STYLE_PRESETS } from "../../diff/diff-style-factory";
 
@@ -63,7 +64,7 @@ export const InlineDiffViewer = memo(function InlineDiffViewer({
   const isDark = isDarkGroup(resolvedTheme);
   const breakpoint = useLayoutStore((s) => s.breakpoint);
   const isMobile = breakpoint === "mobile";
-  const openNodeExpand = useChatOverlayStore((s) => s.openExpand);
+  const openDiffOverlay = useChatOverlayStore((s) => s.openDiff);
 
   const splitView = externalSplitView ?? internalSplitView;
 
@@ -71,46 +72,23 @@ export const InlineDiffViewer = memo(function InlineDiffViewer({
     () => createDiffStyles(isMobile ? DIFF_STYLE_PRESETS.inlineMobile : DIFF_STYLE_PRESETS.inline),
     [isMobile],
   );
-  const overlayStyles = useMemo(
-    () =>
-      createDiffStyles(isMobile ? DIFF_STYLE_PRESETS.overlayMobile : DIFF_STYLE_PRESETS.overlay),
-    [isMobile],
-  );
 
   const renderContent = useSyntaxRenderer(filePath);
 
   const handleExpand = useCallback(() => {
-    openNodeExpand(
-      filePath?.split("/").pop() ?? "Diff",
-      <div className="h-full overflow-auto">
-        <ReactDiffViewer
-          oldValue={oldValue}
-          newValue={newValue}
-          splitView={splitView}
-          compareMethod={DiffMethod.LINES}
-          useDarkTheme={isDark}
-          styles={overlayStyles}
-          hideLineNumbers={false}
-          showDiffOnly
-          renderContent={renderContent}
-          {...(splitView && {
-            leftTitle: t("diffBefore", { defaultValue: "Before" }),
-            rightTitle: t("diffAfter", { defaultValue: "After" }),
-          })}
-        />
-      </div>,
-    );
-  }, [
-    openNodeExpand,
-    filePath,
-    oldValue,
-    newValue,
-    splitView,
-    isDark,
-    overlayStyles,
-    renderContent,
-    t,
-  ]);
+    // Reuse the same overlay channel as the git/file sidebar opens (openDiff → DiffOverlay),
+    // so the expanded diff occupies the chat panel area consistently.
+    useGitStore.setState({
+      currentDiff: {
+        filePath: filePath ?? "Diff",
+        diff: "",
+        oldContent: oldValue,
+        newContent: newValue,
+      },
+      loadingDiff: false,
+    });
+    openDiffOverlay();
+  }, [openDiffOverlay, filePath, oldValue, newValue]);
 
   const expandInToolbar = expandable && showToggle;
   const expandFloating = expandable && !showToggle;

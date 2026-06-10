@@ -8,6 +8,9 @@ export interface PendingChangeResult {
   timestamp: number;
   oldContent: string | null;
   newContent: string | null;
+  unifiedDiff?: string;
+  addedLines?: number;
+  deletedLines?: number;
 }
 
 export interface ChangeReviewMethods {

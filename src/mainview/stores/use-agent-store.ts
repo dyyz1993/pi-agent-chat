@@ -79,6 +79,7 @@ interface AgentState {
   allToolsBySession: Record<string, AgentToolInfo[]>;
   liveSystemPromptBySession: Record<string, string>;
   loadingDetail: boolean;
+  loadingSystemPrompt: Set<string>;
   setAgentForSession: (sessionId: string, name: string) => void;
   setAgents: (agents: AgentInfo[]) => void;
   setCurrentAgent: (sessionId: string, agentName: string) => void;
@@ -89,6 +90,7 @@ interface AgentState {
   fetchAllTools: (sessionId: string) => Promise<void>;
   fetchSystemPrompt: (sessionId: string) => Promise<void>;
   clearAgentDetail: (sessionId: string) => void;
+  clearSession: (sessionId: string) => void;
 }
 
 export type { AgentInfo, AgentSource, AgentDetail, AgentToolInfo, AgentHook };
@@ -112,6 +114,7 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
   allToolsBySession: {},
   liveSystemPromptBySession: {},
   loadingDetail: false,
+  loadingSystemPrompt: new Set<string>(),
   loaded: false,
 
   setAgentForSession: (sessionId, name) =>
@@ -260,7 +263,6 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
           [sessionId]: result.agent as AgentDetail,
         },
       }));
-      get().fetchSystemPrompt(sessionId);
     } catch (e) {
       log.warn("Failed to fetch agent detail", { sessionId, error: String(e) });
     } finally {
@@ -283,6 +285,9 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
   },
 
   fetchSystemPrompt: async (sessionId) => {
+    // Deduplicate: skip if already loading for this session
+    if (get().loadingSystemPrompt.has(sessionId)) return;
+    set((state) => ({ loadingSystemPrompt: new Set(state.loadingSystemPrompt).add(sessionId) }));
     try {
       const result = await apiClient.call("agent.getSystemPrompt", { sessionId });
       set((state) => ({
@@ -293,6 +298,12 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
       }));
     } catch (e) {
       log.warn("Failed to fetch system prompt", { sessionId, error: String(e) });
+    } finally {
+      set((state) => {
+        const next = new Set(state.loadingSystemPrompt);
+        next.delete(sessionId);
+        return { loadingSystemPrompt: next };
+      });
     }
   },
 
@@ -300,6 +311,23 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
     set((state) => {
       const { [sessionId]: _, ...rest } = state.agentDetailBySession;
       return { agentDetailBySession: rest };
+    });
+  },
+
+  clearSession: (sessionId) => {
+    set((state) => {
+      const { [sessionId]: _ad, ...restAgentDetail } = state.agentDetailBySession;
+      const { [sessionId]: _ca, ...restCurrentAgent } = state.currentAgentBySession;
+      const { [sessionId]: _sw, ...restSwitching } = state.switchingBySession;
+      const { [sessionId]: _at, ...restAllTools } = state.allToolsBySession;
+      const { [sessionId]: _sp, ...restSystemPrompt } = state.liveSystemPromptBySession;
+      return {
+        agentDetailBySession: restAgentDetail,
+        currentAgentBySession: restCurrentAgent,
+        switchingBySession: restSwitching,
+        allToolsBySession: restAllTools,
+        liveSystemPromptBySession: restSystemPrompt,
+      };
     });
   },
 

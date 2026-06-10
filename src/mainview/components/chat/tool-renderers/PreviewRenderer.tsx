@@ -44,7 +44,7 @@ export const PreviewRenderer = memo(function PreviewRenderer({
         <ToolCardHeader
           toolName="preview"
           status={isRunning ? "running" : isError ? "error" : "done"}
-          description={filePath ? formatFilePath(filePath) : block.args}
+          description={filePath ? formatFilePath(filePath) : block.args || block.toolName}
           mono
           rtl
           startedAt={block.startedAt}

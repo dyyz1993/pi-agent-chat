@@ -6,6 +6,8 @@ import { createLogger } from "../shared/lib/logger";
 
 const log = createLogger("gateway");
 
+const SLOW_RPC_THRESHOLD_MS = 1000;
+
 export interface WsHandlerDeps {
   config: { readonly port: number; readonly authToken: string; readonly maxUploadSize: number };
   /** 额外允许的 WebSocket token 集合（例如用户 token） */
@@ -61,6 +63,9 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
     log.info("Client connected", { total: clients.size + 1 });
     clients.add(ws);
 
+    // Track RPC timing: id → { method, startTime }
+    const rpcTimings = new Map<string, { method: string; startTime: number }>();
+
     const wsTransport = {
       send: async (message: unknown): Promise<void> => {
         if (ws.readyState !== WebSocket.OPEN) {
@@ -68,12 +73,38 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
         }
         const msg = message as Record<string, unknown>;
         // Log all outgoing messages (requests, responses, events)
-        log.info("[ws-out]", {
-          type: msg.type ?? "unknown",
-          method: msg.method,
-          event: msg.event,
-          id: msg.id,
-        });
+        if (msg.type === "response" && msg.id) {
+          const timing = rpcTimings.get(msg.id as string);
+          if (timing) {
+            const durationMs = Date.now() - timing.startTime;
+            rpcTimings.delete(msg.id as string);
+            if (durationMs >= SLOW_RPC_THRESHOLD_MS) {
+              log.warn("[ws-out] SLOW response", {
+                id: msg.id,
+                method: timing.method,
+                durationMs,
+              });
+            } else {
+              log.info("[ws-out]", {
+                type: msg.type,
+                id: msg.id,
+                method: timing.method,
+                durationMs,
+              });
+            }
+          } else {
+            log.info("[ws-out]", { type: msg.type, id: msg.id });
+          }
+        } else {
+          // Event messages are high-frequency.
+          // Use debug level to avoid excessive log disk IO; info for responses only.
+          log.debug("[ws-out]", {
+            type: msg.type ?? "unknown",
+            method: msg.method,
+            event: msg.event,
+            id: msg.id,
+          });
+        }
 
         return new Promise<void>((resolve, reject) => {
           try {
@@ -103,6 +134,13 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
         const listener = (data: Buffer) => {
           try {
             const msg = JSON.parse(data.toString()) as Record<string, unknown>;
+            // Track RPC request timing
+            if (msg.type === "request" && msg.id && msg.method) {
+              rpcTimings.set(msg.id as string, {
+                method: msg.method as string,
+                startTime: Date.now(),
+              });
+            }
             log.info("[ws-in]", {
               type: msg.type ?? "unknown",
               method: msg.method,

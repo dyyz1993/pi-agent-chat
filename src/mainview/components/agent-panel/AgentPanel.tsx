@@ -357,40 +357,49 @@ export function AgentPanel() {
     );
   }
 
-  if (!agent && !loadingDetail) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full gap-3 text-sm text-[var(--color-text-secondary)]">
-        <Bot className="w-8 h-8 opacity-30" />
-        <span>{currentAgentName ? `Loading "${currentAgentName}"...` : "No agent selected"}</span>
-        <button
-          onClick={handleRefresh}
-          className="text-xs text-[var(--color-accent)] hover:underline"
-        >
-          Refresh
-        </button>
-      </div>
-    );
-  }
-
-  if (loadingDetail && !agent) {
-    return (
-      <div className="flex items-center justify-center h-full text-sm text-[var(--color-text-secondary)]">
-        Loading agent details...
-      </div>
-    );
-  }
-
   if (!agent) {
+    // Even without agent detail, show the system prompt section
+    const livePrompt = liveSystemPromptBySession[sessionId];
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-3 text-sm text-[var(--color-text-secondary)]">
-        <Bot className="w-8 h-8 opacity-30" />
-        <span>No agent detail available</span>
-        <button
-          onClick={handleRefresh}
-          className="text-xs text-[var(--color-accent)] hover:underline"
-        >
-          Load
-        </button>
+      <div className="h-full overflow-y-auto">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--color-border-primary)]">
+          <div className="flex items-center gap-1.5 text-sm font-medium text-[var(--color-text-primary)]">
+            <Bot className="w-4 h-4" />
+            <span>Agent</span>
+            {currentAgentName && (
+              <span className="text-[var(--color-text-secondary)]">— {currentAgentName}</span>
+            )}
+          </div>
+          <button
+            onClick={handleRefresh}
+            className="text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
+          >
+            Refresh
+          </button>
+        </div>
+        <div className="p-3">
+          <Section title="Live System Prompt" icon={Eye} defaultOpen={true}>
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => fetchSystemPrompt(sessionId)}
+                  className="flex items-center gap-1 text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  <span>Refresh</span>
+                </button>
+              </div>
+              <pre className="text-xs text-[var(--color-text-secondary)] whitespace-pre-wrap break-words bg-[var(--color-bg-elevated)] rounded p-2 font-mono leading-relaxed max-h-[400px] overflow-y-auto">
+                {livePrompt || "Click refresh to load"}
+              </pre>
+            </div>
+          </Section>
+          {!loadingDetail && (
+            <div className="mt-4 text-center text-xs text-[var(--color-text-secondary)] opacity-60">
+              Agent detail not available
+            </div>
+          )}
+        </div>
       </div>
     );
   }

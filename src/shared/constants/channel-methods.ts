@@ -52,6 +52,11 @@ export const HOOKS_METHODS = {
   GET_LOG: "hooks.getLog",
   GET_CONFIG: "hooks.getConfig",
   CLEAR: "hooks.clear",
+  GET_STATUS: "hooks.getStatus",
+  SET_ENABLED: "hooks.setEnabled",
+  SKIP_RULE: "hooks.skipRule",
+  UNSKIP_RULE: "hooks.unskipRule",
+  GET_SKIPPED_RULES: "hooks.getSkippedRules",
 } as const;
 
 // ---- lsp channel ----
@@ -81,6 +86,10 @@ export const SUPERVISOR_METHODS = {
   ENABLE: "enable",
   GET_TASK_REPORT: "getTaskReport",
   CHECK_TOOL_STATUS: "checkToolStatus",
+  SET_GOAL: "setGoal",
+  CLEAR_GOAL: "clearGoal",
+  REFINE_GOAL: "refineGoal",
+  GET_TRIGGER_HISTORY: "getTriggerHistory",
 } as const;
 
 // ---- rules-engine channel ----
@@ -120,6 +129,7 @@ export const CHANNEL_METHOD_MAP: Readonly<Record<string, ReadonlySet<string>>> =
   "file-snapshot": new Set(Object.values(FILE_SNAPSHOT_METHODS)),
   "bash-ext": new Set(Object.values(BASH_METHODS)),
   "hooks-engine": new Set(Object.values(HOOKS_METHODS)),
+  hooks: new Set(Object.values(HOOKS_METHODS)),
   lsp: new Set(Object.values(LSP_METHODS)),
   memory: new Set(Object.values(MEMORY_METHODS)),
   supervisor: new Set(Object.values(SUPERVISOR_METHODS)),

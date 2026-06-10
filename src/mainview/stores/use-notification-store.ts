@@ -30,6 +30,13 @@ export const useNotificationStore = create<NotificationState>((set) => ({
   panelOpen: false,
 
   push(n) {
+    if (n.requestId) {
+      const existing = useNotificationStore
+        .getState()
+        .notifications.find((x) => x.requestId === n.requestId);
+      if (existing) return;
+    }
+
     const entry: AppNotification = {
       ...n,
       id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,

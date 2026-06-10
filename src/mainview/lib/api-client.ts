@@ -29,6 +29,29 @@ export function resolveAuthToken(): string {
   return "";
 }
 
+function isLoopbackHost(hostname: string): boolean {
+  return (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "0.0.0.0" ||
+    hostname === "::1" ||
+    hostname === "[::1]"
+  );
+}
+
+/**
+ * Check if a hostname is a private/LAN address (RFC 1918) or loopback.
+ * In DEV mode, these should all connect to the local backend at localhost:3100.
+ */
+function isPrivateOrLoopbackHost(hostname: string): boolean {
+  if (isLoopbackHost(hostname)) return true;
+  // IPv4 private ranges: 10.x.x.x, 172.16-31.x.x, 192.168.x.x
+  if (/^10\./.test(hostname)) return true;
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(hostname)) return true;
+  if (/^192\.168\./.test(hostname)) return true;
+  return false;
+}
+
 class APIClientImpl {
   private client: TypedClient<RPCMethods, RPCEvents> | null = null;
   private initPromise: Promise<void> | null = null;
@@ -242,6 +265,19 @@ class APIClientImpl {
       localStorage.getItem("rpc-websocket-url");
     if (customUrl) {
       return customUrl.includes("token=") ? customUrl : `${customUrl}?token=${token}`;
+    }
+
+    if (
+      import.meta.env.DEV &&
+      window.location.protocol === "http:" &&
+      isPrivateOrLoopbackHost(window.location.hostname) &&
+      window.location.port !== "3100"
+    ) {
+      // Loopback → localhost:3100; LAN IP → same host on port 3100
+      const wsHost = isLoopbackHost(window.location.hostname)
+        ? "localhost"
+        : window.location.hostname;
+      return `ws://${wsHost}:3100/ws?token=${token}`;
     }
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";

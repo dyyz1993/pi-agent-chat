@@ -16,6 +16,7 @@ import type {
   DataSizeSnapshot,
   DiagnosticSnapshot,
 } from "../../stores/use-diagnostic-store";
+import type { StartupPerfEvent } from "../../lib/startup-monitor";
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -219,6 +220,40 @@ function LeakDetector({ snap }: { snap: DiagnosticSnapshot }) {
   );
 }
 
+function StartupTimeline({ events }: { events: StartupPerfEvent[] }) {
+  if (events.length === 0) {
+    return <div className="text-[10px] text-text-tertiary px-1">No startup events yet</div>;
+  }
+
+  return (
+    <div className="space-y-0.5">
+      {events.map((event, index) => {
+        const tone =
+          event.kind === "error"
+            ? "text-status-error"
+            : event.kind === "done"
+              ? "text-status-success"
+              : "text-text-secondary";
+        return (
+          <div
+            key={`${event.traceId}-${event.phase}-${index}`}
+            className="grid grid-cols-[72px_minmax(0,1fr)_48px_48px] gap-1 text-[10px] items-center"
+          >
+            <span className="font-mono text-text-tertiary truncate" title={event.traceId}>
+              {event.traceId.slice(-6)}
+            </span>
+            <span className={`${tone} truncate`} title={`${event.name}:${event.phase}`}>
+              {event.name}:{event.phase}
+            </span>
+            <span className="font-mono text-right text-text-secondary">{event.elapsedMs}ms</span>
+            <span className="font-mono text-right text-text-tertiary">+{event.deltaMs}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function TrendChart({ history }: { history: DiagnosticSnapshot[] }) {
   if (history.length < 2) {
     return (
@@ -383,6 +418,12 @@ export function DiagnosticPanel() {
 
             <div className="px-3 py-2">
               <LeakDetector snap={snapshot} />
+            </div>
+
+            <div className="px-3 py-2">
+              <Section title="Startup Timeline">
+                <StartupTimeline events={snapshot.startupPerfEvents} />
+              </Section>
             </div>
 
             <div className="px-3 py-2">

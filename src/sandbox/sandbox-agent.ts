@@ -96,14 +96,21 @@ function startPi(): Promise<void> {
     });
 
     let buffer = "";
-    piProcess.stdout!.on("data", (data: Buffer) => {
+    const stdout = piProcess.stdout;
+    const stderr = piProcess.stderr;
+    if (!stdout || !stderr) {
+      clearTimeout(timeout);
+      reject(new Error("Failed to access pi process stdio"));
+      return;
+    }
+    stdout.on("data", (data: Buffer) => {
       buffer += data.toString();
       const lines = buffer.split("\n");
       buffer = lines.pop() ?? "";
       for (const line of lines) {
         if (!line.trim()) continue;
         try {
-          const msg = JSON.parse(line);
+          const msg = JSON.parse(line) as Record<string, unknown>;
           handlePiMessage(msg);
         } catch {
           /* skip malformed */
@@ -111,7 +118,7 @@ function startPi(): Promise<void> {
       }
     });
 
-    piProcess.stderr!.on("data", (data: Buffer) => process.stderr.write(data));
+    stderr.on("data", (data: Buffer) => process.stderr.write(data));
 
     piProcess.on("error", (err) => {
       clearTimeout(timeout);
@@ -136,7 +143,8 @@ function handlePiMessage(msg: Record<string, unknown>): void {
   }
 
   if (msg.type === "response" && msg.id && pendingRequests.has(String(msg.id))) {
-    const pending = pendingRequests.get(String(msg.id))!;
+    const pending = pendingRequests.get(String(msg.id));
+    if (!pending) return;
     pendingRequests.delete(String(msg.id));
     clearTimeout(pending.timer);
     if (msg.success === false) {
@@ -168,9 +176,7 @@ function sendToPi(command: Record<string, unknown>): Promise<unknown> {
       reject(new Error("pi process not running"));
       return;
     }
-    if (!command.id) {
-      command.id = `req_${++requestId}`;
-    }
+    command.id ??= `req_${++requestId}`;
     const id = String(command.id);
     const timer = setTimeout(() => {
       if (pendingRequests.has(id)) {
@@ -189,47 +195,6 @@ function writeToPi(message: Record<string, unknown>): void {
   }
   piProcess.stdin.write(JSON.stringify(message) + "\n");
 }
-
-const PARAM_NAMES: Record<string, string[]> = {
-  prompt: ["message", "images"],
-  steer: ["message", "images"],
-  follow_up: ["message", "images"],
-  set_model: ["provider", "modelId"],
-  set_thinking_level: ["level"],
-  bash: ["command"],
-  new_session: ["parentSession"],
-  switch_session: ["sessionPath"],
-  fork: ["entryId", "options"],
-  navigate_tree: ["targetId", "options"],
-  preview_rollback: ["targetId"],
-  set_session_name: ["name"],
-  get_full_messages: ["options"],
-  get_modified_files: ["options"],
-  get_file_diff: ["options"],
-  get_batch_diffs: ["options"],
-  get_file_history: ["options"],
-  set_auto_compaction: ["enabled"],
-  delete_entries: ["targetIds"],
-  summarize_entries: ["targetIds", "options"],
-  set_auto_retry: ["enabled"],
-  set_steering_mode: ["mode"],
-  set_follow_up_mode: ["mode"],
-  set_settings: ["settings", "scope"],
-  get_settings: ["scope"],
-  get_agent_detail: ["agentName"],
-  set_cwd: ["cwd"],
-  set_flag: ["name", "value"],
-  toggle_mcp_server: ["name", "enabled"],
-  restart_mcp_server: ["name"],
-  set_active_tools: ["toolNames"],
-  register_remote_tool: ["tool"],
-  unregister_remote_tool: ["name"],
-  send_remote_tool_result: ["toolCallId", "result"],
-  respond_ui: ["requestId", "response"],
-  wait_for_idle: ["timeout"],
-  collect_events: ["timeout"],
-  prompt_and_wait: ["message", "images", "timeout"],
-};
 
 // ─── HTTP Server ──────────────────────────────────────
 

@@ -13,18 +13,21 @@ import {
   AlertTriangle,
   GitFork,
   ClipboardCheck,
+  Check,
+  FolderOpen,
+  Sparkles,
+  Target,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import type { ImageContent } from "@dyyz1993/pi-ai";
 import { createLogger } from "../../../shared/lib/logger";
 import { useChatStore } from "../../stores/use-chat-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useNotificationStore } from "../../stores/use-notification-store";
 import { NotificationCenter } from "./NotificationCenter";
-import { UIPendingCenter } from "./UIPendingCenter";
-import { HookPermissionBanner } from "./HookPermissionBanner";
+import { ProjectRuntimePendingRequests, UIPendingCenter } from "./UIPendingCenter";
 import { useChangeReviewStore } from "../../stores/use-change-review-store";
 import { RetryNotification } from "./RetryNotification";
-import { InlineErrorToast } from "./InlineErrorToast";
 import { useSubagentStore } from "../../stores/use-subagent-store";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import { useChatNavStore } from "../../stores/use-chat-nav-store";
@@ -42,6 +45,7 @@ import { CommandPopup } from "./CommandPopup";
 import { useCommandPopup } from "../../hooks/use-command-popup";
 import { ScrollToolbar } from "./ScrollToolbar";
 import { QueueCards } from "./QueueCards";
+import { GoalActionCard } from "./GoalActionCard";
 import { MermaidFullscreen } from "./mermaid";
 import { RollbackOverlay } from "./RollbackOverlay";
 import { ForkDialog } from "./ForkDialog";
@@ -51,6 +55,7 @@ import { useForkDialogStore } from "../../stores/use-fork-dialog-store";
 import type { ChatMessage } from "../../types";
 import { useAgentStore } from "../../stores/use-agent-store";
 import { agentColorStyle } from "../../utils/agent-color";
+import { useSupervisorStore } from "../../stores/use-supervisor-store";
 
 const log = createLogger("chat");
 
@@ -66,6 +71,49 @@ function evictMsgIdsIfNeeded(): void {
 }
 
 const EMPTY_MSGS: never[] = [];
+
+function RefineGoalOverlay({ step }: { step: number }) {
+  const { t } = useTranslation("chat");
+  const steps = [
+    { label: t("goal.refineStep.gather"), icon: FolderOpen },
+    { label: t("goal.refineStep.llm"), icon: Sparkles },
+    { label: t("goal.refineStep.done"), icon: Check },
+  ];
+  return (
+    <div className="absolute inset-0 z-10 flex items-center justify-center gap-3 px-4 bg-bg-secondary/90 backdrop-blur-sm rounded">
+      <Loader2 className="w-4 h-4 text-semantic-accent animate-spin shrink-0" />
+      <div className="flex items-center gap-2 min-w-0 flex-1">
+        {steps.map((s, i) => {
+          const isActive = i + 1 === step;
+          const isDone = i + 1 < step;
+          const IconComp = s.icon;
+          return (
+            <div
+              key={i}
+              className={`flex items-center gap-1 text-[11px] whitespace-nowrap transition-colors ${
+                isDone
+                  ? "text-status-success"
+                  : isActive
+                    ? "text-semantic-accent font-medium"
+                    : "text-text-tertiary/50"
+              }`}
+            >
+              {i > 0 && <span className="text-text-tertiary/30 mx-0.5">›</span>}
+              {isDone ? (
+                <Check className="w-3 h-3" />
+              ) : isActive ? (
+                <IconComp className="w-3 h-3" />
+              ) : (
+                <span className="w-3 h-3 rounded-full border border-current opacity-30" />
+              )}
+              <span>{s.label}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export function ChatPanel() {
   const { t } = useTranslation("chat");
@@ -108,6 +156,9 @@ export function ChatPanel() {
   const sessionReady = useSessionStore(
     useCallback((s) => !!activeSessionId && s.sessionReady[activeSessionId], [activeSessionId]),
   );
+  const agentReady = useSessionStore(
+    useCallback((s) => !!activeSessionId && !!s.agentReady[activeSessionId], [activeSessionId]),
+  );
 
   const hasMoreMessages = useChatStore(
     useCallback(
@@ -123,6 +174,7 @@ export function ChatPanel() {
   );
   const loadMoreMessages = useChatStore((s) => s.loadMoreMessages);
   const inputText = useChatStore((s) => s.inputText);
+  const setInputText = useChatStore((s) => s.setInputText);
   const sendMessage = useChatStore((s) => s.sendMessage);
   const sendSteer = useChatStore((s) => s.sendSteer);
   const sendFollowUp = useChatStore((s) => s.sendFollowUp);
@@ -152,17 +204,49 @@ export function ChatPanel() {
   const breakpoint = useLayoutStore((s) => s.breakpoint);
   const isMobileOrTablet = breakpoint === "mobile" || breakpoint === "tablet";
   const commandPopup = useCommandPopup();
+  const setGoal = useSupervisorStore((s) => s.setGoal);
+  const refineGoal = useSupervisorStore((s) => s.refineGoal);
 
-  const streamVersion = useChatStore((s) => s.streamContentVersion);
-  const historyLoadVersion = useChatStore((s) => s.historyLoadVersion);
+  const streamVersion = useChatStore(
+    useCallback(
+      (s) => (activeSessionId ? (s.streamVersionBySession[activeSessionId] ?? 0) : 0),
+      [activeSessionId],
+    ),
+  );
+  const historyLoadVersion = useChatStore(
+    useCallback(
+      (s) => (activeSessionId ? (s.historyLoadVersionBySession?.[activeSessionId] ?? 0) : 0),
+      [activeSessionId],
+    ),
+  );
+  const messageHydration = useChatStore(
+    useCallback(
+      (s) =>
+        activeSessionId ? (s.messageHydrationBySession?.[activeSessionId] ?? "idle") : "idle",
+      [activeSessionId],
+    ),
+  );
+  const initialScrollReady =
+    isViewingSubagent ||
+    !activeSessionId ||
+    messageHydration === "ready" ||
+    messageHydration === "error";
 
-  const agentDetailBySession = useAgentStore((s) => s.agentDetailBySession);
-  const agentBorderColor = activeSessionId
-    ? agentColorStyle(agentDetailBySession[activeSessionId]?.color)
-    : null;
+  const agentColor = useAgentStore(
+    useCallback(
+      (s) => (activeSessionId ? s.agentDetailBySession[activeSessionId]?.color : undefined),
+      [activeSessionId],
+    ),
+  );
+  const agentBorderColor = agentColor ? agentColorStyle(agentColor) : null;
 
   const pushNotif = useNotificationStore((s) => s.push);
   const [isAborting, setIsAborting] = useState(false);
+  const [goalMode, setGoalMode] = useState(false);
+  const [isCreatingGoal, setIsCreatingGoal] = useState(false);
+  const [isRefiningGoal, setIsRefiningGoal] = useState(false);
+  const [refineStep, setRefineStep] = useState(0); // 0=idle, 1=gathering, 2=calling LLM, 3=done
+  const preGoalInputRef = useRef("");
   const abortFallbackRef = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
@@ -181,7 +265,13 @@ export function ChatPanel() {
     if (isAborting) return;
     setIsAborting(true);
     try {
-      await apiClient.call("agent.abort", { sessionId: activeSessionId });
+      const result = await apiClient.call("agent.abort", { sessionId: activeSessionId });
+      if (!result.ok) {
+        useSessionStore.getState().updateSessionStatus(activeSessionId, "idle");
+        pushNotif({ message: "Agent already stopped", level: "info" });
+        setIsAborting(false);
+        return;
+      }
       pushNotif({ message: "Agent stopped", level: "info" });
       abortFallbackRef.current = setTimeout(() => {
         abortFallbackRef.current = undefined;
@@ -189,7 +279,7 @@ export function ChatPanel() {
         const status = useSessionStore.getState().sessionStatusMap[sessionId];
         if (status === "streaming" || status === "retrying") {
           useSessionStore.getState().updateSessionStatus(sessionId, "idle");
-          pushNotif({ message: "Session recovered after abort timeout", level: "warning" });
+          log.warn("Abort fallback forced session idle", { sessionId, status });
         }
         setIsAborting(false);
       }, 10000);
@@ -225,10 +315,12 @@ export function ChatPanel() {
   const lastSetNavIdRef = useRef<string | null>(null);
   const navScrollingRef = useRef(false);
   const navScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initDoneRef = useRef(false);
 
   useEffect(() => {
     lastSetNavIdRef.current = null;
     navScrollingRef.current = false;
+    initDoneRef.current = false;
     if (navScrollTimerRef.current) {
       clearTimeout(navScrollTimerRef.current);
       navScrollTimerRef.current = null;
@@ -256,10 +348,12 @@ export function ChatPanel() {
         lastSetNavIdRef.current = lastIconId;
         setNavId(lastIconId);
       }
+      initDoneRef.current = true;
     }, [setNavId]),
     setActive: useCallback(
       (id: string | null) => {
         setActive(id);
+        if (!initDoneRef.current) return;
         if (navScrollingRef.current) return;
         if (id && id !== lastSetNavIdRef.current) {
           lastSetNavIdRef.current = id;
@@ -270,6 +364,7 @@ export function ChatPanel() {
     ),
     streamVersion,
     historyLoadVersion,
+    initialScrollReady,
   });
 
   const wrappedHandleScrollEnd = useCallback(() => {
@@ -343,10 +438,6 @@ export function ChatPanel() {
   );
 
   const handleSend = async () => {
-    if (!sessionReady) {
-      pushNotif({ message: "Session not ready, please wait", level: "warning" });
-      return;
-    }
     if (!inputText.trim() && useAttachmentStore.getState().attachments.length === 0) return;
 
     const attachmentStore = useAttachmentStore.getState();
@@ -357,7 +448,7 @@ export function ChatPanel() {
       const imageAttachments = attachments.filter((a) => a.type.startsWith("image/"));
       const fileAttachments = attachments.filter((a) => !a.type.startsWith("image/"));
 
-      const images: import("@dyyz1993/pi-ai").ImageContent[] = [];
+      const images: ImageContent[] = [];
       for (const att of imageAttachments) {
         try {
           const arrayBuffer = await att.file.arrayBuffer();
@@ -412,6 +503,71 @@ export function ChatPanel() {
       inputBarRef.current?.blur();
     }
   };
+
+  const startGoalMode = useCallback(
+    (objective?: string) => {
+      if (isViewingSubagent) return;
+      if (goalMode) {
+        // Toggle off: exit goal mode
+        setGoalMode(false);
+        setInputText(preGoalInputRef.current);
+        preGoalInputRef.current = "";
+        return;
+      }
+      preGoalInputRef.current = inputText;
+      setInputText(objective ?? inputText);
+      setGoalMode(true);
+      commandPopup.closePopup();
+      requestAnimationFrame(() => inputBarRef.current?.focus?.());
+    },
+    [commandPopup, goalMode, inputText, isViewingSubagent, setInputText],
+  );
+
+  const handleCreateGoal = useCallback(async () => {
+    const objective = inputText.trim();
+    if (!activeSessionId || !objective || isCreatingGoal) return;
+    setIsCreatingGoal(true);
+    try {
+      await setGoal(activeSessionId, objective);
+      setInputText("");
+      setGoalMode(false);
+      preGoalInputRef.current = "";
+      resumeAutoScroll();
+      if (isMobileOrTablet) {
+        inputBarRef.current?.blur();
+      }
+    } finally {
+      setIsCreatingGoal(false);
+    }
+  }, [
+    activeSessionId,
+    inputText,
+    isCreatingGoal,
+    isMobileOrTablet,
+    resumeAutoScroll,
+    setGoal,
+  ]);
+
+  const handleRefineGoal = useCallback(async () => {
+    const objective = inputText.trim();
+    if (!activeSessionId || !objective || isRefiningGoal) return;
+    setIsRefiningGoal(true);
+    setRefineStep(1);
+    // Simulate the gathering step visible to user, then call LLM
+    await new Promise((r) => setTimeout(r, 300));
+    setRefineStep(2);
+    try {
+      const result = await refineGoal(activeSessionId, objective);
+      if (result.success && result.objective) {
+        setInputText(result.objective);
+      }
+      setRefineStep(3);
+      await new Promise((r) => setTimeout(r, 600));
+    } finally {
+      setIsRefiningGoal(false);
+      setRefineStep(0);
+    }
+  }, [activeSessionId, inputText, isRefiningGoal, refineGoal, setInputText]);
 
   const handleFollowUp = async () => {
     if (!inputText.trim() || !isStreaming) return;
@@ -517,7 +673,6 @@ export function ChatPanel() {
       </div>
 
       <RetryNotification />
-      <InlineErrorToast />
 
       <div className="flex-1 flex overflow-hidden">
         <div className="flex-1 min-w-0 flex flex-col">
@@ -564,7 +719,13 @@ export function ChatPanel() {
               />
             )}
           </div>
-          {activeSessionId && !isViewingSubagent && <QueueCards sessionId={activeSessionId} />}
+          {activeSessionId && !isViewingSubagent && (
+            <>
+              {!goalMode && <GoalActionCard sessionId={activeSessionId} onEdit={startGoalMode} />}
+              <QueueCards sessionId={activeSessionId} />
+              <ProjectRuntimePendingRequests activeSessionId={activeSessionId} />
+            </>
+          )}
         </div>
         <div className="w-12 shrink-0 overflow-hidden">
           <SideNav ref={sideNavRef} messages={messages} onNavDotClick={handleNavDotClick} />
@@ -579,11 +740,7 @@ export function ChatPanel() {
         }}
       />
 
-      {!isViewingSubagent && <QuickActionToolbar />}
-
-      {activeSessionId && !isViewingSubagent && (
-				<HookPermissionBanner sessionId={activeSessionId} />
-			)}
+      {!isViewingSubagent && <QuickActionToolbar onGoalClick={() => startGoalMode()} />}
 
       <div
         className={`px-3 pt-2 pb-1.5 flex-shrink-0 bg-bg-secondary border-t border-border-primary relative ${isDragOver ? "ring-2 ring-semantic-accent/50 bg-semantic-accent/5" : ""}`}
@@ -593,104 +750,149 @@ export function ChatPanel() {
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        {!isViewingSubagent && (
-          <>
-            {!sessionReady && !projectFailed ? (
-              <div className="flex-1 flex items-center justify-center gap-2 py-2">
-                <Loader2 className="w-3.5 h-3.5 text-text-tertiary animate-spin" />
-                <span className="text-xs text-text-tertiary">{t("sessionStarting")}</span>
-              </div>
-            ) : (
-              <>
-                <AttachmentBar />
-                <div className="flex items-stretch gap-1.5">
-                  {!isMobileOrTablet && <AttachmentButtons />}
-
-                  <InputBar
-                    ref={inputBarRef}
-                    onSend={handleSend}
-                    sessionId={activeSessionId ?? ""}
-                    disabled={!sessionReady}
-                    onTriggerPopup={!isMobileOrTablet ? commandPopup.openPopup : undefined}
-                    popupOpen={!isMobileOrTablet && !!commandPopup.popupMode}
-                    onPopupConfirm={commandPopup.confirmSelection}
-                    onPopupCancel={commandPopup.closePopup}
-                    onPopupArrowUp={commandPopup.navigateUp}
-                    onPopupArrowDown={commandPopup.navigateDown}
-                  />
-
-                  <div className="flex flex-col gap-1.5 shrink-0 justify-between py-1">
-                    {isStreaming && inputText.trim() ? (
-                      <button
-                        onClick={handleFollowUp}
-                        className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-status-info text-white hover:bg-status-info shadow-sm shadow-status-info/20"
-                        title={t("sendFollowUp")}
-                        aria-label={t("sendFollowUp")}
-                      >
-                        <Clock className="w-4 h-4" />
-                      </button>
-                    ) : isStreaming ? (
-                      <button
-                        onClick={handleAbort}
-                        disabled={isAborting}
-                        className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${isAborting ? "bg-status-error/40 text-white/70 cursor-wait" : "bg-status-error text-white hover:bg-status-error active:scale-90"}`}
-                        title={isAborting ? t("stopping") : t("stop")}
-                        aria-label={isAborting ? t("stopping") : t("stop")}
-                      >
-                        {isAborting ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Square className="w-4 h-4" />
-                        )}
-                      </button>
-                    ) : (
-                      <button
-                        disabled
-                        className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-status-error/30 text-status-error/50 cursor-not-allowed"
-                        title={t("stop")}
-                        aria-label={t("stop")}
-                      >
-                        <Square className="w-4 h-4" />
-                      </button>
-                    )}
-                    <button
-                      onClick={() => inputBarRef.current?.send()}
-                      disabled={
-                        isAborting ||
-                        isPermissionPending ||
-                        (!inputText.trim() &&
-                          useAttachmentStore.getState().attachments.length === 0) ||
-                        !sessionReady ||
-                        hasNoModel
-                      }
-                      className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${!isAborting && (inputText.trim() || useAttachmentStore.getState().attachments.length > 0) && sessionReady && !hasNoModel ? (isStreaming ? "bg-status-warning text-white hover:bg-status-warning shadow-sm shadow-status-warning/20" : "bg-semantic-accent text-white hover:bg-semantic-accent shadow-sm shadow-semantic-accent/20") : "bg-surface-dim text-text-tertiary cursor-not-allowed"}`}
-                      title={
-                        isPermissionPending
-                          ? t("waitPermission")
-                          : hasNoModel
-                            ? t("sendDisabledNoModel")
-                            : isStreaming
-                              ? t("steer")
-                              : t("send")
-                      }
-                      aria-label={
-                        isPermissionPending
-                          ? t("waitPermission")
-                          : hasNoModel
-                            ? t("sendDisabledNoModel")
-                            : isStreaming
-                              ? t("steer")
-                              : t("send")
-                      }
-                    >
-                      {isStreaming ? <Zap className="w-4 h-4" /> : <ArrowUp className="w-4 h-4" />}
-                    </button>
-                  </div>
+        {!isViewingSubagent ? (
+          (!sessionReady || !agentReady) && !projectFailed ? (
+            <div className="flex-1 flex items-center justify-center gap-2 py-2">
+              <Loader2 className="w-3.5 h-3.5 text-text-tertiary animate-spin" />
+              <span className="text-xs text-text-tertiary">{t("sessionStarting")}</span>
+            </div>
+          ) : (
+            <>
+              {goalMode && !isRefiningGoal && (
+                <div className="flex items-center gap-2 px-1 pb-1 text-xs text-semantic-accent">
+                  <Target className="w-3.5 h-3.5" />
+                  <span>{t("goal.composerMode")}</span>
                 </div>
-              </>
-            )}
-          </>
-        )}
+              )}
+              {!goalMode && <AttachmentBar />}
+              <div className="flex items-stretch gap-1.5">
+                {!isMobileOrTablet && <AttachmentButtons onGoalClick={() => startGoalMode()} />}
+
+                <div className="relative flex-1">
+                  {isRefiningGoal && (
+                    <RefineGoalOverlay step={refineStep} />
+                  )}
+                  <InputBar
+                  ref={inputBarRef}
+                  onSend={goalMode ? handleCreateGoal : handleSend}
+                  sessionId={activeSessionId ?? ""}
+                  disabled={!activeSessionId || isCreatingGoal}
+                  placeholder={goalMode ? t("goal.inputPlaceholder") : undefined}
+                  historyEnabled={!goalMode}
+                  onTriggerPopup={
+                    !goalMode && !isMobileOrTablet ? commandPopup.openPopup : undefined
+                  }
+                  popupOpen={!goalMode && !isMobileOrTablet && !!commandPopup.popupMode}
+                  onPopupConfirm={commandPopup.confirmSelection}
+                  onPopupCancel={commandPopup.closePopup}
+                  onPopupArrowUp={commandPopup.navigateUp}
+                  onPopupArrowDown={commandPopup.navigateDown}
+                />
+                </div>
+
+                <div className="flex flex-col gap-1.5 shrink-0 justify-between py-1">
+                  {goalMode ? (
+                    <button
+                      onClick={() => void handleRefineGoal()}
+                      disabled={isCreatingGoal || isRefiningGoal || !inputText.trim()}
+                      className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${isRefiningGoal ? "bg-semantic-accent/20 text-semantic-accent" : "bg-surface-dim text-text-secondary hover:bg-surface-hover hover:text-semantic-accent"} disabled:opacity-50 disabled:cursor-not-allowed`}
+                      title={t("goal.refine")}
+                      aria-label={t("goal.refine")}
+                    >
+                      {isRefiningGoal ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="w-4 h-4" />
+                      )}
+                    </button>
+                  ) : isStreaming && inputText.trim() ? (
+                    <button
+                      onClick={handleFollowUp}
+                      className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-status-info text-white hover:bg-status-info shadow-sm shadow-status-info/20"
+                      title={t("sendFollowUp")}
+                      aria-label={t("sendFollowUp")}
+                    >
+                      <Clock className="w-4 h-4" />
+                    </button>
+                  ) : isStreaming ? (
+                    <button
+                      onClick={handleAbort}
+                      disabled={isAborting}
+                      className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${isAborting ? "bg-status-error/40 text-white/70 cursor-wait" : "bg-status-error text-white hover:bg-status-error active:scale-90"}`}
+                      title={isAborting ? t("stopping") : t("stop")}
+                      aria-label={isAborting ? t("stopping") : t("stop")}
+                    >
+                      {isAborting ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Square className="w-4 h-4" />
+                      )}
+                    </button>
+                  ) : (
+                    <button
+                      disabled
+                      className="p-2.5 rounded-lg transition-colors flex items-center justify-center bg-status-error/30 text-status-error/50 cursor-not-allowed"
+                      title={t("stop")}
+                      aria-label={t("stop")}
+                    >
+                      <Square className="w-4 h-4" />
+                    </button>
+                  )}
+                  <button
+                    onClick={() =>
+                      goalMode ? void handleCreateGoal() : inputBarRef.current?.send()
+                    }
+                    disabled={
+                      !agentReady ||
+                      isAborting ||
+                      isCreatingGoal ||
+                      isPermissionPending ||
+                      (goalMode
+                        ? !inputText.trim()
+                        : !inputText.trim() &&
+                          useAttachmentStore.getState().attachments.length === 0) ||
+                      !activeSessionId ||
+                      hasNoModel
+                    }
+                    className={`p-2.5 rounded-lg transition-colors flex items-center justify-center ${!isAborting && !isCreatingGoal && (inputText.trim() || (!goalMode && useAttachmentStore.getState().attachments.length > 0)) && activeSessionId && !hasNoModel ? (goalMode ? "bg-semantic-accent text-white hover:bg-semantic-accent shadow-sm shadow-semantic-accent/20" : isStreaming ? "bg-status-warning text-white hover:bg-status-warning shadow-sm shadow-status-warning/20" : "bg-semantic-accent text-white hover:bg-semantic-accent shadow-sm shadow-semantic-accent/20") : "bg-surface-dim text-text-tertiary cursor-not-allowed"}`}
+                    title={
+                      isPermissionPending
+                        ? t("waitPermission")
+                        : hasNoModel
+                          ? t("sendDisabledNoModel")
+                          : goalMode
+                            ? t("goal.create")
+                            : isStreaming
+                              ? t("steer")
+                              : t("send")
+                    }
+                    aria-label={
+                      isPermissionPending
+                        ? t("waitPermission")
+                        : hasNoModel
+                          ? t("sendDisabledNoModel")
+                          : goalMode
+                            ? t("goal.create")
+                            : isStreaming
+                              ? t("steer")
+                              : t("send")
+                    }
+                  >
+                    {isCreatingGoal ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : goalMode ? (
+                      <Target className="w-4 h-4" />
+                    ) : isStreaming ? (
+                      <Zap className="w-4 h-4" />
+                    ) : (
+                      <ArrowUp className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+              </div>
+            </>
+          )
+        ) : null}
         {isViewingSubagent && (
           <div className="flex-1 flex items-center justify-center gap-3 py-2">
             <span className="text-[11px] text-text-tertiary">{t("subagentReadonly")}</span>
@@ -824,10 +1026,7 @@ function ChangeReviewBell() {
       onClick={(e) => {
         e.stopPropagation();
         const layout = useLayoutStore.getState();
-        layout.setActivePanelTab("changeReview");
-        if (layout.statusPanel === "hidden") {
-          layout.showStatus();
-        }
+        layout.openStatusPanel("changeReview");
         fetchPending();
       }}
       className="p-1 rounded transition-colors text-text-tertiary dark:text-text-secondary hover:text-text-primary dark:hover:text-text-secondary relative"

@@ -19,6 +19,8 @@
   "collapseToolCardsDesc": "Tool cards (Bash, etc.) default to collapsed title bar; click to expand details",
   "showTimeline": "Show Timeline",
   "showTimelineDesc": "Display activity timeline in the message area",
+  "showMemoryEntries": "Show Memory Cards",
+  "showMemoryEntriesDesc": "Display memory search, save, and organize processes in chat (for debugging)",
   "reset": "Reset to Defaults",
   "retryTitle": "Auto Retry",
   "retryEnabled": "Enable Auto Retry",

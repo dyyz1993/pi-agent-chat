@@ -3,6 +3,7 @@ import type {
   SupervisorStatus,
   SupervisorChannelEvent,
   TaskReport,
+  TriggerRecord,
 } from "../../shared/modules/supervisor";
 import { apiClient } from "../lib/api-client";
 import { createLogger } from "../../shared/lib/logger";
@@ -12,18 +13,23 @@ const log = createLogger("supervisor");
 export interface SupervisorSessionState {
   status: SupervisorStatus | null;
   taskReports: TaskReport[];
+  triggerRecords: TriggerRecord[];
 }
 
 interface SupervisorState {
   bySession: Record<string, SupervisorSessionState>;
 
   fetchStatus: (sessionId: string) => Promise<void>;
+  setGoal: (sessionId: string, objective: string) => Promise<void>;
+  clearGoal: (sessionId: string, reason?: string) => Promise<void>;
+  refineGoal: (sessionId: string, objective: string) => Promise<{ success: boolean; objective?: string; error?: string }>;
   forceContinue: (sessionId: string, reason?: string) => Promise<void>;
   requestPause: (sessionId: string, delayMs?: number, reason?: string) => Promise<void>;
   cancelPause: (sessionId: string) => Promise<void>;
   enable: (sessionId: string) => Promise<void>;
   disable: (sessionId: string) => Promise<void>;
   fetchTaskReport: (sessionId: string) => Promise<void>;
+  fetchTriggerHistory: (sessionId: string, limit?: number) => Promise<void>;
   handleEvent: (sessionId: string, event: SupervisorChannelEvent) => void;
   clearSession: (sessionId: string) => void;
 }
@@ -31,6 +37,7 @@ interface SupervisorState {
 const emptySession = (): SupervisorSessionState => ({
   status: null,
   taskReports: [],
+  triggerRecords: [],
 });
 
 function updateSession(
@@ -61,6 +68,77 @@ export const useSupervisorStore = create<SupervisorState>()((set) => ({
         sessionId,
         err: err instanceof Error ? err.message : String(err),
       });
+    }
+  },
+
+  setGoal: async (sessionId: string, objective: string) => {
+    try {
+      const result = (await apiClient.call("supervisor.setGoal", {
+        sessionId,
+        objective,
+      })) as { goal: SupervisorStatus["goal"] };
+      set((s) => ({
+        bySession: updateSession(s.bySession, sessionId, (session) => ({
+          ...session,
+          status: session.status
+            ? { ...session.status, goal: result.goal }
+            : {
+                enabled: true,
+                state: "idle" as const,
+                continueCount: 0,
+                maxContinueCount: 0,
+                activeGuards: [],
+                goal: result.goal,
+              },
+        })),
+      }));
+    } catch (err) {
+      log.warn("setGoal failed", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+  },
+
+  clearGoal: async (sessionId: string, reason?: string) => {
+    try {
+      await apiClient.call("supervisor.clearGoal", { sessionId, reason });
+      set((s) => ({
+        bySession: updateSession(s.bySession, sessionId, (session) => ({
+          ...session,
+          status: session.status
+            ? { ...session.status, goal: undefined, lastGoldResult: undefined }
+            : session.status,
+        })),
+      }));
+    } catch (err) {
+      log.warn("clearGoal failed", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+  },
+
+  refineGoal: async (sessionId: string, objective: string): Promise<{ success: boolean; objective?: string; error?: string }> => {
+    try {
+      const result = (await apiClient.call("supervisor.refineGoal", {
+        sessionId,
+        objective,
+      })) as { success: boolean; objective?: string; error?: string };
+
+      if (!result.success) {
+        log.warn("refineGoal returned error", {
+          sessionId,
+          error: result.error,
+        });
+      }
+      return result;
+    } catch (err) {
+      log.warn("refineGoal failed", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
     }
   },
 
@@ -174,6 +252,26 @@ export const useSupervisorStore = create<SupervisorState>()((set) => ({
     }
   },
 
+  fetchTriggerHistory: async (sessionId: string, limit?: number) => {
+    try {
+      const result = (await apiClient.call("supervisor.getTriggerHistory", {
+        sessionId,
+        limit,
+      })) as { triggers: TriggerRecord[] };
+      set((s) => ({
+        bySession: updateSession(s.bySession, sessionId, (session) => ({
+          ...session,
+          triggerRecords: result.triggers,
+        })),
+      }));
+    } catch (err) {
+      log.warn("fetchTriggerHistory failed", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+  },
+
   handleEvent: (sessionId: string, event: SupervisorChannelEvent) => {
     switch (event.type) {
       case "statusChanged":
@@ -239,6 +337,50 @@ export const useSupervisorStore = create<SupervisorState>()((set) => ({
           bySession: updateSession(s.bySession, sessionId, (session) => ({
             ...session,
             taskReports: event.tasks,
+          })),
+        }));
+        break;
+      case "goalChanged":
+        set((s) => ({
+          bySession: updateSession(s.bySession, sessionId, (session) => ({
+            ...session,
+            status: session.status
+              ? { ...session.status, goal: event.goal }
+              : event.goal
+                ? {
+                    enabled: true,
+                    state: "idle" as const,
+                    continueCount: 0,
+                    maxContinueCount: 0,
+                    activeGuards: [],
+                    goal: event.goal,
+                  }
+                : null,
+          })),
+        }));
+        break;
+      case "goldResult":
+        set((s) => ({
+          bySession: updateSession(s.bySession, sessionId, (session) => ({
+            ...session,
+            status: session.status
+              ? { ...session.status, lastGoldResult: event }
+              : {
+                  enabled: true,
+                  state: "idle" as const,
+                  continueCount: 0,
+                  maxContinueCount: 0,
+                  activeGuards: [],
+                  lastGoldResult: event,
+                },
+          })),
+        }));
+        break;
+      case "triggerRecord":
+        set((s) => ({
+          bySession: updateSession(s.bySession, sessionId, (session) => ({
+            ...session,
+            triggerRecords: [...session.triggerRecords, event.record],
           })),
         }));
         break;

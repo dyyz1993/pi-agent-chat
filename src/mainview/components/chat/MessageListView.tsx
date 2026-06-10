@@ -8,17 +8,45 @@ import { ALL_MEMORY_TYPE_KEYS } from "./memory-config";
 import { useChatStore } from "../../stores/use-chat-store";
 import { useSubagentStore } from "../../stores/use-subagent-store";
 import { useSessionStore } from "../../stores/use-session-store";
-import { createLogger } from "../../../shared/lib/logger";
-
-const renderLog = createLogger("render-cache");
+import { useSettingsStore } from "../../stores/use-settings-store";
 
 const EMPTY_MSGS: ChatMessage[] = [];
 
 const MAX_CACHE_SIZE = 10;
 
 interface CacheEntry<T> {
-  ref: ChatMessage[];
+  revision: string;
   result: T;
+}
+
+/**
+ * Lightweight structural revision key for message arrays.
+ * Captures message count + last message id/content-length to detect
+ * changes that would affect cardMeta/processedMessages caches.
+ *
+ * IMPORTANT: sums ALL blocks' content sizes, not just the last block.
+ * During parallel tool execution, multiple blocks grow simultaneously
+ * (e.g. two bash commands streaming output). If we only checked the
+ * last block, updates to earlier blocks would be invisible (cache hit
+ * with stale data → "waiting" shown forever).
+ */
+export function computeMessagesRevision(messages: ChatMessage[]): string {
+  const n = messages.length;
+  if (n === 0) return "0";
+  let streamingCount = 0;
+  const last = messages[n - 1];
+  const blocks = last.content;
+  let totalSize = 0;
+  for (let i = 0; i < n; i++) {
+    if (messages[i].isStreaming) streamingCount++;
+  }
+  if (blocks.length === 0) return `${n}:${last.id}:0:${streamingCount}`;
+  for (const block of blocks) {
+    if (block.type === "text") totalSize += block.text.length;
+    else if (block.type === "thinking") totalSize += block.thinking.length;
+    else if (block.type === "toolExecution") totalSize += (block.output ?? "").length;
+  }
+  return `${n}:${last.id}:${blocks.length}:${totalSize}:${streamingCount}`;
 }
 
 const _processedMessagesCache = new Map<string, CacheEntry<ProcessedMessage[]>>();
@@ -71,31 +99,17 @@ interface ProcessedMessage {
   hide?: boolean;
 }
 
-function buildProcessedMessages(messages: ChatMessage[]): ProcessedMessage[] {
+export function buildProcessedMessages(
+  messages: ChatMessage[],
+  showMemoryEntries: boolean,
+): ProcessedMessage[] {
   const result: ProcessedMessage[] = [];
-  const hideIds = new Set<string>();
 
-  for (let i = 0; i < messages.length; i++) {
-    const msg = messages[i];
-    if (hideIds.has(msg.id)) continue;
-
+  for (const msg of messages) {
     const customBlock = msg.content.find(
       (b): b is Extract<(typeof msg)["content"][number], { type: "custom" }> => b.type === "custom",
     );
-    if (customBlock?.customType === "memory_prefetch") {
-      if (i + 1 < messages.length) {
-        const nextMsg = messages[i + 1];
-        const nextBlock = nextMsg.content.find(
-          (b): b is Extract<(typeof nextMsg)["content"][number], { type: "custom" }> =>
-            b.type === "custom",
-        );
-        if (nextBlock?.customType === "memory_prefetch_result") {
-          result.push({ msg, mergedResultData: nextBlock.data });
-          hideIds.add(nextMsg.id);
-          continue;
-        }
-      }
-      result.push({ msg });
+    if (customBlock && ALL_MEMORY_TYPE_KEYS.has(customBlock.customType) && !showMemoryEntries) {
       continue;
     }
 
@@ -177,41 +191,32 @@ export const MessageListView = memo(function MessageListView({
 }: MessageListViewProps) {
   const messages = useStableMessages(source);
   const { t } = useTranslation("chat");
+  const showMemoryEntries = useSettingsStore((s) => s.showMemoryEntries);
+
   const cardMeta = useMemo(() => {
     if (!activeSessionId) return buildCardMeta(messages, t);
+    const revision = computeMessagesRevision(messages);
     const cached = _cardMetaCache.get(activeSessionId);
-    if (cached && cached.ref === messages) {
-      renderLog.info("cache HIT (cardMeta)", {
-        sessionId: activeSessionId,
-        count: messages.length,
-      });
+    if (cached && cached.revision === revision) {
       return cached.result;
     }
-    renderLog.info("cache MISS (cardMeta)", { sessionId: activeSessionId, count: messages.length });
     const result = buildCardMeta(messages, t);
-    _cardMetaCache.set(activeSessionId, { ref: messages, result });
+    _cardMetaCache.set(activeSessionId, { revision, result });
     evictIfNeeded(_cardMetaCache);
     return result;
   }, [messages, t, activeSessionId]);
   const processedMessages = useMemo(() => {
-    if (!activeSessionId) return buildProcessedMessages(messages);
+    if (!activeSessionId) return buildProcessedMessages(messages, showMemoryEntries);
+    const revision = computeMessagesRevision(messages);
     const cached = _processedMessagesCache.get(activeSessionId);
-    if (cached && cached.ref === messages) {
-      renderLog.info("cache HIT (processedMessages)", {
-        sessionId: activeSessionId,
-        count: messages.length,
-      });
+    if (cached && cached.revision === revision) {
       return cached.result;
     }
-    renderLog.info("cache MISS (processedMessages)", {
-      sessionId: activeSessionId,
-      count: messages.length,
-    });
-    const result = buildProcessedMessages(messages);
-    _processedMessagesCache.set(activeSessionId, { ref: messages, result });
+    const result = buildProcessedMessages(messages, showMemoryEntries);
+    _processedMessagesCache.set(activeSessionId, { revision, result });
     evictIfNeeded(_processedMessagesCache);
     return result;
-  }, [messages, activeSessionId]);
+  }, [messages, activeSessionId, showMemoryEntries]);
 
   if (messages.length === 0 && scrollRef) {
     return (

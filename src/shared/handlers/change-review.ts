@@ -2,32 +2,18 @@ import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { HandlerOptions, R } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
 import { createLogger } from "../lib/logger";
+import { withTimeout } from "../lib/with-timeout";
 import { getProcessManager } from "./agent";
 import { FILE_REVIEW_METHODS } from "../constants/channel-methods";
-import { existsSync } from "fs";
+import { existsSync, readFileSync, statSync } from "fs";
 import { createReadStream } from "fs";
+import { join } from "path";
 import * as readline from "readline";
 import type { PendingChangeResult } from "../modules/change-review";
 
 const log = createLogger("change-review");
 
 const CHANNEL_TIMEOUT_MS = 5_000;
-
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`channel call timed out (${ms}ms)`)), ms);
-    promise.then(
-      (v) => {
-        clearTimeout(timer);
-        resolve(v);
-      },
-      (e) => {
-        clearTimeout(timer);
-        reject(e);
-      },
-    );
-  });
-}
 
 interface TurnChange {
   turnIndex: number;
@@ -160,9 +146,29 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     if (!manager || !manager.hasSession(params.sessionId)) {
       if (params.sessionPath) {
         try {
-          return (await readPendingFromJsonl(
-            params.sessionPath,
-          )) as unknown as R<"change-review.pending">;
+          const items = await readPendingFromJsonl(params.sessionPath);
+          // JSONL fallback returns null content — enrich newContent from disk.
+          const projectPath = manager?.getProjectPath(params.sessionId);
+          if (projectPath) {
+            for (const item of items) {
+              if (item.fileStatus === "deleted") {
+                item.newContent = null;
+              } else {
+                const fullPath = join(projectPath, item.path);
+                try {
+                  if (existsSync(fullPath) && statSync(fullPath).isFile()) {
+                    item.newContent = readFileSync(fullPath, "utf-8");
+                  }
+                } catch {
+                  item.newContent = null;
+                }
+                if (item.fileStatus === "added") {
+                  item.oldContent = null;
+                }
+              }
+            }
+          }
+          return items as unknown as R<"change-review.pending">;
         } catch (err) {
           log.warn("review.pending JSONL fallback failed", {
             sessionId: params.sessionId,

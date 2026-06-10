@@ -9,7 +9,8 @@ import { useCopyFeedback } from "./use-copy-feedback";
 type CopyActionSize = "xs" | "sm";
 
 interface CopyActionProps {
-  text: string;
+  text?: string;
+  textGetter?: () => string;
   size?: CopyActionSize;
   className?: string;
   title?: string;
@@ -32,6 +33,7 @@ const buttonSizeClasses: Record<CopyActionSize, string> = {
 
 export const CopyAction = memo(function CopyAction({
   text,
+  textGetter,
   size = "xs",
   className,
   title,
@@ -53,13 +55,14 @@ export const CopyAction = memo(function CopyAction({
   }, []);
 
   const handleCopy = useCallback(async () => {
-    const ok = await copyWithFeedback(text);
+    const resolvedText = textGetter ? textGetter() : (text ?? "");
+    const ok = await copyWithFeedback(resolvedText);
     if (!ok) return;
 
     setCopied(true);
     if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
     resetTimerRef.current = setTimeout(() => setCopied(false), 1500);
-  }, [copyWithFeedback, text]);
+  }, [copyWithFeedback, text, textGetter]);
 
   const copyLabel = title ?? t("copy");
   const label = copied ? (copiedTitle ?? t("copied")) : copyLabel;

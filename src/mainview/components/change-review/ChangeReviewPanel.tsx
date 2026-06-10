@@ -20,6 +20,7 @@ import { useChangeReviewStore } from "../../stores/use-change-review-store";
 import { useGitStore } from "../../stores/use-git-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import type { FileStatus } from "../../../shared/modules/change-review";
+import { InlineDiffViewer } from "../chat/tool-renderers/InlineDiffViewer";
 
 /* ── Git-style status helpers (reusing GitPanel patterns) ── */
 
@@ -296,6 +297,17 @@ const ChangeItem = memo(function ChangeItem({ change, isExpanded, onToggle }: Ch
             )}
           </div>
         </div>
+
+        {isExpanded && change.oldContent !== null && change.newContent !== null && (
+          <div className="mt-1">
+            <InlineDiffViewer
+              oldValue={change.oldContent}
+              newValue={change.newContent}
+              filePath={change.path}
+              maxHeight="300px"
+            />
+          </div>
+        )}
       </div>
     </div>
   );

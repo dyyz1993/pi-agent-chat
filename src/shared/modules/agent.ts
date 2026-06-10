@@ -68,6 +68,12 @@ export interface AgentMethods {
       steeringMode?: string;
       followUpMode?: string;
       messageCount: number;
+      activeToolExecutions: Array<{
+        toolCallId: string;
+        toolName: string;
+        args?: unknown;
+        startedAt?: number;
+      }>;
     } | null;
   };
   "agent.getCommands": {
@@ -231,6 +237,14 @@ export interface AgentMethods {
   "agent.setDisabledSkill": {
     params: { skillName: string; disabled: boolean };
     result: { disabledSkills: string[] };
+  };
+  "agent.getDisabledPlugins": {
+    params: { projectPath: string };
+    result: { disabledPlugins: string[] };
+  };
+  "agent.setDisabledPlugin": {
+    params: { projectPath: string; pluginPath: string; disabled: boolean };
+    result: { disabledPlugins: string[] };
   };
   "agent.getTools": {
     params: { sessionId: string };
@@ -490,6 +504,12 @@ export interface AgentEventPayload {
   event: AgentEvent;
 }
 
+/** Batch of agent events sent together to reduce broadcast overhead. */
+export interface AgentBatchEventPayload {
+  sessionId: string;
+  events: AgentEvent[];
+}
+
 export interface ChannelDataEvent {
   type: "channel_data";
   name: string;
@@ -500,7 +520,19 @@ export interface HookMeta {
   toolName: string;
   matcher: string;
   command?: string;
+  hookCommand?: string;
+  eventName?: string;
+  source?: string;
   reason: string;
+}
+
+export interface PermissionMeta {
+  type: "path_boundary" | "dangerous_bash" | "hook_approval";
+  path: string;
+  cwd: string;
+  toolName: string;
+  scope: "read" | "write";
+  relativeTo: string;
 }
 
 export interface ExtensionUIRequestEvent {
@@ -532,6 +564,13 @@ export interface ExtensionUIRequestEvent {
   widgetLines?: string[];
   widgetPlacement?: "aboveEditor" | "belowEditor";
   text?: string;
+  permissionMeta?: PermissionMeta;
+}
+
+export interface ExtensionUIResolvedEvent {
+  type: "extension_ui_resolved";
+  id: string;
+  reason: "responded" | "timeout" | "aborted";
 }
 
 export interface CompactionResult {
@@ -545,6 +584,7 @@ export type AgentEvent =
   | { type: "compaction_end"; reason: string; result: CompactionResult; aborted: boolean }
   | { type: "queue_update"; steering: string[]; followUp: string[] }
   | ExtensionUIRequestEvent
+  | ExtensionUIResolvedEvent
   | ChannelDataEvent
   | { type: "custom_entry"; customType: string; data: unknown; id: string; display?: boolean }
   | { type: "session_rename"; oldName: string | undefined; newName: string }
@@ -573,5 +613,10 @@ export interface AgentProcessInfo {
   projectPath: string;
   sessionPath: string;
   status: "idle" | "streaming";
-  holdEvents: AgentEvent[];
+  activeToolExecutions?: Array<{
+    toolCallId: string;
+    toolName: string;
+    args?: unknown;
+    startedAt?: number;
+  }>;
 }

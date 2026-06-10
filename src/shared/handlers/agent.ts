@@ -3,7 +3,7 @@ import type { HandlerOptions, R } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
 import { AgentProcessManager } from "../agent/process-manager";
 import { createLogger } from "../lib/logger";
-import { listDisabledSkills, setDisabledSkill } from "../lib/project-config";
+import { listDisabledSkills, setDisabledSkill, listDisabledPlugins, setDisabledPlugin } from "../lib/project-config";
 
 const log = createLogger("agent");
 
@@ -50,10 +50,6 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     });
     log.info("start result", { result });
     return result;
-  });
-
-  r("agent.replayHoldEvents", async (params) => {
-    return m.replayHoldEvents(params.sessionId);
   });
 
   r("agent.send", async (params) => {
@@ -234,6 +230,16 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     return { disabledSkills };
   });
 
+  r("agent.getDisabledPlugins", async (params) => {
+    const disabledPlugins = await listDisabledPlugins(params.projectPath);
+    return { disabledPlugins };
+  });
+
+  r("agent.setDisabledPlugin", async (params) => {
+    const disabledPlugins = await setDisabledPlugin(params.projectPath, params.pluginPath, params.disabled);
+    return { disabledPlugins };
+  });
+
   r("agent.getTools", async (params) => {
     return m.getTools(params.sessionId) as Promise<R<"agent.getTools">>;
   });
@@ -368,13 +374,15 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("agent.getAgentDetail", async (params) => {
-    return m.getAgentDetail(params.sessionId, params.agentName) as Promise<
-      R<"agent.getAgentDetail">
-    >;
+    // CLI returns AgentConfig directly; schema expects { agent: AgentConfig }
+    const agent = await m.getAgentDetail(params.sessionId, params.agentName);
+    return { agent } as R<"agent.getAgentDetail">;
   });
 
   r("agent.getAllTools", async (params) => {
-    return m.getAllTools(params.sessionId) as Promise<R<"agent.getAllTools">>;
+    // CLI returns tool[] directly; schema expects { tools: tool[] }
+    const tools = await m.getAllTools(params.sessionId);
+    return { tools } as R<"agent.getAllTools">;
   });
 
   r("agent.getSystemPrompt", async (params) => {
