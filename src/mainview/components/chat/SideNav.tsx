@@ -287,7 +287,7 @@ export const SideNav = memo(
         firstNavRef.current = false;
         activeEl.scrollIntoView({ block: "nearest", behavior: isFirst ? "instant" : "smooth" });
       }
-    }, [selectedNavId]);
+    }, [selectedNavId, sessionId]);
 
     const loadMoreMessages = useChatStore((s) => s.loadMoreMessages);
     const hasMoreMessages = useChatStore(

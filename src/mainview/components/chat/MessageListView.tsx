@@ -33,16 +33,20 @@ interface CacheEntry<T> {
 export function computeMessagesRevision(messages: ChatMessage[]): string {
   const n = messages.length;
   if (n === 0) return "0";
+  let streamingCount = 0;
   const last = messages[n - 1];
   const blocks = last.content;
-  if (blocks.length === 0) return `${n}:${last.id}:0`;
   let totalSize = 0;
+  for (let i = 0; i < n; i++) {
+    if (messages[i].isStreaming) streamingCount++;
+  }
+  if (blocks.length === 0) return `${n}:${last.id}:0:${streamingCount}`;
   for (const block of blocks) {
     if (block.type === "text") totalSize += block.text.length;
     else if (block.type === "thinking") totalSize += block.thinking.length;
     else if (block.type === "toolExecution") totalSize += (block.output ?? "").length;
   }
-  return `${n}:${last.id}:${blocks.length}:${totalSize}`;
+  return `${n}:${last.id}:${blocks.length}:${totalSize}:${streamingCount}`;
 }
 
 const _processedMessagesCache = new Map<string, CacheEntry<ProcessedMessage[]>>();
@@ -188,6 +192,7 @@ export const MessageListView = memo(function MessageListView({
   const messages = useStableMessages(source);
   const { t } = useTranslation("chat");
   const showMemoryEntries = useSettingsStore((s) => s.showMemoryEntries);
+
   const cardMeta = useMemo(() => {
     if (!activeSessionId) return buildCardMeta(messages, t);
     const revision = computeMessagesRevision(messages);

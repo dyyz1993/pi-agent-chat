@@ -882,7 +882,6 @@ export const useSessionStore = create<SessionState>()(
           projectStartError: current.projectStartError,
           _projectVersion: current._projectVersion,
           agentSubscriptions: current.agentSubscriptions,
-          batchSubscriptions: current.batchSubscriptions,
           subagentSubscriptions: current.subagentSubscriptions,
           todoSubscriptions: current.todoSubscriptions,
           bashSubscriptions: current.bashSubscriptions,

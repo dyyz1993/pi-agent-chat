@@ -19,7 +19,6 @@ interface ChannelManagedClient {
   };
   info: {
     status: string;
-    holdEvents: unknown[];
     projectPath: string;
     sessionPath: string;
   };

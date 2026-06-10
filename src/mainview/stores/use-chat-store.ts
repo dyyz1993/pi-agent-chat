@@ -599,6 +599,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const GET_MESSAGES_TIMEOUT_MS = 60_000;
       const t0 = performance.now();
       perfLog.info("[loadSessionMessages] begin", { sessionId, force: !!options?.force });
+
+      // Use getFullMessages which already handles streaming merge + dedup
+      // (entryId, message signature, user text, completed toolCall, compaction).
+      // During streaming, it auto-merges in-memory messages from the CLI process.
       const result = (await Promise.race([
         apiClient.call("agent.getFullMessages", {
           sessionId: sid,
@@ -612,6 +616,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           ),
         ),
       ])) as Awaited<ReturnType<typeof apiClient.call<"agent.getFullMessages">>>;
+
       perfLog.info("[loadMessages] RPC returned", {
         sessionId: sid,
         force: !!options?.force,
@@ -657,12 +662,29 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
       log.info("Raw messages count", { sessionId: sid, count: messages.length });
 
+      // Deduplicate by message ID — getFullMessages may return duplicates when
+      // JSONL has entries from multiple compaction cycles or when the streaming
+      // merge cannot fully eliminate overlaps. Keep the last occurrence (latest).
+      const seenIds = new Set<string>();
       const rawMessages: Array<{ raw: AgentMessageForUI; id?: string }> = [];
-      for (const msg of messages) {
-        rawMessages.push({ raw: msg, id: msg.id });
-        const role = msg.role;
+      for (let i = messages.length - 1; i >= 0; i--) {
+        const msg = messages[i];
+        const msgId = msg.id;
+        if (msgId && seenIds.has(msgId)) continue;
+        if (msgId) seenIds.add(msgId);
+        rawMessages.unshift({ raw: msg, id: msgId });
+      }
+      if (rawMessages.length < messages.length) {
+        log.info("Dedup removed duplicates", {
+          sessionId: sid,
+          before: messages.length,
+          after: rawMessages.length,
+        });
+      }
+      for (const { raw } of rawMessages) {
+        const role = raw.role;
         if (role === "assistant") {
-          const content = msg.content;
+          const content = raw.content;
           if (Array.isArray(content)) {
             for (const block of content) {
               if (block.type === "toolCall" && block.id && block.name) {
@@ -727,18 +749,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const localMsgs = (get().messagesBySession[sid] || []).filter((m) => m._local);
       const currentMsgs = get().messagesBySession[sid] || [];
 
-      // When streaming, preserve the last streaming assistant message from replay/events.
-      // loadSessionMessages reads JSONL which may be incomplete during streaming,
-      // and overwriting would lose toolExecution state populated by replayHoldEvents.
-      const lastCurrent = currentMsgs[currentMsgs.length - 1];
-      const isStreamingSession = useSessionStore.getState().sessionStatusMap[sid] === "streaming";
-      const preserveStreaming =
-        options?.preserveStreaming !== false &&
-        isStreamingSession &&
-        lastCurrent &&
-        lastCurrent.role === "assistant" &&
-        lastCurrent.isStreaming === true;
-
       // Dedup _local messages against server messages to prevent duplicates.
       // The server returns user messages from JSONL; if a _local user message
       // has matching text content with a server message, the server version wins.
@@ -762,15 +772,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
       let finalMsgs =
         nonDupLocalMsgs.length > 0 ? [...displayMsgs, ...nonDupLocalMsgs] : displayMsgs;
 
-      if (preserveStreaming) {
-        const streamingInFinal = finalMsgs.findIndex(
-          (m) => m.role === "assistant" && m.isStreaming,
-        );
-        const preservedStreamingMsg = buildPreservedStreamingMessage(finalMsgs, lastCurrent);
-        if (streamingInFinal === -1 && preservedStreamingMsg) {
-          finalMsgs = [...finalMsgs, preservedStreamingMsg];
-        }
-      }
       normalizeToolBlocks(finalMsgs, true, false);
       finalMsgs = prepareMessagesForStore(finalMsgs, {
         activeToolCallIds: get().activeToolCallIdsBySession[sid],

@@ -1,7 +1,6 @@
 import type { AgentEvent, ChannelDataEvent, ExtensionUIRequestEvent } from "../modules/agent";
 import { createLogger } from "../lib/logger";
 import {
-  appendStreamingHoldEvent,
   classifyExtensionUiRequest,
   extractMessageEndText,
 } from "./agent-event-lifecycle";
@@ -59,7 +58,6 @@ interface ManagedEventClientLike {
   };
   info: {
     status: string;
-    holdEvents: unknown[];
     projectPath: string;
     sessionPath?: string;
     activeToolExecutions?: Array<{
@@ -149,14 +147,12 @@ export function handleAgentEventOperation<TManaged extends ManagedEventClientLik
   if (options.event.type === "agent_start") {
     managed.info.status = "streaming";
     managed.lastActiveAt = (options.now ?? Date.now)();
-    managed.info.holdEvents = [];
     options.broadcastSessionStatus(options.sessionId, "streaming");
   }
 
   if (options.event.type === "agent_end") {
     managed.info.status = "idle";
     managed.lastActiveAt = (options.now ?? Date.now)();
-    managed.info.holdEvents = [];
     options.broadcastSessionStatus(options.sessionId, "idle");
 
     managed.client
@@ -266,12 +262,6 @@ export function handleAgentEventOperation<TManaged extends ManagedEventClientLik
   }
 
   const sanitized = sanitizeEvent(options.event);
-
-  managed.info.holdEvents = appendStreamingHoldEvent(
-    managed.info.status,
-    managed.info.holdEvents as SanitizedEvent[],
-    sanitized,
-  );
 
   const parentId = findParentSession(options.parentChildMap, options.sessionId);
   if (parentId) {

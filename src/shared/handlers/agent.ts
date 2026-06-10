@@ -52,10 +52,6 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     return result;
   });
 
-  r("agent.replayHoldEvents", async (params) => {
-    return m.replayHoldEvents(params.sessionId);
-  });
-
   r("agent.send", async (params) => {
     log.info("send called", { sessionId: params.sessionId, content: params.content });
     const ok = await m.send(params.sessionId, params.content, params.images);

@@ -150,7 +150,14 @@ export function createFetchInitialStateAction({
               get().updateSessionContext(sessionId, { contextWindow: cw });
             }
             if (result.isStreaming) {
-              get().updateSessionStatus(sessionId, "streaming");
+              // Guard: if the session has already transitioned to idle/permission
+              // (e.g. message_end + agent_end arrived while this RPC was in-flight),
+              // skip restoring streaming state to avoid overwriting isStreaming: false.
+              const currentStatus = get().sessionStatusMap[sessionId];
+              if (currentStatus === "idle" || currentStatus === "permission") {
+                // Session already finished — do not re-activate streaming
+              } else {
+                get().updateSessionStatus(sessionId, "streaming");
               if (
                 result.streamingMessage &&
                 typeof result.streamingMessage === "object" &&
@@ -195,6 +202,7 @@ export function createFetchInitialStateAction({
                     /* ignore */
                   }
                 }
+              }
               }
             } else if (result.isCompacting) {
               get().updateSessionStatus(sessionId, "compacting");

@@ -94,7 +94,6 @@ export async function startAgentClientOperation<TManaged extends StartManagedCli
           projectPath: options.projectPath,
           sessionPath: options.sessionPath,
           status: "idle",
-          holdEvents: [],
         };
         options.clients.set(options.sessionId, pooled);
         options.sessionPaths.set(options.sessionId, options.sessionPath);

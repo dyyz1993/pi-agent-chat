@@ -96,8 +96,8 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
             log.info("[ws-out]", { type: msg.type, id: msg.id });
           }
         } else {
-          // Event messages are high-frequency (245K+ in a single replayHoldEvents burst).
-          // Use debug level to avoid 28MB+ log disk IO per session; info for responses only.
+          // Event messages are high-frequency.
+          // Use debug level to avoid excessive log disk IO; info for responses only.
           log.debug("[ws-out]", {
             type: msg.type ?? "unknown",
             method: msg.method,

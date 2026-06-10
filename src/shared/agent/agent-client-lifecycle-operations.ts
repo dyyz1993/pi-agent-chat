@@ -38,7 +38,6 @@ interface ManagedAbortLike {
   client: AbortClientLike;
   info: {
     status: string;
-    holdEvents: unknown[];
   };
   lastActiveAt: number;
 }
@@ -135,7 +134,6 @@ export async function abortOperation<TManaged extends ManagedAbortLike>(options:
   });
   managed.info.status = "idle";
   managed.lastActiveAt = (options.now ?? Date.now)();
-  managed.info.holdEvents = [];
   options.broadcastIdle(options.sessionId);
   await options.emitAgentEvent(options.sessionId, { type: "agent_end" } as SanitizedEvent);
   return true;

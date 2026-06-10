@@ -251,7 +251,7 @@ export function useActiveScrollTracker({
 
   // Unified initial scroll: triggered once when messages are first ready.
   // Uses scheduleScrollToBottom which cancels previous attempts, so
-  // loadSessionMessages → replayHoldEvents → _backgroundRefreshMessages
+  // loadSessionMessages → _backgroundRefreshMessages
   // don't create competing scroll chains.
   useEffect(() => {
     if (!initialScrollReady) return;

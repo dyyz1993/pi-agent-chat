@@ -379,9 +379,11 @@ export function SidebarBottomControls() {
                 };
                 const Icon = iconMap[agent.name] || Bot;
                 return (
-                  <button
+                  <div
                     key={agent.name}
-                    className={`w-full text-left px-3 py-2 text-xs flex items-start gap-2 transition-colors ${
+                    role="button"
+                    tabIndex={0}
+                    className={`w-full text-left px-3 py-2 text-xs flex items-start gap-2 transition-colors cursor-pointer ${
                       isActive
                         ? "bg-semantic-accent/15 text-semantic-accent"
                         : "text-text-secondary dark:text-text-primary hover:bg-surface-hover dark:hover:bg-surface-hover"
@@ -391,6 +393,12 @@ export function SidebarBottomControls() {
                         await switchAgent(agent.name, activeSessionId);
                       }
                       setAgentOpen(false);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        (e.target as HTMLElement).click();
+                      }
                     }}
                   >
                     {isActive ? (
@@ -439,7 +447,7 @@ export function SidebarBottomControls() {
                         {agent.tier}
                       </span>
                     )}
-                  </button>
+                  </div>
                 );
               })}
             </div>

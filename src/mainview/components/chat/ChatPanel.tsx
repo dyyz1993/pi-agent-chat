@@ -750,20 +750,14 @@ export function ChatPanel() {
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        {!isViewingSubagent &&
-          (!sessionReady && !projectFailed ? (
+        {!isViewingSubagent ? (
+          (!sessionReady || !agentReady) && !projectFailed ? (
             <div className="flex-1 flex items-center justify-center gap-2 py-2">
               <Loader2 className="w-3.5 h-3.5 text-text-tertiary animate-spin" />
               <span className="text-xs text-text-tertiary">{t("sessionStarting")}</span>
             </div>
           ) : (
             <>
-              {!agentReady && (
-                <div className="flex items-center justify-center gap-1.5 pb-1">
-                  <Loader2 className="w-3 h-3 text-text-tertiary animate-spin" />
-                  <span className="text-[10px] text-text-tertiary">{t("sessionStarting")}</span>
-                </div>
-              )}
               {goalMode && !isRefiningGoal && (
                 <div className="flex items-center gap-2 px-1 pb-1 text-xs text-semantic-accent">
                   <Target className="w-3.5 h-3.5" />
@@ -897,7 +891,8 @@ export function ChatPanel() {
                 </div>
               </div>
             </>
-          ))}
+          )
+        ) : null}
         {isViewingSubagent && (
           <div className="flex-1 flex items-center justify-center gap-3 py-2">
             <span className="text-[11px] text-text-tertiary">{t("subagentReadonly")}</span>

@@ -286,17 +286,14 @@ export function createSetActiveSessionAction({
                 loadPromise
                   .catch(() => {})
                   .then(() => {
-                    return apiClient.call("agent.replayHoldEvents", { sessionId: id });
-                  })
-                  .then((replayResult: { replayed: number } | undefined) => {
-                    if (replayResult && replayResult.replayed === 0) return;
+                    // No replayHoldEvents needed — loadSessionMessages already fetches
+                    // in-memory messages (get_messages) in parallel with JSONL data,
+                    // which includes the streaming assistant message.
                     return useChatStore
                       .getState()
                       ._backgroundRefreshMessages(id, session.sessionPath);
                   })
                   .then(() => {
-                    // Replay may accumulate stale token counts via message_end events;
-                    // fetch the authoritative value to correct any drift.
                     return apiClient
                       .call("agent.getContextUsage", { sessionId: id })
                       .then((r) => {
@@ -316,14 +313,13 @@ export function createSetActiveSessionAction({
                     });
                   })
                   .catch((err: unknown) => {
-                    log.warn("load+replay failed in hot switch", {
+                    log.warn("load+refresh failed in hot switch", {
                       sessionId: id,
                       err: err instanceof Error ? err.message : String(err),
                     });
                   });
               } else {
                 // COLD path: messages were pre-loaded in parallel with agent.start.
-                // Wait for pre-load to finish, then replay hold events.
                 perfLog.info("[switch] COLD: waiting for pre-loaded messages", {
                   sessionId: id,
                 });
@@ -335,17 +331,13 @@ export function createSetActiveSessionAction({
                       count: useChatStore.getState().messagesBySession[id]?.length,
                       ms: Math.round(performance.now() - tLoad),
                     });
-                    return apiClient.call("agent.replayHoldEvents", { sessionId: id });
-                  })
-                  .then((replayResult: { replayed: number } | undefined) => {
-                    if (replayResult && replayResult.replayed === 0) return;
+                    // No replayHoldEvents needed — loadSessionMessages already fetches
+                    // in-memory messages (get_messages) in parallel with JSONL data.
                     return useChatStore
                       .getState()
                       ._backgroundRefreshMessages(id, session.sessionPath);
                   })
                   .then(() => {
-                    // Replay may accumulate stale token counts via message_end events;
-                    // fetch the authoritative value to correct any drift.
                     return apiClient
                       .call("agent.getContextUsage", { sessionId: id })
                       .then((r) => {
@@ -365,7 +357,7 @@ export function createSetActiveSessionAction({
                     });
                   })
                   .catch((e) => {
-                    log.error("COLD switch load+replay failed", {
+                    log.error("COLD switch load+refresh failed", {
                       error: e instanceof Error ? e.message : String(e),
                     });
                   });

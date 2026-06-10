@@ -1,9 +1,3 @@
-import {
-  compactHoldEventsForReplay,
-  HOLD_EVENT_COMPACT_THRESHOLD,
-  type SanitizedEvent,
-} from "./hold-events";
-
 const INTERACTIVE_EXTENSION_UI_METHODS = new Set(["confirm", "input", "select", "editor"]);
 
 export type ExtensionUiAction =
@@ -46,16 +40,4 @@ export function extractMessageEndText(event: unknown, maxLength = 2000): string 
     .join("")
     .slice(0, maxLength);
   return text || null;
-}
-
-export function appendStreamingHoldEvent(
-  status: string,
-  holdEvents: SanitizedEvent[],
-  event: SanitizedEvent,
-  threshold = HOLD_EVENT_COMPACT_THRESHOLD,
-): SanitizedEvent[] {
-  if (status !== "streaming") return holdEvents;
-  const nextEvents = [...holdEvents, event];
-  if (nextEvents.length <= threshold) return nextEvents;
-  return compactHoldEventsForReplay(nextEvents);
 }

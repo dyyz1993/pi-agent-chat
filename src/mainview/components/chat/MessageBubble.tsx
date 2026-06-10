@@ -118,9 +118,10 @@ export const MessageBubble = memo(function MessageBubble({
   message,
   mergedResultData,
 }: MessageBubbleProps) {
+  const sessionId = useSessionStore((s) => s.activeSessionId);
+
   const isUser = message.role === "user";
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
-  const sessionId = useSessionStore((s) => s.activeSessionId);
   const uiBlockMap = useUIBlockMap(message.content, sessionId ?? "");
   const isActive = useChatNavStore(
     useCallback(

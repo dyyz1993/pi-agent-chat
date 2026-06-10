@@ -92,6 +92,16 @@ export function cleanupEventHandlerMaps(sessionId: string): void {
   compactionDeferredSessions.delete(sessionId);
 }
 
+function replaceMsgAt(
+  msgs: ChatMessage[],
+  idx: number,
+  replacement: ChatMessage,
+): ChatMessage[] {
+  const next = [...msgs];
+  next[idx] = replacement;
+  return next;
+}
+
 function scheduleEmptyStreamingReload(sessionId: string, messageId: string): void {
   setTimeout(() => {
     const chat = useChatStore.getState();
@@ -726,10 +736,26 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     batchMessageUpdate(sessionId, () => {
       const chat = useChatStore.getState();
       const existing = chat.messagesBySession[sessionId] || [];
-      const lastMsg = existing[existing.length - 1];
       if (!incoming || !Array.isArray(incoming)) return;
 
-      if (!lastMsg || lastMsg.role !== "assistant" || !lastMsg.isStreaming) {
+      // Search backwards for the last assistant message (step_snapshot and
+      // other custom entries may be appended after it).
+      let lastAssistantIdx = -1;
+      for (let i = existing.length - 1; i >= 0; i--) {
+        if (existing[i].role === "assistant") {
+          lastAssistantIdx = i;
+          break;
+        }
+      }
+      const lastAssistant = lastAssistantIdx >= 0 ? existing[lastAssistantIdx] : null;
+
+      if (!lastAssistant || !lastAssistant.isStreaming) {
+        // Session already ended – a late message_update should not
+        // re-introduce an isStreaming:true message.
+        const curStatus = useSessionStore.getState().sessionStatusMap[sessionId];
+        if (curStatus === "idle" || curStatus === "permission") {
+          return;
+        }
         const synthMsg: ChatMessage = {
           id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           role: "assistant",
@@ -741,9 +767,18 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       }
 
       const currentMsgs = chat.messagesBySession[sessionId] || [];
-      const currentLast = currentMsgs[currentMsgs.length - 1];
+      // Search backwards for the streaming assistant (same pattern as above).
+      let currentAssistant: ChatMessage | null = null;
+      let currentAssistantIdx = -1;
+      for (let i = currentMsgs.length - 1; i >= 0; i--) {
+        if (currentMsgs[i].role === "assistant") {
+          currentAssistant = currentMsgs[i];
+          currentAssistantIdx = i;
+          break;
+        }
+      }
 
-      const preservedToolExecs = (currentLast?.content || []).filter(
+      const preservedToolExecs = (currentAssistant?.content || []).filter(
         (b): b is Extract<ContentBlock, { type: "toolExecution" }> => b.type === "toolExecution",
       );
       const execByCallId = new Map<string, Extract<ContentBlock, { type: "toolExecution" }>>();
@@ -799,15 +834,12 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
       chat.setMessagesForSession(
         sessionId,
-        [
-          ...currentMsgs.slice(0, -1),
-          {
-            ...currentLast,
-            content: [...preservedBlocks, ...orderedBlocks],
-            ...buildTokenUsage(message.usage),
-            ...(message.stopReason ? { stopReason: message.stopReason } : {}),
-          },
-        ],
+        replaceMsgAt(currentMsgs, currentAssistantIdx, {
+          ...currentAssistant!,
+          content: [...preservedBlocks, ...orderedBlocks],
+          ...buildTokenUsage(message.usage),
+          ...(message.stopReason ? { stopReason: message.stopReason } : {}),
+        }),
         { bumpStreamVersion: true, streamingFastPath: true },
       );
     });
@@ -843,8 +875,18 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
     const chat = useChatStore.getState();
     const existing = chat.messagesBySession[sessionId] || [];
-    const lastMsg = existing[existing.length - 1];
-    if (!lastMsg || lastMsg.role !== "assistant") return;
+    // Find the last assistant message (may not be the array's last element if
+    // custom entries like step_snapshot were appended after it).
+    let lastMsg: ChatMessage | undefined;
+    let lastMsgIdx = -1;
+    for (let i = existing.length - 1; i >= 0; i--) {
+      if (existing[i].role === "assistant") {
+        lastMsg = existing[i];
+        lastMsgIdx = i;
+        break;
+      }
+    }
+    if (!lastMsg) return;
 
     const assistantMsg = message as AssistantMessage;
 
@@ -868,9 +910,9 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     if (!hasContent && storeGet().sessionStatusMap[sessionId] === "streaming") {
       const finalMsg = messageToChatMessage(message, entryId, toolCallNameMap);
       if (finalMsg && hasRenderableContent(finalMsg)) {
-        chat.setMessagesForSession(sessionId, [
-          ...existing.slice(0, -1),
-          {
+        chat.setMessagesForSession(
+          sessionId,
+          replaceMsgAt(existing, lastMsgIdx, {
             ...lastMsg,
             content: finalMsg.content,
             isStreaming: false,
@@ -879,8 +921,8 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
             model: assistantMsg.model ?? lastMsg.model,
             ...buildTokenUsage(assistantMsg.usage),
             entryId,
-          },
-        ]);
+          }),
+        );
       } else {
         scheduleEmptyStreamingReload(sessionId, lastMsg.id);
       }
@@ -888,7 +930,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     }
 
     if (!hasContent) {
-      const priorMessages = existing.slice(0, -1);
+      const priorMessages = [...existing.slice(0, lastMsgIdx), ...existing.slice(lastMsgIdx + 1)];
       const hasPriorAssistantContent = hasAssistantContentSinceLastUser(priorMessages);
       const stopReason = assistantMsg.stopReason ?? lastMsg.stopReason ?? null;
 
@@ -911,16 +953,16 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         (isErrorStopReason(stopReason) ? "LLM 返回了错误响应" : undefined) ??
         "LLM 返回了空响应";
       const errorTitle = "LLM 未返回有效响应";
-      chat.setMessagesForSession(sessionId, [
-        ...priorMessages,
-        {
+      chat.setMessagesForSession(
+        sessionId,
+        replaceMsgAt(existing, lastMsgIdx, {
           ...lastMsg,
           role: "error" as const,
           content: [{ type: "text" as const, text: `${errorTitle}\n${errorDetail}` }],
           stopReason,
           isStreaming: false,
-        },
-      ]);
+        }),
+      );
       notificationGateway.emit({
         type: "session_error",
         sessionId,
@@ -936,9 +978,9 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       isErrorStopReason(assistantMsg.stopReason) ? "error" : "done",
     );
 
-    chat.setMessagesForSession(sessionId, [
-      ...existing.slice(0, -1),
-      {
+    chat.setMessagesForSession(
+      sessionId,
+      replaceMsgAt(existing, lastMsgIdx, {
         ...lastMsg,
         content: closedContent,
         isStreaming: false,
@@ -947,8 +989,8 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         model: assistantMsg.model ?? lastMsg.model,
         ...buildTokenUsage(assistantMsg.usage),
         entryId,
-      },
-    ]);
+      }),
+    );
     return;
   }
 
