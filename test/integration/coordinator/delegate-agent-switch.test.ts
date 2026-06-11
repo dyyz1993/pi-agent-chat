@@ -42,23 +42,24 @@ describe("Bug2: delegate_sync agent activation (TDD Red)", () => {
     expect(hasSwitchAgent).toBe(true);
   });
 
-  it("switchAgent should be called AFTER this.start() and BEFORE this.send()", () => {
+  it("switchAgent should be called AFTER session start and BEFORE this.send()", () => {
     const funcStart = src.indexOf("export async function handleCoordinatorDelegateSyncOperation");
     const funcBody = src.substring(
       funcStart,
       src.indexOf("export async function handleCoordinatorDelegateForkOperation", funcStart),
     );
 
-    const startIdx = funcBody.indexOf("await options.start(newSessionId");
-    const sendIdx = funcBody.indexOf("options.send(newSessionId");
-    const switchIdx = funcBody.indexOf("await options.switchAgent(newSessionId, agent)");
+    // Session is created & started via createAndStartDelegateSession
+    const createIdx = funcBody.indexOf("createAndStartDelegateSession");
+    const sendIdx = funcBody.indexOf("options.send(session.sessionId");
+    const switchIdx = funcBody.indexOf("await options.switchAgent(session.sessionId, agent)");
 
-    expect(startIdx).toBeGreaterThan(0);
+    expect(createIdx).toBeGreaterThan(0);
     expect(sendIdx).toBeGreaterThan(0);
     expect(switchIdx).toBeGreaterThan(0);
 
-    // switchAgent must be between start and send
-    expect(switchIdx).toBeGreaterThan(startIdx);
+    // switchAgent must be between session creation and send
+    expect(switchIdx).toBeGreaterThan(createIdx);
     expect(switchIdx).toBeLessThan(sendIdx);
   });
 
@@ -69,7 +70,7 @@ describe("Bug2: delegate_sync agent activation (TDD Red)", () => {
       src.indexOf("export async function handleCoordinatorDelegateForkOperation", funcStart),
     );
 
-    const switchIdx = funcBody.indexOf("await options.switchAgent(newSessionId, agent)");
+    const switchIdx = funcBody.indexOf("await options.switchAgent(session.sessionId, agent)");
     if (switchIdx < 0) {
       // Not yet implemented — this test will fail (Red phase)
       expect(funcBody).toContain("switchAgent");
