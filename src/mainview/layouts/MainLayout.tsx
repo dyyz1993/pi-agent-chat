@@ -236,9 +236,7 @@ export function MainLayout({ onAddProject }: MainLayoutProps) {
 
         {/* ---- COL 3: Right Sidebar ---- */}
         {statusPanel !== "hidden" &&
-          ((isTablet && statusPanel === "visible") ||
-            (!isMobile && !isTablet) ||
-            (isMobile && statusPanel === "visible")) && (
+          (!isMobile || statusPanel === "visible") && (
             <RightSidebar
               width={
                 isMobile || isTablet ? Math.min(320, Math.round(contentWidth * 0.8)) : statusWidth
