@@ -3,12 +3,12 @@ import { mkdir, writeFile, rm } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
 
-vi.mock(import("../src/shared/lib/project-config"), () => ({
+vi.mock(import("../../../src/shared/lib/project-config"), () => ({
   listRecentProjects: vi.fn().mockResolvedValue([]),
   listPinnedSessionIds: vi.fn().mockResolvedValue([]),
 }));
 
-import { scanSessionDir } from "../src/shared/lib/session-scanner";
+import { scanSessionDir } from "../../../src/shared/lib/session-scanner";
 
 const TEST_ROOT = join(tmpdir(), `pi-ss-test-${process.pid}`);
 const TEST_SESSIONS_DIR = join(TEST_ROOT, "sessions");

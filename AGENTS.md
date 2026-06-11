@@ -231,15 +231,15 @@ src/
 
 ## Extension / Skill / MCP Toggle 机制对比
 
-| 特性 | Extension (Plugin) | Skill | MCP Server |
-|------|-------------------|-------|------------|
-| **Toggle UI** | StatusPanel Eye/EyeOff | StatusPanel Eye/EyeOff | StatusPanel 滑动开关 |
-| **RPC 命令** | `agent.setDisabledPlugin` + `agent.setSettings` + `agent.reload` | `agent.setDisabledSkill` | `agent.toggleMcpServer` |
-| **持久化** | `config.json` (disabledPlugins) + settings (extensions `-path`) | `config.json` (disabledSkills) | 内存（进程重启恢复） |
-| **生效方式** | reload CLI runtime | 即时（前端标记） | 即时（断开/重连） |
-| **真正禁用** | 是（extension 不加载） | 否（前端标记，Agent 仍可调用） | 是（MCP 连接断开） |
-| **粒度** | 按项目 | 全局 | 按会话 |
-| **乐观更新+回滚** | 有 | 无 | 无 |
+| 特性              | Extension (Plugin)                                               | Skill                          | MCP Server              |
+| ----------------- | ---------------------------------------------------------------- | ------------------------------ | ----------------------- |
+| **Toggle UI**     | StatusPanel Eye/EyeOff                                           | StatusPanel Eye/EyeOff         | StatusPanel 滑动开关    |
+| **RPC 命令**      | `agent.setDisabledPlugin` + `agent.setSettings` + `agent.reload` | `agent.setDisabledSkill`       | `agent.toggleMcpServer` |
+| **持久化**        | `config.json` (disabledPlugins) + settings (extensions `-path`)  | `config.json` (disabledSkills) | 内存（进程重启恢复）    |
+| **生效方式**      | reload CLI runtime                                               | 即时（前端标记）               | 即时（断开/重连）       |
+| **真正禁用**      | 是（extension 不加载）                                           | 否（前端标记，Agent 仍可调用） | 是（MCP 连接断开）      |
+| **粒度**          | 按项目                                                           | 全局                           | 按会话                  |
+| **乐观更新+回滚** | 有                                                               | 无                             | 无                      |
 
 ## Testing
 
@@ -291,17 +291,17 @@ e2e/                      # Playwright 浏览器 E2E (17 文件, 独立运行)
 
 ### 测试类型识别规则
 
-| 路径前缀 | 测试类型 | 工具 | 速度 | 何时使用 |
-|----------|----------|------|------|----------|
-| `test/unit/stores/` | store 状态 | vitest (happy-dom) | 快 | 改动 Zustand store 时 |
-| `test/unit/handlers/` | RPC handler | vitest | 快 | 改动 RPC handler 时 |
-| `test/unit/utils/` | 纯函数 | vitest | 极快 | 改动工具函数时 |
-| `test/unit/components/` | React 组件 | vitest + RTL | 中 | 改动 UI 组件时 |
-| `test/integration/**` | 跨模块集成 | vitest | 慢 | 改动跨模块流程时 |
-| `test/regression/**` | Bug 回归 | vitest | 中 | 修复已知 bug 时 |
-| `test/smoke/**` | 健康检查 | vitest | 极快 | CI 冒烟 / 提交前 |
-| `test/e2e-llm/**` | 真实 LLM | vitest + ws | 极慢 | 验证真实 LLM 行为 |
-| `e2e/*.spec.ts` | 浏览器 | playwright | 慢 | 验证 UI 流程 |
+| 路径前缀                | 测试类型    | 工具               | 速度 | 何时使用              |
+| ----------------------- | ----------- | ------------------ | ---- | --------------------- |
+| `test/unit/stores/`     | store 状态  | vitest (happy-dom) | 快   | 改动 Zustand store 时 |
+| `test/unit/handlers/`   | RPC handler | vitest             | 快   | 改动 RPC handler 时   |
+| `test/unit/utils/`      | 纯函数      | vitest             | 极快 | 改动工具函数时        |
+| `test/unit/components/` | React 组件  | vitest + RTL       | 中   | 改动 UI 组件时        |
+| `test/integration/**`   | 跨模块集成  | vitest             | 慢   | 改动跨模块流程时      |
+| `test/regression/**`    | Bug 回归    | vitest             | 中   | 修复已知 bug 时       |
+| `test/smoke/**`         | 健康检查    | vitest             | 极快 | CI 冒烟 / 提交前      |
+| `test/e2e-llm/**`       | 真实 LLM    | vitest + ws        | 极慢 | 验证真实 LLM 行为     |
+| `e2e/*.spec.ts`         | 浏览器      | playwright         | 慢   | 验证 UI 流程          |
 
 ### 运行测试
 
@@ -338,17 +338,17 @@ bunx playwright test        # e2e/*.spec.ts
 
 ### 编写新测试
 
-| 改动类型 | 应放在 | 命名建议 |
-|----------|--------|----------|
-| 新 Zustand store | `test/unit/stores/<name>.test.ts` | `chat.test.ts` / `use-<name>-store.test.ts` |
-| 新 RPC handler | `test/unit/handlers/<name>.test.ts` | `bash.test.ts` |
-| 新工具函数 | `test/unit/utils/<name>.test.ts` | `clipboard.test.ts` |
-| 新 React 组件 | `test/unit/components/<ComponentName>.test.tsx` | `MessageBubble.test.tsx` |
-| 跨 store+component+handler | `test/integration/<domain>/<feature>.test.ts` | `integration/chat/refresh-recovery.test.ts` |
-| Bug 修复保护 | `test/regression/<domain>/<bug-name>.test.ts` | `regression/rollback/targetid-resolution.test.ts` |
-| 快速冒烟 | `test/smoke/<phase\|batch>/<n>.test.ts` | `smoke/phase/p5.test.ts` |
-| 真实 LLM 验证 | `test/e2e-llm/<category>/<feature>.test.ts` | `e2e-llm/verify/auth-flow.test.ts` |
-| 浏览器交互 | `e2e/<feature>.spec.ts` | `e2e/chat-pagination.spec.ts` |
+| 改动类型                   | 应放在                                          | 命名建议                                          |
+| -------------------------- | ----------------------------------------------- | ------------------------------------------------- |
+| 新 Zustand store           | `test/unit/stores/<name>.test.ts`               | `chat.test.ts` / `use-<name>-store.test.ts`       |
+| 新 RPC handler             | `test/unit/handlers/<name>.test.ts`             | `bash.test.ts`                                    |
+| 新工具函数                 | `test/unit/utils/<name>.test.ts`                | `clipboard.test.ts`                               |
+| 新 React 组件              | `test/unit/components/<ComponentName>.test.tsx` | `MessageBubble.test.tsx`                          |
+| 跨 store+component+handler | `test/integration/<domain>/<feature>.test.ts`   | `integration/chat/refresh-recovery.test.ts`       |
+| Bug 修复保护               | `test/regression/<domain>/<bug-name>.test.ts`   | `regression/rollback/targetid-resolution.test.ts` |
+| 快速冒烟                   | `test/smoke/<phase\|batch>/<n>.test.ts`         | `smoke/phase/p5.test.ts`                          |
+| 真实 LLM 验证              | `test/e2e-llm/<category>/<feature>.test.ts`     | `e2e-llm/verify/auth-flow.test.ts`                |
+| 浏览器交互                 | `e2e/<feature>.spec.ts`                         | `e2e/chat-pagination.spec.ts`                     |
 
 ## Architecture Design Docs
 
@@ -357,8 +357,9 @@ bunx playwright test        # e2e/*.spec.ts
 | `docs/plans/2026-06-01-process-per-session-design.md`       | Phase 1 已完成   | 每会话独立 CLI 进程，LRU 淘汰，全局进程池                                   |
 | `docs/plans/2026-06-01-session-switch-experience-design.md` | Phase 1-3 已实施 | 会话切换体验优化：热/冷切换分流、fetchInitialState 缓存、MessageList 无闪烁 |
 | `docs/plans/2026-06-01-render-cache-design.md`              | 已实施           | 渲染层按 session 缓存：processedMessages/cardMeta/flatItems/messageIds      |
-| `docs/plans/2026-06-10-plugin-toggle-design.md`             | 已实施           | Plugin 按项目 enable/disable，set_settings + reload，config.json 持久化    |
+| `docs/plans/2026-06-10-plugin-toggle-design.md`             | 已实施           | Plugin 按项目 enable/disable，set_settings + reload，config.json 持久化     |
 | `docs/notification-interaction-manual.md`                   | 操作手册         | 通知、toast、retry、权限 pending 的 UI 分层与适用场景                       |
+| `docs/testing-architecture.md`                              | 参考文档         | 测试架构总览：6 种测试方法、目录结构、散落文件收拢计划、新测试编写指南      |
 
 ### WebSocket RPC 端到端测试方法
 

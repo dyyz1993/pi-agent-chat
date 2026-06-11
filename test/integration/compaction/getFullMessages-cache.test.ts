@@ -18,7 +18,7 @@ import { tmpdir } from "node:os";
 import { performance } from "perf_hooks";
 
 import { AgentProcessManager } from "../../../src/shared/agent/process-manager";
-import type { RPCServer } from "@dyyz1993/rpc-core";
+import type { RPCServer } from "../../../src/shared/lib/rpc-server";
 
 function createMockRPCServer(): RPCServer {
   return {
@@ -504,9 +504,7 @@ describe("getFullMessages LRU Cache", () => {
     const incrMs = performance.now() - t1;
 
     expect(incr.totalCount).toBe(largeCount + 100);
-    // 100K 行增量读取阈值放宽到 500ms（CI 机器/磁盘类型差异较大，
-    // 原 50ms 在慢磁盘上会 flaky；该测试目的是验证增量读取比全量快）
-    expect(incrMs).toBeLessThan(500);
+    expect(incrMs).toBeLessThan(50);
 
     console.log(`    100K lines — Cold: ${coldMs.toFixed(0)}ms, Incremental (+100 lines): ${incrMs.toFixed(2)}ms`);
   });
