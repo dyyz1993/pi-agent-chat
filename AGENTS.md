@@ -90,20 +90,39 @@ Files that implement this pattern:
 
 ```
 src/
+  gateway/                    # HTTP 路由、WebSocket 处理、IPC 传输、代理注册
+  sandbox/                    # 沙箱管理（Cloudflare/Local/SandboxBox 提供者）
+  server.ts                   # 服务启动入口
+  server-config.ts            # 服务配置
   shared/                    # 前后端共享层（Electron main + renderer 共用）
     modules/
-      agent.ts               # RPC 类型定义（所有 method 的 params/result 类型）
-      project.ts             # 项目管理 RPC 类型
-      supervisor.ts          # Supervisor 类型
+      agent.ts               # Agent RPC 类型（含所有 method 的 params/result）
+      coordinator.ts         # Coordinator 委派类型
+      session.ts             # Session 管理类型
+      # ... (17 modules total: bash, change-review, file, git, hooks, lsp, memory, etc.)
     handlers/
-      agent.ts               # RPC handler 注册（前端侧，调用 process-manager）
-      project.ts             # 项目管理 handler
+      agent.ts               # Agent RPC handler（前端侧，调用 process-manager）
+      session.ts             # Session handler
+      coordinator.ts         # Coordinator handler
+      # ... (17 handlers total: bash, change-review, file, git, hooks, lsp, etc.)
     agent/
-      process-manager.ts     # CLI 进程池管理（spawn/kill/restart agent 进程）
+      process-manager.ts         # CLI 进程池核心（spawn/kill/restart）+ 组合根
+      agent-process-pool.ts      # LRU 进程池管理
+      session-message-reader.ts  # JSONL 读取 + 消息缓存 + 消息检索
+      event-handler.ts           # Agent 事件分发 + 7 个 Channel handler
+      coordinator-handler.ts     # Coordinator 委派/子代理管理
+      coordinator-delegate-operations.ts  # 委派操作的提取实现
+      agent-start-operations.ts  # 启动流程操作
+      agent-stop-operations.ts   # 停止流程操作
+      # ... (37 files total: runtime client, channel system, adapters)
     lib/
       project-config.ts      # ~/.pi-agent-chat/config.json 读写（串行队列 + 备份保护）
+      session-scanner.ts     # 磁盘 session 扫描器（用于进程恢复）
       logger.ts              # createLogger 工厂
-      rpc-schema.ts          # RPC Server/Client 创建工具
+      with-timeout.ts        # Promise 超时包装
+      # ... (9 files total: json-to-yaml, linked-projects-config, paths, etc.)
+    rpc-schema.ts            # RPC Server/Client 创建工具（shared 根目录）
+    register-all-handlers.ts # Handler 统一注册入口
   mainview/                  # 前端渲染层
     index.css                # Design tokens + global styles
     layouts/                 # MainLayout, breakpoint logic
@@ -111,15 +130,32 @@ src/
       tab-bar/               # Top project tabs
       chat/                  # Chat UI, messages, previews
       left-sidebar/          # Session list
-      right-sidebar/         # Status panel
+      right-sidebar/         # Status panel (deprecated, merged into status-panel)
+      status-panel/          # Agent/Model/Extension/Skill 状态面板
+      agent-panel/           # Agent 选择面板
+      change-review/         # 变更审查面板
+      model-picker/          # 模型选择器
       project-picker/        # Project selection dialog
       bash-panel/            # Terminal output
       settings/              # Settings modal
       diff/                  # Diff viewer
       file-preview/          # File preview overlay
-    stores/                  # Zustand stores (28 files)
+      explorer/              # 文件浏览器侧栏
+      git/                   # Git 面板（分支选择/提交）
+      hooks-panel/           # Hooks 面板
+      memory-panel/          # Memory 面板
+      rules-panel/           # Rules 面板
+      snapshot-panel/        # Snapshot 面板
+      session-sidebar/       # Session 侧栏
+      primitives/            # 基础 UI 组件
+      debug/                 # 诊断面板
+      rpc-panel/             # RPC 调试面板
+      theme/                 # 主题切换
+    stores/                  # Zustand stores (45 files: 27 stores + 18 helpers)
     hooks/                   # Custom hooks
     lib/                     # API client, i18n, logger
+    utils/                   # 工具函数（clipboard, constants, file-utils 等）
+    locales/                 # i18n 翻译文件（en/ + zh-CN/）
 ```
 
 ## RPC 架构
@@ -140,10 +176,13 @@ src/
   │     └─ 转发到 CLI 进程
   │           │
   │           ▼
-  └─ AgentProcessManager                        # src/shared/agent/process-manager.ts
-        ├─ spawn CLI 进程
-        ├─ 发送 RPC 请求到 CLI stdin
-        └─ 接收 CLI stdout 响应
+  └─ AgentProcessManager (组合根)               # src/shared/agent/process-manager.ts
+        ├─ SessionMessageReader                  #   JSONL 读取 + 消息缓存
+        ├─ AgentEventHandler                     #   事件分发 + Channel 处理
+        ├─ CoordinatorHandler                    #   委派/子代理管理
+        ├─ spawn CLI 进程（含 Sandbox 模式）
+        ├─ Channel 通信（类型安全 ChannelTypeRegistry）
+        └─ 事件路由（handleEvent → agent-event-routing）
               │
               ▼
         fork CLI (pi-coding-agent)               # .yalc/@dyyz1993/pi-coding-agent/dist/
@@ -217,6 +256,7 @@ test/
     stores/               #   Zustand store 状态管理 (50 文件)
     handlers/             #   RPC Handler 请求处理 (17 文件)
     utils/                #   工具函数 / 纯逻辑 (15 文件)
+    lib/                  #   项目配置 / 持久化 (project-config.test.ts)
     components/           #   React 组件渲染 / DOM 交互 (19 文件)
   integration/            # 集成测试 — 跨模块/多组件协作
     agent/                #   Agent 运行时 + 进程池
@@ -274,6 +314,8 @@ bun run test:unit           # test/unit/**
 bun run test:integration    # test/integration/**
 bun run test:regression     # test/regression/**
 bun run test:smoke          # util + handler (最快)
+bun run test:watch         # vitest watch mode
+bun run test:ui            # vitest UI
 bun run test:e2e-llm        # 真实 LLM (需 dev server)
 
 # 按业务模块 (跨类型聚合)
@@ -479,7 +521,7 @@ main().catch(console.error);
 ## Code Style
 
 - No `any` type, use `unknown` with narrowing
-- No `/* eslint-disable */` comments — fix the root cause
+- No block-level `/* eslint-disable */` comments — fix the root cause. Line-level `// eslint-disable-next-line` is acceptable only for type-system false positives (e.g. `prefer-nullish-coalescing` where `||` is intentional for empty-string fallback)
 - Use `createLogger` from `src/shared/lib/logger.ts` instead of `console.log`
 - Function components only, hooks prefixed with `use`
 - Tailwind utility classes for styling, design tokens for theming
