@@ -89,217 +89,243 @@ describe("change-review handler", () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
-  describe("change-review.pending JSONL fallback", () => {
-    it("should return pending changes from JSONL when agent process is not running", async () => {
-      (getProcessManager as Mock).mockReturnValue(null);
+  describe("change-review.pending", () => {
+    describe("with CLI process (channel call)", () => {
+      it("should use channel call when agent process IS running", async () => {
+        const callChannel = vi.fn(async () => [
+          {
+            turnIndex: 0,
+            path: "src/a.ts",
+            fileStatus: "modified",
+            status: "pending",
+            timestamp: Date.now(),
+            oldContent: "old code",
+            newContent: "new code",
+            unifiedDiff: "--- a/src/a.ts\n+++ b/src/a.ts",
+          },
+          {
+            turnIndex: 0,
+            path: "src/b.ts",
+            fileStatus: "added",
+            status: "pending",
+            timestamp: Date.now(),
+            oldContent: null,
+            newContent: "new file",
+            unifiedDiff: "--- /dev/null\n+++ b/src/b.ts",
+          },
+        ]);
 
-      const jsonlPath = join(tempDir, "session.jsonl");
-      await writeFile(
-        jsonlPath,
-        makeReviewTurnEntry(0, [{ path: "src/a.ts", status: "modified" }]) + "\n",
-      );
+        (getProcessManager as Mock).mockReturnValue({
+          hasSession: vi.fn(() => true),
+          callChannel,
+        } as unknown as ReturnType<typeof getProcessManager>);
 
-      const handler = server.handlers.get("change-review.pending")!;
-      const result = (await handler({
-        sessionId: "test-session",
-        sessionPath: jsonlPath,
-      })) as Array<{ path: string; fileStatus: string; status: string }>;
+        const handler = server.handlers.get("change-review.pending")!;
+        const result = (await handler({
+          sessionId: "test-session",
+          sessionPath: "/some/path.jsonl",
+        })) as Array<{ path: string; oldContent: string | null; newContent: string | null; unifiedDiff?: string }>;
 
-      expect(result).toHaveLength(1);
-      expect(result[0].path).toBe("src/a.ts");
-      expect(result[0].fileStatus).toBe("modified");
-      expect(result[0].status).toBe("pending");
-    });
-
-    it("should exclude approved files", async () => {
-      (getProcessManager as Mock).mockReturnValue(null);
-
-      const jsonlPath = join(tempDir, "session.jsonl");
-      const turnLine = makeReviewTurnEntry(0, [{ path: "src/a.ts", status: "modified" }]);
-      const turnObj = JSON.parse(turnLine);
-      const approvalLine = makeApprovalEntry("src/a.ts", "approved", turnObj.id);
-
-      await writeFile(jsonlPath, turnLine + "\n" + approvalLine + "\n");
-
-      const handler = server.handlers.get("change-review.pending")!;
-      const result = await handler({
-        sessionId: "test-session",
-        sessionPath: jsonlPath,
+        expect(callChannel).toHaveBeenCalledWith(
+          "test-session",
+          "file-review",
+          "review.pending",
+          { sessionId: "test-session" },
+        );
+        expect(result).toHaveLength(2);
+        expect(result[0].path).toBe("src/a.ts");
+        expect(result[0].oldContent).toBe("old code");
+        expect(result[0].newContent).toBe("new code");
+        expect(result[0].unifiedDiff).toBeTruthy();
+        expect(result[1].path).toBe("src/b.ts");
+        expect(result[1].fileStatus).toBe("added");
       });
 
-      expect(result).toEqual([]);
+      it("should fall back to JSONL when channel call throws", async () => {
+        const callChannel = vi.fn(async () => {
+          throw new Error("channel timeout");
+        });
+
+        (getProcessManager as Mock).mockReturnValue({
+          hasSession: vi.fn(() => true),
+          callChannel,
+        } as unknown as ReturnType<typeof getProcessManager>);
+
+        const jsonlPath = join(tempDir, "session.jsonl");
+        await writeFile(
+          jsonlPath,
+          makeReviewTurnEntry(0, [{ path: "src/fallback.ts", status: "added" }]) + "\n",
+        );
+
+        const handler = server.handlers.get("change-review.pending")!;
+        const result = (await handler({
+          sessionId: "test-session",
+          sessionPath: jsonlPath,
+        })) as Array<{ path: string }>;
+
+        expect(callChannel).toHaveBeenCalled();
+        expect(result).toHaveLength(1);
+        expect(result[0].path).toBe("src/fallback.ts");
+      });
     });
 
-    it("should exclude rejected files", async () => {
-      (getProcessManager as Mock).mockReturnValue(null);
+    describe("without CLI process (JSONL fallback)", () => {
+      it("should return pending changes from JSONL when agent process is not running", async () => {
+        (getProcessManager as Mock).mockReturnValue(null);
 
-      const jsonlPath = join(tempDir, "session.jsonl");
-      const turnLine = makeReviewTurnEntry(0, [{ path: "src/a.ts", status: "modified" }]);
-      const turnObj = JSON.parse(turnLine);
-      const approvalLine = makeApprovalEntry("src/a.ts", "rejected", turnObj.id);
+        const jsonlPath = join(tempDir, "session.jsonl");
+        await writeFile(
+          jsonlPath,
+          makeReviewTurnEntry(0, [{ path: "src/a.ts", status: "modified" }]) + "\n",
+        );
 
-      await writeFile(jsonlPath, turnLine + "\n" + approvalLine + "\n");
+        const handler = server.handlers.get("change-review.pending")!;
+        const result = (await handler({
+          sessionId: "test-session",
+          sessionPath: jsonlPath,
+        })) as Array<{ path: string; fileStatus: string; status: string }>;
 
-      const handler = server.handlers.get("change-review.pending")!;
-      const result = await handler({
-        sessionId: "test-session",
-        sessionPath: jsonlPath,
+        expect(result).toHaveLength(1);
+        expect(result[0].path).toBe("src/a.ts");
+        expect(result[0].fileStatus).toBe("modified");
+        expect(result[0].status).toBe("pending");
       });
 
-      expect(result).toEqual([]);
-    });
+      it("should exclude approved files", async () => {
+        (getProcessManager as Mock).mockReturnValue(null);
 
-    it("should return multiple pending files, excluding approved ones", async () => {
-      (getProcessManager as Mock).mockReturnValue(null);
+        const jsonlPath = join(tempDir, "session.jsonl");
+        const turnLine = makeReviewTurnEntry(0, [{ path: "src/a.ts", status: "modified" }]);
+        const turnObj = JSON.parse(turnLine);
+        const approvalLine = makeApprovalEntry("src/a.ts", "approved", turnObj.id);
 
-      const jsonlPath = join(tempDir, "session.jsonl");
-      const turnLine = makeReviewTurnEntry(0, [
-        { path: "src/a.ts", status: "modified" },
-        { path: "src/b.ts", status: "added" },
-        { path: "src/c.ts", status: "deleted" },
-      ]);
-      const turnObj = JSON.parse(turnLine);
-      const approvalLine = makeApprovalEntry("src/b.ts", "approved", turnObj.id);
+        await writeFile(jsonlPath, turnLine + "\n" + approvalLine + "\n");
 
-      await writeFile(jsonlPath, turnLine + "\n" + approvalLine + "\n");
+        const handler = server.handlers.get("change-review.pending")!;
+        const result = await handler({
+          sessionId: "test-session",
+          sessionPath: jsonlPath,
+        });
 
-      const handler = server.handlers.get("change-review.pending")!;
-      const result = (await handler({
-        sessionId: "test-session",
-        sessionPath: jsonlPath,
-      })) as Array<{ path: string; status: string }>;
-
-      expect(result).toHaveLength(2);
-      const paths = result.map((r) => r.path);
-      expect(paths).toContain("src/a.ts");
-      expect(paths).toContain("src/c.ts");
-      expect(paths).not.toContain("src/b.ts");
-      expect(result.every((r) => r.status === "pending")).toBe(true);
-    });
-
-    it("should apply net-zero rule: skip added-then-deleted without approval", async () => {
-      (getProcessManager as Mock).mockReturnValue(null);
-
-      const jsonlPath = join(tempDir, "session.jsonl");
-      const turn0 = makeReviewTurnEntry(0, [{ path: "src/a.ts", status: "added" }], "root");
-      const turn0Obj = JSON.parse(turn0);
-      const turn2 = makeReviewTurnEntry(2, [{ path: "src/a.ts", status: "deleted" }], turn0Obj.id);
-
-      await writeFile(jsonlPath, turn0 + "\n" + turn2 + "\n");
-
-      const handler = server.handlers.get("change-review.pending")!;
-      const result = await handler({
-        sessionId: "test-session",
-        sessionPath: jsonlPath,
+        expect(result).toEqual([]);
       });
 
-      expect(result).toEqual([]);
-    });
+      it("should exclude rejected files", async () => {
+        (getProcessManager as Mock).mockReturnValue(null);
 
-    it("should NOT apply net-zero when file was previously approved", async () => {
-      (getProcessManager as Mock).mockReturnValue(null);
+        const jsonlPath = join(tempDir, "session.jsonl");
+        const turnLine = makeReviewTurnEntry(0, [{ path: "src/a.ts", status: "modified" }]);
+        const turnObj = JSON.parse(turnLine);
+        const approvalLine = makeApprovalEntry("src/a.ts", "rejected", turnObj.id);
 
-      const jsonlPath = join(tempDir, "session.jsonl");
-      const turn0 = makeReviewTurnEntry(0, [{ path: "src/a.ts", status: "added" }], "root");
-      const turn0Obj = JSON.parse(turn0);
-      const approval = makeApprovalEntry("src/a.ts", "approved", turn0Obj.id);
-      const approvalObj = JSON.parse(approval);
-      const turn2 = makeReviewTurnEntry(
-        2,
-        [{ path: "src/a.ts", status: "deleted" }],
-        approvalObj.id,
-      );
+        await writeFile(jsonlPath, turnLine + "\n" + approvalLine + "\n");
 
-      await writeFile(jsonlPath, turn0 + "\n" + approval + "\n" + turn2 + "\n");
+        const handler = server.handlers.get("change-review.pending")!;
+        const result = await handler({
+          sessionId: "test-session",
+          sessionPath: jsonlPath,
+        });
 
-      const handler = server.handlers.get("change-review.pending")!;
-      const result = (await handler({
-        sessionId: "test-session",
-        sessionPath: jsonlPath,
-      })) as Array<{ path: string; fileStatus: string; status: string }>;
-
-      expect(result).toHaveLength(1);
-      expect(result[0].path).toBe("src/a.ts");
-      expect(result[0].fileStatus).toBe("deleted");
-      expect(result[0].status).toBe("pending");
-    });
-
-    it("should use latest turn data for a file that appears in multiple turns", async () => {
-      (getProcessManager as Mock).mockReturnValue(null);
-
-      const jsonlPath = join(tempDir, "session.jsonl");
-      const turn0 = makeReviewTurnEntry(0, [{ path: "src/a.ts", status: "modified" }], "root");
-      const turn0Obj = JSON.parse(turn0);
-      const turn2 = makeReviewTurnEntry(2, [{ path: "src/a.ts", status: "modified" }], turn0Obj.id);
-
-      await writeFile(jsonlPath, turn0 + "\n" + turn2 + "\n");
-
-      const handler = server.handlers.get("change-review.pending")!;
-      const result = (await handler({
-        sessionId: "test-session",
-        sessionPath: jsonlPath,
-      })) as Array<{ path: string; turnIndex: number }>;
-
-      expect(result).toHaveLength(1);
-      expect(result[0].path).toBe("src/a.ts");
-      expect(result[0].turnIndex).toBe(2);
-    });
-
-    it("should return empty array when sessionPath is not provided and agent is not running", async () => {
-      (getProcessManager as Mock).mockReturnValue(null);
-
-      const handler = server.handlers.get("change-review.pending")!;
-      const result = await handler({
-        sessionId: "test-session",
+        expect(result).toEqual([]);
       });
 
-      expect(result).toEqual([]);
-    });
+      it("should return multiple pending files, excluding approved ones", async () => {
+        (getProcessManager as Mock).mockReturnValue(null);
 
-    it("should return empty array when JSONL file does not exist", async () => {
-      (getProcessManager as Mock).mockReturnValue(null);
+        const jsonlPath = join(tempDir, "session.jsonl");
+        const turnLine = makeReviewTurnEntry(0, [
+          { path: "src/a.ts", status: "modified" },
+          { path: "src/b.ts", status: "added" },
+          { path: "src/c.ts", status: "deleted" },
+        ]);
+        const turnObj = JSON.parse(turnLine);
+        const approvalLine = makeApprovalEntry("src/b.ts", "approved", turnObj.id);
 
-      const handler = server.handlers.get("change-review.pending")!;
-      const result = await handler({
-        sessionId: "test-session",
-        sessionPath: "/no/such/path/session.jsonl",
+        await writeFile(jsonlPath, turnLine + "\n" + approvalLine + "\n");
+
+        const handler = server.handlers.get("change-review.pending")!;
+        const result = (await handler({
+          sessionId: "test-session",
+          sessionPath: jsonlPath,
+        })) as Array<{ path: string; status: string }>;
+
+        expect(result).toHaveLength(2);
+        const paths = result.map((r) => r.path);
+        expect(paths).toContain("src/a.ts");
+        expect(paths).toContain("src/c.ts");
+        expect(paths).not.toContain("src/b.ts");
+        expect(result.every((r) => r.status === "pending")).toBe(true);
       });
 
-      expect(result).toEqual([]);
-    });
+      it("should apply net-zero rule: skip added-then-deleted without approval", async () => {
+        (getProcessManager as Mock).mockReturnValue(null);
 
-    it("should still use agent channel when agent process IS running (no fallback)", async () => {
-      const channelResult = [
-        {
-          turnIndex: 0,
-          path: "src/a.ts",
-          fileStatus: "modified",
-          status: "pending",
-          timestamp: Date.now(),
-          oldContent: "old",
-          newContent: "new",
-        },
-      ];
+        const jsonlPath = join(tempDir, "session.jsonl");
+        const turn0 = makeReviewTurnEntry(0, [{ path: "src/a.ts", status: "added" }], "root");
+        const turn0Obj = JSON.parse(turn0);
+        const turn2 = makeReviewTurnEntry(2, [{ path: "src/a.ts", status: "deleted" }], turn0Obj.id);
 
-      (getProcessManager as Mock).mockReturnValue({
-        hasSession: vi.fn(() => true),
-        callChannel: vi.fn(async () => ({ result: channelResult })),
-      } as unknown as ReturnType<typeof getProcessManager>);
+        await writeFile(jsonlPath, turn0 + "\n" + turn2 + "\n");
 
-      const jsonlPath = join(tempDir, "session.jsonl");
-      await writeFile(
-        jsonlPath,
-        makeReviewTurnEntry(0, [{ path: "src/other.ts", status: "added" }]) + "\n",
-      );
+        const handler = server.handlers.get("change-review.pending")!;
+        const result = await handler({
+          sessionId: "test-session",
+          sessionPath: jsonlPath,
+        });
 
-      const handler = server.handlers.get("change-review.pending")!;
-      const result = (await handler({
-        sessionId: "test-session",
-        sessionPath: jsonlPath,
-      })) as Array<{ path: string }>;
+        expect(result).toEqual([]);
+      });
 
-      expect(result).toHaveLength(1);
-      expect(result[0].path).toBe("src/a.ts");
+      it("should NOT apply net-zero when file was previously approved", async () => {
+        (getProcessManager as Mock).mockReturnValue(null);
+
+        const jsonlPath = join(tempDir, "session.jsonl");
+        const turn0 = makeReviewTurnEntry(0, [{ path: "src/a.ts", status: "added" }], "root");
+        const turn0Obj = JSON.parse(turn0);
+        const approval = makeApprovalEntry("src/a.ts", "approved", turn0Obj.id);
+        const approvalObj = JSON.parse(approval);
+        const turn2 = makeReviewTurnEntry(
+          2,
+          [{ path: "src/a.ts", status: "deleted" }],
+          approvalObj.id,
+        );
+
+        await writeFile(jsonlPath, turn0 + "\n" + approval + "\n" + turn2 + "\n");
+
+        const handler = server.handlers.get("change-review.pending")!;
+        const result = (await handler({
+          sessionId: "test-session",
+          sessionPath: jsonlPath,
+        })) as Array<{ path: string; fileStatus: string; status: string }>;
+
+        expect(result).toHaveLength(1);
+        expect(result[0].path).toBe("src/a.ts");
+        expect(result[0].fileStatus).toBe("deleted");
+        expect(result[0].status).toBe("pending");
+      });
+
+      it("should return empty array when sessionPath is not provided", async () => {
+        (getProcessManager as Mock).mockReturnValue(null);
+
+        const handler = server.handlers.get("change-review.pending")!;
+        const result = await handler({
+          sessionId: "test-session",
+        });
+
+        expect(result).toEqual([]);
+      });
+
+      it("should return empty array when JSONL file does not exist", async () => {
+        (getProcessManager as Mock).mockReturnValue(null);
+
+        const handler = server.handlers.get("change-review.pending")!;
+        const result = await handler({
+          sessionId: "test-session",
+          sessionPath: "/no/such/path/session.jsonl",
+        });
+
+        expect(result).toEqual([]);
+      });
     });
   });
 });

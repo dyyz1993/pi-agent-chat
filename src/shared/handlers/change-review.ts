@@ -5,15 +5,13 @@ import { createLogger } from "../lib/logger";
 import { withTimeout } from "../lib/with-timeout";
 import { getProcessManager } from "./agent";
 import { FILE_REVIEW_METHODS } from "../constants/channel-methods";
-import { existsSync, readFileSync, statSync } from "fs";
-import { createReadStream } from "fs";
-import { join } from "path";
+import { existsSync, createReadStream } from "fs";
 import * as readline from "readline";
 import type { PendingChangeResult } from "../modules/change-review";
 
 const log = createLogger("change-review");
 
-const CHANNEL_TIMEOUT_MS = 5_000;
+const CHANNEL_TIMEOUT_MS = 15_000;
 
 interface TurnChange {
   turnIndex: number;
@@ -27,6 +25,10 @@ interface ApprovalRecord {
   timestamp: number;
 }
 
+/**
+ * Read pending changes from session JSONL when CLI process is not available.
+ * Returns list without oldContent/newContent (process required for diff data).
+ */
 async function readPendingFromJsonl(sessionPath: string): Promise<PendingChangeResult[]> {
   if (!sessionPath || !existsSync(sessionPath)) return [];
 
@@ -143,62 +145,41 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
   r("change-review.pending", async (params) => {
     const manager = getProcessManager();
-    if (!manager || !manager.hasSession(params.sessionId)) {
-      if (params.sessionPath) {
-        try {
-          const items = await readPendingFromJsonl(params.sessionPath);
-          // JSONL fallback returns null content — enrich newContent from disk.
-          const projectPath = manager?.getProjectPath(params.sessionId);
-          if (projectPath) {
-            for (const item of items) {
-              if (item.fileStatus === "deleted") {
-                item.newContent = null;
-              } else {
-                const fullPath = join(projectPath, item.path);
-                try {
-                  if (existsSync(fullPath) && statSync(fullPath).isFile()) {
-                    item.newContent = readFileSync(fullPath, "utf-8");
-                  }
-                } catch {
-                  item.newContent = null;
-                }
-                if (item.fileStatus === "added") {
-                  item.oldContent = null;
-                }
-              }
-            }
-          }
-          return items as unknown as R<"change-review.pending">;
-        } catch (err) {
-          log.warn("review.pending JSONL fallback failed", {
+
+    // CLI process available → call file-review channel (optimized getBatchFileContents O(M))
+    if (manager && manager.hasSession(params.sessionId)) {
+      try {
+        const result: unknown = await withTimeout(
+          manager.callChannel(params.sessionId, "file-review", FILE_REVIEW_METHODS.PENDING, {
             sessionId: params.sessionId,
-            err: err instanceof Error ? err.message : String(err),
-          });
-        }
+          }),
+          CHANNEL_TIMEOUT_MS,
+        );
+        const items = Array.isArray(result)
+          ? result
+          : Array.isArray((result as Record<string, unknown>)?.result)
+            ? ((result as Record<string, unknown>).result as unknown[])
+            : [];
+        return items as unknown as R<"change-review.pending">;
+      } catch (err: unknown) {
+        log.warn("review.pending channel call failed, falling back to JSONL", {
+          sessionId: params.sessionId,
+          err: err instanceof Error ? err.message : String(err),
+        });
       }
-      return [] as unknown as R<"change-review.pending">;
     }
 
+    // No CLI process or channel call failed → read pending list from JSONL
+    if (!params.sessionPath) return [];
     try {
-      const result: unknown = await withTimeout(
-        manager.callChannel(params.sessionId, "file-review", FILE_REVIEW_METHODS.PENDING, {
-          sessionId: params.sessionId,
-        }),
-        CHANNEL_TIMEOUT_MS,
-      );
-      // ServerChannel wraps array responses as { result: [...], invokeId }
-      const items = Array.isArray(result)
-        ? result
-        : Array.isArray((result as Record<string, unknown>)?.result)
-          ? ((result as Record<string, unknown>).result as unknown[])
-          : [];
+      const items = await readPendingFromJsonl(params.sessionPath);
       return items as unknown as R<"change-review.pending">;
-    } catch (err: unknown) {
-      log.warn("review.pending channel call failed", {
+    } catch (err) {
+      log.warn("review.pending JSONL read failed", {
         sessionId: params.sessionId,
         err: err instanceof Error ? err.message : String(err),
       });
-      return [] as unknown as R<"change-review.pending">;
+      return [];
     }
   });
 
