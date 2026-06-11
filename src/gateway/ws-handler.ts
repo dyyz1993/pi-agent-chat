@@ -7,6 +7,8 @@ import { createLogger } from "../shared/lib/logger";
 const log = createLogger("gateway");
 
 const SLOW_RPC_THRESHOLD_MS = 1000;
+const BACKPRESSURE_THRESHOLD = 1024 * 1024; // 1MB
+const BACKPRESSURE_DRAIN_TARGET = 512 * 1024; // 512KB
 
 export interface WsHandlerDeps {
   config: { readonly port: number; readonly authToken: string; readonly maxUploadSize: number };
@@ -72,6 +74,25 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
           throw new Error("WebSocket not open");
         }
         const msg = message as Record<string, unknown>;
+
+        // Backpressure: if send buffer is backing up, handle by message type
+        if (ws.bufferedAmount > BACKPRESSURE_THRESHOLD) {
+          // Event messages can be dropped during backpressure (next event replaces)
+          if (msg.type === "event") {
+            log.debug("[ws-out] backpressure: dropping event", { event: msg.eventType });
+            return;
+          }
+          // RPC responses must wait for buffer to drain
+          await new Promise<void>((resolve) => {
+            const check = () => {
+              if (ws.readyState !== WebSocket.OPEN) { resolve(); return; }
+              if (ws.bufferedAmount < BACKPRESSURE_DRAIN_TARGET) { resolve(); return; }
+              setTimeout(check, 10);
+            };
+            setTimeout(check, 10);
+          });
+        }
+
         // Log all outgoing messages (requests, responses, events)
         if (msg.type === "response" && msg.id) {
           const timing = rpcTimings.get(msg.id as string);

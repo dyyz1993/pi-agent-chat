@@ -11,44 +11,93 @@ import { sanitizeEvent, type SanitizedEvent } from "./hold-events";
 const log = createLogger("agent");
 
 const MESSAGE_UPDATE_THROTTLE_MS = 50;
-const pendingMessageUpdates = new Map<
-  string,
-  { sanitized: SanitizedEvent; timer: ReturnType<typeof setTimeout> }
->();
+const TOOL_UPDATE_THROTTLE_MS = 100;
+
+type PendingBuffer = { sanitized: SanitizedEvent; timer: ReturnType<typeof setTimeout> };
+
+const pendingMessageUpdates = new Map<string, PendingBuffer>();
+const pendingToolUpdates = new Map<string, PendingBuffer>();
+
+/** Clear all pending throttle buffers (for testing) */
+export function _resetThrottleBuffers(): void {
+  for (const [, buf] of pendingMessageUpdates) clearTimeout(buf.timer);
+  for (const [, buf] of pendingToolUpdates) clearTimeout(buf.timer);
+  pendingMessageUpdates.clear();
+  pendingToolUpdates.clear();
+}
+
+function flushPendingBuffer(
+  sessionId: string,
+  map: Map<string, PendingBuffer>,
+  emitAgentEvent: (sessionId: string, event: SanitizedEvent) => Promise<void>,
+): void {
+  const buf = map.get(sessionId);
+  if (buf) {
+    map.delete(sessionId);
+    emitAgentEvent(sessionId, buf.sanitized).catch(() => undefined);
+  }
+}
+
+function throttleEventType(
+  sessionId: string,
+  sanitized: SanitizedEvent,
+  eventType: string,
+  throttleMs: number,
+  pendingMap: Map<string, PendingBuffer>,
+  otherPendingMaps: Map<string, PendingBuffer>[],
+  emitAgentEvent: (sessionId: string, event: SanitizedEvent) => Promise<void>,
+): boolean {
+  if (sanitized.type !== eventType) return false;
+
+  const pending = pendingMap.get(sessionId);
+  if (pending) {
+    pending.sanitized = sanitized;
+    return true;
+  }
+  const timer = setTimeout(() => {
+    flushPendingBuffer(sessionId, pendingMap, emitAgentEvent);
+  }, throttleMs);
+  pendingMap.set(sessionId, { sanitized, timer });
+  return true;
+}
 
 function emitAgentEventThrottled(
   sessionId: string,
   sanitized: SanitizedEvent,
   emitAgentEvent: (sessionId: string, event: SanitizedEvent) => Promise<void>,
 ): void {
-  if (sanitized.type === "message_update") {
-    const pending = pendingMessageUpdates.get(sessionId);
-    if (pending) {
-      pending.sanitized = sanitized;
-      return;
-    }
-    const timer = setTimeout(() => {
-      const buf = pendingMessageUpdates.get(sessionId);
-      if (buf) {
-        pendingMessageUpdates.delete(sessionId);
-        emitAgentEvent(sessionId, buf.sanitized).catch((err: unknown) => {
-          log.warn("throttled emitAgentEvent failed", {
-            sessionId,
-            err: err instanceof Error ? err.message : String(err),
-          });
-        });
-      }
-    }, MESSAGE_UPDATE_THROTTLE_MS);
-    pendingMessageUpdates.set(sessionId, { sanitized, timer });
+  // Throttle high-frequency event types
+  if (
+    throttleEventType(
+      sessionId,
+      sanitized,
+      "message_update",
+      MESSAGE_UPDATE_THROTTLE_MS,
+      pendingMessageUpdates,
+      [pendingToolUpdates],
+      emitAgentEvent,
+    )
+  ) {
     return;
   }
 
-  const pending = pendingMessageUpdates.get(sessionId);
-  if (pending) {
-    clearTimeout(pending.timer);
-    pendingMessageUpdates.delete(sessionId);
-    emitAgentEvent(sessionId, pending.sanitized).catch(() => undefined);
+  if (
+    throttleEventType(
+      sessionId,
+      sanitized,
+      "tool_execution_update",
+      TOOL_UPDATE_THROTTLE_MS,
+      pendingToolUpdates,
+      [pendingMessageUpdates],
+      emitAgentEvent,
+    )
+  ) {
+    return;
   }
+
+  // Non-throttled event: flush any pending throttled events first, then send immediately
+  flushPendingBuffer(sessionId, pendingMessageUpdates, emitAgentEvent);
+  flushPendingBuffer(sessionId, pendingToolUpdates, emitAgentEvent);
   emitAgentEvent(sessionId, sanitized).catch(() => undefined);
 }
 

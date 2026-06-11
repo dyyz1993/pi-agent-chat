@@ -81,7 +81,7 @@ export class SessionMessageReader {
       byteOffset: number;
     }
   >();
-  private static SESSION_CACHE_MAX = 10;
+  private static SESSION_CACHE_MAX = 25;
 
   constructor(deps: SessionMessageReaderDeps) {
     this.deps = deps;
