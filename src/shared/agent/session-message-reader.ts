@@ -643,7 +643,7 @@ export class SessionMessageReader {
     // Resolve session file path first
     const resolvedSessionPath = managed
       ? managed.info.sessionPath
-      : this.deps.resolveSessionPath(sessionId) || sessionPath || "";
+      : this.deps.resolveSessionPath(sessionId) ?? sessionPath ?? "";
 
     // JSONL-first: always read messages directly from the JSONL file.
     // This avoids CLI OOM — CLI's get_full_messages handler uses readFile internally
