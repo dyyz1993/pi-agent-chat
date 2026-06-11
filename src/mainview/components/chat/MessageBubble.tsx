@@ -742,7 +742,7 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
         description={
           block.output && !isRunning
             ? (() => {
-                const firstLine = block.output!.split("\n")[0].slice(0, 100);
+                const firstLine = block.output.split("\n")[0].slice(0, 100);
                 const trimmed = firstLine.trim();
                 // If output starts with JSON brace, skip it — use args-based description instead.
                 if (trimmed.startsWith("{") || trimmed.startsWith("[")) {

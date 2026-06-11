@@ -287,6 +287,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
             }
             summary ??= block.args.split("\n")[0]?.trim().slice(0, 120);
           }
+          // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
           return summary || block.toolName;
         })()}
         collapsed={collapsed}

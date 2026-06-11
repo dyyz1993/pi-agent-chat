@@ -14,7 +14,7 @@ import type {
   AgentMessageForUI,
   ChannelDataEvent,
 } from "../modules/agent";
-import type { AssistantMessage, AssistantMessageEvent } from "@dyyz1993/pi-ai";
+import type { AssistantMessage, AssistantMessageEvent, ImageContent } from "@dyyz1993/pi-ai";
 import type { RpcClientAPI, ChannelTypeRegistry } from "@dyyz1993/pi-coding-agent";
 import type { TreeEntry } from "../modules/agent";
 import { performance } from "perf_hooks";
@@ -845,12 +845,10 @@ export class AgentProcessManager {
   async send(
     sessionId: string,
     content: string,
-    images?: import("@dyyz1993/pi-ai").ImageContent[],
+    images?: ImageContent[],
   ): Promise<boolean> {
     let managed = this.getActiveManaged(sessionId);
-    if (!managed) {
-      managed = await this.ensureManagedClient(sessionId);
-    }
+    managed ??= await this.ensureManagedClient(sessionId);
     if (!managed) {
       log.warn("send: no client after ensure", { sessionId });
       return false;
@@ -858,7 +856,7 @@ export class AgentProcessManager {
     managed.lastActiveAt = Date.now();
     managed.client.prompt(content, images).catch(async (err: Error) => {
       log.warn("prompt error", { err: err.message });
-      if (!(await this.isClientAlive(sessionId, managed!))) {
+      if (!managed || !(await this.isClientAlive(sessionId, managed))) {
         this.cleanupDeadClient(sessionId, `prompt failed: ${err.message}`);
         return;
       }
@@ -876,7 +874,7 @@ export class AgentProcessManager {
   steer(
     sessionId: string,
     content: string,
-    images?: import("@dyyz1993/pi-ai").ImageContent[],
+    images?: ImageContent[],
   ): boolean {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) return false;
@@ -889,7 +887,7 @@ export class AgentProcessManager {
   followUp(
     sessionId: string,
     content: string,
-    images?: import("@dyyz1993/pi-ai").ImageContent[],
+    images?: ImageContent[],
   ): boolean {
     const managed = this.getActiveManaged(sessionId);
     if (!managed) return false;
@@ -1146,9 +1144,7 @@ export class AgentProcessManager {
     }>;
   } | null> {
     let managed = this.getActiveManaged(sessionId);
-    if (!managed) {
-      managed = await this.ensureManagedClient(sessionId);
-    }
+    managed ??= await this.ensureManagedClient(sessionId);
     if (!managed) return null;
 
     try {
@@ -1296,9 +1292,7 @@ export class AgentProcessManager {
       await new Promise((r) => setTimeout(r, 200));
       managed = this.getActiveManaged(sessionId);
     }
-    if (!managed) {
-      managed = await this.ensureManagedClient(sessionId);
-    }
+    managed ??= await this.ensureManagedClient(sessionId);
     if (!managed) return [];
     return managed.client.getAvailableModels().catch(async (err: unknown) => {
       const msg = err instanceof Error ? err.message : String(err);
@@ -1306,7 +1300,7 @@ export class AgentProcessManager {
         sessionId,
         err: msg,
       });
-      if (!(await this.isClientAlive(sessionId, managed))) {
+      if (!managed || !(await this.isClientAlive(sessionId, managed))) {
         this.cleanupDeadClient(sessionId, `getAvailableModels failed: ${msg}`);
       }
       return [];
@@ -1319,9 +1313,7 @@ export class AgentProcessManager {
     modelId: string,
   ): Promise<{ provider: string; id: string }> {
     let managed = this.getActiveManaged(sessionId);
-    if (!managed) {
-      managed = await this.ensureManagedClient(sessionId);
-    }
+    managed ??= await this.ensureManagedClient(sessionId);
     if (!managed) throw new Error("Client not found");
     return withTimeout(managed.client.setModel(provider, modelId), 15_000, "setModel");
   }
@@ -1346,9 +1338,7 @@ export class AgentProcessManager {
     isScoped: boolean;
   } | null> {
     let managed = this.getActiveManaged(sessionId);
-    if (!managed) {
-      managed = await this.ensureManagedClient(sessionId);
-    }
+    managed ??= await this.ensureManagedClient(sessionId);
     if (!managed) return null;
     return managed.client.cycleModel().catch((err: unknown) => {
       log.warn("cycleModel error", {
@@ -1450,9 +1440,7 @@ export class AgentProcessManager {
 
   async setPermissionMode(sessionId: string, mode: string): Promise<{ mode: string }> {
     let managed = this.getActiveManaged(sessionId);
-    if (!managed) {
-      managed = await this.ensureManagedClient(sessionId);
-    }
+    managed ??= await this.ensureManagedClient(sessionId);
     if (!managed) throw new Error("Client not found");
     return withTimeout(
       managed.client.setPermissionMode(
@@ -1633,9 +1621,7 @@ export class AgentProcessManager {
     sessionId: string,
   ): Promise<{ tokens: number | null; contextWindow: number; percent: number | null }> {
     let managed = this.getActiveManaged(sessionId);
-    if (!managed) {
-      managed = await this.ensureManagedClient(sessionId);
-    }
+    managed ??= await this.ensureManagedClient(sessionId);
     if (!managed) return { tokens: null, contextWindow: 0, percent: null };
     return managed.client.getContextUsage().catch(async (err: unknown) => {
       const msg = err instanceof Error ? err.message : String(err);
@@ -1643,7 +1629,7 @@ export class AgentProcessManager {
         sessionId,
         err: msg,
       });
-      if (!(await this.isClientAlive(sessionId, managed))) {
+      if (!managed || !(await this.isClientAlive(sessionId, managed))) {
         this.cleanupDeadClient(sessionId, `getContextUsage failed: ${msg}`);
       }
       return { tokens: null, contextWindow: 0, percent: null };
@@ -1656,9 +1642,7 @@ export class AgentProcessManager {
       await new Promise((r) => setTimeout(r, 200));
       managed = this.getActiveManaged(sessionId);
     }
-    if (!managed) {
-      managed = await this.ensureManagedClient(sessionId);
-    }
+    managed ??= await this.ensureManagedClient(sessionId);
     if (!managed) return { models: {} };
     const response = await (
       managed.client as unknown as { send: (cmd: unknown) => Promise<unknown> }
@@ -1702,9 +1686,7 @@ export class AgentProcessManager {
     }>;
   }> {
     let managed = this.getActiveManaged(sessionId);
-    if (!managed) {
-      managed = await this.ensureManagedClient(sessionId);
-    }
+    managed ??= await this.ensureManagedClient(sessionId);
     if (!managed) return { agents: [] };
     try {
       const response = await (
@@ -1751,9 +1733,7 @@ export class AgentProcessManager {
     thinkingLevel?: string;
   }> {
     let managed = this.getActiveManaged(sessionId);
-    if (!managed) {
-      managed = await this.ensureManagedClient(sessionId);
-    }
+    managed ??= await this.ensureManagedClient(sessionId);
     if (!managed) throw new Error("No agent process for session");
     const response = await (
       managed.client as unknown as { send: (cmd: unknown) => Promise<unknown> }
@@ -1769,9 +1749,7 @@ export class AgentProcessManager {
 
   async getCurrentAgent(sessionId: string): Promise<{ agentName: string | null }> {
     let managed = this.getActiveManaged(sessionId);
-    if (!managed) {
-      managed = await this.ensureManagedClient(sessionId);
-    }
+    managed ??= await this.ensureManagedClient(sessionId);
     if (!managed) return { agentName: null };
     try {
       const response = await (
@@ -2137,9 +2115,7 @@ export class AgentProcessManager {
         if (managed) break;
       }
     }
-    if (!managed) {
-      managed = await this.ensureManagedClient(sessionId);
-    }
+    managed ??= await this.ensureManagedClient(sessionId);
     if (!managed) throw new Error("Client not found");
     const ch = managed.client.channel(channelName);
     return ch.call(method, params);

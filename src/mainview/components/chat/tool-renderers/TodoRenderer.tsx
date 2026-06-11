@@ -190,6 +190,7 @@ export const TodoExecRenderer = memo(function TodoExecRenderer({ block }: ToolRe
 
   const status: ToolCardStatus = isRunning ? "running" : isError ? "error" : "done";
 
+  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
   const description = operation || (details ? <ActionSummary details={details} /> : undefined) || block.toolName;
 
   const badge = isRunning ? (

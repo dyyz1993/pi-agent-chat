@@ -192,6 +192,7 @@ export function FileOverlay({ preview, loading, onClose, onSave, onToggleEdit }:
     return null;
   };
 
+  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
   const hasToolbarButtons = isHtml || (preview.isText && !preview.editable && onToggleEdit) || preview.editable;
 
   return (

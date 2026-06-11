@@ -778,7 +778,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         }
       }
 
-      const preservedToolExecs = (currentAssistant?.content || []).filter(
+      const preservedToolExecs = (currentAssistant?.content ?? []).filter(
         (b): b is Extract<ContentBlock, { type: "toolExecution" }> => b.type === "toolExecution",
       );
       const execByCallId = new Map<string, Extract<ContentBlock, { type: "toolExecution" }>>();
@@ -832,10 +832,12 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
       const preservedBlocks = preservedToolExecs.filter((exec) => !usedExecs.has(exec.toolCallId));
 
+      if (!currentAssistant) return;
+
       chat.setMessagesForSession(
         sessionId,
         replaceMsgAt(currentMsgs, currentAssistantIdx, {
-          ...currentAssistant!,
+          ...currentAssistant,
           content: [...preservedBlocks, ...orderedBlocks],
           ...buildTokenUsage(message.usage),
           ...(message.stopReason ? { stopReason: message.stopReason } : {}),
