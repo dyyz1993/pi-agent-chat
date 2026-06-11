@@ -1,6 +1,8 @@
 export { Button } from "./Button";
 export { CopyAction } from "./CopyAction";
 export { FullscreenOverlay } from "./FullscreenOverlay";
+export { IframeFullscreenOverlay } from "./IframeFullscreenOverlay";
+export { ImageViewerOverlay } from "./ImageViewerOverlay";
 export { IconButton } from "./IconButton";
 export { ModalDialog } from "./ModalDialog";
 export { ToastViewport } from "./ToastViewport";

@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
-import { X, Columns2, Rows3 } from "lucide-react";
+import { Columns2, Rows3 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import ReactDiffViewer, { DiffMethod } from "react-diff-viewer-continued";
 import { Highlight, themes } from "prism-react-renderer";
@@ -9,6 +9,7 @@ import { useLayoutStore } from "../../layouts/use-layout-store";
 import { formatFilePath } from "../../lib/format-path";
 import { getLanguage } from "../../utils/file-utils";
 import { createDiffStyles, DIFF_STYLE_PRESETS } from "./diff-style-factory";
+import { FullscreenOverlay } from "../primitives";
 
 function useSyntaxRenderer(filePath: string | undefined) {
   const resolvedTheme = useThemeStore((s) => s.resolvedTheme);
@@ -63,67 +64,64 @@ export function DiffOverlay() {
 
   const fileName = rawPath.split("/").pop() ?? "";
 
-  return (
-    <div
-      className="absolute inset-0 bg-bg-elevated dark:bg-surface-code flex flex-col"
-      style={{ zIndex: 40 }}
-    >
-      <div className="h-9 bg-surface-dim border-b border-border-secondary flex items-center px-3 text-xs flex-shrink-0 gap-2">
-        <span className="text-text-primary dark:text-text-secondary font-medium">{fileName}</span>
-        <span className="text-text-tertiary truncate text-[10px]" title={rawPath}>
-          {rawPath ? formatFilePath(rawPath) : ""}
-        </span>
-        <div className="ml-auto flex items-center gap-1">
-          {!isMobile && (
-            <>
-              <button
-                onClick={() => setSplitView(false)}
-                className={`p-1 rounded transition-colors ${!splitView ? "bg-text-tertiary dark:bg-text-secondary text-white" : "text-text-tertiary hover:text-text-primary dark:hover:text-text-primary"}`}
-                title={t("diffLineByLine")}
-                aria-label={t("diffLineByLine")}
-              >
-                <Rows3 className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => setSplitView(true)}
-                className={`p-1 rounded transition-colors ${splitView ? "bg-text-tertiary dark:bg-text-secondary text-white" : "text-text-tertiary hover:text-text-primary dark:hover:text-text-primary"}`}
-                title={t("diffSideBySide")}
-                aria-label={t("diffSideBySide")}
-              >
-                <Columns2 className="w-3.5 h-3.5" />
-              </button>
-            </>
-          )}
-          <button
-            onClick={clearDiff}
-            className="p-2 rounded text-text-tertiary hover:text-text-primary dark:hover:text-text-primary hover:bg-surface-hover dark:hover:bg-surface-hover transition-colors"
-            aria-label={t("closeDiff")}
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-auto">
-        {loadingDiff ? (
-          <div className="flex items-center justify-center h-full text-text-tertiary text-sm">
-            <div className="w-5 h-5 border-2 border-semantic-accent border-t-transparent rounded-full animate-spin mr-2" />
-            {t("loadingDiff")}
-          </div>
-        ) : currentDiff ? (
-          <ReactDiffViewer
-            oldValue={currentDiff.oldContent}
-            newValue={currentDiff.newContent}
-            splitView={effectiveSplitView}
-            compareMethod={DiffMethod.LINES}
-            useDarkTheme={isDark}
-            styles={styles}
-            renderContent={renderContent}
-            showDiffOnly
-            {...(effectiveSplitView && { leftTitle: t("diffBefore"), rightTitle: t("diffAfter") })}
-          />
-        ) : null}
-      </div>
+  const actions = !isMobile ? (
+    <div className="flex items-center gap-1">
+      <button
+        onClick={() => setSplitView(false)}
+        className={`p-1 rounded transition-colors ${!splitView ? "bg-text-tertiary dark:bg-text-secondary text-white" : "text-text-tertiary hover:text-text-primary dark:hover:text-text-primary"}`}
+        title={t("diffLineByLine")}
+        aria-label={t("diffLineByLine")}
+      >
+        <Rows3 className="w-3.5 h-3.5" />
+      </button>
+      <button
+        onClick={() => setSplitView(true)}
+        className={`p-1 rounded transition-colors ${splitView ? "bg-text-tertiary dark:bg-text-secondary text-white" : "text-text-tertiary hover:text-text-primary dark:hover:text-text-primary"}`}
+        title={t("diffSideBySide")}
+        aria-label={t("diffSideBySide")}
+      >
+        <Columns2 className="w-3.5 h-3.5" />
+      </button>
     </div>
+  ) : undefined;
+
+  const title = (
+    <>
+      <span className="font-medium">{fileName}</span>
+      <span className="text-text-tertiary truncate text-[10px] ml-2" title={rawPath}>
+        {rawPath ? formatFilePath(rawPath) : ""}
+      </span>
+    </>
+  );
+
+  return (
+    <FullscreenOverlay
+      title={title}
+      onClose={clearDiff}
+      closeLabel={t("closeDiff")}
+      actions={actions}
+      position="absolute"
+      layer="modal"
+      headerClassName="h-9 text-xs gap-2"
+    >
+      {loadingDiff ? (
+        <div className="flex items-center justify-center h-full text-text-tertiary text-sm">
+          <div className="w-5 h-5 border-2 border-semantic-accent border-t-transparent rounded-full animate-spin mr-2" />
+          {t("loadingDiff")}
+        </div>
+      ) : currentDiff ? (
+        <ReactDiffViewer
+          oldValue={currentDiff.oldContent}
+          newValue={currentDiff.newContent}
+          splitView={effectiveSplitView}
+          compareMethod={DiffMethod.LINES}
+          useDarkTheme={isDark}
+          styles={styles}
+          renderContent={renderContent}
+          showDiffOnly
+          {...(effectiveSplitView && { leftTitle: t("diffBefore"), rightTitle: t("diffAfter") })}
+        />
+      ) : null}
+    </FullscreenOverlay>
   );
 }

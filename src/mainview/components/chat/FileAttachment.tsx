@@ -7,6 +7,7 @@ import { useSupervisorStore } from "../../stores/use-supervisor-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import { isVisionModel } from "../../lib/vision-detection";
+import { ImageViewerOverlay } from "../primitives";
 
 function AttachmentPreview({ att, onRemove }: { att: AttachmentFile; onRemove: () => void }) {
   const isImage = att.type.startsWith("image/");
@@ -30,23 +31,11 @@ function AttachmentPreview({ att, onRemove }: { att: AttachmentFile; onRemove: (
           </button>
         </div>
         {expanded && (
-          <div
-            className="fixed inset-0 z-fullscreen bg-black/70 flex items-center justify-center p-4"
-            onClick={() => setExpanded(false)}
-          >
-            <img
-              src={att.preview}
-              alt={att.name}
-              className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg"
-              onClick={(e) => e.stopPropagation()}
-            />
-            <button
-              onClick={() => setExpanded(false)}
-              className="absolute top-4 right-4 p-2 rounded-full bg-white/20 hover:bg-white/30 text-white transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
+          <ImageViewerOverlay
+            src={att.preview}
+            alt={att.name}
+            onClose={() => setExpanded(false)}
+          />
         )}
       </>
     );

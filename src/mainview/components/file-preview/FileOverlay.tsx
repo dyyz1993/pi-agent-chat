@@ -1,4 +1,4 @@
-import { FileText, X, Code, Eye, Save, Pencil, Check, Loader2 } from "lucide-react";
+import { FileText, Code, Eye, Save, Pencil, Check, Loader2 } from "lucide-react";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import type { FilePreview } from "../../types";
@@ -6,7 +6,7 @@ import { formatSize } from "../../utils/file-utils";
 import { VirtualizedCodeView } from "./VirtualizedCodeView";
 import { apiClient } from "../../lib/api-client";
 import { createLogger } from "../../../shared/lib/logger";
-import { IconButton } from "../primitives/IconButton";
+import { FullscreenOverlay } from "../primitives";
 
 const log = createLogger("file");
 
@@ -65,14 +65,6 @@ export function FileOverlay({ preview, loading, onClose, onSave, onToggleEdit }:
   useEffect(() => {
     setEditContent(preview.content ?? "");
   }, [preview.path, preview.content]);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [onClose]);
 
   // Auto-focus textarea when editable
   useEffect(() => {
@@ -195,86 +187,90 @@ export function FileOverlay({ preview, loading, onClose, onSave, onToggleEdit }:
   // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
   const hasToolbarButtons = isHtml || (preview.isText && !preview.editable && onToggleEdit) || preview.editable;
 
-  return (
-    <div className="absolute inset-0 z-10 bg-bg-elevated/95 dark:bg-surface-code/95 flex flex-col overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-2 bg-surface-dim border-b border-border-secondary flex-shrink-0">
-        <div className="flex items-center gap-2 min-w-0">
-          <FileText className="w-4 h-4 text-text-tertiary shrink-0" />
-          <span className="text-sm font-medium text-text-primary truncate">{preview.name}</span>
-          {preview.size > 0 && (
-            <span className="text-xs text-text-tertiary shrink-0">{formatSize(preview.size)}</span>
+  const actions = hasToolbarButtons ? (
+    <div className="flex items-center gap-1 mr-1 pr-2 border-r border-border-secondary">
+      {isHtml && (
+        <button
+          onClick={() => setHtmlSourceMode((v) => !v)}
+          className={`${toolbarBtnBase} ${
+            htmlSourceMode
+              ? "text-semantic-accent bg-semantic-accent/10 hover:bg-semantic-accent/20"
+              : "text-text-tertiary hover:text-text-primary hover:bg-surface-hover"
+          }`}
+          title={htmlSourceMode ? t("switchPreview") : t("switchSource")}
+        >
+          {htmlSourceMode ? <Eye className="w-3.5 h-3.5" /> : <Code className="w-3.5 h-3.5" />}
+          <span>{htmlSourceMode ? t("preview") : t("source")}</span>
+        </button>
+      )}
+      {preview.isText && !preview.editable && onToggleEdit && (
+        <button
+          onClick={() => onToggleEdit(true)}
+          className={`${toolbarBtnBase} text-text-tertiary hover:text-text-primary hover:bg-surface-hover`}
+          title={t("edit", { ns: "explorer" })}
+        >
+          <Pencil className="w-3.5 h-3.5" />
+          <span>{t("edit", { ns: "explorer" })}</span>
+        </button>
+      )}
+      {preview.editable && (
+        <button
+          onClick={handleSave}
+          disabled={saveState === "saving"}
+          className={`${toolbarBtnBase} ${
+            saveState === "saved"
+              ? "bg-status-success/80 text-white hover:bg-status-success/80"
+              : saveState === "error"
+                ? "bg-status-error/80 text-white hover:bg-status-error/80"
+                : "bg-semantic-accent text-white hover:bg-semantic-accent/85 disabled:opacity-70"
+          }`}
+          title={saveState === "saving" ? t("saving") : `${t("save")} (⌘↵)`}
+        >
+          {saveState === "saving" ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : saveState === "saved" ? (
+            <Check className="w-3.5 h-3.5" />
+          ) : (
+            <Save className="w-3.5 h-3.5" />
           )}
-          {preview.totalLines != null && (
-            <span className="text-xs text-text-tertiary shrink-0">{preview.totalLines} lines</span>
-          )}
-        </div>
-        <div className="flex items-center gap-1 shrink-0">
-          {hasToolbarButtons && (
-            <div className="flex items-center gap-1 mr-1 pr-2 border-r border-border-secondary">
-              {isHtml && (
-                <button
-                  onClick={() => setHtmlSourceMode((v) => !v)}
-                  className={`${toolbarBtnBase} ${
-                    htmlSourceMode
-                      ? "text-semantic-accent bg-semantic-accent/10 hover:bg-semantic-accent/20"
-                      : "text-text-tertiary hover:text-text-primary hover:bg-surface-hover"
-                  }`}
-                  title={htmlSourceMode ? t("switchPreview") : t("switchSource")}
-                >
-                  {htmlSourceMode ? <Eye className="w-3.5 h-3.5" /> : <Code className="w-3.5 h-3.5" />}
-                  <span>{htmlSourceMode ? t("preview") : t("source")}</span>
-                </button>
-              )}
-              {preview.isText && !preview.editable && onToggleEdit && (
-                <button
-                  onClick={() => onToggleEdit(true)}
-                  className={`${toolbarBtnBase} text-text-tertiary hover:text-text-primary hover:bg-surface-hover`}
-                  title={t("edit", { ns: "explorer" })}
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                  <span>{t("edit", { ns: "explorer" })}</span>
-                </button>
-              )}
-              {preview.editable && (
-                <button
-                  onClick={handleSave}
-                  disabled={saveState === "saving"}
-                  className={`${toolbarBtnBase} ${
-                    saveState === "saved"
-                      ? "bg-status-success/80 text-white hover:bg-status-success/80"
-                      : saveState === "error"
-                        ? "bg-status-error/80 text-white hover:bg-status-error/80"
-                        : "bg-semantic-accent text-white hover:bg-semantic-accent/85 disabled:opacity-70"
-                  }`}
-                  title={saveState === "saving" ? t("saving") : `${t("save")} (⌘↵)`}
-                >
-                  {saveState === "saving" ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : saveState === "saved" ? (
-                    <Check className="w-3.5 h-3.5" />
-                  ) : (
-                    <Save className="w-3.5 h-3.5" />
-                  )}
-                  <span>
-                    {saveState === "saving"
-                      ? t("saving")
-                      : saveState === "saved"
-                        ? t("saved")
-                        : saveState === "error"
-                          ? t("saveFailed")
-                          : t("save")}
-                  </span>
-                </button>
-              )}
-            </div>
-          )}
-          <IconButton label={t("close", { ns: "common" })} variant="ghost" size="sm" onClick={onClose}>
-            <X className="w-4 h-4" />
-          </IconButton>
-        </div>
-      </div>
-
-      <div className="flex-1 min-h-0 flex flex-col">{renderPreview()}</div>
+          <span>
+            {saveState === "saving"
+              ? t("saving")
+              : saveState === "saved"
+                ? t("saved")
+                : saveState === "error"
+                  ? t("saveFailed")
+                  : t("save")}
+          </span>
+        </button>
+      )}
     </div>
+  ) : undefined;
+
+  const title = (
+    <>
+      {preview.name}
+      {preview.size > 0 && (
+        <span className="text-xs text-text-tertiary shrink-0 ml-2">{formatSize(preview.size)}</span>
+      )}
+      {preview.totalLines != null && (
+        <span className="text-xs text-text-tertiary shrink-0 ml-2">{preview.totalLines} lines</span>
+      )}
+    </>
+  );
+
+  return (
+    <FullscreenOverlay
+      title={title}
+      onClose={onClose}
+      closeLabel={t("close", { ns: "common" })}
+      icon={<FileText className="w-4 h-4 text-text-tertiary shrink-0" />}
+      actions={actions}
+      position="absolute"
+      layer="modal"
+      bodyClassName="flex-1 min-h-0 flex flex-col"
+    >
+      {renderPreview()}
+    </FullscreenOverlay>
   );
 }
