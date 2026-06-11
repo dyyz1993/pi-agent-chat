@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { createPortal } from "react-dom";
 import {
   ChevronDown,
   ChevronRight,
@@ -17,8 +16,7 @@ import { useSessionStore } from "../../stores/use-session-store";
 import { useBashStore } from "../../stores/use-bash-store";
 import type { BashProcess } from "../../../shared/modules/bash";
 import { apiClient } from "../../lib/api-client";
-import { useFocusTrap } from "../../hooks/use-focus-trap";
-import { IconButton } from "../primitives";
+import { ModalDialog } from "../primitives";
 import { createLogger } from "../../../shared/lib/logger";
 
 const log = createLogger("bash");
@@ -182,8 +180,6 @@ function LogViewer({
   const subIdRef = useRef<string | null>(null);
   const autoScrollRef = useRef(true);
   const isProgrammaticScrollRef = useRef(false);
-  const overlayRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(overlayRef, { onEscape: onClose });
 
   // Sync state → ref for use in callbacks/effects
   autoScrollRef.current = autoScroll;
@@ -202,9 +198,6 @@ function LogViewer({
   }, [virtualizer, lines.length]);
 
   // --- Auto-scroll on new lines ---
-  // Uses autoScrollRef (not state) to avoid stale closure issues,
-  // and isProgrammaticScrollRef to prevent the scroll event from
-  // incorrectly disabling autoScroll.
   const prevLinesLengthRef = useRef(0);
   useEffect(() => {
     if (lines.length === 0) return;
@@ -292,8 +285,6 @@ function LogViewer({
 
   // --- Scroll handler with programmatic scroll guard ---
   const handleScroll = useCallback(() => {
-    // If this scroll was triggered programmatically (scrollToBottom),
-    // skip all flag changes to avoid incorrectly disabling autoScroll.
     if (isProgrammaticScrollRef.current) {
       isProgrammaticScrollRef.current = false;
       return;
@@ -304,21 +295,18 @@ function LogViewer({
 
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
 
-    // User scrolled up → disable auto-scroll
     if (!nearBottom) {
       if (autoScrollRef.current) {
         autoScrollRef.current = false;
         setAutoScroll(false);
       }
     } else {
-      // User scrolled back to bottom → re-enable auto-scroll
       if (!autoScrollRef.current) {
         autoScrollRef.current = true;
         setAutoScroll(true);
       }
     }
 
-    // Load more when near bottom and more pages available
     if (nearBottom && hasMore && !loadingRef.current) {
       loadingRef.current = true;
       loadMoreLines();
@@ -368,134 +356,114 @@ function LogViewer({
 
   const virtualItems = virtualizer.getVirtualItems();
 
-  return (
-    <div
-      ref={overlayRef}
-      className="fixed inset-0 z-modal flex items-center justify-center bg-black/60 sm:p-6"
-      onClick={onClose}
-      onKeyDown={(e) => {
-        if (e.key === "Escape") {
-          e.preventDefault();
-          e.stopPropagation();
-          onClose();
-        }
-      }}
-    >
-      <div
-        className="bg-surface-code border-t sm:border border-border-secondary sm:rounded-lg w-full sm:max-w-4xl flex flex-col h-full sm:h-[70vh] sm:max-h-[85vh]"
-        onClick={(e) => e.stopPropagation()}
+  const title = (
+    <div className="flex items-center gap-2 min-w-0">
+      <span className="text-xs text-text-secondary font-mono truncate">
+        {logPath.split("/").pop()}
+      </span>
+      <span className="text-[9px] text-text-tertiary shrink-0">
+        {t("lineCountShort", { count: totalLines })}
+      </span>
+    </div>
+  );
+
+  const footer = (
+    <div className="flex items-center gap-2 w-full">
+      <span className="text-[9px] text-text-tertiary shrink-0">
+        {lines.length}/{totalLines}
+      </span>
+
+      <button
+        onClick={jumpToBottom}
+        className={`text-[9px] shrink-0 transition-colors ${
+          autoScroll ? "text-status-info" : "text-text-tertiary hover:text-text-secondary"
+        }`}
       >
-        {/* Header */}
-        <div
-          className="flex items-center justify-between px-4 py-2.5 border-b border-border-secondary shrink-0"
-          style={{ paddingTop: "calc(0.625rem + env(safe-area-inset-top, 0px))" }}
+        {t("scrollToBottom")}
+      </button>
+
+      <div className="flex-1 flex items-center gap-1.5 ml-2">
+        <input
+          ref={inputRef}
+          value={stdinInput}
+          onChange={(e) => setStdinInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") sendStdin();
+          }}
+          placeholder={t("stdinPlaceholder")}
+          className="flex-1 h-7 px-2 rounded bg-surface-dim border border-border-secondary text-[11px] text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-border-secondary font-mono"
+        />
+        <button
+          onClick={sendStdin}
+          disabled={!stdinInput.trim()}
+          className="h-7 w-7 flex items-center justify-center rounded bg-status-info/20 text-status-info hover:bg-status-info/30 disabled:opacity-30 disabled:hover:bg-status-info/20 transition-colors shrink-0"
+          title={t("sendTitle")}
         >
-          <div className="flex items-center gap-2 min-w-0">
-            <Terminal className="w-3.5 h-3.5 text-text-tertiary shrink-0" />
-            <span className="text-xs text-text-secondary font-mono truncate">
-              {logPath.split("/").pop()}
-            </span>
-            <span className="text-[9px] text-text-tertiary shrink-0">
-              {t("lineCountShort", { count: totalLines })}
-            </span>
-          </div>
-          <IconButton label={t("close")} size="md" onClick={onClose}>
-            <X className="w-4 h-4" />
-          </IconButton>
-        </div>
+          <Send className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </div>
+  );
 
-        {/* Scrollable log area */}
-        <div className="flex-1 min-h-0 relative">
-          <div ref={scrollRef} onScroll={handleScroll} className="h-full overflow-auto p-3 sm:p-4">
-            {loading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="w-4 h-4 animate-spin text-text-tertiary" />
-                <span className="ml-2 text-[11px] text-text-tertiary">{t("loadingDots")}</span>
-              </div>
-            ) : lines.length === 0 ? (
-              <div className="text-[11px] text-text-tertiary italic">{t("noOutput")}</div>
-            ) : (
-              <div
-                style={{
-                  height: virtualizer.getTotalSize(),
-                  width: "100%",
-                  position: "relative",
-                }}
-              >
-                {virtualItems.map((virtualRow) => {
-                  const line = lines[virtualRow.index];
-                  return (
-                    <pre
-                      key={virtualRow.index}
-                      data-index={virtualRow.index}
-                      ref={virtualizer.measureElement}
-                      className="text-[11px] text-text-secondary font-mono whitespace-pre-wrap break-all leading-relaxed absolute top-0 left-0 w-full"
-                      style={{
-                        transform: `translateY(${virtualRow.start}px)`,
-                      }}
-                    >
-                      {line}
-                    </pre>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Floating "scroll to bottom" button — appears when auto-scroll is paused */}
-          {!autoScroll && !loading && lines.length > 0 && (
-            <button
-              onClick={jumpToBottom}
-              className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-status-info text-white text-[10px] font-medium shadow-lg hover:bg-status-info/80 transition-all z-10"
+  return (
+    <ModalDialog
+      title={title}
+      onClose={onClose}
+      closeLabel={t("close")}
+      icon={<Terminal className="w-3.5 h-3.5 text-text-tertiary shrink-0" />}
+      footer={footer}
+      footerClassName="justify-start"
+      size="lg"
+      className="sm:max-w-4xl sm:h-[70vh] sm:max-h-[85vh]"
+    >
+      <div className="flex-1 min-h-0 relative h-full">
+        <div ref={scrollRef} onScroll={handleScroll} className="h-full overflow-auto p-3 sm:p-4">
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-4 h-4 animate-spin text-text-tertiary" />
+              <span className="ml-2 text-[11px] text-text-tertiary">{t("loadingDots")}</span>
+            </div>
+          ) : lines.length === 0 ? (
+            <div className="text-[11px] text-text-tertiary italic">{t("noOutput")}</div>
+          ) : (
+            <div
+              style={{
+                height: virtualizer.getTotalSize(),
+                width: "100%",
+                position: "relative",
+              }}
             >
-              <ArrowDownToLine className="w-3 h-3" />
-              <span>{t("scrollToBottom")}</span>
-            </button>
+              {virtualItems.map((virtualRow) => {
+                const line = lines[virtualRow.index];
+                return (
+                  <pre
+                    key={virtualRow.index}
+                    data-index={virtualRow.index}
+                    ref={virtualizer.measureElement}
+                    className="text-[11px] text-text-secondary font-mono whitespace-pre-wrap break-all leading-relaxed absolute top-0 left-0 w-full"
+                    style={{
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                  >
+                    {line}
+                  </pre>
+                );
+              })}
+            </div>
           )}
         </div>
 
-        {/* Bottom bar: line count + stdin input */}
-        <div
-          className="flex items-center gap-2 px-3 sm:px-4 py-2 border-t border-border-secondary shrink-0"
-          style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
-        >
-          <span className="text-[9px] text-text-tertiary shrink-0">
-            {lines.length}/{totalLines}
-          </span>
-
-          {/* Auto-scroll indicator */}
+        {!autoScroll && !loading && lines.length > 0 && (
           <button
             onClick={jumpToBottom}
-            className={`text-[9px] shrink-0 transition-colors ${
-              autoScroll ? "text-status-info" : "text-text-tertiary hover:text-text-secondary"
-            }`}
+            className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-status-info text-white text-[10px] font-medium shadow-lg hover:bg-status-info/80 transition-all z-10"
           >
-            {t("scrollToBottom")}
+            <ArrowDownToLine className="w-3 h-3" />
+            <span>{t("scrollToBottom")}</span>
           </button>
-
-          <div className="flex-1 flex items-center gap-1.5 ml-2">
-            <input
-              ref={inputRef}
-              value={stdinInput}
-              onChange={(e) => setStdinInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") sendStdin();
-              }}
-              placeholder={t("stdinPlaceholder")}
-              className="flex-1 h-7 px-2 rounded bg-surface-dim border border-border-secondary text-[11px] text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-border-secondary font-mono"
-            />
-            <button
-              onClick={sendStdin}
-              disabled={!stdinInput.trim()}
-              className="h-7 w-7 flex items-center justify-center rounded bg-status-info/20 text-status-info hover:bg-status-info/30 disabled:opacity-30 disabled:hover:bg-status-info/20 transition-colors shrink-0"
-              title={t("sendTitle")}
-            >
-              <Send className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
+        )}
       </div>
-    </div>
+    </ModalDialog>
   );
 }
 
@@ -536,15 +504,13 @@ export function BashPanel() {
         </div>
       )}
 
-      {logViewer &&
-        createPortal(
-          <LogViewer
-            logPath={logViewer.logPath}
-            toolCallId={logViewer.toolCallId}
-            onClose={() => setLogViewer(null)}
-          />,
-          document.body,
-        )}
+      {logViewer && (
+        <LogViewer
+          logPath={logViewer.logPath}
+          toolCallId={logViewer.toolCallId}
+          onClose={() => setLogViewer(null)}
+        />
+      )}
     </div>
   );
 }

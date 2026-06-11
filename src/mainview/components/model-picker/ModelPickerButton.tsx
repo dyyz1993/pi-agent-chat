@@ -80,7 +80,7 @@ export function ModelPickerButton({
       left: Math.max(4, Math.min(rect.left, window.innerWidth - dropdownWidth - 4)),
       width: dropdownWidth,
       maxHeight: dropdownMaxH,
-      zIndex: 9999,
+      zIndex: 50, // --z-modal
     };
     if (placement === "up") {
       const spaceAbove = rect.top;
