@@ -63,17 +63,23 @@ interface ManagedClientShape {
   _activeSessionId: string;
 }
 
-interface InternalAPM {
-  clients: Map<string, ManagedClientShape>;
-  sessionPaths: Map<string, string>;
-  sessionProjectPaths: Map<string, string>;
-  processByCwd: Map<string, ManagedClientShape>;
+interface CoordinatorHandlerLike {
   parentChildMap: Map<string, Set<string>>;
   handleCoordinatorDelegate: (
     parentSessionId: string,
     msg: { __call: "session_delegate"; task: string; title?: string; invokeId?: string },
   ) => Promise<{ sessionId: string; status: string }>;
   handleCoordinatorCall: (sessionId: string, msg: Record<string, unknown>) => Promise<void>;
+  handleCoordinatorClearStopped: (sessionId: string) => { childSessionIds: string[] };
+  handleCoordinatorRemove: (sessionId: string, delegateId: string) => void;
+}
+
+interface InternalAPM {
+  clients: Map<string, ManagedClientShape>;
+  sessionPaths: Map<string, string>;
+  sessionProjectPaths: Map<string, string>;
+  processByCwd: Map<string, ManagedClientShape>;
+  coordinatorHandler: CoordinatorHandlerLike;
   start: (
     sessionId: string,
     projectPath: string,
@@ -150,7 +156,7 @@ describe("coordinator.session_created — TDD 诊断", () => {
     it("should throw if parent session not found in clients", async () => {
       const m = internals(manager);
       await expect(
-        m.handleCoordinatorDelegate("nonexistent-parent", {
+        m.coordinatorHandler.handleCoordinatorDelegate("nonexistent-parent", {
           __call: "session_delegate",
           task: "do something",
         }),
@@ -197,7 +203,7 @@ describe("coordinator.session_created — TDD 诊断", () => {
         )
         .mockResolvedValue(undefined);
 
-      const result = await m.handleCoordinatorDelegate(parentSessionId, {
+      const result = await m.coordinatorHandler.handleCoordinatorDelegate(parentSessionId, {
         __call: "session_delegate",
         task: "implement feature X",
         title: "Feature X",
@@ -252,7 +258,7 @@ describe("coordinator.session_created — TDD 诊断", () => {
       expect(meta.parentSessionId).toBe(parentSessionId);
 
       // Verify parent-child relationship
-      const children = m.parentChildMap.get(parentSessionId);
+      const children = m.coordinatorHandler.parentChildMap.get(parentSessionId);
       expect(children).toBeDefined();
       expect(children?.has(result.sessionId)).toBe(true);
 
@@ -302,7 +308,7 @@ describe("coordinator.session_created — TDD 诊断", () => {
         "setSessionName",
       ).mockResolvedValue(undefined);
 
-      await m.handleCoordinatorDelegate(parentSessionId, {
+      await m.coordinatorHandler.handleCoordinatorDelegate(parentSessionId, {
         __call: "session_delegate",
         task: "do something",
       });
@@ -366,7 +372,7 @@ describe("coordinator.session_created — TDD 诊断", () => {
         "setSessionName",
       ).mockResolvedValue(undefined);
 
-      await m.handleCoordinatorDelegate(parentSessionId, {
+      await m.coordinatorHandler.handleCoordinatorDelegate(parentSessionId, {
         __call: "session_delegate",
         task: "background task",
       });
@@ -467,9 +473,7 @@ describe("coordinator.session_created — TDD 诊断", () => {
       const childSessionId = "child-1";
 
       // Setup parent-child relationship
-      m.parentChildMap.set(parentSessionId, new Set([childSessionId]));
-      m.delegateCreatedAt.set(childSessionId, Date.now());
-      m.delegateReplyCount.set(childSessionId, 0);
+      m.coordinatorHandler.parentChildMap.set(parentSessionId, new Set([childSessionId]));
 
       const msg = {
         __call: "session_delegate_clear_stopped",
@@ -478,7 +482,7 @@ describe("coordinator.session_created — TDD 诊断", () => {
       };
 
       // Should NOT throw, should NOT hit "Unknown coordinator method"
-      await expect(m.handleCoordinatorCall(parentSessionId, msg)).resolves.toBeUndefined();
+      await expect(m.coordinatorHandler.handleCoordinatorCall(parentSessionId, msg)).resolves.toBeUndefined();
     });
 
     it("session_delegate_remove logs Unknown (no handler yet)", async () => {
@@ -486,7 +490,7 @@ describe("coordinator.session_created — TDD 诊断", () => {
       const parentSessionId = "parent-1";
       const childSessionId = "child-1";
 
-      m.parentChildMap.set(parentSessionId, new Set([childSessionId]));
+      m.coordinatorHandler.parentChildMap.set(parentSessionId, new Set([childSessionId]));
 
       const msg = {
         __call: "session_delegate_remove",
@@ -495,7 +499,7 @@ describe("coordinator.session_created — TDD 诊断", () => {
       };
 
       // Currently falls to default "Unknown coordinator method" — resolves undefined
-      await expect(m.handleCoordinatorCall(parentSessionId, msg)).resolves.toBeUndefined();
+      await expect(m.coordinatorHandler.handleCoordinatorCall(parentSessionId, msg)).resolves.toBeUndefined();
     });
   });
 });
