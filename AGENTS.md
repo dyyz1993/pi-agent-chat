@@ -9,11 +9,43 @@ The core agent runtime (`@dyyz1993/pi-coding-agent`) is linked via **yalc** from
 - **Fork path**: `/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/`
 - **package.json**: `"@dyyz1993/pi-coding-agent": "file:.yalc/@dyyz1993/pi-coding-agent"`
 - **How to update**:
-  1. Edit source in `pi-momo-fork/packages/coding-agent/src/`
+  1. Edit source in `pi-momo-fork/packages/coding-agent/src/` or `extensions/`
   2. Build: `cd pi-momo-fork/packages/coding-agent && npm run build`
   3. Push: `cd pi-momo-fork/packages/coding-agent && yalc push`
   4. This updates `pi-agent-chat/.yalc/` and `node_modules/` automatically
 - **IMPORTANT**: Never manually edit `node_modules/@dyyz1993/pi-coding-agent/dist/` — changes will be lost on next `yalc push` or `npm install`. Always edit the fork source and rebuild.
+
+### 底层库关键目录
+
+```
+pi-momo-fork/packages/coding-agent/
+  src/
+    core/
+      file-store/
+        internal-git.ts           # InternalGit 对象存储（readTree/readTreeFiles/listTreeFiles）
+        file-snapshot-manager.ts  # 快照管理（getBatchFileContents/getBatchDiffs/getLiveChanges）
+    modes/
+      rpc/
+        rpc-mode.ts               # RPC 命令路由（~50 个命令）
+        rpc-client.ts             # Channel 通信（stdin/stdout JSONL）
+      interactive/
+        interactive-mode.ts       # 交互模式
+  extensions/
+    file-review/
+      index.ts                    # 变更审查 extension（review.pending/approve/reject handler）
+      contract.ts                 # Channel 类型契约
+    # ... (其他 extensions: bash, git, memory 等)
+  dist/                           # build 产物
+    core/                         # tsgo 编译 src/ → JS
+    extensions/                   # copy-assets 直接复制 extensions/（TS 源码，不编译）
+    modes/                        # tsgo 编译
+```
+
+**build 产物规则**：
+
+- `src/` 目录 → `tsgo` 编译为 JS 到 `dist/`
+- `extensions/` 目录 → `copy-assets` 直接复制到 `dist/extensions/`（保留 TS 源码）
+- 修改 extensions 后必须重新 build + yalc push，否则 dist 里是旧版本
 
 ## Theme & Design System
 
@@ -193,6 +225,55 @@ src/
           └─ settings-manager.ts                 #   Settings 读写（global + project）
 ```
 
+### Channel 通信机制
+
+App Server 通过 `callChannel()` 与 CLI 进程内的 extension 通信，用于需要 CLI 侧数据/逻辑的 RPC 调用：
+
+```
+App Server (handler)
+  │
+  ├─ manager.callChannel(sessionId, channelName, method, params)
+  │     │
+  │     ▼
+  ├─ 写入 channel_data JSONL 到 CLI stdin        # process-manager.ts
+  │     │
+  │     ▼
+  └─ CLI ChannelManager 路由                      # 底层 channel-manager.ts
+        └─ channelName 对应的 extension handler
+              └─ 返回结果 → stdout JSONL → App Server 解析
+```
+
+**关键点**：
+
+- Channel 调用是同步的（stdin 排队），Agent streaming 时 channel 调用会排队等待
+- Channel 名称在 `src/shared/constants/channel-methods.ts` 中定义
+- Channel 类型契约在底层 `extensions/<name>/contract.ts` 中定义
+- 使用场景：`file-review`（pending/approve/reject）、`bash`、`git` 等
+
+**Channel vs 直接 RPC 的选择**：
+
+- 简单 CRUD（不依赖 CLI 状态）→ 直接 handler 处理
+- 需要 CLI 内部数据（快照、文件树、extension 状态）→ channel 调用
+- Agent 不在时可用 JSONL fallback（从 session 文件读取持久化记录）
+
+### Session JSONL 数据格式
+
+Session 文件（`<sessionPath>`）是 JSONL 格式，每行一个 JSON 条目。核心条目类型：
+
+| 条目类型     | `type` 字段                                   | 用途                      | 写入方                |
+| ------------ | --------------------------------------------- | ------------------------- | --------------------- |
+| 消息         | `"message"`                                   | 用户/助手消息             | CLI Agent             |
+| 叶子指针     | `"leaf_pointer"`                              | 当前对话分支末端          | CLI Agent             |
+| 步骤快照     | `"step-snapshot"`                             | 每轮操作的文件树快照 hash | CLI Agent             |
+| 文件变更记录 | `"custom"` + `customType: "file-review-turn"` | 一轮操作改了哪些文件      | file-review extension |
+| 审批记录     | `"custom"` + `customType: "file-approval"`    | 文件审批/驳回记录         | file-review extension |
+| 通道数据     | `"channel_data"`                              | App Server ↔ CLI 通信     | 双向                  |
+
+**JSONL 读取工具**：
+
+- `src/shared/agent/session-message-reader.ts` — 消息读取 + 缓存
+- `src/shared/handlers/change-review.ts` 中的 `readPendingFromJsonl()` — 解析 file-review-turn + file-approval 计算待审查文件
+
 ### 新增 RPC 命令的步骤
 
 1. **`src/shared/modules/agent.ts`** — 添加 RPC 类型定义（params + result）
@@ -352,14 +433,15 @@ bunx playwright test        # e2e/*.spec.ts
 
 ## Architecture Design Docs
 
-| 文档                                                        | 状态             | 说明                                                                        |
-| ----------------------------------------------------------- | ---------------- | --------------------------------------------------------------------------- |
-| `docs/plans/2026-06-01-process-per-session-design.md`       | Phase 1 已完成   | 每会话独立 CLI 进程，LRU 淘汰，全局进程池                                   |
-| `docs/plans/2026-06-01-session-switch-experience-design.md` | Phase 1-3 已实施 | 会话切换体验优化：热/冷切换分流、fetchInitialState 缓存、MessageList 无闪烁 |
-| `docs/plans/2026-06-01-render-cache-design.md`              | 已实施           | 渲染层按 session 缓存：processedMessages/cardMeta/flatItems/messageIds      |
-| `docs/plans/2026-06-10-plugin-toggle-design.md`             | 已实施           | Plugin 按项目 enable/disable，set_settings + reload，config.json 持久化     |
-| `docs/notification-interaction-manual.md`                   | 操作手册         | 通知、toast、retry、权限 pending 的 UI 分层与适用场景                       |
-| `docs/testing-architecture.md`                              | 参考文档         | 测试架构总览：6 种测试方法、目录结构、散落文件收拢计划、新测试编写指南      |
+| 文档                                                        | 状态             | 说明                                                                                           |
+| ----------------------------------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------- |
+| `docs/plans/2026-06-01-process-per-session-design.md`       | Phase 1 已完成   | 每会话独立 CLI 进程，LRU 淘汰，全局进程池                                                      |
+| `docs/plans/2026-06-01-session-switch-experience-design.md` | Phase 1-3 已实施 | 会话切换体验优化：热/冷切换分流、fetchInitialState 缓存、MessageList 无闪烁                    |
+| `docs/plans/2026-06-01-render-cache-design.md`              | 已实施           | 渲染层按 session 缓存：processedMessages/cardMeta/flatItems/messageIds                         |
+| `docs/plans/2026-06-10-plugin-toggle-design.md`             | 已实施           | Plugin 按项目 enable/disable，set_settings + reload，config.json 持久化                        |
+| `docs/plans/2026-06-11-change-review-optimization.md`       | 已实施           | change-review.pending 性能优化：channel + JSONL 降级，底层 readTreeFiles O(M)，approval 持久化 |
+| `docs/notification-interaction-manual.md`                   | 操作手册         | 通知、toast、retry、权限 pending 的 UI 分层与适用场景                                          |
+| `docs/testing-architecture.md`                              | 参考文档         | 测试架构总览：6 种测试方法、目录结构、散落文件收拢计划、新测试编写指南                         |
 
 ### WebSocket RPC 端到端测试方法
 

@@ -2,6 +2,7 @@ import {
   existsSync,
   mkdirSync,
   readdirSync,
+  realpathSync,
   statSync,
   readFileSync,
   writeFileSync,
@@ -143,10 +144,30 @@ function scanExtensionDir(dir: string, extensionPaths: string[]): void {
 
 function getBuiltinExtensionsDir(): string {
   const cliPath = config.piCliPath;
-  const nmDir = path.resolve(cliPath, "..", "..");
-  const pkgDir = path.join(nmDir, "@dyyz1993", "pi-coding-agent");
-  const srcExists = existsSync(path.join(pkgDir, "src"));
-  return path.join(pkgDir, srcExists ? "src" : "dist", "extensions");
+  // Resolve symlinks — .bin/pi is a symlink to ../@dyyz1993/pi-coding-agent/dist/cli.js
+  // Without realpathSync, path.resolve would go up from .bin/ instead of dist/
+  const resolvedCliPath = realpathSync(cliPath);
+  // cli.js is at <pkg>/dist/cli.js — go up 2 levels to reach package root
+  const pkgRoot = path.resolve(resolvedCliPath, "..", "..");
+
+  // Priority 1: yalc / node_modules layout — <root>/node_modules/@dyyz1993/pi-coding-agent/dist/cli.js
+  const nmPkgDir = path.join(path.resolve(pkgRoot, "..", ".."), "@dyyz1993", "pi-coding-agent");
+  if (existsSync(path.join(nmPkgDir, "dist", "extensions"))) {
+    return path.join(nmPkgDir, "dist", "extensions");
+  }
+  if (existsSync(path.join(nmPkgDir, "src", "extensions"))) {
+    return path.join(nmPkgDir, "src", "extensions");
+  }
+
+  // Priority 2: fork source layout — <pkg>/dist/cli.js with extensions at <pkg>/extensions/
+  const forkExtDir = path.join(pkgRoot, "extensions");
+  if (existsSync(forkExtDir)) {
+    return forkExtDir;
+  }
+
+  // Priority 3: standard layout — <pkg>/dist/extensions or <pkg>/src/extensions
+  const srcExists = existsSync(path.join(pkgRoot, "src"));
+  return path.join(pkgRoot, srcExists ? "src" : "dist", "extensions");
 }
 
 function discoverExtensionArgs(): string[] {
