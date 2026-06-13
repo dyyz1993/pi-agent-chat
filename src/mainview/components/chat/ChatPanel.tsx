@@ -419,7 +419,10 @@ export function ChatPanel() {
       }
 
       if (index !== -1) {
-        lastSetNavIdRef.current = messageIds[index];
+        const targetMsgId = messageIds[index];
+        // Set activeId immediately so message highlight updates before scroll completes
+        setActive(targetMsgId);
+        lastSetNavIdRef.current = targetMsgId;
         vlistRef.current?.scrollToIndex(index, { smooth: true });
 
         if (blockNavId) {
@@ -434,7 +437,7 @@ export function ChatPanel() {
         }
       }
     },
-    [messageIds, suspendAutoScroll, setNavId],
+    [messageIds, suspendAutoScroll, setNavId, setActive],
   );
 
   const handleSend = async () => {

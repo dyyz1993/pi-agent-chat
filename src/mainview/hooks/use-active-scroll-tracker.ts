@@ -39,6 +39,21 @@ export function useActiveScrollTracker({
   const prevSessionRef = useRef(sessionId);
   const lastScrollTopRef = useRef(0);
 
+  // programmaticScrollRef: suppresses updateActiveFromScroll during
+  // programmatic scrolls (scrollToIndex, scrollTop assignment).
+  // Uses double-rAF release to survive virtua's measureElement reflow.
+  const programmaticScrollRef = useRef(false);
+
+  const markProgrammatic = useCallback((fn: () => void) => {
+    programmaticScrollRef.current = true;
+    fn();
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        programmaticScrollRef.current = false;
+      });
+    });
+  }, []);
+
   const isAtTopRef = useRef(true);
   const isAtBottomRef = useRef(true);
   const autoScrollEnabledRef = useRef(true);
@@ -146,7 +161,7 @@ export function useActiveScrollTracker({
       }
 
       attempts++;
-      handle.scrollToIndex(ids.length - 1, { align: "end" });
+      markProgrammatic(() => handle.scrollToIndex(ids.length - 1, { align: "end" }));
 
       const isAtBottom = handle.scrollSize - handle.scrollOffset - handle.viewportSize < 50;
       if (isAtBottom) {
@@ -161,16 +176,16 @@ export function useActiveScrollTracker({
     };
 
     scrollRafRef.current = requestAnimationFrame(tryScroll);
-  }, [vlistRef, setActive]);
+  }, [vlistRef, setActive, markProgrammatic]);
 
   const doScrollToBottom = useCallback(() => {
     const handle = vlistRef.current;
     const ids = messageIdsRef.current;
     if (!handle || ids.length === 0) return;
     if (userScrolledUpRef.current) return;
-    handle.scrollToIndex(ids.length - 1, { align: "end" });
+    markProgrammatic(() => handle.scrollToIndex(ids.length - 1, { align: "end" }));
     setActive(ids[ids.length - 1]);
-  }, [vlistRef, setActive]);
+  }, [vlistRef, setActive, markProgrammatic]);
 
   const scrollToMessage = useCallback(
     (msgId: string) => {
@@ -181,17 +196,21 @@ export function useActiveScrollTracker({
       if (index === -1) return;
 
       setActive(msgId);
-      handle.scrollToIndex(index, { smooth: true });
+      markProgrammatic(() => handle.scrollToIndex(index, { smooth: true }));
 
       if (msgId === ids[ids.length - 1]) {
         userScrolledUpRef.current = false;
       }
     },
-    [vlistRef, setActive],
+    [vlistRef, setActive, markProgrammatic],
   );
 
   const handleScroll = useCallback(() => {
-    updateActiveFromScroll();
+    // Skip activeId updates during programmatic scrolls (scrollToIndex, etc.)
+    // to prevent activeId flicker as intermediate messages scroll past.
+    if (!programmaticScrollRef.current) {
+      updateActiveFromScroll();
+    }
     const nearBottom = isNearBottom();
     const nearTop = isNearTop();
     isAtTopRef.current = nearTop;
@@ -340,11 +359,13 @@ export function useActiveScrollTracker({
         scrollRafRef.current = 0;
       }
 
-      if (edge === "top") {
-        handle.scrollToIndex(0);
-      } else {
-        handle.scrollToIndex(ids.length - 1, { align: "end" });
-      }
+      markProgrammatic(() => {
+        if (edge === "top") {
+          handle.scrollToIndex(0);
+        } else {
+          handle.scrollToIndex(ids.length - 1, { align: "end" });
+        }
+      });
 
       requestAnimationFrame(() => {
         const nearTop = handle.scrollOffset < TOP_THRESHOLD_PX;
@@ -364,7 +385,7 @@ export function useActiveScrollTracker({
 
       markIntent();
     },
-    [vlistRef, setActive, syncToolbarState, markIntent],
+    [vlistRef, setActive, syncToolbarState, markIntent, markProgrammatic],
   );
 
   const toggleAutoScroll = useCallback(() => {
