@@ -78,6 +78,11 @@ export class SessionMessageReader {
       mtimeMs: number;
       lineCount: number;
       lastJsonlLeafPointer: string | null;
+      // The deepest/latest entry appended after the last leaf_pointer. The
+      // on-disk leaf_pointer is only written by branch()/resetLeaf(), NOT by
+      // normal message appends, so it can lag behind. activeJsonlLeafId is the
+      // true current leaf (mirrors CLI _buildIndex "deepest descendant").
+      activeJsonlLeafId?: string | null;
       byteOffset: number;
     }
   >();
@@ -113,6 +118,7 @@ export class SessionMessageReader {
     parentById: Map<string, string | null>;
     lineCount: number;
     lastJsonlLeafPointer: string | null;
+    activeJsonlLeafId?: string | null;
     byteOffset: number;
     needsIncremental: boolean;
   } | null {
@@ -160,6 +166,7 @@ export class SessionMessageReader {
       parentById: Map<string, string | null>;
       lineCount: number;
       lastJsonlLeafPointer: string | null;
+      activeJsonlLeafId?: string | null;
       byteOffset?: number;
     },
   ): void {
@@ -663,6 +670,10 @@ export class SessionMessageReader {
     }> = [];
     const parentById: Map<string, string | null> = new Map();
     let lastJsonlLeafPointer: string | null = null;
+    // Tracks the deepest/latest entry in JSONL order. Updated on every parsed
+    // entry (incl. leaf_pointer). Used to recover the true active leaf when the
+    // on-disk leaf_pointer is stale (rollback + continued chat scenario).
+    let activeJsonlLeafId: string | null = null;
     const isSandboxSessionPath = resolvedSessionPath?.startsWith("/root/workspace/sessions/");
 
     if (isSandboxSessionPath) {
@@ -684,6 +695,7 @@ export class SessionMessageReader {
                 const parentId = (parsed.parentId as string | null | undefined) ?? null;
                 if (entryId) {
                   parentById.set(entryId, parentId);
+                  activeJsonlLeafId = entryId;
                 }
                 if (parsed.type === "custom") {
                   allCustomEntries.push({
@@ -718,6 +730,7 @@ export class SessionMessageReader {
                   });
                 } else if (parsed.type === "leaf_pointer" && typeof parsed.leafId === "string") {
                   lastJsonlLeafPointer = parsed.leafId;
+                  activeJsonlLeafId = parsed.leafId;
                 }
               } catch (err: unknown) {
                 log.debug("skipping malformed JSONL entry (sandbox)", {
@@ -744,6 +757,7 @@ export class SessionMessageReader {
           parentById.set(k, v);
         }
         lastJsonlLeafPointer = cached.lastJsonlLeafPointer;
+        activeJsonlLeafId = cached.activeJsonlLeafId ?? null;
       } else if (cached && cached.needsIncremental) {
         allMessages.push(...cached.messages);
         allCustomEntries.push(...cached.customEntries);
@@ -752,6 +766,9 @@ export class SessionMessageReader {
           parentById.set(k, v);
         }
         lastJsonlLeafPointer = cached.lastJsonlLeafPointer;
+        // Seed from cache; the incremental read advances allMessages in place,
+        // so the last entry id (if any) becomes the current deepest leaf.
+        activeJsonlLeafId = cached.activeJsonlLeafId ?? null;
 
         try {
           const incrResult = await this.readJsonlFromByteOffset(
@@ -770,6 +787,12 @@ export class SessionMessageReader {
           if (incrResult.lastLeafPointer) {
             lastJsonlLeafPointer = incrResult.lastLeafPointer;
           }
+          // Incremental read appends to allMessages in place — the last entry
+          // id (if any) is the current deepest leaf.
+          const incrLast = allMessages[allMessages.length - 1];
+          if (incrLast?.entryId) {
+            activeJsonlLeafId = incrLast.entryId;
+          }
 
           this.setSessionCache(sessionId, resolvedSessionPath, {
             messages: allMessages,
@@ -778,6 +801,7 @@ export class SessionMessageReader {
             parentById,
             lineCount: cached.lineCount + incrResult.totalLines,
             lastJsonlLeafPointer,
+            activeJsonlLeafId,
             byteOffset: incrResult.newByteOffset,
           });
         } catch (err: unknown) {
@@ -801,6 +825,7 @@ export class SessionMessageReader {
               const parentId = (parsed.parentId as string | null | undefined) ?? null;
               if (entryId) {
                 parentById.set(entryId, parentId);
+                activeJsonlLeafId = entryId;
               }
               if (parsed.type === "custom") {
                 allCustomEntries.push({
@@ -834,6 +859,7 @@ export class SessionMessageReader {
                 });
               } else if (parsed.type === "leaf_pointer" && typeof parsed.leafId === "string") {
                 lastJsonlLeafPointer = parsed.leafId;
+                activeJsonlLeafId = parsed.leafId;
               }
             } catch (err: unknown) {
               log.debug("skipping malformed JSONL entry", {
@@ -850,6 +876,7 @@ export class SessionMessageReader {
             parentById,
             lineCount,
             lastJsonlLeafPointer,
+            activeJsonlLeafId,
           });
         } catch (err: unknown) {
           log.warn("Failed to read entries from JSONL", {
@@ -863,10 +890,21 @@ export class SessionMessageReader {
     // parsing above (preserving chronological order). allCompactionEntries is
     // still used for the streaming merge dedup guard below.
 
-    // Resolve leafId: prefer JSONL leaf_pointer (authoritative on-disk value),
-    // fall back to in-memory cache (may be stale after process kill)
-    const leafId = lastJsonlLeafPointer ?? this.deps.leafIds.get(sessionId) ?? null;
-    if (leafId && leafId !== this.deps.leafIds.get(sessionId)) {
+    // Resolve leafId.
+    // On-disk leaf_pointer is only written by branch()/resetLeaf() — NOT by
+    // normal message appends. So after a rollback + continued chat, the JSONL
+    // leaf_pointer still points at the rollback target while newer messages
+    // exist as its descendants. activeJsonlLeafId (the last parsed entry) is
+    // the true active leaf, mirroring the CLI's _buildIndex "deepest
+    // descendant" recovery. Without this, getFullMessages freezes the view at
+    // the rollback point and hides all post-rollback messages.
+    const inMemoryLeafId = this.deps.leafIds.get(sessionId) ?? null;
+    const isStreaming = managed?.info.status === "streaming";
+    const leafId =
+      (lastJsonlLeafPointer ? activeJsonlLeafId ?? lastJsonlLeafPointer : null) ??
+      (isStreaming ? (activeJsonlLeafId ?? null) : null) ??
+      inMemoryLeafId;
+    if (leafId && leafId !== inMemoryLeafId) {
       this.deps.leafIds.set(sessionId, leafId);
     }
 

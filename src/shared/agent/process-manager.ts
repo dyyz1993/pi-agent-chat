@@ -196,7 +196,19 @@ function discoverExtensionArgs(): string[] {
   return extensionPaths.flatMap((p) => ["--extension", p]);
 }
 
-const EXTENSION_ARGS = ["--no-extensions", ...discoverExtensionArgs()];
+// Lazy-init: discoverExtensionArgs() hits the filesystem (realpathSync on
+// piCliPath) and must NOT run at module load time. Earlier this was a top-level
+// const, which meant importing AgentProcessManager in tests executed
+// realpathSync against the mocked "/fake" path and threw ENOENT — silently
+// crashing 8 test suites before any `it()` ran. Deferred to first use instead.
+let _extensionArgsCache: string[] | undefined;
+function getExtensionArgs(): string[] {
+  if (_extensionArgsCache === undefined) {
+    _extensionArgsCache = ["--no-extensions", ...discoverExtensionArgs()];
+  }
+  return _extensionArgsCache;
+}
+
 const TIER_KEYS = ["fast", "pro", "max"] as const;
 type TierKey = (typeof TIER_KEYS)[number];
 
@@ -319,7 +331,7 @@ async function createRpcClient(
     mkdirSync(cwd, { recursive: true });
   }
 
-  const args = [...EXTENSION_ARGS];
+  const args = [...getExtensionArgs()];
   if (sessionPath && existsSync(sessionPath)) {
     args.push("--session", sessionPath);
   }
@@ -440,7 +452,7 @@ export class AgentProcessManager {
         isCurrentProject: oldestPoolKey === currentPoolKey,
       });
       oldest.unsubscribe();
-      oldest.client.stop().catch(() => {});
+      oldest.client.stop().catch(() => { });
       this.clients.delete(sid);
       const pool = this.processByCwd.get(oldestPoolKey);
       if (pool) {
@@ -794,7 +806,7 @@ export class AgentProcessManager {
     const managed: ManagedClient = {
       client,
       info,
-      unsubscribe: () => {},
+      unsubscribe: () => { },
       _activeSessionId: sessionId,
       lastActiveAt: Date.now(),
       activeBackgroundTools: new Set(),
@@ -806,7 +818,7 @@ export class AgentProcessManager {
     try {
       managed.unsubscribe = client.onEvent(bridge);
     } catch {
-      managed.unsubscribe = () => {};
+      managed.unsubscribe = () => { };
     }
 
     const coordinatorChannelNames = new Set(["coordinator", "coordinator_client"]);
@@ -1184,14 +1196,14 @@ export class AgentProcessManager {
       return {
         model: model
           ? {
-              id: String(model.id ?? ""),
-              name: model.name ? String(model.name) : undefined,
-              api: stateAny.api ? String(stateAny.api) : undefined,
-              provider: model.provider ? String(model.provider) : undefined,
-              reasoning: Boolean(model.reasoning),
-              contextWindow: Number(model.contextWindow ?? 0),
-              maxTokens: Number(model.maxTokens ?? 0),
-            }
+            id: String(model.id ?? ""),
+            name: model.name ? String(model.name) : undefined,
+            api: stateAny.api ? String(stateAny.api) : undefined,
+            provider: model.provider ? String(model.provider) : undefined,
+            reasoning: Boolean(model.reasoning),
+            contextWindow: Number(model.contextWindow ?? 0),
+            maxTokens: Number(model.maxTokens ?? 0),
+          }
           : undefined,
         thinkingLevel: state.thinkingLevel ? String(state.thinkingLevel) : undefined,
         isStreaming: Boolean(state.isStreaming),
@@ -1261,10 +1273,10 @@ export class AgentProcessManager {
         cost: Number(stats.cost ?? 0),
         contextUsage: cu
           ? {
-              tokens: cu.tokens,
-              contextWindow: Number(cu.contextWindow ?? 0),
-              percent: cu.percent,
-            }
+            tokens: cu.tokens,
+            contextWindow: Number(cu.contextWindow ?? 0),
+            percent: cu.percent,
+          }
           : undefined,
       };
     } catch (err: unknown) {
@@ -2076,8 +2088,8 @@ export class AgentProcessManager {
     const result = (await managed.client
       .channel("file-snapshot")
       .call("snapshot.restoreByHash", { snapshotTreeHash, files })) as {
-      restored: string[];
-    } | null;
+        restored: string[];
+      } | null;
 
     return result?.restored ?? [];
   }
