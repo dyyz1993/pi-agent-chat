@@ -1004,6 +1004,27 @@ export class SessionMessageReader {
               })
               .filter(Boolean),
           );
+          // Build a set of assistant text fingerprints from JSONL for content-based
+          // dedup. CLI get_messages() returns AgentMessage[] without entryId, so
+          // entryId-based dedup alone misses duplicates.
+          const jsonlAssistantTexts = new Set(
+            allMessages
+              .filter((m) => {
+                const msg = m.message as Record<string, unknown> | undefined;
+                return msg && (msg.role as string) === "assistant";
+              })
+              .map((m) => {
+                const msg = m.message as { content?: unknown[] };
+                if (Array.isArray(msg.content)) {
+                  return (msg.content as Array<Record<string, unknown>>)
+                    .filter((c) => c.type === "text")
+                    .map((c) => (c.text as string) ?? "")
+                    .join("");
+                }
+                return "";
+              })
+              .filter(Boolean),
+          );
           const compactionEntryIds = new Set(allCompactionEntries.map((c) => c.entryId));
           const filteredHasCompaction = filteredMessages.some((fm) => {
             const fmMsg = fm.message as Record<string, unknown>;
@@ -1032,6 +1053,19 @@ export class SessionMessageReader {
                     .join("")
                 : "";
               if (text && jsonlUserTexts.has(text)) continue;
+            }
+            // Content-based dedup for assistant messages without entryId.
+            // CLI get_messages() returns AgentMessage[] that lack entryId, so the
+            // entryId check above doesn't catch them. Compare text content instead.
+            if (role === "assistant" && !eid) {
+              const content = m.content as unknown[];
+              const text = Array.isArray(content)
+                ? (content as Array<Record<string, unknown>>)
+                    .filter((c) => c.type === "text")
+                    .map((c) => (c.text as string) ?? "")
+                    .join("")
+                : "";
+              if (text && jsonlAssistantTexts.has(text)) continue;
             }
             slicedMessages.push(m as unknown as AgentMessageForUI);
             if (eid) jsonlEntryIds.add(eid);

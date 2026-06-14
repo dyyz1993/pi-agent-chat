@@ -147,6 +147,25 @@ export class AgentEventHandler {
       if (!INTERACTIVE_METHODS.has(ui.method)) return;
     }
 
+    // Notify user when a plugin/extension triggers an automatic continue
+    if (event.type === "auto_continue") {
+      const ac = event as { type: "auto_continue"; reason: string; iteration: number };
+      this.deps.broadcastEvent(
+        "agent.notify",
+        {
+          sessionId,
+          message: `Plugin triggered auto-continue (${ac.reason})`,
+          notifyType: "info",
+        },
+        { sessionId },
+      ).catch((err: unknown) => {
+        log.warn("broadcastEvent(agent.notify) error for auto_continue", {
+          sessionId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      });
+    }
+
     if (event.type === "agent_start") {
       managed.info.status = "streaming";
       managed.lastActiveAt = Date.now();

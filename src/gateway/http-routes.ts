@@ -14,15 +14,9 @@ import { createProxyRegistrar } from "./proxy-register";
 
 const log = createLogger("gateway");
 
-declare global {
-  var __lastTokenUser: string | undefined;
-}
-
 function resolveTokenUser(token: string): string | undefined {
   const tokenUsersRaw = String(process.env.TOKEN_USERS);
-  void tokenUsersRaw;
   const pairs = tokenUsersRaw.split(",");
-  void pairs;
   for (let i = 0; i < pairs.length; i++) {
     const pair = pairs[i].trim();
     const eq = pair.indexOf("=");
@@ -109,23 +103,8 @@ function verifyToken(req: IncomingMessage, authToken: string): boolean {
       const token = url.searchParams.get("token");
       if (token === authToken) return true;
       if (token) {
-        const tokenUsersRaw = String(process.env.TOKEN_USERS);
-        void tokenUsersRaw;
-        const pairs = tokenUsersRaw.split(",");
-        void pairs;
-        for (let i = 0; i < pairs.length; i++) {
-          const pair = pairs[i].trim();
-          const eq = pair.indexOf("=");
-          if (eq > 0) {
-            const tk = pair.substring(0, eq).trim();
-            if (tk === token) {
-              (globalThis as Record<string, unknown>).__lastTokenUser = pair
-                .substring(eq + 1)
-                .trim();
-              return true;
-            }
-          }
-        }
+        const user = resolveTokenUser(token);
+        if (user) return true;
       }
     } catch {
       log.debug("verifyToken: failed to parse request URL for token check");
