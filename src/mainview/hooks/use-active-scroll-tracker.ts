@@ -28,7 +28,7 @@ export function useActiveScrollTracker({
   streamVersion,
   historyLoadVersion,
   initialScrollReady = true,
-  onInitComplete: _onInitComplete,
+  onInitComplete,
 }: UseActiveScrollTrackerOptions) {
   const userScrolledUpRef = useRef(false);
   const prevCountRef = useRef(0);
@@ -168,15 +168,19 @@ export function useActiveScrollTracker({
         didInitRef.current = true;
         setActive(ids[ids.length - 1]);
         scrollRafRef.current = 0;
+        // Notify ChatPanel that initial scroll is done so it can sync navId
+        onInitComplete?.();
       } else if (attempts < SCROLL_SETTLE_MAX_ATTEMPTS) {
         scrollRafRef.current = requestAnimationFrame(tryScroll);
       } else {
         scrollRafRef.current = 0;
+        // Max attempts reached — still call onInitComplete so navId sync starts
+        onInitComplete?.();
       }
     };
 
     scrollRafRef.current = requestAnimationFrame(tryScroll);
-  }, [vlistRef, setActive, markProgrammatic]);
+  }, [vlistRef, setActive, markProgrammatic, onInitComplete]);
 
   const doScrollToBottom = useCallback(() => {
     const handle = vlistRef.current;

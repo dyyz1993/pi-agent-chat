@@ -100,3 +100,40 @@ describe("ChatPanel.handleNavDotClick — sets activeId immediately", () => {
     expect(handleClickSection).toContain("scrollToIndex");
   });
 });
+
+describe("onInitComplete — enables navId sync after initial scroll", () => {
+  /**
+   * Bug: onInitComplete was destructured as _onInitComplete (unused),
+   * so it was NEVER called. This meant:
+   *   1. ChatPanel.initDoneRef stayed false forever
+   *   2. The bridge setActive → setNavId was always skipped
+   *   3. SideNav selectedNavId was never set by scroll events
+   *   4. Icons never highlighted and never scrolled into view
+   *
+   * Fix: Actually call onInitComplete after scheduleScrollToBottom settles.
+   */
+
+  it("onInitComplete is NOT renamed to _onInitComplete (must be used)", () => {
+    const source = readSource("src/mainview/hooks/use-active-scroll-tracker.ts");
+    expect(source).not.toContain("_onInitComplete");
+    expect(source).toContain("onInitComplete");
+  });
+
+  it("scheduleScrollToBottom calls onInitComplete on settle", () => {
+    const source = readSource("src/mainview/hooks/use-active-scroll-tracker.ts");
+    const scheduleSection = source.slice(
+      source.indexOf("const scheduleScrollToBottom"),
+      source.indexOf("const doScrollToBottom"),
+    );
+    expect(scheduleSection).toContain("onInitComplete?.()");
+  });
+
+  it("scheduleScrollToBottom includes onInitComplete in dependency array", () => {
+    const source = readSource("src/mainview/hooks/use-active-scroll-tracker.ts");
+    const scheduleSection = source.slice(
+      source.indexOf("const scheduleScrollToBottom"),
+      source.indexOf("const doScrollToBottom"),
+    );
+    expect(scheduleSection).toContain("onInitComplete]");
+  });
+});
