@@ -175,7 +175,7 @@ export const WriteFileCard = memo(function WriteFileCard({
         mono
         rtl
         collapsed={collapsed}
-        onClick={() => setCollapsed((c) => !c)}
+        onClick={() => setCollapsed(!collapsed)}
         startedAt={block.startedAt}
         endedAt={block.endedAt}
         badge={

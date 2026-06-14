@@ -19,8 +19,8 @@ export const DEFAULT_CHANNEL_TIMEOUT_MS = 1_000;
  *        before forwarding (some handlers — e.g. supervisor — only check for the
  *        manager itself, mirroring their original behaviour).
  */
-export async function forwardToChannel<TParams extends { sessionId?: string }, TResult = unknown>(
-  params: TParams,
+export async function forwardToChannel<TResult = unknown>(
+  params: { sessionId?: string } & Record<string, unknown>,
   channelName: string,
   methodName: string,
   payload: Record<string, unknown>,

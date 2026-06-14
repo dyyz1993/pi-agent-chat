@@ -6,6 +6,7 @@ import type { ContentBlock } from "../../../types";
 import { ToolCardHeader } from "../primitives/ToolCardHeader";
 import { InlineCodeViewer } from "./InlineCodeViewer";
 import { formatFilePath } from "../../../lib/format-path";
+import { useAutoCollapse } from "../../../hooks/use-auto-collapse";
 
 type Block = Extract<ContentBlock, { type: "toolExecution" }>;
 
@@ -95,7 +96,7 @@ export const ReadFileCard = memo(function ReadFileCard({
         mono={true}
         rtl={true}
         collapsed={collapsed}
-        onClick={() => setCollapsed((c) => !c)}
+        onClick={() => setCollapsed(!collapsed)}
         startedAt={block.startedAt}
         endedAt={block.endedAt}
         badge={

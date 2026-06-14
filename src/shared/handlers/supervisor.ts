@@ -73,12 +73,14 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
         delayMs?: number;
         reason?: string;
       };
-      const result = await forwardToChannel<
-        { sessionId: string },
-        { scheduled: boolean; scheduledAt?: number }
-      >({ sessionId }, "supervisor", "requestPause", { delayMs, reason }, CHANNEL_TIMEOUT_MS, {
-        skipHasSessionCheck: true,
-      });
+      const result = await forwardToChannel<{ scheduled: boolean; scheduledAt?: number }>(
+        { sessionId },
+        "supervisor",
+        "requestPause",
+        { delayMs, reason },
+        CHANNEL_TIMEOUT_MS,
+        { skipHasSessionCheck: true },
+      );
       if (!result) log.warn("supervisor.requestPause channel call failed", { sessionId });
       return result ?? { scheduled: false };
     },
@@ -86,7 +88,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
   r("supervisor.cancelPause", async (params): Promise<{ cancelled: boolean }> => {
     const { sessionId } = params as { sessionId: string };
-    const result = await forwardToChannel<{ sessionId: string }, { cancelled: boolean }>(
+    const result = await forwardToChannel<{ cancelled: boolean }>(
       { sessionId },
       "supervisor",
       "cancelPause",
@@ -100,7 +102,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
   r("supervisor.forceContinue", async (params): Promise<{ triggered: boolean }> => {
     const { sessionId, reason } = params as { sessionId: string; reason?: string };
-    const result = await forwardToChannel<{ sessionId: string }, { triggered: boolean }>(
+    const result = await forwardToChannel<{ triggered: boolean }>(
       { sessionId },
       "supervisor",
       "forceContinue",
@@ -114,7 +116,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
   r("supervisor.disable", async (params): Promise<{ disabled: boolean }> => {
     const { sessionId } = params as { sessionId: string };
-    const result = await forwardToChannel<{ sessionId: string }, { disabled: boolean }>(
+    const result = await forwardToChannel<{ disabled: boolean }>(
       { sessionId },
       "supervisor",
       "disable",
@@ -128,7 +130,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
   r("supervisor.enable", async (params): Promise<{ enabled: boolean }> => {
     const { sessionId } = params as { sessionId: string };
-    const result = await forwardToChannel<{ sessionId: string }, { enabled: boolean }>(
+    const result = await forwardToChannel<{ enabled: boolean }>(
       { sessionId },
       "supervisor",
       "enable",
@@ -142,7 +144,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
   r("supervisor.getTaskReport", async (params): Promise<{ tasks: TaskReport[] }> => {
     const { sessionId } = params as { sessionId: string };
-    const result = await forwardToChannel<{ sessionId: string }, { tasks: TaskReport[] }>(
+    const result = await forwardToChannel<{ tasks: TaskReport[] }>(
       { sessionId },
       "supervisor",
       "getTaskReport",
@@ -163,10 +165,11 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
         channelName?: string;
         method?: string;
       };
-      const result = await forwardToChannel<
-        { sessionId: string },
-        { reachable: boolean; status?: string; error?: string }
-      >(
+      const result = await forwardToChannel<{
+        reachable: boolean;
+        status?: string;
+        error?: string;
+      }>(
         { sessionId },
         "supervisor",
         "checkToolStatus",
@@ -187,7 +190,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     if (!pm) {
       return blockedGoal(objective, "Agent process manager unavailable");
     }
-    const result = await forwardToChannel<{ sessionId: string }, { goal: GoalState }>(
+    const result = await forwardToChannel<{ goal: GoalState }>(
       { sessionId },
       "supervisor",
       "setGoal",
@@ -202,7 +205,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
   r("supervisor.clearGoal", async (params): Promise<{ cleared: boolean }> => {
     const { sessionId, reason } = params as { sessionId: string; reason?: string };
-    const result = await forwardToChannel<{ sessionId: string }, { cleared: boolean }>(
+    const result = await forwardToChannel<{ cleared: boolean }>(
       { sessionId },
       "supervisor",
       "clearGoal",
@@ -246,7 +249,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
   r("supervisor.getTriggerHistory", async (params): Promise<{ triggers: TriggerRecord[] }> => {
     const { sessionId, limit } = params as { sessionId: string; limit?: number };
-    const result = await forwardToChannel<{ sessionId: string }, { triggers: TriggerRecord[] }>(
+    const result = await forwardToChannel<{ triggers: TriggerRecord[] }>(
       { sessionId },
       "supervisor",
       "getTriggerHistory",

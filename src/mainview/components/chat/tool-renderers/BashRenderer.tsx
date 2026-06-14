@@ -282,7 +282,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
           return summary || block.toolName;
         })()}
         collapsed={collapsed}
-        onClick={() => setCollapsed((c) => !c)}
+        onClick={() => setCollapsed(!collapsed)}
         time={
           isRunning ? (
             <span className="shrink-0 flex items-center gap-1 text-[10px] text-text-tertiary/50 tabular-nums">

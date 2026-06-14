@@ -66,7 +66,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       log.debug("getProjectPath failed:", { err: String(err) });
     }
 
-    const result = await forwardToChannel<{ sessionId?: string }, unknown>(
+    const result = await forwardToChannel<unknown>(
       { sessionId: sid },
       "rules-engine",
       "getSnapshot",
