@@ -297,3 +297,161 @@ describe("SideNav — real session data fixture", () => {
     expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
   });
 });
+
+describe("SideNav — memory/compaction filtering (F)", () => {
+  it("filters out memory custom messages from nav items", () => {
+    const messages: ChatMessage[] = [
+      { id: "msg-1", role: "user", content: [{ type: "text", text: "hi" }], timestamp: 1 },
+      {
+        id: "mem-1",
+        role: "custom",
+        content: [{ type: "custom", customType: "memory_prefetch_result", data: {} }],
+        timestamp: 2,
+      },
+      {
+        id: "mem-2",
+        role: "custom",
+        content: [{ type: "custom", customType: "memory_extract", data: {} }],
+        timestamp: 3,
+      },
+      { id: "msg-2", role: "assistant", content: [{ type: "text", text: "hello" }], timestamp: 4 },
+    ];
+
+    const items = buildFlatItems(messages, false);
+    // Only msg-1 and msg-2 should appear, memory entries filtered out
+    const navIds = items.map((i) => i.navId);
+    expect(navIds).toContain("msg-1");
+    expect(navIds).toContain("msg-2");
+    expect(navIds).not.toContain("mem-1");
+    expect(navIds).not.toContain("mem-2");
+  });
+
+  it("includes compactionSummary in nav items", () => {
+    const messages: ChatMessage[] = [
+      { id: "msg-1", role: "user", content: [{ type: "text", text: "hi" }], timestamp: 1 },
+      {
+        id: "compact-1",
+        role: "compactionSummary",
+        content: [{ type: "compactionSummary", summary: "compressed", tokensBefore: 1000 }],
+        timestamp: 2,
+    },
+    ];
+
+    const items = buildFlatItems(messages, false);
+    expect(items.some((i) => i.navId === "compact-1")).toBe(true);
+  });
+});
+
+describe("SideNav — block-level navigation (G)", () => {
+  it("generates blockId for thinking/text/tool blocks within a message", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "msg-2",
+        role: "assistant",
+        content: [
+          { type: "thinking", thinking: "let me think" },
+          { type: "text", text: "here is my answer" },
+          {
+            type: "toolExecution",
+            toolCallId: "tc-1",
+            toolName: "bash",
+            args: "{}",
+            status: "done",
+          },
+        ],
+        timestamp: 1,
+      },
+    ];
+
+    const items = buildFlatItems(messages, true); // showThinking = true
+    // Should have: Bot icon + thinking block + text block + tool block = 4 items
+    expect(items.length).toBe(4);
+
+    // The block items should have blockId set
+    const blockItems = items.filter((i) => i.blockId);
+    expect(blockItems.length).toBe(3); // thinking + text + tool
+    expect(blockItems[0].blockId).toBe("msg-2-0");
+    expect(blockItems[1].blockId).toBe("msg-2-1");
+    expect(blockItems[2].blockId).toBe("msg-2-2");
+  });
+
+  it("click on block icon passes blockId (not just navId) to onNavDotClick", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "msg-2",
+        role: "assistant",
+        content: [
+          { type: "text", text: "answer" },
+          {
+            type: "toolExecution",
+            toolCallId: "tc-1",
+            toolName: "bash",
+            args: "{}",
+            status: "done",
+          },
+        ],
+        timestamp: 1,
+      },
+    ];
+
+    const onNavDotClick = vi.fn();
+    const { container } = render(
+      <SideNav ref={createRef()} messages={messages} onNavDotClick={onNavDotClick} />,
+    );
+
+    // Click on the tool block icon (3rd dot: Bot, text, tool)
+    const dots = container.querySelectorAll("[data-nav-key]");
+    expect(dots.length).toBeGreaterThanOrEqual(3);
+    fireEvent.click(dots[2]); // tool block dot
+
+    // Should pass the blockId, not just the messageId
+    expect(onNavDotClick).toHaveBeenCalled();
+    const passedId = onNavDotClick.mock.calls[0][0];
+    expect(passedId).toContain("msg-2-"); // blockId format: messageId-blockIndex
+  });
+});
+
+describe("SideNav — right-click multi-select (K)", () => {
+  it("right-click toggles item selection", () => {
+    const messages: ChatMessage[] = [
+      { id: "msg-1", role: "user", content: [{ type: "text", text: "hi" }], timestamp: 1 },
+      { id: "msg-2", role: "assistant", content: [{ type: "text", text: "hello" }], timestamp: 2 },
+    ];
+
+    const { container } = render(
+      <SideNav ref={createRef()} messages={messages} onNavDotClick={vi.fn()} />,
+    );
+
+    const firstDot = container.querySelector("[data-nav-key]") as HTMLElement;
+
+    // Right-click to select
+    fireEvent.contextMenu(firstDot);
+    expect(useChatNavStore.getState().isItemSelected("msg-1")).toBe(true);
+
+    // Right-click again to deselect
+    fireEvent.contextMenu(firstDot);
+    expect(useChatNavStore.getState().isItemSelected("msg-1")).toBe(false);
+  });
+
+  it("shows selection count when items are selected", () => {
+    const messages: ChatMessage[] = [
+      { id: "msg-1", role: "user", content: [{ type: "text", text: "hi" }], timestamp: 1 },
+      { id: "msg-2", role: "assistant", content: [{ type: "text", text: "hello" }], timestamp: 2 },
+    ];
+
+    const { container, rerender } = render(
+      <SideNav ref={createRef()} messages={messages} onNavDotClick={vi.fn()} />,
+    );
+
+    // Select first item
+    const firstDot = container.querySelector("[data-nav-key]") as HTMLElement;
+    fireEvent.contextMenu(firstDot);
+
+    // Should show "1 selected" indicator
+    rerender(
+      <SideNav ref={createRef()} messages={messages} onNavDotClick={vi.fn()} />,
+    );
+    const selectionInfo = container.querySelector(".text-status-error.text-center");
+    expect(selectionInfo?.textContent).toContain("1");
+  });
+});
