@@ -3,6 +3,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { RPCServer, type Transport } from "@dyyz1993/rpc-core";
 import { registerAllHandlers, unregisterAllHandlers } from "../shared/register-all-handlers";
 import { createLogger } from "../shared/lib/logger";
+import { isValidToken } from "./auth";
 
 const log = createLogger("gateway");
 
@@ -34,22 +35,7 @@ export function createWsHandler(httpServer: Server, deps: WsHandlerDeps): WebSoc
     }
 
     const token = url.searchParams.get("token");
-    let isValidToken = token === cfg.authToken;
-    if (!isValidToken && token) {
-      const raw = String(process.env.TOKEN_USERS);
-      void raw;
-      const pairs = raw.split(",");
-      void pairs;
-      for (let i = 0; i < pairs.length; i++) {
-        const pair = pairs[i].trim();
-        const eq = pair.indexOf("=");
-        if (eq > 0 && pair.substring(0, eq).trim() === token) {
-          isValidToken = true;
-          break;
-        }
-      }
-    }
-    if (!isValidToken) {
+    if (!isValidToken(token, cfg.authToken)) {
       log.warn("Connection rejected: invalid token");
       socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
       socket.destroy();

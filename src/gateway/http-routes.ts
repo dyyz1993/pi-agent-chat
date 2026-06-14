@@ -11,22 +11,9 @@ import { extname, basename, dirname, resolve } from "path";
 import { createLogger } from "../shared/lib/logger";
 import { listRecentProjects, restoreOpenTabs } from "../shared/lib/project-config";
 import { createProxyRegistrar } from "./proxy-register";
+import { resolveTokenUser, isValidToken } from "./auth";
 
 const log = createLogger("gateway");
-
-function resolveTokenUser(token: string): string | undefined {
-  const tokenUsersRaw = String(process.env.TOKEN_USERS);
-  const pairs = tokenUsersRaw.split(",");
-  for (let i = 0; i < pairs.length; i++) {
-    const pair = pairs[i].trim();
-    const eq = pair.indexOf("=");
-    if (eq > 0) {
-      const tk = pair.substring(0, eq).trim();
-      if (tk === token) return pair.substring(eq + 1).trim();
-    }
-  }
-  return undefined;
-}
 
 const FS_COOKIE_NAME = "fs_token";
 const FS_COOKIE_MAX_AGE = 3600;
@@ -101,11 +88,7 @@ function verifyToken(req: IncomingMessage, authToken: string): boolean {
     try {
       const url = new URL(req.url, "http://localhost");
       const token = url.searchParams.get("token");
-      if (token === authToken) return true;
-      if (token) {
-        const user = resolveTokenUser(token);
-        if (user) return true;
-      }
+      if (isValidToken(token, authToken)) return true;
     } catch {
       log.debug("verifyToken: failed to parse request URL for token check");
     }
@@ -524,7 +507,7 @@ async function handleFsRoute(
   const cookieToken = parseFsCookie(req);
   const token = queryToken ?? cookieToken;
 
-  if (token !== authToken && !(token && resolveTokenUser(token))) {
+  if (!isValidToken(token, authToken)) {
     res.writeHead(401, { "Content-Type": "text/plain" }).end("Unauthorized");
     return;
   }
