@@ -4,8 +4,6 @@ import {
   readdirSync,
   realpathSync,
   statSync,
-  readFileSync,
-  writeFileSync,
 } from "fs";
 
 import * as path from "path";
@@ -13,7 +11,6 @@ import type { RPCServer } from "@dyyz1993/rpc-core";
 import type {
   AgentEvent,
   AgentMessageForUI,
-  ChannelDataEvent,
 } from "../modules/agent";
 import type { AssistantMessage, AssistantMessageEvent, ImageContent } from "@dyyz1993/pi-ai";
 import type { RpcClientAPI, ChannelTypeRegistry } from "@dyyz1993/pi-coding-agent";
@@ -23,6 +20,66 @@ import { SessionMessageReader } from "./session-message-reader";
 import { AgentEventHandler } from "./event-handler";
 import type { AgentEventHandlerDeps } from "./event-handler";
 import { CoordinatorHandler } from "./coordinator-handler";
+import type { TierKey } from "./agent-runtime-config";
+import { registerAgentChannels } from "./agent-channel-registration";
+import {
+  getAvailableModelsOperation,
+  setModelOperation,
+  switchTierOperation,
+  cycleModelOperation,
+  setThinkingLevelOperation,
+  cycleThinkingLevelOperation,
+} from "./agent-client-model-operations";
+import {
+  getTierModelsOperation,
+  setTierModelsOperation,
+  getAgentsOperation,
+  switchAgentOperation,
+  getCurrentAgentOperation,
+  getLatestAgentChangeOperation,
+} from "./agent-client-command-operations";
+import {
+  getLastAssistantTextOperation,
+  getForkMessagesOperation,
+  forkOperation,
+  previewRollbackOperation,
+  getModifiedFilesOperation,
+  getFileDiffOperation,
+  getBatchDiffsOperation,
+  restoreFilesFromSnapshotOperation,
+  cloneOperation,
+  newSessionOperation,
+  exportHtmlOperation,
+} from "./agent-client-history-operations";
+import {
+  compactOperation,
+  setAutoCompactionOperation,
+  setAutoRetryOperation,
+  abortRetryOperation,
+  setSteeringModeOperation,
+  setFollowUpModeOperation,
+  setPermissionModeOperation,
+  getActiveToolsOperation,
+  setActiveToolsOperation,
+  getQueueOperation,
+  clearQueueOperation,
+  getExtensionsOperation,
+  getSkillsOperation,
+  reloadOperation,
+  getToolsOperation,
+  getMcpServersOperation,
+  toggleMcpServerOperation,
+  restartMcpServerOperation,
+  getContextUsageOperation,
+} from "./agent-client-session-operations";
+import {
+  sendPromptOperation,
+  steerOperation,
+  followUpOperation,
+} from "./agent-client-lifecycle-operations";
+import { getCommandsOperation } from "./agent-client-state-operations";
+import { startAgentClientOperation } from "./agent-start-operations";
+import { stopAgentClientOperation } from "./agent-stop-operations";
 
 // 沙箱模式
 import { SandboxManager } from "../../sandbox/sandbox-manager";
@@ -49,6 +106,12 @@ type ChannelMethodReturn<
 import type { CoordinatorMethodCall } from "../modules/coordinator";
 import { createLogger } from "../lib/logger";
 import { config } from "../../server-config";
+import {
+  makeProcessPoolKey,
+  addToProcessPool,
+  removeFromProcessPool,
+  selectLruEvictionCandidate,
+} from "./agent-process-pool";
 
 const log = createLogger("agent");
 const perfLog = createLogger("session-perf");
@@ -64,30 +127,6 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
       setTimeout(() => reject(new Error(`${label} timed out (${ms}ms)`)), ms),
     ),
   ]);
-}
-
-/**
- * Strip parentSession from a JSONL session file's header entry.
- * Prevents forked sessions from being identified as subagent children on refresh.
- */
-function stripParentSessionFromHeader(filePath: string): void {
-  try {
-    const content = readFileSync(filePath, "utf-8");
-    const newlineIdx = content.indexOf("\n");
-    if (newlineIdx < 0) return;
-    const firstLine = content.slice(0, newlineIdx);
-    const rest = content.slice(newlineIdx + 1);
-    const header = JSON.parse(firstLine) as Record<string, unknown>;
-    if ("parentSession" in header) {
-      delete header.parentSession;
-      writeFileSync(filePath, JSON.stringify(header) + "\n" + rest, "utf-8");
-    }
-  } catch (err) {
-    log.warn("stripParentSessionFromHeader failed", {
-      filePath,
-      err: err instanceof Error ? err.message : String(err),
-    });
-  }
 }
 
 /**
@@ -209,25 +248,7 @@ function getExtensionArgs(): string[] {
   return _extensionArgsCache;
 }
 
-const TIER_KEYS = ["fast", "pro", "max"] as const;
-type TierKey = (typeof TIER_KEYS)[number];
-
-function parseTierModel(tier: TierKey, modelName: string | undefined): {
-  provider: string;
-  modelId: string;
-} {
-  if (!modelName) {
-    throw new Error(`Tier "${tier}" is not configured`);
-  }
-
-  const [provider, ...modelParts] = modelName.split("/");
-  const modelId = modelParts.join("/");
-  if (!provider || !modelId) {
-    throw new Error(`Invalid tier model mapping: ${tier} -> ${modelName}`);
-  }
-
-  return { provider, modelId };
-}
+// Tier constants and parseTierModel are imported from agent-runtime-config.ts
 
 type SanitizedMessageUpdate = Extract<AgentEvent, { type: "message_update" }> & {
   assistantMessageEvent: Omit<AssistantMessageEvent, "partial">;
@@ -384,88 +405,37 @@ export class AgentProcessManager {
   private static MAX_POOL_SIZE = 5;
 
   private addToPool(poolKey: string, managed: ManagedClient): void {
-    let pool = this.processByCwd.get(poolKey);
-    if (!pool) {
-      pool = new Set();
-      this.processByCwd.set(poolKey, pool);
-    }
-    pool.add(managed);
+    addToProcessPool(this.processByCwd, poolKey, managed);
   }
 
   private removeFromPool(poolKey: string, managed: ManagedClient): void {
-    const pool = this.processByCwd.get(poolKey);
-    if (pool) {
-      pool.delete(managed);
-      if (pool.size === 0) {
-        this.processByCwd.delete(poolKey);
-      }
-    }
+    removeFromProcessPool(this.processByCwd, poolKey, managed);
   }
 
   private evictLRU(currentPoolKey: string): void {
-    const totalProcesses = [...this.processByCwd.values()].reduce(
-      (sum, pool) => sum + pool.size,
-      0,
+    const candidate = selectLruEvictionCandidate(
+      this.processByCwd,
+      currentPoolKey,
+      AgentProcessManager.MAX_POOL_SIZE,
     );
-    if (totalProcesses < AgentProcessManager.MAX_POOL_SIZE) return;
+    if (!candidate) return;
 
-    let oldest: ManagedClient | null = null;
-    let oldestPoolKey: string | null = null;
-
-    const currentPool = this.processByCwd.get(currentPoolKey);
-    const currentPoolSize = currentPool?.size ?? 0;
-
-    for (const [poolKey, pool] of this.processByCwd) {
-      for (const mc of pool) {
-        if (mc.info.status === "streaming") continue;
-        if (mc.activeBackgroundTools.size > 0) continue;
-
-        const isCurrentProject = poolKey === currentPoolKey;
-
-        if (isCurrentProject && currentPoolSize <= 1) continue;
-
-        if (!oldest) {
-          oldest = mc;
-          oldestPoolKey = poolKey;
-        } else {
-          const oldestIsCurrent = oldestPoolKey === currentPoolKey;
-          if (!isCurrentProject && oldestIsCurrent) {
-            oldest = mc;
-            oldestPoolKey = poolKey;
-          } else if (
-            isCurrentProject === oldestIsCurrent &&
-            mc.lastActiveAt < oldest.lastActiveAt
-          ) {
-            oldest = mc;
-            oldestPoolKey = poolKey;
-          }
-        }
-      }
-    }
-
-    if (oldest && oldestPoolKey) {
-      const sid = oldest._activeSessionId;
-      log.info("[evictLRU] evicting idle process", {
-        totalBefore: totalProcesses,
-        poolKey: oldestPoolKey,
-        sessionId: sid,
-        isCurrentProject: oldestPoolKey === currentPoolKey,
-      });
-      oldest.unsubscribe();
-      oldest.client.stop().catch(() => { });
-      this.clients.delete(sid);
-      const pool = this.processByCwd.get(oldestPoolKey);
-      if (pool) {
-        pool.delete(oldest);
-        if (pool.size === 0) {
-          this.processByCwd.delete(oldestPoolKey);
-        }
-      }
-    }
+    const { poolKey, managed: oldest, totalProcesses } = candidate;
+    const sid = oldest._activeSessionId;
+    log.info("[evictLRU] evicting idle process", {
+      totalBefore: totalProcesses,
+      poolKey,
+      sessionId: sid,
+      isCurrentProject: poolKey === currentPoolKey,
+    });
+    oldest.unsubscribe();
+    oldest.client.stop().catch(() => { });
+    this.clients.delete(sid);
+    removeFromProcessPool(this.processByCwd, poolKey, oldest);
   }
 
   private getPoolKey(projectPath: string, userId?: string): string {
-    return config.sandboxEnabled && userId ? `${projectPath}::${userId}` : projectPath;
+    return makeProcessPoolKey(projectPath, userId, config.sandboxEnabled);
   }
 
   private messageReader: SessionMessageReader;
@@ -689,190 +659,48 @@ export class AgentProcessManager {
     sessionPath: string,
     options?: { forceNewProcess?: boolean; userId?: string },
   ): Promise<{ agentId: string; status: "started" | "already_running" | "switched" }> {
-    const tStart = performance.now();
-
-    if (this._startInProgress) {
-      // Wait for the in-progress start to finish, then check if client exists
-      log.warn("[start] reentrant call, waiting for first start to complete", { sessionId });
-      for (let i = 0; i < 50; i++) {
-        await new Promise((r) => setTimeout(r, 100));
-        if (!this._startInProgress) break;
-      }
-      const existingAfter = this.getActiveManaged(sessionId);
-      if (existingAfter) {
-        return { agentId: sessionId, status: "already_running" };
-      }
-      // First start may have failed or was for a different session — fall through and retry
-      log.warn("[start] first start did not produce client, proceeding", { sessionId });
-    }
-    this._startInProgress = true;
-
-    const existing = this.clients.get(sessionId);
-    if (existing && existing._activeSessionId === sessionId) {
-      perfLog.info("[start] already_running (cached hit)", {
-        sessionId,
-        totalMs: Math.round(performance.now() - tStart),
-      });
-      existing.lastActiveAt = Date.now();
-      this._startInProgress = false;
-      this._drainPendingDelegates();
-      return { agentId: sessionId, status: "already_running" };
-    }
-
-    // ── Process pool: reuse existing process for same cwd ──
-    const reusePoolKey = this.getPoolKey(projectPath, options?.userId);
-    const pool = this.processByCwd.get(reusePoolKey);
-    if (pool && pool.size > 0) {
-      const pooled = [...pool][pool.size - 1];
-      const oldSessionId = pooled._activeSessionId;
-      const tSwitch = performance.now();
-      try {
-        perfLog.info("[start] reusing pooled process", {
-          sessionId,
-          projectPath,
-          oldSessionId,
-        });
-        const result = await Promise.race([
-          pooled.client.switchSession(sessionPath),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error("switchSession timed out after 15s")), 15000),
-          ),
-        ]);
-        if (!result.cancelled) {
-          this.clients.delete(oldSessionId);
-          pooled._activeSessionId = sessionId;
-          pooled.info = {
-            sessionId,
-            projectPath,
-            sessionPath,
-            status: "idle",
-          };
-          this.clients.set(sessionId, pooled);
-          this.sessionPaths.set(sessionId, sessionPath);
-          this.sessionProjectPaths.set(sessionId, projectPath);
-          perfLog.info("[start] switchSession done", {
-            sessionId,
-            oldSessionId,
-            totalMs: Math.round(performance.now() - tSwitch),
-          });
-          return { agentId: sessionId, status: "switched" };
-        }
-        perfLog.info("[start] switchSession cancelled by extension, creating new process");
-      } catch (err: unknown) {
-        const switchMs = Math.round(performance.now() - tSwitch);
-        perfLog.info("[start] switchSession failed, killing pooled process", {
-          sessionId,
-          oldSessionId,
-          switchMs,
-          error: err instanceof Error ? err.message : String(err),
-        });
-        this.processByCwd.delete(projectPath);
-        this.clients.delete(oldSessionId);
-        try {
-          pooled.unsubscribe();
-        } catch (e) {
-          log.debug("start: failed to unsubscribe old pooled process", { error: String(e) });
-        }
-        try {
-          await pooled.client.stop();
-        } catch (e) {
-          log.debug("start: failed to stop old pooled process client", { error: String(e) });
-        }
-      }
-    }
-    const poolKey = this.getPoolKey(projectPath, options?.userId);
-
-    perfLog.info("[start] begin (new process)", { sessionId, projectPath });
-
-    this.evictLRU(poolKey);
-
-    const { client, timings: createTimings } = await createRpcClient(
-      config.piCliPath,
-      projectPath,
-      sessionPath,
-      config.sandboxEnabled ? (options?.userId ?? sessionId) : undefined,
-    );
-    const tAfterCreate = performance.now();
-
-    log.info("Spawning pi via RpcClient", { cwd: projectPath, sessionPath });
-
-    const info: AgentProcessInfo = {
+    return startAgentClientOperation({
       sessionId,
       projectPath,
       sessionPath,
-      status: "idle",
-    };
-
-    const managed: ManagedClient = {
-      client,
-      info,
-      unsubscribe: () => { },
-      _activeSessionId: sessionId,
-      lastActiveAt: Date.now(),
-      activeBackgroundTools: new Set(),
-    };
-
-    const bridge = (event: unknown): void => {
-      this.handleEvent(managed._activeSessionId, event as AgentEvent);
-    };
-    try {
-      managed.unsubscribe = client.onEvent(bridge);
-    } catch {
-      managed.unsubscribe = () => { };
-    }
-
-    const coordinatorChannelNames = new Set(["coordinator", "coordinator_client"]);
-    const channelNames = [
-      "bash",
-      "todo",
-      "subagent",
-      "lsp",
-      "rules-engine",
-      "memory",
-      "coordinator",
-      "coordinator_client",
-      "supervisor",
-      "file-snapshot",
-      "file-review",
-    ] as const;
-    for (const name of channelNames) {
-      try {
-        client.channel(name).onReceive((data: unknown) => {
-          if (coordinatorChannelNames.has(name)) {
-            this.handleCoordinatorCall(managed._activeSessionId, data, name);
-            return;
+      startOptions: options,
+      clients: this.clients,
+      processByCwd: this.processByCwd,
+      sessionPaths: this.sessionPaths,
+      sessionProjectPaths: this.sessionProjectPaths,
+      getPoolKey: (p, u) => this.getPoolKey(p, u),
+      evictLRU: (k) => this.evictLRU(k),
+      addToPool: (k, m) => this.addToPool(k, m),
+      createRpcClient: (cliPath, cwd, sp, userId) =>
+        createRpcClient(cliPath, cwd, sp, userId),
+      registerAgentChannels: (args) => registerAgentChannels(args),
+      handleEvent: (sid, event) => this.handleEvent(sid, event),
+      handleCoordinatorCall: (sid, data, channelName) =>
+        this.handleCoordinatorCall(sid, data, channelName),
+      broadcastSessionStatus: (sid, status) => this.broadcastSessionStatus(sid, status),
+      acquireStartLock: async (sid) => {
+        if (this._startInProgress) {
+          log.warn("[start] reentrant call, waiting for first start to complete", { sessionId: sid });
+          for (let i = 0; i < 50; i++) {
+            await new Promise((r) => setTimeout(r, 100));
+            if (!this._startInProgress) break;
           }
-          this.handleEvent(managed._activeSessionId, {
-            type: "channel_data",
-            name,
-            data,
-          } as ChannelDataEvent);
-        });
-      } catch {
-        // sandbox mode: channels not supported, skip
-      }
-    }
-
-    const processStartMs = Math.round(performance.now() - tAfterCreate);
-    perfLog.info("[start] RpcClient ready", {
-      sessionId,
-      totalMs: Math.round(performance.now() - tStart),
-      dynamicImportMs: createTimings.dynamicImport,
-      constructMs: createTimings.construct,
-      createRpcTotalMs: Math.round(tAfterCreate - tStart),
-      processStartMs,
-      channelsRegistered: channelNames.length,
+          const existingAfter = this.getActiveManaged(sid);
+          if (existingAfter) {
+            return false;
+          }
+          log.warn("[start] first start did not produce client, proceeding", { sessionId: sid });
+        }
+        this._startInProgress = true;
+        return true;
+      },
+      releaseStartLock: () => {
+        this._startInProgress = false;
+      },
+      drainPendingDelegates: () => {
+        this._drainPendingDelegates();
+      },
     });
-
-    log.info("RpcClient started", { sessionId });
-    this.sessionPaths.set(sessionId, sessionPath);
-    this.sessionProjectPaths.set(sessionId, projectPath);
-    this.clients.set(sessionId, managed);
-    this.addToPool(poolKey, managed);
-    this._startInProgress = false;
-    this._drainPendingDelegates();
-    this.broadcastSessionStatus(sessionId, "idle");
-    return { agentId: sessionId, status: "started" };
   }
 
   async send(
@@ -880,28 +708,16 @@ export class AgentProcessManager {
     content: string,
     images?: ImageContent[],
   ): Promise<boolean> {
-    let managed = this.getActiveManaged(sessionId);
-    managed ??= await this.ensureManagedClient(sessionId);
-    if (!managed) {
-      log.warn("send: no client after ensure", { sessionId });
-      return false;
-    }
-    managed.lastActiveAt = Date.now();
-    managed.client.prompt(content, images).catch(async (err: Error) => {
-      log.warn("prompt error", { err: err.message });
-      if (!managed || !(await this.isClientAlive(sessionId, managed))) {
-        this.cleanupDeadClient(sessionId, `prompt failed: ${err.message}`);
-        return;
-      }
-      this.emitAgentEvent(sessionId, { type: "agent_end" } as SanitizedEvent).catch(
-        (emitErr: unknown) => {
-          log.warn("emitAgentEvent(agent_end) after prompt error", {
-            err: emitErr instanceof Error ? emitErr.message : String(emitErr),
-          });
-        },
-      );
+    return sendPromptOperation({
+      sessionId,
+      content,
+      images,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+      ensureManagedClient: (sid) => this.ensureManagedClient(sid),
+      isClientAlive: (sid, m) => this.isClientAlive(sid, m),
+      cleanupDeadClient: (sid, reason) => this.cleanupDeadClient(sid, reason),
+      emitAgentEnd: (sid) => this.emitAgentEvent(sid, { type: "agent_end" } as SanitizedEvent),
     });
-    return true;
   }
 
   steer(
@@ -909,12 +725,12 @@ export class AgentProcessManager {
     content: string,
     images?: ImageContent[],
   ): boolean {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return false;
-    managed.client.steer(content, images).catch((err: unknown) => {
-      log.warn("steer error", { sessionId, err: err instanceof Error ? err.message : String(err) });
+    return steerOperation({
+      sessionId,
+      content,
+      images,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
     });
-    return true;
   }
 
   followUp(
@@ -922,15 +738,12 @@ export class AgentProcessManager {
     content: string,
     images?: ImageContent[],
   ): boolean {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return false;
-    managed.client.followUp(content, images).catch((err: unknown) => {
-      log.warn("followUp error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
+    return followUpOperation({
+      sessionId,
+      content,
+      images,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
     });
-    return true;
   }
 
   async abort(sessionId: string): Promise<boolean> {
@@ -972,58 +785,25 @@ export class AgentProcessManager {
   }
 
   async stop(sessionId: string, crashReason?: string): Promise<boolean> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return false;
-
-    managed.info.status = "idle";
-    const endEvent = crashReason
-      ? ({ type: "agent_end", reason: crashReason } as unknown as SanitizedEvent)
-      : ({ type: "agent_end" } as SanitizedEvent);
-    this.emitAgentEvent(sessionId, endEvent).catch((err: unknown) => {
-      log.warn("emitAgentEvent(agent_end) error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
+    return stopAgentClientOperation({
+      sessionId,
+      crashReason,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+      clients: this.clients,
+      parentChildMap: this.coordinatorHandler.parentChildMap,
+      delegateCreatedAt: this.coordinatorHandler.delegateCreatedAt,
+      delegateReplyCount: this.coordinatorHandler.delegateReplyCount,
+      syncDelegateResolvers: this.coordinatorHandler.syncDelegateResolvers,
+      subagentSyncChildren: this.coordinatorHandler.subagentSyncChildren,
+      syncDelegateLastText: this.coordinatorHandler.syncDelegateLastText,
+      leafIds: this.leafIds,
+      getPoolKey: (cwd, userId) => this.getPoolKey(cwd, userId),
+      removeFromPool: (k, m) => this.removeFromPool(k, m),
+      stopChild: (sid) => this.stop(sid),
+      emitAgentEvent: (sid, event) => this.emitAgentEvent(sid, event),
+      deleteLspState: (sid) => this.lastLspState.delete(sid),
+      clearSessionCache: (sid) => this.clearSessionCache(sid),
     });
-
-    // Cascade stop delegated children + clean up coordinator tracking
-    const { childSessionIds } = this.coordinatorHandler.cleanupStoppedSession(sessionId);
-    for (const childId of childSessionIds) {
-      this.stop(childId);
-    }
-
-    // Sync leafId before unsubscribe closes the connection
-    try {
-      const treeResult = await withTimeout(
-        managed.client.getTreeWithLeaf(),
-        3_000,
-        "getTreeWithLeaf-stop",
-      );
-      if (treeResult.leafId) {
-        this.leafIds.set(sessionId, treeResult.leafId);
-      }
-    } catch {
-      // Best effort — process may already be unresponsive
-    }
-    managed.unsubscribe();
-    managed.client.stop().catch((err: unknown) => {
-      log.warn("stop error", { sessionId, err: err instanceof Error ? err.message : String(err) });
-    });
-    this.clients.delete(sessionId);
-    const poolKey = this.getPoolKey(managed.info.projectPath);
-    this.removeFromPool(poolKey, managed);
-    const sandboxKey = this.getPoolKey(managed.info.projectPath, managed._activeSessionId);
-    if (sandboxKey !== poolKey) {
-      this.removeFromPool(sandboxKey, managed);
-    }
-    // Note: sessionPaths, sessionProjectPaths, and leafIds are NOT cleared here.
-    // They persist for session restart support (coordinator delegate_send)
-    // and JSONL fallback navigateTree (rollback without active CLI process).
-    // When the CLI restarts, getTreeWithLeaf() will overwrite with the
-    // authoritative value, so stale data self-heals.
-    this.lastLspState.delete(sessionId);
-    this.clearSessionCache(sessionId);
-    return true;
   }
 
   getStatus(sessionId: string): { status: "idle" | "streaming" | "stopped"; pid?: number } {
@@ -1229,24 +1009,10 @@ export class AgentProcessManager {
   ): Promise<
     Array<{ name: string; description: string; source: "extension" | "prompt" | "skill" }>
   > {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return [];
-
-    try {
-      const commands = await withTimeout(managed.client.getCommands(), 10_000, "getCommands");
-      if (!commands) return [];
-      return commands.map((c) => ({
-        name: String(c.name ?? ""),
-        description: String(c.description ?? ""),
-        source: (c.source as "extension" | "prompt" | "skill") ?? "extension",
-      }));
-    } catch (err: unknown) {
-      log.warn("getCommands failed", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return [];
-    }
+    return getCommandsOperation({
+      sessionId,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+    });
   }
 
   async getSessionStats(sessionId: string): Promise<{
@@ -1319,24 +1085,12 @@ export class AgentProcessManager {
   async getAvailableModels(
     sessionId: string,
   ): Promise<Array<{ provider: string; id: string; contextWindow: number; reasoning: boolean }>> {
-    // Retry with short delay: session may be mid-switch (agent.start in progress)
-    let managed = this.getActiveManaged(sessionId);
-    if (!managed) {
-      await new Promise((r) => setTimeout(r, 200));
-      managed = this.getActiveManaged(sessionId);
-    }
-    managed ??= await this.ensureManagedClient(sessionId);
-    if (!managed) return [];
-    return managed.client.getAvailableModels().catch(async (err: unknown) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.warn("getAvailableModels error, checking if CLI is alive", {
-        sessionId,
-        err: msg,
-      });
-      if (!managed || !(await this.isClientAlive(sessionId, managed))) {
-        this.cleanupDeadClient(sessionId, `getAvailableModels failed: ${msg}`);
-      }
-      return [];
+    return getAvailableModelsOperation({
+      sessionId,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+      ensureManagedClient: (sid) => this.ensureManagedClient(sid),
+      isClientAlive: (sid, m) => this.isClientAlive(sid, m),
+      cleanupDeadClient: (sid, reason) => this.cleanupDeadClient(sid, reason),
     });
   }
 
@@ -1345,24 +1099,24 @@ export class AgentProcessManager {
     provider: string,
     modelId: string,
   ): Promise<{ provider: string; id: string }> {
-    let managed = this.getActiveManaged(sessionId);
-    managed ??= await this.ensureManagedClient(sessionId);
-    if (!managed) throw new Error("Client not found");
-    return withTimeout(managed.client.setModel(provider, modelId), 15_000, "setModel");
+    return setModelOperation({
+      sessionId,
+      provider,
+      modelId,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+      ensureManagedClient: (sid) => this.ensureManagedClient(sid),
+    });
   }
 
   async switchTier(
     sessionId: string,
     tier: TierKey,
   ): Promise<{ provider: string; id: string; tier: TierKey }> {
-    if (!TIER_KEYS.includes(tier)) {
-      throw new Error(`Invalid tier "${tier}". Valid tiers are: fast, pro, max`);
-    }
-
-    const { models } = await this.getTierModels(sessionId);
-    const { provider, modelId } = parseTierModel(tier, models[tier]);
-    const model = await this.setModel(sessionId, provider, modelId);
-    return { ...model, tier };
+    return switchTierOperation({
+      tier,
+      getTierModels: () => this.getTierModels(sessionId),
+      setModel: (provider, modelId) => this.setModel(sessionId, provider, modelId),
+    });
   }
 
   async cycleModel(sessionId: string): Promise<{
@@ -1370,40 +1124,25 @@ export class AgentProcessManager {
     thinkingLevel: string;
     isScoped: boolean;
   } | null> {
-    let managed = this.getActiveManaged(sessionId);
-    managed ??= await this.ensureManagedClient(sessionId);
-    if (!managed) return null;
-    return managed.client.cycleModel().catch((err: unknown) => {
-      log.warn("cycleModel error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return null;
+    return cycleModelOperation({
+      sessionId,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+      ensureManagedClient: (sid) => this.ensureManagedClient(sid),
     });
   }
 
   async setThinkingLevel(sessionId: string, level: string): Promise<void> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return;
-    await managed.client
-      .setThinkingLevel(level as Parameters<typeof managed.client.setThinkingLevel>[0])
-      .catch((err: unknown) => {
-        log.warn("setThinkingLevel error", {
-          sessionId,
-          err: err instanceof Error ? err.message : String(err),
-        });
-      });
+    return setThinkingLevelOperation({
+      sessionId,
+      level,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+    });
   }
 
   async cycleThinkingLevel(sessionId: string): Promise<{ level: string } | null> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return null;
-    return managed.client.cycleThinkingLevel().catch((err: unknown) => {
-      log.warn("cycleThinkingLevel error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return null;
+    return cycleThinkingLevelOperation({
+      sessionId,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
     });
   }
 
@@ -1411,126 +1150,87 @@ export class AgentProcessManager {
     sessionId: string,
     customInstructions?: string,
   ): Promise<{ summary: string; tokensBefore: number }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) throw new Error("Client not found");
-    return withTimeout(managed.client.compact(customInstructions), 120_000, "compact");
+    return compactOperation({
+      sessionId,
+      customInstructions,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+    });
   }
 
   async setAutoCompaction(sessionId: string, enabled: boolean): Promise<void> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return;
-    await managed.client.setAutoCompaction(enabled).catch((err: unknown) => {
-      log.warn("setAutoCompaction error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
+    return setAutoCompactionOperation({
+      sessionId,
+      enabled,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
     });
   }
 
   async setAutoRetry(sessionId: string, enabled: boolean): Promise<void> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return;
-    await managed.client.setAutoRetry(enabled).catch((err: unknown) => {
-      log.warn("setAutoRetry error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
+    return setAutoRetryOperation({
+      sessionId,
+      enabled,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
     });
   }
 
   async abortRetry(sessionId: string): Promise<void> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return;
-    await managed.client.abortRetry().catch((err: unknown) => {
-      log.warn("abortRetry error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
+    return abortRetryOperation({
+      sessionId,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
     });
   }
 
   async setSteeringMode(sessionId: string, mode: string): Promise<void> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return;
-    await managed.client.setSteeringMode(mode as "all" | "one-at-a-time").catch((err: unknown) => {
-      log.warn("setSteeringMode error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
+    return setSteeringModeOperation({
+      sessionId,
+      mode,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
     });
   }
 
   async setFollowUpMode(sessionId: string, mode: string): Promise<void> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return;
-    await managed.client.setFollowUpMode(mode as "all" | "one-at-a-time").catch((err: unknown) => {
-      log.warn("setFollowUpMode error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
+    return setFollowUpModeOperation({
+      sessionId,
+      mode,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
     });
   }
 
   async setPermissionMode(sessionId: string, mode: string): Promise<{ mode: string }> {
-    let managed = this.getActiveManaged(sessionId);
-    managed ??= await this.ensureManagedClient(sessionId);
-    if (!managed) throw new Error("Client not found");
-    return withTimeout(
-      managed.client.setPermissionMode(
-        mode as Parameters<typeof managed.client.setPermissionMode>[0],
-      ),
-      15_000,
-      "setPermissionMode",
-    );
+    return setPermissionModeOperation({
+      sessionId,
+      mode,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+      ensureManagedClient: (sid) => this.ensureManagedClient(sid),
+    });
   }
 
   async getActiveTools(sessionId: string): Promise<{ toolNames: string[] }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return { toolNames: [] };
-    try {
-      const result = await withTimeout(managed.client.getActiveTools(), 10_000, "getActiveTools");
-      return { toolNames: Array.isArray(result) ? result : [] };
-    } catch (err: unknown) {
-      log.warn("getActiveTools error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return { toolNames: [] };
-    }
+    return getActiveToolsOperation({
+      sessionId,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+    });
   }
 
   async setActiveTools(sessionId: string, toolNames: string[]): Promise<void> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return;
-    await managed.client.setActiveTools(toolNames).catch((err: unknown) => {
-      log.warn("setActiveTools error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
+    return setActiveToolsOperation({
+      sessionId,
+      toolNames,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
     });
   }
 
   async getQueue(sessionId: string): Promise<{ steering: string[]; followUp: string[] }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return { steering: [], followUp: [] };
-    return managed.client.getQueue().catch((err: unknown) => {
-      log.warn("getQueue error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return { steering: [], followUp: [] };
+    return getQueueOperation({
+      sessionId,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
     });
   }
 
   async clearQueue(sessionId: string): Promise<{ steering: string[]; followUp: string[] }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return { steering: [], followUp: [] };
-    return managed.client.clearQueue().catch((err: unknown) => {
-      log.warn("clearQueue error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return { steering: [], followUp: [] };
+    return clearQueueOperation({
+      sessionId,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
     });
   }
 
@@ -1542,18 +1242,10 @@ export class AgentProcessManager {
       commandNames: string[];
     }>;
   }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return { extensions: [] };
-    try {
-      const result = await withTimeout(managed.client.getExtensions(), 10_000, "getExtensions");
-      return { extensions: Array.isArray(result) ? result : [] };
-    } catch (err: unknown) {
-      log.warn("getExtensions error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return { extensions: [] };
-    }
+    return getExtensionsOperation({
+      sessionId,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+    });
   }
 
   async getSkills(sessionId: string): Promise<{
@@ -1565,56 +1257,33 @@ export class AgentProcessManager {
       disableModelInvocation: boolean;
     }>;
   }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return { skills: [] };
-    try {
-      const result = await withTimeout(managed.client.getSkills(), 10_000, "getSkills");
-      return { skills: Array.isArray(result) ? result : [] };
-    } catch (err: unknown) {
-      log.warn("getSkills error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return { skills: [] };
-    }
+    return getSkillsOperation({
+      sessionId,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+    });
   }
 
   async reload(sessionId: string): Promise<void> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return;
-    await withTimeout(managed.client.reload(), 30_000, "reload");
+    return reloadOperation({
+      sessionId,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+    });
   }
 
   async getTools(
     sessionId: string,
   ): Promise<{ tools: Array<{ name: string; label: string; description: string }> }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return { tools: [] };
-    try {
-      const result = await withTimeout(managed.client.getTools(), 10_000, "getTools");
-      return { tools: Array.isArray(result) ? result : [] };
-    } catch (err: unknown) {
-      log.warn("getTools error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return { tools: [] };
-    }
+    return getToolsOperation({
+      sessionId,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+    });
   }
 
   async getMcpServers(sessionId: string): Promise<{ servers: McpServerInfo[] }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return { servers: [] };
-    try {
-      const servers = await withTimeout(managed.client.getMcpServers(), 10_000, "getMcpServers");
-      return { servers: Array.isArray(servers) ? servers : [] };
-    } catch (err) {
-      log.warn("getMcpServers error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return { servers: [] };
-    }
+    return getMcpServersOperation({
+      sessionId,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+    });
   }
 
   async toggleMcpServer(
@@ -1622,89 +1291,51 @@ export class AgentProcessManager {
     name: string,
     enabled: boolean,
   ): Promise<{ success: boolean; error?: string }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return { success: false, error: "Client not found" };
-    try {
-      await managed.client.toggleMcpServer(name, enabled);
-      return { success: true };
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.warn("toggleMcpServer error", { sessionId, err: msg });
-      return { success: false, error: msg };
-    }
+    return toggleMcpServerOperation({
+      sessionId,
+      name,
+      enabled,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+    });
   }
 
   async restartMcpServer(
     sessionId: string,
     name: string,
   ): Promise<{ success: boolean; error?: string }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return { success: false, error: "Client not found" };
-    try {
-      await managed.client.restartMcpServer(name);
-      return { success: true };
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.warn("restartMcpServer error", { sessionId, err: msg });
-      return { success: false, error: msg };
-    }
+    return restartMcpServerOperation({
+      sessionId,
+      name,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+    });
   }
 
   async getContextUsage(
     sessionId: string,
   ): Promise<{ tokens: number | null; contextWindow: number; percent: number | null }> {
-    let managed = this.getActiveManaged(sessionId);
-    managed ??= await this.ensureManagedClient(sessionId);
-    if (!managed) return { tokens: null, contextWindow: 0, percent: null };
-    return managed.client.getContextUsage().catch(async (err: unknown) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      log.warn("getContextUsage error, checking if CLI is alive", {
-        sessionId,
-        err: msg,
-      });
-      if (!managed || !(await this.isClientAlive(sessionId, managed))) {
-        this.cleanupDeadClient(sessionId, `getContextUsage failed: ${msg}`);
-      }
-      return { tokens: null, contextWindow: 0, percent: null };
+    return getContextUsageOperation({
+      sessionId,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+      ensureManagedClient: (sid) => this.ensureManagedClient(sid),
+      isClientAlive: async (sid, managed) => this.isClientAlive(sid, managed),
+      cleanupDeadClient: (sid, reason) => this.cleanupDeadClient(sid, reason),
     });
   }
 
   async getTierModels(sessionId: string): Promise<{ models: Record<string, string> }> {
-    let managed = this.getActiveManaged(sessionId);
-    if (!managed) {
-      await new Promise((r) => setTimeout(r, 200));
-      managed = this.getActiveManaged(sessionId);
-    }
-    managed ??= await this.ensureManagedClient(sessionId);
-    if (!managed) return { models: {} };
-    const response = await (
-      managed.client as unknown as { send: (cmd: unknown) => Promise<unknown> }
-    )
-      .send({ type: "get_tier_models" })
-      .catch((err: unknown) => {
-        log.warn("getTierModels error", {
-          sessionId,
-          err: err instanceof Error ? err.message : String(err),
-        });
-        return null;
-      });
-    if (!response) return { models: {} };
-    const data = (response as { data?: { models: Record<string, string> } }).data;
-    return { models: data?.models ?? {} };
+    return getTierModelsOperation({
+      sessionId,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+      ensureManagedClient: (sid) => this.ensureManagedClient(sid),
+    });
   }
 
   async setTierModels(sessionId: string, models: Record<string, string>): Promise<{ ok: boolean }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return { ok: false };
-    await (managed.client as unknown as { send: (cmd: unknown) => Promise<unknown> })
-      .send({ type: "set_tier_models", models })
-      .catch((err: unknown) => {
-        log.warn("setTierModels error", {
-          sessionId,
-          err: err instanceof Error ? err.message : String(err),
-        });
-      });
-    return { ok: true };
+    return setTierModelsOperation({
+      sessionId,
+      models,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+    });
   }
 
   async getAgents(sessionId: string): Promise<{
@@ -1718,42 +1349,11 @@ export class AgentProcessManager {
       filePath: string;
     }>;
   }> {
-    let managed = this.getActiveManaged(sessionId);
-    managed ??= await this.ensureManagedClient(sessionId);
-    if (!managed) return { agents: [] };
-    try {
-      const response = await (
-        managed.client as unknown as { send: (cmd: unknown) => Promise<unknown> }
-      ).send({ type: "get_agents" });
-      const data = (
-        response as {
-          data?: {
-            agents: Array<{
-              name: string;
-              description?: string;
-              tier?: string;
-              tools?: string[];
-              permissionMode?: string;
-              source?: string;
-              filePath?: string;
-            }>;
-          };
-        }
-      ).data;
-      return {
-        agents: (data?.agents ?? []).map((a) => ({
-          ...a,
-          source: a.source ?? "builtin",
-          filePath: a.filePath ?? "",
-        })),
-      };
-    } catch (err: unknown) {
-      log.warn("getAgents error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return { agents: [] };
-    }
+    return getAgentsOperation({
+      sessionId,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+      ensureManagedClient: (sid) => this.ensureManagedClient(sid),
+    });
   }
 
   async switchAgent(
@@ -1765,38 +1365,20 @@ export class AgentProcessManager {
     tier?: string;
     thinkingLevel?: string;
   }> {
-    let managed = this.getActiveManaged(sessionId);
-    managed ??= await this.ensureManagedClient(sessionId);
-    if (!managed) throw new Error("No agent process for session");
-    const response = await (
-      managed.client as unknown as { send: (cmd: unknown) => Promise<unknown> }
-    ).send({ type: "switch_agent", agentName });
-    const data = (
-      response as {
-        data?: { agentName: string; tools: string[]; tier?: string; thinkingLevel?: string };
-      }
-    ).data;
-    if (!data) throw new Error("switch_agent returned no data");
-    return data;
+    return switchAgentOperation({
+      sessionId,
+      agentName,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+      ensureManagedClient: (sid) => this.ensureManagedClient(sid),
+    });
   }
 
   async getCurrentAgent(sessionId: string): Promise<{ agentName: string | null }> {
-    let managed = this.getActiveManaged(sessionId);
-    managed ??= await this.ensureManagedClient(sessionId);
-    if (!managed) return { agentName: null };
-    try {
-      const response = await (
-        managed.client as unknown as { send: (cmd: unknown) => Promise<unknown> }
-      ).send({ type: "get_current_agent" });
-      const data = (response as { data?: { agentName: string | null } }).data;
-      return { agentName: data?.agentName ?? null };
-    } catch (err: unknown) {
-      log.warn("getCurrentAgent error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return { agentName: null };
-    }
+    return getCurrentAgentOperation({
+      sessionId,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+      ensureManagedClient: (sid) => this.ensureManagedClient(sid),
+    });
   }
 
   async getAgentDetail(sessionId: string, agentName: string) {
@@ -1830,29 +1412,10 @@ export class AgentProcessManager {
   }
 
   async getLatestAgentChange(sessionId: string) {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return null;
-    try {
-      const response = await (
-        managed.client as unknown as { send: (cmd: unknown) => Promise<unknown> }
-      ).send({ type: "get_latest_agent_change" });
-      const data = (
-        response as {
-          data?: {
-            agentName: string;
-            agentConfig?: Record<string, unknown>;
-            timestamp: string;
-          } | null;
-        }
-      ).data;
-      return data ?? null;
-    } catch (err: unknown) {
-      log.warn("getLatestAgentChange error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return null;
-    }
+    return getLatestAgentChangeOperation({
+      sessionId,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+    });
   }
 
   async getSettings(sessionId: string, scope?: string): Promise<Record<string, unknown>> {
@@ -1910,39 +1473,19 @@ export class AgentProcessManager {
   }
 
   async getLastAssistantText(sessionId: string): Promise<{ text: string | null }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return { text: null };
-    try {
-      const result = await withTimeout(
-        managed.client.getLastAssistantText(),
-        10_000,
-        "getLastAssistantText",
-      );
-      return { text: result };
-    } catch (err: unknown) {
-      log.warn("getLastAssistantText error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return { text: null };
-    }
+    return getLastAssistantTextOperation({
+      sessionId,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+    });
   }
 
   async getForkMessages(
     sessionId: string,
   ): Promise<{ messages: Array<{ entryId: string; text: string }> }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) return { messages: [] };
-    try {
-      const result = await withTimeout(managed.client.getForkMessages(), 10_000, "getForkMessages");
-      return { messages: Array.isArray(result) ? result : [] };
-    } catch (err: unknown) {
-      log.warn("getForkMessages error", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return { messages: [] };
-    }
+    return getForkMessagesOperation({
+      sessionId,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+    });
   }
 
   async fork(
@@ -1955,22 +1498,12 @@ export class AgentProcessManager {
     newSessionFile?: string;
     newSessionId?: string;
   }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) throw new Error("Client not found");
-    const result = (await withTimeout(managed.client.fork(entryId, options), 60_000, "fork")) as {
-      text: string;
-      cancelled: boolean;
-      newSessionFile?: string;
-      newSessionId?: string;
-    };
-    // Don't stop the original session — the process pool's switchSession
-    // will handle the transition when the forked session is started.
-    // The original session remains on disk and can be re-activated later.
-    // Strip parentSession from forked session so it's treated as independent on refresh
-    if (result.newSessionFile && !result.cancelled) {
-      stripParentSessionFromHeader(result.newSessionFile);
-    }
-    return result;
+    return forkOperation({
+      sessionId,
+      entryId,
+      forkOptions: options,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+    });
   }
 
   async navigateTree(
@@ -1985,11 +1518,11 @@ export class AgentProcessManager {
     sessionId: string,
     targetId: string,
   ): Promise<{ restored: string[]; deleted: string[] }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (managed) {
-      return withTimeout(managed.client.previewRollback(targetId), 15_000, "previewRollback");
-    }
-    return { restored: [], deleted: [] };
+    return previewRollbackOperation({
+      sessionId,
+      targetId,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+    });
   }
 
   async getModifiedFiles(
@@ -2006,20 +1539,13 @@ export class AgentProcessManager {
     }>;
     resolvedFromEntryId: string | null;
   }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (managed) {
-      const result = await withTimeout(
-        managed.client.getModifiedFiles({
-          fromEntryId,
-          toEntryId,
-          ...((toUserMsgEntryId ? { toUserMsgEntryId } : {}) as Record<string, string>),
-        }),
-        15_000,
-        "getModifiedFiles",
-      );
-      return result;
-    }
-    return { files: [], resolvedFromEntryId: null };
+    return getModifiedFilesOperation({
+      sessionId,
+      fromEntryId,
+      toEntryId,
+      toUserMsgEntryId,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+    });
   }
 
   async getFileDiff(
@@ -2033,16 +1559,13 @@ export class AgentProcessManager {
     newContent: string | null;
     unifiedDiff: string;
   } | null> {
-    const managed = this.getActiveManaged(sessionId);
-    if (managed) {
-      const result = await withTimeout(
-        managed.client.getFileDiff({ filePath, fromEntryId, toEntryId }),
-        15_000,
-        "getFileDiff",
-      );
-      return result;
-    }
-    return null;
+    return getFileDiffOperation({
+      sessionId,
+      filePath,
+      fromEntryId,
+      toEntryId,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+    });
   }
 
   async getBatchDiffs(
@@ -2062,15 +1585,12 @@ export class AgentProcessManager {
     }>;
     summary: { totalFiles: number; added: number; modified: number; deleted: number };
   }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (managed) {
-      return withTimeout(
-        managed.client.getBatchDiffs({ fromEntryId, toEntryId }),
-        30_000,
-        "getBatchDiffs",
-      );
-    }
-    return { files: [], summary: { totalFiles: 0, added: 0, modified: 0, deleted: 0 } };
+    return getBatchDiffsOperation({
+      sessionId,
+      fromEntryId,
+      toEntryId,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+    });
   }
 
   async getTree(sessionId: string): Promise<{ entries: TreeEntry[]; leafId?: string | null }> {
@@ -2082,34 +1602,35 @@ export class AgentProcessManager {
     snapshotTreeHash: string,
     files?: string[],
   ): Promise<string[]> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) throw new Error("Client not found");
-
-    const result = (await managed.client
-      .channel("file-snapshot")
-      .call("snapshot.restoreByHash", { snapshotTreeHash, files })) as {
-        restored: string[];
-      } | null;
-
-    return result?.restored ?? [];
+    return restoreFilesFromSnapshotOperation({
+      sessionId,
+      snapshotTreeHash,
+      files,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+    });
   }
 
   async clone(sessionId: string): Promise<{ cancelled: boolean }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) throw new Error("Client not found");
-    return withTimeout(managed.client.clone(), 60_000, "clone");
+    return cloneOperation({
+      sessionId,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+    });
   }
 
   async newSession(sessionId: string, parentSession?: string): Promise<{ cancelled: boolean }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) throw new Error("Client not found");
-    return withTimeout(managed.client.newSession(parentSession), 30_000, "newSession");
+    return newSessionOperation({
+      sessionId,
+      parentSession,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+    });
   }
 
   async exportHtml(sessionId: string, outputPath?: string): Promise<{ path: string }> {
-    const managed = this.getActiveManaged(sessionId);
-    if (!managed) throw new Error("Client not found");
-    return withTimeout(managed.client.exportHtml(outputPath), 60_000, "exportHtml");
+    return exportHtmlOperation({
+      sessionId,
+      outputPath,
+      getActiveManaged: (sid) => this.getActiveManaged(sid),
+    });
   }
 
   sendChannelData(sessionId: string, channelName: string, data: unknown): void {
