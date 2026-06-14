@@ -1,9 +1,8 @@
-import { memo, useState, useEffect, useRef } from "react";
+import { memo } from "react";
 import { Zap, CheckCircle2, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { createLogger } from "../../../../shared/lib/logger";
 import type { ContentBlock } from "../../../types";
-import { useSettingsStore } from "../../../stores/use-settings-store";
 import { ToolCardHeader } from "../primitives/ToolCardHeader";
 import { InlineCodeViewer } from "./InlineCodeViewer";
 import { formatFilePath } from "../../../lib/format-path";
@@ -52,15 +51,7 @@ export const ReadFileCard = memo(function ReadFileCard({
   const isError = block.status === "error";
   const { t } = useTranslation("chat");
 
-  const collapseToolCards = useSettingsStore((s) => s.collapseToolCards);
-  const [collapsed, setCollapsed] = useState(() => !isRunning && collapseToolCards);
-  const wasRunningRef = useRef(isRunning);
-  useEffect(() => {
-    if (wasRunningRef.current && !isRunning && collapseToolCards) {
-      setCollapsed(true);
-    }
-    wasRunningRef.current = isRunning;
-  }, [isRunning, collapseToolCards]);
+  const [collapsed, setCollapsed] = useAutoCollapse(isRunning);
 
   let filePath = "";
   try {

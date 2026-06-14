@@ -1,4 +1,4 @@
-import { memo, useMemo, useState, useEffect, useRef } from "react";
+import { memo, useMemo, useRef, useEffect } from "react";
 import { AlertTriangle, FileText } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { createLogger } from "../../../../shared/lib/logger";
@@ -8,9 +8,9 @@ import { CopyButton } from "../CopyButton";
 import { InlineCodeViewer } from "./InlineCodeViewer";
 import { ToolCardHeader } from "../primitives/ToolCardHeader";
 import { InlineDiffViewer } from "./InlineDiffViewer";
-import { useSettingsStore } from "../../../stores/use-settings-store";
 import { formatFilePath } from "../../../lib/format-path";
 import { parseUnifiedDiff } from "../../../lib/diff-utils";
+import { useAutoCollapse } from "../../../hooks/use-auto-collapse";
 
 type Block = Extract<ContentBlock, { type: "toolExecution" }>;
 
@@ -128,15 +128,7 @@ export const WriteFileCard = memo(function WriteFileCard({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const { t } = useTranslation("chat");
 
-  const collapseToolCards = useSettingsStore((s) => s.collapseToolCards);
-  const [collapsed, setCollapsed] = useState(() => !isRunning && collapseToolCards);
-  const wasRunningRef = useRef(isRunning);
-  useEffect(() => {
-    if (wasRunningRef.current && !isRunning && collapseToolCards) {
-      setCollapsed(true);
-    }
-    wasRunningRef.current = isRunning;
-  }, [isRunning, collapseToolCards]);
+  const [collapsed, setCollapsed] = useAutoCollapse(isRunning);
 
   const writeArgs = useMemo(() => parseWriteArgs(block.args), [block.args]);
   const editArgs = useMemo(() => parseEditArgs(block.args), [block.args]);

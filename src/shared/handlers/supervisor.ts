@@ -5,6 +5,7 @@ import type { GoalState, SupervisorStatus, TaskReport, TriggerRecord } from "../
 import { getProcessManager } from "./agent";
 import { createLogger } from "../lib/logger";
 import { withTimeout } from "../lib/with-timeout";
+import { forwardToChannel } from "./channel-helpers";
 
 const log = createLogger("supervisor");
 const STATUS_TIMEOUT_MS = 2500;
@@ -40,6 +41,20 @@ async function getSupervisorStatus(
   }
 }
 
+function blockedGoal(objective: string, summary: string): { goal: GoalState } {
+  return {
+    goal: {
+      id: "",
+      objective,
+      status: "blocked",
+      startedAt: Date.now(),
+      updatedAt: Date.now(),
+      continuationCount: 0,
+      blockers: [{ kind: "runtime", summary }],
+    },
+  };
+}
+
 export function register(server: RPCServer, _options: HandlerOptions): void {
   const r = createRegister(server);
 
@@ -58,114 +73,85 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
         delayMs?: number;
         reason?: string;
       };
-      const pm = getProcessManager();
-      if (!pm) return { scheduled: false };
-      try {
-        return (await withTimeout(
-          pm.callChannel(sessionId, "supervisor", "requestPause", {
-            delayMs,
-            reason,
-          }),
-          CHANNEL_TIMEOUT_MS,
-        )) as { scheduled: boolean; scheduledAt?: number };
-      } catch (err) {
-        log.warn("supervisor.requestPause channel call failed", {
-          sessionId,
-          err: err instanceof Error ? err.message : String(err),
-        });
-        return { scheduled: false };
-      }
+      const result = await forwardToChannel<
+        { sessionId: string },
+        { scheduled: boolean; scheduledAt?: number }
+      >({ sessionId }, "supervisor", "requestPause", { delayMs, reason }, CHANNEL_TIMEOUT_MS, {
+        skipHasSessionCheck: true,
+      });
+      if (!result) log.warn("supervisor.requestPause channel call failed", { sessionId });
+      return result ?? { scheduled: false };
     },
   );
 
   r("supervisor.cancelPause", async (params): Promise<{ cancelled: boolean }> => {
     const { sessionId } = params as { sessionId: string };
-    const pm = getProcessManager();
-    if (!pm) return { cancelled: false };
-    try {
-      return (await withTimeout(
-        pm.callChannel(sessionId, "supervisor", "cancelPause", {}),
-        CHANNEL_TIMEOUT_MS,
-      )) as { cancelled: boolean };
-    } catch (err) {
-      log.warn("supervisor.cancelPause channel call failed", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return { cancelled: false };
-    }
+    const result = await forwardToChannel<{ sessionId: string }, { cancelled: boolean }>(
+      { sessionId },
+      "supervisor",
+      "cancelPause",
+      {},
+      CHANNEL_TIMEOUT_MS,
+      { skipHasSessionCheck: true },
+    );
+    if (!result) log.warn("supervisor.cancelPause channel call failed", { sessionId });
+    return result ?? { cancelled: false };
   });
 
   r("supervisor.forceContinue", async (params): Promise<{ triggered: boolean }> => {
     const { sessionId, reason } = params as { sessionId: string; reason?: string };
-    const pm = getProcessManager();
-    if (!pm) return { triggered: false };
-    try {
-      return (await withTimeout(
-        pm.callChannel(sessionId, "supervisor", "forceContinue", { reason }),
-        CHANNEL_TIMEOUT_MS,
-      )) as { triggered: boolean };
-    } catch (err) {
-      log.warn("supervisor.forceContinue channel call failed", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return { triggered: false };
-    }
+    const result = await forwardToChannel<{ sessionId: string }, { triggered: boolean }>(
+      { sessionId },
+      "supervisor",
+      "forceContinue",
+      { reason },
+      CHANNEL_TIMEOUT_MS,
+      { skipHasSessionCheck: true },
+    );
+    if (!result) log.warn("supervisor.forceContinue channel call failed", { sessionId });
+    return result ?? { triggered: false };
   });
 
   r("supervisor.disable", async (params): Promise<{ disabled: boolean }> => {
     const { sessionId } = params as { sessionId: string };
-    const pm = getProcessManager();
-    if (!pm) return { disabled: false };
-    try {
-      return (await withTimeout(
-        pm.callChannel(sessionId, "supervisor", "disable", {}),
-        CHANNEL_TIMEOUT_MS,
-      )) as { disabled: boolean };
-    } catch (err) {
-      log.warn("supervisor.disable channel call failed", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return { disabled: false };
-    }
+    const result = await forwardToChannel<{ sessionId: string }, { disabled: boolean }>(
+      { sessionId },
+      "supervisor",
+      "disable",
+      {},
+      CHANNEL_TIMEOUT_MS,
+      { skipHasSessionCheck: true },
+    );
+    if (!result) log.warn("supervisor.disable channel call failed", { sessionId });
+    return result ?? { disabled: false };
   });
 
   r("supervisor.enable", async (params): Promise<{ enabled: boolean }> => {
     const { sessionId } = params as { sessionId: string };
-    const pm = getProcessManager();
-    if (!pm) return { enabled: false };
-    try {
-      return (await withTimeout(
-        pm.callChannel(sessionId, "supervisor", "enable", {}),
-        CHANNEL_TIMEOUT_MS,
-      )) as { enabled: boolean };
-    } catch (err) {
-      log.warn("supervisor.enable channel call failed", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return { enabled: false };
-    }
+    const result = await forwardToChannel<{ sessionId: string }, { enabled: boolean }>(
+      { sessionId },
+      "supervisor",
+      "enable",
+      {},
+      CHANNEL_TIMEOUT_MS,
+      { skipHasSessionCheck: true },
+    );
+    if (!result) log.warn("supervisor.enable channel call failed", { sessionId });
+    return result ?? { enabled: false };
   });
 
   r("supervisor.getTaskReport", async (params): Promise<{ tasks: TaskReport[] }> => {
     const { sessionId } = params as { sessionId: string };
-    const pm = getProcessManager();
-    if (!pm) return { tasks: [] };
-    try {
-      return (await withTimeout(
-        pm.callChannel(sessionId, "supervisor", "getTaskReport", {}),
-        CHANNEL_TIMEOUT_MS,
-      )) as { tasks: TaskReport[] };
-    } catch (err) {
-      log.warn("supervisor.getTaskReport channel call failed", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return { tasks: [] };
-    }
+    const result = await forwardToChannel<{ sessionId: string }, { tasks: TaskReport[] }>(
+      { sessionId },
+      "supervisor",
+      "getTaskReport",
+      {},
+      CHANNEL_TIMEOUT_MS,
+      { skipHasSessionCheck: true },
+    );
+    if (!result) log.warn("supervisor.getTaskReport channel call failed", { sessionId });
+    return result ?? { tasks: [] };
   });
 
   r(
@@ -177,24 +163,21 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
         channelName?: string;
         method?: string;
       };
-      const pm = getProcessManager();
-      if (!pm) return { reachable: false, error: "No process manager" };
-      try {
-        return (await withTimeout(
-          pm.callChannel(sessionId, "supervisor", "checkToolStatus", {
-            toolName,
-            channelName,
-            method,
-          }),
-          CHANNEL_TIMEOUT_MS,
-        )) as { reachable: boolean; status?: string; error?: string };
-      } catch (err) {
-        log.warn("supervisor.checkToolStatus channel call failed", {
-          sessionId,
-          err: err instanceof Error ? err.message : String(err),
-        });
-        return { reachable: false, error: err instanceof Error ? err.message : String(err) };
+      const result = await forwardToChannel<
+        { sessionId: string },
+        { reachable: boolean; status?: string; error?: string }
+      >(
+        { sessionId },
+        "supervisor",
+        "checkToolStatus",
+        { toolName, channelName, method },
+        CHANNEL_TIMEOUT_MS,
+        { skipHasSessionCheck: true },
+      );
+      if (!result) {
+        log.warn("supervisor.checkToolStatus channel call failed", { sessionId });
       }
+      return result ?? { reachable: false, error: "Channel call failed" };
     },
   );
 
@@ -202,71 +185,38 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     const { sessionId, objective } = params as { sessionId: string; objective: string };
     const pm = getProcessManager();
     if (!pm) {
-      return {
-        goal: {
-          id: "",
-          objective,
-          status: "blocked",
-          startedAt: Date.now(),
-          updatedAt: Date.now(),
-          continuationCount: 0,
-          blockers: [{ kind: "runtime", summary: "Agent process manager unavailable" }],
-        },
-      };
+      return blockedGoal(objective, "Agent process manager unavailable");
     }
-    try {
-      return (await withTimeout(
-        pm.callChannel(sessionId, "supervisor", "setGoal", {
-          objective,
-        }),
-        CHANNEL_TIMEOUT_MS,
-      )) as { goal: GoalState };
-    } catch (err) {
-      log.warn("supervisor.setGoal channel call failed", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return {
-        goal: {
-          id: "",
-          objective,
-          status: "blocked",
-          startedAt: Date.now(),
-          updatedAt: Date.now(),
-          continuationCount: 0,
-          blockers: [
-            { kind: "runtime", summary: err instanceof Error ? err.message : String(err) },
-          ],
-        },
-      };
-    }
+    const result = await forwardToChannel<{ sessionId: string }, { goal: GoalState }>(
+      { sessionId },
+      "supervisor",
+      "setGoal",
+      { objective },
+      CHANNEL_TIMEOUT_MS,
+      { skipHasSessionCheck: true },
+    );
+    if (result) return result;
+    log.warn("supervisor.setGoal channel call failed", { sessionId });
+    return blockedGoal(objective, "Channel call failed");
   });
 
   r("supervisor.clearGoal", async (params): Promise<{ cleared: boolean }> => {
     const { sessionId, reason } = params as { sessionId: string; reason?: string };
-    const pm = getProcessManager();
-    if (!pm) return { cleared: false };
-    try {
-      return (await withTimeout(
-        pm.callChannel(sessionId, "supervisor", "clearGoal", {
-          reason,
-        }),
-        CHANNEL_TIMEOUT_MS,
-      )) as { cleared: boolean };
-    } catch (err) {
-      log.warn("supervisor.clearGoal channel call failed", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return { cleared: false };
-    }
+    const result = await forwardToChannel<{ sessionId: string }, { cleared: boolean }>(
+      { sessionId },
+      "supervisor",
+      "clearGoal",
+      { reason },
+      CHANNEL_TIMEOUT_MS,
+      { skipHasSessionCheck: true },
+    );
+    if (!result) log.warn("supervisor.clearGoal channel call failed", { sessionId });
+    return result ?? { cleared: false };
   });
 
   r(
     "supervisor.refineGoal",
-    async (
-      params,
-    ): Promise<{ success: boolean; objective?: string; error?: string }> => {
+    async (params): Promise<{ success: boolean; objective?: string; error?: string }> => {
       const { sessionId, objective } = params as {
         sessionId: string;
         objective: string;
@@ -274,12 +224,13 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       const pm = getProcessManager();
       if (!pm) return { success: false, error: "Agent process manager unavailable" };
       try {
-        return (await withTimeout(
+        const result = (await withTimeout(
           pm.callChannel(sessionId, "supervisor", "refineGoal", {
             objective,
           }),
           REFINE_TIMEOUT_MS,
         )) as { success: boolean; objective?: string; error?: string };
+        return result;
       } catch (err) {
         log.warn("supervisor.refineGoal channel call failed", {
           sessionId,
@@ -295,19 +246,15 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
 
   r("supervisor.getTriggerHistory", async (params): Promise<{ triggers: TriggerRecord[] }> => {
     const { sessionId, limit } = params as { sessionId: string; limit?: number };
-    const pm = getProcessManager();
-    if (!pm) return { triggers: [] };
-    try {
-      return (await withTimeout(
-        pm.callChannel(sessionId, "supervisor", "getTriggerHistory", { limit: limit ?? 50 }),
-        STATUS_TIMEOUT_MS,
-      )) as { triggers: TriggerRecord[] };
-    } catch (err) {
-      log.warn("supervisor.getTriggerHistory channel call failed", {
-        sessionId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      return { triggers: [] };
-    }
+    const result = await forwardToChannel<{ sessionId: string }, { triggers: TriggerRecord[] }>(
+      { sessionId },
+      "supervisor",
+      "getTriggerHistory",
+      { limit: limit ?? 50 },
+      STATUS_TIMEOUT_MS,
+      { skipHasSessionCheck: true },
+    );
+    if (!result) log.warn("supervisor.getTriggerHistory channel call failed", { sessionId });
+    return result ?? { triggers: [] };
   });
 }

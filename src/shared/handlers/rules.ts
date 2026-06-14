@@ -2,11 +2,9 @@ import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { HandlerOptions } from "../rpc-schema";
 import { getProcessManager } from "./agent";
 import { createLogger } from "../lib/logger";
-import { withTimeout } from "../lib/with-timeout";
+import { forwardToChannel } from "./channel-helpers";
 
 const log = createLogger("agent");
-
-const CHANNEL_TIMEOUT_MS = 1_000;
 
 interface RulesSnapshot {
   type: "snapshot";
@@ -68,27 +66,24 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       log.debug("getProjectPath failed:", { err: String(err) });
     }
 
-    try {
-      const result = (await withTimeout(
-        pm.callChannel(sid, "rules-engine", "getSnapshot", { cwd: cwd ?? "" }) as Promise<unknown>,
-        CHANNEL_TIMEOUT_MS,
-      )) as unknown;
+    const result = await forwardToChannel<{ sessionId?: string }, unknown>(
+      { sessionId: sid },
+      "rules-engine",
+      "getSnapshot",
+      { cwd: cwd ?? "" },
+    );
 
-      if (
-        result &&
-        typeof result === "object" &&
-        "type" in result &&
-        (result as Record<string, unknown>).type === "snapshot"
-      ) {
-        const snap = result as RulesSnapshot;
-        log.info("requestSnapshot: got snapshot", { sid, totalRules: snap.totalRules });
-        return snap;
-      }
-      log.warn("requestSnapshot: channel call returned no valid result", { sid });
-    } catch (err) {
-      log.warn("requestSnapshot: channel call failed", { sid, err: String(err) });
+    if (
+      result &&
+      typeof result === "object" &&
+      "type" in result &&
+      (result as Record<string, unknown>).type === "snapshot"
+    ) {
+      const snap = result as RulesSnapshot;
+      log.info("requestSnapshot: got snapshot", { sid, totalRules: snap.totalRules });
+      return snap;
     }
-
+    log.warn("requestSnapshot: channel call returned no valid result", { sid });
     return emptySnapshot();
   });
 }

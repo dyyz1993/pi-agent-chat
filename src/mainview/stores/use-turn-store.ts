@@ -1,6 +1,19 @@
 import { create } from "zustand";
 import { useSessionStore } from "./use-session-store";
 
+/**
+ * 注意：本 store 与 use-chat-nav-store 管理 UI 概念有重叠，但粒度不同：
+ * - 本 store：按 **message 粒度**（折叠、多选、导航高亮）
+ * - use-chat-nav-store：按 **timeline turn/item 粒度**
+ *
+ * 无法合并删除的原因（use-chat-nav-store 缺少以下对应）：
+ * - selectedNavIdBySession + navAnchorBySession + setNavId（导航高亮 + 锚点）
+ * - collapsedMessageIdsBySession + toggleCollapse（message 级别折叠）
+ * - selectedMessageIdsBySession + toggleMessageSelection / selectMessageRange / selectAll（message 级别多选）
+ * - isMultiSelectModeBySession + toggleMultiSelectMode（message 级别多选模式）
+ *
+ * 导航相关字段被 ChatPanel、SideNav 使用；message 级别字段被 MessageCard、MessageSelectionBar 使用。
+ */
 export const EMPTY_SET: ReadonlySet<string> = new Set<string>();
 
 interface MessageState {

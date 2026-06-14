@@ -7,7 +7,6 @@ import { createLogger } from "../../../../shared/lib/logger";
 import type { ContentBlock, UIInteractionBlock } from "../../../types";
 import { useSessionStore } from "../../../stores/use-session-store";
 import { useBashStore } from "../../../stores/use-bash-store";
-import { useSettingsStore } from "../../../stores/use-settings-store";
 import { tryFormatAsYaml } from "../../../../shared/lib/json-to-yaml";
 import { apiClient } from "../../../lib/api-client";
 import { useThemeStore, isDarkGroup } from "../../../stores/use-theme-store";
@@ -15,6 +14,7 @@ import { AnsiText } from "../primitives/AnsiText";
 import { ToolCardHeader } from "../primitives/ToolCardHeader";
 import { LogViewer } from "../../bash-panel/BashPanel";
 import { UIInteractionCard } from "./UICardRenderer";
+import { useAutoCollapse } from "../../../hooks/use-auto-collapse";
 
 type Block = Extract<ContentBlock, { type: "toolExecution" }>;
 const EMPTY_PROCS: never[] = [];
@@ -146,7 +146,6 @@ export const BashExecutionCard = memo(function BashExecutionCard({
 }) {
   const sid = useSessionStore((s) => s.activeSessionId);
   const { t } = useTranslation("chat");
-  const collapseToolCards = useSettingsStore((s) => s.collapseToolCards);
   const bashProcess = useBashStore((s) => {
     const procs = s.processesBySession[sid ?? ""] || EMPTY_PROCS;
     // Try exact toolCallId match first (most common path during live streaming)
@@ -186,15 +185,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
   // collapsed=true: hide input/output, show title bar only
   // User can collapse even while running (shows loading dot)
   // Auto-collapse when running finishes + setting enabled
-  const [collapsed, setCollapsed] = useState(() => !isRunning && collapseToolCards);
-  const wasRunningRef = useRef(isRunning);
-
-  useEffect(() => {
-    if (wasRunningRef.current && !isRunning && collapseToolCards) {
-      setCollapsed(true);
-    }
-    wasRunningRef.current = isRunning;
-  }, [isRunning, collapseToolCards]);
+  const [collapsed, setCollapsed] = useAutoCollapse(isRunning);
 
   useEffect(() => {
     if (isBackground) {

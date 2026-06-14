@@ -1,4 +1,4 @@
-import { memo, useState, useMemo, useEffect, useRef, Fragment } from "react";
+import { memo, useMemo, Fragment } from "react";
 import { CheckCircle, AlertCircle, AlertTriangle, Info } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { createLogger } from "../../../../shared/lib/logger";
@@ -6,7 +6,7 @@ import type { ContentBlock } from "../../../types";
 import { CopyButton } from "../CopyButton";
 import { ToolCardHeader } from "../primitives/ToolCardHeader";
 import type { ToolCardStatus } from "../primitives/ToolCardHeader";
-import { useSettingsStore } from "../../../stores/use-settings-store";
+import { useAutoCollapse } from "../../../hooks/use-auto-collapse";
 
 interface LspDiagnostic {
   range?: {
@@ -126,18 +126,9 @@ function LspBadge({
 
 export const LspExecutionCard = memo(function LspExecutionCard({ block }: LspExecutionCardProps) {
   const { t } = useTranslation("chat");
-  const collapseToolCards = useSettingsStore((s) => s.collapseToolCards);
   const isRunning = block.status === "running";
 
-  const [collapsed, setCollapsed] = useState(() => !isRunning && collapseToolCards);
-  const wasRunningRef = useRef(isRunning);
-
-  useEffect(() => {
-    if (wasRunningRef.current && !isRunning && collapseToolCards) {
-      setCollapsed(true);
-    }
-    wasRunningRef.current = isRunning;
-  }, [isRunning, collapseToolCards]);
+  const [collapsed, setCollapsed] = useAutoCollapse(isRunning);
   const isError = block.status === "error";
 
   const parsed = useMemo(() => parseLspOutput(block.output ?? ""), [block.output]);

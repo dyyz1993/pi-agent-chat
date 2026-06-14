@@ -1,8 +1,6 @@
 import { useState, useEffect } from "react";
 import {
   Shield,
-  ChevronDown,
-  ChevronRight,
   Zap,
   Clock,
   FileCode,
@@ -18,6 +16,7 @@ import { useSessionStore } from "../../stores/use-session-store";
 import { useShallow } from "zustand/react/shallow";
 import { formatFilePath } from "../../lib/format-path";
 import { apiClient } from "../../lib/api-client";
+import { SectionHeader } from "../primitives";
 import type { RuleDetail, MatchRecord, LifecycleEntry } from "../../../shared/modules/rules";
 import { createLogger } from "../../../shared/lib/logger";
 
@@ -29,40 +28,6 @@ const SCOPE_KEYS: Record<string, string> = {
   project: "scopeProject",
   managed: "scopeSystem",
 };
-
-function SectionHeader({
-  collapsed,
-  onToggle,
-  icon: Icon,
-  iconCls,
-  label,
-  badge,
-}: {
-  collapsed: boolean;
-  onToggle: () => void;
-  icon: React.ElementType;
-  iconCls?: string;
-  label: string;
-  badge?: number;
-}) {
-  return (
-    <button
-      onClick={onToggle}
-      className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium text-text-secondary hover:bg-surface-hover/50 dark:hover:bg-surface-dim/30 transition-colors"
-    >
-      {collapsed ? (
-        <ChevronRight className="w-3 h-3 shrink-0" />
-      ) : (
-        <ChevronDown className="w-3 h-3 shrink-0" />
-      )}
-      <Icon className={`w-3 h-3 shrink-0 ${iconCls ?? ""}`} />
-      <span>{label}</span>
-      {badge != null && badge > 0 && (
-        <span className="ml-auto text-[9px] text-text-secondary">{badge}</span>
-      )}
-    </button>
-  );
-}
 
 function useRuleContent(filePath: string | undefined, expanded: boolean) {
   const [content, setContent] = useState<string | null>(null);
