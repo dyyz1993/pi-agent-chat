@@ -213,3 +213,87 @@ describe("SideNav — click interaction", () => {
     expect(onNavDotClick).toHaveBeenCalledWith("msg-1");
   });
 });
+
+describe("SideNav — real session data fixture", () => {
+  /**
+   * 使用从真实 JSONL 会话提取的消息数据（经过完整映射链路：
+   * getFullMessages → messageToChatMessage → normalizeToolBlocks）。
+   *
+   * 数据来源: ~/.pi/agent/sessions/.../4bb95113-...jsonl
+   * 提取后: 147 条消息，包含 thinking/text/toolExecution(read/bash/edit/write/todo 等)
+   */
+
+  // Load real fixture
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const fixture = require("../../fixtures/real-session-messages.json") as {
+    messages: ChatMessage[];
+    messageCount: number;
+  };
+
+  it("fixture has realistic message count (>50)", () => {
+    expect(fixture.messageCount).toBeGreaterThan(50);
+  });
+
+  it("buildFlatItems produces reasonable nav items for real data", () => {
+    const items = buildFlatItems(fixture.messages, true); // showThinking = true
+    // Each message produces at least 1 nav item; many produce multiple (thinking + text + tool blocks)
+    expect(items.length).toBeGreaterThan(fixture.messages.length);
+  });
+
+  it("highlights correct icon when scrolling through real messages", () => {
+    // Simulate what the scroll tracker does: set selectedNavId to a message ID
+    // Pick a message ID from the middle of the conversation
+    const midMessage = fixture.messages[Math.floor(fixture.messages.length / 2)];
+    const midMsgId = midMessage.id;
+
+    // Set selectedNavId to this message ID (what ChatPanel bridge does on scroll)
+    useTurnStore.getState().setNavId(midMsgId);
+
+    const { container } = render(
+      <SideNav ref={createRef()} messages={fixture.messages} onNavDotClick={vi.fn()} />,
+    );
+
+    // Should highlight exactly one icon (the first icon of that message)
+    const activeElements = container.querySelectorAll("[data-active]");
+    expect(activeElements.length).toBe(1);
+  });
+
+  it("highlights last message icon after initial scroll to bottom", () => {
+    // Simulate onInitComplete: set selectedNavId to last icon key
+    // Use the SideNav's own ref to get the last icon id (avoids showThinking mismatch)
+    const sideNavRef = createRef<{ getFirstIconId: () => string | null; getLastIconId: () => string | null }>();
+
+    render(<SideNav ref={sideNavRef} messages={fixture.messages} onNavDotClick={vi.fn()} />);
+
+    const lastIconKey = sideNavRef.current?.getLastIconId();
+    expect(lastIconKey).toBeTruthy();
+
+    act(() => {
+      useTurnStore.getState().setNavId(lastIconKey!);
+    });
+
+    const { container } = render(
+      <SideNav ref={createRef()} messages={fixture.messages} onNavDotClick={vi.fn()} />,
+    );
+
+    const activeElements = container.querySelectorAll("[data-active]");
+    expect(activeElements.length).toBe(1);
+    // The active element should be the last nav dot
+    const allDots = container.querySelectorAll("[data-nav-key]");
+    expect(activeElements[0]).toBe(allDots[allDots.length - 1]);
+  });
+
+  it("scrollIntoView fires when navigating across distant messages", () => {
+    // Verify that when selectedNavId is set, scrollIntoView is called
+    // to bring the active icon into view
+    const items = buildFlatItems(fixture.messages, true);
+
+    render(<SideNav ref={createRef()} messages={fixture.messages} onNavDotClick={vi.fn()} />);
+
+    // Jump to first icon
+    act(() => {
+      useTurnStore.getState().setNavId(items[0].key);
+    });
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+  });
+});
