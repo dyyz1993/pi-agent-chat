@@ -63,7 +63,6 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => {
     sessionReady: Record<string, boolean>;
     sessionContextMap: Record<string, unknown>;
     sessionStatusMap: Record<string, SessionStatus>;
-    queueBySession: Record<string, { steering: string[]; followUp: string[] }>;
     currentModel: unknown;
     currentThinkingLevel: string;
     availableModels: unknown[];
@@ -85,7 +84,6 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => {
     sessionReady: {},
     sessionContextMap: {},
     sessionStatusMap: {},
-    queueBySession: {},
     currentModel: null,
     currentThinkingLevel: "medium",
     availableModels: [],

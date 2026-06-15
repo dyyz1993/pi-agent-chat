@@ -123,6 +123,7 @@ vi.mock("../../../src/mainview/stores/session-subscriptions", () => ({
 }));
 
 import { useSessionStore } from "../../../src/mainview/stores/use-session-store";
+import { useSessionTodoStore } from "../../../src/mainview/stores/use-session-todo-store";
 import { apiClient } from "../../../src/mainview/lib/api-client";
 import { setupSubscriptions } from "../../../src/mainview/stores/session-subscriptions";
 import type { SessionMeta, ProjectTab } from "../../../src/mainview/types";
@@ -167,10 +168,8 @@ beforeEach(() => {
     notifySubscriptions: {},
     memorySubscriptions: {},
     sessionReady: {},
-    todosBySession: {},
     sessionContextMap: {},
     sessionStatusMap: {},
-    queueBySession: {},
     currentModel: null,
     currentThinkingLevel: "medium",
     availableModels: [],
@@ -525,17 +524,17 @@ describe("deleteSession", () => {
 
 describe("setSessionTodos", () => {
   it("sets todos for a session", () => {
-    useSessionStore.getState().setSessionTodos("sess-1", [{ id: 1, text: "Task 1", done: false }]);
-    expect(useSessionStore.getState().todosBySession["sess-1"]).toHaveLength(1);
+    useSessionTodoStore.getState().setSessionTodos("sess-1", [{ id: 1, text: "Task 1", done: false }]);
+    expect(useSessionTodoStore.getState().todosBySession["sess-1"]).toHaveLength(1);
   });
 
   it("overwrites existing todos", () => {
-    useSessionStore.getState().setSessionTodos("sess-1", [{ id: 1, text: "Task 1", done: false }]);
-    useSessionStore.getState().setSessionTodos("sess-1", [
+    useSessionTodoStore.getState().setSessionTodos("sess-1", [{ id: 1, text: "Task 1", done: false }]);
+    useSessionTodoStore.getState().setSessionTodos("sess-1", [
       { id: 2, text: "Task 2", done: true },
       { id: 3, text: "Task 3", done: false },
     ]);
-    expect(useSessionStore.getState().todosBySession["sess-1"]).toHaveLength(2);
+    expect(useSessionTodoStore.getState().todosBySession["sess-1"]).toHaveLength(2);
   });
 });
 

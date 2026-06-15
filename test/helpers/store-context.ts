@@ -27,7 +27,6 @@ const INITIAL_SESSION_STATE = {
   sessionReady: {} as Record<string, boolean>,
   sessionContextMap: {} as Record<string, unknown>,
   sessionStatusMap: {} as Record<string, string>,
-  queueBySession: {} as Record<string, { steering: string[]; followUp: string[] }>,
   currentModel: null as unknown,
   currentThinkingLevel: "medium",
   availableModels: [] as unknown[],

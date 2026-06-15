@@ -39,7 +39,6 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => {
     sessionReady: {},
     sessionContextMap: {},
     sessionStatusMap: {} as Record<string, string>,
-    queueBySession: {},
     currentModel: null,
     currentThinkingLevel: "medium",
     availableModels: [],
@@ -134,6 +133,7 @@ vi.mock("../../../src/mainview/stores/use-retry-store", () => ({
 import { handleAgentEvent } from "../../../src/mainview/lib/agent-event-handler";
 import { useChatStore } from "../../../src/mainview/stores/use-chat-store";
 import { useSessionStore } from "../../../src/mainview/stores/use-session-store";
+import { useSessionQueueStore } from "../../../src/mainview/stores/use-session-queue-store";
 import { flushNow } from "../../../src/mainview/lib/message-batcher";
 import { ScenarioPlayer } from "../../helpers/mock-llm";
 import {
@@ -170,7 +170,6 @@ function resetStores() {
     sessionsByProject: {},
     agentSubscriptions: {},
     batchSubscriptions: {},
-    queueBySession: {},
     currentModel: null,
     currentThinkingLevel: "medium",
     availableModels: [],
@@ -339,12 +338,12 @@ describe("Batch 4-5 — T12.x to T30.x", () => {
     expect(useSessionStore.getState().currentThinkingLevel).toBe("minimal");
   });
   it("T18.3 — Clear queue (store)", () => {
-    useSessionStore.setState({
+    useSessionQueueStore.setState({
       queueBySession: { [SID]: { steering: ["msg1"], followUp: ["msg2"] } },
     });
-    expect(useSessionStore.getState().queueBySession[SID]?.steering.length).toBe(1);
-    useSessionStore.setState({ queueBySession: { [SID]: { steering: [], followUp: [] } } });
-    expect(useSessionStore.getState().queueBySession[SID]?.steering.length).toBe(0);
+    expect(useSessionQueueStore.getState().queueBySession[SID]?.steering.length).toBe(1);
+    useSessionQueueStore.setState({ queueBySession: { [SID]: { steering: [], followUp: [] } } });
+    expect(useSessionQueueStore.getState().queueBySession[SID]?.steering.length).toBe(0);
   });
   it("T25.1 — Settings display toggles (store)", () => {
     const settings = { showToolCalls: true, showThinking: true, showTimeline: false };

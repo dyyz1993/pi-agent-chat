@@ -132,7 +132,6 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => {
     sessionReady: Record<string, boolean>;
     sessionContextMap: Record<string, unknown>;
     sessionStatusMap: Record<string, SessionStatus>;
-    queueBySession: Record<string, { steering: string[]; followUp: string[] }>;
     currentModel: unknown;
     currentThinkingLevel: string;
     availableModels: unknown[];
@@ -154,7 +153,6 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => {
     sessionReady: {},
     sessionContextMap: {},
     sessionStatusMap: {},
-    queueBySession: {},
     currentModel: null,
     currentThinkingLevel: "medium",
     availableModels: [],
@@ -187,6 +185,7 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => {
 import { useChatStore } from "../../../src/mainview/stores/use-chat-store";
 import { apiClient } from "../../../src/mainview/lib/api-client";
 import { useSessionStore } from "../../../src/mainview/stores/use-session-store";
+import { useSessionQueueStore } from "../../../src/mainview/stores/use-session-queue-store";
 import { handleAgentEvent } from "../../../src/mainview/lib/agent-event-handler";
 
 const SID = "sess-1";
@@ -213,9 +212,9 @@ function resetSessionStore() {
     sessionReady: { [SID]: true },
     sessionContextMap: {},
     sessionStatusMap: {},
-    queueBySession: {},
     sessionsByProject: {},
   });
+  useSessionQueueStore.setState({ queueBySession: {} });
 }
 
 // ── Reset ──────────────────────────────────────────────────────────────
@@ -375,7 +374,7 @@ describe("queue_update 事件处理", () => {
       followUp: ["等等再做"],
     });
 
-    const queue = useSessionStore.getState().queueBySession[SID];
+    const queue = useSessionQueueStore.getState().queueBySession[SID];
     expect(queue).toBeDefined();
     expect(queue?.steering).toEqual([]);
     expect(queue?.followUp).toEqual(["等等再做"]);
@@ -388,7 +387,7 @@ describe("queue_update 事件处理", () => {
       followUp: ["等等"],
     });
 
-    const queue = useSessionStore.getState().queueBySession[SID];
+    const queue = useSessionQueueStore.getState().queueBySession[SID];
     expect(queue?.steering).toEqual(["换个方向"]);
     expect(queue?.followUp).toEqual(["等等"]);
   });
@@ -400,7 +399,7 @@ describe("queue_update 事件处理", () => {
       followUp: [],
     });
 
-    const queue = useSessionStore.getState().queueBySession[SID];
+    const queue = useSessionQueueStore.getState().queueBySession[SID];
     expect(queue?.steering).toEqual([]);
     expect(queue?.followUp).toEqual([]);
   });
@@ -418,8 +417,8 @@ describe("queue_update 事件处理", () => {
       followUp: ["s2-follow"],
     });
 
-    const queue1 = useSessionStore.getState().queueBySession["sess-1"];
-    const queue2 = useSessionStore.getState().queueBySession["sess-2"];
+    const queue1 = useSessionQueueStore.getState().queueBySession["sess-1"];
+    const queue2 = useSessionQueueStore.getState().queueBySession["sess-2"];
 
     expect(queue1?.steering).toEqual(["s1-steer"]);
     expect(queue1?.followUp).toEqual([]);
@@ -436,7 +435,7 @@ describe("queue_update 事件处理", () => {
 describe("agent_end 事件处理", () => {
   it("agent_end 清除该 session 的 queueBySession", () => {
     // 先模拟有队列
-    useSessionStore.setState({
+    useSessionQueueStore.setState({
       queueBySession: {
         [SID]: { steering: ["old-steer"], followUp: ["old-follow"] },
         other: { steering: [], followUp: ["keep-me"] },
@@ -446,8 +445,8 @@ describe("agent_end 事件处理", () => {
     handleAgentEvent(SID, { type: "agent_end", messages: [] });
 
     // Should remove SID from queue, keep "other"
-    expect(useSessionStore.getState().queueBySession[SID]).toBeUndefined();
-    expect(useSessionStore.getState().queueBySession["other"]).toBeDefined();
+    expect(useSessionQueueStore.getState().queueBySession[SID]).toBeUndefined();
+    expect(useSessionQueueStore.getState().queueBySession["other"]).toBeDefined();
   });
 
   it("agent_end 没有队列时不报错", () => {
@@ -505,7 +504,7 @@ describe("完整事件流 — followUp 消息生命周期", () => {
       followUp: ["稍后处理"],
     });
 
-    const queue = useSessionStore.getState().queueBySession[SID];
+    const queue = useSessionQueueStore.getState().queueBySession[SID];
     expect(queue?.followUp).toEqual(["稍后处理"]);
   });
 
@@ -548,7 +547,7 @@ describe("完整事件流 — followUp 消息生命周期", () => {
       followUp: [],
     });
 
-    const queue = useSessionStore.getState().queueBySession[SID];
+    const queue = useSessionQueueStore.getState().queueBySession[SID];
     expect(queue?.followUp).toEqual([]);
   });
 });
@@ -577,7 +576,7 @@ describe("完整事件流 — steer 消息生命周期", () => {
       followUp: [],
     });
 
-    const queue = useSessionStore.getState().queueBySession[SID];
+    const queue = useSessionQueueStore.getState().queueBySession[SID];
     expect(queue?.steering).toEqual(["转向"]);
   });
 
@@ -642,7 +641,7 @@ describe("多条消息排队", () => {
       followUp: ["第一条", "第二条", "第三条"],
     });
 
-    const queue = useSessionStore.getState().queueBySession[SID];
+    const queue = useSessionQueueStore.getState().queueBySession[SID];
     expect(queue?.followUp).toEqual(["第一条", "第二条", "第三条"]);
   });
 
@@ -653,7 +652,7 @@ describe("多条消息排队", () => {
       followUp: ["稍后1", "稍后2"],
     });
 
-    const queue = useSessionStore.getState().queueBySession[SID];
+    const queue = useSessionQueueStore.getState().queueBySession[SID];
     expect(queue?.steering).toEqual(["转向A", "转向B"]);
     expect(queue?.followUp).toEqual(["稍后1", "稍后2"]);
   });
@@ -684,7 +683,7 @@ describe("clearQueue 完整流程", () => {
     });
 
     // 4. 队列为空
-    const queue = useSessionStore.getState().queueBySession[SID];
+    const queue = useSessionQueueStore.getState().queueBySession[SID];
     expect(queue?.followUp).toEqual([]);
   });
 });
@@ -790,7 +789,7 @@ describe("端到端模拟 — streaming 中发送 followUp", () => {
       followUp: ["还有个问题"],
     });
 
-    const queue = useSessionStore.getState().queueBySession[SID];
+    const queue = useSessionQueueStore.getState().queueBySession[SID];
     expect(queue?.followUp).toEqual(["还有个问题"]);
 
     // Step 3: 后端结束当前 turn，消费 followUp
@@ -816,7 +815,7 @@ describe("端到端模拟 — streaming 中发送 followUp", () => {
       followUp: [],
     });
 
-    expect(useSessionStore.getState().queueBySession[SID]?.followUp).toEqual([]);
+    expect(useSessionQueueStore.getState().queueBySession[SID]?.followUp).toEqual([]);
 
     // Step 5: agent_end
     handleAgentEvent(SID, { type: "agent_end", messages: [] });
@@ -825,7 +824,7 @@ describe("端到端模拟 — streaming 中发送 followUp", () => {
     const msgs = useChatStore.getState().messagesBySession[SID];
     expect(msgs.length).toBeGreaterThanOrEqual(2);
     expect(msgs.some((m: { role: string }) => m.role === "user")).toBe(true);
-    expect(useSessionStore.getState().queueBySession[SID]).toBeUndefined();
+    expect(useSessionQueueStore.getState().queueBySession[SID]).toBeUndefined();
   });
 });
 
@@ -917,14 +916,14 @@ describe("事件类型与数据结构验证", () => {
   });
 
   it("agent_end → status idle + queue cleared", () => {
-    useSessionStore.setState({
+    useSessionQueueStore.setState({
       queueBySession: { [SID]: { steering: ["x"], followUp: ["y"] } },
     });
 
     handleAgentEvent(SID, { type: "agent_end", messages: [] });
 
     expect(useSessionStore.getState().sessionStatusMap[SID]).toBe("idle");
-    expect(useSessionStore.getState().queueBySession[SID]).toBeUndefined();
+    expect(useSessionQueueStore.getState().queueBySession[SID]).toBeUndefined();
   });
 
   it("auto_retry_start → retrying", () => {

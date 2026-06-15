@@ -71,7 +71,6 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => ({
     (selector?: (s: Record<string, unknown>) => unknown) => {
       const state = {
         activeSessionId: "test-session",
-        todosBySession: {},
         refreshSessionResources: vi.fn(),
       };
       return selector ? selector(state) : state;

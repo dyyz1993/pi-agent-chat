@@ -84,6 +84,8 @@ vi.mock("../../../src/mainview/stores/session-subscriptions", () => ({
 }));
 
 import { useSessionStore } from "../../../src/mainview/stores/use-session-store";
+import { useSessionTodoStore } from "../../../src/mainview/stores/use-session-todo-store";
+import { useSessionQueueStore } from "../../../src/mainview/stores/use-session-queue-store";
 
 describe("useSessionStore - basic state", () => {
   beforeEach(() => {
@@ -104,10 +106,8 @@ describe("useSessionStore - basic state", () => {
       memorySubscriptions: {},
       coordinatorSubscriptions: {},
       sessionReady: {},
-      todosBySession: {},
       sessionContextMap: {},
       sessionStatusMap: {},
-      queueBySession: {},
       currentModel: null,
       currentThinkingLevel: "medium",
       availableModels: [],
@@ -126,7 +126,7 @@ describe("useSessionStore - basic state", () => {
     expect(s.sessionReady).toEqual({});
     expect(s.sessionStatusMap).toEqual({});
     expect(s.sessionContextMap).toEqual({});
-    expect(s.queueBySession).toEqual({});
+    expect(useSessionQueueStore.getState().queueBySession).toEqual({});
     expect(s.currentModel).toBeNull();
     expect(s.currentThinkingLevel).toBe("medium");
     expect(s.availableModels).toEqual([]);
@@ -181,14 +181,14 @@ describe("useSessionStore - basic state", () => {
       { id: 1, text: "Task A", done: false },
       { id: 2, text: "Task B", done: true },
     ];
-    useSessionStore.getState().setSessionTodos("s1", todos);
-    expect(useSessionStore.getState().todosBySession.s1).toEqual(todos);
+    useSessionTodoStore.getState().setSessionTodos("s1", todos);
+    expect(useSessionTodoStore.getState().todosBySession.s1).toEqual(todos);
   });
 
   it("setSessionTodos overwrites previous todos", () => {
-    useSessionStore.getState().setSessionTodos("s1", [{ id: 1, text: "Old", done: false }]);
-    useSessionStore.getState().setSessionTodos("s1", [{ id: 2, text: "New", done: true }]);
-    expect(useSessionStore.getState().todosBySession.s1).toEqual([
+    useSessionTodoStore.getState().setSessionTodos("s1", [{ id: 1, text: "Old", done: false }]);
+    useSessionTodoStore.getState().setSessionTodos("s1", [{ id: 2, text: "New", done: true }]);
+    expect(useSessionTodoStore.getState().todosBySession.s1).toEqual([
       { id: 2, text: "New", done: true },
     ]);
   });
@@ -240,10 +240,10 @@ describe("useSessionStore - basic state", () => {
   });
 
   it("queueBySession can be set via setState", () => {
-    useSessionStore.setState({
+    useSessionQueueStore.setState({
       queueBySession: { s1: { steering: ["msg-1"], followUp: [] } },
     });
-    const q = useSessionStore.getState().queueBySession;
+    const q = useSessionQueueStore.getState().queueBySession;
     expect(q.s1.steering).toEqual(["msg-1"]);
     expect(q.s1.followUp).toEqual([]);
   });

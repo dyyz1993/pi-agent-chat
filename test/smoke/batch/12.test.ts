@@ -52,7 +52,6 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => {
     sessionReady: Record<string, boolean>;
     sessionContextMap: Record<string, unknown>;
     sessionStatusMap: Record<string, SessionStatus>;
-    queueBySession: Record<string, { steering: string[]; followUp: string[] }>;
     currentModel: unknown;
     currentThinkingLevel: string;
     availableModels: unknown[];
@@ -74,7 +73,6 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => {
     sessionReady: {},
     sessionContextMap: {},
     sessionStatusMap: {},
-    queueBySession: {},
     currentModel: null,
     currentThinkingLevel: "medium",
     availableModels: [],
@@ -261,6 +259,7 @@ vi.mock("../../../src/mainview/stores/use-ui-dialog-store", () => {
 import { handleAgentEvent, toolCallNameMap } from "../../../src/mainview/lib/agent-event-handler";
 import { useChatStore } from "../../../src/mainview/stores/use-chat-store";
 import { useSessionStore } from "../../../src/mainview/stores/use-session-store";
+import { useSessionQueueStore } from "../../../src/mainview/stores/use-session-queue-store";
 import { useUIDialogStore } from "../../../src/mainview/stores/use-ui-dialog-store";
 import { flushNow } from "../../../src/mainview/lib/message-batcher";
 import { ScenarioPlayer } from "../../helpers/mock-llm";
@@ -304,7 +303,6 @@ function resetStores() {
     sessionsByProject: {},
     agentSubscriptions: {},
     batchSubscriptions: {},
-    queueBySession: {},
     currentModel: null,
     currentThinkingLevel: "medium",
     availableModels: [],
@@ -361,7 +359,7 @@ describe("Batch 12 — T1.5 through T6.3", () => {
 
   it("T1.6 — Follow-up mode (queue_update with followUp)", async () => {
     await player.play(followUpModeScenario());
-    const queue = useSessionStore.getState().queueBySession[SID];
+    const queue = useSessionQueueStore.getState().queueBySession[SID];
     expect(queue).toBeUndefined();
     const msgs = getMessages();
     expect(msgs.length).toBeGreaterThanOrEqual(2);

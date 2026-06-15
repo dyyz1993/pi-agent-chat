@@ -21,7 +21,6 @@ const { mockStores } = vi.hoisted(() => {
         rulesSubscriptions: {},
         notifySubscriptions: {},
         memorySubscriptions: {},
-        todosBySession: {},
         sessionContextMap: {},
         sessionStatusMap: {},
       }),

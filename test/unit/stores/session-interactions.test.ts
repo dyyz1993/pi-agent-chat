@@ -124,6 +124,7 @@ vi.mock("../../../src/mainview/stores/session-subscriptions", () => ({
 }));
 
 import { useSessionStore } from "../../../src/mainview/stores/use-session-store";
+import { useSessionQueueStore } from "../../../src/mainview/stores/use-session-queue-store";
 import { apiClient } from "../../../src/mainview/lib/api-client";
 import type { SessionMeta, ProjectTab } from "../../../src/mainview/types";
 
@@ -168,10 +169,8 @@ beforeEach(() => {
     memorySubscriptions: {},
     coordinatorSubscriptions: {},
     sessionReady: {},
-    todosBySession: {},
     sessionContextMap: {},
     sessionStatusMap: {},
-    queueBySession: {},
     currentModel: null,
     currentThinkingLevel: "medium",
     availableModels: [],
@@ -330,11 +329,11 @@ describe("context usage update", () => {
 
 describe("queue update", () => {
   it("setSessionQueue updates queueBySession via setState", () => {
-    useSessionStore.setState({
+    useSessionQueueStore.setState({
       queueBySession: {
         s1: { steering: ["a"], followUp: [] },
       },
     });
-    expect(useSessionStore.getState().queueBySession["s1"].steering).toEqual(["a"]);
+    expect(useSessionQueueStore.getState().queueBySession["s1"].steering).toEqual(["a"]);
   });
 });

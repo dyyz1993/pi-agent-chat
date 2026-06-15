@@ -59,7 +59,6 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => {
     sessionReady: Record<string, boolean>;
     sessionContextMap: Record<string, unknown>;
     sessionStatusMap: Record<string, SessionStatus>;
-    queueBySession: Record<string, { steering: string[]; followUp: string[] }>;
     currentModel: unknown;
     currentThinkingLevel: string;
     availableModels: unknown[];
@@ -81,7 +80,6 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => {
     sessionReady: {},
     sessionContextMap: {},
     sessionStatusMap: {},
-    queueBySession: {},
     currentModel: null,
     currentThinkingLevel: "medium",
     availableModels: [],
@@ -181,6 +179,7 @@ vi.mock("../../../src/mainview/stores/use-status-store", () => ({
 import { handleAgentEvent, toolCallNameMap } from "../../../src/mainview/lib/agent-event-handler";
 import { useChatStore } from "../../../src/mainview/stores/use-chat-store";
 import { useSessionStore } from "../../../src/mainview/stores/use-session-store";
+import { useSessionQueueStore } from "../../../src/mainview/stores/use-session-queue-store";
 import { useUIDialogStore } from "../../../src/mainview/stores/use-ui-dialog-store";
 import { apiClient } from "../../../src/mainview/lib/api-client";
 import { flushNow } from "../../../src/mainview/lib/message-batcher";
@@ -960,29 +959,33 @@ describe("agent_end cleanup", () => {
   });
 
   it("clears queueBySession for the ended session", () => {
-    useSessionStore.setState({
-      sessionsByProject: { "/tmp": [] },
+    useSessionQueueStore.setState({
       queueBySession: {
         [SID]: { steering: ["msg1"], followUp: ["msg2"] },
         "other-session": { steering: [], followUp: [] },
       },
     });
-
-    handleAgentEvent(SID, { type: "agent_end" } as Parameters<typeof handleAgentEvent>[1]);
-
-    expect(useSessionStore.getState().queueBySession[SID]).toBeUndefined();
-    expect(useSessionStore.getState().queueBySession["other-session"]).toBeDefined();
-  });
-
-  it("does not modify queueBySession when session has no queue entry", () => {
     useSessionStore.setState({
       sessionsByProject: { "/tmp": [] },
-      queueBySession: { "other-session": { steering: [], followUp: [] } },
     });
 
     handleAgentEvent(SID, { type: "agent_end" } as Parameters<typeof handleAgentEvent>[1]);
 
-    expect(Object.keys(useSessionStore.getState().queueBySession)).toHaveLength(1);
+    expect(useSessionQueueStore.getState().queueBySession[SID]).toBeUndefined();
+    expect(useSessionQueueStore.getState().queueBySession["other-session"]).toBeDefined();
+  });
+
+  it("does not modify queueBySession when session has no queue entry", () => {
+    useSessionQueueStore.setState({
+      queueBySession: { "other-session": { steering: [], followUp: [] } },
+    });
+    useSessionStore.setState({
+      sessionsByProject: { "/tmp": [] },
+    });
+
+    handleAgentEvent(SID, { type: "agent_end" } as Parameters<typeof handleAgentEvent>[1]);
+
+    expect(Object.keys(useSessionQueueStore.getState().queueBySession)).toHaveLength(1);
   });
 
   it("closes running tool blocks when the agent ends without a tool end event", () => {

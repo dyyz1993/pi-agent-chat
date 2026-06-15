@@ -27,7 +27,6 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => {
     sessionReady: {},
     sessionContextMap: {},
     sessionStatusMap: {} as Record<string, string>,
-    queueBySession: {} as Record<string, { steering: string[]; followUp: string[] }>,
     currentModel: null as Record<string, unknown> | null,
     currentThinkingLevel: "medium",
     availableModels: [] as Record<string, unknown>[],
@@ -66,6 +65,7 @@ vi.mock("../../../src/mainview/stores/use-chat-store", () => {
 });
 
 import { useSessionStore } from "../../../src/mainview/stores/use-session-store";
+import { useSessionQueueStore } from "../../../src/mainview/stores/use-session-queue-store";
 import { useChatStore } from "../../../src/mainview/stores/use-chat-store";
 
 describe("Final store-level tests (T16.3, T18.1, T18.2, T20.4, T24.2)", () => {
@@ -88,7 +88,6 @@ describe("Final store-level tests (T16.3, T18.1, T18.2, T20.4, T24.2)", () => {
       sessionsByProject: {},
       agentSubscriptions: {},
       batchSubscriptions: {},
-      queueBySession: {},
       currentModel: null,
       currentThinkingLevel: "medium",
       availableModels: [],
@@ -116,36 +115,36 @@ describe("Final store-level tests (T16.3, T18.1, T18.2, T20.4, T24.2)", () => {
   // T18.1 — Steering queue
   it("T18.1 — Steering queue management", () => {
     const SID = "test-session";
-    useSessionStore.setState({
+    useSessionQueueStore.setState({
       queueBySession: { [SID]: { steering: [], followUp: [] } },
     });
     // Add steering messages
-    const q = useSessionStore.getState().queueBySession;
+    const q = useSessionQueueStore.getState().queueBySession;
     q[SID] = { steering: ["Add error handling", "Use TypeScript"], followUp: [] };
-    useSessionStore.setState({ queueBySession: { ...q } });
-    const stored = useSessionStore.getState().queueBySession[SID];
+    useSessionQueueStore.setState({ queueBySession: { ...q } });
+    const stored = useSessionQueueStore.getState().queueBySession[SID];
     expect(stored.steering.length).toBe(2);
     expect(stored.steering[0]).toBe("Add error handling");
     // Clear queue
     stored.steering = [];
-    useSessionStore.setState({
-      queueBySession: { ...useSessionStore.getState().queueBySession, [SID]: stored },
+    useSessionQueueStore.setState({
+      queueBySession: { ...useSessionQueueStore.getState().queueBySession, [SID]: stored },
     });
-    expect(useSessionStore.getState().queueBySession[SID].steering.length).toBe(0);
+    expect(useSessionQueueStore.getState().queueBySession[SID].steering.length).toBe(0);
   });
 
   // T18.2 — Follow-up queue
   it("T18.2 — Follow-up queue management", () => {
     const SID = "test-session";
-    useSessionStore.setState({
+    useSessionQueueStore.setState({
       queueBySession: { [SID]: { steering: [], followUp: ["Also check App.tsx", "Review types"] } },
     });
-    const q = useSessionStore.getState().queueBySession[SID];
+    const q = useSessionQueueStore.getState().queueBySession[SID];
     expect(q.followUp.length).toBe(2);
     expect(q.followUp[1]).toBe("Review types");
     // Clear all
-    useSessionStore.setState({ queueBySession: { [SID]: { steering: [], followUp: [] } } });
-    expect(useSessionStore.getState().queueBySession[SID].followUp.length).toBe(0);
+    useSessionQueueStore.setState({ queueBySession: { [SID]: { steering: [], followUp: [] } } });
+    expect(useSessionQueueStore.getState().queueBySession[SID].followUp.length).toBe(0);
   });
 
   // T20.4 — MCP connection change

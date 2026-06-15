@@ -61,7 +61,6 @@ const { mockSessionStore } = vi.hoisted(() => {
     sessionReady: Record<string, boolean>;
     sessionContextMap: Record<string, { tokens: number | null; contextWindow: number }>;
     sessionStatusMap: Record<string, SessionStatus>;
-    queueBySession: Record<string, { steering: string[]; followUp: string[] }>;
     currentModel: unknown;
     currentThinkingLevel: string;
     availableModels: unknown[];
@@ -84,7 +83,6 @@ const { mockSessionStore } = vi.hoisted(() => {
     sessionReady: {},
     sessionContextMap: {},
     sessionStatusMap: {},
-    queueBySession: {},
     currentModel: null,
     currentThinkingLevel: "medium",
     availableModels: [],
