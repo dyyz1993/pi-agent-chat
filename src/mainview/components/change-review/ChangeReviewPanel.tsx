@@ -200,8 +200,12 @@ const ChangeItem = memo(function ChangeItem({ change, isExpanded, onToggle }: Ch
   const fileCfg = FILE_STATUS_CONFIG[change.fileStatus] ?? FILE_STATUS_CONFIG.modified;
   const FileStatusIcon = fileCfg.Icon;
 
-  // Compute diff stats from oldContent/newContent
+  // Compute diff stats: prefer backend-provided addedLines/deletedLines,
+  // fall back to computing from oldContent/newContent
   const stats = useMemo(() => {
+    if (change.addedLines != null || change.deletedLines != null) {
+      return { additions: change.addedLines ?? 0, deletions: change.deletedLines ?? 0 };
+    }
     if (change.oldContent === null && change.newContent === null) return null;
     if (change.oldContent === null)
       return { additions: (change.newContent ?? "").split("\n").length, deletions: 0 };
@@ -215,7 +219,7 @@ const ChangeItem = memo(function ChangeItem({ change, isExpanded, onToggle }: Ch
       else if (part.removed) deletions += part.count ?? 0;
     }
     return { additions, deletions };
-  }, [change.oldContent, change.newContent]);
+  }, [change.addedLines, change.deletedLines, change.oldContent, change.newContent]);
 
   const handleApprove = useCallback(() => {
     approveChange(change.path);
