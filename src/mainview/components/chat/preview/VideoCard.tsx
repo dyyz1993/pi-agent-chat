@@ -5,7 +5,7 @@ import type { PreviewDetails } from "./types";
 import { getFileHttpUrl } from "./types";
 import { CardHeader } from "./CardHeader";
 import { MediaCardError } from "./MediaCardError";
-import { useMediaCardError } from "../../hooks/use-media-card-error";
+import { useMediaCardError } from "../../../hooks/use-media-card-error";
 
 export const VideoCard = memo(function VideoCard({ details }: { details: PreviewDetails }) {
   const { t } = useTranslation("chat");

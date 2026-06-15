@@ -21,6 +21,7 @@ import { useSessionStore } from "../../stores/use-session-store";
 import { useShallow } from "zustand/react/shallow";
 import { formatFilePath } from "../../lib/format-path";
 import { apiClient } from "../../lib/api-client";
+import { PanelHeader } from "../primitives/PanelHeader";
 import type { HookLogEntry, HookRuleStats, HookConfigSnapshot } from "../../stores/use-hooks-store";
 
 const DECISION_STYLES: Record<string, { icon: React.ElementType; cls: string }> = {

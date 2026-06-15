@@ -35,7 +35,9 @@ export type LogModule =
   | "sandbox-channel"
   | "project-config"
   | "render-cache"
-  | "hooks";
+  | "hooks"
+  | "gateway:debug"
+  | "gateway:proxy";
 type LogLevel = "debug" | "info" | "warn" | "error";
 
 const VALID_LOG_LEVELS: Readonly<LogLevel[]> = ["debug", "info", "warn", "error"] as const;
