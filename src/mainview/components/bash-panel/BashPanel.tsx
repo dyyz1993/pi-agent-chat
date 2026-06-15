@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { Virtualizer, type VirtualizerHandle } from "virtua";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useBashStore } from "../../stores/use-bash-store";
 import type { BashProcess } from "../../../shared/modules/bash";
@@ -153,8 +153,6 @@ function BashProcessCard({
   );
 }
 
-const LINE_HEIGHT = 20;
-
 function LogViewer({
   logPath,
   toolCallId,
@@ -172,6 +170,7 @@ function LogViewer({
   const [autoScroll, setAutoScroll] = useState(true);
   const [stdinInput, setStdinInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const vlistRef = useRef<VirtualizerHandle>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const offsetRef = useRef(0);
   const mountedRef = useRef(true);
@@ -184,18 +183,11 @@ function LogViewer({
   // Sync state → ref for use in callbacks/effects
   autoScrollRef.current = autoScroll;
 
-  const virtualizer = useVirtualizer({
-    count: lines.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => LINE_HEIGHT,
-    overscan: 20,
-  });
-
   const scrollToBottom = useCallback(() => {
     if (lines.length === 0) return;
     isProgrammaticScrollRef.current = true;
-    virtualizer.scrollToIndex(lines.length - 1, { align: "end" });
-  }, [virtualizer, lines.length]);
+    vlistRef.current?.scrollToIndex(lines.length - 1, { align: "end" });
+  }, [lines.length]);
 
   // --- Auto-scroll on new lines ---
   const prevLinesLengthRef = useRef(0);
@@ -354,8 +346,6 @@ function LogViewer({
     scrollToBottom();
   }
 
-  const virtualItems = virtualizer.getVirtualItems();
-
   const title = (
     <div className="flex items-center gap-2 min-w-0">
       <span className="text-xs text-text-secondary font-mono truncate">
@@ -426,30 +416,16 @@ function LogViewer({
           ) : lines.length === 0 ? (
             <div className="text-[11px] text-text-tertiary italic">{t("noOutput")}</div>
           ) : (
-            <div
-              style={{
-                height: virtualizer.getTotalSize(),
-                width: "100%",
-                position: "relative",
-              }}
-            >
-              {virtualItems.map((virtualRow) => {
-                const line = lines[virtualRow.index];
-                return (
-                  <pre
-                    key={virtualRow.index}
-                    data-index={virtualRow.index}
-                    ref={virtualizer.measureElement}
-                    className="text-[11px] text-text-secondary font-mono whitespace-pre-wrap break-all leading-relaxed absolute top-0 left-0 w-full"
-                    style={{
-                      transform: `translateY(${virtualRow.start}px)`,
-                    }}
-                  >
-                    {line}
-                  </pre>
-                );
-              })}
-            </div>
+            <Virtualizer ref={vlistRef} scrollRef={scrollRef}>
+              {lines.map((line, index) => (
+                <pre
+                  key={index}
+                  className="text-[11px] text-text-secondary font-mono whitespace-pre-wrap break-all leading-relaxed"
+                >
+                  {line}
+                </pre>
+              ))}
+            </Virtualizer>
           )}
         </div>
 

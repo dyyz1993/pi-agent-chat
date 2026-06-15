@@ -1,5 +1,5 @@
 import { useRef, useMemo } from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { Virtualizer } from "virtua";
 import { Highlight, themes } from "prism-react-renderer";
 import { createLogger } from "../../../shared/lib/logger";
 import { getLanguage } from "../../utils/file-utils";
@@ -50,13 +50,6 @@ export function VirtualizedCodeView({ code, filename }: VirtualizedCodeViewProps
     NO_HIGHLIGHT_EXTS.has(ext) ||
     lines.length > MAX_HIGHLIGHT_LINES;
 
-  const virtualizer = useVirtualizer({
-    count: lines.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => 20,
-    overscan: 20,
-  });
-
   // --- Plain text path: no Prism tokenization ---
   if (forcePlainText) {
     return (
@@ -64,34 +57,24 @@ export function VirtualizedCodeView({ code, filename }: VirtualizedCodeViewProps
         ref={parentRef}
         className="flex-1 min-h-0 overflow-auto bg-bg-elevated dark:bg-surface-code"
       >
-        <div
-          style={{ height: `${virtualizer.getTotalSize()}px`, width: "100%", position: "relative" }}
-        >
-          {virtualizer.getVirtualItems().map((vr) => (
+        <Virtualizer scrollRef={parentRef} itemSize={20}>
+          {lines.map((line, index) => (
             <div
-              key={vr.key}
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                height: `${vr.size}px`,
-                transform: `translateY(${vr.start}px)`,
-              }}
+              key={index}
               className="flex text-xs leading-5 font-mono"
             >
               <span className="inline-block w-10 text-right pr-4 text-text-tertiary dark:text-text-secondary select-none shrink-0">
-                {vr.index + 1}
+                {index + 1}
               </span>
               <span
                 className="flex-1 text-text-primary dark:text-text-secondary whitespace-pre"
                 style={{ tabSize: 2 }}
               >
-                {lines[vr.index]}
+                {line}
               </span>
             </div>
           ))}
-        </div>
+        </Virtualizer>
       </div>
     );
   }
@@ -106,33 +89,18 @@ export function VirtualizedCodeView({ code, filename }: VirtualizedCodeViewProps
             ref={parentRef}
             className="flex-1 min-h-0 overflow-auto bg-bg-elevated dark:bg-surface-code"
           >
-            <div
-              style={{
-                height: `${virtualizer.getTotalSize()}px`,
-                width: "100%",
-                position: "relative",
-              }}
-            >
-              {virtualizer.getVirtualItems().map((vr) => {
-                const lineTokens = tokens[vr.index];
-                const lineText = lines[vr.index];
+            <Virtualizer scrollRef={parentRef} itemSize={20}>
+              {lines.map((lineText, index) => {
+                const lineTokens = tokens[index];
                 const isLongLine = (lineText?.length ?? 0) > LONG_LINE_THRESHOLD;
 
                 return (
                   <div
-                    key={vr.key}
-                    style={{
-                      position: "absolute",
-                      top: 0,
-                      left: 0,
-                      width: "100%",
-                      height: `${vr.size}px`,
-                      transform: `translateY(${vr.start}px)`,
-                    }}
+                    key={index}
                     className="flex text-xs leading-5 font-mono"
                   >
                     <span className="inline-block w-10 text-right pr-4 text-text-tertiary dark:text-text-secondary select-none shrink-0">
-                      {vr.index + 1}
+                      {index + 1}
                     </span>
                     {isLongLine || !tokensValid ? (
                       <span
@@ -151,7 +119,7 @@ export function VirtualizedCodeView({ code, filename }: VirtualizedCodeViewProps
                   </div>
                 );
               })}
-            </div>
+            </Virtualizer>
           </div>
         );
       }}

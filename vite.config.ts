@@ -21,7 +21,7 @@ export default defineConfig({
           ],
           "vendor-highlight": ["prism-react-renderer"],
           "vendor-diff": ["react-diff-viewer-continued"],
-          "vendor-virtual": ["@tanstack/react-virtual"],
+          "vendor-virtual": ["virtua"],
           "vendor-icons": ["lucide-react"],
           "vendor-state": ["zustand"],
         },

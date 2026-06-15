@@ -21,17 +21,30 @@ vi.mock("../../../src/mainview/lib/api-client", () => ({
   },
 }));
 
-// Mock @tanstack/react-virtual
+// Mock virtua - Virtualizer component renders children directly in test env,
+// and exposes a mock VirtualizerHandle via ref for imperative scrolling.
 const mockScrollToIndex = vi.fn();
-
-vi.mock("@tanstack/react-virtual", () => ({
-  useVirtualizer: () => ({
-    scrollToIndex: (...args: unknown[]) => mockScrollToIndex(...args),
-    getVirtualItems: () => [],
-    getTotalSize: () => 0,
-    measureElement: () => {},
-  }),
-}));
+vi.mock("virtua", async () => {
+  const { forwardRef, useImperativeHandle } = await import("react");
+  const MockVirtualizer = forwardRef(
+    ({ children }: { children: React.ReactNode }, ref: React.Ref<unknown>) => {
+      useImperativeHandle(ref, () => ({
+        scrollToIndex: mockScrollToIndex,
+        scrollOffset: 0,
+        scrollSize: 0,
+        viewportSize: 0,
+        findItemIndex: () => 0,
+        getItemOffset: () => 0,
+        getItemSize: () => 0,
+        scrollTo: () => {},
+        scrollBy: () => {},
+        cache: { getLength: () => 0 },
+      }));
+      return <div data-testid="mock-virtualizer">{children}</div>;
+    }
+  );
+  return { Virtualizer: MockVirtualizer };
+});
 
 // Mock useSessionStore for subscribe/unsubscribe
 vi.mock("../../../src/mainview/stores/use-session-store", () => ({

@@ -19,16 +19,16 @@ vi.mock("../../../src/mainview/lib/api-client", () => ({
   },
 }));
 
-const mockScrollToIndex = vi.fn();
-
-vi.mock("@tanstack/react-virtual", () => ({
-  useVirtualizer: () => ({
-    scrollToIndex: (...args: unknown[]) => mockScrollToIndex(...args),
-    getVirtualItems: () => [],
-    getTotalSize: () => 0,
-    measureElement: () => {},
-  }),
-}));
+// Mock virtua - Virtualizer component renders children directly in test env
+vi.mock("virtua", async () => {
+  const { forwardRef } = await import("react");
+  const MockVirtualizer = forwardRef(
+    ({ children }: { children: React.ReactNode }) => {
+      return <div data-testid="mock-virtualizer">{children}</div>;
+    }
+  );
+  return { Virtualizer: MockVirtualizer };
+});
 
 vi.mock("../../../src/mainview/stores/use-session-store", () => ({
   useSessionStore: Object.assign(
