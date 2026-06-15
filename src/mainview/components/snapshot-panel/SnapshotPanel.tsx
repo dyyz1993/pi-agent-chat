@@ -15,6 +15,7 @@ import { useTranslation } from "react-i18next";
 import { useSnapshotStore } from "../../stores/use-snapshot-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useNotificationStore } from "../../stores/use-notification-store";
+import { PanelHeader } from "../primitives/PanelHeader";
 import { apiClient } from "../../lib/api-client";
 import { createLogger } from "../../../shared/lib/logger";
 import { InlineDiffViewer } from "../chat/tool-renderers/InlineDiffViewer";
@@ -115,20 +116,21 @@ export function SnapshotPanel() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-border-secondary dark:border-surface-code">
-        <div className="flex items-center gap-1.5 text-xs text-text-tertiary">
-          <Camera className="w-3.5 h-3.5" />
-          <span>{t("snapshots", { count: snapshots.length })}</span>
-        </div>
-        <button
-          onClick={() => sessionId && fetchSnapshots(sessionId)}
-          disabled={!sessionId || loading}
-          className="p-1 rounded hover:bg-surface-hover dark:hover:bg-surface-dim text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary transition-colors disabled:opacity-30"
-          title={t("refresh")}
-        >
-          <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} />
-        </button>
-      </div>
+      <PanelHeader
+        icon={Camera}
+        iconCls="text-text-tertiary"
+        title={t("snapshots", { count: snapshots.length })}
+        trailing={
+          <button
+            onClick={() => sessionId && fetchSnapshots(sessionId)}
+            disabled={!sessionId || loading}
+            className="p-1 rounded hover:bg-surface-hover dark:hover:bg-surface-dim text-text-tertiary hover:text-text-secondary dark:hover:text-text-secondary transition-colors disabled:opacity-30"
+            title={t("refresh")}
+          >
+            <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} />
+          </button>
+        }
+      />
 
       <div className="flex-1 overflow-y-auto">
         {loading && <SkeletonState />}

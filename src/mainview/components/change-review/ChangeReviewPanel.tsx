@@ -19,6 +19,7 @@ import { useTranslation } from "react-i18next";
 import { useChangeReviewStore } from "../../stores/use-change-review-store";
 import { useGitStore } from "../../stores/use-git-store";
 import { useSessionStore } from "../../stores/use-session-store";
+import { PanelHeader } from "../primitives/PanelHeader";
 import type { FileStatus } from "../../../shared/modules/change-review";
 import { InlineDiffViewer } from "../chat/tool-renderers/InlineDiffViewer";
 
@@ -60,45 +61,50 @@ export function ChangeReviewPanel() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-border-secondary dark:border-surface-code">
-        <div className="flex items-center gap-1.5 text-xs text-text-tertiary">
-          <FileText className="w-3.5 h-3.5" />
-          <span>{t("title")}</span>
-          {pendingCount > 0 && (
-            <span className="bg-status-warning/20 text-status-warning text-[10px] px-1.5 py-0.5 rounded-full font-medium">
-              {pendingCount}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={fetchPending}
-            disabled={loading}
-            className="p-1 rounded hover:bg-surface-hover dark:hover:bg-surface-dim text-text-tertiary hover:text-text-secondary transition-colors disabled:opacity-30"
-            title={t("refresh")}
-          >
-            <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} />
-          </button>
-          <button
-            onClick={handleApproveAll}
-            disabled={pendingCount === 0}
-            className="flex items-center gap-1 px-2 py-1 text-[10px] rounded bg-semantic-accent/15 text-semantic-accent hover:bg-semantic-accent/25 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-            title={t("approveAll")}
-          >
-            <CheckSquare className="w-3 h-3" />
-            {t("approveAll")}
-          </button>
-          <button
-            onClick={rejectAll}
-            disabled={pendingCount === 0}
-            className="flex items-center gap-1 px-2 py-1 text-[10px] rounded bg-status-error/15 text-status-error hover:bg-status-error/25 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-            title={t("rejectAll")}
-          >
-            <XSquare className="w-3 h-3" />
-            {t("rejectAll")}
-          </button>
-        </div>
-      </div>
+      <PanelHeader
+        icon={FileText}
+        iconCls="text-text-tertiary"
+        title={
+          <>
+            {t("title")}
+            {pendingCount > 0 && (
+              <span className="bg-status-warning/20 text-status-warning text-[10px] px-1.5 py-0.5 rounded-full font-medium">
+                {pendingCount}
+              </span>
+            )}
+          </>
+        }
+        trailing={
+          <>
+            <button
+              onClick={fetchPending}
+              disabled={loading}
+              className="p-1 rounded hover:bg-surface-hover dark:hover:bg-surface-dim text-text-tertiary hover:text-text-secondary transition-colors disabled:opacity-30"
+              title={t("refresh")}
+            >
+              <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} />
+            </button>
+            <button
+              onClick={handleApproveAll}
+              disabled={pendingCount === 0}
+              className="flex items-center gap-1 px-2 py-1 text-[10px] rounded bg-semantic-accent/15 text-semantic-accent hover:bg-semantic-accent/25 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              title={t("approveAll")}
+            >
+              <CheckSquare className="w-3 h-3" />
+              {t("approveAll")}
+            </button>
+            <button
+              onClick={rejectAll}
+              disabled={pendingCount === 0}
+              className="flex items-center gap-1 px-2 py-1 text-[10px] rounded bg-status-error/15 text-status-error hover:bg-status-error/25 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              title={t("rejectAll")}
+            >
+              <XSquare className="w-3 h-3" />
+              {t("rejectAll")}
+            </button>
+          </>
+        }
+      />
 
       <div className="flex-1 overflow-y-auto">
         {loading && changes.length === 0 && <SkeletonState />}

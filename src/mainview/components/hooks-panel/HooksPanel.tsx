@@ -313,26 +313,30 @@ export function HooksPanel() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center gap-2 px-2.5 py-2 border-b border-border-secondary dark:border-surface-code shrink-0">
-        <ListChecks className="w-3.5 h-3.5 text-semantic-accent" />
-        <span className="text-[11px] font-medium text-text-secondary">Hooks</span>
-        <span className="text-[9px] text-text-tertiary ml-auto">{totalExecutions} executions</span>
-        {configSnapshot && (
-          <button
-            onClick={() => {
-              if (activeSessionId) setEnabled(activeSessionId, !configSnapshot.runtimeEnabled);
-            }}
-            className={`p-1 rounded transition-colors ${
-              configSnapshot.runtimeEnabled
-                ? "text-status-success hover:bg-status-success/10"
-                : "text-status-error hover:bg-status-error/10"
-            }`}
-            title={configSnapshot.runtimeEnabled ? "Hooks enabled (click to disable)" : "Hooks disabled (click to enable)"}
-          >
-            {configSnapshot.runtimeEnabled ? <Power className="w-3 h-3" /> : <PowerOff className="w-3 h-3" />}
-          </button>
-        )}
-      </div>
+      <PanelHeader
+        icon={ListChecks}
+        title="Hooks"
+        trailing={
+          <>
+            <span className="text-[9px] text-text-tertiary">{totalExecutions} executions</span>
+            {configSnapshot && (
+              <button
+                onClick={() => {
+                  if (activeSessionId) setEnabled(activeSessionId, !configSnapshot.runtimeEnabled);
+                }}
+                className={`p-1 rounded transition-colors ${
+                  configSnapshot.runtimeEnabled
+                    ? "text-status-success hover:bg-status-success/10"
+                    : "text-status-error hover:bg-status-error/10"
+                }`}
+                title={configSnapshot.runtimeEnabled ? "Hooks enabled (click to disable)" : "Hooks disabled (click to enable)"}
+              >
+                {configSnapshot.runtimeEnabled ? <Power className="w-3 h-3" /> : <PowerOff className="w-3 h-3" />}
+              </button>
+            )}
+          </>
+        }
+      />
 
       <div className="flex items-center border-b border-border-secondary dark:border-surface-code shrink-0">
         <button

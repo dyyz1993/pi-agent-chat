@@ -1,5 +1,4 @@
 import {
-  Pin,
   PanelRight,
   PanelRightClose,
   GitBranch,
@@ -26,6 +25,7 @@ import { HooksPanel } from "../hooks-panel/HooksPanel";
 import { SnapshotPanel } from "../snapshot-panel/SnapshotPanel";
 import { AgentPanel } from "../agent-panel/AgentPanel";
 import { ChangeReviewPanel } from "../change-review/ChangeReviewPanel";
+import { PanelPinButton } from "../primitives/PanelPinButton";
 import { useChangeReviewStore } from "../../stores/use-change-review-store";
 import { useExplorerStore } from "../../stores/use-explorer-store";
 import { useGitStore } from "../../stores/use-git-store";
@@ -230,16 +230,7 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
               <PanelRightClose className="w-3.5 h-3.5" />
             </button>
           )}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              toggleStatus();
-            }}
-            className={`p-1.5 rounded-md transition-colors max-sm:hidden ${isPinned ? "text-semantic-accent bg-semantic-accent/10" : "text-text-tertiary hover:text-text-primary hover:bg-surface-hover"}`}
-            title={isPinned ? t("unpinPanel") : t("pinPanel")}
-          >
-            <Pin className="w-3.5 h-3.5" fill={isPinned ? "currentColor" : "none"} />
-          </button>
+          <PanelPinButton isPinned={isPinned} onToggle={toggleStatus} />
         </div>
         <div className="flex items-center overflow-x-auto scrollbar-none flex-1">
           {PANEL_TABS.map((tab: { id: PanelTabId; label: string }) => (

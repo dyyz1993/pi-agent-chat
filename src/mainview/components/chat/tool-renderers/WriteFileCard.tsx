@@ -1,5 +1,5 @@
 import { memo, useMemo, useRef, useEffect } from "react";
-import { AlertTriangle, FileText } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { createLogger } from "../../../../shared/lib/logger";
 import type { ContentBlock } from "../../../types";
@@ -7,6 +7,8 @@ import { CachedReactMarkdown } from "../CachedReactMarkdown";
 import { CopyButton } from "../CopyButton";
 import { InlineCodeViewer } from "./InlineCodeViewer";
 import { ToolCardHeader } from "../primitives/ToolCardHeader";
+import { LspDiagnosticList } from "../primitives/LspDiagnosticList";
+import type { LspDiagnosticFile } from "../primitives/LspDiagnosticList";
 import { InlineDiffViewer } from "./InlineDiffViewer";
 import { formatFilePath } from "../../../lib/format-path";
 import { parseUnifiedDiff } from "../../../lib/diff-utils";
@@ -31,20 +33,8 @@ interface EditToolDetails {
   firstChangedLine?: number;
 }
 
-interface LspDiagnosticIssue {
-  severity?: number;
-  line: number;
-  message: string;
-  source?: string;
-  code?: string | number;
-}
-
 interface LspDiagnosticData {
-  files?: Array<{
-    filePath: string;
-    summary: string;
-    issues: LspDiagnosticIssue[];
-  }>;
+  files?: LspDiagnosticFile[];
 }
 
 function isLspDiagnosticData(d: unknown): d is LspDiagnosticData {
@@ -268,41 +258,12 @@ export const WriteFileCard = memo(function WriteFileCard({
                   {lspDetails.files.reduce((acc, f) => acc + f.issues.length, 0) !== 1 ? "s" : ""}
                 </span>
               </summary>
-              <div className="px-3 pb-2">
-                {lspDetails.files.map((f) => (
-                  <div
-                    key={f.filePath}
-                    className="border-b last:border-b-0 border-status-warning/20 py-1"
-                  >
-                    <div className="text-[11px] text-status-warning font-medium flex items-center gap-1">
-                      <FileText className="w-2.5 h-2.5 shrink-0" />
-                      <span>{f.filePath}</span>
-                      <span className="text-status-warning/80 ml-1">{f.summary}</span>
-                    </div>
-                    {f.issues.map((issue, i) => (
-                      <div key={i} className="text-[11px] text-text-secondary pl-4 pt-0.5">
-                        <span
-                          className={
-                            issue.severity === 1
-                              ? "text-status-error"
-                              : issue.severity === 2
-                                ? "text-status-warning"
-                                : "text-text-tertiary"
-                          }
-                        >
-                          L{issue.line}
-                        </span>
-                        {issue.source && (
-                          <span className="text-text-tertiary"> [{issue.source}]</span>
-                        )}
-                        {issue.code != null && (
-                          <span className="text-text-tertiary"> ({String(issue.code)})</span>
-                        )}
-                        : {issue.message}
-                      </div>
-                    ))}
-                  </div>
-                ))}
+              <div className="px-3 pb-2 pt-1">
+                <LspDiagnosticList
+                  files={lspDetails.files}
+                  formatPaths={false}
+                  issueTextClass="text-[11px]"
+                />
               </div>
             </details>
           )}

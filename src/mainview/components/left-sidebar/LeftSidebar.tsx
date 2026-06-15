@@ -1,10 +1,11 @@
-import { Pin, Plus, PanelLeft, PanelLeftClose } from "lucide-react";
+import { Plus, PanelLeft, PanelLeftClose } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useGitStore } from "../../stores/use-git-store";
 import { SessionSidebar } from "../session-sidebar/SessionSidebar";
 import { SidebarBottomControls } from "./SidebarBottomControls";
+import { PanelPinButton } from "../primitives/PanelPinButton";
 import { useState } from "react";
 
 interface LeftSidebarProps {
@@ -84,17 +85,7 @@ export function LeftSidebar({ width, overlay }: LeftSidebarProps) {
               </div>
             )}
           </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              toggleSession();
-            }}
-            className={`p-1.5 rounded-md transition-colors max-sm:hidden ${isPinned ? "text-semantic-accent bg-semantic-accent/10" : "text-text-tertiary hover:text-text-primary hover:bg-surface-hover"}`}
-            title={isPinned ? t("unpinPanel") : t("pinPanel")}
-            aria-label={isPinned ? t("unpinPanel") : t("pinPanel")}
-          >
-            <Pin className="w-3.5 h-3.5" fill={isPinned ? "currentColor" : "none"} />
-          </button>
+          <PanelPinButton isPinned={isPinned} onToggle={toggleSession} />
           {overlay ? (
             <button
               onClick={(e) => {
