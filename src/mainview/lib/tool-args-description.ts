@@ -1,23 +1,11 @@
 import { formatFilePath } from "./format-path";
+import { parseToolArgs } from "../utils/parse-tool-args";
 
 const MAX_DESC_LEN = 120;
 
 function truncate(s: string, max = MAX_DESC_LEN): string {
   const trimmed = s.trim();
   return trimmed.length > max ? trimmed.slice(0, max) + "…" : trimmed;
-}
-
-function parseArgs(args: string | undefined): Record<string, unknown> | null {
-  if (!args) return null;
-  try {
-    const raw = JSON.parse(args) as unknown;
-    if (raw && typeof raw === "object" && raw !== null) {
-      return raw as Record<string, unknown>;
-    }
-  } catch {
-    // not JSON — plain string args
-  }
-  return null;
 }
 
 function str(v: unknown): string | undefined {
@@ -29,7 +17,7 @@ export function getToolArgsDescription(
   args: string | undefined,
 ): string | undefined {
   const name = toolName.toLowerCase().trim();
-  const parsed = parseArgs(args);
+  const parsed = parseToolArgs(args);
 
   // Non-JSON args (plain command string): use first line
   // Skip if it looks like broken JSON (starts with { or [) to avoid showing raw braces.

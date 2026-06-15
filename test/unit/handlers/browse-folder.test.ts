@@ -10,19 +10,10 @@ vi.mock("../../../src/shared/lib/native-dialog", () => ({
 
 import { register } from "../../../src/shared/handlers/project";
 import type { HandlerOptions } from "../../../src/shared/rpc-schema";
-
-function createMockServer() {
-  const handlers = new Map<string, (params: unknown) => Promise<unknown>>();
-  return {
-    register: vi.fn((method: string, handler: (params: unknown) => Promise<unknown>) => {
-      handlers.set(method, handler);
-    }),
-    handlers,
-  };
-}
+import { createMockServer, type MockServer } from "../../helpers/mock-server";
 
 describe("project.browseFolder", () => {
-  let server: ReturnType<typeof createMockServer>;
+  let server: MockServer;
   let browseFolder: (params: unknown) => Promise<unknown>;
 
   beforeEach(() => {

@@ -9,20 +9,7 @@ vi.mock("../../../src/shared/handlers/agent", () => ({
 }));
 
 import { register } from "../../../src/shared/handlers/bash";
-
-function createMockServer() {
-  const handlers = new Map<string, (params: unknown) => Promise<unknown>>();
-  return {
-    register: vi.fn((method: string, handler: (params: unknown) => Promise<unknown>) => {
-      handlers.set(method, handler);
-    }),
-    handlers,
-    subscriptions: new Map(),
-    emitEvent: vi.fn(),
-  };
-}
-
-type MockServer = ReturnType<typeof createMockServer>;
+import { createMockServer, type MockServer } from "../../helpers/mock-server";
 
 describe("bash.command kill idempotent logic", () => {
   let server: MockServer;

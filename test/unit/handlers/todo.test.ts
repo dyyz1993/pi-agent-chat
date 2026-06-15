@@ -4,20 +4,7 @@ import { join } from "path";
 import { tmpdir } from "os";
 
 import { register } from "../../../src/shared/handlers/todo";
-
-function createMockServer() {
-  const handlers = new Map<string, (params: unknown) => Promise<unknown>>();
-  return {
-    register: vi.fn((method: string, handler: (params: unknown) => Promise<unknown>) => {
-      handlers.set(method, handler);
-    }),
-    handlers,
-    subscriptions: new Map(),
-    emitEvent: vi.fn(),
-  };
-}
-
-type MockServer = ReturnType<typeof createMockServer>;
+import { createMockServer, type MockServer } from "../../helpers/mock-server";
 
 describe("todo handler", () => {
   let server: MockServer;

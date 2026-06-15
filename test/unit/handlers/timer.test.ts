@@ -1,20 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 import { register } from "../../../src/shared/handlers/timer";
-
-function createMockServer() {
-  const handlers = new Map<string, (params: unknown) => Promise<unknown>>();
-  return {
-    register: vi.fn((method: string, handler: (params: unknown) => Promise<unknown>) => {
-      handlers.set(method, handler);
-    }),
-    handlers,
-    subscriptions: new Map(),
-    emitEvent: vi.fn(),
-  };
-}
-
-type MockServer = ReturnType<typeof createMockServer>;
+import { createMockServer, type MockServer } from "../../helpers/mock-server";
 
 describe("timer handler", () => {
   let server: MockServer;

@@ -1,5 +1,6 @@
 import { apiClient } from "../../../lib/api-client";
 import { proxyUrlSync } from "../../../lib/proxy";
+import { formatSize } from "../../../utils/file-utils";
 
 export type ResourceType =
   | "image"
@@ -30,8 +31,4 @@ export function getFileHttpUrl(absolutePath: string): string {
   return `${baseUrl}/file/${encodeURIComponent(absolutePath)}?token=${token}`;
 }
 
-export function formatFileSize(bytes: number): string {
-  if (bytes > 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  if (bytes > 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${bytes} B`;
-}
+export { formatSize as formatFileSize };

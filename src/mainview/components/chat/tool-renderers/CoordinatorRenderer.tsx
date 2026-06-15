@@ -1,7 +1,6 @@
 import { memo, useEffect, useRef, useState, type ReactNode } from "react";
 import { ExternalLink } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { createLogger } from "../../../../shared/lib/logger";
 import type { ContentBlock, SessionStatus } from "../../../types";
 import { useSessionStore } from "../../../stores/use-session-store";
 import { useSettingsStore } from "../../../stores/use-settings-store";
@@ -9,10 +8,9 @@ import { ToolCardHeader, type ToolCardStatus } from "../primitives/ToolCardHeade
 import { useJumpToSession } from "../primitives/useJumpToSession";
 import { CachedReactMarkdown } from "../CachedReactMarkdown";
 import { CopyButton } from "../CopyButton";
+import { parseToolArgs } from "../../../utils/parse-tool-args";
 
 type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
-
-const logger = createLogger("agent");
 
 interface CoordinatorDetails {
   sessionId?: string;
@@ -27,13 +25,7 @@ interface CoordinatorDetails {
 }
 
 function parseArgs(args?: string): Record<string, unknown> {
-  if (!args) return {};
-  try {
-    return JSON.parse(args) as Record<string, unknown>;
-  } catch (e) {
-    logger.warn("Failed to parse coordinator args", { error: String(e) });
-    return {};
-  }
+  return parseToolArgs(args) ?? {};
 }
 
 function extractDetails(detailData: unknown): CoordinatorDetails {

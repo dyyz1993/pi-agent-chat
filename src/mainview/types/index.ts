@@ -1,7 +1,17 @@
 // 权威定义在 src/shared/modules/project.ts，前端 re-export 保持单一来源。
 // RPC schema 与 store 共享同一个 SessionStatus，避免两端漂移。
-import type { SessionStatus as SharedSessionStatus } from "../../shared/modules/project";
+import type {
+  SessionStatus as SharedSessionStatus,
+  SessionMeta as SharedSessionMeta,
+} from "../../shared/modules/project";
 export type SessionStatus = SharedSessionStatus;
+
+// 以下类型权威定义在 shared/modules/project.ts，前端 re-export 保持单一来源。
+export type { RecentProject, PiProject, MergedProject, FavoriteFolder, DirectoryEntry } from "../../shared/modules/project";
+export type SessionMeta = SharedSessionMeta & {
+  sessionStatus?: SessionStatus;
+  contextUsage?: ContextUsage;
+};
 
 export type TreeNode = {
   name: string;
@@ -144,70 +154,10 @@ export type ContextUsage = {
   contextWindow: number;
 };
 
-export type SessionMeta = {
-  sessionId: string;
-  name: string;
-  sessionPath: string;
-  projectPath: string;
-  parentSessionPath: string | null;
-  delegateParentSessionId: string | null;
-  delegateType: string | null;
-  messageCount: number;
-  firstMessage: string;
-  createdAt: number;
-  updatedAt: number;
-  status: "idle" | "running";
-  sessionStatus?: SessionStatus;
-  contextUsage?: ContextUsage;
-  pinned?: boolean;
-  tierConfig?: {
-    tierModels: Record<string, string>;
-    currentTier: string | null;
-  };
-};
-
-export type RecentProject = {
-  path: string;
-  name: string;
-  lastOpened: number;
-  pinned: boolean;
-  sessionCount: number;
-};
-
-export type PiProject = {
-  path: string;
-  name: string;
-  sessionCount: number;
-  lastModified: number;
-  hasActiveSession: boolean;
-};
-
 export type ConfiguredPath = {
   path: string;
   name: string;
   type: "home" | "documents" | "custom";
-};
-
-export type MergedProject = {
-  path: string;
-  name: string;
-  source: "pi" | "recent" | "configured";
-  sessionCount: number;
-  lastModified: number;
-  hasActiveSession: boolean;
-};
-
-export type DirectoryEntry = {
-  name: string;
-  path: string;
-  isDirectory: boolean;
-  mtime?: number;
-};
-
-export type FavoriteFolder = {
-  path: string;
-  name: string;
-  addedAt: number;
 };
 
 export type ProjectTab = {

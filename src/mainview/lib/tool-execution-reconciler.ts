@@ -1,4 +1,5 @@
 import type { ChatMessage, ContentBlock, TimelineItem } from "../types";
+import { parseToolArgs } from "../utils/parse-tool-args";
 
 export type ToolExecutionBlock = Extract<ContentBlock, { type: "toolExecution" }>;
 export type ToolCallBlock = Extract<ContentBlock, { type: "toolCall" }> & {
@@ -8,18 +9,6 @@ export type ToolExecutionItem = Extract<TimelineItem, { itemType: "toolExecution
 
 function normalizeToolName(name: string): string {
   return name.trim().toLowerCase();
-}
-
-function parseArgsObject(args: string | undefined): Record<string, unknown> | null {
-  if (!args) return null;
-  try {
-    const parsed = JSON.parse(args) as unknown;
-    return parsed && typeof parsed === "object" && parsed !== null
-      ? (parsed as Record<string, unknown>)
-      : null;
-  } catch {
-    return null;
-  }
 }
 
 export function getToolCallInput(block: Extract<ContentBlock, { type: "toolCall" }>): unknown {
@@ -74,7 +63,7 @@ function filePathKeys(path: string): string[] {
 
 function toolExecutionSemanticKeys(block: ToolExecutionBlock): string[] {
   const toolName = normalizeToolName(block.toolName);
-  const argsObj = parseArgsObject(block.args);
+  const argsObj = parseToolArgs(block.args);
   const path =
     typeof argsObj?.path === "string"
       ? argsObj.path
@@ -141,7 +130,7 @@ function normalizeToolDescription(description: string | undefined): string {
 
 function getToolExecutionDescription(block: ToolExecutionBlock): string | undefined {
   if (block.description) return block.description;
-  const argsObj = parseArgsObject(block.args);
+  const argsObj = parseToolArgs(block.args);
   if (typeof argsObj?.description === "string") return argsObj.description;
   return undefined;
 }

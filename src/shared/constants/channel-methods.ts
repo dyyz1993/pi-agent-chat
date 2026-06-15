@@ -4,7 +4,11 @@
  * Frontend handlers call:  callChannel(sid, "file-review", METHOD, ...)
  * Backend extension handles: channel.handle(METHOD, ...)
  *
- * Keep this list in sync with the backend extension's channel.handle() calls.
+ * NOTE: 这些常量目前主要用于文档/参考和 ESLint 校验（`rpc/valid-channel-method` 规则
+ * 在 lint 时正则解析本文件中的字符串值来构建合法方法名集合）。
+ * 大部分 handler 目前直接硬编码 channel method 字符串，仅 change-review.ts 使用了
+ * FILE_REVIEW_METHODS 常量。其他常量组保留在此作为权威方法名录，不要删除。
+ *
  * The ESLint rule `rpc/valid-channel-method` reads this file at lint time.
  */
 

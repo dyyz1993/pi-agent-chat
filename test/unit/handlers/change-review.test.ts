@@ -18,20 +18,7 @@ vi.mock("../../../src/shared/lib/logger", () => ({
 
 import { register } from "../../../src/shared/handlers/change-review";
 import { getProcessManager } from "../../../src/shared/handlers/agent";
-
-function createMockServer() {
-  const handlers = new Map<string, (params: unknown) => Promise<unknown>>();
-  return {
-    register: vi.fn((method: string, handler: (params: unknown) => Promise<unknown>) => {
-      handlers.set(method, handler);
-    }),
-    handlers,
-    subscriptions: new Map(),
-    emitEvent: vi.fn(),
-  };
-}
-
-type MockServer = ReturnType<typeof createMockServer>;
+import { createMockServer, type MockServer } from "../../helpers/mock-server";
 
 function makeReviewTurnEntry(
   turnIndex: number,
