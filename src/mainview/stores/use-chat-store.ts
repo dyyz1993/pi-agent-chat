@@ -4,10 +4,10 @@ import type { ChatMessage, ContentBlock } from "../types";
 import {
   buildPreservedStreamingMessage,
   normalizeToolBlocks,
-} from "./chat-tool-normalizer";
-import { hasSameMessageSnapshots } from "./chat-message-snapshot";
-import { isAgentNotStartedError, sendAgentMessageWithTimeout } from "./chat-send-utils";
-import { readDraft, writeDraft } from "./chat-input-draft";
+} from "../lib/chat-tool-normalizer";
+import { hasSameMessageSnapshots } from "../utils/chat-message-snapshot";
+import { isAgentNotStartedError, sendAgentMessageWithTimeout } from "../lib/chat-send-utils";
+import { readDraft, writeDraft } from "../utils/chat-input-draft";
 import { apiClient } from "../lib/api-client";
 import { useAppStore } from "./use-app-store";
 import { useNotificationStore } from "./use-notification-store";
@@ -18,7 +18,7 @@ import { messageToChatMessage } from "../lib/message-mapper";
 import type { AgentMessageForUI } from "../../shared/modules/agent";
 import { createLogger } from "../../shared/lib/logger";
 
-export { normalizeToolBlocks } from "./chat-tool-normalizer";
+export { normalizeToolBlocks } from "../lib/chat-tool-normalizer";
 
 const log = createLogger("chat-store");
 const perfLog = createLogger("session-perf");

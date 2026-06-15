@@ -2,16 +2,16 @@ import type { ContentBlock, ChatMessage, TokenUsage, PermissionMeta } from "../t
 import type { SessionMeta } from "../types";
 import type { AgentEvent } from "../../shared/modules/agent";
 import type { AssistantMessage, Message, Usage } from "@dyyz1993/pi-ai";
-import { useChatStore } from "./use-chat-store";
-import { useSessionStore, clearAgentStarted } from "./use-session-store";
-import { useMemoryStore } from "./use-memory-store";
-import { useStatusStore, type MCPServerInfo } from "./use-status-store";
-import { useRetryStore } from "./use-retry-store";
-import { useUIDialogStore } from "./use-ui-dialog-store";
-import { useChangeReviewStore } from "./use-change-review-store";
-import { notificationGateway } from "../lib/notification-gateway";
+import { useChatStore } from "../stores/use-chat-store";
+import { useSessionStore, clearAgentStarted } from "../stores/use-session-store";
+import { useMemoryStore } from "../stores/use-memory-store";
+import { useStatusStore, type MCPServerInfo } from "../stores/use-status-store";
+import { useRetryStore } from "../stores/use-retry-store";
+import { useUIDialogStore } from "../stores/use-ui-dialog-store";
+import { useChangeReviewStore } from "../stores/use-change-review-store";
+import { notificationGateway } from "./notification-gateway";
 import { batchMessageUpdate, flushNow } from "./message-batcher";
-import { messageToChatMessage, extractTokenUsage } from "../lib/message-mapper";
+import { messageToChatMessage, extractTokenUsage } from "./message-mapper";
 import { ALL_MEMORY_TYPE_KEYS } from "../components/chat/memory-config";
 import { createLogger } from "../../shared/lib/logger";
 import {

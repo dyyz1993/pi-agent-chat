@@ -131,10 +131,10 @@ vi.mock("../../../src/mainview/stores/use-retry-store", () => ({
   useRetryStore: { getState: vi.fn(() => ({ startRetry: vi.fn(), endRetry: vi.fn() })) },
 }));
 
-import { handleAgentEvent } from "../../../src/mainview/stores/agent-event-handler";
+import { handleAgentEvent } from "../../../src/mainview/lib/agent-event-handler";
 import { useChatStore } from "../../../src/mainview/stores/use-chat-store";
 import { useSessionStore } from "../../../src/mainview/stores/use-session-store";
-import { flushNow } from "../../../src/mainview/stores/message-batcher";
+import { flushNow } from "../../../src/mainview/lib/message-batcher";
 import { ScenarioPlayer } from "../../helpers/mock-llm";
 import {
   previewImageScenario,

@@ -187,7 +187,7 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => {
 import { useChatStore } from "../../../src/mainview/stores/use-chat-store";
 import { apiClient } from "../../../src/mainview/lib/api-client";
 import { useSessionStore } from "../../../src/mainview/stores/use-session-store";
-import { handleAgentEvent } from "../../../src/mainview/stores/agent-event-handler";
+import { handleAgentEvent } from "../../../src/mainview/lib/agent-event-handler";
 
 const SID = "sess-1";
 

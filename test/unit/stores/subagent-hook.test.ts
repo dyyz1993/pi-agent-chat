@@ -17,7 +17,7 @@ vi.mock("../../../src/mainview/lib/message-mapper", () => ({
   messageToChatMessage: vi.fn(() => ({ id: "msg-1", role: "user", content: [], timestamp: 0 })),
 }));
 
-vi.mock("../../../src/mainview/stores/message-batcher", () => ({
+vi.mock("../../../src/mainview/lib/message-batcher", () => ({
   batchMessageUpdate: vi.fn((_subId: string, apply: () => void) => apply()),
 }));
 

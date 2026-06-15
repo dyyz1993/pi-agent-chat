@@ -3,13 +3,13 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { readDraft, writeDraft } from "../../../src/mainview/stores/chat-input-draft";
-import { hasSameMessageSnapshots } from "../../../src/mainview/stores/chat-message-snapshot";
-import { isAgentNotStartedError } from "../../../src/mainview/stores/chat-send-utils";
+import { readDraft, writeDraft } from "../../../src/mainview/utils/chat-input-draft";
+import { hasSameMessageSnapshots } from "../../../src/mainview/utils/chat-message-snapshot";
+import { isAgentNotStartedError } from "../../../src/mainview/lib/chat-send-utils";
 import {
   buildPreservedStreamingMessage,
   shouldAppendPreservedStreamingMessage,
-} from "../../../src/mainview/stores/chat-tool-normalizer";
+} from "../../../src/mainview/lib/chat-tool-normalizer";
 import type { ChatMessage } from "../../../src/mainview/types";
 
 const storage = new Map<string, string>();

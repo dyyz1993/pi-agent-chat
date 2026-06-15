@@ -140,7 +140,7 @@ vi.mock("../../../src/mainview/stores/use-chat-store", () => {
   return { useChatStore };
 });
 
-import { handleAgentEvent, toolCallNameMap } from "../../../src/mainview/stores/agent-event-handler";
+import { handleAgentEvent, toolCallNameMap } from "../../../src/mainview/lib/agent-event-handler";
 import { useChatStore } from "../../../src/mainview/stores/use-chat-store";
 import { useSessionStore } from "../../../src/mainview/stores/use-session-store";
 const SID = "test-session-1";

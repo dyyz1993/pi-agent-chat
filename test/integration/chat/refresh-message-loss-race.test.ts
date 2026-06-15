@@ -93,10 +93,10 @@ vi.mock("../../../src/mainview/stores/session-subscriptions", () => ({
 }));
 
 import { useChatStore } from "../../../src/mainview/stores/use-chat-store";
-import { handleAgentEvent, toolCallNameMap, toolCallArgsMap } from "../../../src/mainview/stores/agent-event-handler";
-import { hasSameMessageSnapshots } from "../../../src/mainview/stores/chat-message-snapshot";
+import { handleAgentEvent, toolCallNameMap, toolCallArgsMap } from "../../../src/mainview/lib/agent-event-handler";
+import { hasSameMessageSnapshots } from "../../../src/mainview/utils/chat-message-snapshot";
 import type { ChatMessage, ContentBlock } from "../../../src/mainview/types";
-import { hasRenderableContent } from "../../../src/mainview/stores/agent-event-reconciler";
+import { hasRenderableContent } from "../../../src/mainview/lib/agent-event-reconciler";
 
 const SID = "sess-1";
 

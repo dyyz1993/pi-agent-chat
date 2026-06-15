@@ -165,7 +165,7 @@ vi.mock("../../../src/mainview/stores/use-status-store", () => ({
   },
 }));
 
-import { handleAgentEvent } from "../../../src/mainview/stores/agent-event-handler";
+import { handleAgentEvent } from "../../../src/mainview/lib/agent-event-handler";
 import { notificationGateway } from "../../../src/mainview/lib/notification-gateway";
 
 const SID = "test-session-llm-error";

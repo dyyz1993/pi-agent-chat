@@ -134,12 +134,12 @@ vi.mock("../../../src/mainview/stores/use-status-store", () => {
   return { useStatusStore };
 });
 
-import { handleAgentEvent, toolCallNameMap } from "../../../src/mainview/stores/agent-event-handler";
+import { handleAgentEvent, toolCallNameMap } from "../../../src/mainview/lib/agent-event-handler";
 import { useChatStore } from "../../../src/mainview/stores/use-chat-store";
 import { useSessionStore } from "../../../src/mainview/stores/use-session-store";
 import { useLspStore } from "../../../src/mainview/stores/use-lsp-store";
 import { useStatusStore } from "../../../src/mainview/stores/use-status-store";
-import { flushNow } from "../../../src/mainview/stores/message-batcher";
+import { flushNow } from "../../../src/mainview/lib/message-batcher";
 import { ScenarioPlayer } from "../../helpers/mock-llm";
 import { agentStart, messageStart, messageUpdate, messageEnd, agentEnd } from "../../helpers/mock-llm";
 

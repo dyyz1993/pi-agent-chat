@@ -26,7 +26,7 @@ vi.mock("../../../src/mainview/lib/message-mapper", () => ({
   extractTokenUsage: vi.fn(() => null),
 }));
 
-vi.mock("../../../src/mainview/stores/message-batcher", () => ({
+vi.mock("../../../src/mainview/lib/message-batcher", () => ({
   batchMessageUpdate: (_sessionId: string, apply: () => void) => apply(),
   flushNow: vi.fn(),
 }));
@@ -139,7 +139,7 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => ({
   useSessionStore: mockSessionStore,
 }));
 
-import { handleAgentEvent } from "../../../src/mainview/stores/agent-event-handler";
+import { handleAgentEvent } from "../../../src/mainview/lib/agent-event-handler";
 import { useChatStore } from "../../../src/mainview/stores/use-chat-store";
 import { useSessionStore } from "../../../src/mainview/stores/use-session-store";
 import { apiClient } from "../../../src/mainview/lib/api-client";

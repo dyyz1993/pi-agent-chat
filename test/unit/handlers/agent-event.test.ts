@@ -178,12 +178,12 @@ vi.mock("../../../src/mainview/stores/use-status-store", () => ({
   },
 }));
 
-import { handleAgentEvent, toolCallNameMap } from "../../../src/mainview/stores/agent-event-handler";
+import { handleAgentEvent, toolCallNameMap } from "../../../src/mainview/lib/agent-event-handler";
 import { useChatStore } from "../../../src/mainview/stores/use-chat-store";
 import { useSessionStore } from "../../../src/mainview/stores/use-session-store";
 import { useUIDialogStore } from "../../../src/mainview/stores/use-ui-dialog-store";
 import { apiClient } from "../../../src/mainview/lib/api-client";
-import { flushNow } from "../../../src/mainview/stores/message-batcher";
+import { flushNow } from "../../../src/mainview/lib/message-batcher";
 
 const SID = "test-session-1";
 const TCID = "tc-bash-1";

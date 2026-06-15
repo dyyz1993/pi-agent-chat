@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { batchMessageUpdate, flushNow } from "../../../src/mainview/stores/message-batcher";
+import { batchMessageUpdate, flushNow } from "../../../src/mainview/lib/message-batcher";
 
 afterEach(() => {
   flushNow();

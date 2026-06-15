@@ -11,7 +11,7 @@ import type { AgentEvent } from "@dyyz1993/pi-agent-core";
 import type { AssistantMessage, Message, Usage } from "@dyyz1993/pi-ai";
 import { apiClient } from "../lib/api-client";
 import { messageToChatMessage } from "../lib/message-mapper";
-import { batchMessageUpdate } from "./message-batcher";
+import { batchMessageUpdate } from "../lib/message-batcher";
 import { useSessionStore } from "./use-session-store";
 import { createLogger } from "../../shared/lib/logger";
 

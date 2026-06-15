@@ -140,7 +140,7 @@ vi.mock("../../../src/mainview/stores/use-status-store", () => ({
   useStatusStore: { getState: vi.fn(() => ({})) },
 }));
 
-vi.mock("../../../src/mainview/stores/message-batcher", () => ({
+vi.mock("../../../src/mainview/lib/message-batcher", () => ({
   batchMessageUpdate: vi.fn((_sid: string, fn: () => void) => fn()),
   flushNow: vi.fn(),
 }));

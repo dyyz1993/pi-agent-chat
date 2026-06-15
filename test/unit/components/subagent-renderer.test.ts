@@ -31,7 +31,7 @@ vi.mock("../../../src/shared/lib/logger", () => ({
   }),
 }));
 
-vi.mock("../../../src/mainview/stores/message-batcher", () => ({
+vi.mock("../../../src/mainview/lib/message-batcher", () => ({
   batchMessageUpdate: vi.fn((_id: string, fn: () => void) => fn()),
 }));
 
@@ -55,7 +55,7 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => ({
   },
 }));
 
-vi.mock("../../../src/mainview/stores/message-batcher", () => ({
+vi.mock("../../../src/mainview/lib/message-batcher", () => ({
   batchMessageUpdate: vi.fn((_id: string, fn: () => void) => fn()),
 }));
 

@@ -138,7 +138,7 @@ vi.mock("../../../src/mainview/stores/use-change-review-store", () => ({
   },
 }));
 
-vi.mock("../../../src/mainview/stores/message-batcher", () => ({
+vi.mock("../../../src/mainview/lib/message-batcher", () => ({
   batchMessageUpdate: (_sessionId: string, apply: () => void) => apply(),
   flushNow: vi.fn(),
 }));
@@ -155,7 +155,7 @@ vi.mock("../../../src/mainview/lib/message-mapper", () => ({
 
 import { useSessionStore } from "../../../src/mainview/stores/use-session-store";
 import { apiClient } from "../../../src/mainview/lib/api-client";
-import { handleAgentEvent } from "../../../src/mainview/stores/agent-event-handler";
+import { handleAgentEvent } from "../../../src/mainview/lib/agent-event-handler";
 
 const resetStore = () => {
   useSessionStore.setState({

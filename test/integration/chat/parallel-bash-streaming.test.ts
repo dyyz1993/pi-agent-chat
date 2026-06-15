@@ -197,10 +197,10 @@ vi.mock("../../../src/mainview/stores/use-ui-dialog-store", () => {
   return { useUIDialogStore };
 });
 
-import { handleAgentEvent, toolCallNameMap, toolCallArgsMap } from "../../../src/mainview/stores/agent-event-handler";
+import { handleAgentEvent, toolCallNameMap, toolCallArgsMap } from "../../../src/mainview/lib/agent-event-handler";
 import { useChatStore } from "../../../src/mainview/stores/use-chat-store";
 import { useSessionStore } from "../../../src/mainview/stores/use-session-store";
-import { flushNow } from "../../../src/mainview/stores/message-batcher";
+import { flushNow } from "../../../src/mainview/lib/message-batcher";
 
 const SID = "parallel-bash-test-session";
 

@@ -89,7 +89,7 @@ vi.mock("../../../src/mainview/stores/use-supervisor-store", () => ({
   useSupervisorStore: { getState: () => ({}) },
 }));
 
-vi.mock("../../../src/mainview/stores/agent-event-handler", () => ({
+vi.mock("../../../src/mainview/lib/agent-event-handler", () => ({
   handleAgentEvent: vi.fn(),
   toolCallNameMap: {},
 }));

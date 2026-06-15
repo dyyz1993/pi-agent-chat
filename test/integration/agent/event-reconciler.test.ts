@@ -8,7 +8,7 @@ import {
   isDelayedTerminalMessageUpdate,
   isTerminalToolStatus,
   normalizeToolArgsForMatch,
-} from "../../../src/mainview/stores/agent-event-reconciler";
+} from "../../../src/mainview/lib/agent-event-reconciler";
 
 function toolExecution(
   overrides: Partial<Extract<ContentBlock, { type: "toolExecution" }>> = {},

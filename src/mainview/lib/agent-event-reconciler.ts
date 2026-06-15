@@ -3,7 +3,7 @@ import {
   findMatchingPendingToolExecution,
   findMatchingToolExecution,
   normalizeToolArgsForMatch,
-} from "../lib/tool-execution-reconciler";
+} from "./tool-execution-reconciler";
 
 export type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
 

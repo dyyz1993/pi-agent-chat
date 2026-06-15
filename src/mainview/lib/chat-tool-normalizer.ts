@@ -2,7 +2,7 @@ import type { ChatMessage, ContentBlock } from "../types";
 import {
   formatArgsFromRawInput,
   getToolCallInput,
-} from "../lib/tool-execution-reconciler";
+} from "./tool-execution-reconciler";
 
 export {
   buildPreservedStreamingMessage,
@@ -10,7 +10,7 @@ export {
   getToolExecutionDedupeKeys,
   hasOverlappingToolExecutionKeys,
   shouldAppendPreservedStreamingMessage,
-} from "../lib/tool-execution-reconciler";
+} from "./tool-execution-reconciler";
 
 export function normalizeToolBlocks(
   msgs: ChatMessage[],

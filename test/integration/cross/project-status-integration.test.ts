@@ -118,7 +118,7 @@ vi.mock("../../../src/mainview/stores/use-notification-store", () => ({
   useNotificationStore: { getState: () => ({ notify: vi.fn() }) },
 }));
 
-vi.mock("../../../src/mainview/stores/agent-event-handler", () => ({
+vi.mock("../../../src/mainview/lib/agent-event-handler", () => ({
   handleAgentEvent: vi.fn(),
   toolCallNameMap: {},
 }));

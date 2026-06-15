@@ -1,6 +1,6 @@
 import type { ImageContent } from "@dyyz1993/pi-ai";
 
-import { apiClient } from "../lib/api-client";
+import { apiClient } from "./api-client";
 
 const SEND_TIMEOUT_MS = 60_000;
 

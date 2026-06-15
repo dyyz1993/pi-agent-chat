@@ -18,7 +18,7 @@ import { useStatusStore } from "./use-status-store";
 import { useChangeReviewStore } from "./use-change-review-store";
 import { clearSessionFetchInitCache } from "./session-initial-state";
 import { clearRetrySession } from "./use-retry-store";
-import { handleAgentEvent, toolCallNameMap, toolCallArgsMap, cleanupEventHandlerMaps } from "./agent-event-handler";
+import { handleAgentEvent, toolCallNameMap, toolCallArgsMap, cleanupEventHandlerMaps } from "../lib/agent-event-handler";
 import { notificationGateway } from "../lib/notification-gateway";
 import { useAppStore } from "./use-app-store";
 import { useHooksStore } from "./use-hooks-store";
