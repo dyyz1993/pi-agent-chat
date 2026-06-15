@@ -1,11 +1,26 @@
 import { existsSync, statSync } from "fs";
-import { createReadStream } from "fs";
-import * as readline from "readline";
 import { performance } from "perf_hooks";
 
 import type { AgentMessageForUI } from "../modules/agent";
 import type { TreeEntry } from "../modules/agent";
 import { createLogger } from "../lib/logger";
+
+// Extracted modules (pure functions, no class state)
+import {
+  readJsonlFromByteOffset as readJsonlFromByteOffsetRaw,
+  readJsonlFromLine as readJsonlFromLineRaw,
+  readJsonlTreeEntries,
+  readJsonlFully,
+  parseJsonlFromText,
+  type ParsedMessageEntry,
+  type ParsedCustomEntry,
+} from "./session-jsonl-parser";
+import {
+  buildBranchPathSet,
+  filterMessagesToBranch,
+  filterCustomEntriesToBranch,
+  applyPagination,
+} from "./session-branch-filter";
 
 const log = createLogger("agent");
 const perfLog = createLogger("session-perf");
@@ -198,6 +213,8 @@ export class SessionMessageReader {
   /**
    * Read JSONL from a specific physical line number onwards and append results.
    * Returns { newEntries: number of new parsed entries, totalLines: total physical lines in file }
+   *
+   * Delegates to session-jsonl-parser module.
    */
   async readJsonlFromLine(
     sessionPath: string,
@@ -206,60 +223,21 @@ export class SessionMessageReader {
     customEntries: Array<{ id: string; customType: string; data: unknown; timestamp: number }>,
     parentById: Map<string, string | null>,
   ): Promise<{ newEntries: number; totalLines: number }> {
-    let lineIndex = 0;
-    let newEntries = 0;
-    const rl = readline.createInterface({
-      input: createReadStream(sessionPath, { encoding: "utf-8" }),
-      crlfDelay: Infinity,
-    });
-    for await (const line of rl) {
-      lineIndex++;
-      if (lineIndex <= startLine) continue; // skip already-parsed lines
-      if (!line.trim()) continue;
-      try {
-        const parsed = JSON.parse(line) as Record<string, unknown>;
-        const entryId = (parsed.id as string) ?? "";
-        const parentId = (parsed.parentId as string | null | undefined) ?? null;
-        if (entryId) {
-          parentById.set(entryId, parentId);
-        }
-        if (parsed.type === "message" && parsed.message) {
-          messages.push({ entryId, message: parsed.message });
-          newEntries++;
-        } else if (parsed.type === "custom") {
-          customEntries.push({
-            id: entryId || `custom-${Date.now()}`,
-            customType: (parsed.customType as string) ?? "unknown",
-            data: parsed.data,
-            timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
-          });
-          newEntries++;
-        } else if (parsed.type === "compaction") {
-          messages.push({
-            entryId,
-            message: {
-              role: "compactionSummary",
-              summary: (parsed.summary as string) ?? "",
-              tokensBefore: parsed.tokensBefore as number | undefined,
-              timestamp: new Date(
-                (parsed.timestamp as string | number | Date) ?? 0,
-              ).getTime(),
-            },
-          });
-          newEntries++;
-        }
-      } catch {
-        // skip malformed
-      }
-    }
-    rl.close();
-    return { newEntries, totalLines: lineIndex };
+    return readJsonlFromLineRaw(
+      sessionPath,
+      startLine,
+      messages as ParsedMessageEntry[],
+      customEntries as ParsedCustomEntry[],
+      parentById,
+    );
   }
 
   /**
    * Read JSONL from a specific byte offset onwards. Unlike readJsonlFromLine
    * which skips lines one-by-one, this uses createReadStream({ start }) for
    * O(1) seek. Also collects compaction and leaf_pointer entries in one pass.
+   *
+   * Delegates to session-jsonl-parser module.
    */
   async readJsonlFromByteOffset(
     sessionPath: string,
@@ -279,76 +257,13 @@ export class SessionMessageReader {
     }>;
     lastLeafPointer: string | null;
   }> {
-    let lineIndex = 0;
-    let newEntries = 0;
-    const newCompactionEntries: Array<{
-      entryId: string;
-      summary: string;
-      tokensBefore?: number;
-      timestamp: number;
-    }> = [];
-    let lastLeafPointer: string | null = null;
-
-    const rl = readline.createInterface({
-      input: createReadStream(sessionPath, { encoding: "utf-8", start: byteOffset }),
-      crlfDelay: Infinity,
-    });
-    for await (const line of rl) {
-      lineIndex++;
-      if (!line.trim()) continue;
-      try {
-        const parsed = JSON.parse(line) as Record<string, unknown>;
-        const entryId = (parsed.id as string) ?? "";
-        const parentId = (parsed.parentId as string | null | undefined) ?? null;
-        if (entryId) {
-          parentById.set(entryId, parentId);
-        }
-        if (parsed.type === "message" && parsed.message) {
-          messages.push({ entryId, message: parsed.message });
-          newEntries++;
-        } else if (parsed.type === "custom") {
-          customEntries.push({
-            id: entryId || `custom-${Date.now()}`,
-            customType: (parsed.customType as string) ?? "unknown",
-            data: parsed.data,
-            timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
-          });
-          newEntries++;
-        } else if (parsed.type === "compaction") {
-          const compEntry = {
-            entryId,
-            summary: (parsed.summary as string) ?? "",
-            tokensBefore: parsed.tokensBefore as number | undefined,
-            timestamp: new Date(
-              (parsed.timestamp as string | number | Date) ?? 0,
-            ).getTime(),
-          };
-          newCompactionEntries.push(compEntry);
-          messages.push({
-            entryId,
-            message: {
-              role: "compactionSummary",
-              summary: compEntry.summary,
-              tokensBefore: compEntry.tokensBefore,
-              timestamp: compEntry.timestamp,
-            },
-          });
-          newEntries++;
-        } else if (parsed.type === "leaf_pointer" && typeof parsed.leafId === "string") {
-          lastLeafPointer = parsed.leafId;
-        }
-      } catch {
-        // skip malformed
-      }
-    }
-    rl.close();
-    let newByteOffset = byteOffset;
-    try {
-      newByteOffset = statSync(sessionPath).size;
-    } catch {
-      // file gone — keep original offset
-    }
-    return { newEntries, totalLines: lineIndex, newByteOffset, newCompactionEntries, lastLeafPointer };
+    return readJsonlFromByteOffsetRaw(
+      sessionPath,
+      byteOffset,
+      messages as ParsedMessageEntry[],
+      customEntries as ParsedCustomEntry[],
+      parentById,
+    );
   }
 
   private async readJsonlEntries(sessionPath: string): Promise<
@@ -360,56 +275,7 @@ export class SessionMessageReader {
       label?: string;
     }>
   > {
-    const entries: Array<{
-      id: string;
-      parentId: string | null;
-      type: string;
-      customType?: string;
-      label?: string;
-    }> = [];
-    if (!sessionPath || !existsSync(sessionPath)) return entries;
-    try {
-      const rl = readline.createInterface({
-        input: createReadStream(sessionPath, { encoding: "utf-8" }),
-        crlfDelay: Infinity,
-      });
-      for await (const line of rl) {
-        if (!line.trim()) continue;
-        try {
-          const parsed = JSON.parse(line) as Record<string, unknown>;
-          if (parsed.id && parsed.type) {
-            let label: string | undefined;
-            if (
-              parsed.type === "message" &&
-              parsed.message &&
-              typeof parsed.message === "object" &&
-              parsed.message !== null
-            ) {
-              label = (parsed.message as Record<string, unknown>).role as string | undefined;
-            } else if (parsed.customType) {
-              label = parsed.customType as string;
-            }
-            entries.push({
-              id: parsed.id as string,
-              parentId: (parsed.parentId as string | null | undefined) ?? null,
-              type: parsed.type as string,
-              customType: parsed.customType as string | undefined,
-              label,
-            });
-          }
-        } catch (err: unknown) {
-          log.warn("readJsonlEntries: skipping malformed entry", {
-            err: err instanceof Error ? err.message : String(err),
-          });
-        }
-      }
-      rl.close();
-    } catch (err: unknown) {
-      log.warn("readJsonlEntries: failed to read file", {
-        err: err instanceof Error ? err.message : String(err),
-      });
-    }
-    return entries;
+    return readJsonlTreeEntries(sessionPath);
   }
 
   private buildMessagesFromJsonl(
@@ -572,6 +438,8 @@ export class SessionMessageReader {
       }
     } else if (resolvedSessionPath && existsSync(resolvedSessionPath)) {
       try {
+        const { createReadStream } = await import("fs");
+        const readline = await import("readline");
         const rl = readline.createInterface({
           input: createReadStream(resolvedSessionPath, { encoding: "utf-8" }),
           crlfDelay: Infinity,
@@ -686,58 +554,15 @@ export class SessionMessageReader {
               userId,
               `cat ${resolvedSessionPath}`,
             );
-            const lines = raw.split("\n");
-            for (const line of lines) {
-              if (!line.trim()) continue;
-              try {
-                const parsed = JSON.parse(line) as Record<string, unknown>;
-                const entryId = (parsed.id as string) ?? "";
-                const parentId = (parsed.parentId as string | null | undefined) ?? null;
-                if (entryId) {
-                  parentById.set(entryId, parentId);
-                  activeJsonlLeafId = entryId;
-                }
-                if (parsed.type === "custom") {
-                  allCustomEntries.push({
-                    id: entryId || `custom-${Date.now()}`,
-                    customType: (parsed.customType as string) ?? "unknown",
-                    data: parsed.data,
-                    timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
-                  });
-                } else if (parsed.type === "message" && parsed.message) {
-                  allMessages.push({
-                    entryId,
-                    message: parsed.message,
-                  });
-                } else if (parsed.type === "compaction") {
-                  allCompactionEntries.push({
-                    entryId,
-                    summary: (parsed.summary as string) ?? "",
-                    tokensBefore: parsed.tokensBefore as number | undefined,
-                    timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
-                  });
-                  // Inject in-place to preserve JSONL chronological order
-                  allMessages.push({
-                    entryId,
-                    message: {
-                      role: "compactionSummary",
-                      summary: (parsed.summary as string) ?? "",
-                      tokensBefore: parsed.tokensBefore as number | undefined,
-                      timestamp: new Date(
-                        (parsed.timestamp as string | number | Date) ?? 0,
-                      ).getTime(),
-                    },
-                  });
-                } else if (parsed.type === "leaf_pointer" && typeof parsed.leafId === "string") {
-                  lastJsonlLeafPointer = parsed.leafId;
-                  activeJsonlLeafId = parsed.leafId;
-                }
-              } catch (err: unknown) {
-                log.debug("skipping malformed JSONL entry (sandbox)", {
-                  err: err instanceof Error ? err.message : String(err),
-                });
-              }
+            const parsed = parseJsonlFromText(raw);
+            allMessages.push(...parsed.messages);
+            allCustomEntries.push(...parsed.customEntries);
+            allCompactionEntries.push(...parsed.compactionEntries);
+            for (const [k, v] of parsed.parentById) {
+              parentById.set(k, v);
             }
+            lastJsonlLeafPointer = parsed.lastLeafPointer;
+            activeJsonlLeafId = parsed.activeJsonlLeafId;
           }
         } catch (err: unknown) {
           log.warn("Failed to read sandbox JSONL", {
@@ -811,70 +636,22 @@ export class SessionMessageReader {
         }
       } else {
         try {
-          let lineCount = 0;
-          const rl = readline.createInterface({
-            input: createReadStream(resolvedSessionPath, { encoding: "utf-8" }),
-            crlfDelay: Infinity,
-          });
-          for await (const line of rl) {
-            if (!line.trim()) continue;
-            lineCount++;
-            try {
-              const parsed = JSON.parse(line) as Record<string, unknown>;
-              const entryId = (parsed.id as string) ?? "";
-              const parentId = (parsed.parentId as string | null | undefined) ?? null;
-              if (entryId) {
-                parentById.set(entryId, parentId);
-                activeJsonlLeafId = entryId;
-              }
-              if (parsed.type === "custom") {
-                allCustomEntries.push({
-                  id: entryId || `custom-${Date.now()}`,
-                  customType: (parsed.customType as string) ?? "unknown",
-                  data: parsed.data,
-                  timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
-                });
-              } else if (parsed.type === "message" && parsed.message) {
-                allMessages.push({
-                  entryId,
-                  message: parsed.message,
-                });
-              } else if (parsed.type === "compaction") {
-                allCompactionEntries.push({
-                  entryId,
-                  summary: (parsed.summary as string) ?? "",
-                  tokensBefore: parsed.tokensBefore as number | undefined,
-                  timestamp: new Date((parsed.timestamp as string | number | Date) ?? 0).getTime(),
-                });
-                allMessages.push({
-                  entryId,
-                  message: {
-                    role: "compactionSummary",
-                    summary: (parsed.summary as string) ?? "",
-                    tokensBefore: parsed.tokensBefore as number | undefined,
-                    timestamp: new Date(
-                      (parsed.timestamp as string | number | Date) ?? 0,
-                    ).getTime(),
-                  },
-                });
-              } else if (parsed.type === "leaf_pointer" && typeof parsed.leafId === "string") {
-                lastJsonlLeafPointer = parsed.leafId;
-                activeJsonlLeafId = parsed.leafId;
-              }
-            } catch (err: unknown) {
-              log.debug("skipping malformed JSONL entry", {
-                err: err instanceof Error ? err.message : String(err),
-              });
-            }
+          const fullResult = await readJsonlFully(resolvedSessionPath);
+          allMessages.push(...fullResult.messages);
+          allCustomEntries.push(...fullResult.customEntries);
+          allCompactionEntries.push(...fullResult.compactionEntries);
+          for (const [k, v] of fullResult.parentById) {
+            parentById.set(k, v);
           }
-          rl.close();
+          lastJsonlLeafPointer = fullResult.lastLeafPointer;
+          activeJsonlLeafId = fullResult.activeJsonlLeafId;
 
           this.setSessionCache(sessionId, resolvedSessionPath, {
             messages: allMessages,
             customEntries: allCustomEntries,
             compactionEntries: allCompactionEntries,
             parentById,
-            lineCount,
+            lineCount: fullResult.messages.length,
             lastJsonlLeafPointer,
             activeJsonlLeafId,
           });
@@ -909,23 +686,9 @@ export class SessionMessageReader {
     }
 
     // Build leaf→root path set and filter messages to current branch only.
-    let filteredMessages = allMessages;
-    let customEntries = allCustomEntries;
+    let pathIds: Set<string> | null = null;
     if (leafId && parentById.size > 0 && parentById.has(leafId)) {
-      const pathIds = new Set<string>();
-      let curId: string | null = leafId;
-      while (curId) {
-        pathIds.add(curId);
-        const parent = parentById.get(curId);
-        curId = parent ?? null;
-      }
-      filteredMessages = allMessages.filter((m) => pathIds.has(m.entryId));
-      // Exclude compaction_fold/snip — they are internal compaction metadata
-      // (50万+ entries in large sessions) that the frontend does not use.
-      const COMPACTION_CUSTOM_TYPES = new Set(["compaction_fold", "compaction_snip"]);
-      customEntries = allCustomEntries.filter(
-        (e) => pathIds.has(e.id) && !COMPACTION_CUSTOM_TYPES.has(e.customType),
-      );
+      pathIds = buildBranchPathSet(leafId, parentById);
     } else if (leafId && parentById.size > 0 && !parentById.has(leafId)) {
       log.warn("[getFullMessages] leafId not found in JSONL, skipping branch filter", {
         sessionId,
@@ -934,44 +697,15 @@ export class SessionMessageReader {
       });
     }
 
-    // Apply pagination to filtered results. Without a cursor this returns the
-    // newest page. With afterEntryId, return the page immediately before that
-    // entry so the UI can prepend older history without loading the full JSONL.
+    const filteredMessages = filterMessagesToBranch(allMessages, pathIds);
+    const customEntries = filterCustomEntriesToBranch(allCustomEntries, pathIds);
+
+    // Apply pagination to filtered results.
     const totalCount = filteredMessages.length;
-    const limit = options?.limit;
-    const afterEntryId = options?.afterEntryId;
-    let hasMore = false;
-    let nextCursor: string | null = null;
-
-    let slicedMessages: unknown[];
-    const injectEntryId = (e: { entryId: string; message: unknown }) => {
-      const msg = e.message as Record<string, unknown>;
-      if (msg && typeof msg === "object" && e.entryId) {
-        return { ...msg, entryId: e.entryId };
-      }
-      return msg;
-    };
-    const cursorIndex =
-      afterEntryId != null
-        ? filteredMessages.findIndex((entry) => entry.entryId === afterEntryId)
-        : -1;
-
-    if (afterEntryId != null && cursorIndex < 0) {
-      log.warn("[getFullMessages] afterEntryId not found, returning empty page", {
-        sessionId,
-        afterEntryId,
-        totalCount,
-      });
-      slicedMessages = [];
-    } else if (limit !== undefined) {
-      const endIndex = cursorIndex >= 0 ? cursorIndex : totalCount;
-      const startIndex = Math.max(0, endIndex - limit);
-      slicedMessages = filteredMessages.slice(startIndex, endIndex).map(injectEntryId);
-      hasMore = startIndex > 0;
-      nextCursor = hasMore ? (filteredMessages[startIndex]?.entryId ?? null) : null;
-    } else {
-      slicedMessages = filteredMessages.map(injectEntryId);
-    }
+    const paginationResult = applyPagination(filteredMessages, options ?? {});
+    const slicedMessages = paginationResult.messages;
+    const hasMore = paginationResult.hasMore;
+    const nextCursor = paginationResult.nextCursor;
 
     const totalMs = Math.round(performance.now() - t0);
 
