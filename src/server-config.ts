@@ -58,8 +58,6 @@ export const config = {
   sandboxBoxSettingsJson: process.env.SANDBOX_BOX_SETTINGS_JSON ?? "",
   /** sandbox-box 扩展路径 */
   sandboxBoxExtensionsPath: process.env.SANDBOX_BOX_EXTENSIONS_PATH ?? "",
-  /** sandbox-box 域名后缀 */
-  sandboxBoxDomainSuffix: process.env.SANDBOX_BOX_DOMAIN_SUFFIX ?? "sandbox.19930810.xyz",
   /** 沙箱空闲超时（秒） */
   sandboxIdleTimeout: parseInt(process.env.SANDBOX_IDLE_TIMEOUT ?? "1800", 10),
 } as const;
