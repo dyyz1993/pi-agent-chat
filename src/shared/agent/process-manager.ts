@@ -241,7 +241,31 @@ function discoverExtensionArgs(): string[] {
 // realpathSync against the mocked "/fake" path and threw ENOENT — silently
 // crashing 8 test suites before any `it()` ran. Deferred to first use instead.
 let _extensionArgsCache: string[] | undefined;
-function getExtensionArgs(): string[] {
+let _extensionArgsNoLspCache: string[] | undefined;
+
+/** 子代理进程只加载核心 extension，跳过可能卡住的 LSP/auto-memory/rules-engine 等 */
+const SUBAGENT_REQUIRED_EXTENSIONS = new Set(["coordinator", "subagent-v2", "bash-ext", "read", "edit", "write"]);
+
+function getExtensionArgs(excludeLsp = false): string[] {
+  if (excludeLsp) {
+    if (_extensionArgsNoLspCache === undefined) {
+      const flat = discoverExtensionArgs();
+      const filtered: string[] = [];
+      for (let i = 0; i < flat.length; i += 2) {
+        const flag = flat[i];
+        const extPath = flat[i + 1];
+        if (!extPath) continue;
+        // 提取 extension 目录名（路径中 /extensions/<name>/index.ts 的 <name>）
+        const match = extPath.match(/\/extensions\/([^/]+)\//);
+        const extName = match?.[1] ?? "";
+        if (SUBAGENT_REQUIRED_EXTENSIONS.has(extName)) {
+          filtered.push(flag, extPath);
+        }
+      }
+      _extensionArgsNoLspCache = ["--no-extensions", ...filtered];
+    }
+    return _extensionArgsNoLspCache;
+  }
   if (_extensionArgsCache === undefined) {
     _extensionArgsCache = ["--no-extensions", ...discoverExtensionArgs()];
   }
@@ -330,6 +354,7 @@ async function createRpcClient(
   cwd: string,
   sessionPath: string | undefined,
   userId?: string,
+  excludeLsp = false,
 ): Promise<{ client: RpcClientInstance; timings: { dynamicImport: number; construct: number } }> {
   const t0 = performance.now();
 
@@ -352,16 +377,24 @@ async function createRpcClient(
     mkdirSync(cwd, { recursive: true });
   }
 
-  const args = [...getExtensionArgs()];
+  const args = [...getExtensionArgs(excludeLsp)];
   if (sessionPath && existsSync(sessionPath)) {
     args.push("--session", sessionPath);
+  }
+
+  perfLog.info("[createRpcClient] spawning CLI", { cliPath, cwd, sessionPath, args: args.join(" "), excludeLsp });
+
+  // 子代理进程（forceNewProcess）跳过 MCP 连接，避免多进程竞争同一个 stdio MCP server
+  const childEnv: Record<string, string> = { ...process.env, NODE_OPTIONS: "--max-old-space-size=8192" };
+  if (excludeLsp) {
+    childEnv.PI_SKIP_MCP = "1";
   }
 
   const client = new cachedModule.RpcClient({
     cliPath,
     cwd,
     args,
-    env: { ...process.env, NODE_OPTIONS: "--max-old-space-size=8192" },
+    env: childEnv,
   });
   await client.start();
   const t2 = performance.now();
@@ -672,7 +705,7 @@ export class AgentProcessManager {
       evictLRU: (k) => this.evictLRU(k),
       addToPool: (k, m) => this.addToPool(k, m),
       createRpcClient: (cliPath, cwd, sp, userId) =>
-        createRpcClient(cliPath, cwd, sp, userId),
+        createRpcClient(cliPath, cwd, sp, userId, options?.forceNewProcess === true),
       registerAgentChannels: (args) => registerAgentChannels(args),
       handleEvent: (sid, event) => this.handleEvent(sid, event),
       handleCoordinatorCall: (sid, data, channelName) =>

@@ -80,9 +80,12 @@ export async function startAgentClientOperation<TManaged extends StartManagedCli
       return { agentId: options.sessionId, status: "already_running" };
     }
 
-    const reusePoolKey = options.getPoolKey(options.projectPath, options.startOptions?.userId);
-    const pool = options.processByCwd.get(reusePoolKey);
-    if (pool && pool.size > 0) {
+    // 复用进程池：仅当未要求 forceNewProcess 时才尝试 switchSession
+    const forceNew = options.startOptions?.forceNewProcess === true;
+    if (!forceNew) {
+      const reusePoolKey = options.getPoolKey(options.projectPath, options.startOptions?.userId);
+      const pool = options.processByCwd.get(reusePoolKey);
+      if (pool && pool.size > 0) {
       const pooled = [...pool][pool.size - 1];
       const oldSessionId = pooled._activeSessionId;
       const tSwitch = performance.now();
@@ -138,6 +141,7 @@ export async function startAgentClientOperation<TManaged extends StartManagedCli
         } catch (e) {
           log.debug("start: failed to stop old pooled process client", { error: String(e) });
         }
+      }
       }
     }
 
