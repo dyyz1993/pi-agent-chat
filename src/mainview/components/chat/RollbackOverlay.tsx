@@ -16,6 +16,7 @@ import type { ModifiedFile } from "../../stores/use-rollback-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useChatStore } from "../../stores/use-chat-store";
 import { useNotificationStore } from "../../stores/use-notification-store";
+import { useActiveSessionActionGuard } from "../../hooks/use-active-session-action-guard";
 import { apiClient } from "../../lib/api-client";
 import { createLogger } from "../../../shared/lib/logger";
 import { InlineDiffViewer } from "./tool-renderers/InlineDiffViewer";
@@ -250,6 +251,7 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
   const preview = useRollbackStore((s) => s.preview);
   const loading = useRollbackStore((s) => s.loading);
   const closeRollback = useRollbackStore((s) => s.closeRollback);
+  const activeSessionGuard = useActiveSessionActionGuard({ requireReady: false });
   const confirmingRef = useRef(false);
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
 
@@ -283,16 +285,13 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
         return;
       }
 
-      const sessionStatus = useSessionStore.getState().sessionStatusMap[sessionId];
-      if (
-        sessionStatus === "streaming" ||
-        sessionStatus === "compacting" ||
-        sessionStatus === "retrying"
-      ) {
-        useNotificationStore.getState().push({
-          message: "Cannot rollback while agent is streaming",
-          level: "warning",
-        });
+      const guardedSessionId = activeSessionGuard.guard({
+        requireReady: currentTarget.mode === "withFiles",
+        readyMessage: t("messageCard.rollbackRequiresActiveSession", {
+          defaultValue: "File rollback requires an active session. Please wait for reconnect.",
+        }),
+      });
+      if (!guardedSessionId) {
         state.closeRollback();
         return;
       }
@@ -365,7 +364,7 @@ export const RollbackOverlay = memo(function RollbackOverlay() {
       confirmingRef.current = false;
       useRollbackStore.getState().closeRollback();
     }
-  }, []);
+  }, [activeSessionGuard, t]);
 
   if (!open || !target) return null;
 

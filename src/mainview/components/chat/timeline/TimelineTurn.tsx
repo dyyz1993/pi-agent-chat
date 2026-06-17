@@ -11,16 +11,16 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { createLogger } from "../../../../shared/lib/logger";
-import type { TimelineTurn as TTurn, TimelineItem, SessionStatus } from "../../../types";
+import type { TimelineTurn as TTurn, TimelineItem } from "../../../types";
 import { getItemId } from "../../../lib/turn-aggregator";
 import { useChatNavStore } from "../../../stores/use-chat-nav-store";
 import { useClipboard } from "../preview/use-clipboard";
 import { useRollbackStore } from "../../../stores/use-rollback-store";
 import type { ModifiedFile } from "../../../stores/use-rollback-store";
-import { useSessionStore } from "../../../stores/use-session-store";
 import { useChatStore } from "../../../stores/use-chat-store";
 import { useForkDialogStore } from "../../../stores/use-fork-dialog-store";
 import { apiClient } from "../../../lib/api-client";
+import { useActiveSessionActionGuard } from "../../../hooks/use-active-session-action-guard";
 
 const log = createLogger("chat");
 
@@ -54,16 +54,9 @@ export const TimelineTurn = memo(function TimelineTurn({
     ),
   );
 
-  const sessionId = useSessionStore.getState().activeSessionId;
-  const isSessionStreaming = useSessionStore(
-    useCallback(
-      (s: { sessionStatusMap: Record<string, SessionStatus> }) => {
-        const status = sessionId ? s.sessionStatusMap[sessionId] : undefined;
-        return status === "streaming" || status === "compacting" || status === "retrying";
-      },
-      [sessionId],
-    ),
-  );
+  const activeSessionGuard = useActiveSessionActionGuard({ requireReady: false });
+  const isSessionReady = activeSessionGuard.isReady;
+  const isSessionBusy = activeSessionGuard.isBusy;
 
   const allItemIds = turn.items.map(getItemId);
   const toolCount = turn.items.filter((i: TimelineItem) => i.itemType === "toolExecution").length;
@@ -74,7 +67,12 @@ export const TimelineTurn = memo(function TimelineTurn({
 
   const handleRollback = useCallback(
     async (mode: "message" | "withFiles") => {
-      const sessionId = useSessionStore.getState().activeSessionId;
+      const sessionId = activeSessionGuard.guard({
+        requireReady: mode === "withFiles",
+        readyMessage: t("chat:messageCard.rollbackRequiresActiveSession", {
+          defaultValue: "File rollback requires an active session. Please wait for reconnect.",
+        }),
+      });
       if (!sessionId) return;
       try {
         // Pass userEntryId so backend's navigateTree jumps over the entire turn
@@ -236,7 +234,7 @@ export const TimelineTurn = memo(function TimelineTurn({
         logger.warn("Rollback operation failed", { error: String(e) });
       }
     },
-    [turn.userEntryId, turn.userMessageId],
+    [activeSessionGuard, t, turn.userEntryId, turn.userMessageId],
   );
   return (
     <div id={`turn-${turn.id}`} data-turn-id={turn.id} className="relative group/turn">
@@ -344,7 +342,7 @@ export const TimelineTurn = memo(function TimelineTurn({
                   icon={<GitFork size={12} />}
                   label={t("chat:fork")}
                   onClick={async () => {
-                    const sessionId = useSessionStore.getState().activeSessionId;
+                    const sessionId = activeSessionGuard.guard({ requireReady: false });
                     if (!sessionId) return;
                     try {
                       let entryId: string | null =
@@ -372,21 +370,21 @@ export const TimelineTurn = memo(function TimelineTurn({
                       /* skip */
                     }
                   }}
-                  disabled={isSessionStreaming}
+                  disabled={isSessionBusy}
                 />
                 <TurnActionButton
                   icon={<RotateCcw size={12} />}
                   label={t("chat:rollbackCode")}
                   onClick={() => handleRollback("withFiles")}
                   variant="warning"
-                  disabled={isSessionStreaming}
+                  disabled={isSessionBusy || !isSessionReady}
                 />
                 <TurnActionButton
                   icon={<MessageSquare size={12} />}
                   label={t("chat:rollbackChat")}
                   onClick={() => handleRollback("message")}
                   variant="info"
-                  disabled={isSessionStreaming}
+                  disabled={isSessionBusy}
                 />
               </div>
               <div className="max-w-[80%] px-3 py-2 rounded-lg bg-semantic-accent/90 text-white text-sm whitespace-pre-wrap break-words border border-semantic-accent/30">

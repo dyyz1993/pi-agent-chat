@@ -86,6 +86,39 @@ describe("agent tree navigation operations", () => {
     expect(persisted).toContain('"leafId":"m2"');
   });
 
+  it("rejects JSONL fallback for file rollback because files cannot be restored without an active client", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "pi-tree-nav-file-"));
+    const sessionPath = join(dir, "session.jsonl");
+    writeFileSync(
+      sessionPath,
+      [
+        makeEntry("root", null, "session"),
+        makeMessage("m1", "root", "user"),
+        makeMessage("m2", "m1", "assistant"),
+      ].join("\n"),
+      "utf-8",
+    );
+    const leafIds = new Map<string, string | null>();
+
+    await expect(
+      navigateTreeOperation({
+        sessionId: "sess-1",
+        targetId: "m2",
+        navigateOptions: { skipFiles: false },
+        getActiveManaged: () => null,
+        resolveSessionPath: () => sessionPath,
+        leafIds,
+      }),
+    ).resolves.toEqual({
+      cancelled: true,
+      reason: "File rollback requires an active agent process. Restart the session and try again.",
+    });
+
+    expect(leafIds.has("sess-1")).toBe(false);
+    const persisted = readFileSync(sessionPath, "utf-8");
+    expect(persisted).not.toContain('"type":"leaf_pointer"');
+  });
+
   it("maps JSONL entries for getTree fallback", async () => {
     const dir = mkdtempSync(join(tmpdir(), "pi-tree-get-"));
     const sessionPath = join(dir, "session.jsonl");

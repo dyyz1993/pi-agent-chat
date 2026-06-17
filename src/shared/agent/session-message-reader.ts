@@ -894,6 +894,17 @@ export class SessionMessageReader {
       targetId,
     });
 
+    if (!options?.skipFiles) {
+      log.warn("navigateTree: file rollback requires an active CLI process", {
+        sessionId,
+        targetId,
+      });
+      return {
+        cancelled: true,
+        reason: "File rollback requires an active agent process. Restart the session and try again.",
+      };
+    }
+
     const sessionPath = this.deps.resolveSessionPath(sessionId);
     if (!sessionPath) {
       return { cancelled: true, reason: "No session path found" };
@@ -952,13 +963,6 @@ export class SessionMessageReader {
       log.warn("navigateTree: failed to write leaf_pointer in fallback", {
         sessionId,
         err: leafErr instanceof Error ? leafErr.message : String(leafErr),
-      });
-    }
-
-    if (!options?.skipFiles) {
-      log.warn("navigateTree: file restore skipped (no active CLI process)", {
-        sessionId,
-        targetId,
       });
     }
 

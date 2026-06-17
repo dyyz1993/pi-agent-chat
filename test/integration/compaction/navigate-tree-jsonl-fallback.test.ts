@@ -84,7 +84,7 @@ describe("navigateTree JSONL fallback", () => {
     }
   });
 
-  it("no managed client + valid targetId → succeeds, sets leafIds", async () => {
+  it("no managed client + message-only valid targetId → succeeds, sets leafIds", async () => {
     writeFileSync(
       sessionFile,
       [
@@ -99,11 +99,30 @@ describe("navigateTree JSONL fallback", () => {
     internals(manager).sessionPaths.set("sess-1", sessionFile);
     expect(internals(manager).clients.has("sess-1")).toBe(false);
 
-    const result = await manager.navigateTree("sess-1", "m2");
+    const result = await manager.navigateTree("sess-1", "m2", { skipFiles: true });
 
     expect(result.cancelled).toBe(false);
     expect(result.reason).toBeUndefined();
     expect(internals(manager).leafIds.get("sess-1")).toBe("m2");
+  });
+
+  it("no managed client + file rollback → cancels instead of pretending files were restored", async () => {
+    writeFileSync(
+      sessionFile,
+      [
+        makeEntry("root", null, "session"),
+        makeMessage("m1", "root", "user"),
+        makeMessage("m2", "m1", "assistant"),
+      ].join("\n"),
+    );
+
+    internals(manager).sessionPaths.set("sess-1", sessionFile);
+
+    const result = await manager.navigateTree("sess-1", "m2", { skipFiles: false });
+
+    expect(result.cancelled).toBe(true);
+    expect(result.reason).toContain("File rollback requires an active agent process");
+    expect(internals(manager).leafIds.has("sess-1")).toBe(false);
   });
 
   it("no managed client + invalid targetId → cancelled with reason", async () => {
@@ -118,7 +137,7 @@ describe("navigateTree JSONL fallback", () => {
 
     internals(manager).sessionPaths.set("sess-1", sessionFile);
 
-    const result = await manager.navigateTree("sess-1", "nonexistent-id");
+    const result = await manager.navigateTree("sess-1", "nonexistent-id", { skipFiles: true });
 
     expect(result.cancelled).toBe(true);
     expect(result.reason).toBe("Target entry not found in session");
@@ -126,7 +145,7 @@ describe("navigateTree JSONL fallback", () => {
   });
 
   it("no managed client + no session path → cancelled with reason", async () => {
-    const result = await manager.navigateTree("sess-unknown", "some-target");
+    const result = await manager.navigateTree("sess-unknown", "some-target", { skipFiles: true });
 
     expect(result.cancelled).toBe(true);
     expect(result.reason).toBe("No session path found");
@@ -147,7 +166,7 @@ describe("navigateTree JSONL fallback", () => {
 
     internals(manager).sessionPaths.set("sess-1", sessionFile);
 
-    const navResult = await manager.navigateTree("sess-1", "m2");
+    const navResult = await manager.navigateTree("sess-1", "m2", { skipFiles: true });
     expect(navResult.cancelled).toBe(false);
     expect(internals(manager).leafIds.get("sess-1")).toBe("m2");
 

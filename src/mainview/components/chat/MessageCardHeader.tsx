@@ -1,5 +1,5 @@
 import { memo, useCallback, useRef } from "react";
-import { RotateCcw, Undo2, GitFork, Loader2 } from "lucide-react";
+import { RotateCcw, Undo2, GitFork } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useChatStore } from "../../stores/use-chat-store";
@@ -7,9 +7,10 @@ import { useNotificationStore } from "../../stores/use-notification-store";
 import { useRollbackStore } from "../../stores/use-rollback-store";
 import { useForkDialogStore } from "../../stores/use-fork-dialog-store";
 import { apiClient } from "../../lib/api-client";
+import { useActiveSessionActionGuard } from "../../hooks/use-active-session-action-guard";
 import { createLogger } from "../../../shared/lib/logger";
 import type { TreeEntry } from "../../../shared/modules/agent";
-import type { ChatMessage, ContentBlock, SessionStatus } from "../../types";
+import type { ChatMessage, ContentBlock } from "../../types";
 import type { ModifiedFile } from "../../stores/use-rollback-store";
 import { EMPTY_MSGS } from "./message-card-helpers";
 
@@ -41,11 +42,7 @@ const ActionBtn = memo(function ActionBtn({
       disabled={disabled}
       className={`p-1 rounded transition-colors ${disabled ? "text-text-tertiary dark:text-text-secondary cursor-not-allowed" : active ? activeClassName : "text-text-tertiary dark:text-text-secondary hover:text-text-primary dark:hover:text-text-secondary hover:bg-surface-hover/50 dark:hover:bg-surface-hover/50"}`}
     >
-      {disabled ? (
-        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-      ) : (
-        <Icon className={`w-3.5 h-3.5 ${active ? "fill-current" : ""}`} />
-      )}
+      <Icon className={`w-3.5 h-3.5 ${active ? "fill-current" : ""}`} />
     </button>
   );
 });
@@ -58,16 +55,10 @@ export const HeaderActions = memo(function HeaderActions({
   isUserCard?: boolean;
 }) {
   const { t } = useTranslation("chat");
-  const sessionId = useSessionStore((s) => s.activeSessionId);
-  const isSessionStreaming = useSessionStore(
-    useCallback(
-      (s: { sessionStatusMap: Record<string, SessionStatus> }) => {
-        const status = sessionId ? s.sessionStatusMap[sessionId] : undefined;
-        return status === "streaming" || status === "compacting" || status === "retrying";
-      },
-      [sessionId],
-    ),
-  );
+  const activeSessionGuard = useActiveSessionActionGuard({ requireReady: false });
+  const sessionId = activeSessionGuard.sessionId;
+  const isSessionReady = activeSessionGuard.isReady;
+  const isSessionBusy = activeSessionGuard.isBusy;
   const pushNotification = useNotificationStore((s) => s.push);
   const rollingBackRef = useRef(false);
 
@@ -150,16 +141,7 @@ export const HeaderActions = memo(function HeaderActions({
   const findTurnBoundary = useCallback((entryId: string, entries: TreeEntry[]): string | null => {
     // The backend's navigateTree handles the parentId jump for all message types
     // (user, assistant, etc.), so the frontend just passes the clicked entryId directly.
-    // However, if this is the FIRST user message entry in the tree, rolling back would
-    // navigate to before any conversation content exists, effectively clearing everything.
-    // Return null to trigger the first-message guard.
-    const entry = entries.find((e) => e.id === entryId);
-    if (entry && entry.type === "message" && entry.label === "user") {
-      const userEntries = entries.filter((e) => e.type === "message" && e.label === "user");
-      if (userEntries.length > 0 && userEntries[0].id === entryId) {
-        return null;
-      }
-    }
+    void entries;
     return entryId;
   }, []);
 
@@ -216,6 +198,15 @@ export const HeaderActions = memo(function HeaderActions({
       try {
         if (!sessionId) {
           log.warn("rollback aborted: no active session");
+          return;
+        }
+        const guardedSessionId = activeSessionGuard.guard({
+          requireReady: mode === "withFiles",
+          readyMessage: t("messageCard.rollbackRequiresActiveSession", {
+            defaultValue: "File rollback requires an active session. Please wait for reconnect.",
+          }),
+        });
+        if (!guardedSessionId) {
           return;
         }
 
@@ -406,7 +397,15 @@ export const HeaderActions = memo(function HeaderActions({
         rollingBackRef.current = false;
       }
     },
-    [sessionId, resolveRollbackTarget, message.id, message.role, pushNotification],
+    [
+      sessionId,
+      activeSessionGuard,
+      resolveRollbackTarget,
+      message.id,
+      message.role,
+      pushNotification,
+      t,
+    ],
   );
 
   return (
@@ -415,19 +414,19 @@ export const HeaderActions = memo(function HeaderActions({
         icon={GitFork}
         title={t("fork")}
         onClick={handleFork}
-        disabled={isSessionStreaming}
+        disabled={isSessionBusy}
       />
       <ActionBtn
         icon={Undo2}
         title={t("messageCard.rollbackMessage")}
         onClick={() => requestRollback("message")}
-        disabled={rollingBackRef.current || isSessionStreaming}
+        disabled={rollingBackRef.current || isSessionBusy}
       />
       <ActionBtn
         icon={RotateCcw}
         title={t("messageCard.rollbackMessageAndCode")}
         onClick={() => requestRollback("withFiles")}
-        disabled={rollingBackRef.current || isSessionStreaming}
+        disabled={rollingBackRef.current || isSessionBusy || !isSessionReady}
       />
     </>
   );
