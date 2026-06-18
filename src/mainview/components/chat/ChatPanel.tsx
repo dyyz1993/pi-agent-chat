@@ -730,7 +730,7 @@ export function ChatPanel() {
             </>
           )}
         </div>
-        <div className="w-12 shrink-0 overflow-hidden">
+        <div className="w-10 shrink-0 overflow-hidden">
           <SideNav ref={sideNavRef} messages={messages} onNavDotClick={handleNavDotClick} />
         </div>
       </div>
