@@ -1,5 +1,5 @@
 import { memo, type ReactNode } from "react";
-import { getToolIcon } from "../tool-icon-map";
+import {    getToolIcon } from "../tool-icon-map";
 import { useToolDuration } from "./useToolDuration";
 
 export type ToolCardStatus = "running" | "done" | "error" | "background" | "terminated";
@@ -45,7 +45,7 @@ export const ToolCardHeader = memo(function ToolCardHeader({
   endedAt,
   badge,
   onClick,
-  mono,
+  mono: _mono,
   rtl: useRtl,
   className = "",
 }: ToolCardHeaderProps) {
@@ -58,9 +58,9 @@ export const ToolCardHeader = memo(function ToolCardHeader({
 
   return (
     <div
-      className={`px-3 py-1.5 flex items-center gap-2 text-xs cursor-pointer hover:bg-surface-hover transition-colors select-none overflow-hidden ${className}`}
+      className={`px-3 py-1.5 flex items-center gap-2 text-xs transition-colors select-none overflow-hidden ${onClick ? "cursor-pointer hover:bg-surface-hover" : ""} ${className}`}
       onClick={onClick}
-      role="button"
+      role={onClick ? "button" : undefined}
       aria-expanded={onClick ? !collapsed : undefined}
     >
       {collapsed && isRunning && (
@@ -70,7 +70,7 @@ export const ToolCardHeader = memo(function ToolCardHeader({
       <Icon className={`w-3.5 h-3.5 shrink-0 ${iconColor}`} />
 
       <span
-        className={`flex-1 min-w-0 truncate ${mono ? "font-mono" : "text-text-secondary"}`}
+        className="flex-1 min-w-0 truncate text-text-secondary"
         title={typeof description === "string" ? description : undefined}
       >
         {useRtl ? (

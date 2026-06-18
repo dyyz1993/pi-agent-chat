@@ -19,7 +19,6 @@ import {
   Video,
   Music,
   File,
-  Brain,
   Activity,
   CircleCheckBig,
   ListChecks,
@@ -61,7 +60,7 @@ const TOOL_ICON_MAP: Record<string, ToolIconEntry> = {
   delegate: { icon: UserPlus, color: "text-semantic-agent", label: "Delegate" },
   fork: { icon: GitFork, color: "text-semantic-notify", label: "Fork" },
   read: { icon: Eye, color: "text-status-info", label: "Read" },
-  edit: { icon: FilePen, color: "text-blue-400", label: "Edit" },
+  edit: { icon: FilePen, color: "text-status-success", label: "Edit" },
   write: { icon: Pencil, color: "text-status-success", label: "Write" },
   search: { icon: Search, color: "text-status-warning", label: "Search" },
   grep: { icon: Search, color: "text-status-warning", label: "Grep" },
@@ -144,6 +143,7 @@ const CUSTOM_TYPE_ICON_MAP: Record<string, ToolIconEntry> = {
     ]),
   ),
   lsp_diagnostics: { icon: Network, color: "text-status-warning", label: "LSP Diagnostics" },
+  bash_background_process: { icon: Terminal, color: "text-semantic-tool", label: "Background Process" },
   bash_background_exit: { icon: Terminal, color: "text-semantic-tool", label: "Background Exit" },
   step_snapshot: { icon: Activity, color: "text-text-tertiary", label: "Step Snapshot" },
   supervisor_goal_complete: { icon: CircleCheckBig, color: "text-status-success", label: "Goal Complete" },
@@ -163,10 +163,14 @@ export function getUIMethodIcon(method: string): ToolIconEntry {
 }
 
 const CUSTOM_TYPE_DEFAULT: ToolIconEntry = {
-  icon: Brain,
-  color: "text-semantic-agent",
+  icon: FileText,
+  color: "text-text-tertiary",
   label: "Custom",
 };
+
+export function hasCustomTypeIcon(customType: string): boolean {
+  return customType in CUSTOM_TYPE_ICON_MAP;
+}
 
 export function getCustomTypeIcon(customType: string): ToolIconEntry {
   return CUSTOM_TYPE_ICON_MAP[customType] ?? CUSTOM_TYPE_DEFAULT;
