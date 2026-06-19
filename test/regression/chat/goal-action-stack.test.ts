@@ -20,24 +20,29 @@ describe("Goal action stack regression", () => {
     expect(pendingIndex).toBeGreaterThan(queueIndex);
   });
 
-  it("creates a goal via handleCreateGoal (separate from handleSend)", () => {
+  it("creates a goal and starts an agent turn only when the session is idle", () => {
     const source = readSource("src/mainview/components/chat/ChatPanel.tsx");
 
-    // handleCreateGoal is a separate code path that calls setGoal
+    // handleCreateGoal is a separate code path that calls setGoal.
     // It is triggered by onSend when goalMode is true
     const handleCreateGoalIndex = source.indexOf("const handleCreateGoal");
     const setGoalCallIndex = source.indexOf("await setGoal(activeSessionId, objective)", handleCreateGoalIndex);
+    const idleTurnIndex = source.indexOf('if (effectiveStatus === "idle")', setGoalCallIndex);
+    const idleSendIndex = source.indexOf("await sendMessage()", idleTurnIndex);
     const goalModeDispatchIndex = source.indexOf("goalMode ? handleCreateGoal : handleSend");
 
     expect(handleCreateGoalIndex).toBeGreaterThan(-1);
     expect(setGoalCallIndex).toBeGreaterThan(handleCreateGoalIndex);
+    expect(idleTurnIndex).toBeGreaterThan(setGoalCallIndex);
+    expect(idleSendIndex).toBeGreaterThan(idleTurnIndex);
     expect(goalModeDispatchIndex).toBeGreaterThan(-1);
 
-    // handleSend is a separate code path that calls sendMessage or sendSteer
-    const handleSendMatch = source.indexOf("await sendMessage()");
+    // handleSend still handles the normal chat path.
+    const handleSendIndex = source.indexOf("const handleSend");
+    const handleSendMatch = source.indexOf("await sendMessage()", handleSendIndex);
     const sendSteerMatch = source.indexOf("await sendSteer()");
 
-    expect(handleSendMatch).toBeGreaterThan(-1);
+    expect(handleSendMatch).toBeGreaterThan(handleSendIndex);
     expect(sendSteerMatch).toBeGreaterThan(-1);
   });
 
@@ -72,7 +77,35 @@ describe("Goal action stack regression", () => {
     expect(goalCard).not.toContain("ExternalLink");
   });
 
-  it("keeps the mobile Goal card to one compact row with only cancel action", () => {
+  it("shows supervisor check count instead of raw continuation count on the Goal card", () => {
+    const goalCard = readSource("src/mainview/components/chat/GoalActionCard.tsx");
+
+    expect(goalCard).toContain("triggerRecords.filter((record) => record.goalId === goal.id).length");
+    expect(goalCard).toContain("status?.lastGoldResult?.goalId === goal.id");
+    expect(goalCard).toContain(
+      "Math.max(goal.continuationCount ?? 0, triggerCount, lastGoldResult ? 1 : 0)",
+    );
+    expect(goalCard).toContain("#{checkCount}");
+    expect(goalCard).not.toContain("#{goal.continuationCount}");
+  });
+
+  it("colors completed Goal entry points with the success tone", () => {
+    const attachmentButtons = readSource("src/mainview/components/chat/FileAttachment.tsx");
+    const quickActionToolbar = readSource("src/mainview/components/chat/QuickActionToolbar.tsx");
+
+    expect(attachmentButtons).toContain('if (!supervisorStatus?.goal) return "text-text-tertiary"');
+    expect(attachmentButtons).toContain('goalStatus === "complete"');
+    expect(attachmentButtons).toContain('return "text-status-success"');
+    expect(quickActionToolbar).toContain(
+      'if (!supervisorStatus?.goal) return "text-text-tertiary border border-transparent"',
+    );
+    expect(quickActionToolbar).toContain('goalStatus === "complete"');
+    expect(quickActionToolbar).toContain(
+      "text-status-success border border-status-success/40 bg-status-success/10",
+    );
+  });
+
+  it("keeps the mobile Goal card compact while exposing panel and cancel actions", () => {
     const goalCard = readSource("src/mainview/components/chat/GoalActionCard.tsx");
     const mobileStart = goalCard.indexOf("sm:hidden flex items-center");
     const desktopStart = goalCard.indexOf("hidden sm:flex items-start");
@@ -80,9 +113,22 @@ describe("Goal action stack regression", () => {
 
     expect(mobileStart).toBeGreaterThan(-1);
     expect(desktopStart).toBeGreaterThan(mobileStart);
-    expect(mobileBlock).toContain("truncate min-w-0");
+    expect(mobileBlock).toContain("min-w-0 flex-1");
+    expect(mobileBlock).toContain("text-text-tertiary truncate");
+    expect(mobileBlock).toContain("text-text-secondary truncate");
+    expect(mobileBlock).toContain("goal.state.");
+    expect(mobileBlock).toContain("{elapsed}");
+    expect(mobileBlock).toContain("#{checkCount}");
+    expect(mobileBlock).toContain("${checkSummary.done}/${checkSummary.total}");
     // 触摸目标 ≥ 44px（Apple HIG）：h-11 / min-h-11 均可
     expect(mobileBlock).toMatch(/h-11|min-h-11/);
+    expect(mobileBlock).toContain("openGoalPanel");
+    expect(mobileBlock).toContain("handleClearGoal");
+    expect(mobileBlock).toContain("<MoreHorizontal");
+    expect(mobileBlock).toContain("<X");
+    expect(goalCard).toContain("const handleClearGoal");
+    expect(goalCard).toContain("event?.stopPropagation()");
+    expect(goalCard).toContain('clearGoal(sessionId, "user_cancelled")');
     expect(mobileBlock).not.toContain("Pencil");
     expect(mobileBlock).not.toContain("ListChecks");
   });
@@ -91,25 +137,75 @@ describe("Goal action stack regression", () => {
     const layoutTypes = readSource("src/mainview/layouts/types.ts");
     const rightSidebar = readSource("src/mainview/components/right-sidebar/RightSidebar.tsx");
     const statusPanel = readSource("src/mainview/components/status-panel/StatusPanel.tsx");
+    const supervisorPanel = readSource("src/mainview/components/supervisor-panel/SupervisorPanel.tsx");
     const goalCard = readSource("src/mainview/components/chat/GoalActionCard.tsx");
+    const zh = readSource("src/mainview/locales/zh-CN/chat.json");
+    const en = readSource("src/mainview/locales/en/chat.json");
 
-    expect(layoutTypes).toContain('{ id: "status", label: "Goal" }');
-    expect(rightSidebar).toContain("status: Target");
-    expect(statusPanel).toContain('t("supervisor.goldRecords")');
-    expect(statusPanel).toContain('t("supervisor.gold.empty")');
-    expect(goalCard).toContain('openStatusPanel("status")');
-    expect(goalCard).toContain('expandStatusSection("supervisor")');
+    expect(layoutTypes).toContain('{ id: "status", label: "状态" }');
+    expect(layoutTypes).toContain('{ id: "supervisor", label: "守护" }');
+    expect(rightSidebar).toContain("supervisor: ShieldCheck");
+    expect(statusPanel).not.toContain('id === "supervisor"');
+    expect(supervisorPanel).toContain('t("supervisor.goldRecords")');
+    expect(supervisorPanel).toContain('t("supervisor.gold.empty")');
+    expect(goalCard).toContain("event?.stopPropagation()");
+    expect(goalCard).toContain('openStatusPanel("supervisor")');
+    expect(goalCard).not.toContain('expandStatusSection("supervisor")');
+    expect(zh).toContain('"goal.openPanel": "打开守护面板"');
+    expect(en).toContain('"goal.openPanel": "Open supervisor panel"');
   });
 
   it("separates Goal status labels from enable and disable actions", () => {
-    const statusPanel = readSource("src/mainview/components/status-panel/StatusPanel.tsx");
+    const supervisorPanel = readSource("src/mainview/components/supervisor-panel/SupervisorPanel.tsx");
     const zh = readSource("src/mainview/locales/zh-CN/status.json");
 
-    expect(statusPanel).toContain('t("supervisor.runtimeState")');
-    expect(statusPanel).toContain('t("supervisor.switchState")');
-    expect(statusPanel).toContain('t("supervisor.action.enable")');
-    expect(statusPanel).toContain('t("supervisor.action.disable")');
-    expect(zh).toContain('"supervisor.action.enable": "启用 Goal"');
-    expect(zh).toContain('"supervisor.action.disable": "禁用 Goal"');
+    expect(supervisorPanel).toContain('t("supervisor.runtimeState")');
+    expect(supervisorPanel).toContain('t("supervisor.action.enable")');
+    expect(supervisorPanel).toContain('t("supervisor.action.disable")');
+    expect(zh).toContain('"supervisor.action.enable": "启用守护"');
+    expect(zh).toContain('"supervisor.action.disable": "禁用守护"');
+  });
+
+  it("maps supervisor guard protocol names to user-facing labels", () => {
+    const supervisorPanel = readSource("src/mainview/components/supervisor-panel/SupervisorPanel.tsx");
+    const zh = readSource("src/mainview/locales/zh-CN/status.json");
+    const en = readSource("src/mainview/locales/en/status.json");
+    const supervisorTypes = readSource("src/shared/modules/supervisor.ts");
+
+    expect(supervisorPanel).toContain("KNOWN_GUARD_KEYS");
+    expect(supervisorPanel).toContain('"incomplete-keywords": "incompleteKeywords"');
+    expect(supervisorPanel).toContain("getGuardLabel(t, g.guardName)");
+    expect(supervisorPanel).toContain("getGuardLabel(t, g)");
+    expect(supervisorPanel).toContain("getGuardLabel(t, tr.guardName)");
+    expect(supervisorPanel).toContain("getGuardExecutionLabel");
+    expect(supervisorPanel).toContain('t("supervisor.trigger.model")');
+    expect(supervisorTypes).toContain("model?: string");
+    expect(zh).toContain('"supervisor.continueCount": "自动续执行次数"');
+    expect(zh).toContain('"supervisor.activeGuards": "活跃检查项"');
+    expect(zh).toContain('"supervisor.guard.incompleteKeywords.label": "未完成标记检查"');
+    expect(zh).toContain('"supervisor.guardExecution.keyword": "本地规则"');
+    expect(en).toContain('"supervisor.continueCount": "Auto-continue count"');
+    expect(en).toContain('"supervisor.activeGuards": "Active checks"');
+    expect(en).toContain('"supervisor.guard.incompleteKeywords.label": "Incomplete marker check"');
+    expect(en).toContain('"supervisor.guardExecution.keyword": "Local rule"');
+  });
+
+  it("loads the full supervisor snapshot on startup and reconnect", () => {
+    const initialState = readSource("src/mainview/stores/session-initial-state.ts");
+    const subscriptions = readSource("src/mainview/stores/session-subscriptions.ts");
+    const supervisorStore = readSource("src/mainview/stores/use-supervisor-store.ts");
+
+    expect(initialState).toContain("supervisorStore.fetchStatus(sessionId)");
+    expect(initialState).toContain("supervisorStore.fetchTaskReport(sessionId)");
+    expect(initialState).toContain("supervisorStore.fetchTriggerHistory(sessionId, 50)");
+
+    expect(subscriptions).toContain("supervisorStore.fetchStatus(id)");
+    expect(subscriptions).toContain("supervisorStore.fetchTaskReport(id)");
+    expect(subscriptions).toContain("supervisorStore.fetchTriggerHistory(id, 50)");
+
+    expect(supervisorStore).toContain("function mergeTriggerRecords");
+    expect(supervisorStore).toContain("byKey.set(String(record.seq), record)");
+    expect(supervisorStore).toContain("mergeTriggerRecords(session.triggerRecords, result.triggers)");
+    expect(supervisorStore).toContain("mergeTriggerRecords(session.triggerRecords, [event.record])");
   });
 });

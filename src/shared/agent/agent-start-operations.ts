@@ -10,7 +10,6 @@ const perfLog = createLogger("session-perf");
 
 export interface StartManagedClient {
   client: ChannelRegistrableClient & {
-    switchSession(sessionPath: string): Promise<{ cancelled: boolean }>;
     stop(): Promise<void>;
     onEvent(handler: (event: unknown) => void): () => void;
   };
@@ -57,7 +56,7 @@ export async function startAgentClientOperation<TManaged extends StartManagedCli
   acquireStartLock?: (sessionId: string) => Promise<boolean>;
   releaseStartLock?: () => void;
   drainPendingDelegates?: () => void;
-}): Promise<{ agentId: string; status: "started" | "already_running" | "switched" }> {
+}): Promise<{ agentId: string; status: "started" | "already_running" }> {
   const tStart = performance.now();
   const now = options.now ?? Date.now;
 
@@ -78,71 +77,6 @@ export async function startAgentClientOperation<TManaged extends StartManagedCli
       existing.lastActiveAt = now();
       options.drainPendingDelegates?.();
       return { agentId: options.sessionId, status: "already_running" };
-    }
-
-    // 复用进程池：仅当未要求 forceNewProcess 时才尝试 switchSession
-    const forceNew = options.startOptions?.forceNewProcess === true;
-    if (!forceNew) {
-      const reusePoolKey = options.getPoolKey(options.projectPath, options.startOptions?.userId);
-      const pool = options.processByCwd.get(reusePoolKey);
-      if (pool && pool.size > 0) {
-      const pooled = [...pool][pool.size - 1];
-      const oldSessionId = pooled._activeSessionId;
-      const tSwitch = performance.now();
-      try {
-        perfLog.info("[start] reusing pooled process", {
-          sessionId: options.sessionId,
-          projectPath: options.projectPath,
-          oldSessionId,
-        });
-        const result = await Promise.race([
-          pooled.client.switchSession(options.sessionPath),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error("switchSession timed out after 15s")), 15000),
-          ),
-        ]);
-        if (!result.cancelled) {
-          options.clients.delete(oldSessionId);
-          pooled._activeSessionId = options.sessionId;
-          pooled.info = {
-            sessionId: options.sessionId,
-            projectPath: options.projectPath,
-            sessionPath: options.sessionPath,
-            status: "idle",
-          };
-          options.clients.set(options.sessionId, pooled);
-          options.sessionPaths.set(options.sessionId, options.sessionPath);
-          options.sessionProjectPaths.set(options.sessionId, options.projectPath);
-          perfLog.info("[start] switchSession done", {
-            sessionId: options.sessionId,
-            oldSessionId,
-            totalMs: Math.round(performance.now() - tSwitch),
-          });
-          return { agentId: options.sessionId, status: "switched" };
-        }
-        perfLog.info("[start] switchSession cancelled by extension, creating new process");
-      } catch (err: unknown) {
-        const switchMs = Math.round(performance.now() - tSwitch);
-        perfLog.info("[start] switchSession failed, killing pooled process", {
-          sessionId: options.sessionId,
-          oldSessionId,
-          switchMs,
-          error: err instanceof Error ? err.message : String(err),
-        });
-        options.processByCwd.delete(options.projectPath);
-        options.clients.delete(oldSessionId);
-        try {
-          pooled.unsubscribe();
-        } catch (e) {
-          log.debug("start: failed to unsubscribe old pooled process", { error: String(e) });
-        }
-        try {
-          await pooled.client.stop();
-        } catch (e) {
-          log.debug("start: failed to stop old pooled process client", { error: String(e) });
-        }
-      }
-      }
     }
 
     const poolKey = options.getPoolKey(options.projectPath, options.startOptions?.userId);

@@ -6,7 +6,7 @@ import {
   Image as ImageIcon,
   AtSign,
   Slash,
-  Bot,
+  Wrench,
   File,
   Folder,
   Loader2,
@@ -53,7 +53,7 @@ interface PopupItem {
   id: string;
   label: string;
   description?: string;
-  icon: "bot" | "file" | "folder" | "sparkles" | "puzzle" | "filetext" | "brain" | "book";
+  icon: "tool" | "file" | "folder" | "sparkles" | "puzzle" | "filetext" | "brain" | "book";
   accentColor: string;
   insertText: string;
   isFolder?: boolean;
@@ -89,6 +89,20 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
   const supervisorStatus = useSupervisorStore(
     (s) => (activeSessionId ? s.bySession[activeSessionId]?.status : null) ?? null,
   );
+  const goalStatus = supervisorStatus?.goal?.status;
+  const goalButtonClass = (() => {
+    if (!supervisorStatus?.goal) return "text-text-tertiary border border-transparent";
+    if (goalStatus === "complete") {
+      return "text-status-success border border-status-success/40 bg-status-success/10";
+    }
+    if (goalStatus === "blocked" || goalStatus === "needs_user") {
+      return "text-status-warning border border-status-warning/40 bg-status-warning/10";
+    }
+    if (supervisorStatus.goal) {
+      return "text-semantic-accent border border-semantic-accent/40 bg-semantic-accent/10";
+    }
+    return "text-text-tertiary border border-transparent";
+  })();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -168,7 +182,7 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
             id: `tool-${ext.path}-${toolName}`,
             label: toolName,
             description: ext.path,
-            icon: "bot",
+            icon: "tool",
             accentColor: "text-semantic-agent",
             insertText: `@${toolName}`,
           });
@@ -462,8 +476,8 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
 
   const renderIcon = (icon: PopupItem["icon"]) => {
     switch (icon) {
-      case "bot":
-        return <Bot className="w-4 h-4" />;
+      case "tool":
+        return <Wrench className="w-4 h-4" />;
       case "file":
         return <File className="w-4 h-4" />;
       case "folder":
@@ -555,19 +569,10 @@ export function QuickActionToolbar({ onGoalClick }: { onGoalClick?: () => void }
                 onGoalClick();
                 return;
               }
-              openStatusPanel("status");
+              openStatusPanel("supervisor");
             }}
             className={`px-2 py-1 rounded-md text-xs font-medium hover:bg-surface-dim dark:hover:bg-surface-dim transition-colors ${
-              !supervisorStatus?.enabled
-                ? "text-semantic-accent border border-semantic-accent/30"
-                : supervisorStatus.goal
-                  ? "text-semantic-accent border border-semantic-accent/40 bg-semantic-accent/10"
-                  : supervisorStatus.state === "paused"
-                    ? "text-semantic-notify"
-                    : supervisorStatus.state === "checking" ||
-                        supervisorStatus.state === "continuing"
-                      ? "text-status-info animate-pulse"
-                      : "text-status-success"
+              goalButtonClass
             }`}
             title={t("goal.entry")}
             aria-label={t("goal.entry")}

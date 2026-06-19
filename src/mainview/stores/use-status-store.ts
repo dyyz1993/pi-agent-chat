@@ -12,8 +12,7 @@ export type StatusSection =
   | "mcp"
   | "lsp"
   | "plugins"
-  | "skills"
-  | "supervisor";
+  | "skills";
 
 export type PluginScope = "global" | "project";
 

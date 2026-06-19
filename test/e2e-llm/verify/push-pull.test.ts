@@ -315,11 +315,8 @@ describe.skipIf(shouldRun === false)("Reconnect Data Pull Verification", () => {
       console.log("[PASS] Reconnect agent.start:", startResult.status);
       expect(["started", "already_running"]).toContain(startResult.status);
 
-      if (startResult.status === "already_running") {
-        const replayResp = await sendRPC(ws2, "agent.replayHoldEvents", { sessionId });
-        const replayResult = replayResp.result as Record<string, unknown>;
-        console.log("[PASS] replayHoldEvents:", replayResult.replayed, "events");
-      }
+      // Note: agent.replayHoldEvents was removed; agent.start already replays
+      // in-memory state for reconnect scenarios.
     } finally {
       ws2.close();
     }

@@ -4,8 +4,8 @@
  * 场景4：Coordinator 子任务场景
  *
  * 验证内容：
- * 1. 各种 coordinator 工具（delegate/fork/status/stop/remove/clear）在 SideNav 中有正确图标
- * 2. coordinator details 结构解析（sessionId/status/task/title）
+ * 1. 各种 coordinator 工具（delegate/fork/status/stop/remove/clear）有正确图标映射
+ * 2. SideNav 主轴保持消息级粒度，不把工具块混入滚动导航
  * 3. 子任务工具在消息列表中的渲染不崩溃
  * 4. 混合场景：正常工具 + coordinator 工具在同一条消息中
  * 5. subagent 工具的特殊颜色
@@ -79,17 +79,18 @@ describe("Coordinator — tool icon mapping", () => {
 });
 
 describe("Coordinator — SideNav rendering with coordinator tools", () => {
-  it("delegate tool produces correct nav item", () => {
+  it("delegate tool produces a message item plus delegate block item", () => {
     const messages = [assistantWithTools("msg-1", [{ name: "session_delegate", status: "done" }])];
     const items = buildFlatItems(messages, false);
 
-    // Should have: Bot icon + text block + delegate tool = 3 items
-    expect(items.length).toBe(3);
-    const toolItem = items.find((i) => i.icon.displayName === "UserPlus");
-    expect(toolItem).toBeTruthy();
+    expect(items).toHaveLength(3);
+    expect(items[0].navId).toBe("msg-1");
+    expect(items[0].blockId).toBeUndefined();
+    expect(items[2].blockId).toBe("msg-1-1");
+    expect(items[2].icon.displayName).toBe("UserPlus");
   });
 
-  it("multiple coordinator tools in same message", () => {
+  it("multiple coordinator tools in same message are flattened as distinct block nav items", () => {
     const messages = [
       assistantWithTools("msg-1", [
         { name: "session_delegate", status: "done" },
@@ -99,13 +100,13 @@ describe("Coordinator — SideNav rendering with coordinator tools", () => {
     ];
     const items = buildFlatItems(messages, false);
 
-    // Bot + text + 3 tools = 5
-    expect(items.length).toBe(5);
-
-    const icons = items.map((i) => i.icon.displayName);
-    expect(icons).toContain("UserPlus");
-    expect(icons).toContain("Activity");
-    expect(icons).toContain("OctagonPause");
+    expect(items).toHaveLength(5);
+    expect(items.map((item) => item.blockId).filter(Boolean)).toEqual([
+      "msg-1-0",
+      "msg-1-1",
+      "msg-1-2",
+      "msg-1-3",
+    ]);
   });
 
   it("coordinator tool with details (sessionId, task) renders without crash", () => {
@@ -157,11 +158,8 @@ describe("Coordinator — mixed scenario (normal + coordinator + error)", () => 
     // All items should be red (because bash failed)
     expect(items.every((i) => i.color === "text-status-error")).toBe(true);
 
-    // But icons should still be distinct
-    const icons = items.map((i) => i.icon.displayName);
-    expect(icons).toContain("Eye"); // read
-    expect(icons).toContain("UserPlus"); // delegate
-    expect(icons).toContain("Terminal"); // bash
+    expect(items).toHaveLength(5);
+    expect(items[0].navId).toBe("msg-1");
   });
 
   it("fork then delegate sequence", () => {
@@ -173,16 +171,14 @@ describe("Coordinator — mixed scenario (normal + coordinator + error)", () => 
 
     const items = buildFlatItems(messages, false);
 
-    // Each message: Bot + text + 1 tool = 3 items × 3 messages = 9
-    expect(items.length).toBe(9);
-
-    // Verify fork comes before delegate before status
-    const iconNames = items.map((i) => i.icon.displayName);
-    const forkIdx = iconNames.indexOf("GitFork");
-    const delegateIdx = iconNames.indexOf("UserPlus");
-    const statusIdx = iconNames.indexOf("Activity");
-
-    expect(forkIdx).toBeLessThan(delegateIdx);
-    expect(delegateIdx).toBeLessThan(statusIdx);
+    expect(items).toHaveLength(9);
+    expect(items.filter((item) => !item.blockId).map((item) => item.navId)).toEqual([
+      "msg-1",
+      "msg-2",
+      "msg-3",
+    ]);
+    expect(items.filter((item) => item.blockId && item.icon.displayName === "GitFork")).toHaveLength(1);
+    expect(items.filter((item) => item.blockId && item.icon.displayName === "UserPlus")).toHaveLength(1);
+    expect(items.filter((item) => item.blockId && item.icon.displayName === "Activity")).toHaveLength(1);
   });
 });

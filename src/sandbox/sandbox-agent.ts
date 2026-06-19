@@ -14,6 +14,7 @@ import {
   constants,
 } from "fs";
 import { join, basename as pathBasename, dirname } from "path";
+import { getMimeType } from "../gateway/mime";
 
 const PORT = parseInt(process.argv.find((a) => a.startsWith("--port="))?.split("=")[1] ?? "3101");
 const CLI_PATH =
@@ -453,22 +454,8 @@ const server = createServer(async (req, res) => {
         return;
       }
       const ext = filePath.lastIndexOf(".");
-      const mimeType: Record<string, string> = {
-        ".html": "text/html",
-        ".css": "text/css",
-        ".js": "application/javascript",
-        ".json": "application/json",
-        ".png": "image/png",
-        ".jpg": "image/jpeg",
-        ".svg": "image/svg+xml",
-        ".pdf": "application/pdf",
-        ".txt": "text/plain",
-        ".md": "text/markdown",
-      };
       const ct =
-        ext >= 0
-          ? (mimeType[filePath.slice(ext)] ?? "application/octet-stream")
-          : "application/octet-stream";
+        ext >= 0 ? getMimeType(filePath.slice(ext)) : "application/octet-stream";
       const range = req.headers["range"];
       const data = readFileSync(filePath);
       if (range) {

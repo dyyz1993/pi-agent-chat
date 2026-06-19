@@ -38,6 +38,7 @@ export async function stopAgentClientOperation<TManaged extends StopManagedClien
   parentChildMap: DelegateChildMap;
   delegateCreatedAt: Map<string, number>;
   delegateReplyCount: Map<string, number>;
+  delegateRepliedSessions: Set<string>;
   syncDelegateResolvers: Map<string, SyncDelegateResolver>;
   subagentSyncChildren: Set<string>;
   syncDelegateLastText: Map<string, string>;
@@ -68,6 +69,7 @@ export async function stopAgentClientOperation<TManaged extends StopManagedClien
     parentChildMap: options.parentChildMap,
     delegateCreatedAt: options.delegateCreatedAt,
     delegateReplyCount: options.delegateReplyCount,
+    delegateRepliedSessions: options.delegateRepliedSessions,
     syncDelegateResolvers: options.syncDelegateResolvers,
     subagentSyncChildren: options.subagentSyncChildren,
     syncDelegateLastText: options.syncDelegateLastText,

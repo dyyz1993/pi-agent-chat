@@ -2,7 +2,7 @@
  * 验证测试：历史消息加载 & 压缩标识显示
  *
  * 验证四个关键问题的修复：
- * 1. memory customEntries 同步到 memory store，但不进入 chat messages
+ * 1. memory customEntries 同步到 memory store，并进入 chat messages 由显示开关控制
  * 2. loadMoreMessages 正确递增 historyLoadVersion
  * 3. compactionSummary 空 summary 不再被丢弃
  * 4. loadMoreMessages 使用服务端返回的 hasMore
@@ -83,10 +83,10 @@ beforeEach(() => {
 });
 
 // ============================================================
-// 修复 1: memory customEntries 不污染 chat messages
+// 修复 1: memory customEntries 进入 chat messages，并由显示开关控制可见性
 // ============================================================
 describe("FIX: loadMoreMessages 处理 customEntries", () => {
-  it("loadSessionMessages 同步 memory customEntries 到 memory store，不加入 chat messages", async () => {
+  it("loadSessionMessages 同步 memory customEntries 到 memory store，并加入 chat messages", async () => {
     const sessionId = "sess-history";
 
     mockedCall.mockResolvedValue({
@@ -114,8 +114,8 @@ describe("FIX: loadMoreMessages 处理 customEntries", () => {
     await useChatStore.getState().loadSessionMessages(sessionId);
 
     const msgs = useChatStore.getState().messagesBySession[sessionId] ?? [];
-    expect(msgs).toHaveLength(2);
-    expect(msgs.some((m) => m.role === "custom")).toBe(false);
+    expect(msgs).toHaveLength(3);
+    expect(msgs.some((m) => m.role === "custom" && m.id === "ce-1")).toBe(true);
     expect(memoryStoreMock.clearSession).toHaveBeenCalledWith(sessionId);
     expect(memoryStoreMock.addEvent).toHaveBeenCalledWith(
       sessionId,

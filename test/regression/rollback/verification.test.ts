@@ -372,7 +372,7 @@ describe("回滚后 historyLoadVersion", () => {
 // 场景 6: 回滚后 customEntries 也正确过滤
 // ============================================================
 describe("回滚后 customEntries 过滤", () => {
-  it("回滚后 memory customEntries 只同步当前分支，且不加入 chat messages", async () => {
+  it("回滚后 memory customEntries 只同步当前分支，并加入 chat messages", async () => {
     const sessionId = "sess-custom-rollback";
 
     mockedCall.mockResolvedValueOnce({
@@ -400,7 +400,7 @@ describe("回滚后 customEntries 过滤", () => {
     const customCount = allMsgs.filter(
       (m) => Array.isArray(m.content) && m.content.some((b) => b.type === "custom"),
     ).length;
-    expect(customCount).toBe(0);
+    expect(customCount).toBe(2);
     expect(memoryStoreMock.clearSession).toHaveBeenCalledWith(sessionId);
     expect(memoryStoreMock.addEvent).toHaveBeenCalledTimes(2);
 
@@ -423,7 +423,8 @@ describe("回滚后 customEntries 过滤", () => {
     const customMsgs = msgs.filter(
       (m) => Array.isArray(m.content) && m.content.some((b) => b.type === "custom"),
     );
-    expect(customMsgs).toHaveLength(0);
+    expect(customMsgs).toHaveLength(1);
+    expect(customMsgs[0].id).toBe("ce-1");
     expect(memoryStoreMock.clearSession).toHaveBeenCalledTimes(2);
     expect(memoryStoreMock.addEvent).toHaveBeenLastCalledWith(
       sessionId,

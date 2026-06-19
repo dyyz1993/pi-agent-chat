@@ -10,14 +10,11 @@ import {
   steerOperation,
 } from "../../../src/shared/agent/agent-client-lifecycle-operations";
 
-function flushMicrotasks(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0));
-}
-
 describe("agent client lifecycle operations", () => {
   it("sends prompts after ensuring a managed client", async () => {
     const managed = {
       client: { prompt: vi.fn().mockResolvedValue(undefined) },
+      info: { status: "idle" },
       lastActiveAt: 0,
     };
 
@@ -38,24 +35,48 @@ describe("agent client lifecycle operations", () => {
     expect(managed.lastActiveAt).toBe(123);
   });
 
+  it("rejects ordinary prompts while a client is streaming", async () => {
+    const managed = {
+      client: { prompt: vi.fn().mockResolvedValue(undefined) },
+      info: { status: "streaming" },
+      lastActiveAt: 0,
+    };
+
+    await expect(
+      sendPromptOperation({
+        sessionId: "sess-1",
+        content: "hello",
+        getActiveManaged: () => managed,
+        ensureManagedClient: vi.fn(),
+        isClientAlive: vi.fn(),
+        cleanupDeadClient: vi.fn(),
+        emitAgentEnd: vi.fn(),
+      }),
+    ).rejects.toThrow(/follow-up or steer/);
+
+    expect(managed.client.prompt).not.toHaveBeenCalled();
+  });
+
   it("cleans up dead clients when prompt rejects and health check fails", async () => {
     const managed = {
       client: { prompt: vi.fn().mockRejectedValue(new Error("provider timeout")) },
+      info: { status: "idle" },
       lastActiveAt: 0,
     };
     const cleanupDeadClient = vi.fn();
     const emitAgentEnd = vi.fn();
 
-    await sendPromptOperation({
-      sessionId: "sess-1",
-      content: "hello",
-      getActiveManaged: () => managed,
-      ensureManagedClient: vi.fn(),
-      isClientAlive: vi.fn().mockResolvedValue(false),
-      cleanupDeadClient,
-      emitAgentEnd,
-    });
-    await flushMicrotasks();
+    await expect(
+      sendPromptOperation({
+        sessionId: "sess-1",
+        content: "hello",
+        getActiveManaged: () => managed,
+        ensureManagedClient: vi.fn(),
+        isClientAlive: vi.fn().mockResolvedValue(false),
+        cleanupDeadClient,
+        emitAgentEnd,
+      }),
+    ).rejects.toThrow("provider timeout");
 
     expect(cleanupDeadClient).toHaveBeenCalledWith(
       "sess-1",
@@ -67,20 +88,22 @@ describe("agent client lifecycle operations", () => {
   it("emits agent_end after prompt rejects when the client is still alive", async () => {
     const managed = {
       client: { prompt: vi.fn().mockRejectedValue(new Error("transient")) },
+      info: { status: "idle" },
       lastActiveAt: 0,
     };
     const emitAgentEnd = vi.fn().mockResolvedValue(undefined);
 
-    await sendPromptOperation({
-      sessionId: "sess-1",
-      content: "hello",
-      getActiveManaged: () => managed,
-      ensureManagedClient: vi.fn(),
-      isClientAlive: vi.fn().mockResolvedValue(true),
-      cleanupDeadClient: vi.fn(),
-      emitAgentEnd,
-    });
-    await flushMicrotasks();
+    await expect(
+      sendPromptOperation({
+        sessionId: "sess-1",
+        content: "hello",
+        getActiveManaged: () => managed,
+        ensureManagedClient: vi.fn(),
+        isClientAlive: vi.fn().mockResolvedValue(true),
+        cleanupDeadClient: vi.fn(),
+        emitAgentEnd,
+      }),
+    ).rejects.toThrow("transient");
 
     expect(emitAgentEnd).toHaveBeenCalledWith("sess-1");
   });

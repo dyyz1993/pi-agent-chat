@@ -363,7 +363,7 @@ describe_("RpcClient Integration Tests", () => {
       expect(textBeforeDisconnect.length).toBeGreaterThan(10);
     }, 60000);
 
-    it("should reconnect, get messages, and replay hold events", async () => {
+    it("should reconnect, get messages, and verify no stale events", async () => {
       safeClose(ws);
       ws = undefined;
 
@@ -410,9 +410,9 @@ describe_("RpcClient Integration Tests", () => {
         };
         ws2.on("message", replayHandler);
 
-        const replayResp = await sendRPC(ws2, "agent.replayHoldEvents", { sessionId: sessionId! });
-        expect((replayResp.result as { replayed: number }).replayed).toBeGreaterThanOrEqual(0);
-
+        // Note: agent.replayHoldEvents was removed; agent.start already replays
+        // in-memory state for reconnect scenarios. We keep the listener to
+        // verify no stale message_update events arrive after reconnect.
         await new Promise((r) => setTimeout(r, 2000));
         ws2.off("message", replayHandler);
 
@@ -532,7 +532,9 @@ describe_("RpcClient Integration Tests", () => {
         };
         ws2.on("message", replayHandler);
 
-        await sendRPC(ws2, "agent.replayHoldEvents", { sessionId: sessionId! });
+        // Note: agent.replayHoldEvents was removed; agent.start already replays
+        // in-memory state, so the following wait simply observes the live event
+        // stream after reconnect to detect any duplicate message_update.
         await new Promise((r) => setTimeout(r, 2000));
         ws2.off("message", replayHandler);
 

@@ -88,10 +88,12 @@ export function clearDelegateTracking(
   delegateCreatedAt: Map<string, number>,
   delegateReplyCount: Map<string, number>,
   sessionId: string,
+  delegateRepliedSessions?: Set<string>,
 ): boolean {
   const hadCreatedAt = delegateCreatedAt.delete(sessionId);
   const hadReplyCount = delegateReplyCount.delete(sessionId);
-  return hadCreatedAt || hadReplyCount;
+  const hadReplied = delegateRepliedSessions?.delete(sessionId) ?? false;
+  return hadCreatedAt || hadReplyCount || hadReplied;
 }
 
 export function cleanupStoppedDelegateSession(options: {
@@ -99,13 +101,19 @@ export function cleanupStoppedDelegateSession(options: {
   parentChildMap: DelegateChildMap;
   delegateCreatedAt: Map<string, number>;
   delegateReplyCount: Map<string, number>;
+  delegateRepliedSessions?: Set<string>;
   syncDelegateResolvers: Map<string, SyncDelegateResolver>;
   subagentSyncChildren: SyncChildRegistry;
   syncDelegateLastText: Map<string, string>;
 }): { childSessionIds: string[]; resolvedSyncDelegate: boolean } {
   const childSessionIds = popDelegateChildren(options.parentChildMap, options.sessionId);
   removeSessionFromAllParents(options.parentChildMap, options.sessionId);
-  clearDelegateTracking(options.delegateCreatedAt, options.delegateReplyCount, options.sessionId);
+  clearDelegateTracking(
+    options.delegateCreatedAt,
+    options.delegateReplyCount,
+    options.sessionId,
+    options.delegateRepliedSessions,
+  );
 
   const syncResolver = options.syncDelegateResolvers.get(options.sessionId);
   if (!syncResolver) {

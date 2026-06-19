@@ -97,6 +97,9 @@ describe("coordinator delegate utils", () => {
     });
     expect(JSON.parse(delegateLine)).toMatchObject({
       type: "delegate_info",
+      id: "delegate_info",
+      parentId: null,
+      timestamp: "2026-06-05T00:00:00.000Z",
       delegateParentSessionId: "sess_parent",
       delegateType: "subagent",
       createdAt: 123,
@@ -135,6 +138,24 @@ describe("coordinator delegate utils", () => {
         projectPath: "/repo/pi-agent-chat",
       }),
     ).toContain(`- 你的会话 ID: sess_child`);
+    expect(
+      buildCoordinatorDelegatePrompt({
+        newSessionId: "sess_child",
+        parentSessionId: "sess_parent",
+        title: "指派: 检查 hooks",
+        task: "检查 hooks",
+        projectPath: "/repo/pi-agent-chat",
+      }),
+    ).toContain("委派方不会轮询你的状态");
+    expect(
+      buildCoordinatorDelegatePrompt({
+        newSessionId: "sess_child",
+        parentSessionId: "sess_parent",
+        title: "指派: 检查 hooks",
+        task: "检查 hooks",
+        projectPath: "/repo/pi-agent-chat",
+      }),
+    ).toContain("最终结果发送成功后");
 
     expect(
       buildSyncDelegatePrompt({
@@ -147,6 +168,7 @@ describe("coordinator delegate utils", () => {
 
     expect(
       wrapDelegateReply({
+        sourceSessionId: "sess_child",
         targetSessionId: "sess_child",
         title: "子任务",
         sequence: 2,
@@ -156,7 +178,7 @@ describe("coordinator delegate utils", () => {
       }),
     ).toBe(
       [
-        `<delegate-reply from="sess_child" title="子任务" sequence="2" createdAt="123" elapsed="5s" historyCount="2">`,
+        `<delegate-reply from="sess_child" sessionId="sess_child" targetSessionId="sess_child" title="子任务" sequence="2" createdAt="123" elapsed="5s" historyCount="2">`,
         "完成",
         `</delegate-reply>`,
       ].join("\n"),
@@ -197,6 +219,7 @@ describe("coordinator delegate utils", () => {
 
   it("formats delegate reply elapsed time in seconds or minutes", () => {
     expect(formatDelegateElapsed(1_000, 16_000)).toBe("15s");
+    expect(formatDelegateElapsed(1_000, 1_200)).toBe("1s");
     expect(formatDelegateElapsed(1_000, 122_000)).toBe("2m");
     expect(formatDelegateElapsed(20_000, 10_000)).toBe("0s");
   });

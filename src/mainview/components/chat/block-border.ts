@@ -1,5 +1,6 @@
 import type { ContentBlock } from "../../types";
 import { LSP_CUSTOM_TYPES_SET } from "./lsp-constants";
+import { isBashBackgroundProcessType } from "./bash-background-process";
 
 export function getBlockBorderColor(block: ContentBlock, role: "user" | "assistant"): string {
   const roleDefault = role === "user" ? "border-l-status-info/60" : "border-l-status-success/60";
@@ -32,6 +33,7 @@ export function getBlockBorderColor(block: ContentBlock, role: "user" | "assista
       if (ct === "memory_created") return "border-l-semantic-memory/50 dark:border-l-semantic-memory/60";
       if (ct === "memory_failed") return "border-l-status-error/50 dark:border-l-status-error/60";
       if (ct === "step_snapshot") return "border-l-semantic-accent/50 dark:border-l-semantic-accent/60";
+      if (isBashBackgroundProcessType(ct)) return "border-l-semantic-tool/50 dark:border-l-semantic-tool/60";
       return roleDefault;
     }
     case "compactionSummary":

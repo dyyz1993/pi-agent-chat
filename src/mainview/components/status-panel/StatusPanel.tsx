@@ -1,5 +1,4 @@
 import { useState, useCallback } from "react";
-import type { SupervisorStatus, TaskReport, TriggerRecord } from "../../../shared/modules/supervisor";
 import {
   ChevronDown,
   ChevronRight,
@@ -19,22 +18,19 @@ import {
   Copy,
   Check,
   RotateCw,
-  Shield,
-  Play,
-  Pause,
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
 import { useStatusStore, type MCPServerInfo } from "../../stores/use-status-store";
 import { useSessionStore } from "../../stores/use-session-store";
+import { useSessionTodoStore } from "../../stores/use-session-todo-store";
+import type { TodoPriority } from "../../stores/use-session-todo-store";
 import { useSubagentStore } from "../../stores/use-subagent-store";
 import { useLspStore } from "../../stores/use-lsp-store";
 import { useBashStore } from "../../stores/use-bash-store";
-import { useSupervisorStore } from "../../stores/use-supervisor-store";
 import { BashProcessCard, LogViewer } from "../bash-panel/BashPanel";
 import type { LspDiagnosticsMode } from "../../../shared/modules/lsp";
 import type { StatusSection } from "../../stores/use-status-store";
-import type { TodoPriority } from "../../stores/use-session-store";
 import { useClipboard } from "../chat/preview/use-clipboard";
 import type { PluginInfo } from "../../stores/use-status-store";
 import { formatFilePath } from "../../lib/format-path";
@@ -83,7 +79,7 @@ export function StatusPanel() {
   const expandedSkill = useStatusStore((s) => s.expandedSkill);
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const activeSubId = useSubagentStore((s) => s.activeSubsessionId);
-  const todosBySession = useSessionStore((s) => s.todosBySession);
+  const todosBySession = useSessionTodoStore((s) => s.todosBySession);
   const allProcesses = useBashStore(useShallow((s) => s.processesBySession[activeSessionId ?? ""]));
   const backgroundedIds = useBashStore((s) => s.backgroundedIds);
   const [logViewer, setLogViewer] = useState<{ logPath: string; toolCallId: string } | null>(null);
@@ -99,11 +95,6 @@ export function StatusPanel() {
   const togglePluginExpanded = useStatusStore((s) => s.togglePluginExpanded);
   const togglePluginEnabled = useStatusStore((s) => s.togglePluginEnabled);
   const sessionsByProject = useSessionStore((s) => s.sessionsByProject);
-  const supervisorStatus = useSupervisorStore(
-    (s) => (activeSessionId ? s.bySession[activeSessionId] : null) ?? null,
-  );
-  const supervisorActions = useSupervisorStore((s) => s);
-
   const backgroundProcesses = allProcesses?.filter((p) => backgroundedIds.has(p.toolCallId)) ?? [];
   const hasProcesses = backgroundProcesses.length > 0;
 
@@ -115,7 +106,6 @@ export function StatusPanel() {
     { id: "lsp", label: t("lsp"), icon: Network },
     { id: "plugins", label: t("plugins"), icon: Puzzle },
     { id: "skills", label: t("skills"), icon: BookOpen },
-    { id: "supervisor", label: t("supervisor"), icon: Shield },
   ];
 
   const [refreshing, setRefreshing] = useState(false);
@@ -558,20 +548,6 @@ export function StatusPanel() {
                       )}
                     </div>
                   )}
-                  {id === "supervisor" && (
-                    <SupervisorSectionContent
-                      status={supervisorStatus?.status ?? null}
-                      taskReports={supervisorStatus?.taskReports ?? []}
-                      triggerRecords={supervisorStatus?.triggerRecords ?? []}
-                      sessionId={activeSessionId}
-                      enable={supervisorActions.enable}
-                      disable={supervisorActions.disable}
-                      forceContinue={supervisorActions.forceContinue}
-                      requestPause={supervisorActions.requestPause}
-                      cancelPause={supervisorActions.cancelPause}
-                      fetchTriggerHistory={supervisorActions.fetchTriggerHistory}
-                    />
-                  )}
                 </div>
               )}
             </div>
@@ -734,313 +710,5 @@ function MCPCopyButton({ server }: { server: MCPServerInfo }) {
       {copied ? <Check className="w-3 h-3 text-status-success" /> : <Copy className="w-3 h-3" />}
       <span>{copied ? t("copied") : t("copyInfo")}</span>
     </button>
-  );
-}
-
-interface SupervisorSectionContentProps {
-  status: SupervisorStatus | null;
-  taskReports: TaskReport[];
-  triggerRecords: TriggerRecord[];
-  sessionId: string | null;
-  enable: (sessionId: string) => Promise<void>;
-  disable: (sessionId: string) => Promise<void>;
-  forceContinue: (sessionId: string, reason?: string) => Promise<void>;
-  requestPause: (sessionId: string, delayMs?: number, reason?: string) => Promise<void>;
-  cancelPause: (sessionId: string) => Promise<void>;
-  fetchTriggerHistory: (sessionId: string, limit?: number) => Promise<void>;
-}
-
-const STATE_STYLES: Record<string, string> = {
-  idle: "bg-status-success/20 text-status-success",
-  checking: "bg-status-info/20 text-status-info",
-  paused: "bg-status-warning/20 text-status-warning",
-  continuing: "bg-status-info/20 text-status-info",
-  disabled: "bg-text-tertiary/20 text-text-tertiary",
-};
-
-function SupervisorSectionContent({
-  status,
-  taskReports,
-  triggerRecords,
-  sessionId,
-  enable,
-  disable,
-  forceContinue,
-  requestPause,
-  cancelPause,
-  fetchTriggerHistory,
-}: SupervisorSectionContentProps) {
-  const { t } = useTranslation("status");
-  const [loading, setLoading] = useState(false);
-
-  const handleEnable = useCallback(
-    (sid: string) => {
-      setLoading(true);
-      enable(sid).finally(() => setLoading(false));
-    },
-    [enable],
-  );
-
-  if (!status) {
-    return (
-      <div className="flex items-center gap-2">
-        <span className="text-text-tertiary">
-          {t("supervisor.runtimeState")}: {t("supervisor.state.disabled")}
-        </span>
-        {sessionId && (
-          <button
-            onClick={() => handleEnable(sessionId)}
-            disabled={loading}
-            className="px-1.5 py-0.5 rounded text-[9px] bg-status-success/20 text-status-success disabled:opacity-50"
-          >
-            {loading ? "..." : t("supervisor.action.enable")}
-          </button>
-        )}
-      </div>
-    );
-  }
-
-  const stateLabel = t(`supervisor.state.${status.state}`) ?? status.state;
-
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center gap-1.5">
-        <span className="text-[9px] text-text-tertiary">{t("supervisor.runtimeState")}</span>
-        <span
-          className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${STATE_STYLES[status.state] ?? "bg-text-tertiary/20 text-text-tertiary"}`}
-        >
-          {stateLabel}
-        </span>
-        <span className="text-[9px] text-text-tertiary">{t("supervisor.switchState")}</span>
-        <span
-          className={`text-[9px] ${status.enabled ? "text-status-success" : "text-text-tertiary"}`}
-        >
-          {status.enabled ? t("supervisor.enabled") : t("supervisor.disabled")}
-        </span>
-      </div>
-
-      <div className="text-text-tertiary">
-        {t("supervisor.continueCount")}: {status.continueCount}/{status.maxContinueCount}
-      </div>
-
-      {status.goal && (
-        <div className="rounded border border-status-info/25 bg-status-info/10 px-2 py-1">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[9px] font-medium text-status-info">{t("supervisor.goal")}</span>
-            <span className="text-[9px] text-text-tertiary">
-              {t(`supervisor.goal.state.${status.goal.status}`)}
-            </span>
-          </div>
-          <div className="mt-0.5 break-words text-text-secondary">{status.goal.objective}</div>
-        </div>
-      )}
-
-      <div>
-        <span className="text-text-tertiary block mb-0.5">{t("supervisor.goldRecords")}</span>
-        {status.lastGoldResult ? (
-          <div className="rounded border border-border-primary/70 px-2 py-1">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-[9px] font-medium text-text-secondary">
-                {t("supervisor.gold")}
-              </span>
-              <span
-                className={`text-[9px] ${
-                  status.lastGoldResult.verdict === "complete"
-                    ? "text-status-success"
-                    : status.lastGoldResult.verdict === "incomplete"
-                      ? "text-status-warning"
-                      : "text-status-error"
-                }`}
-              >
-                {t(`supervisor.gold.verdict.${status.lastGoldResult.verdict}`)}
-              </span>
-            </div>
-            <div className="mt-0.5 break-words text-text-tertiary">
-              {status.lastGoldResult.reason}
-            </div>
-            {status.lastGoldResult.evidence.length > 0 && (
-              <div className="mt-1 text-[9px] text-text-tertiary">
-                {t("supervisor.gold.evidenceCount", {
-                  count: status.lastGoldResult.evidence.length,
-                })}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="rounded border border-border-primary/50 px-2 py-1 text-text-tertiary">
-            {t("supervisor.gold.empty")}
-          </div>
-        )}
-      </div>
-
-      <div>
-        <div className="flex items-center justify-between mb-0.5">
-          <span className="text-text-tertiary">{t("supervisor.triggerHistory")}</span>
-          {sessionId && (
-            <button
-              type="button"
-              className="text-[9px] text-semantic-accent hover:underline"
-              onClick={() => fetchTriggerHistory(sessionId, 50)}
-            >
-              {t("supervisor.triggerHistory.refresh")}
-            </button>
-          )}
-        </div>
-        {triggerRecords.length > 0 ? (
-          <div className="space-y-1 max-h-48 overflow-y-auto">
-            {[...triggerRecords].reverse().map((rec) => (
-              <div
-                key={rec.seq}
-                className="rounded border border-border-primary/70 px-2 py-1"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[9px] font-medium text-text-secondary">
-                    #{rec.seq}
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    {rec.durationMs != null && (
-                      <span className="text-[9px] text-text-tertiary">
-                        {(rec.durationMs / 1000).toFixed(1)}s
-                      </span>
-                    )}
-                    <span
-                      className={`text-[9px] font-medium ${
-                        rec.verdict === "complete"
-                          ? "text-status-success"
-                          : rec.verdict === "incomplete"
-                            ? "text-status-warning"
-                            : "text-status-error"
-                      }`}
-                    >
-                      {t(`supervisor.trigger.verdict.${rec.verdict}`)}
-                    </span>
-                    <span className="text-[9px] text-text-tertiary">
-                      {Math.round(rec.confidence * 100)}%
-                    </span>
-                  </div>
-                </div>
-                {rec.reason && (
-                  <div className="mt-0.5 break-words text-[9px] text-text-tertiary">
-                    {rec.reason}
-                  </div>
-                )}
-                {rec.guardResults.length > 0 && (
-                  <div className="mt-0.5 flex flex-wrap gap-0.5">
-                    {rec.guardResults.map((g, i) => (
-                      <span
-                        key={i}
-                        className={`px-1 py-px rounded text-[8px] ${
-                          g.passed
-                            ? "bg-status-success/15 text-status-success"
-                            : "bg-status-error/15 text-status-error"
-                        }`}
-                      >
-                        {g.guardName}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {rec.modelCheck && (
-                  <div className="mt-0.5 text-[9px] text-text-tertiary">
-                    {t("supervisor.trigger.modelCheck")}: {rec.modelCheck.passed ? "✓" : "✗"} ({(rec.modelCheck.durationMs ?? 0) / 1000}s)
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="rounded border border-border-primary/50 px-2 py-1 text-text-tertiary">
-            {t("supervisor.triggerHistory.empty")}
-          </div>
-        )}
-      </div>
-
-      {status.activeGuards.length > 0 && (
-        <div>
-          <span className="text-text-tertiary block mb-0.5">{t("supervisor.activeGuards")}</span>
-          <div className="flex flex-wrap gap-1">
-            {status.activeGuards.map((g) => (
-              <span
-                key={g}
-                className="px-1 py-px rounded text-[9px] bg-semantic-tool/15 text-semantic-tool"
-              >
-                {g}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {taskReports.length > 0 && (
-        <div>
-          <span className="text-text-tertiary block mb-0.5">{t("supervisor.taskReport")}</span>
-          <div className="space-y-0.5">
-            {taskReports.map((tr) => (
-              <div key={tr.guardName} className="flex items-center gap-1">
-                <span
-                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                    tr.status === "completed"
-                      ? "bg-status-success"
-                      : tr.status === "error"
-                        ? "bg-status-error"
-                        : tr.status === "incomplete"
-                          ? "bg-status-warning"
-                          : "bg-text-tertiary"
-                  }`}
-                />
-                <span className="truncate text-text-tertiary">{tr.guardName}</span>
-                <span className="text-[9px] text-text-tertiary shrink-0">{tr.status}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {sessionId && (
-        <div className="flex flex-wrap gap-1 pt-0.5">
-          <button
-            onClick={() => (status.enabled ? disable(sessionId) : enable(sessionId))}
-            className={`px-1.5 py-0.5 rounded text-[9px] ${status.enabled ? "bg-status-error/20 text-status-error" : "bg-status-success/20 text-status-success"}`}
-          >
-            {status.enabled ? t("supervisor.action.disable") : t("supervisor.action.enable")}
-          </button>
-          {status.enabled && (
-            <>
-              <button
-                onClick={() => forceContinue(sessionId)}
-                className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] bg-status-info/20 text-status-info"
-              >
-                <Play className="w-2.5 h-2.5" />
-                {t("supervisor.forceContinue")}
-              </button>
-              {status.pendingPause ? (
-                <button
-                  onClick={() => cancelPause(sessionId)}
-                  className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] bg-status-warning/20 text-status-warning"
-                >
-                  {t("supervisor.cancelPause")}
-                </button>
-              ) : (
-                <button
-                  onClick={() => requestPause(sessionId, 5000)}
-                  className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] bg-status-warning/20 text-status-warning"
-                >
-                  <Pause className="w-2.5 h-2.5" />
-                  {t("supervisor.pause")}
-                </button>
-              )}
-            </>
-          )}
-        </div>
-      )}
-
-      {status.pendingPause && (
-        <div className="text-[9px] text-status-warning/80">
-          {t("supervisor.pause")}:{" "}
-          {Math.ceil((status.pendingPause.scheduledAt - Date.now()) / 1000)}s
-          {status.pendingPause.reason ? ` — ${status.pendingPause.reason}` : ""}
-        </div>
-      )}
-    </div>
   );
 }

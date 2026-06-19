@@ -1,11 +1,14 @@
 import { create } from "zustand";
 import { createLogger } from "../../shared/lib/logger";
 import { apiClient } from "../lib/api-client";
-import { useSessionStore } from "./use-session-store";
+import type { SessionMeta } from "../types";
+import { clearAgentStarted, markAgentStarted, useSessionStore } from "./use-session-store";
 
 const log = createLogger("agent");
 
 type AgentSource = "builtin" | "user" | "project";
+
+type AgentAvatar = { type: "emoji"; value: string } | { type: "image"; src: string };
 
 interface AgentInfo {
   name: string;
@@ -15,6 +18,8 @@ interface AgentInfo {
   permissionMode?: string;
   source: AgentSource;
   filePath: string;
+  color?: string;
+  avatar?: AgentAvatar;
 }
 
 interface ToolSourceInfo {
@@ -68,6 +73,7 @@ interface AgentDetail {
   thinkingLevel?: string;
   mode?: string;
   hidden?: boolean;
+  avatar?: AgentAvatar;
 }
 
 interface AgentState {
@@ -93,7 +99,7 @@ interface AgentState {
   clearSession: (sessionId: string) => void;
 }
 
-export type { AgentInfo, AgentSource, AgentDetail, AgentToolInfo, AgentHook };
+export type { AgentInfo, AgentSource, AgentAvatar, AgentDetail, AgentToolInfo, AgentHook };
 
 const SOURCE_LABELS: Record<AgentSource, string> = {
   builtin: "内置",
@@ -105,6 +111,103 @@ export const getSourceLabel = (source: AgentSource): string => SOURCE_LABELS[sou
 
 export const isGlobalAgent = (source: AgentSource): boolean =>
   source === "builtin" || source === "user";
+
+const runtimeRecoveryBySession = new Map<string, Promise<boolean>>();
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
+function isMissingRuntimeClientError(error: unknown): boolean {
+  const message = errorMessage(error);
+  return /(?:Client not found|No client for session)/i.test(message);
+}
+
+function findSessionInStore(sessionId: string): SessionMeta | null {
+  const state = useSessionStore.getState();
+  for (const sessions of Object.values(state.sessionsByProject)) {
+    const session = sessions.find((item) => item.id === sessionId || item.sessionId === sessionId);
+    if (session) return session;
+  }
+  return null;
+}
+
+async function findSessionForRecovery(sessionId: string): Promise<SessionMeta | null> {
+  const cached = findSessionInStore(sessionId);
+  if (cached) return cached;
+
+  const state = useSessionStore.getState();
+  const activeProject = state.projectTabs.find((tab) => tab.id === state.activeProjectId);
+  if (!activeProject) return null;
+
+  try {
+    const sessions = await state.loadSessionsForProject(activeProject.path);
+    return sessions.find((item) => item.id === sessionId || item.sessionId === sessionId) ?? null;
+  } catch (error) {
+    log.warn("failed to load sessions while recovering runtime client", {
+      sessionId,
+      error: errorMessage(error),
+    });
+    return null;
+  }
+}
+
+async function recoverRuntimeClient(sessionId: string): Promise<boolean> {
+  const existing = runtimeRecoveryBySession.get(sessionId);
+  if (existing) return existing;
+
+  const recovery = (async () => {
+    clearAgentStarted(sessionId);
+    useSessionStore.setState((state) => ({
+      agentReady: { ...state.agentReady, [sessionId]: false },
+    }));
+
+    const session = await findSessionForRecovery(sessionId);
+    if (!session) {
+      log.warn("cannot recover runtime client without session metadata", { sessionId });
+      return false;
+    }
+
+    try {
+      const result = (await apiClient.call("agent.start", {
+        sessionId,
+        projectPath: session.projectPath,
+        sessionPath: session.sessionPath,
+      })) as { status?: string };
+      const recovered = result.status === "started" || result.status === "already_running";
+      if (!recovered) {
+        log.warn("runtime client recovery returned unexpected status", {
+          sessionId,
+          status: result.status,
+        });
+        return false;
+      }
+
+      markAgentStarted(sessionId);
+      useSessionStore.setState((state) => ({
+        sessionReady: { ...state.sessionReady, [sessionId]: true },
+        agentReady: { ...state.agentReady, [sessionId]: true },
+      }));
+      useSessionStore.getState().fetchInitialState(sessionId);
+      log.info("runtime client recovered", { sessionId, status: result.status });
+      return true;
+    } catch (error) {
+      log.warn("failed to recover runtime client", {
+        sessionId,
+        error: errorMessage(error),
+      });
+      return false;
+    }
+  })();
+
+  runtimeRecoveryBySession.set(sessionId, recovery);
+  try {
+    return await recovery;
+  } finally {
+    runtimeRecoveryBySession.delete(sessionId);
+  }
+}
 
 export const useAgentStore = create<AgentState>()((set, get) => ({
   currentAgentBySession: {},
@@ -138,6 +241,8 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
           permissionMode?: string;
           source: string;
           filePath: string;
+          color?: string;
+          avatar?: AgentAvatar;
         }>;
       };
       const agents: AgentInfo[] = (result.agents ?? []).map((a) => ({
@@ -148,6 +253,8 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
         permissionMode: a.permissionMode,
         source: (a.source ?? "builtin") as AgentSource,
         filePath: a.filePath ?? "",
+        color: a.color,
+        avatar: a.avatar,
       }));
       set({ agents, loaded: true });
 
@@ -264,7 +371,27 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
         },
       }));
     } catch (e) {
-      log.warn("Failed to fetch agent detail", { sessionId, error: String(e) });
+      if (isMissingRuntimeClientError(e) && (await recoverRuntimeClient(sessionId))) {
+        try {
+          const agentName = get().getCurrentAgentForSession(sessionId);
+          if (!agentName) return;
+          const result = await apiClient.call("agent.getAgentDetail", { sessionId, agentName });
+          set((state) => ({
+            agentDetailBySession: {
+              ...state.agentDetailBySession,
+              [sessionId]: result.agent as AgentDetail,
+            },
+          }));
+          return;
+        } catch (retryError) {
+          log.warn("Failed to fetch agent detail after runtime recovery", {
+            sessionId,
+            error: errorMessage(retryError),
+          });
+          return;
+        }
+      }
+      log.warn("Failed to fetch agent detail", { sessionId, error: errorMessage(e) });
     } finally {
       set({ loadingDetail: false });
     }
@@ -280,7 +407,25 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
         },
       }));
     } catch (e) {
-      log.warn("Failed to fetch all tools", { sessionId, error: String(e) });
+      if (isMissingRuntimeClientError(e) && (await recoverRuntimeClient(sessionId))) {
+        try {
+          const result = await apiClient.call("agent.getAllTools", { sessionId });
+          set((state) => ({
+            allToolsBySession: {
+              ...state.allToolsBySession,
+              [sessionId]: result.tools as AgentToolInfo[],
+            },
+          }));
+          return;
+        } catch (retryError) {
+          log.warn("Failed to fetch all tools after runtime recovery", {
+            sessionId,
+            error: errorMessage(retryError),
+          });
+          return;
+        }
+      }
+      log.warn("Failed to fetch all tools", { sessionId, error: errorMessage(e) });
     }
   },
 
@@ -297,7 +442,25 @@ export const useAgentStore = create<AgentState>()((set, get) => ({
         },
       }));
     } catch (e) {
-      log.warn("Failed to fetch system prompt", { sessionId, error: String(e) });
+      if (isMissingRuntimeClientError(e) && (await recoverRuntimeClient(sessionId))) {
+        try {
+          const result = await apiClient.call("agent.getSystemPrompt", { sessionId });
+          set((state) => ({
+            liveSystemPromptBySession: {
+              ...state.liveSystemPromptBySession,
+              [sessionId]: (result as { systemPrompt: string }).systemPrompt,
+            },
+          }));
+          return;
+        } catch (retryError) {
+          log.warn("Failed to fetch system prompt after runtime recovery", {
+            sessionId,
+            error: errorMessage(retryError),
+          });
+          return;
+        }
+      }
+      log.warn("Failed to fetch system prompt", { sessionId, error: errorMessage(e) });
     } finally {
       set((state) => {
         const next = new Set(state.loadingSystemPrompt);

@@ -2,6 +2,7 @@ import { memo, useCallback, useState } from "react";
 import { AlertTriangle, ChevronDown, Copy, Check } from "lucide-react";
 import { useClipboard } from "./preview/use-clipboard";
 import type { ChatMessage } from "../../types";
+import { CHAT_CARD_SHELL_CLASS } from "./chat-layout-classes";
 
 export const ErrorMessageCard = memo(function ErrorMessageCard({
   message,
@@ -26,7 +27,7 @@ export const ErrorMessageCard = memo(function ErrorMessageCard({
   }, [title, detail, stopReason, copy]);
 
   return (
-    <div data-msg-card-id={message.id} className="relative w-full py-1.5">
+    <div data-msg-card-id={message.id} className={CHAT_CARD_SHELL_CLASS}>
       <div className="mx-3 rounded-lg bg-status-error/10 border border-status-error/20">
         <div className="flex items-start gap-2 px-3 py-2">
           <AlertTriangle className="w-4 h-4 shrink-0 text-status-error mt-0.5" />

@@ -4,13 +4,20 @@
  * SideNav 组件行为测试：
  * 1. selectedNavId 匹配 item.key 时，对应 NavDot 有 data-active 属性
  * 2. selectedNavId 匹配 item.navId（消息 ID）时，该消息的第一个图标高亮
- * 3. selectedNavId 变化时触发 scrollIntoView（图标滚入可视区）
- * 4. 点击图标触发 onNavDotClick
+ * 3. activeId 匹配消息 ID 时，该消息的第一个图标显示滚动指示条
+ * 4. selectedNavId/activeId 变化时触发 scrollIntoView（图标滚入可视区）
+ * 5. 点击图标触发 onNavDotClick
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, fireEvent, act } from "@testing-library/react";
 import { createRef } from "react";
-import { SideNav, buildFlatItems } from "../../../src/mainview/components/chat/SideNav";
+import {
+  SideNav,
+  buildFlatItems,
+  getSideNavScrollTarget,
+  getSideNavVisibleEdgeFallbackKey,
+  getSideNavViewportPadding,
+} from "../../../src/mainview/components/chat/SideNav";
 import { useTurnStore } from "../../../src/mainview/stores/use-turn-store";
 import { useChatNavStore } from "../../../src/mainview/stores/use-chat-nav-store";
 import type { ChatMessage } from "../../../src/mainview/types";
@@ -30,10 +37,22 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => ({
 
 // Mock scrollIntoView (not available in happy-dom)
 Element.prototype.scrollIntoView = vi.fn();
+HTMLElement.prototype.scrollTo = vi.fn();
 
 // Mock settings store
 vi.mock("../../../src/mainview/stores/use-settings-store", () => ({
-  useSettingsStore: () => false, // showThinking = false
+  useSettingsStore: (selector: (s: {
+    showThinking: boolean;
+    showMemoryEntries: boolean;
+    showToolCalls: boolean;
+    showToolResults: boolean;
+  }) => unknown) =>
+    selector({
+      showThinking: false,
+      showMemoryEntries: false,
+      showToolCalls: true,
+      showToolResults: true,
+    }),
 }));
 
 // Mock chat store for loadMoreMessages
@@ -95,18 +114,17 @@ beforeEach(() => {
     rollbackTargetItemId: null,
   });
   vi.mocked(Element.prototype.scrollIntoView).mockClear();
+  vi.mocked(HTMLElement.prototype.scrollTo).mockClear();
 });
 
 describe("SideNav — highlight matching", () => {
   it("renders correct number of nav items for mixed messages", () => {
     const messages = makeMessages();
     const items = buildFlatItems(messages, false);
-    // msg-1: User icon
-    // msg-2: Bot icon + text block + tool block = 3 items
-    // msg-3: User icon
-    // msg-4: Bot icon + text block = 2 items
-    // Total: 1 + 3 + 1 + 2 = 7
-    expect(items.length).toBe(7);
+    // SideNav 主轴是加工后的平级列表：消息主点 + 可见内容块。
+    expect(items.length).toBeGreaterThan(messages.length);
+    expect(new Set(items.map((item) => item.key)).size).toBe(items.length);
+    expect(items.some((item) => item.blockId != null)).toBe(true);
   });
 
   it("highlights correct NavDot when selectedNavId matches item.key", () => {
@@ -125,18 +143,49 @@ describe("SideNav — highlight matching", () => {
     expect(activeElements.length).toBe(1);
   });
 
-  it("highlights first icon of message when selectedNavId is a message ID (navId match)", () => {
+  it("selects the main message nav item when selectedNavId is a message id", () => {
     const messages = makeMessages();
 
-    // Set selectedNavId to message ID (what the scroll tracker bridge does)
     useTurnStore.getState().setNavId("msg-2");
 
     const onNavDotClick = vi.fn();
     const { container } = render(<SideNav ref={createRef()} messages={messages} onNavDotClick={onNavDotClick} />);
 
-    // The fallback logic: selectedNavId === item.navId → highlight first item of that message
     const activeElements = container.querySelectorAll("[data-active]");
     expect(activeElements.length).toBe(1);
+    expect(activeElements[0].getAttribute("data-nav-key")).toBe("msg-2");
+  });
+
+  it("marks first icon of active message without changing selected state", () => {
+    const messages = makeMessages();
+    useChatNavStore.getState().setActive("msg-2");
+
+    const { container } = render(
+      <SideNav ref={createRef()} messages={messages} onNavDotClick={vi.fn()} />,
+    );
+
+    const selectedElements = container.querySelectorAll("[data-active]");
+    const scrollActiveElements = container.querySelectorAll("[data-scroll-active]");
+
+    expect(selectedElements.length).toBe(0);
+    expect(scrollActiveElements.length).toBe(1);
+    expect(scrollActiveElements[0].getAttribute("data-nav-key")).toBe("msg-2");
+  });
+
+  it("does not style scroll-active as a second selected item", () => {
+    const messages = makeMessages();
+    useChatNavStore.getState().setActive("msg-2");
+
+    const { container } = render(
+      <SideNav ref={createRef()} messages={messages} onNavDotClick={vi.fn()} />,
+    );
+
+    const scrollActive = container.querySelector("[data-scroll-active]") as HTMLElement;
+
+    expect(scrollActive).toBeTruthy();
+    expect(scrollActive.className).not.toContain("bg-semantic-accent/12");
+    expect(scrollActive.className).not.toContain("bg-semantic-accent/25");
+    expect(scrollActive.className).not.toContain("shadow-[0_0_10px");
   });
 
   it("no highlight when selectedNavId is null", () => {
@@ -150,54 +199,179 @@ describe("SideNav — highlight matching", () => {
   });
 });
 
-describe("SideNav — scrollIntoView on selectedNavId change", () => {
-  it("calls scrollIntoView when selectedNavId is set", () => {
+describe("SideNav — keep active icon visible", () => {
+  it("calculates viewport padding so the visible icon slots fit as an integer count", () => {
+    const padding = getSideNavViewportPadding(646.5);
+    expect(padding).toBe(19.25);
+    expect((646.5 - padding * 2) / 32).toBe(19);
+
+    const compactPadding = getSideNavViewportPadding(100);
+    expect(compactPadding).toBe(18);
+    expect((100 - compactPadding * 2) / 32).toBe(2);
+  });
+
+  it("calculates centered scroll target for out-of-comfort-zone items", () => {
+    expect(
+      getSideNavScrollTarget(
+        { scrollTop: 50, clientHeight: 100 } as HTMLElement,
+        { offsetTop: 20, offsetHeight: 20 } as HTMLElement,
+      ),
+    ).toBe(0);
+    expect(
+      getSideNavScrollTarget(
+        { scrollTop: 0, clientHeight: 100 } as HTMLElement,
+        { offsetTop: 130, offsetHeight: 20 } as HTMLElement,
+      ),
+    ).toBe(90);
+    expect(
+      getSideNavScrollTarget(
+        { scrollTop: 0, clientHeight: 100 } as HTMLElement,
+        { offsetTop: 40, offsetHeight: 20 } as HTMLElement,
+      ),
+    ).toBeNull();
+  });
+
+  it("calculates edge-anchored scroll target for continuous scroll following", () => {
+    expect(
+      getSideNavScrollTarget(
+        { scrollTop: 80, clientHeight: 100, scrollHeight: 400 } as HTMLElement,
+        { offsetTop: 60, offsetHeight: 20 } as HTMLElement,
+        24,
+        "edge",
+      ),
+    ).toBe(36);
+    expect(
+      getSideNavScrollTarget(
+        { scrollTop: 0, clientHeight: 100, scrollHeight: 400 } as HTMLElement,
+        { offsetTop: 130, offsetHeight: 20 } as HTMLElement,
+        24,
+        "edge",
+      ),
+    ).toBe(74);
+    expect(
+      getSideNavScrollTarget(
+        { scrollTop: 180, clientHeight: 100, scrollHeight: 300 } as HTMLElement,
+        { offsetTop: 280, offsetHeight: 20 } as HTMLElement,
+        24,
+        "edge",
+      ),
+    ).toBe(200);
+  });
+
+  it("falls back to the visible edge icon when active is outside the SideNav viewport", () => {
+    const container = document.createElement("div");
+    const above = document.createElement("div");
+    const first = document.createElement("div");
+    const last = document.createElement("div");
+    const below = document.createElement("div");
+    above.dataset.navKey = "above";
+    first.dataset.navKey = "first";
+    last.dataset.navKey = "last";
+    below.dataset.navKey = "below";
+    container.append(above, first, last, below);
+
+    container.getBoundingClientRect = () =>
+      ({ top: 100, bottom: 164, height: 64 } as DOMRect);
+    above.getBoundingClientRect = () =>
+      ({ top: 36, bottom: 68, height: 32 } as DOMRect);
+    first.getBoundingClientRect = () =>
+      ({ top: 100, bottom: 132, height: 32 } as DOMRect);
+    last.getBoundingClientRect = () =>
+      ({ top: 132, bottom: 164, height: 32 } as DOMRect);
+    below.getBoundingClientRect = () =>
+      ({ top: 180, bottom: 212, height: 32 } as DOMRect);
+
+    expect(getSideNavVisibleEdgeFallbackKey(container, "above")).toBe("first");
+    expect(getSideNavVisibleEdgeFallbackKey(container, "below")).toBe("last");
+    expect(getSideNavVisibleEdgeFallbackKey(container, "first")).toBeNull();
+  });
+
+  it("scrolls SideNav container when selectedNavId is outside viewport", () => {
     const messages = makeMessages();
     const onNavDotClick = vi.fn();
 
-    render(<SideNav ref={createRef()} messages={messages} onNavDotClick={onNavDotClick} />);
-
-    // Initially no scrollIntoView
-    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
-
-    // Set selectedNavId — must wrap in act for React to process the effect
+    const { container } = render(
+      <SideNav ref={createRef()} messages={messages} onNavDotClick={onNavDotClick} />,
+    );
+    const scrollContainer = container.querySelector(".overflow-y-auto") as HTMLElement;
     const items = buildFlatItems(messages, false);
+    const targetDot = container.querySelector(`[data-nav-key="${items[0].key}"]`) as HTMLElement;
+
+    Object.defineProperty(scrollContainer, "scrollTop", { value: 50, writable: true, configurable: true });
+    Object.defineProperty(scrollContainer, "clientHeight", { value: 100, configurable: true });
+    Object.defineProperty(targetDot, "offsetTop", { value: 20, configurable: true });
+    Object.defineProperty(targetDot, "offsetHeight", { value: 20, configurable: true });
+    const scrollTo = vi.fn();
+    scrollContainer.scrollTo = scrollTo;
+
     act(() => {
       useTurnStore.getState().setNavId(items[0].key);
     });
 
-    // scrollIntoView should be called to bring the active icon into view
-    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+    expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ top: 0, behavior: "auto" }));
+  });
+
+  it("scrolls SideNav container when activeId is set by scroll tracking", () => {
+    const messages = makeMessages();
+
+    const { container } = render(
+      <SideNav ref={createRef()} messages={messages} onNavDotClick={vi.fn()} />,
+    );
+    const scrollContainer = container.querySelector(".overflow-y-auto") as HTMLElement;
+    const targetDot = container.querySelector('[data-nav-key="msg-2"]') as HTMLElement;
+
+    Object.defineProperty(scrollContainer, "scrollTop", { value: 0, writable: true, configurable: true });
+    Object.defineProperty(scrollContainer, "clientHeight", { value: 64, configurable: true });
+    Object.defineProperty(scrollContainer, "scrollHeight", { value: 300, configurable: true });
+    Object.defineProperty(targetDot, "offsetTop", { value: 120, configurable: true });
+    Object.defineProperty(targetDot, "offsetHeight", { value: 32, configurable: true });
+    const scrollTo = vi.fn();
+    scrollContainer.scrollTo = scrollTo;
+
+    act(() => {
+      useChatNavStore.getState().setActive("msg-2");
+    });
+
+    expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ top: 88, behavior: "auto" }));
   });
 
   it("uses instant behavior on first nav, smooth on subsequent", () => {
     const messages = makeMessages();
     const items = buildFlatItems(messages, false);
 
-    render(<SideNav ref={createRef()} messages={messages} onNavDotClick={vi.fn()} />);
+    const { container } = render(
+      <SideNav ref={createRef()} messages={messages} onNavDotClick={vi.fn()} />,
+    );
+    const scrollContainer = container.querySelector(".overflow-y-auto") as HTMLElement;
+    Object.defineProperty(scrollContainer, "scrollTop", { value: 0, writable: true, configurable: true });
+    Object.defineProperty(scrollContainer, "clientHeight", { value: 64, configurable: true });
+    const firstDot = container.querySelector(`[data-nav-key="${items[0].key}"]`) as HTMLElement;
+    const secondDot = container.querySelector(`[data-nav-key="${items[1].key}"]`) as HTMLElement;
+    Object.defineProperty(firstDot, "offsetTop", { value: 120, configurable: true });
+    Object.defineProperty(firstDot, "offsetHeight", { value: 32, configurable: true });
+    Object.defineProperty(secondDot, "offsetTop", { value: 150, configurable: true });
+    Object.defineProperty(secondDot, "offsetHeight", { value: 32, configurable: true });
+    const scrollTo = vi.fn();
+    scrollContainer.scrollTo = scrollTo;
 
     // First nav — instant
     act(() => {
       useTurnStore.getState().setNavId(items[0].key);
     });
-    expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith(
-      expect.objectContaining({ behavior: "instant" }),
-    );
+    expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ behavior: "auto" }));
 
-    vi.mocked(Element.prototype.scrollIntoView).mockClear();
+    scrollTo.mockClear();
 
     // Second nav — smooth
     act(() => {
       useTurnStore.getState().setNavId(items[1].key);
     });
-    expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith(
-      expect.objectContaining({ behavior: "smooth" }),
-    );
+    expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ behavior: "smooth" }));
   });
 });
 
 describe("SideNav — click interaction", () => {
-  it("calls onNavDotClick with navId when icon is clicked", () => {
+  it("calls onNavDotClick with the message target when an icon is clicked", () => {
     const messages = makeMessages();
     const onNavDotClick = vi.fn();
 
@@ -210,7 +384,148 @@ describe("SideNav — click interaction", () => {
     expect(firstDot).toBeTruthy();
     fireEvent.click(firstDot);
 
-    expect(onNavDotClick).toHaveBeenCalledWith("msg-1");
+    expect(onNavDotClick).toHaveBeenCalledWith({ messageId: "msg-1", blockId: undefined });
+  });
+
+  it("does not auto-scroll the SideNav container immediately after clicking a visible icon", () => {
+    const messages = makeMessages();
+    const onNavDotClick = vi.fn();
+
+    const { container } = render(
+      <SideNav ref={createRef()} messages={messages} onNavDotClick={onNavDotClick} />,
+    );
+    const scrollContainer = container.querySelector(".overflow-y-auto") as HTMLElement;
+    const firstDot = container.querySelector("[data-nav-key]") as HTMLElement;
+    Object.defineProperty(scrollContainer, "scrollTop", {
+      value: 0,
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(scrollContainer, "clientHeight", { value: 64, configurable: true });
+    Object.defineProperty(firstDot, "offsetTop", { value: 120, configurable: true });
+    Object.defineProperty(firstDot, "offsetHeight", { value: 32, configurable: true });
+    const scrollTo = vi.fn();
+    scrollContainer.scrollTo = scrollTo;
+
+    fireEvent.click(firstDot);
+
+    expect(onNavDotClick).toHaveBeenCalled();
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("does not let scroll-active updates move SideNav immediately after a nav click", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "msg-2",
+        role: "assistant",
+        content: [
+          { type: "text", text: "answer" },
+          {
+            type: "toolExecution",
+            toolCallId: "tc-1",
+            toolName: "bash",
+            args: "{}",
+            status: "done",
+          },
+        ],
+        timestamp: 1,
+      },
+    ];
+
+    const { container } = render(
+      <SideNav ref={createRef()} messages={messages} onNavDotClick={vi.fn()} />,
+    );
+    const scrollContainer = container.querySelector(".overflow-y-auto") as HTMLElement;
+    const dots = container.querySelectorAll("[data-nav-key]");
+    const clickedDot = dots[2] as HTMLElement;
+    const otherDot = dots[1] as HTMLElement;
+
+    Object.defineProperty(scrollContainer, "scrollTop", {
+      value: 0,
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(scrollContainer, "clientHeight", { value: 64, configurable: true });
+    Object.defineProperty(otherDot, "offsetTop", { value: 160, configurable: true });
+    Object.defineProperty(otherDot, "offsetHeight", { value: 32, configurable: true });
+    const scrollTo = vi.fn();
+    scrollContainer.scrollTo = scrollTo;
+
+    fireEvent.click(clickedDot);
+    act(() => {
+      useChatNavStore.getState().setActive("msg-2-0");
+    });
+
+    expect(scrollTo).not.toHaveBeenCalled();
+    expect(container.querySelectorAll("[data-active]")).toHaveLength(1);
+    expect(container.querySelector("[data-active]")?.getAttribute("data-nav-key")).toBe("msg-2-1");
+  });
+
+  it("does not auto-scroll the SideNav while external navigation lock is active", () => {
+    const messages = makeMessages();
+
+    const { container } = render(
+      <SideNav
+        ref={createRef()}
+        messages={messages}
+        onNavDotClick={vi.fn()}
+        isScrollLocked={true}
+      />,
+    );
+    const scrollContainer = container.querySelector(".overflow-y-auto") as HTMLElement;
+    const targetDot = container.querySelector('[data-nav-key="msg-2"]') as HTMLElement;
+
+    Object.defineProperty(scrollContainer, "scrollTop", {
+      value: 0,
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(scrollContainer, "clientHeight", { value: 64, configurable: true });
+    Object.defineProperty(targetDot, "offsetTop", { value: 120, configurable: true });
+    Object.defineProperty(targetDot, "offsetHeight", { value: 32, configurable: true });
+    const scrollTo = vi.fn();
+    scrollContainer.scrollTo = scrollTo;
+
+    act(() => {
+      useChatNavStore.getState().setActive("msg-2");
+      useTurnStore.getState().setNavId("msg-2");
+    });
+
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("creates distinct flat nav targets for text/tool blocks in one message", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "msg-2",
+        role: "assistant",
+        content: [
+          { type: "text", text: "answer" },
+          {
+            type: "toolExecution",
+            toolCallId: "tc-1",
+            toolName: "bash",
+            args: "{}",
+            status: "done",
+          },
+        ],
+        timestamp: 1,
+      },
+    ];
+    const onNavDotClick = vi.fn();
+
+    const { container } = render(
+      <SideNav ref={createRef()} messages={messages} onNavDotClick={onNavDotClick} />,
+    );
+    const dots = container.querySelectorAll("[data-nav-key]");
+
+    expect(dots).toHaveLength(3);
+    expect(new Set(Array.from(dots).map((dot) => dot.getAttribute("data-nav-key"))).size).toBe(3);
+    expect(dots[1].getAttribute("data-nav-block-id")).toBe("msg-2-0");
+    expect(dots[2].getAttribute("data-nav-block-id")).toBe("msg-2-1");
+    fireEvent.click(dots[2]);
+
+    expect(onNavDotClick).toHaveBeenCalledWith({ messageId: "msg-2", blockId: "msg-2-1" });
   });
 });
 
@@ -236,31 +551,33 @@ describe("SideNav — real session data fixture", () => {
 
   it("buildFlatItems produces reasonable nav items for real data", () => {
     const items = buildFlatItems(fixture.messages, true); // showThinking = true
-    // Each message produces at least 1 nav item; many produce multiple (thinking + text + tool blocks)
     expect(items.length).toBeGreaterThan(fixture.messages.length);
   });
 
-  it("highlights correct icon when scrolling through real messages", () => {
-    // Simulate what the scroll tracker does: set selectedNavId to a message ID
-    // Pick a message ID from the middle of the conversation
+  it("buildFlatItems produces unique nav keys and block targets for real data", () => {
+    const items = buildFlatItems(fixture.messages, true);
+    const keys = items.map((item) => item.key);
+
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(items.some((item) => item.blockId != null)).toBe(true);
+  });
+
+  it("selects a real message main dot when selectedNavId is the message id", () => {
     const midMessage = fixture.messages[Math.floor(fixture.messages.length / 2)];
     const midMsgId = midMessage.id;
 
-    // Set selectedNavId to this message ID (what ChatPanel bridge does on scroll)
     useTurnStore.getState().setNavId(midMsgId);
 
     const { container } = render(
       <SideNav ref={createRef()} messages={fixture.messages} onNavDotClick={vi.fn()} />,
     );
 
-    // Should highlight exactly one icon (the first icon of that message)
     const activeElements = container.querySelectorAll("[data-active]");
     expect(activeElements.length).toBe(1);
+    expect(activeElements[0].getAttribute("data-nav-key")).toBe(midMsgId);
   });
 
-  it("highlights last message icon after initial scroll to bottom", () => {
-    // Simulate onInitComplete: set selectedNavId to last icon key
-    // Use the SideNav's own ref to get the last icon id (avoids showThinking mismatch)
+  it("highlights last nav item when it is explicitly selected by key", () => {
     const sideNavRef = createRef<{ getFirstIconId: () => string | null; getLastIconId: () => string | null }>();
 
     render(<SideNav ref={sideNavRef} messages={fixture.messages} onNavDotClick={vi.fn()} />);
@@ -283,18 +600,28 @@ describe("SideNav — real session data fixture", () => {
     expect(activeElements[0]).toBe(allDots[allDots.length - 1]);
   });
 
-  it("scrollIntoView fires when navigating across distant messages", () => {
-    // Verify that when selectedNavId is set, scrollIntoView is called
-    // to bring the active icon into view
+  it("SideNav container scrolls when navigating across distant messages", () => {
+    // Verify that when selectedNavId is set, SideNav scrolls its own container
+    // to bring the active icon into view.
     const items = buildFlatItems(fixture.messages, true);
 
-    render(<SideNav ref={createRef()} messages={fixture.messages} onNavDotClick={vi.fn()} />);
+    const { container } = render(
+      <SideNav ref={createRef()} messages={fixture.messages} onNavDotClick={vi.fn()} />,
+    );
+    const scrollContainer = container.querySelector(".overflow-y-auto") as HTMLElement;
+    const targetDot = container.querySelector(`[data-nav-key="${items[0].key}"]`) as HTMLElement;
+    Object.defineProperty(scrollContainer, "scrollTop", { value: 50, writable: true, configurable: true });
+    Object.defineProperty(scrollContainer, "clientHeight", { value: 100, configurable: true });
+    Object.defineProperty(targetDot, "offsetTop", { value: 20, configurable: true });
+    Object.defineProperty(targetDot, "offsetHeight", { value: 20, configurable: true });
+    const scrollTo = vi.fn();
+    scrollContainer.scrollTo = scrollTo;
 
     // Jump to first icon
     act(() => {
       useTurnStore.getState().setNavId(items[0].key);
     });
-    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+    expect(scrollTo).toHaveBeenCalled();
   });
 });
 
@@ -342,8 +669,36 @@ describe("SideNav — memory/compaction filtering (F)", () => {
   });
 });
 
-describe("SideNav — block-level navigation (G)", () => {
-  it("generates blockId for thinking/text/tool blocks within a message", () => {
+describe("SideNav — flat block navigation (G)", () => {
+  it("renders flat block nav items when expanded and only main item when collapsed", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "msg-collapsed",
+        role: "assistant",
+        content: [
+          { type: "text", text: "answer" },
+          {
+            type: "toolExecution",
+            toolCallId: "tc-1",
+            toolName: "bash",
+            args: "{}",
+            status: "done",
+          },
+        ],
+        timestamp: 1,
+      },
+    ];
+
+    const expandedItems = buildFlatItems(messages, false);
+    const collapsedItems = buildFlatItems(messages, false, false, new Set(["msg-collapsed"]));
+
+    expect(expandedItems).toHaveLength(3);
+    expect(collapsedItems).toHaveLength(1);
+    expect(collapsedItems[0].key).toBe("msg-collapsed");
+    expect(collapsedItems[0].blockId).toBeUndefined();
+  });
+
+  it("generates block-level nav items for thinking/text/tool blocks", () => {
     const messages: ChatMessage[] = [
       {
         id: "msg-2",
@@ -364,18 +719,41 @@ describe("SideNav — block-level navigation (G)", () => {
     ];
 
     const items = buildFlatItems(messages, true); // showThinking = true
-    // Should have: Bot icon + thinking block + text block + tool block = 4 items
-    expect(items.length).toBe(4);
-
-    // The block items should have blockId set
-    const blockItems = items.filter((i) => i.blockId);
-    expect(blockItems.length).toBe(3); // thinking + text + tool
-    expect(blockItems[0].blockId).toBe("msg-2-0");
-    expect(blockItems[1].blockId).toBe("msg-2-1");
-    expect(blockItems[2].blockId).toBe("msg-2-2");
+    expect(items).toHaveLength(4);
+    expect(items[0].navId).toBe("msg-2");
+    expect(items[0].blockId).toBeUndefined();
+    expect(items.slice(1).map((item) => item.blockId)).toEqual(["msg-2-0", "msg-2-1", "msg-2-2"]);
   });
 
-  it("click on block icon passes blockId (not just navId) to onNavDotClick", () => {
+  it("keeps multiple thinking blocks as distinct flat nav markers", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "msg-thinking-many",
+        role: "assistant",
+        content: [
+          { type: "thinking", thinking: "first thought" },
+          { type: "thinking", thinking: "second thought" },
+          { type: "thinking", thinking: "third thought" },
+          { type: "text", text: "final answer" },
+        ],
+        timestamp: 1,
+      },
+    ];
+
+    const items = buildFlatItems(messages, true);
+
+    expect(items).toHaveLength(5);
+    expect(items[0].navId).toBe("msg-thinking-many");
+    expect(items[0].blockId).toBeUndefined();
+    expect(items.slice(1).map((item) => item.blockId)).toEqual([
+      "msg-thinking-many-0",
+      "msg-thinking-many-1",
+      "msg-thinking-many-2",
+      "msg-thinking-many-3",
+    ]);
+  });
+
+  it("click on message icon passes only the message target to onNavDotClick", () => {
     const messages: ChatMessage[] = [
       {
         id: "msg-2",
@@ -399,15 +777,41 @@ describe("SideNav — block-level navigation (G)", () => {
       <SideNav ref={createRef()} messages={messages} onNavDotClick={onNavDotClick} />,
     );
 
-    // Click on the tool block icon (3rd dot: Bot, text, tool)
     const dots = container.querySelectorAll("[data-nav-key]");
-    expect(dots.length).toBeGreaterThanOrEqual(3);
-    fireEvent.click(dots[2]); // tool block dot
+    expect(dots).toHaveLength(3);
+    fireEvent.click(dots[0]);
 
-    // Should pass the blockId, not just the messageId
     expect(onNavDotClick).toHaveBeenCalled();
-    const passedId = onNavDotClick.mock.calls[0][0];
-    expect(passedId).toContain("msg-2-"); // blockId format: messageId-blockIndex
+    expect(onNavDotClick).toHaveBeenCalledWith({ messageId: "msg-2", blockId: undefined });
+  });
+
+  it("renders explicit message target attributes for diagnostics and navigation", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "msg-2",
+        role: "assistant",
+        content: [
+          { type: "text", text: "answer" },
+          {
+            type: "toolExecution",
+            toolCallId: "tc-1",
+            toolName: "bash",
+            args: "{}",
+            status: "done",
+          },
+        ],
+        timestamp: 1,
+      },
+    ];
+
+    const { container } = render(
+      <SideNav ref={createRef()} messages={messages} onNavDotClick={vi.fn()} />,
+    );
+    const dots = container.querySelectorAll("[data-nav-key]");
+
+    expect(dots[0].getAttribute("data-nav-message-id")).toBe("msg-2");
+    expect(dots[0].getAttribute("data-nav-block-id")).toBeNull();
+    expect(dots[0].getAttribute("data-nav-kind")).toBe("message");
   });
 });
 
@@ -453,5 +857,85 @@ describe("SideNav — right-click multi-select (K)", () => {
     );
     const selectionInfo = container.querySelector(".text-status-error.text-center");
     expect(selectionInfo?.textContent).toContain("1");
+  });
+});
+
+describe("SideNav — pagination (L)", () => {
+  it("loads older nav items when the SideNav scroll container reaches the top", () => {
+    const messages = makeMessages();
+    const onLoadMore = vi.fn();
+    const raf = vi
+      .spyOn(globalThis, "requestAnimationFrame")
+      .mockImplementation((callback: FrameRequestCallback) => {
+        callback(0);
+        return 1;
+      });
+    const cancel = vi.spyOn(globalThis, "cancelAnimationFrame").mockImplementation(() => {});
+
+    const { container } = render(
+      <SideNav
+        ref={createRef()}
+        messages={messages}
+        onNavDotClick={vi.fn()}
+        pagination={{ hasMore: true, isLoading: false, onLoadMore }}
+      />,
+    );
+    const scrollContainer = container.querySelector(".overflow-y-auto") as HTMLElement;
+    Object.defineProperty(scrollContainer, "scrollTop", {
+      value: 0,
+      writable: true,
+      configurable: true,
+    });
+
+    fireEvent.scroll(scrollContainer);
+
+    expect(onLoadMore).toHaveBeenCalledTimes(1);
+
+    raf.mockRestore();
+    cancel.mockRestore();
+  });
+
+  it("does not load older nav items when already loading or exhausted", () => {
+    const messages = makeMessages();
+    const onLoadMore = vi.fn();
+    const raf = vi
+      .spyOn(globalThis, "requestAnimationFrame")
+      .mockImplementation((callback: FrameRequestCallback) => {
+        callback(0);
+        return 1;
+      });
+    const cancel = vi.spyOn(globalThis, "cancelAnimationFrame").mockImplementation(() => {});
+
+    const { container, rerender } = render(
+      <SideNav
+        ref={createRef()}
+        messages={messages}
+        onNavDotClick={vi.fn()}
+        pagination={{ hasMore: true, isLoading: true, onLoadMore }}
+      />,
+    );
+    const scrollContainer = container.querySelector(".overflow-y-auto") as HTMLElement;
+    Object.defineProperty(scrollContainer, "scrollTop", {
+      value: 0,
+      writable: true,
+      configurable: true,
+    });
+
+    fireEvent.scroll(scrollContainer);
+    expect(onLoadMore).not.toHaveBeenCalled();
+
+    rerender(
+      <SideNav
+        ref={createRef()}
+        messages={messages}
+        onNavDotClick={vi.fn()}
+        pagination={{ hasMore: false, isLoading: false, onLoadMore }}
+      />,
+    );
+    fireEvent.scroll(scrollContainer);
+    expect(onLoadMore).not.toHaveBeenCalled();
+
+    raf.mockRestore();
+    cancel.mockRestore();
   });
 });

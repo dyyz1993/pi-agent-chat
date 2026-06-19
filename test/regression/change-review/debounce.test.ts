@@ -38,6 +38,7 @@ function resetStore() {
   useChangeReviewStore.setState({
     open: false,
     changes: [],
+    approvals: [],
     loading: false,
     selectedPath: null,
   });
@@ -70,7 +71,11 @@ describe("fetchPending in-flight dedup", () => {
 
     await Promise.all([p1, p2, p3]);
 
-    expect(mockCall).toHaveBeenCalledTimes(1);
+    expect(mockCall).toHaveBeenCalledTimes(2);
+    expect(mockCall.mock.calls.map(([method]) => method)).toEqual([
+      "change-review.approvals",
+      "change-review.pending",
+    ]);
   });
 
   it("subsequent fetchPending after the first resolves triggers a new RPC", async () => {
@@ -79,10 +84,16 @@ describe("fetchPending in-flight dedup", () => {
     await useChangeReviewStore.getState().fetchPending();
     await useChangeReviewStore.getState().fetchPending();
 
-    expect(mockCall).toHaveBeenCalledTimes(2);
+    expect(mockCall).toHaveBeenCalledTimes(4);
+    expect(mockCall.mock.calls.map(([method]) => method)).toEqual([
+      "change-review.approvals",
+      "change-review.pending",
+      "change-review.approvals",
+      "change-review.pending",
+    ]);
   });
 
-  it("writes the resolved changes (enriched with empty content fallbacks) to the store", async () => {
+  it("writes the resolved changes to the store (keeping null content as-is)", async () => {
     const changes = [
       {
         turnIndex: 0,
@@ -94,17 +105,14 @@ describe("fetchPending in-flight dedup", () => {
         newContent: null,
       },
     ];
-    // fetchPending 内部会把 null 字段 enrich 为 ""，便于 InlineDiffViewer 渲染
-    const enriched = changes.map((c) => ({
-      ...c,
-      oldContent: "",
-      newContent: "",
-    }));
-    mockCall.mockResolvedValueOnce(changes);
+    mockCall.mockImplementation(async (method: string) =>
+      method === "change-review.pending" ? changes : [],
+    );
 
     await useChangeReviewStore.getState().fetchPending();
 
-    expect(useChangeReviewStore.getState().changes).toEqual(enriched);
+    // null content stays null — UI uses this to detect "no diff data"
+    expect(useChangeReviewStore.getState().changes).toEqual(changes);
   });
 
   it("clears loading state even if RPC rejects", async () => {

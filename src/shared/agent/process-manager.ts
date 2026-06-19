@@ -1,17 +1,8 @@
-import {
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  realpathSync,
-  statSync,
-} from "fs";
+import { existsSync, mkdirSync, readdirSync, realpathSync, statSync } from "fs";
 
 import * as path from "path";
 import type { RPCServer } from "@dyyz1993/rpc-core";
-import type {
-  AgentEvent,
-  AgentMessageForUI,
-} from "../modules/agent";
+import type { AgentEvent, AgentMessageForUI, ExtensionUIRequestEvent } from "../modules/agent";
 import type { AssistantMessage, AssistantMessageEvent, ImageContent } from "@dyyz1993/pi-ai";
 import type { RpcClientAPI, ChannelTypeRegistry } from "@dyyz1993/pi-coding-agent";
 import type { TreeEntry } from "../modules/agent";
@@ -243,8 +234,8 @@ function discoverExtensionArgs(): string[] {
 let _extensionArgsCache: string[] | undefined;
 let _extensionArgsNoLspCache: string[] | undefined;
 
-/** 子代理进程只加载核心 extension，跳过可能卡住的 LSP/auto-memory/rules-engine 等 */
-const SUBAGENT_REQUIRED_EXTENSIONS = new Set(["coordinator", "subagent-v2", "bash-ext", "read", "edit", "write"]);
+/** 子代理进程保留正常 extension 能力，只跳过容易拖慢 ready 的 LSP。MCP 通过 PI_SKIP_MCP 禁用。 */
+const SUBAGENT_EXCLUDED_EXTENSIONS = new Set(["lsp"]);
 
 function getExtensionArgs(excludeLsp = false): string[] {
   if (excludeLsp) {
@@ -258,7 +249,7 @@ function getExtensionArgs(excludeLsp = false): string[] {
         // 提取 extension 目录名（路径中 /extensions/<name>/index.ts 的 <name>）
         const match = extPath.match(/\/extensions\/([^/]+)\//);
         const extName = match?.[1] ?? "";
-        if (SUBAGENT_REQUIRED_EXTENSIONS.has(extName)) {
+        if (!SUBAGENT_EXCLUDED_EXTENSIONS.has(extName)) {
           filtered.push(flag, extPath);
         }
       }
@@ -281,6 +272,7 @@ type SanitizedMessageUpdate = Extract<AgentEvent, { type: "message_update" }> & 
 type SanitizedEvent = SanitizedMessageUpdate | Exclude<AgentEvent, { type: "message_update" }>;
 
 type RpcClientInstance = RpcClientAPI;
+type AgentStartResult = { agentId: string; status: "started" | "already_running" };
 
 interface ManagedClient {
   client: RpcClientInstance;
@@ -382,10 +374,19 @@ async function createRpcClient(
     args.push("--session", sessionPath);
   }
 
-  perfLog.info("[createRpcClient] spawning CLI", { cliPath, cwd, sessionPath, args: args.join(" "), excludeLsp });
+  perfLog.info("[createRpcClient] spawning CLI", {
+    cliPath,
+    cwd,
+    sessionPath,
+    args: args.join(" "),
+    excludeLsp,
+  });
 
   // 子代理进程（forceNewProcess）跳过 MCP 连接，避免多进程竞争同一个 stdio MCP server
-  const childEnv: Record<string, string> = { ...process.env, NODE_OPTIONS: "--max-old-space-size=8192" };
+  const childEnv: Record<string, string> = {
+    ...process.env,
+    NODE_OPTIONS: "--max-old-space-size=8192",
+  };
   if (excludeLsp) {
     childEnv.PI_SKIP_MCP = "1";
   }
@@ -396,7 +397,44 @@ async function createRpcClient(
     args,
     env: childEnv,
   });
-  await client.start();
+  try {
+    await client.start();
+  } catch (err: unknown) {
+    const debugClient = client as RpcClientInstance & {
+      getStdout?: () => string;
+      getStderr?: () => string;
+      getProcessSnapshot?: () => {
+        pid?: number;
+        exitCode: number | null;
+        signalCode: string | null;
+      };
+    };
+    perfLog.error("[createRpcClient] client.start failed", {
+      cwd,
+      sessionPath,
+      excludeLsp,
+      argsCount: args.length,
+      stderr:
+        typeof debugClient.getStderr === "function" ? debugClient.getStderr().slice(-2000) : "",
+      stdout:
+        typeof debugClient.getStdout === "function" ? debugClient.getStdout().slice(-2000) : "",
+      process:
+        typeof debugClient.getProcessSnapshot === "function"
+          ? debugClient.getProcessSnapshot()
+          : undefined,
+      err: err instanceof Error ? err.message : String(err),
+      elapsedMs: Math.round(performance.now() - t1),
+    });
+    try {
+      await client.stop();
+    } catch (stopErr: unknown) {
+      perfLog.warn("[createRpcClient] client.stop after failed start failed", {
+        sessionPath,
+        err: stopErr instanceof Error ? stopErr.message : String(stopErr),
+      });
+    }
+    throw err;
+  }
   const t2 = performance.now();
 
   const timings = {
@@ -414,8 +452,8 @@ export class AgentProcessManager {
   /** CWD-based process tracking: projectPath → set of ManagedClients for that project */
   private processByCwd = new Map<string, Set<ManagedClient>>();
   private servers = new Set<RPCServer>();
-  /** Guard: prevents recursive start() via coordinator session_delegate */
-  private _startInProgress = false;
+  /** Per-session start de-dupe: repeated UI/subscription starts share the same client startup. */
+  private _startPromises = new Map<string, Promise<AgentStartResult>>();
   /** Queued delegate requests received during start() */
   private _pendingDelegateRequests: Array<{
     sessionId: string;
@@ -462,7 +500,7 @@ export class AgentProcessManager {
       isCurrentProject: poolKey === currentPoolKey,
     });
     oldest.unsubscribe();
-    oldest.client.stop().catch(() => { });
+    oldest.client.stop().catch(() => {});
     this.clients.delete(sid);
     removeFromProcessPool(this.processByCwd, poolKey, oldest);
   }
@@ -537,7 +575,13 @@ export class AgentProcessManager {
     customEntries: Array<{ id: string; customType: string; data: unknown; timestamp: number }>,
     parentById: Map<string, string | null>,
   ): Promise<{ newEntries: number; totalLines: number }> {
-    return this.messageReader.readJsonlFromLine(sessionPath, startLine, messages, customEntries, parentById);
+    return this.messageReader.readJsonlFromLine(
+      sessionPath,
+      startLine,
+      messages,
+      customEntries,
+      parentById,
+    );
   }
 
   async readJsonlFromByteOffset(
@@ -558,7 +602,13 @@ export class AgentProcessManager {
     }>;
     lastLeafPointer: string | null;
   }> {
-    return this.messageReader.readJsonlFromByteOffset(sessionPath, byteOffset, messages, customEntries, parentById);
+    return this.messageReader.readJsonlFromByteOffset(
+      sessionPath,
+      byteOffset,
+      messages,
+      customEntries,
+      parentById,
+    );
   }
 
   private async _drainPendingDelegates(): Promise<void> {
@@ -607,7 +657,7 @@ export class AgentProcessManager {
       sessionProjectPaths: this.sessionProjectPaths,
       clients: this.clients,
       processByCwd: this.processByCwd,
-      isStartInProgress: () => this._startInProgress,
+      isStartInProgress: () => false,
       queueDelegateRequest: (args) =>
         new Promise<unknown>((resolve) => {
           this._pendingDelegateRequests.push({ ...args, resolve });
@@ -628,16 +678,22 @@ export class AgentProcessManager {
       broadcastSessionStatus: (sessionId, status) => this.broadcastSessionStatus(sessionId, status),
       emitAgentEvent: (sessionId, event) => this.emitAgentEvent(sessionId, event as SanitizedEvent),
       getActiveManaged: (sessionId) => this.getActiveManaged(sessionId) ?? undefined,
-      findParentSession: (sessionId) => this.coordinatorHandler.findParentSession(sessionId) ?? undefined,
+      findParentSession: (sessionId) =>
+        this.coordinatorHandler.findParentSession(sessionId) ?? undefined,
       clients: this.clients,
       lastLspState: this.lastLspState,
       leafIds: this.leafIds,
-      syncDelegateResolvers: this.coordinatorHandler.syncDelegateResolvers as AgentEventHandlerDeps["syncDelegateResolvers"],
+      syncDelegateResolvers: this.coordinatorHandler
+        .syncDelegateResolvers as AgentEventHandlerDeps["syncDelegateResolvers"],
       syncDelegateLastText: this.coordinatorHandler.syncDelegateLastText,
       subagentSyncChildren: this.coordinatorHandler.subagentSyncChildren,
       parentChildMap: this.coordinatorHandler.parentChildMap,
       delegateReplyCount: this.coordinatorHandler.delegateReplyCount,
       delegateCreatedAt: this.coordinatorHandler.delegateCreatedAt,
+      delegateReplyMode: this.coordinatorHandler.delegateReplyMode,
+      delegateRepliedSessions: this.coordinatorHandler.delegateRepliedSessions,
+      sendDelegateFallbackReply: (sessionId) =>
+        this.coordinatorHandler.sendDelegateFallbackReply(sessionId),
     });
   }
 
@@ -691,8 +747,14 @@ export class AgentProcessManager {
     projectPath: string,
     sessionPath: string,
     options?: { forceNewProcess?: boolean; userId?: string },
-  ): Promise<{ agentId: string; status: "started" | "already_running" | "switched" }> {
-    return startAgentClientOperation({
+  ): Promise<AgentStartResult> {
+    const inFlightStart = this._startPromises.get(sessionId);
+    if (inFlightStart) {
+      log.info("[start] joining in-flight session start", { sessionId });
+      return inFlightStart;
+    }
+
+    const startPromise = startAgentClientOperation({
       sessionId,
       projectPath,
       sessionPath,
@@ -711,36 +773,21 @@ export class AgentProcessManager {
       handleCoordinatorCall: (sid, data, channelName) =>
         this.handleCoordinatorCall(sid, data, channelName),
       broadcastSessionStatus: (sid, status) => this.broadcastSessionStatus(sid, status),
-      acquireStartLock: async (sid) => {
-        if (this._startInProgress) {
-          log.warn("[start] reentrant call, waiting for first start to complete", { sessionId: sid });
-          for (let i = 0; i < 50; i++) {
-            await new Promise((r) => setTimeout(r, 100));
-            if (!this._startInProgress) break;
-          }
-          const existingAfter = this.getActiveManaged(sid);
-          if (existingAfter) {
-            return false;
-          }
-          log.warn("[start] first start did not produce client, proceeding", { sessionId: sid });
-        }
-        this._startInProgress = true;
-        return true;
-      },
-      releaseStartLock: () => {
-        this._startInProgress = false;
-      },
       drainPendingDelegates: () => {
         this._drainPendingDelegates();
       },
     });
+    this._startPromises.set(sessionId, startPromise);
+    try {
+      return await startPromise;
+    } finally {
+      if (this._startPromises.get(sessionId) === startPromise) {
+        this._startPromises.delete(sessionId);
+      }
+    }
   }
 
-  async send(
-    sessionId: string,
-    content: string,
-    images?: ImageContent[],
-  ): Promise<boolean> {
+  async send(sessionId: string, content: string, images?: ImageContent[]): Promise<boolean> {
     return sendPromptOperation({
       sessionId,
       content,
@@ -753,11 +800,7 @@ export class AgentProcessManager {
     });
   }
 
-  steer(
-    sessionId: string,
-    content: string,
-    images?: ImageContent[],
-  ): boolean {
+  steer(sessionId: string, content: string, images?: ImageContent[]): boolean {
     return steerOperation({
       sessionId,
       content,
@@ -766,11 +809,7 @@ export class AgentProcessManager {
     });
   }
 
-  followUp(
-    sessionId: string,
-    content: string,
-    images?: ImageContent[],
-  ): boolean {
+  followUp(sessionId: string, content: string, images?: ImageContent[]): boolean {
     return followUpOperation({
       sessionId,
       content,
@@ -826,6 +865,7 @@ export class AgentProcessManager {
       parentChildMap: this.coordinatorHandler.parentChildMap,
       delegateCreatedAt: this.coordinatorHandler.delegateCreatedAt,
       delegateReplyCount: this.coordinatorHandler.delegateReplyCount,
+      delegateRepliedSessions: this.coordinatorHandler.delegateRepliedSessions,
       syncDelegateResolvers: this.coordinatorHandler.syncDelegateResolvers,
       subagentSyncChildren: this.coordinatorHandler.subagentSyncChildren,
       syncDelegateLastText: this.coordinatorHandler.syncDelegateLastText,
@@ -988,6 +1028,7 @@ export class AgentProcessManager {
       args?: unknown;
       startedAt?: number;
     }>;
+    pendingUIRequests?: ExtensionUIRequestEvent[];
   } | null> {
     let managed = this.getActiveManaged(sessionId);
     managed ??= await this.ensureManagedClient(sessionId);
@@ -1003,20 +1044,21 @@ export class AgentProcessManager {
           args?: unknown;
           startedAt?: number;
         }>;
+        pendingUIRequests?: ExtensionUIRequestEvent[];
       };
       const model = state.model;
       const stateAny = state as unknown as Record<string, unknown>;
       return {
         model: model
           ? {
-            id: String(model.id ?? ""),
-            name: model.name ? String(model.name) : undefined,
-            api: stateAny.api ? String(stateAny.api) : undefined,
-            provider: model.provider ? String(model.provider) : undefined,
-            reasoning: Boolean(model.reasoning),
-            contextWindow: Number(model.contextWindow ?? 0),
-            maxTokens: Number(model.maxTokens ?? 0),
-          }
+              id: String(model.id ?? ""),
+              name: model.name ? String(model.name) : undefined,
+              api: stateAny.api ? String(stateAny.api) : undefined,
+              provider: model.provider ? String(model.provider) : undefined,
+              reasoning: Boolean(model.reasoning),
+              contextWindow: Number(model.contextWindow ?? 0),
+              maxTokens: Number(model.maxTokens ?? 0),
+            }
           : undefined,
         thinkingLevel: state.thinkingLevel ? String(state.thinkingLevel) : undefined,
         isStreaming: Boolean(state.isStreaming),
@@ -1026,6 +1068,7 @@ export class AgentProcessManager {
         messageCount: Number(state.messageCount ?? 0),
         streamingMessage: stateWithStreaming.streamingMessage,
         activeToolExecutions: stateWithStreaming.activeToolExecutions ?? [],
+        pendingUIRequests: stateWithStreaming.pendingUIRequests ?? [],
       };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -1072,10 +1115,10 @@ export class AgentProcessManager {
         cost: Number(stats.cost ?? 0),
         contextUsage: cu
           ? {
-            tokens: cu.tokens,
-            contextWindow: Number(cu.contextWindow ?? 0),
-            percent: cu.percent,
-          }
+              tokens: cu.tokens,
+              contextWindow: Number(cu.contextWindow ?? 0),
+              percent: cu.percent,
+            }
           : undefined,
       };
     } catch (err: unknown) {
@@ -1380,6 +1423,8 @@ export class AgentProcessManager {
       permissionMode?: string;
       source: string;
       filePath: string;
+      color?: string;
+      avatar?: { type: "emoji"; value: string } | { type: "image"; src: string };
     }>;
   }> {
     return getAgentsOperation({

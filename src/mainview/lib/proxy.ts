@@ -19,7 +19,38 @@ import { createLogger } from "../../shared/lib/logger";
 
 const logger = createLogger("proxy-register");
 
+const PROXY_PREFERENCE_KEY = "pi-local-proxy-enabled";
+
+let preferred = readProxyPreference();
 let active = false;
+let configured: boolean | null = null;
+let statusError: string | undefined;
+
+function readProxyPreference(): boolean {
+  if (typeof localStorage === "undefined") return false;
+  return localStorage.getItem(PROXY_PREFERENCE_KEY) === "true";
+}
+
+function writeProxyPreference(next: boolean): void {
+  preferred = next;
+  if (typeof localStorage === "undefined") return;
+  if (next) {
+    localStorage.setItem(PROXY_PREFERENCE_KEY, "true");
+  } else {
+    localStorage.removeItem(PROXY_PREFERENCE_KEY);
+  }
+}
+
+export interface ProxyStatus {
+  preferred: boolean;
+  active: boolean;
+  configured: boolean | null;
+  error?: string;
+}
+
+export function getProxyStatus(): ProxyStatus {
+  return { preferred, active, configured, error: statusError };
+}
 
 // ---- 公开 API ----
 
@@ -39,14 +70,44 @@ export function isProxyEnabled(): boolean {
   return active;
 }
 
-/** 开启代理 */
-export function enableProxy(): void {
+/** 开启代理偏好；真实可用性由 refreshProxyStatus/tryEnable 兜底确认 */
+export function enableProxy(): ProxyStatus {
+  writeProxyPreference(true);
   active = true;
+  return getProxyStatus();
 }
 
-/** 关闭代理 */
-export function disableProxy(): void {
+/** 关闭代理偏好 */
+export function disableProxy(): ProxyStatus {
+  writeProxyPreference(false);
   active = false;
+  statusError = undefined;
+  return getProxyStatus();
+}
+
+/** 刷新服务端代理能力。用户偏好和真实配置都满足时，代理才算 active。 */
+export async function refreshProxyStatus(): Promise<ProxyStatus> {
+  try {
+    const res = await fetch("/api/proxy-status", { method: "GET" });
+    if (!res.ok) {
+      configured = false;
+      active = false;
+      statusError = `HTTP ${res.status}`;
+      return getProxyStatus();
+    }
+
+    const data = (await res.json()) as { configured?: boolean };
+    configured = data.configured === true;
+    active = preferred && configured;
+    statusError = undefined;
+    return getProxyStatus();
+  } catch (e) {
+    configured = false;
+    active = false;
+    statusError = String(e);
+    logger.warn("Proxy status check failed", { error: statusError });
+    return getProxyStatus();
+  }
 }
 
 /**
@@ -55,7 +116,12 @@ export function disableProxy(): void {
  * - 后端没配 → 502 → 自动关闭
  */
 export async function tryEnable(serverHost: string): Promise<void> {
-  active = true;
+  await refreshProxyStatus();
+  if (!preferred || !configured) {
+    active = false;
+    return;
+  }
+
   if (!serverHost) {
     active = false;
     return;

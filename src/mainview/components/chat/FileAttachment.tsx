@@ -133,23 +133,20 @@ export function AttachmentButtons({ onGoalClick }: { onGoalClick?: () => void } 
       onGoalClick();
       return;
     }
-    openStatusPanel("status");
+    openStatusPanel("supervisor");
   }, [onGoalClick, openStatusPanel]);
 
-  const goalColor = !supervisorStatus?.enabled
-    ? "text-semantic-accent"
-    : supervisorStatus.goal
-      ? "text-semantic-accent"
-      : supervisorStatus.state === "idle" || supervisorStatus.state === "checking"
-        ? "text-status-success"
-        : supervisorStatus.state === "paused"
-          ? "text-status-warning"
-          : supervisorStatus.state === "continuing"
-            ? "text-status-info"
-            : "text-text-tertiary";
+  const goalStatus = supervisorStatus?.goal?.status;
+  const goalColor = (() => {
+    if (!supervisorStatus?.goal) return "text-text-tertiary";
+    if (goalStatus === "complete") return "text-status-success";
+    if (goalStatus === "blocked" || goalStatus === "needs_user") return "text-status-warning";
+    return "text-semantic-accent";
+  })();
 
   const isPulsing =
     supervisorStatus?.enabled === true &&
+    !!supervisorStatus.goal &&
     (supervisorStatus.state === "checking" || supervisorStatus.state === "continuing");
 
   const pendingSeconds =

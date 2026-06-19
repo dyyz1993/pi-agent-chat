@@ -4,6 +4,7 @@ import {
   type SyncDelegateResolver,
   clearDelegateTracking,
   removeDelegateChild,
+  removeSessionFromAllParents,
   cleanupStoppedDelegateSession,
 } from "./coordinator-session-state";
 import { findCoordinatorResponseManaged } from "./coordinator-response-routing";
@@ -16,6 +17,7 @@ import {
   handleCoordinatorDelegateStopOperation,
   handleCoordinatorDelegateForkOperation,
 } from "./coordinator-delegate-operations";
+import type { DelegateReplyMode } from "./coordinator-delegate-utils";
 import { createLogger } from "../lib/logger";
 
 const log = createLogger("agent");
@@ -44,7 +46,7 @@ export interface CoordinatorHandlerDeps {
     projectPath: string,
     sessionPath: string,
     options?: Record<string, unknown>,
-  ) => Promise<{ status: "started" | "already_running" | "switched" }>;
+  ) => Promise<{ status: "started" | "already_running" }>;
   stop: (sessionId: string) => Promise<boolean>;
   send: (sessionId: string, content: string) => unknown;
   steer: (sessionId: string, content: string) => unknown;
@@ -84,6 +86,8 @@ export class CoordinatorHandler {
   public parentChildMap: DelegateChildMap = new Map<string, Set<string>>();
   public delegateReplyCount = new Map<string, number>();
   public delegateCreatedAt = new Map<string, number>();
+  public delegateReplyMode = new Map<string, DelegateReplyMode>();
+  public delegateRepliedSessions = new Set<string>();
   public syncDelegateResolvers = new Map<string, SyncDelegateResolver>();
   public subagentSyncChildren = new Set<string>();
   public syncDelegateLastText = new Map<string, string>();
@@ -124,7 +128,7 @@ export class CoordinatorHandler {
           }
           break;
         case "session_delegate_send":
-          result = await this.handleCoordinatorDelegateSend(msg);
+          result = await this.handleCoordinatorDelegateSend(sessionId, msg);
           break;
         case "session_delegate_sync":
           if (this.deps.isStartInProgress()) {
@@ -137,7 +141,7 @@ export class CoordinatorHandler {
           }
           break;
         case "session_delegate_status":
-          result = await this.handleCoordinatorDelegateStatus(msg);
+          result = await this.handleCoordinatorDelegateStatus(sessionId, msg);
           break;
         case "session_delegate_list":
           result = this.handleCoordinatorDelegateList(sessionId);
@@ -150,7 +154,7 @@ export class CoordinatorHandler {
           break;
         default:
           if (method === "session_delegate_clear_stopped") {
-            result = this.handleCoordinatorClearStopped(msg);
+            result = this.handleCoordinatorClearStopped(sessionId, msg);
           } else if (method === "session_delegate_remove") {
             result = this.handleCoordinatorRemove(sessionId, msg);
           } else {
@@ -194,44 +198,64 @@ export class CoordinatorHandler {
   }
 
   handleCoordinatorClearStopped(
+    parentSessionId: string,
     msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_clear_stopped" }>,
-  ): { cleared: string[] } {
+  ): { cleared: string[]; removed: number } {
     const targetSessionId = (msg as Record<string, unknown>).sessionId as string | undefined;
     const cleared: string[] = [];
     if (targetSessionId) {
+      removeDelegateChild(this.parentChildMap, parentSessionId, targetSessionId);
       clearDelegateTracking(
         this.delegateCreatedAt,
         this.delegateReplyCount,
         targetSessionId,
       );
+      this.delegateRepliedSessions.delete(targetSessionId);
       cleared.push(targetSessionId);
+      return { cleared, removed: cleared.length };
     }
-    return { cleared };
+
+    const children = [...(this.parentChildMap.get(parentSessionId) ?? [])];
+    for (const childSessionId of children) {
+      const managed = this.deps.getActiveManaged(childSessionId);
+      if (managed?.info.status === "streaming") continue;
+      removeDelegateChild(this.parentChildMap, parentSessionId, childSessionId);
+      clearDelegateTracking(
+        this.delegateCreatedAt,
+        this.delegateReplyCount,
+        childSessionId,
+      );
+      this.delegateRepliedSessions.delete(childSessionId);
+      cleared.push(childSessionId);
+    }
+    return { cleared, removed: cleared.length };
   }
 
   handleCoordinatorRemove(
     parentSessionId: string,
     msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_remove" }>,
-  ): { removed: boolean } {
-    const targetSessionId = (msg as Record<string, unknown>).targetSessionId as
-      | string
-      | undefined;
-    if (!targetSessionId) return { removed: false };
+  ): { ok: boolean; removed: boolean } {
+    const targetSessionId =
+      ((msg as Record<string, unknown>).sessionId as string | undefined) ??
+      ((msg as Record<string, unknown>).targetSessionId as string | undefined);
+    if (!targetSessionId) return { ok: false, removed: false };
 
     removeDelegateChild(this.parentChildMap, parentSessionId, targetSessionId);
+    removeSessionFromAllParents(this.parentChildMap, targetSessionId);
     clearDelegateTracking(
       this.delegateCreatedAt,
       this.delegateReplyCount,
       targetSessionId,
     );
+    this.delegateRepliedSessions.delete(targetSessionId);
     void this.deps.stop(targetSessionId);
-    return { removed: true };
+    return { ok: true, removed: true };
   }
 
   async handleCoordinatorDelegate(
     parentSessionId: string,
     msg: Extract<CoordinatorMethodCall, { __call: "session_delegate" }>,
-  ): Promise<{ sessionId: string; status: "started" | "already_running" | "switched" }> {
+  ): Promise<{ sessionId: string; status: "started" | "already_running" }> {
     return handleCoordinatorDelegateOperation({
       parentSessionId,
       msg,
@@ -244,6 +268,7 @@ export class CoordinatorHandler {
       parentChildMap: this.parentChildMap,
       delegateCreatedAt: this.delegateCreatedAt,
       delegateReplyCount: this.delegateReplyCount,
+      delegateReplyMode: this.delegateReplyMode,
     });
   }
 
@@ -279,15 +304,19 @@ export class CoordinatorHandler {
   }
 
   async handleCoordinatorDelegateSend(
+    sourceSessionId: string,
     msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_send" }>,
   ): Promise<{ delivered: boolean; targetStatus: "active" | "started" | "not_found" }> {
     return handleCoordinatorDelegateSendOperation({
+      sourceSessionId,
       msg,
       clients: this.deps.clients,
       sessionPaths: this.deps.sessionPaths,
       sessionProjectPaths: this.deps.sessionProjectPaths,
       delegateReplyCount: this.delegateReplyCount,
       delegateCreatedAt: this.delegateCreatedAt,
+      delegateReplyMode: this.delegateReplyMode,
+      delegateRepliedSessions: this.delegateRepliedSessions,
       parentChildMap: this.parentChildMap,
       start: (id, projectPath, sessionPath) =>
         this.deps.start(id, projectPath, sessionPath),
@@ -298,10 +327,13 @@ export class CoordinatorHandler {
   }
 
   async handleCoordinatorDelegateStatus(
+    parentSessionId: string,
     msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_status" }>,
   ): Promise<{ status: string; isCompacting: boolean; contextUsage: unknown }> {
     return handleCoordinatorDelegateStatusOperation({
+      parentSessionId,
       msg,
+      parentChildMap: this.parentChildMap,
       sessionPaths: this.deps.sessionPaths,
       sessionProjectPaths: this.deps.sessionProjectPaths,
       getStatus: this.deps.getStatus,
@@ -335,7 +367,7 @@ export class CoordinatorHandler {
   async handleCoordinatorDelegateFork(
     parentSessionId: string,
     msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_fork" }>,
-  ): Promise<{ sessionId: string; status: "started" | "already_running" | "switched" }> {
+  ): Promise<{ sessionId: string; status: "started" | "already_running" }> {
     return handleCoordinatorDelegateForkOperation({
       parentSessionId,
       msg,
@@ -376,5 +408,28 @@ export class CoordinatorHandler {
       if (children.has(childSessionId)) return parentId;
     }
     return null;
+  }
+
+  async sendDelegateFallbackReply(childSessionId: string): Promise<boolean> {
+    const parentSessionId = this.findParentSession(childSessionId);
+    if (!parentSessionId) return false;
+    if (!this.delegateCreatedAt.has(childSessionId)) return false;
+    if (this.subagentSyncChildren.has(childSessionId)) return false;
+    if (this.delegateRepliedSessions.has(childSessionId)) return false;
+
+    const child = this.deps.getActiveManaged(childSessionId);
+    const title = child?.info.sessionName || childSessionId;
+    const message = [
+      `委派任务「${title}」已结束，但子会话没有主动回传最终结果。`,
+      ``,
+      `这是一条系统兜底回执，不代表任务成功或失败。请点击本卡片的跳转入口查看子会话详情。`,
+    ].join("\n");
+
+    const result = await this.handleCoordinatorDelegateSend(childSessionId, {
+      __call: "session_delegate_send",
+      targetSessionId: parentSessionId,
+      message,
+    });
+    return result.delivered;
   }
 }

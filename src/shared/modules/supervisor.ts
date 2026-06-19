@@ -17,11 +17,21 @@ export interface GoalState {
   startedAt: number;
   updatedAt: number;
   currentMilestone?: string;
+  checklist?: GoalChecklistItem[];
   continuationCount: number;
   blockers: Array<{
     kind: "permission" | "choice" | "runtime" | "unsafe" | "unknown";
     summary: string;
   }>;
+}
+
+export interface GoalChecklistItem {
+  id: string;
+  text: string;
+  status: "pending" | "in_progress" | "done" | "blocked";
+  kind: "scope" | "implementation" | "verification" | "report";
+  evidence?: string;
+  updatedAt?: number;
 }
 
 export interface GoldResult {
@@ -86,9 +96,11 @@ export interface TriggerModelCheck {
   confidence: number;
   response?: string;
   durationMs?: number;
+  model?: string;
 }
 
 export interface TriggerRecord {
+  goalId?: string;
   seq: number;
   startedAt: number;
   finishedAt?: number;
@@ -97,7 +109,7 @@ export interface TriggerRecord {
   confidence: number;
   guardResults: TriggerGuardResult[];
   modelCheck?: TriggerModelCheck;
-  action: "continue" | "pause" | "complete" | "ask_user";
+  action: "continue" | "complete" | "paused" | "error" | "idle";
   reason?: string;
 }
 

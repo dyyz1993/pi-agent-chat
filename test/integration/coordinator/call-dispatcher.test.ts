@@ -31,8 +31,8 @@ function makeOptions(overrides: Partial<Parameters<typeof handleCoordinatorCallO
     handleDelegateList: vi.fn().mockReturnValue({ sessions: [] }),
     handleDelegateStop: vi.fn().mockResolvedValue({ ok: true }),
     handleDelegateFork: vi.fn().mockResolvedValue({ sessionId: "fork" }),
-    handleClearStopped: vi.fn().mockReturnValue({ cleared: [] }),
-    handleRemove: vi.fn().mockReturnValue({ removed: true }),
+    handleClearStopped: vi.fn().mockReturnValue({ cleared: [], removed: 0 }),
+    handleRemove: vi.fn().mockReturnValue({ ok: true, removed: true }),
     findResponseManaged: vi.fn().mockReturnValue({ managed: makeManaged() }),
     ...overrides,
   };
@@ -95,7 +95,42 @@ describe("coordinator call dispatcher", () => {
 
     await handleCoordinatorCallOperation(options);
 
+    expect(options.handleDelegateStatus).toHaveBeenCalledWith("sess-1", options.data);
     const send = managed.client.channel("coordinator").send;
     expect(send).toHaveBeenCalledWith({ error: "offline", invokeId: "invoke-2" });
+  });
+
+  it("routes clear/remove management calls with the parent session id", async () => {
+    const managed = makeManaged();
+    const removeMsg = {
+      __call: "session_delegate_remove" as const,
+      invokeId: "invoke-remove",
+      sessionId: "child-1",
+    };
+    const options = makeOptions({
+      data: removeMsg,
+      findResponseManaged: vi.fn().mockReturnValue({ managed }),
+    });
+
+    await handleCoordinatorCallOperation(options);
+
+    expect(options.handleRemove).toHaveBeenCalledWith("sess-1", removeMsg);
+    let send = managed.client.channel("coordinator").send;
+    expect(send).toHaveBeenCalledWith({ ok: true, removed: true, invokeId: "invoke-remove" });
+
+    const clearMsg = {
+      __call: "session_delegate_clear_stopped" as const,
+      invokeId: "invoke-clear",
+    };
+    const clearOptions = makeOptions({
+      data: clearMsg,
+      findResponseManaged: vi.fn().mockReturnValue({ managed }),
+    });
+
+    await handleCoordinatorCallOperation(clearOptions);
+
+    expect(clearOptions.handleClearStopped).toHaveBeenCalledWith("sess-1", clearMsg);
+    send = managed.client.channel("coordinator").send;
+    expect(send).toHaveBeenCalledWith({ cleared: [], removed: 0, invokeId: "invoke-clear" });
   });
 });

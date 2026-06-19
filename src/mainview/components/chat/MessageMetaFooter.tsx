@@ -25,7 +25,7 @@ export const MessageMetaFooter = memo(function MessageMetaFooter({
   const modelLabel = provider && model ? `${provider}/${model}` : (model ?? provider ?? "");
 
   return (
-    <div className="mt-1.5 pt-1.5 pl-2 pb-0.5 border-t border-border-secondary/20">
+    <div className="mt-0.5 pt-1 pl-2 pb-0.5 border-t border-border-secondary/20">
       <div className="flex items-center gap-1 text-[10px] flex-nowrap overflow-x-auto">
         <span className="inline-flex items-center gap-1 shrink-0">
           <Tag label={t("tokenInput")} value={formatTokenCount(tokenUsage.input)} />

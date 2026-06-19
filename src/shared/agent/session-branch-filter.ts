@@ -69,6 +69,86 @@ function injectEntryId(e: ParsedMessageEntry): unknown {
   return msg;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function extractToolCallIds(message: unknown): string[] {
+  if (!isRecord(message) || message.role !== "assistant") return [];
+  if (!Array.isArray(message.content)) return [];
+  return message.content
+    .filter(isRecord)
+    .filter((block) => block.type === "toolCall")
+    .map((block) => block.id)
+    .filter((id): id is string => typeof id === "string" && id.length > 0);
+}
+
+function extractToolResultId(message: unknown): string | null {
+  if (!isRecord(message) || message.role !== "toolResult") return null;
+  return typeof message.toolCallId === "string" && message.toolCallId
+    ? message.toolCallId
+    : null;
+}
+
+function expandToolPairWindow(
+  filteredMessages: ParsedMessageEntry[],
+  startIndex: number,
+  endIndex: number,
+): ParsedMessageEntry[] {
+  const includedIndexes = new Set<number>();
+  const toolCallIndexById = new Map<string, number>();
+  const toolResultIndexesById = new Map<string, number[]>();
+
+  for (let index = 0; index < filteredMessages.length; index++) {
+    const entry = filteredMessages[index];
+    for (const toolCallId of extractToolCallIds(entry.message)) {
+      toolCallIndexById.set(toolCallId, index);
+    }
+    const resultToolCallId = extractToolResultId(entry.message);
+    if (resultToolCallId) {
+      const indexes = toolResultIndexesById.get(resultToolCallId) ?? [];
+      indexes.push(index);
+      toolResultIndexesById.set(resultToolCallId, indexes);
+    }
+  }
+
+  const toProcess: number[] = [];
+  for (let index = startIndex; index < endIndex; index++) {
+    includedIndexes.add(index);
+    toProcess.push(index);
+  }
+
+  while (toProcess.length > 0) {
+    const index = toProcess.pop();
+    if (index === undefined) break;
+    const entry = filteredMessages[index];
+    if (!entry) continue;
+
+    for (const toolCallId of extractToolCallIds(entry.message)) {
+      for (const resultIndex of toolResultIndexesById.get(toolCallId) ?? []) {
+        if (!includedIndexes.has(resultIndex)) {
+          includedIndexes.add(resultIndex);
+          toProcess.push(resultIndex);
+        }
+      }
+    }
+
+    const resultToolCallId = extractToolResultId(entry.message);
+    if (resultToolCallId) {
+      const callIndex = toolCallIndexById.get(resultToolCallId);
+      if (callIndex !== undefined && !includedIndexes.has(callIndex)) {
+        includedIndexes.add(callIndex);
+        toProcess.push(callIndex);
+      }
+    }
+  }
+
+  return Array.from(includedIndexes)
+    .sort((a, b) => a - b)
+    .map((index) => filteredMessages[index])
+    .filter((entry): entry is ParsedMessageEntry => entry !== undefined);
+}
+
 export interface PaginationOptions {
   limit?: number;
   afterEntryId?: string;
@@ -110,7 +190,9 @@ export function applyPagination(
   } else if (limit !== undefined) {
     const endIndex = cursorIndex >= 0 ? cursorIndex : totalCount;
     const startIndex = Math.max(0, endIndex - limit);
-    slicedMessages = filteredMessages.slice(startIndex, endIndex).map(injectEntryId);
+    slicedMessages = expandToolPairWindow(filteredMessages, startIndex, endIndex).map(
+      injectEntryId,
+    );
     hasMore = startIndex > 0;
     nextCursor = hasMore ? (filteredMessages[startIndex]?.entryId ?? null) : null;
   } else {

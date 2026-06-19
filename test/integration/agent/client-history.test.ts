@@ -11,6 +11,7 @@ import {
   getForkMessagesOperation,
   getLastAssistantTextOperation,
   getModifiedFilesOperation,
+  forkOperation,
   newSessionOperation,
   previewRollbackOperation,
   restoreFilesFromSnapshotOperation,
@@ -100,6 +101,31 @@ describe("agent client history operations", () => {
       toEntryId: "e2",
     });
     expect(getBatchDiffs).toHaveBeenCalledWith({ fromEntryId: "e1", toEntryId: "e2" });
+  });
+
+  it("forks by copy-forking a branched session without switching the active client", async () => {
+    const copyFork = vi.fn().mockResolvedValue({
+      newSessionFile: "/tmp/forked.jsonl",
+      newSessionId: "fork-session",
+    });
+    const fork = vi.fn().mockResolvedValue({ cancelled: false });
+    const managed = makeManaged({ copyFork, fork });
+
+    await expect(
+      forkOperation({
+        sessionId: "sess-1",
+        entryId: "entry-1",
+        forkOptions: { position: "at" },
+        getActiveManaged: () => managed,
+      }),
+    ).resolves.toMatchObject({
+      cancelled: false,
+      newSessionFile: "/tmp/forked.jsonl",
+      newSessionId: "fork-session",
+    });
+
+    expect(copyFork).toHaveBeenCalledWith("entry-1");
+    expect(fork).not.toHaveBeenCalled();
   });
 
   it("restores snapshot files through the file-snapshot channel", async () => {

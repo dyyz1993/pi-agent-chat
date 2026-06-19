@@ -36,4 +36,13 @@ describe("Channel timeout configuration", () => {
 
     expect(totalWaitMs).toBeLessThanOrEqual(1600);
   });
+
+  it("subagent RPC clients should only exclude LSP extensions", () => {
+    const source = readFileSync(join(SRC_ROOT, "shared/agent/process-manager.ts"), "utf-8");
+
+    expect(source).toContain("SUBAGENT_EXCLUDED_EXTENSIONS");
+    expect(source).toContain('new Set(["lsp"])');
+    expect(source).toContain("PI_SKIP_MCP");
+    expect(source).not.toContain("SUBAGENT_REQUIRED_EXTENSIONS");
+  });
 });

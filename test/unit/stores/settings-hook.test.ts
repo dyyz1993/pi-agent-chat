@@ -14,7 +14,7 @@ import {
 const DEFAULTS = {
   showToolCalls: true,
   showToolResults: true,
-  showThinking: true,
+  showThinking: false,
   collapseThinking: true,
   showTimeline: true,
 };
@@ -28,6 +28,7 @@ describe("useSettingsStore", () => {
   it("has correct initial values", () => {
     const s = useSettingsStore.getState();
     expect(s.showToolCalls).toBe(true);
+    expect(s.showThinking).toBe(false);
     expect(s.showTimeline).toBe(true);
   });
 

@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useMemo } from "react";
 import {
-  Bot,
+  Wrench,
   File,
   Folder,
   Sparkles,
@@ -40,8 +40,8 @@ const AT_TABS: { key: AtTab; labelKey: string }[] = [
 
 function renderIcon(icon: PopupItem["icon"]) {
   switch (icon) {
-    case "bot":
-      return <Bot className="w-4 h-4" />;
+    case "tool":
+      return <Wrench className="w-4 h-4" />;
     case "file":
       return <File className="w-4 h-4" />;
     case "folder":

@@ -23,6 +23,9 @@ interface AbortClientLike {
 
 interface ManagedPromptLike {
   client: PromptClientLike;
+  info?: {
+    status?: string;
+  };
   lastActiveAt: number;
 }
 
@@ -64,8 +67,17 @@ export async function sendPromptOperation<TManaged extends ManagedPromptLike>(op
     return false;
   }
 
+  const status = managed.info?.status;
+  if (status && status !== "idle") {
+    throw new Error(
+      `Agent is ${status}; send a follow-up or steer message instead of a new prompt.`,
+    );
+  }
+
   managed.lastActiveAt = (options.now ?? Date.now)();
-  managed.client.prompt(options.content, options.images).catch(async (err: unknown) => {
+  try {
+    await managed.client.prompt(options.content, options.images);
+  } catch (err: unknown) {
     const msg = errorMessage(err);
     log.error("prompt error", {
       sessionId: options.sessionId,
@@ -74,14 +86,15 @@ export async function sendPromptOperation<TManaged extends ManagedPromptLike>(op
     });
     if (!(await options.isClientAlive(options.sessionId, managed))) {
       options.cleanupDeadClient(options.sessionId, `prompt failed: ${msg}`);
-      return;
+      throw err;
     }
-    options.emitAgentEnd(options.sessionId).catch((emitErr: unknown) => {
+    await options.emitAgentEnd(options.sessionId).catch((emitErr: unknown) => {
       log.warn("emitAgentEvent(agent_end) after prompt error", {
         err: errorMessage(emitErr),
       });
     });
-  });
+    throw err;
+  }
   return true;
 }
 

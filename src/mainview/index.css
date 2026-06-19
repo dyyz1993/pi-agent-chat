@@ -804,3 +804,13 @@ a:focus-visible,
     min-height: 28px;
   }
 }
+
+/*
+ * Compress line number column in react-diff-viewer tables.
+ * The library hardcodes <col width="50px"> in the <colgroup>, which forces the
+ * gutter column to 50px and overrides the gutterWidth from the style override.
+ * Override the column width here so the line number column stays narrow.
+ */
+table[class*="react-diff-"] col[width="50px"] {
+  width: 24px !important;
+}

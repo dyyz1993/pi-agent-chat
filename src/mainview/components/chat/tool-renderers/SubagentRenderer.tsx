@@ -1,5 +1,4 @@
 import { memo, useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { ExternalLink } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { createLogger } from "../../../../shared/lib/logger";
 import type { ContentBlock, SubagentSessionInfo } from "../../../types";
@@ -10,10 +9,25 @@ import { useAgentStore } from "../../../stores/use-agent-store";
 import { agentColorStyle } from "../../../utils/agent-color";
 import { AnsiText } from "../primitives/AnsiText";
 import { ToolCardHeader, type ToolCardStatus } from "../primitives/ToolCardHeader";
+import { SessionJumpButton } from "../primitives/SessionJumpButton";
+import {
+  SessionActivitySummary,
+  buildActivityRoundsFromMessages,
+  createSessionActivityLabels,
+} from "./SessionActivitySummary";
 
 type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
 
 const logger = createLogger("subagent");
+
+function isLiveSubagentStatus(status: string | undefined): boolean {
+  return (
+    status === "streaming" ||
+    status === "compacting" ||
+    status === "permission" ||
+    status === "retrying"
+  );
+}
 
 export const SubagentExecutionCard = memo(function SubagentExecutionCard({
   block,
@@ -59,6 +73,13 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
     }
     return null;
   });
+  const subSessionId = matchedSub?.sessionId;
+  const subMessages = useSubagentStore((s) =>
+    subSessionId ? (s.messagesBySubsession?.[subSessionId] ?? []) : [],
+  );
+  const subagentStatus = useSubagentStore((s) =>
+    subSessionId ? s.subagentStatusMap?.[subSessionId] : undefined,
+  );
 
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
 
@@ -121,6 +142,12 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
   else statusColorClass = "text-status-error";
 
   const canJump = !!matchedSub?.sessionId;
+  const activityRoundLabels = useMemo(() => createSessionActivityLabels(t), [t]);
+  const activityRounds = useMemo(
+    () => buildActivityRoundsFromMessages(subMessages, activityRoundLabels),
+    [activityRoundLabels, subMessages],
+  );
+  const isLive = isRunning || isLiveSubagentStatus(subagentStatus);
 
   const badgeContent = (
     <>
@@ -138,16 +165,7 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
       )}
       <span className={`shrink-0 text-[10px] ${statusColorClass}`}>{statusText}</span>
       {canJump && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            handleJumpToSession();
-          }}
-          className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-semantic-agent hover:text-semantic-agent hover:bg-semantic-agent/10 transition-colors"
-          title={t("subagent.view")}
-        >
-          <ExternalLink className="w-3 h-3" />
-        </button>
+        <SessionJumpButton onJump={handleJumpToSession} title={t("subagent.view")} />
       )}
     </>
   );
@@ -155,8 +173,7 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
   return (
     <div
       data-block-id={blockId}
-      className={`rounded-none overflow-hidden border-x-0 border-t border-b transition-colors ${borderBg} ${canJump ? "cursor-pointer" : ""}`}
-      onClick={canJump ? handleJumpToSession : undefined}
+      className={`rounded-none overflow-hidden border-x-0 border-t border-b transition-colors ${borderBg}`}
     >
       <ToolCardHeader
         toolName="subagent"
@@ -183,6 +200,15 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
             {instruction.slice(0, 500)}
           </span>
         </div>
+      )}
+
+      {!collapsed && (
+        <SessionActivitySummary
+          title={t("coordinator.activity")}
+          rounds={activityRounds}
+          live={isLive}
+          labels={activityRoundLabels}
+        />
       )}
 
       {!collapsed && block.output && (

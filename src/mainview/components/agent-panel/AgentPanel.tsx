@@ -25,6 +25,7 @@ import { useLayoutStore } from "../../layouts/use-layout-store";
 import { useClipboard } from "../chat/preview/use-clipboard";
 import { agentColorStyle } from "../../utils/agent-color";
 import { formatFilePath } from "../../lib/format-path";
+import { AgentAvatar } from "../agent-avatar/AgentAvatar";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -324,11 +325,13 @@ export function AgentPanel() {
   const fetchAllTools = useAgentStore((s) => s.fetchAllTools);
   const fetchSystemPrompt = useAgentStore((s) => s.fetchSystemPrompt);
   const currentAgentBySession = useAgentStore((s) => s.currentAgentBySession);
+  const agents = useAgentStore((s) => s.agents);
 
   const sessionId = activeSessionId ?? "";
   const agent = sessionId ? agentDetailBySession[sessionId] : undefined;
   const allTools = sessionId ? (allToolsBySession[sessionId] ?? []) : [];
-  const currentAgentName = sessionId ? currentAgentBySession[sessionId] : undefined;
+  const currentAgentName = sessionId ? (currentAgentBySession[sessionId] ?? "build") : undefined;
+  const currentAgentSummary = agents.find((item) => item.name === currentAgentName);
 
   const handleRefresh = useCallback(() => {
     if (sessionId) {
@@ -364,7 +367,15 @@ export function AgentPanel() {
       <div className="h-full overflow-y-auto">
         <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--color-border-primary)]">
           <div className="flex items-center gap-1.5 text-sm font-medium text-[var(--color-text-primary)]">
-            <Bot className="w-4 h-4" />
+            <AgentAvatar
+              avatar={currentAgentSummary?.avatar}
+              agentFilePath={currentAgentSummary?.filePath}
+              color={currentAgentSummary?.color}
+              fallbackIcon={Bot}
+              className="w-4 h-4 rounded-full shrink-0 text-[11px]"
+              fallbackClassName="text-[var(--color-text-secondary)]"
+              title={currentAgentName}
+            />
             <span>Agent</span>
             {currentAgentName && (
               <span className="text-[var(--color-text-secondary)]">— {currentAgentName}</span>
@@ -411,7 +422,15 @@ export function AgentPanel() {
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--color-border-primary)]">
         <div className="flex items-center gap-1.5 text-sm font-medium text-[var(--color-text-primary)]">
-          <Bot className="w-4 h-4" />
+          <AgentAvatar
+            avatar={agent.avatar}
+            agentFilePath={agent.filePath}
+            color={agent.color}
+            fallbackIcon={Bot}
+            className="w-4 h-4 rounded-full shrink-0 text-[11px]"
+            fallbackClassName="text-[var(--color-text-secondary)]"
+            title={agent.name}
+          />
           <span>Agent</span>
         </div>
         <button
@@ -425,6 +444,18 @@ export function AgentPanel() {
       {/* Section 1: Basic Info */}
       <Section title="Basic Info" icon={Info}>
         <div className="space-y-2">
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-[var(--color-text-secondary)] min-w-[80px]">Avatar:</span>
+            <AgentAvatar
+              avatar={agent.avatar}
+              agentFilePath={agent.filePath}
+              color={agent.color}
+              fallbackIcon={Bot}
+              className="w-8 h-8 rounded-lg shrink-0 text-base"
+              fallbackClassName="text-[var(--color-text-secondary)]"
+              title={agent.name}
+            />
+          </div>
           <div className="flex items-center gap-2 text-xs">
             <span className="text-[var(--color-text-secondary)] min-w-[80px]">Name:</span>
             <span

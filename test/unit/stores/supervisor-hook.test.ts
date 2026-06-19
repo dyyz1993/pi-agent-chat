@@ -24,6 +24,14 @@ describe("useSupervisorStore", () => {
       status: "running" as const,
       startedAt: 1,
       updatedAt: 1,
+      checklist: [
+        {
+          id: "check-1",
+          text: "Verify the renderer still boots",
+          status: "in_progress" as const,
+          kind: "verification" as const,
+        },
+      ],
       continuationCount: 0,
       blockers: [],
     };
@@ -36,6 +44,69 @@ describe("useSupervisorStore", () => {
       objective: goal.objective,
     });
     expect(useSupervisorStore.getState().bySession["sess-1"]?.status?.goal).toEqual(goal);
+  });
+
+  it("clears stale goal result when a new goal is set", async () => {
+    useSupervisorStore.setState({
+      bySession: {
+        "sess-1": {
+          status: {
+            enabled: true,
+            state: "idle",
+            continueCount: 0,
+            maxContinueCount: 5,
+            activeGuards: [],
+            goal: {
+              id: "old-goal",
+              objective: "Old goal",
+              status: "complete",
+              startedAt: 1,
+              updatedAt: 2,
+              continuationCount: 2,
+              blockers: [],
+            },
+            lastGoldResult: {
+              goalId: "old-goal",
+              verdict: "complete",
+              confidence: 1,
+              checkedAt: 3,
+              reason: "Old goal passed",
+              evidence: [],
+            },
+          },
+          taskReports: [],
+          triggerRecords: [
+            {
+              goalId: "old-goal",
+              seq: 1,
+              startedAt: 1,
+              durationMs: 10,
+              verdict: "complete",
+              confidence: 1,
+              guardResults: [],
+              action: "complete",
+            },
+          ],
+        },
+      },
+    });
+    const nextGoal = {
+      id: "new-goal",
+      objective: "New goal",
+      status: "running" as const,
+      startedAt: 10,
+      updatedAt: 10,
+      continuationCount: 0,
+      blockers: [],
+    };
+    mockCall.mockResolvedValueOnce({ goal: nextGoal });
+
+    await useSupervisorStore.getState().setGoal("sess-1", nextGoal.objective);
+
+    const status = useSupervisorStore.getState().bySession["sess-1"]?.status;
+    expect(status?.goal).toEqual(nextGoal);
+    expect(status?.lastGoldResult).toBeUndefined();
+    expect(useSupervisorStore.getState().bySession["sess-1"]?.triggerRecords).toHaveLength(1);
   });
 
   it("handles goal and gold channel events", () => {
@@ -64,5 +135,42 @@ describe("useSupervisorStore", () => {
     expect(status?.goal).toEqual(goal);
     expect(status?.lastGoldResult?.verdict).toBe("incomplete");
     expect(status?.lastGoldResult?.continueMessage).toBe("Continue M4");
+  });
+
+  it("drops stale gold result when a goalChanged event switches to another goal", () => {
+    const oldGoal = {
+      id: "goal-old",
+      objective: "Old",
+      status: "complete" as const,
+      startedAt: 1,
+      updatedAt: 2,
+      continuationCount: 1,
+      blockers: [],
+    };
+    const nextGoal = {
+      id: "goal-next",
+      objective: "Next",
+      status: "running" as const,
+      startedAt: 3,
+      updatedAt: 3,
+      continuationCount: 0,
+      blockers: [],
+    };
+
+    useSupervisorStore.getState().handleEvent("sess-1", { type: "goalChanged", goal: oldGoal });
+    useSupervisorStore.getState().handleEvent("sess-1", {
+      type: "goldResult",
+      goalId: "goal-old",
+      verdict: "complete",
+      confidence: 1,
+      checkedAt: 4,
+      reason: "Old complete",
+      evidence: [],
+    });
+    useSupervisorStore.getState().handleEvent("sess-1", { type: "goalChanged", goal: nextGoal });
+
+    const status = useSupervisorStore.getState().bySession["sess-1"]?.status;
+    expect(status?.goal).toEqual(nextGoal);
+    expect(status?.lastGoldResult).toBeUndefined();
   });
 });

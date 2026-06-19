@@ -14,6 +14,7 @@ import {
   Zap,
   Target,
   Settings2,
+  type LucideIcon,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useSessionStore } from "../../stores/use-session-store";
@@ -27,7 +28,8 @@ import { ThemeMenu } from "../theme/ThemeMenu";
 import { ModelPickerButton } from "../model-picker/ModelPickerButton";
 import { CopyButton } from "../chat/CopyButton";
 import { useAgentStore, getSourceLabel, isGlobalAgent } from "../../stores/use-agent-store";
-import { agentColorStyle } from "../../utils/agent-color";
+import { AgentAvatar } from "../agent-avatar/AgentAvatar";
+import { useNotificationStore } from "../../stores/use-notification-store";
 
 const log = createLogger("chat");
 
@@ -273,6 +275,7 @@ export function SidebarBottomControls() {
       if (currentModel?.id === modelId && currentModel?.provider === provider) return;
       setSwitching(true);
       try {
+        await apiClient.call("agent.reload", { sessionId: activeSessionId });
         await apiClient.call("agent.setModel", {
           sessionId: activeSessionId,
           provider,
@@ -280,12 +283,22 @@ export function SidebarBottomControls() {
         });
         setCurrentModel(provider, modelId);
         useTierStore.getState().syncTierFromModel(activeSessionId ?? "", provider, modelId);
+        fetchModelState(activeSessionId);
       } catch (err) {
-        log.warn("setModel failed", { error: String(err) });
+        const message = err instanceof Error ? err.message : String(err);
+        log.warn("setModel failed", { error: message });
+        useNotificationStore.getState().push({
+          message: t(
+            "modelSwitchFailed",
+            "模型切换失败。请确认 API Key 已保存，然后点击刷新资源或重试。",
+          ),
+          level: "error",
+          sessionId: activeSessionId,
+        });
       }
       setSwitching(false);
     },
-    [activeSessionId, switching, currentModel, setCurrentModel],
+    [activeSessionId, switching, currentModel, setCurrentModel, fetchModelState, t],
   );
 
   const handleSelectThinking = useCallback(
@@ -326,10 +339,22 @@ export function SidebarBottomControls() {
         })()
       : t("default");
 
-  const currentAgentColor =
+  const currentAgentInfo = useMemo(
+    () => agents.find((agent) => agent.name === currentAgent) ?? null,
+    [agents, currentAgent],
+  );
+  const currentAgentColorValue =
     activeSessionId && agentDetailBySession[activeSessionId]?.color
-      ? agentColorStyle(agentDetailBySession[activeSessionId].color)
-      : null;
+      ? agentDetailBySession[activeSessionId].color
+      : currentAgentInfo?.color;
+  const currentAgentAvatar =
+    activeSessionId && agentDetailBySession[activeSessionId]?.avatar
+      ? agentDetailBySession[activeSessionId].avatar
+      : currentAgentInfo?.avatar;
+  const currentAgentFilePath =
+    activeSessionId && agentDetailBySession[activeSessionId]?.filePath
+      ? agentDetailBySession[activeSessionId].filePath
+      : currentAgentInfo?.filePath;
 
   return (
     <div className="shrink-0 border-t border-border-secondary/80 dark:border-surface-dim/80 px-3 py-2 space-y-1.5">
@@ -346,10 +371,14 @@ export function SidebarBottomControls() {
           aria-expanded={agentOpen}
           aria-label={t("agentSelect")}
         >
-          {currentAgentColor ? (
-            <span
-              className="w-3 h-3 shrink-0 rounded-full"
-              style={{ backgroundColor: currentAgentColor.color }}
+          {currentAgentAvatar || currentAgentColorValue ? (
+            <AgentAvatar
+              avatar={currentAgentAvatar}
+              agentFilePath={currentAgentFilePath}
+              color={currentAgentColorValue}
+              fallbackIcon={Bot}
+              className="w-3.5 h-3.5 rounded-full shrink-0 text-text-tertiary"
+              title={currentAgent}
             />
           ) : (
             <Bot className="w-3 h-3 shrink-0 text-text-tertiary" />
@@ -372,7 +401,7 @@ export function SidebarBottomControls() {
             <div className="overflow-y-auto max-h-[15rem]">
               {agents.map((agent) => {
                 const isActive = currentAgent === agent.name;
-                const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
+                const iconMap: Record<string, LucideIcon> = {
                   build: Wrench,
                   explore: Search,
                   plan: ClipboardList,
@@ -401,11 +430,16 @@ export function SidebarBottomControls() {
                       }
                     }}
                   >
-                    {isActive ? (
-                      <Check className="w-3 h-3 shrink-0 text-semantic-accent mt-0.5" />
-                    ) : (
-                      <Icon className="w-3 h-3 shrink-0 text-text-tertiary mt-0.5" />
-                    )}
+                    <AgentAvatar
+                      avatar={agent.avatar}
+                      agentFilePath={agent.filePath}
+                      color={agent.color}
+                      fallbackIcon={Icon}
+                      className={`w-3.5 h-3.5 rounded-full shrink-0 mt-0.5 ${
+                        isActive ? "text-semantic-accent" : "text-text-tertiary"
+                      }`}
+                      title={agent.name}
+                    />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
                         <span className="font-medium truncate">{agent.name}</span>
@@ -442,6 +476,7 @@ export function SidebarBottomControls() {
                         </div>
                       )}
                     </div>
+                    {isActive && <Check className="w-3 h-3 shrink-0 text-semantic-accent mt-0.5" />}
                     {agent.tier && (
                       <span className="text-[10px] text-text-tertiary shrink-0 mt-0.5">
                         {agent.tier}
@@ -608,7 +643,9 @@ export function SidebarBottomControls() {
               aria-label={t("modelSelect")}
             >
               <Cpu className="w-3 h-3 shrink-0 text-text-tertiary" />
-              <span className={`truncate flex-1 text-left${modelStateLoading ? " animate-pulse opacity-60" : ""}`}>
+              <span
+                className={`truncate flex-1 text-left${modelStateLoading ? " animate-pulse opacity-60" : ""}`}
+              >
                 {t("modelLabel", { model: modelDisplay })}
               </span>
               <ChevronDown
@@ -745,7 +782,11 @@ export function SidebarBottomControls() {
           className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-text-tertiary hover:bg-surface-hover/60 dark:hover:bg-surface-dim/60 hover:text-text-secondary dark:hover:text-text-secondary transition-colors disabled:opacity-40"
           aria-expanded={thinkingOpen}
           aria-label={t("thinkingSelect")}
-          title={!currentModel?.reasoning ? t("thinkingNotSupported", "当前模型不支持思考模式") : t("thinkingSelect")}
+          title={
+            !currentModel?.reasoning
+              ? t("thinkingNotSupported", "当前模型不支持思考模式")
+              : t("thinkingSelect")
+          }
         >
           <Brain className="w-3 h-3 shrink-0 text-text-tertiary" />
           <span className="truncate flex-1 text-left">

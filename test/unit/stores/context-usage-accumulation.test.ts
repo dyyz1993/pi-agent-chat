@@ -184,6 +184,10 @@ import { apiClient } from "../../../src/mainview/lib/api-client";
 
 const SID = "test-session-ctx";
 
+async function flushPromises() {
+  await new Promise((r) => setTimeout(r, 0));
+}
+
 function setStreamingAssistant() {
   useChatStore.setState({
     messagesBySession: {
@@ -238,60 +242,84 @@ beforeEach(() => {
 });
 
 describe("message_end context usage accumulation", () => {
-  it("sets tokens to absolute context size from usage (input + output)", () => {
+  it("sets tokens from authoritative context usage", async () => {
+    (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      tokens: 15000,
+      contextWindow: 200000,
+    });
     useSessionStore.setState({
       sessionContextMap: { [SID]: { tokens: 0, contextWindow: 200000 } },
     });
     setStreamingAssistant();
 
     emitMessageEnd({ input: 1000, output: 500 });
+    await flushPromises();
 
     const ctx = useSessionStore.getState().sessionContextMap[SID];
-    expect(ctx.tokens).toBe(1500);
+    expect(ctx.tokens).toBe(15000);
   });
 
-  it("replaces tokens with latest usage (not cumulative)", () => {
+  it("replaces tokens with latest authoritative value (not cumulative)", async () => {
+    (apiClient.call as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ tokens: 15000, contextWindow: 200000 })
+      .mockResolvedValueOnce({ tokens: 28000, contextWindow: 200000 });
     useSessionStore.setState({
       sessionContextMap: { [SID]: { tokens: 0, contextWindow: 200000 } },
     });
 
     setStreamingAssistant();
     emitMessageEnd({ input: 1000, output: 500 });
+    await flushPromises();
 
     setStreamingAssistant();
     emitMessageEnd({ input: 2000, output: 800 });
+    await flushPromises();
 
     const ctx = useSessionStore.getState().sessionContextMap[SID];
-    expect(ctx.tokens).toBe(2800);
+    expect(ctx.tokens).toBe(28000);
   });
 
-  it("replaces tokens with absolute value from usage", () => {
+  it("does not derive replacement from message usage", async () => {
+    (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      tokens: 15000,
+      contextWindow: 200000,
+    });
     useSessionStore.setState({
       sessionContextMap: { [SID]: { tokens: 5000, contextWindow: 200000 } },
     });
     setStreamingAssistant();
 
     emitMessageEnd({ input: 1000, output: 500 });
+    await flushPromises();
 
     const ctx = useSessionStore.getState().sessionContextMap[SID];
-    expect(ctx.tokens).toBe(1500);
+    expect(ctx.tokens).toBe(15000);
     expect(ctx.contextWindow).toBe(200000);
   });
 
-  it("does not crash when usage is missing and leaves tokens unchanged", () => {
+  it("does not crash when usage is missing and authoritative usage has no token value", async () => {
+    (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      tokens: undefined,
+      contextWindow: 0,
+    });
     useSessionStore.setState({
       sessionContextMap: { [SID]: { tokens: 5000, contextWindow: 200000 } },
     });
     setStreamingAssistant();
 
     emitMessageEnd();
+    await flushPromises();
 
     const ctx = useSessionStore.getState().sessionContextMap[SID];
     expect(ctx.tokens).toBe(5000);
     expect(ctx.contextWindow).toBe(200000);
   });
 
-  it("does not crash when usage is undefined and leaves tokens unchanged", () => {
+  it("does not crash when usage is undefined and authoritative usage has no token value", async () => {
+    (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      tokens: undefined,
+      contextWindow: 0,
+    });
     useSessionStore.setState({
       sessionContextMap: { [SID]: { tokens: 3000, contextWindow: 128000 } },
     });
@@ -307,26 +335,32 @@ describe("message_end context usage accumulation", () => {
         usage: undefined,
       },
     } as Parameters<typeof handleAgentEvent>[1]);
+    await flushPromises();
 
     const ctx = useSessionStore.getState().sessionContextMap[SID];
     expect(ctx.tokens).toBe(3000);
     expect(ctx.contextWindow).toBe(128000);
   });
 
-  it("sets tokens from usage when no prior entry", () => {
+  it("sets tokens from authoritative usage when no prior entry", async () => {
+    (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      tokens: 7000,
+      contextWindow: 200000,
+    });
     useSessionStore.setState({ sessionContextMap: {} });
     setStreamingAssistant();
 
     emitMessageEnd({ input: 500, output: 200 });
+    await flushPromises();
 
     const ctx = useSessionStore.getState().sessionContextMap[SID];
     expect(ctx).toBeDefined();
-    expect(ctx.tokens).toBe(700);
+    expect(ctx.tokens).toBe(7000);
   });
 });
 
-describe("message_end does NOT call agent.getContextUsage RPC", () => {
-  it("never calls apiClient.call with agent.getContextUsage", () => {
+describe("message_end uses agent.getContextUsage as the single source", () => {
+  it("calls apiClient.call with agent.getContextUsage", () => {
     useSessionStore.setState({
       sessionContextMap: { [SID]: { tokens: 0, contextWindow: 200000 } },
     });
@@ -338,10 +372,10 @@ describe("message_end does NOT call agent.getContextUsage RPC", () => {
     const getContextCalls = calls.filter(
       (call: unknown[]) => (call as [string, unknown])[0] === "agent.getContextUsage",
     );
-    expect(getContextCalls).toHaveLength(0);
+    expect(getContextCalls).toHaveLength(1);
   });
 
-  it("never calls apiClient.call with agent.getContextUsage even without prior context", () => {
+  it("calls apiClient.call with agent.getContextUsage even without prior context", () => {
     useSessionStore.setState({ sessionContextMap: {} });
     setStreamingAssistant();
 
@@ -351,12 +385,16 @@ describe("message_end does NOT call agent.getContextUsage RPC", () => {
     const getContextCalls = calls.filter(
       (call: unknown[]) => (call as [string, unknown])[0] === "agent.getContextUsage",
     );
-    expect(getContextCalls).toHaveLength(0);
+    expect(getContextCalls).toHaveLength(1);
   });
 });
 
 describe("token replacement with contextWindow preservation", () => {
-  it("preserves contextWindow across multiple replacements", () => {
+  it("preserves contextWindow when authoritative response omits contextWindow", async () => {
+    (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValue({
+      tokens: 15000,
+      contextWindow: 0,
+    });
     useSessionStore.setState({
       sessionContextMap: { [SID]: { tokens: 0, contextWindow: 128000 } },
     });
@@ -364,23 +402,29 @@ describe("token replacement with contextWindow preservation", () => {
     for (let i = 0; i < 5; i++) {
       setStreamingAssistant();
       emitMessageEnd({ input: 1000, output: 500 });
+      await flushPromises();
     }
 
     const ctx = useSessionStore.getState().sessionContextMap[SID];
-    expect(ctx.tokens).toBe(1500);
+    expect(ctx.tokens).toBe(15000);
     expect(ctx.contextWindow).toBe(128000);
   });
 
-  it("works correctly when contextWindow was set by fetchInitialState", () => {
+  it("works correctly when contextWindow was set by fetchInitialState", async () => {
+    (apiClient.call as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      tokens: 70000,
+      contextWindow: 200000,
+    });
     useSessionStore.setState({
       sessionContextMap: { [SID]: { tokens: null, contextWindow: 200000 } },
     });
     setStreamingAssistant();
 
     emitMessageEnd({ input: 5000, output: 2000 });
+    await flushPromises();
 
     const ctx = useSessionStore.getState().sessionContextMap[SID];
-    expect(ctx.tokens).toBe(7000);
+    expect(ctx.tokens).toBe(70000);
     expect(ctx.contextWindow).toBe(200000);
   });
 });

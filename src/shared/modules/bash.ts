@@ -79,16 +79,35 @@ export interface BashEventPayload {
 }
 
 export interface BashBackgroundExitEvent {
-  customType: "bash_background_exit";
+  customType: "bash_background_process" | "bash_background_exit";
   content: string;
   details: {
+    bashId?: string;
+    toolCallId?: string;
     pid?: number;
     command: string;
+    cwd?: string;
+    status?: "done" | "error" | "terminated";
+    reason?: "exit_zero" | "exit_nonzero" | "user_cancel" | "system_cancel" | "timeout" | "crash";
+    backgroundTrigger?: "auto" | "manual";
     exitCode: number | null;
     startedAt: number;
     endedAt: number;
     durationMs: number;
+    duration?: string;
     logPath?: string;
+    logPreview?: {
+      totalLines: number;
+      totalBytes: number;
+      truncated: boolean;
+      headLineCount: number;
+      tailLineCount: number;
+      segments: Array<
+        | { kind: "line"; text: string; repeatCount?: number }
+        | { kind: "omitted"; lineCount: number }
+      >;
+    };
+    error?: string;
   };
   display: "info" | "warning";
 }

@@ -200,21 +200,28 @@ beforeEach(() => {
     sessionsByProject: {},
   });
   (mockedCall as ReturnType<typeof vi.fn>).mockReset();
+  (mockedCall as ReturnType<typeof vi.fn>).mockResolvedValue({
+    tokens: 12345,
+    contextWindow: 200000,
+    percent: 6.17,
+  });
 });
 
 describe("context usage tracking", () => {
-  describe("1. Initial load — empty context", () => {
-    it("message_end sets tokens from usage (input + output)", async () => {
+  describe("1. Initial load — authoritative context usage", () => {
+    it("message_end refreshes tokens from agent.getContextUsage", async () => {
       setupStreamingAssistant();
       fireMessageEnd();
       await flushPromises();
 
       const ctx = getContextMap();
       expect(ctx).toBeDefined();
-      expect(ctx!.tokens).toBe(1500);
+      expect(ctx!.tokens).toBe(12345);
+      expect(ctx!.contextWindow).toBe(200000);
+      expect(mockedCall).toHaveBeenCalledWith("agent.getContextUsage", { sessionId: SID });
     });
 
-    it("message_end without usage does not set tokens", async () => {
+    it("message_end without usage still uses authoritative context usage", async () => {
       setupStreamingAssistant();
       handleAgentEvent(SID, {
         type: "message_end",
@@ -229,49 +236,56 @@ describe("context usage tracking", () => {
       } as Parameters<typeof handleAgentEvent>[1]);
       await flushPromises();
 
-      expect(getContextMap()).toBeUndefined();
+      expect(getContextMap()!.tokens).toBe(12345);
     });
   });
 
-  describe("2. After message_end — tokens set from usage", () => {
-    it("sets tokens from usage (input + output)", async () => {
+  describe("2. After message_end — tokens come from one source", () => {
+    it("does not derive tokens from message usage", async () => {
+      mockedCall.mockResolvedValueOnce({ tokens: 70000, contextWindow: 200000, percent: 35 });
       setupStreamingAssistant();
       fireMessageEnd({ input: 5000, output: 2000 });
       await flushPromises();
 
       const ctx = getContextMap();
       expect(ctx).toBeDefined();
-      expect(ctx!.tokens).toBe(7000);
+      expect(ctx!.tokens).toBe(70000);
     });
 
-    it("replaces tokens with latest usage across multiple message_end events", async () => {
+    it("refreshes authoritative value across multiple message_end events", async () => {
+      mockedCall
+        .mockResolvedValueOnce({ tokens: 40000, contextWindow: 200000, percent: 20 })
+        .mockResolvedValueOnce({ tokens: 25000, contextWindow: 200000, percent: 12.5 });
       setupStreamingAssistant();
       fireMessageEnd({ input: 3000, output: 1000 });
       await flushPromises();
 
-      expect(getContextMap()!.tokens).toBe(4000);
+      expect(getContextMap()!.tokens).toBe(40000);
 
       setupStreamingAssistant();
       fireMessageEnd({ input: 2000, output: 500 });
       await flushPromises();
 
-      expect(getContextMap()!.tokens).toBe(2500);
+      expect(getContextMap()!.tokens).toBe(25000);
     });
   });
 
   describe("3. After compaction_end", () => {
-    it("sets tokens from result.tokensAfter", () => {
+    it("refreshes tokens from authoritative context usage, not result.tokensAfter", async () => {
+      mockedCall.mockResolvedValueOnce({ tokens: 9000, contextWindow: 200000, percent: 4.5 });
       handleAgentEvent(SID, {
         type: "compaction_end",
         result: { tokensAfter: 3000, tokensBefore: 15000 },
       } as Parameters<typeof handleAgentEvent>[1]);
+      await flushPromises();
 
       const ctx = getContextMap();
       expect(ctx).toBeDefined();
-      expect(ctx!.tokens).toBe(3000);
+      expect(ctx!.tokens).toBe(9000);
     });
 
-    it("sets tokens to null when tokensAfter is undefined", () => {
+    it("sets tokens to null only when authoritative usage returns null", async () => {
+      mockedCall.mockResolvedValueOnce({ tokens: null, contextWindow: 200000, percent: null });
       useSessionStore.setState({
         sessionContextMap: { [SID]: { tokens: 8000, contextWindow: 200000 } },
       });
@@ -280,6 +294,7 @@ describe("context usage tracking", () => {
         type: "compaction_end",
         result: {},
       } as Parameters<typeof handleAgentEvent>[1]);
+      await flushPromises();
 
       const ctx = getContextMap();
       expect(ctx!.tokens).toBeNull();
@@ -300,7 +315,8 @@ describe("context usage tracking", () => {
   });
 
   describe("4. Existing value not overwritten by missing usage", () => {
-    it("pre-existing tokens=8000 stays when usage is undefined", async () => {
+    it("pre-existing tokens are replaced by authoritative usage even when message usage is undefined", async () => {
+      mockedCall.mockResolvedValueOnce({ tokens: 12000, contextWindow: 200000, percent: 6 });
       useSessionStore.setState({
         sessionContextMap: { [SID]: { tokens: 8000, contextWindow: 200000 } },
       });
@@ -318,10 +334,11 @@ describe("context usage tracking", () => {
       } as Parameters<typeof handleAgentEvent>[1]);
       await flushPromises();
 
-      expect(getContextMap()!.tokens).toBe(8000);
+      expect(getContextMap()!.tokens).toBe(12000);
     });
 
-    it("pre-existing tokens replaced by usage from message_end", async () => {
+    it("pre-existing tokens replaced by authoritative context usage", async () => {
+      mockedCall.mockResolvedValueOnce({ tokens: 25000, contextWindow: 200000, percent: 12.5 });
       useSessionStore.setState({
         sessionContextMap: { [SID]: { tokens: 8000, contextWindow: 200000 } },
       });
@@ -329,7 +346,7 @@ describe("context usage tracking", () => {
       fireMessageEnd({ input: 2000, output: 500 });
       await flushPromises();
 
-      expect(getContextMap()!.tokens).toBe(2500);
+      expect(getContextMap()!.tokens).toBe(25000);
     });
   });
 
@@ -339,19 +356,23 @@ describe("context usage tracking", () => {
       expect(useSessionStore.getState().sessionStatusMap[SID]).toBe("streaming");
       expect(getContextMap()).toBeUndefined();
 
+      mockedCall.mockResolvedValueOnce({ tokens: 20000, contextWindow: 200000, percent: 10 });
       setupStreamingAssistant();
       fireMessageEnd({ input: 15000, output: 5000 });
       await flushPromises();
 
       expect(getContextMap()!.tokens).toBe(20000);
 
+      mockedCall.mockResolvedValueOnce({ tokens: 5000, contextWindow: 200000, percent: 2.5 });
       handleAgentEvent(SID, {
         type: "compaction_end",
         result: { tokensAfter: 5000 },
       } as Parameters<typeof handleAgentEvent>[1]);
+      await flushPromises();
 
       expect(getContextMap()!.tokens).toBe(5000);
 
+      mockedCall.mockResolvedValueOnce({ tokens: 4000, contextWindow: 200000, percent: 2 });
       setupStreamingAssistant();
       fireMessageEnd({ input: 3000, output: 1000 });
       await flushPromises();
@@ -361,7 +382,8 @@ describe("context usage tracking", () => {
   });
 
   describe("6. contextWindow preserved during token update", () => {
-    it("message_end replaces tokens but preserves contextWindow", async () => {
+    it("message_end applies authoritative tokens and contextWindow", async () => {
+      mockedCall.mockResolvedValueOnce({ tokens: 15000, contextWindow: 180000, percent: 8.3 });
       useSessionStore.setState({
         sessionContextMap: { [SID]: { tokens: 5000, contextWindow: 200000 } },
       });
@@ -370,11 +392,12 @@ describe("context usage tracking", () => {
       await flushPromises();
 
       const ctx = getContextMap();
-      expect(ctx!.tokens).toBe(1500);
-      expect(ctx!.contextWindow).toBe(200000);
+      expect(ctx!.tokens).toBe(15000);
+      expect(ctx!.contextWindow).toBe(180000);
     });
 
-    it("contextWindow stays when contextTokens is 0 (input=0, output=500)", async () => {
+    it("contextWindow is preserved when authoritative response omits it", async () => {
+      mockedCall.mockResolvedValueOnce({ tokens: 1500, contextWindow: 0, percent: null });
       useSessionStore.setState({
         sessionContextMap: { [SID]: { tokens: 5000, contextWindow: 200000 } },
       });
@@ -383,7 +406,7 @@ describe("context usage tracking", () => {
       await flushPromises();
 
       const ctx = getContextMap();
-      expect(ctx!.tokens).toBe(500);
+      expect(ctx!.tokens).toBe(1500);
       expect(ctx!.contextWindow).toBe(200000);
     });
   });
@@ -408,7 +431,8 @@ describe("context usage tracking", () => {
       expect(msgs![0].isStreaming).toBe(false);
     });
 
-    it("tokens stay unchanged when usage.input is 0", async () => {
+    it("tokens stay unchanged when authoritative usage has no token value", async () => {
+      mockedCall.mockResolvedValueOnce({ tokens: undefined, contextWindow: 0, percent: null });
       useSessionStore.setState({
         sessionContextMap: { [SID]: { tokens: 8000, contextWindow: 200000 } },
       });
@@ -420,7 +444,8 @@ describe("context usage tracking", () => {
       expect(getContextMap()!.contextWindow).toBe(200000);
     });
 
-    it("no prior value and no usage → contextMap stays undefined", async () => {
+    it("no prior value and no authoritative token value → contextMap stays undefined", async () => {
+      mockedCall.mockResolvedValueOnce({ tokens: undefined, contextWindow: 0, percent: null });
       setupStreamingAssistant();
       handleAgentEvent(SID, {
         type: "message_end",

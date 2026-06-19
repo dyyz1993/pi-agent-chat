@@ -37,7 +37,7 @@ const DEFAULTS: DisplaySettings = {
   chatViewMode: "developer",
   showToolCalls: true,
   showToolResults: true,
-  showThinking: true,
+  showThinking: false,
   collapseThinking: true,
   collapseToolCards: false,
   showTimeline: true,
@@ -75,6 +75,16 @@ export const useSettingsStore = create<DisplaySettings & SettingsActions>()(
     }),
     {
       name: "pi-display-settings",
+      version: 1,
+      migrate: (persistedState, version) => {
+        if (version >= 1 || !persistedState || typeof persistedState !== "object") {
+          return persistedState;
+        }
+        return {
+          ...(persistedState as Partial<DisplaySettings>),
+          showThinking: false,
+        };
+      },
     },
   ),
 );

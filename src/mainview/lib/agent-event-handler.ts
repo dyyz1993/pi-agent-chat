@@ -4,15 +4,18 @@ import type { AgentEvent } from "../../shared/modules/agent";
 import type { AssistantMessage, Message, Usage } from "@dyyz1993/pi-ai";
 import { useChatStore } from "../stores/use-chat-store";
 import { useSessionStore, clearAgentStarted } from "../stores/use-session-store";
+import { useSessionQueueStore } from "../stores/use-session-queue-store";
 import { useMemoryStore } from "../stores/use-memory-store";
 import { useStatusStore, type MCPServerInfo } from "../stores/use-status-store";
 import { useRetryStore } from "../stores/use-retry-store";
 import { useUIDialogStore } from "../stores/use-ui-dialog-store";
 import { useChangeReviewStore } from "../stores/use-change-review-store";
 import { notificationGateway } from "./notification-gateway";
+import { apiClient } from "./api-client";
 import { batchMessageUpdate, flushNow } from "./message-batcher";
 import { messageToChatMessage, extractTokenUsage } from "./message-mapper";
 import { ALL_MEMORY_TYPE_KEYS } from "../components/chat/memory-config";
+import { isBashBackgroundProcessType } from "../components/chat/bash-background-process";
 import { createLogger } from "../../shared/lib/logger";
 import {
   closeRunningToolExecutions,
@@ -39,6 +42,25 @@ const pendingPrefetchMap = new Map<
   Map<string, { agentEvent: AgentEvent; timer: ReturnType<typeof setTimeout> }>
 >();
 const PREFETCH_FALLBACK_MS = 5000;
+
+function refreshAuthoritativeContextUsage(sessionId: string): void {
+  Promise.resolve(apiClient.call("agent.getContextUsage", { sessionId }))
+    .then((usage) => {
+      if (!usage) return;
+      const update: { tokens?: number | null; contextWindow?: number } = {};
+      if (usage.tokens !== undefined) update.tokens = usage.tokens;
+      if (usage.contextWindow > 0) update.contextWindow = usage.contextWindow;
+      if (update.tokens !== undefined || update.contextWindow !== undefined) {
+        useSessionStore.getState().updateSessionContext(sessionId, update);
+      }
+    })
+    .catch((err) => {
+      log.warn("refreshAuthoritativeContextUsage failed", {
+        sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    });
+}
 
 function setToolActive(sessionId: string, toolCallId: string, active: boolean): void {
   const chat = useChatStore.getState();
@@ -100,6 +122,37 @@ function replaceMsgAt(
   const next = [...msgs];
   next[idx] = replacement;
   return next;
+}
+
+function getMemoryOperationId(data: unknown): string | undefined {
+  const record = data as Record<string, unknown> | undefined;
+  return typeof record?.operationId === "string" ? record.operationId : undefined;
+}
+
+function findTimedOutMemoryPrefetchIndex(msgs: ChatMessage[], operationId: string): number {
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const msg = msgs[i];
+    if (msg.role !== "custom") continue;
+    const block = msg.content[0];
+    if (block?.type !== "custom" || block.customType !== "memory_prefetch") continue;
+    const data = block.data as Record<string, unknown> | undefined;
+    if (data?._timedOut === true && data.operationId === operationId) return i;
+  }
+  return -1;
+}
+
+function mergePrefetchResultData(
+  resultData: unknown,
+  prefetchData: Record<string, unknown> | undefined,
+): unknown {
+  return {
+    ...(typeof resultData === "object" && resultData !== null
+      ? (resultData as Record<string, unknown>)
+      : {}),
+    _prefetchQuery: typeof prefetchData?.query === "string" ? prefetchData.query : "",
+    _prefetchAvailableFiles:
+      typeof prefetchData?.availableFiles === "number" ? prefetchData.availableFiles : 0,
+  };
 }
 
 function scheduleEmptyStreamingReload(sessionId: string, messageId: string): void {
@@ -383,11 +436,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     storeGet().updateSessionStatus(sessionId, "idle");
     useUIDialogStore.getState().clearPendingBySession(sessionId);
     useChangeReviewStore.getState().fetchPending();
-    const currentQueue = storeGet().queueBySession;
-    if (currentQueue[sessionId]) {
-      const { [sessionId]: _removed, ...rest } = currentQueue;
-      useSessionStore.setState({ queueBySession: rest });
-    }
+    useSessionQueueStore.getState().clearSessionQueue(sessionId);
     const allSessions = storeGet().sessionsByProject;
     for (const sessList of Object.values(allSessions)) {
       const session = sessList.find((s) => s.sessionId === sessionId);
@@ -471,8 +520,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
   if (event.type === "compaction_end") {
     log.info("compaction_end → force reload", { sessionId });
-    const tokensAfter = event.result?.tokensAfter;
-    storeGet().updateSessionContext(sessionId, { tokens: tokensAfter ?? null });
+    refreshAuthoritativeContextUsage(sessionId);
 
     if (event.aborted || (event.reason && event.reason !== "success")) {
       const errMsg = event.reason ?? "压缩失败";
@@ -615,6 +663,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
     if (role === "custom") {
       if (!msgObj) return;
+      if ("display" in msgObj && msgObj.display === false) return;
       const customType =
         "customType" in msgObj && typeof msgObj.customType === "string"
           ? msgObj.customType
@@ -892,16 +941,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
     const assistantMsg = message as AssistantMessage;
 
-    // usage.input is the total prompt tokens for this LLM call (absolute value, not delta).
-    // Use calculateContextTokens to match the backend's getContextUsage logic.
-    const usage = assistantMsg.usage;
-    if (usage) {
-      const contextTokens =
-        usage.totalTokens || usage.input + usage.output + (usage.cacheRead ?? 0) + (usage.cacheWrite ?? 0);
-      if (contextTokens > 0) {
-        storeGet().updateSessionContext(sessionId, { tokens: contextTokens });
-      }
-    }
+    refreshAuthoritativeContextUsage(sessionId);
 
     const hasContent = hasRenderableContent(lastMsg);
 
@@ -1105,16 +1145,19 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
   if (event.type === "custom_entry") {
     const SNAPSHOT_TYPE = "step_snapshot";
     const isSnapshot = event.customType === SNAPSHOT_TYPE;
-    if (!ALL_MEMORY_TYPE_KEYS.has(event.customType) && !isSnapshot) return;
+    const isBashBackgroundProcess = isBashBackgroundProcessType(event.customType);
+    if (!ALL_MEMORY_TYPE_KEYS.has(event.customType) && !isSnapshot && !isBashBackgroundProcess) {
+      return;
+    }
 
-    if (isSnapshot) {
+    if (isSnapshot || isBashBackgroundProcess) {
       if (event.display === false) return;
       const chat = useChatStore.getState();
       const existing = chat.messagesBySession[sessionId] || [];
       const customMsg: ChatMessage = {
-        id: event.id || `snapshot-${Date.now()}`,
+        id: event.id || `custom-${Date.now()}`,
         role: "custom",
-        content: [{ type: "custom", customType: SNAPSHOT_TYPE, data: event.data }],
+        content: [{ type: "custom", customType: event.customType, data: event.data }],
         timestamp: Date.now(),
       };
       chat.setMessagesForSession(sessionId, [...existing, customMsg]);
@@ -1151,6 +1194,8 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
 
     if (event.customType === "memory_prefetch") {
       const eventId = event.id || `prefetch-${Date.now()}`;
+      const operationId = getMemoryOperationId(event.data);
+      if (!operationId) return;
       if (!pendingPrefetchMap.has(sessionId)) {
         pendingPrefetchMap.set(sessionId, new Map());
       }
@@ -1158,7 +1203,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       if (!sessionMap) return;
 
       const timer = setTimeout(() => {
-        sessionMap.delete(eventId);
+        sessionMap.delete(operationId);
         if (sessionMap.size === 0) pendingPrefetchMap.delete(sessionId);
         const chat = useChatStore.getState();
         const msgs = chat.messagesBySession[sessionId] || [];
@@ -1179,40 +1224,56 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
         ]);
       }, PREFETCH_FALLBACK_MS);
 
-      sessionMap.set(eventId, { agentEvent: event, timer });
+      sessionMap.set(operationId, { agentEvent: event, timer });
       return;
     }
 
     if (event.customType === "memory_prefetch_result") {
       const sessionMap = pendingPrefetchMap.get(sessionId);
       let resultData: unknown = event.data;
+      const operationId = getMemoryOperationId(event.data);
 
-      if (sessionMap && sessionMap.size > 0) {
-        const entry = sessionMap.entries().next().value;
-        if (!Array.isArray(entry)) return;
-        const [firstKey, firstPending] = entry as [
-          string,
-          { agentEvent: typeof event; timer: ReturnType<typeof setTimeout> },
-        ];
-        clearTimeout(firstPending.timer);
-        sessionMap.delete(firstKey);
-        if (sessionMap.size === 0) pendingPrefetchMap.delete(sessionId);
+      if (sessionMap && operationId) {
+        const firstPending = sessionMap.get(operationId);
+        if (firstPending) {
+          clearTimeout(firstPending.timer);
+          sessionMap.delete(operationId);
+          if (sessionMap.size === 0) pendingPrefetchMap.delete(sessionId);
 
-        const prefetchData = (
-          firstPending.agentEvent.type === "custom_entry" ? firstPending.agentEvent.data : undefined
-        ) as Record<string, unknown> | undefined;
-        resultData = {
-          ...(typeof event.data === "object" && event.data !== null
-            ? (event.data as Record<string, unknown>)
-            : {}),
-          _prefetchQuery: typeof prefetchData?.query === "string" ? prefetchData.query : "",
-          _prefetchAvailableFiles:
-            typeof prefetchData?.availableFiles === "number" ? prefetchData.availableFiles : 0,
-        };
+          const prefetchData = (
+            firstPending.agentEvent.type === "custom_entry" ? firstPending.agentEvent.data : undefined
+          ) as Record<string, unknown> | undefined;
+          resultData = mergePrefetchResultData(event.data, prefetchData);
+        }
       }
 
       const chat = useChatStore.getState();
       const existingMsgs = chat.messagesBySession[sessionId] || [];
+      const timedOutPrefetchIndex = operationId
+        ? findTimedOutMemoryPrefetchIndex(existingMsgs, operationId)
+        : -1;
+      if (timedOutPrefetchIndex >= 0) {
+        const timedOutMsg = existingMsgs[timedOutPrefetchIndex];
+        const timedOutBlock = timedOutMsg.content[0];
+        const prefetchData =
+          timedOutBlock?.type === "custom"
+            ? (timedOutBlock.data as Record<string, unknown> | undefined)
+            : undefined;
+        const replacement: ChatMessage = {
+          id: event.id || timedOutMsg.id,
+          role: "custom",
+          content: [
+            {
+              type: "custom",
+              customType: "memory_prefetch_result",
+              data: mergePrefetchResultData(resultData, prefetchData),
+            },
+          ],
+          timestamp: Date.now(),
+        };
+        chat.setMessagesForSession(sessionId, replaceMsgAt(existingMsgs, timedOutPrefetchIndex, replacement));
+        return;
+      }
       chat.setMessagesForSession(sessionId, [
         ...existingMsgs,
         {
@@ -1258,12 +1319,10 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
   }
 
   if (event.type === "queue_update") {
-    useSessionStore.setState((s) => ({
-      queueBySession: {
-        ...s.queueBySession,
-        [sessionId]: { steering: event.steering, followUp: event.followUp },
-      },
-    }));
+    useSessionQueueStore.getState().setSessionQueue(sessionId, {
+      steering: event.steering,
+      followUp: event.followUp,
+    });
     return;
   }
 

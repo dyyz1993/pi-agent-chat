@@ -2,6 +2,7 @@ import { useCallback, memo, useState } from "react";
 import type { ComponentType } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  AlertCircle,
   Brain,
   ChevronDown,
   ChevronRight,
@@ -18,6 +19,10 @@ import { formatFilePath } from "../../lib/format-path";
 import { getCustomTypeIcon } from "./tool-icon-map";
 import { ENTRY_TYPE_KEYS, getMemoryConfig, getMemorySummary, parseSnippetToEntries } from "./memory-config";
 import { formatDuration } from "./primitives/formatDuration";
+import {
+  CHAT_COMPACT_BLOCK_CLASS,
+  CHAT_COMPACT_ROW_BUTTON_BASE_CLASS,
+} from "./chat-layout-classes";
 
 export const MEMORY_CUSTOM_TYPES = ENTRY_TYPE_KEYS;
 
@@ -75,12 +80,17 @@ function PrefetchSearchingDetail({ data }: { data: unknown }) {
   if (!d) return null;
   const query = typeof d.query === "string" ? d.query : "";
   const availableFiles = typeof d.availableFiles === "number" ? d.availableFiles : 0;
+  const timedOut = d._timedOut === true;
 
   return (
     <div className="px-3 pb-2 text-[11px] space-y-2">
-      <div className="flex items-center gap-1.5 text-status-info">
-        <Loader2 className="w-3 h-3 animate-spin shrink-0" />
-        <span>{t("searchingMemory")}</span>
+      <div className={`flex items-center gap-1.5 ${timedOut ? "text-status-warning" : "text-status-info"}`}>
+        {timedOut ? (
+          <AlertCircle className="w-3 h-3 shrink-0" />
+        ) : (
+          <Loader2 className="w-3 h-3 animate-spin shrink-0" />
+        )}
+        <span>{timedOut ? t("memorySearchTimedOut") : t("searchingMemory")}</span>
       </div>
       {query && (
         <div className="flex gap-1.5">
@@ -159,11 +169,11 @@ export const MemoryCard = memo(function MemoryCard({
   }, [sessionId, blockId, displayData, isMarked]);
 
   return (
-    <div className="my-0.5" data-block-id={blockId}>
+    <div className={CHAT_COMPACT_BLOCK_CLASS} data-block-id={blockId}>
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
-        className={`w-full px-3 py-1 flex items-center gap-1.5 text-[11px] ${config.color} hover:bg-surface-hover/15 dark:hover:bg-surface-dim/15 rounded cursor-pointer select-none`}
+        className={`${CHAT_COMPACT_ROW_BUTTON_BASE_CLASS} ${config.color} hover:bg-surface-hover/15 dark:hover:bg-surface-dim/15`}
         aria-expanded={expanded}
         aria-label={`${config.label}${summary ? `: ${summary}` : ""}`}
       >

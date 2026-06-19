@@ -6,6 +6,7 @@ import {
   Terminal,
   Brain,
   Shield,
+  ShieldCheck,
   Camera,
   Bot,
   ListChecks,
@@ -16,6 +17,7 @@ import { useTranslation } from "react-i18next";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import { PANEL_TABS, type PanelTabId } from "../../layouts/types";
 import { StatusPanel } from "../status-panel/StatusPanel";
+import { SupervisorPanel } from "../supervisor-panel/SupervisorPanel";
 import { ExplorerSidebar } from "../explorer/ExplorerSidebar";
 import { GitPanel } from "../git/GitPanel";
 import { RpcPanel } from "../rpc-panel/RpcPanel";
@@ -36,6 +38,7 @@ const TAB_ICONS: Record<PanelTabId, React.ComponentType<{ className?: string }>>
   git: GitBranch,
   files: FolderTree,
   status: Target,
+  supervisor: ShieldCheck,
   agent: Bot,
   rpc: Terminal,
   memory: Brain,
@@ -138,6 +141,8 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
         );
       case "status":
         return <StatusPanel />;
+      case "supervisor":
+        return <SupervisorPanel />;
       case "agent":
         return <AgentPanel />;
       case "rpc":

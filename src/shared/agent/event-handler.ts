@@ -72,6 +72,8 @@ export interface AgentEventHandlerDeps {
   parentChildMap: Map<string, Set<string>>;
   delegateReplyCount: Map<string, number>;
   delegateCreatedAt: Map<string, number>;
+  delegateRepliedSessions: Set<string>;
+  sendDelegateFallbackReply: (sessionId: string) => Promise<boolean>;
 }
 
 export class AgentEventHandler {
@@ -213,6 +215,16 @@ export class AgentEventHandler {
           status: "completed",
           exitCode: 0,
           finalText: finalText || "(completed)",
+        });
+      }
+
+      const endReason = (event as { reason?: unknown }).reason;
+      if (!resolver && !endReason && this.deps.findParentSession(sessionId)) {
+        this.deps.sendDelegateFallbackReply(sessionId).catch((err: unknown) => {
+          log.warn("sendDelegateFallbackReply error", {
+            sessionId,
+            err: err instanceof Error ? err.message : String(err),
+          });
         });
       }
     }

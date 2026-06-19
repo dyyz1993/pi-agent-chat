@@ -296,6 +296,18 @@ describe.skipIf(shouldRun === false)(
     // ─── Test 2: 设置 Goal ──────────────────────────────────────
 
     it("设置 Goal: setGoal 返回 goal.id, 收到 goalChanged(running) 事件", async () => {
+      // Register the event wait before issuing setGoal; the channel event can
+      // arrive before the RPC response is resolved.
+      const goalChangedPromise = waitForEvent(
+        ws,
+        "supervisor.event",
+        (msg) => {
+          const p = msg.payload as { event?: SupervisorChannelEvent } | undefined;
+          return p?.event?.type === "goalChanged";
+        },
+        10_000,
+      );
+
       const setResp = await sendRPC(ws, "supervisor.setGoal", { sessionId, objective });
       const goal = (setResp.result as { goal: GoalState }).goal;
 
@@ -305,15 +317,7 @@ describe.skipIf(shouldRun === false)(
       expect(goal.status).toBe("running");
 
       // 事件驱动的 goalChanged 等待
-      const ev = await waitForEvent(
-        ws,
-        "supervisor.event",
-        (msg) => {
-          const p = msg.payload as { event?: SupervisorChannelEvent } | undefined;
-          return p?.event?.type === "goalChanged";
-        },
-        10_000,
-      );
+      const ev = await goalChangedPromise;
       const event = (ev.payload as { event: { type: string; goal?: GoalState } }).event;
       expect(event.type).toBe("goalChanged");
       expect(["running", "checking"]).toContain(event.goal?.status);
@@ -334,6 +338,18 @@ describe.skipIf(shouldRun === false)(
         GOAL_TIMEOUT,
       );
 
+      // goldResult can be emitted immediately after agent_end, so the listener
+      // must be registered before sending the user task.
+      const goldPromise = waitForEvent(
+        ws,
+        "supervisor.event",
+        (msg) => {
+          const p = msg.payload as { event?: SupervisorChannelEvent } | undefined;
+          return p?.event?.type === "goldResult";
+        },
+        GOAL_TIMEOUT,
+      );
+
       await sendRPC(ws, "agent.send", {
         sessionId,
         content: "请完成目标：在项目根目录创建 goal-marker.txt 并写入 'supervisor-goal-works'。",
@@ -343,15 +359,7 @@ describe.skipIf(shouldRun === false)(
       console.log("[agent_end] 第一次 Agent 结束");
 
       // 等待 goldResult
-      const goldEv = await waitForEvent(
-        ws,
-        "supervisor.event",
-        (msg) => {
-          const p = msg.payload as { event?: SupervisorChannelEvent } | undefined;
-          return p?.event?.type === "goldResult";
-        },
-        GOAL_TIMEOUT,
-      );
+      const goldEv = await goldPromise;
       const gold = (goldEv.payload as { event: GoldResult }).event;
 
       expect(["complete", "incomplete", "blocked", "unsafe"]).toContain(gold.verdict);

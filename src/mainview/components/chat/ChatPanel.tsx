@@ -31,14 +31,15 @@ import { RetryNotification } from "./RetryNotification";
 import { useSubagentStore } from "../../stores/use-subagent-store";
 import { useLayoutStore } from "../../layouts/use-layout-store";
 import { useChatNavStore } from "../../stores/use-chat-nav-store";
-import { useTurnStore } from "../../stores/use-turn-store";
+import { useTurnStore, EMPTY_SET } from "../../stores/use-turn-store";
+import { useSettingsStore } from "../../stores/use-settings-store";
 import { apiClient } from "../../lib/api-client";
 import { useActiveScrollTracker } from "../../hooks/use-active-scroll-tracker";
 import type { VirtualizerHandle } from "virtua";
-import { SideNav } from "./SideNav";
+import { SideNav, buildFlatItems, type SideNavPagination, type SideNavTarget } from "./SideNav";
 import { InputBar, type InputBarHandle } from "./InputBar";
 import { TokenStatusBar } from "./TokenStatusBar";
-import { MessageListView } from "./MessageListView";
+import { buildProcessedMessages, MessageListView } from "./MessageListView";
 import { MessageSelectionBar } from "./MessageSelectionBar";
 import { QuickActionToolbar } from "./QuickActionToolbar";
 import { CommandPopup } from "./CommandPopup";
@@ -58,6 +59,8 @@ import { agentColorStyle } from "../../utils/agent-color";
 import { useSupervisorStore } from "../../stores/use-supervisor-store";
 
 const log = createLogger("chat");
+const BLOCK_NAV_MAX_RENDER_ATTEMPTS = 60;
+const SIDE_NAV_CLICK_SCROLL_LOCK_FALLBACK_MS = 5000;
 
 const MAX_MSG_IDS_CACHE = 10;
 
@@ -90,13 +93,12 @@ function RefineGoalOverlay({ step }: { step: number }) {
           return (
             <div
               key={i}
-              className={`flex items-center gap-1 text-[11px] whitespace-nowrap transition-colors ${
-                isDone
-                  ? "text-status-success"
-                  : isActive
-                    ? "text-semantic-accent font-medium"
-                    : "text-text-tertiary/50"
-              }`}
+              className={`flex items-center gap-1 text-[11px] whitespace-nowrap transition-colors ${isDone
+                ? "text-status-success"
+                : isActive
+                  ? "text-semantic-accent font-medium"
+                  : "text-text-tertiary/50"
+                }`}
             >
               {i > 0 && <span className="text-text-tertiary/30 mx-0.5">›</span>}
               {isDone ? (
@@ -186,15 +188,66 @@ export function ChatPanel() {
     getFirstIconId: () => string | null;
     getLastIconId: () => string | null;
   }>(null);
+  const showThinking = useSettingsStore((s) => s.showThinking);
+  const showMemoryEntries = useSettingsStore((s) => s.showMemoryEntries);
+  const showToolCalls = useSettingsStore((s) => s.showToolCalls);
+  const showToolResults = useSettingsStore((s) => s.showToolResults);
+  const renderedMessages = useMemo(
+    () =>
+      buildProcessedMessages(messages, showMemoryEntries)
+        .filter((item) => !item.hide)
+        .map((item) => item.msg),
+    [messages, showMemoryEntries],
+  );
   const messageIds = useMemo(() => {
-    if (!activeSessionId) return messages.map((m) => m.id);
+    if (!activeSessionId) return renderedMessages.map((m) => m.id);
     const cached = _messageIdsCache.get(activeSessionId);
-    if (cached && cached.ref === messages) return cached.result;
-    const result = messages.map((m) => m.id);
-    _messageIdsCache.set(activeSessionId, { ref: messages, result });
+    if (cached && cached.ref === renderedMessages) return cached.result;
+    const result = renderedMessages.map((m) => m.id);
+    _messageIdsCache.set(activeSessionId, { ref: renderedMessages, result });
     evictMsgIdsIfNeeded();
     return result;
-  }, [messages, activeSessionId]);
+  }, [renderedMessages, activeSessionId]);
+  const collapsedMessageIdsForNav = useTurnStore(
+    useCallback(
+      (s) =>
+        activeSessionId ? (s.collapsedMessageIdsBySession[activeSessionId] ?? EMPTY_SET) : EMPTY_SET,
+      [activeSessionId],
+    ),
+  );
+  const sideNavTargets = useMemo(
+    () =>
+      buildFlatItems(
+        renderedMessages,
+        showThinking,
+        showMemoryEntries,
+        collapsedMessageIdsForNav,
+        showToolCalls,
+        showToolResults,
+      ).map((item) => ({
+        key: item.key,
+        messageId: item.navId,
+        blockId: item.blockId,
+      })),
+    [
+      renderedMessages,
+      showThinking,
+      showMemoryEntries,
+      collapsedMessageIdsForNav,
+      showToolCalls,
+      showToolResults,
+    ],
+  );
+  const sideNavPagination = useMemo<SideNavPagination | undefined>(() => {
+    if (!activeSessionId || isViewingSubagent) return undefined;
+    return {
+      hasMore: hasMoreMessages,
+      isLoading: isLoadingMore,
+      onLoadMore: () => {
+        void loadMoreMessages(activeSessionId);
+      },
+    };
+  }, [activeSessionId, hasMoreMessages, isLoadingMore, isViewingSubagent, loadMoreMessages]);
   const isStreaming =
     effectiveStatus === "streaming" ||
     effectiveStatus === "compacting" ||
@@ -313,23 +366,28 @@ export function ChatPanel() {
 
   const setNavId = useTurnStore((s) => s.setNavId);
   const lastSetNavIdRef = useRef<string | null>(null);
-  const navScrollingRef = useRef(false);
-  const navScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const initDoneRef = useRef(false);
+  const navClickScrollingRef = useRef(false);
+  const [isSideNavScrollLocked, setSideNavScrollLocked] = useState(false);
+  const navClickScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const releaseSideNavScrollLock = useCallback(() => {
+    navClickScrollingRef.current = false;
+    setSideNavScrollLocked(false);
+    if (navClickScrollTimerRef.current) {
+      clearTimeout(navClickScrollTimerRef.current);
+      navClickScrollTimerRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     lastSetNavIdRef.current = null;
-    navScrollingRef.current = false;
-    initDoneRef.current = false;
-    if (navScrollTimerRef.current) {
-      clearTimeout(navScrollTimerRef.current);
-      navScrollTimerRef.current = null;
-    }
-  }, [activeSessionId, activeSubId]);
+    releaseSideNavScrollLock();
+  }, [activeSessionId, activeSubId, releaseSideNavScrollLock]);
 
   const {
     handleScroll,
     handleScrollEnd,
+    scrollToMessage,
     scrollToEdge,
     isAtTop,
     isAtBottom,
@@ -341,20 +399,11 @@ export function ChatPanel() {
     scrollRef: messagesScrollRef,
     vlistRef,
     messageIds,
+    activeTargets: sideNavTargets,
     sessionId: isViewingSubagent ? activeSubId : (activeSessionId ?? undefined),
-    onInitComplete: useCallback(() => {
-      const lastIconId = sideNavRef.current?.getLastIconId();
-      if (lastIconId) {
-        lastSetNavIdRef.current = lastIconId;
-        setNavId(lastIconId);
-      }
-      initDoneRef.current = true;
-    }, [setNavId]),
     setActive: useCallback(
       (id: string | null) => {
         setActive(id);
-        if (!initDoneRef.current) return;
-        if (navScrollingRef.current) return;
         if (id && id !== lastSetNavIdRef.current) {
           lastSetNavIdRef.current = id;
           setNavId(id);
@@ -368,13 +417,9 @@ export function ChatPanel() {
   });
 
   const wrappedHandleScrollEnd = useCallback(() => {
-    navScrollingRef.current = false;
-    if (navScrollTimerRef.current) {
-      clearTimeout(navScrollTimerRef.current);
-      navScrollTimerRef.current = null;
-    }
+    if (navClickScrollingRef.current) releaseSideNavScrollLock();
     handleScrollEnd();
-  }, [handleScrollEnd]);
+  }, [handleScrollEnd, releaseSideNavScrollLock]);
 
   const handleScrollToEdge = useCallback(
     (edge: "top" | "bottom") => {
@@ -393,51 +438,48 @@ export function ChatPanel() {
         }
       }, 200);
     },
-    [messageIds, setNavId, scrollToEdge, suspendAutoScroll],
+    [messageIds, scrollToEdge, suspendAutoScroll, setNavId],
   );
 
+  const scrollBlockIntoViewWhenRendered = useCallback((blockId: string, attempt = 0) => {
+    const blockEl = messagesScrollRef.current?.querySelector(`[data-block-id="${blockId}"]`);
+    if (blockEl) {
+      blockEl.scrollIntoView({ block: "start", behavior: "instant" });
+      return;
+    }
+    if (attempt >= BLOCK_NAV_MAX_RENDER_ATTEMPTS) return;
+    requestAnimationFrame(() => scrollBlockIntoViewWhenRendered(blockId, attempt + 1));
+  }, []);
+
   const handleNavDotClick = useCallback(
-    (navId: string) => {
+    (target: SideNavTarget) => {
       suspendAutoScroll();
-      navScrollingRef.current = true;
-      if (navScrollTimerRef.current) clearTimeout(navScrollTimerRef.current);
-      navScrollTimerRef.current = setTimeout(() => {
-        navScrollingRef.current = false;
-        navScrollTimerRef.current = null;
-      }, 800);
+      navClickScrollingRef.current = true;
+      setSideNavScrollLocked(true);
+      if (navClickScrollTimerRef.current) clearTimeout(navClickScrollTimerRef.current);
+      navClickScrollTimerRef.current = setTimeout(() => {
+        releaseSideNavScrollLock();
+      }, SIDE_NAV_CLICK_SCROLL_LOCK_FALLBACK_MS);
 
-      let index = messageIds.indexOf(navId);
-      let blockNavId: string | undefined;
-
-      if (index === -1) {
-        const dashIdx = navId.lastIndexOf("-");
-        if (dashIdx >= 0) {
-          const msgId = navId.slice(0, dashIdx);
-          index = messageIds.indexOf(msgId);
-          if (index !== -1) blockNavId = navId;
-        }
+      if (!messageIds.includes(target.messageId)) {
+        releaseSideNavScrollLock();
+        return;
       }
+      lastSetNavIdRef.current = target.blockId ?? target.messageId;
+      scrollToMessage(target.messageId, { align: "start", smooth: !target.blockId });
 
-      if (index !== -1) {
-        const targetMsgId = messageIds[index];
-        // Set activeId immediately so message highlight updates before scroll completes
-        setActive(targetMsgId);
-        lastSetNavIdRef.current = targetMsgId;
-        vlistRef.current?.scrollToIndex(index, { smooth: true });
-
-        if (blockNavId) {
-          requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-              const blockEl = messagesScrollRef.current?.querySelector(
-                `[data-block-id="${blockNavId}"]`,
-              );
-              if (blockEl) blockEl.scrollIntoView({ block: "start", behavior: "instant" });
-            });
-          });
-        }
+      if (target.blockId) {
+        const { blockId } = target;
+        requestAnimationFrame(() => scrollBlockIntoViewWhenRendered(blockId));
       }
     },
-    [messageIds, suspendAutoScroll, setNavId, setActive],
+    [
+      messageIds,
+      releaseSideNavScrollLock,
+      scrollBlockIntoViewWhenRendered,
+      scrollToMessage,
+      suspendAutoScroll,
+    ],
   );
 
   const handleSend = async () => {
@@ -532,6 +574,9 @@ export function ChatPanel() {
     setIsCreatingGoal(true);
     try {
       await setGoal(activeSessionId, objective);
+      if (effectiveStatus === "idle") {
+        await sendMessage();
+      }
       setInputText("");
       setGoalMode(false);
       preGoalInputRef.current = "";
@@ -544,10 +589,12 @@ export function ChatPanel() {
     }
   }, [
     activeSessionId,
+    effectiveStatus,
     inputText,
     isCreatingGoal,
     isMobileOrTablet,
     resumeAutoScroll,
+    sendMessage,
     setGoal,
   ]);
 
@@ -731,7 +778,13 @@ export function ChatPanel() {
           )}
         </div>
         <div className="w-10 shrink-0 overflow-hidden">
-          <SideNav ref={sideNavRef} messages={messages} onNavDotClick={handleNavDotClick} />
+          <SideNav
+            ref={sideNavRef}
+            messages={renderedMessages}
+            onNavDotClick={handleNavDotClick}
+            pagination={sideNavPagination}
+            isScrollLocked={isSideNavScrollLocked}
+          />
         </div>
       </div>
 
@@ -746,8 +799,8 @@ export function ChatPanel() {
       {!isViewingSubagent && <QuickActionToolbar onGoalClick={() => startGoalMode()} />}
 
       <div
-        className={`px-3 pt-2 pb-1.5 flex-shrink-0 bg-bg-secondary border-t border-border-primary relative ${isDragOver ? "ring-2 ring-semantic-accent/50 bg-semantic-accent/5" : ""}`}
-        style={{ paddingBottom: "calc(0.375rem + env(safe-area-inset-bottom))" }}
+        className={`px-3 pt-1.5 pb-1 flex-shrink-0 bg-bg-secondary border-t border-border-primary relative ${isDragOver ? "ring-2 ring-semantic-accent/50 bg-semantic-accent/5" : ""}`}
+        style={{ paddingBottom: "calc(0.25rem + env(safe-area-inset-bottom))" }}
         onPaste={handlePaste}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -776,21 +829,21 @@ export function ChatPanel() {
                     <RefineGoalOverlay step={refineStep} />
                   )}
                   <InputBar
-                  ref={inputBarRef}
-                  onSend={goalMode ? handleCreateGoal : handleSend}
-                  sessionId={activeSessionId ?? ""}
-                  disabled={!activeSessionId || isCreatingGoal}
-                  placeholder={goalMode ? t("goal.inputPlaceholder") : undefined}
-                  historyEnabled={!goalMode}
-                  onTriggerPopup={
-                    !goalMode && !isMobileOrTablet ? commandPopup.openPopup : undefined
-                  }
-                  popupOpen={!goalMode && !isMobileOrTablet && !!commandPopup.popupMode}
-                  onPopupConfirm={commandPopup.confirmSelection}
-                  onPopupCancel={commandPopup.closePopup}
-                  onPopupArrowUp={commandPopup.navigateUp}
-                  onPopupArrowDown={commandPopup.navigateDown}
-                />
+                    ref={inputBarRef}
+                    onSend={goalMode ? handleCreateGoal : handleSend}
+                    sessionId={activeSessionId ?? ""}
+                    disabled={!activeSessionId || isCreatingGoal}
+                    placeholder={goalMode ? t("goal.inputPlaceholder") : undefined}
+                    historyEnabled={!goalMode}
+                    onTriggerPopup={
+                      !goalMode && !isMobileOrTablet ? commandPopup.openPopup : undefined
+                    }
+                    popupOpen={!goalMode && !isMobileOrTablet && !!commandPopup.popupMode}
+                    onPopupConfirm={commandPopup.confirmSelection}
+                    onPopupCancel={commandPopup.closePopup}
+                    onPopupArrowUp={commandPopup.navigateUp}
+                    onPopupArrowDown={commandPopup.navigateDown}
+                  />
                 </div>
 
                 <div className="flex flex-col gap-1.5 shrink-0 justify-between py-1">
@@ -853,7 +906,7 @@ export function ChatPanel() {
                       (goalMode
                         ? !inputText.trim()
                         : !inputText.trim() &&
-                          useAttachmentStore.getState().attachments.length === 0) ||
+                        useAttachmentStore.getState().attachments.length === 0) ||
                       !activeSessionId ||
                       hasNoModel
                     }

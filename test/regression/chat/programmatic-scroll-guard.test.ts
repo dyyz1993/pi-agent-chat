@@ -80,37 +80,45 @@ describe("programmatic scroll guard — prevents activeId flicker", () => {
   });
 });
 
-describe("ChatPanel.handleNavDotClick — sets activeId immediately", () => {
+describe("ChatPanel.handleNavDotClick — uses guarded message scroll", () => {
   /**
-   * Bug: handleNavDotClick called vlistRef.scrollToIndex directly without
-   * calling setActive, meaning activeId only updated when scroll events
-   * fired updateActiveFromScroll — leaving the target message un-highlighted
-   * until the scroll animation completed.
+   * Bug: handleNavDotClick called vlistRef.scrollToIndex directly, bypassing
+   * useActiveScrollTracker.scrollToMessage and its programmatic-scroll guard.
+   * That let intermediate scroll frames fight with activeId.
    *
-   * Fix: Explicitly call setActive(targetMsgId) before scrollToIndex.
+   * Fix: route SideNav clicks through scrollToMessage.
    */
 
-  it("handleNavDotClick calls setActive before scrollToIndex", () => {
+  it("handleNavDotClick calls scrollToMessage with explicit SideNav target", () => {
     const source = readSource("src/mainview/components/chat/ChatPanel.tsx");
     const handleClickSection = source.slice(
       source.indexOf("const handleNavDotClick"),
       source.indexOf("const handleSend"),
     );
-    expect(handleClickSection).toContain("setActive(targetMsgId)");
-    expect(handleClickSection).toContain("scrollToIndex");
+    expect(handleClickSection).toContain("(target: SideNavTarget)");
+    expect(handleClickSection).toContain("scrollToMessage(target.messageId");
+    expect(handleClickSection).toContain("smooth: !target.blockId");
+    expect(handleClickSection).toContain("scrollBlockIntoViewWhenRendered(blockId)");
+    expect(handleClickSection).not.toContain("vlistRef.current?.scrollToIndex(index");
+    expect(handleClickSection).not.toContain("lastIndexOf");
+  });
+
+  it("block navigation waits long enough for virtualized content to mount", () => {
+    const source = readSource("src/mainview/components/chat/ChatPanel.tsx");
+    expect(source).toContain("BLOCK_NAV_MAX_RENDER_ATTEMPTS = 60");
+    expect(source).toContain("attempt >= BLOCK_NAV_MAX_RENDER_ATTEMPTS");
   });
 });
 
-describe("onInitComplete — enables navId sync after initial scroll", () => {
+describe("scroll tracking — does not mutate SideNav selection", () => {
   /**
-   * Bug: onInitComplete was destructured as _onInitComplete (unused),
-   * so it was NEVER called. This meant:
-   *   1. ChatPanel.initDoneRef stayed false forever
-   *   2. The bridge setActive → setNavId was always skipped
-   *   3. SideNav selectedNavId was never set by scroll events
-   *   4. Icons never highlighted and never scrolled into view
+   * Interaction rule from docs/design-sidenav-interaction.md:
+   * SideNav selection is click-owned only. Message-list scrolling may update
+   * activeId for the read-only left bar and keep that icon visible, but must
+   * never write selectedNavId.
    *
-   * Fix: Actually call onInitComplete after scheduleScrollToBottom settles.
+   * Historical bug: onInitComplete was destructured as _onInitComplete and
+   * never called, leaving the initial activeId state incomplete.
    */
 
   it("onInitComplete is NOT renamed to _onInitComplete (must be used)", () => {
@@ -134,6 +142,27 @@ describe("onInitComplete — enables navId sync after initial scroll", () => {
       source.indexOf("const scheduleScrollToBottom"),
       source.indexOf("const doScrollToBottom"),
     );
-    expect(scheduleSection).toContain("onInitComplete]");
+    expect(scheduleSection).toContain("onInitComplete");
+  });
+
+  it("ChatPanel does not bridge scroll activeId into selectedNavId", () => {
+    const source = readSource("src/mainview/components/chat/ChatPanel.tsx");
+    const trackerSection = source.slice(
+      source.indexOf("useActiveScrollTracker"),
+      source.indexOf("const handleScrollToEdge"),
+    );
+
+    expect(trackerSection).toContain("setActive(id)");
+    expect(trackerSection).not.toContain("setNavId(id)");
+    expect(trackerSection).not.toContain("setNavId(lastIconId)");
+    expect(source).not.toContain("initDoneRef");
+    expect(source).toContain("navClickScrollingRef");
+  });
+
+  it("SideNav scrolling does not load or mutate message history", () => {
+    const source = readSource("src/mainview/components/chat/SideNav.tsx");
+    expect(source).not.toContain("loadMoreMessages");
+    expect(source).not.toContain("hasMoreMessagesBySession");
+    expect(source).not.toContain("isLoadingMoreBySession");
   });
 });

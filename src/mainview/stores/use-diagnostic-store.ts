@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { useSessionStore } from "./use-session-store";
+import { useSessionTodoStore } from "./use-session-todo-store";
 import { useChatStore } from "./use-chat-store";
 import { useTurnStore } from "./use-turn-store";
 import { useChatNavStore } from "./use-chat-nav-store";
@@ -112,7 +113,7 @@ function getDataSizes(): DataSizeSnapshot[] {
 
   const sessionState = useSessionStore.getState();
   {
-    const todos = sessionState.todosBySession;
+    const todos = useSessionTodoStore.getState().todosBySession;
     const details: DataSizeSnapshot["details"] = [];
     let totalItems = 0;
     let estimatedBytes = 0;

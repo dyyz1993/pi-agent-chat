@@ -11,6 +11,7 @@ import {
   paginateEntryMessages,
   type FullMessageAccumulator,
 } from "../../../src/shared/agent/session-jsonl-messages";
+import { applyPagination } from "../../../src/shared/agent/session-branch-filter";
 
 function makeAccumulator(): FullMessageAccumulator {
   return {
@@ -209,6 +210,33 @@ describe("session JSONL message helpers", () => {
 
     expect(paginateEntryMessages({ filteredMessages, limit: 1 })).toEqual({
       slicedMessages: [
+        {
+          role: "assistant",
+          content: [{ type: "toolCall", id: "tool-1", name: "bash" }],
+          entryId: "a1",
+        },
+        { role: "toolResult", toolCallId: "tool-1", entryId: "r1" },
+      ],
+      hasMore: true,
+      nextCursor: "r1",
+    });
+  });
+
+  it("expands tool pairs on the SessionMessageReader pagination path", () => {
+    const filteredMessages = [
+      { entryId: "u1", message: { role: "user" } },
+      {
+        entryId: "a1",
+        message: {
+          role: "assistant",
+          content: [{ type: "toolCall", id: "tool-1", name: "bash" }],
+        },
+      },
+      { entryId: "r1", message: { role: "toolResult", toolCallId: "tool-1" } },
+    ];
+
+    expect(applyPagination(filteredMessages, { limit: 1 })).toEqual({
+      messages: [
         {
           role: "assistant",
           content: [{ type: "toolCall", id: "tool-1", name: "bash" }],

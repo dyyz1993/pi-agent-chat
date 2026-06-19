@@ -32,9 +32,9 @@ import {
   syncTabsToBackend,
   requestRulesSnapshot,
 } from "./session-subscriptions";
-import type { TodoItem } from "./session-subscriptions";
-
-export type { TodoItem, TodoPriority } from "./session-subscriptions";
+import { useSessionTodoStore } from "./use-session-todo-store";
+import { useSessionQueueStore } from "./use-session-queue-store";
+import { pickDefaultSessionId } from "./session-selection";
 
 const log = createLogger("session");
 const perfLog = createLogger("session-perf");
@@ -89,10 +89,8 @@ interface SessionState {
   supervisorSubscriptions: Record<string, string>;
   sessionReady: Record<string, boolean>;
   agentReady: Record<string, boolean>;
-  todosBySession: Record<string, TodoItem[]>;
   sessionContextMap: Record<string, ContextUsage>;
   sessionStatusMap: Record<string, SessionStatus>;
-  queueBySession: Record<string, { steering: string[]; followUp: string[] }>;
   currentModel: ModelInfo | null;
   modelBySession: Record<string, ModelInfo>;
   modelStateLoading: boolean;
@@ -129,7 +127,6 @@ interface SessionState {
   renameSession: (sessionId: string, newName: string) => void;
   deleteSession: (sessionId: string) => void;
   togglePinSession: (sessionId: string) => void;
-  setSessionTodos: (sessionId: string, todos: TodoItem[]) => void;
   restoreFromPersisted: () => Promise<boolean>;
   updateSessionContext: (sessionId: string, usage: Partial<ContextUsage>) => void;
   updateSessionStatus: (sessionId: string, status: SessionStatus) => void;
@@ -182,10 +179,8 @@ export const useSessionStore = create<SessionState>()(
       supervisorSubscriptions: {},
       sessionReady: {},
       agentReady: {},
-      todosBySession: {},
       sessionContextMap: {},
       sessionStatusMap: {},
-      queueBySession: {},
       currentModel: null,
       modelBySession: {},
       modelStateLoading: false,
@@ -293,11 +288,11 @@ export const useSessionStore = create<SessionState>()(
 
           if (cached && cached.length > 0) {
             // 有缓存：立即选中会话，后台刷新列表
-            const lastSid = get().lastActiveSessionByProject[tab.path];
-            const targetSession =
-              lastSid && cached.some((s) => s.sessionId === lastSid)
-                ? lastSid
-                : cached[0].sessionId;
+            const targetSession = pickDefaultSessionId(
+              cached,
+              get().lastActiveSessionByProject[tab.path],
+            );
+            if (!targetSession) return;
             set((s) => ({
               activeSessionId: targetSession,
               projectStartFailed: { ...s.projectStartFailed, [id]: false },
@@ -322,11 +317,11 @@ export const useSessionStore = create<SessionState>()(
                 if (version !== get()._projectVersion) return;
 
                 if (sessions.length > 0) {
-                  const lastSid = get().lastActiveSessionByProject[tab.path];
-                  const targetSession =
-                    lastSid && sessions.some((s) => s.sessionId === lastSid)
-                      ? lastSid
-                      : sessions[0].sessionId;
+                  const targetSession = pickDefaultSessionId(
+                    sessions,
+                    get().lastActiveSessionByProject[tab.path],
+                  );
+                  if (!targetSession) return;
                   set((s) => ({
                     activeSessionId: targetSession,
                     projectStartFailed: { ...s.projectStartFailed, [id]: false },
@@ -397,21 +392,20 @@ export const useSessionStore = create<SessionState>()(
         set((s) => {
           const subClean = clearSubscriptionState(s, sessionId);
           const { [sessionId]: _ar, ...restAgentReady } = s.agentReady;
-          const { [sessionId]: _tb, ...restTodos } = s.todosBySession;
           const { [sessionId]: _sc, ...restContext } = s.sessionContextMap;
           const { [sessionId]: _ss, ...restStatus } = s.sessionStatusMap;
-          const { [sessionId]: _qs, ...restQueue } = s.queueBySession;
           const { [sessionId]: _ms, ...restModel } = s.modelBySession;
           return {
             ...subClean,
             agentReady: restAgentReady,
-            todosBySession: restTodos,
             sessionContextMap: restContext,
             sessionStatusMap: restStatus,
-            queueBySession: restQueue,
             modelBySession: restModel,
           };
         });
+
+        useSessionTodoStore.getState().clearSessionTodos(sessionId);
+        useSessionQueueStore.getState().clearSessionQueue(sessionId);
 
         const { sessionsByProject, activeSessionId } = get();
         let deletedPath = "";
@@ -528,12 +522,6 @@ export const useSessionStore = create<SessionState>()(
             });
           });
         }
-      },
-
-      setSessionTodos: (sessionId, todos) => {
-        set((s) => ({
-          todosBySession: { ...s.todosBySession, [sessionId]: todos },
-        }));
       },
 
       updateSessionContext: (sessionId, usage) => {
@@ -844,11 +832,7 @@ export const useSessionStore = create<SessionState>()(
 
           const sessions = await get().loadSessionsForProject(tab.path);
           const found = sessions?.find((s) => s.sessionId === activeSessionId);
-          const targetId = found
-            ? activeSessionId
-            : sessions.length > 0
-              ? sessions[0].sessionId
-              : null;
+          const targetId = found ? activeSessionId : pickDefaultSessionId(sessions);
           if (!targetId) return false;
 
           set({ activeSessionId: null });
@@ -875,7 +859,6 @@ export const useSessionStore = create<SessionState>()(
         const p = persisted as Partial<SessionState> & { modelFavorites?: string[] };
         return {
           ...current,
-          ...(persisted as Partial<SessionState>),
           modelFavorites: new Set(p.modelFavorites ?? []),
           lastActiveSessionByProject: p.lastActiveSessionByProject ?? {},
           projectStartFailed: current.projectStartFailed,
@@ -933,11 +916,7 @@ apiClient.onReconnect(() => {
       sessionPath: session.sessionPath,
     })
     .then((result) => {
-      if (
-        result.status === "already_running" ||
-        result.status === "started" ||
-        result.status === "switched"
-      ) {
+      if (result.status === "already_running" || result.status === "started") {
         useSessionStore.setState((s) => {
           const projectId = s.activeProjectId;
           if (!projectId) return {};
@@ -961,15 +940,11 @@ apiClient.onReconnect(() => {
             })
             .catch(() => {})
             .then(() => {
-              return apiClient.call("agent.replayHoldEvents", { sessionId: activeSessionId });
-            })
-            .then(() => {
               return useChatStore
                 .getState()
                 ._backgroundRefreshMessages(activeSessionId, session.sessionPath);
             })
             .then(() => {
-              // Replay may accumulate stale token counts via message_end events;
               // fetch the authoritative value to correct any drift.
               return apiClient
                 .call("agent.getContextUsage", { sessionId: activeSessionId })
@@ -986,7 +961,7 @@ apiClient.onReconnect(() => {
                 .catch(() => {});
             })
             .catch((err) => {
-              log.warn("[onReconnect] load+replay failed", {
+              log.warn("[onReconnect] load+refresh failed", {
                 sessionId: activeSessionId,
                 err: err instanceof Error ? err.message : String(err),
               });

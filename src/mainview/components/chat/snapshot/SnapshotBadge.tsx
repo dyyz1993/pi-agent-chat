@@ -2,6 +2,10 @@ import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight, FilePlus, FileEdit, FileX, Camera } from "lucide-react";
 import { formatFilePath } from "../../../lib/format-path";
+import {
+  CHAT_COMPACT_BLOCK_CLASS,
+  CHAT_COMPACT_ROW_BUTTON_BASE_CLASS,
+} from "../chat-layout-classes";
 
 interface SnapshotDiff {
   added: string[];
@@ -35,11 +39,11 @@ export const SnapshotBadge = memo(function SnapshotBadge({ data, blockId }: Snap
   if (totalCount === 0) return null;
 
   return (
-    <div className="my-0.5" data-block-id={blockId}>
+    <div className={CHAT_COMPACT_BLOCK_CLASS} data-block-id={blockId}>
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
-        className="w-full px-3 py-1 flex items-center gap-1.5 text-[11px] text-semantic-accent/80 hover:bg-surface-hover/15 rounded cursor-pointer select-none"
+        className={`${CHAT_COMPACT_ROW_BUTTON_BASE_CLASS} text-semantic-accent/80 hover:bg-surface-hover/15`}
         aria-expanded={expanded}
       >
         <Camera className="w-3 h-3 shrink-0" />

@@ -24,7 +24,7 @@ export interface AgentMethods {
       sessionPath: string;
       forceNewProcess?: boolean;
     };
-    result: { agentId: string; status: "started" | "already_running" | "switched" };
+    result: { agentId: string; status: "started" | "already_running" };
   };
   "agent.replayHoldEvents": {
     params: { sessionId: string };
@@ -74,6 +74,7 @@ export interface AgentMethods {
         args?: unknown;
         startedAt?: number;
       }>;
+      pendingUIRequests?: ExtensionUIRequestEvent[];
     } | null;
   };
   "agent.getCommands": {
@@ -397,6 +398,8 @@ export interface AgentMethods {
         permissionMode?: string;
         source: string;
         filePath: string;
+        color?: string;
+        avatar?: { type: "emoji"; value: string } | { type: "image"; src: string };
       }>;
     };
   };
@@ -440,6 +443,7 @@ export interface AgentMethods {
         thinkingLevel?: string;
         mode?: string;
         hidden?: boolean;
+        avatar?: { type: "emoji"; value: string } | { type: "image"; src: string };
       };
     };
   };

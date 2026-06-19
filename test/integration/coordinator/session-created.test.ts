@@ -70,8 +70,19 @@ interface CoordinatorHandlerLike {
     msg: { __call: "session_delegate"; task: string; title?: string; invokeId?: string },
   ) => Promise<{ sessionId: string; status: string }>;
   handleCoordinatorCall: (sessionId: string, msg: Record<string, unknown>) => Promise<void>;
-  handleCoordinatorClearStopped: (sessionId: string) => { childSessionIds: string[] };
-  handleCoordinatorRemove: (sessionId: string, delegateId: string) => void;
+  handleCoordinatorClearStopped: (
+    sessionId: string,
+    msg: { __call: "session_delegate_clear_stopped"; sessionId?: string; invokeId?: string },
+  ) => { cleared: string[] };
+  handleCoordinatorRemove: (
+    sessionId: string,
+    msg: {
+      __call: "session_delegate_remove";
+      sessionId?: string;
+      targetSessionId?: string;
+      invokeId?: string;
+    },
+  ) => { removed: boolean };
 }
 
 interface InternalAPM {
@@ -485,7 +496,7 @@ describe("coordinator.session_created — TDD 诊断", () => {
       await expect(m.coordinatorHandler.handleCoordinatorCall(parentSessionId, msg)).resolves.toBeUndefined();
     });
 
-    it("session_delegate_remove logs Unknown (no handler yet)", async () => {
+    it("session_delegate_remove handles sessionId payloads", async () => {
       const m = internals(manager);
       const parentSessionId = "parent-1";
       const childSessionId = "child-1";
@@ -495,11 +506,12 @@ describe("coordinator.session_created — TDD 诊断", () => {
       const msg = {
         __call: "session_delegate_remove",
         invokeId: "inv_test2",
-        targetSessionId: childSessionId,
+        sessionId: childSessionId,
       };
 
-      // Currently falls to default "Unknown coordinator method" — resolves undefined
+      // Should NOT throw, should NOT hit "Unknown coordinator method".
       await expect(m.coordinatorHandler.handleCoordinatorCall(parentSessionId, msg)).resolves.toBeUndefined();
+      expect(m.coordinatorHandler.parentChildMap.get(parentSessionId)?.has(childSessionId)).not.toBe(true);
     });
   });
 });

@@ -6,8 +6,10 @@ globalThis.fetch = mockFetch;
 import {
   isLocalAddress,
   isProxyEnabled,
+  getProxyStatus,
   enableProxy,
   disableProxy,
+  refreshProxyStatus,
   tryEnable,
   proxyUrlSync,
   checkProxyUrl,
@@ -16,6 +18,7 @@ import {
 describe("proxy module", () => {
   beforeEach(() => {
     disableProxy();
+    localStorage.clear();
     mockFetch.mockReset();
   });
 
@@ -68,12 +71,48 @@ describe("proxy module", () => {
     it("enableProxy activates proxy", () => {
       enableProxy();
       expect(isProxyEnabled()).toBe(true);
+      expect(getProxyStatus().preferred).toBe(true);
+      expect(localStorage.getItem("pi-local-proxy-enabled")).toBe("true");
     });
 
     it("disableProxy deactivates proxy", () => {
       enableProxy();
       disableProxy();
       expect(isProxyEnabled()).toBe(false);
+      expect(getProxyStatus().preferred).toBe(false);
+      expect(localStorage.getItem("pi-local-proxy-enabled")).toBeNull();
+    });
+  });
+
+  describe("refreshProxyStatus", () => {
+    it("keeps proxy active when preference is enabled and server is configured", async () => {
+      enableProxy();
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ configured: true }),
+      });
+
+      const status = await refreshProxyStatus();
+
+      expect(status.preferred).toBe(true);
+      expect(status.configured).toBe(true);
+      expect(status.active).toBe(true);
+      expect(mockFetch).toHaveBeenCalledWith("/api/proxy-status", { method: "GET" });
+    });
+
+    it("disables active proxy when server is not configured but keeps user preference", async () => {
+      enableProxy();
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ configured: false }),
+      });
+
+      const status = await refreshProxyStatus();
+
+      expect(status.preferred).toBe(true);
+      expect(status.configured).toBe(false);
+      expect(status.active).toBe(false);
+      expect(localStorage.getItem("pi-local-proxy-enabled")).toBe("true");
     });
   });
 
@@ -208,33 +247,69 @@ describe("proxy module", () => {
 
   describe("tryEnable", () => {
     it("enables proxy on successful registration", async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ publicUrl: "https://abc.shanbox.xyz:8443" }),
-      });
+      enableProxy();
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ configured: true }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ publicUrl: "https://abc.shanbox.xyz:8443" }),
+        });
 
       await tryEnable("192.168.0.4:3100");
       expect(isProxyEnabled()).toBe(true);
     });
 
     it("disables proxy on failed registration", async () => {
-      mockFetch.mockResolvedValueOnce({ ok: false, status: 502 });
+      enableProxy();
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ configured: true }),
+        })
+        .mockResolvedValueOnce({ ok: false, status: 502 });
 
       await tryEnable("192.168.0.4:3100");
       expect(isProxyEnabled()).toBe(false);
     });
 
     it("disables proxy on empty host", async () => {
+      enableProxy();
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ configured: true }),
+      });
+
       await tryEnable("");
       expect(isProxyEnabled()).toBe(false);
-      expect(mockFetch).not.toHaveBeenCalled();
+      expect(mockFetch).toHaveBeenCalledWith("/api/proxy-status", { method: "GET" });
     });
 
     it("disables proxy on network error", async () => {
+      enableProxy();
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ configured: true }),
+      });
       mockFetch.mockRejectedValueOnce(new Error("Network error"));
 
       await tryEnable("192.168.0.4:3100");
       expect(isProxyEnabled()).toBe(false);
+    });
+
+    it("does not register when user preference is disabled", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ configured: true }),
+      });
+
+      await tryEnable("192.168.0.4:3100");
+
+      expect(isProxyEnabled()).toBe(false);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledWith("/api/proxy-status", { method: "GET" });
     });
   });
 });

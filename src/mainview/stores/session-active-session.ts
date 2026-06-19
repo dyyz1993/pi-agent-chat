@@ -252,8 +252,7 @@ export function createSetActiveSessionAction({
 
             if (
               result.status === "already_running" ||
-              result.status === "started" ||
-              result.status === "switched"
+              result.status === "started"
             ) {
               set((s) => {
                 const projectId = s.activeProjectId;
@@ -286,9 +285,6 @@ export function createSetActiveSessionAction({
                 loadPromise
                   .catch(() => {})
                   .then(() => {
-                    // No replayHoldEvents needed — loadSessionMessages already fetches
-                    // in-memory messages (get_messages) in parallel with JSONL data,
-                    // which includes the streaming assistant message.
                     return useChatStore
                       .getState()
                       ._backgroundRefreshMessages(id, session.sessionPath);
@@ -331,8 +327,6 @@ export function createSetActiveSessionAction({
                       count: useChatStore.getState().messagesBySession[id]?.length,
                       ms: Math.round(performance.now() - tLoad),
                     });
-                    // No replayHoldEvents needed — loadSessionMessages already fetches
-                    // in-memory messages (get_messages) in parallel with JSONL data.
                     return useChatStore
                       .getState()
                       ._backgroundRefreshMessages(id, session.sessionPath);

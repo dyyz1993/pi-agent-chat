@@ -20,6 +20,7 @@ import {
   isLspVisibleInChat,
 } from "./lsp-constants";
 import { MEMORY_CUSTOM_TYPES } from "./MemoryCard";
+import { isBashBackgroundProcessType } from "./bash-background-process";
 
 // Re-exports for backward compatibility
 export { ThinkingCard } from "./ThinkingCard";
@@ -211,7 +212,8 @@ export const MessageBubble = memo(function MessageBubble({
             if (
               block.type === "custom" &&
               !MEMORY_CUSTOM_TYPES.has(block.customType) &&
-              !isLspCustomType(block.customType)
+              !isLspCustomType(block.customType) &&
+              !isBashBackgroundProcessType(block.customType)
             ) {
               return null;
             }

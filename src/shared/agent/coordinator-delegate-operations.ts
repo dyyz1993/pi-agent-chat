@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync } from "fs";
+import { copyFileSync, existsSync, readFileSync } from "fs";
 import * as path from "path";
 
 import type { CoordinatorMethodCall } from "../modules/coordinator";
@@ -17,6 +17,7 @@ import {
   buildCoordinatorDelegatePrompt,
   buildCoordinatorSessionCreatedEvent,
   buildSyncDelegatePrompt,
+  type DelegateReplyMode,
   formatDelegateElapsed,
   resolveDelegateSessionPaths,
   stripParentSessionFromHeader,
@@ -161,7 +162,7 @@ export async function handleCoordinatorDelegateOperation<
     projectPath: string,
     sessionPath: string,
     options: { forceNewProcess: true },
-  ) => Promise<{ status: "started" | "already_running" | "switched" }>;
+  ) => Promise<{ status: "started" | "already_running" }>;
   setSessionName: (sessionId: string, name: string) => Promise<void>;
   send: (sessionId: string, content: string) => void;
   broadcastEvent: (
@@ -172,10 +173,12 @@ export async function handleCoordinatorDelegateOperation<
   parentChildMap: DelegateChildMap;
   delegateCreatedAt: Map<string, number>;
   delegateReplyCount: Map<string, number>;
+  delegateReplyMode?: Map<string, DelegateReplyMode>;
   now?: () => number;
   sessionIdFactory?: () => string;
-}): Promise<{ sessionId: string; status: "started" | "already_running" | "switched" }> {
+}): Promise<{ sessionId: string; status: "started" | "already_running" }> {
   const { task } = options.msg;
+  const replyMode = options.msg.replyMode ?? "interrupt";
 
   const session = await createAndStartDelegateSession({
     parentSessionId: options.parentSessionId,
@@ -190,6 +193,7 @@ export async function handleCoordinatorDelegateOperation<
     now: options.now,
     sessionIdFactory: options.sessionIdFactory,
   });
+  options.delegateReplyMode?.set(session.sessionId, replyMode);
 
   const rawTitle = options.msg.title ?? task.slice(0, 60);
   const title = `指派: ${rawTitle}`;
@@ -200,6 +204,7 @@ export async function handleCoordinatorDelegateOperation<
     title,
     task,
     projectPath: session.projectPath,
+    replyMode,
   });
 
   options.send(session.sessionId, delegatePrompt);
@@ -229,26 +234,28 @@ export async function handleCoordinatorDelegateOperation<
 
   return {
     sessionId: session.sessionId,
-    status: (session.startResult as { status: "started" | "already_running" | "switched" })
-      .status,
+    status: (session.startResult as { status: "started" | "already_running" }).status,
   };
 }
 
 export async function handleCoordinatorDelegateSendOperation<
   TManaged extends DelegateSendManaged,
 >(options: {
+  sourceSessionId: string;
   msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_send" }>;
   clients: Map<string, TManaged>;
   sessionPaths: Map<string, string>;
   sessionProjectPaths: Map<string, string>;
   delegateReplyCount: Map<string, number>;
   delegateCreatedAt: Map<string, number>;
+  delegateReplyMode?: Map<string, DelegateReplyMode>;
+  delegateRepliedSessions?: Set<string>;
   parentChildMap: DelegateChildMap;
   start: (
     sessionId: string,
     projectPath: string,
     sessionPath: string,
-  ) => Promise<{ status: "started" | "already_running" | "switched" }>;
+  ) => Promise<{ status: "started" | "already_running" }>;
   send: (sessionId: string, content: string) => void;
   steer: (sessionId: string, content: string) => void;
   followUp: (sessionId: string, content: string) => void;
@@ -297,6 +304,7 @@ export async function handleCoordinatorDelegateSendOperation<
   }
 
   const wrappedMessage = wrapDelegateReply({
+    sourceSessionId: options.sourceSessionId,
     targetSessionId,
     title,
     sequence: count,
@@ -305,13 +313,23 @@ export async function handleCoordinatorDelegateSendOperation<
     message,
   });
 
-  if (options.msg.mode === "steer") {
+  const configuredMode = options.delegateReplyMode?.get(options.sourceSessionId) ?? "interrupt";
+  const deliveryMode =
+    options.msg.mode ??
+    (configuredMode === "interrupt"
+      ? "steer"
+      : configuredMode === "followUp"
+        ? "followUp"
+        : undefined);
+
+  if (deliveryMode === "steer") {
     options.steer(targetSessionId, wrappedMessage);
-  } else if (options.msg.mode === "followUp" || target.info.status === "streaming") {
+  } else if (deliveryMode === "followUp" || target.info.status === "streaming") {
     options.followUp(targetSessionId, wrappedMessage);
   } else {
     options.send(targetSessionId, wrappedMessage);
   }
+  options.delegateRepliedSessions?.add(options.sourceSessionId);
 
   return { delivered: true, targetStatus: "active" };
 }
@@ -503,7 +521,7 @@ export async function handleCoordinatorDelegateForkOperation<
     projectPath: string,
     sessionPath: string,
     options: { forceNewProcess: true },
-  ) => Promise<{ status: "started" | "already_running" | "switched" }>;
+  ) => Promise<{ status: "started" | "already_running" }>;
   setSessionName: (sessionId: string, name: string) => Promise<void>;
   send: (sessionId: string, content: string) => void;
   broadcastEvent: (
@@ -513,7 +531,7 @@ export async function handleCoordinatorDelegateForkOperation<
   ) => Promise<void>;
   parentChildMap: DelegateChildMap;
   sessionIdFactory?: () => string;
-}): Promise<{ sessionId: string; status: "started" | "already_running" | "switched" }> {
+}): Promise<{ sessionId: string; status: "started" | "already_running" }> {
   const { task, sessionId: targetSessionId } = options.msg;
   const base = options.clients.get(targetSessionId);
   if (!base) throw new Error(`Session not found: ${targetSessionId}`);
@@ -568,7 +586,9 @@ export async function handleCoordinatorDelegateForkOperation<
 }
 
 export async function handleCoordinatorDelegateStatusOperation(options: {
+  parentSessionId: string;
   msg: Extract<CoordinatorMethodCall, { __call: "session_delegate_status" }>;
+  parentChildMap: DelegateChildMap;
   sessionPaths: Map<string, string>;
   sessionProjectPaths: Map<string, string>;
   getStatus: (sessionId: string) => { status: "idle" | "streaming" | "stopped"; pid?: number };
@@ -580,6 +600,14 @@ export async function handleCoordinatorDelegateStatusOperation(options: {
   ) => Promise<{ tokens: number | null; contextWindow: number; percent: number | null }>;
 }): Promise<{ status: string; isCompacting: boolean; contextUsage: unknown }> {
   const { sessionId: targetSessionId } = options.msg;
+  const parentChildren = options.parentChildMap.get(options.parentSessionId);
+  if (!parentChildren?.has(targetSessionId)) {
+    return {
+      status: "not_found",
+      isCompacting: false,
+      contextUsage: { tokens: null, contextWindow: 0, percent: null },
+    };
+  }
 
   const status = options.getStatus(targetSessionId);
   if (status.status === "stopped") {
@@ -596,10 +624,40 @@ export async function handleCoordinatorDelegateStatusOperation(options: {
   const contextUsage = await options.getContextUsage(targetSessionId);
 
   return {
-    status: state?.isStreaming ? "streaming" : "idle",
+    status: state?.isStreaming
+      ? "streaming"
+      : hasAssistantMessage(options.sessionPaths.get(targetSessionId))
+        ? "completed"
+        : "idle",
     isCompacting: state?.isCompacting ?? false,
     contextUsage,
   };
+}
+
+function hasAssistantMessage(sessionPath: string | undefined): boolean {
+  if (!sessionPath || !existsSync(sessionPath)) return false;
+  try {
+    const lines = readFileSync(sessionPath, "utf-8").split("\n");
+    return lines.some((line) => {
+      if (!line.trim()) return false;
+      try {
+        const entry = JSON.parse(line) as unknown;
+        if (!entry || typeof entry !== "object") return false;
+        const record = entry as Record<string, unknown>;
+        if (record.type !== "message") return false;
+        const message = record.message;
+        return (
+          typeof message === "object" &&
+          message !== null &&
+          (message as Record<string, unknown>).role === "assistant"
+        );
+      } catch {
+        return false;
+      }
+    });
+  } catch {
+    return false;
+  }
 }
 
 export function handleCoordinatorDelegateListOperation<
@@ -627,5 +685,8 @@ export async function handleCoordinatorDelegateStopOperation(options: {
     return { ok: false };
   }
   const ok = await options.stop(targetSessionId);
+  if (ok) {
+    registerDelegateChild(options.parentChildMap, options.parentSessionId, targetSessionId);
+  }
   return { ok };
 }

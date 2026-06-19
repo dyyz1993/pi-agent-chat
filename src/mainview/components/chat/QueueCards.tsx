@@ -1,11 +1,11 @@
 import { Zap, Clock, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useSessionStore } from "../../stores/use-session-store";
+import { useSessionQueueStore } from "../../stores/use-session-queue-store";
 import { useChatStore } from "../../stores/use-chat-store";
 
 export function QueueCards({ sessionId }: { sessionId: string }) {
   const { t } = useTranslation("chat");
-  const queue = useSessionStore((s) => s.queueBySession[sessionId]);
+  const queue = useSessionQueueStore((s) => s.queueBySession[sessionId]);
   const clearQueue = useChatStore((s) => s.clearQueue);
 
   if (!queue || (queue.steering.length === 0 && queue.followUp.length === 0)) return null;

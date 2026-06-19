@@ -8,11 +8,17 @@ import { mkdirSync, rmSync, writeFileSync } from "fs";
 import { homedir, tmpdir } from "os";
 import { join } from "path";
 
+const rpcClientMockState = vi.hoisted(() => ({
+  instances: [] as Array<{ start: ReturnType<typeof vi.fn> }>,
+  startMode: "immediate" as "immediate" | "deferred",
+  startResolvers: [] as Array<() => void>,
+}));
+
 vi.mock("../../../src/server-config", () => ({
   config: {
-    piCliPath: "/fake/path/to/cli.js",
+    piCliPath: "/Users/xuyingzhou/Project/temporary/pi-agent-chat/.yalc/@dyyz1993/pi-coding-agent/dist/cli.js",
     piExtensionsDir: "/fake/path/to/extensions",
-    sandboxEnabled: false,
+    sandboxEnabled: true,
   },
 }));
 
@@ -25,13 +31,33 @@ vi.mock("../../../src/shared/lib/logger", () => ({
   }),
 }));
 
+vi.mock("@dyyz1993/pi-coding-agent", () => ({
+  RpcClient: class {
+    start = vi.fn(() => {
+      if (rpcClientMockState.startMode === "deferred") {
+        return new Promise<void>((resolve) => {
+          rpcClientMockState.startResolvers.push(resolve);
+        });
+      }
+      return Promise.resolve();
+    });
+    stop = vi.fn().mockResolvedValue(undefined);
+    prompt = vi.fn().mockResolvedValue(undefined);
+    onEvent = vi.fn().mockReturnValue(vi.fn());
+    channel = vi.fn().mockReturnValue({ onReceive: vi.fn() });
+
+    constructor() {
+      rpcClientMockState.instances.push(this);
+    }
+  },
+}));
+
 import type { AgentProcessManager as APM } from "../../../src/shared/agent/process-manager";
 import { AgentProcessManager } from "../../../src/shared/agent/process-manager";
 
 interface ManagedClientShape {
   client: {
     prompt: (content: string, images?: unknown[]) => Promise<void>;
-    switchSession?: (sessionPath: string) => Promise<{ cancelled: boolean }>;
     stop?: () => Promise<void>;
   };
   info: {
@@ -52,7 +78,6 @@ interface InternalAPM {
   processByCwd: Map<string, Set<ManagedClientShape>>;
   sessionPaths: Map<string, string>;
   sessionProjectPaths: Map<string, string>;
-  _startInProgress: boolean;
 }
 
 function internals(manager: APM): InternalAPM {
@@ -67,11 +92,14 @@ function createManager(): APM {
   return new AgentProcessManager(new MockRPCServer() as never);
 }
 
+function encodeCwd(cwd: string): string {
+  return `--${cwd.replace(/^\//, "").replace(/\//g, "-")}--`;
+}
+
 function makeManaged(sessionId: string, projectPath: string, sessionPath: string): ManagedClientShape {
   return {
     client: {
       prompt: vi.fn().mockResolvedValue(undefined),
-      switchSession: vi.fn().mockResolvedValue({ cancelled: false }),
       stop: vi.fn().mockResolvedValue(undefined),
     },
     info: {
@@ -88,25 +116,14 @@ function makeManaged(sessionId: string, projectPath: string, sessionPath: string
   };
 }
 
-function deferred<T>(): {
-  promise: Promise<T>;
-  resolve: (value: T) => void;
-  reject: (reason?: unknown) => void;
-} {
-  let resolve: (value: T) => void = () => {};
-  let reject: (reason?: unknown) => void = () => {};
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
-}
-
 describe("AgentProcessManager.send stale-session recovery", () => {
   let manager: APM;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    rpcClientMockState.instances.length = 0;
+    rpcClientMockState.startMode = "immediate";
+    rpcClientMockState.startResolvers.length = 0;
     manager = createManager();
   });
 
@@ -136,10 +153,10 @@ describe("AgentProcessManager.send stale-session recovery", () => {
     expect(managed.client.prompt).toHaveBeenCalledWith("hello", undefined);
   });
 
-  it("rebuilds from disk session scanner when manager metadata is missing", async () => {
+  it("returns false when only disk session data exists without manager metadata", async () => {
     const sessionId = "sess_coord_after_restart";
     const projectPath = join(tmpdir(), `pi-send-recovery-project-${Date.now()}`);
-    const sessionRoot = join(homedir(), ".pi", "agent", "sessions", `send-recovery-${Date.now()}`);
+    const sessionRoot = join(homedir(), ".pi", "agent", "sessions", encodeCwd(projectPath));
     const sessionPath = join(sessionRoot, `${sessionId}.jsonl`);
     const m = internals(manager);
     mkdirSync(projectPath, { recursive: true });
@@ -156,24 +173,14 @@ describe("AgentProcessManager.send stale-session recovery", () => {
       "utf-8",
     );
 
-    const managed = makeManaged(sessionId, projectPath, sessionPath);
-    const startSpy = vi.spyOn(manager, "start").mockImplementation(async () => {
-      m.clients.set(sessionId, managed);
-      return { agentId: sessionId, status: "started" };
-    });
+    const startSpy = vi.spyOn(manager, "start");
 
     const ok = await manager.send(sessionId, "hello after restart");
 
-    expect(ok).toBe(true);
-    expect(startSpy).toHaveBeenCalledWith(
-      sessionId,
-      projectPath,
-      sessionPath,
-      expect.objectContaining({ forceNewProcess: false }),
-    );
-    expect(m.sessionProjectPaths.get(sessionId)).toBe(projectPath);
-    expect(m.sessionPaths.get(sessionId)).toBe(sessionPath);
-    expect(managed.client.prompt).toHaveBeenCalledWith("hello after restart", undefined);
+    expect(ok).toBe(false);
+    expect(startSpy).not.toHaveBeenCalled();
+    expect(m.sessionProjectPaths.get(sessionId)).toBeUndefined();
+    expect(m.sessionPaths.get(sessionId)).toBeUndefined();
     rmSync(sessionRoot, { recursive: true, force: true });
     rmSync(projectPath, { recursive: true, force: true });
   });
@@ -184,8 +191,8 @@ describe("AgentProcessManager.send stale-session recovery", () => {
     expect(ok).toBe(false);
   });
 
-  it("releases the start lock after switching a pooled process", async () => {
-    const projectPath = "/fake/project";
+  it("starts independent clients without replacing pooled sessions", async () => {
+    const projectPath = join(tmpdir(), `pi-start-lock-project-${Date.now()}`);
     const oldSessionId = "session-old";
     const newSessionId = "session-new";
     const thirdSessionId = "session-third";
@@ -201,51 +208,64 @@ describe("AgentProcessManager.send stale-session recovery", () => {
     const first = await manager.start(newSessionId, projectPath, newSessionPath);
     const second = await manager.start(thirdSessionId, projectPath, thirdSessionPath);
 
-    expect(first.status).toBe("switched");
-    expect(second.status).toBe("switched");
-    expect(m._startInProgress).toBe(false);
-    expect(m.clients.has(oldSessionId)).toBe(false);
-    expect(m.clients.has(newSessionId)).toBe(false);
-    expect(m.clients.get(thirdSessionId)).toBe(pooled);
-    expect(pooled.client.switchSession).toHaveBeenCalledTimes(2);
+    expect(first.status).toBe("started");
+    expect(second.status).toBe("started");
+    expect(m.clients.get(oldSessionId)).toBe(pooled);
+    expect(m.clients.has(newSessionId)).toBe(true);
+    expect(m.clients.has(thirdSessionId)).toBe(true);
+    expect(rpcClientMockState.instances).toHaveLength(2);
+    rmSync(projectPath, { recursive: true, force: true });
   });
 
-  it("queues concurrent starts instead of reporting a missing session as already running", async () => {
-    const projectPath = "/fake/project";
+  it("starts a separate client for each requested session", async () => {
+    const projectPath = join(tmpdir(), `pi-separate-client-project-${Date.now()}`);
     const oldSessionId = "session-old";
     const firstSessionId = "session-first";
     const secondSessionId = "session-second";
     const oldSessionPath = "/fake/sessions/session-old.jsonl";
     const firstSessionPath = "/fake/sessions/session-first.jsonl";
     const secondSessionPath = "/fake/sessions/session-second.jsonl";
-    const firstSwitch = deferred<{ cancelled: boolean }>();
     const m = internals(manager);
     const pooled = makeManaged(oldSessionId, projectPath, oldSessionPath);
-    const switchSession = vi
-      .fn()
-      .mockReturnValueOnce(firstSwitch.promise)
-      .mockResolvedValue({ cancelled: false });
-    pooled.client.switchSession = switchSession;
 
     m.clients.set(oldSessionId, pooled);
     m.processByCwd.set(projectPath, new Set([pooled]));
 
-    const firstStart = manager.start(firstSessionId, projectPath, firstSessionPath);
+    const first = await manager.start(firstSessionId, projectPath, firstSessionPath);
+    const second = await manager.start(secondSessionId, projectPath, secondSessionPath);
+
+    expect(first.status).toBe("started");
+    expect(second.status).toBe("started");
+    expect(m.clients.get(oldSessionId)).toBe(pooled);
+    expect(m.clients.has(firstSessionId)).toBe(true);
+    expect(m.clients.has(secondSessionId)).toBe(true);
+    expect(rpcClientMockState.instances).toHaveLength(2);
+    rmSync(projectPath, { recursive: true, force: true });
+  });
+
+  it("joins concurrent starts for the same session instead of spawning duplicates", async () => {
+    const projectPath = join(tmpdir(), `pi-concurrent-start-project-${Date.now()}`);
+    const sessionId = "session-concurrent";
+    const sessionPath = "/fake/sessions/session-concurrent.jsonl";
+    const m = internals(manager);
+    rpcClientMockState.startMode = "deferred";
+
+    const firstStart = manager.start(sessionId, projectPath, sessionPath);
+    await vi.waitFor(() => {
+      expect(rpcClientMockState.instances).toHaveLength(1);
+    });
+
+    const secondStart = manager.start(sessionId, projectPath, sessionPath);
     await Promise.resolve();
-    expect(switchSession).toHaveBeenCalledTimes(1);
 
-    const secondStart = manager.start(secondSessionId, projectPath, secondSessionPath);
-    firstSwitch.resolve({ cancelled: false });
+    expect(rpcClientMockState.instances).toHaveLength(1);
+    rpcClientMockState.startResolvers[0]?.();
 
-    const first = await firstStart;
-    const second = await secondStart;
-
-    expect(first.status).toBe("switched");
-    expect(second.status).toBe("switched");
-    expect(switchSession).toHaveBeenNthCalledWith(1, firstSessionPath);
-    expect(switchSession).toHaveBeenNthCalledWith(2, secondSessionPath);
-    expect(m.clients.has(firstSessionId)).toBe(false);
-    expect(m.clients.get(secondSessionId)).toBe(pooled);
-    expect(m._startInProgress).toBe(false);
+    await expect(Promise.all([firstStart, secondStart])).resolves.toEqual([
+      { agentId: sessionId, status: "started" },
+      { agentId: sessionId, status: "started" },
+    ]);
+    expect(m.clients.has(sessionId)).toBe(true);
+    rmSync(projectPath, { recursive: true, force: true });
   });
 });

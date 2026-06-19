@@ -1,10 +1,8 @@
 import { memo, useCallback, useEffect, useState } from "react";
-import { GitFork, Zap, Sparkles, Brain } from "lucide-react";
+import { Bot, GitFork, Zap, Sparkles, Brain } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useForkDialogStore } from "../../stores/use-fork-dialog-store";
 import { useAgentStore } from "../../stores/use-agent-store";
-
-const AGENT_ICONS: Record<string, string> = { plan: "📋", build: "🔨", code: "💻" };
 import { useTierStore, TIER_KEYS } from "../../stores/use-tier-store";
 import type { TierKey } from "../../stores/use-tier-store";
 import { useSessionStore, insertAfterPinned } from "../../stores/use-session-store";
@@ -14,6 +12,8 @@ import { apiClient } from "../../lib/api-client";
 import type { SessionMeta } from "../../types";
 import { createLogger } from "../../../shared/lib/logger";
 import { Button, FullscreenOverlay } from "../primitives";
+import { agentColorStyle } from "../../utils/agent-color";
+import { AgentAvatar } from "../agent-avatar/AgentAvatar";
 
 const log = createLogger("fork-dialog");
 
@@ -175,7 +175,7 @@ export const ForkDialog = memo(function ForkDialog() {
           <div className="flex flex-wrap gap-2">
             {agents.map((agent) => {
               const isSelected = selectedAgent === agent.name;
-              const icon = AGENT_ICONS[agent.name] ?? "🤖";
+              const cs = agentColorStyle(agent.color);
               return (
                 <button
                   key={agent.name}
@@ -185,8 +185,21 @@ export const ForkDialog = memo(function ForkDialog() {
                       ? "border-semantic-accent bg-semantic-accent/10 text-text-primary"
                       : "border-border-secondary text-text-secondary hover:bg-surface-hover dark:hover:bg-surface-hover"
                   }`}
+                  style={
+                    isSelected && cs
+                      ? { borderColor: cs.border, backgroundColor: cs.bg }
+                      : undefined
+                  }
                 >
-                  <span>{icon}</span>
+                  <AgentAvatar
+                    avatar={agent.avatar}
+                    agentFilePath={agent.filePath}
+                    color={agent.color}
+                    fallbackIcon={Bot}
+                    className="w-5 h-5 rounded-full shrink-0 text-[13px]"
+                    fallbackClassName={cs ? "" : "text-text-tertiary"}
+                    title={agent.name}
+                  />
                   <span className="font-medium">{agent.name}</span>
                   {agent.description && (
                     <span className="text-xs text-text-tertiary hidden sm:inline">

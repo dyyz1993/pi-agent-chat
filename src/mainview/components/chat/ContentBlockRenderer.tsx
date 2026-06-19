@@ -5,6 +5,8 @@ import { LspDiagnosticsCard } from "./LspDiagnosticsCard";
 import { CompactionSummaryCard } from "./CompactionSummaryCard";
 import { ToolExecutionCard } from "./ToolExecutionCard";
 import { MEMORY_CUSTOM_TYPES, MemoryCard } from "./MemoryCard";
+import { BashBackgroundProcessCard } from "./BashBackgroundProcessCard";
+import { isBashBackgroundProcessType } from "./bash-background-process";
 import { SnapshotBadge } from "./snapshot/SnapshotBadge";
 import { SubagentExecutionCard } from "./tool-renderers/SubagentRenderer";
 import { UIInteractionCard } from "./tool-renderers/UICardRenderer";
@@ -119,6 +121,9 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({
       }
       if (block.customType === "step_snapshot") {
         return <SnapshotBadge data={block.data} blockId={blockId} />;
+      }
+      if (isBashBackgroundProcessType(block.customType)) {
+        return <BashBackgroundProcessCard data={block.data} />;
       }
       if (!MEMORY_CUSTOM_TYPES.has(block.customType)) {
         return null;

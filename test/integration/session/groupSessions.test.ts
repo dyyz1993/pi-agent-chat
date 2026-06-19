@@ -211,3 +211,52 @@ describe("groupSessions: filter modes", () => {
     expect(result.rootSessions[0].sessionId).toBe("normal-1");
   });
 });
+
+describe("groupSessions: working session ordering", () => {
+  it("uses sessionStatusMap as the source of truth for working priority", () => {
+    const idle = makeSession({
+      sessionId: "idle",
+      firstMessage: "already done",
+      createdAt: 1000,
+      updatedAt: 9000,
+    });
+    const working = makeSession({
+      sessionId: "working",
+      firstMessage: "still running",
+      createdAt: 2000,
+      updatedAt: 1000,
+      status: "idle",
+    });
+
+    const result = groupSessions([idle, working], "", "all", null, undefined, {
+      working: "streaming",
+    });
+
+    expect(result.rootSessions.map((s) => s.sessionId)).toEqual(["working", "idle"]);
+  });
+
+  it("keeps older working sessions above newly pushed working sessions", () => {
+    const olderWorking = makeSession({
+      sessionId: "older-working",
+      firstMessage: "started first",
+      createdAt: 1000,
+      updatedAt: 2000,
+    });
+    const newerWorking = makeSession({
+      sessionId: "newer-working",
+      firstMessage: "pushed later",
+      createdAt: 5000,
+      updatedAt: 9000,
+    });
+
+    const result = groupSessions([newerWorking, olderWorking], "", "all", null, undefined, {
+      "older-working": "streaming",
+      "newer-working": "streaming",
+    });
+
+    expect(result.rootSessions.map((s) => s.sessionId)).toEqual([
+      "older-working",
+      "newer-working",
+    ]);
+  });
+});

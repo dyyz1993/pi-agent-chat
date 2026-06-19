@@ -103,7 +103,7 @@ describe("parseSpecialBlocks", () => {
 
   it("parses delegate-reply with all attributes", () => {
     const input =
-      '<delegate-reply from="5cfc-abc" title="test title" sequence="2" createdAt="12345" elapsed="3s" historyCount="5">\nreply content here\n</delegate-reply>';
+      '<delegate-reply from="5cfc-abc" sessionId="sess_child" targetSessionId="sess_parent" title="test title" sequence="2" createdAt="12345" elapsed="3s" historyCount="5">\nreply content here\n</delegate-reply>';
     const tags = new Set(["delegate-reply"]);
     const result = parseSpecialBlocks(input, tags);
     expect(result).toHaveLength(1);
@@ -111,6 +111,8 @@ describe("parseSpecialBlocks", () => {
     expect(result[0].tag).toBe("delegate-reply");
     expect(result[0].attrs).toEqual({
       from: "5cfc-abc",
+      sessionId: "sess_child",
+      targetSessionId: "sess_parent",
       title: "test title",
       sequence: "2",
       createdAt: "12345",

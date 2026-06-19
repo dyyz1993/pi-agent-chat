@@ -25,6 +25,7 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => ({
     getState: vi.fn(() => ({
       activeSessionId: "sess-1",
       sessionReady: { "sess-1": true },
+      sessionStatusMap: {},
       sessionContextMap: {},
       restoreContextFromHistory: vi.fn(),
     })),
@@ -46,6 +47,7 @@ vi.mock("../../../src/mainview/components/chat/memory-config", () => ({
 }));
 
 import { useChatStore, normalizeToolBlocks } from "../../../src/mainview/stores/use-chat-store";
+import { apiClient } from "../../../src/mainview/lib/api-client";
 import type { ChatMessage, ContentBlock } from "../../../src/mainview/types";
 
 beforeEach(() => {
@@ -308,6 +310,137 @@ describe("setIsStreaming / incrementStreamVersion", () => {
     const v0 = useChatStore.getState().streamContentVersion;
     useChatStore.getState().incrementStreamVersion();
     expect(useChatStore.getState().streamContentVersion).toBe(v0 + 1);
+  });
+});
+
+describe("loadSessionMessages custom entry recovery", () => {
+  it("hydrates bash background process custom entries after refresh", async () => {
+    vi.mocked(apiClient.call).mockResolvedValue({
+      messages: [
+        {
+          role: "user",
+          content: [{ type: "text", text: "run background task" }],
+          timestamp: 100,
+        },
+      ],
+      customEntries: [
+        {
+          id: "bg-1",
+          customType: "bash_background_process",
+          data: {
+            bashId: "bash-fabe60",
+            command: "/tmp/cumulative_sum_test.sh",
+            status: "done",
+            reason: "exit_zero",
+            backgroundTrigger: "auto",
+            duration: "1m0s",
+          },
+          timestamp: 200,
+        },
+      ],
+      hasMore: false,
+    });
+
+    await useChatStore.getState().loadSessionMessages("sess-1", { force: true });
+
+    const messages = useChatStore.getState().messagesBySession["sess-1"];
+    expect(messages).toHaveLength(2);
+    expect(messages[1]).toMatchObject({
+      id: "bg-1",
+      role: "custom",
+      content: [
+        {
+          type: "custom",
+          customType: "bash_background_process",
+        },
+      ],
+    });
+  });
+
+  it("merges memory prefetch start/result by operationId after refresh", async () => {
+    vi.mocked(apiClient.call).mockResolvedValue({
+      messages: [],
+      customEntries: [
+        {
+          id: "prefetch-start-1",
+          customType: "memory_prefetch",
+          data: {
+            operationId: "op-1",
+            query: "find related memory",
+            availableFiles: 7,
+          },
+          timestamp: 100,
+        },
+        {
+          id: "prefetch-result-1",
+          customType: "memory_prefetch_result",
+          data: {
+            operationId: "op-1",
+            summary: "Injected relevant memories",
+            snippet: "memory text",
+            injectedBytes: 2048,
+            selectedFiles: ["a.md"],
+          },
+          timestamp: 200,
+        },
+      ],
+      hasMore: false,
+    });
+
+    await useChatStore.getState().loadSessionMessages("sess-1", { force: true });
+
+    const messages = useChatStore.getState().messagesBySession["sess-1"];
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      id: "prefetch-result-1",
+      role: "custom",
+      content: [
+        {
+          type: "custom",
+          customType: "memory_prefetch_result",
+          data: {
+            operationId: "op-1",
+            _prefetchQuery: "find related memory",
+            _prefetchAvailableFiles: 7,
+          },
+        },
+      ],
+    });
+  });
+
+  it("does not merge memory prefetch entries without matching operationId", async () => {
+    vi.mocked(apiClient.call).mockResolvedValue({
+      messages: [],
+      customEntries: [
+        {
+          id: "prefetch-start-1",
+          customType: "memory_prefetch",
+          data: {
+            operationId: "op-1",
+            query: "first",
+            availableFiles: 1,
+          },
+          timestamp: 100,
+        },
+        {
+          id: "prefetch-result-2",
+          customType: "memory_prefetch_result",
+          data: {
+            operationId: "op-2",
+            summary: "No relevant memories",
+            snippet: "",
+          },
+          timestamp: 200,
+        },
+      ],
+      hasMore: false,
+    });
+
+    await useChatStore.getState().loadSessionMessages("sess-1", { force: true });
+
+    const messages = useChatStore.getState().messagesBySession["sess-1"];
+    expect(messages).toHaveLength(2);
+    expect(messages.map((m) => m.id)).toEqual(["prefetch-start-1", "prefetch-result-2"]);
   });
 });
 
@@ -576,6 +709,38 @@ describe("normalizeToolBlocks", () => {
       expect(block.args).toContain("npm run build");
       expect(block.description).toBe("workspace 全量测试");
     }
+  });
+
+  it("keeps informative orphan toolResults for historical recovery", () => {
+    const msgs: ChatMessage[] = [
+      {
+        id: "a1",
+        role: "assistant",
+        content: [{ type: "text", text: "查看结果" }],
+        timestamp: 1,
+      },
+      {
+        id: "r1",
+        role: "toolResult",
+        content: [
+          {
+            type: "toolResult",
+            toolCallId: "tc-missing",
+            toolName: "bash",
+            content: "real output",
+          },
+        ],
+        timestamp: 2,
+      },
+    ];
+
+    normalizeToolBlocks(msgs);
+
+    expect(msgs).toHaveLength(1);
+    const exec = msgs[0].content[1] as Extract<ContentBlock, { type: "toolExecution" }>;
+    expect(exec.type).toBe("toolExecution");
+    expect(exec.toolName).toBe("bash");
+    expect(exec.output).toBe("real output");
   });
 
 });

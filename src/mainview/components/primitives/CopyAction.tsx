@@ -27,7 +27,7 @@ const iconSizeClasses: Record<CopyActionSize, string> = {
 };
 
 const buttonSizeClasses: Record<CopyActionSize, string> = {
-  xs: "h-auto w-auto p-0.5",
+  xs: "h-8 w-8 rounded-md",
   sm: "h-9 w-9",
 };
 

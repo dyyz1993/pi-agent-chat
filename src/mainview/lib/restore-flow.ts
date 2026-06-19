@@ -7,6 +7,7 @@
  */
 import type { SessionMeta } from "../../shared/modules/project";
 import type { StartupTrace } from "./startup-monitor";
+import { pickDefaultSessionId } from "../stores/session-selection";
 
 export interface SavedTab {
   id: string;
@@ -202,12 +203,16 @@ export async function runRestoreFlow(deps: RestoreFlowDeps): Promise<void> {
           `Restored ${savedTabs.length} tabs from server config (${sessions.length} sessions)`,
         );
         if (sessions.length > 0) {
-          const lastActiveSessionByProject = getLastActiveSessionByProject();
-          const lastSid = lastActiveSessionByProject[tab.path];
-          const targetSession =
-            lastSid && sessions.some((s) => s.sessionId === lastSid)
-              ? lastSid
-              : sessions[0].sessionId;
+          const targetSession = pickDefaultSessionId(
+            sessions,
+            getLastActiveSessionByProject()[tab.path],
+          );
+          if (!targetSession) {
+            trace.mark("active-project.create-session.begin", { projectPath: tab.path });
+            await createNewSession();
+            trace.done("active-project.create-session.done", { projectPath: tab.path });
+            return;
+          }
           setActiveSession(targetSession);
           trace.done("active-session.selected", { sessionId: targetSession });
         } else {
@@ -250,12 +255,14 @@ export async function runRestoreFlow(deps: RestoreFlowDeps): Promise<void> {
     addLog(`Restored project: ${first.name} (${sessions.length} sessions)`);
 
     if (sessions.length > 0) {
-      const lastActiveSessionByProject = getLastActiveSessionByProject();
-      const lastSid = lastActiveSessionByProject[first.path];
-      const sid =
-        lastSid && sessions.some((s) => s.sessionId === lastSid)
-          ? lastSid
-          : sessions[0].sessionId;
+      const sid = pickDefaultSessionId(sessions, getLastActiveSessionByProject()[first.path]);
+      if (!sid) {
+        trace.mark("recent-project.create-session.begin", { projectPath: first.path });
+        await createNewSession();
+        trace.done("recent-project.create-session.done", { projectPath: first.path });
+        if (!isCancelled()) setRestoring(false);
+        return;
+      }
       setActiveSession(sid);
       trace.done("recent-project.session.selected", { sessionId: sid });
     } else {

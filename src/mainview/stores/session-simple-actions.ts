@@ -1,6 +1,7 @@
 import type { StoreApi } from "zustand";
 import { apiClient } from "../lib/api-client";
 import type { ProjectTab, SessionMeta } from "../types";
+import { pickDefaultSessionId } from "./session-selection";
 import { useRetryStore } from "./use-retry-store";
 
 interface SimpleSessionState {
@@ -68,8 +69,9 @@ export function createRetryActiveProjectAction({
       get().setActiveSession(activeSessionId, true);
     } else {
       const sessions = get().sessionsByProject[tab.path];
-      if (sessions && sessions.length > 0) {
-        get().setActiveSession(sessions[0].sessionId, true);
+      const defaultSessionId = pickDefaultSessionId(sessions ?? []);
+      if (defaultSessionId) {
+        get().setActiveSession(defaultSessionId, true);
       }
     }
   };

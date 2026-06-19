@@ -10,7 +10,7 @@ interface ManagedClientLike {
     RpcClientAPI,
     | "getLastAssistantText"
     | "getForkMessages"
-    | "fork"
+    | "copyFork"
     | "previewRollback"
     | "getModifiedFiles"
     | "getFileDiff"
@@ -88,20 +88,15 @@ export async function forkOperation<TManaged extends ManagedClientLike>(options:
 }> {
   const managed = options.getActiveManaged(options.sessionId);
   if (!managed) throw new Error("Client not found");
-  const result = (await withTimeout(
-    managed.client.fork(options.entryId, options.forkOptions),
+  const result = await withTimeout(
+    managed.client.copyFork(options.entryId),
     60_000,
-    "fork",
-  )) as {
-    text: string;
-    cancelled: boolean;
-    newSessionFile?: string;
-    newSessionId?: string;
-  };
-  if (result.newSessionFile && !result.cancelled) {
+    "copyFork",
+  );
+  if (result.newSessionFile) {
     stripParentSessionFromHeader(result.newSessionFile);
   }
-  return result;
+  return { ...result, text: "", cancelled: false };
 }
 
 export async function previewRollbackOperation<TManaged extends ManagedClientLike>(options: {

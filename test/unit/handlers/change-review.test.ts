@@ -315,4 +315,103 @@ describe("change-review handler", () => {
       });
     });
   });
+
+  describe("change-review.approvals", () => {
+    it("should use channel call when agent process is running", async () => {
+      const callChannel = vi.fn(async () => [
+        {
+          turnIndex: -1,
+          path: "src/a.ts",
+          status: "approved",
+          timestamp: Date.now(),
+          snapshotEntryId: "snap-1",
+        },
+      ]);
+
+      (getProcessManager as Mock).mockReturnValue({
+        hasSession: vi.fn(() => true),
+        callChannel,
+      } as unknown as ReturnType<typeof getProcessManager>);
+
+      const handler = server.handlers.get("change-review.approvals")!;
+      const result = (await handler({
+        sessionId: "test-session",
+        status: "approved",
+      })) as Array<{ path: string; status: string; snapshotEntryId?: string }>;
+
+      expect(callChannel).toHaveBeenCalledWith(
+        "test-session",
+        "file-review",
+        "review.approvals",
+        { status: "approved" },
+      );
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({
+        path: "src/a.ts",
+        status: "approved",
+        snapshotEntryId: "snap-1",
+      });
+    });
+
+    it("should read approvals from JSONL fallback", async () => {
+      (getProcessManager as Mock).mockReturnValue(null);
+
+      const jsonlPath = join(tempDir, "session.jsonl");
+      const turnLine = makeReviewTurnEntry(0, [{ path: "src/a.ts", status: "modified" }]);
+      const turnObj = JSON.parse(turnLine);
+      const approvalLine = JSON.stringify({
+        type: "custom",
+        customType: "file-approval",
+        data: {
+          path: "src/a.ts",
+          status: "approved",
+          timestamp: Date.now(),
+          snapshotEntryId: "snap-2",
+          snapshotTreeHash: "tree-2",
+        },
+        id: "approval-1",
+        parentId: turnObj.id,
+        timestamp: new Date().toISOString(),
+      });
+
+      await writeFile(jsonlPath, turnLine + "\n" + approvalLine + "\n");
+
+      const handler = server.handlers.get("change-review.approvals")!;
+      const result = (await handler({
+        sessionId: "test-session",
+        sessionPath: jsonlPath,
+      })) as Array<{ path: string; status: string; snapshotEntryId?: string; snapshotTreeHash?: string }>;
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({
+        path: "src/a.ts",
+        status: "approved",
+        snapshotEntryId: "snap-2",
+        snapshotTreeHash: "tree-2",
+      });
+    });
+
+    it("should filter approvals by status in JSONL fallback", async () => {
+      (getProcessManager as Mock).mockReturnValue(null);
+
+      const jsonlPath = join(tempDir, "session.jsonl");
+      await writeFile(
+        jsonlPath,
+        [
+          makeApprovalEntry("src/a.ts", "approved"),
+          makeApprovalEntry("src/b.ts", "rejected"),
+        ].join("\n") + "\n",
+      );
+
+      const handler = server.handlers.get("change-review.approvals")!;
+      const result = (await handler({
+        sessionId: "test-session",
+        sessionPath: jsonlPath,
+        status: "approved",
+      })) as Array<{ path: string; status: string }>;
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({ path: "src/a.ts", status: "approved" });
+    });
+  });
 });

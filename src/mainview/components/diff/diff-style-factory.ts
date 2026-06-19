@@ -31,7 +31,7 @@ export const DIFF_STYLE_PRESETS = {
   },
   inline: {
     fontSize: 11,
-    gutterWidth: 20,
+    gutterWidth: 24,
     gutterFontSize: 10,
     lineHeight: 1.5,
     background: "transparent",

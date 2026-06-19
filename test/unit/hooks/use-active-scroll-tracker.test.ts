@@ -26,7 +26,11 @@ vi.mock("../../../src/mainview/hooks/use-scroll-intent", () => ({
   }),
 }));
 
-import { useActiveScrollTracker } from "../../../src/mainview/hooks/use-active-scroll-tracker";
+import {
+  chooseActiveTargetKeyForScroll,
+  getActiveTargetAnchorY,
+  useActiveScrollTracker,
+} from "../../../src/mainview/hooks/use-active-scroll-tracker";
 
 // --- Mock VirtualizerHandle 工厂 ---
 interface MockHandle {
@@ -64,6 +68,75 @@ function createMockHandle(overrides?: Partial<MockHandle>): MockHandle {
 const mockHandleRef: { current: MockHandle | null } = { current: null };
 
 const MESSAGE_IDS = ["msg-1", "msg-2", "msg-3", "msg-4", "msg-5"];
+
+describe("useActiveScrollTracker — active target anchor", () => {
+  it("uses a lower reading anchor instead of the very top edge", () => {
+    expect(getActiveTargetAnchorY({ top: 100, height: 600 } as DOMRect)).toBe(148);
+    expect(getActiveTargetAnchorY({ top: 100, height: 80 } as DOMRect)).toBe(128);
+    expect(getActiveTargetAnchorY({ top: 100, height: 20 } as DOMRect)).toBe(112);
+  });
+
+  it("defaults to the target nearest the reading anchor when there is no previous active target", () => {
+    const candidates = [
+      { key: "top", top: 100, bottom: 132 },
+      { key: "middle", top: 140, bottom: 172 },
+      { key: "bottom", top: 180, bottom: 212 },
+    ];
+
+    expect(chooseActiveTargetKeyForScroll(candidates, "towardOlder", 148)).toBe("middle");
+    expect(chooseActiveTargetKeyForScroll(candidates, "towardNewer", 148)).toBe("middle");
+    expect(chooseActiveTargetKeyForScroll(candidates, null, 148)).toBe("middle");
+  });
+
+  it("steps toward the reading anchor instead of walking to the opposite edge on direction change", () => {
+    const candidates = [
+      { key: "top", top: 100, bottom: 132, order: 10 },
+      { key: "middle", top: 140, bottom: 172, order: 11 },
+      { key: "bottom", top: 180, bottom: 212, order: 12 },
+    ];
+
+    expect(chooseActiveTargetKeyForScroll(candidates, "towardOlder", 148, "bottom", 12)).toBe(
+      "middle",
+    );
+    expect(chooseActiveTargetKeyForScroll(candidates, "towardOlder", 148, "middle", 11)).toBe(
+      "middle",
+    );
+    expect(chooseActiveTargetKeyForScroll(candidates, "towardOlder", 148, "top", 10)).toBe(
+      "middle",
+    );
+
+    expect(chooseActiveTargetKeyForScroll(candidates, "towardNewer", 148, "top", 10)).toBe(
+      "middle",
+    );
+    expect(chooseActiveTargetKeyForScroll(candidates, "towardNewer", 148, "middle", 11)).toBe(
+      "middle",
+    );
+    expect(chooseActiveTargetKeyForScroll(candidates, "towardNewer", 148, "bottom", 12)).toBe(
+      "middle",
+    );
+  });
+
+  it("still moves one visible target at a time when the reading anchor advances", () => {
+    const candidates = [
+      { key: "top", top: 100, bottom: 132, order: 10 },
+      { key: "middle", top: 140, bottom: 172, order: 11 },
+      { key: "bottom", top: 180, bottom: 212, order: 12 },
+    ];
+
+    expect(chooseActiveTargetKeyForScroll(candidates, "towardNewer", 184, "top", 10)).toBe(
+      "middle",
+    );
+    expect(chooseActiveTargetKeyForScroll(candidates, "towardNewer", 184, "middle", 11)).toBe(
+      "bottom",
+    );
+    expect(chooseActiveTargetKeyForScroll(candidates, "towardOlder", 104, "bottom", 12)).toBe(
+      "middle",
+    );
+    expect(chooseActiveTargetKeyForScroll(candidates, "towardOlder", 104, "middle", 11)).toBe(
+      "top",
+    );
+  });
+});
 
 describe("useActiveScrollTracker — initialization", () => {
   beforeEach(() => {
@@ -270,6 +343,89 @@ describe("useActiveScrollTracker — programmatic scroll guard", () => {
 
     // setActive should be called with the visible message
     expect(setActive).toHaveBeenCalled();
+  });
+});
+
+describe("useActiveScrollTracker — edge active targets", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    mockHandleRef.current = null;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("forces the first active target when the message list reaches the top", () => {
+    const setActive = vi.fn();
+    const mockHandle = createMockHandle({
+      scrollSize: 2000,
+      scrollOffset: 0,
+      viewportSize: 500,
+    });
+    mockHandleRef.current = mockHandle;
+
+    const { result } = renderHook(
+      () => {
+        const scrollRef = useRef<HTMLDivElement | null>(null);
+        const vlistRef = useRef(mockHandle);
+        return useActiveScrollTracker({
+          scrollRef,
+          vlistRef: vlistRef as React.RefObject<MockHandle | null>,
+          messageIds: MESSAGE_IDS,
+          activeTargets: [
+            { key: "msg-1", messageId: "msg-1" },
+            { key: "msg-1-0", messageId: "msg-1", blockId: "msg-1-0" },
+            { key: "msg-5", messageId: "msg-5" },
+          ],
+          sessionId: "test-session",
+          setActive,
+          streamVersion: 0,
+          initialScrollReady: false,
+        });
+      },
+    );
+
+    act(() => vi.advanceTimersByTime(20));
+    act(() => result.current.handleScroll());
+
+    expect(setActive).toHaveBeenCalledWith("msg-1");
+  });
+
+  it("forces the last active target when the message list reaches the bottom", () => {
+    const setActive = vi.fn();
+    const mockHandle = createMockHandle({
+      scrollSize: 2000,
+      scrollOffset: 1500,
+      viewportSize: 500,
+    });
+    mockHandleRef.current = mockHandle;
+
+    const { result } = renderHook(
+      () => {
+        const scrollRef = useRef<HTMLDivElement | null>(null);
+        const vlistRef = useRef(mockHandle);
+        return useActiveScrollTracker({
+          scrollRef,
+          vlistRef: vlistRef as React.RefObject<MockHandle | null>,
+          messageIds: MESSAGE_IDS,
+          activeTargets: [
+            { key: "msg-1", messageId: "msg-1" },
+            { key: "msg-5", messageId: "msg-5" },
+            { key: "msg-5-0", messageId: "msg-5", blockId: "msg-5-0" },
+          ],
+          sessionId: "test-session",
+          setActive,
+          streamVersion: 0,
+          initialScrollReady: false,
+        });
+      },
+    );
+
+    act(() => vi.advanceTimersByTime(20));
+    act(() => result.current.handleScroll());
+
+    expect(setActive).toHaveBeenCalledWith("msg-5-0");
   });
 });
 

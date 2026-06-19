@@ -16,7 +16,7 @@ export interface PopupItem {
   id: string;
   label: string;
   description?: string;
-  icon: "bot" | "file" | "folder" | "sparkles" | "puzzle" | "filetext" | "brain" | "book";
+  icon: "tool" | "file" | "folder" | "sparkles" | "puzzle" | "filetext" | "brain" | "book";
   accentColor: string;
   insertText: string;
   isFolder?: boolean;
@@ -117,7 +117,7 @@ export function useCommandPopup(): CommandPopupState {
             id: `tool-${ext.path}-${toolName}`,
             label: toolName,
             description: ext.path,
-            icon: "bot",
+            icon: "tool",
             accentColor: "text-purple-400",
             insertText: `@${toolName}`,
           });

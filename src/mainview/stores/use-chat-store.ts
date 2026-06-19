@@ -14,6 +14,7 @@ import { useNotificationStore } from "./use-notification-store";
 import { clearAgentStarted, useSessionStore } from "./use-session-store";
 import { useMemoryStore } from "./use-memory-store";
 import { ALL_MEMORY_TYPE_KEYS } from "../components/chat/memory-config";
+import { isBashBackgroundProcessType } from "../components/chat/bash-background-process";
 import { messageToChatMessage } from "../lib/message-mapper";
 import type { AgentMessageForUI } from "../../shared/modules/agent";
 import { createLogger } from "../../shared/lib/logger";
@@ -25,6 +26,17 @@ const perfLog = createLogger("session-perf");
 
 const PAGE_SIZE = 50;
 const backgroundRefreshGenerationBySession = new Map<string, number>();
+const RENDERABLE_MEMORY_CUSTOM_TYPES = new Set([
+  "memory_prefetch",
+  "memory_prefetch_result",
+  "memory_extract",
+  "memory_extract_result",
+  "memory_dream",
+  "memory_dream_result",
+  "memory_created",
+  "memory_failed",
+  "memory_irrelevant_marked",
+]);
 
 export function clearBackgroundRefreshGeneration(sessionId: string): void {
   backgroundRefreshGenerationBySession.delete(sessionId);
@@ -120,37 +132,35 @@ type MemoryCustomEntry = {
   timestamp: number;
 };
 
-function syncMemoryCustomEntries(
-  sessionId: string,
-  customEntries: MemoryCustomEntry[],
-  options: { clearSession?: boolean } = {},
-) {
-  const memoryStore = useMemoryStore.getState();
-  if (options.clearSession && typeof memoryStore.clearSession === "function") {
-    memoryStore.clearSession(sessionId);
-  }
+function getMemoryOperationId(entry: MemoryCustomEntry): string | undefined {
+  const data = entry.data as Record<string, unknown> | undefined;
+  return typeof data?.operationId === "string" ? data.operationId : undefined;
+}
 
+function normalizeMemoryCustomEntries(customEntries: MemoryCustomEntry[]): MemoryCustomEntry[] {
+  const entries = customEntries.map((entry) => ({
+    ...entry,
+    data:
+      entry.data && typeof entry.data === "object"
+        ? { ...(entry.data as Record<string, unknown>) }
+        : entry.data,
+  }));
   const resultMap = new Map<string, MemoryCustomEntry>();
 
-  for (const entry of customEntries) {
-    if (entry.customType === "memory_prefetch_result") {
-      resultMap.set(entry.id, entry);
+  for (const entry of entries) {
+    const operationId = getMemoryOperationId(entry);
+    if (entry.customType === "memory_prefetch_result" && operationId) {
+      resultMap.set(operationId, entry);
     }
   }
 
   const mergedResultIds = new Set<string>();
 
-  for (const entry of customEntries) {
+  for (const entry of entries) {
     if (entry.customType !== "memory_prefetch") continue;
-
-    let bestResult: MemoryCustomEntry | undefined;
-    for (const [, rentry] of resultMap) {
-      if (rentry.timestamp >= entry.timestamp && !mergedResultIds.has(rentry.id)) {
-        if (!bestResult || rentry.timestamp < bestResult.timestamp) {
-          bestResult = rentry;
-        }
-      }
-    }
+    const operationId = getMemoryOperationId(entry);
+    if (!operationId) continue;
+    const bestResult = resultMap.get(operationId);
 
     if (bestResult) {
       mergedResultIds.add(bestResult.id);
@@ -165,17 +175,65 @@ function syncMemoryCustomEntries(
     }
   }
 
-  for (const entry of customEntries) {
+  return entries.filter((entry) => {
     if (entry.customType === "memory_prefetch") {
-      const hasLaterMergedResult = Array.from(resultMap.values()).some(
-        (r) =>
-          r.customType === "memory_prefetch_result" &&
-          mergedResultIds.has(r.id) &&
-          r.timestamp >= entry.timestamp,
-      );
-      if (hasLaterMergedResult) continue;
+      const operationId = getMemoryOperationId(entry);
+      if (operationId) {
+        const mergedResult = resultMap.get(operationId);
+        if (mergedResult && mergedResultIds.has(mergedResult.id)) return false;
+      }
     }
 
+    return true;
+  });
+}
+
+function memoryEntriesToChatMessages(customEntries: MemoryCustomEntry[]): ChatMessage[] {
+  return customEntries
+    .filter((entry) => RENDERABLE_MEMORY_CUSTOM_TYPES.has(entry.customType))
+    .map((entry) => ({
+      id: entry.id,
+      role: "custom" as const,
+      content: [{ type: "custom" as const, customType: entry.customType, data: entry.data }],
+      timestamp: entry.timestamp,
+    }));
+}
+
+function renderableCustomEntriesToChatMessages(customEntries: MemoryCustomEntry[]): ChatMessage[] {
+  const memoryMessages = memoryEntriesToChatMessages(customEntries);
+  const bashBackgroundMessages = customEntries
+    .filter((entry) => isBashBackgroundProcessType(entry.customType))
+    .map((entry) => ({
+      id: entry.id,
+      role: "custom" as const,
+      content: [{ type: "custom" as const, customType: entry.customType, data: entry.data }],
+      timestamp: entry.timestamp,
+    }));
+  return [...memoryMessages, ...bashBackgroundMessages];
+}
+
+function mergeRenderableCustomMessages(
+  messages: ChatMessage[],
+  customEntries: MemoryCustomEntry[],
+): ChatMessage[] {
+  const customMessages = renderableCustomEntriesToChatMessages(customEntries);
+  if (customMessages.length === 0) return messages;
+  const existingIds = new Set(messages.map((message) => message.id));
+  const merged = [...messages, ...customMessages.filter((message) => !existingIds.has(message.id))];
+  return merged.sort((a, b) => a.timestamp - b.timestamp);
+}
+
+function syncMemoryCustomEntries(
+  sessionId: string,
+  customEntries: MemoryCustomEntry[],
+  options: { clearSession?: boolean } = {},
+) {
+  const memoryStore = useMemoryStore.getState();
+  if (options.clearSession && typeof memoryStore.clearSession === "function") {
+    memoryStore.clearSession(sessionId);
+  }
+
+  for (const entry of customEntries) {
     if (!ALL_MEMORY_TYPE_KEYS.has(entry.customType)) continue;
 
     memoryStore.addEvent(sessionId, {
@@ -722,13 +780,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       normalizeToolBlocks(msgs, true, false);
 
-      const customEntries = result.customEntries;
+      const customEntries = Array.isArray(result.customEntries)
+        ? normalizeMemoryCustomEntries(result.customEntries)
+        : [];
       if (Array.isArray(customEntries)) {
         syncMemoryCustomEntries(sid, customEntries, { clearSession: true });
       }
 
       const hasMore = result.hasMore === true || msgs.length > PAGE_SIZE;
-      const displayMsgs = msgs;
+      const displayMsgs = mergeRenderableCustomMessages(msgs, customEntries);
 
       log.info("SET messages", {
         sessionId: sid,
@@ -748,6 +808,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       const localMsgs = (get().messagesBySession[sid] || []).filter((m) => m._local);
       const currentMsgs = get().messagesBySession[sid] || [];
+
+      // When streaming, preserve the last streaming assistant message.
+      // getFullMessages auto-merges CLI in-memory messages, but the merge is not
+      // always complete — thinking/text blocks that just arrived may be missing.
+      // Without this, a loadSessionMessages triggered during streaming (e.g.
+      // empty-streaming recovery reload) would drop the streaming assistant
+      // message, causing the next message_update to create a NEW synthetic
+      // message — splitting thinking from text into two separate cards.
+      const lastCurrent = currentMsgs[currentMsgs.length - 1];
+      const isStreamingSession = useSessionStore.getState().sessionStatusMap[sid] === "streaming";
+      const preserveStreaming =
+        options?.preserveStreaming !== false &&
+        isStreamingSession &&
+        lastCurrent &&
+        lastCurrent.role === "assistant" &&
+        lastCurrent.isStreaming === true;
 
       // Dedup _local messages against server messages to prevent duplicates.
       // The server returns user messages from JSONL; if a _local user message
@@ -771,6 +847,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       let finalMsgs =
         nonDupLocalMsgs.length > 0 ? [...displayMsgs, ...nonDupLocalMsgs] : displayMsgs;
+
+      if (preserveStreaming) {
+        const streamingInFinal = finalMsgs.findIndex(
+          (m) => m.role === "assistant" && m.isStreaming,
+        );
+        const preservedStreamingMsg = buildPreservedStreamingMessage(finalMsgs, lastCurrent);
+        if (streamingInFinal === -1 && preservedStreamingMsg) {
+          finalMsgs = [...finalMsgs, preservedStreamingMsg];
+        }
+      }
 
       normalizeToolBlocks(finalMsgs, true, false);
       finalMsgs = prepareMessagesForStore(finalMsgs, {
@@ -921,7 +1007,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
       normalizeToolBlocks(msgs, true, false);
 
-      const customEntries = result.customEntries;
+      const customEntries = Array.isArray(result.customEntries)
+        ? normalizeMemoryCustomEntries(result.customEntries)
+        : [];
       if (Array.isArray(customEntries)) {
         syncMemoryCustomEntries(sid, customEntries, { clearSession: true });
       }
@@ -936,6 +1024,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         localOnly.length > 0
           ? [...msgs, ...localOnly].sort((a, b) => a.timestamp - b.timestamp)
           : msgs;
+      finalMsgs = mergeRenderableCustomMessages(finalMsgs, customEntries);
 
       const lastCurrent = current[current.length - 1];
       const preservedStreamingMsg = buildPreservedStreamingMessage(finalMsgs, lastCurrent);

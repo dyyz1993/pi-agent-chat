@@ -7,6 +7,7 @@ export type PanelTabId =
   | "git"
   | "files"
   | "status"
+  | "supervisor"
   | "agent"
   | "rpc"
   | "memory"
@@ -23,7 +24,8 @@ export const PANEL_TABS: PanelTab[] = [
   { id: "changeReview", label: "审核" },
   { id: "git", label: "Git" },
   { id: "files", label: "文件" },
-  { id: "status", label: "Goal" },
+  { id: "status", label: "状态" },
+  { id: "supervisor", label: "守护" },
   { id: "agent", label: "Agent" },
   { id: "rpc", label: "RPC" },
   { id: "memory", label: "记忆" },

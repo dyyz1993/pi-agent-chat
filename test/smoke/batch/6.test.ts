@@ -301,14 +301,14 @@ describe("Batch 6 — Remaining store tests + T30.4", () => {
     const defaults = {
       showToolCalls: true,
       showToolResults: true,
-      showThinking: true,
+      showThinking: false,
       collapseThinking: true,
       showTimeline: false,
     };
-    const custom = { ...defaults, showThinking: false };
-    expect(custom.showThinking).toBe(false);
+    const custom = { ...defaults, showThinking: true };
+    expect(custom.showThinking).toBe(true);
     const reset = { ...defaults };
-    expect(reset.showThinking).toBe(true);
+    expect(reset.showThinking).toBe(false);
   });
 
   // T28 — File explorer

@@ -1,5 +1,5 @@
 import { memo, type ReactNode } from "react";
-import {    getToolIcon } from "../tool-icon-map";
+import {     getToolIcon } from "../tool-icon-map";
 import { useToolDuration } from "./useToolDuration";
 
 export type ToolCardStatus = "running" | "done" | "error" | "background" | "terminated";
@@ -82,7 +82,7 @@ export const ToolCardHeader = memo(function ToolCardHeader({
         )}
       </span>
 
-      <span className="shrink-0 flex items-center gap-1.5 overflow-hidden">{badge}</span>
+      <span className="shrink-0 h-5 flex items-center gap-1.5 overflow-hidden">{badge}</span>
 
       {displayTime}
 

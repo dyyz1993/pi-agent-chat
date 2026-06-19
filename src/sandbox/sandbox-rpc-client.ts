@@ -47,7 +47,7 @@ type AgentsFile = InferReturn<"getAgentsFiles"> extends Array<infer T> ? T : nev
 
 const log = createLogger("sandbox-rpc");
 
-export class SandboxRpcClient implements RpcClientAPI {
+export class SandboxRpcClient {
   private endpoint: string;
   private _stderr = "";
   private eventListeners = new Set<(event: AgentEvent) => void>();
@@ -196,10 +196,6 @@ export class SandboxRpcClient implements RpcClientAPI {
 
   async exportHtml(outputPath?: string): Promise<{ path: string }> {
     return this.call("agent.exportHtml", outputPath);
-  }
-
-  async switchSession(sessionPath: string): Promise<SessionOperationResult> {
-    return this.call("agent.switchSession", sessionPath);
   }
 
   async fork(entryId: string, options?: { position?: "before" | "at" }): Promise<ForkResult> {

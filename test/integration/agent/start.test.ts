@@ -17,7 +17,6 @@ import {
 
 function makeClient(overrides: Record<string, unknown> = {}) {
   return {
-    switchSession: vi.fn().mockResolvedValue({ cancelled: false }),
     stop: vi.fn().mockResolvedValue(undefined),
     onEvent: vi.fn().mockReturnValue(vi.fn()),
     channel: vi.fn().mockReturnValue({ onReceive: vi.fn() }),
@@ -94,7 +93,7 @@ describe("agent start operations", () => {
     expect(options.createRpcClient).not.toHaveBeenCalled();
   });
 
-  it("switches an existing pooled process to the requested session", async () => {
+  it("starts a new client instead of switching an existing pooled process", async () => {
     const pooled = makeManaged("old-session");
     const processByCwd = new Map([["/repo", new Set([pooled])]]);
     const clients = new Map([["old-session", pooled]]);
@@ -109,15 +108,14 @@ describe("agent start operations", () => {
 
     await expect(startAgentClientOperation(options)).resolves.toEqual({
       agentId: "sess-1",
-      status: "switched",
+      status: "started",
     });
 
-    expect(pooled.client.switchSession).toHaveBeenCalledWith("/sessions/sess-1.jsonl");
-    expect(clients.has("old-session")).toBe(false);
-    expect(clients.get("sess-1")).toBe(pooled);
-    expect(pooled._activeSessionId).toBe("sess-1");
+    expect(clients.get("old-session")).toBe(pooled);
+    expect(clients.get("sess-1")).not.toBe(pooled);
+    expect(pooled._activeSessionId).toBe("old-session");
     expect(sessionPaths.get("sess-1")).toBe("/sessions/sess-1.jsonl");
-    expect(options.createRpcClient).not.toHaveBeenCalled();
+    expect(options.createRpcClient).toHaveBeenCalled();
   });
 
   it("creates a new client, subscribes events, registers channels, and broadcasts idle", async () => {
@@ -142,11 +140,8 @@ describe("agent start operations", () => {
     expect(options.sessionProjectPaths.get("sess-1")).toBe("/repo");
   });
 
-  it("stops a pooled process when switchSession fails before creating a new client", async () => {
+  it("does not stop a pooled process when starting another session", async () => {
     const pooled = makeManaged("old-session");
-    (pooled.client.switchSession as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-      new Error("boom"),
-    );
     const processByCwd = new Map([["/repo", new Set([pooled])]]);
     const clients = new Map([["old-session", pooled]]);
     const options = makeOptions({ clients, processByCwd });
@@ -156,9 +151,9 @@ describe("agent start operations", () => {
       status: "started",
     });
 
-    expect(pooled.unsubscribe).toHaveBeenCalled();
-    expect(pooled.client.stop).toHaveBeenCalled();
-    expect(clients.has("old-session")).toBe(false);
+    expect(pooled.unsubscribe).not.toHaveBeenCalled();
+    expect(pooled.client.stop).not.toHaveBeenCalled();
+    expect(clients.get("old-session")).toBe(pooled);
     expect(options.createRpcClient).toHaveBeenCalled();
   });
 });

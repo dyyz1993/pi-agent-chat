@@ -141,9 +141,8 @@ export const LspExecutionCard = memo(function LspExecutionCard({ block }: LspExe
 
   const status: ToolCardStatus = isRunning ? "running" : isError ? "error" : "done";
 
-  const description = parsed.action
-    ? parsed.action
-    : (block.output?.split("\n")[0]?.slice(0, 80) ?? t("waitingOutput"));
+  const firstOutputLine = block.output?.split("\n")[0]?.slice(0, 80).trim();
+  const description = parsed.action ? parsed.action : firstOutputLine || t("waitingOutput");
 
   const badge = (
     <LspBadge

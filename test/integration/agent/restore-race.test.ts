@@ -274,3 +274,50 @@ describe("fetchInitialState agent restoration", () => {
     expect(agent).toBe("build");
   });
 });
+
+describe("agent runtime client recovery", () => {
+  it("restarts the session client and retries tool metadata fetch after Client not found", async () => {
+    useSessionStore.setState({
+      sessionsByProject: {
+        "/tmp/project": [
+          {
+            id: SID,
+            title: "Recovered session",
+            projectPath: "/tmp/project",
+            sessionPath: "/tmp/project/.pi/session.jsonl",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            status: "idle",
+            pinned: false,
+          },
+        ],
+      },
+    });
+
+    let getAllToolsCalls = 0;
+    mockedCall.mockImplementation((method: string) => {
+      if (method === "agent.getAllTools") {
+        getAllToolsCalls += 1;
+        if (getAllToolsCalls === 1) {
+          return Promise.reject(new Error("Client not found"));
+        }
+        return Promise.resolve({ tools: [{ name: "bash" }] });
+      }
+      if (method === "agent.start") {
+        return Promise.resolve({ status: "started" });
+      }
+      return Promise.resolve({});
+    });
+
+    await useAgentStore.getState().fetchAllTools(SID);
+
+    expect(mockedCall).toHaveBeenCalledWith("agent.start", {
+      sessionId: SID,
+      projectPath: "/tmp/project",
+      sessionPath: "/tmp/project/.pi/session.jsonl",
+    });
+    expect(getAllToolsCalls).toBe(2);
+    expect(useAgentStore.getState().allToolsBySession[SID]).toEqual([{ name: "bash" }]);
+    expect(useSessionStore.getState().agentReady[SID]).toBe(true);
+  });
+});

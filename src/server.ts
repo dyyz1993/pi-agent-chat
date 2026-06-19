@@ -8,6 +8,7 @@ import { extname, join, resolve } from "path";
 import { config } from "./server-config";
 import { createHttpHandler } from "./gateway/http-routes";
 import { createWsHandler } from "./gateway/ws-handler";
+import { getMimeType } from "./gateway/mime";
 import { type WebSocket } from "ws";
 import { createLogger, setLogSink } from "./shared/lib/logger";
 import { configureLogDir, writeLogLine } from "./shared/lib/logger.node";
@@ -43,20 +44,6 @@ const httpServer = createServer();
 const wss = createWsHandler(httpServer, { config });
 
 const distPath = resolve(process.cwd(), "dist");
-const STATIC_MIME: Record<string, string> = {
-  ".html": "text/html",
-  ".css": "text/css",
-  ".js": "application/javascript",
-  ".json": "application/json",
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".svg": "image/svg+xml",
-  ".ico": "image/x-icon",
-  ".woff": "font/woff",
-  ".woff2": "font/woff2",
-  ".ttf": "font/ttf",
-  ".webp": "image/webp",
-};
 
 const apiHandler = createHttpHandler({
   config,
@@ -107,7 +94,7 @@ httpServer.on("request", (req, res) => {
 
   if (existsSync(filePath) && statSync(filePath).isFile()) {
     const ext = extname(filePath);
-    const contentType = STATIC_MIME[ext] || "application/octet-stream";
+    const contentType = getMimeType(ext);
     res.writeHead(200, { "Content-Type": contentType });
     res.end(readFileSync(filePath));
     return;

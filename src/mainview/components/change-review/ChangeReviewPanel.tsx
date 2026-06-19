@@ -1,4 +1,3 @@
-import { diffLines } from "diff";
 import { memo, useEffect, useCallback, useMemo } from "react";
 import {
   CheckCircle2,
@@ -18,7 +17,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { useChangeReviewStore } from "../../stores/use-change-review-store";
 import { useGitStore } from "../../stores/use-git-store";
-import { useSessionStore } from "../../stores/use-session-store";
+import { useChatOverlayStore } from "../../stores/use-chat-overlay-store";
 import { PanelHeader } from "../primitives/PanelHeader";
 import type { FileStatus } from "../../../shared/modules/change-review";
 import { InlineDiffViewer } from "../chat/tool-renderers/InlineDiffViewer";
@@ -183,6 +182,10 @@ interface ChangeItemProps {
     timestamp: number;
     oldContent: string | null;
     newContent: string | null;
+    unifiedDiff?: string;
+    snapshotEntryId?: string;
+    addedLines?: number;
+    deletedLines?: number;
   };
   isExpanded: boolean;
   onToggle: () => void;
@@ -192,34 +195,21 @@ const ChangeItem = memo(function ChangeItem({ change, isExpanded, onToggle }: Ch
   const { t } = useTranslation("changeReview");
   const approveChange = useChangeReviewStore((s) => s.approveChange);
   const rejectChange = useChangeReviewStore((s) => s.rejectChange);
-  const fetchAgentFileDiff = useGitStore((s) => s.fetchAgentFileDiff);
-  const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const isProcessing = useChangeReviewStore((s) => s.processingPaths.has(change.path));
 
   const statusCfg = STATUS_CONFIG[change.status];
   const StatusIcon = statusCfg.Icon;
-  const fileCfg = FILE_STATUS_CONFIG[change.fileStatus] ?? FILE_STATUS_CONFIG.modified;
+  const fileCfg = FILE_STATUS_CONFIG[change.fileStatus];
   const FileStatusIcon = fileCfg.Icon;
+  const hasDiffData =
+    change.oldContent !== null || change.newContent !== null || !!change.unifiedDiff?.trim();
 
-  // Compute diff stats: prefer backend-provided addedLines/deletedLines,
-  // fall back to computing from oldContent/newContent
   const stats = useMemo(() => {
     if (change.addedLines != null || change.deletedLines != null) {
       return { additions: change.addedLines ?? 0, deletions: change.deletedLines ?? 0 };
     }
-    if (change.oldContent === null && change.newContent === null) return null;
-    if (change.oldContent === null)
-      return { additions: (change.newContent ?? "").split("\n").length, deletions: 0 };
-    if (change.newContent === null)
-      return { additions: 0, deletions: change.oldContent.split("\n").length };
-    const changes = diffLines(change.oldContent, change.newContent);
-    let additions = 0;
-    let deletions = 0;
-    for (const part of changes) {
-      if (part.added) additions += part.count ?? 0;
-      else if (part.removed) deletions += part.count ?? 0;
-    }
-    return { additions, deletions };
-  }, [change.addedLines, change.deletedLines, change.oldContent, change.newContent]);
+    return null;
+  }, [change.addedLines, change.deletedLines]);
 
   const handleApprove = useCallback(() => {
     approveChange(change.path);
@@ -230,9 +220,20 @@ const ChangeItem = memo(function ChangeItem({ change, isExpanded, onToggle }: Ch
   }, [rejectChange, change.path]);
 
   const handleViewDiff = useCallback(() => {
-    if (!activeSessionId) return;
-    fetchAgentFileDiff(activeSessionId, change.path);
-  }, [activeSessionId, fetchAgentFileDiff, change.path]);
+    if (!hasDiffData) return;
+    // Use change-review data directly (correct baseline from review.pending channel)
+    // instead of fetchAgentFileDiff (which uses a different default baseline)
+    useGitStore.setState({
+      currentDiff: {
+        filePath: change.path,
+        diff: "",
+        oldContent: change.oldContent ?? "",
+        newContent: change.newContent ?? "",
+      },
+      loadingDiff: false,
+    });
+    useChatOverlayStore.getState().openDiff();
+  }, [change.path, change.oldContent, change.newContent, hasDiffData]);
 
   const fileName = change.path.split("/").pop() ?? change.path;
   const dirPath = (() => {
@@ -244,7 +245,12 @@ const ChangeItem = memo(function ChangeItem({ change, isExpanded, onToggle }: Ch
     <div className="border-b border-border-secondary/50 dark:border-surface-code/50 hover:bg-surface-hover/40 dark:hover:bg-surface-hover/20 transition-colors">
       <div className="px-2 py-1.5">
         <div className="flex items-center gap-1.5 min-w-0">
-          <button type="button" onClick={onToggle} className="text-text-tertiary shrink-0">
+          <button
+            type="button"
+            onClick={onToggle}
+            className={`text-text-tertiary shrink-0 ${hasDiffData ? "" : "opacity-40 cursor-default"}`}
+            disabled={!hasDiffData}
+          >
             {isExpanded ? (
               <ChevronDown className="w-3 h-3" />
             ) : (
@@ -260,7 +266,7 @@ const ChangeItem = memo(function ChangeItem({ change, isExpanded, onToggle }: Ch
             <span
               className="text-[11px] font-mono font-medium text-text-primary dark:text-text-secondary hover:underline cursor-pointer truncate"
               title={change.path}
-              onClick={handleViewDiff}
+              onClick={hasDiffData ? handleViewDiff : undefined}
             >
               {fileName}
             </span>
@@ -287,12 +293,16 @@ const ChangeItem = memo(function ChangeItem({ change, isExpanded, onToggle }: Ch
                   icon={CheckCircle2}
                   title={t("approve")}
                   onClick={handleApprove}
+                  loading={isProcessing}
+                  disabled={isProcessing}
                   className="text-status-success hover:text-status-success"
                 />
                 <ActionBtn
                   icon={XCircle}
                   title={t("reject")}
                   onClick={handleReject}
+                  loading={isProcessing}
+                  disabled={isProcessing}
                   className="text-status-error hover:text-status-error"
                 />
               </>
@@ -308,11 +318,11 @@ const ChangeItem = memo(function ChangeItem({ change, isExpanded, onToggle }: Ch
           </div>
         </div>
 
-        {isExpanded && change.oldContent !== null && change.newContent !== null && (
+        {isExpanded && hasDiffData && (
           <div className="mt-1">
             <InlineDiffViewer
-              oldValue={change.oldContent}
-              newValue={change.newContent}
+              oldValue={change.oldContent ?? ""}
+              newValue={change.newContent ?? ""}
               filePath={change.path}
               maxHeight="300px"
             />

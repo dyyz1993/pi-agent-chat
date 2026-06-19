@@ -5,19 +5,21 @@ import { registerSpecialBlock } from "../special-block-registry";
 import { useSessionStore } from "../../../stores/use-session-store";
 import { useAgentStore } from "../../../stores/use-agent-store";
 import { useJumpToSession } from "../primitives/useJumpToSession";
+import { SessionJumpButton } from "../primitives/SessionJumpButton";
 import { agentColorStyle } from "../../../utils/agent-color";
 
 export const DelegateReplyCard = memo(function DelegateReplyCard({
   block,
 }: SpecialBlockRendererProps) {
-  const { from, title, elapsed, historyCount } = block.attrs;
+  const { from, sessionId, title, elapsed, historyCount } = block.attrs;
+  const displayElapsed = elapsed === "0s" ? "1s" : elapsed;
 
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const agentDetailBySession = useAgentStore((s) => s.agentDetailBySession);
   const cs = activeSessionId ? agentColorStyle(agentDetailBySession[activeSessionId]?.color) : null;
 
   const [collapsed, setCollapsed] = useState(true);
-  const { canJump, handleJump } = useJumpToSession(from);
+  const { canJump, handleJump } = useJumpToSession(sessionId ?? from);
 
   const hasBody = !!block.body;
 
@@ -45,7 +47,9 @@ export const DelegateReplyCard = memo(function DelegateReplyCard({
           委托回复
         </span>
         {title && <span className="font-medium text-text-primary truncate">{title}</span>}
-        {elapsed && <span className="text-text-tertiary text-[10px] shrink-0">{elapsed}</span>}
+        {displayElapsed && (
+          <span className="text-text-tertiary text-[10px] shrink-0">{displayElapsed}</span>
+        )}
         {historyCount && (
           <span className="text-text-tertiary text-[10px] shrink-0">({historyCount}条历史)</span>
         )}
@@ -55,16 +59,9 @@ export const DelegateReplyCard = memo(function DelegateReplyCard({
           />
         )}
         {canJump && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleJump();
-            }}
-            className="ml-auto shrink-0 p-0.5 rounded text-text-secondary hover:text-semantic-agent hover:bg-surface-hover transition-colors"
-            title="跳转到对应会话"
-          >
-            <ExternalLink className="w-3.5 h-3.5" />
-          </button>
+          <span className="ml-auto shrink-0">
+            <SessionJumpButton onJump={handleJump} />
+          </span>
         )}
       </div>
       {block.body && !collapsed && (

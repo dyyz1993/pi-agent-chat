@@ -329,6 +329,10 @@ Session 文件（`<sessionPath>`）是 JSONL 格式，每行一个 JSON 条目�
 - E2E (browser): `@playwright/test` with `workers: 3`, `headless: true`
 - Config: `vitest.config.ts` (default), `vitest.config.e2e.ts` (LLM), `vitest.config.integration.ts`, `playwright.config.ts`
 
+### Real LLM E2E Model Preference
+
+For real LLM E2E validation (`PI_E2E_LLM=1`), prefer `opencode-go/deepseek-v4-flash` when the test does not require a specific model. This is the fastest currently configured model for these validation runs.
+
 ### Test Directory Structure (两层分类: test/{type}/{domain}/)
 
 ```

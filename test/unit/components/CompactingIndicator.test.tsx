@@ -16,7 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CompactingIndicator } from "../../../src/mainview/components/chat/CompactingIndicator";
 import { MessageCard } from "../../../src/mainview/components/chat/MessageCard";
 import { useSessionStore } from "../../../src/mainview/stores/use-session-store";
-import { handleAgentEvent } from "../../../src/mainview/stores/agent-event-handler";
+import { handleAgentEvent } from "../../../src/mainview/lib/agent-event-handler";
 import { useChatStore } from "../../../src/mainview/stores/use-chat-store";
 import type { ChatMessage } from "../../../src/mainview/types";
 import type { AgentEvent } from "../../../src/shared/modules/agent";
@@ -52,15 +52,6 @@ function compactionSummaryMsg(id: string, summary = "压缩了 50 条消息的�
     id,
     role: "compactionSummary",
     content: [{ type: "compactionSummary", summary, tokensBefore: 50000 }],
-    timestamp: Date.now(),
-  };
-}
-
-function userMsg(id: string): ChatMessage {
-  return {
-    id,
-    role: "user",
-    content: [{ type: "text", text: "hello" }],
     timestamp: Date.now(),
   };
 }

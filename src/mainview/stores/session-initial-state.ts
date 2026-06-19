@@ -13,7 +13,10 @@ import { useTierStore } from "./use-tier-store";
 import { useRetryConfigStore, RETRY_DEFAULTS } from "./use-settings-store";
 import { useAgentStore } from "./use-agent-store";
 import { useSupervisorStore } from "./use-supervisor-store";
+import { useSessionQueueStore } from "./use-session-queue-store";
+import { useUIDialogStore } from "./use-ui-dialog-store";
 import type { ContextUsage, SessionMeta, SessionStatus } from "../types";
+import type { ExtensionUIRequestEvent } from "../../shared/modules/agent";
 
 interface ExtensionEntry {
   path: string;
@@ -44,7 +47,13 @@ interface DisabledPluginsResponse {
 }
 
 interface AgentStateResult {
-  model?: { provider?: string; id: string; name: string; reasoning?: boolean; contextWindow?: number };
+  model?: {
+    provider?: string;
+    id: string;
+    name: string;
+    reasoning?: boolean;
+    contextWindow?: number;
+  };
   thinkingLevel?: string;
   isStreaming?: boolean;
   isCompacting?: boolean;
@@ -55,6 +64,7 @@ interface AgentStateResult {
     args?: unknown;
     startedAt?: number;
   }>;
+  pendingUIRequests?: ExtensionUIRequestEvent[];
 }
 
 interface InitialStateSessionState {
@@ -75,7 +85,6 @@ interface InitialStateSessionState {
   sessionReady: Record<string, boolean>;
   sessionStatusMap: Record<string, SessionStatus>;
   sessionsByProject: Record<string, SessionMeta[]>;
-  queueBySession: Record<string, { steering: string[]; followUp: string[] }>;
   updateSessionContext: (sessionId: string, usage: Partial<ContextUsage>) => void;
   updateSessionStatus: (sessionId: string, status: SessionStatus) => void;
 }
@@ -91,6 +100,19 @@ interface InitialStateLogger {
 const fetchInitPromiseMap = new Map<string, Promise<void>>();
 const fetchInitTimestampMap = new Map<string, number>();
 const FETCH_INIT_TTL_MS = 30_000;
+
+type InteractiveUIMethod = "confirm" | "input" | "select" | "editor";
+
+function isInteractiveUIRequest(
+  request: ExtensionUIRequestEvent,
+): request is ExtensionUIRequestEvent & { method: InteractiveUIMethod } {
+  return (
+    request.method === "confirm" ||
+    request.method === "input" ||
+    request.method === "select" ||
+    request.method === "editor"
+  );
+}
 
 export function clearSessionFetchInitCache(sessionId: string): void {
   fetchInitTimestampMap.delete(sessionId);
@@ -153,60 +175,81 @@ export function createFetchInitialStateAction({
             if (cw > 0) {
               get().updateSessionContext(sessionId, { contextWindow: cw });
             }
-            if (result.isStreaming) {
-              // Guard: if the session has already transitioned to idle/permission
-              // (e.g. message_end + agent_end arrived while this RPC was in-flight),
-              // skip restoring streaming state to avoid overwriting isStreaming: false.
+            const pendingUIRequests = Array.isArray(result.pendingUIRequests)
+              ? result.pendingUIRequests.filter(isInteractiveUIRequest)
+              : [];
+            if (pendingUIRequests.length > 0) {
+              const uiDialog = useUIDialogStore.getState();
+              for (const request of pendingUIRequests) {
+                uiDialog.registerUIRequest({
+                  requestId: request.id,
+                  sessionId,
+                  method: request.method,
+                  title: request.title,
+                  message: request.message,
+                  options: request.options,
+                  multiple: request.multiple,
+                  placeholder: request.placeholder,
+                  prefill: request.prefill,
+                  timeout: request.timeout,
+                  toolCallId: request.toolCallId,
+                  hookMeta: request.hookMeta,
+                  permissionMeta: request.permissionMeta,
+                });
+              }
+              get().updateSessionStatus(sessionId, "permission");
+            } else if (result.isStreaming) {
+              // Pending user intervention is a stronger stop point than streaming.
               const currentStatus = get().sessionStatusMap[sessionId];
-              if (currentStatus === "idle" || currentStatus === "permission") {
-                // Session already finished — do not re-activate streaming
+              if (currentStatus === "permission") {
+                // Do not overwrite a restored permission request.
               } else {
                 get().updateSessionStatus(sessionId, "streaming");
-              if (
-                result.streamingMessage &&
-                typeof result.streamingMessage === "object" &&
-                "role" in (result.streamingMessage as object)
-              ) {
-                const raw = result.streamingMessage as {
-                  role: string;
-                  content?: unknown;
-                  timestamp?: number;
-                };
-                if (raw.role === "assistant") {
-                  try {
-                    const { messageToChatMessage } = await import("../lib/message-mapper");
-                    const msg = messageToChatMessage(
-                      raw as Parameters<typeof messageToChatMessage>[0],
-                    );
-                    if (msg) {
-                      const chat = useChatStore.getState();
-                      const existing = chat.messagesBySession[sessionId] || [];
-                      const alreadyStreaming = existing.some(
-                        (m) => m.role === "assistant" && m.isStreaming,
+                if (
+                  result.streamingMessage &&
+                  typeof result.streamingMessage === "object" &&
+                  "role" in (result.streamingMessage as object)
+                ) {
+                  const raw = result.streamingMessage as {
+                    role: string;
+                    content?: unknown;
+                    timestamp?: number;
+                  };
+                  if (raw.role === "assistant") {
+                    try {
+                      const { messageToChatMessage } = await import("../lib/message-mapper");
+                      const msg = messageToChatMessage(
+                        raw as Parameters<typeof messageToChatMessage>[0],
                       );
-                      const lastMsg = existing[existing.length - 1];
-                      const lastIsAssistant = lastMsg && lastMsg.role === "assistant";
-                      const lastHasContent =
-                        lastIsAssistant &&
-                        Array.isArray(lastMsg.content) &&
-                        lastMsg.content.length > 0;
-                      if (!alreadyStreaming && !lastHasContent) {
-                        chat.setMessagesForSession(sessionId, [
-                          ...existing,
-                          { ...msg, isStreaming: true },
-                        ]);
-                      } else if (lastIsAssistant && !alreadyStreaming) {
-                        chat.setMessagesForSession(sessionId, [
-                          ...existing.slice(0, -1),
-                          { ...lastMsg, isStreaming: true },
-                        ]);
+                      if (msg) {
+                        const chat = useChatStore.getState();
+                        const existing = chat.messagesBySession[sessionId] || [];
+                        const alreadyStreaming = existing.some(
+                          (m) => m.role === "assistant" && m.isStreaming,
+                        );
+                        const lastMsg = existing[existing.length - 1];
+                        const lastIsAssistant = lastMsg && lastMsg.role === "assistant";
+                        const lastHasContent =
+                          lastIsAssistant &&
+                          Array.isArray(lastMsg.content) &&
+                          lastMsg.content.length > 0;
+                        if (!alreadyStreaming && !lastHasContent) {
+                          chat.setMessagesForSession(sessionId, [
+                            ...existing,
+                            { ...msg, isStreaming: true },
+                          ]);
+                        } else if (lastIsAssistant && !alreadyStreaming) {
+                          chat.setMessagesForSession(sessionId, [
+                            ...existing.slice(0, -1),
+                            { ...lastMsg, isStreaming: true },
+                          ]);
+                        }
                       }
+                    } catch {
+                      /* ignore */
                     }
-                  } catch {
-                    /* ignore */
                   }
                 }
-              }
               }
             } else if (result.isCompacting) {
               get().updateSessionStatus(sessionId, "compacting");
@@ -377,7 +420,9 @@ export function createFetchInitialStateAction({
           return null;
         })();
         const disabledPluginsPromise = sessionMetaForPlugins?.projectPath
-          ? apiClient.call("agent.getDisabledPlugins", { projectPath: sessionMetaForPlugins.projectPath })
+          ? apiClient.call("agent.getDisabledPlugins", {
+              projectPath: sessionMetaForPlugins.projectPath,
+            })
           : Promise.resolve({ disabledPlugins: [] } as DisabledPluginsResponse);
 
         Promise.all([extensionsPromise, disabledPluginsPromise])
@@ -390,7 +435,11 @@ export function createFetchInitialStateAction({
               ? extRes
               : ((extRes as { extensions?: ExtensionEntry[] })?.extensions ?? []);
             const exts = rawExts as ExtensionEntry[];
-            if (exts.length === 0 && !(disabledPluginsRes as DisabledPluginsResponse)?.disabledPlugins?.length) return;
+            if (
+              exts.length === 0 &&
+              !(disabledPluginsRes as DisabledPluginsResponse)?.disabledPlugins?.length
+            )
+              return;
             const dp = disabledPluginsRes as DisabledPluginsResponse;
             const disabledPluginSet = new Set(dp?.disabledPlugins ?? []);
             const plugins = exts.map((e: ExtensionEntry) => {
@@ -460,7 +509,12 @@ export function createFetchInitialStateAction({
               .addLog(`[skills] call failed: ${err instanceof Error ? err.message : String(err)}`);
           });
 
-        await Promise.allSettled([extensionsPromise, skillsPromise, disabledSkillsPromise, disabledPluginsPromise]);
+        await Promise.allSettled([
+          extensionsPromise,
+          skillsPromise,
+          disabledSkillsPromise,
+          disabledPluginsPromise,
+        ]);
 
         // --- Priority 4 (parallel, max 3) ---
         const mcpPromise = apiClient.call("agent.getMcpServers", { sessionId });
@@ -469,7 +523,11 @@ export function createFetchInitialStateAction({
         const supervisorStore = useSupervisorStore.getState();
         const supervisorPromise =
           typeof supervisorStore.fetchStatus === "function"
-            ? supervisorStore.fetchStatus(sessionId)
+            ? Promise.allSettled([
+                supervisorStore.fetchStatus(sessionId),
+                supervisorStore.fetchTaskReport(sessionId),
+                supervisorStore.fetchTriggerHistory(sessionId, 50),
+              ])
             : Promise.resolve();
 
         mcpPromise
@@ -518,12 +576,7 @@ export function createFetchInitialStateAction({
             if (!result) return;
             const { steering, followUp } = result;
             if (steering.length > 0 || followUp.length > 0) {
-              set((s) => ({
-                queueBySession: {
-                  ...s.queueBySession,
-                  [sessionId]: { steering, followUp },
-                },
-              }));
+              useSessionQueueStore.getState().setSessionQueue(sessionId, { steering, followUp });
             }
           })
           .catch((err) => {
@@ -607,6 +660,8 @@ export function createFetchInitialStateAction({
                 permissionMode?: string;
                 source?: string;
                 filePath?: string;
+                color?: string;
+                avatar?: { type: "emoji"; value: string } | { type: "image"; src: string };
               }>;
             };
             const agentList = (raw.agents ?? []).map((a) => ({
@@ -617,6 +672,8 @@ export function createFetchInitialStateAction({
               permissionMode: a.permissionMode,
               source: (a.source ?? "builtin") as "builtin" | "user" | "project",
               filePath: a.filePath ?? "",
+              color: a.color,
+              avatar: a.avatar,
             }));
             useAgentStore.getState().setAgents(agentList);
 

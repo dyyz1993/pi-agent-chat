@@ -7,7 +7,7 @@ import { getProcessManager } from "./agent";
 import { FILE_REVIEW_METHODS } from "../constants/channel-methods";
 import { existsSync, createReadStream } from "fs";
 import * as readline from "readline";
-import type { PendingChangeResult } from "../modules/change-review";
+import type { ApprovalResult, PendingChangeResult, ReviewApprovalStatus } from "../modules/change-review";
 
 const log = createLogger("change-review");
 
@@ -21,22 +21,28 @@ interface TurnChange {
 
 interface ApprovalRecord {
   path: string;
-  status: "approved" | "rejected";
+  status: ReviewApprovalStatus;
   timestamp: number;
+  snapshotEntryId?: string;
+  snapshotTreeHash?: string;
 }
 
-/**
- * Read pending changes from session JSONL when CLI process is not available.
- * Returns list without oldContent/newContent (process required for diff data).
- */
-async function readPendingFromJsonl(sessionPath: string): Promise<PendingChangeResult[]> {
-  if (!sessionPath || !existsSync(sessionPath)) return [];
+interface ParsedReviewState {
+  turns: TurnChange[];
+  approvals: Map<string, ApprovalRecord>;
+  everApproved: Set<string>;
+  maxTurnIndexAtLastApproval: Map<string, number>;
+}
 
+async function readReviewStateFromJsonl(sessionPath: string): Promise<ParsedReviewState> {
   const turns: TurnChange[] = [];
   const approvals = new Map<string, ApprovalRecord>();
   const everApproved = new Set<string>();
-
   const maxTurnIndexAtLastApproval = new Map<string, number>();
+
+  if (!sessionPath || !existsSync(sessionPath)) {
+    return { turns, approvals, everApproved, maxTurnIndexAtLastApproval };
+  }
 
   const rl = readline.createInterface({
     input: createReadStream(sessionPath, { encoding: "utf-8" }),
@@ -64,13 +70,21 @@ async function readPendingFromJsonl(sessionPath: string): Promise<PendingChangeR
         if (data.turnIndex > currentMaxTurn) currentMaxTurn = data.turnIndex;
       } else if (entry.customType === "file-approval") {
         const data = entry.data as
-          | { path: string; status: "approved" | "rejected"; timestamp: number }
+          | {
+              path: string;
+              status: ReviewApprovalStatus;
+              timestamp: number;
+              snapshotEntryId?: string;
+              snapshotTreeHash?: string;
+            }
           | undefined;
         if (!data) continue;
         approvals.set(data.path, {
           path: data.path,
           status: data.status,
           timestamp: data.timestamp,
+          snapshotEntryId: data.snapshotEntryId,
+          snapshotTreeHash: data.snapshotTreeHash,
         });
         if (data.status === "approved") everApproved.add(data.path);
         maxTurnIndexAtLastApproval.set(data.path, currentMaxTurn);
@@ -78,6 +92,17 @@ async function readPendingFromJsonl(sessionPath: string): Promise<PendingChangeR
     } catch {}
   }
   rl.close();
+
+  return { turns, approvals, everApproved, maxTurnIndexAtLastApproval };
+}
+
+/**
+ * Read pending changes from session JSONL when CLI process is not available.
+ * Returns list without oldContent/newContent (process required for diff data).
+ */
+async function readPendingFromJsonl(sessionPath: string): Promise<PendingChangeResult[]> {
+  const { turns, approvals, everApproved, maxTurnIndexAtLastApproval } =
+    await readReviewStateFromJsonl(sessionPath);
 
   if (turns.length === 0) return [];
 
@@ -140,6 +165,25 @@ async function readPendingFromJsonl(sessionPath: string): Promise<PendingChangeR
   return result;
 }
 
+async function readApprovalsFromJsonl(
+  sessionPath: string,
+  status?: ReviewApprovalStatus,
+): Promise<ApprovalResult[]> {
+  const { approvals } = await readReviewStateFromJsonl(sessionPath);
+  const items = [...approvals.values()]
+    .filter((approval) => (status ? approval.status === status : approval.status !== "pending"))
+    .map((approval) => ({
+      turnIndex: -1,
+      path: approval.path,
+      status: approval.status,
+      timestamp: approval.timestamp,
+      snapshotEntryId: approval.snapshotEntryId,
+      snapshotTreeHash: approval.snapshotTreeHash,
+    }));
+  items.sort((a, b) => b.timestamp - a.timestamp || a.path.localeCompare(b.path));
+  return items;
+}
+
 export function register(server: RPCServer, _options: HandlerOptions): void {
   const r = createRegister(server);
 
@@ -183,10 +227,48 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     }
   });
 
+  r("change-review.approvals", async (params) => {
+    const manager = getProcessManager();
+
+    if (manager && manager.hasSession(params.sessionId)) {
+      try {
+        const result: unknown = await withTimeout(
+          manager.callChannel(params.sessionId, "file-review", FILE_REVIEW_METHODS.APPROVALS, {
+            status: params.status,
+          }),
+          CHANNEL_TIMEOUT_MS,
+        );
+        const items = Array.isArray(result)
+          ? result
+          : Array.isArray((result as Record<string, unknown>)?.result)
+            ? ((result as Record<string, unknown>).result as unknown[])
+            : [];
+        return items as unknown as R<"change-review.approvals">;
+      } catch (err: unknown) {
+        log.warn("review.approvals channel call failed, falling back to JSONL", {
+          sessionId: params.sessionId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    if (!params.sessionPath) return [];
+    try {
+      const items = await readApprovalsFromJsonl(params.sessionPath, params.status);
+      return items as unknown as R<"change-review.approvals">;
+    } catch (err) {
+      log.warn("review.approvals JSONL read failed", {
+        sessionId: params.sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return [];
+    }
+  });
+
   r("change-review.approve", async (params) => {
     const manager = getProcessManager();
     if (!manager || !manager.hasSession(params.sessionId)) {
-      return { ok: false };
+      return { ok: false, error: "Session not active" };
     }
 
     try {
@@ -203,14 +285,14 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
         sessionId: params.sessionId,
         err: err instanceof Error ? err.message : String(err),
       });
-      return { ok: false };
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
   });
 
   r("change-review.reject", async (params) => {
     const manager = getProcessManager();
     if (!manager || !manager.hasSession(params.sessionId)) {
-      return { ok: false, error: "No session" };
+      return { ok: false, error: "Session not active" };
     }
 
     try {

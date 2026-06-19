@@ -3,6 +3,10 @@ import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight, CircleCheckBig, Clock, Hash, Target } from "lucide-react";
 
 import { formatDuration } from "./primitives/formatDuration";
+import {
+  CHAT_COMPACT_BLOCK_CLASS,
+  CHAT_COMPACT_ROW_BUTTON_BASE_CLASS,
+} from "./chat-layout-classes";
 
 interface GoalCompleteData {
   goalId?: string;
@@ -36,11 +40,11 @@ export const GoalCompleteCard = memo(function GoalCompleteCard({
   const evidence = d.evidence ?? [];
 
   return (
-    <div className="my-0.5">
+    <div className={CHAT_COMPACT_BLOCK_CLASS}>
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
-        className="w-full px-3 py-1.5 flex items-center gap-1.5 text-[11px] text-status-success hover:bg-status-success/5 rounded cursor-pointer select-none"
+        className={`${CHAT_COMPACT_ROW_BUTTON_BASE_CLASS} text-status-success hover:bg-status-success/5`}
         aria-expanded={expanded}
         aria-label={t("goal.completeCardLabel")}
       >

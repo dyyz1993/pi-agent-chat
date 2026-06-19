@@ -49,6 +49,23 @@ function updateSession(
   return { ...bySession, [sessionId]: updater(session) };
 }
 
+function mergeTriggerRecords(
+  existing: TriggerRecord[],
+  incoming: TriggerRecord[],
+): TriggerRecord[] {
+  const byKey = new Map<string, TriggerRecord>();
+  for (const record of existing) {
+    byKey.set(String(record.seq), record);
+  }
+  for (const record of incoming) {
+    byKey.set(String(record.seq), record);
+  }
+  return Array.from(byKey.values()).sort((a, b) => {
+    const startedDelta = a.startedAt - b.startedAt;
+    return startedDelta !== 0 ? startedDelta : a.seq - b.seq;
+  });
+}
+
 export const useSupervisorStore = create<SupervisorState>()((set) => ({
   bySession: {},
 
@@ -81,7 +98,7 @@ export const useSupervisorStore = create<SupervisorState>()((set) => ({
         bySession: updateSession(s.bySession, sessionId, (session) => ({
           ...session,
           status: session.status
-            ? { ...session.status, goal: result.goal }
+            ? { ...session.status, goal: result.goal, lastGoldResult: undefined }
             : {
                 enabled: true,
                 state: "idle" as const,
@@ -261,7 +278,7 @@ export const useSupervisorStore = create<SupervisorState>()((set) => ({
       set((s) => ({
         bySession: updateSession(s.bySession, sessionId, (session) => ({
           ...session,
-          triggerRecords: result.triggers,
+          triggerRecords: mergeTriggerRecords(session.triggerRecords, result.triggers),
         })),
       }));
     } catch (err) {
@@ -345,7 +362,14 @@ export const useSupervisorStore = create<SupervisorState>()((set) => ({
           bySession: updateSession(s.bySession, sessionId, (session) => ({
             ...session,
             status: session.status
-              ? { ...session.status, goal: event.goal }
+              ? {
+                  ...session.status,
+                  goal: event.goal,
+                  lastGoldResult:
+                    event.goal && session.status.lastGoldResult?.goalId === event.goal.id
+                      ? session.status.lastGoldResult
+                      : undefined,
+                }
               : event.goal
                 ? {
                     enabled: true,
@@ -380,7 +404,7 @@ export const useSupervisorStore = create<SupervisorState>()((set) => ({
         set((s) => ({
           bySession: updateSession(s.bySession, sessionId, (session) => ({
             ...session,
-            triggerRecords: [...session.triggerRecords, event.record],
+            triggerRecords: mergeTriggerRecords(session.triggerRecords, [event.record]),
           })),
         }));
         break;

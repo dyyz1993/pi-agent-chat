@@ -40,7 +40,11 @@ function makeMinimalDeps(overrides: Partial<RestoreFlowDeps> = {}): RestoreFlowD
   };
 }
 
-function makeSession(sid: string, path = "/proj"): SessionMeta {
+function makeSession(
+  sid: string,
+  path = "/proj",
+  overrides: Partial<SessionMeta> = {},
+): SessionMeta {
   return {
     sessionId: sid,
     name: sid,
@@ -54,6 +58,7 @@ function makeSession(sid: string, path = "/proj"): SessionMeta {
     createdAt: 0,
     updatedAt: 0,
     status: "idle",
+    ...overrides,
   };
 }
 
@@ -180,6 +185,44 @@ describe("runRestoreFlow — setRestoring timing (anti-flicker)", () => {
     );
     expect(restoringIdx).toBeDefined();
     expect(loadMsgIdx).toBeLessThan(restoringIdx!);
+  });
+
+  it("saved-tabs path: defaults to a root session instead of a delegate session", async () => {
+    const setActiveSession = vi.fn();
+    const deps = makeMinimalDeps({
+      setActiveSession,
+      callApi: vi.fn().mockResolvedValue({
+        tabs: [{ id: "tab-1", name: "Proj", path: "/proj" }],
+        activeTabId: "tab-1",
+      }),
+      loadSessionsForProject: vi.fn().mockResolvedValue([
+        makeSession("delegate-1", "/proj", { delegateParentSessionId: "root-1" }),
+        makeSession("root-1", "/proj"),
+      ]),
+    });
+
+    await runRestoreFlow(deps);
+
+    expect(setActiveSession).toHaveBeenCalledWith("root-1");
+  });
+
+  it("recent-projects path: ignores last active session when it is a delegate", async () => {
+    const setActiveSession = vi.fn();
+    const deps = makeMinimalDeps({
+      setActiveSession,
+      callApi: vi.fn().mockResolvedValue({
+        projects: [{ path: "/proj", name: "Proj", sessionCount: 2 }],
+      }),
+      getLastActiveSessionByProject: vi.fn().mockReturnValue({ "/proj": "delegate-1" }),
+      loadSessionsForProject: vi.fn().mockResolvedValue([
+        makeSession("delegate-1", "/proj", { delegateParentSessionId: "root-1" }),
+        makeSession("root-1", "/proj"),
+      ]),
+    });
+
+    await runRestoreFlow(deps);
+
+    expect(setActiveSession).toHaveBeenCalledWith("root-1");
   });
 });
 

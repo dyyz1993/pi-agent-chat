@@ -21,9 +21,11 @@ import { useSubagentStore } from "../../stores/use-subagent-store";
 import { useAgentStore } from "../../stores/use-agent-store";
 import { useGitStore } from "../../stores/use-git-store";
 import { useLayoutStore } from "../../layouts/use-layout-store";
-import type { SessionMeta, SubagentSessionInfo } from "../../types";
+import type { SessionMeta, SessionStatus, SubagentSessionInfo } from "../../types";
 import { ConfirmDialog } from "../explorer/ConfirmDialog";
 import { useCopyFeedback } from "../primitives";
+import { agentColorStyle } from "../../utils/agent-color";
+import { AgentAvatar } from "../agent-avatar/AgentAvatar";
 
 const EMPTY: never[] = [];
 
@@ -33,6 +35,7 @@ export function groupSessions(
   filterType?: "all" | "delegate" | "normal",
   filterAgent?: string | null,
   agentBySession?: Record<string, string>,
+  statusBySession?: Record<string, SessionStatus>,
 ): { rootSessions: SessionMeta[]; childMap: Record<string, SessionMeta[]> } {
   const seen = new Set<string>();
   const deduped = rawSessions.filter((sess) => {
@@ -68,16 +71,21 @@ export function groupSessions(
     }
   }
 
+  const isWorkingSession = (sess: SessionMeta): boolean => {
+    const status = statusBySession?.[sess.sessionId] ?? sess.sessionStatus ?? sess.status;
+    return (
+      status === "running" ||
+      status === "streaming" ||
+      status === "compacting" ||
+      status === "retrying"
+    );
+  };
+
   const sortPinnedFirst = (s: SessionMeta[]) =>
     [...s].sort((a, b) => {
       const getPriority = (sess: SessionMeta): number => {
-        const isRunning =
-          sess.status === "running" ||
-          sess.sessionStatus === "streaming" ||
-          sess.sessionStatus === "compacting" ||
-          sess.sessionStatus === "retrying";
         const isEmpty = sess.messageCount === 0 && !sess.firstMessage;
-        if (isRunning) return 0;
+        if (isWorkingSession(sess)) return 0;
         if (sess.pinned) return 1;
         if (isEmpty) return 2; // 空会话放在 pinned 之后
         return 3;
@@ -85,6 +93,14 @@ export function groupSessions(
       const priorityA = getPriority(a);
       const priorityB = getPriority(b);
       if (priorityA !== priorityB) return priorityA - priorityB;
+
+      const aWorking = isWorkingSession(a);
+      const bWorking = isWorkingSession(b);
+      if (aWorking && bWorking) {
+        const createdDiff = a.createdAt - b.createdAt;
+        if (createdDiff !== 0) return createdDiff;
+      }
+
       // 相同优先级按更新时间降序（最新的在上面）
       return b.updatedAt - a.updatedAt;
     });
@@ -244,6 +260,7 @@ function SessionList({
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const activeSubId = useSubagentStore((s) => s.activeSubsessionId);
   const loading = useSessionStore((s) => s.loading);
+  const sessionStatusMap = useSessionStore((s) => s.sessionStatusMap);
   const agentBySession = useAgentStore((s) => s.currentAgentBySession);
 
   const activeSessionPath = useMemo(() => {
@@ -259,8 +276,16 @@ function SessionList({
   const subsessionsByParent = useSubagentStore((s) => s.subsessionsByParent);
 
   const { rootSessions, childMap } = useMemo(
-    () => groupSessions(rawSessions, searchQuery, filterType, filterAgent, agentBySession),
-    [rawSessions, searchQuery, filterType, filterAgent, agentBySession],
+    () =>
+      groupSessions(
+        rawSessions,
+        searchQuery,
+        filterType,
+        filterAgent,
+        agentBySession,
+        sessionStatusMap,
+      ),
+    [rawSessions, searchQuery, filterType, filterAgent, agentBySession, sessionStatusMap],
   );
 
   const filteredRoots = useMemo(() => {
@@ -424,6 +449,12 @@ function SessionItem({
   const loadingSubs = useSubagentStore((s) => s.loadingByParent[session.sessionPath]);
   const worktrees = useGitStore((s) => s.worktrees);
   const currentAgentName = useAgentStore((s) => s.currentAgentBySession[session.sessionId] ?? "");
+  const agents = useAgentStore((s) => s.agents);
+  const currentAgentInfo = useMemo(
+    () => agents.find((agent) => agent.name === currentAgentName) ?? null,
+    [agents, currentAgentName],
+  );
+  const currentAgentColor = agentColorStyle(currentAgentInfo?.color);
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState(false);
@@ -542,8 +573,21 @@ function SessionItem({
                 ? "bg-semantic-accent/20 text-accent-text"
                 : "bg-surface-hover/70 text-text-tertiary group-hover:bg-surface-hover"
             }`}
+            style={
+              currentAgentColor
+                ? { backgroundColor: currentAgentColor.bg, color: currentAgentColor.color }
+                : undefined
+            }
           >
-            <User className="w-3 h-3" />
+            <AgentAvatar
+              avatar={currentAgentInfo?.avatar}
+              agentFilePath={currentAgentInfo?.filePath}
+              color={currentAgentInfo?.color}
+              fallbackIcon={User}
+              className="w-4 h-4 rounded-md shrink-0 text-[10px]"
+              fallbackClassName="text-current"
+              title={currentAgentName || displayName}
+            />
           </div>
           {isEditing ? (
             <div
@@ -583,8 +627,13 @@ function SessionItem({
               </span>
               {currentAgentName && (
                 <span
-                  className="text-[9px] px-1 py-0.5 rounded font-mono shrink-0 ml-1 bg-semantic-accent/10 text-accent-text"
+                  className="inline-flex items-center gap-1 text-[9px] px-1 py-0.5 rounded font-mono shrink-0 ml-1 bg-semantic-accent/10 text-accent-text"
                   title={t("sidebar:currentAgent", "Current Agent")}
+                  style={
+                    currentAgentColor
+                      ? { backgroundColor: currentAgentColor.bg, color: currentAgentColor.color }
+                      : undefined
+                  }
                 >
                   {currentAgentName}
                 </span>

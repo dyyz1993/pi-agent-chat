@@ -194,6 +194,13 @@ export const BashExecutionCard = memo(function BashExecutionCard({
   }, [isBackground]);
 
   useEffect(() => {
+    const hasOutput = Boolean(block.output || bashProcess?.output);
+    if (!isRunning && !isBackground && hasOutput) {
+      setOutputOpen(true);
+    }
+  }, [block.output, bashProcess?.output, isBackground, isRunning]);
+
+  useEffect(() => {
     if (!isRunning) return;
     if (block.startedAt) startedAt.current = block.startedAt;
     setElapsed(Date.now() - startedAt.current);

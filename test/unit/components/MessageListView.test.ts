@@ -13,28 +13,54 @@ function customMessage(id: string, customType: string): ChatMessage {
   };
 }
 
+function userMessage(id: string): ChatMessage {
+  return {
+    id,
+    role: "user",
+    content: [{ type: "text", text: "hello" }],
+    timestamp: 1000,
+  };
+}
+
 describe("MessageListView message processing", () => {
   it("filters memory custom entries from the main chat list", () => {
-    const processed = buildProcessedMessages([
-      customMessage("mem-search", "memory_prefetch_result"),
-      customMessage("mem-save", "memory_extract"),
-      customMessage("mem-organize", "memory_dream"),
-      customMessage("visible", "bash_background_exit"),
-    ]);
+    const processed = buildProcessedMessages(
+      [
+        customMessage("mem-search", "memory_prefetch_result"),
+        customMessage("mem-save", "memory_extract"),
+        customMessage("mem-organize", "memory_dream"),
+        userMessage("visible"),
+      ],
+      false,
+    );
 
     expect(processed.map((item) => item.msg.id)).toEqual(["visible"]);
   });
 
-  it("filters memory custom entries from side navigation", () => {
+  it("filters memory custom entries from side navigation when disabled", () => {
     const items = buildFlatItems(
       [
         customMessage("mem-search", "memory_prefetch_result"),
         customMessage("mem-save", "memory_extract"),
-        customMessage("visible", "bash_background_exit"),
+        userMessage("visible"),
       ],
       true,
     );
 
     expect(items.map((item) => item.navId)).toEqual(["visible"]);
+  });
+
+  it("shows memory custom entries in side navigation when enabled", () => {
+    const items = buildFlatItems(
+      [
+        customMessage("mem-search", "memory_prefetch_result"),
+        customMessage("mem-save", "memory_extract"),
+        userMessage("visible"),
+      ],
+      true,
+      true,
+    );
+
+    expect(items.map((item) => item.navId)).toEqual(["mem-search", "mem-save", "visible"]);
   });
 });

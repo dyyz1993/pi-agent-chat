@@ -26,9 +26,58 @@ import { useSnapshotStore } from "./use-snapshot-store";
 import { useTierStore } from "./use-tier-store";
 import { useAgentStore } from "./use-agent-store";
 import { clearAgentStarted } from "./use-session-store";
+import { useSessionTodoStore } from "./use-session-todo-store";
+import { useDelegateActivityStore } from "./use-delegate-activity-store";
 import { createLogger } from "../../shared/lib/logger";
 
 const perfLog = createLogger("session-perf");
+
+function unsubscribeSubscriptionValue(value: string | undefined): void {
+  if (!value) return;
+  for (const subId of value.split(",").map((item) => item.trim())) {
+    if (subId && subId !== "__pending__") apiClient.unsubscribe(subId);
+  }
+}
+
+function syncCoordinatorChildSessionStatus(childSessionId: string, status: SessionStatus): void {
+  const sessionStore = useSessionStore.getState();
+  sessionStore.updateSessionStatus(childSessionId, status);
+
+  const nextSessionStatus = status === "idle" ? "idle" : "running";
+  const { sessionsByProject } = sessionStore;
+  for (const [projectPath, sessions] of Object.entries(sessionsByProject)) {
+    const idx = sessions.findIndex((session) => session.sessionId === childSessionId);
+    if (idx === -1) continue;
+    const updated = [...sessions];
+    updated[idx] = { ...updated[idx], status: nextSessionStatus };
+    useSessionStore.setState((prev) => ({
+      sessionsByProject: { ...prev.sessionsByProject, [projectPath]: updated },
+    }));
+    return;
+  }
+}
+
+function statusFromCoordinatorChildEvent(event: unknown): SessionStatus | null {
+  if (!event || typeof event !== "object") return null;
+  const type = (event as Record<string, unknown>).type;
+  switch (type) {
+    case "agent_start":
+      return "streaming";
+    case "agent_end":
+      return "idle";
+    case "compaction_start":
+      return "compacting";
+    case "auto_retry_start":
+      return "retrying";
+    case "extension_ui_request":
+      return "permission";
+    case "extension_ui_resolved":
+    case "auto_retry_end":
+      return "streaming";
+    default:
+      return null;
+  }
+}
 
 type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
 
@@ -256,8 +305,6 @@ export function setupSubscriptions(
     coordinatorSubscriptions,
     supervisorSubscriptions,
   } = state;
-  const storeGet = () => useSessionStore.getState();
-
   if (!agentSubscriptions[id]) {
     set((s) => ({
       agentSubscriptions: { ...s.agentSubscriptions, [id]: "__pending__" },
@@ -362,7 +409,7 @@ export function setupSubscriptions(
         "todo.event",
         (payload: { sessionId: string; action: string; todos: TodoItem[]; timestamp: number }) => {
           if (payload.sessionId !== id) return;
-          storeGet().setSessionTodos(id, payload.todos);
+          useSessionTodoStore.getState().setSessionTodos(id, payload.todos);
         },
         { sessionId: id },
       )
@@ -374,7 +421,7 @@ export function setupSubscriptions(
           .call("todo.list", { sessionPath: session.sessionPath })
           .then((result) => {
             if (result.todos.length > 0) {
-              storeGet().setSessionTodos(id, result.todos);
+              useSessionTodoStore.getState().setSessionTodos(id, result.todos);
             }
           })
           .catch((err) => {
@@ -690,12 +737,14 @@ export function setupSubscriptions(
         set((s) => ({
           supervisorSubscriptions: { ...s.supervisorSubscriptions, [id]: subId },
         }));
-        useSupervisorStore
-          .getState()
-          .fetchStatus(id)
-          .catch((err) => {
-            useAppStore.getState().addLog(`[sub] ${String(err)}`);
-          });
+        const supervisorStore = useSupervisorStore.getState();
+        Promise.allSettled([
+          supervisorStore.fetchStatus(id),
+          supervisorStore.fetchTaskReport(id),
+          supervisorStore.fetchTriggerHistory(id, 50),
+        ]).catch((err) => {
+          useAppStore.getState().addLog(`[sub] ${String(err)}`);
+        });
       })
       .catch((err) => {
         set((s) => {
@@ -711,7 +760,7 @@ export function setupSubscriptions(
       coordinatorSubscriptions: { ...s.coordinatorSubscriptions, [id]: "__pending__" },
     }));
 
-    apiClient
+    const createdSubPromise = apiClient
       .subscribe(
         "coordinator.session_created",
         (payload: { parentSessionId: string; session: SessionMeta }) => {
@@ -752,13 +801,30 @@ export function setupSubscriptions(
           });
         },
         { parentSessionId: id },
-      )
-      .then((subId) => {
+      );
+
+    const eventSubPromise = apiClient.subscribe(
+      "coordinator.session_event",
+      (payload: { parentSessionId: string; childSessionId: string; event: unknown }) => {
+        if (payload.parentSessionId !== id) return;
+        const childStatus = statusFromCoordinatorChildEvent(payload.event);
+        if (childStatus) {
+          syncCoordinatorChildSessionStatus(payload.childSessionId, childStatus);
+        }
+        useDelegateActivityStore.getState().handleEvent(payload.childSessionId, payload.event);
+      },
+      { parentSessionId: id },
+    );
+
+    Promise.all([createdSubPromise, eventSubPromise])
+      .then((subIds) => {
         set((s) => ({
-          coordinatorSubscriptions: { ...s.coordinatorSubscriptions, [id]: subId },
+          coordinatorSubscriptions: { ...s.coordinatorSubscriptions, [id]: subIds.join(",") },
         }));
       })
       .catch((err) => {
+        createdSubPromise.then((subId) => apiClient.unsubscribe(subId)).catch(() => {});
+        eventSubPromise.then((subId) => apiClient.unsubscribe(subId)).catch(() => {});
         set((s) => {
           const { [id]: _, ...rest } = s.coordinatorSubscriptions;
           return { coordinatorSubscriptions: rest };
@@ -787,8 +853,7 @@ export function cleanupSession(state: SubscriptionMaps, sessionId: string): void
   ];
 
   for (const map of singleSubMaps) {
-    const subId = map[sessionId];
-    if (subId) apiClient.unsubscribe(subId);
+    unsubscribeSubscriptionValue(map[sessionId]);
   }
 
   const memSubIds = state.memorySubscriptions[sessionId];
@@ -844,6 +909,7 @@ export function cleanupSessionHeavy(sessionId: string): void {
   useSnapshotStore.getState().clearSession(sessionId);
   useTierStore.getState().clearSession(sessionId);
   useAgentStore.getState().clearSession(sessionId);
+  useDelegateActivityStore.getState().clearSession(sessionId);
   clearAgentStarted(sessionId);
 
   // Clean up module-level maps in agent-event-handler

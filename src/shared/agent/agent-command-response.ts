@@ -10,7 +10,11 @@ export interface AgentListItem {
   permissionMode?: string;
   source?: string;
   filePath?: string;
+  color?: string;
+  avatar?: AgentAvatar;
 }
+
+export type AgentAvatar = { type: "emoji"; value: string } | { type: "image"; src: string };
 
 export interface NormalizedAgentListItem {
   name: string;
@@ -20,6 +24,8 @@ export interface NormalizedAgentListItem {
   permissionMode?: string;
   source: string;
   filePath: string;
+  color?: string;
+  avatar?: AgentAvatar;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

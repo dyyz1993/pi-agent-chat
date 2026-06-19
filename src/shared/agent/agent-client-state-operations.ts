@@ -1,6 +1,7 @@
 import type { RpcClientAPI } from "@dyyz1993/pi-coding-agent";
 
 import { createLogger } from "../lib/logger";
+import type { ExtensionUIRequestEvent } from "../modules/agent";
 
 const log = createLogger("agent");
 
@@ -73,13 +74,17 @@ export async function getStateOperation<TManaged extends ManagedClientLike>(opti
     args?: unknown;
     startedAt?: number;
   }>;
+  pendingUIRequests?: ExtensionUIRequestEvent[];
 } | null> {
   const managed = await resolveManagedClient(options);
   if (!managed) return null;
 
   try {
     const state = await withTimeout(managed.client.getState(), 10_000, "getState");
-    const stateWithStreaming = state as typeof state & { streamingMessage?: unknown };
+    const stateWithStreaming = state as typeof state & {
+      streamingMessage?: unknown;
+      pendingUIRequests?: ExtensionUIRequestEvent[];
+    };
     const model = state.model;
     const streamingMessage = stateWithStreaming.streamingMessage;
     return {
@@ -99,6 +104,7 @@ export async function getStateOperation<TManaged extends ManagedClientLike>(opti
       messageCount: Number(state.messageCount ?? 0),
       streamingMessage,
       activeToolExecutions: managed.info?.activeToolExecutions ?? [],
+      pendingUIRequests: stateWithStreaming.pendingUIRequests ?? [],
     };
   } catch (err: unknown) {
     const msg = errorMessage(err);

@@ -12,3 +12,11 @@ fi
 if [ -n "$FORMAT_FILES" ]; then
   printf "%s\n" "$FORMAT_FILES" | xargs npx prettier --check
 fi
+
+# Run targeted tests when relevant source files change
+# This prevents regressions in change-review diff/approval logic
+REVIEW_FILES=$(printf "%s\n" "$STAGED_FILES" | grep -E 'change-review|ChangeReviewPanel|use-change-review-store|diff-style-factory|InlineDiffViewer' || true)
+if [ -n "$REVIEW_FILES" ]; then
+  echo "change-review related files changed — running tests..."
+  npx vitest run test/regression/change-review/ test/unit/handlers/change-review.test.ts --reporter=dot 2>&1 | tail -5
+fi

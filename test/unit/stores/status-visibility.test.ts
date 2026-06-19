@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import type { SessionStatus } from "../../../src/mainview/types";
 
+const uiDialogMocks = vi.hoisted(() => ({
+  registerUIRequest: vi.fn(),
+  clearPendingBySession: vi.fn(),
+}));
+
 vi.mock("zustand/middleware", () => ({
   persist: (fn: unknown) => fn,
 }));
@@ -126,8 +131,8 @@ vi.mock("../../../src/mainview/stores/use-rpc-debug-store", () => ({
 vi.mock("../../../src/mainview/stores/use-ui-dialog-store", () => ({
   useUIDialogStore: {
     getState: vi.fn(() => ({
-      registerUIRequest: vi.fn(),
-      clearPendingBySession: vi.fn(),
+      registerUIRequest: uiDialogMocks.registerUIRequest,
+      clearPendingBySession: uiDialogMocks.clearPendingBySession,
     })),
   },
 }));
@@ -154,6 +159,7 @@ vi.mock("../../../src/mainview/lib/message-mapper", () => ({
 }));
 
 import { useSessionStore } from "../../../src/mainview/stores/use-session-store";
+import { clearSessionFetchInitCache } from "../../../src/mainview/stores/session-initial-state";
 import { apiClient } from "../../../src/mainview/lib/api-client";
 import { handleAgentEvent } from "../../../src/mainview/lib/agent-event-handler";
 
@@ -188,6 +194,9 @@ const resetStore = () => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  uiDialogMocks.registerUIRequest.mockClear();
+  uiDialogMocks.clearPendingBySession.mockClear();
+  clearSessionFetchInitCache("s1");
   resetStore();
 });
 
@@ -555,6 +564,64 @@ describe("Level 5: fetchInitialState does NOT overwrite streaming status", () =>
 
     await vi.waitFor(() => {
       expect(useSessionStore.getState().sessionStatusMap["s1"]).toBe("streaming");
+    });
+  });
+
+  it("restores pending UI requests from agent.getState before streaming status", async () => {
+    useSessionStore.setState({
+      activeSessionId: "s1",
+      sessionReady: { s1: true },
+      sessionStatusMap: { s1: "idle" },
+    });
+
+    (apiClient.call as ReturnType<typeof vi.fn>).mockImplementation((method: string) => {
+      if (method === "agent.getState") {
+        return Promise.resolve({
+          isStreaming: true,
+          isCompacting: false,
+          messageCount: 5,
+          pendingUIRequests: [
+            {
+              type: "extension_ui_request",
+              id: "ui-1",
+              method: "confirm",
+              title: "Dangerous Command",
+              message: "Allow rm -rf?",
+              timeout: 60_000,
+              toolCallId: "tool-1",
+              hookMeta: {
+                toolName: "bash",
+                matcher: "bash",
+                reason: "needs approval",
+              },
+            },
+          ],
+        });
+      }
+      if (method === "agent.getAvailableModels") return Promise.resolve([]);
+      if (method === "agent.getContextUsage")
+        return Promise.resolve({ tokens: 100, contextWindow: 8000 });
+      if (method === "agent.getSettings") return Promise.resolve(null);
+      if (method === "agent.getExtensions") return Promise.resolve([]);
+      if (method === "agent.getSkills") return Promise.resolve([]);
+      if (method === "agent.getDisabledSkills") return Promise.resolve([]);
+      return Promise.resolve({});
+    });
+
+    await useSessionStore.getState().fetchInitialState("s1");
+
+    await vi.waitFor(() => {
+      expect(uiDialogMocks.registerUIRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestId: "ui-1",
+          sessionId: "s1",
+          method: "confirm",
+          title: "Dangerous Command",
+          message: "Allow rm -rf?",
+          toolCallId: "tool-1",
+        }),
+      );
+      expect(useSessionStore.getState().sessionStatusMap["s1"]).toBe("permission");
     });
   });
 

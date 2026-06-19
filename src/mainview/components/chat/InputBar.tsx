@@ -33,6 +33,9 @@ interface InputBarProps {
   onPopupArrowDown?: () => void;
 }
 
+const COLLAPSED_INPUT_HEIGHT = 72;
+const EXPANDED_INPUT_HEIGHT = 200;
+
 export const InputBar = memo(
   forwardRef<InputBarHandle, InputBarProps>(function InputBar(
     {
@@ -183,7 +186,7 @@ export const InputBar = memo(
       resetIndex();
       if (textareaRef.current) {
         textareaRef.current.style.height = "auto";
-        textareaRef.current.style.height = expanded ? "200px" : "70px";
+        textareaRef.current.style.height = `${expanded ? EXPANDED_INPUT_HEIGHT : COLLAPSED_INPUT_HEIGHT}px`;
       }
     }, [setInputText, expanded, clearHistory, resetIndex]);
 
@@ -226,7 +229,7 @@ export const InputBar = memo(
       const rafId = requestAnimationFrame(() => {
         el.style.height = "auto";
         el.style.height = expanded
-          ? `${Math.max(el.scrollHeight, 200)}px`
+          ? `${Math.max(el.scrollHeight, EXPANDED_INPUT_HEIGHT)}px`
           : `${Math.min(el.scrollHeight, maxHeight ?? 160)}px`;
       });
       return () => cancelAnimationFrame(rafId);
@@ -237,7 +240,7 @@ export const InputBar = memo(
     return (
       <div
         className="flex-1 rounded-lg border border-border-primary bg-bg-elevated/95 focus-within:border-border-focus focus-within:shadow-sm overflow-hidden transition-colors"
-        style={{ minHeight: expanded ? "200px" : "80px" }}
+        style={{ minHeight: expanded ? `${EXPANDED_INPUT_HEIGHT}px` : `${COLLAPSED_INPUT_HEIGHT}px` }}
       >
         <div className="relative h-full flex">
           <textarea
@@ -257,7 +260,7 @@ export const InputBar = memo(
             className="flex-1 px-3 py-2 text-sm bg-transparent text-text-primary resize-none outline-none placeholder:text-text-tertiary"
             style={{
               maxHeight: expanded ? "none" : `${maxHeight}px`,
-              minHeight: expanded ? "200px" : "80px",
+              minHeight: expanded ? `${EXPANDED_INPUT_HEIGHT}px` : `${COLLAPSED_INPUT_HEIGHT}px`,
             }}
           />
           <div className="flex shrink-0 py-1.5 pr-1.5 gap-1.5">

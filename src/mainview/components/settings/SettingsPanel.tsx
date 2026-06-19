@@ -12,7 +12,13 @@ import { useSessionStore } from "../../stores/use-session-store";
 import { useTierStore, TIER_KEYS, type TierKey } from "../../stores/use-tier-store";
 import { ModelPickerButton } from "../model-picker/ModelPickerButton";
 import { Button, ModalDialog } from "../primitives";
-import { isProxyEnabled, enableProxy, disableProxy } from "../../lib/proxy";
+import {
+  getProxyStatus,
+  enableProxy,
+  disableProxy,
+  refreshProxyStatus,
+  type ProxyStatus,
+} from "../../lib/proxy";
 import { createLogger } from "../../../shared/lib/logger";
 
 const log = createLogger("settings");
@@ -139,17 +145,39 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   }, [sessionId, localTierModels, fetchTierConfig, effectiveTierModels]);
 
   // ---- 代理设置 ----
-  const [proxyLocalEnabled, setProxyLocalEnabled] = useState(isProxyEnabled());
+  const [proxyStatus, setProxyStatus] = useState<ProxyStatus>(() => getProxyStatus());
+  const [proxyStatusLoading, setProxyStatusLoading] = useState(false);
 
   const toggleProxy = useCallback(() => {
-    if (proxyLocalEnabled) {
-      disableProxy();
-      setProxyLocalEnabled(false);
+    if (proxyStatus.preferred) {
+      setProxyStatus(disableProxy());
     } else {
-      enableProxy();
-      setProxyLocalEnabled(true);
+      setProxyStatus(enableProxy());
+      setProxyStatusLoading(true);
+      refreshProxyStatus()
+        .then(setProxyStatus)
+        .catch((err: unknown) => {
+          log.warn("refresh proxy status failed", {
+            error: err instanceof Error ? err.message : String(err),
+          });
+          setProxyStatus(getProxyStatus());
+        })
+        .finally(() => setProxyStatusLoading(false));
     }
-  }, [proxyLocalEnabled]);
+  }, [proxyStatus.preferred]);
+
+  useEffect(() => {
+    setProxyStatusLoading(true);
+    refreshProxyStatus()
+      .then(setProxyStatus)
+      .catch((err: unknown) => {
+        log.warn("initial proxy status failed", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+        setProxyStatus(getProxyStatus());
+      })
+      .finally(() => setProxyStatusLoading(false));
+  }, []);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -343,12 +371,41 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
 
       <SectionHeader>{t("proxyTitle")}</SectionHeader>
 
-      <label className="flex items-start gap-3 py-2 px-1 rounded-lg hover:bg-surface-dim dark:hover:bg-surface-dim/40 cursor-pointer transition-colors">
+      <label
+        className={`flex items-start gap-3 py-2 px-1 rounded-lg transition-colors ${
+          proxyStatusLoading
+            ? "cursor-wait opacity-80"
+            : "cursor-pointer hover:bg-surface-dim dark:hover:bg-surface-dim/40"
+        }`}
+      >
         <div className="flex-1 min-w-0">
           <div className="text-[13px] text-text-primary font-medium">{t("proxyEnabled")}</div>
           <div className="text-[11px] text-text-tertiary mt-0.5">{t("proxyEnabledDesc")}</div>
+          <div
+            className={`text-[11px] mt-1 ${
+              proxyStatus.active
+                ? "text-status-success"
+                : proxyStatus.configured === false
+                  ? "text-status-warning"
+                  : "text-text-tertiary"
+            }`}
+          >
+            {proxyStatusLoading
+              ? t("proxyStatusChecking")
+              : proxyStatus.active
+                ? t("proxyStatusActive")
+                : proxyStatus.configured === false
+                  ? t("proxyStatusNotConfigured")
+                  : proxyStatus.preferred
+                    ? t("proxyStatusPreferred")
+                    : t("proxyStatusDisabled")}
+          </div>
         </div>
-        <ToggleSwitch checked={proxyLocalEnabled} onChange={toggleProxy} />
+        <ToggleSwitch
+          checked={proxyStatus.preferred}
+          onChange={toggleProxy}
+          disabled={proxyStatusLoading}
+        />
       </label>
     </ModalDialog>
   );
@@ -441,17 +498,27 @@ function BackoffPreview({
   );
 }
 
-function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: () => void }) {
+function ToggleSwitch({
+  checked,
+  onChange,
+  disabled = false,
+}: {
+  checked: boolean;
+  onChange: () => void;
+  disabled?: boolean;
+}) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
+      disabled={disabled}
       onClick={(e) => {
         e.stopPropagation();
+        if (disabled) return;
         onChange();
       }}
-      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+      className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 ${
         checked ? "bg-semantic-accent" : "bg-surface-hover dark:bg-text-secondary"
       }`}
     >

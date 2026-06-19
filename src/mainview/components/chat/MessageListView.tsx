@@ -5,6 +5,14 @@ import { Virtualizer, type VirtualizerHandle } from "virtua";
 import { MessageCard } from "./MessageCard";
 import type { ChatMessage } from "../../types";
 import { ALL_MEMORY_TYPE_KEYS } from "./memory-config";
+import {
+  MEMORY_HIDDEN_IN_CHAT,
+  isLspCustomType,
+  isLspVisibleInChat,
+} from "./lsp-constants";
+import { MEMORY_CUSTOM_TYPES } from "./MemoryCard";
+import { isBashBackgroundProcessType } from "./bash-background-process";
+import { CHAT_LIST_ITEM_CLASS } from "./chat-layout-classes";
 import { useChatStore } from "../../stores/use-chat-store";
 import { useSubagentStore } from "../../stores/use-subagent-store";
 import { useSessionStore } from "../../stores/use-session-store";
@@ -113,6 +121,26 @@ export function buildProcessedMessages(
       continue;
     }
 
+    // Skip custom messages where ALL blocks would be hidden by MessageCard,
+    // so we don't render an empty wrapper div in the DOM.
+    if (msg.content.some((b) => b.type === "custom")) {
+      const allHidden = msg.content.every((b) => {
+        if (b.type !== "custom") return false;
+        if (MEMORY_HIDDEN_IN_CHAT.has(b.customType)) return true;
+        if (isLspCustomType(b.customType) && !isLspVisibleInChat(b.customType)) return true;
+        if (
+          !MEMORY_CUSTOM_TYPES.has(b.customType) &&
+          !isLspCustomType(b.customType) &&
+          !isBashBackgroundProcessType(b.customType) &&
+          b.customType !== "step_snapshot" &&
+          b.customType !== "supervisor_goal_complete"
+        )
+          return true;
+        return false;
+      });
+      if (allHidden) continue;
+    }
+
     result.push({ msg });
   }
 
@@ -127,6 +155,7 @@ function getCardLabel(msg: ChatMessage, t: (key: string) => string): string | un
     );
     if (!custom) return undefined;
     switch (custom.customType) {
+      case "bash_background_process":
       case "bash_background_exit":
         return t("sideNav.backgroundProcess");
       case "lsp_diagnostics":
@@ -207,7 +236,7 @@ export const MessageListView = memo(function MessageListView({
   }, [messages, t, activeSessionId]);
   const processedMessages = useMemo(() => {
     if (!activeSessionId) return buildProcessedMessages(messages, showMemoryEntries);
-    const revision = computeMessagesRevision(messages);
+    const revision = `${computeMessagesRevision(messages)}:memory:${showMemoryEntries ? "1" : "0"}`;
     const cached = _processedMessagesCache.get(activeSessionId);
     if (cached && cached.revision === revision) {
       return cached.result;
@@ -270,7 +299,7 @@ export const MessageListView = memo(function MessageListView({
           if (item.hide) return <div key={item.msg.id} style={{ height: 0 }} />;
           const meta = cardMeta.get(item.msg.id);
           return (
-            <div key={item.msg.id} data-msg-id={item.msg.id} className="py-0.5 pl-1 pr-1.5">
+            <div key={item.msg.id} data-msg-id={item.msg.id} className={CHAT_LIST_ITEM_CLASS}>
               <MessageCard
                 message={item.msg}
                 cardLabel={meta?.cardLabel}

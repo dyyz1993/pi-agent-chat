@@ -5,6 +5,7 @@ import * as path from "path";
 
 export type DelegateSessionType = "coordinator" | "subagent";
 export type CoordinatorSessionCreatedDelegateType = DelegateSessionType | "fork";
+export type DelegateReplyMode = "auto" | "interrupt" | "followUp";
 
 export interface CoordinatorSessionCreatedPayload {
   parentSessionId: string;
@@ -73,16 +74,20 @@ export async function writeDelegateSessionHeader(options: {
   createdAt?: number;
   timestamp?: string;
 }): Promise<void> {
+  const timestamp = options.timestamp ?? new Date().toISOString();
   const headerEntry = JSON.stringify({
     type: "session",
     version: 3,
     id: options.newSessionId,
-    timestamp: options.timestamp ?? new Date().toISOString(),
+    timestamp,
     cwd: options.projectPath,
     delegateParentSessionId: options.parentSessionId,
   });
   const delegateInfoEntry = JSON.stringify({
     type: "delegate_info",
+    id: "delegate_info",
+    parentId: null,
+    timestamp,
     delegateParentSessionId: options.parentSessionId,
     parentSessionPath: options.parentSessionPath,
     delegateType: options.delegateType,
@@ -118,8 +123,20 @@ export function buildCoordinatorDelegatePrompt(options: {
   title: string;
   task: string;
   projectPath: string;
+  replyMode?: DelegateReplyMode;
 }): string {
   const projectName = options.projectPath.split("/").pop() ?? options.projectPath;
+  const replyMode = options.replyMode ?? "interrupt";
+  const replyModeInstruction =
+    replyMode === "followUp"
+      ? "回传会排队到委派方当前轮结束后处理。"
+      : replyMode === "auto"
+        ? "委派方空闲时会立即处理回传；忙碌时会排队处理。"
+        : "回传会作为打断式消息插入委派方，委派方不需要轮询状态。";
+  const replyModeParamLine =
+    replyMode === "auto"
+      ? "   - mode: 可省略，由委派方创建时的默认回传策略决定"
+      : `   - mode: ${replyMode === "interrupt" ? "steer" : "followUp"}`;
   return [
     `[系统提示] 你是一个被委派的后台任务会话。`,
     ``,
@@ -134,9 +151,12 @@ export function buildCoordinatorDelegatePrompt(options: {
     `1. 你是独立执行任务的助手，专注于完成委派给你的任务`,
     `2. 执行完毕后，请明确总结你的工作成果`,
     `3. 如果遇到问题无法继续，请说明原因`,
-    `4. 如需向委派方反馈中间进度或最终结果，请使用 session_delegate_send 工具：`,
+    `4. 这是异步委派任务；委派方不会轮询你的状态，也不应该反复调用 session_delegate_status 等你完成。你有中间进度或最终结果时，必须主动使用 session_delegate_send 工具回传给委派方：`,
     `   - targetSessionId: ${options.parentSessionId}`,
     `   - message: 你要反馈的内容`,
+    replyModeParamLine,
+    `5. 本次委派回传策略: ${replyMode}。${replyModeInstruction}`,
+    `6. 最终结果发送成功后，不要等待委派方继续查询状态；除非任务本身要求继续等待，否则直接结束本轮。`,
     ``,
     `---`,
     ``,
@@ -203,13 +223,15 @@ export function buildCoordinatorSessionCreatedEvent(options: {
 }
 
 export function formatDelegateElapsed(createdAt: number, now = Date.now()): string {
-  const elapsedMs = Math.max(0, now - createdAt);
+  if (now < createdAt) return "0s";
+  const elapsedMs = now - createdAt;
   return elapsedMs < 60000
-    ? `${Math.round(elapsedMs / 1000)}s`
+    ? `${Math.max(1, Math.ceil(elapsedMs / 1000))}s`
     : `${Math.round(elapsedMs / 60000)}m`;
 }
 
 export function wrapDelegateReply(options: {
+  sourceSessionId: string;
   targetSessionId: string;
   title: string;
   sequence: number;
@@ -218,7 +240,7 @@ export function wrapDelegateReply(options: {
   message: string;
 }): string {
   return [
-    `<delegate-reply from="${options.targetSessionId}" title="${options.title}" sequence="${options.sequence}" createdAt="${options.createdAt}" elapsed="${options.elapsed}" historyCount="${options.sequence}">`,
+    `<delegate-reply from="${options.sourceSessionId}" sessionId="${options.sourceSessionId}" targetSessionId="${options.targetSessionId}" title="${options.title}" sequence="${options.sequence}" createdAt="${options.createdAt}" elapsed="${options.elapsed}" historyCount="${options.sequence}">`,
     options.message,
     `</delegate-reply>`,
   ].join("\n");

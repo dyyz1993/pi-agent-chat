@@ -1,6 +1,7 @@
 /**
  * Proxy route handlers for the web gateway.
- * Routes: /__proxy__/{host:port/path}, POST /api/proxy-check, POST /api/proxy-register
+ * Routes: /__proxy__/{host:port/path}, GET /api/proxy-status, POST /api/proxy-check,
+ * POST /api/proxy-register
  *
  * All proxy routes are registered BEFORE auth so they don't require a token.
  */
@@ -23,6 +24,13 @@ export interface ProxyRouteContext {
  */
 export async function handleProxyRoute(ctx: ProxyRouteContext): Promise<boolean> {
   const { url, req, res, proxyRegistrar } = ctx;
+
+  // 代理能力检测：前端设置面板用它区分“用户想开启”和“服务端实际可用”
+  if (url.pathname === "/api/proxy-status" && req.method === "GET") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ configured: Boolean(proxyRegistrar) }));
+    return true;
+  }
 
   // 端口代理重定向（不需要鉴权，iframe 直接访问）
   if (url.pathname.startsWith("/__proxy__/")) {
