@@ -129,6 +129,7 @@ interface SessionState {
   togglePinSession: (sessionId: string) => void;
   restoreFromPersisted: () => Promise<boolean>;
   updateSessionContext: (sessionId: string, usage: Partial<ContextUsage>) => void;
+  refreshSessionContext: (sessionId: string) => Promise<void>;
   updateSessionStatus: (sessionId: string, status: SessionStatus) => void;
   restoreContextFromHistory: (sessionId: string) => void;
   fetchInitialState: (sessionId: string) => void;
@@ -527,10 +528,25 @@ export const useSessionStore = create<SessionState>()(
       updateSessionContext: (sessionId, usage) => {
         set((s) => {
           const prev = s.sessionContextMap[sessionId] || { tokens: null, contextWindow: 0 };
+          const next = { ...prev, ...usage };
+          if (
+            usage.contextWindow !== undefined &&
+            usage.contextWindow <= 0 &&
+            prev.contextWindow > 0
+          ) {
+            next.contextWindow = prev.contextWindow;
+          }
           return {
-            sessionContextMap: { ...s.sessionContextMap, [sessionId]: { ...prev, ...usage } },
+            sessionContextMap: { ...s.sessionContextMap, [sessionId]: next },
           };
         });
+      },
+
+      refreshSessionContext: async (sessionId) => {
+        const usage = await apiClient.call("agent.getContextUsage", { sessionId });
+        if (usage) {
+          get().updateSessionContext(sessionId, usage);
+        }
       },
 
       updateSessionStatus: (sessionId, status) => {
@@ -567,10 +583,7 @@ export const useSessionStore = create<SessionState>()(
           .call("agent.getContextUsage", { sessionId })
           .then((r) => {
             if (r && r.tokens != null) {
-              get().updateSessionContext(sessionId, {
-                tokens: r.tokens,
-                ...(r.contextWindow > 0 ? { contextWindow: r.contextWindow } : {}),
-              });
+              get().updateSessionContext(sessionId, r);
             }
           })
           .catch(() => {});
@@ -950,12 +963,7 @@ apiClient.onReconnect(() => {
                 .call("agent.getContextUsage", { sessionId: activeSessionId })
                 .then((r) => {
                   if (r && r.tokens != null) {
-                    useSessionStore
-                      .getState()
-                      .updateSessionContext(activeSessionId, {
-                        tokens: r.tokens,
-                        ...(r.contextWindow > 0 ? { contextWindow: r.contextWindow } : {}),
-                      });
+                    useSessionStore.getState().updateSessionContext(activeSessionId, r);
                   }
                 })
                 .catch(() => {});

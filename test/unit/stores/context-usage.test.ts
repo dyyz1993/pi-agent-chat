@@ -300,7 +300,7 @@ describe("context usage tracking", () => {
       expect(ctx!.tokens).toBeNull();
     });
 
-    it("does not change status — compaction_end preserves current status", () => {
+    it("clears compacting status when compaction_end arrives without active streaming", () => {
       useSessionStore.setState({ sessionStatusMap: { [SID]: "compacting" } });
 
       handleAgentEvent(SID, {
@@ -308,9 +308,9 @@ describe("context usage tracking", () => {
         result: { tokensAfter: 3000 },
       } as Parameters<typeof handleAgentEvent>[1]);
 
-      // compaction_end intentionally does NOT reset status to idle —
-      // status transitions are managed by agent_end / streaming lifecycle
-      expect(useSessionStore.getState().sessionStatusMap[SID]).toBe("compacting");
+      // Without an active streaming assistant message, the running compaction card can disappear
+      // immediately; streaming compactions still defer status cleanup to agent_end.
+      expect(useSessionStore.getState().sessionStatusMap[SID]).toBe("idle");
     });
   });
 

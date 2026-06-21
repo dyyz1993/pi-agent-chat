@@ -10,6 +10,7 @@ import { useStatusStore, type MCPServerInfo } from "../stores/use-status-store";
 import { useRetryStore } from "../stores/use-retry-store";
 import { useUIDialogStore } from "../stores/use-ui-dialog-store";
 import { useChangeReviewStore } from "../stores/use-change-review-store";
+import { useCompactionStore } from "../stores/use-compaction-store";
 import { notificationGateway } from "./notification-gateway";
 import { apiClient } from "./api-client";
 import { batchMessageUpdate, flushNow } from "./message-batcher";
@@ -36,6 +37,33 @@ export const toolCallArgsMap: Record<string, string> = {};
 // When agent_end fires for these sessions, a force reload is triggered to sync
 // messages with the compacted JSONL data.
 const compactionDeferredSessions = new Set<string>();
+const compactionCompletionTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const MIN_COMPACTION_RUNNING_CARD_MS = 1800;
+
+function clearCompactionCompletionTimer(sessionId: string): void {
+  const timer = compactionCompletionTimers.get(sessionId);
+  if (!timer) return;
+  clearTimeout(timer);
+  compactionCompletionTimers.delete(sessionId);
+}
+
+function finishCompactionAfterMinimumVisibility(sessionId: string, finish: () => void): void {
+  clearCompactionCompletionTimer(sessionId);
+  const activity = useCompactionStore.getState().activitiesBySession[sessionId];
+  const elapsed = activity?.status === "running" ? Date.now() - activity.startedAt : Infinity;
+  const delay = Math.max(0, MIN_COMPACTION_RUNNING_CARD_MS - elapsed);
+
+  if (delay <= 0) {
+    finish();
+    return;
+  }
+
+  const timer = setTimeout(() => {
+    compactionCompletionTimers.delete(sessionId);
+    finish();
+  }, delay);
+  compactionCompletionTimers.set(sessionId, timer);
+}
 
 const pendingPrefetchMap = new Map<
   string,
@@ -47,11 +75,12 @@ function refreshAuthoritativeContextUsage(sessionId: string): void {
   Promise.resolve(apiClient.call("agent.getContextUsage", { sessionId }))
     .then((usage) => {
       if (!usage) return;
-      const update: { tokens?: number | null; contextWindow?: number } = {};
-      if (usage.tokens !== undefined) update.tokens = usage.tokens;
-      if (usage.contextWindow > 0) update.contextWindow = usage.contextWindow;
-      if (update.tokens !== undefined || update.contextWindow !== undefined) {
-        useSessionStore.getState().updateSessionContext(sessionId, update);
+      if (usage.tokens !== undefined || usage.contextWindow > 0) {
+        const { contextWindow, ...rest } = usage;
+        useSessionStore.getState().updateSessionContext(sessionId, {
+          ...rest,
+          ...(contextWindow > 0 ? { contextWindow } : {}),
+        });
       }
     })
     .catch((err) => {
@@ -112,6 +141,8 @@ export function cleanupEventHandlerMaps(sessionId: string): void {
 
   // Remove from compaction deferred set
   compactionDeferredSessions.delete(sessionId);
+  clearCompactionCompletionTimer(sessionId);
+  useCompactionStore.getState().clear(sessionId);
 }
 
 function replaceMsgAt(
@@ -451,7 +482,12 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     if (compactionDeferredSessions.has(sessionId)) {
       compactionDeferredSessions.delete(sessionId);
       log.info("agent_end → deferred compaction reload", { sessionId });
-      useChatStore.getState().loadSessionMessages(sessionId, { force: true });
+      void useChatStore
+        .getState()
+        .loadSessionMessages(sessionId, { force: true })
+        .finally(() => {
+          useCompactionStore.getState().clear(sessionId);
+        });
     }
 
     const crashReason = (event as { reason?: string }).reason;
@@ -514,6 +550,8 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
   }
 
   if (event.type === "compaction_start") {
+    clearCompactionCompletionTimer(sessionId);
+    useCompactionStore.getState().markRunning(sessionId, event.reason);
     storeGet().updateSessionStatus(sessionId, "compacting");
     return;
   }
@@ -522,30 +560,42 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
     log.info("compaction_end → force reload", { sessionId });
     refreshAuthoritativeContextUsage(sessionId);
 
-    if (event.aborted || (event.reason && event.reason !== "success")) {
-      const errMsg = event.reason ?? "压缩失败";
-      notificationGateway.emit({
-        type: "session_error",
-        sessionId,
-        title: "上下文压缩失败",
-        body: errMsg,
-        level: "warning",
-      });
-    }
+    finishCompactionAfterMinimumVisibility(sessionId, () => {
+      if (event.aborted || (event.reason && event.reason !== "success")) {
+        const errMsg = event.reason ?? "压缩失败";
+        useCompactionStore
+          .getState()
+          .markFinished(sessionId, event.aborted ? "aborted" : "failed", errMsg);
+        notificationGateway.emit({
+          type: "session_error",
+          sessionId,
+          title: "上下文压缩失败",
+          body: errMsg,
+          level: "warning",
+        });
+      } else {
+        useCompactionStore.getState().markFinished(sessionId, "completed", event.reason);
+      }
 
-    // ❌ 不再强制切到 idle，保持当前状态（streaming 或其他）
-    const chatState = useChatStore.getState();
-    const currentMsgs = chatState.messagesBySession[sessionId] || [];
-    const isActivelyStreaming = currentMsgs.some(
-      (m) => m.role === "assistant" && m.isStreaming === true,
-    );
-    if (isActivelyStreaming) {
-      // Defer the reload: agent_end will trigger it once streaming finishes.
-      compactionDeferredSessions.add(sessionId);
-      log.info("compaction_end → session streaming, deferred reload to agent_end", { sessionId });
-    } else {
-      chatState.loadSessionMessages(sessionId, { force: true });
-    }
+      // ❌ 不再强制切到 idle，保持当前状态（streaming 或其他）
+      const chatState = useChatStore.getState();
+      const currentMsgs = chatState.messagesBySession[sessionId] || [];
+      const isActivelyStreaming = currentMsgs.some(
+        (m) => m.role === "assistant" && m.isStreaming === true,
+      );
+      if (isActivelyStreaming) {
+        // Defer the reload: agent_end will trigger it once streaming finishes.
+        compactionDeferredSessions.add(sessionId);
+        log.info("compaction_end → session streaming, deferred reload to agent_end", {
+          sessionId,
+        });
+      } else {
+        void chatState.loadSessionMessages(sessionId, { force: true }).finally(() => {
+          useCompactionStore.getState().clear(sessionId);
+        });
+        storeGet().updateSessionStatus(sessionId, "idle");
+      }
+    });
     return;
   }
 
@@ -596,7 +646,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
   }
 
   if (event.type === "extension_ui_request") {
-    const INTERACTIVE = new Set(["confirm", "input", "select", "editor"]);
+    const INTERACTIVE = new Set(["askUserQuestion", "confirm", "input", "select", "editor"]);
     const method = event.method;
     const id = event.id;
     if (!id || !method) return;
@@ -605,25 +655,31 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       useUIDialogStore.getState().registerUIRequest({
         requestId: id,
         sessionId,
-        method: method as "confirm" | "input" | "select" | "editor",
+        method: method as "askUserQuestion" | "confirm" | "input" | "select" | "editor",
         title: event.title,
         message: event.message,
         options: event.options,
+        questions: event.questions,
         multiple: event.multiple,
         placeholder: event.placeholder,
         prefill: event.prefill,
         timeout: event.timeout,
         toolCallId: event.toolCallId,
+        confirmText: event.confirmText,
+        cancelText: event.cancelText,
         hookMeta: (
           event as {
             hookMeta?: {
               toolName: string;
               matcher: string;
+              description?: string;
               command?: string;
               hookCommand?: string;
               eventName?: string;
               source?: string;
               reason: string;
+              confirmText?: string;
+              cancelText?: string;
             };
           }
         ).hookMeta,
@@ -1172,7 +1228,7 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
       timestamp: Date.now(),
     });
 
-    if (event.customType === "memory_prefetch_result") {
+    if (event.customType === "memory_prefetch_result" || event.customType === "memory_inject") {
       const data = event.data as { summary?: string; snippet?: string } | undefined;
       if (data) {
         memoryStore.addInjected(sessionId, {

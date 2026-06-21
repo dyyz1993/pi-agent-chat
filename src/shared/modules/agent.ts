@@ -282,7 +282,76 @@ export interface AgentMethods {
   };
   "agent.getContextUsage": {
     params: { sessionId: string };
-    result: { tokens: number | null; contextWindow: number; percent: number | null };
+    result: {
+      tokens: number | null;
+      contextWindow: number;
+      percent: number | null;
+      breakdown?: Array<{
+        id:
+          | "system_base"
+          | "tools"
+          | "mcp_tools"
+          | "context_files"
+          | "skills"
+          | "agents"
+          | "tool_inputs"
+          | "tool_outputs"
+          | "conversation"
+          | "thinking"
+          | "memory"
+          | "rules"
+          | "lsp"
+          | "provider_system"
+          | "provider_messages"
+          | "provider_tools"
+          | "provider_options"
+          | "unclassified";
+        label: string;
+        tokens: number;
+        source: "core" | "extension";
+        estimated: boolean;
+        details?: Array<{ label: string; tokens: number }>;
+        compaction?: {
+          count: number;
+          tokensBefore: number;
+          summaryTokens: number;
+          estimatedSavedTokens: number;
+        };
+      }>;
+      providerRequest?: {
+        version: 1;
+        provider: string;
+        modelId: string;
+        api?: string;
+        timestamp: string;
+        payloadChars: number;
+        payloadTokens: number;
+        topLevelKeys: string[];
+        sections: Array<{
+          id: "system" | "messages" | "tools" | "options";
+          label: string;
+          chars: number;
+          tokens: number;
+          count?: number;
+        }>;
+        toolDefinitions?: Array<{
+          name: string;
+          chars: number;
+          tokens: number;
+        }>;
+        toolInteractions?: Array<{
+          name: string;
+          inputCount: number;
+          inputChars: number;
+          inputTokens: number;
+          avgInputTokens: number;
+          outputCount: number;
+          outputChars: number;
+          outputTokens: number;
+          avgOutputTokens: number;
+        }>;
+      };
+    };
   };
   "agent.getTierModels": {
     params: { sessionId: string };
@@ -523,11 +592,14 @@ export interface ChannelDataEvent {
 export interface HookMeta {
   toolName: string;
   matcher: string;
+  description?: string;
   command?: string;
   hookCommand?: string;
   eventName?: string;
   source?: string;
   reason: string;
+  confirmText?: string;
+  cancelText?: string;
 }
 
 export interface PermissionMeta {
@@ -539,10 +611,30 @@ export interface PermissionMeta {
   relativeTo: string;
 }
 
+export interface AskUserQuestionOption {
+  label: string;
+  description: string;
+  preview?: string;
+}
+
+export interface AskUserQuestion {
+  id: string;
+  question: string;
+  header: string;
+  options: AskUserQuestionOption[];
+  multiSelect?: boolean;
+}
+
+export interface AskUserQuestionAnswer {
+  selected: string[];
+  text?: string;
+}
+
 export interface ExtensionUIRequestEvent {
   type: "extension_ui_request";
   id: string;
   method:
+    | "askUserQuestion"
     | "select"
     | "confirm"
     | "input"
@@ -555,11 +647,14 @@ export interface ExtensionUIRequestEvent {
   title?: string;
   message?: string;
   options?: string[];
+  questions?: AskUserQuestion[];
   multiple?: boolean;
   placeholder?: string;
   prefill?: string;
   timeout?: number;
   toolCallId?: string;
+  confirmText?: string;
+  cancelText?: string;
   hookMeta?: HookMeta;
   notifyType?: "info" | "warning" | "error";
   statusKey?: string;

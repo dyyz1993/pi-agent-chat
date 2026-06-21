@@ -4,6 +4,7 @@ import type {
   SessionStatus as SharedSessionStatus,
   SessionMeta as SharedSessionMeta,
 } from "../../shared/modules/project";
+import type { AskUserQuestion } from "../../shared/modules/agent";
 export type SessionStatus = SharedSessionStatus;
 
 // 以下类型权威定义在 shared/modules/project.ts，前端 re-export 保持单一来源。
@@ -41,7 +42,7 @@ export type FilePreview = {
 
 export type ToolExecutionStatus = "running" | "done" | "error" | "background" | "unknown";
 
-export type UIMethod = "confirm" | "select" | "input" | "editor" | "notify";
+export type UIMethod = "askUserQuestion" | "confirm" | "select" | "input" | "editor" | "notify";
 
 export type UIInteractionStatus = "pending" | "responded" | "dismissed" | "notified";
 
@@ -63,6 +64,7 @@ export type UIInteractionBlock = {
   title?: string;
   message?: string;
   options?: string[];
+  questions?: AskUserQuestion[];
   multiple?: boolean;
   placeholder?: string;
   prefill?: string;
@@ -73,14 +75,19 @@ export type UIInteractionBlock = {
   hookMeta?: {
     toolName: string;
     matcher: string;
+    description?: string;
     command?: string;
     hookCommand?: string;
     eventName?: string;
     source?: string;
     reason: string;
+    confirmText?: string;
+    cancelText?: string;
   };
   permissionMeta?: PermissionMeta;
   timeout?: number;
+  confirmText?: string;
+  cancelText?: string;
 };
 
 export type ContentBlock =
@@ -88,29 +95,36 @@ export type ContentBlock =
   | { type: "thinking"; thinking: string }
   | { type: "toolCall"; id: string; name: string; input: string }
   | {
-      type: "toolResult";
-      toolCallId: string;
-      toolName: string;
-      content: string;
-      isError?: boolean;
-      args?: string;
-      details?: unknown;
-    }
+    type: "toolResult";
+    toolCallId: string;
+    toolName: string;
+    content: string;
+    isError?: boolean;
+    args?: string;
+    details?: unknown;
+  }
   | {
-      type: "toolExecution";
-      toolCallId: string;
-      toolName: string;
-      args: string;
-      status: ToolExecutionStatus;
-      output?: string;
-      details?: unknown;
-      timeout?: number;
-      startedAt?: number;
-      endedAt?: number;
-      description?: string;
-    }
+    type: "toolExecution";
+    toolCallId: string;
+    toolName: string;
+    args: string;
+    status: ToolExecutionStatus;
+    output?: string;
+    details?: unknown;
+    timeout?: number;
+    startedAt?: number;
+    endedAt?: number;
+    description?: string;
+  }
   | { type: "custom"; customType: string; data: unknown }
-  | { type: "compactionSummary"; summary: string; tokensBefore?: number }
+  | {
+    type: "compactionSummary";
+    summary: string;
+    tokensBefore?: number;
+    status?: "running" | "completed" | "failed" | "aborted";
+    reason?: string;
+    startedAt?: number;
+  }
   | { type: "imageBlock"; url: string; alt?: string }
   | UIInteractionBlock;
 
@@ -152,6 +166,84 @@ export type EditingNode = { path: string; type: EditingType };
 export type ContextUsage = {
   tokens: number | null;
   contextWindow: number;
+  percent?: number | null;
+  breakdown?: ContextUsageBreakdownItem[];
+  providerRequest?: ProviderRequestContextUsage;
+};
+
+export type ProviderRequestContextUsage = {
+  version: 1;
+  provider: string;
+  modelId: string;
+  api?: string;
+  timestamp: string;
+  payloadChars: number;
+  payloadTokens: number;
+  topLevelKeys: string[];
+  sections: ProviderRequestContextUsageSection[];
+  toolDefinitions?: ProviderRequestToolDefinitionUsage[];
+  toolInteractions?: ProviderRequestToolInteractionUsage[];
+};
+
+export type ProviderRequestContextUsageSection = {
+  id: "system" | "messages" | "tools" | "options";
+  label: string;
+  chars: number;
+  tokens: number;
+  count?: number;
+};
+
+export type ProviderRequestToolDefinitionUsage = {
+  name: string;
+  chars: number;
+  tokens: number;
+};
+
+export type ProviderRequestToolInteractionUsage = {
+  name: string;
+  inputCount: number;
+  inputChars: number;
+  inputTokens: number;
+  avgInputTokens: number;
+  outputCount: number;
+  outputChars: number;
+  outputTokens: number;
+  avgOutputTokens: number;
+};
+
+export type ContextUsageBreakdownId =
+  | "system_base"
+  | "tools"
+  | "mcp_tools"
+  | "context_files"
+  | "skills"
+  | "agents"
+  | "tool_inputs"
+  | "tool_outputs"
+  | "conversation"
+  | "thinking"
+  | "memory"
+  | "rules"
+  | "lsp"
+  | "provider_system"
+  | "provider_messages"
+  | "provider_tools"
+  | "provider_options"
+  | "unclassified";
+
+export type ContextUsageBreakdownItem = {
+  id: ContextUsageBreakdownId;
+  label: string;
+  tokens: number;
+  source: "core" | "extension";
+  estimated: boolean;
+  details?: Array<{ label: string; tokens: number }>;
+  compaction?: {
+    count: number;
+    tokensBefore: number;
+    summaryTokens: number;
+    estimatedSavedTokens: number;
+  };
 };
 
 export type ConfiguredPath = {
@@ -206,23 +298,23 @@ export type TimelineItem =
   | { itemType: "userMessage"; messageId: string; text: string; timestamp: number }
   | { itemType: "assistantText"; blockIndex: number; text: string; messageId: string }
   | {
-      itemType: "toolExecution";
-      blockIndex: number;
-      toolCallId: string;
-      toolName: string;
-      args: string;
-      status: ToolExecutionStatus;
-      output?: string;
-      details?: unknown;
-      messageId: string;
-    }
+    itemType: "toolExecution";
+    blockIndex: number;
+    toolCallId: string;
+    toolName: string;
+    args: string;
+    status: ToolExecutionStatus;
+    output?: string;
+    details?: unknown;
+    messageId: string;
+  }
   | {
-      itemType: "customEntry";
-      entryId: string;
-      customType: string;
-      data: unknown;
-      timestamp: number;
-    };
+    itemType: "customEntry";
+    entryId: string;
+    customType: string;
+    data: unknown;
+    timestamp: number;
+  };
 
 /** A "Turn" = one user message + the assistant's full response (text blocks + tool executions) */
 export type TimelineTurn = {

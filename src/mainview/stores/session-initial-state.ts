@@ -1,5 +1,6 @@
 import type { StoreApi } from "zustand";
 import { apiClient } from "../lib/api-client";
+import { createStartupTrace } from "../lib/startup-monitor";
 import { useAppStore } from "./use-app-store";
 import { useChatStore } from "./use-chat-store";
 import {
@@ -15,6 +16,7 @@ import { useAgentStore } from "./use-agent-store";
 import { useSupervisorStore } from "./use-supervisor-store";
 import { useSessionQueueStore } from "./use-session-queue-store";
 import { useUIDialogStore } from "./use-ui-dialog-store";
+import { useCompactionStore } from "./use-compaction-store";
 import type { ContextUsage, SessionMeta, SessionStatus } from "../types";
 import type { ExtensionUIRequestEvent } from "../../shared/modules/agent";
 
@@ -101,13 +103,14 @@ const fetchInitPromiseMap = new Map<string, Promise<void>>();
 const fetchInitTimestampMap = new Map<string, number>();
 const FETCH_INIT_TTL_MS = 30_000;
 
-type InteractiveUIMethod = "confirm" | "input" | "select" | "editor";
+type InteractiveUIMethod = "askUserQuestion" | "confirm" | "input" | "select" | "editor";
 
 function isInteractiveUIRequest(
   request: ExtensionUIRequestEvent,
 ): request is ExtensionUIRequestEvent & { method: InteractiveUIMethod } {
   return (
     request.method === "confirm" ||
+    request.method === "askUserQuestion" ||
     request.method === "input" ||
     request.method === "select" ||
     request.method === "editor"
@@ -140,12 +143,15 @@ export function createFetchInitialStateAction({
         ageMs: Date.now() - lastFetch,
       });
       return Promise.resolve();
-    }
-
-    const promise = (async () => {
-      try {
-        const t0 = performance.now();
-        perfLog.info("[fetchInit] begin (batched, maxConcurrency=3)", { sessionId });
+	    }
+	
+	    const promise = (async () => {
+	      const trace = createStartupTrace("fetch-init", { sessionId });
+	      const t0 = performance.now();
+	      try {
+	        perfLog.info("[fetchInit] begin (batched, maxConcurrency=3)", { sessionId });
+	
+	        trace.mark("begin");
 
         set({ modelStateLoading: true });
 
@@ -158,6 +164,7 @@ export function createFetchInitialStateAction({
               sessionId,
               ms: Math.round(performance.now() - t0),
             });
+            trace.mark("p1-getstate-done", { ms: Math.round(performance.now() - t0) });
             const result = rawResult as AgentStateResult;
             if (!result) return;
 
@@ -188,18 +195,20 @@ export function createFetchInitialStateAction({
                   title: request.title,
                   message: request.message,
                   options: request.options,
+                  questions: request.questions,
                   multiple: request.multiple,
                   placeholder: request.placeholder,
                   prefill: request.prefill,
                   timeout: request.timeout,
                   toolCallId: request.toolCallId,
+                  confirmText: request.confirmText,
+                  cancelText: request.cancelText,
                   hookMeta: request.hookMeta,
                   permissionMeta: request.permissionMeta,
                 });
               }
               get().updateSessionStatus(sessionId, "permission");
             } else if (result.isStreaming) {
-              // Pending user intervention is a stronger stop point than streaming.
               const currentStatus = get().sessionStatusMap[sessionId];
               if (currentStatus === "permission") {
                 // Do not overwrite a restored permission request.
@@ -252,6 +261,7 @@ export function createFetchInitialStateAction({
                 }
               }
             } else if (result.isCompacting) {
+              useCompactionStore.getState().markRunning(sessionId, "recovered");
               get().updateSessionStatus(sessionId, "compacting");
             } else {
               const currentStatus = get().sessionStatusMap[sessionId];
@@ -353,15 +363,11 @@ export function createFetchInitialStateAction({
           .catch(() => {});
 
         const handleContextRetry = (_attempt: number): void => {
-          // Only retry once — avoid infinite retry loops when CLI is dead
           apiClient
             .call("agent.getContextUsage", { sessionId })
             .then((r) => {
               if (r && (r.contextWindow > 0 || r.tokens != null)) {
-                const update: Partial<ContextUsage> = {};
-                if (r.contextWindow > 0) update.contextWindow = r.contextWindow;
-                if (r.tokens != null) update.tokens = r.tokens;
-                get().updateSessionContext(sessionId, update);
+                get().updateSessionContext(sessionId, r);
               }
             })
             .catch(() => {
@@ -383,17 +389,11 @@ export function createFetchInitialStateAction({
               setTimeout(() => handleContextRetry(1), 1500);
               return;
             }
-            const update: Partial<ContextUsage> = {};
-            if (r.contextWindow > 0) update.contextWindow = r.contextWindow;
-            if (r.tokens != null) {
-              update.tokens = r.tokens;
-            } else {
+            if (r.tokens == null) {
               setTimeout(() => handleContextRetry(1), 1500);
               return;
             }
-            if (update.contextWindow || update.tokens != null) {
-              get().updateSessionContext(sessionId, update);
-            }
+            get().updateSessionContext(sessionId, r);
           })
           .catch((err) => {
             log.warn("agent.getContextUsage failed in fetchInitialState", {
@@ -405,13 +405,13 @@ export function createFetchInitialStateAction({
           });
 
         await Promise.allSettled([modelsPromise, contextPromise, settingsPromise]);
+        trace.mark("p2-models-context-settings-done", { ms: Math.round(performance.now() - t0) });
 
         // --- Priority 3 (parallel, max 3) ---
         const extensionsPromise = apiClient.call("agent.getExtensions", { sessionId });
         const skillsPromise = apiClient.call("agent.getSkills", { sessionId });
         const disabledSkillsPromise = apiClient.call("agent.getDisabledSkills", {});
 
-        // 查找当前 session 的 projectPath
         const sessionMetaForPlugins = (() => {
           for (const sessions of Object.values(get().sessionsByProject)) {
             const found = sessions.find((s) => s.sessionId === sessionId);
@@ -515,6 +515,7 @@ export function createFetchInitialStateAction({
           disabledSkillsPromise,
           disabledPluginsPromise,
         ]);
+        trace.mark("p3-ext-skills-plugins-done", { ms: Math.round(performance.now() - t0) });
 
         // --- Priority 4 (parallel, max 3) ---
         const mcpPromise = apiClient.call("agent.getMcpServers", { sessionId });
@@ -587,6 +588,7 @@ export function createFetchInitialStateAction({
           });
 
         await Promise.allSettled([mcpPromise, queuePromise, agentChangePromise, supervisorPromise]);
+        trace.mark("p4-mcp-queue-supervisor-done", { ms: Math.round(performance.now() - t0) });
 
         // --- Priority 5 (parallel) ---
         const agentsPromise = apiClient.call("agent.getAgents", { sessionId });
@@ -728,6 +730,7 @@ export function createFetchInitialStateAction({
         fetchInitPromiseMap.delete(sessionId);
         fetchInitTimestampMap.set(sessionId, Date.now());
         set({ modelStateLoading: false });
+        trace.done("all-done", { totalMs: Math.round(performance.now() - t0) });
       }
     })();
 

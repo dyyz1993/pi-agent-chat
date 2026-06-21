@@ -1,5 +1,6 @@
 import type { StoreApi } from "zustand";
 import { apiClient } from "../lib/api-client";
+import { createStartupTrace } from "../lib/startup-monitor";
 import type { ModelInfo } from "./use-session-store";
 import { useSessionStore } from "./use-session-store";
 import type { ProjectTab, SessionMeta } from "../types";
@@ -67,6 +68,10 @@ export function createSetActiveSessionAction({
     const tSwitchStart = performance.now();
     const prevId = get().activeSessionId;
     if (!force && prevId === id) return;
+
+    const trace = id ? createStartupTrace("switch-session", { sessionId: id }) : null;
+    trace?.mark("begin");
+
     const skipCleanup = options?.skipCleanup ?? false;
 
     perfLog.info("[switch] === SESSION SWITCH START ===", {
@@ -86,6 +91,7 @@ export function createSetActiveSessionAction({
         prevId,
         ms: Math.round(performance.now() - t0),
       });
+      trace?.mark("cleanup-done", { prevId });
     } else if (skipCleanup && prevId && prevId !== id) {
       useChatStore.getState().saveInputDraft(prevId);
       perfLog.info("[switch] step-1 SKIPPED cleanup (fork scenario)", {
@@ -163,11 +169,13 @@ export function createSetActiveSessionAction({
           sessionId: id,
           ms: Math.round(performance.now() - tSubs),
         });
+        trace?.mark("setup-subs-done");
 
         const isAgentKnownRunning = isAgentStarted(id);
 
         if (isAgentKnownRunning) {
           perfLog.info("[switch] HOT (cached): agent.start SKIPPED", { sessionId: id });
+          trace?.mark("hot-path-skip-agent-start");
 
           set((s) => {
             const projectId = s.activeProjectId;
@@ -249,6 +257,11 @@ export function createSetActiveSessionAction({
               isHot,
               ms: Math.round(performance.now() - tAgentStart),
             });
+            trace?.mark("agent-start-done", {
+              status: result.status,
+              isHot,
+              ms: Math.round(performance.now() - tAgentStart),
+            });
 
             if (
               result.status === "already_running" ||
@@ -268,6 +281,7 @@ export function createSetActiveSessionAction({
 
               requestRulesSnapshot(id);
               get().fetchInitialState(id);
+              trace?.mark("fetch-initial-state-started");
 
               if (isHot) {
                 const cachedMsgs = useChatStore.getState().messagesBySession[id] || [];
@@ -294,10 +308,7 @@ export function createSetActiveSessionAction({
                       .call("agent.getContextUsage", { sessionId: id })
                       .then((r) => {
                         if (r && r.tokens != null) {
-                          useSessionStore.getState().updateSessionContext(id, {
-                            tokens: r.tokens,
-                            ...(r.contextWindow > 0 ? { contextWindow: r.contextWindow } : {}),
-                          });
+                          useSessionStore.getState().updateSessionContext(id, r);
                         }
                       })
                       .catch(() => {});
@@ -319,12 +330,16 @@ export function createSetActiveSessionAction({
                 perfLog.info("[switch] COLD: waiting for pre-loaded messages", {
                   sessionId: id,
                 });
+                trace?.mark("cold-preload-await");
                 const tLoad = performance.now();
                 preLoadPromise
                   .then(() => {
                     perfLog.info("[switch] COLD: pre-load confirmed", {
                       sessionId: id,
                       count: useChatStore.getState().messagesBySession[id]?.length,
+                      ms: Math.round(performance.now() - tLoad),
+                    });
+                    trace?.mark("cold-preload-msg-done", {
                       ms: Math.round(performance.now() - tLoad),
                     });
                     return useChatStore
@@ -336,10 +351,7 @@ export function createSetActiveSessionAction({
                       .call("agent.getContextUsage", { sessionId: id })
                       .then((r) => {
                         if (r && r.tokens != null) {
-                          useSessionStore.getState().updateSessionContext(id, {
-                            tokens: r.tokens,
-                            ...(r.contextWindow > 0 ? { contextWindow: r.contextWindow } : {}),
-                          });
+                          useSessionStore.getState().updateSessionContext(id, r);
                         }
                       })
                       .catch(() => {});
