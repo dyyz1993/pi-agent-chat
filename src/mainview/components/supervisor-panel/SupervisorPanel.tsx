@@ -18,6 +18,8 @@ const STATE_STYLES: Record<string, string> = {
 const KNOWN_GUARD_KEYS: Record<string, string> = {
   "incomplete-keywords": "incompleteKeywords",
 };
+const EMPTY_TASK_REPORTS: TaskReport[] = [];
+const EMPTY_TRIGGER_RECORDS: TriggerRecord[] = [];
 
 function getGuardLabel(t: TFunction<"status">, guardName: string): string {
   const key = KNOWN_GUARD_KEYS[guardName];
@@ -71,7 +73,12 @@ export function SupervisorPanel() {
   const { t } = useTranslation("status");
   const sessionId = useSessionStore((s) => s.activeSessionId);
   const sessionState = useSupervisorStore((s) => (sessionId ? s.bySession[sessionId] : null) ?? null);
-  const actions = useSupervisorStore((s) => s);
+  const enable = useSupervisorStore((s) => s.enable);
+  const disable = useSupervisorStore((s) => s.disable);
+  const forceContinue = useSupervisorStore((s) => s.forceContinue);
+  const requestPause = useSupervisorStore((s) => s.requestPause);
+  const cancelPause = useSupervisorStore((s) => s.cancelPause);
+  const fetchTriggerHistory = useSupervisorStore((s) => s.fetchTriggerHistory);
 
   return (
     <div className="h-full flex flex-col bg-bg-secondary">
@@ -88,15 +95,15 @@ export function SupervisorPanel() {
       <div className="flex-1 overflow-y-auto px-3 py-3">
         <SupervisorPanelContent
           status={sessionState?.status ?? null}
-          taskReports={sessionState?.taskReports ?? []}
-          triggerRecords={sessionState?.triggerRecords ?? []}
+          taskReports={sessionState?.taskReports ?? EMPTY_TASK_REPORTS}
+          triggerRecords={sessionState?.triggerRecords ?? EMPTY_TRIGGER_RECORDS}
           sessionId={sessionId}
-          enable={actions.enable}
-          disable={actions.disable}
-          forceContinue={actions.forceContinue}
-          requestPause={actions.requestPause}
-          cancelPause={actions.cancelPause}
-          fetchTriggerHistory={actions.fetchTriggerHistory}
+          enable={enable}
+          disable={disable}
+          forceContinue={forceContinue}
+          requestPause={requestPause}
+          cancelPause={cancelPause}
+          fetchTriggerHistory={fetchTriggerHistory}
         />
       </div>
     </div>

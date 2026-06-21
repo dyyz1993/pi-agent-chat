@@ -27,6 +27,7 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => ({
 import { useUIDialogStore, toolNameToMethod } from "../../../src/mainview/stores/use-ui-dialog-store";
 import { apiClient } from "../../../src/mainview/lib/api-client";
 import { useSessionStore } from "../../../src/mainview/stores/use-session-store";
+import type { AskUserQuestion } from "../../../src/shared/modules/agent";
 
 const mockedCall = apiClient.call as ReturnType<typeof vi.fn>;
 const mockedSessionGetState = useSessionStore.getState as ReturnType<typeof vi.fn>;
@@ -34,10 +35,11 @@ const mockedSessionGetState = useSessionStore.getState as ReturnType<typeof vi.f
 interface MakeRequestOverrides {
   requestId?: string;
   sessionId?: string;
-  method?: "confirm" | "input" | "select" | "editor";
+  method?: "askUserQuestion" | "confirm" | "input" | "select" | "editor";
   message?: string;
   title?: string;
   options?: string[];
+  questions?: AskUserQuestion[];
   multiple?: boolean;
   placeholder?: string;
   prefill?: string;
@@ -135,6 +137,84 @@ describe("respondById", () => {
 
     expect(useUIDialogStore.getState().panelOpen).toBe(true);
   });
+
+  it("passes structured askUserQuestion answers through", () => {
+    const req = makeRequest({
+      requestId: "ask-1",
+      method: "askUserQuestion",
+      questions: [
+        {
+          id: "scope",
+          header: "Scope",
+          question: "Pick scope",
+          options: [{ label: "Local", description: "Only this session" }],
+        },
+      ],
+    });
+    useUIDialogStore.getState().registerUIRequest(req);
+
+    const response = {
+      action: "responded",
+      answers: { scope: { selected: ["Local"], text: "note" } },
+    };
+    useUIDialogStore.getState().respondById("ask-1", response);
+
+    expect(useUIDialogStore.getState().requestStates.get("ask-1")?.response).toEqual(response);
+    expect(mockedCall).toHaveBeenCalledWith("agent.respondUI", {
+      sessionId: "sess-1",
+      requestId: "ask-1",
+      response,
+    });
+  });
+
+  it("wraps legacy askUserQuestion answers into Ask v2 response shape", () => {
+    const req = makeRequest({ requestId: "ask-legacy", method: "askUserQuestion" });
+    useUIDialogStore.getState().registerUIRequest(req);
+
+    useUIDialogStore
+      .getState()
+      .respondById("ask-legacy", { scope: { selected: ["Fallback"] } });
+
+    const expected = {
+      action: "responded",
+      answers: { scope: { selected: ["Fallback"] } },
+    };
+    expect(useUIDialogStore.getState().requestStates.get("ask-legacy")?.response).toEqual(expected);
+    expect(mockedCall).toHaveBeenCalledWith("agent.respondUI", {
+      sessionId: "sess-1",
+      requestId: "ask-legacy",
+      response: expected,
+    });
+  });
+
+  it("responds to the child session that owns a nested subtask question", () => {
+    const req = makeRequest({
+      requestId: "nested-ask",
+      sessionId: "sess-grandchild",
+      method: "askUserQuestion",
+      questions: [
+        {
+          id: "scope",
+          header: "Scope",
+          question: "Nested subtask question",
+          options: [{ label: "Continue" }],
+        },
+      ],
+    });
+    useUIDialogStore.getState().registerUIRequest(req);
+
+    const response = {
+      action: "responded",
+      answers: { scope: { selected: ["Continue"] } },
+    };
+    useUIDialogStore.getState().respondById("nested-ask", response);
+
+    expect(mockedCall).toHaveBeenCalledWith("agent.respondUI", {
+      sessionId: "sess-grandchild",
+      requestId: "nested-ask",
+      response,
+    });
+  });
 });
 
 describe("dismissById", () => {
@@ -216,6 +296,8 @@ describe("checkPermissionClear", () => {
 
 describe("toolNameToMethod", () => {
   it("maps known tool names to methods", () => {
+    expect(toolNameToMethod("askUserQuestion")).toBe("askUserQuestion");
+    expect(toolNameToMethod("ask-user-question")).toBe("askUserQuestion");
     expect(toolNameToMethod("ask-confirm")).toBe("confirm");
     expect(toolNameToMethod("ask-select")).toBe("select");
     expect(toolNameToMethod("ask-input")).toBe("input");

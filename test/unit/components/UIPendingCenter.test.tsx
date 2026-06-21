@@ -6,6 +6,7 @@ import {
   waitFor,
   act,
   renderHook,
+  within,
 } from "@testing-library/react";
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import {
@@ -13,6 +14,8 @@ import {
   UIPendingCenter,
   useProjectPendingCount,
 } from "../../../src/mainview/components/chat/UIPendingCenter";
+import { ContentBlockRenderer } from "../../../src/mainview/components/chat/ContentBlockRenderer";
+import { AskUserQuestionToolCard } from "../../../src/mainview/components/chat/tool-renderers/UICardRenderer";
 import type { UIPendingRequest } from "../../../src/mainview/stores/use-ui-dialog-store";
 
 const mockFns = vi.hoisted(() => ({
@@ -99,6 +102,10 @@ vi.mock("../../../src/mainview/lib/api-client", () => ({
 }));
 
 vi.mock("react-i18next", () => ({
+  initReactI18next: {
+    type: "3rdParty",
+    init: vi.fn(),
+  },
   useTranslation: () => ({
     t: (key: string, opts?: Record<string, unknown>) => {
       if (opts) return `${key} ${JSON.stringify(opts)}`;
@@ -139,6 +146,7 @@ describe("UIPendingCenter", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     cleanup();
     vi.clearAllMocks();
     mockApiCall.mockResolvedValue(undefined);
@@ -375,6 +383,306 @@ describe("UIPendingCenter", () => {
     expect(screen.getByText("A")).toBeInTheDocument();
   });
 
+  function advanceAskAutoDelay() {
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+  }
+
+  it("renders askUserQuestion as a step wizard and submits all answers", () => {
+    vi.useFakeTimers();
+    setupProject();
+    mockPanelOpen = true;
+    currentPending = [
+      makeRequest({
+        requestId: "ask-1",
+        sessionId: "sess-1",
+        method: "askUserQuestion",
+        questions: [
+          {
+            id: "scope",
+            header: "1 / 2 Scope",
+            question: "Pick scope",
+            options: [{ label: "Local", description: "Local only" }],
+          },
+          {
+            id: "checks",
+            header: "2 / 2 Checks",
+            question: "Pick checks",
+            multiSelect: true,
+            options: [
+              { label: "Single", description: "Single choice" },
+              { label: "Multi", description: "Multiple choices" },
+            ],
+          },
+        ],
+      }),
+    ];
+
+    render(<UIPendingCenter />);
+
+    expect(screen.getByText("1 / 2 Scope")).toBeInTheDocument();
+    expect(screen.queryByText("2 / 2 Checks")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Local/i }));
+
+    expect(screen.getByText("1 / 2 Scope")).toBeInTheDocument();
+    expect(screen.getByText(/uiCard\.selectionSaved/)).toBeInTheDocument();
+    expect(screen.queryByText("2 / 2 Checks")).not.toBeInTheDocument();
+
+    advanceAskAutoDelay();
+
+    expect(screen.queryByText("1 / 2 Scope")).not.toBeInTheDocument();
+    expect(screen.getByText("2 / 2 Checks")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /common:back/i })).toBeInTheDocument();
+
+    const submitButton = screen.getByRole("button", { name: /common:submit/i });
+    expect(submitButton).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /Single/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Multi/i }));
+    expect(submitButton).not.toBeDisabled();
+    fireEvent.click(submitButton);
+
+    expect(mockRespondById).toHaveBeenCalledWith("ask-1", {
+      action: "responded",
+      answers: {
+        scope: { selected: ["Local"] },
+        checks: { selected: ["Single", "Multi"] },
+      },
+    });
+  });
+
+  it("lets askUserQuestion navigate back to the previous step", () => {
+    vi.useFakeTimers();
+    setupProject();
+    mockPanelOpen = true;
+    currentPending = [
+      makeRequest({
+        requestId: "ask-1",
+        sessionId: "sess-1",
+        method: "askUserQuestion",
+        questions: [
+          {
+            id: "scope",
+            header: "1 / 2 Scope",
+            question: "Pick scope",
+            options: [{ label: "Local", description: "Local only" }],
+          },
+          {
+            id: "checks",
+            header: "2 / 2 Checks",
+            question: "Pick checks",
+            options: [{ label: "Single", description: "Single choice" }],
+          },
+        ],
+      }),
+    ];
+
+    render(<UIPendingCenter />);
+    fireEvent.click(screen.getByRole("button", { name: /Local/i }));
+    advanceAskAutoDelay();
+    fireEvent.click(screen.getByRole("button", { name: /common:back/i }));
+
+    expect(screen.getByText("1 / 2 Scope")).toBeInTheDocument();
+    expect(screen.queryByText("2 / 2 Checks")).not.toBeInTheDocument();
+  });
+
+  it("treats custom askUserQuestion input as exclusive and keeps manual next", () => {
+    vi.useFakeTimers();
+    setupProject();
+    mockPanelOpen = true;
+    currentPending = [
+      makeRequest({
+        requestId: "ask-1",
+        sessionId: "sess-1",
+        method: "askUserQuestion",
+        questions: [
+          {
+            id: "scope",
+            header: "1 / 2 Scope",
+            question: "Pick scope",
+            options: [{ label: "Local", description: "Local only" }],
+          },
+          {
+            id: "confirm",
+            header: "2 / 2 Confirm",
+            question: "Confirm",
+            options: [{ label: "Done", description: "Ready" }],
+          },
+        ],
+      }),
+    ];
+
+    render(<UIPendingCenter />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Local/i }));
+    advanceAskAutoDelay();
+    fireEvent.click(screen.getByRole("button", { name: /common:back/i }));
+    fireEvent.change(screen.getByPlaceholderText("uiCard.customAnswer"), {
+      target: { value: "Shared" },
+    });
+    fireEvent.click(screen.getAllByRole("button", { name: /common:next/i }).at(-1)!);
+    fireEvent.click(screen.getByRole("button", { name: /Done/i }));
+
+    expect(mockRespondById).not.toHaveBeenCalled();
+    advanceAskAutoDelay();
+
+    expect(mockRespondById).toHaveBeenCalledWith("ask-1", {
+      action: "responded",
+      answers: {
+        scope: { selected: [], text: "Shared" },
+        confirm: { selected: ["Done"] },
+      },
+    });
+  });
+
+  it("combines multi-select askUserQuestion options with a custom answer", () => {
+    setupProject();
+    mockPanelOpen = true;
+    currentPending = [
+      makeRequest({
+        requestId: "ask-1",
+        sessionId: "sess-1",
+        method: "askUserQuestion",
+        questions: [
+          {
+            id: "checks",
+            header: "Checks",
+            question: "Pick checks",
+            multiSelect: true,
+            options: [
+              { label: "Layout", description: "Layout issues" },
+              { label: "Touch", description: "Touch issues" },
+            ],
+          },
+        ],
+      }),
+    ];
+
+    render(<UIPendingCenter />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Layout/i }));
+    fireEvent.change(screen.getByPlaceholderText("uiCard.customAnswer"), {
+      target: { value: "Keyboard issue" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /common:submit/i }));
+
+    expect(mockRespondById).toHaveBeenCalledWith("ask-1", {
+      action: "responded",
+      answers: {
+        checks: { selected: ["Layout"], text: "Keyboard issue" },
+      },
+    });
+  });
+
+  it("renders ask-user-question tool output as a structured answer card", () => {
+    render(
+      <AskUserQuestionToolCard
+        block={{
+          type: "toolExecution",
+          toolCallId: "tool-ask-1",
+          toolName: "ask-user-question",
+          args: JSON.stringify({
+            title: "交互样式反馈三步提问",
+            questions: [
+              {
+                id: "style_feedback",
+                header: "样式评价",
+                question: "你觉得这个交互样式如何？",
+                options: [{ label: "很好", description: "样式符合预期" }],
+              },
+            ],
+          }),
+          status: "done",
+          output:
+            'User answered: {"style_feedback":{"selected":["还要调整"],"text":"按钮放到底部"}}',
+        }}
+      />,
+    );
+
+    expect(screen.getByText("交互样式反馈三步提问")).toBeInTheDocument();
+    expect(screen.getByText("样式评价")).toBeInTheDocument();
+    expect(screen.getByText("（你觉得这个交互样式如何？）")).toBeInTheDocument();
+    expect(screen.getByText("还要调整")).toBeInTheDocument();
+    expect(screen.getByText("按钮放到底部")).toBeInTheDocument();
+    expect(screen.queryByText("ask-user-question")).not.toBeInTheDocument();
+    expect(screen.queryByText("style_feedback")).not.toBeInTheDocument();
+    expect(screen.queryByText(/User answered/)).not.toBeInTheDocument();
+  });
+
+  it("falls back to the default tool card when ask-user-question validation fails", () => {
+    render(
+      <ContentBlockRenderer
+        block={{
+          type: "toolExecution",
+          toolCallId: "tool-ask-error",
+          toolName: "ask-user-question",
+          args: JSON.stringify({
+            title: "移动端调整详情",
+            questions: [
+              {
+                id: "mobile_issues",
+                header: "移动端问题排查",
+                question: "移动端具体哪些地方需要调整？",
+                multiSelect: true,
+                options: [
+                  { label: "布局错位", description: "元素位置偏移，未正确适配屏幕尺寸" },
+                ],
+              },
+            ],
+          }),
+          status: "error",
+          output:
+            'Validation failed for tool "ask-user-question": - questions.0.options: must not have more than 4 items',
+        }}
+        msgId="msg-ask-error"
+        blockIndex={0}
+        uiBlockMap={new Map()}
+      />,
+    );
+
+    expect(screen.getByText("Input")).toBeInTheDocument();
+    expect(screen.getByText("Output")).toBeInTheDocument();
+    expect(screen.getAllByText(/Validation failed for tool "ask-user-question"/).length).toBeGreaterThan(0);
+    expect(screen.queryByText("移动端调整详情")).not.toBeInTheDocument();
+    expect(document.querySelector("svg.text-status-error")).toBeInTheDocument();
+  });
+
+  it("renders pending ask-user-question tool calls as a compact anchor", () => {
+    render(
+      <AskUserQuestionToolCard
+        block={{
+          type: "toolExecution",
+          toolCallId: "tool-ask-1",
+          toolName: "ask-user-question",
+          args: "{}",
+          status: "running",
+        }}
+        uiBlock={{
+          type: "uiInteraction",
+          id: "ask-1",
+          method: "askUserQuestion",
+          status: "pending",
+          title: "Question from tool",
+          message: "Choose one",
+          questions: [
+            {
+              id: "scope",
+              header: "Scope",
+              question: "Pick scope",
+              options: [{ label: "Local", description: "Local only" }],
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Question from tool")).toBeInTheDocument();
+    expect(screen.getByText(/uiPending\.handleRequest/)).toBeInTheDocument();
+    expect(screen.queryByText("Pick scope")).not.toBeInTheDocument();
+    expect(screen.queryByText("Local")).not.toBeInTheDocument();
+  });
+
   it("renders editor card without hooks error", () => {
     setupProject();
     mockPanelOpen = true;
@@ -386,6 +694,7 @@ describe("UIPendingCenter", () => {
     setupProject();
 
     const methods: Array<{ method: UIPendingRequest["method"]; options?: string[] }> = [
+      { method: "askUserQuestion" },
       { method: "confirm" },
       { method: "input" },
       { method: "select", options: ["Opt1"] },
@@ -452,21 +761,164 @@ describe("ProjectRuntimePendingRequests", () => {
     expect(screen.getByText("Allow this command?")).toBeInTheDocument();
     expect(screen.getByText("npm run build")).toBeInTheDocument();
     expect(screen.getByText("uiCard.allowOnce")).toBeInTheDocument();
-    expect(screen.getByText("Other session")).toBeInTheDocument();
+    expect(screen.queryByText("Other session")).not.toBeInTheDocument();
     expect(document.querySelector('[data-ui-request-id="r1"]')).toBeInTheDocument();
   });
 
-  it("renders pending requests from other sessions in the current project", () => {
+  it("renders custom hook confirm and cancel labels in the runtime action area", () => {
+    currentPending = [
+      makeRequest({
+        requestId: "hook-labels",
+        sessionId: "sess-1",
+        method: "confirm",
+        title: "Hook permission",
+        message: "Allow this command?",
+        confirmText: "允许一次",
+        cancelText: "取消执行",
+        hookMeta: {
+          toolName: "bash",
+          matcher: "echo *",
+          command: "echo HOT_RELOAD_PERM_TEST",
+          reason: "Needs approval",
+        },
+      }),
+    ];
+
+    setupProject();
+    render(<ProjectRuntimePendingRequests activeSessionId="sess-1" />);
+
+    expect(screen.getByText("允许一次")).toBeInTheDocument();
+    expect(screen.getByText("取消执行")).toBeInTheDocument();
+    expect(screen.queryByText("uiCard.allowOnce")).not.toBeInTheDocument();
+  });
+
+  it("keeps simultaneous hook requests in one active-session dock", () => {
+    currentPending = [
+      makeRequest({
+        requestId: "hook-1",
+        sessionId: "sess-1",
+        method: "confirm",
+        title: "Dangerous bash",
+        message: "Allow npm build?",
+        hookMeta: {
+          toolName: "bash",
+          matcher: "npm *",
+          command: "npm run build",
+          hookCommand: "bash ~/.claude/hooks/pre-tool-use.sh",
+          eventName: "PreToolUse",
+          source: "global",
+          reason: "Needs approval",
+        },
+      }),
+      makeRequest({
+        requestId: "hook-2",
+        sessionId: "sess-1",
+        method: "confirm",
+        title: "Second hook",
+        message: "Allow test command?",
+        hookMeta: {
+          toolName: "bash",
+          matcher: "bun *",
+          command: "bun test",
+          hookCommand: "bash ~/.claude/hooks/pre-tool-use.sh",
+          eventName: "PreToolUse",
+          source: "project",
+          reason: "Needs approval",
+        },
+      }),
+      makeRequest({
+        requestId: "path-1",
+        sessionId: "sess-1",
+        method: "select",
+        title: "Path Access",
+        message: "Allow write outside project?",
+        options: ["✅ Allow once", "📁 Always allow", "❌ Deny"],
+        permissionMeta: {
+          type: "path_boundary",
+          path: "/tmp/outside.txt",
+          cwd: "/projects/my-project",
+          toolName: "write",
+          scope: "write",
+          relativeTo: "outside project",
+        },
+      }),
+      makeRequest({
+        requestId: "other-session",
+        sessionId: "sess-2",
+        method: "confirm",
+        title: "Other session hook",
+      }),
+    ];
+
+    setupProject();
+    render(<ProjectRuntimePendingRequests activeSessionId="sess-1" />);
+
+    expect(screen.getByText("Dangerous bash")).toBeInTheDocument();
+    expect(screen.getByText("npm run build")).toBeInTheDocument();
+    expect(screen.getByText("Second hook")).toBeInTheDocument();
+    expect(screen.getByText("Path Access")).toBeInTheDocument();
+    expect(screen.queryByText("Other session hook")).not.toBeInTheDocument();
+    expect(document.querySelector('[data-ui-dock-request-id="hook-1"]')).toBeInTheDocument();
+    expect(document.querySelector('[data-ui-dock-request-id="hook-2"]')).toBeInTheDocument();
+    expect(document.querySelector('[data-ui-dock-request-id="path-1"]')).toBeInTheDocument();
+  });
+
+  it("submits path-boundary permission choices from the active-session dock", () => {
+    setupProject();
+    currentPending = [
+      makeRequest({
+        requestId: "path-1",
+        sessionId: "sess-1",
+        method: "select",
+        title: "Path Access",
+        options: ["✅ Allow once", "📁 Always allow", "❌ Deny"],
+        permissionMeta: {
+          type: "path_boundary",
+          path: "/tmp/outside.txt",
+          cwd: "/projects/my-project",
+          toolName: "write",
+          scope: "write",
+          relativeTo: "outside project",
+        },
+      }),
+    ];
+
+    render(<ProjectRuntimePendingRequests activeSessionId="sess-1" />);
+
+    expect(screen.getByText("Path Access")).toBeInTheDocument();
+    expect(screen.getByText("/tmp/outside.txt")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Allow once/i }));
+
+    expect(mockRespondById).toHaveBeenCalledWith("path-1", { value: "✅ Allow once" });
+  });
+
+  it("does not render pending requests from other sessions in the runtime action area", () => {
     setupProject();
     currentPending = [
       makeRequest({ requestId: "r1", sessionId: "sess-2", title: "Other session permission" }),
     ];
 
+    const { container } = render(<ProjectRuntimePendingRequests activeSessionId="sess-1" />);
+
+    expect(container.innerHTML).toBe("");
+    expect(screen.queryByText("Other session permission")).not.toBeInTheDocument();
+    expect(screen.queryByText("uiPending.gotoSession")).not.toBeInTheDocument();
+  });
+
+  it("renders active session requests even when project session metadata is not loaded", () => {
+    currentPending = [
+      makeRequest({
+        requestId: "r1",
+        sessionId: "sess-1",
+        title: "Current session permission",
+        message: "Current session only",
+      }),
+    ];
+
     render(<ProjectRuntimePendingRequests activeSessionId="sess-1" />);
 
-    expect(screen.getByText("Other session permission")).toBeInTheDocument();
-    expect(screen.getByText("Session B")).toBeInTheDocument();
-    expect(screen.getByText("uiPending.gotoSession")).toBeInTheDocument();
+    expect(screen.getByText("Current session permission")).toBeInTheDocument();
+    expect(screen.getByText("Current session only")).toBeInTheDocument();
   });
 
   it("renders bash command confirm requests without hook metadata in the runtime action area", () => {
@@ -487,13 +939,42 @@ describe("ProjectRuntimePendingRequests", () => {
     expect(screen.getAllByText("uiPending.confirm").length).toBeGreaterThan(0);
   });
 
-  it("renders nothing when the current project has no pending requests", () => {
+  it("renders nothing when the active session has no pending requests", () => {
     setupProject();
     currentPending = [makeRequest({ requestId: "r1", sessionId: "other-session" })];
 
     const { container } = render(<ProjectRuntimePendingRequests activeSessionId="sess-1" />);
 
     expect(container.innerHTML).toBe("");
+  });
+
+  it("scopes nested subtask questions to the owning child session dock", () => {
+    currentPending = [
+      makeRequest({
+        requestId: "grandchild-ask",
+        sessionId: "sess-grandchild",
+        method: "askUserQuestion",
+        title: "Grandchild asks",
+        questions: [
+          {
+            id: "decision",
+            header: "Decision",
+            question: "Answer from nested subtask?",
+            options: [{ label: "Yes", description: "Continue" }],
+          },
+        ],
+      }),
+    ];
+
+    const parent = render(<ProjectRuntimePendingRequests activeSessionId="sess-parent" />);
+    expect(parent.container.innerHTML).toBe("");
+    cleanup();
+
+    render(<ProjectRuntimePendingRequests activeSessionId="sess-grandchild" />);
+
+    expect(screen.getByText("Grandchild asks")).toBeInTheDocument();
+    expect(screen.getByText("Answer from nested subtask?")).toBeInTheDocument();
+    expect(document.querySelector('[data-ui-dock-request-id="grandchild-ask"]')).toBeInTheDocument();
   });
 });
 
@@ -531,5 +1012,66 @@ describe("useProjectPendingCount", () => {
     setupProject();
     const { result } = renderHook(() => useProjectPendingCount());
     expect(result.current).toBe(0);
+  });
+});
+
+describe("UIPendingCenter nested subtask requests", () => {
+  beforeEach(() => {
+    mockActiveProjectId = "proj-1";
+    mockProjectTabs = [{ id: "proj-1", name: "My Project", path: "/projects/my-project" }];
+    mockSessionsByProject = {
+      "/projects/my-project": [
+        { sessionId: "sess-parent", name: "Parent Session" },
+        { sessionId: "sess-child", name: "Child Task" },
+        { sessionId: "sess-grandchild", name: "Grandchild Task" },
+      ],
+    };
+    mockPanelOpen = true;
+    currentPending = [];
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it("groups nested child requests in the project pending center and jumps to the owning session", () => {
+    currentPending = [
+      makeRequest({
+        requestId: "grandchild-ask",
+        sessionId: "sess-grandchild",
+        method: "askUserQuestion",
+        title: "Grandchild asks",
+        questions: [
+          {
+            id: "decision",
+            header: "Decision",
+            question: "Answer from nested subtask?",
+            options: [{ label: "Yes", description: "Continue" }],
+          },
+        ],
+      }),
+      makeRequest({
+        requestId: "child-hook",
+        sessionId: "sess-child",
+        method: "confirm",
+        title: "Child hook approval",
+        message: "Allow child task command?",
+      }),
+    ];
+
+    render(<UIPendingCenter />);
+
+    expect(screen.getByText("Grandchild Task")).toBeInTheDocument();
+    expect(screen.getByText("Child Task")).toBeInTheDocument();
+    expect(screen.getAllByText("Grandchild asks").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Child hook approval").length).toBeGreaterThan(0);
+
+    const grandchildGroup = screen.getByText("Grandchild Task").closest(".border");
+    expect(grandchildGroup).not.toBeNull();
+    fireEvent.click(within(grandchildGroup as HTMLElement).getByText("uiPending.gotoSession"));
+
+    expect(mockSetPanelOpen).toHaveBeenCalledWith(false);
+    expect(mockSetActiveSession).toHaveBeenCalledWith("sess-grandchild");
   });
 });

@@ -235,11 +235,26 @@ export function SidebarBottomControls() {
     [activeSessionId, agentReady, switchingTier, switchToTier],
   );
 
+  const refreshModelsForActiveSession = useCallback(() => {
+    if (!activeSessionId || !agentReady) return;
+    void apiClient
+      .call("agent.reload", { sessionId: activeSessionId })
+      .catch((err) => {
+        log.warn("refresh models reload failed", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      })
+      .finally(() => {
+        fetchModelState(activeSessionId);
+      });
+  }, [activeSessionId, agentReady, fetchModelState]);
+
   const handleOpenTierConfig = useCallback(async () => {
     if (!activeSessionId) return;
+    refreshModelsForActiveSession();
     setTierConfigModels({ ...tierModels });
     setTierConfigOpen(true);
-  }, [activeSessionId, tierModels]);
+  }, [activeSessionId, refreshModelsForActiveSession, tierModels]);
 
   const handleSaveTierConfig = useCallback(async () => {
     if (!activeSessionId) return;
@@ -630,6 +645,7 @@ export function SidebarBottomControls() {
           placement="up"
           onOpenChange={(open) => {
             if (open) {
+              refreshModelsForActiveSession();
               setThinkingOpen(false);
               setWorkspaceOpen(false);
               setTierConfigOpen(false);
@@ -738,6 +754,9 @@ export function SidebarBottomControls() {
                       value={tierConfigModels[tier] ?? ""}
                       onChange={(v) => {
                         setTierConfigModels((prev) => ({ ...prev, [tier]: v }));
+                      }}
+                      onOpenChange={(open) => {
+                        if (open) refreshModelsForActiveSession();
                       }}
                       placement="up"
                       placeholder={

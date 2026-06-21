@@ -1,7 +1,7 @@
 import { memo, useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { createLogger } from "../../../../shared/lib/logger";
-import type { ContentBlock, SubagentSessionInfo } from "../../../types";
+import type { ChatMessage, ContentBlock, SubagentSessionInfo } from "../../../types";
 import { useSubagentStore } from "../../../stores/use-subagent-store";
 import { useSessionStore } from "../../../stores/use-session-store";
 import { useSettingsStore } from "../../../stores/use-settings-store";
@@ -19,6 +19,7 @@ import {
 type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
 
 const logger = createLogger("subagent");
+const EMPTY_SUBAGENT_MESSAGES: ChatMessage[] = [];
 
 function isLiveSubagentStatus(status: string | undefined): boolean {
   return (
@@ -75,7 +76,9 @@ export const SubagentExecutionCard = memo(function SubagentExecutionCard({
   });
   const subSessionId = matchedSub?.sessionId;
   const subMessages = useSubagentStore((s) =>
-    subSessionId ? (s.messagesBySubsession?.[subSessionId] ?? []) : [],
+    subSessionId
+      ? (s.messagesBySubsession?.[subSessionId] ?? EMPTY_SUBAGENT_MESSAGES)
+      : EMPTY_SUBAGENT_MESSAGES,
   );
   const subagentStatus = useSubagentStore((s) =>
     subSessionId ? s.subagentStatusMap?.[subSessionId] : undefined,

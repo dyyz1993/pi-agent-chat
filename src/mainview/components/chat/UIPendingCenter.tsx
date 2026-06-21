@@ -19,6 +19,7 @@ import { useTranslation } from "react-i18next";
 import { useUIDialogStore, type UIPendingRequest } from "../../stores/use-ui-dialog-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { IconButton, ModalDialog } from "../primitives";
+import { AskUserQuestionCard } from "./tool-renderers/UICardRenderer";
 
 function PanelCard({ req }: { req: UIPendingRequest }) {
   const { t } = useTranslation("chat");
@@ -32,6 +33,7 @@ function PanelCard({ req }: { req: UIPendingRequest }) {
   const [editorValue, setEditorValue] = useState(req.prefill ?? "");
 
   const methodLabel: Record<string, string> = {
+    askUserQuestion: t("uiPending.askUserQuestion", "询问"),
     confirm: t("uiPending.confirm"),
     select: t("uiPending.select"),
     input: t("uiPending.inputLabel"),
@@ -42,8 +44,27 @@ function PanelCard({ req }: { req: UIPendingRequest }) {
   const isConfirm = req.method === "confirm";
   const isInput = req.method === "input";
   const isEditor = req.method === "editor";
+  const isAskUserQuestion = req.method === "askUserQuestion";
   const options = req.options ?? [];
   const isMulti = !!req.multiple;
+
+  if (isAskUserQuestion) {
+    return (
+      <AskUserQuestionCard
+        block={{
+          type: "uiInteraction",
+          id: req.requestId,
+          method: req.method,
+          status: "pending",
+          title: req.title,
+          message: req.message,
+          questions: req.questions,
+          sessionId: req.sessionId,
+          timeout: req.timeout,
+        }}
+      />
+    );
+  }
 
   if (isSelect && req.permissionMeta?.type === "path_boundary") {
     const meta = req.permissionMeta;
@@ -164,11 +185,10 @@ function PanelCard({ req }: { req: UIPendingRequest }) {
                       return next;
                     })
                   }
-                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left transition-colors ${
-                    checked
+                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left transition-colors ${checked
                       ? "bg-status-info/15 text-status-info"
                       : "hover:bg-surface-dim dark:hover:bg-surface-dim text-text-tertiary"
-                  }`}
+                    }`}
                 >
                   {checked ? (
                     <CheckSquare className="w-3.5 h-3.5 shrink-0 text-status-info" />
@@ -224,6 +244,8 @@ function PanelCard({ req }: { req: UIPendingRequest }) {
 
   if (isConfirm) {
     const isHookConfirm = !!req.hookMeta;
+    const confirmText = req.confirmText ?? req.hookMeta?.confirmText;
+    const cancelText = req.cancelText ?? req.hookMeta?.cancelText;
 
     return (
       <div className="border border-border-secondary/40 rounded-xl overflow-hidden bg-surface-dim/50 dark:bg-surface-code/50">
@@ -235,7 +257,23 @@ function PanelCard({ req }: { req: UIPendingRequest }) {
           {req.message && (
             <p className="text-[11px] text-text-secondary mb-2.5 leading-relaxed">{req.message}</p>
           )}
-          {isHookConfirm && req.hookMeta?.command && (
+          {isHookConfirm && req.hookMeta?.command && req.hookMeta?.toolName === "bash" && req.hookMeta?.description && (
+            <div className="mb-2.5 rounded-md bg-bg-primary/70 border border-border-secondary/40 px-2 py-1.5 space-y-1.5">
+              <div className="flex items-start gap-2">
+                <span className="text-[10px] text-text-tertiary shrink-0 mt-0.5">操作说明</span>
+                <span className="text-[11px] text-text-primary leading-relaxed">
+                  {req.hookMeta.description}
+                </span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="text-[10px] text-text-tertiary shrink-0 mt-0.5">目标操作</span>
+                <code className="block text-[11px] text-text-primary font-mono break-all leading-relaxed">
+                  <span className="text-text-tertiary">$ </span>{req.hookMeta.command}
+                </code>
+              </div>
+            </div>
+          )}
+          {isHookConfirm && req.hookMeta?.command && !(req.hookMeta?.toolName === "bash" && req.hookMeta?.description) && (
             <div className="mb-2.5 rounded-md bg-bg-primary/70 border border-border-secondary/40 px-2 py-1.5">
               <div className="text-[10px] text-text-tertiary mb-0.5">目标操作</div>
               <code className="block text-[11px] text-text-primary font-mono break-all leading-relaxed">
@@ -260,13 +298,13 @@ function PanelCard({ req }: { req: UIPendingRequest }) {
               onClick={() => respondById(req.requestId, { confirmed: true })}
               className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md bg-status-success/20 text-status-success hover:bg-status-success/30 text-[11px] transition-colors"
             >
-              {isHookConfirm ? t("uiCard.allowOnce") : t("uiPending.confirm")}
+              {confirmText ?? (isHookConfirm ? t("uiCard.allowOnce") : t("uiPending.confirm"))}
             </button>
             <button
               onClick={() => dismissById(req.requestId)}
               className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md bg-status-error/15 text-status-error hover:bg-status-error/25 text-[11px] transition-colors"
             >
-              {t("common:cancel")}
+              {cancelText ?? t("common:cancel")}
             </button>
           </div>
         </div>
@@ -368,6 +406,7 @@ function SessionGroup({ sessionId, sessionName, requests, onGotoSession }: Sessi
   const [expanded, setExpanded] = useState(true);
 
   const methodLabel: Record<string, string> = {
+    askUserQuestion: t("uiPending.askUserQuestion", "询问"),
     confirm: t("uiPending.confirm"),
     select: t("uiPending.select"),
     input: t("uiPending.inputLabel"),
@@ -546,61 +585,73 @@ export function ProjectRuntimePendingRequests({
 }) {
   const { t } = useTranslation("chat");
   const allPending = useUIDialogStore((s) => s.pending);
-  const activeProjectId = useSessionStore((s) => s.activeProjectId);
-  const projectTabs = useSessionStore((s) => s.projectTabs);
-  const sessionsByProject = useSessionStore((s) => s.sessionsByProject);
 
-  const projectSessions = useMemo(() => {
-    if (!activeProjectId) return [];
-    const tab = projectTabs.find((t) => t.id === activeProjectId);
-    if (!tab) return [];
-    return sessionsByProject[tab.path] ?? [];
-  }, [activeProjectId, projectTabs, sessionsByProject]);
+  const sessionPending = useMemo(() => {
+    if (!activeSessionId) return [];
+    return allPending.filter((req) => req.sessionId === activeSessionId);
+  }, [allPending, activeSessionId]);
 
-  const sessionNameMap = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const s of projectSessions) {
-      map.set(s.sessionId, s.name || s.firstMessage?.slice(0, 30) || s.sessionId.slice(0, 8));
-    }
-    return map;
-  }, [projectSessions]);
+  if (sessionPending.length === 0) return null;
 
-  const projectPending = useMemo(() => {
-    const projectSessionIds = new Set(projectSessions.map((s) => s.sessionId));
-    const scoped = allPending.filter((req) => projectSessionIds.has(req.sessionId));
-    return scoped.sort((a, b) => {
-      if (a.sessionId === activeSessionId && b.sessionId !== activeSessionId) return -1;
-      if (b.sessionId === activeSessionId && a.sessionId !== activeSessionId) return 1;
-      return 0;
-    });
-  }, [allPending, activeSessionId, projectSessions]);
-
-  if (projectPending.length === 0) return null;
-
-  const handleGotoSession = (sessionId: string) => {
-    useSessionStore.getState().setActiveSession(sessionId);
+  const methodLabel: Record<string, string> = {
+    askUserQuestion: t("uiPending.askUserQuestion", "询问"),
+    confirm: t("uiPending.confirm"),
+    select: t("uiPending.select"),
+    input: t("uiPending.inputLabel"),
+    editor: t("uiPending.editor"),
   };
 
+  const [primary, ...secondary] = sessionPending;
+
   return (
-    <div className="px-3 py-1.5 flex-shrink-0 space-y-2" aria-live="polite">
-      {projectPending.map((req) => (
-        <div key={req.requestId} data-ui-request-id={req.requestId} className="space-y-1">
-          {req.sessionId !== activeSessionId && (
-            <div className="flex items-center gap-2 px-1 text-[10px] text-text-tertiary">
-              <span className="truncate">
-                {sessionNameMap.get(req.sessionId) ?? req.sessionId.slice(0, 8)}
-              </span>
-              <button
-                onClick={() => handleGotoSession(req.sessionId)}
-                className="ml-auto text-semantic-accent hover:text-semantic-accent/80 transition-colors"
-              >
-                {t("uiPending.gotoSession")}
-              </button>
-            </div>
-          )}
-          <PanelCard req={req} />
+    <div className="px-3 py-1.5 flex-shrink-0" aria-live="polite">
+      <div
+        data-ui-request-id={primary.requestId}
+        data-ui-dock-request-id={primary.requestId}
+        className="overflow-hidden rounded-xl border border-status-warning/30 bg-bg-elevated/95 shadow-sm dark:bg-surface-dim/95"
+      >
+        <div className="flex items-center gap-2 border-b border-border-secondary/50 px-3 py-2">
+          <span className="rounded-md bg-status-warning/15 px-2 py-0.5 text-[11px] font-semibold text-status-warning">
+            {t("uiPending.pendingRequestsTitle")}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-[11px] text-text-secondary">
+            {methodLabel[primary.method] ?? primary.method}
+            {primary.title ? ` · ${primary.title}` : ""}
+          </span>
+          <span className="shrink-0 rounded-full bg-status-warning/15 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-status-warning">
+            {sessionPending.length}
+          </span>
         </div>
-      ))}
+        <div className="max-h-[min(560px,66vh)] overflow-y-auto px-2.5 py-2.5">
+          <PanelCard req={primary} />
+        </div>
+        {secondary.length > 0 && (
+          <div className="space-y-1 border-t border-border-secondary/50 px-2.5 py-2">
+            {secondary.slice(0, 4).map((req) => {
+              return (
+                <div
+                  key={req.requestId}
+                  data-ui-request-id={req.requestId}
+                  data-ui-dock-request-id={req.requestId}
+                  className="flex items-center gap-2 rounded-lg bg-surface-hover/30 px-2 py-1.5 text-[11px]"
+                >
+                  <span className="shrink-0 text-status-warning">
+                    {methodLabel[req.method] ?? req.method}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-text-secondary">
+                    {req.title ?? req.message ?? req.requestId}
+                  </span>
+                </div>
+              );
+            })}
+            {secondary.length > 4 && (
+              <div className="px-2 pt-0.5 text-[10px] text-text-tertiary">
+                {t("uiPending.moreRequests", { count: secondary.length - 4 })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

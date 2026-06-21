@@ -10,7 +10,7 @@ const bashMocks = {
   mockCall: vi.fn(),
   state: { mockBashProcess: undefined as BashProcess | undefined },
   stores: {
-    mockUIDialogStore: { respondById: vi.fn(), dismissById: vi.fn() },
+    mockUIDialogStore: { respondById: vi.fn(), dismissById: vi.fn(), setPanelOpen: vi.fn() },
     mockHooksStore: { skipRule: vi.fn().mockResolvedValue(undefined) },
   },
 };
@@ -122,6 +122,10 @@ beforeEach(() => {
   vi.useFakeTimers({ now: new Date("2025-01-01T00:00:00Z") });
   bashMocks.state.mockBashProcess = undefined;
   mockCall.mockReset();
+  bashMocks.stores.mockUIDialogStore.respondById.mockReset();
+  bashMocks.stores.mockUIDialogStore.dismissById.mockReset();
+  bashMocks.stores.mockUIDialogStore.setPanelOpen.mockReset();
+  bashMocks.stores.mockHooksStore.skipRule.mockClear();
   mockCall.mockImplementation((method: string) => {
     if (method === "bash.readLog") {
       return Promise.resolve({ lines: [], totalLines: 0, hasMore: false });
@@ -229,13 +233,13 @@ describe("BashExecutionCard state rendering", () => {
     const { container } = render(<BashExecutionCard block={block} uiBlock={uiBlock} />);
 
     expect(container.textContent).toContain("危险命令");
-    expect(container.textContent).toContain("目标操作");
-    expect(container.textContent).toContain("rm -rf /tmp/demo");
-    expect(container.textContent).toContain("Hook 规则");
-    expect(container.textContent).toContain("bash ~/.claude/hooks/pre-tool-use-write.sh");
-    // Current UI has "allow once" and "skip this hook" buttons instead of permission mode
-    expect(container.textContent).toContain("uiCard.allowOnce");
-    expect(container.textContent).toContain("uiCard.skipThisHook");
+    expect(container.textContent).toContain("Bash 命令确认");
+    expect(container.textContent).toContain("uiCard.waitingResponse");
+    expect(container.textContent).toContain("需要审核");
+    expect(container.textContent).toContain("uiPending.handleRequest");
+    expect(container.textContent).not.toContain("Hook 规则");
+    expect(container.textContent).not.toContain("uiCard.allowOnce");
+    expect(container.textContent).not.toContain("uiCard.skipThisHook");
   });
 });
 
@@ -285,23 +289,23 @@ describe("BashExecutionCard interactions", () => {
     });
   });
 
-  it("click skip this hook — calls skipRule and dismisses the dialog", async () => {
+  it("click handle request — opens the unified pending request panel", async () => {
     const block = makeBlock({
       args: JSON.stringify({ command: "rm -rf /tmp/demo", description: "危险命令" }),
     });
     const uiBlock = makeUIBlock();
     const { container } = render(<BashExecutionCard block={block} uiBlock={uiBlock} />);
-    const skipBtn = [...container.querySelectorAll("button")].find(
-      (b) => b.textContent === "uiCard.skipThisHook",
+    const handleBtn = [...container.querySelectorAll("button")].find(
+      (b) => b.textContent === "uiPending.handleRequest",
     );
-    expect(skipBtn).toBeTruthy();
+    expect(handleBtn).toBeTruthy();
 
     await act(async () => {
-      fireEvent.click(skipBtn!);
+      fireEvent.click(handleBtn!);
     });
 
-    // skipRule is called via useHooksStore, then dismissById closes the dialog
-    expect(bashMocks.stores.mockUIDialogStore.dismissById).toHaveBeenCalledWith(uiBlock.id);
+    expect(bashMocks.stores.mockUIDialogStore.setPanelOpen).toHaveBeenCalledWith(true);
+    expect(bashMocks.stores.mockUIDialogStore.dismissById).not.toHaveBeenCalled();
   });
 
   it("click View Output on background — shows LogViewer", () => {

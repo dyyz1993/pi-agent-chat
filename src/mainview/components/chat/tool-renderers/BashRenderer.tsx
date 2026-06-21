@@ -13,7 +13,7 @@ import { useThemeStore, isDarkGroup } from "../../../stores/use-theme-store";
 import { AnsiText } from "../primitives/AnsiText";
 import { ToolCardHeader } from "../primitives/ToolCardHeader";
 import { LogViewer } from "../../bash-panel/BashPanel";
-import { UIInteractionCard } from "./UICardRenderer";
+import { UIInteractionAnchor } from "./UICardRenderer";
 import { useAutoCollapse } from "../../../hooks/use-auto-collapse";
 
 type Block = Extract<ContentBlock, { type: "toolExecution" }>;
@@ -411,7 +411,7 @@ export const BashExecutionCard = memo(function BashExecutionCard({
             </summary>
             <div className="px-3 pb-2 relative">
               {uiBlock && uiBlock.status === "pending" ? (
-                <UIInteractionCard block={uiBlock} />
+                <UIInteractionAnchor block={uiBlock} />
               ) : (() => {
                 // Fall back to the live bash process output when the chat
                 // store hasn't picked it up yet (e.g., after a page refresh

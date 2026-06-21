@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { AlertTriangle, CheckCircle, XCircle } from "lucide-react";
 import { CopyButton } from "./CopyButton";
 import { ToolCardHeader } from "./primitives/ToolCardHeader";
-import { UIInteractionCard } from "./tool-renderers/UICardRenderer";
+import { UIInteractionAnchor } from "./tool-renderers/UICardRenderer";
 import { tryFormatAsYaml } from "../../../shared/lib/json-to-yaml";
 import { useSettingsStore } from "../../stores/use-settings-store";
 import { getToolArgsDescription } from "../../lib/tool-args-description";
@@ -176,7 +176,7 @@ export const ToolExecutionCard = memo(function ToolExecutionCard({
           {outputOpen && (
             <div className="px-3 pb-2 pt-0.5">
               {uiBlock && uiBlock.status === "pending" ? (
-                <UIInteractionCard block={uiBlock} />
+                <UIInteractionAnchor block={uiBlock} />
               ) : block.output ? (
                 <pre className="text-[11px] text-text-secondary overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed max-h-36 overflow-y-auto bg-surface-code/80 dark:bg-surface-code/30 rounded px-2 py-1.5">
                   {block.output}

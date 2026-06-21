@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import type { ContentBlock, SessionMeta, SessionStatus } from "../../../types";
+import type { ChatMessage, ContentBlock, SessionMeta, SessionStatus } from "../../../types";
 import { useSessionStore } from "../../../stores/use-session-store";
 import { useSubagentStore } from "../../../stores/use-subagent-store";
 import { useSettingsStore } from "../../../stores/use-settings-store";
@@ -23,6 +23,7 @@ import {
 } from "./SessionActivitySummary";
 
 type ToolExecBlock = Extract<ContentBlock, { type: "toolExecution" }>;
+const EMPTY_SUBAGENT_MESSAGES: ChatMessage[] = [];
 
 interface CoordinatorDetails {
   sessionId?: string;
@@ -511,7 +512,9 @@ export const DelegateSyncCard = memo(function DelegateSyncCard({
   const { canJump, handleJump } = useJumpToSession(targetSessionId);
   const sessionStatus = useTargetSessionStatus(targetSessionId);
   const subMessages = useSubagentStore((s) =>
-    targetSessionId ? (s.messagesBySubsession?.[targetSessionId] ?? []) : [],
+    targetSessionId
+      ? (s.messagesBySubsession?.[targetSessionId] ?? EMPTY_SUBAGENT_MESSAGES)
+      : EMPTY_SUBAGENT_MESSAGES,
   );
 
   const collapseToolCards = useSettingsStore((s) => s.collapseToolCards);

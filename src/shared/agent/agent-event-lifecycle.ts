@@ -1,4 +1,10 @@
-const INTERACTIVE_EXTENSION_UI_METHODS = new Set(["confirm", "input", "select", "editor"]);
+const INTERACTIVE_EXTENSION_UI_METHODS = new Set([
+  "askUserQuestion",
+  "confirm",
+  "input",
+  "select",
+  "editor",
+]);
 
 export type ExtensionUiAction =
   | { type: "notify"; payload: { message: string; notifyType: string } }

@@ -7,6 +7,7 @@ import {
   Loader,
   Bookmark,
   ThumbsDown,
+  ArrowDownToLine,
   type LucideIcon,
 } from "lucide-react";
 
@@ -27,6 +28,11 @@ export const ENTRY_TYPES: Record<string, MemoryTypeConfig> = {
     icon: SearchCheck,
     color: "text-blue-400",
     label: "记忆搜索",
+  },
+  memory_inject: {
+    icon: ArrowDownToLine,
+    color: "text-blue-400",
+    label: "注入记忆",
   },
   memory_extract: {
     icon: Save,
@@ -209,7 +215,7 @@ export function getMemorySummary(customType: string, data: unknown): string | nu
                   ? "未触发"
                   : "";
         const parts = [layerLabel, sizeLabel, fileCountLabel, durationLabel].filter(Boolean);
-        resultPart = parts.length > 0 ? `已注入记忆 · ${parts.join(" · ")}` : "已注入记忆";
+        resultPart = parts.length > 0 ? `已匹配记忆 · ${parts.join(" · ")}` : "已匹配记忆";
       }
 
       if (prefetchQuery) {
@@ -218,6 +224,15 @@ export function getMemorySummary(customType: string, data: unknown): string | nu
       }
 
       return resultPart;
+    }
+    case "memory_inject": {
+      const bytes = typeof d.injectedBytes === "number" ? d.injectedBytes : 0;
+      const files = Array.isArray(d.selectedFiles) ? (d.selectedFiles as string[]) : [];
+      const parts = [
+        files.length > 0 ? `${files.length}个文件` : "",
+        bytes > 0 ? `约${Math.round(bytes / 4)} tokens` : "",
+      ].filter(Boolean);
+      return parts.length > 0 ? `已注入到模型上下文 · ${parts.join(" · ")}` : "已注入到模型上下文";
     }
     case "memory_extract": {
       type FileEntry = { filename: string; name: string; description: string };

@@ -14,6 +14,7 @@ import {
   DelegateRemoveCard,
   DelegateClearCard,
 } from "./CoordinatorRenderer";
+import { AskUserQuestionToolCard, shouldRenderAskUserQuestionToolCard } from "./UICardRenderer";
 
 registerToolRenderer("read", { renderExecution: ReadFileCard });
 registerToolRenderer("write", { renderExecution: WriteFileCard });
@@ -30,6 +31,14 @@ registerToolRenderer("session_delegate_status", { renderExecution: DelegateStatu
 registerToolRenderer("session_delegate_stop", { renderExecution: DelegateStopCard });
 registerToolRenderer("session_delegate_remove", { renderExecution: DelegateRemoveCard });
 registerToolRenderer("session_delegate_clear_stopped", { renderExecution: DelegateClearCard });
+registerToolRenderer("ask-user-question", {
+  renderExecution: AskUserQuestionToolCard,
+  shouldRenderExecution: shouldRenderAskUserQuestionToolCard,
+});
+registerToolRenderer("askUserQuestion", {
+  renderExecution: AskUserQuestionToolCard,
+  shouldRenderExecution: shouldRenderAskUserQuestionToolCard,
+});
 
 export { getToolRenderer } from "./registry";
 export type { ToolRenderer, ToolRendererProps } from "./registry";

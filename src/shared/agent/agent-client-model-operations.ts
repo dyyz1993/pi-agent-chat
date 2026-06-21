@@ -1,4 +1,4 @@
-import type { RpcClientAPI } from "@dyyz1993/pi-coding-agent";
+import { AuthStorage, ModelRegistry, type RpcClientAPI } from "@dyyz1993/pi-coding-agent";
 
 import { createLogger } from "../lib/logger";
 import { parseTierModel, TIER_KEYS, type TierKey } from "./agent-runtime-config";
@@ -18,6 +18,35 @@ interface ManagedClientAccess<TManaged extends ManagedClientLike> {
   ensureManagedClient: (sessionId: string) => Promise<TManaged | null>;
 }
 
+type AvailableModelInfo = {
+  provider: string;
+  id: string;
+  name: string;
+  contextWindow: number;
+  reasoning: boolean;
+  input: ("text" | "image")[];
+};
+
+type RawAvailableModelInfo = {
+  provider: string;
+  id: string;
+  name?: string;
+  contextWindow: number;
+  reasoning: boolean;
+  input?: ("text" | "image")[];
+};
+
+function normalizeAvailableModel(model: RawAvailableModelInfo): AvailableModelInfo {
+  return {
+    provider: model.provider,
+    id: model.id,
+    name: model.name ?? model.id,
+    contextWindow: model.contextWindow,
+    reasoning: model.reasoning,
+    input: model.input ?? ["text"],
+  };
+}
+
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return Promise.race([
     promise,
@@ -35,6 +64,11 @@ async function resolveManagedClient<TManaged extends ManagedClientLike>(
   return managed;
 }
 
+function getAvailableModelsFromRegistry(): AvailableModelInfo[] {
+  const registry = ModelRegistry.create(AuthStorage.create());
+  return registry.getAvailable().map(normalizeAvailableModel);
+}
+
 export async function getAvailableModelsOperation<TManaged extends ManagedClientLike>(options: {
   sessionId: string;
   getActiveManaged: (sessionId: string) => TManaged | null;
@@ -42,25 +76,28 @@ export async function getAvailableModelsOperation<TManaged extends ManagedClient
   isClientAlive: (sessionId: string, managed: TManaged) => Promise<boolean>;
   cleanupDeadClient: (sessionId: string, reason: string) => void;
   retryDelayMs?: number;
-}): Promise<Array<{ provider: string; id: string; contextWindow: number; reasoning: boolean }>> {
+}): Promise<AvailableModelInfo[]> {
   let managed = options.getActiveManaged(options.sessionId);
   if (!managed && options.retryDelayMs !== 0) {
     await new Promise((r) => setTimeout(r, options.retryDelayMs ?? 200));
     managed = options.getActiveManaged(options.sessionId);
   }
   managed ??= await options.ensureManagedClient(options.sessionId);
-  if (!managed) return [];
-  return managed.client.getAvailableModels().catch(async (err: unknown) => {
-    const msg = err instanceof Error ? err.message : String(err);
-    log.warn("getAvailableModels error, checking if CLI is alive", {
-      sessionId: options.sessionId,
-      err: msg,
+  if (!managed) return getAvailableModelsFromRegistry();
+  return managed.client
+    .getAvailableModels()
+    .then((models) => models.map(normalizeAvailableModel))
+    .catch(async (err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.warn("getAvailableModels error, checking if CLI is alive", {
+        sessionId: options.sessionId,
+        err: msg,
+      });
+      if (!(await options.isClientAlive(options.sessionId, managed))) {
+        options.cleanupDeadClient(options.sessionId, `getAvailableModels failed: ${msg}`);
+      }
+      return getAvailableModelsFromRegistry();
     });
-    if (!(await options.isClientAlive(options.sessionId, managed))) {
-      options.cleanupDeadClient(options.sessionId, `getAvailableModels failed: ${msg}`);
-    }
-    return [];
-  });
 }
 
 export async function setModelOperation<TManaged extends ManagedClientLike>(options: {

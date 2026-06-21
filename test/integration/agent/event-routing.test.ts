@@ -111,6 +111,29 @@ describe("agent event routing", () => {
     expect(options.clients.get("sess-1")?.info.holdEvents).toEqual([]);
   });
 
+  it("forwards askUserQuestion extension UI requests as interactive agent events", async () => {
+    const emitAgentEvent = vi.fn().mockResolvedValue(undefined);
+    const event = {
+      type: "extension_ui_request",
+      id: "ask-1",
+      method: "askUserQuestion",
+      title: "Pick one",
+      questions: [
+        {
+          id: "choice",
+          question: "Which option?",
+          options: [{ label: "A" }],
+        },
+      ],
+    } as unknown as AgentEvent;
+    const options = makeOptions({ event, emitAgentEvent });
+
+    handleAgentEventOperation(options);
+    await flushMicrotasks();
+
+    expect(emitAgentEvent).toHaveBeenCalledWith("sess-1", event);
+  });
+
   it("closes agent state, syncs leaf id, and resolves pending sync delegate on agent_end", async () => {
     const resolved: unknown[] = [];
     const timeout = setTimeout(() => undefined, 10_000);

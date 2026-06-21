@@ -62,7 +62,10 @@ export async function handleDebugRoute(ctx: DebugRouteContext): Promise<boolean>
       title?: string;
       message?: string;
       options?: string[];
+      questions?: unknown[];
       multiple?: boolean;
+      timeout?: number;
+      toolCallId?: string;
       id?: string;
     };
 
@@ -81,7 +84,10 @@ export async function handleDebugRoute(ctx: DebugRouteContext): Promise<boolean>
           title: body.title ?? "Test Request",
           message: body.message ?? "This is a test request",
           options: body.options,
+          questions: body.questions,
           multiple: body.multiple,
+          timeout: body.timeout,
+          toolCallId: body.toolCallId,
         },
       },
     };

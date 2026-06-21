@@ -46,6 +46,15 @@ pi-momo-fork/packages/coding-agent/
 - `src/` 目录 → `tsgo` 编译为 JS 到 `dist/`
 - `extensions/` 目录 → `copy-assets` 直接复制到 `dist/extensions/`（保留 TS 源码）
 - 修改 extensions 后必须重新 build + yalc push，否则 dist 里是旧版本
+- `yalc push` 后如果 `bun run dev:web` 已经在跑，新创建的 Agent 进程会读取更新后的 `dist/`；已经运行中的 Agent/CLI 进程需要 `agent.reload`、停止后重启 session，或重启 dev server 才会加载新的 extension 代码。
+- 修改底层包后至少验证三层：底层相关单测（例如 `npm test -- extensions/coordinator/handler.test.ts`）、`npm run build && yalc push`、消费项目端口健康检查（默认 `http://localhost:3100/` 和 `http://localhost:5173/`）。
+
+### Coordinator 委派索引规则
+
+- `coordinator` 的委派任务索引是父会话感知子任务的持久化入口，存储在父会话目录的 `coordinator-tasks.json`。
+- 不要对 stopped/completed/idle 委派任务做时间驱动的静默自动清理；JSONL 会话文件永久保留时，委派索引也应保留到用户或 Agent 明确调用 `session_delegate_remove` / `session_delegate_clear_stopped`。
+- `buildPrompt()` 应展示当前 store 中的委派任务，不要按年龄过滤，否则父 Agent 刷新、重连或长时间运行后会失去委派历史。
+- 如果将来必须新增清理机制，必须是显式、可配置、可观测的行为，并向前端/父会话发出状态变化事件，不能静默删除。
 
 ## Theme & Design System
 

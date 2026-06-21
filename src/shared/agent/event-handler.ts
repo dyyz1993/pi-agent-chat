@@ -10,6 +10,7 @@ import type { LspChannelEvent } from "../modules/lsp";
 import type { RulesChannelEvent } from "../modules/rules";
 import { createLogger } from "../lib/logger";
 import { config } from "../../server-config";
+import { classifyExtensionUiRequest } from "./agent-event-lifecycle";
 
 const log = createLogger("agent");
 
@@ -128,14 +129,13 @@ export class AgentEventHandler {
 
     if (event.type === "extension_ui_request") {
       const ui = event as ExtensionUIRequestEvent;
-      const INTERACTIVE_METHODS = new Set(["confirm", "input", "select", "editor"]);
-      if (ui.method === "notify") {
+      const action = classifyExtensionUiRequest(ui);
+      if (action.type === "notify") {
         this.deps.broadcastEvent(
           "agent.notify",
           {
             sessionId,
-            message: ui.message ?? "",
-            notifyType: ui.notifyType ?? "info",
+            ...action.payload,
           },
           { sessionId },
         ).catch((err: unknown) => {
@@ -146,7 +146,7 @@ export class AgentEventHandler {
         });
         return;
       }
-      if (!INTERACTIVE_METHODS.has(ui.method)) return;
+      if (action.type === "ignore") return;
     }
 
     // Notify user when a plugin/extension triggers an automatic continue

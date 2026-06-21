@@ -23,6 +23,9 @@ describe("agent event lifecycle helpers", () => {
 
     expect(classifyExtensionUiRequest({ method: "confirm" })).toEqual({ type: "interactive" });
     expect(classifyExtensionUiRequest({ method: "input" })).toEqual({ type: "interactive" });
+    expect(classifyExtensionUiRequest({ method: "askUserQuestion" })).toEqual({
+      type: "interactive",
+    });
     expect(classifyExtensionUiRequest({ method: "unknown" })).toEqual({ type: "ignore" });
   });
 

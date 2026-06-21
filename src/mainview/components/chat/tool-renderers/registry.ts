@@ -11,6 +11,7 @@ export interface ToolRenderer {
   renderCall?: ComponentType<ToolRendererProps>;
   renderExecution?: ComponentType<ToolRendererProps>;
   renderResult?: ComponentType<ToolRendererProps>;
+  shouldRenderExecution?: (props: ToolRendererProps) => boolean;
 }
 
 const registry = new Map<string, ToolRenderer>();

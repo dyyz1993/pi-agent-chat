@@ -1,4 +1,4 @@
-import { memo, useState, useCallback } from "react";
+import { memo, useState, useCallback, useEffect, useMemo, useRef } from "react";
 import {
   CheckCircle,
   XCircle,
@@ -20,6 +20,8 @@ import {
   FileWarning,
   Clock,
   SkipForward,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { UIInteractionBlock } from "../../../types";
@@ -27,8 +29,12 @@ import { getUIMethodIcon } from "../tool-icon-map";
 import { useUIDialogStore } from "../../../stores/use-ui-dialog-store";
 import { useHooksStore } from "../../../stores/use-hooks-store";
 import { useSessionStore } from "../../../stores/use-session-store";
+import type { ToolRendererProps } from "./registry";
 
 type UIBlock = UIInteractionBlock;
+type AskDraftAnswer = { selected: string[]; text: string };
+
+const SINGLE_SELECT_ADVANCE_DELAY_MS = 500;
 
 const BG_MAP: Record<string, string> = {
   pending:
@@ -74,6 +80,65 @@ export function CardShell({ block, children }: { block: UIBlock; children: React
   );
 }
 
+export const UIInteractionAnchor = memo(function UIInteractionAnchor({ block }: { block: UIBlock }) {
+  const { t } = useTranslation("chat");
+  const setPanelOpen = useUIDialogStore((s) => s.setPanelOpen);
+  const { icon: Icon, color } = getUIMethodIcon(block.method);
+  const isPending = block.status === "pending";
+
+  const focusPrimarySurface = useCallback(() => {
+    const dock = Array.from(document.querySelectorAll("[data-ui-dock-request-id]")).find(
+      (el) => el.getAttribute("data-ui-dock-request-id") === block.id,
+    );
+    if (dock) {
+      dock.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      return;
+    }
+    setPanelOpen(true);
+  }, [block.id, setPanelOpen]);
+
+  const statusLabel = isPending
+    ? t("uiCard.waitingResponse")
+    : block.status === "responded"
+      ? t("uiCard.confirmed")
+      : t("uiCard.rejected");
+
+  return (
+    <div
+      className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 text-xs ${
+        isPending
+          ? "border-status-warning/25 bg-status-warning/10 text-status-warning"
+          : "border-border-secondary/40 bg-surface-dim text-text-secondary"
+      }`}
+      data-ui-request-id={block.id}
+    >
+      <Icon className={`h-3.5 w-3.5 shrink-0 ${color}`} />
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate font-medium text-text-primary">
+            {block.title ?? t("uiPending.pendingRequestsTitle")}
+          </span>
+          <span className="shrink-0 text-[10px] text-text-tertiary">{statusLabel}</span>
+        </div>
+        {block.message && (
+          <div className="mt-0.5 truncate text-[10px] text-text-tertiary">{block.message}</div>
+        )}
+      </div>
+      {isPending ? (
+        <button
+          type="button"
+          onClick={focusPrimarySurface}
+          className="shrink-0 rounded-md border border-status-warning/30 bg-status-warning/10 px-2 py-1 text-[11px] font-medium text-status-warning transition-colors hover:bg-status-warning/20"
+        >
+          {t("uiPending.handleRequest", "处理")}
+        </button>
+      ) : (
+        <CheckCircle className="h-3.5 w-3.5 shrink-0 text-status-success" />
+      )}
+    </div>
+  );
+});
+
 const HOOK_TOOL_ICONS: Record<string, { icon: typeof Terminal; color: string }> = {
   bash: { icon: Terminal, color: "text-orange-400" },
   read: { icon: Eye, color: "text-blue-400" },
@@ -94,6 +159,8 @@ export const ConfirmCard = memo(function ConfirmCard({ block }: { block: UIBlock
 
   const hookMeta = block.hookMeta;
   const isHookConfirm = !!hookMeta;
+  const confirmText = block.confirmText ?? hookMeta?.confirmText;
+  const cancelText = block.cancelText ?? hookMeta?.cancelText;
 
   const responseText =
     block.status === "responded" && block.response
@@ -117,6 +184,14 @@ export const ConfirmCard = memo(function ConfirmCard({ block }: { block: UIBlock
               <div className="flex items-start gap-1.5 bg-black/30 dark:bg-black/40 rounded px-2 py-1 max-h-32 overflow-y-auto">
                 <HookIcon className={`w-3 h-3 mt-0.5 shrink-0 ${hookIcon.color}`} />
                 <div className="min-w-0">
+                  {hookMeta.toolName === "bash" && hookMeta.description && (
+                    <>
+                      <div className="text-[10px] text-text-tertiary mb-0.5">操作说明</div>
+                      <div className="text-[11px] text-text-primary leading-relaxed mb-1">
+                        {hookMeta.description}
+                      </div>
+                    </>
+                  )}
                   <div className="text-[10px] text-text-tertiary mb-0.5">目标操作</div>
                   <code className="text-[11px] text-text-primary font-mono break-all leading-relaxed">
                     {hookMeta.command}
@@ -142,14 +217,14 @@ export const ConfirmCard = memo(function ConfirmCard({ block }: { block: UIBlock
                 className="flex-1 flex items-center justify-center gap-1 py-1 text-[11px] rounded bg-status-success text-white dark:bg-status-success/20 dark:text-status-success hover:bg-status-success/90 dark:hover:bg-status-success/30 transition-colors"
               >
                 <CheckCircle className="w-3 h-3" />
-                {t("uiCard.allowOnce")}
+                {confirmText ?? t("uiCard.allowOnce")}
               </button>
               <button
                 onClick={() => dismissById(block.id)}
                 className="flex items-center justify-center gap-1 px-3 py-1 text-[11px] rounded bg-status-error text-white dark:bg-status-error/15 dark:text-status-error hover:bg-status-error/90 dark:hover:bg-status-error/25 transition-colors"
               >
                 <XCircle className="w-3 h-3" />
-                {t("common:cancel")}
+                {cancelText ?? t("common:cancel")}
               </button>
             </div>
             <button
@@ -211,6 +286,539 @@ export const ConfirmCard = memo(function ConfirmCard({ block }: { block: UIBlock
   );
 });
 
+function normalizeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string");
+}
+
+function normalizeAskAnswer(value: unknown): AskDraftAnswer {
+  if (!value || typeof value !== "object") {
+    return { selected: [], text: "" };
+  }
+  const record = value as Record<string, unknown>;
+  return {
+    selected: normalizeStringArray(record.selected),
+    text: typeof record.text === "string" ? record.text : "",
+  };
+}
+
+function normalizeAskAnswers(value: unknown): Record<string, AskDraftAnswer> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const result: Record<string, AskDraftAnswer> = {};
+  for (const [questionId, answer] of Object.entries(value as Record<string, unknown>)) {
+    result[questionId] = normalizeAskAnswer(answer);
+  }
+  return Object.keys(result).length > 0 ? result : null;
+}
+
+function getAskResponseAnswers(block: UIBlock): Record<string, AskDraftAnswer> | null {
+  if (block.status !== "responded" || !block.response) return null;
+  const rawAnswers =
+    "answers" in block.response
+      ? (block.response as Record<string, unknown>).answers
+      : block.response;
+  return normalizeAskAnswers(rawAnswers);
+}
+
+function parseAskToolOutput(output?: string): Record<string, AskDraftAnswer> | null {
+  const raw = output?.trim();
+  if (!raw) return null;
+  const prefix = "User answered:";
+  const jsonText = raw.startsWith(prefix) ? raw.slice(prefix.length).trim() : raw;
+  try {
+    const parsed = JSON.parse(jsonText) as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && "answers" in parsed) {
+      return normalizeAskAnswers((parsed as Record<string, unknown>).answers);
+    }
+    return normalizeAskAnswers(parsed);
+  } catch {
+    return null;
+  }
+}
+
+function parseJsonObject(value?: string): Record<string, unknown> | null {
+  const raw = value?.trim();
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function isAskQuestion(value: unknown): value is NonNullable<UIBlock["questions"]>[number] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.id === "string" &&
+    typeof record.question === "string" &&
+    Array.isArray(record.options)
+  );
+}
+
+function parseAskToolArgs(args?: string): {
+  title?: string;
+  message?: string;
+  questions?: NonNullable<UIBlock["questions"]>;
+} {
+  const parsed = parseJsonObject(args);
+  if (!parsed) return {};
+  const questions = Array.isArray(parsed.questions)
+    ? parsed.questions.filter(isAskQuestion)
+    : undefined;
+  return {
+    title: typeof parsed.title === "string" ? parsed.title : undefined,
+    message: typeof parsed.message === "string" ? parsed.message : undefined,
+    questions: questions && questions.length > 0 ? questions : undefined,
+  };
+}
+
+export function shouldRenderAskUserQuestionToolCard({
+  block,
+  uiBlock,
+}: ToolRendererProps): boolean {
+  if (block.status === "error") return false;
+  return block.status === "running" || !!uiBlock || parseAskToolOutput(block.output) !== null;
+}
+
+export const AskUserQuestionCard = memo(function AskUserQuestionCard({
+  block,
+}: {
+  block: UIBlock;
+}) {
+  const { t } = useTranslation("chat");
+  const respondById = useUIDialogStore((s) => s.respondById);
+  const dismissById = useUIDialogStore((s) => s.dismissById);
+  const questions = block.questions ?? [];
+  const isPending = block.status === "pending";
+  const [draft, setDraft] = useState<Record<string, AskDraftAnswer>>({});
+  const [currentStep, setCurrentStep] = useState(0);
+  const [autoAdvance, setAutoAdvance] = useState<{ questionId: string; label: string } | null>(
+    null,
+  );
+  const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const currentQuestionIndex = Math.min(currentStep, Math.max(questions.length - 1, 0));
+  const currentQuestion = questions[currentQuestionIndex];
+
+  const clearAutoAdvance = useCallback(() => {
+    if (autoAdvanceTimerRef.current) {
+      clearTimeout(autoAdvanceTimerRef.current);
+      autoAdvanceTimerRef.current = null;
+    }
+  }, []);
+
+  const resetAutoAdvance = useCallback(() => {
+    clearAutoAdvance();
+    setAutoAdvance(null);
+  }, [clearAutoAdvance]);
+
+  useEffect(() => () => clearAutoAdvance(), [clearAutoAdvance]);
+
+  const answerEntries = questions.map((question) => [
+    question.id,
+    draft[question.id] ?? { selected: [], text: "" },
+  ]);
+  const canSubmit = answerEntries.some(([, answer]) => {
+    const typedAnswer = answer as AskDraftAnswer;
+    return typedAnswer.selected.length > 0 || typedAnswer.text.trim().length > 0;
+  });
+  const hasAnswer = (questionId: string) => {
+    const answer = draft[questionId] ?? { selected: [], text: "" };
+    return answer.selected.length > 0 || answer.text.trim().length > 0;
+  };
+  const canAdvance = currentQuestion ? hasAnswer(currentQuestion.id) : false;
+  const allAnswered = questions.length > 0 && questions.every((question) => hasAnswer(question.id));
+  const isLastStep = currentQuestionIndex >= questions.length - 1;
+  const autoAdvanceActive = !!autoAdvance;
+  const goBack = useCallback(() => {
+    resetAutoAdvance();
+    setCurrentStep((step) => Math.max(0, step - 1));
+  }, [resetAutoAdvance]);
+  const goNext = useCallback(() => {
+    resetAutoAdvance();
+    setCurrentStep((step) => Math.min(questions.length - 1, step + 1));
+  }, [questions.length, resetAutoAdvance]);
+
+  const buildAnswers = useCallback(
+    (answersDraft: Record<string, AskDraftAnswer>) =>
+      Object.fromEntries(
+        questions.map((question) => {
+          const typedAnswer = answersDraft[question.id] ?? { selected: [], text: "" };
+          return [
+            question.id,
+            {
+              selected: typedAnswer.selected,
+              ...(typedAnswer.text.trim() ? { text: typedAnswer.text.trim() } : {}),
+            },
+          ];
+        }),
+      ),
+    [questions],
+  );
+
+  const submit = useCallback(
+    (answersDraft = draft) => {
+      resetAutoAdvance();
+      respondById(block.id, { action: "responded", answers: buildAnswers(answersDraft) });
+    },
+    [block.id, buildAnswers, draft, resetAutoAdvance, respondById],
+  );
+
+	  const chooseOption = useCallback(
+	    (questionId: string, label: string, multiSelect: boolean) => {
+	      const current = draft[questionId] ?? { selected: [], text: "" };
+	      const selected = multiSelect
+	        ? current.selected.includes(label)
+	          ? current.selected.filter((item) => item !== label)
+	          : [...current.selected, label]
+	        : [label];
+	      const nextDraft = {
+	        ...draft,
+	        [questionId]: { selected, text: multiSelect ? current.text : "" },
+	      };
+      setDraft(nextDraft);
+      if (!multiSelect) {
+        clearAutoAdvance();
+        setAutoAdvance({ questionId, label });
+        autoAdvanceTimerRef.current = setTimeout(() => {
+          autoAdvanceTimerRef.current = null;
+          setAutoAdvance(null);
+          if (isLastStep) {
+            submit(nextDraft);
+          } else {
+            setCurrentStep((step) => Math.min(questions.length - 1, step + 1));
+          }
+        }, SINGLE_SELECT_ADVANCE_DELAY_MS);
+      }
+    },
+    [clearAutoAdvance, draft, isLastStep, questions.length, submit],
+  );
+
+  const updateCustomAnswer = useCallback(
+    (questionId: string, text: string, multiSelect: boolean) => {
+      resetAutoAdvance();
+      setDraft((prev) => {
+        const current = prev[questionId] ?? { selected: [], text: "" };
+        return {
+          ...prev,
+          [questionId]: {
+            selected: multiSelect ? current.selected : [],
+            text,
+          },
+        };
+      });
+    },
+    [resetAutoAdvance],
+  );
+
+  const responseAnswers = useMemo(() => getAskResponseAnswers(block), [block]);
+  const responseRows = useMemo(() => {
+    if (!responseAnswers) return [];
+    return Object.entries(responseAnswers).map(([questionId, answer]) => {
+      const question = questions.find((item) => item.id === questionId);
+      const label = question?.header || question?.question || questionId;
+      const detail =
+        question?.header && question.question && question.question !== question.header
+          ? question.question
+          : undefined;
+      return {
+        questionId,
+        label,
+        detail,
+        values: [...answer.selected, answer.text].filter((item) => item.trim().length > 0),
+      };
+    });
+  }, [questions, responseAnswers]);
+  const { icon: MethodIcon, color } = getUIMethodIcon(block.method);
+  const mainTitle = block.title ?? t("uiPending.askUserQuestion");
+
+  if (isPending) {
+    return (
+      <div
+        className="flex max-h-[min(520px,58vh)] flex-col overflow-hidden rounded-2xl border border-border-secondary/50 bg-bg-elevated/95 shadow-sm dark:bg-surface-dim/95"
+        data-ui-request-id={block.id}
+      >
+        {currentQuestion ? (
+          <>
+          <div className="shrink-0 px-3.5 pb-2.5 pt-3.5 sm:px-4 sm:pt-4">
+            <div className="flex items-center gap-2">
+              <div className="min-w-0 flex-1 text-[14px] font-semibold leading-snug text-text-primary">
+                {mainTitle}
+              </div>
+              <div className="flex shrink-0 items-center gap-1 text-xs text-text-tertiary">
+                <button
+                  type="button"
+                  disabled={currentQuestionIndex === 0}
+                  onClick={goBack}
+                  className="rounded-md p-1 transition-colors hover:bg-surface-hover disabled:cursor-default disabled:opacity-30"
+                  aria-label={t("common:back")}
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </button>
+                <span className="min-w-8 text-center tabular-nums">
+                  {currentQuestionIndex + 1}/{questions.length}
+                </span>
+                <button
+                  type="button"
+                  disabled={isLastStep || !canAdvance || autoAdvanceActive}
+                  onClick={goNext}
+                  className="rounded-md p-1 transition-colors hover:bg-surface-hover disabled:cursor-default disabled:opacity-30"
+                  aria-label={t("common:next")}
+                >
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-2 flex items-start gap-2">
+              <span className="mt-0.5 max-w-[42%] shrink-0 truncate rounded-full border border-border-secondary/60 bg-surface-hover/45 px-2 py-0.5 text-[11px] font-medium text-text-secondary">
+                {currentQuestion.header}
+              </span>
+              <div className="min-w-0 flex-1 text-[13px] font-medium leading-relaxed text-text-primary/95">
+                {currentQuestion.question}
+              </div>
+            </div>
+
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto px-3.5 py-2 sm:px-4">
+            <div className="space-y-2">
+              {currentQuestion.options.map((option) => {
+                const current = draft[currentQuestion.id] ?? { selected: [], text: "" };
+                const checked = current.selected.includes(option.label);
+                const isAutoSelecting =
+                  autoAdvance?.questionId === currentQuestion.id &&
+                  autoAdvance.label === option.label;
+                const isActive = checked || isAutoSelecting;
+                const Icon = currentQuestion.multiSelect
+                  ? checked
+                    ? CheckSquare
+                    : Square
+                  : CircleDot;
+                return (
+                  <button
+                    key={option.label}
+                    type="button"
+                    onClick={() =>
+                      chooseOption(currentQuestion.id, option.label, !!currentQuestion.multiSelect)
+                    }
+                    className={`w-full rounded-xl px-3 py-2.5 text-left text-[12px] transition-colors ${
+                      isActive
+                        ? "bg-surface-hover text-text-primary ring-1 ring-semantic-accent/35"
+                        : "text-text-secondary hover:bg-surface-hover/55"
+                    }`}
+                  >
+                    <span className="flex items-start gap-2.5">
+                      <Icon
+                        className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${
+                          isActive ? "text-semantic-accent" : "text-text-tertiary"
+                        }`}
+                      />
+                      <span className="min-w-0">
+                        <span className="block font-semibold text-text-primary">
+                          {option.label}
+                        </span>
+                        {option.description && (
+                          <span className="mt-0.5 block text-[11px] leading-relaxed text-text-tertiary">
+                            {option.description}
+                          </span>
+                        )}
+                        {option.preview && (
+                          <span className="mt-1 block rounded bg-surface-code px-1.5 py-1 font-mono text-[10px] text-text-secondary">
+                            {option.preview}
+                          </span>
+                        )}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+              {(() => {
+                const customText = (draft[currentQuestion.id]?.text ?? "").trim();
+                const CustomIcon = currentQuestion.multiSelect
+                  ? customText
+                    ? CheckSquare
+                    : Square
+                  : CircleDot;
+                return (
+                  <label
+                    className={`flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-[12px] transition-colors ${
+                      customText
+                        ? "bg-surface-hover text-text-primary ring-1 ring-semantic-accent/35"
+                        : "text-text-secondary hover:bg-surface-hover/55"
+                    }`}
+                  >
+                    <CustomIcon
+                      className={`h-3.5 w-3.5 shrink-0 ${
+                        customText ? "text-semantic-accent" : "text-text-tertiary"
+                      }`}
+                    />
+                    <input
+                      type="text"
+                      value={(draft[currentQuestion.id] ?? { selected: [], text: "" }).text}
+                      onChange={(event) =>
+                        updateCustomAnswer(
+                          currentQuestion.id,
+                          event.target.value,
+                          !!currentQuestion.multiSelect,
+                        )
+                      }
+                      onFocus={() =>
+                        updateCustomAnswer(
+                          currentQuestion.id,
+                          draft[currentQuestion.id]?.text ?? "",
+                          !!currentQuestion.multiSelect,
+                        )
+                      }
+                      placeholder={t("uiCard.customAnswer")}
+                      className="min-w-0 flex-1 bg-transparent text-[12px] font-medium text-text-primary placeholder:text-text-tertiary focus:outline-none"
+                    />
+                  </label>
+                );
+              })()}
+            </div>
+          </div>
+
+          <div className="shrink-0 border-t border-border-secondary/50 px-3.5 py-3 sm:px-4">
+            <div className="flex flex-wrap items-center gap-2">
+              {autoAdvance ? (
+                <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-semantic-accent">
+                  {t("uiCard.selectionSaved", { value: autoAdvance.label })}
+                </span>
+              ) : block.message ? (
+                <span className="min-w-0 flex-1 truncate text-[11px] text-text-tertiary">
+                  {block.message}
+                </span>
+              ) : (
+                <span className="min-w-0 flex-1" />
+              )}
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    resetAutoAdvance();
+                    dismissById(block.id);
+                  }}
+                  className="rounded-lg border border-border-secondary/70 bg-surface-hover/35 px-3 py-2 text-[12px] font-medium text-text-secondary transition-colors hover:bg-surface-hover"
+                >
+                  {t("common:dismiss")}
+                </button>
+                {questions.length > 0 && !isLastStep ? (
+                  <button
+                    onClick={goNext}
+                    disabled={!canAdvance || autoAdvanceActive}
+                    className="rounded-lg bg-semantic-accent px-4 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-semantic-accent/90 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <span className="inline-flex items-center justify-center gap-1">
+                      {t("common:next")}
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => submit()}
+                    disabled={questions.length > 0 ? !allAnswered || autoAdvanceActive : !canSubmit}
+                    className="rounded-lg bg-semantic-accent px-4 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-semantic-accent/90 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {t("common:submit")}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+          </>
+        ) : (
+          <div className="px-3.5 py-3 text-[12px] text-text-secondary">{block.message}</div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="overflow-hidden rounded-xl border border-status-success/25 bg-status-success/10 dark:bg-status-success/15"
+      data-ui-request-id={block.id}
+    >
+      <div className="flex items-center gap-2 px-3 py-2 text-xs">
+        <MethodIcon className={`w-3.5 h-3.5 shrink-0 ${color}`} />
+        <span className={`min-w-0 flex-1 truncate font-medium ${color}`}>
+          {block.title ?? t("uiCard.askAnswered")}
+        </span>
+        <CheckCircle className="w-3 h-3 text-status-success shrink-0 ml-auto" />
+      </div>
+      {responseRows.length > 0 ? (
+        <div className="space-y-1 px-3 pb-2.5 text-[11px] text-text-secondary">
+          {responseRows.map((row) => (
+            <div key={row.questionId} className="rounded-lg bg-surface-hover/35 px-2 py-1.5">
+              <div className="mb-1 truncate text-[10px] font-medium text-text-tertiary">
+                <span>{row.label}</span>
+                {row.detail && <span className="text-text-tertiary/80">（{row.detail}）</span>}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {row.values.length > 0 ? (
+                  row.values.map((value) => (
+                    <span
+                      key={value}
+                      className="rounded-md bg-status-success/15 px-1.5 py-0.5 text-[11px] font-medium text-status-success"
+                    >
+                      {value}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-text-tertiary">{t("uiCard.empty")}</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : block.message ? (
+        <div className="px-3 pb-2 text-[11px] text-text-secondary">{block.message}</div>
+      ) : null}
+    </div>
+  );
+});
+
+export const AskUserQuestionToolCard = memo(function AskUserQuestionToolCard({
+  block,
+  uiBlock,
+}: ToolRendererProps) {
+  const parsedAnswers = parseAskToolOutput(block.output);
+  const parsedArgs = parseAskToolArgs(block.args);
+
+  if (uiBlock) {
+    if (!parsedAnswers && uiBlock.status === "pending") {
+      return <UIInteractionAnchor block={uiBlock} />;
+    }
+    const normalizedBlock: UIBlock =
+      parsedAnswers && block.status !== "running"
+        ? {
+            ...uiBlock,
+            status: "responded",
+            title: uiBlock.title ?? parsedArgs.title,
+            message: uiBlock.message ?? parsedArgs.message,
+            questions: uiBlock.questions ?? parsedArgs.questions,
+            response: { action: "responded", answers: parsedAnswers },
+          }
+        : uiBlock;
+    return <AskUserQuestionCard block={normalizedBlock} />;
+  }
+
+  const fallbackBlock: UIBlock = {
+    type: "uiInteraction",
+    id: block.toolCallId,
+    method: "askUserQuestion",
+    status: parsedAnswers ? "responded" : block.status === "error" ? "dismissed" : "pending",
+    title: parsedArgs.title ?? block.toolName,
+    message: parsedAnswers ? parsedArgs.message : block.output,
+    questions: parsedArgs.questions,
+    response: parsedAnswers ? { action: "responded", answers: parsedAnswers } : undefined,
+  };
+
+  return <AskUserQuestionCard block={fallbackBlock} />;
+});
+
 export const PathPermissionCard = memo(function PathPermissionCard({ block }: { block: UIBlock }) {
   const { t } = useTranslation("chat");
   const respondById = useUIDialogStore((s) => s.respondById);
@@ -222,9 +830,7 @@ export const PathPermissionCard = memo(function PathPermissionCard({ block }: { 
   const ScopeIcon = scopeIcon;
 
   const responseValue =
-    block.status === "responded" && block.response
-      ? (block.response.value as string)
-      : null;
+    block.status === "responded" && block.response ? (block.response.value as string) : null;
 
   if (responseValue) {
     return (
@@ -275,9 +881,7 @@ export const PathPermissionCard = memo(function PathPermissionCard({ block }: { 
             <div className="flex items-center gap-1.5">
               <ShieldAlert className="w-3 h-3 text-status-warning shrink-0" />
               <span className="text-[10px] text-text-tertiary">Status</span>
-              <span className="text-[11px] text-status-warning ml-auto">
-                {meta.relativeTo}
-              </span>
+              <span className="text-[11px] text-status-warning ml-auto">{meta.relativeTo}</span>
             </div>
           </div>
         )}
@@ -708,6 +1312,8 @@ export const RespondUICard = memo(function RespondUICard({ block }: { block: UIB
 
 export const UIInteractionCard = memo(function UIInteractionCard({ block }: { block: UIBlock }) {
   switch (block.method) {
+    case "askUserQuestion":
+      return <AskUserQuestionCard block={block} />;
     case "confirm":
       return <ConfirmCard block={block} />;
     case "select":
