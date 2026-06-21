@@ -163,12 +163,25 @@ export function messageToChatMessage(
   }
 
   if (role === "compactionSummary") {
-    const raw = message as unknown as { summary?: string; tokensBefore?: number };
+    const raw = message as unknown as {
+      summary?: string;
+      tokensBefore?: number;
+      status?: "running" | "completed" | "failed" | "aborted";
+      reason?: string;
+    };
     const summary = raw.summary ?? "";
     return {
       id: msgId,
       role: "compactionSummary",
-      content: [{ type: "compactionSummary" as const, summary, tokensBefore: raw.tokensBefore }],
+      content: [
+        {
+          type: "compactionSummary" as const,
+          summary,
+          tokensBefore: raw.tokensBefore,
+          status: raw.status,
+          reason: raw.reason,
+        },
+      ],
       timestamp: extractTimestamp(message),
       ...(entryId ? { entryId } : {}),
     };

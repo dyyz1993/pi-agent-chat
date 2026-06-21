@@ -1,4 +1,4 @@
-import { useMemo, memo, useCallback } from "react";
+import { useMemo, memo, useCallback, useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Virtualizer, type VirtualizerHandle } from "virtua";
@@ -17,6 +17,8 @@ import { useChatStore } from "../../stores/use-chat-store";
 import { useSubagentStore } from "../../stores/use-subagent-store";
 import { useSessionStore } from "../../stores/use-session-store";
 import { useSettingsStore } from "../../stores/use-settings-store";
+import type { CompactionActivity } from "../../stores/use-compaction-store";
+import { useCompactionStore } from "../../stores/use-compaction-store";
 
 const EMPTY_MSGS: ChatMessage[] = [];
 
@@ -65,6 +67,28 @@ interface CardMetaEntry {
 }
 
 const _cardMetaCache = new Map<string, CacheEntry<Map<string, CardMetaEntry>>>();
+
+function buildCompactionActivityMessage(
+  sessionId: string,
+  activity: CompactionActivity,
+): ChatMessage {
+  return {
+    id: `__compaction_running__:${sessionId}`,
+    role: "compactionSummary",
+    content: [
+      {
+        type: "compactionSummary",
+        summary: "",
+        status: activity.status,
+        reason: activity.reason,
+        startedAt: activity.startedAt,
+      },
+    ],
+    timestamp: 0,
+    isStreaming: activity.status === "running",
+    _local: true,
+  };
+}
 
 function evictIfNeeded<K, V>(cache: Map<K, V>): void {
   if (cache.size > MAX_CACHE_SIZE) {
@@ -221,33 +245,76 @@ export const MessageListView = memo(function MessageListView({
   const messages = useStableMessages(source);
   const { t } = useTranslation("chat");
   const showMemoryEntries = useSettingsStore((s) => s.showMemoryEntries);
+  const sessionStatus = useSessionStore(
+    useCallback(
+      (s) => (activeSessionId ? s.sessionStatusMap[activeSessionId] : undefined),
+      [activeSessionId],
+    ),
+  );
+  const compactionActivity = useCompactionStore(
+    useCallback(
+      (s) => (activeSessionId ? s.activitiesBySession[activeSessionId] : undefined),
+      [activeSessionId],
+    ),
+  );
+  useEffect(() => {
+    if (
+      source === "main" &&
+      activeSessionId &&
+      sessionStatus === "compacting" &&
+      !compactionActivity
+    ) {
+      useCompactionStore.getState().markRunning(activeSessionId, "active");
+    }
+  }, [activeSessionId, compactionActivity, sessionStatus, source]);
+  const visibleMessages = useMemo(() => {
+    if (source !== "main" || !activeSessionId) {
+      return messages;
+    }
+    const activity = compactionActivity;
+    if (!activity || activity.status === "completed") return messages;
+    if (messages.some((msg) => msg.id === `__compaction_running__:${activeSessionId}`)) {
+      return messages;
+    }
+    return [...messages, buildCompactionActivityMessage(activeSessionId, activity)];
+  }, [activeSessionId, compactionActivity, messages, sessionStatus, source]);
+
+  useEffect(() => {
+    if (source !== "main" || compactionActivity?.status !== "running") return;
+    const scrollEl = scrollRef?.current;
+    if (!scrollEl) return;
+    const frame = requestAnimationFrame(() => {
+      scrollEl.scrollTo({ top: scrollEl.scrollHeight, behavior: "smooth" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [compactionActivity?.startedAt, compactionActivity?.status, scrollRef, source]);
 
   const cardMeta = useMemo(() => {
-    if (!activeSessionId) return buildCardMeta(messages, t);
-    const revision = computeMessagesRevision(messages);
+    if (!activeSessionId) return buildCardMeta(visibleMessages, t);
+    const revision = `${computeMessagesRevision(visibleMessages)}:status:${sessionStatus ?? ""}`;
     const cached = _cardMetaCache.get(activeSessionId);
     if (cached && cached.revision === revision) {
       return cached.result;
     }
-    const result = buildCardMeta(messages, t);
+    const result = buildCardMeta(visibleMessages, t);
     _cardMetaCache.set(activeSessionId, { revision, result });
     evictIfNeeded(_cardMetaCache);
     return result;
-  }, [messages, t, activeSessionId]);
+  }, [visibleMessages, t, activeSessionId, sessionStatus]);
   const processedMessages = useMemo(() => {
-    if (!activeSessionId) return buildProcessedMessages(messages, showMemoryEntries);
-    const revision = `${computeMessagesRevision(messages)}:memory:${showMemoryEntries ? "1" : "0"}`;
+    if (!activeSessionId) return buildProcessedMessages(visibleMessages, showMemoryEntries);
+    const revision = `${computeMessagesRevision(visibleMessages)}:memory:${showMemoryEntries ? "1" : "0"}:status:${sessionStatus ?? ""}`;
     const cached = _processedMessagesCache.get(activeSessionId);
     if (cached && cached.revision === revision) {
       return cached.result;
     }
-    const result = buildProcessedMessages(messages, showMemoryEntries);
+    const result = buildProcessedMessages(visibleMessages, showMemoryEntries);
     _processedMessagesCache.set(activeSessionId, { revision, result });
     evictIfNeeded(_processedMessagesCache);
     return result;
-  }, [messages, activeSessionId, showMemoryEntries]);
+  }, [visibleMessages, activeSessionId, showMemoryEntries, sessionStatus]);
 
-  if (messages.length === 0 && scrollRef) {
+  if (visibleMessages.length === 0 && scrollRef) {
     return (
       <div
         ref={scrollRef as React.Ref<HTMLDivElement>}

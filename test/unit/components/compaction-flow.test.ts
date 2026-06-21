@@ -5,22 +5,22 @@
  *
  * 完整流程：
  * 1. 被动压缩（threshold/overflow）：
- *    compaction_start → sessionStatus="compacting" → CompactingIndicator 紫色占位行
+ *    compaction_start → sessionStatus="compacting" → compactionSummary 运行态卡片
  *    → compaction_end + streaming → defer reload（等 agent_end）
- *    → compaction_end + !streaming → 立即 reload → CompactingIndicator 消失
+ *    → compaction_end + !streaming → 立即 reload → 运行态卡片消失
  *    → reload 后 compactionSummary 消息出现在列表中（Archive 图标）
  *
  * 2. 手动压缩（/compact-force）：
- *    compaction_start → CompactingIndicator
+ *    compaction_start → compactionSummary 运行态卡片
  *    → compaction_end + !streaming → 清 compacting status + reload
- *    → CompactingIndicator 立即消失 + compactionSummary 出现
+ *    → 运行态卡片立即消失 + compactionSummary 出现
  *
  * 3. 压缩失败：
  *    compaction_end + aborted/reason → 错误通知 + 正常清 status
  *
  * 这组测试验证：
  * - compactionSummary 消息在 SideNav 中显示为 Archive 图标
- * - CompactingIndicator 在 sessionStatus="compacting" 时渲染
+ * - sessionStatus="compacting" 时由消息列表注入 compactionSummary 运行态卡片
  * - compactionSummary 在 buildProcessedMessages 中不被过滤
  */
 import { describe, it, expect } from "vitest";
@@ -105,12 +105,12 @@ describe("Compaction — compactionSummary in message list", () => {
   });
 });
 
-describe("Compaction — CompactingIndicator visibility logic", () => {
+describe("Compaction — running card visibility logic", () => {
   /**
-   * CompactingIndicator 在 MessageListView 中条件渲染：
+   * 运行态 compactionSummary 在 MessageListView 中条件注入：
    * sessionStatusMap[activeSessionId] === "compacting"
    *
-   * 这里验证消息列表层逻辑——CompactingIndicator 是纯 UI 驱动的，
+   * 这里验证消息列表层逻辑——运行态卡片是纯 UI 驱动的，
    * 不是真实消息，所以不出现在 messages 数组中。
    */
 

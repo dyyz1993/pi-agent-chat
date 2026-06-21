@@ -1,5 +1,5 @@
 import { memo, useCallback } from "react";
-import { ChevronDown, ChevronRight, Archive } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useTurnStore, EMPTY_SET } from "../../stores/use-turn-store";
 import { useSessionStore } from "../../stores/use-session-store";
@@ -250,62 +250,9 @@ export const MessageCard = memo(function MessageCard({
   }
 
   if (isCompaction) {
-    const compactionBlock = message.content.find(
-      (b): b is Extract<typeof b, { type: "compactionSummary" }> => b.type === "compactionSummary",
-    );
-    const roleCfg = ROLE_CONFIG.compactionSummary;
-    const summary = compactionBlock?.summary ?? "";
-    const firstLine =
-      summary
-        .split("\n")
-        .find((l) => l.trim() && !l.startsWith("#"))
-        ?.trim() ?? summary.slice(0, 100);
-
     return (
-      <div
-        data-msg-card-id={message.id}
-        className={`${CHAT_CARD_INTERACTIVE_SHELL_CLASS} ${roleCfg.bgColor}`}
-      >
-        <div
-          className={`${CHAT_CARD_HEADER_BASE_CLASS} ${roleCfg.barColor}`}
-        >
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              toggleCollapse(message.id);
-            }}
-            className="p-0.5 text-text-secondary hover:text-text-primary dark:hover:text-text-secondary transition-colors shrink-0"
-            title={collapseButtonLabel}
-            aria-label={collapseButtonLabel}
-          >
-            <CollapseIcon collapsed={isCollapsed} />
-          </button>
-          <span className={`flex items-center gap-1 text-[11px] font-medium ${roleCfg.color}`}>
-            <Archive className="w-3 h-3" />
-            {t("contextCompaction")}
-          </span>
-          {compactionBlock?.tokensBefore != null && (
-            <span className="text-[10px] text-text-tertiary dark:text-text-secondary">
-              {Math.round(compactionBlock.tokensBefore / 1000)}k tokens
-            </span>
-          )}
-          <div className="flex items-center gap-0.5 ml-auto shrink-0">
-            <span className="text-[10px] text-text-tertiary dark:text-text-secondary">
-              {timeStr}
-            </span>
-          </div>
-        </div>
-        {isCollapsed ? (
-          <div
-            className={`relative z-20 border-l-[3px] ${roleCfg.barColor} px-3 py-1 text-xs text-text-tertiary italic leading-relaxed`}
-          >
-            {firstLine}
-          </div>
-        ) : (
-          <div className="relative z-20">
-            <MessageBubble message={message} mergedResultData={mergedResultData} />
-          </div>
-        )}
+      <div data-msg-card-id={message.id} className={CHAT_CARD_SHELL_CLASS}>
+        <MessageBubble message={message} mergedResultData={mergedResultData} />
       </div>
     );
   }

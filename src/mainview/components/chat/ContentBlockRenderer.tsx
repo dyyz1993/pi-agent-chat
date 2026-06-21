@@ -11,6 +11,7 @@ import { SnapshotBadge } from "./snapshot/SnapshotBadge";
 import { SubagentExecutionCard } from "./tool-renderers/SubagentRenderer";
 import { UIInteractionCard } from "./tool-renderers/UICardRenderer";
 import { getToolRenderer } from "./tool-renderers";
+import type { ToolRendererProps } from "./tool-renderers";
 import {
   MEMORY_HIDDEN_IN_CHAT,
   isLspCustomType,
@@ -18,6 +19,15 @@ import {
 } from "./lsp-constants";
 import { useSettingsStore } from "../../stores/use-settings-store";
 import type { ContentBlock, UIInteractionBlock } from "../../types";
+
+function shouldUseToolRenderer(
+  renderer: ReturnType<typeof getToolRenderer>,
+  props: ToolRendererProps,
+): renderer is NonNullable<ReturnType<typeof getToolRenderer>> & {
+  renderExecution: NonNullable<NonNullable<ReturnType<typeof getToolRenderer>>["renderExecution"]>;
+} {
+  return !!renderer?.renderExecution && (renderer.shouldRenderExecution?.(props) ?? true);
+}
 
 export interface ContentBlockRendererProps {
   block: ContentBlock;
@@ -71,9 +81,10 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({
           status: "running",
         };
         const renderer = getToolRenderer(execBlock.toolName);
-        if (renderer?.renderExecution) {
+        const rendererProps = { block: execBlock, blockId, uiBlock };
+        if (shouldUseToolRenderer(renderer, rendererProps)) {
           const CustomCard = renderer.renderExecution;
-          return <CustomCard block={execBlock} blockId={blockId} uiBlock={uiBlock} />;
+          return <CustomCard {...rendererProps} />;
         }
         return <ToolExecutionCard block={execBlock} blockId={blockId} uiBlock={uiBlock} />;
       }
@@ -90,9 +101,10 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({
           details: block.details,
         };
         const renderer = getToolRenderer(execBlock.toolName);
-        if (renderer?.renderExecution) {
+        const rendererProps = { block: execBlock, blockId, uiBlock };
+        if (shouldUseToolRenderer(renderer, rendererProps)) {
           const CustomCard = renderer.renderExecution;
-          return <CustomCard block={execBlock} blockId={blockId} uiBlock={uiBlock} />;
+          return <CustomCard {...rendererProps} />;
         }
         return <ToolExecutionCard block={execBlock} blockId={blockId} uiBlock={uiBlock} />;
       }
@@ -103,9 +115,10 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({
           return <SubagentExecutionCard block={block} blockId={blockId} />;
         }
         const renderer = getToolRenderer(block.toolName);
-        if (renderer?.renderExecution) {
+        const rendererProps = { block, blockId, uiBlock };
+        if (shouldUseToolRenderer(renderer, rendererProps)) {
           const CustomCard = renderer.renderExecution;
-          return <CustomCard block={block} blockId={blockId} uiBlock={uiBlock} />;
+          return <CustomCard {...rendererProps} />;
         }
         return <ToolExecutionCard block={block} blockId={blockId} uiBlock={uiBlock} />;
       }
@@ -138,7 +151,16 @@ export const ContentBlockRenderer = memo(function ContentBlockRenderer({
         />
       );
     case "compactionSummary":
-      return <CompactionSummaryCard summary={block.summary} blockId={blockId} />;
+      return (
+        <CompactionSummaryCard
+          summary={block.summary}
+          blockId={blockId}
+          tokensBefore={block.tokensBefore}
+          status={block.status}
+          reason={block.reason}
+          startedAt={block.startedAt}
+        />
+      );
     case "imageBlock":
       return (
         <div data-block-id={blockId} className="my-1 px-3">

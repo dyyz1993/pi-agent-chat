@@ -244,7 +244,7 @@ function MemoryExpandedContent({
   data: unknown;
   isMarkedIrrelevant?: boolean;
 }) {
-  if (customType === "memory_prefetch_result") {
+  if (customType === "memory_prefetch_result" || customType === "memory_inject") {
     return <PrefetchResultDetail data={data} isMarkedIrrelevant={isMarkedIrrelevant} />;
   }
   if (customType === "memory_prefetch") {

@@ -64,9 +64,10 @@ export function chooseActiveTargetKeyForScroll(
   if (direction === "towardOlder") {
     if (resolvedPreviousOrder != null) {
       if (anchorOrder != null && anchorOrder >= resolvedPreviousOrder) return anchorCandidate.key;
-      const previousVisibleTarget = orderedCandidates
-        .filter((candidate) => candidate.order < resolvedPreviousOrder)
-        .at(-1);
+      const previousVisibleTargets = orderedCandidates.filter(
+        (candidate) => candidate.order < resolvedPreviousOrder,
+      );
+      const previousVisibleTarget = previousVisibleTargets[previousVisibleTargets.length - 1];
       if (previousVisibleTarget) return previousVisibleTarget.key;
     }
     return anchorCandidate.key;

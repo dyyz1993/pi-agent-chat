@@ -1,19 +1,19 @@
 /**
  * @vitest-environment happy-dom
  *
- * UI 测试: 手动压缩 (/compact-force) 的样式渲染
+ * UI 测试: 压缩卡片 (/compact-force + 自动压缩) 的样式渲染
  *
  * 验证场景:
- * 1. CompactingIndicator 在 sessionStatus="compacting" 时渲染紫色 loading
- * 2. CompactingIndicator 在 sessionStatus="idle" 时不渲染
- * 3. compactionSummary 消息在 MessageCard 中正确渲染 (Archive 图标 + token 信息)
- * 4. compactionSummary 卡片支持折叠/展开
- * 5. compaction_end 事件清 compacting status 后 CompactingIndicator 消失
+ * 1. compactionSummary 运行态渲染为统一的 compact card
+ * 2. compaction_start / compaction_end 正确驱动 session status
+ * 3. compactionSummary 完成态在 MessageCard 中正确渲染
+ * 4. compactionSummary 卡片支持展开查看详情
+ * 5. compaction_end 事件清 compacting status 后运行态卡片消失
  */
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { CompactingIndicator } from "../../../src/mainview/components/chat/CompactingIndicator";
+import { CompactionSummaryCard } from "../../../src/mainview/components/chat/CompactionSummaryCard";
 import { MessageCard } from "../../../src/mainview/components/chat/MessageCard";
 import { useSessionStore } from "../../../src/mainview/stores/use-session-store";
 import { handleAgentEvent } from "../../../src/mainview/lib/agent-event-handler";
@@ -71,31 +71,39 @@ afterEach(() => {
   useSessionStore.setState({ activeSessionId: null, sessionStatusMap: {} });
 });
 
-describe("CompactingIndicator — 压缩中样式", () => {
-  it("渲染紫色 loading 占位行", () => {
-    const { container } = render(<CompactingIndicator />);
+describe("CompactionSummaryCard — 压缩中样式", () => {
+  it("渲染运行态 compact card", () => {
+    const { container } = render(
+      <CompactionSummaryCard
+        blockId="running-compact"
+        summary=""
+        status="running"
+        reason="threshold"
+      />,
+    );
 
-    // 用 data-msg-card-id 属性查找 (不是 data-testid)
-    const indicator = container.querySelector('[data-msg-card-id="__compacting__"]');
-    expect(indicator).toBeTruthy();
-
-    // 有旋转 loading 图标 (Loader2)
-    const loader = indicator.querySelector(".animate-spin");
-    expect(loader).toBeTruthy();
-
-    // 背景应该是紫色 (semantic-agent)
-    expect(indicator.className).toContain("bg-semantic-agent");
-
-    // 左边框紫色 (border-l-semantic-agent/50 或 /50 后缀)
-    const bars = indicator.querySelectorAll('[class*="border-l-semantic-agent"]');
-    expect(bars.length).toBeGreaterThan(0);
-  });
-
-  it("文案显示 '正在压缩上下文...'", () => {
-    const { container } = render(<CompactingIndicator />);
-    // t("compacting") 返回 "compacting"，t("compactingHint") 返回 "compactingHint"
+    const card = container.querySelector('[data-block-id="running-compact"]');
+    expect(card).toBeTruthy();
     expect(container.textContent).toContain("compacting");
     expect(container.textContent).toContain("compactingHint");
+
+    // 有旋转 loading 图标 (Loader2)
+    const loader = card!.querySelector(".animate-spin");
+    expect(loader).toBeTruthy();
+  });
+
+  it("运行态默认可展开并显示原因", () => {
+    const { container } = render(
+      <CompactionSummaryCard blockId="running-compact" summary="" status="running" reason="manual" />,
+    );
+
+    expect(container.textContent).toContain("compacting");
+    expect(container.textContent).not.toContain("manual");
+
+    const toggle = screen.getByRole("button", { name: /compacting/ });
+    fireEvent.click(toggle);
+
+    expect(container.textContent).toContain("manual");
   });
 });
 
@@ -183,36 +191,30 @@ describe("MessageCard — compactionSummary 压缩摘要卡片", () => {
     // 标题 (t("contextCompaction") → "contextCompaction")
     expect(screen.getByText("contextCompaction")).toBeTruthy();
 
-    // token 信息 (50000 / 1000 = 50k)
-    expect(screen.getByText(/50k tokens/)).toBeTruthy();
+    // token 信息 (50000 / 1000 = 50k)，新卡片只显示紧凑单位。
+    expect(screen.getByText("50k")).toBeTruthy();
   });
 
-  it("默认展开状态显示完整摘要", () => {
+  it("默认折叠状态显示摘要预览", () => {
     const msg = compactionSummaryMsg("compact-1", "## 对话摘要\n用户讨论了 React 性能优化");
     const { container } = render(<MessageCard message={msg} />);
 
-    // 应该能看到摘要内容
-    expect(container.textContent).toContain("对话摘要");
+    expect(container.textContent).toContain("用户讨论了 React 性能优化");
+    expect(container.textContent).not.toContain("对话摘要");
   });
 
-  it("点击折叠按钮后只显示第一行摘要", () => {
+  it("点击卡片后展开显示完整摘要", () => {
     const summary = "这是第一行摘要\n这是第二行\n第三行内容";
     const msg = compactionSummaryMsg("compact-1", summary);
     const { container } = render(<MessageCard message={msg} />);
 
-    // 找到折叠按钮
-    const collapseBtn = screen.getByTitle("collapse");
-    expect(collapseBtn).toBeTruthy();
+    expect(container.textContent).toContain("这是第一行摘要");
+    expect(container.textContent).not.toContain("第三行内容");
 
-    // 点击折叠
-    fireEvent.click(collapseBtn);
+    const toggle = screen.getByRole("button", { name: /contextCompaction/ });
+    fireEvent.click(toggle);
 
-    // 折叠后应该只显示第一行 (italic 样式)
-    const italicEl = container.querySelector(".italic");
-    expect(italicEl).toBeTruthy();
-    expect(italicEl?.textContent).toContain("这是第一行摘要");
-    // 不应该显示后面的行
-    expect(italicEl?.textContent).not.toContain("第三行内容");
+    expect(container.textContent).toContain("第三行内容");
   });
 
   it("tokensBefore 显示为整数 k", () => {
@@ -224,7 +226,7 @@ describe("MessageCard — compactionSummary 压缩摘要卡片", () => {
     render(<MessageCard message={msgWithTokens} />);
 
     // 28984 / 1000 ≈ 29k
-    expect(screen.getByText(/29k tokens/)).toBeTruthy();
+    expect(screen.getByText("29k")).toBeTruthy();
   });
 
   it("没有 tokensBefore 时不显示 token 信息", () => {

@@ -29,6 +29,7 @@ const backgroundRefreshGenerationBySession = new Map<string, number>();
 const RENDERABLE_MEMORY_CUSTOM_TYPES = new Set([
   "memory_prefetch",
   "memory_prefetch_result",
+  "memory_inject",
   "memory_extract",
   "memory_extract_result",
   "memory_dream",
@@ -243,7 +244,7 @@ function syncMemoryCustomEntries(
       timestamp: entry.timestamp,
     });
 
-    if (entry.customType === "memory_prefetch_result" && entry.data) {
+    if ((entry.customType === "memory_prefetch_result" || entry.customType === "memory_inject") && entry.data) {
       const payload = entry.data as Record<string, unknown>;
       memoryStore.addInjected(sessionId, {
         summary: (payload.summary as string) ?? "",
