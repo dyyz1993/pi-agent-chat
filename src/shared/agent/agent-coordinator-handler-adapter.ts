@@ -1,6 +1,7 @@
 import type { CoordinatorMethodCall } from "../modules/coordinator";
 import {
   clearDelegateTracking,
+  canManageDelegateChild,
   removeDelegateChild,
   removeSessionFromAllParents,
   type DelegateChildMap,
@@ -130,6 +131,9 @@ export function createCoordinatorHandlerAdapter<TManaged extends CoordinatorMana
         ((msg as Record<string, unknown>).sessionId as string | undefined) ??
         ((msg as Record<string, unknown>).targetSessionId as string | undefined);
       if (!targetSessionId) return { ok: false, removed: false };
+      if (!canManageDelegateChild(deps.parentChildMap, parentSessionId, targetSessionId)) {
+        return { ok: false, removed: false };
+      }
       removeDelegateChild(deps.parentChildMap, parentSessionId, targetSessionId);
       removeSessionFromAllParents(deps.parentChildMap, targetSessionId);
       clearDelegateTracking(

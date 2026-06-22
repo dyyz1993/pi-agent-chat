@@ -369,6 +369,26 @@ export interface AgentMethods {
     params: { sessionId: string; settings: Record<string, unknown>; scope?: string };
     result: { ok: boolean };
   };
+  "agent.getProjectTrust": {
+    params: { projectPath: string };
+    result: {
+      projectPath: string;
+      trusted: boolean;
+      decision: boolean | null;
+      decisionPath?: string;
+      trustStorePath: string;
+    };
+  };
+  "agent.setProjectTrust": {
+    params: { projectPath: string; trusted: boolean };
+    result: {
+      projectPath: string;
+      trusted: boolean;
+      decision: boolean;
+      decisionPath: string;
+      trustStorePath: string;
+    };
+  };
   "agent.setSessionName": {
     params: { sessionId: string; name: string };
     result: { ok: boolean };
@@ -602,14 +622,23 @@ export interface HookMeta {
   cancelText?: string;
 }
 
-export interface PermissionMeta {
-  type: "path_boundary" | "dangerous_bash" | "hook_approval";
-  path: string;
-  cwd: string;
-  toolName: string;
-  scope: "read" | "write";
-  relativeTo: string;
-}
+export type PermissionMeta =
+  | {
+      type: "path_boundary" | "dangerous_bash" | "hook_approval";
+      path: string;
+      cwd: string;
+      toolName: string;
+      scope: "read" | "write";
+      relativeTo: string;
+    }
+  | {
+      type: "permission_runtime";
+      requestId: string;
+      provider: string;
+      subject: string;
+      toolCallId?: string;
+      metadata?: Record<string, unknown>;
+    };
 
 export interface AskUserQuestionOption {
   label: string;

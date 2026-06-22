@@ -1,8 +1,11 @@
 import type { ClassAttributes, HTMLAttributes, ReactNode } from "react";
-import { Highlight, themes } from "prism-react-renderer";
+import { Highlight, Prism, themes } from "prism-react-renderer";
 import { MermaidBlock, isMermaidLang } from "./MermaidBlock";
 import { useThemeStore, isDarkGroup } from "../../../stores/use-theme-store";
 import { CopyButton } from "../CopyButton";
+import { registerShellPrismLanguage } from "../../../lib/prism-languages";
+
+registerShellPrismLanguage(Prism);
 
 interface HastNode {
   type: string;

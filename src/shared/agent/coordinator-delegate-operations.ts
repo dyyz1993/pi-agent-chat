@@ -4,6 +4,8 @@ import * as path from "path";
 import type { CoordinatorMethodCall } from "../modules/coordinator";
 import { createLogger } from "../lib/logger";
 import {
+  canManageDelegateChild,
+  canSendDelegateMessage,
   canStopDelegateChild,
   findParentSession,
   listDelegateChildSessions,
@@ -262,6 +264,16 @@ export async function handleCoordinatorDelegateSendOperation<
   now?: () => number;
 }): Promise<{ delivered: boolean; targetStatus: "active" | "started" | "not_found" }> {
   const { targetSessionId, message } = options.msg;
+
+  if (
+    !canSendDelegateMessage(
+      options.parentChildMap,
+      options.sourceSessionId,
+      targetSessionId,
+    )
+  ) {
+    return { delivered: false, targetStatus: "not_found" };
+  }
 
   let target = options.clients.get(targetSessionId);
 
@@ -533,6 +545,15 @@ export async function handleCoordinatorDelegateForkOperation<
   sessionIdFactory?: () => string;
 }): Promise<{ sessionId: string; status: "started" | "already_running" }> {
   const { task, sessionId: targetSessionId } = options.msg;
+  if (
+    !canManageDelegateChild(
+      options.parentChildMap,
+      options.parentSessionId,
+      targetSessionId,
+    )
+  ) {
+    throw new Error(`Session not found: ${targetSessionId}`);
+  }
   const base = options.clients.get(targetSessionId);
   if (!base) throw new Error(`Session not found: ${targetSessionId}`);
 

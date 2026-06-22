@@ -34,6 +34,11 @@ describe("getLanguage", () => {
     expect(getLanguage("app.mts")).toBe("typescript");
     expect(getLanguage("app.cts")).toBe("typescript");
   });
+
+  it("maps shell scripts to bash syntax highlighting", () => {
+    expect(getLanguage("guard-write.sh")).toBe("bash");
+    expect(getLanguage("deploy.bash")).toBe("bash");
+  });
 });
 
 describe("isTextFile", () => {

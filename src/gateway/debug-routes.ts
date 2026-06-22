@@ -67,6 +67,10 @@ export async function handleDebugRoute(ctx: DebugRouteContext): Promise<boolean>
       timeout?: number;
       toolCallId?: string;
       id?: string;
+      permissionMeta?: unknown;
+      hookMeta?: unknown;
+      confirmText?: string;
+      cancelText?: string;
     };
 
     const event = {
@@ -88,6 +92,10 @@ export async function handleDebugRoute(ctx: DebugRouteContext): Promise<boolean>
           multiple: body.multiple,
           timeout: body.timeout,
           toolCallId: body.toolCallId,
+          permissionMeta: body.permissionMeta,
+          hookMeta: body.hookMeta,
+          confirmText: body.confirmText,
+          cancelText: body.cancelText,
         },
       },
     };
@@ -109,13 +117,24 @@ export async function handleDebugRoute(ctx: DebugRouteContext): Promise<boolean>
       res.writeHead(500).end(JSON.stringify({ error: "broadcastEvent not available" }));
       return true;
     }
-    // Send a synthetic clear event
+    const chunks: Buffer[] = [];
+    for await (const chunk of req as AsyncIterable<Buffer | string>)
+      chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+    const body = chunks.length
+      ? (JSON.parse(Buffer.concat(chunks).toString()) as { sessionId?: string })
+      : {};
+
+    // Send a synthetic clear event. When sessionId is provided it uses the
+    // normal agent.event subscription path, so tests can clean the same dock
+    // state they injected without touching production runtime state.
     broadcastEvent({
       id: `test-clear-${Date.now()}`,
       type: "event",
       eventType: "agent.event",
-      metadata: {},
-      payload: { type: "test_clear_all" },
+      metadata: body.sessionId ? { sessionId: body.sessionId } : {},
+      payload: body.sessionId
+        ? { sessionId: body.sessionId, event: { type: "test_clear_all" } }
+        : { type: "test_clear_all" },
     });
     res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ ok: true }));
     return true;

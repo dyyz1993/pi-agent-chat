@@ -163,3 +163,21 @@ export function canStopDelegateChild(
 ): boolean {
   return parentChildMap.get(parentSessionId)?.has(childSessionId) ?? false;
 }
+
+export function canManageDelegateChild(
+  parentChildMap: DelegateChildMap,
+  parentSessionId: string,
+  childSessionId: string,
+): boolean {
+  return parentChildMap.get(parentSessionId)?.has(childSessionId) ?? false;
+}
+
+export function canSendDelegateMessage(
+  parentChildMap: DelegateChildMap,
+  sourceSessionId: string,
+  targetSessionId: string,
+): boolean {
+  if (sourceSessionId === targetSessionId) return true;
+  if (parentChildMap.get(sourceSessionId)?.has(targetSessionId)) return true;
+  return findParentSession(parentChildMap, sourceSessionId) === targetSessionId;
+}

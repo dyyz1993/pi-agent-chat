@@ -584,17 +584,23 @@ describe("Level 5: fetchInitialState does NOT overwrite streaming status", () =>
             {
               type: "extension_ui_request",
               id: "ui-1",
-              method: "confirm",
-              title: "Dangerous Command",
-              message: "Allow rm -rf?",
-              timeout: 60_000,
-              toolCallId: "tool-1",
-              hookMeta: {
-                toolName: "bash",
-                matcher: "bash",
-                reason: "needs approval",
-              },
-            },
+	              method: "select",
+	              title: "Confirm command",
+	              message: "Run command flagged for recursive rm?",
+	              options: ["1. Allow once", "2. Always allow", "3. Deny once", "4. Always deny"],
+	              timeout: 60_000,
+	              toolCallId: "tool-1",
+	              permissionMeta: {
+	                type: "permission_runtime",
+	                requestId: "perm-1",
+	                provider: "dangerous-command",
+	                subject: "command.run",
+	                toolCallId: "tool-1",
+	                metadata: {
+	                  command: "rm -rf /tmp/data",
+	                },
+	              },
+	            },
           ],
         });
       }
@@ -613,14 +619,19 @@ describe("Level 5: fetchInitialState does NOT overwrite streaming status", () =>
     await vi.waitFor(() => {
       expect(uiDialogMocks.registerUIRequest).toHaveBeenCalledWith(
         expect.objectContaining({
-          requestId: "ui-1",
-          sessionId: "s1",
-          method: "confirm",
-          title: "Dangerous Command",
-          message: "Allow rm -rf?",
-          toolCallId: "tool-1",
-        }),
-      );
+	          requestId: "ui-1",
+	          sessionId: "s1",
+	          method: "select",
+	          title: "Confirm command",
+	          message: "Run command flagged for recursive rm?",
+	          toolCallId: "tool-1",
+	          permissionMeta: expect.objectContaining({
+	            type: "permission_runtime",
+	            provider: "dangerous-command",
+	            subject: "command.run",
+	          }),
+	        }),
+	      );
       expect(useSessionStore.getState().sessionStatusMap["s1"]).toBe("permission");
     });
   });

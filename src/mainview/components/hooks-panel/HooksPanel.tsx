@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ListChecks,
   Shield,
@@ -15,13 +15,15 @@ import {
   Power,
   PowerOff,
   SkipForward,
+  ExternalLink,
 } from "lucide-react";
 import { useHooksStore } from "../../stores/use-hooks-store";
 import { useSessionStore } from "../../stores/use-session-store";
+import { useExplorerStore } from "../../stores/use-explorer-store";
 import { useShallow } from "zustand/react/shallow";
 import { formatFilePath } from "../../lib/format-path";
 import { apiClient } from "../../lib/api-client";
-import { PanelHeader } from "../primitives/PanelHeader";
+import { PanelHeader } from "../primitives";
 import type { HookLogEntry, HookRuleStats, HookConfigSnapshot } from "../../stores/use-hooks-store";
 
 const DECISION_STYLES: Record<string, { icon: React.ElementType; cls: string }> = {
@@ -65,6 +67,130 @@ function formatDuration(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
+function basename(path: string): string {
+  return path.split("/").filter(Boolean).pop() ?? path;
+}
+
+function resolveOpenablePath(
+  path: string,
+  projectPath: string | null,
+  homePath: string | null = null,
+): string | null {
+  const trimmed = path.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith("/")) return trimmed;
+  if (trimmed.startsWith("~/")) {
+    if (!homePath) return null;
+    return `${homePath.replace(/\/$/, "")}/${trimmed.slice(2)}`;
+  }
+  if (
+    trimmed.startsWith("./") ||
+    trimmed.startsWith("../") ||
+    trimmed.startsWith(".pi/") ||
+    trimmed.startsWith(".claude/")
+  ) {
+    if (!projectPath) return null;
+    return decodeURI(new URL(trimmed, `file://${projectPath.replace(/\/$/, "")}/`).pathname);
+  }
+  return null;
+}
+
+function tokenizeCommand(command: string): string[] {
+  return Array.from(command.matchAll(/"([^"]*)"|'([^']*)'|[^\s]+/g)).map(
+    (match) => match[1] ?? match[2] ?? match[0],
+  );
+}
+
+function commandName(commandPath: string): string {
+  return commandPath.split("/").pop() ?? commandPath;
+}
+
+function getHookCommandParts(command: string): { prefix: string | null; script: string } | null {
+  const tokens = tokenizeCommand(command);
+  if (tokens.length === 0) return null;
+  if (tokens.length === 1) return { prefix: null, script: tokens[0] };
+
+  const first = commandName(tokens[0]);
+  if (["bash", "sh", "zsh"].includes(first) && tokens[1]) {
+    return { prefix: tokens[0], script: tokens[1] };
+  }
+  if (
+    first === "env" &&
+    tokens.length >= 3 &&
+    ["bash", "sh", "zsh"].includes(commandName(tokens[1]))
+  ) {
+    return { prefix: `${tokens[0]} ${tokens[1]}`, script: tokens[2] };
+  }
+  return null;
+}
+
+function inferHomePath(config: HookConfigSnapshot | undefined): string | null {
+  const globalSource = config?.sources.find(
+    (src) => src.scope === "global" || src.scope === "pi-global",
+  );
+  const match = globalSource?.path.match(/^(.*)\/(?:\.claude|\.pi\/agent)\//);
+  return match?.[1] ?? null;
+}
+
+function OpenableCode({
+  label,
+  path,
+  onOpen,
+  className = "",
+}: {
+  label: string;
+  path: string | null;
+  onOpen: (path: string) => void;
+  className?: string;
+}) {
+  if (!path) {
+    return <code className={className}>{label}</code>;
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(path)}
+      className={`inline-flex min-w-0 items-center gap-1 rounded px-0.5 text-left text-semantic-accent/80 hover:text-semantic-accent transition-colors ${className}`}
+      title={`Open ${path}`}
+    >
+      <ExternalLink className="h-2.5 w-2.5 shrink-0" />
+      <code className="truncate min-w-0">{label}</code>
+    </button>
+  );
+}
+
+function HookCommandCode({
+  command,
+  projectPath,
+  homePath = null,
+  onOpen,
+  className = "",
+}: {
+  command: string;
+  projectPath: string | null;
+  homePath?: string | null;
+  onOpen: (path: string) => void;
+  className?: string;
+}) {
+  const parts = getHookCommandParts(command);
+  if (!parts) return <code className={className}>{command}</code>;
+
+  const path = resolveOpenablePath(parts.script, projectPath, homePath);
+  if (!path) return <code className={className}>{command}</code>;
+
+  if (!parts.prefix) {
+    return <OpenableCode label={parts.script} path={path} onOpen={onOpen} className={className} />;
+  }
+
+  return (
+    <span className={`inline-flex min-w-0 items-center gap-1 ${className}`}>
+      <code className="shrink-0 text-text-tertiary">{parts.prefix}</code>
+      <OpenableCode label={parts.script} path={path} onOpen={onOpen} className="min-w-0 truncate" />
+    </span>
+  );
+}
+
 function EntryRow({
   entry,
   expanded,
@@ -74,6 +200,22 @@ function EntryRow({
   expanded: boolean;
   onToggle: () => void;
 }) {
+  const openFile = useExplorerStore((s) => s.openFile);
+  const projectPath = useSessionStore(
+    useShallow((s) => s.projectTabs.find((tab) => tab.id === s.activeProjectId)?.path ?? null),
+  );
+
+  const handleOpenPath = useCallback(
+    (path: string) => {
+      openFile({
+        name: basename(path),
+        path,
+        type: "file",
+      });
+    },
+    [openFile],
+  );
+
   return (
     <div className="border-b border-border-secondary dark:border-surface-code/50 last:border-b-0">
       <button
@@ -121,7 +263,12 @@ function EntryRow({
             {entry.command && (
               <>
                 <span>|</span>
-                <code className="truncate min-w-0">{entry.command}</code>
+                <HookCommandCode
+                  command={entry.command}
+                  projectPath={projectPath}
+                  onOpen={handleOpenPath}
+                  className="truncate min-w-0"
+                />
               </>
             )}
             <span>|</span>
@@ -133,15 +280,27 @@ function EntryRow({
   );
 }
 
-function RuleRow({ stat, isSkipped, onToggleSkip }: {
+function RuleRow({
+  stat,
+  isSkipped,
+  onToggleSkip,
+  projectPath,
+  homePath,
+  onOpenPath,
+}: {
   stat: HookRuleStats;
   isSkipped?: boolean;
   onToggleSkip?: () => void;
+  projectPath: string | null;
+  homePath: string | null;
+  onOpenPath: (path: string) => void;
 }) {
   const total = stat.allowCount + stat.blockCount + stat.askCount;
   const sourceCls = SOURCE_STYLES[stat.source] ?? SOURCE_STYLES.unknown;
   return (
-    <div className={`px-2.5 py-1.5 border-b border-border-secondary dark:border-surface-code/50 last:border-b-0 ${isSkipped ? "opacity-50" : ""}`}>
+    <div
+      className={`px-2.5 py-1.5 border-b border-border-secondary dark:border-surface-code/50 last:border-b-0 ${isSkipped ? "opacity-50" : ""}`}
+    >
       <div className="flex items-center gap-1.5 min-w-0">
         <span className="text-[9px] px-1 py-0.5 rounded bg-surface-code dark:bg-surface-dim/60 text-text-secondary font-medium shrink-0">
           {EVENT_SHORT[stat.event] || stat.event}
@@ -169,9 +328,13 @@ function RuleRow({ stat, isSkipped, onToggleSkip }: {
         )}
       </div>
       <div className="flex items-center gap-2 mt-0.5 pl-5">
-        <code className="text-[9px] text-semantic-accent/70 truncate min-w-0 flex-1">
-          {stat.command}
-        </code>
+        <HookCommandCode
+          command={stat.command}
+          projectPath={projectPath}
+          homePath={homePath}
+          onOpen={onOpenPath}
+          className="text-[9px] truncate min-w-0 flex-1"
+        />
         <div className="flex items-center gap-1.5 text-[9px] shrink-0">
           {stat.allowCount > 0 && (
             <span className="text-status-success">{stat.allowCount} allow</span>
@@ -187,36 +350,65 @@ function RuleRow({ stat, isSkipped, onToggleSkip }: {
   );
 }
 
-function ConfigSources({ config }: { config: HookConfigSnapshot }) {
+function ConfigSources({
+  config,
+  projectPath,
+  homePath,
+  onOpenPath,
+}: {
+  config: HookConfigSnapshot;
+  projectPath: string | null;
+  homePath: string | null;
+  onOpenPath: (path: string) => void;
+}) {
   if (config.sources.length === 0) return null;
   return (
     <div className="border-t border-border-secondary dark:border-surface-code/50">
       <div className="px-2.5 py-1.5 text-[10px] font-medium text-text-secondary">
         Config Sources
       </div>
-      {config.sources.map((src, i) => (
-        <div key={`${src.path}-${i}`} className="flex items-center gap-1.5 px-2.5 py-1 text-[10px]">
-          {src.exists ? (
-            <FileText className="w-2.5 h-2.5 text-status-success shrink-0" />
-          ) : (
-            <FileText className="w-2.5 h-2.5 text-text-tertiary shrink-0" />
-          )}
-          <span className="text-text-tertiary truncate min-w-0 flex-1" title={src.path}>
-            {formatFilePath(src.path)}
-          </span>
-          <span className="text-[9px] px-1 py-0.5 rounded bg-surface-code dark:bg-surface-dim/60 text-text-secondary shrink-0">
-            {src.scope}
-          </span>
-          {src.disabled && (
-            <span className="text-[9px] text-status-warning shrink-0">disabled</span>
-          )}
-        </div>
-      ))}
+      {config.sources.map((src, i) => {
+        const sourcePath = src.exists ? resolveOpenablePath(src.path, projectPath, homePath) : null;
+        return (
+          <div
+            key={`${src.path}-${i}`}
+            className="flex items-center gap-1.5 px-2.5 py-1 text-[10px]"
+          >
+            {src.exists ? (
+              <FileText className="w-2.5 h-2.5 text-status-success shrink-0" />
+            ) : (
+              <FileText className="w-2.5 h-2.5 text-text-tertiary shrink-0" />
+            )}
+            <OpenableCode
+              label={formatFilePath(src.path)}
+              path={sourcePath}
+              onOpen={onOpenPath}
+              className="text-text-tertiary truncate min-w-0 flex-1"
+            />
+            <span className="text-[9px] px-1 py-0.5 rounded bg-surface-code dark:bg-surface-dim/60 text-text-secondary shrink-0">
+              {src.scope}
+            </span>
+            {src.disabled && (
+              <span className="text-[9px] text-status-warning shrink-0">disabled</span>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-function ConfigEvents({ config }: { config: HookConfigSnapshot }) {
+function ConfigEvents({
+  config,
+  projectPath,
+  homePath,
+  onOpenPath,
+}: {
+  config: HookConfigSnapshot;
+  projectPath: string | null;
+  homePath: string | null;
+  onOpenPath: (path: string) => void;
+}) {
   if (config.events.length === 0) return null;
   return (
     <div className="border-t border-border-secondary dark:border-surface-code/50">
@@ -237,7 +429,13 @@ function ConfigEvents({ config }: { config: HookConfigSnapshot }) {
                 <div key={`${hook.type}-${hi}`} className="pl-3 text-[9px] text-text-tertiary">
                   [{hook.type}]
                   {hook.command && (
-                    <code className="ml-1 text-semantic-accent/70 truncate">{hook.command}</code>
+                    <HookCommandCode
+                      command={hook.command}
+                      projectPath={projectPath}
+                      homePath={homePath}
+                      onOpen={onOpenPath}
+                      className="ml-1 text-[9px] truncate"
+                    />
                   )}
                   {hook.url && (
                     <code className="ml-1 text-status-info/70 truncate">{hook.url}</code>
@@ -254,6 +452,9 @@ function ConfigEvents({ config }: { config: HookConfigSnapshot }) {
 
 export function HooksPanel() {
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const activeProjectPath = useSessionStore(
+    useShallow((s) => s.projectTabs.find((tab) => tab.id === s.activeProjectId)?.path ?? null),
+  );
   const activeTab = useHooksStore((s) => s.activeTab);
   const setActiveTab = useHooksStore((s) => s.setActiveTab);
   const session = useHooksStore(useShallow((s) => s.bySession[activeSessionId ?? ""] ?? null));
@@ -273,6 +474,19 @@ export function HooksPanel() {
   const totalExecutions = session?.totalExecutions || 0;
   const configSnapshot = session?.configSnapshot;
   const loading = session?.loading || false;
+  const openFile = useExplorerStore((s) => s.openFile);
+  const homePath = useMemo(() => inferHomePath(configSnapshot), [configSnapshot]);
+
+  const handleOpenPath = useCallback(
+    (path: string) => {
+      openFile({
+        name: basename(path),
+        path,
+        type: "file",
+      });
+    },
+    [openFile],
+  );
 
   useEffect(() => {
     if (!activeSessionId) return;
@@ -330,9 +544,17 @@ export function HooksPanel() {
                     ? "text-status-success hover:bg-status-success/10"
                     : "text-status-error hover:bg-status-error/10"
                 }`}
-                title={configSnapshot.runtimeEnabled ? "Hooks enabled (click to disable)" : "Hooks disabled (click to enable)"}
+                title={
+                  configSnapshot.runtimeEnabled
+                    ? "Hooks enabled (click to disable)"
+                    : "Hooks disabled (click to enable)"
+                }
               >
-                {configSnapshot.runtimeEnabled ? <Power className="w-3 h-3" /> : <PowerOff className="w-3 h-3" />}
+                {configSnapshot.runtimeEnabled ? (
+                  <Power className="w-3 h-3" />
+                ) : (
+                  <PowerOff className="w-3 h-3" />
+                )}
               </button>
             )}
           </>
@@ -439,28 +661,50 @@ export function HooksPanel() {
                       Rule Stats
                     </div>
                     {ruleStats.map((stat, i) => {
-                      const isSkipped = configSnapshot?.skippedRules?.some(
-                        (r) => r.event === stat.event && r.matcher === stat.matcher,
-                      ) ?? false;
+                      const isSkipped =
+                        configSnapshot?.skippedRules?.some(
+                          (r) => r.event === stat.event && r.matcher === stat.matcher,
+                        ) ?? false;
                       return (
                         <RuleRow
                           key={`${stat.matcher}-${stat.event}-${i}`}
                           stat={stat}
                           isSkipped={isSkipped}
-                          onToggleSkip={activeSessionId ? () => {
-                            if (isSkipped) {
-                              unskipRule(activeSessionId, stat.event, stat.matcher);
-                            } else {
-                              skipRule(activeSessionId, stat.event, stat.matcher);
-                            }
-                          } : undefined}
+                          projectPath={activeProjectPath}
+                          homePath={homePath}
+                          onOpenPath={handleOpenPath}
+                          onToggleSkip={
+                            activeSessionId
+                              ? () => {
+                                  if (isSkipped) {
+                                    unskipRule(activeSessionId, stat.event, stat.matcher);
+                                  } else {
+                                    skipRule(activeSessionId, stat.event, stat.matcher);
+                                  }
+                                }
+                              : undefined
+                          }
                         />
                       );
                     })}
                   </div>
                 )}
-                {configSnapshot && <ConfigSources config={configSnapshot} />}
-                {configSnapshot && <ConfigEvents config={configSnapshot} />}
+                {configSnapshot && (
+                  <ConfigSources
+                    config={configSnapshot}
+                    projectPath={activeProjectPath}
+                    homePath={homePath}
+                    onOpenPath={handleOpenPath}
+                  />
+                )}
+                {configSnapshot && (
+                  <ConfigEvents
+                    config={configSnapshot}
+                    projectPath={activeProjectPath}
+                    homePath={homePath}
+                    onOpenPath={handleOpenPath}
+                  />
+                )}
               </>
             )}
           </>

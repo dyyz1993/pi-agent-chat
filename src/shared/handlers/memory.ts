@@ -4,19 +4,15 @@ import { createRegister } from "../rpc-schema";
 import type { MemoryFile, MemoryStatusResult } from "../modules/memory";
 import { readdir, readFile, stat } from "fs/promises";
 import { existsSync } from "fs";
-import { join, resolve } from "path";
-import { homedir } from "os";
+import { join } from "path";
 import { getProcessManager } from "./agent";
 import { createLogger } from "../lib/logger";
 import { withTimeout } from "../lib/with-timeout";
+import { getLegacyMemoryProjectDir, isPathInsideUserMemoryDir } from "../lib/pi-agent-paths";
 
 const log = createLogger("mcp");
 
 const CHANNEL_TIMEOUT_MS = 1_000;
-
-function encodeCwd(cwd: string): string {
-  return "--" + cwd.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-") + "--";
-}
 
 function parseFrontmatter(content: string): { frontmatter: Record<string, string>; body: string } {
   const normalized = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
@@ -40,8 +36,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   const r = createRegister(server);
 
   async function fallbackListFiles(projectPath: string): Promise<R<"memory.listFiles">> {
-    const agentDir = join(homedir(), ".pi", "agent");
-    const memoryDir = join(agentDir, "memory", encodeCwd(projectPath));
+    const memoryDir = getLegacyMemoryProjectDir(projectPath);
 
     if (!existsSync(memoryDir)) {
       return { files: [], entrypointContent: null, memoryDir };
@@ -118,17 +113,11 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("memory.readFile", async (params) => {
-    const memoryBase = resolve(join(homedir(), ".pi", "agent", "memory"));
-    const resolvedPath = resolve(params.filePath);
-    if (
-      resolvedPath !== memoryBase &&
-      !resolvedPath.startsWith(memoryBase + "/") &&
-      !resolvedPath.startsWith(memoryBase + "\\")
-    ) {
+    if (!isPathInsideUserMemoryDir(params.filePath)) {
       throw new Error("Path outside memory directory");
     }
-    const content = await readFile(resolvedPath, "utf-8");
-    const s = await stat(resolvedPath);
+    const content = await readFile(params.filePath, "utf-8");
+    const s = await stat(params.filePath);
     return { content, size: s.size };
   });
 
@@ -160,12 +149,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
     if (manager && params.sessionId && manager.hasSession(params.sessionId)) {
       try {
         const result = (await withTimeout(
-          manager.callChannel(
-            params.sessionId,
-            "memory",
-            "memory.getStatus",
-            {},
-          ),
+          manager.callChannel(params.sessionId, "memory", "memory.getStatus", {}),
           CHANNEL_TIMEOUT_MS,
         )) as MemoryStatusResult | null;
         if (result) return result;

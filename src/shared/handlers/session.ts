@@ -2,22 +2,16 @@ import type { RPCServer } from "@dyyz1993/rpc-core";
 import type { HandlerOptions } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
 import type { SessionEntry } from "../modules/session";
-import { readFile, writeFile, appendFile, mkdir, unlink } from "fs/promises";
+import { readFile, writeFile, appendFile, mkdir, unlink, readdir, stat } from "fs/promises";
 import { existsSync, createReadStream } from "fs";
 import * as readline from "readline";
 import { join } from "path";
-import { homedir } from "os";
 import { randomUUID } from "crypto";
 import { pinSession, unpinSession, listPinnedSessionIds } from "../lib/project-config";
 import { createLogger } from "../lib/logger";
+import { getProjectSessionDir, getSessionsRoot } from "../lib/pi-agent-paths";
 
 const log = createLogger("session");
-
-const SESSIONS_DIR = join(homedir(), ".pi", "agent", "sessions");
-
-function encodeCwd(cwd: string): string {
-  return "--" + cwd.replace(/^\//, "").replace(/\//g, "-") + "--";
-}
 
 export function register(server: RPCServer, _options: HandlerOptions): void {
   const r = createRegister(server);
@@ -64,8 +58,7 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   r("session.create", async (params) => {
     const { projectPath } = params;
     const sessionId = randomUUID();
-    const dirName = encodeCwd(projectPath);
-    const sessionDir = join(SESSIONS_DIR, dirName);
+    const sessionDir = getProjectSessionDir(projectPath);
     const sessionPath = join(sessionDir, `${sessionId}.jsonl`);
 
     await mkdir(sessionDir, { recursive: true });
@@ -142,23 +135,39 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("session.getMetadata", async () => {
-    const cwd = process.cwd();
-    const sessionsDir = join(cwd, ".pi", "sessions");
+    const sessionsDir = getSessionsRoot();
 
     if (!existsSync(sessionsDir)) {
-      throw new Error("No sessions directory found in current working directory");
+      throw new Error("No sessions directory found in PI agent directory");
     }
 
-    const files = await (await import("fs/promises")).readdir(sessionsDir);
-    const sessionFiles = files.filter((f) => f.endsWith(".jsonl"));
+    const dirs = await readdir(sessionsDir);
+    const sessionFiles: { path: string; mtimeMs: number }[] = [];
+    for (const dir of dirs) {
+      const fullDir = join(sessionsDir, dir);
+      try {
+        if (!(await stat(fullDir)).isDirectory()) continue;
+        const files = await readdir(fullDir);
+        for (const file of files) {
+          if (!file.endsWith(".jsonl")) continue;
+          const sessionFile = join(fullDir, file);
+          const s = await stat(sessionFile);
+          if (s.isFile()) sessionFiles.push({ path: sessionFile, mtimeMs: s.mtimeMs });
+        }
+      } catch (err) {
+        log.debug("session.getMetadata: skipping session directory", {
+          fullDir,
+          err: String(err),
+        });
+      }
+    }
 
     if (sessionFiles.length === 0) {
-      throw new Error("No session files found in .pi/sessions directory");
+      throw new Error("No session files found in PI agent sessions directory");
     }
 
-    // 读取第一个（最近）会话文件的 header
-    const sessionFile = join(sessionsDir, sessionFiles[0]);
-    const { readFile } = await import("fs/promises");
+    sessionFiles.sort((a, b) => b.mtimeMs - a.mtimeMs);
+    const sessionFile = sessionFiles[0].path;
     const content = await readFile(sessionFile, "utf-8");
     const lines = content.split("\n").filter((l) => l.trim());
 
@@ -172,8 +181,8 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
           return {
             sessionId: (parsed.id as string) ?? "",
             sessionPath: sessionFile,
-            projectPath: (parsed.cwd as string) ?? cwd,
-            cwd: (parsed.cwd as string) ?? cwd,
+            projectPath: (parsed.cwd as string) ?? process.cwd(),
+            cwd: (parsed.cwd as string) ?? process.cwd(),
             delegateParentSessionId:
               (parsed.delegateParentSessionId as string | undefined) ?? delegateParentSessionId,
             delegateType: delegateType ?? null,

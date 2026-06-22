@@ -3,18 +3,12 @@ import { createReadStream } from "fs";
 import { existsSync } from "fs";
 import { createInterface } from "readline";
 import { join, basename } from "path";
-import { homedir } from "os";
 import { createLogger } from "./logger";
 import type { SessionMeta, PiProject, MergedProject } from "../modules/project";
 import { listRecentProjects, listPinnedSessionIds } from "./project-config";
+import { getProjectSessionDir, getSessionsRoot } from "./pi-agent-paths";
 
 const log = createLogger("session");
-
-const SESSIONS_DIR = join(homedir(), ".pi", "agent", "sessions");
-
-function encodeCwd(cwd: string): string {
-  return "--" + cwd.replace(/^\//, "").replace(/\//g, "-") + "--";
-}
 
 interface JsonlHeader {
   type: "session";
@@ -177,7 +171,10 @@ async function parseJsonlMeta(filePath: string): Promise<{
 
 const PRE_SCAN_LIMIT = 120;
 
-export async function scanSessionDir(sessionDir: string, pinnedIds?: Set<string>): Promise<SessionMeta[]> {
+export async function scanSessionDir(
+  sessionDir: string,
+  pinnedIds?: Set<string>,
+): Promise<SessionMeta[]> {
   if (!existsSync(sessionDir)) return [];
 
   const files = await readdir(sessionDir);
@@ -198,8 +195,7 @@ export async function scanSessionDir(sessionDir: string, pinnedIds?: Set<string>
     }),
   );
 
-  const nonEmpty = fileStats
-    .filter((e): e is NonNullable<typeof e> => e !== null && e.size > 0);
+  const nonEmpty = fileStats.filter((e): e is NonNullable<typeof e> => e !== null && e.size > 0);
 
   // Sort by mtime descending (newest first)
   nonEmpty.sort((a, b) => b.mtimeMs - a.mtimeMs);
@@ -281,13 +277,14 @@ export async function scanSessionDir(sessionDir: string, pinnedIds?: Set<string>
 export async function findSessionById(
   sessionId: string,
 ): Promise<(SessionMeta & { sessionPath: string }) | null> {
-  if (!existsSync(SESSIONS_DIR)) return null;
+  const sessionsDir = getSessionsRoot();
+  if (!existsSync(sessionsDir)) return null;
 
-  const dirs = await readdir(SESSIONS_DIR);
+  const dirs = await readdir(sessionsDir);
   const targetFile = `${sessionId}.jsonl`;
 
   for (const dir of dirs) {
-    const fullPath = join(SESSIONS_DIR, dir);
+    const fullPath = join(sessionsDir, dir);
     try {
       const dirStat = await stat(fullPath);
       if (!dirStat.isDirectory()) continue;
@@ -350,8 +347,7 @@ export async function findDelegateChildren(
   parentSessionId: string,
   projectPath: string,
 ): Promise<string[]> {
-  const dirName = encodeCwd(projectPath);
-  const sessionDir = join(SESSIONS_DIR, dirName);
+  const sessionDir = getProjectSessionDir(projectPath);
   if (!existsSync(sessionDir)) return [];
 
   const files = await readdir(sessionDir);
@@ -378,8 +374,7 @@ export async function findDelegateChildren(
 }
 
 export async function scanSessionsForProject(projectPath: string): Promise<SessionMeta[]> {
-  const dirName = encodeCwd(projectPath);
-  const sessionDir = join(SESSIONS_DIR, dirName);
+  const sessionDir = getProjectSessionDir(projectPath);
   const pinnedIds = await loadPinnedSet();
   return scanSessionDir(sessionDir, pinnedIds);
 }
@@ -397,14 +392,15 @@ async function loadPinnedSet(): Promise<Set<string>> {
 export async function scanAllProjects(): Promise<
   { projectPath: string; sessionCount: number; sessions: SessionMeta[] }[]
 > {
-  if (!existsSync(SESSIONS_DIR)) return [];
+  const sessionsDir = getSessionsRoot();
+  if (!existsSync(sessionsDir)) return [];
 
   const pinnedIds = await loadPinnedSet();
-  const dirs = await readdir(SESSIONS_DIR);
+  const dirs = await readdir(sessionsDir);
 
   const allResults = await Promise.all(
     dirs.map(async (dir) => {
-      const fullPath = join(SESSIONS_DIR, dir);
+      const fullPath = join(sessionsDir, dir);
       try {
         const dirStat = await stat(fullPath);
         if (!dirStat.isDirectory()) return null;

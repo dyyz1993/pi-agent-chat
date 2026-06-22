@@ -3,6 +3,7 @@ import {
   ChevronDown,
   ChevronRight,
   Zap,
+  ShieldCheck,
   ClipboardList,
   Terminal,
   Plug,
@@ -72,12 +73,16 @@ function PluginCopyButton({ plugin }: { plugin: PluginInfo }) {
 
 export function StatusPanel() {
   const { t } = useTranslation("status");
-  const yoloEnabled = useStatusStore((s) => s.yoloEnabled);
-  const yoloLoading = useStatusStore((s) => s.yoloLoading);
+  const permissionProfile = useStatusStore((s) => s.permissionProfile);
+  const permissionProfileLoading = useStatusStore((s) => s.permissionProfileLoading);
+  const projectTrust = useStatusStore((s) => s.projectTrust);
+  const projectTrustLoading = useStatusStore((s) => s.projectTrustLoading);
   const plugins = useStatusStore((s) => s.plugins);
   const skills = useStatusStore((s) => s.skills);
   const expandedSkill = useStatusStore((s) => s.expandedSkill);
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const projectTabs = useSessionStore((s) => s.projectTabs);
+  const activeProjectId = useSessionStore((s) => s.activeProjectId);
   const activeSubId = useSubagentStore((s) => s.activeSubsessionId);
   const todosBySession = useSessionTodoStore((s) => s.todosBySession);
   const allProcesses = useBashStore(useShallow((s) => s.processesBySession[activeSessionId ?? ""]));
@@ -88,18 +93,73 @@ export function StatusPanel() {
   const lspData = activeSessionId ? lspStore[activeSessionId] : undefined;
   const collapsedSections = useStatusStore((s) => s.collapsedSections);
   const toggleSection = useStatusStore((s) => s.toggleSection);
-  const toggleYolo = useStatusStore((s) => s.toggleYolo);
+  const setPermissionProfile = useStatusStore((s) => s.setPermissionProfile);
+  const trustCurrentProject = useStatusStore((s) => s.trustCurrentProject);
   const toggleSkillExpanded = useStatusStore((s) => s.toggleSkillExpanded);
   const toggleSkillEnabled = useStatusStore((s) => s.toggleSkillEnabled);
   const expandedPlugin = useStatusStore((s) => s.expandedPlugin);
   const togglePluginExpanded = useStatusStore((s) => s.togglePluginExpanded);
   const togglePluginEnabled = useStatusStore((s) => s.togglePluginEnabled);
   const sessionsByProject = useSessionStore((s) => s.sessionsByProject);
+  const safeProjectTabs = projectTabs ?? [];
+  const safeSessionsByProject = sessionsByProject ?? {};
+  const activeProjectTab = safeProjectTabs.find((tab) => tab.id === activeProjectId) ?? null;
+  const activeSessionMeta =
+    activeProjectTab && activeSessionId
+      ? safeSessionsByProject[activeProjectTab.path]?.find((s) => s.sessionId === activeSessionId)
+      : null;
   const backgroundProcesses = allProcesses?.filter((p) => backgroundedIds.has(p.toolCallId)) ?? [];
   const hasProcesses = backgroundProcesses.length > 0;
+  const [showPermissionAdvanced, setShowPermissionAdvanced] = useState(false);
+
+  const permissionPresets = [
+    {
+      id: "normal" as const,
+      label: t("permissionPresetAsk"),
+      access: t("permissionAccessWorkspace"),
+      approval: t("permissionApprovalOnRequest"),
+      description: t("permissionPresetAskDesc"),
+      icon: ShieldCheck,
+      tone: "success",
+      disabled: false,
+    },
+    {
+      id: "autopilot" as const,
+      label: t("permissionPresetAutopilot"),
+      access: t("permissionAccessWorkspace"),
+      approval: t("permissionApprovalAutopilot"),
+      description: t("permissionPresetAutopilotDesc"),
+      icon: Zap,
+      tone: "info",
+      disabled: false,
+    },
+    {
+      id: "yolo" as const,
+      label: t("permissionPresetFull"),
+      access: t("permissionAccessFull"),
+      approval: t("permissionApprovalNever"),
+      description: t("permissionPresetFullDesc"),
+      icon: Zap,
+      tone: "warning",
+      disabled: false,
+    },
+    {
+      id: "readonly" as const,
+      label: t("permissionPresetReadonly"),
+      access: t("permissionAccessReadonly"),
+      approval: t("permissionApprovalNever"),
+      description: t("permissionPresetReadonlyDesc"),
+      icon: ShieldCheck,
+      tone: "success",
+      disabled: false,
+    },
+  ];
+  const activePermissionPreset =
+    permissionPresets.find((preset) => preset.id === permissionProfile) ?? permissionPresets[0];
+  const projectTrusted = projectTrust?.trusted === true;
 
   const SECTIONS: { id: StatusSection; label: string; icon: React.ElementType }[] = [
-    { id: "yolo", label: t("yoloMode"), icon: Zap },
+    { id: "permission", label: t("permissionMode"), icon: ShieldCheck },
     { id: "plan", label: t("planMode"), icon: ClipboardList },
     { id: "shell", label: t("shell"), icon: Terminal },
     { id: "mcp", label: t("mcpTools"), icon: Plug },
@@ -153,14 +213,118 @@ export function StatusPanel() {
               </button>
               {!collapsed && (
                 <div className="px-2.5 pb-2 text-[10px] text-text-tertiary">
-                  {id === "yolo" && (
-                    <button
-                      onClick={toggleYolo}
-                      disabled={yoloLoading}
-                      className={`px-2 py-0.5 rounded text-[10px] ${yoloLoading ? "opacity-50 cursor-wait" : ""} ${yoloEnabled ? "bg-status-warning/30 text-status-warning" : "bg-surface-hover dark:bg-surface-code text-text-tertiary"}`}
-                    >
-                      {yoloLoading ? "..." : yoloEnabled ? t("enabled") : t("disabled")}
-                    </button>
+                  {id === "permission" && (
+                    <div className="space-y-2 pt-0.5">
+                      <div className="grid grid-cols-2 gap-1">
+                        {permissionPresets.map((preset) => {
+                          const active = permissionProfile === preset.id;
+                          const Icon = preset.icon;
+                          return (
+                            <button
+                              key={preset.id}
+                              onClick={() => setPermissionProfile(preset.id)}
+                              disabled={permissionProfileLoading || active || preset.disabled}
+                              title={preset.description}
+                              className={`min-h-8 px-2 py-1.5 rounded-md text-[10px] transition-colors flex items-center justify-center gap-1 ${
+                                active
+                                  ? preset.tone === "warning"
+                                    ? "bg-status-warning/25 text-status-warning"
+                                    : "bg-status-success/20 text-status-success"
+                                  : preset.disabled
+                                    ? "text-text-tertiary/50 bg-surface-hover/20 cursor-not-allowed"
+                                    : "text-text-tertiary hover:text-text-secondary hover:bg-surface-hover"
+                              } ${permissionProfileLoading ? "opacity-60 cursor-wait" : ""}`}
+                            >
+                              <Icon className="h-3 w-3 shrink-0" />
+                              <span>{preset.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="flex items-start gap-1.5 text-[10px] leading-4 text-text-tertiary">
+                        {activePermissionPreset.id === "yolo" ? (
+                          <Zap className="mt-0.5 h-3 w-3 shrink-0 text-status-warning" />
+                        ) : (
+                          <ShieldCheck className="mt-0.5 h-3 w-3 shrink-0 text-status-success" />
+                        )}
+                        <div>
+                          <div className="text-text-secondary">
+                            {t("permissionCurrentStrategy", {
+                              access: activePermissionPreset.access,
+                              approval: activePermissionPreset.approval,
+                            })}
+                          </div>
+                          <div>{activePermissionPreset.description}</div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowPermissionAdvanced((value) => !value)}
+                        className="text-[10px] text-accent hover:text-accent-hover transition-colors"
+                      >
+                        {showPermissionAdvanced
+                          ? t("permissionAdvancedHide")
+                          : t("permissionAdvancedShow")}
+                      </button>
+                      {showPermissionAdvanced && (
+                        <div className="space-y-1 rounded-md border border-border-secondary/60 bg-surface-hover/25 p-2">
+                          <div className="grid grid-cols-[4.5rem_1fr] gap-x-2 gap-y-1">
+                            <span className="text-text-tertiary">{t("permissionAccessAxis")}</span>
+                            <span className="text-text-secondary">
+                              {activePermissionPreset.access}
+                            </span>
+                            <span className="text-text-tertiary">
+                              {t("permissionApprovalAxis")}
+                            </span>
+                            <span className="text-text-secondary">
+                              {activePermissionPreset.approval}
+                            </span>
+                            <span className="text-text-tertiary">{t("permissionScopeAxis")}</span>
+                            <span className="text-text-secondary">
+                              {projectTrusted
+                                ? t("permissionScopeProject")
+                                : t("permissionScopeSession")}
+                            </span>
+                            <span className="text-text-tertiary">{t("permissionTrustAxis")}</span>
+                            <span className="flex items-center gap-1 text-text-secondary">
+                              {projectTrusted ? (
+                                <ShieldCheck className="h-3 w-3 text-status-success" />
+                              ) : (
+                                <AlertTriangle className="h-3 w-3 text-status-warning" />
+                              )}
+                              {projectTrusted
+                                ? t("permissionTrustTrusted")
+                                : t("permissionTrustUntrusted")}
+                            </span>
+                          </div>
+                          <div className="pt-1 text-[10px] leading-4 text-text-tertiary">
+                            {projectTrusted
+                              ? t("permissionTrustHintProject")
+                              : t("permissionTrustHintSession")}
+                          </div>
+                          {!projectTrusted && activeSessionId && activeProjectTab && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                trustCurrentProject(
+                                  activeSessionId,
+                                  activeProjectTab.path,
+                                  activeSessionMeta?.sessionPath,
+                                )
+                              }
+                              disabled={projectTrustLoading}
+                              className="mt-1 inline-flex min-h-7 items-center gap-1 rounded-md border border-status-warning/35 bg-status-warning/10 px-2 py-1 text-[10px] font-medium text-status-warning hover:bg-status-warning/15 disabled:cursor-wait disabled:opacity-60"
+                              title={activeProjectTab.path}
+                            >
+                              <ShieldCheck className="h-3 w-3" />
+                              {projectTrustLoading
+                                ? t("permissionTrusting")
+                                : t("permissionTrustAction")}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   )}
                   {id === "plan" && (
                     <div className="space-y-1">
@@ -387,27 +551,28 @@ export function StatusPanel() {
                                 >
                                   {p.scope === "global" ? t("global") : t("project")}
                                 </span>
-                                {activeSessionId && (() => {
-                                  const projectPath = Object.values(sessionsByProject)
-                                    .flat()
-                                    .find((s) => s.sessionId === activeSessionId)?.projectPath;
-                                  return projectPath ? (
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        togglePluginEnabled(activeSessionId, projectPath, p.path);
-                                      }}
-                                      className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-surface-hover/60 rounded transition-opacity"
-                                      title={p.enabled ? t("disablePlugin") : t("enablePlugin")}
-                                    >
-                                      {p.enabled ? (
-                                        <EyeOff className="w-3 h-3 text-text-tertiary" />
-                                      ) : (
-                                        <Eye className="w-3 h-3 text-text-tertiary" />
-                                      )}
-                                    </button>
-                                  ) : null;
-                                })()}
+                                {activeSessionId &&
+                                  (() => {
+                                    const projectPath = Object.values(sessionsByProject)
+                                      .flat()
+                                      .find((s) => s.sessionId === activeSessionId)?.projectPath;
+                                    return projectPath ? (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          togglePluginEnabled(activeSessionId, projectPath, p.path);
+                                        }}
+                                        className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-surface-hover/60 rounded transition-opacity"
+                                        title={p.enabled ? t("disablePlugin") : t("enablePlugin")}
+                                      >
+                                        {p.enabled ? (
+                                          <EyeOff className="w-3 h-3 text-text-tertiary" />
+                                        ) : (
+                                          <Eye className="w-3 h-3 text-text-tertiary" />
+                                        )}
+                                      </button>
+                                    ) : null;
+                                  })()}
                               </div>
                               {isExpanded && (
                                 <div className="ml-4 pl-2 border-l border-border-primary/70 space-y-1 pt-1 text-[10px]">

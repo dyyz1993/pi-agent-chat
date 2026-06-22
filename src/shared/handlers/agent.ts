@@ -1,9 +1,21 @@
 import type { RPCServer } from "@dyyz1993/rpc-core";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import type { HandlerOptions, R } from "../rpc-schema";
 import { createRegister } from "../rpc-schema";
 import { AgentProcessManager } from "../agent/process-manager";
 import { createLogger } from "../lib/logger";
-import { listDisabledSkills, setDisabledSkill, listDisabledPlugins, setDisabledPlugin } from "../lib/project-config";
+import {
+  getLegacyTrustStorePath,
+  getProjectTrustStorePath,
+  normalizeProjectPath,
+} from "../lib/pi-agent-paths";
+import {
+  listDisabledSkills,
+  setDisabledSkill,
+  listDisabledPlugins,
+  setDisabledPlugin,
+} from "../lib/project-config";
 
 const log = createLogger("agent");
 
@@ -14,6 +26,75 @@ function getManager(): AgentProcessManager {
     throw new Error("AgentProcessManager not initialized");
   }
   return manager;
+}
+
+type TrustFile = Record<string, boolean | null | undefined>;
+
+function readTrustFile(path: string): TrustFile {
+  if (!existsSync(path)) return {};
+  const raw = readFileSync(path, "utf-8");
+  const parsed = JSON.parse(raw) as unknown;
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error(`Invalid trust store ${path}: expected an object`);
+  }
+  const data: TrustFile = {};
+  for (const [key, value] of Object.entries(parsed)) {
+    if (value !== true && value !== false && value !== null) {
+      throw new Error(
+        `Invalid trust store ${path}: value for ${JSON.stringify(key)} must be true, false, or null`,
+      );
+    }
+    data[key] = value as boolean | null;
+  }
+  return data;
+}
+
+function writeTrustFile(path: string, data: TrustFile): void {
+  const sorted: TrustFile = {};
+  for (const key of Object.keys(data).sort()) {
+    const value = data[key];
+    if (value === true || value === false || value === null) {
+      sorted[key] = value;
+    }
+  }
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${JSON.stringify(sorted, null, 2)}\n`, "utf-8");
+}
+
+function findProjectTrustEntry(
+  data: TrustFile,
+  projectPath: string,
+): { path: string; decision: boolean } | null {
+  let current = normalizeProjectPath(projectPath);
+  while (true) {
+    const decision = data[current];
+    if (decision === true || decision === false) {
+      return { path: current, decision };
+    }
+    const parent = dirname(current);
+    if (parent === current) return null;
+    current = parent;
+  }
+}
+
+function readProjectTrustEntry(
+  projectPath: string,
+): { path: string; decision: boolean; trustStorePath: string } | null {
+  let current = normalizeProjectPath(projectPath);
+  while (true) {
+    const trustStorePath = getProjectTrustStorePath(current);
+    const decision = readTrustFile(trustStorePath).decision;
+    if (decision === true || decision === false) {
+      return { path: current, decision, trustStorePath };
+    }
+    const parent = dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+
+  const legacyTrustStorePath = getLegacyTrustStorePath();
+  const legacyEntry = findProjectTrustEntry(readTrustFile(legacyTrustStorePath), projectPath);
+  return legacyEntry ? { ...legacyEntry, trustStorePath: legacyTrustStorePath } : null;
 }
 
 export function getProcessManager(): AgentProcessManager | null {
@@ -236,7 +317,11 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   });
 
   r("agent.setDisabledPlugin", async (params) => {
-    const disabledPlugins = await setDisabledPlugin(params.projectPath, params.pluginPath, params.disabled);
+    const disabledPlugins = await setDisabledPlugin(
+      params.projectPath,
+      params.pluginPath,
+      params.disabled,
+    );
     return { disabledPlugins };
   });
 
@@ -275,6 +360,33 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
   r("agent.setSettings", async (params) => {
     await m.setSettings(params.sessionId, params.settings, params.scope);
     return { ok: true };
+  });
+
+  r("agent.getProjectTrust", async (params) => {
+    const projectPath = normalizeProjectPath(params.projectPath);
+    const entry = readProjectTrustEntry(projectPath);
+    return {
+      projectPath,
+      trusted: entry?.decision === true,
+      decision: entry?.decision ?? null,
+      decisionPath: entry?.path,
+      trustStorePath: entry?.trustStorePath ?? getProjectTrustStorePath(projectPath),
+    };
+  });
+
+  r("agent.setProjectTrust", async (params) => {
+    const projectPath = normalizeProjectPath(params.projectPath);
+    const trustStorePath = getProjectTrustStorePath(projectPath);
+    const data = readTrustFile(trustStorePath);
+    data.decision = params.trusted;
+    writeTrustFile(trustStorePath, data);
+    return {
+      projectPath,
+      trusted: params.trusted,
+      decision: params.trusted,
+      decisionPath: projectPath,
+      trustStorePath,
+    };
   });
 
   r("agent.setSessionName", async (params) => {

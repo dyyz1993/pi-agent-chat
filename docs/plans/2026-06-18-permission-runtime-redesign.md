@@ -8,6 +8,29 @@
 
 **Tech Stack:** TypeScript, React/WebSocket RPC integration, pi-coding-agent extension runner, JSONL session recovery, Vitest.
 
+**Implementation checkpoint (2026-06-21):**
+
+- Added core `PermissionRuntime` protocol/types and provider pipeline skeleton.
+- Added built-in `tool-gate-provider` for `AgentConfig.tools` / `disallowedTools` and wired it into `AgentSession.beforeToolCall`.
+- Added generic `PermissionStore` backed by project `.pi/settings.json` under `permissions.rules`.
+- Added `stored-decision-provider` that converts stored project allow/deny rules into runtime decisions.
+- Added `path-access-provider` for current-compatible `AgentConfig.paths.read/write` enforcement; `paths.bash` remains pass-through until bash path semantics are redesigned and tested separately.
+- Added `dangerous-command-provider` for current-compatible dangerous bash detection, with deny-by-default behavior and an ask-capable request shape for later UI/transport wiring.
+- Added `pi-hooks-provider` adapter that maps the existing Claude Code-compatible `tool_call` hook protocol into permission `deny` / `mutate` / `pass` decisions without rewriting `pi-hooks` itself.
+- Extracted shared tool/path matching helpers so the legacy path store and new permission modules use the same matching semantics.
+- Wired `AgentSession.beforeToolCall` through a two-stage PermissionRuntime flow: `tool-gate -> stored-decision -> pi-hooks`, then post-mutation `path-access -> dangerous-command`. This keeps hook mutation useful without letting mutated input skip safety checks.
+- Removed the legacy `agent-permissions` extension and deleted the old `checkToolPermission()` implementation/tests so duplicate permission logic no longer remains as a parallel runtime path.
+- Added a first `PermissionProfile` registry for `normal` / `yolo` and legacy aliases, moving provider-stage ordering and path-boundary approval skipping out of ad hoc `AgentSession` branches.
+- Added `permissionProfile` frontmatter compatibility while keeping `permissionMode` as the effective compatibility field for existing callers.
+- Added a core `askPermission()` resolver that lets `permission_request` hooks decide first, falls back to UI select prompts when available, persists project remember choices through `PermissionStore`, and fails closed when no interaction transport exists.
+- Extended `askPermission()` so each project-scoped remember option becomes its own selectable UI choice, allowing users to save exact, normalized, or family command rules without the resolver silently picking the first allow/deny rule.
+- Added stored-rule lookup inside `askPermission()` itself so direct extension permission requests can reuse project allow/deny rules without depending on an outer provider pass.
+- Added deterministic dangerous-command pattern suggestions: destructive commands such as recursive `rm`, `sudo`, env, and credentials stay exact-only, while lower-risk command families such as `git commit *--no-verify*` and `git push *--force*` can offer reusable scoped patterns.
+- Added normalized bash command candidates to `stored-decision-provider` so remembered normalized patterns can match commands whose whitespace differs.
+- Exposed `ctx.permissions.ask()` on extension contexts and migrated synchronous `pi-hooks` `PreToolUse` exit-3 approvals from legacy `ctx.ui.confirm()` to provider=`pi-hooks`, subject=`hook.approval` `PermissionRequest`s with selectable exact-request and hook-rule remember options.
+- Wired `PermissionDecision.ask` into `AgentSession` for dangerous bash prompts; fixed `pi-hooks` so absent `PermissionRequest` hooks defer instead of auto-allowing provider asks.
+- Verified the wiring with focused permission/provider tests, AgentSession integration tests, Claude Code hooks compatibility tests, build, `yalc push`, and consumer dev-server health checks.
+
 ---
 
 ## Current State
@@ -55,14 +78,14 @@ AgentSession.beforeToolCall
         |
         v
 PermissionRuntime.evaluate(ctx)
-  provider pipeline:
-    tool-gate-provider
-    stored-decision-provider
-    pi-hooks-provider
-    path-access-provider
-    dangerous-command-provider
-    auto-approver-provider
-    file-time-guard-provider
+  provider pipeline resolved from the selected profile:
+    built-in: tool-gate-provider
+    built-in: stored-decision-provider
+    built-in: path-access-provider
+    official optional: dangerous-command-provider
+    official optional: auto-approver-provider
+    extension: pi-hooks-provider
+    extension: file-time-guard-provider
         |
         v
 allow / deny / ask / mutate / pass
@@ -78,6 +101,12 @@ Architectural boundaries:
 - **Core Permission Runtime** owns context, decision protocol, request identity, pending lifecycle, stored decisions, recovery snapshots, and provider orchestration.
 - **Permission providers** implement policy.
 - **UI transports** display interaction requests and return answers. They do not know permission policy.
+
+Provider categories:
+
+- **Built-in providers** ship with core because they define baseline product semantics that must not disappear when extensions are disabled.
+- **Official optional providers** ship with the product but remain profile-selectable policy modules rather than hard-coded runtime branches.
+- **Extension providers** are registered by plugins and use `ctx.permissions` instead of calling UI transports directly.
 
 ## Naming
 
@@ -386,6 +415,19 @@ npm test -- permission-interaction.test.ts extensions-ui-intercept.test.ts exten
 
 Expected: existing UI interception tests still pass.
 
+**Checkpoint (2026-06-21):**
+
+- Added `/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/src/core/ask-permission.ts` as the first interaction resolver rather than a full pending-request transport.
+- Extended `PermissionRequestEvent` with the full `PermissionRequest`, subject, title, message, and actions so plugins can inspect structured provider requests while keeping the existing allow/deny result shape.
+- `askPermission()` now calls `permission_request` hooks first; hook allow can optionally mutate input, hook deny blocks, and hook errors fail closed.
+- UI fallback currently uses `ExtensionUIContext.select()` and maps `allow_once`, `always_allow_project`, `deny_once`, and `always_deny_project` into runtime decisions.
+- Project-scoped remember choices are persisted through `PermissionStore`.
+- Missing UI and missing hook handlers deny explicitly, preserving fail-closed behavior until a real pending-request transport exists.
+- `AgentSession` now applies `PermissionDecision.ask` and routes dangerous bash ask requests through `askPermission()`.
+- Path boundary approval now also constructs a `path-access` `PermissionRequest` and persists remember choices in `PermissionStore` instead of using `PathPermissionStore` directly from `AgentSession`.
+- `pi-hooks` PermissionRequest compatibility was tightened so no matching `PermissionRequest` hook means "defer" rather than automatic allow.
+- Verified with `/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/test/ask-permission.test.ts`, AgentSession dangerous-command ask integration tests, and `/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/test/suite/path-boundary-approval.test.ts`.
+
 ### Task 3.2: Add Pending Permission Snapshot
 
 **Files:**
@@ -569,7 +611,6 @@ Expected: previous dangerous command tests are updated to expect provider decisi
 **Files:**
 
 - Modify: `/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/src/core/agent-session.ts`
-- Modify: `/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/src/core/agent-session-services.ts`
 - Test: `/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/test/suite/agent-session-permissions.test.ts`
 - Test: `/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/test/suite/agent-session-rpc-permissions.test.ts`
 
@@ -578,18 +619,20 @@ Expected: previous dangerous command tests are updated to expect provider decisi
 ```text
 beforeToolCall
   build PermissionContext
-  runtime.evaluate(ctx)
+  preRuntime.evaluate(ctx)
   apply decision:
     allow -> continue
     pass -> continue
     deny -> block with reason
     ask -> askPermission then apply answer
-    mutate -> update args then continue
+    mutate -> update args
+  postRuntime.evaluate(updated ctx)
+  apply deny/ask/pass/allow
 ```
 
 **Important ordering:**
 
-The profile controls provider order. A reasonable normal default is:
+The profile controls provider order. The current normal default is:
 
 ```text
 tool-gate
@@ -597,10 +640,9 @@ stored-decision
 pi-hooks
 path-access
 dangerous-command
-file-time-guard
 ```
 
-Provider order must be explicit and tested. Do not hide ordering inside incidental extension load order.
+Provider order is explicit and tested. `pi-hooks` can mutate tool input, but the post-runtime path/dangerous providers always see the final mutated input.
 
 **Verification:**
 
@@ -610,6 +652,17 @@ npm test -- test/suite/agent-session-permissions.test.ts test/suite/agent-sessio
 ```
 
 Expected: blocked tools still return an error ToolResult and do not kill the agent loop.
+
+**Checkpoint (2026-06-21):**
+
+- Implemented in `/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/src/core/agent-session.ts`.
+- Added coverage for hook single execution, safe hook mutation, and dangerous hook mutation blocking in `/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/test/suite/agent-session-permissions.test.ts`.
+- Verified with:
+  - `npm test -- test/permission-runtime-types.test.ts test/permission-runtime.test.ts test/permission-tool-gate-provider.test.ts test/permission-store.test.ts test/permission-stored-decision-provider.test.ts test/permission-path-access-provider.test.ts test/permission-dangerous-command-provider.test.ts test/permission-pi-hooks-provider.test.ts test/suite/agent-session-permissions.test.ts test/suite/claude-hooks-compat.test.ts test/suite/pi-hooks-integration.test.ts test/claude-hooks-compat-output.test.ts`
+  - `npm run build`
+  - `yalc push`
+  - `curl -I --max-time 5 http://localhost:3100/`
+  - `curl -I --max-time 5 http://localhost:5173/`
 
 ### Task 5.2: Remove Legacy agent-permissions Extension
 
@@ -631,10 +684,18 @@ Expected: blocked tools still return an error ToolResult and do not kill the age
 
 ```bash
 cd /Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent
-npm test -- builtin-extensions.test.ts permissions.test.ts
+npm test -- test/builtin-extensions.test.ts test/permission-runtime-types.test.ts test/permission-runtime.test.ts test/permission-tool-gate-provider.test.ts test/permission-store.test.ts test/permission-stored-decision-provider.test.ts test/permission-path-access-provider.test.ts test/permission-dangerous-command-provider.test.ts test/permission-pi-hooks-provider.test.ts test/suite/agent-session-permissions.test.ts test/suite/claude-hooks-compat.test.ts test/suite/pi-hooks-integration.test.ts test/claude-hooks-compat-output.test.ts
 ```
 
 Expected: built-in extension list no longer expects `agent-permissions`; permission behavior is covered by providers.
+
+**Checkpoint (2026-06-21):**
+
+- Deleted `/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/extensions/agent-permissions/`.
+- Deleted `/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/src/core/permissions.ts` and `/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/test/permissions.test.ts`.
+- Updated `/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/package.json` so `copy-assets` clears `dist/extensions` before copying, preventing deleted extensions from surviving as stale dist artifacts.
+- Verified `rg "agent-permissions|checkToolPermission|CorePermissionMode" -n src extensions test dist/extensions` has no matches.
+- Verified `dist/extensions/agent-permissions` and consumer `node_modules/@dyyz1993/pi-coding-agent/dist/extensions/agent-permissions` are absent after `npm run build` and `yalc push`.
 
 ---
 
@@ -684,6 +745,21 @@ npm test -- permission-profiles.test.ts
 
 Expected: each profile expands into a deterministic provider pipeline.
 
+**Checkpoint (2026-06-21):**
+
+- Added `/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/src/core/permissions/profiles.ts`.
+- Updated `/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/src/core/agent-session.ts` so pre/post providers are resolved from profile config.
+- Updated `/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/src/core/agent-types.ts` so `permissionMode` uses the shared profile input type.
+- Added `/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/test/permission-profiles.test.ts`.
+- Added AgentSession coverage proving `yolo` omits dangerous-command while preserving the rest of the permission runtime path.
+- Verified with:
+  - `npm test -- test/permission-profiles.test.ts test/suite/agent-session-permissions.test.ts`
+  - `npm test -- test/builtin-extensions.test.ts test/permission-runtime-types.test.ts test/permission-runtime.test.ts test/permission-profiles.test.ts test/permission-tool-gate-provider.test.ts test/permission-store.test.ts test/permission-stored-decision-provider.test.ts test/permission-path-access-provider.test.ts test/permission-dangerous-command-provider.test.ts test/permission-pi-hooks-provider.test.ts test/suite/agent-session-permissions.test.ts test/suite/claude-hooks-compat.test.ts test/suite/pi-hooks-integration.test.ts test/claude-hooks-compat-output.test.ts`
+  - `npm run build`
+  - `yalc push`
+  - `curl -I --max-time 5 http://localhost:3100/`
+  - `curl -I --max-time 5 http://localhost:5173/`
+
 ### Task 6.2: Extend Agent Frontmatter Compatibility
 
 **Files:**
@@ -708,6 +784,20 @@ npm test -- agent-types.test.ts
 ```
 
 Expected: old agent files continue loading; new profile field works.
+
+**Checkpoint (2026-06-21):**
+
+- Added `permissionProfile` to `/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/src/core/agent-types.ts`.
+- `permissionProfile` wins when both `permissionMode` and `permissionProfile` are present, and the effective value is mirrored into `permissionMode` for existing callers.
+- Updated `/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/src/core/agent-session.ts` to apply `agent.permissionProfile ?? agent.permissionMode`.
+- Added `/Users/xuyingzhou/Project/temporary/pi-momo-fork/packages/coding-agent/test/agent-types.test.ts`.
+- Verified with:
+  - `npm test -- test/agent-types.test.ts test/permission-profiles.test.ts test/suite/agent-session-permissions.test.ts`
+  - `npm test -- test/agent-types.test.ts test/builtin-extensions.test.ts test/permission-runtime-types.test.ts test/permission-runtime.test.ts test/permission-profiles.test.ts test/permission-tool-gate-provider.test.ts test/permission-store.test.ts test/permission-stored-decision-provider.test.ts test/permission-path-access-provider.test.ts test/permission-dangerous-command-provider.test.ts test/permission-pi-hooks-provider.test.ts test/suite/agent-session-permissions.test.ts test/suite/agent-session-rpc-permissions.test.ts test/suite/claude-hooks-compat.test.ts test/suite/pi-hooks-integration.test.ts test/claude-hooks-compat-output.test.ts`
+  - `npm run build`
+  - `yalc push`
+  - `curl -I --max-time 5 http://localhost:3100/`
+  - `curl -I --max-time 5 http://localhost:5173/`
 
 ---
 
@@ -738,6 +828,14 @@ bun run test:integration -- test/integration/agent/permission-recovery.test.ts
 
 Expected: permission cards do not disappear after refresh and close everywhere after response.
 
+**Checkpoint (2026-06-21):**
+
+- The existing `pendingUIRequests` snapshot/recovery path already carries extension UI select requests, so the first runtime permission UI integration reuses that transport instead of adding a separate pending-permission state source.
+- Extended `/Users/xuyingzhou/Project/temporary/pi-agent-chat/src/shared/modules/agent.ts` and `/Users/xuyingzhou/Project/temporary/pi-agent-chat/src/mainview/types/index.ts` so `permissionMeta` supports both legacy `path_boundary` and new `permission_runtime` metadata.
+- Verified runtime permission metadata survives into the existing active-session pending request dock.
+- Updated `/Users/xuyingzhou/Project/temporary/pi-agent-chat/test/unit/stores/status-visibility.test.ts` so `fetchInitialState()` recovery preserves `permission_runtime` metadata and restores session status to `permission`.
+- A dedicated runtime-owned query API is still needed later if permissions move beyond the existing extension UI request transport.
+
 ### Task 7.2: Add Permission Request UI Card
 
 **Files:**
@@ -764,6 +862,17 @@ bun run test:unit -- test/unit/components/PermissionRequestCard.test.tsx
 ```
 
 Expected: card renders actions and sends selected action with request id.
+
+**Checkpoint (2026-06-21):**
+
+- Reused the existing UI interaction card path instead of creating a standalone `PermissionRequestCard`.
+- Added runtime permission rendering in `/Users/xuyingzhou/Project/temporary/pi-agent-chat/src/mainview/components/chat/UIPendingCenter.tsx` for active-session pending request docks.
+- Added `RuntimePermissionCard` in `/Users/xuyingzhou/Project/temporary/pi-agent-chat/src/mainview/components/chat/tool-renderers/UICardRenderer.tsx` for chat/history UI interaction blocks.
+- Runtime permission cards show provider, subject, message, and command/path metadata when present, and return the original selected option label so bottom `askPermission()` can resolve it.
+- Verified with:
+  - `bun run test -- test/unit/components/UIPendingCenter.test.tsx`
+  - `bun run test -- test/unit/components/UIPendingCenter.test.tsx test/unit/stores/status-visibility.test.ts`
+  - `bun run build`
 
 ---
 

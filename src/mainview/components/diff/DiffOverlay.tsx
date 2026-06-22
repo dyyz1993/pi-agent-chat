@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback } from "react";
 import { Columns2, Rows3 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import ReactDiffViewer, { DiffMethod } from "react-diff-viewer-continued";
-import { Highlight, themes } from "prism-react-renderer";
+import { Highlight, Prism, themes } from "prism-react-renderer";
 import { useGitStore } from "../../stores/use-git-store";
 import { useThemeStore, isDarkGroup } from "../../stores/use-theme-store";
 import { useLayoutStore } from "../../layouts/use-layout-store";
@@ -10,6 +10,9 @@ import { formatFilePath } from "../../lib/format-path";
 import { getLanguage } from "../../utils/file-utils";
 import { createDiffStyles, DIFF_STYLE_PRESETS } from "./diff-style-factory";
 import { FullscreenOverlay } from "../primitives";
+import { registerShellPrismLanguage } from "../../lib/prism-languages";
+
+registerShellPrismLanguage(Prism);
 
 function useSyntaxRenderer(filePath: string | undefined) {
   const resolvedTheme = useThemeStore((s) => s.resolvedTheme);

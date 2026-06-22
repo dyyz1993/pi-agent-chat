@@ -15,7 +15,11 @@ import {
   useProjectPendingCount,
 } from "../../../src/mainview/components/chat/UIPendingCenter";
 import { ContentBlockRenderer } from "../../../src/mainview/components/chat/ContentBlockRenderer";
-import { AskUserQuestionToolCard } from "../../../src/mainview/components/chat/tool-renderers/UICardRenderer";
+import {
+  AskUserQuestionToolCard,
+  PathPermissionCard,
+} from "../../../src/mainview/components/chat/tool-renderers/UICardRenderer";
+import type { UIInteractionBlock } from "../../../src/mainview/types";
 import type { UIPendingRequest } from "../../../src/mainview/stores/use-ui-dialog-store";
 
 const mockFns = vi.hoisted(() => ({
@@ -625,9 +629,7 @@ describe("UIPendingCenter", () => {
                 header: "移动端问题排查",
                 question: "移动端具体哪些地方需要调整？",
                 multiSelect: true,
-                options: [
-                  { label: "布局错位", description: "元素位置偏移，未正确适配屏幕尺寸" },
-                ],
+                options: [{ label: "布局错位", description: "元素位置偏移，未正确适配屏幕尺寸" }],
               },
             ],
           }),
@@ -643,9 +645,38 @@ describe("UIPendingCenter", () => {
 
     expect(screen.getByText("Input")).toBeInTheDocument();
     expect(screen.getByText("Output")).toBeInTheDocument();
-    expect(screen.getAllByText(/Validation failed for tool "ask-user-question"/).length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(/Validation failed for tool "ask-user-question"/).length,
+    ).toBeGreaterThan(0);
     expect(screen.queryByText("移动端调整详情")).not.toBeInTheDocument();
     expect(document.querySelector("svg.text-status-error")).toBeInTheDocument();
+  });
+
+  it("falls back to the default tool card when write fails", () => {
+    render(
+      <ContentBlockRenderer
+        block={{
+          type: "toolExecution",
+          toolCallId: "tool-write-error",
+          toolName: "write",
+          args: JSON.stringify({
+            path: "/opt/pi-agent-permission-test.txt",
+            content: "hello",
+          }),
+          status: "error",
+          output:
+            'Permission provider "pi-hooks" failed: Project is not trusted; refusing to write project settings',
+        }}
+        msgId="msg-write-error"
+        blockIndex={0}
+        uiBlockMap={new Map()}
+      />,
+    );
+
+    expect(screen.getByText("Input")).toBeInTheDocument();
+    expect(screen.getByText("Output")).toBeInTheDocument();
+    expect(screen.getAllByText(/Project is not trusted/).length).toBeGreaterThan(0);
+    expect(screen.queryByText("opt/pi-agent-permission-test.txt/")).not.toBeInTheDocument();
   });
 
   it("renders pending ask-user-question tool calls as a compact anchor", () => {
@@ -892,6 +923,193 @@ describe("ProjectRuntimePendingRequests", () => {
     expect(mockRespondById).toHaveBeenCalledWith("path-1", { value: "✅ Allow once" });
   });
 
+  it("submits runtime permission choices from the active-session dock", () => {
+    setupProject();
+    currentPending = [
+      makeRequest({
+        requestId: "perm-1",
+        sessionId: "sess-1",
+        method: "select",
+        title: "Confirm command",
+        message: "Run command flagged for recursive rm?",
+        options: [
+          "1. Allow once",
+          "2. Always allow: Exact command",
+          "3. Always allow: Any git commit that skips verification",
+          "4. Deny once",
+          "5. Always deny: Exact command",
+          "6. Always deny: Any git commit that skips verification",
+        ],
+        permissionMeta: {
+          type: "permission_runtime",
+          requestId: "perm-1",
+          provider: "dangerous-command",
+          subject: "command.run",
+          rememberOptions: [
+            {
+              id: "allow-exact",
+              label: "Exact command",
+              subject: "command.run",
+              pattern: "git commit --no-verify -m wip",
+              scope: "project",
+              action: "allow",
+            },
+            {
+              id: "allow-family",
+              label: "Any git commit that skips verification",
+              subject: "command.run",
+              pattern: "git commit *--no-verify*",
+              scope: "project",
+              action: "allow",
+            },
+            {
+              id: "deny-exact",
+              label: "Exact command",
+              subject: "command.run",
+              pattern: "git commit --no-verify -m wip",
+              scope: "project",
+              action: "deny",
+            },
+            {
+              id: "deny-family",
+              label: "Any git commit that skips verification",
+              subject: "command.run",
+              pattern: "git commit *--no-verify*",
+              scope: "project",
+              action: "deny",
+            },
+          ],
+          toolCallId: "tool-1",
+          metadata: {
+            command: "git commit --no-verify -m wip",
+          },
+        },
+      }),
+    ];
+
+    render(<ProjectRuntimePendingRequests activeSessionId="sess-1" />);
+
+    expect(screen.getByText("Confirm command")).toBeInTheDocument();
+    expect(screen.getByText("dangerous-command")).toBeInTheDocument();
+    expect(screen.getByText("command.run")).toBeInTheDocument();
+    expect(screen.getByText("git commit --no-verify -m wip")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Allow once" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Deny once" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Always allow" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Always deny" })).not.toBeInTheDocument();
+    expect(screen.getByText("git commit *--no-verify*")).toBeInTheDocument();
+    expect(screen.queryByText("Always deny: Exact command")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
+        name: "Always allow: Any git commit that skips verification",
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "More permission actions" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Always allow" }));
+
+    expect(mockRespondById).toHaveBeenCalledWith("perm-1", {
+      value: "3. Always allow: Any git commit that skips verification",
+    });
+  });
+
+  it("keeps raw Deny as the primary one-time deny action", () => {
+    setupProject();
+    currentPending = [
+      makeRequest({
+        requestId: "perm-path-1",
+        sessionId: "sess-1",
+        method: "select",
+        title: "Path permission",
+        message: "Allow write outside project?",
+        options: [
+          "1. Allow once",
+          "2. Always allow: Any write under /opt",
+          "3. Deny",
+          "4. Always deny: This exact path",
+        ],
+        permissionMeta: {
+          type: "permission_runtime",
+          requestId: "perm-path-1",
+          provider: "path-access",
+          subject: "file.write",
+          rememberOptions: [
+            {
+              id: "allow-opt",
+              label: "Any write under /opt",
+              subject: "file.write",
+              pattern: "/opt/**",
+              scope: "project",
+              action: "allow",
+            },
+            {
+              id: "deny-exact-path",
+              label: "This exact path",
+              subject: "file.write",
+              pattern: "/opt/pi-agent-permission-test.txt",
+              scope: "project",
+              action: "deny",
+            },
+          ],
+          toolCallId: "tool-1",
+          metadata: {
+            path: "/opt/pi-agent-permission-test.txt",
+          },
+        },
+      }),
+    ];
+
+    render(<ProjectRuntimePendingRequests activeSessionId="sess-1" />);
+
+    expect(screen.getByRole("button", { name: "Allow once" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Always allow" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Deny" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Always deny" })).not.toBeInTheDocument();
+    expect(screen.getByText("Match")).toBeInTheDocument();
+    expect(screen.getByText("Project settings")).toBeInTheDocument();
+    expect(screen.getByText("/opt/**")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Always deny: This exact path" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Deny" }));
+
+    expect(mockRespondById).toHaveBeenCalledWith("perm-path-1", {
+      value: "3. Deny",
+    });
+  });
+
+  it("renders path permission cards with no more than three primary choices", () => {
+    const block: UIInteractionBlock = {
+      type: "uiInteraction",
+      id: "path-card-1",
+      method: "select",
+      status: "pending",
+      title: "Path Access",
+      options: ["1. Allow once", "2. Always allow", "3. Deny", "4. Always deny: This exact path"],
+      permissionMeta: {
+        type: "path_boundary",
+        path: "/opt/pi-agent-permission-test.txt",
+        cwd: "/Users/xuyingzhou/Project/study-web/猴子",
+        toolName: "Write",
+        scope: "write",
+        relativeTo: "outside project directory",
+      },
+    };
+
+    render(<PathPermissionCard block={block} />);
+
+    expect(screen.getByRole("button", { name: "Allow once" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Always allow" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Deny" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Always deny/i })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button")).toHaveLength(3);
+    expect(screen.getByText("Match")).toBeInTheDocument();
+    expect(screen.getByText("Current session only")).toBeInTheDocument();
+    expect(screen.getByText("/opt/∗∗")).toBeInTheDocument();
+  });
+
   it("does not render pending requests from other sessions in the runtime action area", () => {
     setupProject();
     currentPending = [
@@ -974,7 +1192,9 @@ describe("ProjectRuntimePendingRequests", () => {
 
     expect(screen.getByText("Grandchild asks")).toBeInTheDocument();
     expect(screen.getByText("Answer from nested subtask?")).toBeInTheDocument();
-    expect(document.querySelector('[data-ui-dock-request-id="grandchild-ask"]')).toBeInTheDocument();
+    expect(
+      document.querySelector('[data-ui-dock-request-id="grandchild-ask"]'),
+    ).toBeInTheDocument();
   });
 });
 

@@ -23,6 +23,8 @@ beforeEach(() => {
   mockCall.mockReset();
   mockCall.mockResolvedValue({});
   useStatusStore.setState({
+    permissionProfile: "normal",
+    permissionProfileLoading: false,
     yoloEnabled: false,
     planMode: true,
     shellActive: false,
@@ -38,18 +40,19 @@ beforeEach(() => {
 });
 
 describe("useStatusStore", () => {
-  it("initial state: yoloEnabled=false, planMode=true, mcpServers=[], plugins=[], skills=[]", () => {
+  it("initial state: permissionProfile=normal, planMode=true, mcpServers=[], plugins=[], skills=[]", () => {
     const s = useStatusStore.getState();
-    expect(s.yoloEnabled).toBe(false);
+    expect(s.permissionProfile).toBe("normal");
     expect(s.planMode).toBe(true);
     expect(s.mcpServers).toEqual([]);
     expect(s.plugins).toEqual([]);
     expect(s.skills).toEqual([]);
   });
 
-  it("toggleYolo sets yoloEnabled=true", async () => {
-    useStatusStore.getState().toggleYolo();
+  it("togglePermissionProfile switches to yolo", async () => {
+    useStatusStore.getState().togglePermissionProfile();
     await Promise.resolve();
+    expect(useStatusStore.getState().permissionProfile).toBe("yolo");
     expect(useStatusStore.getState().yoloEnabled).toBe(true);
   });
 

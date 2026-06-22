@@ -1,9 +1,12 @@
 import { memo, useMemo, useCallback } from "react";
 import { Maximize2 } from "lucide-react";
-import { Highlight, themes } from "prism-react-renderer";
+import { Highlight, Prism, themes } from "prism-react-renderer";
 import { getLanguage } from "../../../utils/file-utils";
 import { useThemeStore, isDarkGroup } from "../../../stores/use-theme-store";
 import { useChatOverlayStore } from "../../../stores/use-chat-overlay-store";
+import { registerShellPrismLanguage } from "../../../lib/prism-languages";
+
+registerShellPrismLanguage(Prism);
 
 interface InlineCodeViewerProps {
   code: string;

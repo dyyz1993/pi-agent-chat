@@ -8,7 +8,13 @@ import type { AskUserQuestion } from "../../shared/modules/agent";
 export type SessionStatus = SharedSessionStatus;
 
 // 以下类型权威定义在 shared/modules/project.ts，前端 re-export 保持单一来源。
-export type { RecentProject, PiProject, MergedProject, FavoriteFolder, DirectoryEntry } from "../../shared/modules/project";
+export type {
+  RecentProject,
+  PiProject,
+  MergedProject,
+  FavoriteFolder,
+  DirectoryEntry,
+} from "../../shared/modules/project";
 export type SessionMeta = SharedSessionMeta & {
   sessionStatus?: SessionStatus;
   contextUsage?: ContextUsage;
@@ -46,14 +52,33 @@ export type UIMethod = "askUserQuestion" | "confirm" | "select" | "input" | "edi
 
 export type UIInteractionStatus = "pending" | "responded" | "dismissed" | "notified";
 
-export interface PermissionMeta {
-  type: "path_boundary" | "dangerous_bash" | "hook_approval";
-  path: string;
-  cwd: string;
-  toolName: string;
-  scope: "read" | "write";
-  relativeTo: string;
-}
+export type PermissionMeta =
+  | {
+      type: "path_boundary" | "dangerous_bash" | "hook_approval";
+      path: string;
+      cwd: string;
+      toolName: string;
+      scope: "read" | "write";
+      relativeTo: string;
+    }
+  | {
+      type: "permission_runtime";
+      requestId: string;
+      provider: string;
+      subject: string;
+      actions?: Array<"allow_once" | "always_allow_project" | "deny_once" | "always_deny_project">;
+      rememberOptions?: Array<{
+        id: string;
+        label: string;
+        subject: string;
+        pattern: string;
+        scope: "project" | "session";
+        action: "allow" | "deny";
+        metadata?: Record<string, unknown>;
+      }>;
+      toolCallId?: string;
+      metadata?: Record<string, unknown>;
+    };
 
 export type UIInteractionBlock = {
   type: "uiInteraction";
@@ -95,36 +120,36 @@ export type ContentBlock =
   | { type: "thinking"; thinking: string }
   | { type: "toolCall"; id: string; name: string; input: string }
   | {
-    type: "toolResult";
-    toolCallId: string;
-    toolName: string;
-    content: string;
-    isError?: boolean;
-    args?: string;
-    details?: unknown;
-  }
+      type: "toolResult";
+      toolCallId: string;
+      toolName: string;
+      content: string;
+      isError?: boolean;
+      args?: string;
+      details?: unknown;
+    }
   | {
-    type: "toolExecution";
-    toolCallId: string;
-    toolName: string;
-    args: string;
-    status: ToolExecutionStatus;
-    output?: string;
-    details?: unknown;
-    timeout?: number;
-    startedAt?: number;
-    endedAt?: number;
-    description?: string;
-  }
+      type: "toolExecution";
+      toolCallId: string;
+      toolName: string;
+      args: string;
+      status: ToolExecutionStatus;
+      output?: string;
+      details?: unknown;
+      timeout?: number;
+      startedAt?: number;
+      endedAt?: number;
+      description?: string;
+    }
   | { type: "custom"; customType: string; data: unknown }
   | {
-    type: "compactionSummary";
-    summary: string;
-    tokensBefore?: number;
-    status?: "running" | "completed" | "failed" | "aborted";
-    reason?: string;
-    startedAt?: number;
-  }
+      type: "compactionSummary";
+      summary: string;
+      tokensBefore?: number;
+      status?: "running" | "completed" | "failed" | "aborted";
+      reason?: string;
+      startedAt?: number;
+    }
   | { type: "imageBlock"; url: string; alt?: string }
   | UIInteractionBlock;
 
@@ -298,23 +323,23 @@ export type TimelineItem =
   | { itemType: "userMessage"; messageId: string; text: string; timestamp: number }
   | { itemType: "assistantText"; blockIndex: number; text: string; messageId: string }
   | {
-    itemType: "toolExecution";
-    blockIndex: number;
-    toolCallId: string;
-    toolName: string;
-    args: string;
-    status: ToolExecutionStatus;
-    output?: string;
-    details?: unknown;
-    messageId: string;
-  }
+      itemType: "toolExecution";
+      blockIndex: number;
+      toolCallId: string;
+      toolName: string;
+      args: string;
+      status: ToolExecutionStatus;
+      output?: string;
+      details?: unknown;
+      messageId: string;
+    }
   | {
-    itemType: "customEntry";
-    entryId: string;
-    customType: string;
-    data: unknown;
-    timestamp: number;
-  };
+      itemType: "customEntry";
+      entryId: string;
+      customType: string;
+      data: unknown;
+      timestamp: number;
+    };
 
 /** A "Turn" = one user message + the assistant's full response (text blocks + tool executions) */
 export type TimelineTurn = {

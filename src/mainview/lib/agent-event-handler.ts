@@ -145,11 +145,7 @@ export function cleanupEventHandlerMaps(sessionId: string): void {
   useCompactionStore.getState().clear(sessionId);
 }
 
-function replaceMsgAt(
-  msgs: ChatMessage[],
-  idx: number,
-  replacement: ChatMessage,
-): ChatMessage[] {
+function replaceMsgAt(msgs: ChatMessage[], idx: number, replacement: ChatMessage): ChatMessage[] {
   const next = [...msgs];
   next[idx] = replacement;
   return next;
@@ -278,10 +274,7 @@ function applyToolExecutionEvent(
   // --- Branch 1: block found in a non-last message ---
   const exactPosition = findToolExecutionPosition(existing, toolCallId);
   if (exactPosition && exactPosition.msgIndex !== existing.length - 1) {
-    if (
-      event.type === "tool_execution_start" &&
-      isTerminalToolStatus(exactPosition.block.status)
-    ) {
+    if (event.type === "tool_execution_start" && isTerminalToolStatus(exactPosition.block.status)) {
       return;
     }
     const msg = existing[exactPosition.msgIndex];
@@ -409,8 +402,7 @@ function applyToolExecutionEvent(
       // already streaming output (visible in the bash sidebar), but the agent
       // hasn't relayed any of it yet. Without this guard the chat's "Output"
       // section would be wiped to empty on every agent update.
-      const preservedOutput =
-        output.length > 0 || !previousOutput ? output : previousOutput;
+      const preservedOutput = output.length > 0 || !previousOutput ? output : previousOutput;
       blocks[targetIdx] = {
         ...prev,
         output: isTerminalToolStatus(prev.status)
@@ -442,6 +434,11 @@ function applyToolExecutionEvent(
 
 export function handleAgentEvent(sessionId: string, event: AgentEvent) {
   const storeGet = () => useSessionStore.getState();
+
+  if ((event as { type?: string }).type === "test_clear_all") {
+    useUIDialogStore.getState().clearPendingBySession(sessionId);
+    return;
+  }
 
   if (event.type === "agent_start") {
     storeGet().updateSessionStatus(sessionId, "streaming");
@@ -1297,7 +1294,9 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
           if (sessionMap.size === 0) pendingPrefetchMap.delete(sessionId);
 
           const prefetchData = (
-            firstPending.agentEvent.type === "custom_entry" ? firstPending.agentEvent.data : undefined
+            firstPending.agentEvent.type === "custom_entry"
+              ? firstPending.agentEvent.data
+              : undefined
           ) as Record<string, unknown> | undefined;
           resultData = mergePrefetchResultData(event.data, prefetchData);
         }
@@ -1327,7 +1326,10 @@ export function handleAgentEvent(sessionId: string, event: AgentEvent) {
           ],
           timestamp: Date.now(),
         };
-        chat.setMessagesForSession(sessionId, replaceMsgAt(existingMsgs, timedOutPrefetchIndex, replacement));
+        chat.setMessagesForSession(
+          sessionId,
+          replaceMsgAt(existingMsgs, timedOutPrefetchIndex, replacement),
+        );
         return;
       }
       chat.setMessagesForSession(sessionId, [

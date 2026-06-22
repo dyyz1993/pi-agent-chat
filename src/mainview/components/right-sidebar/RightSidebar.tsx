@@ -11,6 +11,7 @@ import {
   Bot,
   ListChecks,
   ClipboardCheck,
+  KeyRound,
   Target,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -23,6 +24,7 @@ import { GitPanel } from "../git/GitPanel";
 import { RpcPanel } from "../rpc-panel/RpcPanel";
 import { MemoryPanel } from "../memory-panel/MemoryPanel";
 import { RulesPanel } from "../rules-panel/RulesPanel";
+import { PermissionsPanel } from "../permissions-panel/PermissionsPanel";
 import { HooksPanel } from "../hooks-panel/HooksPanel";
 import { SnapshotPanel } from "../snapshot-panel/SnapshotPanel";
 import { AgentPanel } from "../agent-panel/AgentPanel";
@@ -43,6 +45,7 @@ const TAB_ICONS: Record<PanelTabId, React.ComponentType<{ className?: string }>>
   rpc: Terminal,
   memory: Brain,
   rules: Shield,
+  permissions: KeyRound,
   hooks: ListChecks,
   snapshot: Camera,
   changeReview: ClipboardCheck,
@@ -151,6 +154,8 @@ export function RightSidebar({ width, overlay }: RightSidebarProps) {
         return <MemoryPanel />;
       case "rules":
         return <RulesPanel />;
+      case "permissions":
+        return <PermissionsPanel />;
       case "hooks":
         return <HooksPanel />;
       case "snapshot":

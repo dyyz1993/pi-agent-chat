@@ -6,6 +6,7 @@ import { useSessionStore } from "./use-session-store";
 const log = createLogger("settings");
 
 export type StatusSection =
+  | "permission"
   | "yolo"
   | "plan"
   | "shell"
@@ -14,7 +15,17 @@ export type StatusSection =
   | "plugins"
   | "skills";
 
+export type PermissionProfileName = "normal" | "autopilot" | "readonly" | "yolo";
+
 export type PluginScope = "global" | "project";
+
+export interface ProjectTrustState {
+  projectPath: string;
+  trusted: boolean;
+  decision: boolean | null;
+  decisionPath?: string;
+  trustStorePath: string;
+}
 
 export interface PluginInfo {
   name: string;
@@ -93,7 +104,13 @@ export function derivePluginUsageNotice(name: string): PluginInfo["usageNotice"]
 }
 
 interface StatusState {
+  permissionProfile: PermissionProfileName;
+  permissionProfileLoading: boolean;
+  projectTrust: ProjectTrustState | null;
+  projectTrustLoading: boolean;
+  /** @deprecated Use permissionProfile === "yolo". */
   yoloEnabled: boolean;
+  /** @deprecated Use permissionProfileLoading. */
   yoloLoading: boolean;
   planMode: boolean;
   shellActive: boolean;
@@ -106,6 +123,12 @@ interface StatusState {
   expandedMcpServer: string | null;
   collapsedSections: Set<StatusSection>;
 
+  setPermissionProfile: (profile: PermissionProfileName) => void;
+  setProjectTrustState: (trust: ProjectTrustState | null) => void;
+  refreshProjectTrust: (projectPath: string) => Promise<void>;
+  trustCurrentProject: (sessionId: string, projectPath: string, sessionPath?: string) => void;
+  togglePermissionProfile: () => void;
+  /** @deprecated Use togglePermissionProfile. */
   toggleYolo: () => void;
   togglePlan: () => void;
   toggleSection: (section: StatusSection) => void;
@@ -125,6 +148,10 @@ interface StatusState {
 }
 
 export const useStatusStore = create<StatusState>((set) => ({
+  permissionProfile: "normal",
+  permissionProfileLoading: false,
+  projectTrust: null,
+  projectTrustLoading: false,
   yoloEnabled: false,
   yoloLoading: false,
   planMode: true,
@@ -138,25 +165,74 @@ export const useStatusStore = create<StatusState>((set) => ({
   expandedMcpServer: null,
   collapsedSections: new Set(),
 
-  toggleYolo: () => {
+  setPermissionProfile: (profile) => {
     const s = useStatusStore.getState();
-    if (s.yoloLoading) return;
-    const next = !s.yoloEnabled;
+    if (s.permissionProfileLoading || s.permissionProfile === profile) return;
     const sessionId = useSessionStore.getState().activeSessionId;
     if (!sessionId) return;
-    set({ yoloLoading: true });
+    set({ permissionProfileLoading: true, yoloLoading: true });
     apiClient
       .call("agent.setPermissionMode", {
         sessionId,
-        mode: next ? "dontAsk" : "auto",
+        mode: profile,
       })
       .then(() => {
-        set({ yoloEnabled: next, yoloLoading: false });
+        set({
+          permissionProfile: profile,
+          permissionProfileLoading: false,
+          yoloEnabled: profile === "yolo",
+          yoloLoading: false,
+        });
       })
       .catch((err) => {
         log.warn("setPermissionMode failed:", { error: String(err) });
-        set({ yoloLoading: false });
+        set({ permissionProfileLoading: false, yoloLoading: false });
       });
+  },
+  setProjectTrustState: (trust) => set({ projectTrust: trust }),
+  refreshProjectTrust: async (projectPath) => {
+    try {
+      const trust = await apiClient.call("agent.getProjectTrust", { projectPath });
+      set({ projectTrust: trust as ProjectTrustState });
+    } catch (err) {
+      log.warn("getProjectTrust failed", { error: String(err) });
+    }
+  },
+  trustCurrentProject: (sessionId, projectPath, sessionPath) => {
+    const state = useStatusStore.getState();
+    if (state.projectTrustLoading) return;
+    set({ projectTrustLoading: true });
+    (async () => {
+      try {
+        const trust = (await apiClient.call("agent.setProjectTrust", {
+          projectPath,
+          trusted: true,
+        })) as ProjectTrustState;
+        set({ projectTrust: trust });
+
+        await apiClient.call("agent.stop", { sessionId }).catch(() => ({ ok: false }));
+        if (sessionPath) {
+          await apiClient.call("agent.start", {
+            sessionId,
+            projectPath,
+            sessionPath,
+            forceNewProcess: true,
+          });
+          useSessionStore.getState().fetchInitialState(sessionId);
+        }
+      } catch (err) {
+        log.warn("setProjectTrust failed", { error: String(err) });
+      } finally {
+        set({ projectTrustLoading: false });
+      }
+    })();
+  },
+  togglePermissionProfile: () => {
+    const current = useStatusStore.getState().permissionProfile;
+    useStatusStore.getState().setPermissionProfile(current === "yolo" ? "normal" : "yolo");
+  },
+  toggleYolo: () => {
+    useStatusStore.getState().togglePermissionProfile();
   },
   togglePlan: () => set((s) => ({ planMode: !s.planMode })),
   toggleSection: (section) =>
@@ -202,9 +278,7 @@ export const useStatusStore = create<StatusState>((set) => ({
 
     // 乐观更新 UI
     set((s) => ({
-      plugins: s.plugins.map((p) =>
-        p.path === pluginPath ? { ...p, enabled: newEnabled } : p,
-      ),
+      plugins: s.plugins.map((p) => (p.path === pluginPath ? { ...p, enabled: newEnabled } : p)),
     }));
 
     // 异步执行：写 config → set_settings → reload → fetchInitialState
@@ -284,6 +358,10 @@ export const useStatusStore = create<StatusState>((set) => ({
   },
   clearSessionData: () =>
     set({
+      permissionProfile: "normal",
+      permissionProfileLoading: false,
+      projectTrust: null,
+      projectTrustLoading: false,
       yoloEnabled: false,
       yoloLoading: false,
       planMode: true,

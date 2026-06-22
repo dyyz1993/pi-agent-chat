@@ -14,11 +14,15 @@ import {
   Clock,
   Eye,
   Pencil,
+  Terminal,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useLayoutStore } from "../../layouts/use-layout-store";
 import { useUIDialogStore, type UIPendingRequest } from "../../stores/use-ui-dialog-store";
 import { useSessionStore } from "../../stores/use-session-store";
+import { useStatusStore } from "../../stores/use-status-store";
 import { IconButton, ModalDialog } from "../primitives";
+import { PermissionActionButtons } from "./PermissionActionButtons";
 import { AskUserQuestionCard } from "./tool-renderers/UICardRenderer";
 
 function PanelCard({ req }: { req: UIPendingRequest }) {
@@ -69,77 +73,74 @@ function PanelCard({ req }: { req: UIPendingRequest }) {
   if (isSelect && req.permissionMeta?.type === "path_boundary") {
     const meta = req.permissionMeta;
     const ScopeIcon = meta.scope === "write" ? Pencil : Eye;
+    const scopePattern = `${meta.path.split("/").slice(0, -1).join("/") || "/"}/\u2217\u2217`;
+    const rememberScope = useStatusStore.getState().projectTrust?.trusted ? "project" : "session";
+    const rememberOptions = [
+      {
+        id: "path-boundary-scope",
+        label: "Path scope",
+        subject: "file.write",
+        pattern: scopePattern,
+        scope: rememberScope,
+        action: "allow" as const,
+      },
+    ];
     return (
-      <div className="border border-status-warning/30 rounded-xl overflow-hidden bg-surface-dim/50 dark:bg-surface-code/50">
-        <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-border-secondary/50">
+      <div className="overflow-hidden rounded-lg border border-status-warning/30 bg-surface-dim/50 dark:bg-surface-code/50">
+        <div className="flex items-center gap-1.5 border-b border-border-secondary/50 px-3 py-2">
           <ShieldAlert className="w-3.5 h-3.5 text-status-warning" />
-          <span className="text-[11px] font-medium text-status-warning">Path Access</span>
+          <span className="text-xs font-semibold text-status-warning">Path Access</span>
         </div>
         <div className="px-3 py-2">
-          <div className="mb-2.5 rounded-md bg-bg-primary/70 border border-border-secondary/40 px-2.5 py-2 space-y-1">
-            <div className="flex items-center gap-1.5">
-              <ScopeIcon className="w-3 h-3 text-text-tertiary shrink-0" />
-              <span className="text-[10px] text-text-tertiary">Tool</span>
-              <span className="text-[11px] text-text-primary font-medium ml-auto capitalize">
+          <div className="mb-2.5 space-y-1.5 rounded-md border border-border-secondary/40 bg-bg-primary/70 px-2.5 py-2">
+            <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-2">
+              <span className="flex items-center gap-1.5 text-[10px] text-text-tertiary">
+                <ScopeIcon className="h-3.5 w-3.5 shrink-0" />
+                Tool
+              </span>
+              <span className="min-w-0 truncate text-xs font-medium capitalize text-text-primary">
                 {meta.toolName}
               </span>
             </div>
-            <div className="flex items-center gap-1.5">
-              <FileWarning className="w-3 h-3 text-text-tertiary shrink-0" />
-              <span className="text-[10px] text-text-tertiary">Path</span>
+            <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-2">
+              <span className="flex items-center gap-1.5 text-[10px] text-text-tertiary">
+                <FileWarning className="h-3.5 w-3.5 shrink-0" />
+                Path
+              </span>
               <span
-                className="text-[11px] text-text-primary font-mono ml-auto truncate max-w-[60%]"
+                className="min-w-0 truncate font-mono text-xs text-text-primary"
                 title={meta.path}
               >
                 {meta.path}
               </span>
             </div>
-            <div className="flex items-center gap-1.5">
-              <FolderOpen className="w-3 h-3 text-text-tertiary shrink-0" />
-              <span className="text-[10px] text-text-tertiary">Project</span>
+            <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-2">
+              <span className="flex items-center gap-1.5 text-[10px] text-text-tertiary">
+                <FolderOpen className="h-3.5 w-3.5 shrink-0" />
+                Project
+              </span>
               <span
-                className="text-[11px] text-text-secondary font-mono ml-auto truncate max-w-[60%]"
+                className="min-w-0 truncate font-mono text-xs text-text-secondary"
                 title={meta.cwd}
               >
                 {meta.cwd}
               </span>
             </div>
-            <div className="flex items-center gap-1.5">
-              <ShieldAlert className="w-3 h-3 text-status-warning shrink-0" />
-              <span className="text-[10px] text-text-tertiary">Status</span>
-              <span className="text-[11px] text-status-warning ml-auto">{meta.relativeTo}</span>
+            <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-2">
+              <span className="flex items-center gap-1.5 text-[10px] text-text-tertiary">
+                <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-status-warning" />
+                Status
+              </span>
+              <span className="min-w-0 truncate text-xs text-status-warning">
+                {meta.relativeTo}
+              </span>
             </div>
           </div>
-          <div className="flex gap-1.5">
-            {options.map((opt, i) => {
-              const parts = opt.split(" ");
-              const label = parts.slice(1).join(" ") || opt;
-              const alwaysDir =
-                i === 1 && meta?.path
-                  ? `${meta.path.split("/").slice(0, -1).join("/") || "/"}/\u2217\u2217`
-                  : null;
-              const btnStyle =
-                i === 0
-                  ? "bg-status-success/15 text-status-success hover:bg-status-success/25 border-status-success/30"
-                  : i === 1
-                    ? "bg-status-info/15 text-status-info hover:bg-status-info/25 border-status-info/30"
-                    : "bg-status-error/10 text-status-error hover:bg-status-error/20 border-status-error/30";
-              return (
-                <button
-                  key={i}
-                  onClick={() => respondById(req.requestId, { value: opt })}
-                  className={`flex-1 flex flex-col items-center justify-center py-1.5 rounded-md border text-[11px] font-medium transition-colors ${btnStyle}`}
-                >
-                  <span>{label}</span>
-                  {alwaysDir && (
-                    <span className="text-[9px] opacity-70 font-mono truncate max-w-full">
-                      {alwaysDir}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+          <PermissionActionButtons
+            options={options}
+            rememberOptions={rememberOptions}
+            onSelect={(value) => respondById(req.requestId, { value })}
+          />
           {req.timeout != null && req.timeout > 0 && (
             <div className="flex items-center gap-1 mt-1.5 px-0.5">
               <Clock className="w-3 h-3 text-text-tertiary" />
@@ -149,6 +150,59 @@ function PanelCard({ req }: { req: UIPendingRequest }) {
             </div>
           )}
         </div>
+      </div>
+    );
+  }
+
+  if (isSelect && req.permissionMeta?.type === "permission_runtime") {
+    const meta = req.permissionMeta;
+    const command =
+      typeof meta.metadata?.command === "string"
+        ? meta.metadata.command
+        : typeof meta.metadata?.path === "string"
+          ? meta.metadata.path
+          : undefined;
+    return (
+      <div className="rounded-md border border-border-secondary/60 bg-bg-primary/60 px-3 py-2 dark:bg-surface-code/45">
+        <div className="mb-1.5 flex items-center gap-1.5">
+          <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-status-warning" />
+          <span className="min-w-0 truncate text-[11px] font-semibold text-status-warning">
+            {req.title ?? "Permission Request"}
+          </span>
+        </div>
+        {req.message && (
+          <p className="mb-2 text-[11px] leading-relaxed text-text-secondary">{req.message}</p>
+        )}
+        <div className="mb-2 space-y-1 rounded-md border border-border-secondary/40 bg-surface-dim/35 px-2 py-1.5">
+          <div className="grid grid-cols-[4rem_minmax(0,1fr)] items-center gap-2">
+            <span className="text-[10px] text-text-tertiary">Provider</span>
+            <span className="min-w-0 truncate text-[11px] font-medium text-text-primary">
+              {meta.provider}
+            </span>
+          </div>
+          <div className="grid grid-cols-[4rem_minmax(0,1fr)] items-center gap-2">
+            <span className="text-[10px] text-text-tertiary">Subject</span>
+            <span className="min-w-0 truncate font-mono text-[11px] text-text-secondary">
+              {meta.subject}
+            </span>
+          </div>
+          {command && (
+            <div className="grid grid-cols-[4rem_minmax(0,1fr)] items-center gap-2">
+              <span className="text-[10px] text-text-tertiary">Command</span>
+              <span
+                className="min-w-0 truncate font-mono text-[11px] text-text-primary"
+                title={command}
+              >
+                {command}
+              </span>
+            </div>
+          )}
+        </div>
+        <PermissionActionButtons
+          options={options}
+          rememberOptions={meta.rememberOptions}
+          onSelect={(value) => respondById(req.requestId, { value })}
+        />
       </div>
     );
   }
@@ -185,10 +239,11 @@ function PanelCard({ req }: { req: UIPendingRequest }) {
                       return next;
                     })
                   }
-                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left transition-colors ${checked
+                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left transition-colors ${
+                    checked
                       ? "bg-status-info/15 text-status-info"
                       : "hover:bg-surface-dim dark:hover:bg-surface-dim text-text-tertiary"
-                    }`}
+                  }`}
                 >
                   {checked ? (
                     <CheckSquare className="w-3.5 h-3.5 shrink-0 text-status-info" />
@@ -257,30 +312,57 @@ function PanelCard({ req }: { req: UIPendingRequest }) {
           {req.message && (
             <p className="text-[11px] text-text-secondary mb-2.5 leading-relaxed">{req.message}</p>
           )}
-          {isHookConfirm && req.hookMeta?.command && req.hookMeta?.toolName === "bash" && req.hookMeta?.description && (
-            <div className="mb-2.5 rounded-md bg-bg-primary/70 border border-border-secondary/40 px-2 py-1.5 space-y-1.5">
-              <div className="flex items-start gap-2">
-                <span className="text-[10px] text-text-tertiary shrink-0 mt-0.5">操作说明</span>
-                <span className="text-[11px] text-text-primary leading-relaxed">
-                  {req.hookMeta.description}
-                </span>
-              </div>
-              <div className="flex items-start gap-2">
-                <span className="text-[10px] text-text-tertiary shrink-0 mt-0.5">目标操作</span>
+          {isHookConfirm &&
+            req.hookMeta?.command &&
+            req.hookMeta?.toolName === "bash" &&
+            req.hookMeta?.description && (
+              <div className="mb-2.5 space-y-1.5 rounded-md border border-status-warning/25 bg-bg-primary/70 px-2.5 py-2">
+                <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-status-warning">
+                  <Terminal className="h-3 w-3" />
+                  Command
+                </div>
                 <code className="block text-[11px] text-text-primary font-mono break-all leading-relaxed">
-                  <span className="text-text-tertiary">$ </span>{req.hookMeta.command}
+                  <span className="text-text-tertiary">$ </span>
+                  {req.hookMeta.command}
                 </code>
+                <div className="grid grid-cols-[3.5rem_minmax(0,1fr)] gap-2 border-t border-border-secondary/35 pt-1.5">
+                  <span className="text-[10px] text-text-tertiary">说明</span>
+                  <span className="text-[11px] leading-relaxed text-text-secondary">
+                    {req.hookMeta.description}
+                  </span>
+                  {req.hookMeta.matcher && (
+                    <>
+                      <span className="text-[10px] text-text-tertiary">Matcher</span>
+                      <code className="break-all font-mono text-[10px] text-text-secondary">
+                        {req.hookMeta.matcher}
+                      </code>
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
-          {isHookConfirm && req.hookMeta?.command && !(req.hookMeta?.toolName === "bash" && req.hookMeta?.description) && (
-            <div className="mb-2.5 rounded-md bg-bg-primary/70 border border-border-secondary/40 px-2 py-1.5">
-              <div className="text-[10px] text-text-tertiary mb-0.5">目标操作</div>
-              <code className="block text-[11px] text-text-primary font-mono break-all leading-relaxed">
-                {req.hookMeta.command}
-              </code>
-            </div>
-          )}
+            )}
+          {isHookConfirm &&
+            req.hookMeta?.command &&
+            !(req.hookMeta?.toolName === "bash" && req.hookMeta?.description) && (
+              <div className="mb-2.5 space-y-1.5 rounded-md border border-status-warning/25 bg-bg-primary/70 px-2.5 py-2">
+                <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-status-warning">
+                  <Terminal className="h-3 w-3" />
+                  Command
+                </div>
+                <code className="block break-all font-mono text-[11px] leading-relaxed text-text-primary">
+                  <span className="text-text-tertiary">$ </span>
+                  {req.hookMeta.command}
+                </code>
+                {req.hookMeta.matcher && (
+                  <div className="grid grid-cols-[3.5rem_minmax(0,1fr)] gap-2 border-t border-border-secondary/35 pt-1.5">
+                    <span className="text-[10px] text-text-tertiary">Matcher</span>
+                    <code className="break-all font-mono text-[10px] text-text-secondary">
+                      {req.hookMeta.matcher}
+                    </code>
+                  </div>
+                )}
+              </div>
+            )}
           {isHookConfirm && req.hookMeta?.hookCommand && (
             <div className="mb-2.5 rounded-md bg-surface-dim/60 border border-border-secondary/40 px-2 py-1.5">
               <div className="text-[10px] text-text-tertiary mb-0.5">
@@ -414,30 +496,30 @@ function SessionGroup({ sessionId, sessionName, requests, onGotoSession }: Sessi
   };
 
   return (
-    <div className="border border-border-secondary/40 rounded-lg overflow-hidden">
+    <div className="overflow-hidden rounded-lg border border-border-secondary/40">
       <button
         onClick={() => setExpanded((v) => !v)}
-        className="w-full flex items-center gap-2 px-3 py-2 bg-surface-hover/20 hover:bg-surface-hover/30 transition-colors"
+        className="flex w-full items-center gap-2 bg-surface-hover/20 px-3 py-2 transition-colors hover:bg-surface-hover/30"
       >
         {expanded ? (
           <ChevronDown className="w-3.5 h-3.5 text-text-tertiary shrink-0" />
         ) : (
           <ChevronRight className="w-3.5 h-3.5 text-text-tertiary shrink-0" />
         )}
-        <span className="text-[12px] font-medium text-text-primary truncate flex-1 text-left">
+        <span className="flex-1 truncate text-left text-xs font-semibold text-text-primary">
           {sessionName}
         </span>
-        <span className="px-1.5 py-0.5 rounded-full bg-status-warning/15 text-status-warning text-[10px] font-medium tabular-nums shrink-0">
+        <span className="shrink-0 rounded-full bg-status-warning/15 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-status-warning">
           {requests.length}
         </span>
       </button>
 
       {expanded && (
-        <div className="px-2.5 pb-2.5 pt-1.5 space-y-2">
+        <div className="space-y-2 px-2.5 pb-2.5 pt-1.5">
           {requests.map((req) => (
             <div key={req.requestId} className="relative">
-              <div className="flex items-center gap-1.5 mb-1.5">
-                <span className="text-[10px] font-medium text-status-warning/80 bg-status-warning/10 px-1.5 py-0.5 rounded">
+              <div className="mb-1.5 flex items-center gap-1.5">
+                <span className="rounded bg-status-warning/10 px-1.5 py-0.5 text-[10px] font-semibold text-status-warning/80">
                   {methodLabel[req.method] ?? req.method}
                 </span>
                 {req.title && (
@@ -445,7 +527,7 @@ function SessionGroup({ sessionId, sessionName, requests, onGotoSession }: Sessi
                 )}
                 <button
                   onClick={() => onGotoSession(sessionId, req.requestId)}
-                  className="ml-auto flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] text-semantic-accent hover:bg-semantic-accent/10 transition-colors shrink-0"
+                  className="ml-auto flex shrink-0 items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] text-semantic-accent transition-colors hover:bg-semantic-accent/10"
                   title={t("uiPending.gotoSession")}
                 >
                   {t("uiPending.gotoSession")}
@@ -585,6 +667,9 @@ export function ProjectRuntimePendingRequests({
 }) {
   const { t } = useTranslation("chat");
   const allPending = useUIDialogStore((s) => s.pending);
+  const statusPanel = useLayoutStore((s) => s.statusPanel);
+  const statusWidth = useLayoutStore((s) => s.statusWidth);
+  const breakpoint = useLayoutStore((s) => s.breakpoint);
 
   const sessionPending = useMemo(() => {
     if (!activeSessionId) return [];
@@ -602,16 +687,23 @@ export function ProjectRuntimePendingRequests({
   };
 
   const [primary, ...secondary] = sessionPending;
+  const shouldAvoidRightOverlay = statusPanel === "visible" && breakpoint !== "mobile";
 
   return (
-    <div className="px-3 py-1.5 flex-shrink-0" aria-live="polite">
+    <div
+      className="px-3 py-1.5 flex-shrink-0"
+      aria-live="polite"
+      style={
+        shouldAvoidRightOverlay ? { paddingRight: `calc(0.75rem + ${statusWidth}px)` } : undefined
+      }
+    >
       <div
         data-ui-request-id={primary.requestId}
         data-ui-dock-request-id={primary.requestId}
-        className="overflow-hidden rounded-xl border border-status-warning/30 bg-bg-elevated/95 shadow-sm dark:bg-surface-dim/95"
+        className="overflow-hidden rounded-lg border border-status-warning/20 bg-bg-elevated/95 shadow-sm dark:bg-surface-dim/95"
       >
-        <div className="flex items-center gap-2 border-b border-border-secondary/50 px-3 py-2">
-          <span className="rounded-md bg-status-warning/15 px-2 py-0.5 text-[11px] font-semibold text-status-warning">
+        <div className="flex items-center gap-2 border-b border-border-secondary/45 px-2.5 py-1.5">
+          <span className="rounded bg-status-warning/10 px-1.5 py-0.5 text-[11px] font-semibold text-status-warning">
             {t("uiPending.pendingRequestsTitle")}
           </span>
           <span className="min-w-0 flex-1 truncate text-[11px] text-text-secondary">
@@ -622,7 +714,7 @@ export function ProjectRuntimePendingRequests({
             {sessionPending.length}
           </span>
         </div>
-        <div className="max-h-[min(560px,66vh)] overflow-y-auto px-2.5 py-2.5">
+        <div className="max-h-[min(560px,66vh)] overflow-y-auto px-2.5 py-2">
           <PanelCard req={primary} />
         </div>
         {secondary.length > 0 && (
@@ -633,7 +725,7 @@ export function ProjectRuntimePendingRequests({
                   key={req.requestId}
                   data-ui-request-id={req.requestId}
                   data-ui-dock-request-id={req.requestId}
-                  className="flex items-center gap-2 rounded-lg bg-surface-hover/30 px-2 py-1.5 text-[11px]"
+                  className="flex items-center gap-2 rounded-md bg-surface-hover/30 px-2 py-1.5 text-xs"
                 >
                   <span className="shrink-0 text-status-warning">
                     {methodLabel[req.method] ?? req.method}

@@ -23,6 +23,14 @@ const ALLOWED_ROOTS = [
   resolve("/private/tmp"),
 ];
 
+const READ_ONLY_ROOTS = [
+  resolve(process.env.HOME ?? "", ".claude", "settings.json"),
+  resolve(process.env.HOME ?? "", ".claude", "settings.local.json"),
+  resolve(process.env.HOME ?? "", ".claude", "hooks"),
+  resolve(process.env.HOME ?? "", ".pi", "agent", "settings.json"),
+  resolve(process.env.HOME ?? "", ".pi", "agent", "hooks"),
+];
+
 let cachedAllowedRoots: string[] | null = null;
 let rootsCacheTime = 0;
 const ROOTS_CACHE_TTL = 30_000;
@@ -47,4 +55,12 @@ export async function isPathAllowed(requestedPath: string): Promise<boolean> {
   const resolved = resolve(requestedPath);
   const roots = await getAllowedRoots();
   return roots.some((root) => resolved === root || resolved.startsWith(root + "/"));
+}
+
+export async function isPathReadable(requestedPath: string): Promise<boolean> {
+  const resolved = resolve(requestedPath);
+  if (READ_ONLY_ROOTS.some((root) => resolved === root || resolved.startsWith(root + "/"))) {
+    return true;
+  }
+  return isPathAllowed(requestedPath);
 }

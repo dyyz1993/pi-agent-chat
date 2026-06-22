@@ -143,15 +143,15 @@ export function createFetchInitialStateAction({
         ageMs: Date.now() - lastFetch,
       });
       return Promise.resolve();
-	    }
-	
-	    const promise = (async () => {
-	      const trace = createStartupTrace("fetch-init", { sessionId });
-	      const t0 = performance.now();
-	      try {
-	        perfLog.info("[fetchInit] begin (batched, maxConcurrency=3)", { sessionId });
-	
-	        trace.mark("begin");
+    }
+
+    const promise = (async () => {
+      const trace = createStartupTrace("fetch-init", { sessionId });
+      const t0 = performance.now();
+      try {
+        perfLog.info("[fetchInit] begin (batched, maxConcurrency=3)", { sessionId });
+
+        trace.mark("begin");
 
         set({ modelStateLoading: true });
 
@@ -321,6 +321,31 @@ export function createFetchInitialStateAction({
         }
         if (!p1Ok) return;
 
+        const currentSessionMeta = (() => {
+          for (const sessions of Object.values(get().sessionsByProject)) {
+            const found = sessions.find((s) => s.sessionId === sessionId);
+            if (found) return found;
+          }
+          return null;
+        })();
+        const projectTrustPromise = currentSessionMeta?.projectPath
+          ? apiClient.call("agent.getProjectTrust", { projectPath: currentSessionMeta.projectPath })
+          : Promise.resolve(null);
+        projectTrustPromise
+          .then((trust) => {
+            if (trust) {
+              useStatusStore.getState().setProjectTrustState(trust);
+            } else {
+              useStatusStore.getState().setProjectTrustState(null);
+            }
+          })
+          .catch((err) => {
+            log.warn("agent.getProjectTrust failed", {
+              sessionId,
+              err: err instanceof Error ? err.message : String(err),
+            });
+          });
+
         // --- Priority 2 (parallel, max 3) ---
         const modelsPromise = apiClient.call("agent.getAvailableModels", { sessionId });
         const contextPromise = apiClient.call("agent.getContextUsage", { sessionId });
@@ -404,7 +429,12 @@ export function createFetchInitialStateAction({
             setTimeout(() => handleContextRetry(1), 1500);
           });
 
-        await Promise.allSettled([modelsPromise, contextPromise, settingsPromise]);
+        await Promise.allSettled([
+          modelsPromise,
+          contextPromise,
+          settingsPromise,
+          projectTrustPromise,
+        ]);
         trace.mark("p2-models-context-settings-done", { ms: Math.round(performance.now() - t0) });
 
         // --- Priority 3 (parallel, max 3) ---
@@ -412,16 +442,9 @@ export function createFetchInitialStateAction({
         const skillsPromise = apiClient.call("agent.getSkills", { sessionId });
         const disabledSkillsPromise = apiClient.call("agent.getDisabledSkills", {});
 
-        const sessionMetaForPlugins = (() => {
-          for (const sessions of Object.values(get().sessionsByProject)) {
-            const found = sessions.find((s) => s.sessionId === sessionId);
-            if (found) return found;
-          }
-          return null;
-        })();
-        const disabledPluginsPromise = sessionMetaForPlugins?.projectPath
+        const disabledPluginsPromise = currentSessionMeta?.projectPath
           ? apiClient.call("agent.getDisabledPlugins", {
-              projectPath: sessionMetaForPlugins.projectPath,
+              projectPath: currentSessionMeta.projectPath,
             })
           : Promise.resolve({ disabledPlugins: [] } as DisabledPluginsResponse);
 
@@ -595,13 +618,6 @@ export function createFetchInitialStateAction({
         const currentAgentPromise = apiClient.call("agent.getCurrentAgent", { sessionId });
         const tierPromise = apiClient.call("agent.getTierModels", { sessionId });
         const favoritesPromise = apiClient.call("project.getModelFavorites", {});
-        const currentSessionMeta = (() => {
-          for (const sessions of Object.values(get().sessionsByProject)) {
-            const found = sessions.find((s) => s.sessionId === sessionId);
-            if (found) return found;
-          }
-          return null;
-        })();
         const persistedTierPromise = currentSessionMeta
           ? apiClient
               .call("session.loadTierConfig", { sessionPath: currentSessionMeta.sessionPath })

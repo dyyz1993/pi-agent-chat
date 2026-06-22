@@ -17,16 +17,27 @@ import { createMockServer, type MockServer } from "../../helpers/mock-server";
 describe("session handler", () => {
   let server: MockServer;
   let tempDir: string;
+  let originalAgentDir: string | undefined;
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    server = createMockServer();
-    register(server as unknown as Parameters<typeof register>[0], {} as Parameters<typeof register>[1]);
     tempDir = join(tmpdir(), `session-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    originalAgentDir = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = join(tempDir, "agent");
     await mkdir(tempDir, { recursive: true });
+    server = createMockServer();
+    register(
+      server as unknown as Parameters<typeof register>[0],
+      {} as Parameters<typeof register>[1],
+    );
   });
 
   afterEach(async () => {
+    if (originalAgentDir === undefined) {
+      delete process.env.PI_CODING_AGENT_DIR;
+    } else {
+      process.env.PI_CODING_AGENT_DIR = originalAgentDir;
+    }
     await rm(tempDir, { recursive: true, force: true });
   });
 
@@ -43,6 +54,7 @@ describe("session handler", () => {
       );
       expect(result.sessionPath).toContain(result.sessionId);
       expect(result.sessionPath).toContain(".jsonl");
+      expect(result.sessionPath).toContain(join(process.env.PI_CODING_AGENT_DIR!, "sessions"));
       expect(existsSync(result.sessionPath)).toBe(true);
     });
 
@@ -78,9 +90,21 @@ describe("session handler", () => {
         filePath,
         [
           JSON.stringify({ type: "session", id: "s1", timestamp: "2025-01-01T00:00:00Z" }),
-          JSON.stringify({ type: "message", id: "m1", parentId: null, timestamp: "2025-01-01T00:01:00Z", role: "user" }),
+          JSON.stringify({
+            type: "message",
+            id: "m1",
+            parentId: null,
+            timestamp: "2025-01-01T00:01:00Z",
+            role: "user",
+          }),
           "",
-          JSON.stringify({ type: "message", id: "m2", parentId: "m1", timestamp: "2025-01-01T00:02:00Z", role: "assistant" }),
+          JSON.stringify({
+            type: "message",
+            id: "m2",
+            parentId: "m1",
+            timestamp: "2025-01-01T00:02:00Z",
+            role: "assistant",
+          }),
         ].join("\n"),
       );
 
@@ -148,7 +172,16 @@ describe("session handler", () => {
   describe("session.rename", () => {
     it("appends session_info entry when none exists", async () => {
       const filePath = join(tempDir, "rename.jsonl");
-      await writeFile(filePath, JSON.stringify({ type: "session", id: "s1", version: 1, timestamp: "2025-01-01T00:00:00Z", cwd: "/test" }) + "\n");
+      await writeFile(
+        filePath,
+        JSON.stringify({
+          type: "session",
+          id: "s1",
+          version: 1,
+          timestamp: "2025-01-01T00:00:00Z",
+          cwd: "/test",
+        }) + "\n",
+      );
 
       const handler = server.handlers.get("session.rename")!;
       const result = await handler({ sessionPath: filePath, newName: "My Session" });
@@ -169,8 +202,20 @@ describe("session handler", () => {
       await writeFile(
         filePath,
         [
-          JSON.stringify({ type: "session", id: "s1", version: 1, timestamp: "2025-01-01T00:00:00Z", cwd: "/test" }),
-          JSON.stringify({ type: "session_info", id: "si1", parentId: null, timestamp: "2025-01-01T00:01:00Z", name: "Old Name" }),
+          JSON.stringify({
+            type: "session",
+            id: "s1",
+            version: 1,
+            timestamp: "2025-01-01T00:00:00Z",
+            cwd: "/test",
+          }),
+          JSON.stringify({
+            type: "session_info",
+            id: "si1",
+            parentId: null,
+            timestamp: "2025-01-01T00:01:00Z",
+            name: "Old Name",
+          }),
         ].join("\n") + "\n",
       );
 
@@ -181,9 +226,16 @@ describe("session handler", () => {
 
       const { readFile } = await import("fs/promises");
       const content = await readFile(filePath, "utf-8");
-      const infoLine = content.split("\n").filter((l) => l.trim()).find((l) => {
-        try { return JSON.parse(l).type === "session_info"; } catch { return false; }
-      });
+      const infoLine = content
+        .split("\n")
+        .filter((l) => l.trim())
+        .find((l) => {
+          try {
+            return JSON.parse(l).type === "session_info";
+          } catch {
+            return false;
+          }
+        });
       const info = JSON.parse(infoLine!);
       expect(info.name).toBe("New Name");
     });
@@ -202,8 +254,20 @@ describe("session handler", () => {
       await writeFile(
         filePath,
         [
-          JSON.stringify({ type: "session", id: "s1", version: 1, timestamp: "2025-01-01T00:00:00Z", cwd: "/old" }),
-          JSON.stringify({ type: "session_info", id: "si1", parentId: null, timestamp: "2025-01-01T00:01:00Z", cwd: "/old" }),
+          JSON.stringify({
+            type: "session",
+            id: "s1",
+            version: 1,
+            timestamp: "2025-01-01T00:00:00Z",
+            cwd: "/old",
+          }),
+          JSON.stringify({
+            type: "session_info",
+            id: "si1",
+            parentId: null,
+            timestamp: "2025-01-01T00:01:00Z",
+            cwd: "/old",
+          }),
         ].join("\n") + "\n",
       );
 
@@ -214,9 +278,16 @@ describe("session handler", () => {
 
       const { readFile } = await import("fs/promises");
       const content = await readFile(filePath, "utf-8");
-      const infoLine = content.split("\n").filter((l) => l.trim()).find((l) => {
-        try { return JSON.parse(l).type === "session_info"; } catch { return false; }
-      });
+      const infoLine = content
+        .split("\n")
+        .filter((l) => l.trim())
+        .find((l) => {
+          try {
+            return JSON.parse(l).type === "session_info";
+          } catch {
+            return false;
+          }
+        });
       const info = JSON.parse(infoLine!);
       expect(info.cwd).toBe("/new/path");
     });

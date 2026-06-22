@@ -14,6 +14,8 @@ const sessionState = {
   activeProjectId: null as string | null,
 };
 
+const mockOpenFile = vi.hoisted(() => vi.fn());
+
 function getSessionState() {
   return sessionState;
 }
@@ -40,6 +42,11 @@ vi.mock("../../../src/mainview/stores/use-session-store", () => {
   return { useSessionStore };
 });
 
+vi.mock("../../../src/mainview/stores/use-explorer-store", () => ({
+  useExplorerStore: (selector: (s: { openFile: typeof mockOpenFile }) => unknown) =>
+    selector({ openFile: mockOpenFile }),
+}));
+
 import { useHooksStore } from "../../../src/mainview/stores/use-hooks-store";
 import { apiClient } from "../../../src/mainview/lib/api-client";
 import { HooksPanel } from "../../../src/mainview/components/hooks-panel/HooksPanel";
@@ -49,6 +56,7 @@ const mockCall = apiClient.call as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockOpenFile.mockReset();
   mockCall.mockResolvedValue({
     entries: [],
     ruleStats: [],
@@ -91,13 +99,24 @@ const mockEntry: HookLogEntry = {
 
 const mockConfigSnapshot: HookConfigSnapshot = {
   sources: [
+    { path: "/Users/tester/.claude/settings.json", scope: "global", exists: true, disabled: false },
     { path: "/project/.claude/settings.json", scope: "project", exists: true, disabled: false },
+    { path: ".pi/settings.json", scope: "pi-project", exists: true, disabled: false },
   ],
   events: [
     {
       name: "PreToolUse",
       groups: [
-        { matcher: "Bash", source: "project", hooks: [{ type: "command", command: "echo ok" }] },
+        {
+          matcher: "Bash",
+          source: "global",
+          hooks: [{ type: "command", command: "bash ~/.claude/hooks/pre-tool-use.sh" }],
+        },
+        {
+          matcher: "write",
+          source: "pi-project",
+          hooks: [{ type: "command", command: ".pi/hooks/guard-write.sh" }],
+        },
       ],
     },
   ],
@@ -211,6 +230,56 @@ describe("HooksPanel", () => {
       expect(screen.getByText("echo secret")).toBeInTheDocument();
     });
     expect(screen.getByText(/exit: 0/)).toBeInTheDocument();
+  });
+
+  it("renders hook command script path as the openable file link", async () => {
+    Object.assign(sessionState, {
+      activeSessionId: "sess-1",
+      activeProjectId: "project-1",
+      projectTabs: [{ id: "project-1", name: "Demo", path: "/project/测试 demo" }],
+    });
+    render(<HooksPanel />);
+    await waitForInitialFetch();
+
+    useHooksStore.setState({
+      bySession: {
+        "sess-1": {
+          entries: [
+            {
+              ...mockEntry,
+              id: 1,
+              decision: "block",
+              reason: "写入被拒绝: /opt/pi-agent-permission-test.txt 不在白名单内",
+              snippet: "/opt/pi-agent-permission-test.txt",
+              command: ".pi/hooks/guard-write.sh",
+            },
+          ],
+          ruleStats: [],
+          totalExecutions: 1,
+          configSnapshot: null,
+          loading: false,
+          expandedEntry: null,
+        },
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Bash").length).toBeGreaterThanOrEqual(1);
+    });
+
+    fireEvent.click(screen.getAllByText("Bash")[0]);
+
+    expect(screen.getByText("/opt/pi-agent-permission-test.txt")).toBeInTheDocument();
+    expect(screen.queryByTitle("Open /opt/pi-agent-permission-test.txt")).not.toBeInTheDocument();
+
+    const commandLink = await screen.findByTitle("Open /project/测试 demo/.pi/hooks/guard-write.sh");
+    fireEvent.click(commandLink);
+
+    expect(mockOpenFile).toHaveBeenCalledWith({
+      name: "guard-write.sh",
+      path: "/project/测试 demo/.pi/hooks/guard-write.sh",
+      type: "file",
+    });
   });
 
   it("filter dropdown changes trigger re-fetch", async () => {
@@ -369,7 +438,74 @@ describe("HooksPanel", () => {
       expect(screen.getByText("Configured Events")).toBeInTheDocument();
     });
     expect(screen.getByText("PreToolUse")).toBeInTheDocument();
-    expect(screen.getByText("echo ok")).toBeInTheDocument();
+    expect(screen.getByText("bash")).toBeInTheDocument();
+    expect(screen.getByText("~/.claude/hooks/pre-tool-use.sh")).toBeInTheDocument();
+  });
+
+  it("Rules tab opens rule commands, config sources, and configured hook commands", async () => {
+    Object.assign(sessionState, {
+      activeSessionId: "sess-1",
+      activeProjectId: "project-1",
+      projectTabs: [{ id: "project-1", name: "Demo", path: "/project/测试 demo" }],
+    });
+    render(<HooksPanel />);
+    await waitForInitialFetch();
+
+    fireEvent.click(screen.getByText("Rules"));
+
+    useHooksStore.setState({
+      activeTab: "rules",
+      bySession: {
+        "sess-1": {
+          entries: [],
+          ruleStats: [
+            {
+              matcher: "write",
+              event: "PreToolUse",
+              hookType: "command",
+              command: ".pi/hooks/guard-write.sh",
+              source: "pi-project",
+              allowCount: 0,
+              blockCount: 1,
+              askCount: 0,
+            },
+          ],
+          totalExecutions: 1,
+          configSnapshot: mockConfigSnapshot,
+          loading: false,
+          expandedEntry: null,
+        },
+      },
+    });
+
+    const ruleCommandLinks = await screen.findAllByTitle(
+      "Open /project/测试 demo/.pi/hooks/guard-write.sh",
+    );
+    fireEvent.click(ruleCommandLinks[0]);
+    expect(mockOpenFile).toHaveBeenLastCalledWith({
+      name: "guard-write.sh",
+      path: "/project/测试 demo/.pi/hooks/guard-write.sh",
+      type: "file",
+    });
+
+    const projectSettingsLink = await screen.findByTitle("Open /project/测试 demo/.pi/settings.json");
+    fireEvent.click(projectSettingsLink);
+    expect(mockOpenFile).toHaveBeenLastCalledWith({
+      name: "settings.json",
+      path: "/project/测试 demo/.pi/settings.json",
+      type: "file",
+    });
+
+    const globalHookLink = await screen.findByTitle(
+      "Open /Users/tester/.claude/hooks/pre-tool-use.sh",
+    );
+    expect(screen.queryByTitle("Open bash ~/.claude/hooks/pre-tool-use.sh")).not.toBeInTheDocument();
+    fireEvent.click(globalHookLink);
+    expect(mockOpenFile).toHaveBeenLastCalledWith({
+      name: "pre-tool-use.sh",
+      path: "/Users/tester/.claude/hooks/pre-tool-use.sh",
+      type: "file",
+    });
   });
 
   it("refresh button calls fetchLog", async () => {

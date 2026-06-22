@@ -31,6 +31,8 @@ const mockedCall = apiClient.call as ReturnType<typeof vi.fn>;
 beforeEach(() => {
   vi.clearAllMocks();
   useStatusStore.setState({
+    permissionProfile: "normal",
+    permissionProfileLoading: false,
     yoloEnabled: false,
     planMode: true,
     shellActive: false,
@@ -44,16 +46,47 @@ beforeEach(() => {
   });
 });
 
-describe("toggleYolo", () => {
-  it("toggles yolo mode on and off", async () => {
-    expect(useStatusStore.getState().yoloEnabled).toBe(false);
-    useStatusStore.getState().toggleYolo();
+describe("setPermissionProfile", () => {
+  it("switches permission profiles", async () => {
+    expect(useStatusStore.getState().permissionProfile).toBe("normal");
+    useStatusStore.getState().setPermissionProfile("yolo");
     await vi.waitFor(() => {
-      expect(useStatusStore.getState().yoloEnabled).toBe(true);
+      expect(useStatusStore.getState().permissionProfile).toBe("yolo");
     });
-    useStatusStore.getState().toggleYolo();
+    expect(useStatusStore.getState().yoloEnabled).toBe(true);
+    expect(mockedCall).toHaveBeenLastCalledWith("agent.setPermissionMode", {
+      sessionId: "test-session",
+      mode: "yolo",
+    });
+
+    useStatusStore.getState().setPermissionProfile("normal");
     await vi.waitFor(() => {
-      expect(useStatusStore.getState().yoloEnabled).toBe(false);
+      expect(useStatusStore.getState().permissionProfile).toBe("normal");
+    });
+    expect(useStatusStore.getState().yoloEnabled).toBe(false);
+  });
+
+  it("switches to readonly through the permission RPC", async () => {
+    useStatusStore.getState().setPermissionProfile("readonly");
+    await vi.waitFor(() => {
+      expect(useStatusStore.getState().permissionProfile).toBe("readonly");
+    });
+    expect(useStatusStore.getState().yoloEnabled).toBe(false);
+    expect(mockedCall).toHaveBeenLastCalledWith("agent.setPermissionMode", {
+      sessionId: "test-session",
+      mode: "readonly",
+    });
+  });
+
+  it("switches to autopilot through the permission RPC", async () => {
+    useStatusStore.getState().setPermissionProfile("autopilot");
+    await vi.waitFor(() => {
+      expect(useStatusStore.getState().permissionProfile).toBe("autopilot");
+    });
+    expect(useStatusStore.getState().yoloEnabled).toBe(false);
+    expect(mockedCall).toHaveBeenLastCalledWith("agent.setPermissionMode", {
+      sessionId: "test-session",
+      mode: "autopilot",
     });
   });
 });

@@ -319,6 +319,227 @@ Session 文件（`<sessionPath>`）是 JSONL 格式，每行一个 JSON 条目�
 - Settings 中的 `extensions` 字段支持模式语法：`-path`（排除）、`+path`（强制包含）、`!pattern`（glob 排除）
 - Settings 修改后需调用 `agent.reload` 才能生效
 
+### Project-scoped 用户态状态规范
+
+用户本机私有、但语义上属于某个项目的状态，必须按项目目录隔离，不能继续堆到 `<agentDir>` 根目录的大 JSON 文件里。
+
+```text
+<PROJECT_USER_STATE_DIR>/
+  trust.json              # 用户是否信任该项目，可被父目录决策继承
+  path-permissions.json   # legacy path permission fallback，仅本机私有
+  metadata.json           # 后续项目私有元数据预留
+```
+
+边界规则：
+
+- `<PROJECT_USER_STATE_DIR>/...`：用户本机私有状态，不进仓库，例如 project trust、session fallback、自动审批历史、项目私有权限缓存。
+- `<PROJECT_SHARED_DIR>/settings.json`：项目共享配置，只有项目已 trust 后才允许写入，例如 `permissions.rules`、项目 extension 配置。
+- `<PROJECT_SHARED_DIR>/agents/` / `<PROJECT_SHARED_DIR>/rules/`：项目共享 agent/rule 定义，属于仓库态配置。
+- `<PI_AGENT_DIR>/settings.json`：真正全局的用户默认配置，不应混入按项目分组的状态。
+- `<PI_APP_CONFIG_DIR>/config.json`：pi-agent-chat UI 的最近项目、打开 tab、收藏等 app 级索引；它可以记录“打开过哪些项目”，但不能承载项目权限/trust 规则。
+
+迁移/兼容要求：
+
+- 新写入必须写 project-scoped 用户态目录。
+- 旧的 `<PI_AGENT_DIR>/trust.json` 和 `<PI_AGENT_DIR>/path-permissions.json` 只允许作为兼容读取来源；不要再向旧全局大文件写入新项目状态。
+- 如果新增项目私有状态，先定义 `projects/<encoded-project-path>/` 下的文件，再接 UI/RPC；不要新增“全局 JSON + cwd key”的结构。
+
+### 持久化路径变量
+
+所有持久化路径必须用下面变量描述。新增变量前先补本节和“写入路径注册表”，再写代码；不要在业务代码里直接手写 `~/.pi/agent/...`、`~/.pi-agent-chat/...` 或 `<cwd>/.pi/...` 的新变体。
+
+| 变量                           | 生成规则                                                                              | 说明                                                                                                                                  |
+| ------------------------------ | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `<PI_APP_CONFIG_DIR>`          | `~/.pi-agent-chat`                                                                    | pi-agent-chat app 级 UI 状态目录，只保存 UI 索引和偏好。                                                                              |
+| `<PI_AGENT_DIR>`               | `process.env.PI_CODING_AGENT_DIR ?? ~/.pi/agent`                                      | fork CLI 的用户态根目录。所有 agent 私有状态都必须从这里派生。                                                                        |
+| `<PROJECT_ROOT>`               | 当前会话的 canonical project path                                                     | 用户正在操作的项目根目录。普通目录是自身路径；git worktree 见下方规则。写入前必须经过 path guard / trust 规则。                       |
+| `<PROJECT_SHARED_DIR>`         | `<PROJECT_ROOT>/.pi`                                                                  | 项目共享配置目录，可进仓库。写入前必须确认 project trusted。                                                                          |
+| `<PROJECT_KEY>`                | `encodeProjectPath(<PROJECT_ROOT>)`                                                   | 项目路径稳定编码。不是随机值，也不是完整路径替换；当前算法是 `fnv1a32(projectPath) + "--" + sanitizedBasename.slice(0, 48)`。         |
+| `<SESSION_BUCKET_KEY>`         | legacy `encodeCwd(<projectPath>)`                                                     | app 侧现有 session 目录桶编码，格式是 `"--" + path 去掉开头 "/" 后把 "/" 替换成 "-" + "--"`。只用于 session 扫描/兼容，不是项目身份。 |
+| `<CWD_KEY>`                    | `encodeProjectPath(<cwd>)`                                                            | fork extension storage 的 cwd 稳定编码。只用于 cwd legacy storage，不等同于项目身份。                                                 |
+| `<SESSION_ROOT>`               | `<PI_AGENT_DIR>/sessions/<SESSION_BUCKET_KEY>`                                        | 某个 projectPath 下的会话历史根目录。                                                                                                 |
+| `<SESSION_ID>`                 | session manager 分配的 id                                                             | 单个会话身份。不要用它替代 project key。                                                                                              |
+| `<EXT_NAME>`                   | extension package/name 的稳定标识                                                     | extension 私有数据目录的最后一级名称。                                                                                                |
+| `<PROJECT_USER_STATE_DIR>`     | `<PI_AGENT_DIR>/projects/<PROJECT_KEY>`                                               | 项目维度、本机私有用户态状态目录。project trust、自动审批、项目私有权限缓存优先放这里。                                               |
+| `<SESSION_DATA_DIR>`           | `<SESSION_ROOT>/data/<SESSION_ID>/<EXT_NAME>`                                         | session 维度 extension 私有状态目录。                                                                                                 |
+| `<PROJECT_EXTENSION_DATA_DIR>` | `<PI_AGENT_DIR>/project-data/<PROJECT_KEY>/<EXT_NAME>`                                | 现有 extension 项目维度用户态目录，对应底层 `ctx.projectDataDir` / `getProjectDataDir()`。新核心权限/trust 状态不要放这里。           |
+| `<CWD_EXTENSION_DATA_DIR>`     | `<PI_AGENT_DIR>/cwd-data/<CWD_KEY>/<EXT_NAME>`                                        | legacy extension cwd 维度用户态目录。                                                                                                 |
+| `<GLOBAL_EXTENSION_DATA_DIR>`  | `<PI_AGENT_DIR>/extensions-data/<EXT_NAME>`                                           | 真正跨所有项目共享的 extension 状态目录。                                                                                             |
+| `<USER_MEMORY_DIR>`            | `<PI_AGENT_DIR>/memory`                                                               | pi 自己的用户记忆根目录。可包含全局记忆规则、项目记忆 legacy 目录。不要写入宿主产品的记忆目录。                                       |
+| `<PROJECT_MEMORY_DIR>`         | `<PROJECT_USER_STATE_DIR>/memory`                                                     | 新规范下的项目私有记忆目录。项目相关、但不进 git 的记忆优先放这里。                                                                   |
+| `<PLUGIN_PROJECT_MEMORY_DIR>`  | `<PROJECT_EXTENSION_DATA_DIR>/memory`                                                 | 现有插件项目维度记忆目录，应通过 `ctx.projectDataDir` 派生。插件需要独立记忆索引、向量缓存、摘要缓存时使用。                          |
+| `<AUTO_MEMORY_PROJECT_DIR>`    | `<USER_MEMORY_DIR>/<MEMORY_PROJECT_BUCKET_KEY>`                                       | auto-memory legacy 项目记忆目录。当前实现仍在使用，后续重构可迁到 `<PROJECT_MEMORY_DIR>`。                                            |
+| `<HOST_CODEX_MEMORY_DIR>`      | `~/.codex/memories`                                                                   | Codex 宿主自己的记忆目录示例。pi 默认只可显式导入/只读引用，不应直接当作 pi 插件写入目标。                                            |
+| `<CLAUDE_GLOBAL_SETTINGS>`     | `~/.claude/settings.json`                                                             | Claude Code 兼容输入源。pi 新功能默认不要写这里。                                                                                     |
+| `<CLAUDE_PROJECT_SETTINGS>`    | `<PROJECT_ROOT>/.claude/settings.json` / `<PROJECT_ROOT>/.claude/settings.local.json` | Claude Code 项目兼容输入源。pi 新功能默认不要写这里。                                                                                 |
+| `<TMP_DIR>`                    | `process.env.TMPDIR ?? os.tmpdir()`                                                   | 临时文件根目录，只能放可清理、可重建的数据。                                                                                          |
+| `<APP_LOG_DIR>`                | `process.env.LOG_DIR ?? <repo>/logs`                                                  | app/server 诊断日志目录。                                                                                                             |
+
+`encodeProjectPath()` 必须保持 app 侧和 fork 侧字节兼容。当前实现允许出现在路径中的可读后缀只保留 `[a-zA-Z0-9._-]`，其他字符替换成 `_`；前缀 hash 才是避免同名项目冲突的主身份。后续如果调整算法，必须提供迁移或 fallback 读取。
+
+例子：
+
+```text
+PROJECT_ROOT = /Users/xuyingzhou/Project/study-web/猴子
+basename     = 猴子
+sanitized    = __
+PROJECT_KEY  = <fnv1a32-of-full-path>--__
+
+PROJECT_ROOT = /Users/xuyingzhou/Project/temporary/pi-agent-chat
+basename     = pi-agent-chat
+sanitized    = pi-agent-chat
+PROJECT_KEY  = <fnv1a32-of-full-path>--pi-agent-chat
+```
+
+`PROJECT_KEY` 的 hash 输入是完整 canonical project path，所以两个不同目录即使 basename 一样，也会生成不同 key。可读后缀只用于人眼辨认，不能当唯一身份。
+
+路径选择规则：
+
+- 项目私有、用户本机状态：写 `<PROJECT_USER_STATE_DIR>/<feature>.json` 或子目录。
+- 项目共享、可随仓库流转配置：写 `<PROJECT_SHARED_DIR>/...`，必须先 trust。
+- 单次会话状态：写 `<SESSION_DATA_DIR>/...`。
+- extension 真正全局状态：写 `<GLOBAL_EXTENSION_DATA_DIR>/...`，不能混入项目 key。
+- 用户全局记忆规则：写 `<USER_MEMORY_DIR>/...`，例如全局 skip/guard 规则；不要混入项目专属内容。
+- 项目私有记忆：新写入目标是 `<PROJECT_MEMORY_DIR>/...`；现有 auto-memory 仍兼容 `<AUTO_MEMORY_PROJECT_DIR>/...`。
+- 插件项目记忆：写 `<PLUGIN_PROJECT_MEMORY_DIR>/...`，不要写到宿主产品目录，例如 `<HOST_CODEX_MEMORY_DIR>`。
+- app UI 索引：写 `<PI_APP_CONFIG_DIR>/config.json`，不能存权限/trust 规则。
+- 临时日志/缓存：写 `<TMP_DIR>`、`<APP_LOG_DIR>` 或明确 cache/tool/tmp 目录，必须可清理或可重建。
+
+### Extension 存储 API 现状
+
+底层 extension runtime 已经暴露四个标准数据目录。普通插件应优先使用这些 `ctx.*DataDir`，不要自己手拼 `<PI_AGENT_DIR>`：
+
+| Extension API        | 当前路径                                      | 适用场景                                            |
+| -------------------- | --------------------------------------------- | --------------------------------------------------- |
+| `ctx.sessionDataDir` | `<SESSION_DATA_DIR>`                          | 当前 session 私有状态，例如 runtime state、临时日志 |
+| `ctx.projectDataDir` | `<PROJECT_EXTENSION_DATA_DIR>`                | 当前项目下该插件跨 session 共享的用户态状态         |
+| `ctx.cwdDataDir`     | `<CWD_EXTENSION_DATA_DIR>`                    | 按当前 cwd 隔离的 legacy/特殊状态                   |
+| `ctx.globalDataDir`  | `<GLOBAL_EXTENSION_DATA_DIR>`                 | 该插件跨所有项目共享的全局状态                      |
+| `ctx.projectRoot`    | `resolveProjectIdentity(cwd)` 的 canonical 值 | worktree-aware git root；用于 projectDataDir 编码   |
+
+现有例子：
+
+- `session-supervisor` 读取 `ctx.sessionDataDir/supervisor.json` 和 `ctx.projectDataDir/supervisor.json`。
+- `auto-memory` 当前没有走 `ctx.projectDataDir`，而是自己写 `<USER_MEMORY_DIR>/<MEMORY_PROJECT_BUCKET_KEY>`；这是历史路径，需要兼容。
+
+因此，插件项目维度记忆如果是插件内部数据，当前应放 `<PLUGIN_PROJECT_MEMORY_DIR>`，也就是 `ctx.projectDataDir/memory`。只有统一 memory provider 管理的项目级共享记忆，才进入 `<PROJECT_MEMORY_DIR>`。
+
+### Memory 存储边界
+
+Memory 是一等用户态数据，不等同于普通 cache。路径需要按“谁拥有”和“是否项目相关”拆开：
+
+```text
+<USER_MEMORY_DIR>/
+  MEMORY.md 或全局索引预留
+  .prefetch-skip-words.json        # auto-memory 当前全局 skip/guard 规则
+  <MEMORY_PROJECT_BUCKET_KEY>/     # auto-memory legacy 项目记忆目录
+
+<PROJECT_MEMORY_DIR>/
+  MEMORY.md
+  *.md                             # 新规范下的项目私有记忆
+
+<PLUGIN_PROJECT_MEMORY_DIR>/
+  MEMORY.md 或 plugin-index.json
+  ...                              # 某插件自己的项目维度记忆/索引/缓存
+```
+
+`/Users/xuyingzhou/.codex/memories` 这类目录属于宿主 Codex 产品，不属于 pi 默认存储根。pi 插件如果要接入宿主记忆，应通过显式 connector/import/sync 协议读取或同步，并在 UI/权限上说明来源；不要直接把插件数据写进 `<HOST_CODEX_MEMORY_DIR>`。
+
+所有权边界：
+
+- `<PROJECT_MEMORY_DIR>` 归统一 memory provider 管。它是项目级共享记忆池，普通插件不要直接写文件；如果要写入项目记忆，应调用 memory provider 暴露的 channel/API，由 provider 做去重、索引、权限和格式维护。
+- `<PLUGIN_PROJECT_MEMORY_DIR>` 归单个插件自己管。它只放该插件内部可解释的数据，例如索引、向量缓存、风险历史、扫描摘要。其他插件不要默认依赖它的内部格式。
+- 如果插件产出的内容已经变成“整个项目以后都应该知道”的长期知识，应通过 memory provider 晋升到 `<PROJECT_MEMORY_DIR>`，而不是直接跨目录写入。
+
+当前兼容现状：
+
+- app fallback memory panel 读取 `<USER_MEMORY_DIR>/<SESSION_BUCKET_KEY>/...`。
+- auto-memory extension 当前写 `<AUTO_MEMORY_PROJECT_DIR>/...`，其中 bucket 来自 legacy `encodeCwd(getProjectRoot(cwd))`。
+- auto-memory 的全局 skip/guard 规则当前写 `<USER_MEMORY_DIR>/.prefetch-skip-words.json`。
+- sandbox-box 当前会备份/恢复 `/root/.pi/agent/memory`，对应宿主侧 `<USER_MEMORY_DIR>`。
+
+后续新写入建议：
+
+- 新项目记忆写 `<PROJECT_MEMORY_DIR>`。
+- 新插件项目记忆写 `<PLUGIN_PROJECT_MEMORY_DIR>`。
+- legacy `<AUTO_MEMORY_PROJECT_DIR>` 只保留读取、兼容和迁移。
+- 如果要把 Codex 记忆作为来源，做成显式只读 source 或导入任务，不要共享写同一个目录。
+
+### Git worktree 路径规则
+
+Git worktree 不是特殊项目类型；每一个 worktree path 都可以作为一个 `projectPath` 打开会话，但 project identity 要区分两层：
+
+- UI/session 层的 `<PROJECT_ROOT>`：当前打开的 worktree 实际路径。例如 `/repo-main-feature-x`。会话、文件浏览、写入权限、当前工作区切换都应使用这个路径。
+- fork extension 层的 canonical git root：`resolveProjectIdentity(cwd)` 会识别 `.git` 文件里的 `gitdir: .../.git/worktrees/...`，并解析到主仓库 root。这个用于 extension 的 project storage 兼容，不能替代 UI/session 的 active worktree path。
+
+现有 worktree RPC 行为：
+
+- `git.worktreeList({ repoPath })`：以 `repoPath` 执行 `git rev-parse --show-toplevel`，再执行 `git worktree list --porcelain`，返回 Git 报告的每个 worktree 绝对路径。
+- `git.worktreeAdd({ repoPath, branch, sourceBranch })`：默认创建到 `dirname(repoRoot) / (basename(repoRoot) + "-" + branch)`。
+
+例子：
+
+```text
+repoRoot = /Users/xuyingzhou/Project/temporary/pi-agent-chat
+branch   = permission-runtime
+
+默认 worktree path:
+/Users/xuyingzhou/Project/temporary/pi-agent-chat-permission-runtime
+```
+
+如果未来支持自定义 worktree 根目录，必须新增变量，例如 `<WORKTREE_ROOT>`，并登记默认值、配置来源和沙盒挂载策略；不要在 git handler 里临时拼另一个路径规则。
+
+路径来源：
+
+- Project picker / tab：来自 `<PI_APP_CONFIG_DIR>/config.json` 的 recent/open tab 项目路径。
+- Worktree 列表：来自 `git.worktreeList` 的 Git porcelain 输出。
+- 新 worktree 会话：`git.worktreeAdd` 返回 `worktree.path` 后，UI 调用 `createNewSession(worktree.path)`，所以新 session 的 `projectPath` 就是该 worktree 的实际路径。
+- 文件 explorer / walker：调用 `file.listDir({ path })`，路径来自当前 active project/session 的 `projectPath` 或用户正在展开的目录；它不应该自己生成项目路径。
+- Session 扫描：`project.scanSessions({ projectPath })` 使用 `<SESSION_ROOT>`，也就是 `<PI_AGENT_DIR>/sessions/<SESSION_BUCKET_KEY>`。
+
+### 写入路径注册表（沙盒/挂载依据）
+
+任何新增持久化写入都必须先归类到下面某一类；如果归不进去，先更新本节再写代码。沙盒、容器、远程执行、权限拦截都应以这张表为准。
+
+| 类别                   | 路径                                                                                                                | 谁写入/读取                          | 语义与约束                                                                             |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------- |
+| App UI 状态            | `<PI_APP_CONFIG_DIR>/config.json`                                                                                   | `src/shared/lib/project-config.ts`   | 最近项目、打开 tab、收藏、UI 层 disable 索引。只能存 app 索引，不存权限/trust 规则。   |
+| Agent 全局配置         | `<PI_AGENT_DIR>/settings.json`                                                                                      | fork `SettingsManager`               | 用户全局默认配置，例如全局 extensions/settings。不能塞按项目分组的状态。               |
+| Agent 认证/模型        | `<PI_AGENT_DIR>/auth.json`, `<PI_AGENT_DIR>/oauth.json`, `<PI_AGENT_DIR>/models.json`                               | fork config/auth/model 逻辑          | 用户机密和模型配置。沙盒默认不应复制，除非明确需要并经过安全处理。                     |
+| Agent 全局资源         | `<PI_AGENT_DIR>/agents/`, `<PI_AGENT_DIR>/skills/`, `<PI_AGENT_DIR>/extensions/`, `<PI_AGENT_DIR>/prompts/`         | package/resource loader              | 用户安装的全局 agent/skill/extension/prompt。沙盒可只读挂载，写入必须走安装/管理流程。 |
+| Agent 工具/二进制      | `<PI_AGENT_DIR>/tools/`, `<PI_AGENT_DIR>/bin/`, `<PI_AGENT_DIR>/npm/`, `<PI_AGENT_DIR>/git/`, `<PI_AGENT_DIR>/tmp/` | package/tool manager                 | 下载和构建出来的运行依赖。可缓存，可清理；不要把项目状态放这里。                       |
+| Agent sessions         | `<SESSION_ROOT>/...`                                                                                                | `SessionManager`, JSONL reader       | 会话 JSONL、session data、父子会话索引。属于用户运行历史，不进项目仓库。               |
+| Session 扩展数据       | `<SESSION_DATA_DIR>/...`                                                                                            | `getSessionDataDir()`                | 某个 session 私有的 extension 数据。生命周期跟 session 走。                            |
+| Project-scoped 用户态  | `<PROJECT_USER_STATE_DIR>/...`                                                                                      | trust/permission/local project state | 本机私有但属于某项目的状态，例如 `trust.json`、`path-permissions.json`、自动审批历史。 |
+| Project 扩展数据       | `<PROJECT_EXTENSION_DATA_DIR>/...`                                                                                  | `ctx.projectDataDir`                 | 现有 extension runtime 的项目维度用户态目录。新核心 trust/permission 状态不要放这里。  |
+| CWD 扩展数据（legacy） | `<CWD_EXTENSION_DATA_DIR>/...`                                                                                      | `getCwdDataDir()`                    | 现有 extension storage 的 cwd 维度用户态目录。不要新增核心权限/trust 状态到这里。      |
+| 全局扩展数据           | `<GLOBAL_EXTENSION_DATA_DIR>/...`                                                                                   | `getGlobalDataDir()`                 | extension 的真正全局状态。不得存项目私有状态。                                         |
+| 用户全局记忆           | `<USER_MEMORY_DIR>/...`                                                                                             | `auto-memory` / memory connector     | pi 自己的用户记忆根目录。可存全局记忆规则；项目记忆应进入项目子目录或新规范目录。      |
+| 项目记忆               | `<PROJECT_MEMORY_DIR>/...`                                                                                          | memory / plugin providers            | 新规范下的项目私有记忆目录。不进 git。                                                 |
+| 插件项目记忆           | `<PLUGIN_PROJECT_MEMORY_DIR>/...`                                                                                   | plugin providers                     | 插件自己的项目维度记忆、索引、向量缓存；当前由 `ctx.projectDataDir/memory` 派生。      |
+| Auto memory（legacy）  | `<AUTO_MEMORY_PROJECT_DIR>/...`                                                                                     | `auto-memory` extension              | 现有本机私有项目记忆目录。后续若重构，可迁到 `<PROJECT_MEMORY_DIR>/`。                 |
+| 宿主 Codex 记忆        | `<HOST_CODEX_MEMORY_DIR>/...`                                                                                       | explicit connector/import only       | 外部宿主记忆源。pi 默认不直接写；需要显式授权的只读引用或导入/同步协议。               |
+| 项目共享配置           | `<PROJECT_SHARED_DIR>/settings.json`                                                                                | `SettingsManager` project scope      | 仓库态/项目态配置。只有 project trusted 后才允许写，例如 `permissions.rules`。         |
+| 项目共享 agent/rule    | `<PROJECT_SHARED_DIR>/agents/`, `<PROJECT_SHARED_DIR>/rules/`, `<PROJECT_SHARED_DIR>/rules-config.json`             | agent/rules loader                   | 可随项目共享的 agent/rule 定义。写入前必须经过项目 trust 和权限检查。                  |
+| Claude/兼容配置        | `<CLAUDE_GLOBAL_SETTINGS>`, `<CLAUDE_PROJECT_SETTINGS>`                                                             | hooks/compat loaders                 | Claude Code 兼容输入源。除专门兼容功能外，不要作为 pi 新状态写入目标。                 |
+| Bash 临时日志          | `<TMP_DIR>/pi-bash-*.log` 或 `<TMP_DIR>/pi-<bashId>.log`                                                            | bash extension / executor            | 临时运行输出，便于 UI 打开日志。可清理，不作为持久配置。                               |
+| App/server 日志        | `<APP_LOG_DIR>/...`, `<PI_AGENT_DIR>/*-debug.log`, `<TMP_DIR>/*debug*.log`                                          | server/debug/session-supervisor 等   | 诊断日志。不要存配置；沙盒可映射为临时或丢弃。                                         |
+| 用户上传/调试临时文件  | gateway upload/debug temp dir、sandbox provider temp dir                                                            | gateway/sandbox                      | 只作为传输或调试缓存。必须受 path guard/sandbox policy 限制。                          |
+
+写入规则：
+
+- **禁止新增** `<PI_AGENT_DIR>/<name>.json` 且用 cwd/project path 当 key 的结构；这是全局大文件污染，也是并发热点。
+- **禁止新增** 未登记路径：任何新写入路径必须先进入“持久化路径变量”和“写入路径注册表”。
+- **禁止业务代码手拼根路径**：除 canonical helper/config 外，不要直接 `join(homedir(), ".pi", "agent", ...)`、`join(projectRoot, ".pi", ...)` 或复制 `encodeProjectPath()` 算法。
+- **新增项目私有用户态**：写 `<PROJECT_USER_STATE_DIR>/<feature>.json` 或子目录。
+- **新增项目共享配置**：写 `<PROJECT_SHARED_DIR>/...`，必须先确认 project trust，且失败时不能静默降级写项目目录。
+- **新增 session 私有状态**：写 `<SESSION_DATA_DIR>/...`，不要写到项目目录。
+- **新增 extension 全局状态**：只有确实跨所有项目共享时，才能用 `<GLOBAL_EXTENSION_DATA_DIR>/...`。
+- **新增 memory 状态**：用户全局记忆写 `<USER_MEMORY_DIR>`，项目私有记忆写 `<PROJECT_MEMORY_DIR>`，插件项目记忆写 `<PLUGIN_PROJECT_MEMORY_DIR>`；不要直接写 `<HOST_CODEX_MEMORY_DIR>`。
+- **新增缓存/下载产物**：必须放到明确 cache/tool/tmp 目录，并可重建、可清理。
+- **新增沙盒支持**：先判断该路径是只读挂载、读写挂载、复制进入沙盒、还是禁止暴露；不要默认把整个 `<PI_AGENT_DIR>` 读写挂进沙盒。
+- **旧路径兼容**：可以 read fallback，可以做一次性迁移；新写入必须进入新规范路径。
+
 ## Extension / Skill / MCP Toggle 机制对比
 
 | 特性              | Extension (Plugin)                                               | Skill                          | MCP Server              |

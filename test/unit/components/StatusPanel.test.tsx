@@ -4,6 +4,8 @@ import type { BashProcess } from "../../../src/shared/modules/bash";
 
 let mockProcesses: BashProcess[] = [];
 let mockBackgroundedIds: Set<string> = new Set();
+let mockPermissionProfile = "normal";
+const mockSetPermissionProfile = vi.fn();
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -47,6 +49,9 @@ vi.mock("../../../src/mainview/stores/use-status-store", () => ({
     const state = {
       collapsedSections: mockCollapsedSections,
       toggleSection: mockToggleSection,
+      permissionProfile: mockPermissionProfile,
+      permissionProfileLoading: false,
+      setPermissionProfile: mockSetPermissionProfile,
       yoloEnabled: false,
       plugins: [],
       skills: [],
@@ -122,6 +127,7 @@ describe("StatusPanel shell section", () => {
   beforeEach(() => {
     mockProcesses = [];
     mockBackgroundedIds = new Set();
+    mockPermissionProfile = "normal";
     mockCollapsedSections = new Set();
     vi.clearAllMocks();
   });
@@ -194,5 +200,66 @@ describe("StatusPanel shell section", () => {
 
     fireEvent.click(shellBtn!);
     expect(mockToggleSection).toHaveBeenCalledWith("shell");
+  });
+});
+
+describe("StatusPanel permission section", () => {
+  beforeEach(() => {
+    mockProcesses = [];
+    mockBackgroundedIds = new Set();
+    mockPermissionProfile = "normal";
+    mockCollapsedSections = new Set();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("shows the high-frequency permission presets", () => {
+    const { container } = render(<StatusPanel />);
+
+    expect(container.textContent).toContain("permissionPresetAsk");
+    expect(container.textContent).toContain("permissionPresetAutopilot");
+    expect(container.textContent).toContain("permissionPresetFull");
+    expect(container.textContent).toContain("permissionPresetReadonly");
+  });
+
+  it("clicks available permission presets", () => {
+    const { container } = render(<StatusPanel />);
+    const buttons = Array.from(container.querySelectorAll("button"));
+
+    fireEvent.click(buttons.find((button) => button.textContent?.includes("permissionPresetFull"))!);
+    expect(mockSetPermissionProfile).toHaveBeenCalledWith("yolo");
+
+    fireEvent.click(buttons.find((button) => button.textContent?.includes("permissionPresetReadonly"))!);
+    expect(mockSetPermissionProfile).toHaveBeenCalledWith("readonly");
+  });
+
+  it("clicks autopilot permission preset", () => {
+    const { container } = render(<StatusPanel />);
+    const autopilotButton = Array.from(container.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("permissionPresetAutopilot"),
+    );
+
+    expect(autopilotButton).toBeDefined();
+    expect(autopilotButton).not.toBeDisabled();
+    fireEvent.click(autopilotButton!);
+    expect(mockSetPermissionProfile).toHaveBeenCalledWith("autopilot");
+  });
+
+  it("expands advanced permission details", () => {
+    const { container } = render(<StatusPanel />);
+    expect(container.textContent).not.toContain("permissionAccessAxis");
+
+    const advancedButton = Array.from(container.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("permissionAdvancedShow"),
+    );
+    expect(advancedButton).toBeDefined();
+    fireEvent.click(advancedButton!);
+
+    expect(container.textContent).toContain("permissionAccessAxis");
+    expect(container.textContent).toContain("permissionApprovalAxis");
+    expect(container.textContent).toContain("permissionScopeAxis");
   });
 });

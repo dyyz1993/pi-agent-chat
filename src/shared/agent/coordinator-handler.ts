@@ -3,6 +3,7 @@ import {
   type DelegateChildMap,
   type SyncDelegateResolver,
   clearDelegateTracking,
+  canManageDelegateChild,
   removeDelegateChild,
   removeSessionFromAllParents,
   cleanupStoppedDelegateSession,
@@ -37,6 +38,7 @@ interface CoordinatorManagedClient {
     status: string;
     projectPath: string;
     sessionPath: string;
+    sessionName?: string;
   };
 }
 
@@ -51,19 +53,13 @@ export interface CoordinatorHandlerDeps {
   send: (sessionId: string, content: string) => unknown;
   steer: (sessionId: string, content: string) => unknown;
   followUp: (sessionId: string, content: string) => unknown;
-  broadcastEvent: (
-    method: string,
-    payload: unknown,
-    metadata?: unknown,
-  ) => Promise<void>;
+  broadcastEvent: (method: string, payload: unknown, metadata?: unknown) => Promise<void>;
   setSessionName: (sessionId: string, name: string) => Promise<void>;
   switchAgent: (sessionId: string, agentName: string) => Promise<unknown>;
   getState: (
     sessionId: string,
   ) => Promise<{ isStreaming?: boolean; isCompacting?: boolean } | null>;
-  getStatus: (
-    sessionId: string,
-  ) => { status: "idle" | "streaming" | "stopped"; pid?: number };
+  getStatus: (sessionId: string) => { status: "idle" | "streaming" | "stopped"; pid?: number };
   getContextUsage: (
     sessionId: string,
   ) => Promise<{ tokens: number | null; contextWindow: number; percent: number | null }>;
@@ -182,14 +178,11 @@ export class CoordinatorHandler {
           activeSession: managed?._activeSessionId,
         });
       } else if (!managed && route.projectPath) {
-        log.warn(
-          "handleCoordinatorCall: processByCwd fallback could not find matching process",
-          {
-            sessionId,
-            projectPath: route.projectPath,
-            processCount: route.processCount ?? 0,
-          },
-        );
+        log.warn("handleCoordinatorCall: processByCwd fallback could not find matching process", {
+          sessionId,
+          projectPath: route.projectPath,
+          processCount: route.processCount ?? 0,
+        });
       }
       if (managed) {
         managed.client.channel(channelName).send({ ...(result as object), invokeId });
@@ -205,11 +198,7 @@ export class CoordinatorHandler {
     const cleared: string[] = [];
     if (targetSessionId) {
       removeDelegateChild(this.parentChildMap, parentSessionId, targetSessionId);
-      clearDelegateTracking(
-        this.delegateCreatedAt,
-        this.delegateReplyCount,
-        targetSessionId,
-      );
+      clearDelegateTracking(this.delegateCreatedAt, this.delegateReplyCount, targetSessionId);
       this.delegateRepliedSessions.delete(targetSessionId);
       cleared.push(targetSessionId);
       return { cleared, removed: cleared.length };
@@ -220,11 +209,7 @@ export class CoordinatorHandler {
       const managed = this.deps.getActiveManaged(childSessionId);
       if (managed?.info.status === "streaming") continue;
       removeDelegateChild(this.parentChildMap, parentSessionId, childSessionId);
-      clearDelegateTracking(
-        this.delegateCreatedAt,
-        this.delegateReplyCount,
-        childSessionId,
-      );
+      clearDelegateTracking(this.delegateCreatedAt, this.delegateReplyCount, childSessionId);
       this.delegateRepliedSessions.delete(childSessionId);
       cleared.push(childSessionId);
     }
@@ -239,14 +224,13 @@ export class CoordinatorHandler {
       ((msg as Record<string, unknown>).sessionId as string | undefined) ??
       ((msg as Record<string, unknown>).targetSessionId as string | undefined);
     if (!targetSessionId) return { ok: false, removed: false };
+    if (!canManageDelegateChild(this.parentChildMap, parentSessionId, targetSessionId)) {
+      return { ok: false, removed: false };
+    }
 
     removeDelegateChild(this.parentChildMap, parentSessionId, targetSessionId);
     removeSessionFromAllParents(this.parentChildMap, targetSessionId);
-    clearDelegateTracking(
-      this.delegateCreatedAt,
-      this.delegateReplyCount,
-      targetSessionId,
-    );
+    clearDelegateTracking(this.delegateCreatedAt, this.delegateReplyCount, targetSessionId);
     this.delegateRepliedSessions.delete(targetSessionId);
     void this.deps.stop(targetSessionId);
     return { ok: true, removed: true };
@@ -318,8 +302,7 @@ export class CoordinatorHandler {
       delegateReplyMode: this.delegateReplyMode,
       delegateRepliedSessions: this.delegateRepliedSessions,
       parentChildMap: this.parentChildMap,
-      start: (id, projectPath, sessionPath) =>
-        this.deps.start(id, projectPath, sessionPath),
+      start: (id, projectPath, sessionPath) => this.deps.start(id, projectPath, sessionPath),
       send: (id, content) => this.deps.send(id, content),
       steer: (id, content) => this.deps.steer(id, content),
       followUp: (id, content) => this.deps.followUp(id, content),
@@ -418,7 +401,7 @@ export class CoordinatorHandler {
     if (this.delegateRepliedSessions.has(childSessionId)) return false;
 
     const child = this.deps.getActiveManaged(childSessionId);
-    const title = child?.info.sessionName || childSessionId;
+    const title = child?.info.sessionName ?? childSessionId;
     const message = [
       `委派任务「${title}」已结束，但子会话没有主动回传最终结果。`,
       ``,

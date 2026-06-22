@@ -12,7 +12,7 @@ import { extname, basename, dirname } from "path";
 import { createLogger } from "../shared/lib/logger";
 import { isValidToken } from "./auth";
 import { getMimeType } from "./mime";
-import { isPathAllowed } from "./path-guard";
+import { isPathAllowed, isPathReadable } from "./path-guard";
 
 const log = createLogger("gateway");
 
@@ -58,7 +58,7 @@ export async function handleFsRoute(
     return;
   }
 
-  if (!(await isPathAllowed(filePath))) {
+  if (!(await isPathReadable(filePath))) {
     res.writeHead(403, { "Content-Type": "text/plain" }).end("Path not allowed");
     return;
   }
@@ -106,7 +106,7 @@ export async function handleFsRoute(
 
 export async function handleFileInfo(encodedPath: string, res: ServerResponse): Promise<void> {
   const filePath = decodeURIComponent(encodedPath);
-  if (!(await isPathAllowed(filePath))) {
+  if (!(await isPathReadable(filePath))) {
     res.writeHead(403, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Path not allowed" }));
     return;
@@ -137,7 +137,7 @@ export async function handleFileContent(
   res: ServerResponse,
 ): Promise<void> {
   const filePath = decodeURIComponent(encodedPath);
-  if (!(await isPathAllowed(filePath))) {
+  if (!(await isPathReadable(filePath))) {
     res.writeHead(403, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Path not allowed" }));
     return;

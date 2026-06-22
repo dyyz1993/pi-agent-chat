@@ -82,7 +82,7 @@ interface CoordinatorHandlerLike {
       targetSessionId?: string;
       invokeId?: string;
     },
-  ) => { removed: boolean };
+  ) => { ok: boolean; removed: boolean };
 }
 
 interface InternalAPM {
@@ -512,6 +512,23 @@ describe("coordinator.session_created — TDD 诊断", () => {
       // Should NOT throw, should NOT hit "Unknown coordinator method".
       await expect(m.coordinatorHandler.handleCoordinatorCall(parentSessionId, msg)).resolves.toBeUndefined();
       expect(m.coordinatorHandler.parentChildMap.get(parentSessionId)?.has(childSessionId)).not.toBe(true);
+    });
+
+    it("session_delegate_remove rejects sessions outside the caller's direct children", () => {
+      const m = internals(manager);
+      const parentSessionId = "parent-1";
+      const otherParentId = "parent-2";
+      const childSessionId = "child-1";
+
+      m.coordinatorHandler.parentChildMap.set(otherParentId, new Set([childSessionId]));
+
+      const result = m.coordinatorHandler.handleCoordinatorRemove(parentSessionId, {
+        __call: "session_delegate_remove",
+        sessionId: childSessionId,
+      });
+
+      expect(result).toEqual({ ok: false, removed: false });
+      expect(m.coordinatorHandler.parentChildMap.get(otherParentId)?.has(childSessionId)).toBe(true);
     });
   });
 });

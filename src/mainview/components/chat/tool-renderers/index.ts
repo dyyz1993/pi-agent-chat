@@ -17,9 +17,18 @@ import {
 import { AskUserQuestionToolCard, shouldRenderAskUserQuestionToolCard } from "./UICardRenderer";
 
 registerToolRenderer("read", { renderExecution: ReadFileCard });
-registerToolRenderer("write", { renderExecution: WriteFileCard });
-registerToolRenderer("edit", { renderExecution: WriteFileCard });
-registerToolRenderer("create_file", { renderExecution: WriteFileCard });
+registerToolRenderer("write", {
+  renderExecution: WriteFileCard,
+  shouldRenderExecution: ({ block }) => block.status !== "error",
+});
+registerToolRenderer("edit", {
+  renderExecution: WriteFileCard,
+  shouldRenderExecution: ({ block }) => block.status !== "error",
+});
+registerToolRenderer("create_file", {
+  renderExecution: WriteFileCard,
+  shouldRenderExecution: ({ block }) => block.status !== "error",
+});
 registerToolRenderer("preview", { renderExecution: PreviewRenderer });
 registerToolRenderer("bash", { renderExecution: BashExecutionCard });
 registerToolRenderer("lsp", { renderExecution: LspExecutionCard });

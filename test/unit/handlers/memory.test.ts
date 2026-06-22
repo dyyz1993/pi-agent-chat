@@ -1,10 +1,21 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdir, rm, writeFile } from "fs/promises";
 import { existsSync } from "fs";
 import { join, resolve } from "path";
 import { tmpdir } from "os";
 import { stat, readdir, readFile } from "fs/promises";
-import type { MemoryMethods, MemoryEvents, MemoryEventData } from "../../../src/shared/modules/memory";
+import type {
+  MemoryMethods,
+  MemoryEvents,
+  MemoryEventData,
+} from "../../../src/shared/modules/memory";
+
+vi.mock("../../../src/shared/handlers/agent", () => ({
+  getProcessManager: vi.fn(() => null),
+}));
+
+import { register as registerMemory } from "../../../src/shared/handlers/memory";
+import { createMockServer, type MockServer } from "../../helpers/mock-server";
 
 type MemoryFile = {
   filename: string;
@@ -334,6 +345,70 @@ describe("readMemoryFile", () => {
 
     const result = await readMemoryFile(filePath, tempDir);
     expect(result.content).toBe("nested content");
+  });
+});
+
+describe("memory RPC handler", () => {
+  let server: MockServer;
+  let originalAgentDir: string | undefined;
+
+  beforeEach(async () => {
+    originalAgentDir = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = join(tempDir, "agent");
+    await mkdir(process.env.PI_CODING_AGENT_DIR, { recursive: true });
+    server = createMockServer();
+    registerMemory(
+      server as unknown as Parameters<typeof registerMemory>[0],
+      {} as Parameters<typeof registerMemory>[1],
+    );
+  });
+
+  afterEach(() => {
+    if (originalAgentDir === undefined) {
+      delete process.env.PI_CODING_AGENT_DIR;
+    } else {
+      process.env.PI_CODING_AGENT_DIR = originalAgentDir;
+    }
+  });
+
+  it("falls back to PI_CODING_AGENT_DIR memory bucket", async () => {
+    const projectPath = "/my/project";
+    const memoryDir = join(process.env.PI_CODING_AGENT_DIR!, "memory", encodeCwd(projectPath));
+    await mkdir(memoryDir, { recursive: true });
+    await writeFile(join(memoryDir, "MEMORY.md"), "# Entrypoint");
+    await writeFile(
+      join(memoryDir, "preference.md"),
+      "---\ntype: user\ndescription: prefers concise replies\n---\nUse concise replies",
+    );
+
+    const handler = server.handlers.get("memory.listFiles")!;
+    const result = (await handler({ projectPath })) as MemoryMethods["memory.listFiles"]["result"];
+
+    expect(result.memoryDir).toBe(memoryDir);
+    expect(result.entrypointContent).toBe("# Entrypoint");
+    expect(result.files).toHaveLength(1);
+    expect(result.files[0]).toMatchObject({
+      filename: "preference.md",
+      description: "prefers concise replies",
+      type: "user",
+    });
+  });
+
+  it("only reads files inside the configured memory root", async () => {
+    const memoryDir = join(process.env.PI_CODING_AGENT_DIR!, "memory", encodeCwd("/safe/project"));
+    await mkdir(memoryDir, { recursive: true });
+    const safeFile = join(memoryDir, "safe.md");
+    await writeFile(safeFile, "safe content");
+    const outsideFile = join(tempDir, "outside.md");
+    await writeFile(outsideFile, "outside content");
+
+    const handler = server.handlers.get("memory.readFile")!;
+    await expect(handler({ filePath: safeFile })).resolves.toMatchObject({
+      content: "safe content",
+    });
+    await expect(handler({ filePath: outsideFile })).rejects.toThrow(
+      "Path outside memory directory",
+    );
   });
 });
 

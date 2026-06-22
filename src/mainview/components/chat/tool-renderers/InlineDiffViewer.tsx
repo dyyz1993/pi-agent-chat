@@ -1,7 +1,7 @@
 import { memo, useMemo, useCallback, useState } from "react";
 import { Columns2, Rows3, Maximize2 } from "lucide-react";
 import ReactDiffViewer, { DiffMethod } from "react-diff-viewer-continued";
-import { Highlight, themes } from "prism-react-renderer";
+import { Highlight, Prism, themes } from "prism-react-renderer";
 import { useTranslation } from "react-i18next";
 import { useThemeStore, isDarkGroup } from "../../../stores/use-theme-store";
 import { useLayoutStore } from "../../../layouts/use-layout-store";
@@ -9,6 +9,9 @@ import { useChatOverlayStore } from "../../../stores/use-chat-overlay-store";
 import { useGitStore } from "../../../stores/use-git-store";
 import { getLanguage } from "../../../utils/file-utils";
 import { createDiffStyles, DIFF_STYLE_PRESETS } from "../../diff/diff-style-factory";
+import { registerShellPrismLanguage } from "../../../lib/prism-languages";
+
+registerShellPrismLanguage(Prism);
 
 interface InlineDiffViewerProps {
   oldValue: string;

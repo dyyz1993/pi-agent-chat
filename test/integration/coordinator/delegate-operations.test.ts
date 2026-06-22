@@ -229,7 +229,7 @@ describe("coordinator delegate operations", () => {
       ].join("\n") + "\n",
       "utf-8",
     );
-    const parentChildMap = new Map<string, Set<string>>();
+    const parentChildMap = new Map([["parent", new Set(["source"])]]);
     const start = vi.fn().mockResolvedValue({ status: "started" });
     const setSessionName = vi.fn().mockResolvedValue(undefined);
     const send = vi.fn();
@@ -300,6 +300,27 @@ describe("coordinator delegate operations", () => {
         parentChildMap: new Map(),
       }),
     ).rejects.toThrow("Session not found: missing");
+  });
+
+  it("rejects delegate forks for sessions outside the caller's direct children", async () => {
+    const parentChildMap = new Map([["other-parent", new Set(["child"])]]);
+
+    await expect(
+      handleCoordinatorDelegateForkOperation({
+        parentSessionId: "parent",
+        msg: {
+          __call: "session_delegate_fork",
+          sessionId: "child",
+          task: "continue",
+        },
+        clients: new Map([["child", makeManaged("idle", "/tmp/child.jsonl")]]),
+        start: vi.fn(),
+        setSessionName: vi.fn(),
+        send: vi.fn(),
+        broadcastEvent: vi.fn(),
+        parentChildMap,
+      }),
+    ).rejects.toThrow("Session not found: child");
   });
 
   it("wraps delegate sends and interrupts by default even when the target is streaming", async () => {
@@ -411,6 +432,38 @@ describe("coordinator delegate operations", () => {
       ),
     );
     expect(delegateRepliedSessions.has("child")).toBe(true);
+  });
+
+  it("rejects delegate sends to unrelated sessions", async () => {
+    const clients = new Map([
+      ["child", makeManaged("idle", "/tmp/child.jsonl")],
+      ["other-parent", makeManaged("idle", "/tmp/other-parent.jsonl")],
+    ]);
+    const parentChildMap = new Map([["parent", new Set(["child"])]]);
+    const steer = vi.fn();
+
+    await expect(
+      handleCoordinatorDelegateSendOperation({
+        sourceSessionId: "child",
+        msg: {
+          __call: "session_delegate_send",
+          targetSessionId: "other-parent",
+          message: "should not cross session boundary",
+        },
+        clients,
+        sessionPaths: new Map(),
+        sessionProjectPaths: new Map(),
+        delegateReplyCount: new Map(),
+        delegateCreatedAt: new Map(),
+        parentChildMap,
+        start: vi.fn(),
+        send: vi.fn(),
+        steer,
+        followUp: vi.fn(),
+      }),
+    ).resolves.toEqual({ delivered: false, targetStatus: "not_found" });
+
+    expect(steer).not.toHaveBeenCalled();
   });
 
   it("restarts inactive delegate sessions from persisted paths before sending", async () => {

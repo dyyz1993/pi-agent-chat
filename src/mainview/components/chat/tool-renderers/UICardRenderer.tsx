@@ -29,6 +29,8 @@ import { getUIMethodIcon } from "../tool-icon-map";
 import { useUIDialogStore } from "../../../stores/use-ui-dialog-store";
 import { useHooksStore } from "../../../stores/use-hooks-store";
 import { useSessionStore } from "../../../stores/use-session-store";
+import { useStatusStore } from "../../../stores/use-status-store";
+import { PermissionActionButtons } from "../PermissionActionButtons";
 import type { ToolRendererProps } from "./registry";
 
 type UIBlock = UIInteractionBlock;
@@ -55,14 +57,14 @@ export function CardShell({ block, children }: { block: UIBlock; children: React
 
   return (
     <div
-      className={`overflow-hidden rounded ${BG_MAP[block.status] ?? ""}`}
+      className={`overflow-hidden rounded-md ${BG_MAP[block.status] ?? ""}`}
       data-ui-request-id={block.id}
     >
-      <div className="px-3 py-1.5 flex items-center gap-2 text-xs">
+      <div className="flex items-center gap-2 px-3 py-2 text-xs">
         <Icon className={`w-3.5 h-3.5 shrink-0 ${color}`} />
         {block.title && <span className={`font-medium ${color}`}>{block.title}</span>}
         {isPending && (
-          <span className="text-status-warning animate-pulse text-[10px] flex items-center gap-1">
+          <span className="flex items-center gap-1 text-[11px] text-status-warning animate-pulse">
             <Loader2 className="w-2.5 h-2.5 animate-spin" />
             {t("uiCard.waitingResponse")}
           </span>
@@ -71,7 +73,7 @@ export function CardShell({ block, children }: { block: UIBlock; children: React
         {isDismissed && <XCircle className="w-3 h-3 text-text-tertiary" />}
       </div>
       {block.message && (
-        <div className="px-3 pb-2 text-[11px] text-text-secondary leading-relaxed max-h-32 overflow-y-auto">
+        <div className="max-h-32 overflow-y-auto px-3 pb-2 text-xs leading-relaxed text-text-secondary">
           {block.message}
         </div>
       )}
@@ -80,7 +82,11 @@ export function CardShell({ block, children }: { block: UIBlock; children: React
   );
 }
 
-export const UIInteractionAnchor = memo(function UIInteractionAnchor({ block }: { block: UIBlock }) {
+export const UIInteractionAnchor = memo(function UIInteractionAnchor({
+  block,
+}: {
+  block: UIBlock;
+}) {
   const { t } = useTranslation("chat");
   const setPanelOpen = useUIDialogStore((s) => s.setPanelOpen);
   const { icon: Icon, color } = getUIMethodIcon(block.method);
@@ -181,22 +187,35 @@ export const ConfirmCard = memo(function ConfirmCard({ block }: { block: UIBlock
         {isPending ? (
           <div className="px-3 pb-2 space-y-2">
             {hookMeta.command && (
-              <div className="flex items-start gap-1.5 bg-black/30 dark:bg-black/40 rounded px-2 py-1 max-h-32 overflow-y-auto">
-                <HookIcon className={`w-3 h-3 mt-0.5 shrink-0 ${hookIcon.color}`} />
-                <div className="min-w-0">
-                  {hookMeta.toolName === "bash" && hookMeta.description && (
-                    <>
-                      <div className="text-[10px] text-text-tertiary mb-0.5">操作说明</div>
-                      <div className="text-[11px] text-text-primary leading-relaxed mb-1">
-                        {hookMeta.description}
-                      </div>
-                    </>
-                  )}
-                  <div className="text-[10px] text-text-tertiary mb-0.5">目标操作</div>
-                  <code className="text-[11px] text-text-primary font-mono break-all leading-relaxed">
-                    {hookMeta.command}
-                  </code>
+              <div className="space-y-1.5 rounded-md border border-status-warning/25 bg-bg-primary/70 px-2.5 py-2 dark:bg-black/35">
+                <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-status-warning">
+                  <HookIcon className={`h-3 w-3 shrink-0 ${hookIcon.color}`} />
+                  Command
                 </div>
+                <code className="block break-all font-mono text-[11px] leading-relaxed text-text-primary">
+                  <span className="text-text-tertiary">$ </span>
+                  {hookMeta.command}
+                </code>
+                {[hookMeta.description, hookMeta.matcher].some(Boolean) && (
+                  <div className="grid grid-cols-[3.5rem_minmax(0,1fr)] gap-2 border-t border-border-secondary/35 pt-1.5">
+                    {hookMeta.description && (
+                      <>
+                        <span className="text-[10px] text-text-tertiary">说明</span>
+                        <span className="text-[11px] leading-relaxed text-text-secondary">
+                          {hookMeta.description}
+                        </span>
+                      </>
+                    )}
+                    {hookMeta.matcher && (
+                      <>
+                        <span className="text-[10px] text-text-tertiary">Matcher</span>
+                        <code className="break-all font-mono text-[10px] text-text-secondary">
+                          {hookMeta.matcher}
+                        </code>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             )}
             {hookMeta.hookCommand && (
@@ -467,18 +486,18 @@ export const AskUserQuestionCard = memo(function AskUserQuestionCard({
     [block.id, buildAnswers, draft, resetAutoAdvance, respondById],
   );
 
-	  const chooseOption = useCallback(
-	    (questionId: string, label: string, multiSelect: boolean) => {
-	      const current = draft[questionId] ?? { selected: [], text: "" };
-	      const selected = multiSelect
-	        ? current.selected.includes(label)
-	          ? current.selected.filter((item) => item !== label)
-	          : [...current.selected, label]
-	        : [label];
-	      const nextDraft = {
-	        ...draft,
-	        [questionId]: { selected, text: multiSelect ? current.text : "" },
-	      };
+  const chooseOption = useCallback(
+    (questionId: string, label: string, multiSelect: boolean) => {
+      const current = draft[questionId] ?? { selected: [], text: "" };
+      const selected = multiSelect
+        ? current.selected.includes(label)
+          ? current.selected.filter((item) => item !== label)
+          : [...current.selected, label]
+        : [label];
+      const nextDraft = {
+        ...draft,
+        [questionId]: { selected, text: multiSelect ? current.text : "" },
+      };
       setDraft(nextDraft);
       if (!multiSelect) {
         clearAutoAdvance();
@@ -519,7 +538,7 @@ export const AskUserQuestionCard = memo(function AskUserQuestionCard({
     if (!responseAnswers) return [];
     return Object.entries(responseAnswers).map(([questionId, answer]) => {
       const question = questions.find((item) => item.id === questionId);
-      const label = question?.header || question?.question || questionId;
+      const label = question?.header ?? question?.question ?? questionId;
       const detail =
         question?.header && question.question && question.question !== question.header
           ? question.question
@@ -538,199 +557,204 @@ export const AskUserQuestionCard = memo(function AskUserQuestionCard({
   if (isPending) {
     return (
       <div
-        className="flex max-h-[min(520px,58vh)] flex-col overflow-hidden rounded-2xl border border-border-secondary/50 bg-bg-elevated/95 shadow-sm dark:bg-surface-dim/95"
+        className="flex max-h-[min(540px,62vh)] flex-col overflow-hidden rounded-lg border border-border-secondary/60 bg-bg-elevated/95 shadow-sm dark:bg-surface-dim/95"
         data-ui-request-id={block.id}
       >
         {currentQuestion ? (
           <>
-          <div className="shrink-0 px-3.5 pb-2.5 pt-3.5 sm:px-4 sm:pt-4">
-            <div className="flex items-center gap-2">
-              <div className="min-w-0 flex-1 text-[14px] font-semibold leading-snug text-text-primary">
-                {mainTitle}
-              </div>
-              <div className="flex shrink-0 items-center gap-1 text-xs text-text-tertiary">
-                <button
-                  type="button"
-                  disabled={currentQuestionIndex === 0}
-                  onClick={goBack}
-                  className="rounded-md p-1 transition-colors hover:bg-surface-hover disabled:cursor-default disabled:opacity-30"
-                  aria-label={t("common:back")}
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                </button>
-                <span className="min-w-8 text-center tabular-nums">
-                  {currentQuestionIndex + 1}/{questions.length}
-                </span>
-                <button
-                  type="button"
-                  disabled={isLastStep || !canAdvance || autoAdvanceActive}
-                  onClick={goNext}
-                  className="rounded-md p-1 transition-colors hover:bg-surface-hover disabled:cursor-default disabled:opacity-30"
-                  aria-label={t("common:next")}
-                >
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-2 flex items-start gap-2">
-              <span className="mt-0.5 max-w-[42%] shrink-0 truncate rounded-full border border-border-secondary/60 bg-surface-hover/45 px-2 py-0.5 text-[11px] font-medium text-text-secondary">
-                {currentQuestion.header}
-              </span>
-              <div className="min-w-0 flex-1 text-[13px] font-medium leading-relaxed text-text-primary/95">
-                {currentQuestion.question}
-              </div>
-            </div>
-
-          </div>
-
-          <div className="min-h-0 flex-1 overflow-y-auto px-3.5 py-2 sm:px-4">
-            <div className="space-y-2">
-              {currentQuestion.options.map((option) => {
-                const current = draft[currentQuestion.id] ?? { selected: [], text: "" };
-                const checked = current.selected.includes(option.label);
-                const isAutoSelecting =
-                  autoAdvance?.questionId === currentQuestion.id &&
-                  autoAdvance.label === option.label;
-                const isActive = checked || isAutoSelecting;
-                const Icon = currentQuestion.multiSelect
-                  ? checked
-                    ? CheckSquare
-                    : Square
-                  : CircleDot;
-                return (
+            <div className="shrink-0 px-3.5 pb-3 pt-3.5 sm:px-4 sm:pt-4">
+              <div className="flex items-center gap-2">
+                <div className="min-w-0 flex-1 text-sm font-semibold leading-5 text-text-primary">
+                  {mainTitle}
+                </div>
+                <div className="flex shrink-0 items-center gap-1 text-xs text-text-tertiary">
                   <button
-                    key={option.label}
                     type="button"
-                    onClick={() =>
-                      chooseOption(currentQuestion.id, option.label, !!currentQuestion.multiSelect)
-                    }
-                    className={`w-full rounded-xl px-3 py-2.5 text-left text-[12px] transition-colors ${
-                      isActive
-                        ? "bg-surface-hover text-text-primary ring-1 ring-semantic-accent/35"
-                        : "text-text-secondary hover:bg-surface-hover/55"
-                    }`}
+                    disabled={currentQuestionIndex === 0}
+                    onClick={goBack}
+                    className="rounded-md p-1 transition-colors hover:bg-surface-hover disabled:cursor-default disabled:opacity-30"
+                    aria-label={t("common:back")}
                   >
-                    <span className="flex items-start gap-2.5">
-                      <Icon
-                        className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${
-                          isActive ? "text-semantic-accent" : "text-text-tertiary"
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                  </button>
+                  <span className="min-w-8 text-center tabular-nums">
+                    {currentQuestionIndex + 1}/{questions.length}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={isLastStep || !canAdvance || autoAdvanceActive}
+                    onClick={goNext}
+                    className="rounded-md p-1 transition-colors hover:bg-surface-hover disabled:cursor-default disabled:opacity-30"
+                    aria-label={t("common:next")}
+                  >
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-2.5 flex items-start gap-2.5">
+                <span className="mt-0.5 max-w-[40%] shrink-0 truncate rounded-md border border-border-secondary/60 bg-surface-hover/45 px-2 py-0.5 text-[11px] font-medium text-text-secondary">
+                  {currentQuestion.header}
+                </span>
+                <div className="min-w-0 flex-1 text-sm font-medium leading-5 text-text-primary/95">
+                  {currentQuestion.question}
+                </div>
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-3.5 py-2 sm:px-4">
+              <div className="space-y-2">
+                {currentQuestion.options.map((option) => {
+                  const current = draft[currentQuestion.id] ?? { selected: [], text: "" };
+                  const checked = current.selected.includes(option.label);
+                  const isAutoSelecting =
+                    autoAdvance?.questionId === currentQuestion.id &&
+                    autoAdvance.label === option.label;
+                  const isActive = checked || isAutoSelecting;
+                  const Icon = currentQuestion.multiSelect
+                    ? checked
+                      ? CheckSquare
+                      : Square
+                    : CircleDot;
+                  return (
+                    <button
+                      key={option.label}
+                      type="button"
+                      onClick={() =>
+                        chooseOption(
+                          currentQuestion.id,
+                          option.label,
+                          !!currentQuestion.multiSelect,
+                        )
+                      }
+                      className={`w-full rounded-md px-3 py-2.5 text-left text-xs leading-5 transition-colors ${
+                        isActive
+                          ? "bg-surface-hover text-text-primary ring-1 ring-semantic-accent/35"
+                          : "text-text-secondary hover:bg-surface-hover/55"
+                      }`}
+                    >
+                      <span className="flex items-start gap-2.5">
+                        <Icon
+                          className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${
+                            isActive ? "text-semantic-accent" : "text-text-tertiary"
+                          }`}
+                        />
+                        <span className="min-w-0">
+                          <span className="block font-semibold text-text-primary">
+                            {option.label}
+                          </span>
+                          {option.description && (
+                            <span className="mt-0.5 block text-xs leading-5 text-text-tertiary">
+                              {option.description}
+                            </span>
+                          )}
+                          {option.preview && (
+                            <span className="mt-1 block rounded bg-surface-code px-2 py-1 font-mono text-xs leading-5 text-text-secondary">
+                              {option.preview}
+                            </span>
+                          )}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+                {(() => {
+                  const customText = (draft[currentQuestion.id]?.text ?? "").trim();
+                  const CustomIcon = currentQuestion.multiSelect
+                    ? customText
+                      ? CheckSquare
+                      : Square
+                    : CircleDot;
+                  return (
+                    <label
+                      className={`flex items-center gap-2.5 rounded-md px-3 py-2.5 text-xs transition-colors ${
+                        customText
+                          ? "bg-surface-hover text-text-primary ring-1 ring-semantic-accent/35"
+                          : "text-text-secondary hover:bg-surface-hover/55"
+                      }`}
+                    >
+                      <CustomIcon
+                        className={`h-3.5 w-3.5 shrink-0 ${
+                          customText ? "text-semantic-accent" : "text-text-tertiary"
                         }`}
                       />
-                      <span className="min-w-0">
-                        <span className="block font-semibold text-text-primary">
-                          {option.label}
-                        </span>
-                        {option.description && (
-                          <span className="mt-0.5 block text-[11px] leading-relaxed text-text-tertiary">
-                            {option.description}
-                          </span>
-                        )}
-                        {option.preview && (
-                          <span className="mt-1 block rounded bg-surface-code px-1.5 py-1 font-mono text-[10px] text-text-secondary">
-                            {option.preview}
-                          </span>
-                        )}
-                      </span>
-                    </span>
-                  </button>
-                );
-              })}
-              {(() => {
-                const customText = (draft[currentQuestion.id]?.text ?? "").trim();
-                const CustomIcon = currentQuestion.multiSelect
-                  ? customText
-                    ? CheckSquare
-                    : Square
-                  : CircleDot;
-                return (
-                  <label
-                    className={`flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-[12px] transition-colors ${
-                      customText
-                        ? "bg-surface-hover text-text-primary ring-1 ring-semantic-accent/35"
-                        : "text-text-secondary hover:bg-surface-hover/55"
-                    }`}
-                  >
-                    <CustomIcon
-                      className={`h-3.5 w-3.5 shrink-0 ${
-                        customText ? "text-semantic-accent" : "text-text-tertiary"
-                      }`}
-                    />
-                    <input
-                      type="text"
-                      value={(draft[currentQuestion.id] ?? { selected: [], text: "" }).text}
-                      onChange={(event) =>
-                        updateCustomAnswer(
-                          currentQuestion.id,
-                          event.target.value,
-                          !!currentQuestion.multiSelect,
-                        )
-                      }
-                      onFocus={() =>
-                        updateCustomAnswer(
-                          currentQuestion.id,
-                          draft[currentQuestion.id]?.text ?? "",
-                          !!currentQuestion.multiSelect,
-                        )
-                      }
-                      placeholder={t("uiCard.customAnswer")}
-                      className="min-w-0 flex-1 bg-transparent text-[12px] font-medium text-text-primary placeholder:text-text-tertiary focus:outline-none"
-                    />
-                  </label>
-                );
-              })()}
-            </div>
-          </div>
-
-          <div className="shrink-0 border-t border-border-secondary/50 px-3.5 py-3 sm:px-4">
-            <div className="flex flex-wrap items-center gap-2">
-              {autoAdvance ? (
-                <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-semantic-accent">
-                  {t("uiCard.selectionSaved", { value: autoAdvance.label })}
-                </span>
-              ) : block.message ? (
-                <span className="min-w-0 flex-1 truncate text-[11px] text-text-tertiary">
-                  {block.message}
-                </span>
-              ) : (
-                <span className="min-w-0 flex-1" />
-              )}
-              <div className="ml-auto flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    resetAutoAdvance();
-                    dismissById(block.id);
-                  }}
-                  className="rounded-lg border border-border-secondary/70 bg-surface-hover/35 px-3 py-2 text-[12px] font-medium text-text-secondary transition-colors hover:bg-surface-hover"
-                >
-                  {t("common:dismiss")}
-                </button>
-                {questions.length > 0 && !isLastStep ? (
-                  <button
-                    onClick={goNext}
-                    disabled={!canAdvance || autoAdvanceActive}
-                    className="rounded-lg bg-semantic-accent px-4 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-semantic-accent/90 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    <span className="inline-flex items-center justify-center gap-1">
-                      {t("common:next")}
-                      <ChevronRight className="h-3.5 w-3.5" />
-                    </span>
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => submit()}
-                    disabled={questions.length > 0 ? !allAnswered || autoAdvanceActive : !canSubmit}
-                    className="rounded-lg bg-semantic-accent px-4 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-semantic-accent/90 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    {t("common:submit")}
-                  </button>
-                )}
+                      <input
+                        type="text"
+                        value={(draft[currentQuestion.id] ?? { selected: [], text: "" }).text}
+                        onChange={(event) =>
+                          updateCustomAnswer(
+                            currentQuestion.id,
+                            event.target.value,
+                            !!currentQuestion.multiSelect,
+                          )
+                        }
+                        onFocus={() =>
+                          updateCustomAnswer(
+                            currentQuestion.id,
+                            draft[currentQuestion.id]?.text ?? "",
+                            !!currentQuestion.multiSelect,
+                          )
+                        }
+                        placeholder={t("uiCard.customAnswer")}
+                        className="min-w-0 flex-1 bg-transparent text-xs font-medium text-text-primary placeholder:text-text-tertiary focus:outline-none"
+                      />
+                    </label>
+                  );
+                })()}
               </div>
             </div>
-          </div>
+
+            <div className="shrink-0 border-t border-border-secondary/50 px-3.5 py-3 sm:px-4">
+              <div className="flex flex-wrap items-center gap-2">
+                {autoAdvance ? (
+                  <span className="min-w-0 flex-1 truncate text-xs font-medium text-semantic-accent">
+                    {t("uiCard.selectionSaved", { value: autoAdvance.label })}
+                  </span>
+                ) : block.message ? (
+                  <span className="min-w-0 flex-1 truncate text-xs text-text-tertiary">
+                    {block.message}
+                  </span>
+                ) : (
+                  <span className="min-w-0 flex-1" />
+                )}
+                <div className="ml-auto flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      resetAutoAdvance();
+                      dismissById(block.id);
+                    }}
+                    className="rounded-md border border-border-secondary/70 bg-surface-hover/35 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-hover"
+                  >
+                    {t("common:dismiss")}
+                  </button>
+                  {questions.length > 0 && !isLastStep ? (
+                    <button
+                      onClick={goNext}
+                      disabled={!canAdvance || autoAdvanceActive}
+                      className="rounded-md bg-semantic-accent px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-semantic-accent/90 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <span className="inline-flex items-center justify-center gap-1">
+                        {t("common:next")}
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => submit()}
+                      disabled={
+                        questions.length > 0 ? !allAnswered || autoAdvanceActive : !canSubmit
+                      }
+                      className="rounded-md bg-semantic-accent px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-semantic-accent/90 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {t("common:submit")}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
           </>
         ) : (
-          <div className="px-3.5 py-3 text-[12px] text-text-secondary">{block.message}</div>
+          <div className="px-3.5 py-3 text-xs text-text-secondary">{block.message}</div>
         )}
       </div>
     );
@@ -738,7 +762,7 @@ export const AskUserQuestionCard = memo(function AskUserQuestionCard({
 
   return (
     <div
-      className="overflow-hidden rounded-xl border border-status-success/25 bg-status-success/10 dark:bg-status-success/15"
+      className="overflow-hidden rounded-lg border border-status-success/25 bg-status-success/10 dark:bg-status-success/15"
       data-ui-request-id={block.id}
     >
       <div className="flex items-center gap-2 px-3 py-2 text-xs">
@@ -749,10 +773,10 @@ export const AskUserQuestionCard = memo(function AskUserQuestionCard({
         <CheckCircle className="w-3 h-3 text-status-success shrink-0 ml-auto" />
       </div>
       {responseRows.length > 0 ? (
-        <div className="space-y-1 px-3 pb-2.5 text-[11px] text-text-secondary">
+        <div className="space-y-1.5 px-3 pb-2.5 text-xs text-text-secondary">
           {responseRows.map((row) => (
-            <div key={row.questionId} className="rounded-lg bg-surface-hover/35 px-2 py-1.5">
-              <div className="mb-1 truncate text-[10px] font-medium text-text-tertiary">
+            <div key={row.questionId} className="rounded-md bg-surface-hover/35 px-2 py-1.5">
+              <div className="mb-1 truncate text-[11px] font-medium text-text-tertiary">
                 <span>{row.label}</span>
                 {row.detail && <span className="text-text-tertiary/80">（{row.detail}）</span>}
               </div>
@@ -761,7 +785,7 @@ export const AskUserQuestionCard = memo(function AskUserQuestionCard({
                   row.values.map((value) => (
                     <span
                       key={value}
-                      className="rounded-md bg-status-success/15 px-1.5 py-0.5 text-[11px] font-medium text-status-success"
+                      className="rounded-md bg-status-success/15 px-1.5 py-0.5 text-xs font-medium text-status-success"
                     >
                       {value}
                     </span>
@@ -774,7 +798,7 @@ export const AskUserQuestionCard = memo(function AskUserQuestionCard({
           ))}
         </div>
       ) : block.message ? (
-        <div className="px-3 pb-2 text-[11px] text-text-secondary">{block.message}</div>
+        <div className="px-3 pb-2 text-xs text-text-secondary">{block.message}</div>
       ) : null}
     </div>
   );
@@ -823,8 +847,25 @@ export const PathPermissionCard = memo(function PathPermissionCard({ block }: { 
   const { t } = useTranslation("chat");
   const respondById = useUIDialogStore((s) => s.respondById);
   const isPending = block.status === "pending";
-  const meta = block.permissionMeta;
+  const meta = block.permissionMeta?.type === "path_boundary" ? block.permissionMeta : undefined;
   const options = block.options ?? [];
+  const scopePattern = meta
+    ? `${meta.path.split("/").slice(0, -1).join("/") || "/"}/\u2217\u2217`
+    : null;
+  const rememberScope = useStatusStore((s) => (s.projectTrust?.trusted ? "project" : "session"));
+  const rememberOptions =
+    meta && scopePattern
+      ? [
+          {
+            id: "path-boundary-scope",
+            label: "Path scope",
+            subject: "file.write",
+            pattern: scopePattern,
+            scope: rememberScope,
+            action: "allow" as const,
+          },
+        ]
+      : undefined;
 
   const scopeIcon = meta?.scope === "write" ? Pencil : Eye;
   const ScopeIcon = scopeIcon;
@@ -836,7 +877,7 @@ export const PathPermissionCard = memo(function PathPermissionCard({ block }: { 
     return (
       <CardShell block={block}>
         <div className="px-3 pb-1.5">
-          <span className="text-[11px] text-status-info">{responseValue}</span>
+          <span className="text-xs text-status-info">{responseValue}</span>
         </div>
       </CardShell>
     );
@@ -850,72 +891,142 @@ export const PathPermissionCard = memo(function PathPermissionCard({ block }: { 
     <CardShell block={block}>
       <div className="px-3 py-2">
         {meta && (
-          <div className="mb-2.5 rounded-md bg-surface-dim/60 border border-border-secondary/40 px-2.5 py-2 space-y-1">
-            <div className="flex items-center gap-1.5">
-              <ScopeIcon className="w-3 h-3 text-text-tertiary shrink-0" />
-              <span className="text-[10px] text-text-tertiary">Tool</span>
-              <span className="text-[11px] text-text-primary font-medium ml-auto capitalize">
+          <div className="mb-2.5 space-y-1.5 rounded-md border border-border-secondary/40 bg-surface-dim/60 px-2.5 py-2">
+            <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-2">
+              <span className="flex items-center gap-1.5 text-[10px] text-text-tertiary">
+                <ScopeIcon className="h-3.5 w-3.5 shrink-0" />
+                Tool
+              </span>
+              <span className="min-w-0 truncate text-xs font-medium capitalize text-text-primary">
                 {meta.toolName}
               </span>
             </div>
-            <div className="flex items-center gap-1.5">
-              <FileWarning className="w-3 h-3 text-text-tertiary shrink-0" />
-              <span className="text-[10px] text-text-tertiary">Path</span>
+            <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-2">
+              <span className="flex items-center gap-1.5 text-[10px] text-text-tertiary">
+                <FileWarning className="h-3.5 w-3.5 shrink-0" />
+                Path
+              </span>
               <span
-                className="text-[11px] text-text-primary font-mono ml-auto truncate max-w-[60%]"
+                className="min-w-0 truncate font-mono text-xs text-text-primary"
                 title={meta.path}
               >
                 {meta.path}
               </span>
             </div>
-            <div className="flex items-center gap-1.5">
-              <FolderOpen className="w-3 h-3 text-text-tertiary shrink-0" />
-              <span className="text-[10px] text-text-tertiary">Project</span>
+            <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-2">
+              <span className="flex items-center gap-1.5 text-[10px] text-text-tertiary">
+                <FolderOpen className="h-3.5 w-3.5 shrink-0" />
+                Project
+              </span>
               <span
-                className="text-[11px] text-text-secondary font-mono ml-auto truncate max-w-[60%]"
+                className="min-w-0 truncate font-mono text-xs text-text-secondary"
                 title={meta.cwd}
               >
                 {meta.cwd}
               </span>
             </div>
-            <div className="flex items-center gap-1.5">
-              <ShieldAlert className="w-3 h-3 text-status-warning shrink-0" />
-              <span className="text-[10px] text-text-tertiary">Status</span>
-              <span className="text-[11px] text-status-warning ml-auto">{meta.relativeTo}</span>
+            <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-2">
+              <span className="flex items-center gap-1.5 text-[10px] text-text-tertiary">
+                <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-status-warning" />
+                Status
+              </span>
+              <span className="min-w-0 truncate text-xs text-status-warning">
+                {meta.relativeTo}
+              </span>
             </div>
           </div>
         )}
-        <div className="flex gap-1.5">
-          {options.map((opt, i) => {
-            const parts = opt.split(" ");
-            const label = parts.slice(1).join(" ") || opt;
-            // For "Always allow", show the directory pattern
-            const alwaysDir =
-              i === 1 && meta?.path
-                ? `${meta.path.split("/").slice(0, -1).join("/") || "/"}/\u2217\u2217`
-                : null;
-            const btnStyle =
-              i === 0
-                ? "bg-status-success/15 text-status-success hover:bg-status-success/25 border-status-success/30"
-                : i === 1
-                  ? "bg-status-info/15 text-status-info hover:bg-status-info/25 border-status-info/30"
-                  : "bg-status-error/10 text-status-error hover:bg-status-error/20 border-status-error/30";
-            return (
-              <button
-                key={i}
-                onClick={() => respondById(block.id, { value: opt })}
-                className={`flex-1 flex flex-col items-center justify-center py-1.5 rounded-md border text-[11px] font-medium transition-colors ${btnStyle}`}
-              >
-                <span>{label}</span>
-                {alwaysDir && (
-                  <span className="text-[9px] opacity-70 font-mono truncate max-w-full">
-                    {alwaysDir}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+        <PermissionActionButtons
+          options={options}
+          rememberOptions={rememberOptions}
+          onSelect={(value) => respondById(block.id, { value })}
+        />
+        {block.timeout != null && block.timeout > 0 && (
+          <div className="flex items-center gap-1 mt-1.5 px-0.5">
+            <Clock className="w-3 h-3 text-text-tertiary" />
+            <span className="text-[10px] text-text-tertiary">
+              {t("uiCard.autoDeny", { seconds: Math.ceil(block.timeout / 1000) })}
+            </span>
+          </div>
+        )}
+      </div>
+    </CardShell>
+  );
+});
+
+export const RuntimePermissionCard = memo(function RuntimePermissionCard({
+  block,
+}: {
+  block: UIBlock;
+}) {
+  const { t } = useTranslation("chat");
+  const respondById = useUIDialogStore((s) => s.respondById);
+  const isPending = block.status === "pending";
+  const meta =
+    block.permissionMeta?.type === "permission_runtime" ? block.permissionMeta : undefined;
+  const options = block.options ?? [];
+  const command =
+    typeof meta?.metadata?.command === "string"
+      ? meta.metadata.command
+      : typeof meta?.metadata?.path === "string"
+        ? meta.metadata.path
+        : undefined;
+
+  const responseValue =
+    block.status === "responded" && block.response ? (block.response.value as string) : null;
+
+  if (responseValue) {
+    return (
+      <CardShell block={block}>
+        <div className="px-3 pb-1.5">
+          <span className="text-xs text-status-info">{responseValue}</span>
         </div>
+      </CardShell>
+    );
+  }
+
+  if (!isPending) {
+    return <CardShell block={block}>{null}</CardShell>;
+  }
+
+  return (
+    <CardShell block={block}>
+      <div className="px-3 py-2">
+        {block.message && (
+          <p className="mb-2 text-[11px] leading-relaxed text-text-secondary">{block.message}</p>
+        )}
+        {meta && (
+          <div className="mb-2 space-y-1 rounded-md border border-border-secondary/40 bg-surface-dim/35 px-2 py-1.5">
+            <div className="grid grid-cols-[4rem_minmax(0,1fr)] items-center gap-2">
+              <span className="text-[10px] text-text-tertiary">Provider</span>
+              <span className="min-w-0 truncate text-[11px] font-medium text-text-primary">
+                {meta.provider}
+              </span>
+            </div>
+            <div className="grid grid-cols-[4rem_minmax(0,1fr)] items-center gap-2">
+              <span className="text-[10px] text-text-tertiary">Subject</span>
+              <span className="min-w-0 truncate font-mono text-[11px] text-text-secondary">
+                {meta.subject}
+              </span>
+            </div>
+            {command && (
+              <div className="grid grid-cols-[4rem_minmax(0,1fr)] items-center gap-2">
+                <span className="text-[10px] text-text-tertiary">Command</span>
+                <span
+                  className="min-w-0 truncate font-mono text-[11px] text-text-primary"
+                  title={command}
+                >
+                  {command}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+        <PermissionActionButtons
+          options={options}
+          rememberOptions={meta?.rememberOptions}
+          onSelect={(value) => respondById(block.id, { value })}
+        />
         {block.timeout != null && block.timeout > 0 && (
           <div className="flex items-center gap-1 mt-1.5 px-0.5">
             <Clock className="w-3 h-3 text-text-tertiary" />
@@ -1319,6 +1430,9 @@ export const UIInteractionCard = memo(function UIInteractionCard({ block }: { bl
     case "select":
       if (block.permissionMeta?.type === "path_boundary") {
         return <PathPermissionCard block={block} />;
+      }
+      if (block.permissionMeta?.type === "permission_runtime") {
+        return <RuntimePermissionCard block={block} />;
       }
       return <SelectCard block={block} />;
     case "input":

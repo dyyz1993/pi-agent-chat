@@ -1,9 +1,12 @@
 import { useRef, useMemo } from "react";
 import { Virtualizer } from "virtua";
-import { Highlight, themes } from "prism-react-renderer";
+import { Highlight, Prism, themes } from "prism-react-renderer";
 import { createLogger } from "../../../shared/lib/logger";
 import { getLanguage } from "../../utils/file-utils";
 import { useThemeStore, isDarkGroup } from "../../stores/use-theme-store";
+import { registerShellPrismLanguage } from "../../lib/prism-languages";
+
+registerShellPrismLanguage(Prism);
 
 interface VirtualizedCodeViewProps {
   code: string;
