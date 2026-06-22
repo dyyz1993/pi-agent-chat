@@ -67,6 +67,7 @@ export interface AgentMethods {
       isCompacting: boolean;
       steeringMode?: string;
       followUpMode?: string;
+      permissionMode?: string;
       messageCount: number;
       activeToolExecutions: Array<{
         toolCallId: string;

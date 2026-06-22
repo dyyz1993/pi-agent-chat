@@ -57,6 +57,7 @@ interface AgentStateResult {
     contextWindow?: number;
   };
   thinkingLevel?: string;
+  permissionMode?: string;
   isStreaming?: boolean;
   isCompacting?: boolean;
   streamingMessage?: unknown;
@@ -167,6 +168,10 @@ export function createFetchInitialStateAction({
             trace.mark("p1-getstate-done", { ms: Math.round(performance.now() - t0) });
             const result = rawResult as AgentStateResult;
             if (!result) return;
+
+            useStatusStore
+              .getState()
+              .applyPermissionProfileSnapshot(result.permissionMode, sessionId);
 
             const chat = useChatStore.getState();
             if (typeof chat.setActiveToolCallIds === "function") {

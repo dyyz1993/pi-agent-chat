@@ -7,6 +7,7 @@ import type { ProjectTab, SessionMeta } from "../types";
 import { useAppStore } from "./use-app-store";
 import { useChatStore } from "./use-chat-store";
 import { useGitStore } from "./use-git-store";
+import { useStatusStore } from "./use-status-store";
 import {
   requestRulesSnapshot,
   setupSubscriptions,
@@ -248,7 +249,7 @@ export function createSetActiveSessionAction({
         );
 
         Promise.race([startPromise, timeoutPromise])
-          .then((result) => {
+          .then(async (result) => {
             const isHot = result.status === "already_running";
 
             perfLog.info("[switch] agent.start done", {
@@ -263,10 +264,7 @@ export function createSetActiveSessionAction({
               ms: Math.round(performance.now() - tAgentStart),
             });
 
-            if (
-              result.status === "already_running" ||
-              result.status === "started"
-            ) {
+            if (result.status === "already_running" || result.status === "started") {
               set((s) => {
                 const projectId = s.activeProjectId;
                 if (!projectId) return {};
@@ -278,6 +276,27 @@ export function createSetActiveSessionAction({
                 };
               });
               markAgentStarted(id);
+
+              const rememberedPermissionProfile = useStatusStore
+                .getState()
+                .getRememberedPermissionProfile(id);
+              if (rememberedPermissionProfile) {
+                try {
+                  await apiClient.call("agent.setPermissionMode", {
+                    sessionId: id,
+                    mode: rememberedPermissionProfile,
+                  });
+                  useStatusStore
+                    .getState()
+                    .applyPermissionProfileSnapshot(rememberedPermissionProfile, id);
+                } catch (err) {
+                  log.warn("restore permission profile failed", {
+                    sessionId: id,
+                    profile: rememberedPermissionProfile,
+                    error: err instanceof Error ? err.message : String(err),
+                  });
+                }
+              }
 
               requestRulesSnapshot(id);
               get().fetchInitialState(id);

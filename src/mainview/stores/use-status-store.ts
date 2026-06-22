@@ -16,6 +16,7 @@ export type StatusSection =
   | "skills";
 
 export type PermissionProfileName = "normal" | "autopilot" | "readonly" | "yolo";
+const PERMISSION_PROFILE_BY_SESSION_KEY = "pi-permission-profile-by-session";
 
 export type PluginScope = "global" | "project";
 
@@ -124,6 +125,8 @@ interface StatusState {
   collapsedSections: Set<StatusSection>;
 
   setPermissionProfile: (profile: PermissionProfileName) => void;
+  applyPermissionProfileSnapshot: (profile: string | undefined, sessionId?: string) => void;
+  getRememberedPermissionProfile: (sessionId: string) => PermissionProfileName | undefined;
   setProjectTrustState: (trust: ProjectTrustState | null) => void;
   refreshProjectTrust: (projectPath: string) => Promise<void>;
   trustCurrentProject: (sessionId: string, projectPath: string, sessionPath?: string) => void;
@@ -177,6 +180,7 @@ export const useStatusStore = create<StatusState>((set) => ({
         mode: profile,
       })
       .then(() => {
+        rememberPermissionProfileForSession(sessionId, profile);
         set({
           permissionProfile: profile,
           permissionProfileLoading: false,
@@ -189,6 +193,18 @@ export const useStatusStore = create<StatusState>((set) => ({
         set({ permissionProfileLoading: false, yoloLoading: false });
       });
   },
+  applyPermissionProfileSnapshot: (profile, sessionId) => {
+    const normalized = normalizePermissionProfileName(profile);
+    if (!normalized) return;
+    if (sessionId) rememberPermissionProfileForSession(sessionId, normalized);
+    set({
+      permissionProfile: normalized,
+      permissionProfileLoading: false,
+      yoloEnabled: normalized === "yolo",
+      yoloLoading: false,
+    });
+  },
+  getRememberedPermissionProfile: (sessionId) => getRememberedPermissionProfile(sessionId),
   setProjectTrustState: (trust) => set({ projectTrust: trust }),
   refreshProjectTrust: async (projectPath) => {
     try {
@@ -375,3 +391,48 @@ export const useStatusStore = create<StatusState>((set) => ({
       expandedMcpServer: null,
     }),
 }));
+
+function normalizePermissionProfileName(
+  value: string | undefined,
+): PermissionProfileName | undefined {
+  if (value === "normal" || value === "autopilot" || value === "readonly" || value === "yolo") {
+    return value;
+  }
+  return undefined;
+}
+
+function readPermissionProfileMap(): Record<string, PermissionProfileName> {
+  if (typeof localStorage === "undefined") return {};
+  try {
+    const parsed = JSON.parse(localStorage.getItem(PERMISSION_PROFILE_BY_SESSION_KEY) ?? "{}");
+    if (!parsed || typeof parsed !== "object") return {};
+    const result: Record<string, PermissionProfileName> = {};
+    for (const [sessionId, value] of Object.entries(parsed)) {
+      const normalized = normalizePermissionProfileName(
+        typeof value === "string" ? value : undefined,
+      );
+      if (normalized) result[sessionId] = normalized;
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+function writePermissionProfileMap(map: Record<string, PermissionProfileName>): void {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(PERMISSION_PROFILE_BY_SESSION_KEY, JSON.stringify(map));
+}
+
+function rememberPermissionProfileForSession(
+  sessionId: string,
+  profile: PermissionProfileName,
+): void {
+  const map = readPermissionProfileMap();
+  map[sessionId] = profile;
+  writePermissionProfileMap(map);
+}
+
+function getRememberedPermissionProfile(sessionId: string): PermissionProfileName | undefined {
+  return readPermissionProfileMap()[sessionId];
+}

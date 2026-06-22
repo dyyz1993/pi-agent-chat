@@ -30,6 +30,7 @@ const mockedCall = apiClient.call as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.clear();
   useStatusStore.setState({
     permissionProfile: "normal",
     permissionProfileLoading: false,
@@ -88,6 +89,27 @@ describe("setPermissionProfile", () => {
       sessionId: "test-session",
       mode: "autopilot",
     });
+  });
+
+  it("remembers the selected permission profile per session", async () => {
+    useStatusStore.getState().setPermissionProfile("autopilot");
+    await vi.waitFor(() => {
+      expect(useStatusStore.getState().permissionProfile).toBe("autopilot");
+    });
+
+    expect(useStatusStore.getState().getRememberedPermissionProfile("test-session")).toBe(
+      "autopilot",
+    );
+
+    useStatusStore.getState().applyPermissionProfileSnapshot("readonly", "other-session");
+
+    expect(useStatusStore.getState().permissionProfile).toBe("readonly");
+    expect(useStatusStore.getState().getRememberedPermissionProfile("test-session")).toBe(
+      "autopilot",
+    );
+    expect(useStatusStore.getState().getRememberedPermissionProfile("other-session")).toBe(
+      "readonly",
+    );
   });
 });
 
@@ -288,7 +310,8 @@ describe("togglePluginEnabled", () => {
       if (method === "agent.getSettings") return Promise.resolve({ extensions: [] });
       if (method === "agent.setSettings") return Promise.resolve({ ok: true });
       if (method === "agent.reload") return Promise.resolve();
-      if (method === "agent.setDisabledPlugin") return Promise.resolve({ disabledPlugins: [testPlugin.path] });
+      if (method === "agent.setDisabledPlugin")
+        return Promise.resolve({ disabledPlugins: [testPlugin.path] });
       return Promise.resolve({});
     });
 

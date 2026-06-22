@@ -1020,6 +1020,7 @@ export class AgentProcessManager {
     isCompacting: boolean;
     steeringMode?: string;
     followUpMode?: string;
+    permissionMode?: string;
     messageCount: number;
     streamingMessage?: AssistantMessage;
     activeToolExecutions: Array<{
@@ -1065,6 +1066,7 @@ export class AgentProcessManager {
         isCompacting: Boolean(state.isCompacting),
         steeringMode: stateAny.steeringMode ? String(stateAny.steeringMode) : undefined,
         followUpMode: stateAny.followUpMode ? String(stateAny.followUpMode) : undefined,
+        permissionMode: stateAny.permissionMode ? String(stateAny.permissionMode) : undefined,
         messageCount: Number(state.messageCount ?? 0),
         streamingMessage: stateWithStreaming.streamingMessage,
         activeToolExecutions: stateWithStreaming.activeToolExecutions ?? [],

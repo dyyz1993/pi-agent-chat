@@ -66,6 +66,7 @@ export async function getStateOperation<TManaged extends ManagedClientLike>(opti
   thinkingLevel?: string;
   isStreaming: boolean;
   isCompacting: boolean;
+  permissionMode?: string;
   messageCount: number;
   streamingMessage?: unknown;
   activeToolExecutions: Array<{
@@ -86,6 +87,7 @@ export async function getStateOperation<TManaged extends ManagedClientLike>(opti
       pendingUIRequests?: ExtensionUIRequestEvent[];
     };
     const model = state.model;
+    const stateAny = state as unknown as Record<string, unknown>;
     const streamingMessage = stateWithStreaming.streamingMessage;
     return {
       model: model
@@ -101,6 +103,7 @@ export async function getStateOperation<TManaged extends ManagedClientLike>(opti
       thinkingLevel: state.thinkingLevel ? String(state.thinkingLevel) : undefined,
       isStreaming: Boolean(state.isStreaming),
       isCompacting: Boolean(state.isCompacting),
+      permissionMode: stateAny.permissionMode ? String(stateAny.permissionMode) : undefined,
       messageCount: Number(state.messageCount ?? 0),
       streamingMessage,
       activeToolExecutions: managed.info?.activeToolExecutions ?? [],
