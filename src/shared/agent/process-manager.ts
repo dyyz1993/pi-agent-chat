@@ -98,6 +98,10 @@ import type { CoordinatorMethodCall } from "../modules/coordinator";
 import { createLogger } from "../lib/logger";
 import { config } from "../../server-config";
 import {
+  applyExecutionSandboxEnv,
+  readProjectExecutionSandbox,
+} from "../lib/execution-sandbox-config";
+import {
   makeProcessPoolKey,
   addToProcessPool,
   removeFromProcessPool,
@@ -384,7 +388,10 @@ async function createRpcClient(
 
   // 子代理进程（forceNewProcess）跳过 MCP 连接，避免多进程竞争同一个 stdio MCP server
   const childEnv: Record<string, string> = {
-    ...process.env,
+    ...applyExecutionSandboxEnv(
+      process.env,
+      readProjectExecutionSandbox(cwd).mode,
+    ),
     NODE_OPTIONS: "--max-old-space-size=8192",
   };
   if (excludeLsp) {

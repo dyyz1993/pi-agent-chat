@@ -16,6 +16,7 @@ export type StatusSection =
   | "skills";
 
 export type PermissionProfileName = "normal" | "autopilot" | "readonly" | "yolo";
+export type ExecutionSandboxMode = "off" | "filesystem";
 const PERMISSION_PROFILE_BY_SESSION_KEY = "pi-permission-profile-by-session";
 
 export type PluginScope = "global" | "project";
@@ -26,6 +27,12 @@ export interface ProjectTrustState {
   decision: boolean | null;
   decisionPath?: string;
   trustStorePath: string;
+}
+
+export interface ExecutionSandboxState {
+  projectPath: string;
+  mode: ExecutionSandboxMode;
+  configPath: string;
 }
 
 export interface PluginInfo {
@@ -109,6 +116,8 @@ interface StatusState {
   permissionProfileLoading: boolean;
   projectTrust: ProjectTrustState | null;
   projectTrustLoading: boolean;
+  executionSandbox: ExecutionSandboxState | null;
+  executionSandboxLoading: boolean;
   /** @deprecated Use permissionProfile === "yolo". */
   yoloEnabled: boolean;
   /** @deprecated Use permissionProfileLoading. */
@@ -130,6 +139,11 @@ interface StatusState {
   setProjectTrustState: (trust: ProjectTrustState | null) => void;
   refreshProjectTrust: (projectPath: string) => Promise<void>;
   trustCurrentProject: (sessionId: string, projectPath: string, sessionPath?: string) => void;
+  refreshExecutionSandbox: (projectPath: string) => Promise<void>;
+  setExecutionSandboxMode: (
+    mode: ExecutionSandboxMode,
+    options: { sessionId?: string; projectPath?: string; sessionPath?: string },
+  ) => void;
   togglePermissionProfile: () => void;
   /** @deprecated Use togglePermissionProfile. */
   toggleYolo: () => void;
@@ -155,6 +169,8 @@ export const useStatusStore = create<StatusState>((set) => ({
   permissionProfileLoading: false,
   projectTrust: null,
   projectTrustLoading: false,
+  executionSandbox: null,
+  executionSandboxLoading: false,
   yoloEnabled: false,
   yoloLoading: false,
   planMode: true,
@@ -213,6 +229,45 @@ export const useStatusStore = create<StatusState>((set) => ({
     } catch (err) {
       log.warn("getProjectTrust failed", { error: String(err) });
     }
+  },
+  refreshExecutionSandbox: async (projectPath) => {
+    try {
+      const sandbox = await apiClient.call("agent.getExecutionSandbox", { projectPath });
+      set({ executionSandbox: sandbox as ExecutionSandboxState });
+    } catch (err) {
+      log.warn("getExecutionSandbox failed", { error: String(err) });
+    }
+  },
+  setExecutionSandboxMode: (mode, options) => {
+    const { sessionId, projectPath, sessionPath } = options;
+    const state = useStatusStore.getState();
+    if (!projectPath || state.executionSandboxLoading || state.executionSandbox?.mode === mode) return;
+
+    set({ executionSandboxLoading: true });
+    (async () => {
+      try {
+        const sandbox = (await apiClient.call("agent.setExecutionSandbox", {
+          projectPath,
+          mode,
+        })) as ExecutionSandboxState;
+        set({ executionSandbox: sandbox });
+
+        if (sessionId && sessionPath) {
+          await apiClient.call("agent.stop", { sessionId }).catch(() => ({ ok: false }));
+          await apiClient.call("agent.start", {
+            sessionId,
+            projectPath,
+            sessionPath,
+            forceNewProcess: true,
+          });
+          useSessionStore.getState().fetchInitialState(sessionId);
+        }
+      } catch (err) {
+        log.warn("setExecutionSandbox failed", { error: String(err) });
+      } finally {
+        set({ executionSandboxLoading: false });
+      }
+    })();
   },
   trustCurrentProject: (sessionId, projectPath, sessionPath) => {
     const state = useStatusStore.getState();

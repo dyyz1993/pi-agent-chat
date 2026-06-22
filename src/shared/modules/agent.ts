@@ -390,6 +390,22 @@ export interface AgentMethods {
       trustStorePath: string;
     };
   };
+  "agent.getExecutionSandbox": {
+    params: { projectPath: string };
+    result: {
+      projectPath: string;
+      mode: "off" | "filesystem";
+      configPath: string;
+    };
+  };
+  "agent.setExecutionSandbox": {
+    params: { projectPath: string; mode: "off" | "filesystem" };
+    result: {
+      projectPath: string;
+      mode: "off" | "filesystem";
+      configPath: string;
+    };
+  };
   "agent.setSessionName": {
     params: { sessionId: string; name: string };
     result: { ok: boolean };

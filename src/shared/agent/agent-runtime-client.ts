@@ -10,6 +10,10 @@ import type { ISandboxProvider } from "../../sandbox/types";
 import { config } from "../../server-config";
 import { createLogger } from "../lib/logger";
 import { discoverExtensionArgs } from "./agent-runtime-config";
+import {
+  applyExecutionSandboxEnv,
+  readProjectExecutionSandbox,
+} from "../lib/execution-sandbox-config";
 
 const log = createLogger("agent");
 const perfLog = createLogger("session-perf");
@@ -121,7 +125,10 @@ export async function createRpcClient(
     cliPath,
     cwd,
     args,
-    env: { ...process.env, NODE_OPTIONS: "--max-old-space-size=4096" },
+    env: {
+      ...applyExecutionSandboxEnv(process.env, readProjectExecutionSandbox(cwd).mode),
+      NODE_OPTIONS: "--max-old-space-size=4096",
+    },
   });
   const tBeforeStart = performance.now();
   perfLog.info("[createRpcClient] calling client.start()", { sessionId: sessionPath?.split("/").pop(), cwd, argsCount: args.length });

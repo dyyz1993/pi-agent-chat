@@ -48,6 +48,10 @@ export function getProjectPathPermissionsPath(projectPath: string): string {
   return join(getProjectUserStateDir(projectPath), "path-permissions.json");
 }
 
+export function getProjectExecutionSandboxPath(projectPath: string): string {
+  return join(getProjectUserStateDir(projectPath), "execution-sandbox.json");
+}
+
 export function getSessionBucketKey(projectPath: string): string {
   return `--${projectPath.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-")}--`;
 }

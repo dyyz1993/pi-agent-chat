@@ -11,6 +11,11 @@ import {
   normalizeProjectPath,
 } from "../lib/pi-agent-paths";
 import {
+  readProjectExecutionSandbox,
+  writeProjectExecutionSandbox,
+  normalizeExecutionSandboxMode,
+} from "../lib/execution-sandbox-config";
+import {
   listDisabledSkills,
   setDisabledSkill,
   listDisabledPlugins,
@@ -387,6 +392,17 @@ export function register(server: RPCServer, _options: HandlerOptions): void {
       decisionPath: projectPath,
       trustStorePath,
     };
+  });
+
+  r("agent.getExecutionSandbox", async (params) => {
+    return readProjectExecutionSandbox(params.projectPath);
+  });
+
+  r("agent.setExecutionSandbox", async (params) => {
+    return writeProjectExecutionSandbox(
+      params.projectPath,
+      normalizeExecutionSandboxMode(params.mode),
+    );
   });
 
   r("agent.setSessionName", async (params) => {

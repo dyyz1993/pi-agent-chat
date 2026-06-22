@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -77,6 +77,8 @@ export function StatusPanel() {
   const permissionProfileLoading = useStatusStore((s) => s.permissionProfileLoading);
   const projectTrust = useStatusStore((s) => s.projectTrust);
   const projectTrustLoading = useStatusStore((s) => s.projectTrustLoading);
+  const executionSandbox = useStatusStore((s) => s.executionSandbox);
+  const executionSandboxLoading = useStatusStore((s) => s.executionSandboxLoading);
   const plugins = useStatusStore((s) => s.plugins);
   const skills = useStatusStore((s) => s.skills);
   const expandedSkill = useStatusStore((s) => s.expandedSkill);
@@ -95,6 +97,8 @@ export function StatusPanel() {
   const toggleSection = useStatusStore((s) => s.toggleSection);
   const setPermissionProfile = useStatusStore((s) => s.setPermissionProfile);
   const trustCurrentProject = useStatusStore((s) => s.trustCurrentProject);
+  const refreshExecutionSandbox = useStatusStore((s) => s.refreshExecutionSandbox);
+  const setExecutionSandboxMode = useStatusStore((s) => s.setExecutionSandboxMode);
   const toggleSkillExpanded = useStatusStore((s) => s.toggleSkillExpanded);
   const toggleSkillEnabled = useStatusStore((s) => s.toggleSkillEnabled);
   const expandedPlugin = useStatusStore((s) => s.expandedPlugin);
@@ -157,6 +161,13 @@ export function StatusPanel() {
   const activePermissionPreset =
     permissionPresets.find((preset) => preset.id === permissionProfile) ?? permissionPresets[0];
   const projectTrusted = projectTrust?.trusted === true;
+  const executionSandboxMode = executionSandbox?.mode ?? "off";
+
+  useEffect(() => {
+    if (activeProjectTab?.path) {
+      refreshExecutionSandbox(activeProjectTab.path);
+    }
+  }, [activeProjectTab?.path, refreshExecutionSandbox]);
 
   const SECTIONS: { id: StatusSection; label: string; icon: React.ElementType }[] = [
     { id: "permission", label: t("permissionMode"), icon: ShieldCheck },
@@ -296,11 +307,60 @@ export function StatusPanel() {
                                 ? t("permissionTrustTrusted")
                                 : t("permissionTrustUntrusted")}
                             </span>
+                            <span className="text-text-tertiary">
+                              {t("executionSandboxAxis")}
+                            </span>
+                            <span className="flex items-center gap-1 text-text-secondary">
+                              {executionSandboxMode === "filesystem" ? (
+                                <ShieldCheck className="h-3 w-3 text-status-success" />
+                              ) : (
+                                <AlertTriangle className="h-3 w-3 text-text-tertiary" />
+                              )}
+                              {executionSandboxMode === "filesystem"
+                                ? t("executionSandboxFilesystem")
+                                : t("executionSandboxOff")}
+                            </span>
                           </div>
                           <div className="pt-1 text-[10px] leading-4 text-text-tertiary">
                             {projectTrusted
                               ? t("permissionTrustHintProject")
                               : t("permissionTrustHintSession")}
+                          </div>
+                          <div className="flex items-center justify-between gap-2 rounded-md border border-border-secondary/50 bg-bg-primary/35 px-2 py-1.5">
+                            <div className="min-w-0">
+                              <div className="text-[10px] font-medium text-text-secondary">
+                                {t("executionSandboxTitle")}
+                              </div>
+                              <div className="truncate text-[9px] text-text-tertiary">
+                                {t("executionSandboxHint")}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExecutionSandboxMode(
+                                  executionSandboxMode === "filesystem" ? "off" : "filesystem",
+                                  {
+                                    sessionId: activeSessionId ?? undefined,
+                                    projectPath: activeProjectTab?.path,
+                                    sessionPath: activeSessionMeta?.sessionPath,
+                                  },
+                                )
+                              }
+                              disabled={executionSandboxLoading || !activeProjectTab}
+                              className={`shrink-0 rounded-md px-2 py-1 text-[10px] font-medium transition-colors disabled:cursor-wait disabled:opacity-60 ${
+                                executionSandboxMode === "filesystem"
+                                  ? "bg-status-success/20 text-status-success hover:bg-status-success/25"
+                                  : "bg-surface-hover/60 text-text-tertiary hover:text-text-secondary"
+                              }`}
+                              title={executionSandbox?.configPath}
+                            >
+                              {executionSandboxLoading
+                                ? t("executionSandboxApplying")
+                                : executionSandboxMode === "filesystem"
+                                  ? t("executionSandboxOn")
+                                  : t("executionSandboxEnable")}
+                            </button>
                           </div>
                           {!projectTrusted && activeSessionId && activeProjectTab && (
                             <button
