@@ -77,6 +77,32 @@ function pathBasename(p: string): string {
   return p.replace(/\\/g, "/").split("/").pop() ?? p;
 }
 
+function compactMiddle(value: string, max = 64): string {
+  if (value.length <= max) return value;
+  const head = Math.ceil((max - 1) * 0.58);
+  const tail = Math.floor((max - 1) * 0.42);
+  return `${value.slice(0, head)}…${value.slice(value.length - tail)}`;
+}
+
+function getRecentProjectDisplay(project: RecentProject) {
+  if (project.runtime === "ssh" && project.remote) {
+    return {
+      isRemote: true,
+      title: project.name || pathBasename(project.remote.remotePath) || project.remote.host,
+      primary: project.remote.host,
+      secondary: project.remote.remotePath,
+      searchable: `${project.name} ${project.remote.host} ${project.remote.remotePath}`,
+    };
+  }
+  return {
+    isRemote: false,
+    title: project.name || pathBasename(project.path),
+    primary: project.path,
+    secondary: "",
+    searchable: `${project.name} ${project.path}`,
+  };
+}
+
 function pathDirname(p: string): string | null {
   const normalized = p.replace(/\\/g, "/");
   const parts = normalized.split("/").filter(Boolean);
@@ -334,10 +360,8 @@ export function ProjectPickerDialog({
     }
   }, []);
 
-  const filtered = recents.filter(
-    (r) =>
-      r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      r.path.toLowerCase().includes(searchQuery.toLowerCase()),
+  const filtered = recents.filter((project) =>
+    getRecentProjectDisplay(project).searchable.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   const sortedRecents = [...filtered].sort((a, b) => {
@@ -375,72 +399,106 @@ export function ProjectPickerDialog({
       );
     }
 
-    return projects.map((proj) => (
-      <div
-        key={proj.path}
-        role="button"
-        tabIndex={0}
-        onClick={() => handleSelectRecent(proj)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") handleSelectRecent(proj);
-        }}
-        className={`w-full flex items-center gap-3 text-left group transition-colors cursor-pointer ${
-          mobile
-            ? "px-4 py-3.5 rounded-xl active:bg-surface-hover dark:active:bg-surface-dim/80"
-            : "px-3 py-2.5 rounded-lg hover:bg-surface-hover dark:hover:bg-surface-dim/60"
-        }`}
-      >
-        <Folder
-          className={
-            mobile
-              ? "w-5 h-5 text-semantic-accent/70 shrink-0"
-              : "w-4 h-4 text-semantic-accent/70 shrink-0"
-          }
-        />
-        <div className="flex-1 min-w-0">
-          <div
-            className={
-              mobile
-                ? "text-sm font-medium text-text-primary truncate"
-                : "text-[12px] font-medium text-text-primary truncate"
-            }
-          >
-            {proj.name}
-          </div>
-          <div
-            className={
-              mobile
-                ? "text-[11px] text-text-tertiary truncate"
-                : "text-[10px] text-text-tertiary truncate"
-            }
-          >
-            {proj.path}
-          </div>
-          {proj.sessionCount > 0 && (
-            <div className="text-[10px] text-text-secondary">
-              {t("picker.sessionCount", { count: proj.sessionCount })}
-            </div>
-          )}
-        </div>
-        <span className="text-[10px] text-text-secondary shrink-0">{timeAgo(proj.lastOpened)}</span>
-        <button
-          onClick={(e) => handleTogglePin(e, proj.path)}
-          className={`p-1 rounded hover:bg-surface-hover dark:hover:bg-surface-hover/50 transition-all shrink-0 ${
-            proj.pinned
-              ? "text-status-warning opacity-100"
-              : "opacity-0 group-hover:opacity-100 text-text-secondary hover:text-status-warning"
+    return projects.map((proj) => {
+      const display = getRecentProjectDisplay(proj);
+      const Icon = display.isRemote ? Server : Folder;
+      return (
+        <div
+          key={proj.path}
+          role="button"
+          tabIndex={0}
+          onClick={() => handleSelectRecent(proj)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") handleSelectRecent(proj);
+          }}
+          className={`group w-full cursor-pointer rounded-lg border text-left transition-colors ${
+            display.isRemote
+              ? "border-transparent hover:border-border-secondary hover:bg-surface-hover dark:hover:bg-surface-dim/60"
+              : "border-transparent hover:border-border-secondary hover:bg-surface-hover dark:hover:bg-surface-dim/60"
+          } focus-visible:border-border-focus focus-visible:bg-surface-hover focus-visible:outline-none ${
+            mobile ? "px-4 py-3.5 active:bg-surface-hover" : "px-3 py-2.5"
           }`}
         >
-          <Pin className="w-3 h-3" fill={proj.pinned ? "currentColor" : "none"} />
-        </button>
-        <button
-          onClick={(e) => handleRemoveRecent(e, proj.path)}
-          className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-status-error/20 text-text-secondary hover:text-status-error transition-all shrink-0"
-        >
-          <Trash2 className="w-3 h-3" />
-        </button>
-      </div>
-    ));
+          <div className="flex min-w-0 items-start gap-3">
+            <div
+              className={`mt-0.5 flex shrink-0 items-center justify-center rounded-md border ${
+                mobile ? "h-9 w-9" : "h-8 w-8"
+              } ${
+                display.isRemote
+                  ? "border-status-info/25 bg-bg-elevated text-status-info"
+                  : "border-border-secondary bg-bg-elevated text-semantic-accent/80"
+              }`}
+            >
+              <Icon className={mobile ? "h-5 w-5" : "h-4 w-4"} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex min-w-0 items-center gap-2">
+                <div
+                  className={
+                    mobile
+                      ? "truncate text-sm font-semibold text-text-primary"
+                      : "truncate text-[13px] font-semibold text-text-primary"
+                  }
+                >
+                  {display.title}
+                </div>
+                {display.isRemote && (
+                  <span className="shrink-0 rounded border border-status-info/25 bg-status-info/10 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-status-info">
+                    {t("picker.remoteBadge")}
+                  </span>
+                )}
+              </div>
+              <div
+                className={
+                  mobile
+                    ? "mt-1 truncate text-[12px] text-text-secondary"
+                    : "mt-1 truncate text-[11px] text-text-secondary"
+                }
+              >
+                {display.isRemote ? display.primary : compactMiddle(display.primary)}
+              </div>
+              {display.isRemote && (
+                <div
+                  className={
+                    mobile
+                      ? "mt-0.5 truncate font-mono text-[11px] text-text-tertiary"
+                      : "mt-0.5 truncate font-mono text-[10px] text-text-tertiary"
+                  }
+                >
+                  {compactMiddle(display.secondary, mobile ? 72 : 54)}
+                </div>
+              )}
+              {proj.sessionCount > 0 && (
+                <div className="mt-1 text-[10px] text-text-secondary">
+                  {t("picker.sessionCount", { count: proj.sessionCount })}
+                </div>
+              )}
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              <span className="text-[10px] text-text-secondary">{timeAgo(proj.lastOpened)}</span>
+              <button
+                onClick={(e) => handleTogglePin(e, proj.path)}
+                className={`rounded p-1 transition-all hover:bg-surface-hover dark:hover:bg-surface-hover/50 ${
+                  proj.pinned
+                    ? "text-status-warning opacity-100"
+                    : "text-text-secondary opacity-0 hover:text-status-warning group-hover:opacity-100"
+                }`}
+                aria-label={proj.pinned ? t("unpin") : t("pin")}
+              >
+                <Pin className="h-3 w-3" fill={proj.pinned ? "currentColor" : "none"} />
+              </button>
+              <button
+                onClick={(e) => handleRemoveRecent(e, proj.path)}
+                className="rounded p-1 text-text-secondary opacity-0 transition-all hover:bg-status-error/20 hover:text-status-error group-hover:opacity-100"
+                aria-label={t("picker.removeRecent")}
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    });
   };
 
   const renderBreadcrumb = () => {

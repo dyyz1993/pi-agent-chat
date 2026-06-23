@@ -14,12 +14,19 @@ let originalConfig: string | null = null;
 let originalBackup: string | null = null;
 
 beforeEach(async () => {
+  originalConfig = null;
+  originalBackup = null;
+
   // 备份原始配置
   if (existsSync(TEST_CONFIG_PATH)) {
-    originalConfig = await import("fs/promises").then((fs) => fs.readFile(TEST_CONFIG_PATH, "utf-8"));
+    originalConfig = await import("fs/promises").then((fs) =>
+      fs.readFile(TEST_CONFIG_PATH, "utf-8"),
+    );
   }
   if (existsSync(TEST_BACKUP_PATH)) {
-    originalBackup = await import("fs/promises").then((fs) => fs.readFile(TEST_BACKUP_PATH, "utf-8"));
+    originalBackup = await import("fs/promises").then((fs) =>
+      fs.readFile(TEST_BACKUP_PATH, "utf-8"),
+    );
   }
 
   // 写入干净的测试配置
@@ -73,6 +80,97 @@ describe("listDisabledPlugins", () => {
   });
 });
 
+describe("listRecentProjects", () => {
+  it("filters orphan SSH shadow projects without remote metadata", async () => {
+    const orphanLocalPath = join(TEST_CONFIG_DIR, "remote-projects", "ssh-orphan");
+
+    await writeFile(
+      TEST_CONFIG_PATH,
+      JSON.stringify(
+        {
+          recentProjects: [
+            {
+              path: orphanLocalPath,
+              name: "ssh-orphan",
+              lastOpened: 100,
+              pinned: false,
+              sessionCount: 0,
+            },
+            {
+              path: "/Users/xuyingzhou/Project/local",
+              name: "local",
+              lastOpened: 90,
+              pinned: false,
+              sessionCount: 1,
+            },
+          ],
+          remoteProjects: [],
+        },
+        null,
+        2,
+      ),
+      "utf-8",
+    );
+
+    const { listRecentProjects } = await import("../../../src/shared/lib/project-config");
+    const projects = await listRecentProjects();
+
+    expect(projects.map((project) => project.path)).toEqual(["/Users/xuyingzhou/Project/local"]);
+  });
+
+  it("hydrates legacy SSH recent projects from remote project records", async () => {
+    const localPath = join(TEST_CONFIG_DIR, "remote-projects", "ssh-legacy");
+
+    await writeFile(
+      TEST_CONFIG_PATH,
+      JSON.stringify(
+        {
+          recentProjects: [
+            {
+              path: localPath,
+              name: "ssh-legacy",
+              lastOpened: 100,
+              pinned: false,
+              sessionCount: 2,
+            },
+          ],
+          remoteProjects: [
+            {
+              id: "remote-legacy",
+              runtime: "ssh",
+              profileId: "ssh-profile",
+              host: "xyz-mac",
+              remotePath: "/Users/xyz/pi-agent-remote-smoke",
+              localPath,
+              name: "pi-agent-remote-smoke",
+              createdAt: 90,
+              lastOpened: 100,
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+      "utf-8",
+    );
+
+    const { listRecentProjects } = await import("../../../src/shared/lib/project-config");
+    const [project] = await listRecentProjects();
+
+    expect(project).toMatchObject({
+      path: localPath,
+      name: "pi-agent-remote-smoke",
+      runtime: "ssh",
+      remote: {
+        runtime: "ssh",
+        host: "xyz-mac",
+        remotePath: "/Users/xyz/pi-agent-remote-smoke",
+        localPath,
+      },
+    });
+  });
+});
+
 describe("setDisabledPlugin", () => {
   it("adds a plugin to disabled list", async () => {
     const { setDisabledPlugin } = await import("../../../src/shared/lib/project-config");
@@ -104,9 +202,8 @@ describe("setDisabledPlugin", () => {
   });
 
   it("persists across calls", async () => {
-    const { setDisabledPlugin, listDisabledPlugins } = await import(
-      "../../../src/shared/lib/project-config"
-    );
+    const { setDisabledPlugin, listDisabledPlugins } =
+      await import("../../../src/shared/lib/project-config");
 
     await setDisabledPlugin("/project/a", "/plugins/x/index.ts", true);
     await setDisabledPlugin("/project/a", "/plugins/y/index.ts", true);
@@ -116,9 +213,8 @@ describe("setDisabledPlugin", () => {
   });
 
   it("handles different projects independently", async () => {
-    const { setDisabledPlugin, listDisabledPlugins } = await import(
-      "../../../src/shared/lib/project-config"
-    );
+    const { setDisabledPlugin, listDisabledPlugins } =
+      await import("../../../src/shared/lib/project-config");
 
     await setDisabledPlugin("/project/a", "/plugins/shared/index.ts", true);
     await setDisabledPlugin("/project/b", "/plugins/shared/index.ts", false);

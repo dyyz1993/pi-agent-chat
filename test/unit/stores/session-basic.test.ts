@@ -1,5 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { ProjectTab, ContextUsage, SessionStatus } from "../../../src/mainview/types";
+
+const { mockListRootDir, mockGitRefreshAll } = vi.hoisted(() => ({
+  mockListRootDir: vi.fn(),
+  mockGitRefreshAll: vi.fn(),
+}));
 
 vi.mock("../../../src/mainview/lib/api-client", () => ({
   apiClient: {
@@ -45,12 +50,23 @@ vi.mock("../../../src/mainview/stores/use-app-store", () => ({
 }));
 
 vi.mock("../../../src/mainview/stores/use-explorer-store", () => ({
-  useExplorerStore: { getState: () => ({ setCurrentPath: vi.fn(), listRootDir: vi.fn() }) },
+  useExplorerStore: {
+    getState: () => ({
+      currentPath: "/repo",
+      setCurrentPath: vi.fn(),
+      listRootDir: mockListRootDir,
+    }),
+  },
 }));
 
 vi.mock("../../../src/mainview/stores/use-git-store", () => ({
   useGitStore: {
-    getState: () => ({ fetchWorktrees: vi.fn(), fetchStatus: vi.fn(), fetchBranches: vi.fn() }),
+    getState: () => ({
+      fetchWorktrees: vi.fn(),
+      fetchStatus: vi.fn(),
+      fetchBranches: vi.fn(),
+      refreshAll: mockGitRefreshAll,
+    }),
   },
 }));
 
@@ -89,6 +105,9 @@ import { useSessionQueueStore } from "../../../src/mainview/stores/use-session-q
 
 describe("useSessionStore - basic state", () => {
   beforeEach(() => {
+    vi.useRealTimers();
+    mockListRootDir.mockClear();
+    mockGitRefreshAll.mockClear();
     useSessionStore.setState({
       sessionsByProject: {},
       activeSessionId: null,
@@ -117,6 +136,10 @@ describe("useSessionStore - basic state", () => {
     });
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("has correct initial state", () => {
     const s = useSessionStore.getState();
     expect(s.activeSessionId).toBeNull();
@@ -143,6 +166,41 @@ describe("useSessionStore - basic state", () => {
     useSessionStore.getState().updateSessionStatus("sess-1", "streaming");
     useSessionStore.getState().updateSessionStatus("sess-1", "idle");
     expect(useSessionStore.getState().sessionStatusMap["sess-1"]).toBe("idle");
+  });
+
+  it("refreshes active workspace resources when a running session returns to idle", () => {
+    vi.useFakeTimers();
+    const session = {
+      sessionId: "sess-1",
+      name: "Session 1",
+      sessionPath: "/sessions/sess-1.jsonl",
+      projectPath: "/repo",
+      parentSessionPath: null,
+      delegateParentSessionId: null,
+      delegateType: null,
+      messageCount: 0,
+      firstMessage: "",
+      createdAt: 1,
+      updatedAt: 1,
+      status: "idle" as const,
+    };
+
+    useSessionStore.setState({
+      activeSessionId: "sess-1",
+      activeProjectId: "tab-1",
+      projectTabs: [{ id: "tab-1", name: "repo", path: "/repo" }],
+      sessionsByProject: { "/repo": [session] },
+      sessionStatusMap: { "sess-1": "streaming" },
+    });
+
+    useSessionStore.getState().updateSessionStatus("sess-1", "idle");
+    expect(mockListRootDir).not.toHaveBeenCalled();
+    expect(mockGitRefreshAll).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(300);
+
+    expect(mockListRootDir).toHaveBeenCalledTimes(1);
+    expect(mockGitRefreshAll).toHaveBeenCalledWith("/repo");
   });
 
   it("updateSessionStatus handles multiple sessions independently", () => {

@@ -89,7 +89,6 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
   const [port, setPort] = useState("");
   const [user, setUser] = useState("");
   const [identityFile, setIdentityFile] = useState("");
-  const [downloadMode, setDownloadMode] = useState<"upload" | "remote">("upload");
   const [remotePath, setRemotePath] = useState("");
   const [browsePath, setBrowsePath] = useState("");
   const [entries, setEntries] = useState<SshDirectoryEntry[]>([]);
@@ -141,7 +140,11 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
     [detectedHosts, sshAlias],
   );
 
-  const connectionSelectValue = profileId ? `profile:${profileId}` : sshAlias ? `ssh:${sshAlias}` : "";
+  const connectionSelectValue = profileId
+    ? `profile:${profileId}`
+    : sshAlias
+      ? `ssh:${sshAlias}`
+      : "";
   const connectionHost = firstNonEmpty(selectedProfile?.host, sshAlias, host);
   const connectionTitle =
     firstNonEmpty(sshAlias, selectedProfile?.name, name, host) || t("welcome.remoteManual");
@@ -309,7 +312,9 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
             {done ? <Check className="h-4 w-4" /> : index}
           </span>
           <div>
-            <div className={`text-sm font-semibold ${active ? "text-text-primary" : "text-text-secondary"}`}>
+            <div
+              className={`text-sm font-semibold ${active ? "text-text-primary" : "text-text-secondary"}`}
+            >
               {label}
             </div>
             <div className="text-xs text-text-tertiary">{hint}</div>
@@ -347,10 +352,30 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
         <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[18rem_1fr]">
           <aside className="hidden border-r border-border-secondary bg-bg-elevated/80 px-6 py-6 lg:block">
             <div className="space-y-2">
-              {renderStepBadge("method", t("welcome.remoteStepMethod"), t("welcome.remoteStepMethodHint"), 1)}
-              {renderStepBadge("config", t("welcome.remoteStepConnection"), t("welcome.remoteStepConnectionHint"), 2)}
-              {renderStepBadge("directory", t("welcome.remoteStepDirectory"), t("welcome.remoteStepDirectoryHint"), 3)}
-              {renderStepBadge("opening", t("welcome.remoteStepConnect"), t("welcome.remoteStepConnectHint"), 4)}
+              {renderStepBadge(
+                "method",
+                t("welcome.remoteStepMethod"),
+                t("welcome.remoteStepMethodHint"),
+                1,
+              )}
+              {renderStepBadge(
+                "config",
+                t("welcome.remoteStepConnection"),
+                t("welcome.remoteStepConnectionHint"),
+                2,
+              )}
+              {renderStepBadge(
+                "directory",
+                t("welcome.remoteStepDirectory"),
+                t("welcome.remoteStepDirectoryHint"),
+                3,
+              )}
+              {renderStepBadge(
+                "opening",
+                t("welcome.remoteStepConnect"),
+                t("welcome.remoteStepConnectHint"),
+                4,
+              )}
             </div>
           </aside>
 
@@ -465,7 +490,10 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                         </span>
                       </div>
                       <div className="grid gap-3 sm:grid-cols-4">
-                        <DetailItem label={t("welcome.remoteHost")} value={host || connectionHost} />
+                        <DetailItem
+                          label={t("welcome.remoteHost")}
+                          value={host || connectionHost}
+                        />
                         <DetailItem label={t("welcome.remotePort")} value={port || "22"} />
                         <DetailItem label={t("welcome.remoteUser")} value={user} />
                         <DetailItem label={t("welcome.remotePrivateKey")} value={identityFile} />
@@ -478,7 +506,9 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                       className="mt-4 inline-flex items-center gap-2 rounded-md px-1 py-1 text-sm font-medium text-status-info hover:text-status-info/80"
                     >
                       <Settings2 className="h-4 w-4" />
-                      {advancedOpen ? t("welcome.remoteHideAdvanced") : t("welcome.remoteShowAdvanced")}
+                      {advancedOpen
+                        ? t("welcome.remoteHideAdvanced")
+                        : t("welcome.remoteShowAdvanced")}
                       <ChevronDown
                         className={`h-4 w-4 transition-transform ${advancedOpen ? "rotate-180" : ""}`}
                       />
@@ -561,72 +591,76 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                 )}
 
                 {step === "directory" && (
-                  <section className="rounded-lg border border-border-secondary bg-bg-elevated p-5">
-                    <div className="mb-4 flex items-center gap-3">
-                      <span className="flex h-9 w-9 items-center justify-center rounded-md border border-status-success/30 bg-status-success/10 text-status-success">
-                        <FolderOpen className="h-5 w-5" />
+                  <section className="rounded-lg border border-border-secondary bg-bg-elevated">
+                    <div className="flex items-start gap-3 border-b border-border-secondary px-5 py-4">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-status-success/30 bg-status-success/10 text-status-success">
+                        <FolderOpen className="h-4 w-4" />
                       </span>
-                      <div>
+                      <div className="min-w-0">
                         <h3 className="text-base font-semibold text-text-primary">
                           {t("welcome.remoteStepDirectory")}
                         </h3>
-                        <p className="text-sm text-text-secondary">
+                        <p className="mt-0.5 text-sm leading-5 text-text-secondary">
                           {t("welcome.remoteDirectoryBrowserHint")}
                         </p>
                       </div>
                     </div>
 
-                    <div className="flex flex-col gap-2 sm:flex-row">
-                      <input
-                        value={remotePath}
-                        onChange={(event) => setRemotePath(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") void browseRemoteDirectory(remotePath);
-                        }}
-                        className="h-11 min-w-0 flex-1 rounded-md border border-border-secondary bg-bg-primary px-3 font-mono text-sm outline-none focus:border-border-focus"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => browseRemoteDirectory(remotePath)}
-                        disabled={busy === "list"}
-                        className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-border-secondary px-4 text-sm font-medium text-text-primary hover:bg-surface-hover disabled:opacity-50"
-                      >
-                        {busy === "list" && <Loader2 className="h-4 w-4 animate-spin" />}
-                        {t("welcome.remoteGo")}
-                      </button>
+                    <div className="space-y-3 px-5 py-4">
+                      <div className="grid grid-cols-[1fr_auto] gap-2">
+                        <input
+                          value={remotePath}
+                          onChange={(event) => setRemotePath(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") void browseRemoteDirectory(remotePath);
+                          }}
+                          className="h-10 min-w-0 rounded-md border border-border-secondary bg-bg-primary px-3 font-mono text-sm outline-none focus:border-border-focus"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => browseRemoteDirectory(remotePath)}
+                          disabled={busy === "list"}
+                          className="inline-flex h-10 min-w-20 items-center justify-center gap-2 rounded-md border border-border-secondary px-3 text-sm font-medium text-text-primary hover:bg-surface-hover disabled:opacity-50"
+                        >
+                          {busy === "list" && <Loader2 className="h-4 w-4 animate-spin" />}
+                          {t("welcome.remoteGo")}
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-[1fr_auto] gap-2">
+                        <input
+                          value={newFolderName}
+                          onChange={(event) => setNewFolderName(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") void handleCreateDirectory();
+                          }}
+                          placeholder={t("welcome.remoteNewFolderPlaceholder")}
+                          className="h-10 min-w-0 rounded-md border border-border-secondary bg-bg-primary px-3 text-sm outline-none focus:border-border-focus"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleCreateDirectory}
+                          disabled={!newFolderName.trim() || busy === "create"}
+                          className="inline-flex h-10 min-w-28 items-center justify-center gap-2 rounded-md border border-border-secondary px-3 text-sm font-medium text-text-primary hover:bg-surface-hover disabled:opacity-50"
+                        >
+                          {busy === "create" ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <FolderPlus className="h-4 w-4" />
+                          )}
+                          {t("welcome.remoteCreateFolder")}
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                      <input
-                        value={newFolderName}
-                        onChange={(event) => setNewFolderName(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") void handleCreateDirectory();
-                        }}
-                        placeholder={t("welcome.remoteNewFolderPlaceholder")}
-                        className="h-11 min-w-0 flex-1 rounded-md border border-border-secondary bg-bg-primary px-3 text-sm outline-none focus:border-border-focus"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleCreateDirectory}
-                        disabled={!newFolderName.trim() || busy === "create"}
-                        className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-border-secondary px-4 text-sm font-medium text-text-primary hover:bg-surface-hover disabled:opacity-50"
-                      >
-                        {busy === "create" ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <FolderPlus className="h-4 w-4" />
-                        )}
-                        {t("welcome.remoteCreateFolder")}
-                      </button>
-                    </div>
-
-                    <div className="mt-4 max-h-[42vh] overflow-y-auto rounded-md border border-border-secondary bg-bg-primary">
+                    <div className="mx-5 mb-5 max-h-[42vh] overflow-y-auto rounded-md border border-border-secondary bg-bg-primary">
                       {parentRemotePath(browsePath) && (
                         <button
                           type="button"
-                          onClick={() => browseRemoteDirectory(parentRemotePath(browsePath) ?? undefined)}
-                          className="flex w-full items-center gap-3 border-b border-border-secondary px-4 py-3 text-left text-sm hover:bg-surface-hover"
+                          onClick={() =>
+                            browseRemoteDirectory(parentRemotePath(browsePath) ?? undefined)
+                          }
+                          className="flex w-full items-center gap-3 border-b border-border-secondary px-4 py-2.5 text-left text-sm hover:bg-surface-hover"
                         >
                           <Folder className="h-4 w-4 text-text-tertiary" />
                           <span className="font-mono text-text-secondary">..</span>
@@ -642,7 +676,7 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                             type="button"
                             key={entry.path}
                             onClick={() => browseRemoteDirectory(entry.path)}
-                            className="flex w-full items-center gap-3 border-b border-border-secondary px-4 py-3 text-left text-sm last:border-b-0 hover:bg-surface-hover"
+                            className="flex w-full items-center gap-3 border-b border-border-secondary px-4 py-2.5 text-left text-sm last:border-b-0 hover:bg-surface-hover"
                           >
                             <Folder className="h-4 w-4 text-status-info" />
                             <span className="truncate text-text-primary">{entry.name}</span>
@@ -674,49 +708,6 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                   </section>
                 )}
 
-                {step !== "method" && (
-                  <section className="rounded-lg border border-border-secondary bg-bg-elevated p-5">
-                    <div className="mb-4 flex items-center gap-3">
-                      <span className="flex h-9 w-9 items-center justify-center rounded-md border border-border-primary bg-bg-primary text-text-secondary">
-                        <UploadCloud className="h-5 w-5" />
-                      </span>
-                      <div>
-                        <h3 className="text-base font-semibold text-text-primary">
-                          {t("welcome.remoteDownloadMode")}
-                        </h3>
-                        <p className="text-sm text-text-secondary">
-                          {t("welcome.remoteStepConnectHint")}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="inline-flex rounded-md border border-border-secondary bg-bg-primary p-1">
-                      <button
-                        type="button"
-                        onClick={() => setDownloadMode("upload")}
-                        className={`rounded px-4 py-2 text-sm font-medium ${
-                          downloadMode === "upload"
-                            ? "bg-bg-elevated text-text-primary shadow-sm"
-                            : "text-text-secondary"
-                        }`}
-                      >
-                        {t("welcome.remoteDownloadUpload")}
-                      </button>
-                      <button
-                        type="button"
-                        disabled
-                        className="rounded px-4 py-2 text-sm font-medium text-text-tertiary opacity-70"
-                      >
-                        {t("welcome.remoteDownloadRemote")}
-                      </button>
-                    </div>
-                    <p className="mt-2 text-xs leading-5 text-text-tertiary">
-                      {downloadMode === "upload"
-                        ? t("welcome.remoteDownloadUploadHint")
-                        : t("welcome.remoteDownloadRemoteHint")}
-                    </p>
-                  </section>
-                )}
-
                 {message && (
                   <div
                     className={`flex items-start gap-2 rounded-md border px-3 py-2 text-sm ${
@@ -725,9 +716,7 @@ export function SshProjectDialog({ open, onClose, onOpened }: SshProjectDialogPr
                         : "border-status-error/40 bg-status-error/10 text-status-error"
                     }`}
                   >
-                    {message.type === "ok" && (
-                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-                    )}
+                    {message.type === "ok" && <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />}
                     <span className="min-w-0 break-words">{message.text}</span>
                   </div>
                 )}

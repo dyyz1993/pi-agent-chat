@@ -40,6 +40,7 @@ const log = createLogger("session");
 const perfLog = createLogger("session-perf");
 
 const _statusWatchdogs = new Map<string, ReturnType<typeof setTimeout>>();
+const _resourceRefreshTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const STATUS_STUCK_TIMEOUT_MS = 30 * 60 * 1000;
 
 export function clearStatusWatchdog(sessionId: string) {
@@ -48,6 +49,55 @@ export function clearStatusWatchdog(sessionId: string) {
     clearTimeout(watchdog);
     _statusWatchdogs.delete(sessionId);
   }
+}
+
+function clearResourceRefreshTimer(sessionId: string): void {
+  const timer = _resourceRefreshTimers.get(sessionId);
+  if (timer) {
+    clearTimeout(timer);
+    _resourceRefreshTimers.delete(sessionId);
+  }
+}
+
+function findSessionProjectPath(state: SessionState, sessionId: string): string | null {
+  for (const sessions of Object.values(state.sessionsByProject)) {
+    const session = sessions.find((item) => item.sessionId === sessionId);
+    if (session?.projectPath) return session.projectPath;
+  }
+  return null;
+}
+
+function getActiveTabPath(state: SessionState): string | null {
+  const tab = state.projectTabs.find((item) => item.id === state.activeProjectId);
+  return tab?.path ?? null;
+}
+
+function scheduleWorkspaceResourceRefresh(getState: () => SessionState, sessionId: string): void {
+  const existing = _resourceRefreshTimers.get(sessionId);
+  if (existing) clearTimeout(existing);
+
+  const timer = setTimeout(() => {
+    _resourceRefreshTimers.delete(sessionId);
+
+    const state = getState();
+    if (state.activeSessionId !== sessionId) return;
+
+    const explorer = useExplorerStore.getState();
+    const tabPath = getActiveTabPath(state);
+    const sessionPath = findSessionProjectPath(state, sessionId);
+    const refreshPath = explorer.currentPath ?? sessionPath ?? tabPath;
+    if (!refreshPath) return;
+
+    if (explorer.currentPath && typeof explorer.listRootDir === "function") {
+      void explorer.listRootDir();
+    }
+    const git = useGitStore.getState();
+    if (typeof git.refreshAll === "function") {
+      void git.refreshAll(refreshPath);
+    }
+  }, 300);
+
+  _resourceRefreshTimers.set(sessionId, timer);
 }
 
 export interface ModelInfo {
@@ -259,6 +309,7 @@ export const useSessionStore = create<SessionState>()(
 
         if (prevProjectId && prevProjectId !== id && prevSessionId) {
           clearStatusWatchdog(prevSessionId);
+          clearResourceRefreshTimer(prevSessionId);
           cleanupSession(get(), prevSessionId);
           cleanupSessionLight(prevSessionId);
           set((s) => clearSubscriptionState(s, prevSessionId));
@@ -550,9 +601,14 @@ export const useSessionStore = create<SessionState>()(
       },
 
       updateSessionStatus: (sessionId, status) => {
+        const previousStatus = get().sessionStatusMap[sessionId] ?? "idle";
         set((s) => ({
           sessionStatusMap: { ...s.sessionStatusMap, [sessionId]: status },
         }));
+
+        if (status === "idle" && previousStatus !== "idle") {
+          scheduleWorkspaceResourceRefresh(get, sessionId);
+        }
 
         const existing = _statusWatchdogs.get(sessionId);
         if (existing) {
@@ -668,6 +724,7 @@ export const useSessionStore = create<SessionState>()(
 
       cleanupActiveSession: (sessionId) => {
         clearStatusWatchdog(sessionId);
+        clearResourceRefreshTimer(sessionId);
         cleanupSession(get(), sessionId);
         cleanupSessionData(sessionId);
         set((s) => clearSubscriptionState(s, sessionId));

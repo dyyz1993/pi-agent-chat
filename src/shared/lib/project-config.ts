@@ -299,7 +299,35 @@ async function loadAndSave<T>(patcher: (config: ProjectConfig) => T): Promise<T>
 
 export async function listRecentProjects(): Promise<RecentProject[]> {
   const config = await load();
-  return config.recentProjects;
+  return hydrateRecentProjects(config);
+}
+
+function hydrateRecentProjects(config: ProjectConfig): RecentProject[] {
+  const remoteByLocalPath = new Map(
+    config.remoteProjects.map((remote) => [remote.localPath, remote]),
+  );
+
+  return config.recentProjects.flatMap((project) => {
+    const remoteRecord = remoteByLocalPath.get(project.path);
+    const remote = project.remote ?? remoteRecord;
+    if (!remote) {
+      return isRemoteProjectLocalPath(project.path) ? [] : [project];
+    }
+
+    const wasLegacyRemote = project.runtime !== "ssh" || !project.remote;
+    return [
+      {
+        ...project,
+        name: wasLegacyRemote && remoteRecord ? remoteRecord.name : project.name,
+        runtime: "ssh",
+        remote,
+      },
+    ];
+  });
+}
+
+function isRemoteProjectLocalPath(projectPath: string): boolean {
+  return projectPath.startsWith(join(CONFIG_DIR, "remote-projects", "ssh-"));
 }
 
 export async function addRecentProject(
